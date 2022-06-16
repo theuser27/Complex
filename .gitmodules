@@ -1,0 +1,3 @@
+[submodule "Source/Third Party/gcem"]
+	path = Source/Third Party/gcem
+	url = https://github.com/kthohr/gcem
