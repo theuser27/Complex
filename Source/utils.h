@@ -1,0 +1,191 @@
+/*
+  ==============================================================================
+
+    utils.h
+    Created: 27 Jul 2021 12:53:28am
+    Author:  Lenovo
+
+  ==============================================================================
+*/
+
+#pragma once
+
+#include "common.h"
+
+namespace utils
+{
+    static constexpr float kLogOf2 = 0.69314718056f;
+    static constexpr float kInvLogOf2 = 1.44269504089f;
+
+    enum class Operations { Assign, Add, Multiply, MultiplyAdd };
+
+    force_inline float min(float one, float two) 
+    { return fmin(one, two); }
+
+    force_inline float max(float one, float two) 
+    { return fmax(one, two); }
+
+    force_inline float clamp(float value, float min, float max) 
+    { return fmin(max, fmax(value, min)); }
+
+    constexpr force_inline size_t imax(size_t one, size_t two)
+    { return (one > two) ? one : two; }
+
+    constexpr force_inline size_t imin(size_t one, size_t two)
+    { return (one > two) ? two : one; }
+
+    template<typename T>
+    constexpr force_inline T interpolate(T from, T to, T t) 
+    { return t * (to - from) + from; }
+
+    force_inline float mod(double value, double* divisor) 
+    { return static_cast<float>(modf(value, divisor)); }
+
+    force_inline float mod(float value, float* divisor) 
+    { return modff(value, divisor); }
+
+    constexpr force_inline size_t iclamp(size_t value, size_t min, size_t max)
+    { return value > max ? max : (value < min ? min : value); }
+
+    force_inline i32 ilog2(i32 value)
+    {
+    #if defined(__GNUC__) || defined(__clang__)
+        constexpr i32 kMaxBitIndex = sizeof(i32) * 8 - 1;
+        return kMaxBitIndex - __builtin_clz(std::max(value, 1));
+    #elif defined(_MSC_VER)
+        unsigned long result = 0;
+        _BitScanReverse(&result, value);
+        return result;
+    #else
+        i32 num = 0;
+        while (value >>= 1)
+            num++;
+        return num;
+    #endif
+    }
+
+    constexpr force_inline bool closeToZero(float value)
+    { return value <= kEpsilon && value >= -kEpsilon; }
+
+    force_inline float magnitudeToDb(float magnitude) 
+    { return 20 * log10f(magnitude); }
+
+    force_inline float dbToMagnitude(float decibels) 
+    { return powf(10.0f, decibels / 20); }
+
+    force_inline float centsToRatio(float cents) 
+    { return powf(2.0f, cents / kCentsPerOctave); }
+
+    force_inline float midiCentsToFrequency(float cents) 
+    { return kMidi0Frequency * centsToRatio(cents); }
+
+    force_inline float midiNoteToFrequency(float note) 
+    { return midiCentsToFrequency(note * kCentsPerNote); }
+
+    force_inline float frequencyToMidiNote(float frequency) 
+    { return (float)kNotesPerOctave * logf(frequency / kMidi0Frequency) * kInvLogOf2; }
+
+    force_inline float frequencyToMidiCents(float frequency) 
+    { return kCentsPerNote * frequencyToMidiNote(frequency); }
+
+    force_inline i32 nextPowerOfTwo(float value) 
+    { return static_cast<i32>(roundf(powf(2.0f, ceilf(logf(value) * kInvLogOf2)))); }
+
+    force_inline void zeroBuffer(float *buffer, int size)
+    {
+      for (int i = 0; i < size; ++i)
+        buffer[i] = 0.0f;
+    }
+
+    force_inline void copyBuffer(float *dest, const float *source, int size)
+    {
+      for (int i = 0; i < size; ++i)
+        dest[i] = source[i];
+    }
+
+    constexpr force_inline bool isSilent(const float* buffer, i32 length)
+    {
+        for (i32 i = 0; i < length; ++i)
+        {
+            if (!closeToZero(buffer[i]))
+                return false;
+        }
+        return true;
+    }
+
+    force_inline float rms(const float* buffer, i32 num)
+    {
+        float squared_total (0.0f);
+        for (i32 i = 0; i < num; i++)
+            squared_total += buffer[i] * buffer[i];
+
+        return sqrtf(squared_total / num);
+    }
+
+    constexpr force_inline i32 prbs32(i32 x)
+    {
+      // maximal length, taps 32 31 29 1, from wikipedia
+      return ((u32)x >> 1) ^ (-(x & 1) & 0xd0000001UL);
+    }
+
+    // copies samples from "otherBuffer" to "thisBuffer" to respective channels
+    // while anticipating wrapping around in both buffers 
+    force_inline void copyBuffer(AudioBuffer<float> &thisBuffer, const AudioBuffer<float> &otherBuffer,
+      u32 numChannels, u32 numSamples, u32 thisStartIndex, u32 otherStartIndex,
+      Operations operation = Operations::Assign) noexcept
+    {
+      COMPLEX_ASSERT(static_cast<u32>(thisBuffer.getNumChannels()) >= numChannels);
+      COMPLEX_ASSERT(static_cast<u32>(otherBuffer.getNumChannels()) >= numChannels);
+      COMPLEX_ASSERT(static_cast<u32>(thisBuffer.getNumSamples()) >= numSamples);
+      COMPLEX_ASSERT(static_cast<u32>(otherBuffer.getNumSamples()) >= numSamples);
+
+      float(*opFunction)(float, float);
+      switch (operation)
+      {
+      case utils::Operations::Add:
+        opFunction = [](float one, float two) { return one + two; };
+        break;
+      case utils::Operations::Multiply:
+        opFunction = [](float one, float two) { return one * two; };
+        break;
+      default:
+      case utils::Operations::Assign:
+        opFunction = [](float one, float two) { return two; };
+        break;
+      }
+
+      auto otherDataReadPointers = otherBuffer.getArrayOfReadPointers();
+      auto thisDataReadPointers = thisBuffer.getArrayOfReadPointers();
+      auto thisDataWritePointers = thisBuffer.getArrayOfWritePointers();
+
+      auto thisBufferSize = thisBuffer.getNumSamples();
+      auto otherBufferSize = otherBuffer.getNumSamples();
+
+      for (u32 i = 0; i < numChannels; i++)
+      {
+        for (u32 k = 0; k < numSamples; k++)
+        {
+          thisDataWritePointers[i][(thisStartIndex + k) % thisBufferSize]
+            = opFunction(thisDataReadPointers[i][(thisStartIndex + k) % thisBufferSize],
+              otherDataReadPointers[i][(otherStartIndex + k) % otherBufferSize]);
+        }
+      }
+    }
+
+    template<typename T, SimdValue SIMD>
+    force_inline u32 calculateNumSimdChannels(u32 numChannels)
+    {
+      auto relativeSize = sizeof(SIMD) / sizeof(T);
+      return (u32)std::ceil((double)numChannels / (double)relativeSize);
+    }
+
+    // for debugging purposes
+    force_inline void printBuffer(const float *begin, u32 numSamples)
+    {
+      for (u32 i = 0; i < numSamples; i++)
+      {
+        DBG(begin[i]);
+      }
+      DBG("\n");
+    }
+}

@@ -1,0 +1,180 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<JUCERPROJECT id="MQJhEl" name="Complex" projectType="audioplug" addUsingNamespaceToJuceHeader="1"
+              displaySplashScreen="1" jucerFormatVersion="1" cppLanguageStandard="20">
+  <MAINGROUP id="zNsp6a" name="Complex">
+    <GROUP id="{EA56D449-367C-4F87-53C4-8DB58E6C0431}" name="Source">
+      <GROUP id="{E1B2C33E-00F1-0B12-1A60-E39A660852BA}" name="Third Party">
+        <GROUP id="{09FA4548-7D24-6788-581C-4018D277B000}" name="gcem">
+          <GROUP id="{D350C894-1459-C270-82D6-FB501338ADC7}" name="gcem_incl">
+            <GROUP id="{6BE153FB-1EC0-B21A-0461-25EAFB368B29}" name="quadrature">
+              <FILE id="TwYFz7" name="gauss_legendre_30.hpp" compile="0" resource="0"
+                    file="Source/Third Party/gcem/gcem_incl/quadrature/gauss_legendre_30.hpp"/>
+              <FILE id="iRmLgP" name="gauss_legendre_50.hpp" compile="0" resource="0"
+                    file="Source/Third Party/gcem/gcem_incl/quadrature/gauss_legendre_50.hpp"/>
+            </GROUP>
+            <FILE id="GNdAVH" name="abs.hpp" compile="0" resource="0" file="Source/Third Party/gcem/gcem_incl/abs.hpp"/>
+            <FILE id="kopPUN" name="acos.hpp" compile="0" resource="0" file="Source/Third Party/gcem/gcem_incl/acos.hpp"/>
+            <FILE id="IFp7L6" name="acosh.hpp" compile="0" resource="0" file="Source/Third Party/gcem/gcem_incl/acosh.hpp"/>
+            <FILE id="II9e7W" name="asin.hpp" compile="0" resource="0" file="Source/Third Party/gcem/gcem_incl/asin.hpp"/>
+            <FILE id="KODUoA" name="asinh.hpp" compile="0" resource="0" file="Source/Third Party/gcem/gcem_incl/asinh.hpp"/>
+            <FILE id="qCrt49" name="atan.hpp" compile="0" resource="0" file="Source/Third Party/gcem/gcem_incl/atan.hpp"/>
+            <FILE id="EIizXt" name="atan2.hpp" compile="0" resource="0" file="Source/Third Party/gcem/gcem_incl/atan2.hpp"/>
+            <FILE id="XEHJMj" name="atanh.hpp" compile="0" resource="0" file="Source/Third Party/gcem/gcem_incl/atanh.hpp"/>
+            <FILE id="vNL89n" name="beta.hpp" compile="0" resource="0" file="Source/Third Party/gcem/gcem_incl/beta.hpp"/>
+            <FILE id="LA7EFX" name="binomial_coef.hpp" compile="0" resource="0"
+                  file="Source/Third Party/gcem/gcem_incl/binomial_coef.hpp"/>
+            <FILE id="wM7dUK" name="ceil.hpp" compile="0" resource="0" file="Source/Third Party/gcem/gcem_incl/ceil.hpp"/>
+            <FILE id="AoFHD8" name="copysign.hpp" compile="0" resource="0" file="Source/Third Party/gcem/gcem_incl/copysign.hpp"/>
+            <FILE id="zz8zXo" name="cos.hpp" compile="0" resource="0" file="Source/Third Party/gcem/gcem_incl/cos.hpp"/>
+            <FILE id="cLFgtm" name="cosh.hpp" compile="0" resource="0" file="Source/Third Party/gcem/gcem_incl/cosh.hpp"/>
+            <FILE id="yGap3m" name="erf.hpp" compile="0" resource="0" file="Source/Third Party/gcem/gcem_incl/erf.hpp"/>
+            <FILE id="uBOi3V" name="erf_inv.hpp" compile="0" resource="0" file="Source/Third Party/gcem/gcem_incl/erf_inv.hpp"/>
+            <FILE id="ICwUjE" name="exp.hpp" compile="0" resource="0" file="Source/Third Party/gcem/gcem_incl/exp.hpp"/>
+            <FILE id="NKmSmq" name="expm1.hpp" compile="0" resource="0" file="Source/Third Party/gcem/gcem_incl/expm1.hpp"/>
+            <FILE id="voTDWs" name="factorial.hpp" compile="0" resource="0" file="Source/Third Party/gcem/gcem_incl/factorial.hpp"/>
+            <FILE id="fhCySY" name="find_exponent.hpp" compile="0" resource="0"
+                  file="Source/Third Party/gcem/gcem_incl/find_exponent.hpp"/>
+            <FILE id="IxzB4R" name="find_fraction.hpp" compile="0" resource="0"
+                  file="Source/Third Party/gcem/gcem_incl/find_fraction.hpp"/>
+            <FILE id="g6Euj1" name="find_whole.hpp" compile="0" resource="0" file="Source/Third Party/gcem/gcem_incl/find_whole.hpp"/>
+            <FILE id="jnp5QJ" name="floor.hpp" compile="0" resource="0" file="Source/Third Party/gcem/gcem_incl/floor.hpp"/>
+            <FILE id="R7qVia" name="fmod.hpp" compile="0" resource="0" file="Source/Third Party/gcem/gcem_incl/fmod.hpp"/>
+            <FILE id="dJN4aW" name="gcd.hpp" compile="0" resource="0" file="Source/Third Party/gcem/gcem_incl/gcd.hpp"/>
+            <FILE id="w64Dka" name="gcem_options.hpp" compile="0" resource="0"
+                  file="Source/Third Party/gcem/gcem_incl/gcem_options.hpp"/>
+            <FILE id="LBHEtO" name="incomplete_beta.hpp" compile="0" resource="0"
+                  file="Source/Third Party/gcem/gcem_incl/incomplete_beta.hpp"/>
+            <FILE id="wFUnj9" name="incomplete_beta_inv.hpp" compile="0" resource="0"
+                  file="Source/Third Party/gcem/gcem_incl/incomplete_beta_inv.hpp"/>
+            <FILE id="Z8fS9H" name="incomplete_gamma.hpp" compile="0" resource="0"
+                  file="Source/Third Party/gcem/gcem_incl/incomplete_gamma.hpp"/>
+            <FILE id="VLCl5i" name="incomplete_gamma_inv.hpp" compile="0" resource="0"
+                  file="Source/Third Party/gcem/gcem_incl/incomplete_gamma_inv.hpp"/>
+            <FILE id="WKay7y" name="is_even.hpp" compile="0" resource="0" file="Source/Third Party/gcem/gcem_incl/is_even.hpp"/>
+            <FILE id="Qdac8M" name="is_finite.hpp" compile="0" resource="0" file="Source/Third Party/gcem/gcem_incl/is_finite.hpp"/>
+            <FILE id="R1orF5" name="is_inf.hpp" compile="0" resource="0" file="Source/Third Party/gcem/gcem_incl/is_inf.hpp"/>
+            <FILE id="qPIlgm" name="is_nan.hpp" compile="0" resource="0" file="Source/Third Party/gcem/gcem_incl/is_nan.hpp"/>
+            <FILE id="aAnKun" name="is_odd.hpp" compile="0" resource="0" file="Source/Third Party/gcem/gcem_incl/is_odd.hpp"/>
+            <FILE id="HoKKZh" name="lbeta.hpp" compile="0" resource="0" file="Source/Third Party/gcem/gcem_incl/lbeta.hpp"/>
+            <FILE id="WDFqKh" name="lcm.hpp" compile="0" resource="0" file="Source/Third Party/gcem/gcem_incl/lcm.hpp"/>
+            <FILE id="JCI8ky" name="lgamma.hpp" compile="0" resource="0" file="Source/Third Party/gcem/gcem_incl/lgamma.hpp"/>
+            <FILE id="Kp9MU3" name="lmgamma.hpp" compile="0" resource="0" file="Source/Third Party/gcem/gcem_incl/lmgamma.hpp"/>
+            <FILE id="rW6MGb" name="log.hpp" compile="0" resource="0" file="Source/Third Party/gcem/gcem_incl/log.hpp"/>
+            <FILE id="CZoX9u" name="log_binomial_coef.hpp" compile="0" resource="0"
+                  file="Source/Third Party/gcem/gcem_incl/log_binomial_coef.hpp"/>
+            <FILE id="y3icvC" name="log1p.hpp" compile="0" resource="0" file="Source/Third Party/gcem/gcem_incl/log1p.hpp"/>
+            <FILE id="bUOenI" name="log2.hpp" compile="0" resource="0" file="Source/Third Party/gcem/gcem_incl/log2.hpp"/>
+            <FILE id="eKUUxn" name="log10.hpp" compile="0" resource="0" file="Source/Third Party/gcem/gcem_incl/log10.hpp"/>
+            <FILE id="dPFcua" name="mantissa.hpp" compile="0" resource="0" file="Source/Third Party/gcem/gcem_incl/mantissa.hpp"/>
+            <FILE id="QdsRYe" name="max.hpp" compile="0" resource="0" file="Source/Third Party/gcem/gcem_incl/max.hpp"/>
+            <FILE id="LCrwsn" name="min.hpp" compile="0" resource="0" file="Source/Third Party/gcem/gcem_incl/min.hpp"/>
+            <FILE id="PLwq77" name="neg_zero.hpp" compile="0" resource="0" file="Source/Third Party/gcem/gcem_incl/neg_zero.hpp"/>
+            <FILE id="bCXFXR" name="pow.hpp" compile="0" resource="0" file="Source/Third Party/gcem/gcem_incl/pow.hpp"/>
+            <FILE id="zTv0X1" name="pow_integral.hpp" compile="0" resource="0"
+                  file="Source/Third Party/gcem/gcem_incl/pow_integral.hpp"/>
+            <FILE id="G12f5I" name="round.hpp" compile="0" resource="0" file="Source/Third Party/gcem/gcem_incl/round.hpp"/>
+            <FILE id="RtG3Jp" name="sgn.hpp" compile="0" resource="0" file="Source/Third Party/gcem/gcem_incl/sgn.hpp"/>
+            <FILE id="KarCfy" name="signbit.hpp" compile="0" resource="0" file="Source/Third Party/gcem/gcem_incl/signbit.hpp"/>
+            <FILE id="YiEtYw" name="sin.hpp" compile="0" resource="0" file="Source/Third Party/gcem/gcem_incl/sin.hpp"/>
+            <FILE id="POrjcY" name="sinh.hpp" compile="0" resource="0" file="Source/Third Party/gcem/gcem_incl/sinh.hpp"/>
+            <FILE id="rP4h5L" name="sqrt.hpp" compile="0" resource="0" file="Source/Third Party/gcem/gcem_incl/sqrt.hpp"/>
+            <FILE id="MD8vVJ" name="tan.hpp" compile="0" resource="0" file="Source/Third Party/gcem/gcem_incl/tan.hpp"/>
+            <FILE id="Yuw4a4" name="tanh.hpp" compile="0" resource="0" file="Source/Third Party/gcem/gcem_incl/tanh.hpp"/>
+            <FILE id="cItfkk" name="tgamma.hpp" compile="0" resource="0" file="Source/Third Party/gcem/gcem_incl/tgamma.hpp"/>
+            <FILE id="UU8u3p" name="trunc.hpp" compile="0" resource="0" file="Source/Third Party/gcem/gcem_incl/trunc.hpp"/>
+          </GROUP>
+          <FILE id="sz88W0" name="gcem.hpp" compile="0" resource="0" file="Source/Third Party/gcem/gcem.hpp"/>
+        </GROUP>
+      </GROUP>
+      <GROUP id="{A619801D-52F0-778D-18BF-9CC363BACE8D}" name="Framework">
+        <FILE id="BXEcNU" name="simd_buffer.h" compile="0" resource="0" file="Source/simd_buffer.h"/>
+        <FILE id="uORCQF" name="common.h" compile="0" resource="0" file="Source/common.h"/>
+        <FILE id="UocdhJ" name="fourier_transform.h" compile="0" resource="0"
+              file="Source/fourier_transform.h"/>
+        <FILE id="aa68pY" name="lookup.h" compile="0" resource="0" file="Source/lookup.h"/>
+        <FILE id="srYd3T" name="matrix.h" compile="0" resource="0" file="Source/matrix.h"/>
+        <FILE id="hTbZak" name="memory_block.h" compile="0" resource="0" file="Source/memory_block.h"/>
+        <FILE id="lrAOSh" name="circular_buffer.h" compile="0" resource="0"
+              file="Source/circular_buffer.h"/>
+        <FILE id="PQTMcE" name="simd_utils.h" compile="0" resource="0" file="Source/simd_utils.h"/>
+        <FILE id="xJsOHz" name="simd_values.h" compile="0" resource="0" file="Source/simd_values.h"/>
+        <FILE id="T8wL08" name="utils.h" compile="0" resource="0" file="Source/utils.h"/>
+        <FILE id="pjH1mw" name="windows.h" compile="0" resource="0" file="Source/windows.h"/>
+      </GROUP>
+      <GROUP id="{EF39CE43-0DBF-FB40-49CF-0CE98C567940}" name="SoundEngine">
+        <FILE id="Fk1jhI" name="SoundEngine.cpp" compile="1" resource="0" file="Source/SoundEngine.cpp"/>
+        <FILE id="nlIqnO" name="SoundEngine.h" compile="0" resource="0" file="Source/SoundEngine.h"/>
+        <FILE id="K1l21V" name="EffectsState.cpp" compile="1" resource="0"
+              file="Source/EffectsState.cpp"/>
+        <FILE id="Jajp3e" name="EffectsState.h" compile="0" resource="0" file="Source/EffectsState.h"/>
+        <FILE id="deegT9" name="EffectModules.cpp" compile="1" resource="0"
+              file="Source/EffectModules.cpp"/>
+        <FILE id="gnPSkY" name="EffectModules.h" compile="0" resource="0" file="Source/EffectModules.h"/>
+        <FILE id="q0wQqs" name="spectral_support_functions.h" compile="0" resource="0"
+              file="Source/spectral_support_functions.h"/>
+      </GROUP>
+      <GROUP id="{BEC5E2C1-4F17-5CB7-533E-804A3018BEFB}" name="Plugin">
+        <FILE id="NFxzp5" name="Complex.cpp" compile="1" resource="0" file="Source/Complex.cpp"/>
+        <FILE id="Vy9NK2" name="Complex.h" compile="0" resource="0" file="Source/Complex.h"/>
+        <FILE id="VugG0k" name="PluginProcessor.cpp" compile="1" resource="0"
+              file="Source/PluginProcessor.cpp"/>
+        <FILE id="FOeRnu" name="PluginProcessor.h" compile="0" resource="0"
+              file="Source/PluginProcessor.h"/>
+        <FILE id="wkttjb" name="PluginEditor.cpp" compile="1" resource="0"
+              file="Source/PluginEditor.cpp"/>
+        <FILE id="w6Lgac" name="PluginEditor.h" compile="0" resource="0" file="Source/PluginEditor.h"/>
+      </GROUP>
+    </GROUP>
+  </MAINGROUP>
+  <JUCEOPTIONS JUCE_STRICT_REFCOUNTEDPOINTER="1" JUCE_VST3_CAN_REPLACE_VST2="0"
+               JUCE_PLUGINHOST_VST3="1"/>
+  <EXPORTFORMATS>
+    <VS2019 targetFolder="Builds/VisualStudio2019" extraDefs="INTEL_IPP=1"
+            IPP1ALibrary="Static_Library" IPPLibrary="">
+      <CONFIGURATIONS>
+        <CONFIGURATION isDebug="1" name="Debug" targetName="Complex" fastMath="1" enablePluginBinaryCopyStep="1"
+                       vst3BinaryLocation="C:\Program Files\Common Files\VST3\DEV"/>
+        <CONFIGURATION isDebug="0" name="Release" targetName="Complex" fastMath="1"
+                       enablePluginBinaryCopyStep="1" vst3BinaryLocation="C:\Program Files\Common Files\VST3\DEV"
+                       optimisation="3"/>
+        <CONFIGURATION isDebug="1" name="Standalone Debug" linkTimeOptimisation="0"
+                       optimisation="1" debugInformationFormat="EditAndContinue" fastMath="1"/>
+      </CONFIGURATIONS>
+      <MODULEPATHS>
+        <MODULEPATH id="juce_audio_basics" path="../JUCE/modules"/>
+        <MODULEPATH id="juce_audio_devices" path="../JUCE/modules"/>
+        <MODULEPATH id="juce_audio_formats" path="../JUCE/modules"/>
+        <MODULEPATH id="juce_audio_plugin_client" path="../JUCE/modules"/>
+        <MODULEPATH id="juce_audio_processors" path="../JUCE/modules"/>
+        <MODULEPATH id="juce_audio_utils" path="../JUCE/modules"/>
+        <MODULEPATH id="juce_core" path="../JUCE/modules"/>
+        <MODULEPATH id="juce_data_structures" path="../JUCE/modules"/>
+        <MODULEPATH id="juce_events" path="../JUCE/modules"/>
+        <MODULEPATH id="juce_graphics" path="../JUCE/modules"/>
+        <MODULEPATH id="juce_gui_basics" path="../JUCE/modules"/>
+        <MODULEPATH id="juce_gui_extra" path="../JUCE/modules"/>
+        <MODULEPATH id="juce_dsp" path="../JUCE/modules"/>
+      </MODULEPATHS>
+    </VS2019>
+  </EXPORTFORMATS>
+  <MODULES>
+    <MODULE id="juce_audio_basics" showAllCode="1" useLocalCopy="0" useGlobalPath="1"/>
+    <MODULE id="juce_audio_devices" showAllCode="1" useLocalCopy="0" useGlobalPath="1"/>
+    <MODULE id="juce_audio_formats" showAllCode="1" useLocalCopy="0" useGlobalPath="1"/>
+    <MODULE id="juce_audio_plugin_client" showAllCode="1" useLocalCopy="0"
+            useGlobalPath="1"/>
+    <MODULE id="juce_audio_processors" showAllCode="1" useLocalCopy="0" useGlobalPath="1"/>
+    <MODULE id="juce_audio_utils" showAllCode="1" useLocalCopy="0" useGlobalPath="1"/>
+    <MODULE id="juce_core" showAllCode="1" useLocalCopy="0" useGlobalPath="1"/>
+    <MODULE id="juce_data_structures" showAllCode="1" useLocalCopy="0" useGlobalPath="1"/>
+    <MODULE id="juce_dsp" showAllCode="1" useLocalCopy="0" useGlobalPath="1"/>
+    <MODULE id="juce_events" showAllCode="1" useLocalCopy="0" useGlobalPath="1"/>
+    <MODULE id="juce_graphics" showAllCode="1" useLocalCopy="0" useGlobalPath="1"/>
+    <MODULE id="juce_gui_basics" showAllCode="1" useLocalCopy="0" useGlobalPath="1"/>
+    <MODULE id="juce_gui_extra" showAllCode="1" useLocalCopy="0" useGlobalPath="1"/>
+  </MODULES>
+  <LIVE_SETTINGS>
+    <WINDOWS/>
+  </LIVE_SETTINGS>
+</JUCERPROJECT>
