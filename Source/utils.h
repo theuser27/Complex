@@ -14,8 +14,8 @@
 
 namespace utils
 {
-    static constexpr float kLogOf2 = 0.69314718056f;
-    static constexpr float kInvLogOf2 = 1.44269504089f;
+    static constexpr float kLogOf2 = std::numbers::ln2_v<float>;
+    static constexpr float kInvLogOf2 = 1.0f / kLogOf2;
 
     enum class Operations { Assign, Add, Multiply, MultiplyAdd };
 

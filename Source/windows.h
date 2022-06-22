@@ -12,7 +12,7 @@
 
 #include "common.h"
 #include "lookup.h"
-#include "./Third Party/gcem/gcem.hpp"
+#include "./Third Party/gcem/include/gcem.hpp"
 
 namespace Framework
 {

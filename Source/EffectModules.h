@@ -25,8 +25,7 @@ namespace Generation
 	class baseEffect
 	{
 	public:
-		baseEffect(bool initialise = false)
-		{ if (initialise) this->initialise(); };
+		baseEffect() = default;
 
 		virtual void initialise() noexcept
 		{
@@ -36,23 +35,18 @@ namespace Generation
 			boundaryShiftParameter_ = 0.0f;
 		}
 
-		virtual void run(Framework::SimdBuffer<std::complex<float>, simd_float> &source,
-			Framework::SimdBuffer<std::complex<float>, simd_float> &destination)
-		{ 
-			// swapping pointers since we're not doing anything with the data
-			source.swap(destination);
-		};
-
 		virtual void setParameter(std::variant<simd_float, u32, bool> &newValue, std::string_view parameter) noexcept
 		{
 			if (parameter == baseParameterIds[0])
 				typeParameter_ = std::get<u32>(newValue);
 			else if (parameter == baseParameterIds[1])
-				lowBoundaryParameter_ = std::get<float>(newValue);
+				lowBoundaryParameter_ = std::get<simd_float>(newValue);
 			else if (parameter == baseParameterIds[2])
-				highBoundaryParameter_ = std::get<float>(newValue);
+				highBoundaryParameter_ = std::get<simd_float>(newValue);
 			else if (parameter == baseParameterIds[3])
-				boundaryShiftParameter_ = std::get<float>(newValue);
+				boundaryShiftParameter_ = std::get<simd_float>(newValue);
+			else if (parameter == baseParameterIds[4])
+				isLinearShiftParameter_ = std::get<bool>(newValue);
 		}
 
 		virtual std::variant<simd_float, u32, bool> getParameter(std::string_view parameter) const noexcept
@@ -65,36 +59,80 @@ namespace Generation
 				return highBoundaryParameter_;
 			else if (parameter == baseParameterIds[3])
 				return boundaryShiftParameter_;
+			else if (parameter == baseParameterIds[4])
+				return isLinearShiftParameter_;
 		}
 
-		void setSampleRate(float newSampleRate) noexcept { sampleRate_ = newSampleRate; }
-		void setFFTSize(u32 newFFTSize) noexcept { FFTSize_ = newFFTSize; }
+		virtual void run(Framework::SimdBuffer<std::complex<float>, simd_float> &source,
+			Framework::SimdBuffer<std::complex<float>, simd_float> &destination, u32 FFTSize, float sampleRate) noexcept
+		{ 
+			// swapping pointers since we're not doing anything with the data
+			source.swap(destination);
+		};
 
 	protected:
-		// returns the range of bins that need to be processed
-		force_inline std::pair<u32, u32> getProcessingRange(simd_int &lowBins, simd_int &highBins)
+		// returns starting point and distance to end of processed/unprocessed range
+		force_inline std::pair<u32, u32> getRange(const simd_int &lowIndices, const simd_int &highIndices, u32 FFTSize, bool isProcessedRange)
 		{
-			auto lowArray = simd_float::min(lowBins, highBins).getArrayOfValues();
-			auto highArray = simd_float::max(lowBins, highBins).getArrayOfValues();
+			using namespace utils;
 
-			return { *std::min_element(lowArray.begin(), lowArray.end()), 
-				*std::max_element(highArray.begin(), highArray.end()) };
+			simd_int boundaryDistances = maskLoad(highIndices - lowIndices,
+				(simd_int(FFTSize) + lowIndices - highIndices) & simd_int(FFTSize - 1),
+				simd_int::greaterThanOrEqualSigned(highIndices, lowIndices));
+
+			u32 start, end;
+
+			if (isProcessedRange)
+			{
+				auto startArray = lowIndices.getArrayOfValues();
+				auto endArray = (lowIndices + boundaryDistances).getArrayOfValues();
+				start = *std::min_element(startArray.begin(), startArray.end());
+				end = *std::max_element(endArray.begin(), endArray.end());
+			}
+			else
+			{
+				auto startArray = (lowIndices + boundaryDistances).getArrayOfValues();
+				auto endArray = (lowIndices + simd_int(FFTSize)).getArrayOfValues();
+				start = *std::min_element(startArray.begin(), startArray.end());
+				end = *std::max_element(endArray.begin(), endArray.end());
+			}
+
+			return { start, std::min(end - start, FFTSize) };
 		}
 
 		// first - low shifted boundary, second - high shifted boundary
-		force_inline std::pair<simd_float, simd_float> getShiftedBoundaries()
+		force_inline std::pair<simd_float, simd_float> getShiftedBoundaries(simd_float lowBoundary, 
+			simd_float highBoundary, float maxFrequency, bool isLinearShift)
 		{
-			// TODO
-			return { lowBoundaryParameter_, highBoundaryParameter_ };
+			using namespace utils;
+
+			float maxOctave = log2f(maxFrequency / kMinFrequency);
+
+			if (isLinearShift)
+			{
+				simd_float boundaryShift = boundaryShiftParameter_ * maxFrequency;
+				lowBoundary = clamp(exp2(lowBoundary * maxOctave) * kMinFrequency + boundaryShift, kMinFrequency, maxFrequency);
+				highBoundary = clamp(exp2(highBoundary * maxOctave) * kMinFrequency + boundaryShift, kMinFrequency, maxFrequency);
+				// snapping to 0 hz if it's below the minimum frequency
+				lowBoundary &= simd_float::greaterThan(lowBoundary, kMinFrequency);
+				highBoundary &= simd_float::greaterThan(highBoundary, kMinFrequency);
+			}
+			else
+			{
+				lowBoundary = exp2(utils::clamp(lowBoundary + boundaryShiftParameter_, 0.0f, 1.0f) * maxOctave);
+				highBoundary = exp2(utils::clamp(highBoundary + boundaryShiftParameter_, 0.0f, 1.0f) * maxOctave);
+				// snapping to 0 hz if it's below the minimum frequency
+				lowBoundary = (lowBoundary & simd_float::greaterThan(lowBoundary, 1.0f)) * kMinFrequency;
+				highBoundary = (highBoundary & simd_float::greaterThan(highBoundary, 1.0f)) * kMinFrequency;
+			}
+			return { lowBoundary, highBoundary };
 		}
 
-		float sampleRate_ = kDefaultSampleRate;
-		u32 FFTSize_ = 1 << kDefaultFFTOrder;
-
 		u32 typeParameter_ = 0;																		// internal fx type
-		simd_float lowBoundaryParameter_ = 0.0f;									// normalised frequency boundaries of processed region
+		simd_float lowBoundaryParameter_ = 0.0f;									// normalised frequency boundaries of processed region [0.0f, 1.0f]
 		simd_float highBoundaryParameter_ = 1.0f;
-		simd_float boundaryShiftParameter_ = 0.0f;								// shifted version of the freq boundaries
+		simd_float boundaryShiftParameter_ = 0.0f;								// shifting of the freq boundaries [-1.0f; 1.0f]
+		bool isLinearShiftParameter_ = false;											// are the boundaries being shifted logarithmically or linearly
 	};
 
 	class utilityEffect : public baseEffect
@@ -103,9 +141,8 @@ namespace Generation
 		utilityEffect() = default;
 
 	private:
-		bool toReverseSpectrum = false;						// reverses the spectrum bins
-		bool flipLeftPhase = false;								// flipping phases of channels
-		bool flipRightPhase = false;
+		simd_int toReverseSpectrum = 0;						// reverses the spectrum bins
+		simd_int flipPhase = 0;										// flipping phases of channels
 		simd_float pan = 0.0f;										// channel pan control
 
 		// TODO:
@@ -118,29 +155,53 @@ namespace Generation
 	public:
 		filterEffect() = default;
 
+		void initialise() noexcept override
+		{
+			baseEffect::initialise();
+			gainParameter = 0.0f;
+			cutoffParameter = 0.0f;
+			slopeParameter = 0.0f;
+		}
+
+		void setParameter(std::variant<simd_float, u32, bool> &newValue, std::string_view parameter) noexcept override
+		{
+			if (parameter == parameterNames[0])
+				gainParameter = std::get<simd_float>(newValue);
+			else if (parameter == parameterNames[1])
+				cutoffParameter = std::get<simd_float>(newValue);
+			else if (parameter == parameterNames[2])
+				slopeParameter = std::get<simd_float>(newValue);
+		}
+
+		std::variant<simd_float, u32, bool> getParameter(std::string_view parameter) const noexcept override
+		{
+			if (parameter == parameterNames[0])
+				return gainParameter;
+			else if (parameter == parameterNames[1])
+				return cutoffParameter;
+			else if (parameter == parameterNames[2])
+				return slopeParameter;
+		}
+
 		void run(Framework::SimdBuffer<std::complex<float>, simd_float> &source,
-			Framework::SimdBuffer<std::complex<float>, simd_float> &destination) override
+			Framework::SimdBuffer<std::complex<float>, simd_float> &destination, u32 FFTSize, float sampleRate) noexcept override
 		{
 			using namespace utils;
 
-			auto shiftedBoundaries = getShiftedBoundaries();
+			auto shiftedBoundaries = getShiftedBoundaries(lowBoundaryParameter_, 
+				highBoundaryParameter_, sampleRate / 2.0f, isLinearShiftParameter_);
 
 			// getting the boundaries in terms of bin position
-			simd_int lowBoundaryIndices = utils::floorToInt(shiftedBoundaries.first * FFTSize_);
-			simd_int highBoundaryIndices = utils::floorToInt(shiftedBoundaries.second * FFTSize_);
+			simd_int lowBoundaryIndices = utils::ceilToInt((shiftedBoundaries.first / (sampleRate / 2.0f)) * FFTSize);
+			simd_int highBoundaryIndices = utils::floorToInt((shiftedBoundaries.second / (sampleRate / 2.0f)) * FFTSize);
 
 			// getting the distances between the boundaries and which masks precede the others 
 			simd_mask boundaryMask = simd_int::greaterThanOrEqualSigned(highBoundaryIndices, lowBoundaryIndices);
-			simd_int boundaryDistances = 
-				(boundaryMask & ((simd_int(FFTSize_) + highBoundaryIndices - lowBoundaryIndices) & simd_int(FFTSize_ - 1))) |
-				(~boundaryMask & ((simd_int(FFTSize_) + lowBoundaryIndices - highBoundaryIndices) & simd_int(FFTSize_ - 1)));
 
-			// minimising the bins to iterate on and process
-			auto lowestHighestIndices = getProcessingRange(lowBoundaryIndices, highBoundaryIndices);
-			u32 numBinsToProcess = (FFTSize_ + lowestHighestIndices.first - lowestHighestIndices.second) % FFTSize_;
-
-			// position to start processing
-			u32 positionIndex = lowestHighestIndices.first;
+			// minimising the bins to iterate on
+			auto processedIndexAndRange = getRange(lowBoundaryIndices, highBoundaryIndices, FFTSize, true);
+			u32 index = processedIndexAndRange.first;
+			u32 numBins = processedIndexAndRange.second;
 
 			// calculating the bins where the cutoff lies
 			simd_int cutoffIndices = floorToInt(interpolate(simd_float(lowBoundaryIndices), 
@@ -150,48 +211,55 @@ namespace Generation
 			// clearing sign and calculating end of slope bins
 			simd_float slopes = slopeParameter;
 			simd_mask slopeMask = unsignFloat(slopes);
-			slopes = floorToInt(interpolate((float)FFTSize_, 1.0f, slopes));
+			slopes = ceilToInt(interpolate((float)FFTSize, 1.0f, slopes));
 
-			//
 			// if mask scalars are negative -> attenuate at cutoff, if positive -> around cutoff
 			// clearing sign (gains is the gain reduction, not the gain multiplier)
 			simd_float gains = gainParameter;
 			simd_mask gainMask = unsignFloat(gains);
 
-			simd_int distancesFromCutoff;
-
-			for (u32 i = 0; i < numBinsToProcess; i++)
+			for (u32 i = 0; i < numBins; i++)
 			{
-				distancesFromCutoff = getDistancesFromCutoff(simd_int(positionIndex + i),
-					cutoffIndices, boundaryMask, lowBoundaryIndices);
+				simd_int distancesFromCutoff = getDistancesFromCutoff(simd_int(index),
+					cutoffIndices, boundaryMask, lowBoundaryIndices, FFTSize);
 
 				// calculating linear slope and brickwall, both are ratio of the gain attenuation
 				// the higher tha value the more it will be affected by it
-				simd_float gainRatio = simd_float::clamp(0.0f, 1.0f, simd_float(distancesFromCutoff) / slopes) & slopeMask;
-				gainRatio = simd_float::min(floor(simd_float(distancesFromCutoff) / (slopes + 1.0f)), 1.0f) & ~slopeMask;
+				simd_float gainRatio = maskLoad(simd_float::clamp(0.0f, 1.0f, simd_float(distancesFromCutoff) / slopes),
+																				simd_float::min(floor(simd_float(distancesFromCutoff) / (slopes + 1.0f)), 1.0f), 
+																				~slopeMask);
+				gains = maskLoad(gains * gainRatio, gains * (simd_float(1.0f) - gainRatio), ~gainMask);
 
-				gains = ((gains * gainRatio) & ~gainMask) + ((gains * (simd_float(1.0f) - gainRatio)) & gainMask);
-				// convert gain attenuation to gain multiplier
-				gains = simd_float(1.0f) - gains;
+				// convert gain attenuation to gain multiplier and zeroing gains lower than lowest amplitude
+				gains *= kLowestDb;
+				gains = dbToMagnitude(gains);
+				gains &= simd_float::greaterThan(gains, kLowestAmplitude);
 
-				// TODO: refactor simdBuffer since there won't more than 2 channels
-				destination.writeSIMDValueAt(source.getSIMDValueAt(0, (positionIndex + i) % FFTSize_) * gains, 0, (positionIndex + i) % FFTSize_);
+				destination.writeSIMDValueAt(source.getSIMDValueAt(0, index) * gains, 0, index);
+
+				index = (index + 1) % FFTSize;
 			}
 
+			auto unprocessedIndexAndRange = getRange(lowBoundaryIndices, highBoundaryIndices, FFTSize, false);
+			index = unprocessedIndexAndRange.first;
+			numBins = unprocessedIndexAndRange.second;
+
 			// copying the unprocessed data
-			for (u32 i = 0; i < FFTSize_; i++)
+			for (u32 i = 0; i < numBins; i++)
 			{
 				// utilising boundary mask since it doesn't serve a purpose anymore
-				boundaryMask = simd_int::greaterThanOrEqualSigned(lowBoundaryIndices, positionIndex)
-					| simd_int::greaterThanOrEqualSigned(positionIndex, highBoundaryIndices);
-				destination.writeSIMDValueAt((source.getSIMDValueAt(0, i) & boundaryMask)
-					+ (destination.getSIMDValueAt(0, i) & ~boundaryMask), 0, i);
+				boundaryMask = simd_int::greaterThanOrEqualSigned(lowBoundaryIndices, index)
+					| simd_int::greaterThanOrEqualSigned(index, highBoundaryIndices);
+				destination.writeSIMDValueAt((source.getSIMDValueAt(0, index) & boundaryMask) +
+																		 (destination.getSIMDValueAt(0, index) & ~boundaryMask), 0, index);
+
+				index = (index + 1) % FFTSize;
 			}
 		}
 
 	private:
 		force_inline simd_int getDistancesFromCutoff(const simd_int positionIndices, 
-			const simd_int &cutoffIndices, const simd_mask &boundaryMask, const simd_int &lowBoundaryIndices)
+			const simd_int &cutoffIndices, const simd_mask &boundaryMask, const simd_int &lowBoundaryIndices, u32 FFTSize) const noexcept
 		{
 			using namespace utils;
 
@@ -209,42 +277,6 @@ namespace Generation
 			* 
 			* for 2.2 we need one of the masks to be above/below and one below/above the low/highBoundary (I chose low)
 			*/
-			
-			// in case the simd version doesn't work, we just unpack and compare
-			/*std::array<float, kSimdRatio> precedingIndices;
-			std::array<float, kSimdRatio> succeedingIndices;
-			auto cutoffIndicesArray = cutoffIndices.getArrayOfValues();
-			auto positionIndicesArray = positionIndices.getArrayOfValues();
-			auto lowBoundaryIndicesArray = lowBoundaryIndices.getArrayOfValues();
-			for (size_t i = 0; i < kSimdRatio; i++)
-			{
-				if (cutoffIndicesArray[i] >= positionIndicesArray[i])
-				{
-					precedingIndices[i] = cutoffIndicesArray[i];
-					succeedingIndices[i] = positionIndicesArray[i];
-				}
-				else
-				{
-					precedingIndices[i] = positionIndicesArray[i];
-					succeedingIndices[i] = cutoffIndicesArray[i];
-				}
-
-				if ((positionIndicesArray[i] < lowBoundaryIndicesArray[i]) && 
-					(cutoffIndicesArray[i] >= lowBoundaryIndicesArray[i]))
-				{
-					precedingIndices[i] = positionIndicesArray[i];
-					succeedingIndices[i] = cutoffIndicesArray[i];
-				}
-				else if ((cutoffIndicesArray[i] < lowBoundaryIndicesArray[i]) &&
-					(positionIndicesArray[i] >= lowBoundaryIndicesArray[i]))
-				{
-					precedingIndices[i] = cutoffIndicesArray[i];
-					succeedingIndices[i] = positionIndicesArray[i];
-				}
-			}
-			distance = ~boundaryMask & ((simd_int(FFTSize_) + simd_int(precedingIndices)
-				- simd_int(succeedingIndices)) & simd_int(FFTSize_ - 1));
-			return distance;*/
 
 			simd_int distance;
 			simd_mask greaterThanOrEqualMask = simd_mask::greaterThanOrEqualSigned(cutoffIndices, positionIndices);
@@ -253,15 +285,15 @@ namespace Generation
 			simd_mask cutoffAboveLowMask = simd_mask::greaterThanOrEqualSigned(cutoffIndices, lowBoundaryIndices);
 
 			// writing indices computed for the general case 1. and 2.1
-			simd_int precedingIndices  = ( greaterThanOrEqualMask & cutoffIndices) | (~greaterThanOrEqualMask & positionIndices);
-			simd_int succeedingIndices = (~greaterThanOrEqualMask & cutoffIndices) | ( greaterThanOrEqualMask & positionIndices);
+			simd_int precedingIndices  = maskLoad(cutoffIndices, positionIndices, greaterThanOrEqualMask);
+			simd_int succeedingIndices = maskLoad(cutoffIndices, positionIndices, ~greaterThanOrEqualMask);
 
 			// masking for 1. and 2.1; (PA & CA) | (~PA & ~CA) == ~(PA ^ CA)
-			distance = (boundaryMask | ~(positionsAboveLowMask ^ cutoffAboveLowMask))
-				& ((simd_int(FFTSize_) + precedingIndices - succeedingIndices) & simd_int(FFTSize_ - 1));
+			distance = maskLoad((simd_int(FFTSize) + precedingIndices - succeedingIndices) & simd_int(FFTSize - 1),
+				simd_int(0), boundaryMask | ~(positionsAboveLowMask ^ cutoffAboveLowMask));
 
 			// if all values are already set, return
-			if (simd_int::equal(distance, simd_int(0)).anyMask() == 0)
+			if (simd_int::equal(distance, simd_int(0)).sum() == 0)
 				return distance;
 
 			simd_mask positionsPrecedingMask = ~positionsAboveLowMask & cutoffAboveLowMask;
@@ -272,8 +304,8 @@ namespace Generation
 			succeedingIndices = (positionsPrecedingMask & cutoffIndices	) | (cutoffPrecedingMask & positionIndices);
 
 			// inverse mask of previous assignment
-			distance |= (~boundaryMask & (positionsAboveLowMask ^ cutoffAboveLowMask))
-				& ((simd_int(FFTSize_) + precedingIndices - succeedingIndices) & simd_int(FFTSize_ - 1));
+			distance |= maskLoad((simd_int(FFTSize) + precedingIndices - succeedingIndices) & simd_int(FFTSize - 1),
+				simd_int(0), ~boundaryMask & (positionsAboveLowMask ^ cutoffAboveLowMask));
 			return distance;
 		}
 
@@ -293,8 +325,9 @@ namespace Generation
 		simd_float gainParameter = 0.0f;
 		simd_float cutoffParameter = 0.0f;
 		simd_float slopeParameter = 0.0f;
-		u32 slopeTypeParameter = 0;
 
+		static constexpr float kLowestDb = -100.0f;
+		static constexpr float kLowestAmplitude = 0.00001f;
 		static constexpr std::string_view parameterNames[] = {"Gain", "Cutoff", "Slope"};
 	};
 
@@ -307,24 +340,37 @@ namespace Generation
 
 	class contrastEffect : public baseEffect
 	{
-		contrastEffect()
+		contrastEffect() = default;
+
+		void initialise() noexcept override
 		{
+			baseEffect::initialise();
+			contrastParameter = 0.0f;
+		}
+
+		void setParameter(std::variant<simd_float, u32, bool> &newValue, std::string_view parameter) noexcept override
+		{
+			if (parameter == parameterNames[0])
+				contrastParameter = std::get<simd_float>(newValue);
+		}
+
+		std::variant<simd_float, u32, bool> getParameter(std::string_view parameter) const noexcept override
+		{
+			if (parameter == parameterNames[0])
+				return contrastParameter;
 		}
 
 		void run(Framework::SimdBuffer<std::complex<float>, simd_float> &source,
-			Framework::SimdBuffer<std::complex<float>, simd_float> &destination) override
+			Framework::SimdBuffer<std::complex<float>, simd_float> &destination, u32 FFTSize, float sampleRate) noexcept override
 		{
 			
 		};
 
-		void setParameter(std::variant<simd_float, u32, bool> &newValue, std::string_view parameter) noexcept override
-		{
-
-		}
-
 	private:
-		simd_float contrast = 0.0f;
+		simd_float contrastParameter = 0.0f;
 		// contrast, specops noise filter/focus, thinner
+
+		static constexpr std::string_view parameterNames[] = { "Contrast" };
 	};
 
 	class phaseEffect : public baseEffect
@@ -425,9 +471,9 @@ namespace Generation
 				changeEffect(moduleType);
 			}
 			else if (parameter == moduleParameterIds[1])
-				mix_ = std::get<float>(newValue);
+				mix_ = std::get<simd_float>(newValue);
 			else if (parameter == moduleParameterIds[2])
-				gain_ = std::get<float>(newValue);
+				gain_ = std::get<simd_float>(newValue);
 			else
 				fxPtr_->setParameter(newValue, parameter);
 		}

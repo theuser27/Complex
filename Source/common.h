@@ -39,7 +39,6 @@ namespace common
 	static constexpr float k2Pi = kPi * 2.0f;
 	static constexpr float kEpsilon = 1e-16f;
 	static constexpr u32 kDefaultSampleRate = 44100;
-	static constexpr u32 kMaxSampleRate = 192000;
 	static constexpr u32 kNumInputsOutputs = 1;																				// input sources
 	static constexpr u32 kNumChannels = 2;																						// how many channels each input is going to be
 																																										// currently the plugin will work only with stereo signals
@@ -51,11 +50,12 @@ namespace common
 
 	static constexpr i32 kMidiSize = 128;
 	static constexpr i32 kMidiKeyCenter = 60;
-	static constexpr float kMidi0Frequency = 8.1757989156f;
+	static constexpr double kMidi0Frequency = 8.1757989156f;
+	static constexpr double kMinFrequency = kMidi0Frequency / 4.0f;										// lowest frequency that will be displayed
 	static constexpr i32 kNotesPerOctave = 12;
 	static constexpr i32 kCentsPerNote = 100;
 	static constexpr i32 kCentsPerOctave = kNotesPerOctave * kCentsPerNote;
-
+																																										// FFT sizes must be powers of 2 (some internal processing relies on that)
 	static constexpr u32 kMinFFTOrder = 7;																						// 128 samples min
 	static constexpr u32 kMaxFFTOrder = 14;																						// 16384 samples max
 	static constexpr u32 kDefaultFFTOrder = 12;																				// 4096 samples default
@@ -81,8 +81,9 @@ namespace common
 		enum class FilterTypes { Normal, Regular };
 		enum class PeakTypes { Even, Odd, Both, Between };
 
-		static constexpr std::string_view baseParameterIds[] = { "FX_TYPE", "FX_LOW_BOUNDARY", "FX_HIGH_BOUNDARY", "FX_SHIFT_BOUNDARY", "FX_PARAM_1", 
-			"FX_PARAM_2", "FX_PARAM_3", "FX_PARAM_4", "FX_PARAM_5", "FX_PARAM_6", "FX_PARAM_7", "FX_PARAM_8", "FX_PARAM_9", "FX_PARAM_10", "FX_PARAM_11", "FX_PARAM_12" };
+		static constexpr std::string_view baseParameterIds[] = { "FX_TYPE", "FX_LOW_BOUNDARY", "FX_HIGH_BOUNDARY", "FX_SHIFT_BOUNDARY", 
+			"FX_IS_LINEAR_SHIFT", "FX_PARAM_1", "FX_PARAM_2", "FX_PARAM_3", "FX_PARAM_4", "FX_PARAM_5", "FX_PARAM_6", "FX_PARAM_7", "FX_PARAM_8", 
+			"FX_PARAM_9", "FX_PARAM_10", "FX_PARAM_11", "FX_PARAM_12", "FX_PARAM_13", "FX_PARAM_14", "FX_PARAM_15", "FX_PARAM_16" };
 	}
 
 }
