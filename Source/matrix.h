@@ -36,7 +36,7 @@ namespace Framework
 		{ simd_float::transpose(rows_); }
 
 		force_inline void complexTranspose()
-		{ simd_float::complexTranspose(rows_); }
+		{ utils::complexTranspose(rows_); }
 
 		force_inline simd_float sumRows()
 		{ 

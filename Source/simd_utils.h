@@ -26,9 +26,18 @@ namespace utils
 			return result;
 		}
 
-		force_inline simd_float tan(simd_float value) { return map<tanf>(value); }
+		template<float(*func)(float, float)>
+		static force_inline simd_float map(simd_float one, simd_float two) {
+			simd_float result;
+			for (int i = 0; i < kSize; ++i)
+				result.set(i, func(one[i], two[i]));
+			return result;
+		}
+
 		force_inline simd_float sin(simd_float value) { return map<sinf>(value); }
 		force_inline simd_float cos(simd_float value) { return map<cosf>(value); }
+		force_inline simd_float tan(simd_float value) { return map<tanf>(value); }
+		force_inline simd_float atan2(simd_float one, simd_float two) { return map<atan2f>(one, two); }
 
 		force_inline simd_float sqrt(simd_float value)
 		{

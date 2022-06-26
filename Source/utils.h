@@ -11,6 +11,7 @@
 #pragma once
 
 #include "common.h"
+#include "Third Party/gcem/include/gcem.hpp"
 
 namespace utils
 {
@@ -68,10 +69,13 @@ namespace utils
     { return value <= kEpsilon && value >= -kEpsilon; }
 
     force_inline float magnitudeToDb(float magnitude) 
-    { return 20 * log10f(magnitude); }
+    { return 20.0f * log10f(magnitude); }
 
-    force_inline float dbToMagnitude(float decibels) 
-    { return powf(10.0f, decibels / 20); }
+    force_inline float dbToMagnitude(float decibels)
+    { return powf(10.0f, decibels / 20.0f); }
+
+    constexpr force_inline float dbToMagnitudeConstexpr(float decibels)
+    { return gcem::pow(10.0f, decibels / 20.0f); }
 
     force_inline float centsToRatio(float cents) 
     { return powf(2.0f, cents / kCentsPerOctave); }

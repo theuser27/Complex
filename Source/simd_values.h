@@ -676,17 +676,6 @@ namespace simd_values
 		#endif
 		}
 
-		static force_inline simd_type vector_call sqrt(simd_type value)
-		{
-		#if COMPLEX_AVX2
-			return _mm256_sqrt_ps(value);
-		#elif COMPLEX_SSE3
-			return _mm_sqrt_ps(value);
-		#elif COMPLEX_NEON
-			
-		#endif
-		}
-
 		static force_inline simd_type vector_call bitAnd(simd_type value, mask_simd_type mask)
 		{
 		#if COMPLEX_AVX2
@@ -889,164 +878,15 @@ namespace simd_values
 			
 		#elif COMPLEX_SSE3
 			// right to left
-			// *4th* value - in first place, *3rd* value - in second place, 
-			// *2nd* value - in third place, *1st* value - in forth place
+			// *4th* value - in first place, 
+			// *3rd* value - in second place, 
+			// *2nd* value - in third place, 
+			// *1st* value - in forth place
 			return _mm_shuffle_ps(value, value, _MM_SHUFFLE(0, 1, 2, 3));
 		#elif COMPLEX_NEON
 
 		#endif
 
-		}
-
-		template<float(*func)(float)>
-		static force_inline simd_float map(simd_float value) {
-			simd_float result;
-			for (int i = 0; i < kSize; ++i)
-				result.set(i, func(value[i]));
-			return result;
-		}
-
-		template<float(*func)(float, float)>
-		static force_inline simd_float map(simd_float one, simd_float two) {
-			simd_float result;
-			for (int i = 0; i < kSize; ++i)
-				result.set(i, func(one[i], two[i]));
-			return result;
-		}
-		// TODO: optimise sin, cos and atan2 calls
-		static force_inline simd_type vector_call sin(simd_type value) { return map<sinf>(value).value; }
-		static force_inline simd_type vector_call cos(simd_type value) { return map<cosf>(value).value; }
-		static force_inline simd_type vector_call atan2(simd_type one, simd_type two) { return map<atan2f>(one, two).value; }
-
-		static force_inline void vector_call complexValueMerge(simd_type &one, simd_type &two)
-		{
-			// TODO: implement complexMerge for AVX and NEON
-		#if COMPLEX_AVX2
-
-		#elif COMPLEX_SSE3
-			simd_type one_ = _mm_unpacklo_ps(one, two);
-			two = _mm_unpackhi_ps(one, two);
-			one = one_;
-		#elif COMPLEX_NEON
-
-		#endif
-		}
-
-		static force_inline simd_type vector_call complexCartAdd(simd_type one, simd_type two)
-		{ return add(one, two); }
-
-		static force_inline simd_type vector_call complexCartSub(simd_type one, simd_type two)
-		{ return sub(one, two); }
-
-		static force_inline simd_type vector_call complexCartMul(simd_type one, simd_type two)
-		{
-
-		#if COMPLEX_AVX2
-			// TODO: implement permutation
-			static_assert(false, "AVX2 complexCartMul not supported yet");
-		#elif COMPLEX_SSE3
-			simd_type realSums = mul(one, two);
-			simd_type imaginarySums = mul(one, _mm_shuffle_ps(two, two, _MM_SHUFFLE(2, 3, 0, 1)));
-			realSums = _mm_hsub_ps(realSums, realSums);
-			imaginarySums = _mm_hadd_ps(imaginarySums, imaginarySums);
-			return _mm_unpacklo_ps(realSums, imaginarySums);
-		#elif COMPLEX_NEON
-			static_assert(false, "ARM NEON complexCartMul not supported yet");
-		#endif
-		}
-
-		static force_inline simd_type vector_call complexPolarMul(simd_type one, simd_type two)
-		{
-			simd_type magnitudes = mul(one, two);
-			simd_type phases = add(one, two);
-		#if COMPLEX_AVX2
-			// TODO: implement permutation
-			static_assert(false, "AVX2 complexPolarMul not supported yet");
-		#elif COMPLEX_SSE3
-			magnitudes = _mm_shuffle_ps(magnitudes, magnitudes, _MM_SHUFFLE(2, 0, 2, 0));
-			phases = _mm_shuffle_ps(phases, phases, _MM_SHUFFLE(3, 1, 3, 1));
-			return _mm_unpacklo_ps(magnitudes, phases);
-		#elif COMPLEX_NEON
-			static_assert(false, "ARM NEON complexPolarMul not supported yet");
-		#endif
-		}
-
-		static force_inline void vector_call complexTranspose(std::array<simd_float, simd_float::kSize> &rows)
-		{
-		#if COMPLEX_AVX2
-			static_assert(false, "AVX2 complexTranspose not supported yet");
-		#elif COMPLEX_SSE3
-			simd_type low = _mm_movelh_ps(rows[0].value, rows[1].value);
-			simd_type high = _mm_movehl_ps(rows[1].value, rows[0].value);
-			rows[0].value = low;
-			rows[1].value = high;
-		#elif COMPLEX_NEON
-			// TODO: implement complexTranspose for NEON
-			static_assert(false, "ARM NEON complexTranspose not supported yet");
-		#endif
-		}
-
-		static force_inline simd_type vector_call complexMagnitude(simd_type one, simd_type two)
-		{
-			// TODO: hypot intrinsics for avx2 and neon
-		#if COMPLEX_AVX2
-
-		#elif COMPLEX_SSE3
-			simd_type real = _mm_shuffle_ps(one, two, _MM_SHUFFLE(2, 0, 2, 0));
-			simd_type imaginary = _mm_shuffle_ps(one, two, _MM_SHUFFLE(3, 1, 3, 1));
-		#elif COMPLEX_NEON
-
-		#endif
-
-			return sqrt(mulAdd(mul(real, real), imaginary, imaginary));
-		}
-
-		static force_inline simd_type vector_call complexPhase(simd_type one, simd_type two)
-		{
-			// TODO: atan2 intrinsics for avx2 and neon
-		#if COMPLEX_AVX2
-
-		#elif COMPLEX_SSE3
-			simd_type real = _mm_shuffle_ps(one, two, _MM_SHUFFLE(2, 0, 2, 0));
-			simd_type imaginary = _mm_shuffle_ps(one, two, _MM_SHUFFLE(3, 1, 3, 1));
-
-		#elif COMPLEX_NEON
-
-		#endif
-
-			return simd_float::atan2(imaginary, real);
-		}
-
-		static force_inline simd_type vector_call complexReal(simd_type one, simd_type two)
-		{
-			// TODO: atan2 intrinsics for avx2 and neon
-		#if COMPLEX_AVX2
-
-		#elif COMPLEX_SSE3
-			simd_type magnitude = _mm_shuffle_ps(one, two, _MM_SHUFFLE(2, 0, 2, 0));
-			simd_type phase = _mm_shuffle_ps(one, two, _MM_SHUFFLE(3, 1, 3, 1));
-
-		#elif COMPLEX_NEON
-
-		#endif
-
-			return mul(magnitude, simd_float::cos(phase));
-		}
-
-		static force_inline simd_type vector_call complexImaginary(simd_type one, simd_type two)
-		{
-			// TODO: atan2 intrinsics for avx2 and neon
-		#if COMPLEX_AVX2
-
-		#elif COMPLEX_SSE3
-			simd_type magnitude = _mm_shuffle_ps(one, two, _MM_SHUFFLE(2, 0, 2, 0));
-			simd_type phase = _mm_shuffle_ps(one, two, _MM_SHUFFLE(3, 1, 3, 1));
-
-		#elif COMPLEX_NEON
-
-		#endif
-
-			return mul(magnitude, simd_float::sin(phase));
 		}
 
 
@@ -1095,43 +935,6 @@ namespace simd_values
 
 		static force_inline simd_float vector_call reverse(simd_float value)
 		{	return reverse(value.value); }
-
-		static force_inline simd_float vector_call complexCartAdd(simd_float one, simd_float two)
-		{ return complexCartAdd(one.value, two.value); }
-
-		static force_inline simd_float vector_call complexCartSub(simd_float one, simd_float two)
-		{ return complexCartSub(one.value, two.value); }
-
-		static force_inline simd_float vector_call complexCartMul(simd_float one, simd_float two)
-		{	return complexCartMul(one.value, two.value); }
-
-		static force_inline simd_float vector_call complexPolarMul(simd_float one, simd_float two)
-		{	return complexPolarMul(one.value, two.value); }
-
-		static force_inline simd_float vector_call complexMagnitude(simd_float one, simd_float two)
-		{	return complexMagnitude(one.value, two.value); }
-
-		static force_inline simd_float vector_call complexPhase(simd_float one, simd_float two)
-		{	return complexPhase(one.value, two.value); }
-
-		static force_inline void vector_call complexCartToPolar(simd_float &one, simd_float &two)
-		{
-			simd_type magnitudes = complexMagnitude(one.value, two.value);
-			simd_type phases = complexPhase(one.value, two.value);
-			complexValueMerge(magnitudes, phases);
-			one.value = magnitudes; 
-			two.value = phases;
-		}
-
-		static force_inline void vector_call complexPolarToCart(simd_float &one, simd_float &two)
-		{
-			// TODO: generalise
-			simd_type realValues = complexMagnitude(one.value, two.value);
-			simd_type imaginaryValues = complexPhase(one.value, two.value);
-			complexValueMerge(realValues, imaginaryValues);
-			one.value = realValues;
-			two.value = imaginaryValues;
-		}
 
 
 		//////////////////////////////////

@@ -39,31 +39,38 @@ namespace Generation
 		bool isCartesian;
 	};
 
-	class EffectsChain
+	struct EffectsChain
 	{
-	public:
 		EffectsChain()
 		{
 			// TODO: get rid of temporary
-			fxOrder.reserve(kNumFx);
-			fxOrder.emplace_back();
+			effectOrder.reserve(kNumFx);
+			effectOrder.emplace_back();
 			chainData = std::make_shared<EffectsChainData>();
 		}
 		~EffectsChain() = default;
 
-		EffectsChain(const EffectsChain &other) : fxOrder(other.fxOrder) { }
+		EffectsChain(const EffectsChain &other) : effectOrder(other.effectOrder) { }
+		EffectsChain &operator=(const EffectsChain &other) 
+		{ 
+			if (this != &other)
+				effectOrder = other.effectOrder;
+			return *this;
+		}
 
-		void mapOutModuleParameters();
-		// TODO: every parameter that's modulated should be mapped to particular
-		//				every parameter that's mapped out should retain its 
-		void setParameterValues();
+		EffectsChain(EffectsChain &&other) = delete;
+		EffectsChain &operator=(EffectsChain &&other) = delete;
+
+
+		void getParameters();
+		void setParameters();
 		void processEffects();
 
 		std::weak_ptr<EffectsChainData> getChainData() noexcept
 		{ return chainData; }
 
-	private:
-		std::vector<EffectModule> fxOrder;
+
+		std::vector<EffectModule> effectOrder;
 		// TODO: make it so a separate thread allocates memory for the buffers
 		std::shared_ptr<EffectsChainData> chainData;
 
@@ -73,6 +80,15 @@ namespace Generation
 	class EffectsState
 	{
 	public:
+		// data link between modules in different chains
+		struct EffectsModuleLink
+		{
+			bool checkForFeedback();
+
+			std::pair<u32, u32> sourceIndex, destinationIndex;
+		};
+
+
 		EffectsState()
 		{
 			chains_.reserve(kMaxNumChains);
@@ -82,7 +98,25 @@ namespace Generation
 		}
 		~EffectsState() = default;
 
-		EffectsState(const EffectsState &other) : chains_(other.chains_), sourceBuffer_(other.sourceBuffer_) { }
+		EffectsState(const EffectsState &other) : chains_(other.chains_), 
+			FFTSize_(other.FFTSize_), sampleRate_(other.sampleRate_) 
+		{ 
+			sourceBuffer_.reserve(other.sourceBuffer_.getNumChannels(), other.sourceBuffer_.getSize());
+		}
+		EffectsState &operator=(const EffectsState &other)
+		{
+			if (this != &other)
+			{
+				chains_ = other.chains_;
+				sourceBuffer_.reserve(other.sourceBuffer_.getNumChannels(), other.sourceBuffer_.getSize());
+				FFTSize_ = other.FFTSize_;
+				sampleRate_ = other.sampleRate_;
+			}
+			return *this;
+		}
+		
+		EffectsState(EffectsState &&other) = delete;
+		EffectsState &operator=(EffectsState &&other) = delete;
 
 		void writeInputData(AudioBuffer<float> &inputBuffer);
 		void distributeData(std::array<u32, kMaxNumChains> &chainInputs);
@@ -90,10 +124,20 @@ namespace Generation
 		void sumChains(std::array<u32, kMaxNumChains> &chainOutputs);
 		void writeOutputData(AudioBuffer<float> &outputBuffer);
 
+		void addEffect(u32 chainIndex, u32 effectIndex, ModuleTypes type = ModuleTypes::Utility);
+		void deleteEffect(u32 chainIndex, u32 effectIndex);
+		void moveEffect(u32 currentChainIndex, u32 currentEffectIndex, u32 newChainIndex, u32 newEffectIndex);
+		void copyEffect(u32 chainIndex, u32 effectIndex, u32 copyChainIndex, u32 copyEffectIndex);
+
+		// TODO: every parameter that's modulated should be mapped to particular
+		//				every parameter that's mapped out should retain its 
+		void mapOutParameter();
+
+
 		force_inline u32 getNumChains() const noexcept { return chains_.size(); }
 
 		force_inline void setFFTSize(u32 newFFTSize) noexcept { FFTSize_ = newFFTSize; }
-		force_inline void setSampleRate(double newSampleRate) { sampleRate_ = newSampleRate; }
+		force_inline void setSampleRate(double newSampleRate) noexcept { sampleRate_ = newSampleRate; }
 
 	private:
 		// TODO: parallelalise effects chains with threads

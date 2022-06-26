@@ -78,8 +78,9 @@ namespace common
 	{
 		// Normal - Lowpass/Highpass/Bandpass/Notch
 		// Regular - Harmonic/Bin based filters
-		enum class FilterTypes { Normal, Regular };
-		enum class PeakTypes { Even, Odd, Both, Between };
+		enum class FilterTypes : u32 { Normal, Regular };
+		enum class ContrastTypes : u32 { Contrast };
+		enum class PeakTypes : u32 { Even, Odd, Both, Between };
 
 		static constexpr std::string_view baseParameterIds[] = { "FX_TYPE", "FX_LOW_BOUNDARY", "FX_HIGH_BOUNDARY", "FX_SHIFT_BOUNDARY", 
 			"FX_IS_LINEAR_SHIFT", "FX_PARAM_1", "FX_PARAM_2", "FX_PARAM_3", "FX_PARAM_4", "FX_PARAM_5", "FX_PARAM_6", "FX_PARAM_7", "FX_PARAM_8", 

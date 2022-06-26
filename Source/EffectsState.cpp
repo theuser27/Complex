@@ -64,7 +64,7 @@ namespace Generation
 					{
 						simd_float one = buffer.getSIMDValueAt(i * kComplexSimdRatio, j);
 						simd_float two = buffer.getSIMDValueAt(i * kComplexSimdRatio, j + 1);
-						simd_float::complexPolarToCart(one, two);
+						utils::complexPolarToCart(one, two);
 						buffer.writeSIMDValueAt(one, i * kComplexSimdRatio, j);
 						buffer.writeSIMDValueAt(two, i * kComplexSimdRatio, j + 1);
 					}
@@ -90,7 +90,7 @@ namespace Generation
 		// for every chain we add its scaled output to the main sourceBuffer_ at the designated output channels
 		for (u32 i = 0; i < chains_.size(); i++)
 		{
-			auto currentChainData = &chains_[i].getChainData().lock().get()->intermediateBuffer;
+			auto currentChainData = &chains_[i].getChainData().lock()->intermediateBuffer;
 			for (u32 j = 0; j < currentChainData->getNumSimdChannels(); j++)
 			{
 				for (u32 k = 0; k < FFTSize_; k++)
@@ -121,5 +121,21 @@ namespace Generation
 						matrix.rows_[k].getArrayOfValues().data(), 2 * kComplexSimdRatio);
 			}
 		}
+	}
+
+	void EffectsState::addEffect(u32 chainIndex, u32 effectIndex, ModuleTypes type)
+	{
+	}
+
+	void EffectsState::deleteEffect(u32 chainIndex, u32 effectIndex)
+	{
+	}
+
+	void EffectsState::moveEffect(u32 currentChainIndex, u32 currentEffectIndex, u32 newChainIndex, u32 newEffectIndex)
+	{
+	}
+
+	void EffectsState::copyEffect(u32 chainIndex, u32 effectIndex, u32 copyChainIndex, u32 copyEffectIndex)
+	{
 	}
 }

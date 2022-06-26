@@ -13,20 +13,190 @@
 #include "common.h"
 #include "simd_buffer.h"
 
-namespace Framework
+namespace utils
 {
 	// TODO: fix this mess
 
-	static force_inline simd_float vector_call mulPolar(simd_float one, simd_float two)
+	force_inline void vector_call complexValueMerge(simd_float &one, simd_float &two)
 	{
-		auto one_ = one.getArrayOfValues();
-		auto two_ = two.getArrayOfValues();
-		for (u16 i = 0; i < simd_float::kSize; i += 2)
-		{
-			one_[i] *= two_[i];
-			one_[i + 1] += two_[i + 1];
-		}
-		return simd_float(one_);
+		// TODO: implement complexMerge for AVX and NEON
+	#if COMPLEX_AVX2
+
+	#elif COMPLEX_SSE3
+		auto one_ = _mm_unpacklo_ps(one.value, two.value);
+		two.value = _mm_unpackhi_ps(one.value, two.value);
+		one.value = one_;
+	#elif COMPLEX_NEON
+
+	#endif
+	}
+
+	force_inline simd_float vector_call complexCartAdd(simd_float one, simd_float two)
+	{	return simd_float::add(one.value, two.value); }
+
+	force_inline simd_float vector_call complexCartSub(simd_float one, simd_float two)
+	{	return simd_float::sub(one.value, two.value); }
+
+	force_inline simd_float vector_call complexCartMul(simd_float one, simd_float two)
+	{
+
+	#if COMPLEX_AVX2
+		// TODO: implement permutation
+		static_assert(false, "AVX2 complexCartMul not supported yet");
+	#elif COMPLEX_SSE3
+		auto realSums = simd_float::mul(one.value, two.value);
+		auto imaginarySums = simd_float::mul(one.value, _mm_shuffle_ps(two.value, two.value, _MM_SHUFFLE(2, 3, 0, 1)));
+		realSums = _mm_hsub_ps(realSums, realSums);
+		imaginarySums = _mm_hadd_ps(imaginarySums, imaginarySums);
+		return _mm_unpacklo_ps(realSums, imaginarySums);
+	#elif COMPLEX_NEON
+		static_assert(false, "ARM NEON complexCartMul not supported yet");
+	#endif
+	}
+
+	force_inline simd_float vector_call complexPolarMul(simd_float one, simd_float two)
+	{
+		auto magnitudes = simd_float::mul(one.value, two.value);
+		auto phases = simd_float::add(one.value, two.value);
+	#if COMPLEX_AVX2
+		// TODO: implement permutation
+		static_assert(false, "AVX2 complexPolarMul not supported yet");
+	#elif COMPLEX_SSE3
+		magnitudes = _mm_shuffle_ps(magnitudes, magnitudes, _MM_SHUFFLE(2, 0, 2, 0));
+		phases = _mm_shuffle_ps(phases, phases, _MM_SHUFFLE(3, 1, 3, 1));
+		return _mm_unpacklo_ps(magnitudes, phases);
+	#elif COMPLEX_NEON
+		static_assert(false, "ARM NEON complexPolarMul not supported yet");
+	#endif
+	}
+
+	force_inline void vector_call complexTranspose(std::array<simd_float, simd_float::kSize> &rows)
+	{
+	#if COMPLEX_AVX2
+		static_assert(false, "AVX2 complexTranspose not supported yet");
+	#elif COMPLEX_SSE3
+		auto low = _mm_movelh_ps(rows[0].value, rows[1].value);
+		auto high = _mm_movehl_ps(rows[1].value, rows[0].value);
+		rows[0].value = low;
+		rows[1].value = high;
+	#elif COMPLEX_NEON
+		// TODO: implement complexTranspose for NEON
+		static_assert(false, "ARM NEON complexTranspose not supported yet");
+	#endif
+	}
+
+	// doesn't sqrt
+	force_inline simd_float vector_call complexMagnitude(simd_float value)
+	{
+		// TODO: hypot intrinsics for avx2 and neon
+	#if COMPLEX_AVX2
+
+	#elif COMPLEX_SSE3
+		auto real = _mm_shuffle_ps(value.value, value.value, _MM_SHUFFLE(2, 2, 0, 0));
+		auto imaginary = _mm_shuffle_ps(value.value, value.value, _MM_SHUFFLE(3, 3, 1, 1));
+	#elif COMPLEX_NEON
+
+	#endif
+
+		return simd_float::mulAdd(simd_float::mul(real, real), imaginary, imaginary);
+	}
+
+	force_inline simd_float vector_call complexMagnitude(simd_float one, simd_float two)
+	{
+		// TODO: hypot intrinsics for avx2 and neon
+	#if COMPLEX_AVX2
+
+	#elif COMPLEX_SSE3
+		auto real = _mm_shuffle_ps(one.value, two.value, _MM_SHUFFLE(2, 0, 2, 0));
+		auto imaginary = _mm_shuffle_ps(one.value, two.value, _MM_SHUFFLE(3, 1, 3, 1));
+	#elif COMPLEX_NEON
+
+	#endif
+
+		return sqrt(simd_float::mulAdd(simd_float::mul(real, real), imaginary, imaginary));
+	}
+
+	force_inline simd_float vector_call complexPhase(simd_float value)
+	{
+		// TODO: atan2 intrinsics for avx2 and neon
+	#if COMPLEX_AVX2
+
+	#elif COMPLEX_SSE3
+		auto real = _mm_shuffle_ps(value.value, value.value, _MM_SHUFFLE(2, 2, 0, 0));
+		auto imaginary = _mm_shuffle_ps(value.value, value.value, _MM_SHUFFLE(3, 3, 1, 1));
+
+	#elif COMPLEX_NEON
+
+	#endif
+
+		return atan2(imaginary, real);
+	}
+
+	force_inline simd_float vector_call complexPhase(simd_float one, simd_float two)
+	{
+		// TODO: atan2 intrinsics for avx2 and neon
+	#if COMPLEX_AVX2
+
+	#elif COMPLEX_SSE3
+		auto real = _mm_shuffle_ps(one.value, two.value, _MM_SHUFFLE(2, 0, 2, 0));
+		auto imaginary = _mm_shuffle_ps(one.value, two.value, _MM_SHUFFLE(3, 1, 3, 1));
+
+	#elif COMPLEX_NEON
+
+	#endif
+
+		return atan2(imaginary, real);
+	}
+
+	force_inline simd_float vector_call complexReal(simd_float one, simd_float two)
+	{
+		// TODO: atan2 intrinsics for avx2 and neon
+	#if COMPLEX_AVX2
+
+	#elif COMPLEX_SSE3
+		auto magnitude = _mm_shuffle_ps(one.value, two.value, _MM_SHUFFLE(2, 0, 2, 0));
+		auto phase = _mm_shuffle_ps(one.value, two.value, _MM_SHUFFLE(3, 1, 3, 1));
+
+	#elif COMPLEX_NEON
+
+	#endif
+
+		return simd_float::mul(magnitude, utils::cos(phase).value);
+	}
+
+	force_inline simd_float vector_call complexImaginary(simd_float one, simd_float two)
+	{
+		// TODO: atan2 intrinsics for avx2 and neon
+	#if COMPLEX_AVX2
+
+	#elif COMPLEX_SSE3
+		auto magnitude = _mm_shuffle_ps(one.value, two.value, _MM_SHUFFLE(2, 0, 2, 0));
+		auto phase = _mm_shuffle_ps(one.value, two.value, _MM_SHUFFLE(3, 1, 3, 1));
+
+	#elif COMPLEX_NEON
+
+	#endif
+
+		return simd_float::mul(magnitude, utils::sin(phase).value);
+	}
+
+	force_inline void vector_call complexCartToPolar(simd_float &one, simd_float &two)
+	{
+		auto magnitudes = complexMagnitude(one, two);
+		auto phases = complexPhase(one, two);
+		complexValueMerge(magnitudes, phases);
+		one = magnitudes;
+		two = phases;
+	}
+
+	force_inline void vector_call complexPolarToCart(simd_float &one, simd_float &two)
+	{
+		// TODO: generalise
+		auto realValues = complexReal(one, two);
+		auto imaginaryValues = complexImaginary(one, two);
+		complexValueMerge(realValues, imaginaryValues);
+		one = realValues;
+		two = imaginaryValues;
 	}
 
 	/// <summary>
@@ -140,7 +310,4 @@ namespace Framework
 							simd_float::mulPolar(inputs[0][j], inputs[i][j]);
 			}
 	}*/
-
-
-
 }

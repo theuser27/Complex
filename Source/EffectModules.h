@@ -72,7 +72,8 @@ namespace Generation
 
 	protected:
 		// returns starting point and distance to end of processed/unprocessed range
-		force_inline std::pair<u32, u32> getRange(const simd_int &lowIndices, const simd_int &highIndices, u32 FFTSize, bool isProcessedRange)
+		force_inline std::pair<u32, u32> getRange(const simd_int &lowIndices, 
+			const simd_int &highIndices, u32 FFTSize, bool isProcessedRange)
 		{
 			using namespace utils;
 
@@ -133,6 +134,9 @@ namespace Generation
 		simd_float highBoundaryParameter_ = 1.0f;
 		simd_float boundaryShiftParameter_ = 0.0f;								// shifting of the freq boundaries [-1.0f; 1.0f]
 		bool isLinearShiftParameter_ = false;											// are the boundaries being shifted logarithmically or linearly
+		
+		static constexpr float kLowestDb = -100.0f;
+		static constexpr float kLowestAmplitude = utils::dbToMagnitudeConstexpr(kLowestDb);
 	};
 
 	class utilityEffect : public baseEffect
@@ -171,6 +175,8 @@ namespace Generation
 				cutoffParameter = std::get<simd_float>(newValue);
 			else if (parameter == parameterNames[2])
 				slopeParameter = std::get<simd_float>(newValue);
+			else
+				baseEffect::setParameter(newValue, parameter);
 		}
 
 		std::variant<simd_float, u32, bool> getParameter(std::string_view parameter) const noexcept override
@@ -181,83 +187,27 @@ namespace Generation
 				return cutoffParameter;
 			else if (parameter == parameterNames[2])
 				return slopeParameter;
+			else
+				return baseEffect::getParameter(parameter);
 		}
 
 		void run(Framework::SimdBuffer<std::complex<float>, simd_float> &source,
 			Framework::SimdBuffer<std::complex<float>, simd_float> &destination, u32 FFTSize, float sampleRate) noexcept override
 		{
-			using namespace utils;
-
-			auto shiftedBoundaries = getShiftedBoundaries(lowBoundaryParameter_, 
-				highBoundaryParameter_, sampleRate / 2.0f, isLinearShiftParameter_);
-
-			// getting the boundaries in terms of bin position
-			simd_int lowBoundaryIndices = utils::ceilToInt((shiftedBoundaries.first / (sampleRate / 2.0f)) * FFTSize);
-			simd_int highBoundaryIndices = utils::floorToInt((shiftedBoundaries.second / (sampleRate / 2.0f)) * FFTSize);
-
-			// getting the distances between the boundaries and which masks precede the others 
-			simd_mask boundaryMask = simd_int::greaterThanOrEqualSigned(highBoundaryIndices, lowBoundaryIndices);
-
-			// minimising the bins to iterate on
-			auto processedIndexAndRange = getRange(lowBoundaryIndices, highBoundaryIndices, FFTSize, true);
-			u32 index = processedIndexAndRange.first;
-			u32 numBins = processedIndexAndRange.second;
-
-			// calculating the bins where the cutoff lies
-			simd_int cutoffIndices = floorToInt(interpolate(simd_float(lowBoundaryIndices), 
-				simd_float(highBoundaryIndices), cutoffParameter));
-
-			// if mask scalars are negative -> brickwall, if positive -> linear slope
-			// clearing sign and calculating end of slope bins
-			simd_float slopes = slopeParameter;
-			simd_mask slopeMask = unsignFloat(slopes);
-			slopes = ceilToInt(interpolate((float)FFTSize, 1.0f, slopes));
-
-			// if mask scalars are negative -> attenuate at cutoff, if positive -> around cutoff
-			// clearing sign (gains is the gain reduction, not the gain multiplier)
-			simd_float gains = gainParameter;
-			simd_mask gainMask = unsignFloat(gains);
-
-			for (u32 i = 0; i < numBins; i++)
+			switch (typeParameter_)
 			{
-				simd_int distancesFromCutoff = getDistancesFromCutoff(simd_int(index),
-					cutoffIndices, boundaryMask, lowBoundaryIndices, FFTSize);
-
-				// calculating linear slope and brickwall, both are ratio of the gain attenuation
-				// the higher tha value the more it will be affected by it
-				simd_float gainRatio = maskLoad(simd_float::clamp(0.0f, 1.0f, simd_float(distancesFromCutoff) / slopes),
-																				simd_float::min(floor(simd_float(distancesFromCutoff) / (slopes + 1.0f)), 1.0f), 
-																				~slopeMask);
-				gains = maskLoad(gains * gainRatio, gains * (simd_float(1.0f) - gainRatio), ~gainMask);
-
-				// convert gain attenuation to gain multiplier and zeroing gains lower than lowest amplitude
-				gains *= kLowestDb;
-				gains = dbToMagnitude(gains);
-				gains &= simd_float::greaterThan(gains, kLowestAmplitude);
-
-				destination.writeSIMDValueAt(source.getSIMDValueAt(0, index) * gains, 0, index);
-
-				index = (index + 1) % FFTSize;
-			}
-
-			auto unprocessedIndexAndRange = getRange(lowBoundaryIndices, highBoundaryIndices, FFTSize, false);
-			index = unprocessedIndexAndRange.first;
-			numBins = unprocessedIndexAndRange.second;
-
-			// copying the unprocessed data
-			for (u32 i = 0; i < numBins; i++)
-			{
-				// utilising boundary mask since it doesn't serve a purpose anymore
-				boundaryMask = simd_int::greaterThanOrEqualSigned(lowBoundaryIndices, index)
-					| simd_int::greaterThanOrEqualSigned(index, highBoundaryIndices);
-				destination.writeSIMDValueAt((source.getSIMDValueAt(0, index) & boundaryMask) +
-																		 (destination.getSIMDValueAt(0, index) & ~boundaryMask), 0, index);
-
-				index = (index + 1) % FFTSize;
+			case static_cast<u32>(FilterTypes::Normal):
+				runNormal(source, destination, FFTSize, sampleRate);
+				break;
+			default:
+				break;
 			}
 		}
 
 	private:
+		force_inline void runNormal(Framework::SimdBuffer<std::complex<float>, simd_float> &source,
+			Framework::SimdBuffer<std::complex<float>, simd_float> &destination, u32 FFTSize, float sampleRate) noexcept;
+
 		force_inline simd_int getDistancesFromCutoff(const simd_int positionIndices, 
 			const simd_int &cutoffIndices, const simd_mask &boundaryMask, const simd_int &lowBoundaryIndices, u32 FFTSize) const noexcept
 		{
@@ -318,7 +268,7 @@ namespace Generation
 		*	 at 0.0f/1.0f it's at the low/high boundary
 		*  *parameter values are interpreted linearly, so the control needs to have an exponential slope
 		* 
-		* slope - range[0.0f, 1.0f]; controls the slope transition
+		* slope - range[-1.0f, 1.0f]; controls the slope transition
 		*	 at 0.0f it stretches from the cutoff to the frequency boundaries
 		*	 at 1.0f only the center bin is left unaffected
 		*/
@@ -326,8 +276,6 @@ namespace Generation
 		simd_float cutoffParameter = 0.0f;
 		simd_float slopeParameter = 0.0f;
 
-		static constexpr float kLowestDb = -100.0f;
-		static constexpr float kLowestAmplitude = 0.00001f;
 		static constexpr std::string_view parameterNames[] = {"Gain", "Cutoff", "Slope"};
 	};
 
@@ -352,24 +300,44 @@ namespace Generation
 		{
 			if (parameter == parameterNames[0])
 				contrastParameter = std::get<simd_float>(newValue);
+			else
+				baseEffect::setParameter(newValue, parameter);
 		}
 
 		std::variant<simd_float, u32, bool> getParameter(std::string_view parameter) const noexcept override
 		{
 			if (parameter == parameterNames[0])
 				return contrastParameter;
+			else
+				return baseEffect::getParameter(parameter);
 		}
 
 		void run(Framework::SimdBuffer<std::complex<float>, simd_float> &source,
 			Framework::SimdBuffer<std::complex<float>, simd_float> &destination, u32 FFTSize, float sampleRate) noexcept override
 		{
-			
+			switch (typeParameter_)
+			{
+			case static_cast<u32>(ContrastTypes::Contrast):
+				runContrast(source, destination, FFTSize, sampleRate);
+				break;
+			default:
+				break;
+			}
 		};
 
 	private:
-		simd_float contrastParameter = 0.0f;
-		// contrast, specops noise filter/focus, thinner
+		force_inline void runContrast(Framework::SimdBuffer<std::complex<float>, simd_float> &source,
+			Framework::SimdBuffer<std::complex<float>, simd_float> &destination, u32 FFTSize, float sampleRate);
 
+		/*
+		* contrast - range[-1.0f, 1.0f]; controls the relative loudness of the bins
+		*/
+		simd_float contrastParameter = 0.0f;
+		// dtblkfx contrast, specops noise filter/focus, thinner
+
+		static constexpr float kMinPositiveValue = 0.0f;
+		static constexpr float kMaxPositiveValue = 4.0f;
+		static constexpr float kMaxNegativeValue = -0.5f;
 		static constexpr std::string_view parameterNames[] = { "Contrast" };
 	};
 
@@ -409,26 +377,23 @@ namespace Generation
 	// class for the whole FX unit
 	class EffectModule
 	{
-		
-
 	public:
-		EffectModule() : isEnabled_(true),
-			fxPtr_(std::make_unique<baseEffect>())
+		EffectModule() : isEnabledParameter_(true),
+			effect_(std::make_unique<baseEffect>())
 		{
 			// TODO: change this when you define the default fx
 		}
 
-		EffectModule(const EffectModule &other) : isEnabled_(other.isEnabled_),
-			fxPtr_(std::make_unique<baseEffect>(*other.fxPtr_)) { }
+		EffectModule(const EffectModule &other) : isEnabledParameter_(other.isEnabledParameter_),
+			effect_(std::make_unique<baseEffect>(*other.effect_)) { }
 
 		EffectModule &operator=(const EffectModule &other)
 		{
 			if (this != &other)
 			{
-				isEnabled_ = other.isEnabled_;
-				fxPtr_ = std::make_unique<baseEffect>(*other.fxPtr_);
+				isEnabledParameter_ = other.isEnabledParameter_;
+				effect_ = std::make_unique<baseEffect>(*other.effect_);
 			}
-
 			return *this;
 		}
 
@@ -436,10 +401,9 @@ namespace Generation
 		{
 			if (this != &other)
 			{
-				isEnabled_ = other.isEnabled_;
-				fxPtr_ = std::exchange(other.fxPtr_, nullptr);
-
-				other.isEnabled_ = false;
+				isEnabledParameter_ = other.isEnabledParameter_;
+				effect_ = std::exchange(other.effect_, nullptr);
+				other.isEnabledParameter_ = false;
 			}
 		}
 
@@ -447,12 +411,10 @@ namespace Generation
 		{
 			if (this != &other)
 			{
-				isEnabled_ = other.isEnabled_;
-				fxPtr_ = std::exchange(other.fxPtr_, nullptr);
-
-				other.isEnabled_ = false;
+				isEnabledParameter_ = other.isEnabledParameter_;
+				effect_ = std::exchange(other.effect_, nullptr);
+				other.isEnabledParameter_ = false;
 			}
-
 			return *this;
 		}
 
@@ -464,38 +426,38 @@ namespace Generation
 		void setParameter(std::variant<simd_float, u32, bool> &newValue, std::string_view parameter) noexcept
 		{
 			if (parameter == moduleParameterIds[0])
-				isEnabled_ = std::get<bool>(newValue);
+				isEnabledParameter_ = std::get<bool>(newValue);
 			else if (parameter == moduleParameterIds[1])
 			{
-				moduleType = static_cast<ModuleTypes>(std::get<u32>(newValue));
-				changeEffect(moduleType);
+				moduleTypeParameter_ = static_cast<ModuleTypes>(std::get<u32>(newValue));
+				changeEffect(moduleTypeParameter_);
 			}
 			else if (parameter == moduleParameterIds[1])
-				mix_ = std::get<simd_float>(newValue);
+				mixParameter_ = std::get<simd_float>(newValue);
 			else if (parameter == moduleParameterIds[2])
-				gain_ = std::get<simd_float>(newValue);
+				gainParameter_ = std::get<simd_float>(newValue);
 			else
-				fxPtr_->setParameter(newValue, parameter);
+				effect_->setParameter(newValue, parameter);
 		}
 
 		std::variant<simd_float, u32, bool> getParameter(std::string_view parameter) const noexcept
 		{
 			if (parameter == moduleParameterIds[0])
-				return isEnabled_;
+				return isEnabledParameter_;
 			else if (parameter == moduleParameterIds[1])
-				return static_cast<u32>(moduleType);
+				return static_cast<u32>(moduleTypeParameter_);
 			else if (parameter == moduleParameterIds[2])
-				return mix_;
+				return mixParameter_;
 			else if (parameter == moduleParameterIds[3])
-				return gain_;
+				return gainParameter_;
 			else
-				return fxPtr_->getParameter(parameter);
+				return effect_->getParameter(parameter);
 		}
 
 		void changeEffect(ModuleTypes newType, bool reinitialise = false)
 		{
 			// TODO: call the allocation thread to fetch you the particular module type
-			std::unique_ptr<baseEffect> newFx;
+			std::unique_ptr<baseEffect> newEffect;
 
 			switch (newType)
 			{
@@ -521,13 +483,18 @@ namespace Generation
 				break;
 			}
 		}
-		void processEffect();
+
+		void processEffect(Framework::SimdBuffer<std::complex<float>, simd_float> &source,
+			Framework::SimdBuffer<std::complex<float>, simd_float> &destination, u32 FFTSize, float sampleRate);
 
 	private:
-		bool isEnabled_ = true;
-		simd_float mix_ = 100.0f;
-		simd_float gain_ = 0.0f;
-		ModuleTypes moduleType = ModuleTypes::Utility;
-		std::unique_ptr<baseEffect> fxPtr_;
+		bool isEnabledParameter_ = true;
+		simd_float mixParameter_ = 1.0f;
+		simd_float gainParameter_ = 0.0f;
+		ModuleTypes moduleTypeParameter_ = ModuleTypes::Utility;
+		std::unique_ptr<baseEffect> effect_;
+
+		static constexpr float kMaxPositiveGain = utils::dbToMagnitudeConstexpr(30.0f);
+		static constexpr float kMaxNegativeGain = utils::dbToMagnitudeConstexpr(-30.0f);
 	};
 }
