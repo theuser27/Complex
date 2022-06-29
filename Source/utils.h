@@ -20,35 +20,35 @@ namespace utils
 
     enum class Operations { Assign, Add, Multiply, MultiplyAdd };
 
-    force_inline float min(float one, float two) 
+    strict_inline float min(float one, float two) 
     { return fmin(one, two); }
 
-    force_inline float max(float one, float two) 
+    strict_inline float max(float one, float two) 
     { return fmax(one, two); }
 
-    force_inline float clamp(float value, float min, float max) 
+    strict_inline float clamp(float value, float min, float max) 
     { return fmin(max, fmax(value, min)); }
 
-    constexpr force_inline size_t imax(size_t one, size_t two)
+    constexpr strict_inline size_t imax(size_t one, size_t two)
     { return (one > two) ? one : two; }
 
-    constexpr force_inline size_t imin(size_t one, size_t two)
+    constexpr strict_inline size_t imin(size_t one, size_t two)
     { return (one > two) ? two : one; }
 
     template<typename T>
-    constexpr force_inline T interpolate(T from, T to, T t) 
+    constexpr strict_inline T interpolate(T from, T to, T t) 
     { return t * (to - from) + from; }
 
-    force_inline float mod(double value, double* divisor) 
+    strict_inline float mod(double value, double* divisor) 
     { return static_cast<float>(modf(value, divisor)); }
 
-    force_inline float mod(float value, float* divisor) 
+    strict_inline float mod(float value, float* divisor) 
     { return modff(value, divisor); }
 
-    constexpr force_inline size_t iclamp(size_t value, size_t min, size_t max)
+    constexpr strict_inline size_t iclamp(size_t value, size_t min, size_t max)
     { return value > max ? max : (value < min ? min : value); }
 
-    force_inline i32 ilog2(i32 value)
+    strict_inline i32 ilog2(i32 value)
     {
     #if defined(__GNUC__) || defined(__clang__)
         constexpr i32 kMaxBitIndex = sizeof(i32) * 8 - 1;
@@ -65,49 +65,49 @@ namespace utils
     #endif
     }
 
-    constexpr force_inline bool closeToZero(float value)
+    constexpr strict_inline bool closeToZero(float value)
     { return value <= kEpsilon && value >= -kEpsilon; }
 
-    force_inline float magnitudeToDb(float magnitude) 
+    strict_inline float magnitudeToDb(float magnitude) 
     { return 20.0f * log10f(magnitude); }
 
-    force_inline float dbToMagnitude(float decibels)
+    strict_inline float dbToMagnitude(float decibels)
     { return powf(10.0f, decibels / 20.0f); }
 
-    constexpr force_inline float dbToMagnitudeConstexpr(float decibels)
+    constexpr strict_inline float dbToMagnitudeConstexpr(float decibels)
     { return gcem::pow(10.0f, decibels / 20.0f); }
 
-    force_inline float centsToRatio(float cents) 
+    strict_inline float centsToRatio(float cents) 
     { return powf(2.0f, cents / kCentsPerOctave); }
 
-    force_inline float midiCentsToFrequency(float cents) 
+    strict_inline float midiCentsToFrequency(float cents) 
     { return kMidi0Frequency * centsToRatio(cents); }
 
-    force_inline float midiNoteToFrequency(float note) 
+    strict_inline float midiNoteToFrequency(float note) 
     { return midiCentsToFrequency(note * kCentsPerNote); }
 
-    force_inline float frequencyToMidiNote(float frequency) 
+    strict_inline float frequencyToMidiNote(float frequency) 
     { return (float)kNotesPerOctave * logf(frequency / kMidi0Frequency) * kInvLogOf2; }
 
-    force_inline float frequencyToMidiCents(float frequency) 
+    strict_inline float frequencyToMidiCents(float frequency) 
     { return kCentsPerNote * frequencyToMidiNote(frequency); }
 
-    force_inline i32 nextPowerOfTwo(float value) 
+    strict_inline i32 nextPowerOfTwo(float value) 
     { return static_cast<i32>(roundf(powf(2.0f, ceilf(logf(value) * kInvLogOf2)))); }
 
-    force_inline void zeroBuffer(float *buffer, int size)
+    strict_inline void zeroBuffer(float *buffer, int size)
     {
       for (int i = 0; i < size; ++i)
         buffer[i] = 0.0f;
     }
 
-    force_inline void copyBuffer(float *dest, const float *source, int size)
+    strict_inline void copyBuffer(float *dest, const float *source, int size)
     {
       for (int i = 0; i < size; ++i)
         dest[i] = source[i];
     }
 
-    constexpr force_inline bool isSilent(const float* buffer, i32 length)
+    constexpr strict_inline bool isSilent(const float* buffer, i32 length)
     {
         for (i32 i = 0; i < length; ++i)
         {
@@ -117,7 +117,7 @@ namespace utils
         return true;
     }
 
-    force_inline float rms(const float* buffer, i32 num)
+    strict_inline float rms(const float* buffer, i32 num)
     {
         float squared_total (0.0f);
         for (i32 i = 0; i < num; i++)
@@ -126,7 +126,7 @@ namespace utils
         return sqrtf(squared_total / num);
     }
 
-    constexpr force_inline i32 prbs32(i32 x)
+    constexpr strict_inline i32 prbs32(i32 x)
     {
       // maximal length, taps 32 31 29 1, from wikipedia
       return ((u32)x >> 1) ^ (-(x & 1) & 0xd0000001UL);
@@ -134,7 +134,7 @@ namespace utils
 
     // copies samples from "otherBuffer" to "thisBuffer" to respective channels
     // while anticipating wrapping around in both buffers 
-    force_inline void copyBuffer(AudioBuffer<float> &thisBuffer, const AudioBuffer<float> &otherBuffer,
+    strict_inline void copyBuffer(AudioBuffer<float> &thisBuffer, const AudioBuffer<float> &otherBuffer,
       u32 numChannels, u32 numSamples, u32 thisStartIndex, u32 otherStartIndex,
       Operations operation = Operations::Assign) noexcept
     {
@@ -177,14 +177,14 @@ namespace utils
     }
 
     template<typename T, SimdValue SIMD>
-    force_inline u32 calculateNumSimdChannels(u32 numChannels)
+    strict_inline u32 calculateNumSimdChannels(u32 numChannels)
     {
       auto relativeSize = sizeof(SIMD) / sizeof(T);
       return (u32)std::ceil((double)numChannels / (double)relativeSize);
     }
 
     // for debugging purposes
-    force_inline void printBuffer(const float *begin, u32 numSamples)
+    strict_inline void printBuffer(const float *begin, u32 numSamples)
     {
       for (u32 i = 0; i < numSamples; i++)
       {

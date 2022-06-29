@@ -10,28 +10,18 @@
 
 #pragma once
 
-#include "JuceHeader.h"
-
-#if DEBUG
-#include <cassert>
-#define COMPLEX_ASSERT(x) assert(x)
-#else
-#define COMPLEX_ASSERT(x) ((void)0)
-#endif
-
-#if !defined(force_inline)
-#if defined (_MSC_VER)
-#define force_inline __forceinline
-#define vector_call __vectorcall
-#else
-#define force_inline inline __attribute__((always_inline))
-#define vector_call
-#endif
-#endif
-
-#include "simd_values.h"
 #include <memory>
 #include <numbers>
+
+#if DEBUG
+	#include <cassert>
+	#define COMPLEX_ASSERT(x) assert(x)
+#else
+	#define COMPLEX_ASSERT(x) ((void)0)
+#endif
+
+#include "JuceHeader.h"
+#include "simd_values.h"
 
 namespace common
 {

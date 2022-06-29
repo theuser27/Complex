@@ -27,6 +27,38 @@ namespace Generation
 	public:
 		baseEffect() = default;
 
+		baseEffect(const baseEffect &other) noexcept : typeParameter_(other.typeParameter_),
+			lowBoundaryParameter_(other.lowBoundaryParameter_),
+			highBoundaryParameter_(other.highBoundaryParameter_),
+			isLinearShiftParameter_(other.isLinearShiftParameter_) { }
+		baseEffect &operator=(const baseEffect &other) noexcept
+		{
+			if (this != &other)
+			{
+				typeParameter_ = other.typeParameter_;
+				lowBoundaryParameter_ = other.lowBoundaryParameter_;
+				highBoundaryParameter_ = other.highBoundaryParameter_;
+				isLinearShiftParameter_ = other.isLinearShiftParameter_;
+			}
+			return *this;
+		}
+
+		baseEffect(baseEffect &&other) noexcept : typeParameter_(other.typeParameter_),
+			lowBoundaryParameter_(other.lowBoundaryParameter_),
+			highBoundaryParameter_(other.highBoundaryParameter_),
+			isLinearShiftParameter_(other.isLinearShiftParameter_) { }
+		baseEffect &operator=(baseEffect &&other) noexcept
+		{
+			if (this != &other)
+			{
+				typeParameter_ = other.typeParameter_;
+				lowBoundaryParameter_ = other.lowBoundaryParameter_;
+				highBoundaryParameter_ = other.highBoundaryParameter_;
+				isLinearShiftParameter_ = other.isLinearShiftParameter_;
+			}
+			return *this;
+		}
+
 		virtual void initialise() noexcept
 		{
 			typeParameter_ = 0;
@@ -70,9 +102,11 @@ namespace Generation
 			source.swap(destination);
 		};
 
+
+
 	protected:
 		// returns starting point and distance to end of processed/unprocessed range
-		force_inline std::pair<u32, u32> getRange(const simd_int &lowIndices, 
+		perf_inline std::pair<u32, u32> getRange(const simd_int &lowIndices,
 			const simd_int &highIndices, u32 FFTSize, bool isProcessedRange)
 		{
 			using namespace utils;
@@ -102,7 +136,7 @@ namespace Generation
 		}
 
 		// first - low shifted boundary, second - high shifted boundary
-		force_inline std::pair<simd_float, simd_float> getShiftedBoundaries(simd_float lowBoundary, 
+		perf_inline std::pair<simd_float, simd_float> getShiftedBoundaries(simd_float lowBoundary,
 			simd_float highBoundary, float maxFrequency, bool isLinearShift)
 		{
 			using namespace utils;
@@ -134,7 +168,7 @@ namespace Generation
 		simd_float highBoundaryParameter_ = 1.0f;
 		simd_float boundaryShiftParameter_ = 0.0f;								// shifting of the freq boundaries [-1.0f; 1.0f]
 		bool isLinearShiftParameter_ = false;											// are the boundaries being shifted logarithmically or linearly
-		
+
 		static constexpr float kLowestDb = -100.0f;
 		static constexpr float kLowestAmplitude = utils::dbToMagnitudeConstexpr(kLowestDb);
 	};
@@ -205,10 +239,10 @@ namespace Generation
 		}
 
 	private:
-		force_inline void runNormal(Framework::SimdBuffer<std::complex<float>, simd_float> &source,
+		perf_inline void runNormal(Framework::SimdBuffer<std::complex<float>, simd_float> &source,
 			Framework::SimdBuffer<std::complex<float>, simd_float> &destination, u32 FFTSize, float sampleRate) noexcept;
 
-		force_inline simd_int getDistancesFromCutoff(const simd_int positionIndices, 
+		perf_inline simd_int getDistancesFromCutoff(const simd_int positionIndices,
 			const simd_int &cutoffIndices, const simd_mask &boundaryMask, const simd_int &lowBoundaryIndices, u32 FFTSize) const noexcept
 		{
 			using namespace utils;
@@ -288,6 +322,7 @@ namespace Generation
 
 	class contrastEffect : public baseEffect
 	{
+	public:
 		contrastEffect() = default;
 
 		void initialise() noexcept override
@@ -326,7 +361,7 @@ namespace Generation
 		};
 
 	private:
-		force_inline void runContrast(Framework::SimdBuffer<std::complex<float>, simd_float> &source,
+		strict_inline void runContrast(Framework::SimdBuffer<std::complex<float>, simd_float> &source,
 			Framework::SimdBuffer<std::complex<float>, simd_float> &destination, u32 FFTSize, float sampleRate);
 
 		/*
@@ -378,42 +413,75 @@ namespace Generation
 	class EffectModule
 	{
 	public:
-		EffectModule() : isEnabledParameter_(true),
-			effect_(std::make_unique<baseEffect>())
+		EffectModule() = default;
+
+		EffectModule(ModuleTypes type)
 		{
-			// TODO: change this when you define the default fx
+			switch (type)
+			{
+			case ModuleTypes::Utility:
+				effect_ = std::make_unique<utilityEffect>();
+				break;
+			case ModuleTypes::Filter:
+				effect_ = std::make_unique<filterEffect>();
+				break;
+			case ModuleTypes::Contrast:
+				effect_ = std::make_unique<contrastEffect>();
+				break;
+			case ModuleTypes::Dynamics:
+				effect_ = std::make_unique<dynamicsEffect>();
+				break;
+			case ModuleTypes::Phase:
+				effect_ = std::make_unique<phaseEffect>();
+				break;
+			case ModuleTypes::Pitch:
+				effect_ = std::make_unique<pitchEffect>();
+				break;
+			case ModuleTypes::Stretch:
+				effect_ = std::make_unique<stretchEffect>();
+				break;
+			case ModuleTypes::Warp:
+				effect_ = std::make_unique<warpEffect>();
+				break;
+			case ModuleTypes::Destroy:
+				effect_ = std::make_unique<destroyEffect>();
+				break;
+			default:
+				effect_ = std::make_unique<utilityEffect>();
+				break;
+			}
 		}
 
 		EffectModule(const EffectModule &other) : isEnabledParameter_(other.isEnabledParameter_),
+			mixParameter_(other.mixParameter_), gainParameter_(other.gainParameter_),
+			moduleTypeParameter_(other.moduleTypeParameter_),
 			effect_(std::make_unique<baseEffect>(*other.effect_)) { }
-
 		EffectModule &operator=(const EffectModule &other)
 		{
 			if (this != &other)
 			{
 				isEnabledParameter_ = other.isEnabledParameter_;
+				mixParameter_ = other.mixParameter_;
+				gainParameter_ = other.gainParameter_;
+				moduleTypeParameter_ = other.moduleTypeParameter_;
 				effect_ = std::make_unique<baseEffect>(*other.effect_);
 			}
 			return *this;
 		}
 
-		EffectModule(EffectModule &&other) noexcept
-		{
-			if (this != &other)
-			{
-				isEnabledParameter_ = other.isEnabledParameter_;
-				effect_ = std::exchange(other.effect_, nullptr);
-				other.isEnabledParameter_ = false;
-			}
-		}
-
+		EffectModule(EffectModule &&other) noexcept : isEnabledParameter_(other.isEnabledParameter_),
+			mixParameter_(other.mixParameter_), gainParameter_(other.gainParameter_), 
+			moduleTypeParameter_(other.moduleTypeParameter_), effect_(std::exchange(other.effect_, nullptr)) { }
 		EffectModule &operator=(EffectModule &&other) noexcept
 		{
 			if (this != &other)
 			{
 				isEnabledParameter_ = other.isEnabledParameter_;
+				isEnabledParameter_ = other.isEnabledParameter_;
+				mixParameter_ = other.mixParameter_;
+				gainParameter_ = other.gainParameter_;
+				moduleTypeParameter_ = other.moduleTypeParameter_;
 				effect_ = std::exchange(other.effect_, nullptr);
-				other.isEnabledParameter_ = false;
 			}
 			return *this;
 		}
@@ -454,34 +522,49 @@ namespace Generation
 				return effect_->getParameter(parameter);
 		}
 
-		void changeEffect(ModuleTypes newType, bool reinitialise = false)
+		// call on an allocation thread to fetch you the particular module type
+		void changeEffect(ModuleTypes newType)
 		{
-			// TODO: call the allocation thread to fetch you the particular module type
 			std::unique_ptr<baseEffect> newEffect;
-
 			switch (newType)
 			{
 			case ModuleTypes::Utility:
+				newEffect = std::make_unique<utilityEffect>();
 				break;
 			case ModuleTypes::Filter:
+				newEffect = std::make_unique<filterEffect>();
 				break;
 			case ModuleTypes::Contrast:
+				newEffect = std::make_unique<contrastEffect>();
 				break;
 			case ModuleTypes::Dynamics:
+				newEffect = std::make_unique<dynamicsEffect>();
 				break;
 			case ModuleTypes::Phase:
+				newEffect = std::make_unique<phaseEffect>();
 				break;
 			case ModuleTypes::Pitch:
+				newEffect = std::make_unique<pitchEffect>();
 				break;
 			case ModuleTypes::Stretch:
+				newEffect = std::make_unique<stretchEffect>();
 				break;
 			case ModuleTypes::Warp:
+				newEffect = std::make_unique<warpEffect>();
 				break;
 			case ModuleTypes::Destroy:
+				newEffect = std::make_unique<destroyEffect>();
 				break;
 			default:
+				newEffect = std::make_unique<utilityEffect>();
 				break;
 			}
+
+			// blocks alloc thread until processing finishes
+			bool expected = false;
+			while (isInUse.compare_exchange_weak(expected, true));
+			std::swap(effect_, newEffect);
+			isInUse.store(false, std::memory_order_release);
 		}
 
 		void processEffect(Framework::SimdBuffer<std::complex<float>, simd_float> &source,
@@ -493,6 +576,8 @@ namespace Generation
 		simd_float gainParameter_ = 0.0f;
 		ModuleTypes moduleTypeParameter_ = ModuleTypes::Utility;
 		std::unique_ptr<baseEffect> effect_;
+
+		std::atomic<bool> isInUse = false;
 
 		static constexpr float kMaxPositiveGain = utils::dbToMagnitudeConstexpr(30.0f);
 		static constexpr float kMaxNegativeGain = utils::dbToMagnitudeConstexpr(-30.0f);

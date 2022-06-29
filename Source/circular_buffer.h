@@ -57,7 +57,7 @@ namespace Framework
 			channels_ = newNumChannels;
 		}
 
-		force_inline void clear(u32 begin, u32 numSamples) noexcept
+		perf_inline void clear(u32 begin, u32 numSamples) noexcept
 		{
 			if (begin + numSamples <= size_)
 			{
@@ -70,20 +70,20 @@ namespace Framework
 			data_.clear(0, samplesLeft);
 		}
 
-		force_inline void clear() noexcept
+		perf_inline void clear() noexcept
 		{ data_.clear(); }
 
-		force_inline void advanceEnd(u32 numSamples) noexcept
+		perf_inline void advanceEnd(u32 numSamples) noexcept
 		{ end_ = (end_ + numSamples) % size_; }
 
-		force_inline void setEnd(u32 index) noexcept
+		perf_inline void setEnd(u32 index) noexcept
 		{ end_ = index % size_; }
 
 		// - A specified AudioBuffer reads from the current buffer's data and stores it in a reader, where
 		//	readee's starting index = readerIndex + end_ and 
 		//	reader's starting index = readeeIndex
 		// - Can decide whether to advance the block or not
-		/*force_inline*/ void readBuffer(AudioBuffer<float> &reader, u32 numChannels,
+		perf_inline void readBuffer(AudioBuffer<float> &reader, u32 numChannels,
 			u32 numSamples, u32 readeeIndex = 0, u32 readerIndex = 0) noexcept
 		{
 			utils::copyBuffer(reader, data_, numChannels, numSamples, readerIndex, readeeIndex);
@@ -92,58 +92,58 @@ namespace Framework
 		// - A specified AudioBuffer writes own data starting at writerOffset to the end of the current buffer,
 		//	which can be offset forwards or backwards with writeeOffset
 		// - Adjusts end_ according to the new block written
-		/*force_inline*/ void writeBuffer(const AudioBuffer<float> &writer, u32 numChannels, u32 numSamples,
+		perf_inline void writeBuffer(const AudioBuffer<float> &writer, u32 numChannels, u32 numSamples,
 			u32 writerIndex = 0, utils::Operations operation = utils::Operations::Assign) noexcept
 		{
 			utils::copyBuffer(data_, writer, numChannels, numSamples, end_, writerIndex, operation);
 			advanceEnd(numSamples);
 		}
 
-		force_inline void add(float value, u32 channel, u32 index) noexcept
+		perf_inline void add(float value, u32 channel, u32 index) noexcept
 		{
 			COMPLEX_ASSERT(channel < getNumChannels());
 			COMPLEX_ASSERT(index < getSize());
 			data_.setSample(channel, index, data_.getSample(channel, index) + value); 
 		}
 
-		/*force_inline*/ void addBuffer(const AudioBuffer<float> &other, u32 numChannels,
+		perf_inline void addBuffer(const AudioBuffer<float> &other, u32 numChannels,
 			u32 numSamples, u32 thisStartIndex = 0, u32 otherStartIndex = 0) noexcept
 		{
 			utils::copyBuffer(data_, other, numChannels, numSamples, 
 				thisStartIndex, otherStartIndex, utils::Operations::Add);
 		}
 
-		force_inline void multiply(float value, u32 channel, u32 index) noexcept
+		perf_inline void multiply(float value, u32 channel, u32 index) noexcept
 		{
 			COMPLEX_ASSERT(channel < getNumChannels());
 			COMPLEX_ASSERT(index < getSize());
 			data_.setSample(channel, index, data_.getSample(channel, index) * value);
 		}
 
-		/*force_inline*/ void multiplyBuffer(const AudioBuffer<float> &other, u32 numChannels,
+		perf_inline void multiplyBuffer(const AudioBuffer<float> &other, u32 numChannels,
 			u32 numSamples, u32 thisStartIndex = 0, u32 otherStartIndex = 0) noexcept
 		{
 			utils::copyBuffer(data_, other, numChannels, numSamples, 
 				thisStartIndex, otherStartIndex, utils::Operations::Multiply);
 		}
 
-		force_inline float getSample(u32 channel, u32 index) const noexcept
+		perf_inline float getSample(u32 channel, u32 index) const noexcept
 		{
 			COMPLEX_ASSERT(channel < getNumChannels());
 			COMPLEX_ASSERT(index < getSize());
 			return data_.getSample(channel, index);
 		}
 
-		force_inline auto& getData() noexcept
+		strict_inline auto& getData() noexcept
 		{ return data_; }
 
-		force_inline u32 getNumChannels() const noexcept
+		strict_inline u32 getNumChannels() const noexcept
 		{ return channels_; }
 
-		force_inline u32 getSize() const noexcept
+		strict_inline u32 getSize() const noexcept
 		{ return size_; }
 
-		force_inline u32 getEnd() const noexcept
+		strict_inline u32 getEnd() const noexcept
 		{ return end_; }
 
 	private:

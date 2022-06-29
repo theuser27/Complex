@@ -12,7 +12,7 @@
 
 namespace Generation
 {
-	force_inline void filterEffect::runNormal(Framework::SimdBuffer<std::complex<float>, simd_float> &source,
+	perf_inline void filterEffect::runNormal(Framework::SimdBuffer<std::complex<float>, simd_float> &source,
 		Framework::SimdBuffer<std::complex<float>, simd_float> &destination, u32 FFTSize, float sampleRate) noexcept
 	{
 		using namespace utils;
@@ -86,7 +86,7 @@ namespace Generation
 		}
 	}
 
-	force_inline void contrastEffect::runContrast(Framework::SimdBuffer<std::complex<float>, simd_float> &source,
+	perf_inline void contrastEffect::runContrast(Framework::SimdBuffer<std::complex<float>, simd_float> &source,
 		Framework::SimdBuffer<std::complex<float>, simd_float> &destination, u32 FFTSize, float sampleRate)
 	{
 		using namespace utils;
@@ -174,7 +174,15 @@ namespace Generation
 			return;
 		}
 
+		// the only reason we'd have to wait is if the allocation thread is
+		// swapping pointers
+		bool expected = false;
+		while (isInUse.compare_exchange_weak(expected, true, std::memory_order_acq_rel));
+
 		effect_->run(source, destination, FFTSize, sampleRate);
+
+		isInUse.store(false, std::memory_order_release);
+		isInUse.notify_one();
 
 		simd_mask wetMask = simd_float::notEqual(1.0f, mixParameter_);
 		simd_mask gainMask = simd_float::notEqual(0.0f, gainParameter_);

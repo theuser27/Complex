@@ -23,20 +23,19 @@ namespace Generation
 			// size is half the max because a single SIMD package stores both real and imaginary parts
 			workBuffer.reserve(kNumChannels, kMaxFFTBufferLength / 2);
 			intermediateBuffer.reserve(kNumChannels, kMaxFFTBufferLength / 2);
-			isCartesian = true;
 		}
+
+		// is the work buffer in cartesian or polar representation
+		bool isCartesian = true;
+
+		// volume of the output wet signal
+		simd_float outputVolume;
 
 		// main buffer for processing
 		Framework::SimdBuffer<std::complex<float>, simd_float> workBuffer;
 
 		// intermediate buffer used for dry/wet mixing per effect
 		Framework::SimdBuffer<std::complex<float>, simd_float> intermediateBuffer;
-
-		// volume of the output wet signal
-		simd_float outputVolume;
-
-		// is the work buffer in cartesian or polar representation
-		bool isCartesian;
 	};
 
 	struct EffectsChain
@@ -50,17 +49,33 @@ namespace Generation
 		}
 		~EffectsChain() = default;
 
-		EffectsChain(const EffectsChain &other) : effectOrder(other.effectOrder) { }
+		EffectsChain(const EffectsChain &other) : effectOrder(other.effectOrder), 
+			chainData(std::make_shared<EffectsChainData>()) { }
+
 		EffectsChain &operator=(const EffectsChain &other) 
 		{ 
 			if (this != &other)
+			{
 				effectOrder = other.effectOrder;
+				chainData = std::make_shared<EffectsChainData>();
+			}
+				
 			return *this;
 		}
 
-		EffectsChain(EffectsChain &&other) = delete;
-		EffectsChain &operator=(EffectsChain &&other) = delete;
+		EffectsChain(EffectsChain &&other) noexcept 
+			: effectOrder(other.effectOrder), chainData(other.chainData) { }
 
+		EffectsChain &operator=(EffectsChain &&other) noexcept
+		{
+			if (this != &other)
+			{
+				effectOrder = other.effectOrder;
+				chainData = other.chainData;
+			}
+
+			return *this;
+		}
 
 		void getParameters();
 		void setParameters();
@@ -134,10 +149,10 @@ namespace Generation
 		void mapOutParameter();
 
 
-		force_inline u32 getNumChains() const noexcept { return chains_.size(); }
+		strict_inline u32 getNumChains() const noexcept { return chains_.size(); }
 
-		force_inline void setFFTSize(u32 newFFTSize) noexcept { FFTSize_ = newFFTSize; }
-		force_inline void setSampleRate(double newSampleRate) noexcept { sampleRate_ = newSampleRate; }
+		strict_inline void setFFTSize(u32 newFFTSize) noexcept { FFTSize_ = newFFTSize; }
+		strict_inline void setSampleRate(double newSampleRate) noexcept { sampleRate_ = newSampleRate; }
 
 	private:
 		// TODO: parallelalise effects chains with threads
@@ -145,7 +160,7 @@ namespace Generation
 		// main buffer to store every FFT-ed input
 		Framework::SimdBuffer<std::complex<float>, simd_float> sourceBuffer_;
 		// current FFT process size
-		u32 FFTSize_ = 0;
+		u32 FFTSize_ = 1 << kDefaultFFTOrder;
 		double sampleRate_ = kDefaultSampleRate;
 	};
 }

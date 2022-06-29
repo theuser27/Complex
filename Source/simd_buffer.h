@@ -41,7 +41,7 @@ namespace Framework
 			reserve(other.getNumChannels(), other.getSize());
 		}
 
-		force_inline void swap(SimdBuffer<T, SIMD> &other)
+		perf_inline void swap(SimdBuffer<T, SIMD> &other)
 		{
 			if (&other == this)
 				return;
@@ -91,7 +91,7 @@ namespace Framework
 			size_ = newSize;
 		}
 
-		force_inline void clear()
+		perf_inline void clear()
 		{ data_.clear(); }
 
 		// copies/does math operation on samples from "otherBuffer" to "thisBuffer"
@@ -154,7 +154,7 @@ namespace Framework
 		}
 
 
-		force_inline void add(SIMD value, u32 channel, u32 index)
+		perf_inline void add(SIMD value, u32 channel, u32 index)
 		{
 			COMPLEX_ASSERT(channel < getNumChannels());
 			COMPLEX_ASSERT(index < getSize());
@@ -163,7 +163,7 @@ namespace Framework
 			writeSIMDValueAt(simd + value, channel, index);
 		}
 
-		force_inline void add(T value, u32 channel, u32 index)
+		perf_inline void add(T value, u32 channel, u32 index)
 		{
 			COMPLEX_ASSERT(channel < getNumChannels());
 			COMPLEX_ASSERT(index < getSize());
@@ -172,7 +172,7 @@ namespace Framework
 			writeValueAt(scalar + value, channel, index);
 		}
 
-		force_inline void addBuffer(SimdBuffer<T, SIMD, alignment> &other, u32 numChannels, u32 numSamples,
+		perf_inline void addBuffer(SimdBuffer<T, SIMD, alignment> &other, u32 numChannels, u32 numSamples,
 			simd_mask mergeMask = kNoChangeMask, simd_mask shiftMask = kNoChangeMask, u32 thisStartChannel = 0,
 			u32 otherStartChannel = 0, u32 thisStartIndex = 0, u32 otherStartIndex = 0)
 		{
@@ -183,7 +183,7 @@ namespace Framework
 				mergeMask, shiftMask, thisStartChannel, otherStartChannel, thisStartIndex, otherStartIndex);
 		}
 
-		force_inline void multiply(SIMD value, u32 channel, u32 index)
+		perf_inline void multiply(SIMD value, u32 channel, u32 index)
 		{
 			COMPLEX_ASSERT(channel < getNumChannels());
 			COMPLEX_ASSERT(index < getSize());
@@ -192,7 +192,7 @@ namespace Framework
 			writeSIMDValueAt(simd * value, channel, index);
 		}
 
-		force_inline void multiply(T value, u32 channel, u32 index)
+		perf_inline void multiply(T value, u32 channel, u32 index)
 		{
 			COMPLEX_ASSERT(channel < getNumChannels());
 			COMPLEX_ASSERT(index < getSize());
@@ -201,7 +201,7 @@ namespace Framework
 			writeValueAt(scalar * value, channel, index);
 		}
 
-		force_inline void multiplyBuffer(SimdBuffer<T, SIMD, alignment> &other, u32 numChannels, u32 numSamples,
+		perf_inline void multiplyBuffer(SimdBuffer<T, SIMD, alignment> &other, u32 numChannels, u32 numSamples,
 			simd_mask mergeMask = kNoChangeMask, simd_mask shiftMask = kNoChangeMask, u32 thisStartChannel = 0,
 			u32 otherStartChannel = 0, u32 thisStartIndex = 0, u32 otherStartIndex = 0)
 		{
@@ -214,7 +214,7 @@ namespace Framework
 		
 
 		// returns packed values from the buffer
-		force_inline SIMD getSIMDValueAt(u32 channel, u32 index) const noexcept
+		perf_inline SIMD getSIMDValueAt(u32 channel, u32 index) const noexcept
 		{
 			COMPLEX_ASSERT(channel < getNumChannels());
 			COMPLEX_ASSERT(index < getSize());
@@ -224,7 +224,7 @@ namespace Framework
 		}
 
 		// returns a single value from the buffer
-		force_inline T getValueAt(u32 channel, u32 index) const noexcept
+		perf_inline T getValueAt(u32 channel, u32 index) const noexcept
 		{
 			COMPLEX_ASSERT(channel < getNumChannels());
 			COMPLEX_ASSERT(index < getSize());
@@ -236,7 +236,7 @@ namespace Framework
 		}
 
 		// writes packed values to the buffer
-		force_inline void writeSIMDValueAt(SIMD value, u32 channel, u32 index) noexcept
+		perf_inline void writeSIMDValueAt(SIMD value, u32 channel, u32 index) noexcept
 		{
 			COMPLEX_ASSERT(channel < getNumChannels());
 			COMPLEX_ASSERT(index < getSize());
@@ -249,7 +249,7 @@ namespace Framework
 		}
 
 		// writes a single value to the buffer
-		force_inline void writeValueAt(T value, u32 channel, u32 index) noexcept
+		perf_inline void writeValueAt(T value, u32 channel, u32 index) noexcept
 		{
 			COMPLEX_ASSERT(channel < getNumChannels());
 			COMPLEX_ASSERT(index < getSize());
@@ -265,31 +265,32 @@ namespace Framework
 		}
 
 
-		force_inline u32 getSize() const noexcept
+		strict_inline u32 getSize() const noexcept
 		{	return size_; }
 
-		force_inline u32 getNumChannels() const noexcept
+		strict_inline u32 getNumChannels() const noexcept
 		{ return channels_; }
 
-		force_inline u32 getEnd() const noexcept
+		strict_inline u32 getEnd() const noexcept
 		{ return end_; }
 
-		force_inline u32 getNumSimdChannels() const noexcept
+		strict_inline u32 getNumSimdChannels() const noexcept
 		{ return simdChannels_; }
 
-		force_inline std::weak_ptr<SIMD[]> getData() const noexcept
+		perf_inline std::weak_ptr<SIMD[]> getData() const noexcept
 		{ return data_.getData(); }
 
-		force_inline static SIMD* getDataPointer(std::shared_ptr<SIMD[]>& dataPtr, u32 channel, u32 index, u32 size) noexcept
+		// can get raw pointer if the context already has a shared_ptr
+		perf_inline static SIMD* getDataPointer(std::shared_ptr<SIMD[]>& dataPtr, u32 channel, u32 index, u32 size) noexcept
 		{
 			auto indices = getAbsoluteIndices(channel, size, index);
 			return &dataPtr[indices.first];
 		}
 
-		force_inline static constexpr u32 getRelativeSize() noexcept
+		strict_inline static constexpr u32 getRelativeSize() noexcept
 		{ return sizeof(SIMD) / sizeof(T); }
 
-	protected:
+	private:
 		u32 channels_{ 0 };
 		u32 size_{ 0 };
 		u32 end_{ 0 };
@@ -299,7 +300,7 @@ namespace Framework
 		// internal function for calculating SIMD and internal positions of an element
 		// first - index to the **SIMD** element 
 		// second - channel index of T value inside the SIMD element
-		force_inline static std::pair<u32, u32> getAbsoluteIndices(u32 channel, u32 channelSize, u32 index) noexcept
+		strict_inline static std::pair<u32, u32> getAbsoluteIndices(u32 channel, u32 channelSize, u32 index) noexcept
 		{
 			return std::pair<u32, u32>((channel / getRelativeSize()) * channelSize + index, channel % getRelativeSize());
 		}

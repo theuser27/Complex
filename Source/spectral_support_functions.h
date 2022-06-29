@@ -12,12 +12,13 @@
 
 #include "common.h"
 #include "simd_buffer.h"
+#include "simd_utils.h"
 
 namespace utils
 {
 	// TODO: fix this mess
 
-	force_inline void vector_call complexValueMerge(simd_float &one, simd_float &two)
+	strict_inline void vector_call complexValueMerge(simd_float &one, simd_float &two)
 	{
 		// TODO: implement complexMerge for AVX and NEON
 	#if COMPLEX_AVX2
@@ -31,13 +32,13 @@ namespace utils
 	#endif
 	}
 
-	force_inline simd_float vector_call complexCartAdd(simd_float one, simd_float two)
+	strict_inline simd_float vector_call complexCartAdd(simd_float one, simd_float two)
 	{	return simd_float::add(one.value, two.value); }
 
-	force_inline simd_float vector_call complexCartSub(simd_float one, simd_float two)
+	strict_inline simd_float vector_call complexCartSub(simd_float one, simd_float two)
 	{	return simd_float::sub(one.value, two.value); }
 
-	force_inline simd_float vector_call complexCartMul(simd_float one, simd_float two)
+	strict_inline simd_float vector_call complexCartMul(simd_float one, simd_float two)
 	{
 
 	#if COMPLEX_AVX2
@@ -54,7 +55,7 @@ namespace utils
 	#endif
 	}
 
-	force_inline simd_float vector_call complexPolarMul(simd_float one, simd_float two)
+	strict_inline simd_float vector_call complexPolarMul(simd_float one, simd_float two)
 	{
 		auto magnitudes = simd_float::mul(one.value, two.value);
 		auto phases = simd_float::add(one.value, two.value);
@@ -70,23 +71,8 @@ namespace utils
 	#endif
 	}
 
-	force_inline void vector_call complexTranspose(std::array<simd_float, simd_float::kSize> &rows)
-	{
-	#if COMPLEX_AVX2
-		static_assert(false, "AVX2 complexTranspose not supported yet");
-	#elif COMPLEX_SSE3
-		auto low = _mm_movelh_ps(rows[0].value, rows[1].value);
-		auto high = _mm_movehl_ps(rows[1].value, rows[0].value);
-		rows[0].value = low;
-		rows[1].value = high;
-	#elif COMPLEX_NEON
-		// TODO: implement complexTranspose for NEON
-		static_assert(false, "ARM NEON complexTranspose not supported yet");
-	#endif
-	}
-
 	// doesn't sqrt
-	force_inline simd_float vector_call complexMagnitude(simd_float value)
+	strict_inline simd_float vector_call complexMagnitude(simd_float value)
 	{
 		// TODO: hypot intrinsics for avx2 and neon
 	#if COMPLEX_AVX2
@@ -101,7 +87,7 @@ namespace utils
 		return simd_float::mulAdd(simd_float::mul(real, real), imaginary, imaginary);
 	}
 
-	force_inline simd_float vector_call complexMagnitude(simd_float one, simd_float two)
+	strict_inline simd_float vector_call complexMagnitude(simd_float one, simd_float two)
 	{
 		// TODO: hypot intrinsics for avx2 and neon
 	#if COMPLEX_AVX2
@@ -116,7 +102,7 @@ namespace utils
 		return sqrt(simd_float::mulAdd(simd_float::mul(real, real), imaginary, imaginary));
 	}
 
-	force_inline simd_float vector_call complexPhase(simd_float value)
+	strict_inline simd_float vector_call complexPhase(simd_float value)
 	{
 		// TODO: atan2 intrinsics for avx2 and neon
 	#if COMPLEX_AVX2
@@ -132,7 +118,7 @@ namespace utils
 		return atan2(imaginary, real);
 	}
 
-	force_inline simd_float vector_call complexPhase(simd_float one, simd_float two)
+	strict_inline simd_float vector_call complexPhase(simd_float one, simd_float two)
 	{
 		// TODO: atan2 intrinsics for avx2 and neon
 	#if COMPLEX_AVX2
@@ -148,7 +134,7 @@ namespace utils
 		return atan2(imaginary, real);
 	}
 
-	force_inline simd_float vector_call complexReal(simd_float one, simd_float two)
+	strict_inline simd_float vector_call complexReal(simd_float one, simd_float two)
 	{
 		// TODO: atan2 intrinsics for avx2 and neon
 	#if COMPLEX_AVX2
@@ -164,7 +150,7 @@ namespace utils
 		return simd_float::mul(magnitude, utils::cos(phase).value);
 	}
 
-	force_inline simd_float vector_call complexImaginary(simd_float one, simd_float two)
+	strict_inline simd_float vector_call complexImaginary(simd_float one, simd_float two)
 	{
 		// TODO: atan2 intrinsics for avx2 and neon
 	#if COMPLEX_AVX2
@@ -180,7 +166,7 @@ namespace utils
 		return simd_float::mul(magnitude, utils::sin(phase).value);
 	}
 
-	force_inline void vector_call complexCartToPolar(simd_float &one, simd_float &two)
+	strict_inline void vector_call complexCartToPolar(simd_float &one, simd_float &two)
 	{
 		auto magnitudes = complexMagnitude(one, two);
 		auto phases = complexPhase(one, two);
@@ -189,7 +175,7 @@ namespace utils
 		two = phases;
 	}
 
-	force_inline void vector_call complexPolarToCart(simd_float &one, simd_float &two)
+	strict_inline void vector_call complexPolarToCart(simd_float &one, simd_float &two)
 	{
 		// TODO: generalise
 		auto realValues = complexReal(one, two);
@@ -205,7 +191,7 @@ namespace utils
 	/// <param name="values">- a pointer to the first element of the complex array</param>
 	/// <param name="numTotalElements">- number of all elements in the array/vector</param>
 	/// <returns>returns a polar representation of the complex number</returns>
-	/*static force_inline void cartesianToPolar(simd_float *values, int numTotalElements)
+	/*static strict_inline void cartesianToPolar(simd_float *values, int numTotalElements)
 	{
 		COMPLEX_ASSERT(numTotalElements % (2 * simd_float::kSize) == 0);
 
@@ -231,7 +217,7 @@ namespace utils
 	/// <param name="values">- a pointer to the first element of the complex array</param>
 	/// <param name="numTotalElements">- number of all elements in the array/vector</param>
 	/// <returns>returns a cartesian representation of the complex number</returns>
-	static force_inline void polarToCartesian(simd_float* values, size_t numTotalElements)
+	static strict_inline void polarToCartesian(simd_float* values, size_t numTotalElements)
 	{
 		COMPLEX_ASSERT(numTotalElements % (2 * simd_float::kSize) == 0);
 
@@ -255,7 +241,7 @@ namespace utils
 	/// and scales it down by the number of inputs.
 	/// </summary>
 	/// <param name="inputs">- the input arrays MUST be in Cartesian form</param>
-	static force_inline void AddAllCartesian(std::vector<EffectsChainData>* inputs, int numElements)
+	static strict_inline void AddAllCartesian(std::vector<EffectsChainData>* inputs, int numElements)
 	{
 		int numInputs = inputs->size();
 		simd_float simdNumInputs = (float)numInputs;
@@ -280,7 +266,7 @@ namespace utils
 		}
 	}
 
-	static force_inline void Add2Cartesian(simd_float* one, simd_float* two, u32 numElements)
+	static strict_inline void Add2Cartesian(simd_float* one, simd_float* two, u32 numElements)
 	{
 		simd_float normFactor = 0.5f;
 		for (u32 j = 0; j < numElements; j++)
@@ -290,7 +276,7 @@ namespace utils
 		}
 	}*/
 
-	/*static force_inline void Multiply2Polar(simd_float *one, simd_float *two, int numElements)
+	/*static strict_inline void Multiply2Polar(simd_float *one, simd_float *two, int numElements)
 	{
 		for (int j = 0; j < numElements; j++)
 			simd_float::mulPolar(one[j], two[j]);
@@ -300,7 +286,7 @@ namespace utils
 	/// Adds an array of inputs, puts the output in the *first input*
 	/// </summary>
 	/// <param name="inputs">- the input arrays MUST be in Polar form</param>
-	static force_inline void MultiplyPolar(simd_float* inputs[], int numInputs, int numElements)
+	static strict_inline void MultiplyPolar(simd_float* inputs[], int numInputs, int numElements)
 	{
 			// iterating through the number of inputs
 			for (int i = 1; i < numInputs; i++)

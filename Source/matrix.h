@@ -11,6 +11,7 @@
 #pragma once
 
 #include "simd_values.h"
+//#include "spectral_support_functions.h"
 
 namespace Framework
 {
@@ -19,26 +20,26 @@ namespace Framework
 		std::array<simd_float, kSimdRatio> rows_;
 		bool isComplex = false;
 
-		force_inline matrix() = default;
-		force_inline matrix(const simd_float row)
+		perf_inline matrix() = default;
+		perf_inline matrix(const simd_float row)
 		{ 
 			for (size_t i = 0; i < kSimdRatio; i++)
 				rows_[i] = row;
 		}
-		force_inline matrix(const std::array<simd_float, kSimdRatio> rows) : rows_(rows) { }
-		force_inline matrix(const std::array<simd_float, kComplexSimdRatio> rows) : isComplex(true)
+		perf_inline matrix(const std::array<simd_float, kSimdRatio> rows) : rows_(rows) { }
+		perf_inline matrix(const std::array<simd_float, kComplexSimdRatio> rows) : isComplex(true)
 		{
 			for (size_t i = 0; i < kComplexSimdRatio; i++)
 				rows_[i] = rows[i];
 		}
 
-		force_inline void transpose()
+		perf_inline void transpose()
 		{ simd_float::transpose(rows_); }
 
-		force_inline void complexTranspose()
-		{ utils::complexTranspose(rows_); }
+		perf_inline void complexTranspose()
+		{ simd_float::complexTranspose(rows_); }
 
-		force_inline simd_float sumRows()
+		perf_inline simd_float sumRows()
 		{ 
 			simd_float sum{ 0.0f };
 			for (size_t i = 0; i < rows_.size(); i++)
@@ -46,10 +47,10 @@ namespace Framework
 			return sum;
 		}
 
-		force_inline simd_float complexCartSumRows()
+		perf_inline simd_float complexCartSumRows()
 		{ return sumRows(); }
 
-		force_inline simd_float multiplyAndSumRows(const matrix &other)
+		perf_inline simd_float multiplyAndSumRows(const matrix &other)
 		{
 			simd_float summedVector = 0;
 			for (u32 i = 0; i < simd_float::kSize; i += 2)

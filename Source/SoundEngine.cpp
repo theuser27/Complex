@@ -39,11 +39,11 @@ namespace Generation
 		samplesPerBlock_ = samplesPerBlock;
 	}
 
-	force_inline void SoundEngine::UpdateParameters()
+	perf_inline void SoundEngine::UpdateParameters()
 	{
 	}
 
-	/*force_inline*/ void SoundEngine::CopyBuffers(AudioBuffer<float> &buffer, u32 numInputs, u32 numSamples)
+	perf_inline void SoundEngine::CopyBuffers(AudioBuffer<float> &buffer, u32 numInputs, u32 numSamples)
 	{
 		//// skipping silence can lead to weird behaviour when receiving new non-silent blocks
 		// checking whether we even have anything or the buffer is pure silence
@@ -64,7 +64,7 @@ namespace Generation
 		inputBuffer.writeBuffer(buffer, numInputs, numSamples);
 	}
 
-	/*force_inline*/ void SoundEngine::IsReadyToPerform(u32 numSamples)
+	perf_inline void SoundEngine::IsReadyToPerform(u32 numSamples)
 	{
 		// if there are scaled and/or processed samples 
 		// that haven't already been output we don't need to perform
@@ -109,7 +109,7 @@ namespace Generation
 		isPerforming_ = true;
 	}
 
-	/*force_inline*/ void SoundEngine::DoFFT()
+	perf_inline void SoundEngine::DoFFT()
 	{
 		// windowing
 		windows.applyWindow(FFTBuffer, FFTBuffer.getNumChannels(), FFTNumSamples_, windowType_, alpha_);
@@ -119,7 +119,7 @@ namespace Generation
 			transforms[getFFTPlan()]->transformRealForward(FFTBuffer.getWritePointer(i));
 	}
 
-	/*force_inline*/ void SoundEngine::ProcessFFT()
+	perf_inline void SoundEngine::ProcessFFT()
 	{
 		effectsState.setFFTSize(FFTNumSamples_);
 		effectsState.setSampleRate(sampleRate_);
@@ -131,7 +131,7 @@ namespace Generation
 		effectsState.writeOutputData(FFTBuffer);
 	}
 
-	/*force_inline*/ void SoundEngine::DoIFFT()
+	perf_inline void SoundEngine::DoIFFT()
 	{
 		// in-place IFFT
 		for (u32 i = 0; i < kNumTotalChannels; i++)
@@ -150,7 +150,7 @@ namespace Generation
 
 	// when the overlap is more than what the window requires
 	// there will be an increase in gain, so we need to offset that
-	void SoundEngine::ScaleDown()
+	perf_inline void SoundEngine::ScaleDown()
 	{
 		// TODO: use an extra overlap_ variable to store the overlap param 
 		// from previous scaleDown run in order to apply extra attenuation 
@@ -200,7 +200,7 @@ namespace Generation
 		lastOverlap = overlap_;
 	}
 
-	/*force_inline */ void SoundEngine::MixOut(u32 numSamples)
+	perf_inline void SoundEngine::MixOut(u32 numSamples)
 	{
 		if (!hasEnoughSamples_)
 			return;
@@ -262,7 +262,7 @@ namespace Generation
 		inputBuffer.advanceLastOutputBlock(numSamples);
 	}
 
-	void SoundEngine::FillOutput(AudioBuffer<float> &buffer, u32 numOutputs, u32 numSamples)
+	perf_inline void SoundEngine::FillOutput(AudioBuffer<float> &buffer, u32 numOutputs, u32 numSamples)
 	{
 		// if we don't have enough samples we simply output silence
 		if (!hasEnoughSamples_)

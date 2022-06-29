@@ -36,14 +36,14 @@ namespace Framework
 		}
 
 		// src buffer needs to have exactly as many samples as FFT size
-		force_inline void transformRealForward(float *inOut)
+		perf_inline void transformRealForward(float *inOut)
 		{
 			inOut[size_] = 0.0f;
 			ippsFFTFwd_RToCCS_32f_I((Ipp32f *)inOut, ipp_specs_, buffer_.get());
 		}
 
 		// src needs to be in the CCS format
-		force_inline void transformRealInverse(float *inOut)
+		perf_inline void transformRealInverse(float *inOut)
 		{
 			ippsFFTInv_CCSToR_32f_I((Ipp32f *)inOut, ipp_specs_, buffer_.get());
 		}

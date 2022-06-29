@@ -36,7 +36,7 @@ namespace Framework
 
 
 		// gets catmull-rom spline interpolated y-values at their corresponding x-values
-		force_inline simd_float cubicLookup(simd_float xValues) const
+		perf_inline simd_float cubicLookup(simd_float xValues) const
 		{
 			//COMPLEX_ASSERT(simd_float::greaterThanOrEqual(xValues, simd_float(0.0f)) && xValues <= simd_float(1.0f));
 			simd_float boost = (xValues * scale_) + 1.0f;
@@ -51,7 +51,7 @@ namespace Framework
 		}
 
 		// gets linearly interpolated y-values at their corresponding x-values
-		force_inline simd_float linearLookup(simd_float xValues) const
+		perf_inline simd_float linearLookup(simd_float xValues) const
 		{
 			//COMPLEX_ASSERT(xValues >= simd_float(0.0f) && xValues <= simd_float(1.0f));
 			simd_float boost = (xValues * scale_) + 1.0f;
@@ -66,7 +66,7 @@ namespace Framework
 		}
 
 		// gets catmull-rom spline interpolated y-value at the corresponding x-value
-		force_inline float cubicLookup(float xValue) const
+		perf_inline float cubicLookup(float xValue) const
 		{
 			COMPLEX_ASSERT(xValue >= 0.0f && xValue <= 1.0f);
 			float boost = (xValue * scale_) + 1.0f;
@@ -84,7 +84,7 @@ namespace Framework
 		}
 
 		// gets linearly interpolated y-value at the corresponding x-value
-		force_inline float linearLookup(float xValue) const
+		perf_inline float linearLookup(float xValue) const
 		{
 			COMPLEX_ASSERT(xValue >= 0.0f && xValue <= 1.0f);
 			float boost = (xValue * scale_) + 1.0f;

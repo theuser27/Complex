@@ -27,25 +27,25 @@ namespace Framework
 
 		// static windows
 
-		static constexpr force_inline float createHannWindow(float position)
+		static constexpr strict_inline float createHannWindow(float position)
 		{	return 0.5f * (1.0f - gcem::cos(common::k2Pi * position)); }
 
 		// simplified version of the traditional hamming window
-		static constexpr force_inline float createHammingWindow(float position)
+		static constexpr strict_inline float createHammingWindow(float position)
 		{	return 0.46f * (25.0f - 21.0f * gcem::cos(common::k2Pi * position)); }
 
-		static constexpr force_inline float createTriangleWindow(float position)
+		static constexpr strict_inline float createTriangleWindow(float position)
 		{	return 1 - 2 * gcem::abs(position - 0.5f); }
 
-		static constexpr force_inline float createSineWindow(float position)
+		static constexpr strict_inline float createSineWindow(float position)
 		{	return gcem::sin(common::k2Pi * position); }
 
 		// dynamic windows
 
-		static constexpr force_inline float createExponentialWindow(float position)
+		static constexpr strict_inline float createExponentialWindow(float position)
 		{	return gcem::exp((-common::k2Pi) * gcem::abs(position - 0.5f)); }
 
-		static constexpr force_inline float createLanczosWindow(float position)
+		static constexpr strict_inline float createLanczosWindow(float position)
 		{
 			float adjustedPosition = position - 0.5f;
 			return adjustedPosition == 0.0f ? 1.0f :
@@ -78,32 +78,32 @@ namespace Framework
 
 	public:
 
-		static force_inline float getHannWindow(float position)
+		static perf_inline float getHannWindow(float position)
 		{	return hannWindowLookup.linearLookup(position); }
 
-		static force_inline float getHammingWindow(float position)
+		static perf_inline float getHammingWindow(float position)
 		{	return hammingWindowLookup.linearLookup(position); }
 
-		static force_inline float getTriangleWindow(float position)
+		static perf_inline float getTriangleWindow(float position)
 		{	return triangleWindowLookup.linearLookup(position); }
 
-		static force_inline float getSineWindow(float position)
+		static perf_inline float getSineWindow(float position)
 		{	return sineWindowLookup.linearLookup(position); }
 
 
-		static force_inline float getExponentialWindow(float position, float alpha)
+		static perf_inline float getExponentialWindow(float position, float alpha)
 		{	return utils::pow((exponentialWindowLookup.linearLookup(position)), alpha); }
 
-		static force_inline float getHannExponentialWindow(float position, float alpha)
+		static perf_inline float getHannExponentialWindow(float position, float alpha)
 		{
 			return (utils::pow((exponentialWindowLookup.linearLookup(position)), alpha)
 				* hannWindowLookup.linearLookup(position));
 		}
 
-		static force_inline float getLanczosWindow(float position, float alpha)
+		static perf_inline float getLanczosWindow(float position, float alpha)
 		{	return utils::pow((lanczosWindowLookup.linearLookup(position)), alpha); }
 
-		force_inline void applyWindow(AudioBuffer<float> &buffer, u32 numChannels, u32 numSamples, WindowTypes type, float alpha)
+		perf_inline void applyWindow(AudioBuffer<float> &buffer, u32 numChannels, u32 numSamples, WindowTypes type, float alpha)
 		{
 			if (type == WindowTypes::Custom)
 				applyCustomWindows(buffer, numChannels, numSamples, type, alpha);
@@ -111,7 +111,7 @@ namespace Framework
 				applyDefaultWindows(buffer, numChannels, numSamples, type, alpha);
 		}
 
-		force_inline void applyDefaultWindows(AudioBuffer<float> &buffer, u32 numChannels, u32 numSamples, WindowTypes type, float alpha)
+		perf_inline void applyDefaultWindows(AudioBuffer<float> &buffer, u32 numChannels, u32 numSamples, WindowTypes type, float alpha)
 		{
 			if (type == WindowTypes::Rectangle)
 				return;
@@ -217,7 +217,7 @@ namespace Framework
 			}
 		}
 
-		force_inline void applyCustomWindows(AudioBuffer<float> &buffer, u32 numChannels, u32 numSamples, WindowTypes type, float alpha)
+		perf_inline void applyCustomWindows(AudioBuffer<float> &buffer, u32 numChannels, u32 numSamples, WindowTypes type, float alpha)
 		{
 			// TODO: see into how to generate custom windows based on spectral properties
 			// redirecting to the default types for now
