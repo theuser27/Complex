@@ -133,7 +133,7 @@ namespace utils
 		{ return (oneValue & mask) | (zeroValue & ~mask); }
 
 		// 0s for loading values from one, 1s for loading values from two
-		template<SimdValue SIMD>
+		template<commonConcepts::SimdValue SIMD>
 		strict_inline SIMD maskLoad(SIMD currentValue, SIMD newValue, simd_mask mask) 
 		{
 			SIMD oldValues = currentValue & ~mask;

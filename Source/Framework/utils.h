@@ -176,13 +176,6 @@ namespace utils
       }
     }
 
-    template<typename T, SimdValue SIMD>
-    strict_inline u32 calculateNumSimdChannels(u32 numChannels)
-    {
-      auto relativeSize = sizeof(SIMD) / sizeof(T);
-      return (u32)std::ceil((double)numChannels / (double)relativeSize);
-    }
-
     // for debugging purposes
     strict_inline void printBuffer(const float *begin, u32 numSamples)
     {

@@ -15,6 +15,7 @@
 
 namespace Framework
 {
+	// used for allocating raw memory and using it for whatever purpose
 	template <typename T, u64 alignment = alignof(T)>
 	class memory_block
 	{
@@ -120,7 +121,7 @@ namespace Framework
 		strict_inline u64 getAbsoluteSize() const noexcept { return absoluteSize_; }
 		perf_inline std::weak_ptr<T[]> getData() const noexcept { return data_; }
 
-		T& operator[] (u64 index) noexcept
+		perf_inline T& operator[] (u64 index) noexcept
 		{ 
 			COMPLEX_ASSERT(index < absoluteSize_);
 			return data_[index];

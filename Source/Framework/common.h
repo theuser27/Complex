@@ -77,6 +77,24 @@ namespace common
 			"FX_PARAM_9", "FX_PARAM_10", "FX_PARAM_11", "FX_PARAM_12", "FX_PARAM_13", "FX_PARAM_14", "FX_PARAM_15", "FX_PARAM_16" };
 	}
 
+	namespace commonConcepts
+	{
+		template<typename T>
+		concept SimdValue = std::same_as<T, simd_int> || std::same_as<T, simd_float>;
+
+		template<typename T>
+		concept Addable = requires (T x) { x + x; x += x; };
+
+		template<typename T>
+		concept Multipliable = requires (T x) { x * x; x *= x; };
+
+		template<typename T>
+		concept OperatorParen = requires (T x) { x.operator(); };
+
+		template<typename T>
+		concept OperatorBracket = requires (T x) { x.operator[]; };
+	}
+
 }
 
 using namespace common;

@@ -1174,10 +1174,6 @@ namespace simd_values
 			return sum(value);
 		}
 	};
-
-	template<typename T>
-	concept SimdValue = std::same_as<T, simd_int> || std::same_as<T, simd_float>;
-
 }
 
 using namespace simd_values;
