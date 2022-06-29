@@ -10,8 +10,8 @@
 
 #pragma once
 
-#include "common.h"
-#include "SoundEngine.h"
+#include "./Framework/common.h"
+#include "./SoundEngine/SoundEngine.h"
 
 namespace Plugin
 {

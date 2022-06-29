@@ -12,9 +12,9 @@
 
 #include <variant>
 #include <algorithm>
-#include "common.h"
-#include "spectral_support_functions.h"
-#include "simd_buffer.h"
+#include "./Framework/common.h"
+#include "./Framework/spectral_support_functions.h"
+#include "./Framework/simd_buffer.h"
 
 namespace Generation
 {

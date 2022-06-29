@@ -11,7 +11,7 @@
 #pragma once
 
 #include "EffectModules.h"
-#include "simd_buffer.h"
+#include "./Framework/simd_buffer.h"
 
 namespace Generation
 {

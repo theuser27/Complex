@@ -10,15 +10,15 @@
 
 #pragma once
 
-#include "common.h"
-#include "fourier_transform.h"
-#include "utils.h"
-#include "circular_buffer.h"
-#include "simd_buffer.h"
-#include "windows.h"
+#include "./Framework/common.h"
+#include "./Framework/fourier_transform.h"
+#include "./Framework/utils.h"
+#include "./Framework/circular_buffer.h"
+#include "./Framework/simd_buffer.h"
+#include "./Framework/windows.h"
+#include "./Framework/spectral_support_functions.h"
 #include "EffectModules.h"
 #include "EffectsState.h"
-#include "spectral_support_functions.h"
 
 
 namespace Generation

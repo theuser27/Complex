@@ -11,7 +11,6 @@
 #pragma once
 
 #include "simd_values.h"
-//#include "spectral_support_functions.h"
 
 namespace Framework
 {

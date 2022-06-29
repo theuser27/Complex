@@ -9,7 +9,7 @@
 */
 
 #include "EffectsState.h"
-#include "simd_utils.h"
+#include "./Framework/simd_utils.h"
 
 namespace Generation
 {

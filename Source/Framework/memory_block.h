@@ -85,7 +85,7 @@ namespace Framework
 			}
 		}
 
-		perf_inline void free() noexcept
+		void free() noexcept
 		{
 			data_.reset();
 			absoluteSize_ = 0;
