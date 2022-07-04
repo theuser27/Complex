@@ -30,7 +30,7 @@ namespace Plugin
 	public:
 		void Initialise(double sampleRate, u32 samplesPerBlock);
 		void CheckGlobalParameters();
-		void Process(AudioBuffer<float> &buffer, int numSamples, int numInputs, int numOutputs);
+		void Process(AudioBuffer<float> &buffer, u32 numSamples, u32 numInputs, u32 numOutputs);
 
 	protected:
 		AudioParameterFloat *mix_;

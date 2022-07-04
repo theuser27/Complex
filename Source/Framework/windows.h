@@ -103,15 +103,17 @@ namespace Framework
 		static perf_inline float getLanczosWindow(float position, float alpha)
 		{	return utils::pow((lanczosWindowLookup.linearLookup(position)), alpha); }
 
-		perf_inline void applyWindow(AudioBuffer<float> &buffer, u32 numChannels, u32 numSamples, WindowTypes type, float alpha)
+		perf_inline void applyWindow(AudioBuffer<float> &buffer, u32 numChannels, 
+			const bool* channelsToProcess, u32 numSamples, WindowTypes type, float alpha)
 		{
 			if (type == WindowTypes::Custom)
-				applyCustomWindows(buffer, numChannels, numSamples, type, alpha);
+				applyCustomWindows(buffer, numChannels, channelsToProcess, numSamples, type, alpha);
 			else
-				applyDefaultWindows(buffer, numChannels, numSamples, type, alpha);
+				applyDefaultWindows(buffer, numChannels, channelsToProcess, numSamples, type, alpha);
 		}
 
-		perf_inline void applyDefaultWindows(AudioBuffer<float> &buffer, u32 numChannels, u32 numSamples, WindowTypes type, float alpha)
+		perf_inline void applyDefaultWindows(AudioBuffer<float> &buffer, u32 numChannels, 
+			const bool* channelsToCopy, u32 numSamples, WindowTypes type, float alpha)
 		{
 			if (type == WindowTypes::Rectangle)
 				return;
@@ -123,42 +125,42 @@ namespace Framework
 			// we can take advantage of window symmetry and do 2 assignments with 1 lookup
 			u32 halfLength = (numSamples - 2) / 2;
 
-			float window{ 1.0f };
-			float position{ 0.0f };
+			float window = 1.0f;
+			float position = 0.0f;
 
 			// applying window to first sample and middle
 			{
-				float centreWindow = 1.0f;
-				u32 centreSample = numSamples / 2;
+				float centerWindow = 1.0f;
+				u32 centerSample = numSamples / 2;
 				switch (type)
 				{
 				case Framework::WindowTypes::Hann:
 					window = getHannWindow(position);
-					centreWindow = getHannWindow(0.5f);
+					centerWindow = getHannWindow(0.5f);
 					break;
 				case Framework::WindowTypes::Hamming:
 					window = getHammingWindow(position);
-					centreWindow = getHammingWindow(0.5f);
+					centerWindow = getHammingWindow(0.5f);
 					break;
 				case Framework::WindowTypes::Triangle:
 					window = getTriangleWindow(position);
-					centreWindow = getTriangleWindow(0.5f);
+					centerWindow = getTriangleWindow(0.5f);
 					break;
 				case Framework::WindowTypes::Sine:
 					window = getSineWindow(position);
-					centreWindow = getSineWindow(0.5f);
+					centerWindow = getSineWindow(0.5f);
 					break;
 				case Framework::WindowTypes::Exponential:
 					window = getExponentialWindow(position, alpha);
-					centreWindow = getExponentialWindow(0.5f, alpha);
+					centerWindow = getExponentialWindow(0.5f, alpha);
 					break;
 				case Framework::WindowTypes::HannExponential:
 					window = getHannExponentialWindow(position, alpha);
-					centreWindow = getHannExponentialWindow(0.5f, alpha);
+					centerWindow = getHannExponentialWindow(0.5f, alpha);
 					break;
 				case Framework::WindowTypes::Lanczos:
 					window = getLanczosWindow(position, alpha);
-					centreWindow = getLanczosWindow(0.5f, alpha);
+					centerWindow = getLanczosWindow(0.5f, alpha);
 					break;
 				case Framework::WindowTypes::Blackman:
 					break;
@@ -169,8 +171,11 @@ namespace Framework
 				}
 				for (u32 j = 0; j < numChannels; j++)
 				{
+					if (!channelsToCopy[j])
+						continue;
+
 					*buffer.getWritePointer(j, 0) *= window;
-					*buffer.getWritePointer(j, centreSample) *= centreWindow;
+					*buffer.getWritePointer(j, centerSample) *= centerWindow;
 				}
 				position += increment;
 			}
@@ -210,6 +215,9 @@ namespace Framework
 
 				for (u32 j = 0; j < numChannels; j++)
 				{
+					if (!channelsToCopy[j])
+						continue;
+
 					*buffer.getWritePointer(j, i) *= window;
 					*buffer.getWritePointer(j, numSamples - i) *= window;
 				}
@@ -217,11 +225,12 @@ namespace Framework
 			}
 		}
 
-		perf_inline void applyCustomWindows(AudioBuffer<float> &buffer, u32 numChannels, u32 numSamples, WindowTypes type, float alpha)
+		perf_inline void applyCustomWindows(AudioBuffer<float> &buffer, u32 numChannels, 
+			const bool* channelsToCopy, u32 numSamples, WindowTypes type, float alpha)
 		{
 			// TODO: see into how to generate custom windows based on spectral properties
 			// redirecting to the default types for now
-			applyDefaultWindows(buffer, numChannels, numSamples, type, alpha);
+			applyDefaultWindows(buffer, numChannels, channelsToCopy, numSamples, type, alpha);
 		}
 	};
 }

@@ -140,6 +140,9 @@
         <CONFIGURATION isDebug="0" name="Release" targetName="Complex" fastMath="1"
                        enablePluginBinaryCopyStep="1" vst3BinaryLocation="C:\Program Files\Common Files\VST3\DEV"
                        optimisation="3" headerPath="../../Source"/>
+        <CONFIGURATION isDebug="1" name="ReleaseWithDebugInfo" fastMath="1" debugInformationFormat="ProgramDatabase"
+                       enablePluginBinaryCopyStep="1" vst3BinaryLocation="C:\Program Files\Common Files\VST3\DEV"
+                       headerPath="../../Source"/>
       </CONFIGURATIONS>
       <MODULEPATHS>
         <MODULEPATH id="juce_audio_basics" path="../JUCE/modules"/>

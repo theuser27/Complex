@@ -83,16 +83,19 @@ namespace Framework
 		//	readee's starting index = readerIndex + end_ and 
 		//	reader's starting index = readeeIndex
 		// - Can decide whether to advance the block or not
-		perf_inline void readBuffer(AudioBuffer<float> &reader, u32 numChannels,
-			u32 numSamples, u32 readeeIndex = 0, u32 readerIndex = 0) noexcept
+		void readBuffer(AudioBuffer<float> &reader, u32 numChannels,u32 numSamples, 
+			const bool *channelsToCopy = nullptr, u32 readeeIndex = 0, u32 readerIndex = 0) noexcept
 		{
-			utils::copyBuffer(reader, data_, numChannels, numSamples, readerIndex, readeeIndex);
+			if (channelsToCopy)
+				utils::copyBufferChannels(reader, data_, numChannels, channelsToCopy, numSamples, readerIndex, readeeIndex);
+			else
+				utils::copyBuffer(reader, data_, numChannels, numSamples, readerIndex, readeeIndex);
 		}
 
 		// - A specified AudioBuffer writes own data starting at writerOffset to the end of the current buffer,
 		//	which can be offset forwards or backwards with writeeOffset
 		// - Adjusts end_ according to the new block written
-		perf_inline void writeBuffer(const AudioBuffer<float> &writer, u32 numChannels, u32 numSamples,
+		void writeBuffer(const AudioBuffer<float> &writer, u32 numChannels, u32 numSamples,
 			u32 writerIndex = 0, utils::Operations operation = utils::Operations::Assign) noexcept
 		{
 			utils::copyBuffer(data_, writer, numChannels, numSamples, end_, writerIndex, operation);
@@ -106,11 +109,15 @@ namespace Framework
 			data_.setSample(channel, index, data_.getSample(channel, index) + value); 
 		}
 
-		perf_inline void addBuffer(const AudioBuffer<float> &other, u32 numChannels,
-			u32 numSamples, u32 thisStartIndex = 0, u32 otherStartIndex = 0) noexcept
+		void addBuffer(const AudioBuffer<float> &other, u32 numChannels, u32 numSamples,
+			const bool *channelsToAdd = nullptr, u32 thisStartIndex = 0, u32 otherStartIndex = 0) noexcept
 		{
-			utils::copyBuffer(data_, other, numChannels, numSamples, 
-				thisStartIndex, otherStartIndex, utils::Operations::Add);
+			if (channelsToAdd)
+				utils::copyBufferChannels(data_, other, numChannels, channelsToAdd,
+					numSamples, thisStartIndex, otherStartIndex, utils::Operations::Add);
+			else
+				utils::copyBuffer(data_, other, numChannels, numSamples, 
+					thisStartIndex, otherStartIndex, utils::Operations::Add);
 		}
 
 		perf_inline void multiply(float value, u32 channel, u32 index) noexcept
@@ -120,7 +127,7 @@ namespace Framework
 			data_.setSample(channel, index, data_.getSample(channel, index) * value);
 		}
 
-		perf_inline void multiplyBuffer(const AudioBuffer<float> &other, u32 numChannels,
+		void multiplyBuffer(const AudioBuffer<float> &other, u32 numChannels,
 			u32 numSamples, u32 thisStartIndex = 0, u32 otherStartIndex = 0) noexcept
 		{
 			utils::copyBuffer(data_, other, numChannels, numSamples, 

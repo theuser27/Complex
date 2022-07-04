@@ -52,7 +52,7 @@ namespace Framework
 		perf_inline simd_float multiplyAndSumRows(const matrix &other)
 		{
 			simd_float summedVector = 0;
-			for (u32 i = 0; i < simd_float::kSize; i += 2)
+			for (size_t i = 0; i < simd_float::kSize; i += 2)
 				summedVector += simd_float::mulAdd(rows_[i] * other.rows_[i], rows_[i + 1], other.rows_[i + 1]);
 			return summedVector;
 		}

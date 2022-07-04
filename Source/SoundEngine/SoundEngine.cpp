@@ -18,18 +18,13 @@ namespace Generation
 		for (u32 i = 0; i < (kMaxFFTOrder - kMinFFTOrder + 1); i++)
 		{
 			u32 bits = kMinFFTOrder + i;
-			transforms.emplace_back(std::make_shared<Framework::FFT>(bits));
+			transforms.emplace_back(std::make_unique<Framework::FFT>(bits));
 		}
 
 		inputBuffer.reserve(kNumTotalChannels, kMaxPreBufferLength);
 		FFTBuffer.setSize(kNumTotalChannels, kMaxFFTBufferLength, false, true);
 		outBuffer.reserve(kNumTotalChannels, kMaxFFTBufferLength);
 		//isFirstRun_ = true;
-
-		// assigning first input to first chain
-		chainInputs[0] = 0;
-		// assigning the first chain to the first output
-		chainOutputs[0] = 0;
 	}
 	SoundEngine::~SoundEngine() = default;
 
@@ -62,6 +57,10 @@ namespace Generation
 
 		// assume that we don't get blocks bigger than our buffer size
 		inputBuffer.writeBuffer(buffer, numInputs, numSamples);
+
+		// we update them here because we could get broken up blocks if done inside the loop
+		usedInputChannels_ = effectsState.getUsedInputChannels();
+		usedOutputChannels_ = effectsState.getUsedOutputChannels();
 	}
 
 	perf_inline void SoundEngine::IsReadyToPerform(u32 numSamples)
@@ -93,15 +92,16 @@ namespace Generation
 		
 		i32 FFTChangeOffset = prevFFTNumSamples - FFTNumSamples_;
 
-		//FFTBuffer.clear();
+		// clearing upper samples that could remain
+		// after changing from a higher to lower FFTSize
 		for (size_t i = 0; i < FFTBuffer.getNumChannels(); i++)
 		{
 			i32 samplesToClear = std::max(FFTChangeOffset, 0);
 			utils::zeroBuffer(FFTBuffer.getWritePointer(i, FFTNumSamples_), samplesToClear);
 		}
 
-		inputBuffer.readBuffer(FFTBuffer, FFTBuffer.getNumChannels(), FFTNumSamples_,
-			inputBuffer.BlockBegin, nextOverlapOffset_ + FFTChangeOffset);
+		inputBuffer.readBuffer(FFTBuffer, FFTBuffer.getNumChannels(), usedInputChannels_.data(), 
+			FFTNumSamples_, inputBuffer.BlockBegin, nextOverlapOffset_ + FFTChangeOffset);
 
 		// getting the next overlapOffset
 		nextOverlapOffset_ = getOverlapOffset();
@@ -112,11 +112,13 @@ namespace Generation
 	perf_inline void SoundEngine::DoFFT()
 	{
 		// windowing
-		windows.applyWindow(FFTBuffer, FFTBuffer.getNumChannels(), FFTNumSamples_, windowType_, alpha_);
+		windows.applyWindow(FFTBuffer, FFTBuffer.getNumChannels(), usedInputChannels_.data(), FFTNumSamples_, windowType_, alpha_);
 
 		// in-place FFT
-		for (size_t i = 0; i < kNumTotalChannels; i++)
-			transforms[getFFTPlan()]->transformRealForward(FFTBuffer.getWritePointer(i));
+		// FFT-ed only if the input is used
+		for (u32 i = 0; i < kNumTotalChannels; i++)
+			if (usedInputChannels_[i])
+				transforms[getFFTPlan()]->transformRealForward(FFTBuffer.getWritePointer(i));
 	}
 
 	perf_inline void SoundEngine::ProcessFFT()
@@ -125,9 +127,9 @@ namespace Generation
 		effectsState.setSampleRate(sampleRate_);
 
 		effectsState.writeInputData(FFTBuffer);
-		effectsState.distributeData(chainInputs);
+		effectsState.distributeData();
 		effectsState.processChains();
-		effectsState.sumChains(chainOutputs);
+		effectsState.sumChains();
 		effectsState.writeOutputData(FFTBuffer);
 	}
 
@@ -135,8 +137,8 @@ namespace Generation
 	{
 		// in-place IFFT
 		for (u32 i = 0; i < kNumTotalChannels; i++)
-			transforms[getFFTPlan()]->transformRealInverse(FFTBuffer.getWritePointer(i));
-
+			if (usedOutputChannels_[i])
+				transforms[getFFTPlan()]->transformRealInverse(FFTBuffer.getWritePointer(i));
 
 		// if the FFT size is big enough to guarantee that even with max overlap 
 		// a block >= samplesPerBlock can be finished, we don't offset
@@ -145,7 +147,8 @@ namespace Generation
 		outBuffer.setLatencyOffset(latencyOffset);
 
 		// overlap-adding
-		outBuffer.addOverlapBuffer(FFTBuffer, outBuffer.getNumChannels(), FFTNumSamples_, nextOverlapOffset_);
+		outBuffer.addOverlapBuffer(FFTBuffer, outBuffer.getNumChannels(), 
+			usedOutputChannels_.data(),  FFTNumSamples_, nextOverlapOffset_);
 	}
 
 	// when the overlap is more than what the window requires
@@ -160,8 +163,11 @@ namespace Generation
 		float mult = 1.0f;
 		u32 start = outBuffer.getToScaleOutput();
 		u32 toScaleNumSamples = outBuffer.getToScaleOutputToAddOverlap();
-		for (u32 i = 0; i < kNumChannels; i++)
+		for (u32 i = 0; i < kNumTotalChannels; i++)
 		{
+			if (!usedOutputChannels_[i])
+				continue;
+
 			switch (windowType_)
 			{
 			case Framework::WindowTypes::Rectangle:
@@ -222,7 +228,7 @@ namespace Generation
 		// only dry
 		if (getMix() == 0.0f)
 		{
-			inputBuffer.outBufferRead(outBuffer.buffer_, kNumChannels,
+			inputBuffer.outBufferRead(outBuffer.buffer_, kNumTotalChannels, usedOutputChannels_.data(),
 				numSamples, outBuffer.getBeginOutput(), FFTChangeOffset - (i32)(outBuffer.getLatencyOffset()));
 
 			// advancing buffer indices
@@ -234,8 +240,11 @@ namespace Generation
 		// mix both
 		float wetMix = getMix();
 		float dryMix = 1.0f - wetMix;
-		for (u32 i = 0; i < kNumChannels; i++)
+		for (u32 i = 0; i < kNumTotalChannels; i++)
 		{
+			if (!usedOutputChannels_[i])
+				continue;
+
 			u32 beginOutput = outBuffer.getBeginOutput();
 			u32 outBufferSize = outBuffer.getSize();
 
@@ -273,13 +282,13 @@ namespace Generation
 			return;
 		}
 
-		outBuffer.readOutput(buffer, numSamples);
+		outBuffer.readOutput(buffer, numOutputs, usedOutputChannels_.data(), numSamples);
 		outBuffer.advanceBeginOutput(numSamples);
 
 		prevFFTNumSamples_ = FFTNumSamples_;
 	}
 
-	void SoundEngine::MainProcess(AudioBuffer<float> &buffer, int numSamples, int numInputs, int numOutputs)
+	void SoundEngine::MainProcess(AudioBuffer<float> &buffer, u32 numSamples, u32 numInputs, u32 numOutputs)
 	{
 		// copying input in the main circular buffer
 		CopyBuffers(buffer, numInputs, numSamples);

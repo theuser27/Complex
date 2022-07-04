@@ -560,11 +560,13 @@ namespace Generation
 				break;
 			}
 
-			// blocks alloc thread until processing finishes
+			// alloc thread blocked until processing finishes 
+			// and then effect pointer is swapped
 			bool expected = false;
 			while (isInUse.compare_exchange_weak(expected, true));
 			std::swap(effect_, newEffect);
 			isInUse.store(false, std::memory_order_release);
+			isInUse.notify_one();
 		}
 
 		void processEffect(Framework::SimdBuffer<std::complex<float>, simd_float> &source,

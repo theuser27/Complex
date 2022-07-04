@@ -21,8 +21,8 @@ namespace Framework
 	// SIMD - simd type
 	// intended for use of simd types
 	template<typename T, commonConcepts::SimdValue SIMD, u32 alignment = alignof(SIMD)>
-		requires commonConcepts::Addable<SIMD> && commonConcepts::Multipliable<SIMD> &&
-			commonConcepts::OperatorParen<SIMD> && commonConcepts::OperatorBracket<SIMD>
+		/*requires commonConcepts::Addable<SIMD> &&commonConcepts::Multipliable<SIMD> &&
+			commonConcepts::OperatorParen<SIMD> && commonConcepts::OperatorBracket<SIMD>*/
 	class SimdBuffer {
 	public:
 		static_assert(alignment % alignof(T) == 0);
@@ -36,11 +36,16 @@ namespace Framework
 			reserve(numChannels, size);
 		}
 
-		SimdBuffer(const SimdBuffer<T, SIMD>& other)
+		SimdBuffer(const SimdBuffer<T, SIMD> &other, bool doDataCopy = false)
 		{
 			COMPLEX_ASSERT(other.getNumChannels() > 0 && other.getSize() > 0);
 			reserve(other.getNumChannels(), other.getSize());
+
+			if (doDataCopy)
+				copyToThis(*this, other, other.getNumChannels(), other.getSize());
 		}
+
+		SimdBuffer &operator=(const SimdBuffer<T, SIMD> &other) = delete;
 
 		perf_inline void swap(SimdBuffer<T, SIMD> &other)
 		{
@@ -93,7 +98,7 @@ namespace Framework
 		{ data_.clear(); }
 
 		// copies/does math operation on samples from "otherBuffer" to "thisBuffer"
-		// specified by starting channels/indices, while anticipating wrapping around in both buffers 
+		// specified by starting channels/indices
 		// result is shifted by shiftMask and filtered with mergeMask
 		// note: starting channels need to be congruent to kNumChannels
 		static void copyToThis(SimdBuffer<T, SIMD, alignment> &thisBuffer, const SimdBuffer<T, SIMD, alignment> &otherBuffer,
@@ -111,18 +116,18 @@ namespace Framework
 			{
 			case utils::Operations::Add:
 
-				opFunction = [](SIMD one, SIMD two, simd_mask mask) { return utils::maskLoad(one, one + two, mask); };
+				opFunction = [](SIMD one, SIMD two, simd_mask mask) { return utils::maskLoad(one + two, one, mask); };
 				break;
 
 			case utils::Operations::Multiply:
 
-				opFunction = [](SIMD one, SIMD two, simd_mask mask) { return utils::maskLoad(one, one * two, mask); };
+				opFunction = [](SIMD one, SIMD two, simd_mask mask) { return utils::maskLoad(one * two, one, mask); };
 				break;
 
 			default:
 			case utils::Operations::Assign:
 				
-				opFunction = [](SIMD one, SIMD two, simd_mask mask)	{ return utils::maskLoad(one, two, mask); };
+				opFunction = [](SIMD one, SIMD two, simd_mask mask)	{ return utils::maskLoad(two, one, mask); };
 				break;
 			}
 
@@ -142,9 +147,9 @@ namespace Framework
 
 				for (u32 k = 0; k < numSamples; k++)
 				{
-					thisDataPointer[thisChannelIndices.first + ((thisStartIndex + k) % thisBufferSize)]
-						= opFunction(thisDataPointer[thisChannelIndices.first + ((thisStartIndex + k) % thisBufferSize)],
-							otherDataPointer[otherChannelIndices.first + ((otherStartIndex + k) % otherBufferSize)], mergeMask);
+					thisDataPointer[thisChannelIndices.first + thisStartIndex + k]
+						= opFunction(thisDataPointer[thisChannelIndices.first + thisStartIndex + k],
+							otherDataPointer[otherChannelIndices.first + otherStartIndex + k], mergeMask);
 				}
 			}
 		}
@@ -276,7 +281,7 @@ namespace Framework
 			return &dataPtr[indices.first];
 		}
 
-		strict_inline static consteval u32 getRelativeSize() noexcept
+		strict_inline static constexpr u32 getRelativeSize() noexcept
 		{ return sizeof(SIMD) / sizeof(T); }
 
 	private:

@@ -48,7 +48,7 @@ namespace Plugin
 		// check for power matching
 	}
 
-	void ComplexPlugin::Process(AudioBuffer<float> &buffer, int numSamples, int numInputs, int numOutputs)
+	void ComplexPlugin::Process(AudioBuffer<float> &buffer, u32 numSamples, u32 numInputs, u32 numOutputs)
 	{
 		soundEngine->MainProcess(buffer, numSamples, numInputs, numOutputs);
 	}

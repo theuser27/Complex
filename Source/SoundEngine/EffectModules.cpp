@@ -174,8 +174,9 @@ namespace Generation
 			return;
 		}
 
-		// the only reason we'd have to wait is if the allocation thread is
-		// swapping pointers
+		// lock-free but may not be wait-free
+		// the only reason we'd have to wait is if the allocation thread is swapping pointers,
+		// however, i seriously doubt that will cause me to miss a block
 		bool expected = false;
 		while (isInUse.compare_exchange_weak(expected, true, std::memory_order_acq_rel));
 

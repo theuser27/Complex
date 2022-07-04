@@ -25,39 +25,44 @@
 
 namespace common
 {
+	// general constants
 	static constexpr float kPi = std::numbers::pi_v<float>;
 	static constexpr float k2Pi = kPi * 2.0f;
 	static constexpr float kEpsilon = 1e-16f;
-	static constexpr u32 kDefaultSampleRate = 44100;
-	static constexpr u32 kNumInputsOutputs = 1;																				// input sources
-	static constexpr u32 kNumChannels = 2;																						// how many channels each input is going to be
-																																										// currently the plugin will work only with stereo signals
-	static constexpr u32 kNumTotalChannels = kNumInputsOutputs * kNumChannels;				// total channels to process
+	static constexpr double kDefaultSampleRate = 44100;
 	static constexpr u32 kSimdRatio = simd_float::kSize;
 	static constexpr u32 kComplexSimdRatio = simd_float::kComplexSize;
-	static constexpr u32 kSimdsPerInput = kSimdRatio / kNumChannels;
-	static constexpr u32 kSimdsPerComplexInput = kComplexSimdRatio / kNumChannels;
-
 	static constexpr i32 kMidiSize = 128;
 	static constexpr i32 kMidiKeyCenter = 60;
 	static constexpr double kMidi0Frequency = 8.1757989156f;
-	static constexpr double kMinFrequency = kMidi0Frequency / 4.0f;										// lowest frequency that will be displayed
 	static constexpr i32 kNotesPerOctave = 12;
 	static constexpr i32 kCentsPerNote = 100;
 	static constexpr i32 kCentsPerOctave = kNotesPerOctave * kCentsPerNote;
-																																										// FFT sizes must be powers of 2 (some internal processing relies on that)
-	static constexpr u32 kMinFFTOrder = 7;																						// 128 samples min
-	static constexpr u32 kMaxFFTOrder = 14;																						// 16384 samples max
-	static constexpr u32 kDefaultFFTOrder = 12;																				// 4096 samples default
-	static constexpr u32 kMaxPreBufferLength = 1 << (kMaxFFTOrder + 5);								// pre FFT buffer size
-	static constexpr u32 kMaxFFTBufferLength = 1 << (kMaxFFTOrder + 1);								// mid and post FFT buffers size
-	static constexpr float kMinWindowOverlap = 0.0f;																	// minimum window overlap
-	static constexpr float kMaxWindowOverlap = 0.96875f;															// maximum window overlap
-	static constexpr float kDefaultWindowOverlap = 0.5f;															// default window overlap
-	static constexpr u32 kWindowResolution = (1 << 10) + 1;														// 1025 samples window lookup resolution (one more sample  
-																																										// in order to have a distinct sample in the middle)
+
+	// channel constants
+	static constexpr u32 kNumInputsOutputs = 1;																				// (can be changed)   in/out sources
+	static constexpr u32 kNumChannels = 2;																						// (can't be changed) currently the plugin only works with stereo signals
+	static constexpr u32 kNumTotalChannels = kNumInputsOutputs * kNumChannels;
+	static constexpr u32 kSimdsPerInput = kSimdRatio / kNumChannels;
+	static constexpr u32 kSimdsPerComplexInput = kComplexSimdRatio / kNumChannels;
+
+	// FFT constants; some internal processing relies that sizes be powers of 2
+	static constexpr u32 kMinFFTOrder = 7;																						// (can be changed)   128 samples min
+	static constexpr u32 kMaxFFTOrder = 14;																						// (can be changed)   16384 samples max
+	static constexpr u32 kDefaultFFTOrder = 12;																				// (can be changed)   4096 samples default
+	static constexpr u32 kMaxPreBufferLength = 1 << (kMaxFFTOrder + 5);								// (can be changed)   pre FFT buffer size
+	static constexpr u32 kMaxFFTBufferLength = 1 << (kMaxFFTOrder + 1);								// (can't be changed) mid and post FFT buffers size
+	static constexpr float kMinWindowOverlap = 0.0f;																	// (can be changed)   minimum window overlap
+	static constexpr float kMaxWindowOverlap = 0.96875f;															// (can be changed)   maximum window overlap
+	static constexpr float kDefaultWindowOverlap = 0.5f;															// (can be changed)   default window overlap
+	static constexpr u32 kWindowResolution = (1 << 10) + 1;														// (can be changed)   1025 samples window lookup resolution 
+																																										//										(one more sample in order to have 
+																																										//                    a distinct sample in the middle)
+	
+	// misc constants
+	static constexpr double kMinFrequency = kMidi0Frequency / 4.0;										// (can be changed)   lowest frequency that will be displayed
+	static constexpr u32 kMaxNumChains = 16;																					// (can be changed)   max number of chains
 	static constexpr u32 kNumFx = 4;																									// temporary number of fx in a chain
-	static constexpr u32 kMaxNumChains = 16;
 
 	namespace moduleTypes
 	{

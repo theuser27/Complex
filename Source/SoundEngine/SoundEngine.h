@@ -95,9 +95,9 @@ namespace Generation
 				return (getSize() + getEnd() - currentBufferStart) % getSize();
 			}
 
-			perf_inline void readBuffer(AudioBuffer<float> &reader, u32 numChannels,
-				u32 numSamples, BeginPoint beginPoint = BeginPoint::BlockBegin, i32 inputBufferOffset = 0,
-				u32 readerBeginIndex = 0, bool advanceBlock = true) noexcept
+			perf_inline void readBuffer(AudioBuffer<float> &reader, u32 numChannels, 
+				const bool* channelsToCopy, u32 numSamples, BeginPoint beginPoint = BeginPoint::BlockBegin, 
+				i32 inputBufferOffset = 0, u32 readerBeginIndex = 0, bool advanceBlock = true) noexcept
 			{
 				u32 begin = 0;
 				switch (beginPoint)
@@ -118,7 +118,9 @@ namespace Generation
 
 				u32 currentBufferBegin = (getSize() + begin + inputBufferOffset) % getSize();
 				
-				buffer_.readBuffer(reader, numChannels, numSamples, currentBufferBegin, readerBeginIndex);
+				buffer_.readBuffer(reader, numChannels, numSamples, 
+					channelsToCopy, currentBufferBegin, readerBeginIndex);
+
 				if (advanceBlock)
 					this->advanceBlock(currentBufferBegin, numSamples);
 			}
@@ -129,9 +131,9 @@ namespace Generation
 				buffer_.writeBuffer(writer, numChannels, numSamples, writerIndex, operation);
 			}
 
-			perf_inline void outBufferRead(Framework::CircularBuffer &outBuffer,
-				u32 numChannels, u32 numSamples, u32 outBufferIndex = 0, i32 inputBufferOffset = 0,
-				BeginPoint beginPoint = BeginPoint::LastOutputBlock) noexcept
+			perf_inline void outBufferRead(Framework::CircularBuffer &outBuffer, 
+				u32 numChannels, const bool* channelsToCopy, u32 numSamples, u32 outBufferIndex = 0, 
+				i32 inputBufferOffset = 0, BeginPoint beginPoint = BeginPoint::LastOutputBlock) noexcept
 			{
 				u32 inputBufferBegin = 0;
 				switch (beginPoint)
@@ -151,7 +153,7 @@ namespace Generation
 				}
 
 				u32 inputBufferIndex = (getSize() + inputBufferBegin + inputBufferOffset) % getSize();
-				buffer_.readBuffer(outBuffer.getData(), numChannels, numSamples, inputBufferIndex, outBufferIndex);
+				buffer_.readBuffer(outBuffer.getData(), numChannels, numSamples, channelsToCopy, inputBufferIndex, outBufferIndex);
 			}
 
 			strict_inline float getSample(u32 channel, u32 index) const noexcept
@@ -199,8 +201,9 @@ namespace Generation
 		// a master object that controls all effects chains
 		EffectsState effectsState;
 
-		// volume of the incoming dry signal(s)
-		static simd_float inputVolume;
+		// if an input isn't used there's no need to process it at all
+		std::array<bool, kNumTotalChannels> usedInputChannels_{};
+		std::array<bool, kNumTotalChannels> usedOutputChannels_{};
 
 		// output buffer containing dry and wet data
 		struct
@@ -229,20 +232,26 @@ namespace Generation
 				buffer_.reserve(newNumChannels, newSize, fitToSize);
 			}
 
-			perf_inline void readOutput(AudioBuffer<float> &output, u32 numSamples) noexcept
+			perf_inline void readOutput(AudioBuffer<float> &output, u32 numOutputs, const bool* channelsToCopy, u32 numSamples) noexcept
 			{
-				buffer_.readBuffer(output, output.getNumChannels(), numSamples, getBeginOutput(), 0);
+				COMPLEX_ASSERT(numOutputs <= kNumTotalChannels);
+				buffer_.readBuffer(output, numOutputs, numSamples, channelsToCopy, getBeginOutput(), 0);
+
+				auto writePointers = output.getArrayOfWritePointers();
+				for (u32 i = 0; i < numOutputs; i++)
+					if (!channelsToCopy[i])
+						utils::zeroBuffer(writePointers[i], numSamples);
 			}
 
 			perf_inline void addOverlapBuffer(const AudioBuffer<float> &other,
-				u32 numChannels, u32 numSamples, i32 beginOutputOffset) noexcept
+				u32 numChannels, const bool* channelsToOvelap, u32 numSamples, i32 beginOutputOffset) noexcept
 			{
 				// clearing samples from previous blocks
 				u32 oldEnd = getEnd();
 				buffer_.setEnd((addOverlap_ + numSamples) % getSize());
 				buffer_.clear(oldEnd, (getSize() + getEnd() - oldEnd) % getSize());
 
-				buffer_.addBuffer(other, numChannels, numSamples, addOverlap_, 0);
+				buffer_.addBuffer(other, numChannels, numSamples, channelsToOvelap, addOverlap_, 0);
 
 				// offsetting the overlap index for the next block
 				addOverlap_ = (addOverlap_ + beginOutputOffset) % getSize();
@@ -325,7 +334,7 @@ namespace Generation
 		Framework::Window windows;
 
 		// pointer to an array of fourier transforms
-		std::vector<std::shared_ptr<Framework::FFT>> transforms;
+		std::vector<std::unique_ptr<Framework::FFT>> transforms;
 
 	public:
 		// initialising pointers and FFT plans
@@ -339,13 +348,13 @@ namespace Generation
 		void DoIFFT();
 		void MixOut(u32 numSamples);
 		void FillOutput(AudioBuffer<float> &buffer, u32 numOutputs, u32 numSamples);
-		void MainProcess(AudioBuffer<float> &buffer, int numSamples, int numInputs, int numOutputs);
+		void MainProcess(AudioBuffer<float> &buffer, u32 numSamples, u32 numInputs, u32 numOutputs);
 
 		// Getter Methods
 		//
 		strict_inline u32 getProcessingDelay() const noexcept { return FFTNumSamples_ + samplesPerBlock_; }
 		strict_inline u32 getSamplesPerBlock() const noexcept { return samplesPerBlock_; }
-		strict_inline u32 getSampleRate() const noexcept { return sampleRate_; }
+		strict_inline double getSampleRate() const noexcept { return sampleRate_; }
 
 		// Setter Methods
 		//
@@ -353,7 +362,6 @@ namespace Generation
 		strict_inline void setFFTOrder(u32 order) noexcept { FFTOrder_ = order; }
 		strict_inline void setOverlap(float overlap) noexcept { overlap_ = overlap; }
 		strict_inline void setWindowType(Framework::WindowTypes type) noexcept { windowType_ = type; }
-		//strict_inline void setPowerMatching(bool isPowerMatching) noexcept { isPowerMatching_ = isPowerMatching; }
 
 	private:
 		//=========================================================================================
@@ -382,8 +390,6 @@ namespace Generation
 		//
 		// mixback amount with dry signal
 		float mix_ = 1.0f;
-		// power matching with input signal
-		//bool isPowerMatching_;
 		// amount of overlap with previous block
 		float overlap_ = kDefaultWindowOverlap;
 		// window type
@@ -392,10 +398,6 @@ namespace Generation
 		float alpha_ = 0.0f;
 		// FFT order
 		u32 FFTOrder_ = kDefaultFFTOrder;
-		// input routing for the chains
-		std::array<u32, kMaxNumChains> chainInputs;
-		// output routing for the chains
-		std::array<u32, kMaxNumChains> chainOutputs;
 
 		//=========================================================================================
 		// internal methods

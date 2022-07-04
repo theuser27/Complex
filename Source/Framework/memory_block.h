@@ -101,9 +101,7 @@ namespace Framework
 		}
 
 		perf_inline void clear() noexcept
-		{
-			std::memset(data_.get(), 0, absoluteSize_);
-		}
+		{	std::memset(data_.get(), 0, absoluteSize_); }
 
 		perf_inline T read(u64 index) const noexcept
 		{ 
