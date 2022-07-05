@@ -41,35 +41,84 @@ namespace Generation
 		for (u32 i = 0; i < chains_.size(); i++)
 		{
 			// if the input is dependent on another chain's output we don't do anything yet
-			auto chainIndex = chainInputs_[i];
+			auto chainIndex = chains_[i].inputIndex;
 			if (chainIndex & kChainInputMask)
 				continue;
 
 			auto currentChain = chains_[i].getChainData().lock();
-			Framework::SimdBuffer<std::complex<float>, simd_float>::copyToThis(currentChain->intermediateBuffer, 
-				sourceBuffer_, kNumChannels, FFTSize_, utils::Operations::Assign, simd_mask(kNoChangeMask), 0, chainIndex * kComplexSimdRatio);
+			Framework::SimdBuffer<std::complex<float>, simd_float>::copyToThisNoMask(currentChain->sourceBuffer, sourceBuffer_,
+				kNumChannels, FFTSize_, utils::Operations::Assign, 0, chainIndex * kComplexSimdRatio);
 		}
 	}
 
 	void EffectsState::processChains()
 	{
-		std::array<std::thread, kMaxNumChains> chainThreads;
-		for (size_t i = 0; i < AreChainsFinished_.size(); i++)
-			AreChainsFinished_[i].store(false, std::memory_order_release);
-
+		// triggers the chains to run again
 		for (size_t i = 0; i < chains_.size(); i++)
-			chainThreads[i] = std::thread(processIndividualChains, std::cref(*this), i);
+			chains_[i].isFinished.store(false, std::memory_order_release);
 
-		// i have a sneaking suspicion the last chains will be the first to finish
-		for (size_t i = chains_.size(); i > 0; i--)
-			chainThreads[i - 1].join();
+		// waiting for chanins to finish
+		for (size_t i = 0; i < chains_.size(); i++)
+			while (chains_[i].isFinished.load(std::memory_order_acquire) == false);
 	}
 
-	void EffectsState::processIndividualChains(const EffectsState &state, u32 chainIndex)
+	void EffectsState::processIndividualChains(std::stop_token stoken, const EffectsState &state, u32 chainIndex)
 	{
+		while (true)
+		{
+			// so long as the flag is not set we don't execute anything
+			while (state.chains_[chainIndex].isFinished.load(std::memory_order_acquire) == true)
+			{
+				// if chain has been deleted or program is shutting down we need to close thread
+				if (stoken.stop_requested())
+					return;
+			}
 
+			// we're getting pointers every time the chain runs because
+			// there might be changes/resizes of container objects
+			auto thisChain = &state.chains_[chainIndex];
+			auto thisChainSourceBuffer = &thisChain->chainData->sourceBuffer;
+			auto thisChainWorkBuffer = &thisChain->chainData->workBuffer;
+			auto thisChainEffectOrder = thisChain->effectOrder.data();
+			auto thisChainEffectOrderSize = thisChain->effectOrder.size();
+			auto thisChainDataIsInWork = &thisChain->chainData->dataIsInWork;
 
-		state.AreChainsFinished_[chainIndex].store(true, std::memory_order_release);
+			auto FFTSize = state.FFTSize_;
+			float sampleRate = state.sampleRate_;
+
+			// if this chain's input is another's output
+			// we wait until that one is finished and then copy its data
+			if (thisChain->inputIndex & EffectsState::kChainInputMask)
+			{
+				u32 chainInputIndex = thisChain->inputIndex ^ EffectsState::kChainInputMask;
+				while (state.chains_[chainInputIndex].isFinished.load(std::memory_order_acquire) == false);
+
+				auto inputChainData = state.chains_[chainInputIndex].getChainData().lock();
+				Framework::SimdBuffer<std::complex<float>, simd_float>::copyToThisNoMask(*thisChainSourceBuffer,
+					inputChainData->sourceBuffer, kNumChannels, state.FFTSize_, utils::Operations::Assign);
+			}
+
+			// main processing loop
+			for (size_t i = 0; i < thisChainEffectOrderSize; i++)
+			{
+				thisChainEffectOrder[i].processEffect(*thisChainSourceBuffer,
+					*thisChainWorkBuffer, FFTSize, sampleRate);
+				// TODO: fit links between modules here
+				std::swap(thisChainSourceBuffer, thisChainWorkBuffer);
+				*thisChainDataIsInWork = !(*thisChainDataIsInWork);
+			}
+
+			// if the latest data is in the wrong buffer, we swap
+			if (*thisChainDataIsInWork)
+			{
+				thisChainSourceBuffer->swap(*thisChainWorkBuffer);
+				*thisChainDataIsInWork = false;
+			}
+
+			// to let other threads know that the data is in its final state
+			// and to prevent the thread of instantly running again
+			thisChain->isFinished.store(true, std::memory_order_release);
+		}
 	}
 
 	void EffectsState::sumChains()
@@ -84,7 +133,7 @@ namespace Generation
 			auto currentChainData = chains_.at(i).getChainData().lock();
 			if (!currentChainData->isCartesian && chains_[i].isEnabled)
 			{
-				auto &buffer = currentChainData->intermediateBuffer;
+				auto &buffer = currentChainData->sourceBuffer;
 				for (u32 i = 0; i < buffer.getNumSimdChannels(); i++)
 				{
 					for (u32 j = 0; j < buffer.getSize(); j += 2)
@@ -106,9 +155,10 @@ namespace Generation
 		for (u32 i = 0; i < multipliers.size(); i++)
 		{
 			float scale = 0.0f;
-			for (auto output : chainOutputs_)
-				if (output == i)
+			for (size_t i = 0; i < chains_.size(); i++)
+				if (chains_[i].outputIndex == i)
 					scale++;
+				
 			// if an output isn't chosen, we don't do anything
 			scale = std::max(1.0f, scale);
 			multipliers[i] = (1.0f / scale);
@@ -117,15 +167,15 @@ namespace Generation
 		// for every chain we add its scaled output to the main sourceBuffer_ at the designated output channels
 		for (u32 i = 0; i < chains_.size(); i++)
 		{
-			if (chainOutputs_[i] == kDefaultOutput)
+			if (chains_[i].outputIndex == kDefaultOutput)
 				continue;
 
 			auto currentChainData = chains_[i].getChainData().lock();
-			auto currentChainBuffer = &currentChainData->intermediateBuffer;
+			auto currentChainBuffer = &currentChainData->sourceBuffer;
 
-			Framework::SimdBuffer<std::complex<float>, simd_float>::copyToThis(sourceBuffer_,
+			Framework::SimdBuffer<std::complex<float>, simd_float>::copyToThisNoMask(sourceBuffer_,
 				*currentChainBuffer, kComplexSimdRatio, FFTSize_, utils::Operations::Add,
-				kNoChangeMask, chainOutputs_[i] * kComplexSimdRatio, 0);
+				chains_[i].outputIndex * kComplexSimdRatio, 0);
 		}
 
 		// scaling all outputs
@@ -164,24 +214,6 @@ namespace Generation
 			}
 		}
 	}
-
-	void EffectsState::addChain()
-	{
-	}
-
-	void EffectsState::deleteChain(u32 chainIndex)
-	{
-	}
-
-	void EffectsState::moveChain(u32 chainIndex, u32 newChainIndex)
-	{
-	}
-
-	void EffectsState::copyChain(u32 chainIndex, u32 copyChainIndex)
-	{
-	}
-
-
 
 	void EffectsState::addEffect(u32 chainIndex, u32 effectIndex, ModuleTypes type)
 	{

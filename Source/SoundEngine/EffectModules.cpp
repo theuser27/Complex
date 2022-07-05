@@ -86,6 +86,19 @@ namespace Generation
 		}
 	}
 
+	void filterEffect::run(Framework::SimdBuffer<std::complex<float>, simd_float> &source,
+		Framework::SimdBuffer<std::complex<float>, simd_float> &destination, u32 FFTSize, float sampleRate) noexcept
+	{
+		switch (typeParameter_)
+		{
+		case static_cast<u32>(FilterTypes::Normal):
+			runNormal(source, destination, FFTSize, sampleRate);
+			break;
+		default:
+			break;
+		}
+	}
+
 	perf_inline void contrastEffect::runContrast(Framework::SimdBuffer<std::complex<float>, simd_float> &source,
 		Framework::SimdBuffer<std::complex<float>, simd_float> &destination, u32 FFTSize, float sampleRate)
 	{
@@ -183,7 +196,6 @@ namespace Generation
 		effect_->run(source, destination, FFTSize, sampleRate);
 
 		isInUse.store(false, std::memory_order_release);
-		isInUse.notify_one();
 
 		simd_mask wetMask = simd_float::notEqual(1.0f, mixParameter_);
 		simd_mask gainMask = simd_float::notEqual(0.0f, gainParameter_);
@@ -206,6 +218,19 @@ namespace Generation
 				destination.multiply(gain, 0, i);
 		}
 	}
+
+	void contrastEffect::run(Framework::SimdBuffer<std::complex<float>, simd_float> &source,
+		Framework::SimdBuffer<std::complex<float>, simd_float> &destination, u32 FFTSize, float sampleRate) noexcept
+	{
+		switch (typeParameter_)
+		{
+		case static_cast<u32>(ContrastTypes::Contrast):
+			runContrast(source, destination, FFTSize, sampleRate);
+			break;
+		default:
+			break;
+		}
+	};
 }
 
 

@@ -36,7 +36,7 @@ namespace Framework
 			reserve(numChannels, size);
 		}
 
-		SimdBuffer(const SimdBuffer<T, SIMD> &other, bool doDataCopy = false)
+		SimdBuffer(const SimdBuffer &other, bool doDataCopy = false)
 		{
 			COMPLEX_ASSERT(other.getNumChannels() > 0 && other.getSize() > 0);
 			reserve(other.getNumChannels(), other.getSize());
@@ -45,7 +45,9 @@ namespace Framework
 				copyToThis(*this, other, other.getNumChannels(), other.getSize());
 		}
 
-		SimdBuffer &operator=(const SimdBuffer<T, SIMD> &other) = delete;
+		SimdBuffer &operator=(const SimdBuffer &other) = delete;
+		SimdBuffer(SimdBuffer &&other) = delete;
+		SimdBuffer &operator=(const SimdBuffer &&other) = delete;
 
 		perf_inline void swap(SimdBuffer<T, SIMD> &other)
 		{
@@ -154,6 +156,75 @@ namespace Framework
 			}
 		}
 
+		static void copyToThisNoMask(SimdBuffer<T, SIMD, alignment> &thisBuffer, const SimdBuffer<T, SIMD, alignment> &otherBuffer,
+			u32 numChannels, u32 numSamples, utils::Operations operation = utils::Operations::Assign,
+			u32 thisStartChannel = 0, u32 otherStartChannel = 0, u32 thisStartIndex = 0, u32 otherStartIndex = 0)
+		{
+			COMPLEX_ASSERT(thisBuffer.getNumChannels() >= thisStartChannel + numChannels);
+			COMPLEX_ASSERT(otherBuffer.getNumChannels() >= otherStartChannel + numChannels);
+			COMPLEX_ASSERT(thisBuffer.getSize() >= numSamples);
+			COMPLEX_ASSERT(otherBuffer.getSize() >= numSamples);
+
+			// getting data and setting up variables
+			auto otherDataPointer = otherBuffer.getData().lock();
+			auto thisDataPointer = thisBuffer.getData().lock();
+
+			auto thisBufferSize = thisBuffer.getSize();
+			auto otherBufferSize = otherBuffer.getSize();
+			u32 simdNumChannels = calculateNumSimdChannels(numChannels);
+			switch (operation)
+			{
+			case utils::Operations::Add:
+
+				for (u32 i = 0; i < simdNumChannels; i++)
+				{
+					// getting indices to the beginning of the SIMD channel buffer blocks
+					auto thisChannelIndices = getAbsoluteIndices(thisStartChannel + i * getRelativeSize(), thisBufferSize, 0);
+					auto otherChannelIndices = getAbsoluteIndices(otherStartChannel + i * getRelativeSize(), otherBufferSize, 0);
+
+					for (u32 k = 0; k < numSamples; k++)
+					{
+						thisDataPointer[thisChannelIndices.first + thisStartIndex + k] +=
+							otherDataPointer[otherChannelIndices.first + otherStartIndex + k];
+					}
+				}
+				break;
+
+			case utils::Operations::Multiply:
+
+				for (u32 i = 0; i < simdNumChannels; i++)
+				{
+					// getting indices to the beginning of the SIMD channel buffer blocks
+					auto thisChannelIndices = getAbsoluteIndices(thisStartChannel + i * getRelativeSize(), thisBufferSize, 0);
+					auto otherChannelIndices = getAbsoluteIndices(otherStartChannel + i * getRelativeSize(), otherBufferSize, 0);
+
+					for (u32 k = 0; k < numSamples; k++)
+					{
+						thisDataPointer[thisChannelIndices.first + thisStartIndex + k] *=
+							otherDataPointer[otherChannelIndices.first + otherStartIndex + k];
+					}
+				}
+				break;
+
+			default:
+			case utils::Operations::Assign:
+
+				for (u32 i = 0; i < simdNumChannels; i++)
+				{
+					// getting indices to the beginning of the SIMD channel buffer blocks
+					auto thisChannelIndices = getAbsoluteIndices(thisStartChannel + i * getRelativeSize(), thisBufferSize, 0);
+					auto otherChannelIndices = getAbsoluteIndices(otherStartChannel + i * getRelativeSize(), otherBufferSize, 0);
+
+					for (u32 k = 0; k < numSamples; k++)
+					{
+						thisDataPointer[thisChannelIndices.first + thisStartIndex + k] =
+							otherDataPointer[otherChannelIndices.first + otherStartIndex + k];
+					}
+				}
+				break;
+			}
+		}
+
 
 		perf_inline void add(SIMD value, u32 channel, u32 index)
 		{
@@ -175,14 +246,18 @@ namespace Framework
 		}
 
 		perf_inline void addBuffer(SimdBuffer<T, SIMD, alignment> &other, u32 numChannels, u32 numSamples,
-			simd_mask mergeMask = kNoChangeMask, simd_mask shiftMask = kNoChangeMask, u32 thisStartChannel = 0,
-			u32 otherStartChannel = 0, u32 thisStartIndex = 0, u32 otherStartIndex = 0)
+			simd_mask mergeMask = kNoChangeMask, u32 thisStartChannel = 0, u32 otherStartChannel = 0,
+			 u32 thisStartIndex = 0, u32 otherStartIndex = 0)
 		{
 			COMPLEX_ASSERT(numChannels <= other.getNumChannels());
 			COMPLEX_ASSERT(numChannels <= getNumChannels());
 
-			this->copyToThis(*this, other, numChannels, numSamples, utils::Operations::Add, 
-				mergeMask, thisStartChannel, otherStartChannel, thisStartIndex, otherStartIndex);
+			if (simd_mask::notEqual(mergeMask, kNoChangeMask).sum() == 0)
+				copyToThisNoMask(*this, other, numChannels, numSamples, utils::Operations::Add,
+					thisStartChannel, otherStartChannel, thisStartIndex, otherStartIndex);
+			else
+				copyToThis(*this, other, numChannels, numSamples, utils::Operations::Add, 
+					mergeMask, thisStartChannel, otherStartChannel, thisStartIndex, otherStartIndex);
 		}
 
 		perf_inline void multiply(SIMD value, u32 channel, u32 index)
@@ -205,14 +280,18 @@ namespace Framework
 		}
 
 		perf_inline void multiplyBuffer(SimdBuffer<T, SIMD, alignment> &other, u32 numChannels, u32 numSamples,
-			simd_mask mergeMask = kNoChangeMask, simd_mask shiftMask = kNoChangeMask, u32 thisStartChannel = 0,
-			u32 otherStartChannel = 0, u32 thisStartIndex = 0, u32 otherStartIndex = 0)
+			simd_mask mergeMask = kNoChangeMask, u32 thisStartChannel = 0, u32 otherStartChannel = 0,
+			 u32 thisStartIndex = 0, u32 otherStartIndex = 0)
 		{
 			COMPLEX_ASSERT(numChannels <= other.getNumChannels());
 			COMPLEX_ASSERT(numChannels <= getNumChannels());
 
-			this->copyToThis(*this, other, numChannels, numSamples, utils::Operations::Multiply, 
-				mergeMask, thisStartChannel, otherStartChannel, thisStartIndex, otherStartIndex);
+			if (simd_mask::notEqual(mergeMask, kNoChangeMask).sum() == 0)
+				copyToThisNoMask(*this, other, numChannels, numSamples, utils::Operations::Multiply,
+					thisStartChannel, otherStartChannel, thisStartIndex, otherStartIndex);
+			else
+				this->copyToThis(*this, other, numChannels, numSamples, utils::Operations::Multiply, 
+					mergeMask, thisStartChannel, otherStartChannel, thisStartIndex, otherStartIndex);
 		}
 		
 

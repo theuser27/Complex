@@ -27,20 +27,23 @@ namespace Framework
 		}
 		~memory_block() = default;
 
-		memory_block(const memory_block<T, alignment> &other) = delete;
+		memory_block(const memory_block &other) = delete;
 		memory_block &operator= (const memory_block<T, alignment> &other) = delete;
 
-		memory_block(memory_block<T, alignment>&& other) noexcept
+		memory_block(memory_block&& other) noexcept
 		{
-			data_.swap(other.data_);
-			std::swap(absoluteSize_, other.absoluteSize_);
-			other.data_.reset();
+			data_ = std::move(other.data_);
+			absoluteSize_ = other.absoluteSize_;
 		}
 
 		memory_block& operator= (memory_block<T, alignment>&& other) noexcept
 		{
-			data_.swap(other.data_);
-			std::swap(absoluteSize_, other.absoluteSize_);
+			if (this != &other)
+			{
+				data_ = std::move(other.data_);
+				absoluteSize_ = other.absoluteSize_;
+			}
+
 			return *this;
 		}
 
@@ -101,7 +104,7 @@ namespace Framework
 		}
 
 		perf_inline void clear() noexcept
-		{	std::memset(data_.get(), 0, absoluteSize_); }
+		{ std::memset(data_.get(), 0, absoluteSize_); }
 
 		perf_inline T read(u64 index) const noexcept
 		{ 

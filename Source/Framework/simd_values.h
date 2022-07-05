@@ -267,6 +267,9 @@ namespace simd_values
 		static strict_inline simd_int vector_call equal(simd_int one, simd_int two)
 		{	return equal(one.value, two.value); }
 
+		static strict_inline simd_int vector_call notEqual(simd_int one, simd_int two)
+		{ return ~equal(one, two); }
+
 		static strict_inline simd_int vector_call greaterThanUnsigned(simd_int one, simd_int two)
 		{	return greaterThanUnsigned(one.value, two.value); }
 

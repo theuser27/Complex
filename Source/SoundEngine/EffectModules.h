@@ -178,6 +178,12 @@ namespace Generation
 	public:
 		utilityEffect() = default;
 
+		void run(Framework::SimdBuffer<std::complex<float>, simd_float> &source,
+			Framework::SimdBuffer<std::complex<float>, simd_float> &destination, u32 FFTSize, float sampleRate) noexcept override
+		{
+			baseEffect::run(source, destination, FFTSize, sampleRate);
+		}
+
 	private:
 		simd_int toReverseSpectrum = 0;						// reverses the spectrum bins
 		simd_int flipPhase = 0;										// flipping phases of channels
@@ -226,20 +232,10 @@ namespace Generation
 		}
 
 		void run(Framework::SimdBuffer<std::complex<float>, simd_float> &source,
-			Framework::SimdBuffer<std::complex<float>, simd_float> &destination, u32 FFTSize, float sampleRate) noexcept override
-		{
-			switch (typeParameter_)
-			{
-			case static_cast<u32>(FilterTypes::Normal):
-				runNormal(source, destination, FFTSize, sampleRate);
-				break;
-			default:
-				break;
-			}
-		}
+			Framework::SimdBuffer<std::complex<float>, simd_float> &destination, u32 FFTSize, float sampleRate) noexcept override;
 
 	private:
-		perf_inline void runNormal(Framework::SimdBuffer<std::complex<float>, simd_float> &source,
+		void runNormal(Framework::SimdBuffer<std::complex<float>, simd_float> &source,
 			Framework::SimdBuffer<std::complex<float>, simd_float> &destination, u32 FFTSize, float sampleRate) noexcept;
 
 		perf_inline simd_int getDistancesFromCutoff(const simd_int positionIndices,
@@ -348,17 +344,7 @@ namespace Generation
 		}
 
 		void run(Framework::SimdBuffer<std::complex<float>, simd_float> &source,
-			Framework::SimdBuffer<std::complex<float>, simd_float> &destination, u32 FFTSize, float sampleRate) noexcept override
-		{
-			switch (typeParameter_)
-			{
-			case static_cast<u32>(ContrastTypes::Contrast):
-				runContrast(source, destination, FFTSize, sampleRate);
-				break;
-			default:
-				break;
-			}
-		};
+			Framework::SimdBuffer<std::complex<float>, simd_float> &destination, u32 FFTSize, float sampleRate) noexcept override;
 
 	private:
 		strict_inline void runContrast(Framework::SimdBuffer<std::complex<float>, simd_float> &source,
@@ -471,7 +457,7 @@ namespace Generation
 
 		EffectModule(EffectModule &&other) noexcept : isEnabledParameter_(other.isEnabledParameter_),
 			mixParameter_(other.mixParameter_), gainParameter_(other.gainParameter_), 
-			moduleTypeParameter_(other.moduleTypeParameter_), effect_(std::exchange(other.effect_, nullptr)) { }
+			moduleTypeParameter_(other.moduleTypeParameter_), effect_(std::move(other.effect_)) { }
 		EffectModule &operator=(EffectModule &&other) noexcept
 		{
 			if (this != &other)
@@ -481,15 +467,12 @@ namespace Generation
 				mixParameter_ = other.mixParameter_;
 				gainParameter_ = other.gainParameter_;
 				moduleTypeParameter_ = other.moduleTypeParameter_;
-				effect_ = std::exchange(other.effect_, nullptr);
+				effect_ = std::move(other.effect_);
 			}
 			return *this;
 		}
 
 		~EffectModule() = default;
-
-		//baseEffect *getEffect() { return fxPtr_.get(); }
-		//void copyEffect(baseEffect *fx) { fxPtr_ = std::make_unique<baseEffect>(*fx); }
 
 		void setParameter(std::variant<simd_float, u32, bool> &newValue, std::string_view parameter) noexcept
 		{
