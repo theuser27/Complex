@@ -3,7 +3,7 @@
 
 		fourier_transform.h
 		Created: 14 Jul 2021 3:26:35pm
-		Author:  Lenovo
+		Author:  theuser27
 
 	==============================================================================
 */
@@ -23,9 +23,9 @@ namespace Framework
 		// in and out buffers need to be 2 * bits
 		FFT(int bits) : size_(1 << bits)
 		{
-			int spec_size{ 0 };
-			int spec_buffer_size{ 0 };
-			int buffer_size{ 0 };
+			int spec_size = 0;
+			int spec_buffer_size = 0;
+			int buffer_size = 0;
 			ippsFFTGetSize_R_32f(bits, IPP_FFT_DIV_INV_BY_N, ippAlgHintNone, &spec_size, &spec_buffer_size, &buffer_size);
 
 			spec_ = std::make_unique<Ipp8u[]>(spec_size);

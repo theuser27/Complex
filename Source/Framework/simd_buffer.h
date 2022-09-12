@@ -3,7 +3,7 @@
 
 		simd_buffer.h
 		Created: 25 Oct 2021 11:14:40pm
-		Author:  Lenovo
+		Author:  theuser27
 
 	==============================================================================
 */
@@ -21,9 +21,10 @@ namespace Framework
 	// SIMD - simd type
 	// intended for use of simd types
 	template<typename T, commonConcepts::SimdValue SIMD, u32 alignment = alignof(SIMD)>
-		/*requires commonConcepts::Addable<SIMD> &&commonConcepts::Multipliable<SIMD> &&
+		/*requires commonConcepts::Addable<SIMD> && commonConcepts::Multipliable<SIMD> &&
 			commonConcepts::OperatorParen<SIMD> && commonConcepts::OperatorBracket<SIMD>*/
-	class SimdBuffer {
+	class SimdBuffer 
+	{
 	public:
 		static_assert(alignment % alignof(T) == 0);
 
@@ -56,7 +57,7 @@ namespace Framework
 
 			u32 newChannels = other.channels_;
 			u32 newSize = other.size_;
-			memory_block<SIMD> newData;
+			MemoryBlock<SIMD> newData;
 			newData.swap(other.data_);
 
 			other.data_.swap(data_);
@@ -76,7 +77,7 @@ namespace Framework
 				return;
 
 			u32 newSimdChannels = calculateNumSimdChannels(newNumChannels);
-			memory_block<SIMD> newData(newSimdChannels * newSize, true);
+			MemoryBlock<SIMD> newData(newSimdChannels * newSize, true);
 
 			// checking if we even have any elements to move
 			if (channels_ * size_ != 0)
@@ -103,8 +104,8 @@ namespace Framework
 		// specified by starting channels/indices
 		// result is shifted by shiftMask and filtered with mergeMask
 		// note: starting channels need to be congruent to kNumChannels
-		static void copyToThis(SimdBuffer<T, SIMD, alignment> &thisBuffer, const SimdBuffer<T, SIMD, alignment> &otherBuffer,
-			u32 numChannels, u32 numSamples, utils::Operations operation = utils::Operations::Assign, simd_mask mergeMask = kNoChangeMask,
+		static void copyToThis(SimdBuffer &thisBuffer, const SimdBuffer &otherBuffer, u32 numChannels, 
+			u32 numSamples, utils::MathOperations operation = utils::MathOperations::Assign, simd_mask mergeMask = kNoChangeMask,
 			u32 thisStartChannel = 0, u32 otherStartChannel = 0, u32 thisStartIndex = 0, u32 otherStartIndex = 0)
 		{
 			COMPLEX_ASSERT(thisBuffer.getNumChannels() >= thisStartChannel + numChannels);
@@ -116,18 +117,18 @@ namespace Framework
 			SIMD (*opFunction)(SIMD, SIMD, simd_mask);
 			switch (operation)
 			{
-			case utils::Operations::Add:
+			case utils::MathOperations::Add:
 
 				opFunction = [](SIMD one, SIMD two, simd_mask mask) { return utils::maskLoad(one + two, one, mask); };
 				break;
 
-			case utils::Operations::Multiply:
+			case utils::MathOperations::Multiply:
 
 				opFunction = [](SIMD one, SIMD two, simd_mask mask) { return utils::maskLoad(one * two, one, mask); };
 				break;
 
 			default:
-			case utils::Operations::Assign:
+			case utils::MathOperations::Assign:
 				
 				opFunction = [](SIMD one, SIMD two, simd_mask mask)	{ return utils::maskLoad(two, one, mask); };
 				break;
@@ -156,8 +157,8 @@ namespace Framework
 			}
 		}
 
-		static void copyToThisNoMask(SimdBuffer<T, SIMD, alignment> &thisBuffer, const SimdBuffer<T, SIMD, alignment> &otherBuffer,
-			u32 numChannels, u32 numSamples, utils::Operations operation = utils::Operations::Assign,
+		static void copyToThisNoMask(SimdBuffer &thisBuffer, const SimdBuffer &otherBuffer,
+			u32 numChannels, u32 numSamples, utils::MathOperations operation = utils::MathOperations::Assign,
 			u32 thisStartChannel = 0, u32 otherStartChannel = 0, u32 thisStartIndex = 0, u32 otherStartIndex = 0)
 		{
 			COMPLEX_ASSERT(thisBuffer.getNumChannels() >= thisStartChannel + numChannels);
@@ -174,7 +175,7 @@ namespace Framework
 			u32 simdNumChannels = calculateNumSimdChannels(numChannels);
 			switch (operation)
 			{
-			case utils::Operations::Add:
+			case utils::MathOperations::Add:
 
 				for (u32 i = 0; i < simdNumChannels; i++)
 				{
@@ -190,7 +191,7 @@ namespace Framework
 				}
 				break;
 
-			case utils::Operations::Multiply:
+			case utils::MathOperations::Multiply:
 
 				for (u32 i = 0; i < simdNumChannels; i++)
 				{
@@ -207,7 +208,7 @@ namespace Framework
 				break;
 
 			default:
-			case utils::Operations::Assign:
+			case utils::MathOperations::Assign:
 
 				for (u32 i = 0; i < simdNumChannels; i++)
 				{
@@ -253,10 +254,10 @@ namespace Framework
 			COMPLEX_ASSERT(numChannels <= getNumChannels());
 
 			if (simd_mask::notEqual(mergeMask, kNoChangeMask).sum() == 0)
-				copyToThisNoMask(*this, other, numChannels, numSamples, utils::Operations::Add,
+				copyToThisNoMask(*this, other, numChannels, numSamples, utils::MathOperations::Add,
 					thisStartChannel, otherStartChannel, thisStartIndex, otherStartIndex);
 			else
-				copyToThis(*this, other, numChannels, numSamples, utils::Operations::Add, 
+				copyToThis(*this, other, numChannels, numSamples, utils::MathOperations::Add, 
 					mergeMask, thisStartChannel, otherStartChannel, thisStartIndex, otherStartIndex);
 		}
 
@@ -287,10 +288,10 @@ namespace Framework
 			COMPLEX_ASSERT(numChannels <= getNumChannels());
 
 			if (simd_mask::notEqual(mergeMask, kNoChangeMask).sum() == 0)
-				copyToThisNoMask(*this, other, numChannels, numSamples, utils::Operations::Multiply,
+				copyToThisNoMask(*this, other, numChannels, numSamples, utils::MathOperations::Multiply,
 					thisStartChannel, otherStartChannel, thisStartIndex, otherStartIndex);
 			else
-				this->copyToThis(*this, other, numChannels, numSamples, utils::Operations::Multiply, 
+				this->copyToThis(*this, other, numChannels, numSamples, utils::MathOperations::Multiply, 
 					mergeMask, thisStartChannel, otherStartChannel, thisStartIndex, otherStartIndex);
 		}
 		
@@ -367,7 +368,7 @@ namespace Framework
 		u32 channels_ = 0;
 		u32 size_ = 0;
 		u32 simdChannels_ = 0;
-		memory_block<SIMD> data_;
+		MemoryBlock<SIMD> data_;
 
 		strict_inline static u32 calculateNumSimdChannels(u32 numChannels)
 		{	return (u32)std::ceil((double)numChannels / (double)getRelativeSize()); }

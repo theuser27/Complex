@@ -3,7 +3,7 @@
 
 		windows.h
 		Created: 5 Aug 2021 3:39:49am
-		Author:  Lenovo
+		Author:  theuser27
 
 	==============================================================================
 */
@@ -16,12 +16,7 @@
 
 namespace Framework
 {
-	enum class WindowTypes : int
-	{
-		Rectangle, Hann, Hamming, Triangle, Sine, Exponential, HannExponential, Lanczos, Blackman, BlackmanHarris, Custom
-	};
-
-	namespace WindowGen
+	namespace
 	{
 		// all functions are in range from 0.0f to 1.0f
 
@@ -61,20 +56,19 @@ namespace Framework
 		Window(Window &&) = delete;
 		Window &operator=(const Window &&) = delete;
 
+		static Window *getInstance() { static Window instance; return &instance; }
+
+	private:
 		Window() = default;
 		~Window() = default;
 
-	private:
-		// TODO: constrain the lookup tables to only half the window because of symmetry
-		//				and use std::abs for the lookup functions to wrap back around
+		static constexpr auto hannWindowLookup = Lookup<common::kWindowResolution>(Framework::createHannWindow);
+		static constexpr auto hammingWindowLookup = Lookup<common::kWindowResolution>(Framework::createHammingWindow);
+		static constexpr auto triangleWindowLookup = Lookup<common::kWindowResolution>(Framework::createTriangleWindow);
+		static constexpr auto sineWindowLookup = Lookup<common::kWindowResolution>(Framework::createSineWindow);
 
-		static constexpr auto hannWindowLookup = Lookup<common::kWindowResolution>(Framework::WindowGen::createHannWindow);
-		static constexpr auto hammingWindowLookup = Lookup<common::kWindowResolution>(Framework::WindowGen::createHammingWindow);
-		static constexpr auto triangleWindowLookup = Lookup<common::kWindowResolution>(Framework::WindowGen::createTriangleWindow);
-		static constexpr auto sineWindowLookup = Lookup<common::kWindowResolution>(Framework::WindowGen::createSineWindow);
-
-		static constexpr auto exponentialWindowLookup = Lookup<common::kWindowResolution>(Framework::WindowGen::createExponentialWindow);
-		static constexpr auto lanczosWindowLookup = Lookup<common::kWindowResolution>(Framework::WindowGen::createLanczosWindow);
+		static constexpr auto exponentialWindowLookup = Lookup<common::kWindowResolution>(Framework::createExponentialWindow);
+		static constexpr auto lanczosWindowLookup = Lookup<common::kWindowResolution>(Framework::createLanczosWindow);
 
 	public:
 

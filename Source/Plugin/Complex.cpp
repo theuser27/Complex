@@ -3,7 +3,7 @@
 
 		Complex.cpp
 		Created: 23 May 2021 12:20:15am
-		Author:  Lenovo
+		Author:  theuser27
 
 	==============================================================================
 */
@@ -14,22 +14,32 @@ namespace Plugin
 {
 	ComplexPlugin::ComplexPlugin()
 	{
-		soundEngine = std::make_unique<Generation::SoundEngine>();
+		soundEngine = std::make_shared<Generation::SoundEngine>();
+		Generation::PluginModule::AllModules::addModule(soundEngine);
 	}
-	ComplexPlugin::~ComplexPlugin() = default;
 
-	void ComplexPlugin::Initialise(double sampleRate, u32 samplesPerBlock)
+	void ComplexPlugin::Initialise(float sampleRate, u32 samplesPerBlock)
 	{
+		if (sampleRate != RuntimeInfo::sampleRate.load(std::memory_order_acquire))
+			RuntimeInfo::sampleRate.store(sampleRate, std::memory_order_release);
+
+		if (samplesPerBlock != RuntimeInfo::samplesPerBlock.load(std::memory_order_acquire))
+			RuntimeInfo::samplesPerBlock.store(samplesPerBlock, std::memory_order_release);
+
 		soundEngine->Initialise(sampleRate, samplesPerBlock);
 	}
 
+	// IMPORTANT !!!
+	// TODO: repurpose function for updating the plugin structure AFTER audio callback 
+	// (i.e. adding new modules/new parameter maps, etc.)
+	// because the audio callback is timed we have an eternity to set stuff up
 	void ComplexPlugin::CheckGlobalParameters()
 	{
 		// temporary setters
-		soundEngine->setMix(mix_->get());
+		/*soundEngine->setMix(mix_->get());
 		soundEngine->setWindowType(Framework::WindowTypes::Hann);
 		soundEngine->setFFTOrder(order_->get());
-		soundEngine->setOverlap(overlap_->get());
+		soundEngine->setOverlap(overlap_->get());*/
 
 		// TODO: do parameter checking
 		// check for mix
@@ -48,9 +58,16 @@ namespace Plugin
 		// check for power matching
 	}
 
+	void ComplexPlugin::parameterChangeMidi([[maybe_unused]] u64 parentModuleId, 
+		[[maybe_unused]] std::string_view parameterName, [[maybe_unused]] float value)
+	{
+		// TODO
+	}
+
 	void ComplexPlugin::Process(AudioBuffer<float> &buffer, u32 numSamples, u32 numInputs, u32 numOutputs)
 	{
 		soundEngine->MainProcess(buffer, numSamples, numInputs, numOutputs);
 	}
+
 }
 

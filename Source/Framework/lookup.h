@@ -3,7 +3,7 @@
 
 		lookup.h
 		Created: 19 Aug 2021 1:52:21am
-		Author:  Lenovo
+		Author:  theuser27
 
 	==============================================================================
 */
@@ -32,8 +32,6 @@ namespace Framework
 				lookup_[i] = function(t * scale);
 			}
 		}
-		~Lookup() = default;
-
 
 		// gets catmull-rom spline interpolated y-values at their corresponding x-values
 		perf_inline simd_float cubicLookup(simd_float xValues) const
@@ -43,8 +41,8 @@ namespace Framework
 			simd_int indices = utils::clamp(utils::toInt(boost), simd_int(1), simd_int(resolution));
 			simd_float t = boost - utils::toFloat(indices);
 
-			matrix interpolationMatrix = utils::getCatmullInterpolationMatrix(t);
-			matrix valueMatrix = utils::getValueMatrix<kSimdRatio>(lookup_.data(), indices - simd_int(1));
+			Matrix interpolationMatrix = utils::getCatmullInterpolationMatrix(t);
+			Matrix valueMatrix = utils::getValueMatrix<kSimdRatio>(lookup_.data(), indices - simd_int(1));
 			valueMatrix.transpose();
 
 			return interpolationMatrix.multiplyAndSumRows(valueMatrix);
@@ -58,8 +56,8 @@ namespace Framework
 			simd_int indices = utils::clamp(utils::toInt(boost), simd_int(1), simd_int(resolution));
 			simd_float t = boost - utils::toFloat(indices);
 
-			matrix interpolationMatrix = utils::getLinearInterpolationMatrix(t);
-			matrix valueMatrix = utils::getValueMatrix<kSimdRatio>(lookup_.data(), indices - simd_int(1));
+			Matrix interpolationMatrix = utils::getLinearInterpolationMatrix(t);
+			Matrix valueMatrix = utils::getValueMatrix<kSimdRatio>(lookup_.data(), indices - simd_int(1));
 			valueMatrix.transpose();
 
 			return interpolationMatrix.multiplyAndSumRows(valueMatrix);

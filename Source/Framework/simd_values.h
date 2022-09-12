@@ -3,7 +3,7 @@
 
 		simd_values.h
 		Created: 22 May 2021 6:22:20pm
-		Author:  Lenovo
+		Author:  theuser27
 
 	==============================================================================
 */
@@ -35,7 +35,7 @@
 
 #if COMPLEX_SSE3
 	#include <immintrin.h>
-	#include <tmmintrin.h>
+	#include <pmmintrin.h>
 #elif COMPLEX_NEON
 	#include <arm_neon.h>
 #endif
@@ -69,6 +69,7 @@ typedef int64_t i64;
 
 namespace simd_values
 {
+	static constexpr u32 kFullMask = UINT32_MAX;
 	static constexpr u32 kNoChangeMask = UINT32_MAX;
 	static constexpr u32 kSignMask = INT32_MAX + 1;
 	static constexpr u32 kNotSignMask = INT32_MAX;
@@ -230,11 +231,10 @@ namespace simd_values
 
 		static strict_inline u32 vector_call sum(simd_type value) {
 		#if COMPLEX_SSE3
-			auto scalars = std::bit_cast<std::array<u32, kSize>>(value);
-			u32 total = 0;
-			for (int i = 0; i < kSize; ++i)
-				total += scalars[i];
-			return total;
+			simd_type flip = _mm_shuffle_epi32(value, _MM_SHUFFLE(1, 0, 3, 2));
+			value = _mm_add_epi32(value, flip);
+			flip = _mm_shuffle_epi32(value, _MM_SHUFFLE(2, 3, 0, 1));
+			return _mm_cvtsi128_si32(_mm_add_epi32(value, flip));
 		#elif COMPLEX_NEON
 			uint32x2_t sum = vpadd_u32(vget_low_u32(value), vget_high_u32(value));
 			sum = vpadd_u32(sum, sum);
@@ -274,7 +274,7 @@ namespace simd_values
 		{	return greaterThanUnsigned(one.value, two.value); }
 
 		static strict_inline simd_int vector_call lessThanUnsigned(simd_int one, simd_int two)
-		{	return greaterThanUnsigned(two.value, one.value); }		
+		{	return greaterThanUnsigned(two.value, one.value); }
 		
 		static strict_inline simd_int vector_call greaterThanSigned(simd_int one, simd_int two)
 		{	return greaterThanSigned(one.value, two.value); }
@@ -300,18 +300,13 @@ namespace simd_values
 		strict_inline simd_int(const std::array<T, (sizeof(u32) *kSize) / sizeof(T)> &scalars) noexcept
 			: value(std::bit_cast<simd_type>(scalars)) {	}
 
-		strict_inline ~simd_int() noexcept = default;
-
 
 		///////////////
 		// Operators //
 		///////////////
 
 		strict_inline u32 vector_call access(size_t index) const noexcept
-		{
-			auto scalars = std::bit_cast<std::array<u32, kSize>, simd_type>(value);
-			return scalars[index];
-		}
+		{ return std::bit_cast<std::array<u32, kSize>, simd_type>(value)[index]; }
 
 		strict_inline void vector_call set(size_t index, u32 newValue) noexcept
 		{
@@ -690,9 +685,9 @@ namespace simd_values
 		{
 		#if COMPLEX_SSE3
 			simd_type flip = _mm_shuffle_ps(value, value, _MM_SHUFFLE(1, 0, 3, 2));
-			simd_type sum = _mm_add_ps(value, flip);
-			simd_type swap = _mm_shuffle_ps(sum, sum, _MM_SHUFFLE(2, 3, 0, 1));
-			return _mm_cvtss_f32(_mm_add_ps(sum, swap));
+			value = _mm_add_ps(value, flip);
+			flip = _mm_shuffle_ps(value, value, _MM_SHUFFLE(2, 3, 0, 1));
+			return _mm_cvtss_f32(_mm_add_ps(value, flip));
 		#elif COMPLEX_NEON
 			float32x2_t sum = vpadd_f32(vget_low_f32(value), vget_high_f32(value));
 			sum = vpadd_f32(sum, sum);
@@ -743,7 +738,7 @@ namespace simd_values
 			// doing shifting
 			static constexpr u32 arraySize = sizeof(u32) / sizeof(u8);
 			auto shifts = shiftMask.getArrayOfValues();
-			u8 byteShifts[kSize * arraySize];
+			u8 byteShifts[kSize * arraySize]{};
 			for (u32 i = 0; i < shifts.size(); i++)
 			{
 				if (shifts[i] == kNoChangeMask)
@@ -781,7 +776,7 @@ namespace simd_values
 			// *1st* value - in forth place
 			return _mm_shuffle_ps(value, value, _MM_SHUFFLE(0, 1, 2, 3));
 		#elif COMPLEX_NEON
-			static_assert(false, "ARM NEON reverse not supported yet");
+			static_assert(false, "ARM NEON reverse not implemented yet");
 		#endif
 		}
 
@@ -808,8 +803,8 @@ namespace simd_values
 		static strict_inline simd_float vector_call abs(simd_float value)
 		{ return abs(value.value); }
 
-		static strict_inline simd_mask vector_call sign_mask(simd_float value)
-		{ return sign_mask(value.value);	}
+		static strict_inline simd_mask vector_call signMask(simd_float value)
+		{ return signMask(value.value); }
 
 		static strict_inline simd_mask vector_call equal(simd_float one, simd_float two)
 		{ return equal(one.value, two.value);	}
@@ -848,13 +843,8 @@ namespace simd_values
 		strict_inline simd_float(const std::array<T, (sizeof(float) *kSize) / sizeof(T)> &scalars) noexcept
 			: value(std::bit_cast<simd_type>(scalars)) { }
 
-		strict_inline ~simd_float() noexcept = default;
-
 		strict_inline float vector_call access(size_t index) const noexcept 
-		{
-			auto scalars = std::bit_cast<std::array<float, kSize>>(value);
-			return scalars[index];
-		}
+		{ return std::bit_cast<std::array<float, kSize>>(value)[index]; }
 
 		strict_inline void vector_call set(size_t index, float newValue) noexcept
 		{
@@ -863,11 +853,11 @@ namespace simd_values
 			value = std::bit_cast<simd_type>(scalars);
 		}
 
-		strict_inline auto vector_call getArrayOfValues()
+		strict_inline auto vector_call getArrayOfValues() const noexcept
 		{ return std::bit_cast<std::array<float, kSize>, simd_type>(value); }
 
 		template<typename T> requires requires (T x) { (sizeof(float) * kSize) % sizeof(x) == 0; }
-		strict_inline auto vector_call getArrayOfValues()
+		strict_inline auto vector_call getArrayOfValues() const noexcept
 		{ return std::bit_cast<std::array<T, ((sizeof(float) *kSize) / sizeof(T))>>(value); }
 
 		///////////////
@@ -1002,11 +992,11 @@ namespace simd_values
 		strict_inline simd_float vector_call operator*(simd_float other) const noexcept
 		{ return mul(value, other.value); }
 
-		strict_inline simd_float vector_call operator/(simd_float other) const noexcept
-		{ return div(value, other.value); }
-
 		strict_inline simd_float vector_call operator*(float scalar) const noexcept
 		{ return mulScalar(value, scalar); }
+
+		strict_inline simd_float vector_call operator/(simd_float other) const noexcept
+		{ return div(value, other.value); }
 
 		strict_inline simd_float vector_call operator&(simd_mask other) const noexcept
 		{ return bitAnd(value, other.value); }

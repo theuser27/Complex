@@ -3,22 +3,158 @@
 
 		EffectsState.cpp
 		Created: 2 Oct 2021 8:53:05pm
-		Author:  Lenovo
+		Author:  theuser27
 
 	==============================================================================
 */
 
 #include "EffectsState.h"
 #include "./Framework/simd_utils.h"
-#include <thread>
 
 namespace Generation
 {
-	void EffectsState::writeInputData(const AudioBuffer<float> &inputBuffer)
+	bool EffectsChain::insertSubModule(u32 index, std::string_view moduleType) noexcept
+	{
+		if (!checkUpdateFlag())
+			return false;
+
+		COMPLEX_ASSERT(Framework::kEffectModuleNames.end() != std::find(Framework::kEffectModuleNames.begin(),
+			Framework::kEffectModuleNames.end(), moduleType) && "You're trying to insert a non-EffectModule into EffectChain");
+
+		subModules_.insert(subModules_.begin() + index, std::move(std::make_shared<EffectModule>(moduleId_, moduleType)));
+		AllModules::addModule(subModules_[index]);
+
+		return true;
+	}
+
+	bool EffectsChain::deleteSubModule(u32 index) noexcept
+	{
+		if (!checkUpdateFlag())
+			return false;
+
+		subModules_.erase(subModules_.begin() + index);
+		return true;
+	}
+
+	bool EffectsChain::copySubModule(const std::shared_ptr<PluginModule> &newSubModule, u32 index) noexcept
+	{
+		if (!checkUpdateFlag())
+			return false;
+
+		COMPLEX_ASSERT(newSubModule->getModuleType() == Framework::kPluginModules[3] &&
+			"You're trying to copy a non-EffectModule into EffectChain");
+
+		subModules_.insert(subModules_.begin() + index, std::make_shared<PluginModule>(*newSubModule, moduleId_));
+		AllModules::addModule(subModules_[index]);
+
+		return true;
+	}
+
+	bool EffectsChain::moveSubModule(std::shared_ptr<PluginModule> newSubModule, u32 index) noexcept
+	{
+		if (!checkUpdateFlag())
+			return false;
+
+		COMPLEX_ASSERT(newSubModule->getModuleType() == Framework::kPluginModules[3] &&
+			"You're trying to copy a non-EffectModule into EffectChain");
+
+		auto subModule = std::make_shared<PluginModule>(std::move(*newSubModule), moduleId_);
+
+		subModules_.insert(subModules_.begin() + index, std::move(subModule));
+		AllModules::addModule(subModules_[index]);
+
+		return true;
+	}
+
+	bool EffectsState::insertSubModule([[maybe_unused]] u32 index, [[maybe_unused]] std::string_view moduleType) noexcept
+	{
+		if (!checkUpdateFlag())
+			return false;
+
+		COMPLEX_ASSERT(moduleType == Framework::kPluginModules[2] &&
+			"You're trying to insert a non-EffectChain into EffectsState");
+
+		// searching for chains that are unused first
+		for (size_t i = 0; i < subModules_.size(); i++)
+		{
+			auto &instance = subModules_[i];
+			if (instance->getNumCurrentUsers() >= 0)
+				continue;
+
+			instance->clearSubModules();
+			instance->initialise();
+			instance->reuse();
+
+			std::jthread newThread = std::jthread(processIndividualChains, std::ref(*this), i);
+			chainThreads_[i].swap(newThread);
+
+			return true;
+		}
+
+		// have we reached the max chain capacity?
+		if (subModules_.size() >= kMaxNumChains)
+			return false;
+
+		// if there are no unused objects and we haven't reached max capacity, we can add
+		subModules_.emplace_back(std::move(std::make_shared<EffectsChain>(moduleId_)));
+		chainThreads_.emplace_back(processIndividualChains, std::ref(*this), subModules_.size() - 1);
+		AllModules::addModule(subModules_.back());
+
+		return true;
+	}
+
+	bool EffectsState::deleteSubModule(u32 index) noexcept
+	{
+		if (!checkUpdateFlag())
+			return false;
+
+		chainThreads_[index].~jthread();
+		subModules_[index]->softDelete();
+
+		return true;
+	}
+
+	bool EffectsState::copySubModule(const std::shared_ptr<PluginModule> &newSubModule, [[maybe_unused]] u32 index) noexcept
+	{
+		if (!checkUpdateFlag())
+			return false;
+
+		COMPLEX_ASSERT(newSubModule->getModuleType() == Framework::kPluginModules[2] &&
+			"You're trying to copy a non-EffectsChain into EffectsState");
+
+		// searching for chains that are unused first
+		for (size_t i = 0; i < subModules_.size(); i++)
+		{
+			auto &instance = subModules_[i];
+			if (instance->getNumCurrentUsers() >= 0)
+				continue;
+
+			*instance = *newSubModule;
+			instance->reuse();
+
+			std::jthread newThread = std::jthread(processIndividualChains, std::ref(*this), i);
+			chainThreads_[i].swap(newThread);
+
+			return true;
+		}
+
+		// we've reached the max chain capacity
+		if (subModules_.size() >= kMaxNumChains)
+			return false;
+
+		// if there are no unused objects and we haven't reached max capacity, we can add
+		subModules_.emplace_back(std::make_shared<PluginModule>(*newSubModule, moduleId_));
+		chainThreads_.emplace_back(processIndividualChains, std::ref(*this), subModules_.size() - 1);
+		AllModules::addModule(subModules_.back());
+
+		return true;
+	}
+
+	void EffectsState::writeInputData(const AudioBuffer<float> &inputBuffer) noexcept
 	{
 		auto channelPointers = inputBuffer.getArrayOfReadPointers();
 
-		for (u32 i = 0; i < inputBuffer.getNumChannels(); i += kComplexSimdRatio)
+		for (u32 i = 0; i < (u32)inputBuffer.getNumChannels(); i += kComplexSimdRatio)
 		{
 			// if the input is not used we skip it
 			if (!usedInputs_[i / kComplexSimdRatio])
@@ -36,76 +172,102 @@ namespace Generation
 		}
 	}
 
-	void EffectsState::distributeData()
+	void EffectsState::distributeData() noexcept
 	{
-		for (u32 i = 0; i < chains_.size(); i++)
+		for (u32 i = 0; i < subModules_.size(); i++)
 		{
+			auto chainPointer = static_cast<EffectsChain *>(subModules_[i].get());
 			// if the input is dependent on another chain's output we don't do anything yet
-			auto chainIndex = chains_[i].inputIndex;
+			auto chainIndex = chainPointer->moduleParameters_[1]->getInternalValue<u32>();
 			if (chainIndex & kChainInputMask)
 				continue;
 
-			auto currentChain = chains_[i].getChainData().lock();
+			auto currentChain = chainPointer->chainData.get();
 			Framework::SimdBuffer<std::complex<float>, simd_float>::copyToThisNoMask(currentChain->sourceBuffer, sourceBuffer_,
-				kNumChannels, FFTSize_, utils::Operations::Assign, 0, chainIndex * kComplexSimdRatio);
+				kNumChannels, FFTSize_, utils::MathOperations::Assign, 0, chainIndex * kComplexSimdRatio);
 		}
 	}
 
-	void EffectsState::processChains()
+	void EffectsState::processChains() noexcept
 	{
 		// triggers the chains to run again
-		for (size_t i = 0; i < chains_.size(); i++)
-			chains_[i].isFinished.store(false, std::memory_order_release);
+		for (size_t i = 0; i < subModules_.size(); i++)
+			static_cast<EffectsChain *>(subModules_[i].get())
+			->isFinished_.store(false, std::memory_order_release);
 
-		// waiting for chanins to finish
-		for (size_t i = 0; i < chains_.size(); i++)
-			while (chains_[i].isFinished.load(std::memory_order_acquire) == false);
+		// waiting for chains to finish
+		for (size_t i = 0; i < subModules_.size(); i++)
+			while (static_cast<EffectsChain *>(subModules_[i].get())
+				->isFinished_.load(std::memory_order_acquire) == false);
 	}
 
-	void EffectsState::processIndividualChains(std::stop_token stoken, const EffectsState &state, u32 chainIndex)
+	void EffectsState::processIndividualChains(std::stop_token stoken, EffectsState &state, u32 chainIndex) noexcept
 	{
 		while (true)
 		{
-			// so long as the flag is not set we don't execute anything
-			while (state.chains_[chainIndex].isFinished.load(std::memory_order_acquire) == true)
+			while (true)
 			{
+				// so long as the flag is set we don't execute anything
+				if (static_cast<EffectsChain *>(state.subModules_[chainIndex].get())->isFinished_.load(std::memory_order_acquire) == false)
+					break;
+
 				// if chain has been deleted or program is shutting down we need to close thread
 				if (stoken.stop_requested())
 					return;
+
+				utils::wait();
+			}
+
+			auto thisChain = static_cast<EffectsChain *>(state.subModules_[chainIndex].get());
+
+			// Chain On/Off
+			// if this chain is turned off, we set it as finished and skip everything
+			if (!thisChain->moduleParameters_[0]->getInternalValue<u32>())
+			{
+				thisChain->isFinished_.store(true, std::memory_order_release);
+				continue;
 			}
 
 			// we're getting pointers every time the chain runs because
 			// there might be changes/resizes of container objects
-			auto thisChain = &state.chains_[chainIndex];
 			auto thisChainSourceBuffer = &thisChain->chainData->sourceBuffer;
 			auto thisChainWorkBuffer = &thisChain->chainData->workBuffer;
-			auto thisChainEffectOrder = thisChain->effectOrder.data();
-			auto thisChainEffectOrderSize = thisChain->effectOrder.size();
+			auto thisChainEffectOrder = thisChain->subModules_.data();
+			auto thisChainEffectOrderSize = thisChain->subModules_.size();
 			auto thisChainDataIsInWork = &thisChain->chainData->dataIsInWork;
 
 			auto FFTSize = state.FFTSize_;
 			float sampleRate = state.sampleRate_;
 
-			// if this chain's input is another's output
-			// we wait until that one is finished and then copy its data
-			if (thisChain->inputIndex & EffectsState::kChainInputMask)
+			// Chain Input 
+			// if this chain's input is another's output and that chain can be used,
+			// we wait until it is finished and then copy its data
+			if (auto thisChainInputIndex = thisChain->moduleParameters_[1]->getInternalValue<u32>(); 
+				(thisChainInputIndex & EffectsState::kChainInputMask) && thisChain->getNumCurrentUsers() >= 0)
 			{
-				u32 chainInputIndex = thisChain->inputIndex ^ EffectsState::kChainInputMask;
-				while (state.chains_[chainInputIndex].isFinished.load(std::memory_order_acquire) == false);
+				u32 chainInputIndex = thisChainInputIndex ^ EffectsState::kChainInputMask;
+				while (static_cast<EffectsChain *>(state.subModules_[chainInputIndex].get())
+					->isFinished_.load(std::memory_order_acquire) == false)
+				{ utils::wait(); }
 
-				auto inputChainData = state.chains_[chainInputIndex].getChainData().lock();
+				auto &inputChainData = static_cast<EffectsChain *>(state.subModules_[chainInputIndex].get())->chainData;
 				Framework::SimdBuffer<std::complex<float>, simd_float>::copyToThisNoMask(*thisChainSourceBuffer,
-					inputChainData->sourceBuffer, kNumChannels, state.FFTSize_, utils::Operations::Assign);
+					inputChainData->sourceBuffer, kNumChannels, state.FFTSize_, utils::MathOperations::Assign);
 			}
+
+			thisChain->currentEffectIndex_.store(0, std::memory_order_release);
 
 			// main processing loop
 			for (size_t i = 0; i < thisChainEffectOrderSize; i++)
 			{
-				thisChainEffectOrder[i].processEffect(*thisChainSourceBuffer,
-					*thisChainWorkBuffer, FFTSize, sampleRate);
+				static_cast<EffectModule *>(thisChainEffectOrder[i].get())
+					->processEffect(*thisChainSourceBuffer, *thisChainWorkBuffer, FFTSize, sampleRate);
 				// TODO: fit links between modules here
 				std::swap(thisChainSourceBuffer, thisChainWorkBuffer);
 				*thisChainDataIsInWork = !(*thisChainDataIsInWork);
+
+				// incrementing where we are currently
+				thisChain->currentEffectIndex_.fetch_add(1, std::memory_order_acq_rel);
 			}
 
 			// if the latest data is in the wrong buffer, we swap
@@ -117,86 +279,78 @@ namespace Generation
 
 			// to let other threads know that the data is in its final state
 			// and to prevent the thread of instantly running again
-			thisChain->isFinished.store(true, std::memory_order_release);
+			thisChain->isFinished_.store(true, std::memory_order_release);
 		}
 	}
 
-	void EffectsState::sumChains()
+	void EffectsState::sumChains() noexcept
 	{
 		sourceBuffer_.clear();
 
 		// TODO: redo when you get to multiple outputs
 		// checks whether all of the chains are real-imaginary pairs
 		// (instead of magnitude-phase pairs) and if not, gets converted
-		for (u32 i = 0; i < chains_.size(); i++)
+		for (u32 i = 0; i < subModules_.size(); i++)
 		{
-			auto currentChainData = chains_.at(i).getChainData().lock();
-			if (!currentChainData->isCartesian && chains_[i].isEnabled)
+			auto currentChain = static_cast<EffectsChain *>(subModules_[i].get());
+			if (!currentChain->chainData->isCartesian && currentChain->moduleParameters_[0]->getInternalValue<u32>())
 			{
-				auto &buffer = currentChainData->sourceBuffer;
-				for (u32 i = 0; i < buffer.getNumSimdChannels(); i++)
+				auto &buffer = currentChain->chainData->sourceBuffer;
+				for (u32 j = 0; j < buffer.getNumSimdChannels(); j++)
 				{
-					for (u32 j = 0; j < buffer.getSize(); j += 2)
+					for (u32 k = 0; k < buffer.getSize(); k += 2)
 					{
-						simd_float one = buffer.getSIMDValueAt(i * kComplexSimdRatio, j);
-						simd_float two = buffer.getSIMDValueAt(i * kComplexSimdRatio, j + 1);
+						simd_float one = buffer.getSIMDValueAt(j * kComplexSimdRatio, k);
+						simd_float two = buffer.getSIMDValueAt(j * kComplexSimdRatio, k + 1);
 						utils::complexPolarToCart(one, two);
-						buffer.writeSIMDValueAt(one, i * kComplexSimdRatio, j);
-						buffer.writeSIMDValueAt(two, i * kComplexSimdRatio, j + 1);
+						buffer.writeSIMDValueAt(one, j * kComplexSimdRatio, k);
+						buffer.writeSIMDValueAt(two, j * kComplexSimdRatio, k + 1);
 					}
 				}
 
-				currentChainData->isCartesian = true;
+				currentChain->chainData->isCartesian = true;
 			}
 		}
 
 		// multipliers for scaling the multiple chains going into the same output
-		std::array<float, kNumInputsOutputs> multipliers;
-		for (u32 i = 0; i < multipliers.size(); i++)
-		{
-			float scale = 0.0f;
-			for (size_t i = 0; i < chains_.size(); i++)
-				if (chains_[i].outputIndex == i)
-					scale++;
-				
-			// if an output isn't chosen, we don't do anything
-			scale = std::max(1.0f, scale);
-			multipliers[i] = (1.0f / scale);
-		}
+		std::array<float, kNumInputsOutputs> multipliers{};
 
 		// for every chain we add its scaled output to the main sourceBuffer_ at the designated output channels
-		for (u32 i = 0; i < chains_.size(); i++)
+		for (u32 i = 0; i < subModules_.size(); i++)
 		{
-			if (chains_[i].outputIndex == kDefaultOutput)
+			auto currentChain = static_cast<EffectsChain *>(subModules_[i].get());
+			auto currentChainOutput = currentChain->moduleParameters_[2]->getInternalValue<u32>();
+			if (currentChainOutput == kDefaultOutput)
 				continue;
 
-			auto currentChainData = chains_[i].getChainData().lock();
+			multipliers[currentChainOutput]++;
+
+			auto currentChainData = currentChain->chainData.get();
 			auto currentChainBuffer = &currentChainData->sourceBuffer;
 
 			Framework::SimdBuffer<std::complex<float>, simd_float>::copyToThisNoMask(sourceBuffer_,
-				*currentChainBuffer, kComplexSimdRatio, FFTSize_, utils::Operations::Add,
-				chains_[i].outputIndex * kComplexSimdRatio, 0);
+				*currentChainBuffer, kComplexSimdRatio, FFTSize_, utils::MathOperations::Add,
+				currentChainOutput * kComplexSimdRatio, 0);
 		}
 
 		// scaling all outputs
 		for (u32 i = 0; i < kNumInputsOutputs; i++)
 		{
-			if (multipliers[i] == 1.0f)
+			// if there's only one or no chains going to this output, we don't scale
+			if (multipliers[i] == 0.0f || multipliers[i] == 1.0f)
 				continue;
 
-			simd_float multiplier = multipliers[i];
+			simd_float multiplier = 1.0f / multipliers[i];
 			for (u32 j = 0; j < FFTSize_; j++)
 				sourceBuffer_.multiply(multiplier, i * kComplexSimdRatio, j);
 		}
 	}
 
-	void EffectsState::writeOutputData(AudioBuffer<float> &outputBuffer)
+	void EffectsState::writeOutputData(AudioBuffer<float> &outputBuffer) noexcept
 	{
-		std::array<simd_float, kComplexSimdRatio> simdValues;
+		Framework::Matrix matrix;
 
-		auto channelPointers = outputBuffer.getArrayOfWritePointers();
-
-		for (u32 i = 0; i < outputBuffer.getNumChannels(); i += kComplexSimdRatio)
+		for (u32 i = 0; i < (u32)outputBuffer.getNumChannels(); i += kComplexSimdRatio)
 		{
 			if (!usedOutputs_[i / kComplexSimdRatio])
 				continue;
@@ -204,30 +358,13 @@ namespace Generation
 			for (u32 j = 0; j < FFTSize_ / 2; j++)
 			{
 				for (u32 k = 0; k < kComplexSimdRatio; k++)
-					simdValues[k] = sourceBuffer_.getSIMDValueAt(i, j * 2 + k);
-				Framework::matrix matrix(simdValues);
+					matrix.rows_[k] = sourceBuffer_.getSIMDValueAt(i, j * 2 + k);
 
 				matrix.complexTranspose();
 				for (u32 k = 0; k < kComplexSimdRatio; k++)
-					outputBuffer.copyFrom(i + k, j * 2 * kComplexSimdRatio,
-						matrix.rows_[k].getArrayOfValues().data(), 2 * kComplexSimdRatio);
+					std::memcpy(outputBuffer.getWritePointer(i + k, j * 2 * kComplexSimdRatio), 
+						&matrix.rows_[k], 2 * kComplexSimdRatio * sizeof(float));
 			}
 		}
-	}
-
-	void EffectsState::addEffect(u32 chainIndex, u32 effectIndex, ModuleTypes type)
-	{
-	}
-
-	void EffectsState::deleteEffect(u32 chainIndex, u32 effectIndex)
-	{
-	}
-
-	void EffectsState::moveEffect(u32 currentChainIndex, u32 currentEffectIndex, u32 newChainIndex, u32 newEffectIndex)
-	{
-	}
-
-	void EffectsState::copyEffect(u32 chainIndex, u32 effectIndex, u32 copyChainIndex, u32 copyEffectIndex)
-	{
 	}
 }

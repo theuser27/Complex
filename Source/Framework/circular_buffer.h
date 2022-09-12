@@ -3,7 +3,7 @@
 
 		circular_buffer.h
 		Created: 7 Feb 2022 1:56:59am
-		Author:  Lenovo
+		Author:  theuser27
 
 	==============================================================================
 */
@@ -20,7 +20,6 @@ namespace Framework
 	class CircularBuffer
 	{
 	public:
-
 		CircularBuffer() = default;
 
 		CircularBuffer(u32 numChannels, u32 size) : channels_(numChannels), size_(size)
@@ -84,21 +83,19 @@ namespace Framework
 		//	reader's starting index = readeeIndex
 		// - Can decide whether to advance the block or not
 		void readBuffer(AudioBuffer<float> &reader, u32 numChannels,u32 numSamples, 
-			const bool *channelsToCopy = nullptr, u32 readeeIndex = 0, u32 readerIndex = 0) noexcept
+			const bool *channelsToRead = nullptr, u32 readeeIndex = 0, u32 readerIndex = 0) noexcept
 		{
-			if (channelsToCopy)
-				utils::copyBufferChannels(reader, data_, numChannels, channelsToCopy, numSamples, readerIndex, readeeIndex);
-			else
-				utils::copyBuffer(reader, data_, numChannels, numSamples, readerIndex, readeeIndex);
+			utils::copyBuffer(reader, data_, numChannels, numSamples, readerIndex, readeeIndex, channelsToRead);
 		}
 
 		// - A specified AudioBuffer writes own data starting at writerOffset to the end of the current buffer,
 		//	which can be offset forwards or backwards with writeeOffset
 		// - Adjusts end_ according to the new block written
-		void writeBuffer(const AudioBuffer<float> &writer, u32 numChannels, u32 numSamples,
-			u32 writerIndex = 0, utils::Operations operation = utils::Operations::Assign) noexcept
+		void writeBuffer(const AudioBuffer<float> &writer, u32 numChannels, 
+			u32 numSamples, const bool *channelsToWrite = nullptr, u32 writerIndex = 0, 
+			utils::MathOperations operation = utils::MathOperations::Assign) noexcept
 		{
-			utils::copyBuffer(data_, writer, numChannels, numSamples, end_, writerIndex, operation);
+			utils::copyBuffer(data_, writer, numChannels, numSamples, end_, writerIndex, channelsToWrite, operation);
 			advanceEnd(numSamples);
 		}
 
@@ -112,12 +109,8 @@ namespace Framework
 		void addBuffer(const AudioBuffer<float> &other, u32 numChannels, u32 numSamples,
 			const bool *channelsToAdd = nullptr, u32 thisStartIndex = 0, u32 otherStartIndex = 0) noexcept
 		{
-			if (channelsToAdd)
-				utils::copyBufferChannels(data_, other, numChannels, channelsToAdd,
-					numSamples, thisStartIndex, otherStartIndex, utils::Operations::Add);
-			else
-				utils::copyBuffer(data_, other, numChannels, numSamples, 
-					thisStartIndex, otherStartIndex, utils::Operations::Add);
+			utils::copyBuffer(data_, other, numChannels, numSamples, thisStartIndex, 
+				otherStartIndex, channelsToAdd, utils::MathOperations::Add);
 		}
 
 		perf_inline void multiply(float value, u32 channel, u32 index) noexcept
@@ -127,11 +120,11 @@ namespace Framework
 			data_.setSample(channel, index, data_.getSample(channel, index) * value);
 		}
 
-		void multiplyBuffer(const AudioBuffer<float> &other, u32 numChannels,
-			u32 numSamples, u32 thisStartIndex = 0, u32 otherStartIndex = 0) noexcept
+		void multiplyBuffer(const AudioBuffer<float> &other, u32 numChannels, u32 numSamples,
+			const bool *channelsToAdd = nullptr, u32 thisStartIndex = 0, u32 otherStartIndex = 0) noexcept
 		{
-			utils::copyBuffer(data_, other, numChannels, numSamples, 
-				thisStartIndex, otherStartIndex, utils::Operations::Multiply);
+			utils::copyBuffer(data_, other, numChannels, numSamples, thisStartIndex, 
+				otherStartIndex, channelsToAdd, utils::MathOperations::Multiply);
 		}
 
 		perf_inline float getSample(u32 channel, u32 index) const noexcept
@@ -141,7 +134,7 @@ namespace Framework
 			return data_.getSample(channel, index);
 		}
 
-		strict_inline auto& getData() noexcept
+		strict_inline auto &getData() noexcept
 		{ return data_; }
 
 		strict_inline u32 getNumChannels() const noexcept

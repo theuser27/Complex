@@ -3,7 +3,7 @@
 
 		memory_block.h
 		Created: 30 Dec 2021 12:29:35pm
-		Author:  Lenovo
+		Author:  theuser27
 
 	==============================================================================
 */
@@ -17,26 +17,26 @@ namespace Framework
 {
 	// used for allocating raw memory and using it for whatever purpose
 	template <typename T, u64 alignment = alignof(T)>
-	class memory_block
+	class MemoryBlock
 	{
 	public:
-		memory_block() = default;
-		memory_block(u64 numElements, bool initialiseToZero = false)
+		MemoryBlock() = default;
+		MemoryBlock(u64 numElements, bool initialiseToZero = false)
 		{
 			allocate(numElements, initialiseToZero);
 		}
-		~memory_block() = default;
+		~MemoryBlock() = default;
 
-		memory_block(const memory_block &other) = delete;
-		memory_block &operator= (const memory_block<T, alignment> &other) = delete;
+		MemoryBlock(const MemoryBlock &other) = delete;
+		MemoryBlock &operator= (const MemoryBlock<T, alignment> &other) = delete;
 
-		memory_block(memory_block&& other) noexcept
+		MemoryBlock(MemoryBlock&& other) noexcept
 		{
 			data_ = std::move(other.data_);
 			absoluteSize_ = other.absoluteSize_;
 		}
 
-		memory_block& operator= (memory_block<T, alignment>&& other) noexcept
+		MemoryBlock& operator= (MemoryBlock<T, alignment>&& other) noexcept
 		{
 			if (this != &other)
 			{
@@ -95,7 +95,7 @@ namespace Framework
 			absoluteSize_ = 0;
 		}
 
-		perf_inline void swap(memory_block<T, alignment>& other) noexcept
+		perf_inline void swap(MemoryBlock<T, alignment>& other) noexcept
 		{
 			if (&other == this)
 				return;

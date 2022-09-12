@@ -3,7 +3,7 @@
 
 		SoundEngine.h
 		Created: 12 Aug 2021 2:12:59am
-		Author:  Lenovo
+		Author:  theuser27
 
 	==============================================================================
 */
@@ -23,19 +23,25 @@
 
 namespace Generation
 {
-	class SoundEngine
+	class SoundEngine : public PluginModule
 	{
 	public:
-		SoundEngine();
-		~SoundEngine();
+		SoundEngine() noexcept;
+		~SoundEngine() noexcept { PluginModule::~PluginModule(); }
+
+		SoundEngine(const SoundEngine &) = delete;
+		SoundEngine(SoundEngine &&) = delete;
+		SoundEngine &operator= (SoundEngine &&) = delete;
+		SoundEngine &operator= (const SoundEngine &) = delete;
 
 	private:
 		//=========================================================================================
 		// Data
-
+		//
 		// pre FFT-ed data buffer; size is as big as it can be (while still being reasonable)
-		struct
+		class
 		{
+		public:
 			enum BeginPoint
 			{ LastOutputBlock, BlockBegin, BlockEnd, End };
 
@@ -126,9 +132,9 @@ namespace Generation
 			}
 
 			perf_inline void writeBuffer(const AudioBuffer<float> &writer, u32 numChannels, u32 numSamples,
-				u32 writerIndex = 0, utils::Operations operation = utils::Operations::Assign) noexcept
+				u32 writerIndex = 0, utils::MathOperations operation = utils::MathOperations::Assign) noexcept
 			{
-				buffer_.writeBuffer(writer, numChannels, numSamples, writerIndex, operation);
+				buffer_.writeBuffer(writer, numChannels, numSamples, nullptr, writerIndex, operation);
 			}
 
 			perf_inline void outBufferRead(Framework::CircularBuffer &outBuffer, 
@@ -156,8 +162,8 @@ namespace Generation
 				buffer_.readBuffer(outBuffer.getData(), numChannels, numSamples, channelsToCopy, inputBufferIndex, outBufferIndex);
 			}
 
-			strict_inline float getSample(u32 channel, u32 index) const noexcept
-			{ return buffer_.getSample(channel, index); }
+			strict_inline Framework::CircularBuffer& getBuffer() noexcept
+			{	return buffer_; }
 
 			strict_inline u32 getNumChannels() const noexcept
 			{ return buffer_.getNumChannels(); }
@@ -186,28 +192,26 @@ namespace Generation
 			perf_inline u32 getBlockEndToEnd() const noexcept
 			{ return (getSize() + getEnd() - blockEnd_) % getSize(); }
 
+		private:
 			Framework::CircularBuffer buffer_;
 			u32 lastOutputBlock_ = 0;
 			u32 blockBegin_ = 0;
 			u32 blockEnd_ = 0;
 
 		} inputBuffer;
-		
-
+		//
 		// FFT-ed data buffer, size is double the max FFT block
 		// even indices - freqs; odd indices - phases
 		AudioBuffer<float> FFTBuffer;
-
-		// a master object that controls all effects chains
-		EffectsState effectsState;
-
+		//
 		// if an input isn't used there's no need to process it at all
 		std::array<bool, kNumTotalChannels> usedInputChannels_{};
 		std::array<bool, kNumTotalChannels> usedOutputChannels_{};
-
+		//
 		// output buffer containing dry and wet data
-		struct
+		class
 		{
+		public:
 			void reserve(u32 newNumChannels, u32 newSize, bool fitToSize = false)
 			{
 				COMPLEX_ASSERT(newNumChannels > 0 && newSize > 0);
@@ -237,6 +241,7 @@ namespace Generation
 				COMPLEX_ASSERT(numOutputs <= kNumTotalChannels);
 				buffer_.readBuffer(output, numOutputs, numSamples, channelsToCopy, getBeginOutput(), 0);
 
+				// zero out non-copied channels
 				auto writePointers = output.getArrayOfWritePointers();
 				for (u32 i = 0; i < numOutputs; i++)
 					if (!channelsToCopy[i])
@@ -288,6 +293,9 @@ namespace Generation
 			{ addOverlap_ = (addOverlap_ + numSamples) % getSize(); }
 
 
+			strict_inline Framework::CircularBuffer& getBuffer() noexcept
+			{	return buffer_; }
+
 			strict_inline u32 getNumChannels() const noexcept
 			{ return buffer_.getNumChannels(); }
 
@@ -318,6 +326,7 @@ namespace Generation
 			perf_inline u32 getAddOverlapToEnd() const noexcept
 			{ return (getSize() + getEnd() - addOverlap_) % getSize(); }
 
+		private:
 			Framework::CircularBuffer buffer_;
 			// static offset equal to the additional latency caused by overlap
 			i32 latencyOffset_ = 0;
@@ -328,90 +337,108 @@ namespace Generation
 			// index of the first sample of the last add-overlapped block
 			u32 addOverlap_ = 0;
 		} outBuffer;
-		
-
+		//
 		// windows pointer for accessing windowing types
-		Framework::Window windows;
-
+		Framework::Window *windows;
+		//
 		// pointer to an array of fourier transforms
 		std::vector<std::unique_ptr<Framework::FFT>> transforms;
 
+		//=========================================================================================
+		// Methods
+		//
+		void CopyBuffers(AudioBuffer<float> &buffer, u32 numInputs, u32 numSamples) noexcept;
+		void IsReadyToPerform(u32 numSamples) noexcept;
+		void DoFFT() noexcept;		
+		void ProcessFFT() noexcept;
+		void DoIFFT() noexcept;
+		void ScaleDown() noexcept;
+		void MixOut(u32 numSamples) noexcept;
+		void FillOutput(AudioBuffer<float> &buffer, u32 numOutputs, u32 numSamples) noexcept;
+
 	public:
 		// initialising pointers and FFT plans
-		void Initialise(double sampleRate, u32 samplesPerBlock);
-		void UpdateParameters();
-		void CopyBuffers(AudioBuffer<float> &buffer, u32 numInputs, u32 numSamples);
-		void IsReadyToPerform(u32 numSamples);
-		void DoFFT();
-		void ProcessFFT();
-		void ScaleDown();
-		void DoIFFT();
-		void MixOut(u32 numSamples);
-		void FillOutput(AudioBuffer<float> &buffer, u32 numOutputs, u32 numSamples);
-		void MainProcess(AudioBuffer<float> &buffer, u32 numSamples, u32 numInputs, u32 numOutputs);
+		void Initialise(float sampleRate, u32 samplesPerBlock) noexcept;
+		void UpdateParameters(UpdateFlag flag) noexcept;
+		void MainProcess(AudioBuffer<float> &buffer, u32 numSamples,
+			u32 numInputs, u32 numOutputs) noexcept;
 
 		// Getter Methods
 		//
-		strict_inline u32 getProcessingDelay() const noexcept { return FFTNumSamples_ + samplesPerBlock_; }
-		strict_inline u32 getSamplesPerBlock() const noexcept { return samplesPerBlock_; }
-		strict_inline double getSampleRate() const noexcept { return sampleRate_; }
+		u32 getProcessingDelay() const noexcept { return FFTNumSamples_ + samplesPerBlock_; }
+		u32 getSamplesPerBlock() const noexcept { return samplesPerBlock_; }
+		float getSampleRate() const noexcept { return sampleRate_; }
 
 		// Setter Methods
 		//
-		strict_inline void setMix(float mix) noexcept { mix_ = mix; }
-		strict_inline void setFFTOrder(u32 order) noexcept { FFTOrder_ = order; }
-		strict_inline void setOverlap(float overlap) noexcept { overlap_ = overlap; }
-		strict_inline void setWindowType(Framework::WindowTypes type) noexcept { windowType_ = type; }
+		void setMix(float mix) noexcept { mix_ = mix; }
+		void setFFTOrder(u32 order) noexcept { FFTOrder_ = order; }
+		void setOverlap(float overlap) noexcept { overlap_ = overlap; }
+		void setWindowType(Framework::WindowTypes type) noexcept { windowType_ = type; }
 
 	private:
 		//=========================================================================================
-		// Variables
+		// Parameters
 		//
-		double sampleRate_;
+		// 1. Master Mix
+		// 2. Block Size
+		// 3. Overlap
+		// 4. Window Type
+		// 5. Window Alpha
+		// 6. Out Gain
+		// 
+		//=========================================================================================
+		// Variables
+		// 
+		// mix amount with dry signal
+		float mix_ = 1.0f;
+		//
+		// FFT order
+		u32 FFTOrder_ = kDefaultFFTOrder;
+		//
+		// amount of overlap with previous block
+		float overlap_ = kDefaultWindowOverlap;
+		//
+		// window type
+		Framework::WindowTypes windowType_ = Framework::WindowTypes::Hann;
+		//
+		// window alpha
+		float alpha_ = 0.0f;
+		//
+		// output gain
+		float outGain_ = 1.0f;
+		//
+		float sampleRate_;
 		u32 samplesPerBlock_;
-		bool isInitialised = false;
+		//
 		// have we performed for this last run?
 		bool isPerforming_ = false;
+		//
 		// do we have enough processed samples to output?
 		bool hasEnoughSamples_ = false;
+		//
 		// current FFT plan in samples
 		u32 FFTNumSamples_ = 1 << kDefaultFFTOrder;
 		u32 prevFFTNumSamples_ = 1 << kDefaultFFTOrder;
+		//
 		// how many samples we are moving forward in the outBuffer after the current block
 		u32 nextOverlapOffset_ = 0;
 		u32 currentOverlapOffset_ = 0;
-		// it this is the first run, we don't offset
-		//bool isFirstRun_ = true;
-		// if all the samples have been delivered, procede with performing
-		//u32 samplesDelivered = 0;
-
-		//=========================================================================================
-		// global parameters
-		//
-		// mixback amount with dry signal
-		float mix_ = 1.0f;
-		// amount of overlap with previous block
-		float overlap_ = kDefaultWindowOverlap;
-		// window type
-		Framework::WindowTypes windowType_ = Framework::WindowTypes::Hann;
-		// window alpha
-		float alpha_ = 0.0f;
-		// FFT order
-		u32 FFTOrder_ = kDefaultFFTOrder;
 
 		//=========================================================================================
 		// internal methods
 		// 
 		// getting the number of FFT samples
-		strict_inline u32 getFFTNumSamples() const noexcept { return (u32)1 << FFTOrder_; }
+		u32 getFFTNumSamples() const noexcept { return (u32)1 << FFTOrder_; }
+		//
 		// getting array position of FFT
-		strict_inline u32 getFFTPlan() const noexcept { return FFTOrder_ - common::kMinFFTOrder; }
+		u32 getFFTPlan() const noexcept { return FFTOrder_ - common::kMinFFTOrder; }
+		//
 		// getting the dry/wet balance for the whole plugin
-		strict_inline float getMix() const noexcept { return mix_; }
+		float getMix() const noexcept { return mix_; }
+		//
 		// calculating the overlap offset
-		// if this is the first run, we don't move
-		strict_inline u32 getOverlapOffset() const noexcept
+		u32 getOverlapOffset() const noexcept
 		{ return (u32)std::floorf((float)FFTNumSamples_ * (1.0f - overlap_)); }
-		//{ return (!isFirstRun_) ? (u32)std::floorf((float)FFTNumSamples_ * (1.0f - overlap_)) : 0; }
 	};
 }
