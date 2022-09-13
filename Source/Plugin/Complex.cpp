@@ -35,12 +35,6 @@ namespace Plugin
 	// because the audio callback is timed we have an eternity to set stuff up
 	void ComplexPlugin::CheckGlobalParameters()
 	{
-		// temporary setters
-		/*soundEngine->setMix(mix_->get());
-		soundEngine->setWindowType(Framework::WindowTypes::Hann);
-		soundEngine->setFFTOrder(order_->get());
-		soundEngine->setOverlap(overlap_->get());*/
-
 		// TODO: do parameter checking
 		// check for mix
 			// getting info from parameter

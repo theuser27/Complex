@@ -55,7 +55,6 @@ namespace common
 	static constexpr float kMinWindowOverlap = 0.0f;																	// (can be changed)   minimum window overlap
 	static constexpr float kMaxWindowOverlap = 0.96875f;															// (can be changed)   maximum window overlap
 	static constexpr float kDefaultWindowOverlap = 0.5f;															// (can be changed)   default window overlap
-	static constexpr u32 kNumWindowTypes = 6;																					// (can't be changed) current number of used windows
 	static constexpr u32 kWindowResolution = (1 << 10) + 1;														// (can be changed)   1025 samples window lookup resolution 
 																																										//										(one more sample in order to have 
 																																										//                    a distinct sample in the middle)

@@ -13,8 +13,6 @@
 #include "./Framework/parameter_bridge.h"
 
 //==============================================================================
-/**
-*/
 class ComplexAudioProcessor  : public juce::AudioProcessor, public Plugin::ComplexPlugin
 {
 public:

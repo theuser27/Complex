@@ -31,10 +31,5 @@ namespace Plugin
 		void Process(AudioBuffer<float> &buffer, u32 numSamples, u32 numInputs, u32 numOutputs);
 
 		virtual void parameterChangeMidi(u64 parentModuleId, std::string_view parameterName, float value);
-
-	protected:
-		AudioParameterFloat *mix_;
-		AudioParameterInt *order_;
-		AudioParameterFloat *overlap_;
 	};
 }

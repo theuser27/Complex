@@ -23,10 +23,6 @@ ComplexAudioProcessor::ComplexAudioProcessor()
 #endif
 				ComplexPlugin()
 {
-	/*addParameter(mix_ = new AudioParameterFloat("MIX", "Mix", 0.0f, 1.0f, 1.0f));
-	addParameter(order_ = new AudioParameterInt("ORDER", "Order", kMinFFTOrder, kMaxFFTOrder, kDefaultFFTOrder));
-	addParameter(overlap_ = new AudioParameterFloat("OVERLAP", "Overlap", kMinWindowOverlap, kMaxWindowOverlap, kDefaultWindowOverlap));
-	*/
 	using namespace Generation;
 	using namespace Framework;
 
@@ -54,14 +50,7 @@ ComplexAudioProcessor::~ComplexAudioProcessor() {}
 
 //==============================================================================
 const juce::String ComplexAudioProcessor::getName() const { return JucePlugin_Name; }
-bool ComplexAudioProcessor::acceptsMidi() const
-{
-#if JucePlugin_WantsMidiInput
-	return true;
-#else
-	return false;
-#endif
-}
+bool ComplexAudioProcessor::acceptsMidi() const {	return false; /* TODO: change when midi implementation is done */ }
 bool ComplexAudioProcessor::producesMidi() const { return false; }
 bool ComplexAudioProcessor::isMidiEffect() const { return false; }
 double ComplexAudioProcessor::getTailLengthSeconds() const { return 0.0; }
@@ -129,8 +118,7 @@ void ComplexAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, [[ma
 }
 
 //==============================================================================
-bool ComplexAudioProcessor::hasEditor() const
-{ return false; /*TODO: change this when you get to the editor*/ }
+bool ComplexAudioProcessor::hasEditor() const { return true; }
 
 juce::AudioProcessorEditor* ComplexAudioProcessor::createEditor()
 { return new ComplexAudioProcessorEditor (*this); }

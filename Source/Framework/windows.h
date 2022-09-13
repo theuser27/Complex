@@ -25,9 +25,9 @@ namespace Framework
 		static constexpr strict_inline float createHannWindow(float position)
 		{	return 0.5f * (1.0f - gcem::cos(common::k2Pi * position)); }
 
-		// simplified version of the traditional hamming window
+		// an accurate version of the traditional hamming window
 		static constexpr strict_inline float createHammingWindow(float position)
-		{	return 0.46f * (25.0f - 21.0f * gcem::cos(common::k2Pi * position)); }
+		{	return (25.0f / 46.0f) + ((-21.0f / 46.0f) * gcem::cos(k2Pi * position)); }
 
 		static constexpr strict_inline float createTriangleWindow(float position)
 		{	return 1 - 2 * gcem::abs(position - 0.5f); }

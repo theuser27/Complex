@@ -32,7 +32,7 @@ namespace Framework
 		SymmetricLoudness,			// 20 * log10(x) for x >= 0, and -20 * log10(x) for x < 0
 		Frequency,							// (sampleRate / 2 * minFrequency) ^ x
 		SymmetricFrequency,			// same as above but -(sampleRate / 2 * minFrequency) ^ (-x) for x < 0
-		Overlap,
+		Overlap
 	};
 
 	struct ParameterDetails
@@ -58,7 +58,7 @@ namespace Framework
 											(float)(kDefaultFFTOrder - kMinFFTOrder) / (float)(kMaxFFTOrder - kMinFFTOrder), ParameterScale::Indexed, "",
 		                  kFFTSizeNames.data(), false, true, UpdateFlag::BeforeProcess },
 		ParameterDetails{ "OVERLAP", "Overlap", 0.0f, kMaxWindowOverlap, kDefaultWindowOverlap, kDefaultWindowOverlap, ParameterScale::Overlap, "%" },
-		ParameterDetails{ "WINDOW_TYPE", "Window Type", 0.0f, kNumWindowTypes, 1.0f, 1.0f / (float)kNumWindowTypes, 
+		ParameterDetails{ "WINDOW_TYPE", "Window Type", 0.0f, static_cast<u32>(WindowTypes::Size), 1.0f, 1.0f / static_cast<u32>(WindowTypes::Size),
 											ParameterScale::Indexed, "", kWindowNames.data() },
 		ParameterDetails{ "WINDOW_ALPHA", "Window Alpha", 0.0f, 1.0f, 0.0f, 0.0f, ParameterScale::Linear },
 		ParameterDetails{ "OUT_GAIN", "Out Gain" , -30.0f, 30.0f, 0.0f, 0.5f, ParameterScale::Linear, " dB", nullptr, false, true, UpdateFlag::BeforeProcess }
