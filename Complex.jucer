@@ -1,7 +1,8 @@
 <?xml version="1.0" encoding="UTF-8"?>
 
 <JUCERPROJECT id="MQJhEl" name="Complex" projectType="audioplug" addUsingNamespaceToJuceHeader="1"
-              displaySplashScreen="1" jucerFormatVersion="1" cppLanguageStandard="20">
+              displaySplashScreen="1" jucerFormatVersion="1" cppLanguageStandard="20"
+              pluginFormats="buildStandalone,buildVST3">
   <MAINGROUP id="zNsp6a" name="Complex">
     <GROUP id="{EA56D449-367C-4F87-53C4-8DB58E6C0431}" name="Source">
       <GROUP id="{E3C7034B-FA4E-F562-AA1E-A10D545C55F4}" name="Third Party">

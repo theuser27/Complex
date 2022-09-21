@@ -12,7 +12,7 @@
 
 namespace Generation
 {
-	// as the topmost module, its parentModuleId is going to be itself
+	// as the topmost module its parentModuleId is going to be itself
 	SoundEngine::SoundEngine() noexcept : PluginModule(PluginModule::globalModuleIdCounter.load(std::memory_order_acquire), Framework::kPluginModules[0])
 	{
 		transforms.reserve(kMaxFFTOrder - kMinFFTOrder + 1);
@@ -23,8 +23,9 @@ namespace Generation
 		}
 
 		inputBuffer.reserve(kNumTotalChannels, kMaxPreBufferLength);
-		FFTBuffer.setSize(kNumTotalChannels, kMaxFFTBufferLength, false, true);
-		outBuffer.reserve(kNumTotalChannels, kMaxFFTBufferLength);
+		// needs to be double the max FFT, otherwise we get out of bounds errors
+		FFTBuffer.setSize(kNumTotalChannels, kMaxFFTBufferLength * 2, false, true);
+		outBuffer.reserve(kNumTotalChannels, kMaxFFTBufferLength * 2);
 		windows = Framework::Window::getInstance();
 
 		subModules_.emplace_back(std::make_shared<EffectsState>(moduleId_));
@@ -189,7 +190,6 @@ namespace Generation
 			case Framework::WindowTypes::Rectangle:
 				break;
 			case Framework::WindowTypes::Hann:
-			case Framework::WindowTypes::Hamming:
 			case Framework::WindowTypes::Triangle:
 				if (overlap_ <= 0.5f)
 					break;
@@ -201,7 +201,31 @@ namespace Generation
 					outBuffer.multiply(mult, i, sampleIndex);
 				}
 				break;
+			case Framework::WindowTypes::Hamming:
+				if (overlap_ <= 0.5f)
+					break;
+
+				// optimal multiplier empirically found
+				// https://www.desmos.com/calculator/z21xz7r2c9
+				mult = (1.0f - overlap_) * 1.84f;
+				for (u32 j = 0; j < toScaleNumSamples; j++)
+				{
+					u32 sampleIndex = (start + j) % outBuffer.getSize();
+					outBuffer.multiply(mult, i, sampleIndex);
+				}
+				break;
 			case Framework::WindowTypes::Sine:
+				if (overlap_ <= 0.33333333f)
+					break;
+
+				// optimal multiplier empirically found
+				// https://www.desmos.com/calculator/mmjwlj0gqe
+				mult = (1.0f - overlap_) * 1.57f;
+				for (u32 j = 0; j < toScaleNumSamples; j++)
+				{
+					u32 sampleIndex = (start + j) % outBuffer.getSize();
+					outBuffer.multiply(mult, i, sampleIndex);
+				}
 				break;
 			case Framework::WindowTypes::Exponential:
 				break;

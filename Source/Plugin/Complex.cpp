@@ -12,9 +12,8 @@
 
 namespace Plugin
 {
-	ComplexPlugin::ComplexPlugin()
+	ComplexPlugin::ComplexPlugin() : soundEngine(std::make_shared<Generation::SoundEngine>())
 	{
-		soundEngine = std::make_shared<Generation::SoundEngine>();
 		Generation::PluginModule::AllModules::addModule(soundEngine);
 	}
 

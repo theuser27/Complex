@@ -51,7 +51,7 @@ namespace common
 	static constexpr u32 kMaxFFTOrder = 14;																						// (can be changed)   16384 samples max
 	static constexpr u32 kDefaultFFTOrder = 12;																				// (can be changed)   4096 samples default
 	static constexpr u32 kMaxPreBufferLength = 1 << (kMaxFFTOrder + 5);								// (can be changed)   pre FFT buffer size
-	static constexpr u32 kMaxFFTBufferLength = 1 << (kMaxFFTOrder + 1);								// (can't be changed) mid and post FFT buffers size
+	static constexpr u32 kMaxFFTBufferLength = 1 << kMaxFFTOrder;											// (can't be changed) mid and post FFT buffers size
 	static constexpr float kMinWindowOverlap = 0.0f;																	// (can be changed)   minimum window overlap
 	static constexpr float kMaxWindowOverlap = 0.96875f;															// (can be changed)   maximum window overlap
 	static constexpr float kDefaultWindowOverlap = 0.5f;															// (can be changed)   default window overlap
@@ -60,11 +60,14 @@ namespace common
 																																										//                    a distinct sample in the middle)
 	
 	// misc constants
-	static constexpr double kMinFrequency = kMidi0Frequency / 4.0;										// (can be changed)   lowest frequency that will be displayed
 	static constexpr u32 kMaxNumChains = 16;																					// (can be changed)   an artificial limit is needed
 	static constexpr u32 kMaxEffectTypes = 16;																				// (can be changed)   types of effects per module; an artificial limit is needed
 	static constexpr u32 kMaxParameterMappings = 64;																	// (can be changed)   max number of parameters that can be mapped out
 	static constexpr u32 kInitialNumEffects = 16;																			// (can be changed)   initial number of effect slots in a chain
+
+	// processing constants
+	static constexpr double kMinFrequency = kMidi0Frequency / 4.0;										// (can be changed)   lowest frequency that will be displayed
+	static constexpr float kNormalisedToDbMultiplier = 120.0f;												// (can be changed)   symmetrical loudness range in which we're processing	
 
 	// used for updating parameters
 	enum class UpdateFlag : u32 { NoUpdates = 0, Realtime = 1, BeforeProcess = 2, AfterProcess = 3 };

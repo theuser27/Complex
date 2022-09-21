@@ -18,7 +18,7 @@
 namespace utils
 {
 	template<float(*func)(float)>
-	strict_inline simd_float vector_call map(simd_float value)
+	strict_inline simd_float vector_call map(simd_float value) noexcept
 	{
 		simd_float result;
 		for (int i = 0; i < simd_float::kSize; ++i)
@@ -27,49 +27,50 @@ namespace utils
 	}
 
 	template<float(*func)(float, float)>
-	static strict_inline simd_float vector_call map(simd_float one, simd_float two) {
+	static strict_inline simd_float vector_call map(simd_float one, simd_float two) noexcept
+	{
 		simd_float result;
 		for (int i = 0; i < simd_float::kSize; ++i)
 			result.set(i, func(one[i], two[i]));
 		return result;
 	}
 
-	strict_inline simd_float vector_call sin(simd_float value) { return map<sinf>(value); }
-	strict_inline simd_float vector_call cos(simd_float value) { return map<cosf>(value); }
-	strict_inline simd_float vector_call tan(simd_float value) { return map<tanf>(value); }
-	strict_inline simd_float vector_call atan2(simd_float one, simd_float two) { return map<atan2f>(one, two); }
+	strict_inline simd_float vector_call sin(simd_float value) noexcept { return map<sinf>(value); }
+	strict_inline simd_float vector_call cos(simd_float value) noexcept { return map<cosf>(value); }
+	strict_inline simd_float vector_call tan(simd_float value) noexcept { return map<tanf>(value); }
+	strict_inline simd_float vector_call atan2(simd_float one, simd_float two) noexcept { return map<atan2f>(one, two); }
 
-	strict_inline simd_float vector_call sqrt(simd_float value)
+	strict_inline simd_float vector_call sqrt(simd_float value) noexcept
 	{
-	#if COMPLEX_SSE3
+	#if COMPLEX_SSE4_1
 		return _mm_sqrt_ps(value.value);
 	#elif COMPLEX_NEON
 		return map<sqrtf>(value);
 	#endif
 	}
 
-	strict_inline simd_float vector_call interpolate(simd_float &from, simd_float &to, float t)
+	strict_inline simd_float vector_call interpolate(simd_float &from, simd_float &to, float t) noexcept
 	{ return simd_float::mulAdd(from, to - from, t); }
 
-	strict_inline simd_float vector_call interpolate(simd_float &from, simd_float &to, simd_float &t)
+	strict_inline simd_float vector_call interpolate(simd_float &from, simd_float &to, simd_float &t) noexcept
 	{ return simd_float::mulAdd(from, to - from, t); }
 
-	strict_inline simd_float vector_call interpolate(float from, float to, simd_float &t)
+	strict_inline simd_float vector_call interpolate(float from, float to, simd_float &t) noexcept
 	{ return simd_float::mulAdd(from, to - from, t); }
 
 	// t are clamped to the range of low and high
 	strict_inline simd_float vector_call interpolateClamp(simd_float &from, simd_float &to,
-		simd_float t, simd_float &low, simd_float &high)
+		simd_float t, simd_float &low, simd_float &high) noexcept
 	{
 		t = simd_float::clamp(low, high, t);
 		return simd_float::mulAdd(from, to - from, t);
 	}
 
 
-	strict_inline Framework::Matrix vector_call getLinearInterpolationMatrix(simd_float t)
+	strict_inline Framework::Matrix vector_call getLinearInterpolationMatrix(simd_float t) noexcept
 	{ return Framework::Matrix({ 0.0f, simd_float(1.0f) - t, t, 0.0f }); }
 
-	strict_inline Framework::Matrix vector_call getCatmullInterpolationMatrix(simd_float t)
+	strict_inline Framework::Matrix vector_call getCatmullInterpolationMatrix(simd_float t) noexcept
 	{
 		simd_float half_t = t * 0.5f;
 		simd_float half_t2 = t * half_t;
@@ -82,9 +83,9 @@ namespace utils
 			half_t3 - half_t2 });
 	}
 
-	strict_inline simd_float vector_call toSimdFloatFromUnaligned(const float *unaligned)
+	strict_inline simd_float vector_call toSimdFloatFromUnaligned(const float *unaligned) noexcept
 	{
-	#if COMPLEX_SSE3
+	#if COMPLEX_SSE4_1
 		return _mm_loadu_ps(unaligned);
 	#elif COMPLEX_NEON
 		return vld1q_f32(unaligned);
@@ -92,7 +93,7 @@ namespace utils
 	}
 
 	template<u32 size>
-	strict_inline Framework::Matrix vector_call getValueMatrix(const float *buffer, simd_int indices)
+	strict_inline Framework::Matrix vector_call getValueMatrix(const float *buffer, simd_int indices) noexcept
 	{
 		static_assert(size <= kSimdRatio, "Size of matrix cannot be larger than size of simd package");
 		std::array<simd_float, size> values;
@@ -102,7 +103,7 @@ namespace utils
 	}
 
 	template<u32 size>
-	strict_inline Framework::Matrix vector_call getValueMatrix(const float *const *buffers, simd_int indices)
+	strict_inline Framework::Matrix vector_call getValueMatrix(const float *const *buffers, simd_int indices) noexcept
 	{
 		static_assert(size <= kSimdRatio, "Size of matrix cannot be larger than size of simd package");
 		std::array<simd_float, size> values;
@@ -111,109 +112,82 @@ namespace utils
 		return Framework::Matrix(values);
 	}
 
-	strict_inline simd_float vector_call clamp(simd_float value, float min, float max)
-	{ return simd_float::max(simd_float::min(value, max), min); }
-
-	strict_inline simd_float vector_call clamp(simd_float value, simd_float min, simd_float max)
-	{ return simd_float::max(simd_float::min(value, max), min); }
-
-	strict_inline simd_int vector_call clamp(simd_int value, simd_int min, simd_int max)
-	{ return simd_int::max(simd_int::min(value, max), min); }
-
-	strict_inline bool vector_call completelyEqual(simd_float left, simd_float right)
+	strict_inline bool vector_call completelyEqual(simd_float left, simd_float right) noexcept
 	{ return simd_float::notEqual(left, right).sum() == 0; }
 
 	// 0s for loading values from one, 1s for loading values from two
 	template<commonConcepts::SimdValue SIMD>
-	strict_inline SIMD vector_call maskLoad(SIMD currentValue, SIMD newValue, simd_mask mask)
+	strict_inline SIMD vector_call maskLoad(SIMD zeroValue, SIMD oneValue, simd_mask mask) noexcept
 	{
-		SIMD oldValues = currentValue & ~mask;
-		SIMD newValues = newValue & mask;
+		SIMD oldValues = zeroValue & ~mask;
+		SIMD newValues = oneValue & mask;
 		return oldValues + newValues;
 	}
 
-	strict_inline void vector_call copyBuffer(simd_float *dest, const simd_float *source, int size)
+	strict_inline void vector_call copyBuffer(simd_float *dest, 
+		const simd_float *source, int size) noexcept
 	{
 		for (int i = 0; i < size; ++i)
 			dest[i] = source[i];
 	}
 
-	strict_inline void vector_call addBuffers(simd_float *dest, const simd_float *b1, const simd_float *b2, int size)
+	strict_inline void vector_call addBuffers(simd_float *dest, 
+		const simd_float *b1, const simd_float *b2, int size) noexcept
 	{
 		for (int i = 0; i < size; ++i)
 			dest[i] = b1[i] + b2[i];
 	}
 
-	strict_inline simd_float vector_call toFloat(simd_int integers)
+	strict_inline simd_float vector_call toFloat(simd_int integers) noexcept
 	{
-	#if COMPLEX_SSE3
+	#if COMPLEX_SSE4_1
 		return _mm_cvtepi32_ps(integers.value);
 	#elif COMPLEX_NEON
 		return vcvtq_f32_s32(vreinterpretq_s32_u32(integers.value));
 	#endif
 	}
 
-	strict_inline simd_int vector_call toInt(simd_float floats)
+	strict_inline simd_int vector_call toInt(simd_float floats) noexcept
 	{
-	#if COMPLEX_SSE3
+	#if COMPLEX_SSE4_1
 		return _mm_cvtps_epi32(floats.value);
 	#elif COMPLEX_NEON
 		return vreinterpretq_u32_s32(vcvtq_s32_f32(floats.value));
 	#endif
 	}
 
-	strict_inline simd_float vector_call reinterpretToFloat(simd_int value)
+	strict_inline simd_float vector_call reinterpretToFloat(simd_int value) noexcept
 	{
-	#if COMPLEX_SSE3
+	#if COMPLEX_SSE4_1
 		return _mm_castsi128_ps(value.value);
 	#elif COMPLEX_NEON
 		return vreinterpretq_f32_u32(value.value);
 	#endif
 	}
 
-	strict_inline simd_int vector_call reinterpretToInt(simd_float value)
+	strict_inline simd_int vector_call reinterpretToInt(simd_float value) noexcept
 	{
-	#if COMPLEX_SSE3
+	#if COMPLEX_SSE4_1
 		return _mm_castps_si128(value.value);
 	#elif COMPLEX_NEON
 		return vreinterpretq_u32_f32(value.value);
 	#endif
 	}
 
-	strict_inline simd_float vector_call truncate(simd_float value)
-	{ return toFloat(toInt(value)); }
+	strict_inline simd_float vector_call getDecimalPlaces(simd_float value) noexcept
+	{ return value - simd_float::floor(value); }
 
-	strict_inline simd_float vector_call floor(simd_float value)
+	strict_inline simd_float modOnce(simd_float value) noexcept
 	{
-		simd_float truncated = truncate(value);
-		return truncated + (simd_float(-1.0f) & simd_float::greaterThan(truncated, value));
+		simd_mask less_mask = simd_float::lessThanOrEqual(value, 1.0f);
+		simd_float lower = value - 1.0f;
+		return maskLoad(lower, value, less_mask);
 	}
-
-	strict_inline simd_float vector_call ceil(simd_float value)
-	{
-		simd_float truncated = truncate(value);
-		return truncated + (simd_float(1.0f) & simd_float::lessThan(truncated, value));
-	}
-
-	strict_inline simd_int vector_call floorToInt(simd_float value)
-	{ return toInt(floor(value)); }
-
-	strict_inline simd_int vector_call ceilToInt(simd_float value)
-	{ return toInt(ceil(value)); }
-
-	strict_inline simd_int vector_call roundToInt(simd_float value)
-	{ return floorToInt(value + 0.5f); }
-
-	strict_inline simd_float vector_call round(simd_float value)
-	{ return floor(value + 0.5f); }
-
-	strict_inline simd_float vector_call mod(simd_float value)
-	{ return value - floor(value); }
 
 	template<size_t shift>
-	strict_inline simd_int vector_call shiftRight(simd_int values)
+	strict_inline simd_int vector_call shiftRight(simd_int values) noexcept
 	{
-	#if COMPLEX_SSE3
+	#if COMPLEX_SSE4_1
 		return _mm_srli_epi32(values.value, shift);
 	#elif COMPLEX_NEON
 		return vshrq_n_u32(values.value, shift);
@@ -221,9 +195,9 @@ namespace utils
 	}
 
 	template<size_t shift>
-	strict_inline simd_int vector_call shiftLeft(simd_int values)
+	strict_inline simd_int vector_call shiftLeft(simd_int values) noexcept
 	{
-	#if COMPLEX_SSE3
+	#if COMPLEX_SSE4_1
 		return _mm_slli_epi32(values.value, shift);
 	#elif COMPLEX_NEON
 		return vshlq_n_u32(values.value, shift);
@@ -231,24 +205,24 @@ namespace utils
 	}
 
 	template<size_t shift>
-	strict_inline simd_float vector_call shiftRight(simd_float value)
+	strict_inline simd_float vector_call shiftRight(simd_float value) noexcept
 	{ return reinterpretToFloat(shiftRight<shift>(reinterpretToInt(value))); }
 
 	template<size_t shift>
-	strict_inline simd_float vector_call shiftLeft(simd_float value)
+	strict_inline simd_float vector_call shiftLeft(simd_float value) noexcept
 	{ return reinterpretToFloat(shiftRight<shift>(reinterpretToInt(value))); }
 
-	strict_inline simd_float vector_call pow2ToFloat(simd_int value)
+	strict_inline simd_float vector_call pow2ToFloat(simd_int value) noexcept
 	{ return reinterpretToFloat(shiftLeft<23>(value + 127)); }
 
 
 
-	static constexpr float kDbGainConversionMult = 6.02059991329f;
-	static constexpr float kDbMagnitudeConversionMult = 1.0f / kDbGainConversionMult;
+	static constexpr float kAmplitudeToDbConversionMult = 6.02059991329f;
+	static constexpr float kDbToAmplitudeConversionMult = 1.0f / kAmplitudeToDbConversionMult;
 	static constexpr float kExpConversionMult = 1.44269504089f;
 	static constexpr float kLogConversionMult = 0.69314718056f;
 
-	strict_inline simd_float vector_call exp2(simd_float exponent)
+	strict_inline simd_float vector_call exp2(simd_float exponent) noexcept
 	{
 		static constexpr float kCoefficient0 = 1.0f;
 		static constexpr float kCoefficient1 = 16970.0 / 24483.0;
@@ -257,7 +231,7 @@ namespace utils
 		static constexpr float kCoefficient4 = 80.0 / 8161.0;
 		static constexpr float kCoefficient5 = 32.0 / 24483.0;
 
-		simd_int integer = roundToInt(exponent);
+		simd_int integer = toInt(simd_float::round(exponent));
 		simd_float t = exponent - toFloat(integer);
 		simd_float int_pow = pow2ToFloat(integer);
 
@@ -266,7 +240,7 @@ namespace utils
 		return int_pow * interpolate;
 	}
 
-	strict_inline simd_float vector_call log2(simd_float value)
+	strict_inline simd_float vector_call log2(simd_float value) noexcept
 	{
 		static constexpr float kCoefficient0 = -1819.0 / 651.0;
 		static constexpr float kCoefficient1 = 5.0;
@@ -283,74 +257,86 @@ namespace utils
 		return utils::toFloat(floored_log2) + interpolate;
 	}
 
-	strict_inline simd_float vector_call exp(simd_float exponent)
+	strict_inline simd_float vector_call exp(simd_float exponent) noexcept
 	{ return exp2(exponent * kExpConversionMult); }
 
-	strict_inline simd_float vector_call log(simd_float value)
+	strict_inline simd_float vector_call log(simd_float value) noexcept
 	{ return log2(value) * kLogConversionMult; }
 
-	strict_inline simd_float vector_call pow(simd_float base, simd_float exponent)
+	strict_inline simd_float vector_call pow(simd_float base, simd_float exponent) noexcept
 	{ return exp2(log2(base) * exponent); }
 
-	strict_inline simd_float vector_call midiOffsetToRatio(simd_float note_offset)
+	strict_inline simd_float vector_call midiOffsetToRatio(simd_float note_offset) noexcept
 	{ return exp2(note_offset * (1.0f / kNotesPerOctave)); }
 
-	strict_inline simd_float vector_call midiNoteToFrequency(simd_float note)
+	strict_inline simd_float vector_call midiNoteToFrequency(simd_float note) noexcept
 	{ return midiOffsetToRatio(note) * kMidi0Frequency; }
 
 	// fast approximation of the original equation
-	strict_inline simd_float vector_call magnitudeToDb(simd_float magnitude)
-	{ return log2(magnitude) * kDbGainConversionMult; }
+	strict_inline simd_float vector_call amplitudeToDb(simd_float magnitude) noexcept
+	{ return log2(magnitude) * kAmplitudeToDbConversionMult; }
 
 	// fast approximation of the original equation
-	strict_inline simd_float vector_call dbToMagnitude(simd_float decibels)
-	{ return exp2(decibels * kDbMagnitudeConversionMult); }
+	strict_inline simd_float vector_call dbToAmplitude(simd_float decibels) noexcept
+	{ return exp2(decibels * kDbToAmplitudeConversionMult); }
 
-	strict_inline simd_float vector_call normalisedToFrequency(simd_float normalised, float sampleRate)
+	strict_inline simd_float vector_call normalisedToDb(simd_float normalised, float maxDb) noexcept
+	{ return pow(maxDb + 1.0f, normalised) - 1.0f; }
+
+	strict_inline simd_float vector_call dbToNormalised(simd_float db, float maxDb) noexcept
+	{ return log2(db + 1.0f) / log2(maxDb); }
+
+	strict_inline simd_float vector_call normalisedToFrequency(simd_float normalised, float sampleRate) noexcept
 	{ return pow(sampleRate / (2.0f * kMinFrequency), normalised) * kMinFrequency; }
 
-	strict_inline simd_float vector_call frequencyToNormalised(simd_float frequency, float sampleRate)
+	strict_inline simd_float vector_call frequencyToNormalised(simd_float frequency, float sampleRate) noexcept
 	{ return log2(frequency / kMinFrequency) / log2(simd_float(sampleRate / 2.0f * kMinFrequency)); }
 
-	strict_inline float exp2(float value)
+	strict_inline simd_float vector_call binToNormalised(simd_float bin, float FFTOrder) noexcept
+	{ return log2(bin) / (FFTOrder - 1.0f); }
+
+	strict_inline simd_float vector_call normalisedToBin(simd_float normalised, float FFTOrder) noexcept
+	{ return simd_float::ceil(exp2(normalised * (FFTOrder - 1))); }
+
+	strict_inline float exp2(float value) noexcept
 	{
 		simd_float input = value;
 		simd_float result = exp2(input);
 		return result[0];
 	}
 
-	strict_inline float log2(float value)
+	strict_inline float log2(float value) noexcept
 	{
 		simd_float input = value;
 		simd_float result = log2(input);
 		return result[0];
 	}
 
-	strict_inline float exp(float exponent)
+	strict_inline float exp(float exponent) noexcept
 	{ return exp2(exponent * kExpConversionMult); }
 
-	strict_inline float log(float value)
+	strict_inline float log(float value) noexcept
 	{ return log2(value) * kLogConversionMult; }
 
-	strict_inline float pow(float base, float exponent)
+	strict_inline float pow(float base, float exponent) noexcept
 	{ return exp2(log2(base) * exponent); }
 
-	// conditionally unsigns ints if they are < 0 and returns mask
-	strict_inline simd_mask vector_call unsignInt(simd_int &value)
+	// conditionally unsigns ints if they are negative and returns full mask where values are negative
+	strict_inline simd_mask vector_call unsignInt(simd_int &value, bool returnFullMask = false) noexcept
 	{
-		static simd_mask signMask = kSignMask;
+		static const simd_mask signMask = kSignMask;
 		simd_mask mask = value & signMask;
 		value ^= mask;
-		return mask;
+		return (returnFullMask) ? simd_mask::equal(mask, signMask) : mask;
 	}
 
-	// conditionally unsigns floats if they are < 0 and returns mask
-	strict_inline simd_mask vector_call unsignFloat(simd_float &value)
+	// conditionally unsigns floats if they are negative and returns full mask where values are negative
+	strict_inline simd_mask vector_call unsignFloat(simd_float &value, bool returnFullMask = false) noexcept
 	{
-		static simd_mask signMask = kSignMask;
+		static const simd_mask signMask = kSignMask;
 		simd_mask mask = reinterpretToInt(value) & signMask;
 		value ^= mask;
-		return mask;
+		return (returnFullMask) ? simd_mask::equal(mask, signMask) : mask;
 	}
 
 	strict_inline simd_float scaleValue(simd_float value, const Framework::ParameterDetails *details,
@@ -363,10 +349,10 @@ namespace utils
 		switch (details->scale)
 		{
 		case ParameterScale::Toggle:
-			result = utils::reinterpretToFloat(simd_float::notEqual(utils::round(value), 0.0f));
+			result = utils::reinterpretToFloat(simd_float::notEqual(simd_float::round(value), 0.0f));
 			break;
 		case ParameterScale::Indexed:
-			result = utils::round(value * (details->maxValue - details->minValue) + details->minValue);
+			result = simd_float::round(value * (details->maxValue - details->minValue) + details->minValue);
 			break;
 		case ParameterScale::Linear:
 			result = value * (details->maxValue - details->minValue) + details->minValue;
@@ -375,7 +361,7 @@ namespace utils
 			value = value * 2.0f - 1.0f;
 			sign = utils::unsignFloat(value);
 			value *= value;
-			result = (value * (details->maxValue - details->minValue) + details->minValue) | sign;
+			result = (value * (details->maxValue - details->minValue) / 2.0f) | sign;
 			break;
 		case ParameterScale::Quadratic:
 			result = value * value * (details->maxValue - details->minValue) + details->minValue;
@@ -384,12 +370,12 @@ namespace utils
 			result = value * value * value * (details->maxValue - details->minValue) + details->minValue;
 			break;
 		case ParameterScale::SymmetricLoudness:
-			value = value * 2.0f - 1.0f;
+			value = (value * 2.0f - 1.0f);
 			sign = utils::unsignFloat(value);
-			result = utils::dbToMagnitude(value) | sign;
+			result = utils::normalisedToDb(value, kNormalisedToDbMultiplier) | sign;
 			break;
 		case ParameterScale::Loudness:
-			result = utils::dbToMagnitude(value);
+			result = utils::normalisedToDb(value, kNormalisedToDbMultiplier);
 			break;
 		case ParameterScale::SymmetricFrequency:
 			value = value * 2.0f - 1.0f;
@@ -400,7 +386,7 @@ namespace utils
 			result = utils::normalisedToFrequency(value, RuntimeInfo::sampleRate.load(std::memory_order_acquire));
 			break;
 		case ParameterScale::Overlap:
-			result = utils::clamp(value, details->minValue, details->maxValue);
+			result = simd_float::clamp(value, details->minValue, details->maxValue);
 			break;
 		}
 
@@ -446,11 +432,11 @@ namespace utils
 			break;
 		case ParameterScale::SymmetricLoudness:
 			sign = utils::unsignFloat(value);
-			value = utils::dbToMagnitude(value);
+			value = utils::dbToAmplitude(value);
 			result = (value * sign + 1.0f) / 2.0f;
 			break;
 		case ParameterScale::Loudness:
-			result = utils::dbToMagnitude(value);
+			result = utils::dbToAmplitude(value);
 			break;
 		case ParameterScale::SymmetricFrequency:
 			sign = utils::unsignFloat(value);
@@ -465,27 +451,27 @@ namespace utils
 		return result;
 	}
 
-	strict_inline simd_float vector_call getStereoDifference(simd_float value)
+	strict_inline simd_float vector_call getStereoDifference(simd_float value) noexcept
 	{
-	#if COMPLEX_SSE3
+	#if COMPLEX_SSE4_1
 		return (value - simd_float(_mm_shuffle_ps(value.value, value.value, _MM_SHUFFLE(2, 3, 0, 1)))) * 0.5f;
 	#elif COMPLEX_NEON
 		static_assert(false, "ARM NEON getStereoDifference not implemented yet");
 	#endif
 	}
 
-	strict_inline simd_int vector_call getStereoDifference(simd_int value)
+	strict_inline simd_int vector_call getStereoDifference(simd_int value) noexcept
 	{
-	#if COMPLEX_SSE3
+	#if COMPLEX_SSE4_1
 		return shiftRight<1>(value - simd_int(_mm_shuffle_epi32(value.value, _MM_SHUFFLE(2, 3, 0, 1))));
 	#elif COMPLEX_NEON
 		static_assert(false, "ARM NEON getStereoDifference not implemented yet");
 	#endif
 	}
 
-	strict_inline void wait()
+	strict_inline void wait() noexcept
 	{
-	#if COMPLEX_SSE3
+	#if COMPLEX_SSE4_1
 		_mm_pause();
 	#elif COMPLEX_NEON
 		__yield();

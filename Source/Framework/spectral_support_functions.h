@@ -21,7 +21,7 @@ namespace utils
 	strict_inline void vector_call complexValueMerge(simd_float &one, simd_float &two)
 	{
 		// TODO: implement complexMerge for NEON
-	#if COMPLEX_SSE3
+	#if COMPLEX_SSE4_1
 		auto one_ = _mm_unpacklo_ps(one.value, two.value);
 		two.value = _mm_unpackhi_ps(one.value, two.value);
 		one.value = one_;
@@ -38,7 +38,7 @@ namespace utils
 
 	strict_inline simd_float vector_call complexCartMul(simd_float one, simd_float two)
 	{
-	#if COMPLEX_SSE3
+	#if COMPLEX_SSE4_1
 		auto realSums = simd_float::mul(one.value, two.value);
 		auto imaginarySums = simd_float::mul(one.value, _mm_shuffle_ps(two.value, two.value, _MM_SHUFFLE(2, 3, 0, 1)));
 
@@ -67,7 +67,7 @@ namespace utils
 	{
 		auto magnitudes = simd_float::mul(one.value, two.value);
 		auto phases = simd_float::add(one.value, two.value);
-	#if COMPLEX_SSE3
+	#if COMPLEX_SSE4_1
 		magnitudes = _mm_shuffle_ps(magnitudes, magnitudes, _MM_SHUFFLE(2, 0, 2, 0));
 		phases = _mm_shuffle_ps(phases, phases, _MM_SHUFFLE(3, 1, 3, 1));
 		return _mm_unpacklo_ps(magnitudes, phases);
@@ -79,7 +79,7 @@ namespace utils
 	// doesn't sqrt
 	strict_inline simd_float vector_call complexMagnitude(simd_float value)
 	{
-	#if COMPLEX_SSE3
+	#if COMPLEX_SSE4_1
 		auto real = _mm_shuffle_ps(value.value, value.value, _MM_SHUFFLE(2, 2, 0, 0));
 		auto imaginary = _mm_shuffle_ps(value.value, value.value, _MM_SHUFFLE(3, 3, 1, 1));
 	#elif COMPLEX_NEON
@@ -91,7 +91,7 @@ namespace utils
 
 	strict_inline simd_float vector_call complexMagnitude(simd_float one, simd_float two)
 	{
-	#if COMPLEX_SSE3
+	#if COMPLEX_SSE4_1
 		auto real = _mm_shuffle_ps(one.value, two.value, _MM_SHUFFLE(2, 0, 2, 0));
 		auto imaginary = _mm_shuffle_ps(one.value, two.value, _MM_SHUFFLE(3, 1, 3, 1));
 	#elif COMPLEX_NEON
@@ -103,7 +103,7 @@ namespace utils
 
 	strict_inline simd_float vector_call complexPhase(simd_float value)
 	{
-	#if COMPLEX_SSE3
+	#if COMPLEX_SSE4_1
 		auto real = _mm_shuffle_ps(value.value, value.value, _MM_SHUFFLE(2, 2, 0, 0));
 		auto imaginary = _mm_shuffle_ps(value.value, value.value, _MM_SHUFFLE(3, 3, 1, 1));
 	#elif COMPLEX_NEON
@@ -115,7 +115,7 @@ namespace utils
 
 	strict_inline simd_float vector_call complexPhase(simd_float one, simd_float two)
 	{
-	#if COMPLEX_SSE3
+	#if COMPLEX_SSE4_1
 		auto real = _mm_shuffle_ps(one.value, two.value, _MM_SHUFFLE(2, 0, 2, 0));
 		auto imaginary = _mm_shuffle_ps(one.value, two.value, _MM_SHUFFLE(3, 1, 3, 1));
 	#elif COMPLEX_NEON
@@ -127,7 +127,7 @@ namespace utils
 
 	strict_inline simd_float vector_call complexReal(simd_float one, simd_float two)
 	{
-	#if COMPLEX_SSE3
+	#if COMPLEX_SSE4_1
 		auto magnitude = _mm_shuffle_ps(one.value, two.value, _MM_SHUFFLE(2, 0, 2, 0));
 		auto phase = _mm_shuffle_ps(one.value, two.value, _MM_SHUFFLE(3, 1, 3, 1));
 	#elif COMPLEX_NEON
@@ -139,7 +139,7 @@ namespace utils
 
 	strict_inline simd_float vector_call complexImaginary(simd_float one, simd_float two)
 	{
-	#if COMPLEX_SSE3
+	#if COMPLEX_SSE4_1
 		auto magnitude = _mm_shuffle_ps(one.value, two.value, _MM_SHUFFLE(2, 0, 2, 0));
 		auto phase = _mm_shuffle_ps(one.value, two.value, _MM_SHUFFLE(3, 1, 3, 1));
 	#elif COMPLEX_NEON

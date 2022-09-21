@@ -28,15 +28,53 @@ ComplexAudioProcessor::ComplexAudioProcessor()
 
 	parameterBridges.reserve(kMaxParameterMappings + globalPluginParameterList.size());
 
-	for (size_t i = 0; i < globalPluginParameterList.size(); i++)
+	for (auto &parameterDetails : globalPluginParameterList)
 	{
-		auto parameter = PluginModule::AllModules::getModuleParameter(soundEngine->getModuleId(), globalPluginParameterList[i].name);
+		auto parameter = PluginModule::AllModules::getModuleParameter(soundEngine->getModuleId(), parameterDetails.name);
 		if (auto parameterPointer = parameter.lock())
 		{
 			Framework::ParameterBridge *bridge = new Framework::ParameterBridge((u32)(-1), parameterPointer->getParameterLink());
 			parameterBridges.push_back(bridge);
 			addParameter(bridge);
 		}
+	}
+
+	// temporary, used for testing
+	size_t index = 0;
+	for (auto &parameterDetails : effectModuleParameterList)
+	{
+		auto parameter = PluginModule::AllModules::getModuleParameter(3, parameterDetails.name);
+		if (auto parameterPointer = parameter.lock())
+		{
+			Framework::ParameterBridge *bridge = new Framework::ParameterBridge(index, parameterPointer->getParameterLink());
+			parameterBridges.push_back(bridge);
+			addParameter(bridge);
+		}
+		index++;
+	}
+
+	for (auto &parameterDetails : baseEffectParameterList)
+	{
+		auto parameter = PluginModule::AllModules::getModuleParameter(4, parameterDetails.name);
+		if (auto parameterPointer = parameter.lock())
+		{
+			Framework::ParameterBridge *bridge = new Framework::ParameterBridge(index, parameterPointer->getParameterLink());
+			parameterBridges.push_back(bridge);
+			addParameter(bridge);
+		}
+		index++;
+	}
+
+	for (auto &parameterDetails : filterEffectParameterList)
+	{
+		auto parameter = PluginModule::AllModules::getModuleParameter(4, parameterDetails.name);
+		if (auto parameterPointer = parameter.lock())
+		{
+			Framework::ParameterBridge *bridge = new Framework::ParameterBridge(index, parameterPointer->getParameterLink());
+			parameterBridges.push_back(bridge);
+			addParameter(bridge);
+		}
+		index++;
 	}
 
 	/*for (size_t i = 0; i < kMaxParameterMappings; i++)

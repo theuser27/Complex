@@ -95,6 +95,8 @@ namespace Generation
 		// TODO: see if this even needs to be thread-safe
 		// TODO: how are you going to save this in presets?
 		//       maybe, go through all modules, find the largest index and continue from there?
+		
+		// TODO: rework the module ID system so that it doesn't utilise globals, because all instances of the plugin see them!!!!!!!
 		inline static std::atomic<u64> globalModuleIdCounter = 0;
 	public:
 		// global state for keeping track of all parameters lists through global module number

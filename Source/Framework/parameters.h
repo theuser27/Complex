@@ -42,7 +42,7 @@ namespace Framework
 		float minValue = 0.0f;
 		float maxValue = 1.0f;
 		float defaultValue = 0.0f;
-		float defaultNormalisedValue = 0.5f;
+		float defaultNormalisedValue = 0.0f;
 		ParameterScale scale = ParameterScale::Linear;
 		std::string_view displayUnits = "";
 		const std::string_view *stringLookup = nullptr;
@@ -58,7 +58,7 @@ namespace Framework
 											(float)(kDefaultFFTOrder - kMinFFTOrder) / (float)(kMaxFFTOrder - kMinFFTOrder), ParameterScale::Indexed, "",
 		                  kFFTSizeNames.data(), false, true, UpdateFlag::BeforeProcess },
 		ParameterDetails{ "OVERLAP", "Overlap", 0.0f, kMaxWindowOverlap, kDefaultWindowOverlap, kDefaultWindowOverlap, ParameterScale::Overlap, "%" },
-		ParameterDetails{ "WINDOW_TYPE", "Window Type", 0.0f, static_cast<u32>(WindowTypes::Size), 1.0f, 1.0f / static_cast<u32>(WindowTypes::Size),
+		ParameterDetails{ "WINDOW_TYPE", "Window Type", 0.0f, static_cast<u32>(WindowTypes::Size) - 1, 1.0f, 1.0f / static_cast<u32>(WindowTypes::Size),
 											ParameterScale::Indexed, "", kWindowNames.data() },
 		ParameterDetails{ "WINDOW_ALPHA", "Window Alpha", 0.0f, 1.0f, 0.0f, 0.0f, ParameterScale::Linear },
 		ParameterDetails{ "OUT_GAIN", "Out Gain" , -30.0f, 30.0f, 0.0f, 0.5f, ParameterScale::Linear, " dB", nullptr, false, true, UpdateFlag::BeforeProcess }
@@ -78,7 +78,8 @@ namespace Framework
 	inline constexpr std::array effectModuleParameterList =
 	{
 		ParameterDetails{ "MODULE_ENABLED", "Module Enabled", 0.0f, 1.0f, 1.0f, 1.0f, ParameterScale::Toggle, "", kOffOnNames.data() },
-		ParameterDetails{ "MODULE_TYPE", "Module Type", 0.0f, static_cast<float>(EffectModuleTypes::Size), 0.0f, 0.0f, ParameterScale::Indexed, "", 
+		ParameterDetails{ "MODULE_TYPE", "Module Type", 0.0f, static_cast<float>(EffectModuleTypes::Size) - 1, 1.0f, 
+		                  1.0f / static_cast<float>(EffectModuleTypes::Size), ParameterScale::Indexed, "",
 		                  kEffectModuleNames.data(), false, true, UpdateFlag::BeforeProcess },
 		ParameterDetails{ "MODULE_MIX", "Module Mix", 0.0f, 1.0f, 1.0f, 1.0f, ParameterScale::Linear, "%", nullptr, true },
 		ParameterDetails{ "MODULE_GAIN", "Module Gain", -30.0f, 30.0f, 0.0f, 0.5f, ParameterScale::Linear, " dB", nullptr, true }
@@ -86,7 +87,7 @@ namespace Framework
 
 	inline constexpr std::array baseEffectParameterList =
 	{
-		ParameterDetails{ "FX_TYPE", "Effect Type", 0.0f, kMaxEffectTypes, 0.0f, 0.0f, ParameterScale::Indexed, "",
+		ParameterDetails{ "FX_TYPE", "Effect Type", 0.0f, kMaxEffectTypes - 1, 0.0f, 0.0f, ParameterScale::Indexed, "",
 		                  kGenericEffectTypeNames.data() },
 		ParameterDetails{ "FX_LOW_BOUND", "Low Bound", 0.0f, 1.0f, 0.0f, 0.0f, ParameterScale::Frequency, "", nullptr, true },
 		ParameterDetails{ "FX_HIGH_BOUND", "High Bound", 0.0f, 1.0f, 1.0f, 1.0f, ParameterScale::Frequency, "", nullptr, true },
@@ -95,9 +96,9 @@ namespace Framework
 
 	inline constexpr std::array filterEffectParameterList =
 	{
-		ParameterDetails{ "FILTER_FX_GAIN", "Filter Gain", -1.0f, 1.0f, 0.0f, 1.0f, ParameterScale::SymmetricLoudness, "", nullptr, true },
-		ParameterDetails{ "FILTER_FX_CUTOFF", "Filter Cutoff", 0.0f, 1.0f, 0.0f, 0.5f, ParameterScale::Frequency, "", nullptr, true },
-		ParameterDetails{ "FILTER_FX_SLOPE", "Filter Slope", -1.0f, 1.0f, 0.0f, 0.5f, ParameterScale::SymmetricLoudness, "", nullptr, true }
+		ParameterDetails{ "FILTER_FX_GAIN", "Filter Gain", -1.0f, 1.0f, 0.0f, 0.5f, ParameterScale::SymmetricLoudness, "", nullptr, true },
+		ParameterDetails{ "FILTER_FX_CUTOFF", "Filter Cutoff", 0.0f, 1.0f, 0.5f, 0.5f, ParameterScale::Linear, "", nullptr, true },
+		ParameterDetails{ "FILTER_FX_SLOPE", "Filter Slope", -1.0f, 1.0f, 0.5f, 0.75f, ParameterScale::SymmetricQuadratic, "", nullptr, true }
 	};
 
 	inline constexpr std::array contrastEffectParameterList =

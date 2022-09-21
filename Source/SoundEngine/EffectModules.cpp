@@ -13,60 +13,64 @@
 namespace Generation
 {
 	perf_inline void filterEffect::runNormal(Framework::SimdBuffer<std::complex<float>, simd_float> &source,
-		Framework::SimdBuffer<std::complex<float>, simd_float> &destination, u32 FFTSize, float sampleRate) noexcept
+		Framework::SimdBuffer<std::complex<float>, simd_float> &destination, const u32 FFTSize, const float sampleRate) noexcept
 	{
 		using namespace utils;
 
-		auto shiftedBounds = getShiftedBounds(moduleParameters_[1]->getInternalValue<simd_float>(),
-			moduleParameters_[2]->getInternalValue<simd_float>(), sampleRate / 2.0f, false);
+		u32 FFTOrder = ilog2(FFTSize);
+
+		simd_float lowBoundNorm = moduleParameters_[1]->getInternalValue<simd_float>(true);
+		simd_float highBoundNorm = moduleParameters_[2]->getInternalValue<simd_float>(true);
+		simd_float boundShift = moduleParameters_[3]->getInternalValue<simd_float>();
+		simd_float boundsDistance = modOnce(simd_float(1.0f) + highBoundNorm - lowBoundNorm);
 
 		// getting the boundaries in terms of bin position
-		simd_int lowBoundIndices = utils::ceilToInt((shiftedBounds.first / (sampleRate / 2.0f)) * (float)FFTSize);
-		simd_int highBoundIndices = utils::floorToInt((shiftedBounds.second / (sampleRate / 2.0f)) * (float)FFTSize);
-
-		// getting the distances between the boundaries and which masks precede the others 
-		simd_mask boundsMask = simd_int::greaterThanOrEqualSigned(highBoundIndices, lowBoundIndices);
+		auto shiftedBoundsHz = getShiftedBounds(lowBoundNorm, highBoundNorm, sampleRate / 2.0f, false);
+		simd_int lowBoundIndices = toInt(simd_float::ceil((shiftedBoundsHz.first / (sampleRate / 2.0f)) * (float)FFTSize));
+		simd_int highBoundIndices = toInt(simd_float::floor((shiftedBoundsHz.second / (sampleRate / 2.0f)) * (float)FFTSize));
 
 		// minimising the bins to iterate on
 		auto processedIndexAndRange = getRange(lowBoundIndices, highBoundIndices, FFTSize, true);
 		u32 index = processedIndexAndRange.first;
 		u32 numBins = processedIndexAndRange.second;
 
-		// calculating the bins where the cutoff lies
-		simd_int cutoffIndices = floorToInt(interpolate(simd_float(lowBoundIndices),
-			simd_float(highBoundIndices), moduleParameters_[5]->getInternalValue<simd_float>()));
+		// cutoff is described as exponential normalised value of the sample rate
+		// it is dependent on the values of the low/high bounds
+		simd_float cutoffNorm = modOnce(lowBoundNorm + boundShift + boundsDistance * 
+			moduleParameters_[5]->getInternalValue<simd_float>());
+		simd_int cutoffIndices = toInt(normalisedToBin(cutoffNorm, FFTOrder));
 
 		// if mask scalars are negative -> brickwall, if positive -> linear slope
-		// clearing sign and calculating end of slope bins
+		// slopes are logarithmic
 		simd_float slopes = moduleParameters_[6]->getInternalValue<simd_float>();
-		simd_mask slopeMask = unsignFloat(slopes);
-		slopes = ceilToInt(interpolate((float)FFTSize, 1.0f, slopes));
+		simd_mask slopeMask = unsignFloat(slopes, true);
+		simd_mask slopeZeroMask = simd_float::equal(slopes, 0.0f);
 
-		// if mask scalars are negative -> attenuate at cutoff, if positive -> around cutoff
-		// clearing sign (gains is the gain reduction, not the gain multiplier)
+		// if scalars are negative -> attenuate at cutoff, if positive -> around cutoff
+		// (gains is gain reduction in db and NOT a gain multiplier)
 		simd_float gains = moduleParameters_[4]->getInternalValue<simd_float>();
-		simd_mask gainMask = unsignFloat(gains);
+		simd_mask gainMask = unsignFloat(gains, true);
 
 		for (u32 i = 0; i < numBins; i++)
 		{
-			simd_int distancesFromCutoff = getDistancesFromCutoff(simd_int(index),
-				cutoffIndices, boundsMask, lowBoundIndices, FFTSize);
+			// the distances are logarithmic
+			simd_float distancesFromCutoff = getDistancesFromCutoffs(simd_int(index),
+				cutoffIndices, lowBoundIndices, FFTOrder, FFTSize);
 
 			// calculating linear slope and brickwall, both are ratio of the gain attenuation
 			// the higher tha value the more it will be affected by it
-			simd_float gainRatio = maskLoad(simd_float::clamp(0.0f, 1.0f, simd_float(distancesFromCutoff) / slopes),
-				simd_float::min(floor(simd_float(distancesFromCutoff) / (slopes + 1.0f)), 1.0f),
+			simd_float gainRatio = maskLoad(simd_float::clamp(maskLoad(distancesFromCutoff, simd_float(1.0f), slopeZeroMask) 
+				/ maskLoad(slopes, simd_float(1.0f), slopeZeroMask), 0.0f, 1.0f),
+				simd_float(1.0f) & simd_float::greaterThanOrEqual(distancesFromCutoff, slopes),
 				~slopeMask);
-			gains = maskLoad(gains * gainRatio, gains * (simd_float(1.0f) - gainRatio), ~gainMask);
+			simd_float currentGains = maskLoad(gains * gainRatio, gains * (simd_float(1.0f) - gainRatio), gainMask);
 
-			// convert gain attenuation to gain multiplier and zeroing gains lower than lowest amplitude
-			gains *= kLowestDb;
-			gains = dbToMagnitude(gains);
-			gains &= simd_float::greaterThan(gains, kLowestAmplitude);
+			// convert db reduction to amplitude multiplier
+			currentGains = dbToAmplitude(-currentGains);
 
-			destination.writeSIMDValueAt(source.getSIMDValueAt(0, index) * gains, 0, index);
+			destination.writeSIMDValueAt(source.getSIMDValueAt(0, index) * currentGains, 0, index);
 
-			index = (index + 1) % FFTSize;
+			index = (index + 1) & (FFTSize - 1);
 		}
 
 		auto unprocessedIndexAndRange = getRange(lowBoundIndices, highBoundIndices, FFTSize, false);
@@ -76,13 +80,12 @@ namespace Generation
 		// copying the unprocessed data
 		for (u32 i = 0; i < numBins; i++)
 		{
-			// utilising boundary mask since it doesn't serve a purpose anymore
-			boundsMask = simd_int::greaterThanOrEqualSigned(lowBoundIndices, index)
+			simd_mask boundsMask = simd_int::greaterThanOrEqualSigned(lowBoundIndices, index)
 				| simd_int::greaterThanOrEqualSigned(index, highBoundIndices);
 			destination.writeSIMDValueAt((source.getSIMDValueAt(0, index) & boundsMask) +
 				(destination.getSIMDValueAt(0, index) & ~boundsMask), 0, index);
 
-			index = (index + 1) % FFTSize;
+			index = (index + 1) & (FFTSize - 1);
 		}
 	}
 
@@ -108,8 +111,8 @@ namespace Generation
 			moduleParameters_[2]->getInternalValue<simd_float>(), sampleRate / 2.0f, false);
 
 		// getting the boundaries in terms of bin position
-		simd_int lowBoundIndices = utils::ceilToInt((shiftedBounds.first / (sampleRate / 2.0f)) * (float)FFTSize);
-		simd_int highBoundIndices = utils::floorToInt((shiftedBounds.second / (sampleRate / 2.0f)) * (float)FFTSize);
+		simd_int lowBoundIndices = toInt(simd_float::ceil((shiftedBounds.first / (sampleRate / 2.0f)) * (float)FFTSize));
+		simd_int highBoundIndices = toInt(simd_float::floor((shiftedBounds.second / (sampleRate / 2.0f)) * (float)FFTSize));
 
 		// minimising the bins to iterate on
 		auto processedIndexAndRange = getRange(lowBoundIndices, highBoundIndices, FFTSize, true);
@@ -326,7 +329,7 @@ namespace Generation
 		simd_mask gainMask = simd_float::notEqual(0.0f, gain);
 		if (gainMask.sum() != 0)
 		{
-			simd_float magnitude = utils::dbToMagnitude(gain);
+			simd_float magnitude = utils::dbToAmplitude(gain);
 			for (u32 i = 0; i < FFTSize; i++)
 				destination.multiply(magnitude, 0, i);
 		}

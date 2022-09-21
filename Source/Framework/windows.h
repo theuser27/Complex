@@ -18,29 +18,29 @@ namespace Framework
 {
 	namespace
 	{
-		// all functions are in range from 0.0f to 1.0f
+		// all functions take a normalised value as position
 
 		// static windows
 
-		static constexpr strict_inline float createHannWindow(float position)
+		inline constexpr strict_inline float createHannWindow(float position)
 		{	return 0.5f * (1.0f - gcem::cos(common::k2Pi * position)); }
 
 		// an accurate version of the traditional hamming window
-		static constexpr strict_inline float createHammingWindow(float position)
+		inline constexpr strict_inline float createHammingWindow(float position)
 		{	return (25.0f / 46.0f) + ((-21.0f / 46.0f) * gcem::cos(k2Pi * position)); }
 
-		static constexpr strict_inline float createTriangleWindow(float position)
+		inline constexpr strict_inline float createTriangleWindow(float position)
 		{	return 1 - 2 * gcem::abs(position - 0.5f); }
 
-		static constexpr strict_inline float createSineWindow(float position)
+		inline constexpr strict_inline float createSineWindow(float position)
 		{	return gcem::sin(common::k2Pi * position); }
 
 		// dynamic windows
 
-		static constexpr strict_inline float createExponentialWindow(float position)
+		inline constexpr strict_inline float createExponentialWindow(float position)
 		{	return gcem::exp((-common::k2Pi) * gcem::abs(position - 0.5f)); }
 
-		static constexpr strict_inline float createLanczosWindow(float position)
+		inline constexpr strict_inline float createLanczosWindow(float position)
 		{
 			float adjustedPosition = position - 0.5f;
 			return adjustedPosition == 0.0f ? 1.0f :

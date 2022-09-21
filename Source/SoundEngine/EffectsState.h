@@ -24,8 +24,8 @@ namespace Generation
 		{
 			// currently buffers will only process a single complex input
 			// size is half the max because a single SIMD package stores both real and imaginary parts
-			sourceBuffer.reserve(kNumChannels, kMaxFFTBufferLength / 2);
-			workBuffer.reserve(kNumChannels, kMaxFFTBufferLength / 2);
+			sourceBuffer.reserve(kNumChannels, kMaxFFTBufferLength);
+			workBuffer.reserve(kNumChannels, kMaxFFTBufferLength);
 		}
 
 		// is the work buffer in cartesian or polar representation
@@ -51,7 +51,7 @@ namespace Generation
 			chainData = std::make_unique<EffectsChainData>();
 
 			subModules_.reserve(kInitialNumEffects);
-			subModules_.emplace_back(std::move(std::make_shared<EffectModule>(moduleId_, Framework::kEffectModuleNames[0])));
+			subModules_.emplace_back(std::move(std::make_shared<EffectModule>(moduleId_, Framework::kEffectModuleNames[1])));
 			addSubModulesToList();
 
 			moduleParameters_.data.reserve(Framework::effectChainParameterList.size());
@@ -125,7 +125,7 @@ namespace Generation
 		{
 			subModules_.reserve(kMaxNumChains);
 			// size is half the max because a single SIMD package stores both real and imaginary parts
-			sourceBuffer_.reserve(kNumTotalChannels, kMaxFFTBufferLength / 2);
+			sourceBuffer_.reserve(kNumTotalChannels, kMaxFFTBufferLength);
 			chainThreads_.reserve(kMaxNumChains);
 			
 			insertSubModule(subModules_.size(), Framework::kPluginModules[2]);

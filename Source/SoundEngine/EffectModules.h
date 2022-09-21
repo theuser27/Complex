@@ -52,48 +52,43 @@ namespace Generation
 
 	protected:
 		// returns starting point and distance to end of processed/unprocessed range
-		std::pair<u32, u32> getRange(const simd_int &lowIndices,
-			const simd_int &highIndices, u32 FFTSize, bool isProcessedRange)
+		std::pair<u32, u32> getRange(const simd_int &lowIndices, const simd_int &highIndices, 
+			u32 FFTSize, bool isProcessedRange) const noexcept
 		{
-			using namespace utils;
-
-			simd_int boundDistances = maskLoad(highIndices - lowIndices,
-				(simd_int(FFTSize) + lowIndices - highIndices) & simd_int(FFTSize - 1),
-				simd_int::greaterThanOrEqualSigned(highIndices, lowIndices));
-
 			u32 start, end;
+			std::array<u32, kSimdRatio> startArray{};
+			std::array<u32, kSimdRatio> endArray{};
 
 			if (isProcessedRange)
 			{
-				auto startArray = lowIndices.getArrayOfValues();
-				auto endArray = (lowIndices + boundDistances).getArrayOfValues();
-				start = *std::min_element(startArray.begin(), startArray.end());
-				end = *std::max_element(endArray.begin(), endArray.end());
+				startArray = lowIndices.getArrayOfValues();
+				endArray = highIndices.getArrayOfValues();
 			}
 			else
 			{
-				auto startArray = (lowIndices + boundDistances).getArrayOfValues();
-				auto endArray = (lowIndices + simd_int(FFTSize)).getArrayOfValues();
-				start = *std::min_element(startArray.begin(), startArray.end());
-				end = *std::max_element(endArray.begin(), endArray.end());
+				startArray = highIndices.getArrayOfValues();
+				endArray = lowIndices.getArrayOfValues();
 			}
 
-			return { start, std::min(end - start, FFTSize) };
+			start = *std::min_element(startArray.begin(), startArray.end());
+			end = *std::max_element(endArray.begin(), endArray.end());
+
+			return { start & (FFTSize - 1), (FFTSize + end - start) & (FFTSize - 1) };
 		}
 
 		// first - low shifted boundary, second - high shifted boundary
 		std::pair<simd_float, simd_float> getShiftedBounds(simd_float lowBound,
-			simd_float highBound, float maxFrequency, bool isLinearShift)
+			simd_float highBound, float maxFrequency, bool isLinearShift) const noexcept
 		{
 			using namespace utils;
-
+			// TODO: do dynamic min frequency based on FFTOrder
 			float maxOctave = log2f(maxFrequency / kMinFrequency);
 
 			if (isLinearShift)
 			{
 				simd_float boundShift = moduleParameters_[3]->getInternalValue<simd_float>() * maxFrequency;
-				lowBound = clamp(exp2(lowBound * maxOctave) * kMinFrequency + boundShift, kMinFrequency, maxFrequency);
-				highBound = clamp(exp2(highBound * maxOctave) * kMinFrequency + boundShift, kMinFrequency, maxFrequency);
+				lowBound = simd_float::clamp(exp2(lowBound * maxOctave) * kMinFrequency + boundShift, kMinFrequency, maxFrequency);
+				highBound = simd_float::clamp(exp2(highBound * maxOctave) * kMinFrequency + boundShift, kMinFrequency, maxFrequency);
 				// snapping to 0 hz if it's below the minimum frequency
 				lowBound &= simd_float::greaterThan(lowBound, kMinFrequency);
 				highBound &= simd_float::greaterThan(highBound, kMinFrequency);
@@ -101,8 +96,8 @@ namespace Generation
 			else
 			{
 				simd_float boundShift = moduleParameters_[3]->getInternalValue<simd_float>();
-				lowBound = exp2(utils::clamp(lowBound + boundShift, 0.0f, 1.0f) * maxOctave);
-				highBound = exp2(utils::clamp(highBound + boundShift, 0.0f, 1.0f) * maxOctave);
+				lowBound = exp2(simd_float::clamp(lowBound + boundShift, 0.0f, 1.0f) * maxOctave);
+				highBound = exp2(simd_float::clamp(highBound + boundShift, 0.0f, 1.0f) * maxOctave);
 				// snapping to 0 hz if it's below the minimum frequency
 				lowBound = (lowBound & simd_float::greaterThan(lowBound, 1.0f)) * kMinFrequency;
 				highBound = (highBound & simd_float::greaterThan(highBound, 1.0f)) * kMinFrequency;
@@ -117,9 +112,6 @@ namespace Generation
 		// 4. shifting of the freq boundaries (stereo) - [-1.0f; 1.0f]
 
 		std::string_view effectType{};
-
-		static constexpr float kLowestDb = -100.0f;
-		static constexpr float kLowestAmplitude = utils::dbToMagnitudeConstexpr(kLowestDb);
 };
 
 	class utilityEffect : public baseEffect
@@ -181,57 +173,44 @@ namespace Generation
 
 	private:
 		void runNormal(Framework::SimdBuffer<std::complex<float>, simd_float> &source,
-			Framework::SimdBuffer<std::complex<float>, simd_float> &destination, u32 FFTSize, float sampleRate) noexcept;
+			Framework::SimdBuffer<std::complex<float>, simd_float> &destination, const u32 FFTSize, const float sampleRate) noexcept;
 
-		simd_int getDistancesFromCutoff(const simd_int positionIndices,
-			const simd_int &cutoffIndices, const simd_mask &boundMask, const simd_int &lowBoundIndices, u32 FFTSize) const noexcept
+		strict_inline simd_float vector_call getDistancesFromCutoffs(const simd_int &positionIndices, 
+			const simd_int &cutoffIndices, const simd_int &lowBoundIndices, const u32 FFTOrder, const u32 FFTSize) const noexcept
 		{
+			// 1. both positionIndices and cutoffIndices are >= lowBound and < FFTSize_ or <= highBound and > 0
+			// 2. cutoffIndices/positionIndices is >= lowBound and < FFTSize_ and
+			//     positionIndices/cutoffIndices is <= highBound and > 0
+
 			using namespace utils;
+						
+			simd_mask cutoffAbovePositions = simd_mask::greaterThanOrEqualSigned(cutoffIndices, positionIndices);
 
-			/*
-			* 1. when lowBound < highBound
-			* 2. when lowBound > highBound
-			*		2.1 when positionIndices and cutoffIndices are (>= lowBound and < FFTSize_) or (<= highBound and > 0)
-			*		2.2 when either cutoffIndices/positionIndices is >= lowBound and < FFTSize_
-			*  			and positionIndices/cutoffIndices is <= highBound and > 0
-			* 
-			* we redistribute the indices so that all preceding/succeeding indices go into a single variable
-			* but doing that requires a lot of masking
-			* 
-			* for 1. and 2.1 we just look for larger and smaller indices and subtract them from each other
-			* 
-			* for 2.2 we need one of the masks to be above/below and one below/above the low/highBound (I chose low)
-			*/
-
-			simd_int distance;
-			simd_mask greaterThanOrEqualMask = simd_mask::greaterThanOrEqualSigned(cutoffIndices, positionIndices);
-
+			// masks for 1.
 			simd_mask positionsAboveLowMask = simd_mask::greaterThanOrEqualSigned(positionIndices, lowBoundIndices);
 			simd_mask cutoffAboveLowMask = simd_mask::greaterThanOrEqualSigned(cutoffIndices, lowBoundIndices);
+			simd_mask bothAboveOrBelowLowMask = ~(positionsAboveLowMask ^ cutoffAboveLowMask);
 
-			// writing indices computed for the general case 1. and 2.1
-			simd_int precedingIndices  = maskLoad(cutoffIndices, positionIndices, greaterThanOrEqualMask);
-			simd_int succeedingIndices = maskLoad(cutoffIndices, positionIndices, ~greaterThanOrEqualMask);
+			// masks for 2.
+			simd_mask positionsBelowLowBoundAndCutoffsMask = ~positionsAboveLowMask & cutoffAboveLowMask;
+			simd_mask cutoffBelowLowBoundAndPositionsMask = positionsAboveLowMask & ~cutoffAboveLowMask;
 
-			// masking for 1. and 2.1; (PA & CA) | (~PA & ~CA) == ~(PA ^ CA)
-			distance = maskLoad((simd_int(FFTSize) + precedingIndices - succeedingIndices) & simd_int(FFTSize - 1),
-				simd_int(0), boundMask | ~(positionsAboveLowMask ^ cutoffAboveLowMask));
+			// masking for 1.
+			simd_int precedingIndices  = utils::maskLoad(cutoffIndices  , positionIndices, bothAboveOrBelowLowMask & cutoffAbovePositions);
+			simd_int succeedingIndices = utils::maskLoad(positionIndices, cutoffIndices  , bothAboveOrBelowLowMask & cutoffAbovePositions);
 
-			// if all values are already set, return
-			if (simd_int::equal(distance, simd_int(0)).sum() == 0)
-				return distance;
+			// masking for 2.
+			// first 2 are when cutoffs/positions are above/below lowBound
+			// second 2 are when positions/cutoffs are above/below lowBound
+			precedingIndices  = utils::maskLoad(precedingIndices , cutoffIndices  , ~bothAboveOrBelowLowMask & positionsBelowLowBoundAndCutoffsMask);
+			succeedingIndices = utils::maskLoad(succeedingIndices, positionIndices, ~bothAboveOrBelowLowMask & positionsBelowLowBoundAndCutoffsMask);
+			precedingIndices  = utils::maskLoad(precedingIndices , positionIndices, ~bothAboveOrBelowLowMask & cutoffBelowLowBoundAndPositionsMask);
+			succeedingIndices = utils::maskLoad(succeedingIndices, cutoffIndices  , ~bothAboveOrBelowLowMask & cutoffBelowLowBoundAndPositionsMask);
 
-			simd_mask positionsPrecedingMask = ~positionsAboveLowMask & cutoffAboveLowMask;
-			simd_mask cutoffPrecedingMask = positionsAboveLowMask & ~cutoffAboveLowMask;
+			simd_float precedingIndicesRatios = utils::binToNormalised(utils::toFloat(precedingIndices), FFTOrder);
+			simd_float succeedingIndicesRatios = utils::binToNormalised(utils::toFloat(succeedingIndices), FFTOrder);
 
-			// overwriting indices that fall in case 2.2 (if such exist)
-			precedingIndices = (positionsPrecedingMask & positionIndices) | (cutoffPrecedingMask & cutoffIndices	);
-			succeedingIndices = (positionsPrecedingMask & cutoffIndices	) | (cutoffPrecedingMask & positionIndices);
-
-			// inverse mask of previous assignment
-			distance |= maskLoad((simd_int(FFTSize) + precedingIndices - succeedingIndices) & simd_int(FFTSize - 1),
-				simd_int(0), ~boundMask & (positionsAboveLowMask ^ cutoffAboveLowMask));
-			return distance;
+			return utils::getDecimalPlaces(simd_float(1.0f) + succeedingIndicesRatios - precedingIndicesRatios);
 		}
 
 		//// Parameters

@@ -70,13 +70,13 @@ namespace utils
 	constexpr strict_inline bool closeToZero(float value)
 	{ return value <= kEpsilon && value >= -kEpsilon; }
 
-	strict_inline float magnitudeToDb(float magnitude)
+	strict_inline float amplitudeToDb(float magnitude)
 	{ return 20.0f * log10f(magnitude); }
 
 	strict_inline float magnitudeToDbConstexpr(float magnitude)
 	{ return 20.0f * gcem::log10(magnitude); }
 
-	strict_inline float dbToMagnitude(float decibels)
+	strict_inline float dbToAmplitude(float decibels)
 	{ return powf(10.0f, decibels / 20.0f); }
 
 	constexpr strict_inline float dbToMagnitudeConstexpr(float decibels)
@@ -96,6 +96,11 @@ namespace utils
 
 	strict_inline float frequencyToMidiCents(float frequency)
 	{ return kCentsPerNote * frequencyToMidiNote(frequency); }
+
+	inline constexpr float kLowestDb = -kNormalisedToDbMultiplier;
+	inline constexpr float kHighestDb = kNormalisedToDbMultiplier;
+	inline constexpr float kLowestAmplitude = utils::dbToMagnitudeConstexpr(kLowestDb);
+	inline constexpr float kHighestAmplitude = utils::dbToMagnitudeConstexpr(kHighestDb);
 
 	template<std::unsigned_integral T>
 	strict_inline bool isPowerOfTwo(T value)

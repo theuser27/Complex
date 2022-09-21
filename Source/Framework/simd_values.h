@@ -22,20 +22,19 @@
 // the project cannot run without vectorisation (either x86 SSE2 or ARM NEON)
 
 #if defined (_MSC_VER)
-	#define __SSE3__ 1
+	#define __SSE4_1__ 1
 #endif
 
-#if __SSE3__
-	#define COMPLEX_SSE3 1
+#if __SSE4_1__
+	#define COMPLEX_SSE4_1 1
 	#define COMPLEX_SIMD_ALIGNMENT 16
 #elif defined(__ARM_NEON__) || defined(__ARM_NEON)
 	#define COMPLEX_NEON 1
 	#define COMPLEX_SIMD_ALIGNMENT 16
 #endif
 
-#if COMPLEX_SSE3
+#if COMPLEX_SSE4_1
 	#include <immintrin.h>
-	#include <pmmintrin.h>
 #elif COMPLEX_NEON
 	#include <arm_neon.h>
 #endif
@@ -80,7 +79,7 @@ namespace simd_values
 		// Variables and Constants //
 		/////////////////////////////
 
-	#if COMPLEX_SSE3
+	#if COMPLEX_SSE4_1
 		static constexpr size_t kSize = 4;
 		typedef __m128i simd_type;
 	#elif COMPLEX_NEON
@@ -101,7 +100,7 @@ namespace simd_values
 
 		static strict_inline simd_type vector_call init(u32 scalar)
 		{
-		#if COMPLEX_SSE3
+		#if COMPLEX_SSE4_1
 			return _mm_set1_epi32((int32_t)scalar);
 		#elif COMPLEX_NEON
 			return vdupq_n_u32(scalar);
@@ -110,7 +109,7 @@ namespace simd_values
 
 		static strict_inline simd_type vector_call load(const u32 *memory)
 		{
-		#if COMPLEX_SSE3
+		#if COMPLEX_SSE4_1
 			return _mm_loadu_si128((const __m128i *)memory);
 		#elif COMPLEX_NEON
 			return vld1q_u32(memory);
@@ -119,7 +118,7 @@ namespace simd_values
 
 		static strict_inline simd_type vector_call add(simd_type one, simd_type two)
 		{
-		#if COMPLEX_SSE3
+		#if COMPLEX_SSE4_1
 			return _mm_add_epi32(one, two);
 		#elif COMPLEX_NEON
 			return vaddq_u32(one, two);
@@ -128,7 +127,7 @@ namespace simd_values
 
 		static strict_inline simd_type vector_call sub(simd_type one, simd_type two)
 		{
-		#if COMPLEX_SSE3
+		#if COMPLEX_SSE4_1
 			return _mm_sub_epi32(one, two);
 		#elif COMPLEX_NEON
 			return vsubq_u32(one, two);
@@ -137,7 +136,7 @@ namespace simd_values
 
 		static strict_inline simd_type vector_call neg(simd_type value)
 		{
-		#if COMPLEX_SSE3
+		#if COMPLEX_SSE4_1
 			return _mm_sub_epi32(_mm_set1_epi32(0), value);
 		#elif COMPLEX_NEON
 			return vmulq_n_u32(value, -1);
@@ -146,7 +145,7 @@ namespace simd_values
 
 		static strict_inline simd_type vector_call mul(simd_type one, simd_type two)
 		{
-		#if COMPLEX_SSE3
+		#if COMPLEX_SSE4_1
 			simd_type mul0_2 = _mm_mul_epu32(one, two);
 			simd_type mul1_3 = _mm_mul_epu32(_mm_shuffle_epi32(one, _MM_SHUFFLE(2, 3, 0, 1)),
 				_mm_shuffle_epi32(two, _MM_SHUFFLE(2, 3, 0, 1)));
@@ -159,7 +158,7 @@ namespace simd_values
 
 		static strict_inline simd_type vector_call bitAnd(simd_type value, simd_type mask)
 		{
-		#if COMPLEX_SSE3
+		#if COMPLEX_SSE4_1
 			return _mm_and_si128(value, mask);
 		#elif COMPLEX_NEON
 			return vandq_u32(value, mask);
@@ -168,7 +167,7 @@ namespace simd_values
 
 		static strict_inline simd_type vector_call bitOr(simd_type value, simd_type mask)
 		{
-		#if COMPLEX_SSE3
+		#if COMPLEX_SSE4_1
 			return _mm_or_si128(value, mask);
 		#elif COMPLEX_NEON
 			return vorrq_u32(value, mask);
@@ -177,7 +176,7 @@ namespace simd_values
 
 		static strict_inline simd_type vector_call bitXor(simd_type value, simd_type mask)
 		{
-		#if COMPLEX_SSE3
+		#if COMPLEX_SSE4_1
 			return _mm_xor_si128(value, mask);
 		#elif COMPLEX_NEON
 			return veorq_u32(value, mask);
@@ -188,7 +187,7 @@ namespace simd_values
 
 		static strict_inline simd_type vector_call equal(simd_type one, simd_type two)
 		{
-		#if COMPLEX_SSE3
+		#if COMPLEX_SSE4_1
 			return _mm_cmpeq_epi32(one, two);
 		#elif COMPLEX_NEON
 			return vceqq_u32(one, two);
@@ -196,7 +195,7 @@ namespace simd_values
 		}
 
 		static strict_inline simd_type vector_call greaterThanSigned(simd_type one, simd_type two) {
-		#if COMPLEX_SSE3
+		#if COMPLEX_SSE4_1
 			return _mm_cmpgt_epi32(one, two);
 		#elif COMPLEX_NEON
 			return vcgtq_s32(one, two);
@@ -204,7 +203,7 @@ namespace simd_values
 		}
 
 		static strict_inline simd_type vector_call greaterThanUnsigned(simd_type one, simd_type two) {
-		#if COMPLEX_SSE3
+		#if COMPLEX_SSE4_1
 			return _mm_cmpgt_epi32(_mm_xor_si128(one, init(kSignMask)), _mm_xor_si128(two, init(kSignMask)));
 		#elif COMPLEX_NEON
 			return vcgtq_u32(one, two);
@@ -212,7 +211,7 @@ namespace simd_values
 		}
 
 		static strict_inline simd_type vector_call max(simd_type one, simd_type two) {
-		#if COMPLEX_SSE3
+		#if COMPLEX_SSE4_1
 			simd_type greater_than_mask = greaterThanUnsigned(one, two);
 			return _mm_or_si128(_mm_and_si128(greater_than_mask, one), _mm_andnot_si128(greater_than_mask, two));
 		#elif COMPLEX_NEON
@@ -221,7 +220,7 @@ namespace simd_values
 		}
 
 		static strict_inline simd_type vector_call min(simd_type one, simd_type two) {
-		#if COMPLEX_SSE3
+		#if COMPLEX_SSE4_1
 			simd_type less_than_mask = _mm_cmpgt_epi32(two, one);
 			return _mm_or_si128(_mm_and_si128(less_than_mask, one), _mm_andnot_si128(less_than_mask, two));
 		#elif COMPLEX_NEON
@@ -230,7 +229,7 @@ namespace simd_values
 		}
 
 		static strict_inline u32 vector_call sum(simd_type value) {
-		#if COMPLEX_SSE3
+		#if COMPLEX_SSE4_1
 			simd_type flip = _mm_shuffle_epi32(value, _MM_SHUFFLE(1, 0, 3, 2));
 			value = _mm_add_epi32(value, flip);
 			flip = _mm_shuffle_epi32(value, _MM_SHUFFLE(2, 3, 0, 1));
@@ -244,7 +243,7 @@ namespace simd_values
 
 		static strict_inline u32 vector_call anyMask(simd_type value)
 		{
-		#if COMPLEX_SSE3
+		#if COMPLEX_SSE4_1
 			return _mm_movemask_epi8(value);
 		#elif COMPLEX_NEON
 			uint32x2_t max = vpmax_u32(vget_low_u32(value), vget_high_u32(value));
@@ -263,6 +262,9 @@ namespace simd_values
 
 		static strict_inline simd_int vector_call min(simd_int one, simd_int two)
 		{ return min(one.value, two.value); }
+
+		static strict_inline simd_int vector_call clamp(simd_int low, simd_int high, simd_int value)
+		{ return max(min(value.value, high.value), low.value); }
 
 		static strict_inline simd_int vector_call equal(simd_int one, simd_int two)
 		{	return equal(one.value, two.value); }
@@ -448,7 +450,7 @@ namespace simd_values
 		// Variables and Constants //
 		/////////////////////////////
 
-	#if COMPLEX_SSE3
+	#if COMPLEX_SSE4_1
 		static constexpr size_t kSize = 4;
 		static constexpr size_t kComplexSize = kSize / 2;
 		typedef __m128 simd_type;
@@ -469,7 +471,7 @@ namespace simd_values
 
 		static strict_inline mask_simd_type vector_call toMask(simd_type value)
 		{
-		#if COMPLEX_SSE3
+		#if COMPLEX_SSE4_1
 			return _mm_castps_si128(value);
 		#elif COMPLEX_NEON
 			return vreinterpretq_u32_f32(value);
@@ -478,7 +480,7 @@ namespace simd_values
 
 		static strict_inline simd_type vector_call toSimd(mask_simd_type mask)
 		{
-		#if COMPLEX_SSE3
+		#if COMPLEX_SSE4_1
 			return _mm_castsi128_ps(mask);
 		#elif COMPLEX_NEON
 			return vreinterpretq_f32_u32(mask);
@@ -487,7 +489,7 @@ namespace simd_values
 
 		static strict_inline simd_type vector_call init(float scalar)
 		{
-		#if COMPLEX_SSE3
+		#if COMPLEX_SSE4_1
 			return _mm_set1_ps(scalar);
 		#elif COMPLEX_NEON
 			return vdupq_n_f32(scalar);
@@ -496,7 +498,7 @@ namespace simd_values
 
 		static strict_inline simd_type vector_call load(const float *memory)
 		{
-		#if COMPLEX_SSE3
+		#if COMPLEX_SSE4_1
 			return _mm_loadu_ps(memory);
 		#elif COMPLEX_NEON
 			return vld1q_f32(memory);
@@ -505,7 +507,7 @@ namespace simd_values
 
 		static strict_inline simd_type vector_call add(simd_type one, simd_type two)
 		{
-		#if COMPLEX_SSE3
+		#if COMPLEX_SSE4_1
 			return _mm_add_ps(one, two);
 		#elif COMPLEX_NEON
 			return vaddq_f32(one, two);
@@ -514,7 +516,7 @@ namespace simd_values
 
 		static strict_inline simd_type vector_call sub(simd_type one, simd_type two) 
 		{
-		#if COMPLEX_SSE3
+		#if COMPLEX_SSE4_1
 			return _mm_sub_ps(one, two);
 		#elif COMPLEX_NEON
 			return vsubq_f32(one, two);
@@ -522,7 +524,7 @@ namespace simd_values
 		}
 
 		static strict_inline simd_type vector_call neg(simd_type value) {
-		#if COMPLEX_SSE3
+		#if COMPLEX_SSE4_1
 			return _mm_xor_ps(value, _mm_set1_ps(-0.0f));
 		#elif COMPLEX_NEON
 			return vmulq_n_f32(value, -1.0f);
@@ -531,7 +533,7 @@ namespace simd_values
 
 		static strict_inline simd_type vector_call mul(simd_type one, simd_type two)
 		{
-		#if COMPLEX_SSE3
+		#if COMPLEX_SSE4_1
 			return _mm_mul_ps(one, two);
 		#elif COMPLEX_NEON
 			return vmulq_f32(one, two);
@@ -540,7 +542,7 @@ namespace simd_values
 
 		static strict_inline simd_type vector_call mulScalar(simd_type value, float scalar)
 		{
-		#if COMPLEX_SSE3
+		#if COMPLEX_SSE4_1
 			return _mm_mul_ps(value, _mm_set1_ps(scalar));
 		#elif COMPLEX_NEON
 			return vmulq_n_f32(value, scalar);
@@ -549,7 +551,7 @@ namespace simd_values
 
 		static strict_inline simd_type vector_call mulAdd(simd_type add, simd_type mul_one, simd_type mul_two)
 		{
-		#if COMPLEX_SSE3
+		#if COMPLEX_SSE4_1
 			return _mm_add_ps(add, _mm_mul_ps(mul_one, mul_two));
 		#elif COMPLEX_NEON
 		#if defined(NEON_VFP_V3)
@@ -562,7 +564,7 @@ namespace simd_values
 
 		static strict_inline simd_type vector_call mulSub(simd_type sub, simd_type mul_one, simd_type mul_two)
 		{
-		#if COMPLEX_SSE3
+		#if COMPLEX_SSE4_1
 			return _mm_sub_ps(sub, _mm_mul_ps(mul_one, mul_two));
 		#elif COMPLEX_NEON
 		#if defined(NEON_VFP_V3)
@@ -575,7 +577,7 @@ namespace simd_values
 
 		static strict_inline simd_type vector_call div(simd_type one, simd_type two)
 		{
-		#if COMPLEX_SSE3
+		#if COMPLEX_SSE4_1
 			return _mm_div_ps(one, two);
 		#elif COMPLEX_NEON
 		#if defined(NEON_ARM32)
@@ -591,7 +593,7 @@ namespace simd_values
 
 		static strict_inline simd_type vector_call bitAnd(simd_type value, mask_simd_type mask)
 		{
-		#if COMPLEX_SSE3
+		#if COMPLEX_SSE4_1
 			return _mm_and_ps(value, toSimd(mask));
 		#elif COMPLEX_NEON
 			return toSimd(vandq_u32(toMask(value), mask));
@@ -600,7 +602,7 @@ namespace simd_values
 
 		static strict_inline simd_type vector_call bitOr(simd_type value, mask_simd_type mask)
 		{
-		#if COMPLEX_SSE3
+		#if COMPLEX_SSE4_1
 			return _mm_or_ps(value, toSimd(mask));
 		#elif COMPLEX_NEON
 			return toSimd(vorrq_u32(toMask(value), mask));
@@ -609,7 +611,7 @@ namespace simd_values
 
 		static strict_inline simd_type vector_call bitXor(simd_type value, mask_simd_type mask)
 		{
-		#if COMPLEX_SSE3
+		#if COMPLEX_SSE4_1
 			return _mm_xor_ps(value, toSimd(mask));
 		#elif COMPLEX_NEON
 			return toSimd(veorq_u32(toMask(value), mask));
@@ -621,7 +623,7 @@ namespace simd_values
 
 		static strict_inline simd_type vector_call max(simd_type one, simd_type two)
 		{
-		#if COMPLEX_SSE3
+		#if COMPLEX_SSE4_1
 			return _mm_max_ps(one, two);
 		#elif COMPLEX_NEON
 			return vmaxq_f32(one, two);
@@ -630,10 +632,46 @@ namespace simd_values
 
 		static strict_inline simd_type vector_call min(simd_type one, simd_type two)
 		{
-		#if COMPLEX_SSE3
+		#if COMPLEX_SSE4_1
 			return _mm_min_ps(one, two);
 		#elif COMPLEX_NEON
 			return vminq_f32(one, two);
+		#endif
+		}
+
+		static strict_inline simd_type vector_call truncate(simd_type values)
+		{
+		#if COMPLEX_SSE4_1
+			return _mm_round_ps(values, _MM_FROUND_TO_ZERO | _MM_FROUND_NO_EXC);
+		#elif COMPLEX_NEON
+			static_assert(false, "ARM NEON truncate not supported yet");
+		#endif
+		}
+
+		static strict_inline simd_type vector_call floor(simd_type values)
+		{
+		#if COMPLEX_SSE4_1
+			return _mm_round_ps(values, _MM_FROUND_TO_NEG_INF | _MM_FROUND_NO_EXC);
+		#elif COMPLEX_NEON
+			static_assert(false, "ARM NEON floor not supported yet");
+		#endif
+		}
+
+		static strict_inline simd_type vector_call ceil(simd_type values)
+		{
+		#if COMPLEX_SSE4_1
+			return _mm_round_ps(values, _MM_FROUND_TO_POS_INF | _MM_FROUND_NO_EXC);
+		#elif COMPLEX_NEON
+			static_assert(false, "ARM NEON ceil not supported yet");
+		#endif
+		}
+
+		static strict_inline simd_type vector_call round(simd_type values)
+		{
+		#if COMPLEX_SSE4_1
+			return _mm_round_ps(values, _MM_FROUND_TO_NEAREST_INT | _MM_FROUND_NO_EXC);
+		#elif COMPLEX_NEON
+			static_assert(false, "ARM NEON round not supported yet");
 		#endif
 		}
 
@@ -645,7 +683,7 @@ namespace simd_values
 
 		static strict_inline mask_simd_type vector_call equal(simd_type one, simd_type two)
 		{
-		#if COMPLEX_SSE3
+		#if COMPLEX_SSE4_1
 			return toMask(_mm_cmpeq_ps(one, two));
 		#elif COMPLEX_NEON
 			return vceqq_f32(one, two);
@@ -654,7 +692,7 @@ namespace simd_values
 
 		static strict_inline mask_simd_type vector_call greaterThan(simd_type one, simd_type two)
 		{
-		#if COMPLEX_SSE3
+		#if COMPLEX_SSE4_1
 			return toMask(_mm_cmpgt_ps(one, two));
 		#elif COMPLEX_NEON
 			return vcgtq_f32(one, two);
@@ -663,7 +701,7 @@ namespace simd_values
 
 		static strict_inline mask_simd_type vector_call greaterThanOrEqual(simd_type one, simd_type two)
 		{
-		#if COMPLEX_SSE3
+		#if COMPLEX_SSE4_1
 			return toMask(_mm_cmpge_ps(one, two));
 		#elif COMPLEX_NEON
 			return vcgeq_f32(one, two);
@@ -672,7 +710,7 @@ namespace simd_values
 
 		static strict_inline mask_simd_type vector_call notEqual(simd_type one, simd_type two)
 		{
-		#if COMPLEX_SSE3
+		#if COMPLEX_SSE4_1
 			return toMask(_mm_cmpneq_ps(one, two));
 		#elif COMPLEX_NEON
 			simd_mask greater = greaterThan(one, two);
@@ -683,7 +721,7 @@ namespace simd_values
 
 		static strict_inline float vector_call sum(simd_type value)
 		{
-		#if COMPLEX_SSE3
+		#if COMPLEX_SSE4_1
 			simd_type flip = _mm_shuffle_ps(value, value, _MM_SHUFFLE(1, 0, 3, 2));
 			value = _mm_add_ps(value, flip);
 			flip = _mm_shuffle_ps(value, value, _MM_SHUFFLE(2, 3, 0, 1));
@@ -697,7 +735,7 @@ namespace simd_values
 
 		static strict_inline void vector_call transpose(std::array<simd_float, kSize> &rows)
 		{
-		#if COMPLEX_SSE3
+		#if COMPLEX_SSE4_1
 			simd_type low0 = _mm_unpacklo_ps(rows[0].value, rows[1].value);
 			simd_type low1 = _mm_unpacklo_ps(rows[2].value, rows[3].value);
 			simd_type high0 = _mm_unpackhi_ps(rows[0].value, rows[1].value);
@@ -719,7 +757,7 @@ namespace simd_values
 		static strict_inline void vector_call complexTranspose(std::array<simd_float, kSize> &rows)
 		{
 			// TODO: implement complexTranspose for NEON
-		#if COMPLEX_SSE3
+		#if COMPLEX_SSE4_1
 			auto low = _mm_movelh_ps(rows[0].value, rows[1].value);
 			auto high = _mm_movehl_ps(rows[1].value, rows[0].value);
 			rows[0].value = low;
@@ -758,7 +796,7 @@ namespace simd_values
 			}
 
 			// TODO: reverse intrinsic for neon
-		#if COMPLEX_SSE3 // SSSE3
+		#if COMPLEX_SSE4_1 // SSSE3
 			return toSimd(_mm_shuffle_epi8(toMask(value), std::bit_cast<simd_mask::simd_type>(byteShifts)));
 		#elif COMPLEX_NEON
 
@@ -768,7 +806,7 @@ namespace simd_values
 		static strict_inline simd_type vector_call reverse(simd_type value)
 		{
 			// TODO: reverse intrinsic for neon
-		#if COMPLEX_SSE3
+		#if COMPLEX_SSE4_1
 			// right to left
 			// *4th* value - in first place, 
 			// *3rd* value - in second place, 
@@ -797,8 +835,20 @@ namespace simd_values
 		static strict_inline simd_float vector_call min(simd_float one, simd_float two)
 		{ return min(one.value, two.value);	}
 
-		static strict_inline simd_float vector_call clamp(simd_float low, simd_float high, simd_float value)
+		static strict_inline simd_float vector_call clamp(simd_float value, simd_float low, simd_float high)
 		{ return max(min(value.value, high.value), low.value); }
+
+		static strict_inline simd_float vector_call truncate(simd_float value)
+		{ return truncate(value.value); }
+
+		static strict_inline simd_float vector_call floor(simd_float value)
+		{ return floor(value.value); }
+
+		static strict_inline simd_float vector_call ceil(simd_float value)
+		{ return ceil(value.value); }
+
+		static strict_inline simd_float vector_call round(simd_float value)
+		{ return round(value.value); }
 
 		static strict_inline simd_float vector_call abs(simd_float value)
 		{ return abs(value.value); }
@@ -834,7 +884,6 @@ namespace simd_values
 
 		strict_inline simd_float() noexcept : value(init(0.0f)) { }
 		strict_inline simd_float(simd_type initial_value) noexcept : value(initial_value) { }
-		strict_inline simd_float(simd_int initial_value) noexcept : value(std::bit_cast<simd_type>(initial_value.value)) { }
 		strict_inline simd_float(float initial_value) noexcept : value(init(initial_value)) { }
 		strict_inline simd_float(const std::array<float, kSize> &scalars) noexcept
 			: value(std::bit_cast<simd_type>(scalars)) { }

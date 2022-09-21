@@ -64,9 +64,10 @@ namespace Framework
 		ParameterValue(const ParameterDetails *info, u64 parentModuleId) noexcept : 
 			info_(info), parentModuleId_(parentModuleId)
 		{
-			internalValue_ = info_->defaultValue;
-			modulations_ = 0.0f;
 			normalisedValue_ = info_->defaultNormalisedValue;
+			modulations_ = 0.0f;
+			normalisedInternalValue_ = info_->defaultNormalisedValue;
+			internalValue_ = info_->defaultValue;
 			parameterLink_.parameter = this;
 		}
 
@@ -75,6 +76,7 @@ namespace Framework
 		{
 			normalisedValue_ = other.normalisedValue_;
 			modulations_ = other.modulations_;
+			normalisedInternalValue_ = other.normalisedInternalValue_;
 			internalValue_ = other.internalValue_;
 			parameterLink_.parameter = this;
 		}
@@ -84,6 +86,7 @@ namespace Framework
 		{
 			normalisedValue_ = other.normalisedValue_;
 			modulations_ = other.modulations_;
+			normalisedInternalValue_ = other.normalisedInternalValue_;
 			internalValue_ = other.internalValue_;
 			parameterLink_.parameter = this;
 		}
@@ -94,16 +97,17 @@ namespace Framework
 		{
 			utils::spinAndLock(isUsed_, false);
 
-			internalValue_ = info_->defaultValue;
-			modulations_ = 0.0f;
 			normalisedValue_ = info_->defaultNormalisedValue;
+			modulations_ = 0.0f;
+			normalisedInternalValue_ = info_->defaultNormalisedValue;
+			internalValue_ = info_->defaultValue;
 
 			isUsed_.store(false, std::memory_order_release);
 		}
 		
 		// prefer calling this only once if possible
 		template<commonConcepts::ParameterRepresentation T>
-		T getInternalValue() const noexcept
+		T getInternalValue(bool isNormalised = false) const noexcept
 		{
 			utils::spinAndLock(isUsed_, false);
 			
@@ -114,7 +118,10 @@ namespace Framework
 				COMPLEX_ASSERT(info_->scale != ParameterScale::Toggle && "Parameter isn't supposed to be a toggle control");
 				COMPLEX_ASSERT(info_->scale != ParameterScale::Indexed && "Parameter isn't supposed to be a choice control");
 
-				result = internalValue_;
+				if (isNormalised)
+					result = normalisedInternalValue_;
+				else
+					result = internalValue_;
 			}
 			else if constexpr (std::is_same_v<T, float>)
 			{
@@ -125,10 +132,18 @@ namespace Framework
 				{
 					simd_float modulations = modulations_;
 					simd_float difference = utils::getStereoDifference(modulations);
-					result = utils::scaleValue(modulations - difference, info_)[0];
+					if (isNormalised)
+						result = (modulations - difference)[0];
+					else
+						result = utils::scaleValue(modulations - difference, info_)[0];
 				}
 				else
-					result = internalValue_[0];
+				{
+					if (isNormalised)
+						result = normalisedInternalValue_[0];
+					else
+						result = internalValue_[0];
+				}					
 			}
 			else if constexpr (std::is_same_v<T, simd_int>)
 			{
@@ -150,7 +165,7 @@ namespace Framework
 				else if (info_->isStereo)
 				{
 					simd_int difference = utils::getStereoDifference(utils::toInt(modulations_));
-					result = static_cast<u32>(utils::scaleValue(modulations_ - difference, info_)[0]);
+					result = static_cast<u32>(utils::scaleValue(modulations_ - utils::toFloat(difference), info_)[0]);
 				}
 				else
 					result = utils::toInt(internalValue_)[0];
@@ -237,7 +252,10 @@ namespace Framework
 			}
 
 			if (isChanged)
-				internalValue_ = utils::scaleValue(utils::clamp(modulations_ + normalisedValue_, 0.0f, 1.0f), info_);
+			{
+				normalisedInternalValue_ = simd_float::clamp(modulations_ + normalisedValue_, 0.0f, 1.0f);
+				internalValue_ = utils::scaleValue(normalisedInternalValue_, info_);
+			}
 
 			isUsed_.store(false, std::memory_order_release);
 		}
@@ -255,6 +273,8 @@ namespace Framework
 		float normalisedValue_ = 0.0f;
 		// value of all internal modulations
 		simd_float modulations_ = 0.0f;
+		// after adding modulations
+		simd_float normalisedInternalValue_ = 0.0f;
 		// after adding modulations and scaling
 		simd_float internalValue_ = 0.0f;
 

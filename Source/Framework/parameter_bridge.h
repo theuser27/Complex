@@ -37,6 +37,16 @@ namespace Framework
 				link->hostControl = this;
 				value_ = link->parameter->getNormalisedValue();
 			}
+			else if (link)
+			{
+				name_ += 'P';
+				name_ += (int)parameterIndex;
+				name_ += " > ";
+				parameterLinkPointer_.store(link, std::memory_order_release);
+				name_ += link->parameter->getParameterDetails()->displayName.data();
+				link->hostControl = this;
+				value_ = link->parameter->getNormalisedValue();
+			}
 			else
 			{
 				name_ += 'P';
