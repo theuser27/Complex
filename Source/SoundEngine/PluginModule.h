@@ -112,7 +112,7 @@ namespace Generation
 
 	private:
 		template <typename T, typename U, typename ... Args>
-		std::shared_ptr<PluginModule> caller(U &&reference, Args&& ... args)
+		std::shared_ptr<PluginModule> argSplitter(U &&reference, Args&& ... args)
 		{ return std::shared_ptr<PluginModule>(new T(std::forward<T>(static_cast<T &&>(reference)), moduleId_, std::forward<Args>(args)...)); }
 
 	public:
@@ -133,7 +133,7 @@ namespace Generation
 				// if we have a derived class as first parameter then we're calling copy/move constructor
 				if constexpr (std::is_base_of_v<PluginModule, std::tuple_element_t<0, std::tuple<std::remove_reference_t<Args>...>>>)
 				{
-					std::shared_ptr<PluginModule> newSubModule = caller<T>(args...);
+					std::shared_ptr<PluginModule> newSubModule = argSplitter<T>(args...);
 					globalModulesState_->addModule(newSubModule);
 					return newSubModule;
 				}
