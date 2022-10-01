@@ -17,17 +17,20 @@
 #include <bit>
 #include <array>
 
-// there isn't a macro to check SSE3, so we define it here
-// CHANGE IT IF YOU'RE ON ARM
-// the project cannot run without vectorisation (either x86 SSE2 or ARM NEON)
+// if there isn't a macro to check SSE4.1 and FMA, we define them here
+// the project cannot run without vectorisation (either x86 SSE4.1 or ARM NEON, however it can run without FMA)
 
-#if defined (_MSC_VER)
+#if defined (_MSC_VER) && ! (defined(__ARM_NEON__) || defined(__ARM_NEON))
 	#define __SSE4_1__ 1
+	#define __FMA__ 1
 #endif
 
 #if __SSE4_1__
 	#define COMPLEX_SSE4_1 1
 	#define COMPLEX_SIMD_ALIGNMENT 16
+	#if __FMA__
+		#define COMPLEX_FMA 1
+	#endif
 #elif defined(__ARM_NEON__) || defined(__ARM_NEON)
 	#define COMPLEX_NEON 1
 	#define COMPLEX_SIMD_ALIGNMENT 16
@@ -281,7 +284,7 @@ namespace simd_values
 		static strict_inline simd_int vector_call greaterThanSigned(simd_int one, simd_int two)
 		{	return greaterThanSigned(one.value, two.value); }
 
-		static strict_inline simd_int vector_call lessThanSigned(simd_int one, simd_int two)
+		static strict_inline simd_int vector_call lessThanOrEqualToSigned(simd_int one, simd_int two)
 		{	return greaterThanSigned(two.value, one.value); }
 
 		static strict_inline simd_int vector_call greaterThanOrEqualSigned(simd_int one, simd_int two)
@@ -552,7 +555,11 @@ namespace simd_values
 		static strict_inline simd_type vector_call mulAdd(simd_type add, simd_type mul_one, simd_type mul_two)
 		{
 		#if COMPLEX_SSE4_1
+		#if COMPLEX_FMA
+			return _mm_fmadd_ps(mul_one, mul_two, add);
+		#else
 			return _mm_add_ps(add, _mm_mul_ps(mul_one, mul_two));
+		#endif
 		#elif COMPLEX_NEON
 		#if defined(NEON_VFP_V3)
 			return vaddq_f32(add, vmulq_f32(mul_one, mul_two));
@@ -565,7 +572,11 @@ namespace simd_values
 		static strict_inline simd_type vector_call mulSub(simd_type sub, simd_type mul_one, simd_type mul_two)
 		{
 		#if COMPLEX_SSE4_1
+		#if COMPLEX_FMA
+			return _mm_fmsub_ps(mul_one, mul_two, sub);
+		#else
 			return _mm_sub_ps(sub, _mm_mul_ps(mul_one, mul_two));
+		#endif
 		#elif COMPLEX_NEON
 		#if defined(NEON_VFP_V3)
 			return vsubq_f32(sub, vmulq_f32(mul_one, mul_two));
@@ -588,6 +599,15 @@ namespace simd_values
 		#else
 			return vdivq_f32(one, two);
 		#endif
+		#endif
+		}
+
+		static strict_inline simd_type vector_call sqrt(simd_type value) noexcept
+		{
+		#if COMPLEX_SSE4_1
+			return _mm_sqrt_ps(value);
+		#elif COMPLEX_NEON
+			return vsqrtq_f32(value);
 		#endif
 		}
 
@@ -722,6 +742,7 @@ namespace simd_values
 		static strict_inline float vector_call sum(simd_type value)
 		{
 		#if COMPLEX_SSE4_1
+
 			simd_type flip = _mm_shuffle_ps(value, value, _MM_SHUFFLE(1, 0, 3, 2));
 			value = _mm_add_ps(value, flip);
 			flip = _mm_shuffle_ps(value, value, _MM_SHUFFLE(2, 3, 0, 1));
@@ -828,6 +849,9 @@ namespace simd_values
 
 		static strict_inline simd_float vector_call mulSub(simd_float sub, simd_float mul_one, simd_float mul_two)
 		{ return mulSub(sub.value, mul_one.value, mul_two.value); }
+
+		static strict_inline simd_float vector_call sqrt(simd_float value)
+		{ return sqrt(value.value); }
 
 		static strict_inline simd_float vector_call max(simd_float one, simd_float two)
 		{ return max(one.value, two.value); }

@@ -28,82 +28,74 @@ namespace Generation
 		baseEffect(const baseEffect &) = delete;
 		baseEffect(baseEffect &&) = delete;
 
-		baseEffect(u64 parentModuleId, std::string_view effectType) : 
-			PluginModule(parentModuleId, Framework::kPluginModules[4]), effectType(effectType)
+		baseEffect(AllModules *globalModulesState, u64 parentModuleId, std::string_view effectType) :
+			PluginModule(globalModulesState, parentModuleId, Framework::kPluginModules[4]), effectType(effectType)
 		{
 			createModuleParameters(Framework::baseEffectParameterList.data(), Framework::baseEffectParameterList.size());
 		}
 		virtual ~baseEffect() override = default;
 
-		baseEffect(const baseEffect &other, u64 parentModuleId) noexcept : PluginModule(other, parentModuleId) {}
+		baseEffect(const baseEffect &other, u64 parentModuleId) noexcept : 
+			PluginModule(other, parentModuleId), effectType(other.effectType) {}
 		baseEffect &operator=(const baseEffect &other) noexcept
-		{ PluginModule::operator=(other); return *this; }
+		{
+			PluginModule::operator=(other);
+			effectType = other.effectType;
+			return *this;
+		}
 
-		baseEffect(baseEffect &&other, u64 parentModuleId) noexcept : PluginModule(std::move(other), parentModuleId) {}
+		baseEffect(baseEffect &&other, u64 parentModuleId) noexcept : 
+			PluginModule(std::move(other), parentModuleId), effectType(other.effectType) {}
 		baseEffect &operator=(baseEffect &&other) noexcept
-		{ PluginModule::operator=(std::move(other)); return *this; }
+		{
+			PluginModule::operator=(std::move(other));
+			effectType = other.effectType;
+			return *this;
+		}
 
-		virtual void run(Framework::SimdBuffer<std::complex<float>, simd_float> &source,
-			Framework::SimdBuffer<std::complex<float>, simd_float> &destination, [[maybe_unused]] u32 FFTSize, [[maybe_unused]] float sampleRate) noexcept
+		auto getEffectType() const noexcept { return effectType; }
+
+		virtual void run(Framework::SimdBuffer<std::complex<float>, simd_float> &source, Framework::SimdBuffer<std::complex<float>, 
+			simd_float> &destination, [[maybe_unused]] u32 effectiveFFTSize, [[maybe_unused]] float sampleRate) noexcept
 		{ 
 			// swapping pointers since we're not doing anything with the data
 			source.swap(destination);
 		};
 
 	protected:
-		// returns starting point and distance to end of processed/unprocessed range
-		std::pair<u32, u32> getRange(const simd_int &lowIndices, const simd_int &highIndices, 
-			u32 FFTSize, bool isProcessedRange) const noexcept
-		{
-			u32 start, end;
-			std::array<u32, kSimdRatio> startArray{};
-			std::array<u32, kSimdRatio> endArray{};
-
-			if (isProcessedRange)
-			{
-				startArray = lowIndices.getArrayOfValues();
-				endArray = highIndices.getArrayOfValues();
-			}
-			else
-			{
-				startArray = highIndices.getArrayOfValues();
-				endArray = lowIndices.getArrayOfValues();
-			}
-
-			start = *std::min_element(startArray.begin(), startArray.end());
-			end = *std::max_element(endArray.begin(), endArray.end());
-
-			return { start & (FFTSize - 1), (FFTSize + end - start) & (FFTSize - 1) };
-		}
+		enum class BoundRepresentation : u32 { Normalised, Frequency, BinIndex };
 
 		// first - low shifted boundary, second - high shifted boundary
-		std::pair<simd_float, simd_float> getShiftedBounds(simd_float lowBound,
-			simd_float highBound, float maxFrequency, bool isLinearShift) const noexcept
-		{
-			using namespace utils;
-			// TODO: do dynamic min frequency based on FFTOrder
-			float maxOctave = log2f(maxFrequency / kMinFrequency);
+		std::pair<simd_float, simd_float> getShiftedBounds(BoundRepresentation representation,
+			float maxFrequency, u32 FFTSize, bool isLinearShift = false) const noexcept;
 
-			if (isLinearShift)
-			{
-				simd_float boundShift = moduleParameters_[3]->getInternalValue<simd_float>() * maxFrequency;
-				lowBound = simd_float::clamp(exp2(lowBound * maxOctave) * kMinFrequency + boundShift, kMinFrequency, maxFrequency);
-				highBound = simd_float::clamp(exp2(highBound * maxOctave) * kMinFrequency + boundShift, kMinFrequency, maxFrequency);
-				// snapping to 0 hz if it's below the minimum frequency
-				lowBound &= simd_float::greaterThan(lowBound, kMinFrequency);
-				highBound &= simd_float::greaterThan(highBound, kMinFrequency);
-			}
-			else
-			{
-				simd_float boundShift = moduleParameters_[3]->getInternalValue<simd_float>();
-				lowBound = exp2(simd_float::clamp(lowBound + boundShift, 0.0f, 1.0f) * maxOctave);
-				highBound = exp2(simd_float::clamp(highBound + boundShift, 0.0f, 1.0f) * maxOctave);
-				// snapping to 0 hz if it's below the minimum frequency
-				lowBound = (lowBound & simd_float::greaterThan(lowBound, 1.0f)) * kMinFrequency;
-				highBound = (highBound & simd_float::greaterThan(highBound, 1.0f)) * kMinFrequency;
-			}
-			return { lowBound, highBound };
+		simd_mask vector_call isOutsideBounds(const simd_int &positionIndices, const simd_int &lowBoundIndices,
+			const simd_int &highBoundIndices) const noexcept
+		{
+			simd_mask highAboveLow = simd_int::greaterThanSigned(highBoundIndices, lowBoundIndices);
+			simd_mask positionsGreaterThanHigh = simd_int::greaterThanSigned(positionIndices, highBoundIndices);
+			simd_mask positionsLessThanLow = simd_int::greaterThanSigned(lowBoundIndices, positionIndices);
+			return (highAboveLow & (positionsGreaterThanHigh | positionsLessThanLow)) |
+				(~highAboveLow & (positionsGreaterThanHigh & positionsLessThanLow));
 		}
+
+		simd_mask vector_call isInsideBounds(const simd_int &positionIndices, const simd_int &lowBoundIndices,
+			const simd_int &highBoundIndices) const noexcept
+		{
+			simd_mask highAboveLow = simd_int::greaterThanSigned(highBoundIndices, lowBoundIndices);
+			simd_mask positionsLessOrThanEqualHigh = ~simd_int::greaterThanSigned(positionIndices, highBoundIndices);
+			simd_mask positionsGreaterOrThanEqualLow = ~simd_int::greaterThanSigned(lowBoundIndices, positionIndices);
+			return (highAboveLow & (positionsLessOrThanEqualHigh & positionsGreaterOrThanEqualLow)) |
+				(~highAboveLow & (positionsLessOrThanEqualHigh | positionsGreaterOrThanEqualLow));
+		}
+
+		// returns starting point and distance to end of processed/unprocessed range
+		std::pair<u32, u32> vector_call getRange(const simd_int &lowIndices, const simd_int &highIndices,
+			u32 effectiveFFTSize, bool isProcessedRange) const noexcept;
+
+		void copyUnprocessedData(Framework::SimdBuffer<std::complex<float>, simd_float> &source,
+			Framework::SimdBuffer<std::complex<float>, simd_float> &destination, const simd_int &lowBoundIndices,
+			const simd_int &highBoundIndices, u32 effectiveFFTSize) const noexcept;
 
 		//// Parameters
 		//
@@ -121,15 +113,16 @@ namespace Generation
 		utilityEffect(const utilityEffect &) = delete;
 		utilityEffect(utilityEffect &&) = delete;
 
-		utilityEffect(u64 parentModuleId) : baseEffect(parentModuleId, Framework::kEffectModuleNames[0])
+		utilityEffect(AllModules *globalModulesState, u64 parentModuleId) : 
+			baseEffect(globalModulesState, parentModuleId, Framework::kEffectModuleNames[0])
 		{
 			
 		}
 
 		void run(Framework::SimdBuffer<std::complex<float>, simd_float> &source,
-			Framework::SimdBuffer<std::complex<float>, simd_float> &destination, u32 FFTSize, float sampleRate) noexcept override
+			Framework::SimdBuffer<std::complex<float>, simd_float> &destination, u32 effectiveFFTSize, float sampleRate) noexcept override
 		{
-			baseEffect::run(source, destination, FFTSize, sampleRate);
+			baseEffect::run(source, destination, effectiveFFTSize, sampleRate);
 		}
 
 	private:
@@ -151,67 +144,24 @@ namespace Generation
 		filterEffect(const filterEffect &) = delete;
 		filterEffect(filterEffect &&) = delete;
 
-		filterEffect(u64 parentModuleId) : baseEffect(parentModuleId, Framework::kEffectModuleNames[1])
+		filterEffect(AllModules *globalModulesState, u64 parentModuleId) : 
+			baseEffect(globalModulesState, parentModuleId, Framework::kEffectModuleNames[1])
 		{
 			auto parameterSize = Framework::baseEffectParameterList.size() + 
 				Framework::filterEffectParameterList.size();
 			moduleParameters_.data.reserve(parameterSize);
 			createModuleParameters(Framework::filterEffectParameterList.data(), Framework::filterEffectParameterList.size());
 		}
-		~filterEffect() override = default;
-
-		filterEffect(const filterEffect &other, u64 parentModuleId) noexcept : baseEffect(other, parentModuleId) {}
-		filterEffect &operator=(const filterEffect &other) noexcept
-		{ baseEffect::operator=(other); return *this; }
-
-		filterEffect(filterEffect &&other, u64 parentModuleId) noexcept : baseEffect(std::move(other), parentModuleId) {}
-		filterEffect &operator=(filterEffect &&other) noexcept
-		{ baseEffect::operator=(std::move(other)); return *this; }
 
 		void run(Framework::SimdBuffer<std::complex<float>, simd_float> &source,
-			Framework::SimdBuffer<std::complex<float>, simd_float> &destination, u32 FFTSize, float sampleRate) noexcept override;
+			Framework::SimdBuffer<std::complex<float>, simd_float> &destination, u32 effectiveFFTSize, float sampleRate) noexcept override;
 
 	private:
 		void runNormal(Framework::SimdBuffer<std::complex<float>, simd_float> &source,
-			Framework::SimdBuffer<std::complex<float>, simd_float> &destination, const u32 FFTSize, const float sampleRate) noexcept;
+			Framework::SimdBuffer<std::complex<float>, simd_float> &destination, const u32 effectiveFFTSize, const float sampleRate) noexcept;
 
-		strict_inline simd_float vector_call getDistancesFromCutoffs(const simd_int &positionIndices, 
-			const simd_int &cutoffIndices, const simd_int &lowBoundIndices, const u32 FFTOrder, const u32 FFTSize) const noexcept
-		{
-			// 1. both positionIndices and cutoffIndices are >= lowBound and < FFTSize_ or <= highBound and > 0
-			// 2. cutoffIndices/positionIndices is >= lowBound and < FFTSize_ and
-			//     positionIndices/cutoffIndices is <= highBound and > 0
-
-			using namespace utils;
-						
-			simd_mask cutoffAbovePositions = simd_mask::greaterThanOrEqualSigned(cutoffIndices, positionIndices);
-
-			// masks for 1.
-			simd_mask positionsAboveLowMask = simd_mask::greaterThanOrEqualSigned(positionIndices, lowBoundIndices);
-			simd_mask cutoffAboveLowMask = simd_mask::greaterThanOrEqualSigned(cutoffIndices, lowBoundIndices);
-			simd_mask bothAboveOrBelowLowMask = ~(positionsAboveLowMask ^ cutoffAboveLowMask);
-
-			// masks for 2.
-			simd_mask positionsBelowLowBoundAndCutoffsMask = ~positionsAboveLowMask & cutoffAboveLowMask;
-			simd_mask cutoffBelowLowBoundAndPositionsMask = positionsAboveLowMask & ~cutoffAboveLowMask;
-
-			// masking for 1.
-			simd_int precedingIndices  = utils::maskLoad(cutoffIndices  , positionIndices, bothAboveOrBelowLowMask & cutoffAbovePositions);
-			simd_int succeedingIndices = utils::maskLoad(positionIndices, cutoffIndices  , bothAboveOrBelowLowMask & cutoffAbovePositions);
-
-			// masking for 2.
-			// first 2 are when cutoffs/positions are above/below lowBound
-			// second 2 are when positions/cutoffs are above/below lowBound
-			precedingIndices  = utils::maskLoad(precedingIndices , cutoffIndices  , ~bothAboveOrBelowLowMask & positionsBelowLowBoundAndCutoffsMask);
-			succeedingIndices = utils::maskLoad(succeedingIndices, positionIndices, ~bothAboveOrBelowLowMask & positionsBelowLowBoundAndCutoffsMask);
-			precedingIndices  = utils::maskLoad(precedingIndices , positionIndices, ~bothAboveOrBelowLowMask & cutoffBelowLowBoundAndPositionsMask);
-			succeedingIndices = utils::maskLoad(succeedingIndices, cutoffIndices  , ~bothAboveOrBelowLowMask & cutoffBelowLowBoundAndPositionsMask);
-
-			simd_float precedingIndicesRatios = utils::binToNormalised(utils::toFloat(precedingIndices), FFTOrder);
-			simd_float succeedingIndicesRatios = utils::binToNormalised(utils::toFloat(succeedingIndices), FFTOrder);
-
-			return utils::getDecimalPlaces(simd_float(1.0f) + succeedingIndicesRatios - precedingIndicesRatios);
-		}
+		simd_float vector_call getDistancesFromCutoffs(const simd_int &positionIndices,
+			const simd_int &cutoffIndices, const simd_int &lowBoundIndices, u32 FFTSize, float sampleRate) const noexcept;
 
 		//// Parameters
 		// 
@@ -231,7 +181,6 @@ namespace Generation
 		//// Modes
 		// Normal - normal filtering
 		// Regular - triangles, squares, saws, pointy, sweep and custom
-		// TODO: a class for the per bin eq
 		// TODO: write a constexpr generator for all of the weird mask types (triangle, saw, square, etc)
 	};
 
@@ -242,7 +191,8 @@ namespace Generation
 		contrastEffect(const contrastEffect &) = delete;
 		contrastEffect(contrastEffect &&) = delete;
 
-		contrastEffect(u64 parentModuleId) : baseEffect(parentModuleId, Framework::kEffectModuleNames[2])
+		contrastEffect(AllModules *globalModulesState, u64 parentModuleId) : 
+			baseEffect(globalModulesState, parentModuleId, Framework::kEffectModuleNames[2])
 		{
 			auto parameterSize = Framework::baseEffectParameterList.size() +
 				Framework::contrastEffectParameterList.size();
@@ -251,11 +201,22 @@ namespace Generation
 		}
 
 		void run(Framework::SimdBuffer<std::complex<float>, simd_float> &source,
-			Framework::SimdBuffer<std::complex<float>, simd_float> &destination, u32 FFTSize, float sampleRate) noexcept override;
+			Framework::SimdBuffer<std::complex<float>, simd_float> &destination, u32 effectiveFFTSize, float sampleRate) noexcept override;
 
 	private:
 		void runContrast(Framework::SimdBuffer<std::complex<float>, simd_float> &source,
-			Framework::SimdBuffer<std::complex<float>, simd_float> &destination, u32 FFTSize, float sampleRate) noexcept;
+			Framework::SimdBuffer<std::complex<float>, simd_float> &destination, u32 effectiveFFTSize, float sampleRate) noexcept;
+
+		simd_float vector_call matchPower(simd_float target, simd_float current)
+		{
+			simd_float result = 1.0f;
+			result = utils::maskLoad(result, simd_float(0.0f), simd_float::greaterThanOrEqual(0.0f, target));
+			result = utils::maskLoad(result, simd_float::sqrt(target / current), simd_float::greaterThan(current, 0.0f));
+
+			result = utils::maskLoad(result, simd_float(1.0f), simd_float::greaterThan(result, 1e30f));
+			result = utils::maskLoad(result, simd_float(0.0f), simd_float::greaterThan(1e-37f, result));
+			return result;
+		}
 
 		//// Parameters
 		//
@@ -264,7 +225,6 @@ namespace Generation
 		
 		// dtblkfx contrast, specops noise filter/focus, thinner
 
-		static constexpr float kMinPositiveValue = 0.0f;
 		static constexpr float kMaxPositiveValue = 4.0f;
 		static constexpr float kMaxNegativeValue = -0.5f;
 	};
@@ -276,7 +236,8 @@ namespace Generation
 		dynamicsEffect(const dynamicsEffect &) = delete;
 		dynamicsEffect(dynamicsEffect &&) = delete;
 
-		dynamicsEffect(u64 parentModuleId) : baseEffect(parentModuleId, Framework::kEffectModuleNames[3])
+		dynamicsEffect(AllModules *globalModulesState, u64 parentModuleId) : 
+			baseEffect(globalModulesState, parentModuleId, Framework::kEffectModuleNames[3])
 		{
 
 		}
@@ -291,7 +252,8 @@ namespace Generation
 		phaseEffect(const phaseEffect &) = delete;
 		phaseEffect(phaseEffect &&) = delete;
 
-		phaseEffect(u64 parentModuleId) : baseEffect(parentModuleId, Framework::kEffectModuleNames[4])
+		phaseEffect(AllModules *globalModulesState, u64 parentModuleId) : 
+			baseEffect(globalModulesState, parentModuleId, Framework::kEffectModuleNames[4])
 		{
 
 		}
@@ -306,7 +268,8 @@ namespace Generation
 		pitchEffect(const pitchEffect &) = delete;
 		pitchEffect(pitchEffect &&) = delete;
 
-		pitchEffect(u64 parentModuleId) : baseEffect(parentModuleId, Framework::kEffectModuleNames[5])
+		pitchEffect(AllModules *globalModulesState, u64 parentModuleId) : 
+			baseEffect(globalModulesState, parentModuleId, Framework::kEffectModuleNames[5])
 		{
 
 		}
@@ -321,7 +284,8 @@ namespace Generation
 		stretchEffect(const stretchEffect &) = delete;
 		stretchEffect(stretchEffect &&) = delete;
 
-		stretchEffect(u64 parentModuleId) : baseEffect(parentModuleId, Framework::kEffectModuleNames[6])
+		stretchEffect(AllModules *globalModulesState, u64 parentModuleId) : 
+			baseEffect(globalModulesState, parentModuleId, Framework::kEffectModuleNames[6])
 		{
 
 		}
@@ -336,7 +300,8 @@ namespace Generation
 		warpEffect(const warpEffect &) = delete;
 		warpEffect(warpEffect &&) = delete;
 
-		warpEffect(u64 parentModuleId) : baseEffect(parentModuleId, Framework::kEffectModuleNames[7])
+		warpEffect(AllModules *globalModulesState, u64 parentModuleId) : 
+			baseEffect(globalModulesState, parentModuleId, Framework::kEffectModuleNames[7])
 		{
 
 		}
@@ -351,7 +316,8 @@ namespace Generation
 		destroyEffect(const destroyEffect &) = delete;
 		destroyEffect(destroyEffect &&) = delete;
 
-		destroyEffect(u64 parentModuleId) : baseEffect(parentModuleId, Framework::kEffectModuleNames[8])
+		destroyEffect(AllModules *globalModulesState, u64 parentModuleId) : 
+			baseEffect(globalModulesState, parentModuleId, Framework::kEffectModuleNames[8])
 		{
 
 		}
@@ -370,7 +336,7 @@ namespace Generation
 		EffectModule(const EffectModule &) = delete;
 		EffectModule(EffectModule &&) = delete;
 
-		EffectModule(u64 parentModuleId, std::string_view effectType) noexcept;
+		EffectModule(AllModules *globalModulesState, u64 parentModuleId, std::string_view effectType) noexcept;
 
 		EffectModule(const EffectModule &other, u64 parentModuleId) noexcept : PluginModule(other, parentModuleId)
 		{ COMPLEX_ASSERT(other.moduleType_ == Framework::kPluginModules[3] && "You're trying to copy a non-EffectModule into EffectModule"); }
@@ -389,7 +355,7 @@ namespace Generation
 		bool moveSubModule(std::shared_ptr<PluginModule> newSubModule, u32 index) noexcept override;
 
 		void processEffect(Framework::SimdBuffer<std::complex<float>, simd_float> &source,
-			Framework::SimdBuffer<std::complex<float>, simd_float> &destination, u32 FFTSize, float sampleRate);
+			Framework::SimdBuffer<std::complex<float>, simd_float> &destination, u32 effectiveFFTSize, float sampleRate);
 
 	private:
 		//// Parameters

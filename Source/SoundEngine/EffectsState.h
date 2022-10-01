@@ -46,13 +46,13 @@ namespace Generation
 		EffectsChain(const EffectsChain &) = delete;
 		EffectsChain(EffectsChain &&) = delete;
 
-		EffectsChain(u64 parentModuleId) noexcept : PluginModule(parentModuleId, Framework::kPluginModules[2])
+		EffectsChain(AllModules *globalModulesState, u64 parentModuleId) noexcept : 
+			PluginModule(globalModulesState, parentModuleId, Framework::kPluginModules[2])
 		{
 			chainData = std::make_unique<EffectsChainData>();
 
 			subModules_.reserve(kInitialNumEffects);
-			subModules_.emplace_back(std::move(std::make_shared<EffectModule>(moduleId_, Framework::kEffectModuleNames[1])));
-			addSubModulesToList();
+			insertSubModule(0, Framework::kEffectModuleNames[1]);
 
 			moduleParameters_.data.reserve(Framework::effectChainParameterList.size());
 			createModuleParameters(Framework::effectChainParameterList.data(), Framework::effectChainParameterList.size());
@@ -121,7 +121,8 @@ namespace Generation
 		EffectsState &operator=(const EffectsState &other) = delete;
 		EffectsState &operator=(EffectsState &&other) = delete;
 
-		EffectsState(u64 parentModuleId) noexcept : PluginModule(parentModuleId, Framework::kPluginModules[1])
+		EffectsState(AllModules *globalModulesState, u64 parentModuleId) noexcept : 
+			PluginModule(globalModulesState, parentModuleId, Framework::kPluginModules[1])
 		{
 			subModules_.reserve(kMaxNumChains);
 			// size is half the max because a single SIMD package stores both real and imaginary parts
@@ -135,6 +136,7 @@ namespace Generation
 		{
 			for (size_t i = 0; i < chainThreads_.size(); i++)
 				chainThreads_[i].~jthread();
+			PluginModule::~PluginModule();
 		}
 
 		void writeInputData(const AudioBuffer<float> &inputBuffer) noexcept;

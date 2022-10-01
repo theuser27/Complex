@@ -21,8 +21,7 @@ namespace Generation
 		COMPLEX_ASSERT(Framework::kEffectModuleNames.end() != std::find(Framework::kEffectModuleNames.begin(),
 			Framework::kEffectModuleNames.end(), moduleType) && "You're trying to insert a non-EffectModule into EffectChain");
 
-		subModules_.insert(subModules_.begin() + index, std::move(std::make_shared<EffectModule>(moduleId_, moduleType)));
-		AllModules::addModule(subModules_[index]);
+		subModules_.insert(subModules_.begin() + index, std::move(createSubModule<EffectModule>(moduleType)));
 
 		return true;
 	}
@@ -44,8 +43,7 @@ namespace Generation
 		COMPLEX_ASSERT(newSubModule->getModuleType() == Framework::kPluginModules[3] &&
 			"You're trying to copy a non-EffectModule into EffectChain");
 
-		subModules_.insert(subModules_.begin() + index, std::make_shared<PluginModule>(*newSubModule, moduleId_));
-		AllModules::addModule(subModules_[index]);
+		subModules_.insert(subModules_.begin() + index, std::move(createSubModule<EffectModule>(*newSubModule)));
 
 		return true;
 	}
@@ -58,10 +56,10 @@ namespace Generation
 		COMPLEX_ASSERT(newSubModule->getModuleType() == Framework::kPluginModules[3] &&
 			"You're trying to copy a non-EffectModule into EffectChain");
 
-		auto subModule = std::make_shared<PluginModule>(std::move(*newSubModule), moduleId_);
+		auto *subModule = static_cast<EffectModule *>(newSubModule.get());
 
-		subModules_.insert(subModules_.begin() + index, std::move(subModule));
-		AllModules::addModule(subModules_[index]);
+		subModules_.insert(subModules_.begin() + index, std::move(createSubModule<EffectModule>(*newSubModule)));
+		//globalModulesState_->addModule(subModules_[index]);
 
 		return true;
 	}
@@ -96,9 +94,8 @@ namespace Generation
 			return false;
 
 		// if there are no unused objects and we haven't reached max capacity, we can add
-		subModules_.emplace_back(std::move(std::make_shared<EffectsChain>(moduleId_)));
+		subModules_.emplace_back(std::move(createSubModule<EffectsChain>()));
 		chainThreads_.emplace_back(processIndividualChains, std::ref(*this), subModules_.size() - 1);
-		AllModules::addModule(subModules_.back());
 
 		return true;
 	}
@@ -122,14 +119,16 @@ namespace Generation
 		COMPLEX_ASSERT(newSubModule->getModuleType() == Framework::kPluginModules[2] &&
 			"You're trying to copy a non-EffectsChain into EffectsState");
 
+		const auto *subModule = static_cast<EffectsChain *>(newSubModule.get());
+
 		// searching for chains that are unused first
 		for (size_t i = 0; i < subModules_.size(); i++)
 		{
-			auto &instance = subModules_[i];
+			auto *instance = static_cast<EffectsChain *>(subModules_[i].get());
 			if (instance->getNumCurrentUsers() >= 0)
 				continue;
 
-			*instance = *newSubModule;
+			*instance = *subModule;
 			instance->reuse();
 
 			std::jthread newThread = std::jthread(processIndividualChains, std::ref(*this), i);
@@ -143,9 +142,8 @@ namespace Generation
 			return false;
 
 		// if there are no unused objects and we haven't reached max capacity, we can add
-		subModules_.emplace_back(std::make_shared<PluginModule>(*newSubModule, moduleId_));
+		subModules_.emplace_back(std::move(createSubModule<EffectsChain>(*newSubModule)));
 		chainThreads_.emplace_back(processIndividualChains, std::ref(*this), subModules_.size() - 1);
-		AllModules::addModule(subModules_.back());
 
 		return true;
 	}
@@ -236,7 +234,9 @@ namespace Generation
 			auto thisChainEffectOrderSize = thisChain->subModules_.size();
 			auto thisChainDataIsInWork = &thisChain->chainData->dataIsInWork;
 
-			auto FFTSize = state.FFTSize_;
+			// when doing FFT we only receive the positive frequencies and negative are discarded
+			// so we're actually working with half the number of bins
+			auto effectiveFFTSize = state.FFTSize_ / 2;
 			float sampleRate = state.sampleRate_;
 
 			// Chain Input 
@@ -261,7 +261,7 @@ namespace Generation
 			for (size_t i = 0; i < thisChainEffectOrderSize; i++)
 			{
 				static_cast<EffectModule *>(thisChainEffectOrder[i].get())
-					->processEffect(*thisChainSourceBuffer, *thisChainWorkBuffer, FFTSize, sampleRate);
+					->processEffect(*thisChainSourceBuffer, *thisChainWorkBuffer, effectiveFFTSize, sampleRate);
 				// TODO: fit links between modules here
 				std::swap(thisChainSourceBuffer, thisChainWorkBuffer);
 				*thisChainDataIsInWork = !(*thisChainDataIsInWork);

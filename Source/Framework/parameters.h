@@ -98,7 +98,7 @@ namespace Framework
 	{
 		ParameterDetails{ "FILTER_FX_GAIN", "Filter Gain", -1.0f, 1.0f, 0.0f, 0.5f, ParameterScale::SymmetricLoudness, "", nullptr, true },
 		ParameterDetails{ "FILTER_FX_CUTOFF", "Filter Cutoff", 0.0f, 1.0f, 0.5f, 0.5f, ParameterScale::Linear, "", nullptr, true },
-		ParameterDetails{ "FILTER_FX_SLOPE", "Filter Slope", -1.0f, 1.0f, 0.5f, 0.75f, ParameterScale::SymmetricQuadratic, "", nullptr, true }
+		ParameterDetails{ "FILTER_FX_SLOPE", "Filter Slope", -1.0f, 1.0f, 0.25f, 0.75f, ParameterScale::SymmetricQuadratic, "", nullptr, true }
 	};
 
 	inline constexpr std::array contrastEffectParameterList =

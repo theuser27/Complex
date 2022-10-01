@@ -12,9 +12,9 @@
 
 namespace Plugin
 {
-	ComplexPlugin::ComplexPlugin() : soundEngine(std::make_shared<Generation::SoundEngine>())
+	ComplexPlugin::ComplexPlugin() : soundEngine(std::make_shared<Generation::SoundEngine>(this))
 	{
-		Generation::PluginModule::AllModules::addModule(soundEngine);
+		addModule(soundEngine);
 	}
 
 	void ComplexPlugin::Initialise(float sampleRate, u32 samplesPerBlock)

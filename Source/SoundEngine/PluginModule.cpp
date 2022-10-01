@@ -12,11 +12,12 @@
 
 namespace Generation
 {
-	PluginModule::PluginModule(u64 parentModuleId, std::string_view moduleType) noexcept : parentModuleId_(parentModuleId), 
-		moduleId_(globalModuleIdCounter.fetch_add(1, std::memory_order_acq_rel)), moduleType_(moduleType) { }
+	PluginModule::PluginModule(AllModules *globalModulesState, u64 parentModuleId,
+		std::string_view moduleType) noexcept : globalModulesState_(globalModulesState), parentModuleId_(parentModuleId),
+		moduleId_(globalModulesState_->getId()), moduleType_(moduleType) { }
 
-	PluginModule::PluginModule(const PluginModule &other, u64 parentModuleId) noexcept : parentModuleId_(parentModuleId),
-		moduleId_(globalModuleIdCounter.fetch_add(1, std::memory_order_acq_rel)), moduleType_(other.moduleType_)
+	PluginModule::PluginModule(const PluginModule &other, u64 parentModuleId) noexcept : globalModulesState_(other.globalModulesState_),
+		parentModuleId_(parentModuleId), moduleId_(globalModulesState_->getId()), moduleType_(other.moduleType_)
 	{
 		moduleParameters_.data.reserve(other.moduleParameters_.data.size());
 		for (size_t i = 0; i < other.moduleParameters_.data.size(); i++)
@@ -28,8 +29,8 @@ namespace Generation
 			subModules_.emplace_back(std::make_shared<PluginModule>(*(subModules_[i].get()), moduleId_));
 	}
 
-	PluginModule::PluginModule(PluginModule &&other, u64 parentModuleId) noexcept : parentModuleId_(parentModuleId),
-		moduleId_(globalModuleIdCounter.fetch_add(1, std::memory_order_acq_rel)), moduleType_(other.moduleType_)
+	PluginModule::PluginModule(PluginModule &&other, u64 parentModuleId) noexcept : globalModulesState_(other.globalModulesState_),
+		parentModuleId_(parentModuleId), moduleId_(globalModulesState_->getId()), moduleType_(other.moduleType_)
 	{
 		moduleParameters_.data.reserve(other.moduleParameters_.data.size());
 		for (size_t i = 0; i < other.moduleParameters_.data.size(); i++)
@@ -85,7 +86,7 @@ namespace Generation
 	void PluginModule::addSubModulesToList() noexcept
 	{
 		for (auto &subModule : subModules_)
-			AllModules::addModule(subModule);
+			globalModulesState_->addModule(subModule);
 	}
 
 	void PluginModule::updateParameters(UpdateFlag flag, bool updateSubModuleParameters)
@@ -102,8 +103,7 @@ namespace Generation
 				subModule->updateParameters(flag);
 	}
 
-	std::weak_ptr<Framework::ParameterValue> PluginModule::AllModules::
-		getModuleParameter(u64 parentModuleId, std::string_view parameter) noexcept
+	std::weak_ptr<Framework::ParameterValue> AllModules::getModuleParameter(u64 parentModuleId, std::string_view parameter) const noexcept
 	{
 		// we block until no one is doing anything
 		utils::spinAndLock(currentlyInUse, false);
@@ -123,9 +123,10 @@ namespace Generation
 			std::weak_ptr<Framework::ParameterValue>() : parameterIter->second;
 	}
 
-	bool PluginModule::AllModules::addModule(std::shared_ptr<PluginModule> newPointer) noexcept
+	bool AllModules::addModule(std::shared_ptr<PluginModule> newPointer) noexcept
 	{
-		if (!checkUpdateFlag())
+		if (auto flag = getUpdateFlag();
+			!(flag == UpdateFlag::AfterProcess || flag == UpdateFlag::BeforeProcess))
 			return false;
 
 		// we block until no one is doing anything
@@ -143,10 +144,10 @@ namespace Generation
 		return true;
 	}
 
-	bool PluginModule::AllModules::deleteModule(u64 moduleId) noexcept
+	bool AllModules::deleteModule(u64 moduleId) noexcept
 	{
-		if (!checkUpdateFlag())
-			return false;
+		// we're not checking for the update flag 
+		// because this function is only called from destructors
 
 		utils::spinAndLock(currentlyInUse, false);
 		allModules->erase(moduleId);
@@ -155,7 +156,7 @@ namespace Generation
 		return true;
 	}
 
-	void PluginModule::AllModules::resizeAllParameters() noexcept
+	void AllModules::resizeAllParameters() noexcept
 	{
 		auto newAllParameters = std::make_unique<Framework::VectorMap<u64,
 			std::weak_ptr<PluginModule>>>(allModules->data.size() * expandAmount);

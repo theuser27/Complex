@@ -42,22 +42,9 @@ namespace utils
 		auto realSums = simd_float::mul(one.value, two.value);
 		auto imaginarySums = simd_float::mul(one.value, _mm_shuffle_ps(two.value, two.value, _MM_SHUFFLE(2, 3, 0, 1)));
 
-		// SSE3
 		realSums = _mm_hsub_ps(realSums, realSums);
 		imaginarySums = _mm_hadd_ps(imaginarySums, imaginarySums);
 		return _mm_unpacklo_ps(realSums, imaginarySums);
-
-		// SSE2 alternative (~1/3 slower on gcc, ~3/5 slower on clang)
-		// https://quick-bench.com/q/dc83ggozePz5l91BkHV-lxE0B_U
-		/*static simd_mask realMask{std::array{kFullMask, 0, kFullMask, 0}};
-
-		realSums = _mm_shuffle_ps(realSums, realSums, _MM_SHUFFLE(3, 1, 2, 0));
-		imaginarySums = _mm_shuffle_ps(imaginarySums, imaginarySums, _MM_SHUFFLE(3, 1, 2, 0));
-
-		one.value = _mm_unpacklo_ps(realSums, imaginarySums);
-		two.value = _mm_unpackhi_ps(realSums, imaginarySums);
-		return ((one - two) & realMask) + ((one + two) & ~realMask);*/
-
 	#elif COMPLEX_NEON
 		static_assert(false, "ARM NEON complexCartMul not implemented yet");
 	#endif
@@ -76,8 +63,7 @@ namespace utils
 	#endif
 	}
 
-	// doesn't sqrt
-	strict_inline simd_float vector_call complexMagnitude(simd_float value)
+	strict_inline simd_float vector_call complexMagnitude(simd_float value, bool toSqrt)
 	{
 	#if COMPLEX_SSE4_1
 		auto real = _mm_shuffle_ps(value.value, value.value, _MM_SHUFFLE(2, 2, 0, 0));
@@ -85,11 +71,11 @@ namespace utils
 	#elif COMPLEX_NEON
 		static_assert(false, "ARM NEON complexMagnitude not implemented yet");
 	#endif
-
-		return simd_float::mulAdd(simd_float::mul(real, real), imaginary, imaginary);
+		value = simd_float::mulAdd(simd_float::mul(real, real), imaginary, imaginary);
+		return (toSqrt) ? simd_float::sqrt(value) : value;
 	}
 
-	strict_inline simd_float vector_call complexMagnitude(simd_float one, simd_float two)
+	strict_inline simd_float vector_call complexMagnitude(simd_float one, simd_float two, bool toSqrt)
 	{
 	#if COMPLEX_SSE4_1
 		auto real = _mm_shuffle_ps(one.value, two.value, _MM_SHUFFLE(2, 0, 2, 0));
@@ -97,8 +83,8 @@ namespace utils
 	#elif COMPLEX_NEON
 		static_assert(false, "ARM NEON complexMagnitude not implemented yet");
 	#endif
-
-		return sqrt(simd_float::mulAdd(simd_float::mul(real, real), imaginary, imaginary));
+		one = simd_float::mulAdd(simd_float::mul(real, real), imaginary, imaginary);
+		return (toSqrt) ? simd_float::sqrt(one) : one;
 	}
 
 	strict_inline simd_float vector_call complexPhase(simd_float value)
@@ -151,7 +137,7 @@ namespace utils
 
 	strict_inline void vector_call complexCartToPolar(simd_float &one, simd_float &two)
 	{
-		auto magnitudes = complexMagnitude(one, two);
+		auto magnitudes = complexMagnitude(one, two, true);
 		auto phases = complexPhase(one, two);
 		complexValueMerge(magnitudes, phases);
 		one = magnitudes;

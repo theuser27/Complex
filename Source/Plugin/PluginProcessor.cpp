@@ -30,7 +30,7 @@ ComplexAudioProcessor::ComplexAudioProcessor()
 
 	for (auto &parameterDetails : globalPluginParameterList)
 	{
-		auto parameter = PluginModule::AllModules::getModuleParameter(soundEngine->getModuleId(), parameterDetails.name);
+		auto parameter = getModuleParameter(soundEngine->getModuleId(), parameterDetails.name);
 		if (auto parameterPointer = parameter.lock())
 		{
 			Framework::ParameterBridge *bridge = new Framework::ParameterBridge((u32)(-1), parameterPointer->getParameterLink());
@@ -43,7 +43,7 @@ ComplexAudioProcessor::ComplexAudioProcessor()
 	size_t index = 0;
 	for (auto &parameterDetails : effectModuleParameterList)
 	{
-		auto parameter = PluginModule::AllModules::getModuleParameter(3, parameterDetails.name);
+		auto parameter = getModuleParameter(3, parameterDetails.name);
 		if (auto parameterPointer = parameter.lock())
 		{
 			Framework::ParameterBridge *bridge = new Framework::ParameterBridge(index, parameterPointer->getParameterLink());
@@ -55,7 +55,7 @@ ComplexAudioProcessor::ComplexAudioProcessor()
 
 	for (auto &parameterDetails : baseEffectParameterList)
 	{
-		auto parameter = PluginModule::AllModules::getModuleParameter(4, parameterDetails.name);
+		auto parameter = getModuleParameter(4, parameterDetails.name);
 		if (auto parameterPointer = parameter.lock())
 		{
 			Framework::ParameterBridge *bridge = new Framework::ParameterBridge(index, parameterPointer->getParameterLink());
@@ -67,7 +67,7 @@ ComplexAudioProcessor::ComplexAudioProcessor()
 
 	for (auto &parameterDetails : filterEffectParameterList)
 	{
-		auto parameter = PluginModule::AllModules::getModuleParameter(4, parameterDetails.name);
+		auto parameter = getModuleParameter(4, parameterDetails.name);
 		if (auto parameterPointer = parameter.lock())
 		{
 			Framework::ParameterBridge *bridge = new Framework::ParameterBridge(index, parameterPointer->getParameterLink());
@@ -102,7 +102,7 @@ void ComplexAudioProcessor::changeProgramName([[maybe_unused]] int index, [[mayb
 void ComplexAudioProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
 {
 	Initialise(sampleRate, samplesPerBlock);
-	setLatencySamples(soundEngine->getProcessingDelay());
+	setLatencySamples(getProcessingDelay());
 }
 
 void ComplexAudioProcessor::releaseResources()
@@ -147,12 +147,12 @@ void ComplexAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, [[ma
 	//DBG(numSamples);
 
 	//CheckGlobalParameters();
-	soundEngine->UpdateParameters(UpdateFlag::BeforeProcess);
-	setLatencySamples(soundEngine->getProcessingDelay());
+	updateMainParameters();
+	setLatencySamples(getProcessingDelay());
 
 	Process(buffer, numSamples, inputs, outputs);
 
-	RuntimeInfo::updateFlag.store(UpdateFlag::AfterProcess, std::memory_order_release);
+	setUpdateFlag(UpdateFlag::AfterProcess);
 }
 
 //==============================================================================

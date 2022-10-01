@@ -17,6 +17,42 @@
 
 namespace Generation
 {
+	class PluginModule;
+
+	// global state for keeping track of all parameters lists through global module number
+	class AllModules
+	{
+	public:
+		// may block and may allocate, if expandThreshold has been reached
+		bool addModule(std::shared_ptr<PluginModule> newPointer) noexcept;
+		bool deleteModule(u64 moduleId) noexcept;
+		std::weak_ptr<Framework::ParameterValue> getModuleParameter(u64 parentModuleId, std::string_view parameter) const noexcept;
+		u64 getId(bool isTopLevelModule = false) noexcept
+		{
+			return (isTopLevelModule) ? globalModuleIdCounter.load(std::memory_order_acquire) :
+				globalModuleIdCounter.fetch_add(1, std::memory_order_acq_rel);
+		}
+
+		UpdateFlag getUpdateFlag() const noexcept { return updateFlag.load(std::memory_order_acquire); }
+		void setUpdateFlag(UpdateFlag newFlag) noexcept { updateFlag.store(newFlag, std::memory_order_release); }
+
+	private:
+		void resizeAllParameters() noexcept;
+
+		std::unique_ptr<Framework::VectorMap<u64, std::weak_ptr<PluginModule>>> allModules =
+			std::make_unique<Framework::VectorMap<u64, std::weak_ptr<PluginModule>>>(64);
+
+		// used to give out non-repeating ids for all PluginModules
+		std::atomic<u64> globalModuleIdCounter = 0;
+		// used for checking whether it's ok to update parameters/plugin structure
+		std::atomic<UpdateFlag> updateFlag{ UpdateFlag::AfterProcess };
+
+		mutable std::atomic<bool> currentlyInUse = false;
+
+		static constexpr size_t expandAmount = 2;
+		static constexpr float expandThreshold = 0.75f;
+	};
+
 	class PluginModule
 	{
 	public:
@@ -24,13 +60,13 @@ namespace Generation
 		PluginModule(const PluginModule &) = delete;
 		PluginModule(PluginModule &&) = delete;
 
-		PluginModule(u64 parentModuleId, std::string_view moduleType) noexcept;
+		PluginModule(AllModules *globalModulesState_, u64 parentModuleId, std::string_view moduleType) noexcept;
 		PluginModule(const PluginModule &other, u64 parentModuleId) noexcept;
 		PluginModule &operator=(const PluginModule &other) noexcept;
 		PluginModule(PluginModule &&other, u64 parentModuleId) noexcept;
 		PluginModule &operator=(PluginModule &&other) noexcept;
 
-		virtual ~PluginModule() noexcept { AllModules::deleteModule(moduleId_); }
+		virtual ~PluginModule() noexcept { globalModulesState_->deleteModule(moduleId_); }
 
 		virtual void initialise() noexcept
 		{
@@ -39,9 +75,9 @@ namespace Generation
 		}
 
 		void clearSubModules() noexcept { subModules_.clear(); }
-		static bool checkUpdateFlag() noexcept
+		bool checkUpdateFlag() noexcept
 		{
-			if (auto flag = RuntimeInfo::updateFlag.load(std::memory_order_acquire);
+			if (auto flag = globalModulesState_->getUpdateFlag();
 				!(flag == UpdateFlag::AfterProcess || flag == UpdateFlag::BeforeProcess))
 				return false;
 			return true;
@@ -74,6 +110,43 @@ namespace Generation
 		// opposite of softDelete
 		void reuse() noexcept { currentlyUsing_.store(0, std::memory_order_release); }
 
+	private:
+		template <typename T, typename U, typename ... Args>
+		std::shared_ptr<PluginModule> caller(U &&reference, Args&& ... args)
+		{ return std::shared_ptr<PluginModule>(new T(std::forward<T>(static_cast<T &&>(reference)), moduleId_, std::forward<Args>(args)...)); }
+
+	public:
+		// creates and registers a submodule to the global state
+		// use this when creating submodules
+		template<typename T, typename ... Args>
+		std::shared_ptr<PluginModule> createSubModule(Args&& ... args)
+		{
+			// normal constructor
+			if constexpr (sizeof...(Args) == 0)
+			{
+				std::shared_ptr<PluginModule> newSubModule(new T(globalModulesState_, moduleId_));
+				globalModulesState_->addModule(newSubModule);
+				return newSubModule;
+			}
+			else
+			{
+				// if we have a derived class as first parameter then we're calling copy/move constructor
+				if constexpr (std::is_base_of_v<PluginModule, std::tuple_element_t<0, std::tuple<std::remove_reference_t<Args>...>>>)
+				{
+					std::shared_ptr<PluginModule> newSubModule = caller<T>(args...);
+					globalModulesState_->addModule(newSubModule);
+					return newSubModule;
+				}
+				// normal constructor + additional parameters
+				else
+				{
+					std::shared_ptr<PluginModule> newSubModule(new T(globalModulesState_, moduleId_, std::forward<Args>(args)...));
+					globalModulesState_->addModule(newSubModule);
+					return newSubModule;
+				}
+			}
+		}
+
 	protected:
 		void createModuleParameters(const Framework::ParameterDetails *details, size_t size) noexcept;
 		void addSubModulesToList() noexcept;
@@ -87,34 +160,11 @@ namespace Generation
 		Framework::VectorMap<std::string_view, std::shared_ptr<Framework::ParameterValue>> moduleParameters_{};
 
 		// data contextual to the base PluginModule
+		AllModules *const globalModulesState_ { nullptr };
 		const std::string_view moduleType_{};
 		const u64 moduleId_{};
 		const u64 parentModuleId_{};
 
-		// used to give out non-repeating ids for all PluginModules, zero-initialised at loading time
-		// TODO: see if this even needs to be thread-safe
-		// TODO: how are you going to save this in presets?
-		//       maybe, go through all modules, find the largest index and continue from there?
-		
-		// TODO: rework the module ID system so that it doesn't utilise globals, because all instances of the plugin see them!!!!!!!
-		inline static std::atomic<u64> globalModuleIdCounter = 0;
-	public:
-		// global state for keeping track of all parameters lists through global module number
-		struct AllModules
-		{
-			// may block and may allocate, if expandThreshold has been reached
-			static bool addModule(std::shared_ptr<PluginModule> newPointer) noexcept;
-			static bool deleteModule(u64 moduleId) noexcept;
-			static std::weak_ptr<Framework::ParameterValue> getModuleParameter(u64 parentModuleId, std::string_view parameter) noexcept;
-
-		private:
-			static void resizeAllParameters() noexcept;
-			inline static auto allModules = std::make_unique<Framework::VectorMap<u64,
-				std::weak_ptr<PluginModule>>>(64);
-			inline static std::atomic<bool> currentlyInUse = false;
-
-			static constexpr size_t expandAmount = 2;
-			static constexpr float expandThreshold = 0.75f;
-		};
+		friend class AllModules;
 	};
 }

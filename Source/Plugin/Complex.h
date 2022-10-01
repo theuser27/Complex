@@ -16,20 +16,23 @@
 
 namespace Plugin
 {
-	class ComplexPlugin
+	class ComplexPlugin : public Generation::AllModules
 	{
 	public:
-
 		ComplexPlugin();
 		~ComplexPlugin() = default;
-
-		// pointer to the main processing engine
-		std::shared_ptr<Generation::SoundEngine> soundEngine;
 
 		void Initialise(float sampleRate, u32 samplesPerBlock);
 		void CheckGlobalParameters();
 		void Process(AudioBuffer<float> &buffer, u32 numSamples, u32 numInputs, u32 numOutputs);
 
+		u32 getProcessingDelay() { return soundEngine->getProcessingDelay(); }
+		void updateMainParameters() { soundEngine->UpdateParameters(UpdateFlag::BeforeProcess); }
+
 		virtual void parameterChangeMidi(u64 parentModuleId, std::string_view parameterName, float value);
+
+	protected:
+		// pointer to the main processing engine
+		std::shared_ptr<Generation::SoundEngine> soundEngine;
 	};
 }

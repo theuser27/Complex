@@ -77,8 +77,6 @@ namespace common
 	{
 		inline static std::atomic<u32> samplesPerBlock{};
 		inline static std::atomic<float> sampleRate = kDefaultSampleRate;
-		inline static std::atomic<u32> FFTSize = 1 << kDefaultFFTOrder;
-		inline static std::atomic<UpdateFlag> updateFlag{ UpdateFlag::AfterProcess };
 	};
 
 	namespace commonConcepts

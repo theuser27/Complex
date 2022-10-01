@@ -26,7 +26,7 @@ namespace Generation
 	class SoundEngine : public PluginModule
 	{
 	public:
-		SoundEngine() noexcept;
+		SoundEngine(AllModules *globalModulesState) noexcept;
 		~SoundEngine() noexcept { PluginModule::~PluginModule(); }
 
 		SoundEngine(const SoundEngine &) = delete;

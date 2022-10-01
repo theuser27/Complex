@@ -13,7 +13,8 @@
 namespace Generation
 {
 	// as the topmost module its parentModuleId is going to be itself
-	SoundEngine::SoundEngine() noexcept : PluginModule(PluginModule::globalModuleIdCounter.load(std::memory_order_acquire), Framework::kPluginModules[0])
+	SoundEngine::SoundEngine(AllModules *globalModulesState) noexcept : 
+		PluginModule(globalModulesState, globalModulesState->getId(true), Framework::kPluginModules[0])
 	{
 		transforms.reserve(kMaxFFTOrder - kMinFFTOrder + 1);
 		for (u32 i = 0; i < (kMaxFFTOrder - kMinFFTOrder + 1); i++)
@@ -28,8 +29,8 @@ namespace Generation
 		outBuffer.reserve(kNumTotalChannels, kMaxFFTBufferLength * 2);
 		windows = Framework::Window::getInstance();
 
-		subModules_.emplace_back(std::make_shared<EffectsState>(moduleId_));
-		addSubModulesToList();
+		auto newSubModule = createSubModule<EffectsState>();
+		subModules_.emplace_back(std::move(newSubModule));
 
 		moduleParameters_.data.reserve(Framework::globalPluginParameterList.size());
 		createModuleParameters(Framework::globalPluginParameterList.data(), Framework::globalPluginParameterList.size());
@@ -99,7 +100,7 @@ namespace Generation
 
 	void SoundEngine::UpdateParameters(UpdateFlag flag) noexcept
 	{
-		RuntimeInfo::updateFlag.store(flag, std::memory_order_release);
+		globalModulesState_->setUpdateFlag(flag);
 		updateParameters(flag, true);
 
 		switch (flag)

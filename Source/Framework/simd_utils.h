@@ -14,6 +14,7 @@
 #include "matrix.h"
 #include <complex>
 #include <Framework/parameters.h>
+#include "Third Party/gcem/include/gcem.hpp"
 
 namespace utils
 {
@@ -40,14 +41,6 @@ namespace utils
 	strict_inline simd_float vector_call tan(simd_float value) noexcept { return map<tanf>(value); }
 	strict_inline simd_float vector_call atan2(simd_float one, simd_float two) noexcept { return map<atan2f>(one, two); }
 
-	strict_inline simd_float vector_call sqrt(simd_float value) noexcept
-	{
-	#if COMPLEX_SSE4_1
-		return _mm_sqrt_ps(value.value);
-	#elif COMPLEX_NEON
-		return map<sqrtf>(value);
-	#endif
-	}
 
 	strict_inline simd_float vector_call interpolate(simd_float &from, simd_float &to, float t) noexcept
 	{ return simd_float::mulAdd(from, to - from, t); }
@@ -114,6 +107,9 @@ namespace utils
 
 	strict_inline bool vector_call completelyEqual(simd_float left, simd_float right) noexcept
 	{ return simd_float::notEqual(left, right).sum() == 0; }
+
+	strict_inline bool vector_call completelyEqual(simd_int left, simd_int right) noexcept
+	{ return simd_int::notEqual(left, right).sum() == 0; }
 
 	// 0s for loading values from one, 1s for loading values from two
 	template<commonConcepts::SimdValue SIMD>
@@ -224,6 +220,8 @@ namespace utils
 
 	strict_inline simd_float vector_call exp2(simd_float exponent) noexcept
 	{
+		// taylor expansion of 2^x at 0
+		// coefficients are (ln(2)^n) / n! computed with wxMaxima
 		static constexpr float kCoefficient0 = 1.0f;
 		static constexpr float kCoefficient1 = 16970.0 / 24483.0;
 		static constexpr float kCoefficient2 = 1960.0 / 8161.0;
@@ -231,17 +229,47 @@ namespace utils
 		static constexpr float kCoefficient4 = 80.0 / 8161.0;
 		static constexpr float kCoefficient5 = 32.0 / 24483.0;
 
-		simd_int integer = toInt(simd_float::round(exponent));
-		simd_float t = exponent - toFloat(integer);
-		simd_float int_pow = pow2ToFloat(integer);
+		// the closer the exponent is to a whole number, the more accurate it's going to be
+		// since it only requires to add it the overall floating point exponent
+		simd_float rounded = simd_float::round(exponent);
+		simd_float t = exponent - rounded;
+		simd_float int_pow = pow2ToFloat(toInt(rounded));
 
+		// we exp2 whatever decimal number is left with the taylor series
+		// the domain we're in is [0.0f, 0.5f], we don't expect negative numbers
 		simd_float cubic = t * (t * (t * kCoefficient5 + kCoefficient4) + kCoefficient3) + kCoefficient2;
 		simd_float interpolate = t * (t * cubic + kCoefficient1) + kCoefficient0;
 		return int_pow * interpolate;
 	}
 
+	strict_inline simd_float vector_call newExp2(simd_float exponent) noexcept
+	{
+		// taylor series expansion of 2^x at 0
+		// coefficients are (ln(2)^n) / n! computed with wxMaxima
+		static constexpr float kCoefficient0 = 1.0f;
+		static constexpr float kCoefficient1 = 0.6931471805599453f;
+		static constexpr float kCoefficient2 = 0.2402265069591007f;
+		static constexpr float kCoefficient3 = 0.05550410866482158f;
+		static constexpr float kCoefficient4 = 0.009618129107628477f;
+		static constexpr float kCoefficient5 = 0.001333355814642844f;
+
+		// the closer the exponent is to a whole number, the more accurate it's going to be
+		// since it only requires to add it the overall floating point exponent
+		simd_float rounded = simd_float::round(exponent);
+		simd_float t = exponent - rounded;
+		simd_float int_pow = pow2ToFloat(toInt(rounded));
+
+		// we exp2 whatever decimal number is left with the taylor series
+		// the domain we're in is [0.0f, 0.5f], we don't expect negative numbers
+		simd_float interpolate = simd_float::mulAdd(kCoefficient2, t, simd_float::mulAdd(kCoefficient3,
+			t, simd_float::mulAdd(kCoefficient4, t, kCoefficient5)));
+		interpolate = simd_float::mulAdd(kCoefficient0, t, simd_float::mulAdd(kCoefficient1, t, interpolate));
+		return int_pow * interpolate;
+	}
+
 	strict_inline simd_float vector_call log2(simd_float value) noexcept
 	{
+		// i have no idea how these coefficients have been derived
 		static constexpr float kCoefficient0 = -1819.0 / 651.0;
 		static constexpr float kCoefficient1 = 5.0;
 		static constexpr float kCoefficient2 = -10.0 / 3.0;
@@ -249,12 +277,51 @@ namespace utils
 		static constexpr float kCoefficient4 = -1.0 / 3.0;
 		static constexpr float kCoefficient5 = 1.0 / 31.0;
 
-		simd_int floored_log2 = utils::shiftRight<23>(reinterpretToInt(value)) - 0x7f;
+		// effectively log2s only the exponent; gets it in terms an int
+		simd_int floored_log2 = shiftRight<23>(reinterpretToInt(value)) - 0x7f;
+		// 0x7fffff masks the entire mantissa
+		// then we bring the exponent to 2^0 to get the entire number between [1, 2]
 		simd_float t = (value & 0x7fffff) | (0x7f << 23);
 
+		// we log2 the mantissa with the taylor series coefficients
 		simd_float cubic = t * (t * (t * kCoefficient5 + kCoefficient4) + kCoefficient3) + kCoefficient2;
 		simd_float interpolate = t * (t * cubic + kCoefficient1) + kCoefficient0;
-		return utils::toFloat(floored_log2) + interpolate;
+
+		// we add the int with the mantissa to get our final result
+		return toFloat(floored_log2) + interpolate;
+	}
+
+	strict_inline simd_float vector_call newLog2(simd_float value) noexcept
+	{
+		// taylor series expansion of log2 at 1.45
+		// coefficients computed with wxMaxima
+		static constexpr float kOffset = 1.0 / gcem::log(2.0);
+		static constexpr float kCoefficient0 = gcem::log(29.0 / 20.0);
+		static constexpr float kCoefficient1 = 20.0 / 29.0;
+		static constexpr float kCoefficient2 = 200.0 / 841.0;
+		static constexpr float kCoefficient3 = 8000.0 / 73167.0;
+		static constexpr float kCoefficient4 = 40000.0 / 707281.0;
+		static constexpr float kCoefficient5 = 640000.0 / 20511149.0;
+		static constexpr float kCoefficient6 = 32000000.0 / 1784469963.0;
+		static constexpr float kCoefficient7 = 1280000000.0 / 120749134163.0;
+
+		// effectively log2s only the exponent; gets it in terms an int
+		simd_int floored_log2 = shiftRight<23>(reinterpretToInt(value)) - 0x7f;
+		// 0x7fffff masks the entire mantissa
+		// then we bring the exponent to 2^0 to get the entire number between [1, 2]
+		simd_float t = (value & 0x7fffff) | (0x7f << 23);
+		// offsetting because that's the point of expansion
+		t -= 1.45f;
+
+		// we log2 the mantissa with the coefficients
+		simd_float interpolate = simd_float::mulAdd(kCoefficient4, t, simd_float::mulAdd(kCoefficient5, 
+			t, simd_float::mulAdd(kCoefficient6, t, kCoefficient7)));
+		interpolate = simd_float::mulAdd(kCoefficient0, t, simd_float::mulAdd(kCoefficient1, t, 
+			simd_float::mulAdd(kCoefficient2, t, simd_float::mulAdd(kCoefficient3, t, interpolate))));
+		interpolate *= kOffset;
+
+		// we add the int with the mantissa to get our final result
+		return toFloat(floored_log2) + interpolate;
 	}
 
 	strict_inline simd_float vector_call exp(simd_float exponent) noexcept
@@ -287,16 +354,64 @@ namespace utils
 	{ return log2(db + 1.0f) / log2(maxDb); }
 
 	strict_inline simd_float vector_call normalisedToFrequency(simd_float normalised, float sampleRate) noexcept
-	{ return pow(sampleRate / (2.0f * kMinFrequency), normalised) * kMinFrequency; }
+	{
+		static float lastSampleRate = kDefaultSampleRate;
+		static float lastLog2 = std::log2(lastSampleRate / (kMinFrequency * 2.0));
+
+		if (lastSampleRate != sampleRate)
+		{
+			lastSampleRate = sampleRate;
+			lastLog2 = std::log2(lastSampleRate / (2.0 * kMinFrequency));
+		}
+
+		return exp2(simd_float(lastLog2) * normalised) * kMinFrequency;
+	}
 
 	strict_inline simd_float vector_call frequencyToNormalised(simd_float frequency, float sampleRate) noexcept
-	{ return log2(frequency / kMinFrequency) / log2(simd_float(sampleRate / 2.0f * kMinFrequency)); }
+	{
+		static float lastSampleRate = kDefaultSampleRate;
+		static float lastLog2 = std::log2(lastSampleRate / (kMinFrequency * 2.0));
 
-	strict_inline simd_float vector_call binToNormalised(simd_float bin, float FFTOrder) noexcept
-	{ return log2(bin) / (FFTOrder - 1.0f); }
+		if (lastSampleRate != sampleRate)
+		{
+			lastSampleRate = sampleRate;
+			lastLog2 = std::log2((double)lastSampleRate / (2.0 * kMinFrequency));
+		}
+		return log2(frequency / kMinFrequency) / simd_float(lastLog2);
+	}
 
-	strict_inline simd_float vector_call normalisedToBin(simd_float normalised, float FFTOrder) noexcept
-	{ return simd_float::ceil(exp2(normalised * (FFTOrder - 1))); }
+	strict_inline simd_float vector_call binToNormalised(simd_float bin, u32 FFTSize, float sampleRate) noexcept
+	{
+		static float lastSampleRate = kDefaultSampleRate;
+		static float lastLog2 = std::log2(lastSampleRate / (kMinFrequency * 2.0));
+
+		if (lastSampleRate != sampleRate)
+		{
+			lastSampleRate = sampleRate;
+			lastLog2 = std::log2((double)lastSampleRate / (2.0 * kMinFrequency));
+		}
+
+		// for 0 logarithm doesn't produce valid values so we have to mask that
+		simd_mask zeroMask = simd_float::equal(bin, 0.0f);
+		bin = maskLoad(bin, simd_float(1.0f), zeroMask);
+		simd_float result = log2((bin / FFTSize) * (sampleRate / kMinFrequency)) / lastLog2;
+
+		return maskLoad(result, simd_float(0.0f), zeroMask);
+	}
+
+	strict_inline simd_float vector_call normalisedToBin(simd_float normalised, u32 FFTSize, float sampleRate) noexcept
+	{
+		static float lastSampleRate = kDefaultSampleRate;
+		static float lastLog2 = std::log2(lastSampleRate / (kMinFrequency * 2.0));
+
+		if (lastSampleRate != sampleRate)
+		{
+			lastSampleRate = sampleRate;
+			lastLog2 = std::log2((double)lastSampleRate / (2.0 * kMinFrequency));
+		}
+
+		return simd_float::ceil(exp2(normalised * lastLog2) * ((FFTSize * kMinFrequency) / sampleRate)) - 1.0f;
+	}
 
 	strict_inline float exp2(float value) noexcept
 	{
@@ -466,6 +581,29 @@ namespace utils
 		return shiftRight<1>(value - simd_int(_mm_shuffle_epi32(value.value, _MM_SHUFFLE(2, 3, 0, 1))));
 	#elif COMPLEX_NEON
 		static_assert(false, "ARM NEON getStereoDifference not implemented yet");
+	#endif
+	}
+
+	strict_inline bool vector_call areAllElementsSame(simd_int value) noexcept
+	{
+	#if COMPLEX_SSE4_1
+		simd_mask mask = value ^ simd_int(_mm_shuffle_epi32(value.value, _MM_SHUFFLE(2, 3, 0, 1)));
+		mask |= value ^ simd_int(_mm_shuffle_epi32(value.value, _MM_SHUFFLE(0, 1, 2, 3)));
+		return mask.sum() == 0;
+	#elif COMPLEX_NEON
+		static_assert(false, "ARM NEON areAllElementsSame not implemented yet");
+	#endif
+	}
+
+	strict_inline bool vector_call areAllElementsSame(simd_float value) noexcept
+	{
+		simd_int intValue = reinterpretToInt(value);
+	#if COMPLEX_SSE4_1
+		simd_mask mask = intValue ^ simd_int(_mm_shuffle_epi32(intValue.value, _MM_SHUFFLE(2, 3, 0, 1)));
+		mask |= intValue ^ simd_int(_mm_shuffle_epi32(intValue.value, _MM_SHUFFLE(0, 1, 2, 3)));
+		return mask.sum() == 0;
+	#elif COMPLEX_NEON
+		static_assert(false, "ARM NEON areAllElementsSame not implemented yet");
 	#endif
 	}
 

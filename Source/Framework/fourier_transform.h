@@ -23,38 +23,46 @@ namespace Framework
 		// in and out buffers need to be 2 * bits
 		FFT(int bits) : size_(1 << bits)
 		{
-			int spec_size = 0;
-			int spec_buffer_size = 0;
-			int buffer_size = 0;
-			ippsFFTGetSize_R_32f(bits, IPP_FFT_DIV_INV_BY_N, ippAlgHintNone, &spec_size, &spec_buffer_size, &buffer_size);
+			int specSize = 0;
+			int specBufferSize = 0;
+			int bufferSize = 0;
+			ippsFFTGetSize_R_32f(bits, IPP_FFT_DIV_INV_BY_N, ippAlgHintNone, &specSize, &specBufferSize, &bufferSize);
 
-			spec_ = std::make_unique<Ipp8u[]>(spec_size);
-			spec_buffer_ = std::make_unique<Ipp8u[]>(spec_buffer_size);
-			buffer_ = std::make_unique<Ipp8u[]>(buffer_size);
+			memory_ = std::make_unique<Ipp8u[]>(specSize + specBufferSize + bufferSize);
+			spec_ = memory_.get();
+			specBuffer_ = &spec_[specSize];
+			buffer_ = &specBuffer_[specBufferSize];
 
-			ippsFFTInit_R_32f(&ipp_specs_, bits, IPP_FFT_DIV_INV_BY_N, ippAlgHintNone, spec_.get(), spec_buffer_.get());
+			ippsFFTInit_R_32f(&ippSpecs_, bits, IPP_FFT_DIV_INV_BY_N, ippAlgHintNone, spec_, specBuffer_);
 		}
 
 		// src buffer needs to have exactly as many samples as FFT size
 		perf_inline void transformRealForward(float *inOut)
 		{
 			inOut[size_] = 0.0f;
-			ippsFFTFwd_RToCCS_32f_I((Ipp32f *)inOut, ipp_specs_, buffer_.get());
+			ippsFFTFwd_RToCCS_32f_I((Ipp32f *)inOut, ippSpecs_, buffer_);
+			// putting the nyquist bin together with dc bin
+			inOut[1] = inOut[size_];
+			inOut[size_] = 0.0f;
 		}
 
 		// src needs to be in the CCS format
 		perf_inline void transformRealInverse(float *inOut)
 		{
-			ippsFFTInv_CCSToR_32f_I((Ipp32f *)inOut, ipp_specs_, buffer_.get());
+			// separating dc and nyquist bins
+			inOut[size_] = inOut[1];
+			inOut[1] = 0.0f;
+			inOut[size_ + 1] = 0.0f;
+			ippsFFTInv_CCSToR_32f_I((Ipp32f *)inOut, ippSpecs_, buffer_);
 		}
 
 	private:
 		int size_;
-		IppsFFTSpec_R_32f *ipp_specs_;
-		// TODO: allocate a single block of memory for all of these pointers
-		std::unique_ptr<Ipp8u[]> spec_;
-		std::unique_ptr<Ipp8u[]> spec_buffer_;
-		std::unique_ptr<Ipp8u[]> buffer_;
+		IppsFFTSpec_R_32f *ippSpecs_;
+		std::unique_ptr<Ipp8u[]> memory_;
+		Ipp8u* spec_;
+		Ipp8u *specBuffer_;
+		Ipp8u *buffer_;
 
 		JUCE_LEAK_DETECTOR(FFT)
 	};
