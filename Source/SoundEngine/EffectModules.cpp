@@ -351,7 +351,7 @@ namespace Generation
 		if (!checkUpdateFlag())
 			return false;
 
-		std::shared_ptr<PluginModule> newEffect;
+		std::shared_ptr<PluginModule> newEffect{};
 
 		if (moduleType == Framework::kEffectModuleNames[0])
 			newEffect = createSubModule<utilityEffect>();
@@ -389,7 +389,7 @@ namespace Generation
 			static_cast<baseEffect *>(newSubModule.get())->getEffectType()) != Framework::kEffectModuleNames.end()) 
 			&& "You're inserting a non-Effect into an EffectModule");
 
-		std::shared_ptr<PluginModule> newEffect = createSubModule<baseEffect>(*newSubModule);
+		std::shared_ptr<PluginModule> newEffect = newSubModule->createCopy(moduleId_);
 		
 		utils::spinAndLock(currentlyUsing_, 0, 1);
 		subModules_[0].swap(newEffect);
@@ -407,7 +407,9 @@ namespace Generation
 			static_cast<baseEffect *>(newSubModule.get())->getEffectType()) != Framework::kEffectModuleNames.end())
 			&& "You're inserting a non-Effect into an EffectModule");
 
-		std::shared_ptr<PluginModule> newEffect = createSubModule<baseEffect>(*newSubModule);
+		std::shared_ptr<PluginModule> newEffect{};
+		newEffect.swap(newSubModule);
+		newEffect->setParentModuleId(moduleId_);
 
 		utils::spinAndLock(currentlyUsing_, 0, 1);
 		subModules_[0].swap(newEffect);

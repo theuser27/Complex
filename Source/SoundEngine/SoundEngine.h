@@ -27,7 +27,7 @@ namespace Generation
 	{
 	public:
 		SoundEngine(AllModules *globalModulesState) noexcept;
-		~SoundEngine() noexcept { PluginModule::~PluginModule(); }
+		~SoundEngine() noexcept override { PluginModule::~PluginModule(); }
 
 		SoundEngine(const SoundEngine &) = delete;
 		SoundEngine(SoundEngine &&) = delete;
@@ -355,6 +355,10 @@ namespace Generation
 		void ScaleDown() noexcept;
 		void MixOut(u32 numSamples) noexcept;
 		void FillOutput(AudioBuffer<float> &buffer, u32 numOutputs, u32 numSamples) noexcept;
+
+		// Inherited via PluginModule
+		std::shared_ptr<PluginModule> createCopy(u64 parentModuleId) const noexcept override
+		{ COMPLEX_ASSERT(false && "You're trying to copy SoundEngine, which is not meant to be copied"); return {}; }
 
 	public:
 		// initialising pointers and FFT plans

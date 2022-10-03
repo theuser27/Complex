@@ -58,7 +58,7 @@ namespace Generation
 			createModuleParameters(Framework::effectChainParameterList.data(), Framework::effectChainParameterList.size());
 		}
 
-		~EffectsChain() noexcept { PluginModule::~PluginModule(); }
+		~EffectsChain() noexcept override { PluginModule::~PluginModule(); }
 
 		EffectsChain(const EffectsChain &other, u64 parentModuleId) noexcept : PluginModule(other, parentModuleId)
 		{
@@ -82,6 +82,8 @@ namespace Generation
 		bool deleteSubModule([[maybe_unused]] u32 index) noexcept override;
 		bool copySubModule(const std::shared_ptr<PluginModule> &newSubModule, u32 index) noexcept override;
 		bool moveSubModule(std::shared_ptr<PluginModule> newSubModule, u32 index) noexcept override;
+		std::shared_ptr<PluginModule> createCopy(u64 parentModuleId) const noexcept override
+		{ return std::make_shared<EffectsChain>(*this, parentModuleId); }
 
 	private:
 		std::unique_ptr<EffectsChainData> chainData;
@@ -132,7 +134,7 @@ namespace Generation
 			insertSubModule(subModules_.size(), Framework::kPluginModules[2]);
 		}
 
-		~EffectsState() noexcept
+		~EffectsState() noexcept override
 		{
 			for (size_t i = 0; i < chainThreads_.size(); i++)
 				chainThreads_[i].~jthread();
@@ -150,6 +152,9 @@ namespace Generation
 		bool insertSubModule([[maybe_unused]] u32 index, [[maybe_unused]] std::string_view moduleType) noexcept override;
 		bool deleteSubModule(u32 index) noexcept override;
 		bool copySubModule(const std::shared_ptr<PluginModule> &newSubModule, [[maybe_unused]] u32 index) noexcept override;
+
+		std::shared_ptr<PluginModule> createCopy(u64 parentModuleId) const noexcept override
+		{ COMPLEX_ASSERT(false && "You're trying to copy EffectsState, which is not meant to be copied"); return {}; }
 
 		auto getUsedInputChannels() noexcept
 		{

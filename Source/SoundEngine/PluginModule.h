@@ -22,6 +22,13 @@ namespace Generation
 	// global state for keeping track of all parameters lists through global module number
 	class AllModules
 	{
+	protected:
+		AllModules() = default;
+		AllModules(const AllModules &) = default;
+		AllModules(AllModules &&) = default;
+		AllModules &operator=(const AllModules &other) = default;
+		AllModules &operator=(AllModules &&other) = default;
+
 	public:
 		// may block and may allocate, if expandThreshold has been reached
 		bool addModule(std::shared_ptr<PluginModule> newPointer) noexcept;
@@ -74,6 +81,8 @@ namespace Generation
 				moduleParameters_.data[i].second->initialise();
 		}
 
+		virtual std::shared_ptr<PluginModule> createCopy(u64 parentModuleId) const noexcept = 0;
+
 		void clearSubModules() noexcept { subModules_.clear(); }
 		bool checkUpdateFlag() noexcept
 		{
@@ -101,7 +110,9 @@ namespace Generation
 
 		std::string_view getModuleType() const noexcept { return moduleType_; }
 		u64 getModuleId() const noexcept { return moduleId_; }
+		
 		u64 getParentModuleId() const noexcept { return parentModuleId_; }
+		void setParentModuleId(u64 newParentModuleId) noexcept { parentModuleId_ = newParentModuleId; }
 
 		// how many threads are currently using this object
 		i8 getNumCurrentUsers() noexcept { return currentlyUsing_.load(std::memory_order_acquire); }
@@ -110,18 +121,12 @@ namespace Generation
 		// opposite of softDelete
 		void reuse() noexcept { currentlyUsing_.store(0, std::memory_order_release); }
 
-	private:
-		template <typename T, typename U, typename ... Args>
-		std::shared_ptr<PluginModule> argSplitter(U &&reference, Args&& ... args)
-		{ return std::shared_ptr<PluginModule>(new T(std::forward<T>(static_cast<T &&>(reference)), moduleId_, std::forward<Args>(args)...)); }
 
-	public:
 		// creates and registers a submodule to the global state
 		// use this when creating submodules
 		template<typename T, typename ... Args>
 		std::shared_ptr<PluginModule> createSubModule(Args&& ... args)
 		{
-			// normal constructor
 			if constexpr (sizeof...(Args) == 0)
 			{
 				std::shared_ptr<PluginModule> newSubModule(new T(globalModulesState_, moduleId_));
@@ -130,20 +135,9 @@ namespace Generation
 			}
 			else
 			{
-				// if we have a derived class as first parameter then we're calling copy/move constructor
-				if constexpr (std::is_base_of_v<PluginModule, std::tuple_element_t<0, std::tuple<std::remove_reference_t<Args>...>>>)
-				{
-					std::shared_ptr<PluginModule> newSubModule = argSplitter<T>(args...);
-					globalModulesState_->addModule(newSubModule);
-					return newSubModule;
-				}
-				// normal constructor + additional parameters
-				else
-				{
-					std::shared_ptr<PluginModule> newSubModule(new T(globalModulesState_, moduleId_, std::forward<Args>(args)...));
-					globalModulesState_->addModule(newSubModule);
-					return newSubModule;
-				}
+				std::shared_ptr<PluginModule> newSubModule(new T(globalModulesState_, moduleId_, std::forward<Args>(args)...));
+				globalModulesState_->addModule(newSubModule);
+				return newSubModule;
 			}
 		}
 
@@ -160,10 +154,11 @@ namespace Generation
 		Framework::VectorMap<std::string_view, std::shared_ptr<Framework::ParameterValue>> moduleParameters_{};
 
 		// data contextual to the base PluginModule
-		AllModules *const globalModulesState_ { nullptr };
+		u64 parentModuleId_{};
+
+		AllModules *const globalModulesState_ = nullptr;
 		const std::string_view moduleType_{};
 		const u64 moduleId_{};
-		const u64 parentModuleId_{};
 
 		friend class AllModules;
 	};

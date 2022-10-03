@@ -150,7 +150,7 @@ void ComplexAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, [[ma
 	updateMainParameters();
 	setLatencySamples(getProcessingDelay());
 
-	Process(buffer, numSamples, inputs, outputs);
+	Process(buffer, (u32)numSamples, (u32)inputs, (u32)outputs);
 
 	setUpdateFlag(UpdateFlag::AfterProcess);
 }

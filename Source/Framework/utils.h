@@ -259,7 +259,7 @@ namespace utils
 			thisBufferSize = thisBuffer.getNumSamples() - 1;
 			otherBufferSize = otherBuffer.getNumSamples() - 1;
 			break;
-		case false:
+		default:
 			indexFunction = [](u32 value, u32 size) { return value % size; };
 			thisBufferSize = thisBuffer.getNumSamples();
 			otherBufferSize = otherBuffer.getNumSamples();

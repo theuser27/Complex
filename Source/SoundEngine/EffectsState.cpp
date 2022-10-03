@@ -43,7 +43,7 @@ namespace Generation
 		COMPLEX_ASSERT(newSubModule->getModuleType() == Framework::kPluginModules[3] &&
 			"You're trying to copy a non-EffectModule into EffectChain");
 
-		subModules_.insert(subModules_.begin() + index, std::move(createSubModule<EffectModule>(*newSubModule)));
+		subModules_.insert(subModules_.begin() + index, std::move(newSubModule->createCopy(moduleId_)));
 
 		return true;
 	}
@@ -56,10 +56,8 @@ namespace Generation
 		COMPLEX_ASSERT(newSubModule->getModuleType() == Framework::kPluginModules[3] &&
 			"You're trying to copy a non-EffectModule into EffectChain");
 
-		auto *subModule = static_cast<EffectModule *>(newSubModule.get());
-
-		subModules_.insert(subModules_.begin() + index, std::move(createSubModule<EffectModule>(*newSubModule)));
-		//globalModulesState_->addModule(subModules_[index]);
+		newSubModule->setParentModuleId(moduleId_);
+		subModules_.insert(subModules_.begin() + index, std::move(newSubModule));
 
 		return true;
 	}
@@ -142,7 +140,7 @@ namespace Generation
 			return false;
 
 		// if there are no unused objects and we haven't reached max capacity, we can add
-		subModules_.emplace_back(std::move(createSubModule<EffectsChain>(*newSubModule)));
+		subModules_.emplace_back(std::move(newSubModule->createCopy(moduleId_)));
 		chainThreads_.emplace_back(processIndividualChains, std::ref(*this), subModules_.size() - 1);
 
 		return true;

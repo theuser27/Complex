@@ -33,7 +33,7 @@ namespace Generation
 		{
 			createModuleParameters(Framework::baseEffectParameterList.data(), Framework::baseEffectParameterList.size());
 		}
-		virtual ~baseEffect() override = default;
+		virtual ~baseEffect() override { PluginModule::~PluginModule(); };
 
 		baseEffect(const baseEffect &other, u64 parentModuleId) noexcept : 
 			PluginModule(other, parentModuleId), effectType(other.effectType) {}
@@ -52,6 +52,10 @@ namespace Generation
 			effectType = other.effectType;
 			return *this;
 		}
+
+		// Inherited via PluginModule
+		std::shared_ptr<PluginModule> createCopy(u64 parentModuleId) const noexcept override
+		{ return std::make_shared<baseEffect>(*this, parentModuleId); }
 
 		auto getEffectType() const noexcept { return effectType; }
 
@@ -106,7 +110,7 @@ namespace Generation
 		std::string_view effectType{};
 };
 
-	class utilityEffect : public baseEffect
+	class utilityEffect final : public baseEffect
 	{
 	public:
 		utilityEffect() = delete;
@@ -229,7 +233,7 @@ namespace Generation
 		static constexpr float kMaxNegativeValue = -0.5f;
 	};
 
-	class dynamicsEffect : public baseEffect
+	class dynamicsEffect final : public baseEffect
 	{
 	public:
 		dynamicsEffect() = delete;
@@ -245,7 +249,7 @@ namespace Generation
 		// spectral compander, gate (threshold), clipping
 	};
 
-	class phaseEffect : public baseEffect
+	class phaseEffect final : public baseEffect
 	{
 	public:
 		phaseEffect() = delete;
@@ -261,7 +265,7 @@ namespace Generation
 		// phase zeroer, (constrained) phase randomiser (smear), channel phase shifter (pha-979), etc
 	};
 
-	class pitchEffect : public baseEffect
+	class pitchEffect final : public baseEffect
 	{
 	public:
 		pitchEffect() = delete;
@@ -277,7 +281,7 @@ namespace Generation
 		// resample, shift, const shift, harmonic shift, harmonic repitch
 	};
 
-	class stretchEffect : public baseEffect
+	class stretchEffect final : public baseEffect
 	{
 	public:
 		stretchEffect() = delete;
@@ -293,7 +297,7 @@ namespace Generation
 		// specops geometry
 	};
 
-	class warpEffect : public baseEffect
+	class warpEffect final : public baseEffect
 	{
 	public:
 		warpEffect() = delete;
@@ -309,7 +313,7 @@ namespace Generation
 		// vocode, harmonic match, cross/warp mix
 	};
 
-	class destroyEffect : public baseEffect
+	class destroyEffect final : public baseEffect
 	{
 	public:
 		destroyEffect() = delete;
@@ -348,11 +352,14 @@ namespace Generation
 		EffectModule &operator=(EffectModule &&other) noexcept
 		{ PluginModule::operator=(std::move(other)); return *this; }
 
-		~EffectModule() noexcept { PluginModule::~PluginModule(); }
+		~EffectModule() noexcept override { PluginModule::~PluginModule(); }
 
+		// Inherited via PluginModule
 		bool insertSubModule(u32 index, std::string_view moduleType) noexcept override;
 		bool copySubModule(const std::shared_ptr<PluginModule> &newSubModule, u32 index) noexcept override;
 		bool moveSubModule(std::shared_ptr<PluginModule> newSubModule, u32 index) noexcept override;
+		std::shared_ptr<PluginModule> createCopy(u64 parentModuleId) const noexcept override
+		{ return std::make_shared<EffectModule>(*this, parentModuleId); }
 
 		void processEffect(Framework::SimdBuffer<std::complex<float>, simd_float> &source,
 			Framework::SimdBuffer<std::complex<float>, simd_float> &destination, u32 effectiveFFTSize, float sampleRate);

@@ -22,11 +22,11 @@ namespace Generation
 		moduleParameters_.data.reserve(other.moduleParameters_.data.size());
 		for (size_t i = 0; i < other.moduleParameters_.data.size(); i++)
 			moduleParameters_.data.emplace_back(other.moduleParameters_.data[i].first,
-				std::make_shared<Framework::ParameterValue>(*(other.moduleParameters_[i].get()), moduleId_));
+				std::make_shared<Framework::ParameterValue>(*other.moduleParameters_[i], moduleId_));
 
 		subModules_.reserve(other.subModules_.size());
 		for (size_t i = 0; i < other.subModules_.size(); i++)
-			subModules_.emplace_back(std::make_shared<PluginModule>(*(subModules_[i].get()), moduleId_));
+			subModules_.emplace_back(other.subModules_[i]->createCopy(moduleId_));
 	}
 
 	PluginModule::PluginModule(PluginModule &&other, u64 parentModuleId) noexcept : globalModulesState_(other.globalModulesState_),
@@ -35,11 +35,11 @@ namespace Generation
 		moduleParameters_.data.reserve(other.moduleParameters_.data.size());
 		for (size_t i = 0; i < other.moduleParameters_.data.size(); i++)
 			moduleParameters_.data.emplace_back(other.moduleParameters_.data[i].first,
-				std::make_shared<Framework::ParameterValue>(std::move(*(other.moduleParameters_[i].get())), moduleId_));
+				std::make_shared<Framework::ParameterValue>(*other.moduleParameters_[i], moduleId_));
 
-		subModules_.reserve(other.subModules_.size());
-		for (size_t i = 0; i < other.subModules_.size(); i++)
-			subModules_.emplace_back(std::make_shared<PluginModule>(std::move(*(subModules_[i].get())), moduleId_));
+		subModules_ = std::move(other.subModules_);
+		for (size_t i = 0; i < subModules_.size(); i++)
+			subModules_[i]->setParentModuleId(moduleId_);
 	}
 
 
@@ -50,11 +50,11 @@ namespace Generation
 			moduleParameters_.data.reserve(other.moduleParameters_.data.size());
 			for (size_t i = 0; i < other.moduleParameters_.data.size(); i++)
 				moduleParameters_.data.emplace_back(other.moduleParameters_.data[i].first,
-					std::make_shared<Framework::ParameterValue>(*(other.moduleParameters_[i].get()), moduleId_));
+					std::make_shared<Framework::ParameterValue>(*other.moduleParameters_[i], moduleId_));
 
 			subModules_.reserve(other.subModules_.size());
 			for (size_t i = 0; i < other.subModules_.size(); i++)
-				subModules_.emplace_back(std::make_shared<PluginModule>(*(subModules_[i].get()), moduleId_));
+				subModules_.emplace_back(other.subModules_[i]->createCopy(moduleId_));
 		}
 		return *this;
 	}
@@ -66,11 +66,11 @@ namespace Generation
 			moduleParameters_.data.reserve(other.moduleParameters_.data.size());
 			for (size_t i = 0; i < other.moduleParameters_.data.size(); i++)
 				moduleParameters_.data.emplace_back(other.moduleParameters_.data[i].first,
-					std::make_shared<Framework::ParameterValue>(std::move(*(other.moduleParameters_[i].get())), moduleId_));
+					std::make_shared<Framework::ParameterValue>(*other.moduleParameters_[i], moduleId_));
 
-			subModules_.reserve(other.subModules_.size());
-			for (size_t i = 0; i < other.subModules_.size(); i++)
-				subModules_.emplace_back(std::make_shared<PluginModule>(std::move(*(subModules_[i].get())), moduleId_));
+			subModules_ = std::move(other.subModules_);
+			for (size_t i = 0; i < subModules_.size(); i++)
+				subModules_[i]->setParentModuleId(moduleId_);
 		}
 		return *this;
 	}
