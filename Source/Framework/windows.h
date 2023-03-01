@@ -12,7 +12,7 @@
 
 #include "common.h"
 #include "lookup.h"
-#include "./Third Party/gcem/include/gcem.hpp"
+#include <Third Party/gcem/gcem.hpp>
 
 namespace Framework
 {
@@ -72,32 +72,33 @@ namespace Framework
 
 	public:
 
-		static perf_inline float getHannWindow(float position)
+		// all functions take a normalised value as position
+		static float getHannWindow(float position)
 		{	return hannWindowLookup.linearLookup(position); }
 
-		static perf_inline float getHammingWindow(float position)
+		static float getHammingWindow(float position)
 		{	return hammingWindowLookup.linearLookup(position); }
 
-		static perf_inline float getTriangleWindow(float position)
+		static float getTriangleWindow(float position)
 		{	return triangleWindowLookup.linearLookup(position); }
 
-		static perf_inline float getSineWindow(float position)
+		static float getSineWindow(float position)
 		{	return sineWindowLookup.linearLookup(position); }
 
 
-		static perf_inline float getExponentialWindow(float position, float alpha)
+		static float getExponentialWindow(float position, float alpha)
 		{	return utils::pow((exponentialWindowLookup.linearLookup(position)), alpha); }
 
-		static perf_inline float getHannExponentialWindow(float position, float alpha)
+		static float getHannExponentialWindow(float position, float alpha)
 		{
 			return (utils::pow((exponentialWindowLookup.linearLookup(position)), alpha)
 				* hannWindowLookup.linearLookup(position));
 		}
 
-		static perf_inline float getLanczosWindow(float position, float alpha)
+		static float getLanczosWindow(float position, float alpha)
 		{	return utils::pow((lanczosWindowLookup.linearLookup(position)), alpha); }
 
-		perf_inline void applyWindow(AudioBuffer<float> &buffer, u32 numChannels, 
+		void applyWindow(AudioBuffer<float> &buffer, u32 numChannels, 
 			const bool* channelsToProcess, u32 numSamples, WindowTypes type, float alpha)
 		{
 			if (type == WindowTypes::Custom)
@@ -106,10 +107,10 @@ namespace Framework
 				applyDefaultWindows(buffer, numChannels, channelsToProcess, numSamples, type, alpha);
 		}
 
-		perf_inline void applyDefaultWindows(AudioBuffer<float> &buffer, u32 numChannels, 
+		void applyDefaultWindows(AudioBuffer<float> &buffer, u32 numChannels, 
 			const bool* channelsToCopy, u32 numSamples, WindowTypes type, float alpha)
 		{
-			if (type == WindowTypes::Rectangle)
+			if (type == WindowTypes::Clean || type == WindowTypes::Rectangle)
 				return;
 
 			float increment = 1.0f / numSamples;
@@ -219,7 +220,7 @@ namespace Framework
 			}
 		}
 
-		perf_inline void applyCustomWindows(AudioBuffer<float> &buffer, u32 numChannels, 
+		void applyCustomWindows(AudioBuffer<float> &buffer, u32 numChannels, 
 			const bool* channelsToCopy, u32 numSamples, WindowTypes type, float alpha)
 		{
 			// TODO: see into how to generate custom windows based on spectral properties

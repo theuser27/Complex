@@ -17,40 +17,50 @@
 
 namespace Framework
 {
+	template<typename T, commonConcepts::SimdValue SIMD>
+	class SimdBufferView;
+
 	// T - base type
 	// SIMD - simd type
-	// intended for use of simd types
-	template<typename T, commonConcepts::SimdValue SIMD, u32 alignment = alignof(SIMD)>
+	template<typename T, commonConcepts::SimdValue SIMD>
 		/*requires commonConcepts::Addable<SIMD> && commonConcepts::Multipliable<SIMD> &&
 			commonConcepts::OperatorParen<SIMD> && commonConcepts::OperatorBracket<SIMD>*/
 	class SimdBuffer 
 	{
 	public:
-		static_assert(alignment % alignof(T) == 0);
+		static_assert(alignof(SIMD) % alignof(T) == 0);
 
 		SimdBuffer() = default;
 		~SimdBuffer() = default;
 
-		SimdBuffer(u32 numChannels, u32 size)
+		SimdBuffer(u32 numChannels, u32 size) noexcept
 		{
 			COMPLEX_ASSERT(numChannels > 0 && size > 0);
 			reserve(numChannels, size);
 		}
 
-		SimdBuffer(const SimdBuffer &other, bool doDataCopy = false)
+		SimdBuffer(const SimdBuffer &other, bool doDataCopy = false) noexcept
 		{
-			COMPLEX_ASSERT(other.getNumChannels() > 0 && other.getSize() > 0);
-			reserve(other.getNumChannels(), other.getSize());
+			COMPLEX_ASSERT(other.getChannels() > 0 && other.getSize() > 0);
+			reserve(other.getChannels(), other.getSize());
 
 			if (doDataCopy)
-				copyToThis(*this, other, other.getNumChannels(), other.getSize());
+				applyToThis(*this, other, other.getChannels(), other.getSize());
 		}
 
 		SimdBuffer &operator=(const SimdBuffer &other) = delete;
 		SimdBuffer(SimdBuffer &&other) = delete;
-		SimdBuffer &operator=(const SimdBuffer &&other) = delete;
+		SimdBuffer &operator=(SimdBuffer &&other) = delete;
 
-		perf_inline void swap(SimdBuffer<T, SIMD> &other)
+		void copy(const SimdBuffer &other)
+		{
+			data_.copy(other.data_);
+
+			channels_ = other.channels_;
+			size_ = other.size_;
+		}
+
+		void swap(SimdBuffer &other) noexcept
 		{
 			if (&other == this)
 				return;
@@ -69,23 +79,24 @@ namespace Framework
 			size_ = newSize;
 		}
 
-		void reserve(u32 newNumChannels, u32 newSize, bool fitToSize = false)
+		void reserve(u32 newNumChannels, u32 newSize, bool fitToSize = false) noexcept
 		{
 			// TODO: make it so the memory allocation happens on a different thread
 			COMPLEX_ASSERT(newNumChannels > 0 && newSize > 0);
 			if ((newNumChannels <= channels_) && (newSize <= size_) && !fitToSize)
 				return;
 
-			u32 newSimdChannels = calculateNumSimdChannels(newNumChannels);
+			u32 oldSimdChannels = getTotalSimdChannels(channels_);
+			u32 newSimdChannels = getTotalSimdChannels(newNumChannels);
 			MemoryBlock<SIMD> newData(newSimdChannels * newSize, true);
 
 			// checking if we even have any elements to move
 			if (channels_ * size_ != 0)
 			{
-				u32 simdChannelsToCopy = (newSimdChannels < simdChannels_) ? newSimdChannels : simdChannels_;
+				u32 simdChannelsToCopy = (newSimdChannels < oldSimdChannels) ? newSimdChannels : oldSimdChannels;
 				u32 capacityToCopy = (newSize < size_) ? newSize : size_;
-				auto newBufferData = newData.getData().lock();
-				auto oldBufferData = getData().lock();
+				auto newBufferData = newData.getData();
+				auto oldBufferData = data_.getData();
 				for (u32 i = 0; i <= simdChannelsToCopy; i++)
 					std::memcpy(&newBufferData[i * newSize], &oldBufferData[i * size_], capacityToCopy * sizeof(SIMD));
 			}
@@ -93,143 +104,29 @@ namespace Framework
 			data_.swap(newData);
 
 			channels_ = newNumChannels;
-			simdChannels_ = newSimdChannels;
 			size_ = newSize;
 		}
 
-		perf_inline void clear()
-		{ data_.clear(); }
+		void clear() noexcept { data_.clear(); }
+
 
 		// copies/does math operation on samples from "otherBuffer" to "thisBuffer"
 		// specified by starting channels/indices
 		// result is shifted by shiftMask and filtered with mergeMask
 		// note: starting channels need to be congruent to kNumChannels
-		static void copyToThis(SimdBuffer &thisBuffer, const SimdBuffer &otherBuffer, u32 numChannels, 
+		static void applyToThis(SimdBuffer &thisBuffer, SimdBufferView<T, SIMD> &otherBuffer, u32 numChannels,
 			u32 numSamples, utils::MathOperations operation = utils::MathOperations::Assign, simd_mask mergeMask = kNoChangeMask,
-			u32 thisStartChannel = 0, u32 otherStartChannel = 0, u32 thisStartIndex = 0, u32 otherStartIndex = 0)
-		{
-			COMPLEX_ASSERT(thisBuffer.getNumChannels() >= thisStartChannel + numChannels);
-			COMPLEX_ASSERT(otherBuffer.getNumChannels() >= otherStartChannel + numChannels);
-			COMPLEX_ASSERT(thisBuffer.getSize() >= numSamples);
-			COMPLEX_ASSERT(otherBuffer.getSize() >= numSamples);
+			u32 thisStartChannel = 0, u32 otherStartChannel = 0, u32 thisStartIndex = 0, u32 otherStartIndex = 0) noexcept;
 
-			// defining the math operations
-			SIMD (*opFunction)(SIMD, SIMD, simd_mask);
-			switch (operation)
-			{
-			case utils::MathOperations::Add:
-
-				opFunction = [](SIMD one, SIMD two, simd_mask mask) { return utils::maskLoad(one + two, one, mask); };
-				break;
-
-			case utils::MathOperations::Multiply:
-
-				opFunction = [](SIMD one, SIMD two, simd_mask mask) { return utils::maskLoad(one * two, one, mask); };
-				break;
-
-			default:
-			case utils::MathOperations::Assign:
-				
-				opFunction = [](SIMD one, SIMD two, simd_mask mask)	{ return utils::maskLoad(two, one, mask); };
-				break;
-			}
-
-			// getting data and setting up variables
-			auto otherDataPointer = otherBuffer.getData().lock();
-			auto thisDataPointer = thisBuffer.getData().lock();
-
-			auto thisBufferSize = thisBuffer.getSize();
-			auto otherBufferSize = otherBuffer.getSize();
-			u32 simdNumChannels = calculateNumSimdChannels(numChannels);
-
-			for (u32 i = 0; i < simdNumChannels; i++)
-			{
-				// getting indices to the beginning of the SIMD channel buffer blocks
-				auto thisChannelIndices = getAbsoluteIndices(thisStartChannel + i * getRelativeSize(), thisBufferSize, 0);
-				auto otherChannelIndices = getAbsoluteIndices(otherStartChannel + i * getRelativeSize(), otherBufferSize, 0);
-
-				for (u32 k = 0; k < numSamples; k++)
-				{
-					thisDataPointer[thisChannelIndices.first + thisStartIndex + k]
-						= opFunction(thisDataPointer[thisChannelIndices.first + thisStartIndex + k],
-							otherDataPointer[otherChannelIndices.first + otherStartIndex + k], mergeMask);
-				}
-			}
-		}
-
-		static void copyToThisNoMask(SimdBuffer &thisBuffer, const SimdBuffer &otherBuffer,
+		// same thing without the mask
+		static void applyToThisNoMask(SimdBuffer &thisBuffer, SimdBufferView<T, SIMD> &otherBuffer,
 			u32 numChannels, u32 numSamples, utils::MathOperations operation = utils::MathOperations::Assign,
-			u32 thisStartChannel = 0, u32 otherStartChannel = 0, u32 thisStartIndex = 0, u32 otherStartIndex = 0)
+			u32 thisStartChannel = 0, u32 otherStartChannel = 0, u32 thisStartIndex = 0, u32 otherStartIndex = 0) noexcept;
+
+
+		void add(SIMD value, u32 channel, u32 index) noexcept
 		{
-			COMPLEX_ASSERT(thisBuffer.getNumChannels() >= thisStartChannel + numChannels);
-			COMPLEX_ASSERT(otherBuffer.getNumChannels() >= otherStartChannel + numChannels);
-			COMPLEX_ASSERT(thisBuffer.getSize() >= numSamples);
-			COMPLEX_ASSERT(otherBuffer.getSize() >= numSamples);
-
-			// getting data and setting up variables
-			auto otherDataPointer = otherBuffer.getData().lock();
-			auto thisDataPointer = thisBuffer.getData().lock();
-
-			auto thisBufferSize = thisBuffer.getSize();
-			auto otherBufferSize = otherBuffer.getSize();
-			u32 simdNumChannels = calculateNumSimdChannels(numChannels);
-			switch (operation)
-			{
-			case utils::MathOperations::Add:
-
-				for (u32 i = 0; i < simdNumChannels; i++)
-				{
-					// getting indices to the beginning of the SIMD channel buffer blocks
-					auto thisChannelIndices = getAbsoluteIndices(thisStartChannel + i * getRelativeSize(), thisBufferSize, 0);
-					auto otherChannelIndices = getAbsoluteIndices(otherStartChannel + i * getRelativeSize(), otherBufferSize, 0);
-
-					for (u32 k = 0; k < numSamples; k++)
-					{
-						thisDataPointer[thisChannelIndices.first + thisStartIndex + k] +=
-							otherDataPointer[otherChannelIndices.first + otherStartIndex + k];
-					}
-				}
-				break;
-
-			case utils::MathOperations::Multiply:
-
-				for (u32 i = 0; i < simdNumChannels; i++)
-				{
-					// getting indices to the beginning of the SIMD channel buffer blocks
-					auto thisChannelIndices = getAbsoluteIndices(thisStartChannel + i * getRelativeSize(), thisBufferSize, 0);
-					auto otherChannelIndices = getAbsoluteIndices(otherStartChannel + i * getRelativeSize(), otherBufferSize, 0);
-
-					for (u32 k = 0; k < numSamples; k++)
-					{
-						thisDataPointer[thisChannelIndices.first + thisStartIndex + k] *=
-							otherDataPointer[otherChannelIndices.first + otherStartIndex + k];
-					}
-				}
-				break;
-
-			default:
-			case utils::MathOperations::Assign:
-
-				for (u32 i = 0; i < simdNumChannels; i++)
-				{
-					// getting indices to the beginning of the SIMD channel buffer blocks
-					auto thisChannelIndices = getAbsoluteIndices(thisStartChannel + i * getRelativeSize(), thisBufferSize, 0);
-					auto otherChannelIndices = getAbsoluteIndices(otherStartChannel + i * getRelativeSize(), otherBufferSize, 0);
-
-					for (u32 k = 0; k < numSamples; k++)
-					{
-						thisDataPointer[thisChannelIndices.first + thisStartIndex + k] =
-							otherDataPointer[otherChannelIndices.first + otherStartIndex + k];
-					}
-				}
-				break;
-			}
-		}
-
-
-		perf_inline void add(SIMD value, u32 channel, u32 index)
-		{
-			COMPLEX_ASSERT(channel < getNumChannels());
+			COMPLEX_ASSERT(channel < getChannels());
 			COMPLEX_ASSERT(index < getSize());
 			
 			auto indices = getAbsoluteIndices(channel, size_, index);
@@ -237,33 +134,33 @@ namespace Framework
 		}
 
 		// prefer the SIMD version
-		perf_inline void add(T value, u32 channel, u32 index)
+		void add(T value, u32 channel, u32 index) noexcept
 		{
-			COMPLEX_ASSERT(channel < getNumChannels());
+			COMPLEX_ASSERT(channel < getChannels());
 			COMPLEX_ASSERT(index < getSize());
 
-			auto scalar = getValueAt(channel, index);
+			auto scalar = readValueAt(channel, index);
 			writeValueAt(scalar + value, channel, index);
 		}
 
-		perf_inline void addBuffer(SimdBuffer<T, SIMD, alignment> &other, u32 numChannels, u32 numSamples,
+		void addBuffer(const SimdBuffer &other, u32 numChannels, u32 numSamples,
 			simd_mask mergeMask = kNoChangeMask, u32 thisStartChannel = 0, u32 otherStartChannel = 0,
-			 u32 thisStartIndex = 0, u32 otherStartIndex = 0)
+			 u32 thisStartIndex = 0, u32 otherStartIndex = 0) noexcept
 		{
-			COMPLEX_ASSERT(numChannels <= other.getNumChannels());
-			COMPLEX_ASSERT(numChannels <= getNumChannels());
+			COMPLEX_ASSERT(numChannels <= other.getChannels());
+			COMPLEX_ASSERT(numChannels <= getChannels());
 
 			if (simd_mask::notEqual(mergeMask, kNoChangeMask).sum() == 0)
-				copyToThisNoMask(*this, other, numChannels, numSamples, utils::MathOperations::Add,
+				applyToThisNoMask(*this, other, numChannels, numSamples, utils::MathOperations::Add,
 					thisStartChannel, otherStartChannel, thisStartIndex, otherStartIndex);
 			else
-				copyToThis(*this, other, numChannels, numSamples, utils::MathOperations::Add, 
+				applyToThis(*this, other, numChannels, numSamples, utils::MathOperations::Add, 
 					mergeMask, thisStartChannel, otherStartChannel, thisStartIndex, otherStartIndex);
 		}
 
-		perf_inline void multiply(SIMD value, u32 channel, u32 index)
+		void multiply(SIMD value, u32 channel, u32 index) noexcept
 		{
-			COMPLEX_ASSERT(channel < getNumChannels());
+			COMPLEX_ASSERT(channel < getChannels());
 			COMPLEX_ASSERT(index < getSize());
 
 			auto indices = getAbsoluteIndices(channel, size_, index);
@@ -271,35 +168,35 @@ namespace Framework
 		}
 
 		// prefer the SIMD version
-		perf_inline void multiply(T value, u32 channel, u32 index)
+		void multiply(T value, u32 channel, u32 index) noexcept
 		{
-			COMPLEX_ASSERT(channel < getNumChannels());
+			COMPLEX_ASSERT(channel < getChannels());
 			COMPLEX_ASSERT(index < getSize());
 
-			auto scalar = getValueAt(channel, index);
+			auto scalar = readValueAt(channel, index);
 			writeValueAt(scalar * value, channel, index);
 		}
 
-		perf_inline void multiplyBuffer(SimdBuffer<T, SIMD, alignment> &other, u32 numChannels, u32 numSamples,
+		void multiplyBuffer(const SimdBuffer &other, u32 numChannels, u32 numSamples,
 			simd_mask mergeMask = kNoChangeMask, u32 thisStartChannel = 0, u32 otherStartChannel = 0,
-			 u32 thisStartIndex = 0, u32 otherStartIndex = 0)
+			 u32 thisStartIndex = 0, u32 otherStartIndex = 0) noexcept
 		{
-			COMPLEX_ASSERT(numChannels <= other.getNumChannels());
-			COMPLEX_ASSERT(numChannels <= getNumChannels());
+			COMPLEX_ASSERT(numChannels <= other.getChannels());
+			COMPLEX_ASSERT(numChannels <= getChannels());
 
 			if (simd_mask::notEqual(mergeMask, kNoChangeMask).sum() == 0)
-				copyToThisNoMask(*this, other, numChannels, numSamples, utils::MathOperations::Multiply,
+				applyToThisNoMask(*this, other, numChannels, numSamples, utils::MathOperations::Multiply,
 					thisStartChannel, otherStartChannel, thisStartIndex, otherStartIndex);
 			else
-				this->copyToThis(*this, other, numChannels, numSamples, utils::MathOperations::Multiply, 
+				this->applyToThis(*this, other, numChannels, numSamples, utils::MathOperations::Multiply, 
 					mergeMask, thisStartChannel, otherStartChannel, thisStartIndex, otherStartIndex);
 		}
 		
 
 		// returns packed values from the buffer
-		perf_inline SIMD getSIMDValueAt(u32 channel, u32 index) const noexcept
+		SIMD readSimdValueAt(u32 channel, u32 index) const noexcept
 		{
-			COMPLEX_ASSERT(channel < getNumChannels());
+			COMPLEX_ASSERT(channel < getChannels());
 			COMPLEX_ASSERT(index < getSize());
 
 			auto indices = getAbsoluteIndices(channel, size_, index);
@@ -307,9 +204,9 @@ namespace Framework
 		}
 
 		// returns a single value from the buffer
-		perf_inline T getValueAt(u32 channel, u32 index) const noexcept
+		T readValueAt(u32 channel, u32 index) const noexcept
 		{
-			COMPLEX_ASSERT(channel < getNumChannels());
+			COMPLEX_ASSERT(channel < getChannels());
 			COMPLEX_ASSERT(index < getSize());
 
 			auto indices = getAbsoluteIndices(channel, size_, index);
@@ -319,9 +216,9 @@ namespace Framework
 		}
 
 		// writes packed values to the buffer
-		perf_inline void writeSIMDValueAt(SIMD value, u32 channel, u32 index) noexcept
+		void writeSimdValueAt(SIMD value, u32 channel, u32 index) noexcept
 		{
-			COMPLEX_ASSERT(channel < getNumChannels());
+			COMPLEX_ASSERT(channel < getChannels());
 			COMPLEX_ASSERT(index < getSize());
 
 			auto indices = getAbsoluteIndices(channel, size_, index);
@@ -329,54 +226,232 @@ namespace Framework
 		}
 
 		// writes a single value to the buffer
-		perf_inline void writeValueAt(T value, u32 channel, u32 index) noexcept
+		void writeValueAt(T value, u32 channel, u32 index) noexcept
 		{
-			COMPLEX_ASSERT(channel < getNumChannels());
+			COMPLEX_ASSERT(channel < getChannels());
 			COMPLEX_ASSERT(index < getSize());
 
 			auto indices = getAbsoluteIndices(channel, size_, index);
-			auto data = data_.getData().lock();
+			auto data = data_.getData();
 			auto scalars = data_.read(indices.first).getArrayOfValues<T>();
 			scalars[indices.second] = value;
 			data_.write(SIMD(scalars), indices.first);
 		}
 
+		u32 getSize() const noexcept {	return size_; }
+		u32 getChannels() const noexcept { return channels_; }
+		u32 getSimdChannels() const noexcept { return getTotalSimdChannels(channels_); }
 
-		strict_inline u32 getSize() const noexcept
-		{	return size_; }
-
-		strict_inline u32 getNumChannels() const noexcept
-		{ return channels_; }
-
-		strict_inline u32 getNumSimdChannels() const noexcept
-		{ return simdChannels_; }
-
-		perf_inline std::weak_ptr<SIMD[]> getData() const noexcept
-		{ return data_.getData(); }
+		MemoryBlock<SIMD> &getData() const noexcept { return data_; }
 
 		// can get raw pointer if the context already has a shared_ptr
-		perf_inline static SIMD* getDataPointer(std::shared_ptr<SIMD[]>& dataPtr, u32 channel, u32 index, u32 size) noexcept
+		static SIMD* getDataPointer(std::shared_ptr<SIMD[]>& dataPtr, u32 channel, u32 index, u32 size) noexcept
 		{
 			auto indices = getAbsoluteIndices(channel, size, index);
 			return &dataPtr[indices.first];
 		}
 
-		strict_inline static constexpr u32 getRelativeSize() noexcept
-		{ return sizeof(SIMD) / sizeof(T); }
+		static constexpr u32 getRelativeSize() noexcept { return sizeof(SIMD) / sizeof(T); }
 
 	private:
+		MemoryBlock<SIMD> data_;
 		u32 channels_ = 0;
 		u32 size_ = 0;
-		u32 simdChannels_ = 0;
-		MemoryBlock<SIMD> data_;
 
-		strict_inline static u32 calculateNumSimdChannels(u32 numChannels)
+		static u32 getTotalSimdChannels(u32 numChannels)
 		{	return (u32)std::ceil((double)numChannels / (double)getRelativeSize()); }
 
 		// internal function for calculating SIMD and internal positions of an element
 		// first - index to the **SIMD** element 
 		// second - channel index of T value inside the SIMD element
-		strict_inline static constexpr auto getAbsoluteIndices(u32 channel, u32 channelSize, u32 index) noexcept
-		{	return std::pair<u32, u32>((channel / getRelativeSize()) * channelSize + index, channel % getRelativeSize()); }
+		static constexpr auto getAbsoluteIndices(u32 channel, u32 channelSize, u32 index) noexcept
+		{ return std::pair<u32, u32>{ (channel / getRelativeSize()) *channelSize + index, channel % getRelativeSize() }; }
+
+		template<typename T, commonConcepts::SimdValue SIMD>
+		friend class SimdBufferView;
 	};
+
+	template<typename T, commonConcepts::SimdValue SIMD>
+	class SimdBufferView
+	{
+	public:
+		SimdBufferView() = default;
+		SimdBufferView(SimdBuffer<T, SIMD> buffer, u32 beginChannel = 0, u32 channels = 0) noexcept 
+		{
+			COMPLEX_ASSERT(beginChannel + channels <= buffer.getChannels());
+
+			dataView_ = buffer.getData();
+			beginChannel_ = beginChannel;
+			channels_ = (channels) ? channels : buffer.getChannels() - beginChannel;
+			size_ = buffer.getSize();
+		}
+
+		SIMD readSimdValueAt(u32 channel, u32 index) const noexcept
+		{
+			COMPLEX_ASSERT(channel < getChannels());
+			COMPLEX_ASSERT(index < getSize());
+
+			auto indices = SimdBuffer<T, SIMD>::getAbsoluteIndices(channel, size_, index);
+			return dataView_.read(indices.first);
+		}
+
+		T readValueAt(u32 channel, u32 index) const noexcept
+		{
+			COMPLEX_ASSERT(channel < getChannels());
+			COMPLEX_ASSERT(index < getSize());
+
+			auto indices = SimdBuffer<T, SIMD>::getAbsoluteIndices(channel, size_, index);
+			auto scalars = dataView_.read(indices.first).template getArrayOfValues<T>();
+
+			return scalars[indices.second];
+		}
+
+		u32 getSize() const noexcept { return size_; }
+		u32 getChannels() const noexcept { return channels_; }
+		u32 getSimdChannels() const noexcept { return SimdBuffer<T, SIMD>::getTotalSimdChannels(channels_); }
+
+		static constexpr u32 getRelativeSize() noexcept { return SimdBuffer<T, SIMD>::getRelativeSize(); }
+
+		MemoryBlockView<SIMD> &getData() const noexcept { return dataView_; }
+
+		bool isEmpty() const noexcept { return dataView_.isEmpty(); }
+
+	private:
+		MemoryBlockView<SIMD> dataView_{};
+		u32 beginChannel_ = 0;
+		u32 channels_ = 0;
+		u32 size_ = 0;
+
+		template<typename T, commonConcepts::SimdValue SIMD>
+		friend class SimdBuffer;
+	};
+
+	// copies/does math operation on samples from "otherBuffer" to "thisBuffer"
+	// specified by starting channels/indices
+	// result is shifted by shiftMask and filtered with mergeMask
+	// note: starting channels need to be congruent to kNumChannels
+	template<typename T, commonConcepts::SimdValue SIMD>
+	void SimdBuffer<T, SIMD>::applyToThis(SimdBuffer &thisBuffer, SimdBufferView<T, SIMD> &otherBuffer, u32 numChannels,
+		u32 numSamples, utils::MathOperations operation, simd_mask mergeMask, u32 thisStartChannel, u32 otherStartChannel, 
+		u32 thisStartIndex, u32 otherStartIndex) noexcept
+	{
+		COMPLEX_ASSERT(thisBuffer.getChannels() >= thisStartChannel + numChannels);
+		COMPLEX_ASSERT(otherBuffer.getChannels() >= otherStartChannel + numChannels);
+		COMPLEX_ASSERT(thisBuffer.getSize() >= numSamples);
+		COMPLEX_ASSERT(otherBuffer.getSize() >= numSamples);
+
+		// defining the math operations
+		SIMD(*opFunction)(SIMD, SIMD, simd_mask);
+		switch (operation)
+		{
+		case utils::MathOperations::Add:
+
+			opFunction = [](SIMD one, SIMD two, simd_mask mask) { return utils::maskLoad(one + two, one, mask); };
+			break;
+
+		case utils::MathOperations::Multiply:
+
+			opFunction = [](SIMD one, SIMD two, simd_mask mask) { return utils::maskLoad(one * two, one, mask); };
+			break;
+
+		default:
+		case utils::MathOperations::Assign:
+
+			opFunction = [](SIMD one, SIMD two, simd_mask mask) { return utils::maskLoad(two, one, mask); };
+			break;
+		}
+
+		// getting data and setting up variables
+		auto thisDataBlock = thisBuffer.getData();
+		auto otherDataBlock = otherBuffer.getData();
+
+		auto thisBufferSize = thisBuffer.getSize();
+		auto otherBufferSize = otherBuffer.getSize();
+		u32 simdNumChannels = getTotalSimdChannels(numChannels);
+
+		for (u32 i = 0; i < simdNumChannels; i++)
+		{
+			// getting indices to the beginning of the SIMD channel buffer blocks
+			auto thisChannelIndices = getAbsoluteIndices(thisStartChannel + i * getRelativeSize(), thisBufferSize, 0);
+			auto otherChannelIndices = getAbsoluteIndices(otherStartChannel + i * getRelativeSize(), otherBufferSize, 0);
+
+			for (u32 k = 0; k < numSamples; k++)
+			{
+				thisDataBlock[thisChannelIndices.first + thisStartIndex + k]
+					= opFunction(thisDataBlock[thisChannelIndices.first + thisStartIndex + k],
+						otherDataBlock[otherChannelIndices.first + otherStartIndex + k], mergeMask);
+			}
+		}
+	}
+
+	template<typename T, commonConcepts::SimdValue SIMD>
+	void SimdBuffer<T, SIMD>::applyToThisNoMask(SimdBuffer &thisBuffer, SimdBufferView<T, SIMD> &otherBuffer,
+		u32 numChannels, u32 numSamples, utils::MathOperations operation,
+		u32 thisStartChannel, u32 otherStartChannel, u32 thisStartIndex, u32 otherStartIndex) noexcept
+	{
+		COMPLEX_ASSERT(thisBuffer.getChannels() >= thisStartChannel + numChannels);
+		COMPLEX_ASSERT(otherBuffer.getChannels() >= otherStartChannel + numChannels);
+		COMPLEX_ASSERT(thisBuffer.getSize() >= numSamples);
+		COMPLEX_ASSERT(otherBuffer.getSize() >= numSamples);
+
+		// getting data and setting up variables
+		auto thisDataBlock = thisBuffer.getData();
+		auto otherDataBlock = otherBuffer.getData();
+
+		auto thisBufferSize = thisBuffer.getSize();
+		auto otherBufferSize = otherBuffer.getSize();
+		u32 simdNumChannels = getTotalSimdChannels(numChannels);
+
+		switch (operation)
+		{
+		case utils::MathOperations::Add:
+
+			for (u32 i = 0; i < simdNumChannels; i++)
+			{
+				// getting indices to the beginning of the SIMD channel buffer blocks
+				auto thisChannelIndices = getAbsoluteIndices(thisStartChannel + i * getRelativeSize(), thisBufferSize, 0);
+				auto otherChannelIndices = getAbsoluteIndices(otherStartChannel + i * getRelativeSize(), otherBufferSize, 0);
+
+				for (u32 k = 0; k < numSamples; k++)
+				{
+					thisDataBlock[thisChannelIndices.first + thisStartIndex + k] +=
+						otherDataBlock[otherChannelIndices.first + otherStartIndex + k];
+				}
+			}
+			break;
+
+		case utils::MathOperations::Multiply:
+
+			for (u32 i = 0; i < simdNumChannels; i++)
+			{
+				// getting indices to the beginning of the SIMD channel buffer blocks
+				auto thisChannelIndices = getAbsoluteIndices(thisStartChannel + i * getRelativeSize(), thisBufferSize, 0);
+				auto otherChannelIndices = getAbsoluteIndices(otherStartChannel + i * getRelativeSize(), otherBufferSize, 0);
+
+				for (u32 k = 0; k < numSamples; k++)
+				{
+					thisDataBlock[thisChannelIndices.first + thisStartIndex + k] *=
+						otherDataBlock[otherChannelIndices.first + otherStartIndex + k];
+				}
+			}
+			break;
+
+		default:
+		case utils::MathOperations::Assign:
+
+			for (u32 i = 0; i < simdNumChannels; i++)
+			{
+				// getting indices to the beginning of the SIMD channel buffer blocks
+				auto thisChannelIndices = getAbsoluteIndices(thisStartChannel + i * getRelativeSize(), thisBufferSize, 0);
+				auto otherChannelIndices = getAbsoluteIndices(otherStartChannel + i * getRelativeSize(), otherBufferSize, 0);
+
+				for (u32 k = 0; k < numSamples; k++)
+				{
+					thisDataBlock[thisChannelIndices.first + thisStartIndex + k] =
+						otherDataBlock[otherChannelIndices.first + otherStartIndex + k];
+				}
+			}
+			break;
+		}
+	}
 }

@@ -12,18 +12,25 @@
 
 namespace Plugin
 {
-	ComplexPlugin::ComplexPlugin() : soundEngine(std::make_shared<Generation::SoundEngine>(this))
+	ComplexPlugin::ComplexPlugin()
 	{
-		addModule(soundEngine);
+		// don't worry this is not a memory leak
+		soundEngine = new Generation::SoundEngine(this);
 	}
 
 	void ComplexPlugin::Initialise(float sampleRate, u32 samplesPerBlock)
 	{
-		if (sampleRate != RuntimeInfo::sampleRate.load(std::memory_order_acquire))
+		if (sampleRate != sampleRate_.load(std::memory_order_acquire))
+		{
+			sampleRate_.store(sampleRate, std::memory_order_release);
 			RuntimeInfo::sampleRate.store(sampleRate, std::memory_order_release);
+		}
 
-		if (samplesPerBlock != RuntimeInfo::samplesPerBlock.load(std::memory_order_acquire))
+		if (samplesPerBlock != samplesPerBlock_.load(std::memory_order_acquire))
+		{
+			samplesPerBlock_.store(samplesPerBlock, std::memory_order_release);
 			RuntimeInfo::samplesPerBlock.store(samplesPerBlock, std::memory_order_release);
+		}
 
 		soundEngine->Initialise(sampleRate, samplesPerBlock);
 	}
@@ -51,7 +58,12 @@ namespace Plugin
 		// check for power matching
 	}
 
-	void ComplexPlugin::parameterChangeMidi([[maybe_unused]] u64 parentModuleId, 
+	void ComplexPlugin::initialiseModuleTree() noexcept
+	{
+		// TODO: make the module structure here instead of doing it in the constructors
+	}
+
+	void ComplexPlugin::parameterChangeMidi([[maybe_unused]] u64 parentModuleId,
 		[[maybe_unused]] std::string_view parameterName, [[maybe_unused]] float value)
 	{
 		// TODO
@@ -59,6 +71,7 @@ namespace Plugin
 
 	void ComplexPlugin::Process(AudioBuffer<float> &buffer, u32 numSamples, u32 numInputs, u32 numOutputs)
 	{
+		utils::ScopedSpinLock lock(waitLock_);
 		soundEngine->MainProcess(buffer, numSamples, numInputs, numOutputs);
 	}
 

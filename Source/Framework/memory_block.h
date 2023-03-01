@@ -21,14 +21,14 @@ namespace Framework
 	{
 	public:
 		MemoryBlock() = default;
-		MemoryBlock(u64 numElements, bool initialiseToZero = false)
+		MemoryBlock(u64 numElements, bool initialiseToZero = false) noexcept
 		{
 			allocate(numElements, initialiseToZero);
 		}
 		~MemoryBlock() = default;
 
 		MemoryBlock(const MemoryBlock &other) = delete;
-		MemoryBlock &operator= (const MemoryBlock<T, alignment> &other) = delete;
+		MemoryBlock &operator= (const MemoryBlock &other) = delete;
 
 		MemoryBlock(MemoryBlock&& other) noexcept
 		{
@@ -36,7 +36,7 @@ namespace Framework
 			absoluteSize_ = other.absoluteSize_;
 		}
 
-		MemoryBlock& operator= (MemoryBlock<T, alignment>&& other) noexcept
+		MemoryBlock& operator= (MemoryBlock&& other) noexcept
 		{
 			if (this != &other)
 			{
@@ -47,11 +47,20 @@ namespace Framework
 			return *this;
 		}
 
+		void copy(const MemoryBlock &other)
+		{
+			if (absoluteSize_ < other.absoluteSize_)
+				allocate(other.absoluteSize_ / sizeof(T));
+
+			std::memcpy(data_.get(), other.data_.get(), other.absoluteSize_);
+			absoluteSize_ = other.absoluteSize_;
+		}
+
 		void allocate(u64 newNumElements, bool initialiseToZero = false)
 		{
 			// custom deleter is supplied because we're using aligned memory alloc 
 			// and on MSVC it is necessary to deallocate it with _aligned_free
-			absoluteSize_ = newNumElements * alignment;
+			absoluteSize_ = newNumElements * sizeof(T);
 		#if defined(__GNUC__)
 			data_.reset(static_cast<T *>(std::aligned_alloc(alignment, absoluteSize_)), [](T *memory) { deleter(memory); });
 		#elif defined(_MSC_VER)
@@ -65,7 +74,7 @@ namespace Framework
 		{
 			if (!data_)
 			{
-				absoluteSize_ = newNumElements * alignment;
+				absoluteSize_ = newNumElements * sizeof(T);
 			#if defined(__GNUC__)
 				data_.reset(static_cast<T *>(std::aligned_alloc(alignment, absoluteSize_)), [](T *memory) { deleter(memory); });
 			#elif defined(_MSC_VER)
@@ -75,14 +84,14 @@ namespace Framework
 			else
 			{
 			#if defined(__GNUC__)
-				T *newPtr = static_cast<T *>(std::aligned_alloc(alignment, newNumElements * alignment));
-				u64 copySize = ((newNumElements * alignment) < absoluteSize_) ?
-					(newNumElements * alignment) : absoluteSize_;
+				u64 newSize = newNumElements * sizeof(T);
+				T *newPtr = static_cast<T *>(std::aligned_alloc(alignment, newSize));
+				u64 copySize = (newSize < absoluteSize_) ? newSize : absoluteSize_;
 				std::memcpy(newPtr, data_.get(), copySize);
 				data_.reset(newPtr, [](T *memory) { deleter(memory); });
-				absoluteSize_ = newNumElements * alignment;
+				absoluteSize_ = newSize;
 			#elif defined(_MSC_VER)
-				absoluteSize_ = newNumElements * alignment;
+				absoluteSize_ = newNumElements * sizeof(T);
 				T *ptr = data_.get();
 				data_.reset(static_cast<T *>(_aligned_realloc(ptr, absoluteSize_, alignment)), [](T *memory) { deleter(memory); });
 			#endif
@@ -95,7 +104,7 @@ namespace Framework
 			absoluteSize_ = 0;
 		}
 
-		perf_inline void swap(MemoryBlock<T, alignment>& other) noexcept
+		perf_inline void swap(MemoryBlock& other) noexcept
 		{
 			if (&other == this)
 				return;
@@ -103,40 +112,46 @@ namespace Framework
 			std::swap(absoluteSize_, other.absoluteSize_);
 		}
 
-		perf_inline void clear() noexcept
-		{ std::memset(data_.get(), 0, absoluteSize_); }
+		void clear() noexcept { std::memset(data_.get(), 0, absoluteSize_); }
 
-		perf_inline T read(u64 index) const noexcept
+		T read(u64 index) const noexcept
 		{ 
-			COMPLEX_ASSERT(index < absoluteSize_);
+			COMPLEX_ASSERT(index < absoluteSize_ / sizeof(T));
 			return data_[index];
 		}
 
-		perf_inline void write(T value, u64 index) noexcept
+		void write(T value, u64 index) noexcept
 		{ 
-			COMPLEX_ASSERT(index < absoluteSize_);
+			COMPLEX_ASSERT(index < absoluteSize_ / sizeof(T));
 			data_[index] = value;
 		}
 
-
-		strict_inline u64 getAbsoluteSize() const noexcept { return absoluteSize_; }
-		perf_inline std::weak_ptr<T[]> getData() const noexcept { return data_; }
-
-		perf_inline T& operator[] (u64 index) noexcept
+		T& operator[](u64 index) noexcept
 		{ 
-			COMPLEX_ASSERT(index < absoluteSize_);
+			COMPLEX_ASSERT(index < absoluteSize_ / sizeof(T));
 			return data_[index];
 		}
 
-		strict_inline bool operator== (const T* otherPointer) const noexcept { return otherPointer == data_.get(); }
-		strict_inline bool operator!= (const T* otherPointer) const noexcept { return otherPointer != data_.get(); }
+		const T& operator[](u64 index) const noexcept
+		{
+			COMPLEX_ASSERT(index < absoluteSize_ / sizeof(T));
+			return data_[index];
+		}
+
+		bool operator== (const T* otherPointer) const noexcept { return otherPointer == data_.get(); }
+		bool operator!= (const T* otherPointer) const noexcept { return otherPointer != data_.get(); }
+
+		bool isEmpty() const noexcept { return data_.use_count(); }
+
+		u64 getAbsoluteSize() const noexcept { return absoluteSize_; }
+		std::shared_ptr<T[]> getData() noexcept { return data_; }
 
 	private:
 		// size in bytes
 		u64 absoluteSize_ = 0;
 		std::shared_ptr<T[]> data_{ nullptr };
 
-		static strict_inline void deleter(T *memory) noexcept
+		static void deleter(T *memory) noexcept
 		{
 		#if defined(__GNUC__)
 			std::free(memory);
@@ -144,5 +159,38 @@ namespace Framework
 			_aligned_free(memory);
 		#endif
 		}
+
+		template <typename T, u64 alignment = alignof(T)>
+		friend class MemoryBlockView;
+	};
+
+	template <typename T, u64 alignment = alignof(T)>
+	class MemoryBlockView
+	{
+	public:
+		MemoryBlockView() = default;
+		MemoryBlockView(const MemoryBlock<T, alignment> &block)
+		{
+			block_.data_ = block.data_;
+			block_.absoluteSize_ = block.absoluteSize_;
+		}
+
+		MemoryBlockView &operator= (const MemoryBlock<T, alignment> &block) noexcept
+		{
+			if (block_.data_ != block.data_)
+			{
+				block_.data_ = block.data_;
+				block_.absoluteSize_ = block.absoluteSize_;
+			}
+			return *this;
+		}
+
+		T read(u64 index) const noexcept { return block_.read(index); }
+		const T& operator[](u64 index) const noexcept { return block_[index]; }
+
+		bool isEmpty() const noexcept { return block_.isEmpty(); }
+
+	private:
+		MemoryBlock<T, alignment> block_{};
 	};
 }

@@ -10,7 +10,7 @@
 
 #include <JuceHeader.h>
 #include "Complex.h"
-#include "./Framework/parameter_bridge.h"
+#include "Framework/parameter_bridge.h"
 
 //==============================================================================
 class ComplexAudioProcessor  : public juce::AudioProcessor, public Plugin::ComplexPlugin
@@ -54,8 +54,6 @@ public:
 	void setStateInformation (const void* data, int sizeInBytes) override;
 
 private:
-	std::vector<Framework::ParameterBridge*> parameterBridges{};
-
 	//==============================================================================
 	JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (ComplexAudioProcessor)
 };

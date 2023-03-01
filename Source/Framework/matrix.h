@@ -19,26 +19,26 @@ namespace Framework
 		std::array<simd_float, kSimdRatio> rows_;
 		bool isComplex = false;
 
-		perf_inline Matrix() = default;
-		perf_inline Matrix(const simd_float row)
+		Matrix() = default;
+		Matrix(const simd_float row) noexcept
 		{ 
 			for (size_t i = 0; i < kSimdRatio; i++)
 				rows_[i] = row;
 		}
-		perf_inline Matrix(const std::array<simd_float, kSimdRatio> rows) : rows_(rows) { }
-		perf_inline Matrix(const std::array<simd_float, kComplexSimdRatio> rows) : isComplex(true)
+		Matrix(const std::array<simd_float, kSimdRatio> rows) noexcept : rows_(rows) { }
+		Matrix(const std::array<simd_float, kComplexSimdRatio> rows) noexcept : isComplex(true)
 		{
 			for (size_t i = 0; i < kComplexSimdRatio; i++)
 				rows_[i] = rows[i];
 		}
 
-		perf_inline void transpose()
+		void transpose() noexcept
 		{ simd_float::transpose(rows_); }
 
-		perf_inline void complexTranspose()
+		void complexTranspose() noexcept
 		{ simd_float::complexTranspose(rows_); }
 
-		perf_inline simd_float sumRows()
+		simd_float sumRows() noexcept
 		{ 
 			simd_float sum{ 0.0f };
 			for (size_t i = 0; i < rows_.size(); i++)
@@ -46,10 +46,10 @@ namespace Framework
 			return sum;
 		}
 
-		perf_inline simd_float complexCartSumRows()
+		simd_float complexCartSumRows() noexcept
 		{ return sumRows(); }
 
-		perf_inline simd_float multiplyAndSumRows(const Matrix &other)
+		simd_float multiplyAndSumRows(const Matrix &other) noexcept
 		{
 			simd_float summedVector = 0;
 			for (size_t i = 0; i < simd_float::kSize; i += 2)

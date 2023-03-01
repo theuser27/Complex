@@ -22,14 +22,14 @@ namespace Framework
 	public:
 		CircularBuffer() = default;
 
-		CircularBuffer(u32 numChannels, u32 size) : channels_(numChannels), size_(size)
+		CircularBuffer(u32 numChannels, u32 size) noexcept : channels_(numChannels), size_(size)
 		{
 			COMPLEX_ASSERT(numChannels > 0 && size > 0);
 			data_.setSize(numChannels, size);
 		}
 
 		// currently does memory allocation, be careful when calling
-		void reserve(u32 newNumChannels, u32 newSize, bool fitToSize = false)
+		void reserve(u32 newNumChannels, u32 newSize, bool fitToSize = false) noexcept
 		{
 			COMPLEX_ASSERT(newNumChannels > 0 && newSize > 0);
 			if ((newNumChannels <= channels_) && (newSize <= size_) && !fitToSize)
@@ -41,11 +41,11 @@ namespace Framework
 			if (channels_ * size_)
 			{
 				// check for the smaller sizes, that is how much will be copied over
-				u32 channelsToCopy = (newNumChannels < channels_) ? newNumChannels : channels_;
-				u32 numSamplesToCopy = (newSize < size_) ? newSize : size_;
+				u32 channelsToCopy = std::min(newNumChannels, channels_);
+				u32 numSamplesToCopy = std::min(newSize, size_);
 				u32 startCopy = (size_ + end_ - numSamplesToCopy) % size_;
 
-				utils::copyBuffer(newData, data_, channelsToCopy, numSamplesToCopy, 0, startCopy);
+				applyToBuffer(newData, data_, channelsToCopy, numSamplesToCopy, 0, startCopy);
 
 				end_ = 0;
 			}
@@ -56,7 +56,7 @@ namespace Framework
 			channels_ = newNumChannels;
 		}
 
-		perf_inline void clear(u32 begin, u32 numSamples) noexcept
+		void clear(u32 begin, u32 numSamples) noexcept
 		{
 			if (begin + numSamples <= size_)
 			{
@@ -69,37 +69,120 @@ namespace Framework
 			data_.clear(0, samplesLeft);
 		}
 
-		perf_inline void clear() noexcept
+		void clear() noexcept
 		{ data_.clear(); }
 
-		perf_inline void advanceEnd(u32 numSamples) noexcept
-		{ end_ = (end_ + numSamples) % size_; }
+		u32 advanceEnd(u32 numSamples) noexcept
+		{ return end_ = (end_ + numSamples) % size_; }
 
-		perf_inline void setEnd(u32 index) noexcept
-		{ end_ = index % size_; }
+		u32 setEnd(u32 index) noexcept
+		{ return end_ = index % size_; }
+
+		// applies on operation on the samples of otherBuffer and thisBuffer 
+		// and writes the results to the respective channels of thisBuffer
+		// while anticipating wrapping around in both buffers 
+		static void applyToBuffer(AudioBuffer<float>& thisBuffer, const AudioBuffer<float>& otherBuffer,
+			u32 numChannels, u32 numSamples, u32 thisStartIndex, u32 otherStartIndex,
+			const bool* channelsToApplyTo = nullptr, utils::MathOperations operation = utils::MathOperations::Assign) noexcept
+		{
+			COMPLEX_ASSERT(static_cast<u32>(thisBuffer.getNumChannels()) >= numChannels);
+			COMPLEX_ASSERT(static_cast<u32>(otherBuffer.getNumChannels()) >= numChannels);
+			COMPLEX_ASSERT(static_cast<u32>(thisBuffer.getNumSamples()) >= numSamples);
+			COMPLEX_ASSERT(static_cast<u32>(otherBuffer.getNumSamples()) >= numSamples);
+
+			float(*opFunction)(float, float, float);
+			switch (operation)
+			{
+			case utils::MathOperations::Add:
+				opFunction = [](float one, float two, [[maybe_unused]] float three) { return one + two; };
+				break;
+			case utils::MathOperations::Multiply:
+				opFunction = [](float one, float two, [[maybe_unused]] float three) { return one * two; };
+				break;
+			case utils::MathOperations::FadeInAdd:
+				opFunction = [](float one, float two, float t) { return (1 - t) * one + t * (one + two); };
+				break;
+			case utils::MathOperations::FadeOutAdd:
+				opFunction = [](float one, float two, float t) { return (1 - t) * (one + two) + t * two; };
+				break;
+			case utils::MathOperations::Interpolate:
+				opFunction = [](float one, float two, float t) { return (1 - t) * one + t * two; };
+				break;
+			default:
+			case utils::MathOperations::Assign:
+				opFunction = []([[maybe_unused]] float one, float two, [[maybe_unused]] float three) { return two; };
+				break;
+			}
+
+			u32 thisBufferSize{};
+			u32 otherBufferSize{};
+			float increment = 1.0f / (float)numSamples;
+
+			u32(*indexFunction)(u32, u32);
+			switch (isPowerOfTwo(static_cast<u32>(thisBuffer.getNumSamples())) &
+				isPowerOfTwo(static_cast<u32>(otherBuffer.getNumSamples())))
+			{
+			case true:
+				indexFunction = [](u32 value, u32 size) { return value & size; };
+				thisBufferSize = thisBuffer.getNumSamples() - 1;
+				otherBufferSize = otherBuffer.getNumSamples() - 1;
+				break;
+			default:
+				indexFunction = [](u32 value, u32 size) { return value % size; };
+				thisBufferSize = thisBuffer.getNumSamples();
+				otherBufferSize = otherBuffer.getNumSamples();
+				break;
+			}
+
+			auto otherDataReadPointers = otherBuffer.getArrayOfReadPointers();
+			auto thisDataReadPointers = thisBuffer.getArrayOfReadPointers();
+			auto thisDataWritePointers = thisBuffer.getArrayOfWritePointers();
+
+			for (u32 i = 0; i < numChannels; i++)
+			{
+				if (channelsToApplyTo && !channelsToApplyTo[i])
+					continue;
+
+				float t = 0.0f;
+				for (u32 k = 0; k < numSamples; k++)
+				{
+					u32 thisIndex = indexFunction(thisStartIndex + k, thisBufferSize);
+					thisDataWritePointers[i][thisIndex] = opFunction(thisDataReadPointers[i][thisIndex],
+						otherDataReadPointers[i][indexFunction(otherStartIndex + k, otherBufferSize)], t);
+
+					t += increment;
+				}
+			}
+		}
 
 		// - A specified AudioBuffer reads from the current buffer's data and stores it in a reader, where
 		//	readee's starting index = readerIndex + end_ and 
 		//	reader's starting index = readeeIndex
 		// - Can decide whether to advance the block or not
 		void readBuffer(AudioBuffer<float> &reader, u32 numChannels,u32 numSamples, 
-			const bool *channelsToRead = nullptr, u32 readeeIndex = 0, u32 readerIndex = 0) noexcept
+			u32 readeeIndex = 0, u32 readerIndex = 0, const bool* channelsToRead = nullptr) noexcept
 		{
-			utils::copyBuffer(reader, data_, numChannels, numSamples, readerIndex, readeeIndex, channelsToRead);
+			applyToBuffer(reader, data_, numChannels, numSamples, readerIndex, readeeIndex, channelsToRead);
 		}
 
 		// - A specified AudioBuffer writes own data starting at writerOffset to the end of the current buffer,
 		//	which can be offset forwards or backwards with writeeOffset
 		// - Adjusts end_ according to the new block written
-		void writeBuffer(const AudioBuffer<float> &writer, u32 numChannels, 
-			u32 numSamples, const bool *channelsToWrite = nullptr, u32 writerIndex = 0, 
-			utils::MathOperations operation = utils::MathOperations::Assign) noexcept
+		// - Returns the new endpoint
+		u32 writeToBufferEnd(const AudioBuffer<float> &writer, u32 numChannels, u32 numSamples,
+			u32 writerIndex = 0, const bool *channelsToWrite = nullptr) noexcept
 		{
-			utils::copyBuffer(data_, writer, numChannels, numSamples, end_, writerIndex, channelsToWrite, operation);
-			advanceEnd(numSamples);
+			applyToBuffer(data_, writer, numChannels, numSamples, end_, writerIndex, channelsToWrite);
+			return advanceEnd(numSamples);
 		}
 
-		perf_inline void add(float value, u32 channel, u32 index) noexcept
+		void writeToBuffer(const AudioBuffer<float>& writer, u32 numChannels, u32 numSamples,
+			u32 writeeIndex, u32 writerIndex = 0, const bool* channelsToWrite = nullptr) noexcept
+		{
+			applyToBuffer(data_, writer, numChannels, numSamples, writeeIndex, writerIndex, channelsToWrite);
+		}
+
+		void add(float value, u32 channel, u32 index) noexcept
 		{
 			COMPLEX_ASSERT(channel < getNumChannels());
 			COMPLEX_ASSERT(index < getSize());
@@ -109,11 +192,11 @@ namespace Framework
 		void addBuffer(const AudioBuffer<float> &other, u32 numChannels, u32 numSamples,
 			const bool *channelsToAdd = nullptr, u32 thisStartIndex = 0, u32 otherStartIndex = 0) noexcept
 		{
-			utils::copyBuffer(data_, other, numChannels, numSamples, thisStartIndex, 
+			applyToBuffer(data_, other, numChannels, numSamples, thisStartIndex, 
 				otherStartIndex, channelsToAdd, utils::MathOperations::Add);
 		}
 
-		perf_inline void multiply(float value, u32 channel, u32 index) noexcept
+		void multiply(float value, u32 channel, u32 index) noexcept
 		{
 			COMPLEX_ASSERT(channel < getNumChannels());
 			COMPLEX_ASSERT(index < getSize());
@@ -123,27 +206,27 @@ namespace Framework
 		void multiplyBuffer(const AudioBuffer<float> &other, u32 numChannels, u32 numSamples,
 			const bool *channelsToAdd = nullptr, u32 thisStartIndex = 0, u32 otherStartIndex = 0) noexcept
 		{
-			utils::copyBuffer(data_, other, numChannels, numSamples, thisStartIndex, 
+			applyToBuffer(data_, other, numChannels, numSamples, thisStartIndex, 
 				otherStartIndex, channelsToAdd, utils::MathOperations::Multiply);
 		}
 
-		perf_inline float getSample(u32 channel, u32 index) const noexcept
+		float getSample(u32 channel, u32 index) const noexcept
 		{
 			COMPLEX_ASSERT(channel < getNumChannels());
 			COMPLEX_ASSERT(index < getSize());
 			return data_.getSample(channel, index);
 		}
 
-		strict_inline auto &getData() noexcept
+		auto &getData() noexcept
 		{ return data_; }
 
-		strict_inline u32 getNumChannels() const noexcept
+		u32 getNumChannels() const noexcept
 		{ return channels_; }
 
-		strict_inline u32 getSize() const noexcept
+		u32 getSize() const noexcept
 		{ return size_; }
 
-		strict_inline u32 getEnd() const noexcept
+		u32 getEnd() const noexcept
 		{ return end_; }
 
 	private:

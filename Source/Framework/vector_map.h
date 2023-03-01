@@ -77,7 +77,7 @@ namespace Framework
 		}
 
 		constexpr void add(Key key, Value value) noexcept
-		{ data.emplace_back(key, value); }
+		{ data.emplace_back(key, std::move(value)); }
 
 		constexpr void update(const Key &key, const Value &newValue) noexcept
 		{

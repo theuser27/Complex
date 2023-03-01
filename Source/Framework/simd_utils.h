@@ -10,11 +10,9 @@
 
 #pragma once
 
-#include "utils.h"
+//#include "utils.h"
 #include "matrix.h"
-#include <complex>
-#include <Framework/parameters.h>
-#include "Third Party/gcem/include/gcem.hpp"
+#include "parameters.h"
 
 namespace utils
 {
@@ -42,20 +40,14 @@ namespace utils
 	strict_inline simd_float vector_call atan2(simd_float one, simd_float two) noexcept { return map<atan2f>(one, two); }
 
 
-	strict_inline simd_float vector_call interpolate(simd_float &from, simd_float &to, float t) noexcept
-	{ return simd_float::mulAdd(from, to - from, t); }
-
-	strict_inline simd_float vector_call interpolate(simd_float &from, simd_float &to, simd_float &t) noexcept
-	{ return simd_float::mulAdd(from, to - from, t); }
-
-	strict_inline simd_float vector_call interpolate(float from, float to, simd_float &t) noexcept
+	strict_inline simd_float vector_call lerp(simd_float from, simd_float to, simd_float t) noexcept
 	{ return simd_float::mulAdd(from, to - from, t); }
 
 	// t are clamped to the range of low and high
-	strict_inline simd_float vector_call interpolateClamp(simd_float &from, simd_float &to,
-		simd_float t, simd_float &low, simd_float &high) noexcept
+	strict_inline simd_float vector_call interpolateClamp(simd_float from, simd_float to,
+		simd_float t, simd_float low, simd_float high) noexcept
 	{
-		t = simd_float::clamp(low, high, t);
+		t = simd_float::clamp(t, low, high);
 		return simd_float::mulAdd(from, to - from, t);
 	}
 
@@ -70,7 +62,8 @@ namespace utils
 		simd_float half_t3 = t * half_t2;
 		simd_float half_three_t3 = half_t3 * 3.0f;
 
-		return Framework::Matrix({ half_t2 * 2.0f - half_t3 - half_t,
+		return Framework::Matrix({ 
+			simd_float::mulAdd(-half_t3, half_t2, 2.0f) - half_t,
 			simd_float::mulSub(half_three_t3, half_t2, 5.0f) + 1.0f,
 			simd_float::mulAdd(half_t, half_t2, 4.0f) - half_three_t3,
 			half_t3 - half_t2 });
@@ -173,10 +166,10 @@ namespace utils
 	strict_inline simd_float vector_call getDecimalPlaces(simd_float value) noexcept
 	{ return value - simd_float::floor(value); }
 
-	strict_inline simd_float modOnce(simd_float value) noexcept
+	strict_inline simd_float modOnce(simd_float value, simd_float mod) noexcept
 	{
-		simd_mask less_mask = simd_float::lessThanOrEqual(value, 1.0f);
-		simd_float lower = value - 1.0f;
+		simd_mask less_mask = simd_float::lessThanOrEqual(value, mod);
+		simd_float lower = value - mod;
 		return maskLoad(lower, value, less_mask);
 	}
 
@@ -213,45 +206,16 @@ namespace utils
 
 
 
-	static constexpr float kAmplitudeToDbConversionMult = 6.02059991329f;
-	static constexpr float kDbToAmplitudeConversionMult = 1.0f / kAmplitudeToDbConversionMult;
-	static constexpr float kExpConversionMult = 1.44269504089f;
-	static constexpr float kLogConversionMult = 0.69314718056f;
-
 	strict_inline simd_float vector_call exp2(simd_float exponent) noexcept
 	{
 		// taylor expansion of 2^x at 0
-		// coefficients are (ln(2)^n) / n! computed with wxMaxima
+		// coefficients are (ln(2)^n) / n!
 		static constexpr float kCoefficient0 = 1.0f;
 		static constexpr float kCoefficient1 = 16970.0 / 24483.0;
 		static constexpr float kCoefficient2 = 1960.0 / 8161.0;
 		static constexpr float kCoefficient3 = 1360.0 / 24483.0;
 		static constexpr float kCoefficient4 = 80.0 / 8161.0;
 		static constexpr float kCoefficient5 = 32.0 / 24483.0;
-
-		// the closer the exponent is to a whole number, the more accurate it's going to be
-		// since it only requires to add it the overall floating point exponent
-		simd_float rounded = simd_float::round(exponent);
-		simd_float t = exponent - rounded;
-		simd_float int_pow = pow2ToFloat(toInt(rounded));
-
-		// we exp2 whatever decimal number is left with the taylor series
-		// the domain we're in is [0.0f, 0.5f], we don't expect negative numbers
-		simd_float cubic = t * (t * (t * kCoefficient5 + kCoefficient4) + kCoefficient3) + kCoefficient2;
-		simd_float interpolate = t * (t * cubic + kCoefficient1) + kCoefficient0;
-		return int_pow * interpolate;
-	}
-
-	strict_inline simd_float vector_call newExp2(simd_float exponent) noexcept
-	{
-		// taylor series expansion of 2^x at 0
-		// coefficients are (ln(2)^n) / n! computed with wxMaxima
-		static constexpr float kCoefficient0 = 1.0f;
-		static constexpr float kCoefficient1 = 0.6931471805599453f;
-		static constexpr float kCoefficient2 = 0.2402265069591007f;
-		static constexpr float kCoefficient3 = 0.05550410866482158f;
-		static constexpr float kCoefficient4 = 0.009618129107628477f;
-		static constexpr float kCoefficient5 = 0.001333355814642844f;
 
 		// the closer the exponent is to a whole number, the more accurate it's going to be
 		// since it only requires to add it the overall floating point exponent
@@ -284,41 +248,9 @@ namespace utils
 		simd_float t = (value & 0x7fffff) | (0x7f << 23);
 
 		// we log2 the mantissa with the taylor series coefficients
-		simd_float cubic = t * (t * (t * kCoefficient5 + kCoefficient4) + kCoefficient3) + kCoefficient2;
-		simd_float interpolate = t * (t * cubic + kCoefficient1) + kCoefficient0;
-
-		// we add the int with the mantissa to get our final result
-		return toFloat(floored_log2) + interpolate;
-	}
-
-	strict_inline simd_float vector_call newLog2(simd_float value) noexcept
-	{
-		// taylor series expansion of log2 at 1.45
-		// coefficients computed with wxMaxima
-		static constexpr float kOffset = 1.0 / gcem::log(2.0);
-		static constexpr float kCoefficient0 = gcem::log(29.0 / 20.0);
-		static constexpr float kCoefficient1 = 20.0 / 29.0;
-		static constexpr float kCoefficient2 = 200.0 / 841.0;
-		static constexpr float kCoefficient3 = 8000.0 / 73167.0;
-		static constexpr float kCoefficient4 = 40000.0 / 707281.0;
-		static constexpr float kCoefficient5 = 640000.0 / 20511149.0;
-		static constexpr float kCoefficient6 = 32000000.0 / 1784469963.0;
-		static constexpr float kCoefficient7 = 1280000000.0 / 120749134163.0;
-
-		// effectively log2s only the exponent; gets it in terms an int
-		simd_int floored_log2 = shiftRight<23>(reinterpretToInt(value)) - 0x7f;
-		// 0x7fffff masks the entire mantissa
-		// then we bring the exponent to 2^0 to get the entire number between [1, 2]
-		simd_float t = (value & 0x7fffff) | (0x7f << 23);
-		// offsetting because that's the point of expansion
-		t -= 1.45f;
-
-		// we log2 the mantissa with the coefficients
-		simd_float interpolate = simd_float::mulAdd(kCoefficient4, t, simd_float::mulAdd(kCoefficient5, 
-			t, simd_float::mulAdd(kCoefficient6, t, kCoefficient7)));
-		interpolate = simd_float::mulAdd(kCoefficient0, t, simd_float::mulAdd(kCoefficient1, t, 
-			simd_float::mulAdd(kCoefficient2, t, simd_float::mulAdd(kCoefficient3, t, interpolate))));
-		interpolate *= kOffset;
+		simd_float interpolate = simd_float::mulAdd(kCoefficient2, t, (simd_float::mulAdd(kCoefficient3, t,
+			simd_float::mulAdd(kCoefficient4, t, kCoefficient5))));
+		interpolate = simd_float::mulAdd(kCoefficient0, t, simd_float::mulAdd(kCoefficient1, t, interpolate));
 
 		// we add the int with the mantissa to get our final result
 		return toFloat(floored_log2) + interpolate;
@@ -391,7 +323,8 @@ namespace utils
 			lastLog2 = std::log2((double)lastSampleRate / (2.0 * kMinFrequency));
 		}
 
-		// for 0 logarithm doesn't produce valid values so we have to mask that
+		// for 0 logarithm doesn't produce valid values
+		// so we mask that with dummy values to not get errors
 		simd_mask zeroMask = simd_float::equal(bin, 0.0f);
 		bin = maskLoad(bin, simd_float(1.0f), zeroMask);
 		simd_float result = log2((bin / FFTSize) * (sampleRate / kMinFrequency)) / lastLog2;
@@ -436,6 +369,28 @@ namespace utils
 	strict_inline float pow(float base, float exponent) noexcept
 	{ return exp2(log2(base) * exponent); }
 
+	strict_inline simd_float powerScale(simd_float value, simd_float power)
+	{
+		static constexpr float kMinPowerMag = 0.005f;
+		simd_mask zero_mask = simd_float::lessThan(power, kMinPowerMag) & simd_float::lessThan(-power, kMinPowerMag);
+		simd_float numerator = exp(power * value) - 1.0f;
+		simd_float denominator = exp(power) - 1.0f;
+		simd_float result = numerator / denominator;
+		return utils::maskLoad(result, value, zero_mask);
+	}
+
+	strict_inline float powerScale(float value, float power)
+	{
+		static constexpr float kMinPower = 0.01f;
+
+		if (fabsf(power) < kMinPower)
+			return value;
+
+		float numerator = exp(power * value) - 1.0f;
+		float denominator = exp(power) - 1.0f;
+		return numerator / denominator;
+	}
+
 	// conditionally unsigns ints if they are negative and returns full mask where values are negative
 	strict_inline simd_mask vector_call unsignInt(simd_int &value, bool returnFullMask = false) noexcept
 	{
@@ -454,112 +409,53 @@ namespace utils
 		return (returnFullMask) ? simd_mask::equal(mask, signMask) : mask;
 	}
 
-	strict_inline simd_float scaleValue(simd_float value, const Framework::ParameterDetails *details,
-		bool scalePercent = false) noexcept
+	inline simd_float scaleValue(simd_float value, Framework::ParameterDetails details) noexcept
 	{
 		using namespace Framework;
 
 		simd_float result{};
 		simd_mask sign{};
-		switch (details->scale)
+		switch (details.scale)
 		{
 		case ParameterScale::Toggle:
-			result = utils::reinterpretToFloat(simd_float::notEqual(simd_float::round(value), 0.0f));
+			result = reinterpretToFloat(simd_float::notEqual(simd_float::round(value), 0.0f));
 			break;
 		case ParameterScale::Indexed:
-			result = simd_float::round(value * (details->maxValue - details->minValue) + details->minValue);
+			result = simd_float::round(value * (details.maxValue - details.minValue) + details.minValue);
 			break;
 		case ParameterScale::Linear:
-			result = value * (details->maxValue - details->minValue) + details->minValue;
+			result = value * (details.maxValue - details.minValue) + details.minValue;
 			break;
 		case ParameterScale::SymmetricQuadratic:
 			value = value * 2.0f - 1.0f;
-			sign = utils::unsignFloat(value);
+			sign = unsignFloat(value);
 			value *= value;
-			result = (value * (details->maxValue - details->minValue) / 2.0f) | sign;
+			result = (value * (details.maxValue - details.minValue) / 2.0f) | sign;
 			break;
 		case ParameterScale::Quadratic:
-			result = value * value * (details->maxValue - details->minValue) + details->minValue;
+			result = value * value * (details.maxValue - details.minValue) + details.minValue;
 			break;
 		case ParameterScale::Cubic:
-			result = value * value * value * (details->maxValue - details->minValue) + details->minValue;
+			result = value * value * value * (details.maxValue - details.minValue) + details.minValue;
 			break;
 		case ParameterScale::SymmetricLoudness:
 			value = (value * 2.0f - 1.0f);
-			sign = utils::unsignFloat(value);
-			result = utils::normalisedToDb(value, kNormalisedToDbMultiplier) | sign;
+			sign = unsignFloat(value);
+			result = normalisedToDb(value, kNormalisedToDbMultiplier) | sign;
 			break;
 		case ParameterScale::Loudness:
-			result = utils::normalisedToDb(value, kNormalisedToDbMultiplier);
+			result = normalisedToDb(value, kNormalisedToDbMultiplier);
 			break;
 		case ParameterScale::SymmetricFrequency:
 			value = value * 2.0f - 1.0f;
-			sign = utils::unsignFloat(value);
-			result = utils::normalisedToFrequency(value, RuntimeInfo::sampleRate.load(std::memory_order_acquire)) | sign;
+			sign = unsignFloat(value);
+			result = normalisedToFrequency(value, RuntimeInfo::sampleRate.load(std::memory_order_acquire)) | sign;
 			break;
 		case ParameterScale::Frequency:
-			result = utils::normalisedToFrequency(value, RuntimeInfo::sampleRate.load(std::memory_order_acquire));
+			result = normalisedToFrequency(value, RuntimeInfo::sampleRate.load(std::memory_order_acquire));
 			break;
-		case ParameterScale::Overlap:
-			result = simd_float::clamp(value, details->minValue, details->maxValue);
-			break;
-		}
-
-		if (details->displayUnits == "%" && scalePercent)
-			result *= 100.0f;
-
-		return result;
-	}
-
-	strict_inline float unscaleValue(float value, const Framework::ParameterDetails *details,
-		bool unscalePercent = false) noexcept
-	{
-		using namespace Framework;
-
-		if (details->displayUnits == "%" && unscalePercent)
-			value /= 100.0f;
-
-		float result{};
-		float sign{};
-		switch (details->scale)
-		{
-		case ParameterScale::Toggle:
-			result = std::round(value);
-			break;
-		case ParameterScale::Indexed:
-			result = (value - details->minValue) / (details->maxValue - details->minValue);
-			break;
-		case ParameterScale::Linear:
-			result = (value - details->minValue) / (details->maxValue - details->minValue);
-			break;
-		case ParameterScale::SymmetricQuadratic:
-			sign = utils::unsignFloat(value);
-			value = (value - details->minValue) / (details->maxValue - details->minValue);
-			value = std::sqrtf(value);
-			result = (value * sign + 1.0f) / 2.0f;
-			break;
-		case ParameterScale::Quadratic:
-			result = std::sqrtf((value - details->minValue) / (details->maxValue - details->minValue));
-			break;
-		case ParameterScale::Cubic:
-			value = (value - details->minValue) / (details->maxValue - details->minValue);
-			result = std::powf(value, 1.0f / 3.0f);
-			break;
-		case ParameterScale::SymmetricLoudness:
-			sign = utils::unsignFloat(value);
-			value = utils::dbToAmplitude(value);
-			result = (value * sign + 1.0f) / 2.0f;
-			break;
-		case ParameterScale::Loudness:
-			result = utils::dbToAmplitude(value);
-			break;
-		case ParameterScale::SymmetricFrequency:
-			sign = utils::unsignFloat(value);
-			value = utils::frequencyToNormalised(value, RuntimeInfo::sampleRate.load(std::memory_order_acquire))[0];
-			result = (value * sign + 1.0f) / 2.0f;
-			break;
-		case ParameterScale::Frequency:
-			result = utils::frequencyToNormalised(value, RuntimeInfo::sampleRate.load(std::memory_order_acquire))[0];
+		case ParameterScale::Clamp:
+			result = simd_float::clamp(value, details.minValue, details.maxValue);
 			break;
 		}
 
@@ -615,4 +511,5 @@ namespace utils
 		__yield();
 	#endif
 	}
+
 }

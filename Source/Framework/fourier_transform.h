@@ -21,7 +21,7 @@ namespace Framework
 	{
 	public:
 		// in and out buffers need to be 2 * bits
-		FFT(int bits) : size_(1 << bits)
+		explicit FFT(int bits) noexcept : size_(1 << bits)
 		{
 			int specSize = 0;
 			int specBufferSize = 0;
@@ -37,7 +37,7 @@ namespace Framework
 		}
 
 		// src buffer needs to have exactly as many samples as FFT size
-		perf_inline void transformRealForward(float *inOut)
+		void transformRealForward(float *inOut) const noexcept
 		{
 			inOut[size_] = 0.0f;
 			ippsFFTFwd_RToCCS_32f_I((Ipp32f *)inOut, ippSpecs_, buffer_);
@@ -47,7 +47,7 @@ namespace Framework
 		}
 
 		// src needs to be in the CCS format
-		perf_inline void transformRealInverse(float *inOut)
+		void transformRealInverse(float *inOut) const noexcept
 		{
 			// separating dc and nyquist bins
 			inOut[size_] = inOut[1];
@@ -58,7 +58,7 @@ namespace Framework
 
 	private:
 		int size_;
-		IppsFFTSpec_R_32f *ippSpecs_;
+		IppsFFTSpec_R_32f *ippSpecs_ = nullptr;
 		std::unique_ptr<Ipp8u[]> memory_;
 		Ipp8u* spec_;
 		Ipp8u *specBuffer_;

@@ -21,10 +21,10 @@ namespace Framework
 	private:
 		// extra data points needed to perform cspline lookup at edges
 		// when the requested values are exactly at 0.0f or 1.0f
-		static constexpr int kExtraValues = 3;
+		static constexpr size_t kExtraValues = 3;
 
 	public:
-		constexpr Lookup(float(&function)(float), float scale = 1.0f) : scale_(resolution / scale)
+		constexpr Lookup(float(&function)(float), float scale = 1.0f) noexcept : scale_(resolution / scale)
 		{
 			for (size_t i = 0; i < resolution + kExtraValues; i++)
 			{
@@ -34,11 +34,11 @@ namespace Framework
 		}
 
 		// gets catmull-rom spline interpolated y-values at their corresponding x-values
-		perf_inline simd_float cubicLookup(simd_float xValues) const
+		simd_float cubicLookup(simd_float xValues) const noexcept
 		{
 			//COMPLEX_ASSERT(simd_float::greaterThanOrEqual(xValues, simd_float(0.0f)) && xValues <= simd_float(1.0f));
 			simd_float boost = (xValues * scale_) + 1.0f;
-			simd_int indices = utils::clamp(utils::toInt(boost), simd_int(1), simd_int(resolution));
+			simd_int indices = simd_int::clamp(utils::toInt(boost), simd_int(1), simd_int(resolution));
 			simd_float t = boost - utils::toFloat(indices);
 
 			Matrix interpolationMatrix = utils::getCatmullInterpolationMatrix(t);
@@ -49,11 +49,11 @@ namespace Framework
 		}
 
 		// gets linearly interpolated y-values at their corresponding x-values
-		perf_inline simd_float linearLookup(simd_float xValues) const
+		simd_float linearLookup(simd_float xValues) const noexcept
 		{
 			//COMPLEX_ASSERT(xValues >= simd_float(0.0f) && xValues <= simd_float(1.0f));
 			simd_float boost = (xValues * scale_) + 1.0f;
-			simd_int indices = utils::clamp(utils::toInt(boost), simd_int(1), simd_int(resolution));
+			simd_int indices = simd_int::clamp(utils::toInt(boost), simd_int(1), simd_int(resolution));
 			simd_float t = boost - utils::toFloat(indices);
 
 			Matrix interpolationMatrix = utils::getLinearInterpolationMatrix(t);
@@ -64,16 +64,20 @@ namespace Framework
 		}
 
 		// gets catmull-rom spline interpolated y-value at the corresponding x-value
-		perf_inline float cubicLookup(float xValue) const
+		float cubicLookup(float xValue) const noexcept
 		{
+			static constexpr auto exponents = std::to_array({ 3.0f, 2.0f, 1.0f, 0.0f });
 			COMPLEX_ASSERT(xValue >= 0.0f && xValue <= 1.0f);
 			float boost = (xValue * scale_) + 1.0f;
-			size_t index = utils::iclamp((size_t)boost, 1, resolution);
+			size_t index = std::clamp((size_t)boost, (size_t)1, resolution);
 			float t = boost - (float)index;
+			utils::pow(t, simd_float(exponents));
 			float half_t = t * 0.5f;
 			float half_t2 = t * half_t;
 			float half_t3 = t * half_t2;
 			float half_three_t3 = half_t3 * 3.0f;
+			//simd_float mutipliers(std::to_array<float>({ half_t2 * 2.0f - half_t3 - half_t,
+			//	half_three_t3 - 5.0f * half_t2 + 1.0f, 4.0f * half_t2 + half_t - half_three_t3, half_t3 - half_t2 }));
 
 			return (half_t2 * 2.0f - half_t3 - half_t) * lookup_[index - 1] +
 				(half_three_t3 - 5.0f * half_t2 + 1.0f) * lookup_[index] +
@@ -82,11 +86,11 @@ namespace Framework
 		}
 
 		// gets linearly interpolated y-value at the corresponding x-value
-		perf_inline float linearLookup(float xValue) const
+		float linearLookup(float xValue) const noexcept
 		{
 			COMPLEX_ASSERT(xValue >= 0.0f && xValue <= 1.0f);
 			float boost = (xValue * scale_) + 1.0f;
-			size_t index = utils::iclamp((size_t)boost, 1, resolution);
+			size_t index = std::clamp((size_t)boost, (size_t)1, resolution);
 			float t = boost - (float)index;
 			return (1.0f - t) * lookup_[index] + t * lookup_[index + 1];
 		}

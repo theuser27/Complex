@@ -40,6 +40,8 @@
 	#include <immintrin.h>
 #elif COMPLEX_NEON
 	#include <arm_neon.h>
+#else
+	#error Either SSE4.1 or ARM NEON is needed for this program to work
 #endif
 
 #if !defined (strict_inline)
@@ -611,6 +613,15 @@ namespace simd_values
 		#endif
 		}
 
+		static strict_inline simd_type vector_call invSqrt(simd_type value) noexcept
+		{
+		#if COMPLEX_SSE4_1
+			return _mm_rsqrt_ps(value);
+		#elif COMPLEX_NEON
+			return vrsqrteq_f32(value);
+		#endif
+		}
+
 		static strict_inline simd_type vector_call bitAnd(simd_type value, mask_simd_type mask)
 		{
 		#if COMPLEX_SSE4_1
@@ -742,7 +753,6 @@ namespace simd_values
 		static strict_inline float vector_call sum(simd_type value)
 		{
 		#if COMPLEX_SSE4_1
-
 			simd_type flip = _mm_shuffle_ps(value, value, _MM_SHUFFLE(1, 0, 3, 2));
 			value = _mm_add_ps(value, flip);
 			flip = _mm_shuffle_ps(value, value, _MM_SHUFFLE(2, 3, 0, 1));
@@ -852,6 +862,9 @@ namespace simd_values
 
 		static strict_inline simd_float vector_call sqrt(simd_float value)
 		{ return sqrt(value.value); }
+
+		static strict_inline simd_float vector_call invSqrt(simd_float value)
+		{ return invSqrt(value.value); }
 
 		static strict_inline simd_float vector_call max(simd_float one, simd_float two)
 		{ return max(one.value, two.value); }

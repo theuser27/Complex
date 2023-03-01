@@ -23,18 +23,17 @@ ComplexAudioProcessor::ComplexAudioProcessor()
 #endif
 				ComplexPlugin()
 {
-	using namespace Generation;
 	using namespace Framework;
 
-	parameterBridges.reserve(kMaxParameterMappings + globalPluginParameterList.size());
+	parameterBridges_.reserve(kMaxParameterMappings + pluginParameterList.size());
 
-	for (auto &parameterDetails : globalPluginParameterList)
+	for (auto &parameterDetails : pluginParameterList)
 	{
-		auto parameter = getModuleParameter(soundEngine->getModuleId(), parameterDetails.name);
+		auto parameter = getProcessorParameter(soundEngine->getProcessorId(), parameterDetails.name);
 		if (auto parameterPointer = parameter.lock())
 		{
 			Framework::ParameterBridge *bridge = new Framework::ParameterBridge((u32)(-1), parameterPointer->getParameterLink());
-			parameterBridges.push_back(bridge);
+			parameterBridges_.push_back(bridge);
 			addParameter(bridge);
 		}
 	}
@@ -43,11 +42,11 @@ ComplexAudioProcessor::ComplexAudioProcessor()
 	size_t index = 0;
 	for (auto &parameterDetails : effectModuleParameterList)
 	{
-		auto parameter = getModuleParameter(3, parameterDetails.name);
+		auto parameter = getProcessorParameter(3, parameterDetails.name);
 		if (auto parameterPointer = parameter.lock())
 		{
 			Framework::ParameterBridge *bridge = new Framework::ParameterBridge(index, parameterPointer->getParameterLink());
-			parameterBridges.push_back(bridge);
+			parameterBridges_.push_back(bridge);
 			addParameter(bridge);
 		}
 		index++;
@@ -55,23 +54,23 @@ ComplexAudioProcessor::ComplexAudioProcessor()
 
 	for (auto &parameterDetails : baseEffectParameterList)
 	{
-		auto parameter = getModuleParameter(4, parameterDetails.name);
+		auto parameter = getProcessorParameter(4, parameterDetails.name);
 		if (auto parameterPointer = parameter.lock())
 		{
 			Framework::ParameterBridge *bridge = new Framework::ParameterBridge(index, parameterPointer->getParameterLink());
-			parameterBridges.push_back(bridge);
+			parameterBridges_.push_back(bridge);
 			addParameter(bridge);
 		}
 		index++;
 	}
 
-	for (auto &parameterDetails : filterEffectParameterList)
+	for (auto &parameterDetails : contrastEffectParameterList)
 	{
-		auto parameter = getModuleParameter(4, parameterDetails.name);
+		auto parameter = getProcessorParameter(4, parameterDetails[0].name);
 		if (auto parameterPointer = parameter.lock())
 		{
 			Framework::ParameterBridge *bridge = new Framework::ParameterBridge(index, parameterPointer->getParameterLink());
-			parameterBridges.push_back(bridge);
+			parameterBridges_.push_back(bridge);
 			addParameter(bridge);
 		}
 		index++;
@@ -80,7 +79,7 @@ ComplexAudioProcessor::ComplexAudioProcessor()
 	/*for (size_t i = 0; i < kMaxParameterMappings; i++)
 	{
 		Framework::ParameterBridge *bridge = new Framework::ParameterBridge(i);
-		parameterBridges.push_back(bridge);
+		parameterBridges_.push_back(bridge);
 		addParameter(bridge);
 	}*/
 }
@@ -147,12 +146,12 @@ void ComplexAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, [[ma
 	//DBG(numSamples);
 
 	//CheckGlobalParameters();
-	updateMainParameters();
+	updateParameters(UpdateFlag::BeforeProcess);
 	setLatencySamples(getProcessingDelay());
 
 	Process(buffer, (u32)numSamples, (u32)inputs, (u32)outputs);
 
-	setUpdateFlag(UpdateFlag::AfterProcess);
+	updateParameters(UpdateFlag::AfterProcess);
 }
 
 //==============================================================================

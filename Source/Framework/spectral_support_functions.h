@@ -265,4 +265,34 @@ namespace utils
 							simd_float::mulPolar(inputs[0][j], inputs[i][j]);
 			}
 	}*/
+
+	strict_inline simd_float circularLerp(Framework::SimdBuffer<std::complex<float>, simd_float> &bufferOne, 
+		Framework::SimdBuffer<std::complex<float>, simd_float> &bufferTwo, simd_float symmetricRange, u32 frames) noexcept
+	{
+		COMPLEX_ASSERT(bufferOne.getSize() == bufferTwo.getSize());
+
+		/*for (u32 i = 0; i < bufferOne.getSize(); i += 2)
+		{*/
+			// extracting only phase info
+			simd_float pointOne = complexPhase(bufferOne.readSimdValueAt(0, i), bufferOne.readSimdValueAt(0, i + 1));
+			simd_float pointTwo = complexPhase(bufferTwo.readSimdValueAt(0, i), bufferTwo.readSimdValueAt(0, i + 1));
+
+			float asdf = std::bit_cast<int>(2);
+
+			simd_float difference = pointTwo - pointOne;
+			simd_mask differenceSignMask = unsignFloat(difference);
+
+			simd_float altDifference = (symmetricRange * 2.0f) - difference;
+			simd_mask lessThanMask = simd_float::lessThan(difference, altDifference);
+
+			simd_mask distanceMask = maskLoad(~differenceSignMask & kSignMask, differenceSignMask, lessThanMask);
+			simd_float distance = maskLoad(altDifference, difference, lessThanMask);
+			distance |= distanceMask;
+
+
+			return distance;
+
+		//}
+	}
+
 }
