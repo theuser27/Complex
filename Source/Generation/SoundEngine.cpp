@@ -9,37 +9,39 @@
 */
 
 #include "SoundEngine.h"
+#include "../Plugin/ProcessorTree.h"
 
 namespace Generation
 {
 	// as the topmost processor its parentProcessorId is its own
 	SoundEngine::SoundEngine(Plugin::ProcessorTree *processorTree) noexcept :
-		BaseProcessor(processorTree, processorTree->getId(this, true), utils::getClassName<SoundEngine>())
+		BaseProcessor(processorTree, processorTree->getId(this, true), getClassType())
 	{
+		using namespace Framework;
+
 		transforms.reserve(kMaxFFTOrder - kMinFFTOrder + 1);
 		for (u32 i = 0; i < (kMaxFFTOrder - kMinFFTOrder + 1); i++)
 		{
 			u32 bits = kMinFFTOrder + i;
-			transforms.emplace_back(std::make_unique<Framework::FFT>(bits));
+			transforms.emplace_back(std::make_unique<FFT>(bits));
 		}
 
 		inputBuffer.reserve(kNumTotalChannels, kMaxPreBufferLength);
 		// needs to be double the max FFT, otherwise we get out of bounds errors
 		FFTBuffer.setSize(kNumTotalChannels, kMaxFFTBufferLength * 2, false, true);
 		outBuffer.reserve(kNumTotalChannels, kMaxFFTBufferLength * 2);
-		windows = Framework::Window::getInstance();
+		windows = Window::getInstance();
 
-		effectsState = createSubProcessor<EffectsState>();
+		effectsState = makeSubProcessor<EffectsState>();
 		subProcessors_.emplace_back(effectsState);
 
-		processorParameters_.data.reserve(Framework::pluginParameterList.size());
-		createProcessorParameters(Framework::pluginParameterList.data(), Framework::pluginParameterList.size());
+		processorParameters_.data.reserve(pluginParameterList.size());
+		createProcessorParameters(pluginParameterList.data(), pluginParameterList.size());
 	}
 
-	void SoundEngine::Initialise(float sampleRate, u32 samplesPerBlock) noexcept
+	void SoundEngine::ResetBuffers() noexcept
 	{
-		sampleRate_ = (sampleRate >= kDefaultSampleRate) ? sampleRate : kDefaultSampleRate;
-		samplesPerBlock_ = samplesPerBlock;
+		// TODO: when samples per block changes, reset all working buffers to start from the beginning
 	}
 
 	perf_inline void SoundEngine::CopyBuffers(AudioBuffer<float> &buffer, u32 numInputs, u32 numSamples) noexcept
@@ -97,25 +99,25 @@ namespace Generation
 		isPerforming_ = true;
 	}
 
-	void SoundEngine::UpdateParameters(UpdateFlag flag) noexcept
+	void SoundEngine::UpdateParameters(UpdateFlag flag, float sampleRate) noexcept
 	{
 		updateParameters(flag, true);
 
 		switch (flag)
 		{
 		case UpdateFlag::Realtime:
-			overlap_ = processorParameters_[2]->getInternalValue<float>();
-			windowType_ = static_cast<Framework::WindowTypes>(processorParameters_[3]->getInternalValue<u32>());
-			alpha_ = processorParameters_[4]->getInternalValue<float>();
+			overlap_ = processorParameters_[2]->getInternalValue<float>(sampleRate);
+			windowType_ = static_cast<Framework::WindowTypes>(processorParameters_[3]->getInternalValue<u32>(sampleRate));
+			alpha_ = processorParameters_[4]->getInternalValue<float>(sampleRate);
 
 			// getting the next overlapOffset
 			nextOverlapOffset_ = getOverlapOffset();
 
 			break;
 		case UpdateFlag::BeforeProcess:
-			mix_ = processorParameters_[0]->getInternalValue<float>();
-			FFTOrder_ = processorParameters_[1]->getInternalValue<u32>();
-			outGain_ = utils::dbToAmplitude(processorParameters_[5]->getInternalValue<float>());
+			mix_ = processorParameters_[0]->getInternalValue<float>(sampleRate);
+			FFTOrder_ = processorParameters_[1]->getInternalValue<u32>(sampleRate);
+			outGain_ = (float)utils::dbToAmplitude(processorParameters_[5]->getInternalValue<float>(sampleRate));
 
 			break;
 		default:
@@ -137,10 +139,10 @@ namespace Generation
 				transforms[getFFTPlan()]->transformRealForward(FFTBuffer.getWritePointer(i));
 	}
 
-	perf_inline void SoundEngine::ProcessFFT() noexcept
+	perf_inline void SoundEngine::ProcessFFT(float sampleRate) noexcept
 	{
-		effectsState->setFFTSize(FFTNumSamples_);
-		effectsState->setSampleRate(sampleRate_);
+		effectsState->setEffectiveFFTSize(FFTNumSamples_ / 2);
+		effectsState->setSampleRate(sampleRate);
 
 		effectsState->writeInputData(FFTBuffer);
 		effectsState->processChains();
@@ -158,7 +160,7 @@ namespace Generation
 		// if the FFT size is big enough to guarantee that even with max overlap 
 		// a block >= samplesPerBlock can be finished, we don't offset
 		// otherwise, we offset 2 block sizes back
-		u32 latencyOffset = (getProcessingDelay() != FFTNumSamples_) ? 2 * samplesPerBlock_ : 0;
+		u32 latencyOffset = (getProcessingDelay() != FFTNumSamples_) ? 2 * processorTree_->getSamplesPerBlock() : 0;
 		outBuffer.setLatencyOffset(latencyOffset);
 
 		// overlap-adding
@@ -187,7 +189,7 @@ namespace Generation
 
 			switch (windowType_)
 			{
-			case WindowTypes::Clean:
+			case WindowTypes::Lerp:
 				break;
 			case WindowTypes::Rectangle:
 				mult = 1.0f - overlap_;
@@ -240,10 +242,6 @@ namespace Generation
 			case WindowTypes::HannExponential:
 				break;
 			case WindowTypes::Lanczos:
-				break;
-			case WindowTypes::Blackman:
-				break;
-			case WindowTypes::BlackmanHarris:
 				break;
 			default:
 				break;
@@ -337,7 +335,8 @@ namespace Generation
 		prevFFTNumSamples_ = FFTNumSamples_;
 	}
 
-	void SoundEngine::MainProcess(AudioBuffer<float> &buffer, u32 numSamples, u32 numInputs, u32 numOutputs) noexcept
+	void SoundEngine::MainProcess(AudioBuffer<float> &buffer, u32 numSamples, 
+		float sampleRate, u32 numInputs, u32 numOutputs) noexcept
 	{
 		// copying input in the main circular buffer
 		CopyBuffers(buffer, numInputs, numSamples);
@@ -348,9 +347,9 @@ namespace Generation
 			if (!isPerforming_)
 				break;
 			
-			UpdateParameters(UpdateFlag::Realtime);
+			UpdateParameters(UpdateFlag::Realtime, sampleRate);
 			DoFFT();
-			ProcessFFT();
+			ProcessFFT(sampleRate);
 			DoIFFT();
 		}
 

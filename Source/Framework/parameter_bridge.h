@@ -13,9 +13,9 @@
 #include "common.h"
 #include "parameter_value.h"
 
-namespace Interface
+namespace Plugin
 {
-	class InterfaceEngineLink;
+	class ComplexPlugin;
 }
 
 namespace Framework
@@ -30,7 +30,8 @@ namespace Framework
 		ParameterBridge &operator=(const ParameterBridge &) = delete;
 		ParameterBridge &operator=(ParameterBridge &&) = delete;
 
-		ParameterBridge(u32 parameterIndex = u32(-1), ParameterLink *link = nullptr) noexcept;
+		ParameterBridge(Plugin::ComplexPlugin *plugin,
+			u32 parameterIndex = u32(-1), ParameterLink *link = nullptr) noexcept;
 
 		// DON'T CALL ON AUDIO THREAD
 		// because of the stupid way juce::String works
@@ -65,6 +66,8 @@ namespace Framework
 		std::atomic<float> value_ = kDefaultParameterValue;
 		std::atomic<ParameterLink *> parameterLinkPointer_ = nullptr;
 
-		friend class Interface::InterfaceEngineLink;
+		Plugin::ComplexPlugin *plugin_ = nullptr;
+
+		friend class Plugin::ComplexPlugin;
 	};
 }

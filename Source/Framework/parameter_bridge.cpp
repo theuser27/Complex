@@ -10,11 +10,15 @@
 
 #include "parameter_bridge.h"
 #include "Interface/Components/BaseSlider.h"
+#include "Interface/Sections/InterfaceEngineLink.h"
 
 namespace Framework
 {
-	ParameterBridge::ParameterBridge(u32 parameterIndex, ParameterLink *link) noexcept
+	ParameterBridge::ParameterBridge(Plugin::ComplexPlugin *plugin,
+		u32 parameterIndex, ParameterLink *link) noexcept
 	{
+		plugin_ = plugin;
+
 		// should be enough i think
 		name_.second.preallocateBytes(64);
 		// case when the parameter mapping remains permanent for the entirety of the plugin lifetime
@@ -72,8 +76,8 @@ namespace Framework
 	{
 		// we store the new value and if the bridge is linked, we notify the UI
 		value_.store(newValue, std::memory_order_release);
-		if (auto pointer = parameterLinkPointer_.load(std::memory_order_acquire))
-			if (pointer->UIControl)
+		if (auto pointer = parameterLinkPointer_.load(std::memory_order_acquire); 
+			pointer && pointer->UIControl)
 				pointer->UIControl->setValueFromHost(newValue);
 	}
 
@@ -108,10 +112,11 @@ namespace Framework
 		if (auto pointer = parameterLinkPointer_.load(std::memory_order_acquire))
 		{
 			auto details = pointer->parameter->getParameterDetails();
-			double internalValue = utils::scaleValue(value_.load(std::memory_order_acquire), details, true);
+			auto sampleRate = plugin_->getSampleRate();
+			double internalValue = scaleValue(value_.load(std::memory_order_acquire), details, sampleRate, true);
 			if (!details.stringLookup.empty())
 			{
-				auto index = std::clamp<size_t>(internalValue, details.minValue, details.maxValue) - (size_t)details.minValue;
+				auto index = (size_t)std::clamp((float)internalValue, details.minValue, details.maxValue) - (size_t)details.minValue;
 				// clamping in case the value goes above the string count inside the array
 				index = std::clamp(index, (size_t)0, details.stringLookup.size());
 				return details.stringLookup[index].data();
@@ -126,7 +131,7 @@ namespace Framework
 	float ParameterBridge::getValueForText(const String &text) const
 	{
 		if (auto pointer = parameterLinkPointer_.load(std::memory_order_acquire))
-			return (float)utils::unscaleValue(text.getFloatValue(), pointer->parameter->getParameterDetails(), true);
+			return (float)unscaleValue(text.getFloatValue(), pointer->parameter->getParameterDetails(), true);
 
 		return text.getFloatValue();
 	}

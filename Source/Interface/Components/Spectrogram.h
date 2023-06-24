@@ -31,7 +31,7 @@ namespace Interface
 		~Spectrogram() override = default;
 
 		void render(OpenGlWrapper &open_gl, bool animate) override;
-		void paintBackground(Graphics &g) override;
+		void paint(Graphics &g) override;
 
 
 		void paintBackgroundLines(bool paint) noexcept { paint_background_lines_ = paint; }

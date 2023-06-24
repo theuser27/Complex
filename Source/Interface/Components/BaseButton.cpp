@@ -8,17 +8,32 @@
   ==============================================================================
 */
 
+#include "Framework/update_types.h"
 #include "BaseButton.h"
-
 #include "../Sections/BaseSection.h"
+#include "../Sections/InterfaceEngineLink.h"
 
 namespace Interface
 {
+  BaseButton::BaseButton(Framework::ParameterValue *parameter, String name)
+  {
+    if (!parameter)
+    {
+      setName(name);
+      hasParameterAssignment_ = Framework::Parameters::isParameter(getName().toRawUTF8());
+      if (!hasParameterAssignment_)
+        return;
+    }
+
+    setParameterLink(parameter->getParameterLink());
+    setParameterDetails(parameter->getParameterDetails());
+  }
+
   String BaseButton::getTextFromValue(bool value) const noexcept
   {
     int lookup = value ? 1 : 0;
 
-    if (details_.stringLookup)
+    if (!details_.stringLookup.empty())
       return details_.stringLookup[lookup].data();
 
     return Framework::kOffOnNames[lookup].data();
@@ -85,6 +100,13 @@ namespace Interface
   }
 
   void BaseButton::clicked() { setValueSafe(getToggleState()); }
+
+	void BaseButton::endChange()
+  {
+    auto *link = findParentComponentOfClass<InterfaceEngineLink>();
+    link->getPlugin().pushUndo(new Framework::ParameterUpdate(this, valueBeforeChange_, (double)getToggleState()));
+  }
+
   void BaseButton::clicked(const ModifierKeys &modifiers)
   {
     ToggleButton::clicked(modifiers);
@@ -94,6 +116,12 @@ namespace Interface
         listener->guiChanged(this);
   }
 
+
+  void ShapeButtonComponent::parentHierarchyChanged()
+  {
+  	if (findParentComponentOfClass<InterfaceEngineLink>())
+  		setColors();
+  }
 
   void ShapeButtonComponent::render(OpenGlWrapper &open_gl, bool animate)
   {
@@ -326,10 +354,9 @@ namespace Interface
     static constexpr float kUiButtonSizeMult = 0.45f;
 
     ToggleButton::resized();
-    BaseSection *section = findParentComponentOfClass<BaseSection>();
     getGlComponent()->setText();
     getGlComponent()->background().markDirty();
-    if (section)
+    if (auto *section = findParentComponentOfClass<BaseSection>(); section)
     {
       if (getGlComponent()->style() == GeneralButtonComponent::kUiButton)
       {
@@ -344,8 +371,8 @@ namespace Interface
 
   void GeneralButton::clicked()
   {
-    ToggleButton::clicked();
-    if (details_.stringLookup)
+    BaseButton::clicked();
+    if (!details_.stringLookup.empty())
       setText(details_.stringLookup[getToggleState() ? 1 : 0].data());
   }
 

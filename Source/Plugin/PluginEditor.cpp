@@ -8,33 +8,48 @@
 
 #include "PluginProcessor.h"
 #include "PluginEditor.h"
+#include "Interface/LookAndFeel/DefaultLookAndFeel.h"
 
 //==============================================================================
 ComplexAudioProcessorEditor::ComplexAudioProcessorEditor (ComplexAudioProcessor& p)
-		: AudioProcessorEditor (&p), audioProcessor (p), moduleTreeUpdater_(&p)
+	: AudioProcessorEditor (&p), InterfaceEngineLink(p), audioProcessor_(p)
 {
-		// Make sure that before the constructor has finished, you've set the
-		// editor's size to whatever you need it to be.
-		setSize (400, 300);
-}
+	using namespace Interface;
+	using namespace Framework;
 
-ComplexAudioProcessorEditor::~ComplexAudioProcessorEditor()
-{
-}
+	setLookAndFeel(DefaultLookAndFeel::instance());
 
-//==============================================================================
-void ComplexAudioProcessorEditor::paint (juce::Graphics& g)
-{
-		// (Our component is opaque, so we must completely fill the background with a solid colour)
-		g.fillAll (getLookAndFeel().findColour (juce::ResizableWindow::backgroundColourId));
+	constrainer_.setMinimumSize(kMinWindowWidth, kMinWindowHeight);
+	constrainer_.setGui(gui_.get());
+	setConstrainer(&constrainer_);
+	addAndMakeVisible(gui_.get());
 
-		g.setColour (juce::Colours::white);
-		g.setFont (15.0f);
-		g.drawFittedText ("Hello World!", getLocalBounds(), juce::Justification::centred, 1);
+	auto scale = std::clamp(LoadSave::getWindowScale(), (double)kMinWindowScaleFactor, (double)kMaxWindowScaleFactor);
+	auto [windowWidth, windowHeight] = LoadSave::getWindowSize();
+	auto clampedScale = clampScaleFactorToFit(scale, windowWidth, windowHeight);
+
+	LoadSave::saveWindowScale(clampedScale);
+	constrainer_.setScaleFactor(clampedScale);
+	gui_->setScaling((float)clampedScale);
+
+	setResizable(true, true);
+	setSize((int)std::round(windowWidth * clampedScale), (int)std::round(windowHeight * clampedScale));
 }
 
 void ComplexAudioProcessorEditor::resized()
 {
-		// This is generally where you'll want to lay out the positions of any
-		// subcomponents in your editor..
+	AudioProcessorEditor::resized();
+	gui_->setBounds(getLocalBounds());
+}
+
+void ComplexAudioProcessorEditor::setScaleFactor(float newScale)
+{
+	AudioProcessorEditor::setScaleFactor(newScale);
+	gui_->redoBackground();
+}
+
+void ComplexAudioProcessorEditor::updateFullGui()
+{
+	InterfaceEngineLink::updateFullGui();
+	audioProcessor_.updateHostDisplay();
 }

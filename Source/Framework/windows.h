@@ -101,23 +101,20 @@ namespace Framework
 		void applyWindow(AudioBuffer<float> &buffer, u32 numChannels, 
 			const bool* channelsToProcess, u32 numSamples, WindowTypes type, float alpha)
 		{
-			if (type == WindowTypes::Custom)
-				applyCustomWindows(buffer, numChannels, channelsToProcess, numSamples, type, alpha);
-			else
-				applyDefaultWindows(buffer, numChannels, channelsToProcess, numSamples, type, alpha);
+			applyDefaultWindows(buffer, numChannels, channelsToProcess, numSamples, type, alpha);
 		}
 
-		void applyDefaultWindows(AudioBuffer<float> &buffer, u32 numChannels, 
+		static void applyDefaultWindows(AudioBuffer<float> &buffer, u32 numChannels, 
 			const bool* channelsToCopy, u32 numSamples, WindowTypes type, float alpha)
 		{
-			if (type == WindowTypes::Clean || type == WindowTypes::Rectangle)
+			if (type == WindowTypes::Lerp || type == WindowTypes::Rectangle)
 				return;
 
-			float increment = 1.0f / numSamples;
+			float increment = 1.0f / (float)numSamples;
 
 			// the windowing is periodic, therefore if we start one sample forward,
 			// omit the centre sample and we scale both explicitly
-			// we can take advantage of window symmetry and do 2 assignments with 1 lookup
+			// we can take advantage of window symmetry and do 2 multiplications with 1 lookup
 			u32 halfLength = (numSamples - 2) / 2;
 
 			float window = 1.0f;
@@ -157,10 +154,6 @@ namespace Framework
 					window = getLanczosWindow(position, alpha);
 					centerWindow = getLanczosWindow(0.5f, alpha);
 					break;
-				case Framework::WindowTypes::Blackman:
-					break;
-				case Framework::WindowTypes::BlackmanHarris:
-					break;
 				default:
 					break;
 				}
@@ -199,10 +192,6 @@ namespace Framework
 					break;
 				case Framework::WindowTypes::Lanczos:
 					window = getLanczosWindow(position, alpha);
-					break;
-				case Framework::WindowTypes::Blackman:
-					break;
-				case Framework::WindowTypes::BlackmanHarris:
 					break;
 				default:
 					break;

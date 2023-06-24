@@ -10,8 +10,8 @@
 
 #pragma once
 
-#include "JuceHeader.h"
 #include <Third Party/json/json.hpp>
+#include "Framework/common.h"
 
 using json = nlohmann::json;
 
@@ -26,21 +26,11 @@ namespace Interface
     enum SectionOverride
     {
       kNone,
-      kLogo,
-      kHeader,
+      kHeaderFooter,
       kOverlay,
-      kEffectsChain,
+      kEffectsLane,
       kEffectModule,
-      kUtilityEffect,
-      kFilterEffect,
-      kContrastEffect,
-      kDynamicsEffect,
-      kPhaseEffect,
-      kPitchEffect,
-      kStretchEffect,
-      kWarpEffect,
-      kDestroyEffect,
-      kAllEffects,
+      kPopupBrowser,
       kNumSectionOverrides
     };
 
@@ -143,8 +133,13 @@ namespace Interface
 
       kPinSlider,
       kPinSliderDisabled,
-      kPinThumb,
-      kPinThumbDisabled,
+      kPinSliderThumb,
+      kPinSliderThumbDisabled,
+
+      kTextSelectorText,
+      kTextSelectorTextDisabled,
+
+      kNumberBoxSlider,
 
       kWidgetCenterLine,
       kWidgetPrimary1,
@@ -191,7 +186,7 @@ namespace Interface
     };
 
     static constexpr int kNumColors = kFinalColor - kInitialColor;
-    static bool shouldScaleValue(ValueId valueId);
+    static bool shouldScaleValue(ValueId valueId) noexcept;
 
     Skin();
 
@@ -224,13 +219,13 @@ namespace Interface
     json updateJson(json data);
     void jsonToState(json skin_var);
     bool stringToState(String skin_string);
-    bool loadFromFile(File source);
+    bool loadFromFile(const File &source);
     void clearSkin();
 
   protected:
-    Colour colors_[kNumColors];
-    float values_[kNumSkinValueIds];
-    std::map<ColorId, Colour> colorOverrides_[kNumSectionOverrides];
-    std::map<ValueId, float> valueOverrides_[kNumSectionOverrides];
+    std::array<Colour, kNumColors> colors_{};
+    std::array<float, kNumSkinValueIds> values_{};
+    std::array<std::map<ColorId, Colour>, kNumSectionOverrides> colorOverrides_{};
+    std::array<std::map<ValueId, float>, kNumSectionOverrides> valueOverrides_{};
   };
 }

@@ -9,17 +9,18 @@
 */
 
 #include "BaseProcessor.h"
+#include "../Plugin/ProcessorTree.h"
 
 namespace Generation
 {
-	BaseProcessor::BaseProcessor(Plugin::ProcessorTree *moduleTree, u64 parentModuleId,
-		std::string_view moduleType) noexcept : processorTree_(moduleTree), processorId_(processorTree_->getId(this)),
-		 processorType_(moduleType) { parentProcessorId_ = parentModuleId; }
+	BaseProcessor::BaseProcessor(Plugin::ProcessorTree *processorTree, u64 parentProcessorId,
+		std::string_view processorType) noexcept : processorTree_(processorTree), processorId_(processorTree_->getId(this)),
+		 processorType_(processorType) { parentProcessorId_ = parentProcessorId; }
 
-	BaseProcessor::BaseProcessor(const BaseProcessor &other, u64 parentModuleId) noexcept : 
+	BaseProcessor::BaseProcessor(const BaseProcessor &other, u64 parentProcessorId) noexcept :
 		processorTree_(other.processorTree_), processorId_(processorTree_->getId(this)), processorType_(other.processorType_)
 	{
-		parentProcessorId_ = parentModuleId;
+		parentProcessorId_ = parentProcessorId;
 
 		processorParameters_.data.reserve(other.processorParameters_.data.size());
 		for (auto &parameterPair : other.processorParameters_.data)
@@ -33,10 +34,10 @@ namespace Generation
 		dataBuffer_.copy(other.dataBuffer_);
 	}
 
-	BaseProcessor::BaseProcessor(BaseProcessor &&other, u64 parentModuleId) noexcept : 
+	BaseProcessor::BaseProcessor(BaseProcessor &&other, u64 parentProcessorId) noexcept :
 		processorTree_(other.processorTree_), processorId_(processorTree_->getId(this)), processorType_(other.processorType_)
 	{
-		parentProcessorId_ = parentModuleId;
+		parentProcessorId_ = parentProcessorId;
 
 		processorParameters_.data.reserve(other.processorParameters_.data.size());
 		for (auto &parameterPair : other.processorParameters_.data)
@@ -63,8 +64,8 @@ namespace Generation
 					std::make_shared<Framework::ParameterValue>(*other.processorParameters_[i], processorId_));
 
 			subProcessors_.reserve(other.subProcessors_.size());
-			for (size_t i = 0; i < other.subProcessors_.size(); i++)
-				subProcessors_.emplace_back(other.subProcessors_[i]->createCopy(processorId_));
+			for (auto &subProcessor : other.subProcessors_)
+				subProcessors_.emplace_back(subProcessor->createCopy(processorId_));
 
 			dataBuffer_.copy(other.dataBuffer_);
 		}
@@ -83,8 +84,8 @@ namespace Generation
 					std::make_shared<Framework::ParameterValue>(*other.processorParameters_[i], processorId_));
 
 			subProcessors_ = std::move(other.subProcessors_);
-			for (size_t i = 0; i < subProcessors_.size(); i++)
-				subProcessors_[i]->setParentProcessorId(processorId_);
+			for (auto &subProcessor : subProcessors_)
+				subProcessor->setParentProcessorId(processorId_);
 
 			dataBuffer_.swap(other.dataBuffer_);
 		}
@@ -95,77 +96,27 @@ namespace Generation
 	{
 		using namespace Framework;
 		for (size_t i = 0; i < size; i++)
+		{
+			if (details[i].name.empty())
+				continue;
+
 			processorParameters_.data.emplace_back(details[i].name,
 				std::make_shared<ParameterValue>(Parameters::getDetails(details[i].name), processorId_));
+		}
+			
 	}
 
-	void BaseProcessor::updateParameters(UpdateFlag flag, bool updateSubModuleParameters)
+	void BaseProcessor::updateParameters(UpdateFlag flag, float sampleRate, bool updateSubModuleParameters)
 	{
 		if (flag == UpdateFlag::NoUpdates)
 			return;
 
 		for (size_t i = 0; i < processorParameters_.data.size(); i++)
 			if (processorParameters_[i]->getParameterDetails().updateFlag == flag)
-				processorParameters_[i]->updateValues();
+				processorParameters_[i]->updateValues(sampleRate);
 
 		if (updateSubModuleParameters)
 			for (auto &subModule : subProcessors_)
-				subModule->updateParameters(flag);
-	}
-}
-
-namespace Plugin
-{
-	u64 ProcessorTree::getId(Generation::BaseProcessor *newModulePointer, bool isRootModule) noexcept
-	{
-		if (isRootModule)
-			return processorIdCounter_.load(std::memory_order_acquire);
-
-		// litmus test that getId is not called on an already initialised module
-		COMPLEX_ASSERT(newModulePointer->getParentProcessorId() == 0 && "We are adding a module that already exists??");
-
-		std::unique_ptr<Generation::BaseProcessor> newModule{ newModulePointer };
-		u64 newModuleId = processorIdCounter_.fetch_add(1, std::memory_order_acq_rel);
-
-		allProcessors_->add(newModuleId, std::move(newModule));
-		if ((float)allProcessors_->data.size() / allProcessors_->data.capacity() >= expandThreshold)
-			resizeAllParameters();
-
-		return newModuleId;
-	}
-
-	std::unique_ptr<Generation::BaseProcessor> ProcessorTree::deleteProcessor(u64 moduleId) noexcept
-	{
-		auto iter = allProcessors_->find(moduleId);
-		std::unique_ptr<Generation::BaseProcessor> deletedModule = std::move(iter->second);
-		allProcessors_->data.erase(iter);
-		return std::move(deletedModule);
-	}
-
-	Generation::BaseProcessor *ProcessorTree::getProcessor(u64 moduleId) const noexcept
-	{
-		auto moduleIter = allProcessors_->find(moduleId);
-		return (moduleIter != allProcessors_->data.end()) ?
-			moduleIter->second.get() : nullptr;
-	}
-
-	std::weak_ptr<Framework::ParameterValue> ProcessorTree::getProcessorParameter(u64 parentModuleId, std::string_view parameter) const noexcept
-	{
-		auto modulePointer = getProcessor(parentModuleId);
-		if (!modulePointer)
-			return {};
-
-		auto parameterIter = modulePointer->processorParameters_.find(parameter);
-		return (parameterIter == modulePointer->processorParameters_.data.end()) ?
-			std::weak_ptr<Framework::ParameterValue>() : parameterIter->second;
-	}
-
-	void ProcessorTree::resizeAllParameters() noexcept
-	{
-		auto newAllParameters = std::make_unique<Framework::VectorMap<u64,
-			std::unique_ptr<Generation::BaseProcessor>>>(allProcessors_->data.size() * expandAmount);
-
-		std::move(allProcessors_->data.begin(), allProcessors_->data.end(), newAllParameters->data.begin());
-		allProcessors_.swap(newAllParameters);
+				subModule->updateParameters(flag, sampleRate);
 	}
 }

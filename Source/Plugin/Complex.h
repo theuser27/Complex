@@ -11,8 +11,9 @@
 #pragma once
 
 #include "Framework/common.h"
-#include "Generation/SoundEngine.h"
 #include "Framework/parameter_bridge.h"
+#include "Generation/SoundEngine.h"
+#include "ProcessorTree.h"
 
 namespace Plugin
 {
@@ -20,34 +21,31 @@ namespace Plugin
 	{
 	public:
 		ComplexPlugin();
-		~ComplexPlugin() override = default;
 
 		void Initialise(float sampleRate, u32 samplesPerBlock);
 		void CheckGlobalParameters();
-		void Process(AudioBuffer<float> &buffer, u32 numSamples, u32 numInputs, u32 numOutputs);
+		void Process(AudioBuffer<float> &buffer, u32 numSamples, float sampleRate, u32 numInputs, u32 numOutputs);
 
-		strict_inline u32 getProcessingDelay() const noexcept { return soundEngine->getProcessingDelay(); }
+		strict_inline u32 getProcessingDelay() const noexcept { return soundEngine_->getProcessingDelay(); }
 		
-		void updateParameters(UpdateFlag flag) noexcept { soundEngine->UpdateParameters(flag); }
+		strict_inline void updateParameters(UpdateFlag flag, float sampleRate) noexcept
+		{ soundEngine_->UpdateParameters(flag, sampleRate); }
+		void updateGUIParameters() const noexcept;
 		void initialiseModuleTree() noexcept;
 
 		virtual void parameterChangeMidi(u64 parentModuleId, std::string_view parameterName, float value);
 
 		strict_inline auto &getParameterBridges() noexcept { return parameterBridges_; }
 		strict_inline auto &getParameterModulators() noexcept { return parameterModulators_; }
-
-		strict_inline auto getSampleRate() const noexcept { return sampleRate_.load(std::memory_order_acquire); }
-		strict_inline auto getSamplesPerBlock() const noexcept { return samplesPerBlock_.load(std::memory_order_acquire); }
+		strict_inline auto &getSoundEngine() noexcept { return *soundEngine_; }
 
 	protected:
+		Generation::BaseProcessor *deserialiseProcessor(ProcessorTree *processorTree, std::string_view processorType);
+
 		// pointer to the main processing engine
-		Generation::SoundEngine *soundEngine;
+		Generation::SoundEngine *soundEngine_;
 
 		std::vector<Framework::ParameterBridge *> parameterBridges_{};
 		std::vector<Framework::ParameterModulator *> parameterModulators_{};
-		juce::UndoManager undoManager{ 0, 100 };
-
-		std::atomic<float> sampleRate_ = kDefaultSampleRate;
-		std::atomic<u32> samplesPerBlock_ = 256;
 	};
 }

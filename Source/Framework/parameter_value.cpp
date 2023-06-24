@@ -1,28 +1,39 @@
 /*
-  ==============================================================================
+	==============================================================================
 
-    parameter_value.cpp
-    Created: 27 Dec 2022 2:57:25am
-    Author:  theuser27
+		parameter_value.cpp
+		Created: 27 Dec 2022 2:57:25am
+		Author:  theuser27
 
-  ==============================================================================
+	==============================================================================
 */
 
 #include "parameter_value.h"
+#include "parameter_bridge.h"
 
 namespace Framework
 {
-	void ParameterValue::updateValues() noexcept
+	void ParameterValue::updateValues(float sampleRate) noexcept
 	{
 		utils::ScopedSpinLock lock(waitLock_);
 
-		// if there's a set hostControl set, then we're automating this parameter
-		Interface::ParameterUI *control = (parameterLink_.hostControl) ? parameterLink_.hostControl : parameterLink_.UIControl;
 		bool isChanged = false;
 
-		if (control)
 		{
-			float newNormalisedValue = control->getValueInternal();
+			float newNormalisedValue = normalisedValue_;
+
+			// if there's a set hostControl set, then we're automating this parameter
+			if (parameterLink_.hostControl)
+			{
+				auto *control = parameterLink_.hostControl;
+				newNormalisedValue = control->getValue();
+			}
+			else if (parameterLink_.UIControl)
+			{
+				auto *control = parameterLink_.UIControl;
+				newNormalisedValue = (float)control->getValueSafe();
+			}
+
 			if (normalisedValue_ != newNormalisedValue)
 			{
 				normalisedValue_ = newNormalisedValue;
@@ -47,7 +58,16 @@ namespace Framework
 		if (isChanged)
 		{
 			normalisedInternalValue_ = simd_float::clamp(modulations_ + normalisedValue_, 0.0f, 1.0f);
-			internalValue_ = utils::scaleValue(normalisedInternalValue_, details_);
+			internalValue_ = scaleValue(normalisedInternalValue_, details_, sampleRate);
 		}
+	}
+}
+
+namespace Interface
+{
+	void ParameterUI::setValueToHost() noexcept
+	{
+		if (parameterLink_ && parameterLink_->hostControl)
+			parameterLink_->hostControl->setValueFromUI((float)getValueSafe());
 	}
 }

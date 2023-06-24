@@ -19,37 +19,24 @@ namespace Interface
 {
   DefaultLookAndFeel::DefaultLookAndFeel()
   {
-    setColour(PopupMenu::backgroundColourId, Colour(0xff111111));
+  	setColour(PopupMenu::backgroundColourId, Colour(0xff111111));
     setColour(PopupMenu::textColourId, Colour(0xffcccccc));
     setColour(PopupMenu::headerTextColourId, Colour(0xffffffff));
     setColour(PopupMenu::highlightedBackgroundColourId, Colour(0xff8458b7));
     setColour(PopupMenu::highlightedTextColourId, Colour(0xffffffff));
+
     setColour(BubbleComponent::backgroundColourId, Colour(0xff111111));
     setColour(BubbleComponent::outlineColourId, Colour(0xff333333));
+
     setColour(TooltipWindow::textColourId, Colour(0xffdddddd));
-  }
-
-  void DefaultLookAndFeel::fillTextEditorBackground(Graphics &g, int width, int height, TextEditor &textEditor)
-  {
-    if (width <= 0 || height <= 0)
-      return;
-
-    float rounding = 5.0f;
-    if (auto *parent = textEditor.findParentComponentOfClass<BaseSection>(); parent)
-      rounding = parent->findValue(Skin::kWidgetRoundedCorner);
-
-    g.setColour(textEditor.findColour(Skin::kTextEditorBackground, true));
-    g.fillRoundedRectangle(0, 0, width, height, rounding);
-    g.setColour(textEditor.findColour(Skin::kTextEditorBorder, true));
-    g.drawRoundedRectangle(0.5f, 0.5f, width - 1.0f, height - 1.0f, rounding, 1.0f);
   }
 
   void DefaultLookAndFeel::drawPopupMenuBackground(Graphics &g, int width, int height)
   {
     g.setColour(findColour(PopupMenu::backgroundColourId));
-    g.fillRoundedRectangle(0, 0, width, height, kPopupMenuBorder);
+    g.fillRoundedRectangle(0.0f, 0.0f, (float)width, (float)height, kPopupMenuBorder);
     g.setColour(findColour(BubbleComponent::outlineColourId));
-    g.drawRoundedRectangle(0.5f, 0.5f, width - 1.0f, height - 1.0f, kPopupMenuBorder, 1.0f);
+    g.drawRoundedRectangle(0.5f, 0.5f, (float)width - 1.0f, (float)height - 1.0f, kPopupMenuBorder, 1.0f);
   }
 
   void DefaultLookAndFeel::drawScrollbar(Graphics &g, ScrollBar &scrollBar, int x, int y, int width, 
@@ -57,7 +44,6 @@ namespace Interface
   {
     if (thumbSize >= height)
       return;
-
 
     int drawWidth = width / 2 - 2;
     if (mouseDown || mouseOver)
@@ -67,12 +53,12 @@ namespace Interface
     if (mouseDown)
       drawTimes = 4;
 
-    int draw_x = 1;
-    draw_x = width - 1 - drawWidth;
+    int drawX = width - 1 - drawWidth;
 
     g.setColour(scrollBar.findColour(Skin::kLightenScreen, true));
     for (int i = 0; i < drawTimes; ++i)
-      g.fillRoundedRectangle(draw_x, thumbPosition, drawWidth, thumbSize, drawWidth / 2.0f);
+      g.fillRoundedRectangle((float)drawX, (float)thumbPosition, (float)drawWidth,
+        (float)thumbSize, (float)drawWidth / 2.0f);
   }
 
   void DefaultLookAndFeel::drawComboBox(Graphics &g, int width, int height, const bool buttonDown,
@@ -119,16 +105,16 @@ namespace Interface
 
   int DefaultLookAndFeel::getSliderPopupPlacement(Slider &slider)
   {
-    if (auto *pSlider = dynamic_cast<ParameterSlider *>(&slider); pSlider)
+    if (auto *pSlider = dynamic_cast<BaseSlider *>(&slider); pSlider)
       return pSlider->getPopupPlacement();
 
     return LookAndFeel_V3::getSliderPopupPlacement(slider);
   }
 
   Font DefaultLookAndFeel::getPopupMenuFont()
-  { return Fonts::instance()->getInterMediumFont().withPointHeight(14.0f); }
+  { return Fonts::instance()->getInterVFont().withPointHeight(14.0f); }
 
   Font DefaultLookAndFeel::getSliderPopupFont(Slider &slider)
-  { return Fonts::instance()->getInterMediumFont().withPointHeight(14.0f); }
+  { return Fonts::instance()->getInterVFont().withPointHeight(14.0f); }
 
 }

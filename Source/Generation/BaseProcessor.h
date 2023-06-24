@@ -13,65 +13,18 @@
 #include "Framework/common.h"
 #include "Framework/vector_map.h"
 #include "Framework/simd_buffer.h"
-#include "Framework/parameters.h"
 #include "Framework/parameter_value.h"
 
-namespace Generation
-{
-	class BaseProcessor;
-}
+#define DEFINE_CLASS_TYPE(Token) static constexpr std::string_view getClassType() noexcept { return Token; }
 
 namespace Plugin
 {
+	class ProcessorTree;
+}
+
+namespace Framework
+{
 	class ProcessorUpdate;
-
-	// global state for keeping track of all parameters lists through global module number
-	class ProcessorTree
-	{
-	protected:
-		ProcessorTree() = default;
-		virtual ~ProcessorTree() = default;
-
-	public:
-		ProcessorTree(const ProcessorTree &) = delete;
-		ProcessorTree(ProcessorTree &&) = delete;
-		ProcessorTree &operator=(const ProcessorTree &other) = delete;
-		ProcessorTree &operator=(ProcessorTree &&other) = delete;
-
-		// do not call this function manually, it's always called when you instantiate a BaseProcessor derived type
-		// may block and allocate if expandThreshold has been reached
-		u64 getId(Generation::BaseProcessor *newModulePointer, bool isRootModule = false) noexcept;
-		std::unique_ptr<Generation::BaseProcessor> deleteProcessor(u64 moduleId) noexcept;
-
-		// remember to use a scoped lock before calling these 2 methods
-		Generation::BaseProcessor* getProcessor(u64 moduleId) const noexcept;
-		// finds a parameter from a specified module with a specified name
-		std::weak_ptr<Framework::ParameterValue> getProcessorParameter(u64 parentModuleId, std::string_view parameter) const noexcept;
-
-		UpdateFlag getUpdateFlag() const noexcept { return updateFlag_.load(std::memory_order_acquire); }
-		void setUpdateFlag(UpdateFlag newFlag) noexcept { updateFlag_.store(newFlag, std::memory_order_release); }
-
-	protected:
-		void resizeAllParameters() noexcept;
-
-		std::unique_ptr<Framework::VectorMap<u64, std::unique_ptr<Generation::BaseProcessor>>> allProcessors_ =
-			std::make_unique<Framework::VectorMap<u64, std::unique_ptr<Generation::BaseProcessor>>>(64);
-
-		// used to give out non-repeating ids for all PluginModules
-		std::atomic<u64> processorIdCounter_ = 0;
-		// used for checking whether it's ok to update parameters/plugin structure
-		std::atomic<UpdateFlag> updateFlag_ = UpdateFlag::AfterProcess;
-
-		std::atomic<u32> samplesPerBlock_{};
-		std::atomic<float> sampleRate_ = kDefaultSampleRate;
-
-		mutable std::atomic<bool> waitLock_ = false;
-
-		static constexpr size_t expandAmount = 2;
-		static constexpr float expandThreshold = 0.75f;
-
-		friend class ProcessorUpdate;
-	};
 }
 
 namespace Generation
@@ -79,14 +32,24 @@ namespace Generation
 	class BaseProcessor
 	{
 	public:
+		class Listener
+		{
+		public:
+			virtual ~Listener() = default;
+			virtual void insertedSubProcessor([[maybe_unused]] size_t index, [[maybe_unused]] BaseProcessor *newSubProcessor) { }
+			virtual void deletedSubProcessor([[maybe_unused]] size_t index, [[maybe_unused]] BaseProcessor *deletedSubProcessor) { }
+			virtual void updatedSubProcessor([[maybe_unused]] size_t index, [[maybe_unused]] BaseProcessor *oldSubProcessor, 
+				[[maybe_unused]] BaseProcessor *newSubProcessor) { }
+		};
+
 		BaseProcessor() = delete;
 		BaseProcessor(const BaseProcessor &) = delete;
 		BaseProcessor(BaseProcessor &&) = delete;
 
-		BaseProcessor(Plugin::ProcessorTree *moduleTree, u64 parentModuleId, std::string_view moduleType) noexcept;
-		BaseProcessor(const BaseProcessor &other, u64 parentModuleId) noexcept;
+		BaseProcessor(Plugin::ProcessorTree *processorTree, u64 parentProcessorId, std::string_view processorType) noexcept;
+		BaseProcessor(const BaseProcessor &other, u64 parentProcessorId) noexcept;
 		BaseProcessor &operator=(const BaseProcessor &other) noexcept;
-		BaseProcessor(BaseProcessor &&other, u64 parentModuleId) noexcept;
+		BaseProcessor(BaseProcessor &&other, u64 parentProcessorId) noexcept;
 		BaseProcessor &operator=(BaseProcessor &&other) noexcept;
 
 		virtual ~BaseProcessor() noexcept = default;
@@ -97,20 +60,19 @@ namespace Generation
 				processorParameter.second->initialise();
 		}
 
-		[[nodiscard]] virtual BaseProcessor *createCopy(u64 parentModuleId) const noexcept = 0;
-
+		[[nodiscard]] virtual BaseProcessor *createSubProcessor(std::string_view type) const noexcept = 0;
 		void clearSubProcessors() noexcept { subProcessors_.clear(); }
 
 		BaseProcessor *getSubProcessor(size_t index) const noexcept { return subProcessors_[index]; }
-		u32 getIndexOfSubProcessor(const BaseProcessor *subModule) noexcept 
+		size_t getIndexOfSubProcessor(const BaseProcessor *subModule) noexcept 
 		{ return subProcessors_.begin() - std::find(subProcessors_.begin(), subProcessors_.end(), subModule); }
 
 		// the following functions are to be called outside of processing time
-		virtual void insertSubProcessor([[maybe_unused]] u32 index, [[maybe_unused]] std::string_view newModuleType = {},
-			[[maybe_unused]] BaseProcessor *newSubModule = nullptr) noexcept { }
-		virtual BaseProcessor *deleteSubProcessor([[maybe_unused]] u32 index) noexcept { return nullptr; };
-		virtual BaseProcessor *updateSubProcessor([[maybe_unused]] u32 index, [[maybe_unused]] std::string_view newModuleType = {},
-			[[maybe_unused]] BaseProcessor *newSubModule = nullptr) noexcept { return nullptr; }
+		virtual bool insertSubProcessor([[maybe_unused]] size_t index,
+			[[maybe_unused]] BaseProcessor *newSubProcessor) noexcept { return false; }
+		virtual BaseProcessor *deleteSubProcessor([[maybe_unused]] size_t index) noexcept { return nullptr; }
+		virtual BaseProcessor *updateSubProcessor([[maybe_unused]] size_t index,
+			[[maybe_unused]] BaseProcessor *newSubProcessor) noexcept { return nullptr; }
 		
 		[[nodiscard]] std::weak_ptr<Framework::ParameterValue> getParameter(std::string_view parameter) const noexcept
 		{
@@ -118,24 +80,34 @@ namespace Generation
 			return (parameterIter == processorParameters_.data.end()) ?
 				std::weak_ptr<Framework::ParameterValue>() : parameterIter->second;
 		}
-		void updateParameters(UpdateFlag flag, bool updateSubModuleParameters = true);
+		[[nodiscard]] auto *getParameterUnchecked(std::string_view parameter) const noexcept
+		{
+			const auto parameterIter = processorParameters_.find(parameter);
+			return (parameterIter == processorParameters_.data.end()) ? nullptr : parameterIter->second.get();
+		}
+		[[nodiscard]] Framework::ParameterValue *getParameterUnchecked(size_t index) const noexcept
+		{ return processorParameters_[index].get(); }
+		auto getNumParameters() const noexcept { return processorParameters_.data.size(); }
 
-		void randomiseParameters();
-		void setAllParametersRandomisation(bool toRandomise = true);
-		void setParameterRandomisation(std::string_view name, bool toRandomise = true);
+		void updateParameters(UpdateFlag flag, float sampleRate, bool updateSubModuleParameters = true);
+
+		//void randomiseParameters();
+		//void setAllParametersRandomisation(bool toRandomise = true);
+		//void setParameterRandomisation(std::string_view name, bool toRandomise = true);
 
 		std::string_view getProcessorType() const noexcept { return processorType_; }
 		u64 getProcessorId() const noexcept { return processorId_; }
+		auto *getProcessorTree() const noexcept { return processorTree_; }
 		
 		u64 getParentProcessorId() const noexcept { return parentProcessorId_; }
 		void setParentProcessorId(u64 newParentModuleId) noexcept { parentProcessorId_ = newParentModuleId; }
 
 
-		// i use this function so that i don't freak out when i see "new"
+		// i use this is a helper function so that i don't freak out when i see "new"
 		// the processors get added to the tree when they get their moduleId
 		// this is NOT a memory leak
 		template<typename T, typename ... Args>
-		T *createSubProcessor(Args&& ... args) const
+		T *makeSubProcessor(Args&& ... args) const
 		{
 			// default construction, no extra arguments
 			if constexpr (sizeof...(Args) == 0)
@@ -145,9 +117,9 @@ namespace Generation
 			else
 			{
 				// copy constructor
-				if constexpr (std::is_base_of_v<BaseProcessor, std::remove_cvref_t<decltype(utils::getNthElement<0>(args))>>)
+				if constexpr (std::is_base_of_v<BaseProcessor, std::remove_cvref_t<decltype(utils::getNthElement<0>(args...))>>)
 				{
-					return new T(args);
+					return new T(std::forward<Args>(args)...);
 				}
 				else
 				{
@@ -157,7 +129,10 @@ namespace Generation
 			}
 		}
 
+		void addListener(Listener *listener) { listeners_.push_back(listener); }
+
 	protected:
+		[[nodiscard]] virtual BaseProcessor *createCopy(std::optional<u64> parentModuleId) const noexcept = 0;
 		void createProcessorParameters(const Framework::ParameterDetails *details, size_t size) noexcept;
 
 		// data contextual to every individual module
@@ -172,8 +147,9 @@ namespace Generation
 		const u64 processorId_ = 0;
 		const std::string_view processorType_{};
 
+		std::vector<Listener *> listeners_{};
+
 		friend class Plugin::ProcessorTree;
+		friend class Framework::ProcessorUpdate;
 	};
 }
-
-REFL_AUTO(type(Generation::BaseProcessor))

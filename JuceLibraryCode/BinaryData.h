@@ -11,17 +11,14 @@ namespace BinaryData
     extern const char*   Icon_Contrast_svg;
     const int            Icon_Contrast_svgSize = 1337;
 
-    extern const char*   DDINBold_otf;
-    const int            DDINBold_otfSize = 60188;
-
-    extern const char*   InterBold_ttf;
-    const int            InterBold_ttfSize = 316100;
+    extern const char*   DDIN_otf;
+    const int            DDIN_otfSize = 59860;
 
     extern const char*   InterMedium_ttf;
-    const int            InterMedium_ttfSize = 314712;
+    const int            InterMedium_ttfSize = 367772;
 
     // Number of elements in the namedResourceList and originalFileNames arrays.
-    const int namedResourceListSize = 4;
+    const int namedResourceListSize = 3;
 
     // Points to the start of a list of resource names.
     extern const char* namedResourceList[];

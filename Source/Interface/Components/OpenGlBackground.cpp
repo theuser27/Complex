@@ -19,7 +19,7 @@ namespace Interface
 
   void OpenGlBackground::init(OpenGlWrapper &openGl)
   {
-    static const float vertices[] = {
+    static constexpr float vertices[] = {
       -1.0f, 1.0f, 0.0f, 1.0f,
       -1.0f, -1.0f, 0.0f, 0.0f,
       1.0f, -1.0f, 1.0f, 0.0f,
@@ -28,7 +28,7 @@ namespace Interface
 
     memcpy(vertices_, vertices, 16 * sizeof(float));
 
-    static const int triangles[] = {
+    static constexpr int triangles[] = {
       0, 1, 2,
       2, 3, 0
     };
@@ -52,7 +52,7 @@ namespace Interface
     texture_uniform_ = OpenGlComponent::getUniform(*image_shader_, "image");
   }
 
-  void OpenGlBackground::destroy(OpenGlWrapper &open_gl)
+  void OpenGlBackground::destroy(OpenGlWrapper &openGl)
   {
     if (background_.getWidth())
       background_.release();
@@ -64,13 +64,6 @@ namespace Interface
 
     glDeleteBuffers(1, &vertex_buffer_);
     glDeleteBuffers(1, &triangle_buffer_);
-  }
-
-  void OpenGlBackground::bind()
-  {
-    glBindBuffer(GL_ARRAY_BUFFER, vertex_buffer_);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, triangle_buffer_);
-    background_.bind();
   }
 
   void OpenGlBackground::enableAttributes()
@@ -99,7 +92,7 @@ namespace Interface
       glDisableVertexAttribArray(texture_coordinates_->attributeID);
   }
 
-  void OpenGlBackground::render(OpenGlWrapper &open_gl)
+  void OpenGlBackground::render(OpenGlWrapper &openGl)
   {
     mutex_.lock();
     if ((new_background_ || background_.getWidth() == 0) && background_image_.getWidth() > 0)
@@ -107,16 +100,16 @@ namespace Interface
       new_background_ = false;
       background_.loadImage(background_image_);
 
-      float width_ratio = (1.0f * background_.getWidth()) / background_image_.getWidth();
-      float height_ratio = (1.0f * background_.getHeight()) / background_image_.getHeight();
-      float width_end = 2.0f * width_ratio - 1.0f;
-      float height_end = 1.0f - 2.0f * height_ratio;
+      float widthRatio = (float)background_.getWidth() / (float)background_image_.getWidth();
+      float heightRatio = (float)background_.getHeight() / (float)background_image_.getHeight();
+      float widthEnd = 2.0f * widthRatio - 1.0f;
+      float heightEnd = 1.0f - 2.0f * heightRatio;
 
-      vertices_[8] = vertices_[12] = width_end;
-      vertices_[5] = vertices_[9] = height_end;
+      vertices_[8] = vertices_[12] = widthEnd;
+      vertices_[5] = vertices_[9] = heightEnd;
 
       glBindBuffer(GL_ARRAY_BUFFER, vertex_buffer_);
-      GLsizeiptr vert_size = static_cast<GLsizeiptr>(static_cast<size_t>(16 * sizeof(float)));
+      GLsizeiptr vert_size = static_cast<GLsizeiptr>(16 * sizeof(float));
       glBufferData(GL_ARRAY_BUFFER, vert_size, vertices_, GL_STATIC_DRAW);
     }
 
@@ -124,7 +117,11 @@ namespace Interface
     glDisable(GL_SCISSOR_TEST);
 
     image_shader_->use();
-    bind();
+
+  	glBindBuffer(GL_ARRAY_BUFFER, vertex_buffer_);
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, triangle_buffer_);
+    background_.bind();
+
     glActiveTexture(GL_TEXTURE0);
 
     if (texture_uniform_ != nullptr && background_.getWidth())

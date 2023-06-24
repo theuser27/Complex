@@ -22,8 +22,9 @@ namespace Interface
 
     int getPopupMenuBorderSize() override { return kPopupMenuBorder; }
 
-    void drawTextEditorOutline(Graphics &g, int width, int height, TextEditor &textEditor) override { }
-    void fillTextEditorBackground(Graphics &g, int width, int height, TextEditor &textEditor) override;
+    void drawTextEditorOutline([[maybe_unused]] Graphics &g, [[maybe_unused]] int width, [[maybe_unused]] int height, 
+      [[maybe_unused]] TextEditor &textEditor) override { }
+    void fillTextEditorBackground(Graphics &g, int width, int height, TextEditor &textEditor) override { }
     void drawPopupMenuBackground(Graphics &g, int width, int height) override;
 
     void drawScrollbar(Graphics &g, ScrollBar& scrollBar, int x, int y, int width, int height,
@@ -46,6 +47,9 @@ namespace Interface
 
     Font getPopupMenuFont() override;
     Font getSliderPopupFont(Slider &slider) override;
+
+  	Slider::SliderLayout getSliderLayout(Slider &slider) override
+    { return { slider.getLocalBounds(), { 0, 0, 0, 0 } }; }
 
     int getMenuWindowFlags() override { return 0; }
 

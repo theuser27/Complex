@@ -12,31 +12,25 @@
 
 #include "JuceHeader.h"
 
+#include "Plugin/Complex.h"
 #include "BaseSection.h"
+#include "HeaderFooterSections.h"
 #include "../LookAndFeel/Shaders.h"
 #include "../Components/OpenGLBackground.h"
+#include "EffectsStateSection.h"
 
 namespace Interface
 {
 	class AboutSection;
-	class BankExporter;
-	class BendSection;
 	class DeleteSection;
-	class ExpiredSection;
 	class ExtraModSection;
-	class HeaderSection;
-	class KeyboardInterface;
+	class HeaderFooterSections;
+	class EffectsStateSection;
 	class MasterControlsInterface;
 	class ModulationInterface;
 	class ModulationManager;
-	class PortamentoSection;
 	class PresetBrowser;
 	class SaveSection;
-	class SynthesisInterface;
-	struct GuiData;
-	class PluginSlider;
-	class WavetableEditSection;
-	class VoiceSection;
 	class PopupDisplay;
 	class SinglePopupSelector;
 	class DualPopupSelector;
@@ -46,9 +40,22 @@ namespace Interface
 	public:
 		static constexpr double kMinOpenGlVersion = 1.4;
 
-		MainInterface(GuiData *guiData);
+		static constexpr int kMainVisualiserHeight = 112;
+		static constexpr int kLaneScrollHeight = 38;
+		static constexpr int kLaneWidth = 418;
+		static constexpr int kLaneStartingHeight = 384;
+		
+		static constexpr int kVerticalGlobalMargin = 8;
+		static constexpr int kHorizontalWindowEdgeMargin = 4;
+		static constexpr int kLaneToLaneMargin = 4;
+		static constexpr int kLaneToBottomSettingsMargin = 32;
 
-		MainInterface();
+		static constexpr int kWindowStartingWidth = kLaneWidth + 2 * kHorizontalWindowEdgeMargin;
+		static constexpr int kWindowStartingHeight = HeaderFooterSections::kHeaderHeight + kMainVisualiserHeight + 
+			kVerticalGlobalMargin + kLaneScrollHeight + kVerticalGlobalMargin + kLaneStartingHeight + 
+			kLaneToBottomSettingsMargin + HeaderFooterSections::kFooterHeight;
+
+		MainInterface(Plugin::ComplexPlugin &plugin);
 		~MainInterface() override;
 
 		void paintBackground(Graphics &g) override;
@@ -65,8 +72,8 @@ namespace Interface
 			checkShouldReposition();
 		}
 		void resized() override;
-		void animate(bool animate) override;
 		void reset() override;
+		void updateAllValues() override;
 
 		void newOpenGLContextCreated() override;
 		void renderOpenGL() override;
@@ -86,41 +93,35 @@ namespace Interface
 		void hideDisplay(bool primary);
 		void enableRedoBackground(bool enable)
 		{
-			enable_redo_background_ = enable;
+			enableRedoBackground_ = enable;
 			if (enable)
 				resized();
 		}
 
-		float getResizingScale() const { return width_ * 1.0f / resized_width_; }
-		int getPixelMultiple() const override { return pixel_multiple_; }
-
 	private:
+		std::unique_ptr<HeaderFooterSections> headerFooter_;
+		std::unique_ptr<EffectsStateSection> effectsStateSection_;
+		std::unique_ptr<SinglePopupSelector> popupSelector_;
+		std::unique_ptr<DualPopupSelector> dualPopupSelector_;
+		std::unique_ptr<PopupDisplay> popupDisplay1_;
+		std::unique_ptr<PopupDisplay> popupDisplay2_;
 
-		std::map<std::string, PluginSlider *> slider_lookup_;
-		std::map<std::string, Button *> button_lookup_;
-
-		std::unique_ptr<HeaderSection> header_;
-		//std::unique_ptr<EffectsInterface> effects_interface_;
-		std::unique_ptr<SinglePopupSelector> popup_selector_;
-		std::unique_ptr<DualPopupSelector> dual_popup_selector_;
-		std::unique_ptr<PopupDisplay> popup_display_1_;
-		std::unique_ptr<PopupDisplay> popup_display_2_;
-
-		int width_ = 0;
-		int resized_width_ = 0;
-		float last_render_scale_ = 0.0f;
-		float display_scale_ = 1.0f;
-		int pixel_multiple_ = 1;
+		// monitor rendering scale, not plugin scale
+		float displayScale_ = 1.0f;
+		// monitor rendering scale from the last render callback
+		float lastRenderScale_ = 0.0f;
 		bool setting_all_values_ = false;
 		bool unsupported_ = false;
 		bool animate_ = true;
-		bool enable_redo_background_ = true;
-		CriticalSection open_gl_critical_section_;
-		OpenGLContext open_gl_context_;
+		bool enableRedoBackground_ = true;
+		CriticalSection openGlCriticalSection_;
+		OpenGLContext openGlContext_;
 		std::unique_ptr<Shaders> shaders_;
-		OpenGlWrapper open_gl_{ open_gl_context_ };
-		Image background_image_;
+		OpenGlWrapper openGl_{ openGlContext_ };
+		Image backgroundImage_;
 		OpenGlBackground background_;
+
+		Plugin::ComplexPlugin &plugin_;
 
 		JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(MainInterface)
 	};

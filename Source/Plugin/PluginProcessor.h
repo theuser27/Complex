@@ -10,7 +10,6 @@
 
 #include <JuceHeader.h>
 #include "Complex.h"
-#include "Framework/parameter_bridge.h"
 
 //==============================================================================
 class ComplexAudioProcessor  : public juce::AudioProcessor, public Plugin::ComplexPlugin
@@ -18,7 +17,7 @@ class ComplexAudioProcessor  : public juce::AudioProcessor, public Plugin::Compl
 public:
 	//==============================================================================
 	ComplexAudioProcessor();
-	~ComplexAudioProcessor() override;
+	~ComplexAudioProcessor() override = default;
 
 	//==============================================================================
 	void prepareToPlay (double sampleRate, int samplesPerBlock) override;

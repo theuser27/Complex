@@ -31,22 +31,8 @@ namespace Framework
 		static_assert(alignof(SIMD) % alignof(T) == 0);
 
 		SimdBuffer() = default;
-		~SimdBuffer() = default;
-
-		SimdBuffer(u32 numChannels, u32 size) noexcept
-		{
-			COMPLEX_ASSERT(numChannels > 0 && size > 0);
-			reserve(numChannels, size);
-		}
-
-		SimdBuffer(const SimdBuffer &other, bool doDataCopy = false) noexcept
-		{
-			COMPLEX_ASSERT(other.getChannels() > 0 && other.getSize() > 0);
-			reserve(other.getChannels(), other.getSize());
-
-			if (doDataCopy)
-				applyToThis(*this, other, other.getChannels(), other.getSize());
-		}
+		SimdBuffer(u32 numChannels, u32 size) noexcept { reserve(numChannels, size); }
+		SimdBuffer(const SimdBuffer &other, bool doDataCopy = false) noexcept;
 
 		SimdBuffer &operator=(const SimdBuffer &other) = delete;
 		SimdBuffer(SimdBuffer &&other) = delete;
@@ -242,7 +228,7 @@ namespace Framework
 		u32 getChannels() const noexcept { return channels_; }
 		u32 getSimdChannels() const noexcept { return getTotalSimdChannels(channels_); }
 
-		MemoryBlock<SIMD> &getData() const noexcept { return data_; }
+		MemoryBlock<SIMD> &getData() noexcept { return data_; }
 
 		// can get raw pointer if the context already has a shared_ptr
 		static SIMD* getDataPointer(std::shared_ptr<SIMD[]>& dataPtr, u32 channel, u32 index, u32 size) noexcept
@@ -276,11 +262,11 @@ namespace Framework
 	{
 	public:
 		SimdBufferView() = default;
-		SimdBufferView(SimdBuffer<T, SIMD> buffer, u32 beginChannel = 0, u32 channels = 0) noexcept 
+		SimdBufferView(const SimdBuffer<T, SIMD> &buffer, u32 channels = 0, u32 beginChannel = 0) noexcept
 		{
 			COMPLEX_ASSERT(beginChannel + channels <= buffer.getChannels());
 
-			dataView_ = buffer.getData();
+			dataView_ = buffer.data_;
 			beginChannel_ = beginChannel;
 			channels_ = (channels) ? channels : buffer.getChannels() - beginChannel;
 			size_ = buffer.getSize();
@@ -312,7 +298,7 @@ namespace Framework
 
 		static constexpr u32 getRelativeSize() noexcept { return SimdBuffer<T, SIMD>::getRelativeSize(); }
 
-		MemoryBlockView<SIMD> &getData() const noexcept { return dataView_; }
+		const MemoryBlockView<SIMD> &getData() const noexcept { return dataView_; }
 
 		bool isEmpty() const noexcept { return dataView_.isEmpty(); }
 
@@ -325,6 +311,16 @@ namespace Framework
 		template<typename T, commonConcepts::SimdValue SIMD>
 		friend class SimdBuffer;
 	};
+
+	template<typename T, commonConcepts::SimdValue SIMD>
+	SimdBuffer<T, SIMD>::SimdBuffer(const SimdBuffer &other, bool doDataCopy) noexcept
+	{
+		COMPLEX_ASSERT(other.getChannels() > 0 && other.getSize() > 0);
+		reserve(other.getChannels(), other.getSize());
+
+		if (doDataCopy)
+			applyToThis(*this, other, other.getChannels(), other.getSize());
+	}
 
 	// copies/does math operation on samples from "otherBuffer" to "thisBuffer"
 	// specified by starting channels/indices
@@ -395,8 +391,8 @@ namespace Framework
 		COMPLEX_ASSERT(otherBuffer.getSize() >= numSamples);
 
 		// getting data and setting up variables
-		auto thisDataBlock = thisBuffer.getData();
-		auto otherDataBlock = otherBuffer.getData();
+		auto &thisDataBlock = thisBuffer.getData();
+		auto &otherDataBlock = otherBuffer.getData();
 
 		auto thisBufferSize = thisBuffer.getSize();
 		auto otherBufferSize = otherBuffer.getSize();

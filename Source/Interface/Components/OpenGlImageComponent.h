@@ -22,7 +22,7 @@ namespace Interface
   class OpenGlImageComponent : public OpenGlComponent
   {
   public:
-    OpenGlImageComponent(String name = "") : OpenGlComponent(name)
+    OpenGlImageComponent(String name = "") : OpenGlComponent(std::move(name))
     {
       image_.setTopLeft(-1.0f, 1.0f);
       image_.setTopRight(1.0f, 1.0f);
@@ -30,12 +30,11 @@ namespace Interface
       image_.setBottomRight(1.0f, -1.0f);
       image_.setColor(Colours::white);
 
-      if (name == "")
+      if (getName() == "")
         setInterceptsMouseClicks(false, false);
     }
-    ~OpenGlImageComponent() override = default;
 
-    void paint(Graphics &g) override { redrawImage(false); }
+    void paint([[maybe_unused]] Graphics &g) override { redrawImage(false); }
 
     virtual void paintToImage(Graphics &g)
     {
@@ -46,9 +45,9 @@ namespace Interface
         component->paint(g);
     }
 
-    void init(OpenGlWrapper &open_gl) override;
-    void render(OpenGlWrapper &open_gl, bool animate) override;
-    void destroy(OpenGlWrapper &open_gl) override;
+    void init(OpenGlWrapper &openGl) override;
+    void render(OpenGlWrapper &openGl, bool animate) override;
+    void destroy(OpenGlWrapper &openGl) override;
 
     // the force argument is for when we KNOW we need to repaint
     // (i.e. isn't a hierarchy propaged paint call from a top level object that paints its children) 
@@ -128,10 +127,14 @@ namespace Interface
   class OpenGlTextEditor : public OpenGlAutoImageComponent<TextEditor>, public TextEditor::Listener
   {
   public:
-    OpenGlTextEditor(String name) : OpenGlAutoImageComponent(name)
+    OpenGlTextEditor(String name) : OpenGlAutoImageComponent(std::move(name))
     {
       imageComponent_.setComponent(this);
       addListener(this);
+      //imageComponent_.image().setAdditive(true);
+      //setJustification(Justification::centred);
+      /*setBorder({ 1, 1, 1, 1 });
+      setIndents(0, 0);*/
     }
 
     void textEditorTextChanged(TextEditor &) override { redoImage(); }
@@ -143,15 +146,14 @@ namespace Interface
       redoImage();
     }
 
+    void paint(Graphics &g) override
+    {
+      g.setFont(usedFont_);
+    }
+
     void applyFont()
     {
-      Font font;
-      if (valuesFont_)
-        font = Fonts::instance()->getDDinFont().withPointHeight(getHeight() / 2.0f);
-      else
-        font = Fonts::instance()->getInterMediumFont().withPointHeight(getHeight() / 2.0f);
-
-      applyFontToAllText(font);
+      applyFontToAllText(usedFont_);
       redoImage();
     }
 
@@ -168,23 +170,21 @@ namespace Interface
       TextEditor::resized();
       if (isMultiLine())
       {
-        float indent = imageComponent_.findValue(Skin::kLabelBackgroundRounding);
+        auto indent = (int)imageComponent_.findValue(Skin::kLabelBackgroundRounding);
         setIndents(indent, indent);
         return;
       }
 
-      if (valuesFont_)
-        setIndents(getHeight() * 0.2, getHeight() * 0.17);
-      else
-        setIndents(getHeight() * 0.2, getHeight() * 0.15);
       if (isVisible())
         applyFont();
+
     }
 
-    void setValuesFont() { valuesFont_ = true; }
+    auto getUsedFont() const { return usedFont_; }
+  	void setUsedFont(Font font) { usedFont_ = std::move(font); }
 
   private:
-    bool valuesFont_ = false;
+    Font usedFont_{ Fonts::instance()->getInterVFont() };
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(OpenGlTextEditor)
   };
@@ -214,9 +214,9 @@ namespace Interface
       g.setColour(Colours::white);
 
       if (font_type_ == kTitle)
-        g.setFont(Fonts::instance()->getInterBoldFont().withPointHeight(text_size_));
+        g.setFont(Fonts::instance()->getInterVFont().withPointHeight(text_size_).boldened());
       else if (font_type_ == kText)
-        g.setFont(Fonts::instance()->getInterMediumFont().withPointHeight(text_size_));
+        g.setFont(Fonts::instance()->getInterVFont().withPointHeight(text_size_));
       else
         g.setFont(Fonts::instance()->getDDinFont().withPointHeight(text_size_));
 

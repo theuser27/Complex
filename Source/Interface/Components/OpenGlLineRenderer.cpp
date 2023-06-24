@@ -10,6 +10,7 @@
 
 #include "Framework/simd_values.h"
 #include "OpenGlLineRenderer.h"
+#include "OpenGlMultiQuad.h"
 
 namespace
 {

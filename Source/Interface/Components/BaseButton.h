@@ -10,9 +10,9 @@
 
 #pragma once
 
+#include "Framework/parameter_value.h"
 #include "OpenGlImageComponent.h"
 #include "OpenGlMultiQuad.h"
-#include "../Sections/InterfaceEngineLink.h"
 
 namespace Interface
 {
@@ -30,10 +30,10 @@ namespace Interface
     {
     public:
       virtual ~ButtonListener() = default;
-      virtual void guiChanged(BaseButton *button) { }
+      virtual void guiChanged([[maybe_unused]] BaseButton *button) { }
     };
 
-    BaseButton(String name) : ToggleButton(name) { }
+    BaseButton(Framework::ParameterValue *parameter, String name = {});
     ~BaseButton() override = default;
 
     virtual OpenGlComponent *getGlComponent() = 0;
@@ -42,14 +42,25 @@ namespace Interface
     void mouseDown(const MouseEvent &e) override;
     void mouseUp(const MouseEvent &e) override;
 
+    void clicked() override;
+
     // Inherited via ParameterUI
     bool updateValue() override
     {
       bool newValue = (bool)std::round(getValueSafe());
-      bool needsUpdate = getToggleState != newValue;
+      bool needsUpdate = getToggleState() != newValue;
       if (needsUpdate)
         setToggleState(newValue, NotificationType::dontSendNotification);
       return needsUpdate;
+    }
+
+    void endChange() override;
+
+    void updateValueFromParameter()
+    {
+      auto value = (bool)std::round(parameterLink_->parameter->getNormalisedValue());
+      setToggleState(value, sendNotificationSync);
+      setValueSafe(value);
     }
 
     std::span<const std::string_view> getStringLookup() const { return details_.stringLookup; }
@@ -60,10 +71,10 @@ namespace Interface
 
     void addButtonListener(ButtonListener *listener) { button_listeners_.push_back(listener); }
 
-    void clicked() override;
-
   protected:
     void clicked(const ModifierKeys &modifiers) override;
+
+    bool hasParameterAssignment_ = false;
 
     std::vector<ButtonListener *> button_listeners_{};
 
@@ -82,11 +93,7 @@ namespace Interface
       shape_.setScissor(true);
     }
 
-    void parentHierarchyChanged() override
-    {
-      if (findParentComponentOfClass<InterfaceEngineLink>())
-        setColors();
-    }
+    void parentHierarchyChanged() override;
 
     void setColors()
     {
@@ -150,8 +157,8 @@ namespace Interface
   class ShapeButton : public BaseButton
   {
   public:
-    ShapeButton(String name) : BaseButton(name) { }
-    ~ShapeButton() override = default;
+    ShapeButton(Framework::ParameterValue *parameter, String name = {}) :
+  		BaseButton(parameter, std::move(name)) { }
 
     OpenGlComponent *getGlComponent() override { return &gl_component_; }
 
@@ -160,31 +167,31 @@ namespace Interface
 
     void resized() override
     {
-      ToggleButton::resized();
+      BaseButton::resized();
       gl_component_.redoImage();
     }
 
     void mouseEnter(const MouseEvent &e) override
     {
-      ToggleButton::mouseEnter(e);
+      BaseButton::mouseEnter(e);
       gl_component_.setHover(true);
     }
 
     void mouseExit(const MouseEvent &e) override
     {
-      ToggleButton::mouseExit(e);
+      BaseButton::mouseExit(e);
       gl_component_.setHover(false);
     }
 
     void mouseDown(const MouseEvent &e) override
     {
-      ToggleButton::mouseDown(e);
+      BaseButton::mouseDown(e);
       gl_component_.setDown(true);
     }
 
     void mouseUp(const MouseEvent &e) override
     {
-      ToggleButton::mouseUp(e);
+      BaseButton::mouseUp(e);
       gl_component_.setDown(false);
     }
 
@@ -273,7 +280,7 @@ namespace Interface
     void setShowOnColors(bool show) noexcept { show_on_colors_ = show; }
     void setPrimaryUiButton(bool primary) noexcept { primary_ui_button_ = primary; }
 
-    void paint(Graphics &g) override { }
+    void paint([[maybe_unused]] Graphics &g) override { }
 
     OpenGlQuad &background() noexcept { return background_; }
     PlainTextComponent &text() noexcept { return text_; }
@@ -305,8 +312,8 @@ namespace Interface
   class GeneralButton : public BaseButton
   {
   public:
-    GeneralButton(String name) : BaseButton(name) { }
-    ~GeneralButton() override = default;
+    GeneralButton(Framework::ParameterValue *parameter, String name = {}) :
+  		BaseButton(parameter, std::move(name)) { }
 
     GeneralButtonComponent *getGlComponent() override { return &button_component_; }
 
@@ -315,9 +322,9 @@ namespace Interface
 
     void resized() override;
 
-    void setText(String text)
+    void setText(const String &newText)
     {
-      setButtonText(text);
+      setButtonText(newText);
       button_component_.setText();
     }
 
@@ -326,6 +333,9 @@ namespace Interface
 
     void setNoBackground()
     { button_component_.setStyle(GeneralButtonComponent::kJustText); }
+
+  	void setTextButton()
+    { button_component_.setStyle(GeneralButtonComponent::kTextButton); }
 
     void setJustification(Justification justification)
     { button_component_.setJustification(justification); }
@@ -344,31 +354,31 @@ namespace Interface
 
     void enablementChanged() override
     {
-      ToggleButton::enablementChanged();
+      BaseButton::enablementChanged();
       button_component_.setColors();
     }
 
     void mouseEnter(const MouseEvent &e) override
     {
-      ToggleButton::mouseEnter(e);
+      BaseButton::mouseEnter(e);
       button_component_.setHover(true);
     }
 
     void mouseExit(const MouseEvent &e) override
     {
-      ToggleButton::mouseExit(e);
+      BaseButton::mouseExit(e);
       button_component_.setHover(false);
     }
 
     void mouseDown(const MouseEvent &e) override
     {
-      ToggleButton::mouseDown(e);
+      BaseButton::mouseDown(e);
       button_component_.setDown(true);
     }
 
     void mouseUp(const MouseEvent &e) override
     {
-      ToggleButton::mouseUp(e);
+      BaseButton::mouseUp(e);
       button_component_.setDown(false);
     }
 

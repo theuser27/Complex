@@ -16,7 +16,7 @@
 #include "Framework/circular_buffer.h"
 #include "Framework/windows.h"
 #include "Framework/spectral_support_functions.h"
-#include "EffectModules.h"
+#include "Plugin/ProcessorTree.h"
 #include "EffectsState.h"
 
 
@@ -25,6 +25,8 @@ namespace Generation
 	class SoundEngine : public BaseProcessor
 	{
 	public:
+		DEFINE_CLASS_TYPE("{6B31ED46-FBF0-4219-A645-7B774F903026}")
+
 		SoundEngine(Plugin::ProcessorTree *processorTree) noexcept;
 		~SoundEngine() noexcept override = default;
 
@@ -278,7 +280,7 @@ namespace Generation
 				// overlapping
 				if (overlappedSamples)
 				{
-					if (windowType == Framework::WindowTypes::Clean)
+					if (windowType == Framework::WindowTypes::Lerp)
 						Framework::CircularBuffer::applyToBuffer(buffer_.getData(), other, numChannels, overlappedSamples,
 							addOverlap_, 0, channelsToOvelap, utils::MathOperations::Interpolate);
 					else
@@ -397,31 +399,30 @@ namespace Generation
 		void CopyBuffers(AudioBuffer<float> &buffer, u32 numInputs, u32 numSamples) noexcept;
 		void IsReadyToPerform(u32 numSamples) noexcept;
 		void DoFFT() noexcept;		
-		void ProcessFFT() noexcept;
+		void ProcessFFT(float sampleRate) noexcept;
 		void DoIFFT() noexcept;
 		void ScaleDown() noexcept;
 		void MixOut(u32 numSamples) noexcept;
 		void FillOutput(AudioBuffer<float> &buffer, u32 numOutputs, u32 numSamples) noexcept;
 
 		// Inherited via BaseProcessor
-		[[nodiscard]] BaseProcessor *createCopy(u64 parentModuleId) const noexcept override
-		{ COMPLEX_ASSERT(false && "You're trying to copy SoundEngine, which is not meant to be copied"); return nullptr; }
+		BaseProcessor *createCopy(std::optional<u64> parentModuleId) const noexcept override
+		{ COMPLEX_ASSERT_FALSE("You're trying to copy SoundEngine, which is not meant to be copied"); return nullptr; }
+		BaseProcessor *createSubProcessor([[maybe_unused]] std::string_view type) const noexcept override
+		{
+			COMPLEX_ASSERT_FALSE("You're trying to create a subProcessor for SoundEngine, which is not meant to be happen");
+			return nullptr;
+		}
 
 	public:
 		// initialising pointers and FFT plans
-		void Initialise(float sampleRate, u32 samplesPerBlock) noexcept;
-		void UpdateParameters(UpdateFlag flag) noexcept;
+		void ResetBuffers() noexcept;
+		void UpdateParameters(UpdateFlag flag, float sampleRate) noexcept;
 		void MainProcess(AudioBuffer<float> &buffer, u32 numSamples,
-			u32 numInputs, u32 numOutputs) noexcept;
+			float sampleRate, u32 numInputs, u32 numOutputs) noexcept;
 
-		// Getter Methods
-		//
-		[[nodiscard]] u32 getProcessingDelay() const noexcept { return FFTNumSamples_ + samplesPerBlock_; }
-		[[nodiscard]] u32 getSamplesPerBlock() const noexcept { return samplesPerBlock_; }
-		[[nodiscard]] float getSampleRate() const noexcept { return sampleRate_; }
+		[[nodiscard]] u32 getProcessingDelay() const noexcept { return FFTNumSamples_ + processorTree_->getSamplesPerBlock(); }
 
-		// Setter Methods
-		//
 		void setMix(float mix) noexcept { mix_ = mix; }
 		void setFFTOrder(u32 order) noexcept { FFTOrder_ = order; }
 		void setOverlap(float overlap) noexcept { overlap_ = overlap; }
@@ -459,9 +460,6 @@ namespace Generation
 		// output gain
 		float outGain_ = 1.0f;
 		//
-		float sampleRate_ = kDefaultSampleRate;
-		u32 samplesPerBlock_ = 512;
-		//
 		// have we performed for this last run?
 		bool isPerforming_ = false;
 		//
@@ -483,7 +481,7 @@ namespace Generation
 		[[nodiscard]] u32 getFFTNumSamples() const noexcept { return 1 << FFTOrder_; }
 		//
 		// getting array position of FFT
-		[[nodiscard]] u32 getFFTPlan() const noexcept { return FFTOrder_ - common::kMinFFTOrder; }
+		[[nodiscard]] u32 getFFTPlan() const noexcept { return FFTOrder_ - kMinFFTOrder; }
 		//
 		// getting the dry/wet balance for the whole plugin
 		[[nodiscard]] float getMix() const noexcept { return mix_; }
@@ -493,5 +491,3 @@ namespace Generation
 		{ return (u32)std::floorf((float)FFTNumSamples_ * (1.0f - overlap_)); }
 	};
 }
-
-REFL_AUTO(type(Generation::SoundEngine, bases<Generation::BaseProcessor>))

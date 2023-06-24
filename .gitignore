@@ -1,4 +1,6 @@
 /Builds/
 /Info Sources/
 /.vs
+/.idea
+/CreateCmake.bat
 default.vitalskin

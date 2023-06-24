@@ -11,30 +11,19 @@
 #include "Skin.h"
 #include "DefaultLookAndFeel.h"
 #include "../Sections/BaseSection.h"
-#include "Framework/loadSave.h"
+#include "Framework/load_save.h"
 
 namespace
 {
-  inline constexpr std::string_view kOverrideNames[Interface::Skin::kNumSectionOverrides] = {
+  inline constexpr std::array<std::string_view, Interface::Skin::kNumSectionOverrides> kOverrideNames = {
     "All",
-    "Logo",
     "Header",
     "Overlays",
-    "Effects Chain",
-    "Effect Module",
-    "Utility Effect",
-    "Filter Effect",
-    "Contrast Effect",
-    "Dynamics Effect",
-    "Phase Effect",
-    "Pitch Effect",
-    "Stretch Effect",
-    "Destroy Effect",
-    "Warp Effect",
-    "All Effects"
+    "Effects Lane",
+    "Effect Module"
   };
 
-  inline constexpr std::string_view kValueNames[Interface::Skin::kNumSkinValueIds] = {
+  inline constexpr std::array<std::string_view, Interface::Skin::kNumSkinValueIds> kValueNames = {
     "Body Rounding",
     "Label Height",
     "Label Background Height",
@@ -76,7 +65,7 @@ namespace
     "Widget Fill Boost"
   };
 
-  inline constexpr std::string_view kColorNames[Interface::Skin::kNumColors] = {
+  inline constexpr std::array<std::string_view, Interface::Skin::kNumColors> kColorNames = {
     "Background",
     "Body",
     "Body Heading Background",
@@ -112,6 +101,16 @@ namespace
     "Linear Slider Unselected",
     "Linear Slider Thumb",
     "Linear Slider Thumb Disabled",
+
+    "Pin Slider",
+    "Pin Slider Disabled",
+    "Pin Slider Thumb",
+    "Pin Slider Thumb Disabled",
+
+    "Text Selector Text",
+    "Text Selector Text Disabled",
+
+    "Number Box Slider",
 
     "Widget Center Line",
     "Widget Primary 1",
@@ -168,7 +167,9 @@ namespace Interface
   Skin::Skin()
   {
     File defaultSkin = Framework::LoadSave::getDefaultSkin();
+
     // temporary solution to ensure there's a skin file
+    // if this throws put Complex.skin at Users\(user)\AppData\Roaming\Complex
     try
     {
       if (!defaultSkin.exists())
@@ -232,7 +233,7 @@ namespace Interface
     if (topLevel)
       applyComponentValues(component);
     else
-			component->setSkinValues(valueOverrides_[section_override]);
+      component->setSkinValues(valueOverrides_[section_override]);
   }
 
   bool Skin::overridesColor(int section, ColorId colorId) const
@@ -340,7 +341,7 @@ namespace Interface
     }
 
     data["overrides"] = overrides;
-    data["pluginVersion"] = ProjectInfo::versionNumber;
+    data["Plugin Version"] = ProjectInfo::versionNumber;
 
     return data;
   }
@@ -354,27 +355,10 @@ namespace Interface
   json Skin::updateJson(json data)
   {
     int version = 0;
-    if (data.count("pluginVersion"))
-      version = data["pluginVersion"];
+    if (data.count("Plugin Version"))
+      version = data["Plugin Version"];
 
-    if (version < 0x608)
-    {
-      data["Knob Arc Size"] = data["Knob Size"];
-      data["Knob Arc Thickness"] = data["Knob Thickness"];
-      data["Knob Handle Length"] = data["Knob Handle Radial Amount"];
-      data["Knob Mod Amount Arc Size"] = data["Knob Mod Amount Size"];
-      data["Knob Mod Amount Arc Thickness"] = data["Knob Mod Amount Thickness"];
-      data["Knob Mod Meter Arc Size"] = data["Knob Mod Meter Size"];
-      data["Knob Mod Meter Arc Thickness"] = data["Knob Mod Meter Thickness"];
-    }
-
-    if (data.count("Widget Fill Boost") == 0)
-      data["Widget Fill Boost"] = 1.6f;
-    if (data.count("Widget Line Boost") == 0)
-      data["Widget Line Boost"] = 1.0f;
-
-    if (version < 0x609)
-      data["Modulation Meter"] = Colours::white.toString().toStdString();
+    // if skin versions upgrades are ever needed, insert them here
 
     return data;
   }
@@ -452,7 +436,7 @@ namespace Interface
     return true;
   }
 
-  bool Skin::loadFromFile(File source)
+  bool Skin::loadFromFile(const File &source)
   { return stringToState(source.loadFileAsString()); }
 
 }

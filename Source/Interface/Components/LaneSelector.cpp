@@ -1,22 +1,16 @@
 /*
   ==============================================================================
 
-    loadSave.h
-    Created: 3 Dec 2022 1:46:31am
+    LaneSelector.cpp
+    Created: 3 May 2023 4:47:08am
     Author:  theuser27
 
   ==============================================================================
 */
 
-#pragma once
+#include "LaneSelector.h"
 
-#include "JuceHeader.h"
-
-namespace Framework
+namespace Interface
 {
-  class LoadSave
-  {
-  public:
-    static File getDefaultSkin();
-  };
+	
 }

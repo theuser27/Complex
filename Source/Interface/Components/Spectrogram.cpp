@@ -24,11 +24,11 @@ namespace Interface
 
     setFill(true);
 
-    for (int i = 0; i < kAudioSize; ++i)
+    /*for (int i = 0; i < kAudioSize; ++i)
     {
       left_amps_[i] = kDefaultAmp;
       right_amps_[i] = kDefaultAmp;
-    }
+    }*/
 
     addRoundedCorners();
   }
@@ -138,7 +138,7 @@ namespace Interface
     if (synth_interface == nullptr)
       return;
 
-    nyquistFreq_ = synth_interface->getPlugin()->getSampleRate() / 2.0f;
+    nyquistFreq_ = synth_interface->getPlugin().getSampleRate() / 2.0f;
 
     setLineWidth(2.0f);
     setFillCenter(-1.0f);
@@ -156,11 +156,11 @@ namespace Interface
     renderCorners(open_gl, animate);
   }
 
-  void Spectrogram::paintBackground(Graphics &g)
+  void Spectrogram::paint(Graphics &g)
   {
     static constexpr int kLineSpacing = 10;
 
-    OpenGlLineRenderer::paintBackground(g);
+    OpenGlLineRenderer::paint(g);
     if (!paint_background_lines_)
       return;
 

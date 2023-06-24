@@ -46,14 +46,14 @@ namespace Interface
     glGenBuffers(1, &vertexBuffer_);
     glBindBuffer(GL_ARRAY_BUFFER, vertexBuffer_);
 
-    GLsizeiptr vert_size = static_cast<GLsizeiptr>(kNumPositions * sizeof(float));
-    glBufferData(GL_ARRAY_BUFFER, vert_size, positionVertices_.get(), GL_STATIC_DRAW);
+    GLsizeiptr vertSize = static_cast<GLsizeiptr>(kNumPositions * sizeof(float));
+    glBufferData(GL_ARRAY_BUFFER, vertSize, positionVertices_.get(), GL_STATIC_DRAW);
 
     glGenBuffers(1, &triangleBuffer_);
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, triangleBuffer_);
 
-    GLsizeiptr tri_size = static_cast<GLsizeiptr>(kNumTriangleIndices * sizeof(float));
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, tri_size, positionVertices_.get(), GL_STATIC_DRAW);
+    GLsizeiptr triSize = static_cast<GLsizeiptr>(kNumTriangleIndices * sizeof(float));
+    glBufferData(GL_ELEMENT_ARRAY_BUFFER, triSize, positionTriangles_.get(), GL_STATIC_DRAW);
 
     imageShader_ = openGl.shaders->getShaderProgram(Shaders::kImageVertex, Shaders::kTintedImageFragment);
 
@@ -90,12 +90,12 @@ namespace Interface
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 
     glBindBuffer(GL_ARRAY_BUFFER, vertexBuffer_);
-    GLsizeiptr vert_size = static_cast<GLsizeiptr>(kNumPositions * sizeof(float));
 
     mutex_.lock();
     if (hasNewVertices_)
     {
-      glBufferData(GL_ARRAY_BUFFER, vert_size, positionVertices_.get(), GL_STATIC_DRAW);
+      GLsizeiptr vertSize = static_cast<GLsizeiptr>(kNumPositions * sizeof(float));
+    	glBufferData(GL_ARRAY_BUFFER, vertSize, positionVertices_.get(), GL_STATIC_DRAW);
       hasNewVertices_ = false;
     }
 

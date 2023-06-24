@@ -23,9 +23,9 @@ namespace
 	#endif
 
 #define CONSTRAIN_AXIS_FUNCTION \
-    "float constrainAxis(float normAxis, float constraint, float offset) {" \
-    "    return clamp(ceil(-abs(normAxis + offset) + constraint), 0.0, 1.0);\n" \
-    "}\n"
+		"float constrainAxis(float normAxis, float constraint, float offset) {" \
+		"    return clamp(ceil(-abs(normAxis + offset) + constraint), 0.0, 1.0);\n" \
+		"}\n"
 
 	const char *kImageVertexShader =
 		"attribute " MEDIUMP " vec4 position;\n"
@@ -347,10 +347,6 @@ namespace
 		"    float color_step = abs(color_step2 - color_step1);\n"
 		"    gl_FragColor = alt_color * color_step + color * (1.0 - color_step);\n"
 		"    gl_FragColor.a = gl_FragColor.a * alpha;\n"
-		"    vec2 thumb_center_offset = abs(position - vec2(adjusted_value * dimensions_out.x, 0.0)) - vec2(thumb_amount, thickness);\n"
-		"    float thumb_delta_center = length(max(thumb_center_offset + vec2(rounding, rounding), vec2(0.0, 0.0)));\n"
-		"    float thumb_alpha = clamp((rounding - thumb_delta_center) * 0.5 + 0.5, 0.0, 1.0) * alpha;\n"
-		"    gl_FragColor = gl_FragColor * (1.0 - thumb_alpha) + thumb_color * thumb_alpha;\n"
 		"}\n";
 
 	// vertical slider
@@ -457,6 +453,28 @@ namespace
 		"    gl_FragColor = gl_FragColor * (1.0 - mod_alpha1) + background_color * mod_alpha1;\n"
 		"    gl_FragColor = gl_FragColor * (1.0 - mod_alpha2) + mod_color * mod_alpha2;\n"
 		"    gl_FragColor.a = gl_FragColor.a * alpha_mult;\n"
+		"}\n";
+
+	// coordinates_out are ndc (the same values as the position varying
+	//		except when OpenGlCorners when they are coordinates inside the quad itself)
+	// dimensions_out are the absolute dimensions of the object 
+	//		(almost always act as a uniform but why it isn't one idk)
+	const char *kDotSliderFragmentShader =
+		"uniform " MEDIUMP " vec4 color;\n"
+		"uniform " MEDIUMP " float thumb_amount;\n"
+		"varying " MEDIUMP " vec2 dimensions_out;\n"
+		"varying " MEDIUMP " vec2 coordinates_out;\n"
+		"varying " MEDIUMP " vec4 shader_values_out;\n"
+		CONSTRAIN_AXIS_FUNCTION
+		"\n"
+		"void main() {\n"
+		"    vec2 position = coordinates_out * dimensions_out;\n"
+		"    float adjusted_value = shader_values_out.x * 2.0 - 1.0;\n"
+		"    vec2 thumb_center_offset = abs(position - vec2(adjusted_value * dimensions_out.x, 0.0)) - vec2(thumb_amount);\n"
+		"    float rounding = thumb_amount * 0.5;\n"
+		"    float thumb_delta_center = length(max(thumb_center_offset + vec2(rounding), vec2(0.0)));\n"
+		"    float thumb_alpha = clamp((rounding - thumb_delta_center) * 0.5 + 0.5, 0.0, 1.0);\n"
+		"    gl_FragColor = gl_FragColor * (1.0 - thumb_alpha) + thumb_color * thumb_alpha;\n"
 		"}\n";
 
 	const char *kLineFragmentShader =
@@ -597,8 +615,8 @@ namespace Interface
 	OpenGLShaderProgram *Shaders::getShaderProgram(VertexShader vertex_shader, 
 		FragmentShader fragment_shader, const GLchar **varyings)
 	{
-		int shaderProgramIndex = vertex_shader * kNumFragmentShaders + fragment_shader;
-		if (shaderPrograms_.count(shaderProgramIndex))
+		int shaderProgramIndex = vertex_shader * (int)kNumFragmentShaders + fragment_shader;
+		if (shaderPrograms_.contains(shaderProgramIndex))
 			return shaderPrograms_.at(shaderProgramIndex).get();
 
 		shaderPrograms_[shaderProgramIndex] = std::make_unique<OpenGLShaderProgram>(*openGlContext_);
@@ -683,6 +701,8 @@ namespace Interface
 			return kVerticalSliderFragmentShader;
 		case kPinSliderFragment:
 			return kPinSliderFragmentShader;
+		case kDotSliderFragment:
+			return kDotSliderFragmentShader;
 		case kLinearModulationFragment:
 			return kLinearModulationFragmentShader;
 		case kModulationKnobFragment:

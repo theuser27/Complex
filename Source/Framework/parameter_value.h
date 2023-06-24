@@ -34,7 +34,7 @@ namespace Framework
 		virtual ~ParameterModulator() = default;
 
 		// deltaValue is the difference between the current and previous values
-		virtual simd_float getDeltaValue() { return currentValue_.load() - previousValue_.load(); };
+		virtual simd_float getDeltaValue() { return currentValue_.load() - previousValue_.load(); }
 
 	protected:
 		utils::atomic_simd_float currentValue_{ 0.0f };
@@ -73,6 +73,7 @@ namespace Framework
 		ParameterValue(const ParameterValue &other, u64 parentModuleId) noexcept : 
 			details_(other.details_), parentProcessorId_(parentModuleId)
 		{
+			utils::ScopedSpinLock g(other.waitLock_);
 			normalisedValue_ = other.normalisedValue_;
 			modulations_ = other.modulations_;
 			normalisedInternalValue_ = other.normalisedInternalValue_;
@@ -88,8 +89,6 @@ namespace Framework
 			internalValue_ = other.internalValue_;
 		}
 
-		~ParameterValue() = default;
-
 		void initialise()
 		{
 			utils::ScopedSpinLock lock(waitLock_);
@@ -102,11 +101,11 @@ namespace Framework
 		
 		// prefer calling this only once if possible
 		template<commonConcepts::ParameterRepresentation T>
-		T getInternalValue(bool isNormalised = false) const noexcept
+		T getInternalValue(float sampleRate = kDefaultSampleRate, bool isNormalised = false) const noexcept
 		{
 			utils::ScopedSpinLock lock(waitLock_);
 			
-			T result{};
+			T result;
 
 			if constexpr (std::is_same_v<T, simd_float>)
 			{
@@ -130,7 +129,7 @@ namespace Framework
 					if (isNormalised)
 						result = (modulations - difference)[0];
 					else
-						result = utils::scaleValue(modulations - difference, details_)[0];
+						result = scaleValue(modulations - difference, details_, sampleRate)[0];
 				}
 				else
 				{
@@ -160,7 +159,7 @@ namespace Framework
 				else if (details_.isStereo)
 				{
 					simd_int difference = utils::getStereoDifference(utils::toInt(modulations_));
-					result = static_cast<u32>(utils::scaleValue(modulations_ - utils::toFloat(difference), details_)[0]);
+					result = static_cast<u32>(scaleValue(modulations_ - utils::toFloat(difference), details_, sampleRate)[0]);
 				}
 				else
 					result = utils::toInt(internalValue_)[0];
@@ -169,55 +168,59 @@ namespace Framework
 			return result;
 		}
 
-		void changeControl(std::variant<Interface::ParameterUI *, ParameterBridge *> control) noexcept
+		auto changeControl(std::variant<Interface::ParameterUI *, ParameterBridge *> control) noexcept
 		{
 			utils::ScopedSpinLock lock(waitLock_);
-
-			if (std::holds_alternative<Interface::ParameterUI *>(control)) 
-				parameterLink_.UIControl = std::get<0>(control);
-			else parameterLink_.hostControl = std::get<1>(control);
-		}
-
-		void changeModulators(utils::GeneralOperations operation, std::weak_ptr<ParameterModulator> modulator = {}, i32 index = -1)
-		{
-			utils::ScopedSpinLock lock(waitLock_);
-
-			switch (operation)
+			
+			if (std::holds_alternative<Interface::ParameterUI *>(control))
 			{
-			case utils::GeneralOperations::Add:
-			case utils::GeneralOperations::AddCopy:
-			case utils::GeneralOperations::AddMove:
-				COMPLEX_ASSERT(!modulator.expired() && "You're adding an empty modulator to parameter");
-				COMPLEX_ASSERT(index < 0 && "You're updating instead of adding a modulator");
-
-				if (index < 0) parameterLink_.modulators.emplace_back(std::move(modulator));
-				else parameterLink_.modulators.emplace(parameterLink_.modulators.begin() + index, std::move(modulator));
-
-				break;
-			case utils::GeneralOperations::Update:
-			case utils::GeneralOperations::UpdateCopy:
-			case utils::GeneralOperations::UpdateMove:
-				COMPLEX_ASSERT(index >= 0 && "You're haven't given an index for parameter to update");
-				COMPLEX_ASSERT(!modulator.expired() && "You're updating with an empty modulator");
-
-				parameterLink_.modulators[index] = std::move(modulator);
-
-				break;
-			case utils::GeneralOperations::Remove:
-				COMPLEX_ASSERT(index >= 0 && "You're haven't given an index for parameter to remove");
-				COMPLEX_ASSERT(index < parameterLink_.modulators.size() && "You're have given an index that's too large");
-
-				parameterLink_.modulators.erase(parameterLink_.modulators.begin() + index);
-
-				break;
-			default:
-				break;
+				auto variant = std::variant<Interface::ParameterUI *,
+					ParameterBridge *>{ std::in_place_index<0>, parameterLink_.UIControl };
+				parameterLink_.UIControl = std::get<0>(control);
+				return variant;
+			}
+			else
+			{
+				auto variant = std::variant<Interface::ParameterUI *,
+					ParameterBridge *>{ std::in_place_index<1>, parameterLink_.hostControl };
+				parameterLink_.hostControl = std::get<1>(control);
+				return variant;
 			}
 		}
 
-		void updateValues() noexcept;
+		void addModulator(std::weak_ptr<ParameterModulator> modulator, i64 index = -1)
+		{
+			COMPLEX_ASSERT(!modulator.expired() && "You're trying to add an empty modulator to parameter");
 
-		u64 getParentProcessorId() const noexcept { return parentProcessorId_; }
+			utils::ScopedSpinLock lock(waitLock_);
+
+			if (index < 0) parameterLink_.modulators.emplace_back(std::move(modulator));
+			else parameterLink_.modulators.emplace(parameterLink_.modulators.begin() + index, std::move(modulator));
+		}
+
+		auto updateModulator(std::weak_ptr<ParameterModulator> modulator, size_t index)
+		{
+			COMPLEX_ASSERT(!modulator.expired() && "You're updating with an empty modulator");
+
+			utils::ScopedSpinLock lock(waitLock_);
+
+			auto replacedModulator = parameterLink_.modulators[index];
+			parameterLink_.modulators[index] = std::move(modulator);
+			return replacedModulator;
+		}
+
+		auto deleteModulator(size_t index)
+		{
+			COMPLEX_ASSERT(index < parameterLink_.modulators.size() && "You're have given an index that's too large");
+
+			utils::ScopedSpinLock lock(waitLock_);
+
+			auto deletedModulator = parameterLink_.modulators[index];
+			parameterLink_.modulators.erase(parameterLink_.modulators.begin() + index);
+			return deletedModulator;
+		}
+
+		void updateValues(float sampleRate) noexcept;
 
 		float getNormalisedValue() const noexcept
 		{
@@ -229,6 +232,9 @@ namespace Framework
 			utils::ScopedSpinLock guard(waitLock_);
 			return details_;
 		}
+		auto *getParameterLink() noexcept { return &parameterLink_; }
+		u64 getParentProcessorId() const noexcept { return parentProcessorId_; }
+
 		void setParameterDetails(ParameterDetails details) noexcept
 		{
 			utils::ScopedSpinLock guard(waitLock_);
@@ -245,7 +251,7 @@ namespace Framework
 		// after adding modulations and scaling
 		simd_float internalValue_ = 0.0f;
 
-		ParameterLink parameterLink_{};
+		ParameterLink parameterLink_{ nullptr, nullptr, {}, this };
 
 		ParameterDetails details_;
 		const u64 parentProcessorId_;
@@ -261,14 +267,22 @@ namespace Interface
 	public:
 		virtual ~ParameterUI() = default;
 
-		const Framework::ParameterDetails *getParameterDetails() const noexcept { return &details_; }
-		void setParameterDetails(const Framework::ParameterDetails &details) noexcept { details_ = details; }
+		Framework::ParameterDetails getParameterDetails() const noexcept { return details_; }
+		virtual void setParameterDetails(const Framework::ParameterDetails &details) { details_ = details; }
 
 		Framework::ParameterLink *getParameterLink() const noexcept { return parameterLink_; }
-		void setParameterLink(Framework::ParameterLink *parameterLink) noexcept { parameterLink_ = parameterLink; }
+		void setParameterLink(Framework::ParameterLink *parameterLink) noexcept
+		{
+			parameterLink_ = parameterLink;
+			parameterLink_->parameter->changeControl(this);
+		}
 
 		void setValueFromHost(double newValue) noexcept { setValueSafe(newValue); }
+		void setValueToHost() noexcept;
 
+		// called on the UI thread from:
+		// - on a timer in InterfaceEngineLink to watch for updates from the host
+		// - the UndoManager when undo/redo happens
 		virtual bool updateValue() = 0;
 
 		double getValueSafe() const noexcept
@@ -277,8 +291,12 @@ namespace Interface
 		void setValueSafe(double newValue) noexcept
 		{ value_.store(newValue, std::memory_order_release); }
 
+		void beginChange(double oldValue) noexcept { valueBeforeChange_ = oldValue; }
+		virtual void endChange() = 0;
+
 	protected:
 		std::atomic<double> value_ = 0.0;
+		double valueBeforeChange_ = 0.0;
 
 		Framework::ParameterLink *parameterLink_ = nullptr;
 		Framework::ParameterDetails details_{};

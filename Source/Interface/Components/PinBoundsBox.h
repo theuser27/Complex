@@ -18,24 +18,29 @@ namespace Interface
 	class PinBoundsBox : public BaseSection
 	{
 	public:
-		PinBoundsBox(std::string_view name);
+		PinBoundsBox(std::string_view name, Framework::ParameterValue *lowBound, Framework::ParameterValue *highBound);
 
-		void paintBackground(Graphics &g) override { paintBody(g, getBounds(), topRounding_, bottomRounding_); }
+		void paintBackground(Graphics &g) override
+		{
+			g.setColour(findColour(Skin::kBody, true));
+			g.fillRect(getBounds());
+		}
 		void paint(Graphics &g) override;
 		void resized() override;
 
 		void sliderValueChanged(Slider *slider) override;
 
-		void setBottomRounding(float rounding) noexcept { bottomRounding_ = rounding; }
-		void setTopRounding(float rounding) noexcept { topRounding_ = rounding; }
+		void paintHighlightBox(Graphics &g, float lowBoundValue, float highBoundValue, Colour colour) const;
 
-	private:
-		float topRounding_ = 3.0f;
-		float bottomRounding_ = 3.0f;
+		void setRounding(float topRounding, float bottomRounding) noexcept
+		{ roundedCorners_->setCorners(getLocalBounds(), topRounding, bottomRounding); }
+		void setTopRounding(float topRounding) noexcept { roundedCorners_->setTopCorners(getLocalBounds(), topRounding); }
+		void setBottomRounding(float bottomRounding) noexcept { roundedCorners_->setTopCorners(getLocalBounds(), bottomRounding); }
 
-		std::unique_ptr<PinSlider> lowBound_;
-		std::unique_ptr<PinSlider> highBound_;
-		std::unique_ptr<OpenGlImageComponent> highlight_;
-		std::unique_ptr<OpenGlCorners> roundedCorners_;
+	protected:
+		std::unique_ptr<PinSlider> lowBound_ = nullptr;
+		std::unique_ptr<PinSlider> highBound_ = nullptr;
+		std::unique_ptr<OpenGlImageComponent> highlight_ = nullptr;
+		std::unique_ptr<OpenGlCorners> roundedCorners_ = nullptr;
 	};
 }

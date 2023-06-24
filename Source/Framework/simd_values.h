@@ -11,18 +11,39 @@
 #pragma once
 
 #include <cstdint>
-#include <climits>
-#include <cstdlib>
-#include <concepts>
 #include <bit>
 #include <array>
 
-// if there isn't a macro to check SSE4.1 and FMA, we define them here
 // the project cannot run without vectorisation (either x86 SSE4.1 or ARM NEON, however it can run without FMA)
 
-#if defined (_MSC_VER) && ! (defined(__ARM_NEON__) || defined(__ARM_NEON))
-	#define __SSE4_1__ 1
-	#define __FMA__ 1
+#if defined (__GNUC__)
+	#if defined (__clang__)
+		#define COMLPEX_CLANG 1
+	#else
+		#define COMPLEX_GCC 1
+	#endif
+
+	#if defined (__x86_64__)
+		#define COMPLEX_X64 1
+	#elif defined (__aarch64__) 
+		#define COMPLEX_ARM 1
+	#endif
+	
+#elif defined (_MSC_VER)
+	#define COMPLEX_MSVC 1
+	#if defined (_M_X64)
+		#define COMPLEX_X64 1
+
+		// MSVC doesn't define these macros for some reason
+		// if your computer doesn't support FMA you can change the value to 0
+		#define __SSE4_1__ 1
+		#define __FMA__ 1
+
+	#elif defined (_M_ARM64)
+		#define COMPLEX_ARM 1
+	#else
+		#error Your CPU architecture is unsupported
+	#endif
 #endif
 
 #if __SSE4_1__
@@ -44,21 +65,20 @@
 	#error Either SSE4.1 or ARM NEON is needed for this program to work
 #endif
 
-#if !defined (strict_inline)
-	#if defined (_MSC_VER)
-		// strict_inline is used when something absolutely needs to be inlined
-		#define strict_inline __forceinline
-		// perf_inline is used for inlining to increase performance (can be changed for tests)
-		#define perf_inline __forceinline
-		#define vector_call __vectorcall
-	#else
-		// strict_inline is used when something absolutely needs to be inlined
-		#define strict_inline inline __attribute__((always_inline))
-		// perf_inline is used for inlining to increase performance (can be changed for tests)
-		#define perf_inline inline __attribute__((always_inline))
-		#define vector_call
-	#endif
+#if defined (COMPLEX_MSVC)
+	// strict_inline is used when something absolutely needs to be inlined
+	#define strict_inline __forceinline
+	// perf_inline is used for inlining to increase performance (can be changed for tests)
+	#define perf_inline __forceinline
+	#define vector_call __vectorcall
+#else
+	// strict_inline is used when something absolutely needs to be inlined
+	#define strict_inline inline __attribute__((always_inline))
+	// perf_inline is used for inlining to increase performance (can be changed for tests)
+	#define perf_inline inline __attribute__((always_inline))
+	#define vector_call
 #endif
+
 
 // using rust naming because yes
 typedef uint8_t u8;
@@ -75,8 +95,8 @@ namespace simd_values
 {
 	static constexpr u32 kFullMask = UINT32_MAX;
 	static constexpr u32 kNoChangeMask = UINT32_MAX;
-	static constexpr u32 kSignMask = INT32_MAX + 1;
-	static constexpr u32 kNotSignMask = INT32_MAX;
+	static constexpr u32 kNotSignMask = (u32)INT32_MAX;
+	static constexpr u32 kSignMask = kNotSignMask + 1U;
 
 	struct alignas(COMPLEX_SIMD_ALIGNMENT) simd_int
 	{
@@ -99,9 +119,9 @@ namespace simd_values
 		static constexpr u32 kNotSignedMask = kFullMask ^ kSignMask;
 
 
-		///////////////////////////////////
-		// Static Method Implementations //
-		///////////////////////////////////
+		////////////////////////////
+		// Method Implementations //
+		////////////////////////////
 
 		static strict_inline simd_type vector_call init(u32 scalar)
 		{
@@ -188,7 +208,7 @@ namespace simd_values
 		#endif
 		}
 
-		static strict_inline simd_type vector_call bitNot(simd_type value) { return bitXor(value, init(-1)); }
+		static strict_inline simd_type vector_call bitNot(simd_type value) { return bitXor(value, init(kFullMask)); }
 
 		static strict_inline simd_type vector_call equal(simd_type one, simd_type two)
 		{
@@ -258,9 +278,9 @@ namespace simd_values
 		}
 
 
-		/////////////////////////
-		// Static Method Calls //
-		/////////////////////////
+		//////////////////
+		// Method Calls //
+		//////////////////
 
 		static strict_inline simd_int vector_call max(simd_int one, simd_int two)
 		{	return max(one.value, two.value); }
@@ -297,15 +317,15 @@ namespace simd_values
 		// Constructors and Destructors //
 		//////////////////////////////////
 
-		strict_inline simd_int() noexcept : value(init(0)) { }
-		strict_inline simd_int(simd_type initial_value) noexcept : value(initial_value) { }
-		strict_inline simd_int(u32 initial_value) noexcept : value(init(initial_value)) { }
+		strict_inline simd_int() noexcept : simd_int(0) { }
+		strict_inline simd_int(u32 initialValue) noexcept : simd_int(init(initialValue)) { }
+		strict_inline simd_int(simd_type initialValue) noexcept : value(initialValue) { }
 		strict_inline simd_int(const std::array<u32, kSize> &scalars) noexcept
-			: value(std::bit_cast<simd_type, std::array<u32, kSize>>(scalars)) {	}
+			: value(std::bit_cast<simd_type, std::array<u32, kSize>>(scalars)) { }
 
 		template<typename T> requires requires (T x) { (sizeof(u32) * kSize) % sizeof(x) == 0; }
 		strict_inline simd_int(const std::array<T, (sizeof(u32) *kSize) / sizeof(T)> &scalars) noexcept
-			: value(std::bit_cast<simd_type>(scalars)) {	}
+			: value(std::bit_cast<simd_type>(scalars)) { }
 
 
 		///////////////
@@ -329,7 +349,7 @@ namespace simd_values
 		strict_inline auto getArrayOfValues() const
 		{	return std::bit_cast<std::array<T, ((sizeof(u32) *kSize) / sizeof(T))>>(value); }
 
-		strict_inline void swap(simd_int &other)
+		strict_inline void swap(simd_int &other) noexcept
 		{
 			simd_type temp = other.value;
 			other.value = value;
@@ -470,9 +490,9 @@ namespace simd_values
 		simd_type value;
 
 
-		///////////////////////////////////
-		// Static Methods Implementation //
-		///////////////////////////////////
+		////////////////////////////
+		// Methods Implementation //
+		////////////////////////////
 
 		static strict_inline mask_simd_type vector_call toMask(simd_type value)
 		{
@@ -650,7 +670,7 @@ namespace simd_values
 		}
 
 		static strict_inline simd_type vector_call bitNot(simd_type value)
-		{	return bitXor(value, simd_mask::init(-1)); }
+		{	return bitXor(value, simd_mask::init((u32)(-1))); }
 
 		static strict_inline simd_type vector_call max(simd_type one, simd_type two)
 		{
@@ -798,42 +818,6 @@ namespace simd_values
 		#endif
 		}
 
-		static strict_inline simd_type vector_call shift(simd_type value, simd_mask shiftMask)
-		{
-			// if all the masks are kNoChangeMask, we simply return
-			if (shiftMask.sum() == (u32)(-kSize))
-				return value;
-
-			// doing shifting
-			static constexpr u32 arraySize = sizeof(u32) / sizeof(u8);
-			auto shifts = shiftMask.getArrayOfValues();
-			u8 byteShifts[kSize * arraySize]{};
-			for (u32 i = 0; i < shifts.size(); i++)
-			{
-				if (shifts[i] == kNoChangeMask)
-				{
-					for (u32 j = 0; j < arraySize; j++)
-					{
-						byteShifts[i * arraySize + j] = i * arraySize + j;
-					}
-				}
-				else
-				{
-					for (u32 j = 0; j < arraySize; j++)
-					{
-						byteShifts[i * arraySize + j] = shifts[i] * arraySize + j;
-					}
-				}
-			}
-
-			// TODO: reverse intrinsic for neon
-		#if COMPLEX_SSE4_1 // SSSE3
-			return toSimd(_mm_shuffle_epi8(toMask(value), std::bit_cast<simd_mask::simd_type>(byteShifts)));
-		#elif COMPLEX_NEON
-
-		#endif
-		}
-
 		static strict_inline simd_type vector_call reverse(simd_type value)
 		{
 			// TODO: reverse intrinsic for neon
@@ -850,9 +834,9 @@ namespace simd_values
 		}
 
 
-		/////////////////////////
-		// Static Method Calls //
-		/////////////////////////
+		//////////////////
+		// Method Calls //
+		//////////////////
 
 		static strict_inline simd_float vector_call mulAdd(simd_float add, simd_float mul_one, simd_float mul_two)
 		{ return mulAdd(add.value, mul_one.value, mul_two.value);	}
@@ -1061,13 +1045,6 @@ namespace simd_values
 			return *this;
 		}
 
-		// overloaded operator() does value shifting inside the simd package
-		strict_inline simd_float& vector_call operator()(simd_mask shiftMask) noexcept
-		{
-			value = shift(value, shiftMask);
-			return *this;
-		}
-
 
 		strict_inline simd_float vector_call operator+(simd_float other) const noexcept
 		{ return add(value, other.value); }
@@ -1105,3 +1082,18 @@ namespace simd_values
 }
 
 using namespace simd_values;
+
+namespace common
+{
+	namespace commonConcepts
+	{
+		template<typename T>
+		concept SimdInt = std::same_as<T, simd_int>;
+
+		template<typename T>
+		concept SimdFloat = std::same_as<T, simd_float>;
+
+		template<typename T>
+		concept SimdValue = SimdInt<T> || SimdFloat<T>;
+	}
+}

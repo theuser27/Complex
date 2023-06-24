@@ -14,7 +14,7 @@
 
 namespace Interface
 {
-  class PresetSelector : public BaseSection
+  /*class PresetSelector : public BaseSection
   {
   public:
     static constexpr float kDefaultFontHeightRatio = 0.63f;
@@ -95,5 +95,5 @@ namespace Interface
     std::vector<Listener *> listeners_{};
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(PresetSelector)
-  };
+  };*/
 }

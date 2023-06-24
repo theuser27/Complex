@@ -16,7 +16,7 @@
 
 namespace Interface
 {
-  PresetSelector::PresetSelector() : BaseSection("preset_selector")
+  /*PresetSelector::PresetSelector() : BaseSection("preset_selector")
   {
     static const PathStrokeType arrow_stroke(0.05f, PathStrokeType::JointStyle::curved,
       PathStrokeType::EndCapStyle::rounded);
@@ -86,5 +86,5 @@ namespace Interface
       next_preset_->setBounds(getWidth() - height, 0, height, height);
       text_->setColor(findColour(Skin::kPresetText, true));
     }
-  }
+  }*/
 }

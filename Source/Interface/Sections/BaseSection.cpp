@@ -24,13 +24,13 @@ namespace Interface
 	void BaseSection::resized()
 	{
 		Component::resized();
-		if (off_overlay_)
+		if (offOverlay_)
 		{
-			off_overlay_->setBounds(getLocalBounds());
-			off_overlay_->setColor(findColour(Skin::kBackground, true).withMultipliedAlpha(0.8f));
+			offOverlay_->setBounds(getLocalBounds());
+			offOverlay_->setColor(findColour(Skin::kBackground, true).withMultipliedAlpha(0.8f));
 		}
-		/*if (activator_)
-			activator_->setBounds(getPowerButtonBounds());*/
+		if (activator_)
+			activator_->setBounds(getPowerButtonBounds());
 	}
 
 	void BaseSection::paintBackground(Graphics &g)
@@ -175,12 +175,12 @@ namespace Interface
 		g.fillRect(right - corner_size, bottom - corner_size, corner_and_shadow, corner_and_shadow);
 	}
 
-	void BaseSection::setSizeRatio(float ratio)
+	void BaseSection::setScaling(float scale)
 	{
-		size_ratio_ = ratio;
+		scaling_ = scale;
 
 		for (auto &subSection : subSections_)
-			subSection->setSizeRatio(ratio);
+			subSection->setScaling(scale);
 	}
 
 	void BaseSection::reset()
@@ -221,26 +221,22 @@ namespace Interface
 
 	void BaseSection::paintChildBackground(Graphics &g, BaseSection *child)
 	{
-		g.saveState();
+		Graphics::ScopedSaveState s(g);
 
 		Rectangle<int> bounds = getLocalArea(child, child->getLocalBounds());
 		g.reduceClipRegion(bounds);
 		g.setOrigin(bounds.getTopLeft());
 		child->paintBackground(g);
-
-		g.restoreState();
 	}
 
 	void BaseSection::paintChildShadow(Graphics &g, BaseSection *child)
 	{
-		g.saveState();
+		Graphics::ScopedSaveState s(g);
 
 		Rectangle<int> bounds = getLocalArea(child, child->getLocalBounds());
 		g.setOrigin(bounds.getTopLeft());
 		child->paintBackgroundShadow(g);
 		child->paintChildrenShadows(g);
-
-		g.restoreState();
 	}
 
 	void BaseSection::paintOpenGlBackground(Graphics &g, OpenGlComponent *openGlComponent)
@@ -286,30 +282,21 @@ namespace Interface
 			subSection->initOpenGlComponents(open_gl);
 	}
 
-	void BaseSection::renderOpenGlComponents(OpenGlWrapper &open_gl, bool animate)
+	void BaseSection::renderOpenGlComponents(OpenGlWrapper &openGl, bool animate)
 	{
 		// TODO: change order of current and subSections if draw order is switched
+
+		for (auto &subSection : subSections_)
+		{
+			if (subSection->isVisible() && !subSection->isAlwaysOnTop())
+				subSection->renderOpenGlComponents(openGl, animate);
+		}
 
 		for (auto &openGlComponent : openGlComponents_)
 		{
 			if (openGlComponent->isVisible() && !openGlComponent->isAlwaysOnTop())
 			{
-				openGlComponent->render(open_gl, animate);
-				COMPLEX_ASSERT(juce::gl::glGetError() == juce::gl::GL_NO_ERROR);
-			}
-		}
-
-		for (auto &subSection : subSections_)
-		{
-			if (subSection->isVisible() && !subSection->isAlwaysOnTop())
-				subSection->renderOpenGlComponents(open_gl, animate);
-		}
-
-		for (auto &openGlComponent : openGlComponents_)
-		{
-			if (openGlComponent->isVisible() && openGlComponent->isAlwaysOnTop())
-			{
-				openGlComponent->render(open_gl, animate);
+				openGlComponent->render(openGl, animate);
 				COMPLEX_ASSERT(juce::gl::glGetError() == juce::gl::GL_NO_ERROR);
 			}
 		}
@@ -317,7 +304,16 @@ namespace Interface
 		for (auto &subSection : subSections_)
 		{
 			if (subSection->isVisible() && subSection->isAlwaysOnTop())
-				subSection->renderOpenGlComponents(open_gl, animate);
+				subSection->renderOpenGlComponents(openGl, animate);
+		}
+
+		for (auto &openGlComponent : openGlComponents_)
+		{
+			if (openGlComponent->isVisible() && openGlComponent->isAlwaysOnTop())
+			{
+				openGlComponent->render(openGl, animate);
+				COMPLEX_ASSERT(juce::gl::glGetError() == juce::gl::GL_NO_ERROR);
+			}
 		}
 	}
 
@@ -336,6 +332,14 @@ namespace Interface
 			setActive(activator_->getToggleStateValue().getValue());
 	}
 
+	void BaseSection::resizeForText(TextSelector *textSelector, int requestedWidthChange)
+	{
+		auto currentBounds = textSelector->getBounds();
+		auto currentDrawBox = textSelector->getDrawBox();
+		textSelector->setBounds(currentBounds.withWidth(currentBounds.getWidth() + requestedWidthChange));
+		textSelector->setDrawBox(currentDrawBox.withWidth(currentDrawBox.getWidth() + requestedWidthChange));
+	}
+
 	void BaseSection::addButton(BaseButton *button, bool show)
 	{
 		buttons_[button->getName().toStdString()] = button;
@@ -347,7 +351,7 @@ namespace Interface
 
 	void BaseSection::addSlider(BaseSlider *slider, bool show, bool listen)
 	{
-		sliders_[slider->getName().toRawUTF8()] = slider;
+		sliders_[slider->getParameterDetails().name] = slider;
 		if (listen)
 			slider->addListener(this);
 		if (show)
@@ -412,14 +416,14 @@ namespace Interface
 
 	void BaseSection::createOffOverlay()
 	{
-		if (off_overlay_)
+		if (offOverlay_)
 			return;
 
-		off_overlay_ = std::make_unique<OffOverlay>();
-		addOpenGlComponent(off_overlay_.get(), true);
-		off_overlay_->setVisible(false);
-		off_overlay_->setAlwaysOnTop(true);
-		off_overlay_->setInterceptsMouseClicks(false, false);
+		offOverlay_ = std::make_unique<OffOverlay>();
+		addOpenGlComponent(offOverlay_.get(), true);
+		offOverlay_->setVisible(false);
+		offOverlay_->setAlwaysOnTop(true);
+		offOverlay_->setInterceptsMouseClicks(false, false);
 	}
 
 	void BaseSection::paintJointControlBackground(Graphics &g, int x, int y, int width, int height)
@@ -499,7 +503,7 @@ namespace Interface
 	{
 		int total_width = getSliderWidth();
 		int extra = total_width % 2;
-		int slider_width = std::floor(LinearSlider::kLinearWidthPercent * total_width * 0.5f) * 2.0f + extra;
+		int slider_width = (int)(std::floor(LinearSlider::kLinearWidthPercent * total_width * 0.5f) * 2.0f) + extra;
 		return (total_width - slider_width) / 2;
 	}
 
@@ -514,16 +518,17 @@ namespace Interface
 		if (getWidth() <= 0)
 			return 1.0f;
 
-		Component *top_level = getTopLevelComponent();
-		Rectangle<int> global_bounds = top_level->getLocalArea(this, getLocalBounds());
-		float display_scale = Desktop::getInstance().getDisplays().getDisplayForRect(top_level->getScreenBounds())->scale;
-		return display_scale * (1.0f * global_bounds.getWidth()) / getWidth();
+		Component *topLevelComponent = getTopLevelComponent();
+		float globalWidth = (float)topLevelComponent->getLocalArea(this, getLocalBounds()).getWidth();
+		float displayScale = (float)Desktop::getInstance().getDisplays()
+			.getDisplayForRect(topLevelComponent->getScreenBounds())->scale;
+		return displayScale * globalWidth / (float)getWidth();
 	}
 
 	Font BaseSection::getLabelFont() const noexcept
 	{
 		float height = findValue(Skin::kLabelHeight);
-		return Fonts::instance()->getInterMediumFont().withPointHeight(height);
+		return Fonts::instance()->getInterVFont().withPointHeight(height);
 	}
 
 	void BaseSection::setLabelFont(Graphics &g)
@@ -580,11 +585,28 @@ namespace Interface
 		if (component_bounds.getWidth() <= 0 || component_bounds.getHeight() <= 0)
 			return;
 
-		drawLabelBackground(g, component_bounds, text_component);
+		//drawLabelBackground(g, component_bounds, text_component);
+		setLabelFont(g);
 		g.setColour(findColour(Skin::kBodyText, true));
 		Rectangle<int> background_bounds = getLabelBackgroundBounds(component_bounds, text_component);
 		g.drawText(text, component_bounds.getX(), background_bounds.getY(),
 			component_bounds.getWidth(), background_bounds.getHeight(), Justification::centred, false);
+	}
+
+	void BaseSection::drawSliderLabel(Graphics &g, BaseSlider *slider) const
+	{
+		Graphics::ScopedSaveState s(g);
+		auto *label = slider->getLabelComponent();
+		auto rectangle = label->getBounds();
+		g.setFont(label->getFont());
+		g.setColour(findColour(Skin::kBodyText, true));
+		g.drawText(label->getLabelText(), rectangle, Justification::centred, false);
+	}
+
+	void BaseSection::drawNumberBoxBackground(Graphics &g, NumberBox *numberBox) const
+	{
+		Graphics::ScopedSaveState s(g);
+		numberBox->paint(g);
 	}
 
 	void BaseSection::drawTextBelowComponent(Graphics &g, String text, Component *component, int space, int padding)
@@ -599,8 +621,8 @@ namespace Interface
 		if (active_ == active)
 			return;
 
-		if (off_overlay_)
-			off_overlay_->setVisible(!active);
+		if (offOverlay_)
+			offOverlay_->setVisible(!active);
 
 		active_ = active;
 		for (auto &slider : sliders_)
@@ -614,10 +636,10 @@ namespace Interface
 	void BaseSection::updateAllValues()
 	{
 		for (auto &slider : sliders_)
-			slider.second->updateValue();
+			slider.second->updateValueFromParameter();
 
 		for (auto &button : buttons_)
-			button.second->updateValue();
+			button.second->updateValueFromParameter();
 
 		for (auto &subSection : subSections_)
 			subSection->updateAllValues();

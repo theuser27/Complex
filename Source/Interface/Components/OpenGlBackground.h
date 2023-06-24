@@ -27,17 +27,13 @@ namespace Interface
 
     void updateBackgroundImage(Image background);
 
-    void init(OpenGlWrapper &open_gl);
-    void render(OpenGlWrapper &open_gl);
-    void destroy(OpenGlWrapper &open_gl);
+    void init(OpenGlWrapper &openGl);
+    void render(OpenGlWrapper &openGl);
+    void destroy(OpenGlWrapper &openGl);
 
     void lock() { mutex_.lock(); }
     void unlock() { mutex_.unlock(); }
 
-    OpenGLShaderProgram *shader() { return image_shader_; }
-    OpenGLShaderProgram::Uniform *texture_uniform() { return texture_uniform_.get(); }
-
-    void bind();
     void enableAttributes();
     void disableAttributes();
 

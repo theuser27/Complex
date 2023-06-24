@@ -12,7 +12,6 @@
 
 #include <thread>
 #include "EffectModules.h"
-#include "Framework/simd_buffer.h"
 
 namespace Generation
 {
@@ -21,20 +20,21 @@ namespace Generation
 	class EffectsLane : public BaseProcessor
 	{
 	public:
+		DEFINE_CLASS_TYPE("{F260616E-CF7D-4099-A880-9C52CED263C1}")
+
 		EffectsLane() = delete;
 		EffectsLane(const EffectsLane &) = delete;
 		EffectsLane(EffectsLane &&) = delete;
 
 		EffectsLane(Plugin::ProcessorTree *moduleTree, u64 parentModuleId) noexcept;
 
-		EffectsLane(const EffectsLane &other, u64 parentModuleId) noexcept;
+		EffectsLane(const EffectsLane &other, u64 parentModuleId) noexcept :
+			BaseProcessor(other, parentModuleId) { }
 		EffectsLane &operator=(const EffectsLane &other) noexcept
 		{
 			BaseProcessor::operator=(other);
 			return *this;
 		}
-
-		~EffectsLane() noexcept override { BaseProcessor::~BaseProcessor(); }
 
 		void initialise() noexcept override
 		{
@@ -45,14 +45,19 @@ namespace Generation
 		}
 
 		// Inherited via BaseProcessor
-		void insertSubProcessor(u32 index, std::string_view newModuleType = {}, BaseProcessor *newSubModule = nullptr) noexcept override;
-		BaseProcessor *deleteSubProcessor(u32 index) noexcept override;
-		BaseProcessor *updateSubProcessor(u32 index, std::string_view newModuleType = {}, BaseProcessor *newSubModule = nullptr) noexcept override;
-		[[nodiscard]] BaseProcessor *createCopy(u64 parentModuleId) const noexcept override
-		{ return createSubProcessor<EffectsLane>(*this, parentModuleId); }
+		bool insertSubProcessor(size_t index, BaseProcessor *newSubProcessor = nullptr) noexcept override;
+		BaseProcessor *deleteSubProcessor(size_t index) noexcept override;
 
-	private:
-		std::vector<EffectModule *> effectModules_{};
+	protected:
+		[[nodiscard]] BaseProcessor *createCopy(std::optional<u64> parentModuleId) const noexcept override
+		{ return makeSubProcessor<EffectsLane>(*this, parentModuleId.value_or(parentProcessorId_)); }
+		[[nodiscard]] BaseProcessor *createSubProcessor(std::string_view type) const noexcept override
+		{
+			COMPLEX_ASSERT(magic_enum::enum_contains<Framework::EffectTypes>(type) &&
+				"You're trying to create a subProcessor for EffectsLane, that isn't EffectModule");
+			return makeSubProcessor<EffectModule>(type);
+		}
+
 		ComplexDataSource chainDataSource_{};
 
 		//// Parameters
@@ -76,6 +81,8 @@ namespace Generation
 	class EffectsState : public BaseProcessor
 	{
 	public:
+		DEFINE_CLASS_TYPE("{39B6A6C9-D33F-4AF0-BBDB-6C1F1960184F}")
+
 		// data link between modules in different chains
 		struct EffectsModuleLink
 		{
@@ -100,24 +107,30 @@ namespace Generation
 		}
 
 		void writeInputData(const AudioBuffer<float> &inputBuffer) noexcept;
-		void processChains() noexcept;
+		void processChains() const noexcept;
 		void sumChains() noexcept;
 		void writeOutputData(AudioBuffer<float> &outputBuffer) const noexcept;
 
 
 		// Inherited via BaseProcessor
-		void insertSubProcessor(u32 index, std::string_view newModuleType = {}, BaseProcessor *newSubModule = nullptr) noexcept override;
-		BaseProcessor *deleteSubProcessor(u32 index) noexcept override;
-		BaseProcessor *createCopy(u64 parentModuleId) const noexcept override
-		{ COMPLEX_ASSERT(false && "You're trying to copy EffectsState, which is not meant to be copied"); return nullptr; }
+		bool insertSubProcessor(size_t index, BaseProcessor *newSubProcessor) noexcept override;
+		BaseProcessor *deleteSubProcessor(size_t index) noexcept override;
+		BaseProcessor *createCopy([[maybe_unused]] std::optional<u64> parentModuleId) const noexcept override
+		{ COMPLEX_ASSERT_FALSE("You're trying to copy EffectsState, which is not meant to be copied"); return nullptr; }
+		[[nodiscard]] BaseProcessor *createSubProcessor(std::string_view type) const noexcept override
+		{
+			COMPLEX_ASSERT(type == EffectsLane::getClassType() &&
+				"You're trying to create a subProcessor for EffectsState, that isn't EffectsLane");
+			return makeSubProcessor<EffectsLane>();
+		}
 
 		auto getUsedInputChannels() noexcept
 		{
 			for (auto &chain : chains_)
 			{
 				// if the input is not another chain's output and the chain is enabled
-				if (auto chainInput = chain->processorParameters_[1]->getInternalValue<u32>();
-					((chainInput & kChainInputMask) == 0) && chain->processorParameters_[0]->getInternalValue<u32>())
+				if (auto chainInput = chain->processorParameters_[1]->getInternalValue<u32>(getSampleRate());
+					((chainInput & kChainInputMask) == 0) && chain->processorParameters_[0]->getInternalValue<u32>(getSampleRate()))
 					usedInputs_[chainInput] = true;
 			}
 
@@ -133,8 +146,8 @@ namespace Generation
 			for (auto &chain : chains_)
 			{
 				// if the output is not defaulted and the chain is enabled
-				if (auto chainOutput = chain->processorParameters_[2]->getInternalValue<u32>();
-					(chainOutput != kDefaultOutput) && chain->processorParameters_[0]->getInternalValue<u32>())
+				if (auto chainOutput = chain->processorParameters_[2]->getInternalValue<u32>(getSampleRate());
+					(chainOutput != kDefaultOutput) && chain->processorParameters_[0]->getInternalValue<u32>(getSampleRate()))
 					usedOutputs_[chainOutput] = true;
 			}
 
@@ -149,15 +162,15 @@ namespace Generation
 		u32 getEffectiveFFTSize() const noexcept { return effectiveFFTSize_; }
 		float getSampleRate() const noexcept { return sampleRate_; }
 
-		void setFFTSize(u32 newEffectiveFFTSize) noexcept { effectiveFFTSize_ = newEffectiveFFTSize; }
+		void setEffectiveFFTSize(u32 newEffectiveFFTSize) noexcept { effectiveFFTSize_ = newEffectiveFFTSize; }
 		void setSampleRate(float newSampleRate) noexcept { sampleRate_ = newSampleRate; }
 
 	private:
-		void processIndividualChains(std::stop_token stoken, u32 chainIndex) noexcept;
+		void processIndividualChains(std::stop_token stoken, u32 chainIndex) const noexcept;
 
 		std::vector<EffectsLane *> chains_{};
 
-		// current FFT process size
+		// current number of FFT bins (real-imaginary pairs)
 		u32 effectiveFFTSize_ = (1 << kDefaultFFTOrder) / 2;
 		float sampleRate_ = kDefaultSampleRate;
 
@@ -171,6 +184,3 @@ namespace Generation
 		static constexpr u32 kDefaultOutput = (u32)(-1);
 	};
 }
-
-REFL_AUTO(type(Generation::EffectsLane, bases<Generation::BaseProcessor>))
-REFL_AUTO(type(Generation::EffectsState, bases<Generation::BaseProcessor>))

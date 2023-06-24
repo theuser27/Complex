@@ -14,25 +14,22 @@ namespace Plugin
 {
 	ComplexPlugin::ComplexPlugin()
 	{
+		// the object self-registers in the processor tree (this) to be a unique_ptr
 		// don't worry this is not a memory leak
-		soundEngine = new Generation::SoundEngine(this);
+		soundEngine_ = new Generation::SoundEngine(this);
 	}
 
 	void ComplexPlugin::Initialise(float sampleRate, u32 samplesPerBlock)
 	{
-		if (sampleRate != sampleRate_.load(std::memory_order_acquire))
-		{
+		if (sampleRate != getSampleRate())
 			sampleRate_.store(sampleRate, std::memory_order_release);
-			RuntimeInfo::sampleRate.store(sampleRate, std::memory_order_release);
-		}
 
-		if (samplesPerBlock != samplesPerBlock_.load(std::memory_order_acquire))
+		if (samplesPerBlock != getSamplesPerBlock())
 		{
 			samplesPerBlock_.store(samplesPerBlock, std::memory_order_release);
-			RuntimeInfo::samplesPerBlock.store(samplesPerBlock, std::memory_order_release);
+			soundEngine_->ResetBuffers();
 		}
-
-		soundEngine->Initialise(sampleRate, samplesPerBlock);
+			
 	}
 
 	// IMPORTANT !!!
@@ -58,6 +55,13 @@ namespace Plugin
 		// check for power matching
 	}
 
+	void ComplexPlugin::updateGUIParameters() const noexcept
+	{
+		for (auto &bridge : parameterBridges_)
+			if (auto *link = bridge->parameterLinkPointer_.load(std::memory_order_acquire); link && link->UIControl)
+				link->UIControl->updateValue();
+	}
+
 	void ComplexPlugin::initialiseModuleTree() noexcept
 	{
 		// TODO: make the module structure here instead of doing it in the constructors
@@ -69,10 +73,15 @@ namespace Plugin
 		// TODO
 	}
 
-	void ComplexPlugin::Process(AudioBuffer<float> &buffer, u32 numSamples, u32 numInputs, u32 numOutputs)
+	Generation::BaseProcessor *ComplexPlugin::deserialiseProcessor(ProcessorTree *processorTree, std::string_view processorType)
+	{
+		return nullptr;
+	}
+
+	void ComplexPlugin::Process(AudioBuffer<float> &buffer, u32 numSamples, float sampleRate, u32 numInputs, u32 numOutputs)
 	{
 		utils::ScopedSpinLock lock(waitLock_);
-		soundEngine->MainProcess(buffer, numSamples, numInputs, numOutputs);
+		soundEngine_->MainProcess(buffer, numSamples, sampleRate, numInputs, numOutputs);
 	}
 
 }

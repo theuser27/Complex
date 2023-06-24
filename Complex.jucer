@@ -9,18 +9,18 @@
             file="Icons/Icon_Contrast.svg"/>
     </GROUP>
     <GROUP id="{7DCBD02E-5965-7719-7CD3-51C632FE14C8}" name="Fonts">
-      <FILE id="SMmWDV" name="D-DIN-Bold.otf" compile="0" resource="1" file="Fonts/D-DIN-Bold.otf"/>
-      <FILE id="Nl5Mra" name="Inter-Bold.ttf" compile="0" resource="1" file="Fonts/Inter-Bold.ttf"/>
-      <FILE id="NoD00p" name="Inter-Medium.ttf" compile="0" resource="1"
+      <FILE id="i2TP30" name="D-DIN.otf" compile="0" resource="1" file="Fonts/D-DIN.otf"/>
+      <FILE id="lerx3Z" name="Inter-Medium.ttf" compile="0" resource="1"
             file="Fonts/Inter-Medium.ttf"/>
     </GROUP>
     <GROUP id="{EA56D449-367C-4F87-53C4-8DB58E6C0431}" name="Source">
       <GROUP id="{32A822E4-0A2D-7496-308D-972ADD4D4F30}" name="Framework">
-        <FILE id="j2d1RQ" name="loadSave.cpp" compile="1" resource="0" file="Source/Framework/loadSave.cpp"/>
-        <FILE id="Mh417i" name="loadSave.h" compile="0" resource="0" file="Source/Framework/loadSave.h"/>
-        <FILE id="FtRlDg" name="updateTypes.cpp" compile="1" resource="0" file="Source/Framework/updateTypes.cpp"/>
-        <FILE id="yP2CSt" name="updateTypes.h" compile="0" resource="0" file="Source/Framework/updateTypes.h"/>
-        <FILE id="P0pJCc" name="fifo_queue.h" compile="0" resource="0" file="Source/Framework/fifo_queue.h"/>
+        <FILE id="qmhZRh" name="load_save.cpp" compile="1" resource="0" file="Source/Framework/load_save.cpp"/>
+        <FILE id="JcZofO" name="load_save.h" compile="0" resource="0" file="Source/Framework/load_save.h"/>
+        <FILE id="QZdRAA" name="constants.h" compile="0" resource="0" file="Source/Framework/constants.h"/>
+        <FILE id="JwyCA1" name="update_types.cpp" compile="1" resource="0"
+              file="Source/Framework/update_types.cpp"/>
+        <FILE id="ZPzEka" name="update_types.h" compile="0" resource="0" file="Source/Framework/update_types.h"/>
         <FILE id="UfJMry" name="plugin_strings.h" compile="0" resource="0"
               file="Source/Framework/plugin_strings.h"/>
         <FILE id="xWYami" name="circular_buffer.h" compile="0" resource="0"
@@ -72,33 +72,31 @@
               file="Source/Plugin/PluginProcessor.cpp"/>
         <FILE id="l2n7yR" name="PluginProcessor.h" compile="0" resource="0"
               file="Source/Plugin/PluginProcessor.h"/>
-        <FILE id="FJcrKy" name="ModuleTreeUpdater.cpp" compile="1" resource="0"
-              file="Source/Plugin/ModuleTreeUpdater.cpp"/>
-        <FILE id="kl3gFW" name="ModuleTreeUpdater.h" compile="0" resource="0"
-              file="Source/Plugin/ModuleTreeUpdater.h"/>
+        <FILE id="zGFnUK" name="ProcessorTree.cpp" compile="1" resource="0"
+              file="Source/Plugin/ProcessorTree.cpp"/>
+        <FILE id="h6BWjT" name="ProcessorTree.h" compile="0" resource="0" file="Source/Plugin/ProcessorTree.h"/>
       </GROUP>
       <GROUP id="{F4BA8DFF-28C8-EF00-62C9-202FF4771AD8}" name="Interface">
         <GROUP id="{4D931D97-4A4F-8153-12B4-A9C0FA52764F}" name="LookAndFeel">
-          <FILE id="niKhL3" name="CurveLookAndFeel.cpp" compile="1" resource="0"
-                file="Source/Interface/LookAndFeel/CurveLookAndFeel.cpp"/>
-          <FILE id="jBhZcE" name="CurveLookAndFeel.h" compile="0" resource="0"
-                file="Source/Interface/LookAndFeel/CurveLookAndFeel.h"/>
+          <FILE id="cTL9sp" name="BorderBoundsConstrainer.h" compile="0" resource="0"
+                file="Source/Interface/LookAndFeel/BorderBoundsConstrainer.h"/>
           <FILE id="jW8pVp" name="DefaultLookAndFeel.cpp" compile="1" resource="0"
                 file="Source/Interface/LookAndFeel/DefaultLookAndFeel.cpp"/>
           <FILE id="i74lxl" name="DefaultLookAndFeel.h" compile="0" resource="0"
                 file="Source/Interface/LookAndFeel/DefaultLookAndFeel.h"/>
+          <FILE id="uaULql" name="Fonts.cpp" compile="1" resource="0" file="Source/Interface/LookAndFeel/Fonts.cpp"/>
           <FILE id="Ytfo18" name="Fonts.h" compile="0" resource="0" file="Source/Interface/LookAndFeel/Fonts.h"/>
           <FILE id="pwerL9" name="Paths.h" compile="0" resource="0" file="Source/Interface/LookAndFeel/Paths.h"/>
           <FILE id="rMhvta" name="Shaders.cpp" compile="1" resource="0" file="Source/Interface/LookAndFeel/Shaders.cpp"/>
           <FILE id="ViCOIr" name="Shaders.h" compile="0" resource="0" file="Source/Interface/LookAndFeel/Shaders.h"/>
           <FILE id="Ni57uD" name="Skin.cpp" compile="1" resource="0" file="Source/Interface/LookAndFeel/Skin.cpp"/>
           <FILE id="f3m3LO" name="Skin.h" compile="0" resource="0" file="Source/Interface/LookAndFeel/Skin.h"/>
-          <FILE id="TARh11" name="TextLookAndFeel.cpp" compile="1" resource="0"
-                file="Source/Interface/LookAndFeel/TextLookAndFeel.cpp"/>
-          <FILE id="bBNUDe" name="TextLookAndFeel.h" compile="0" resource="0"
-                file="Source/Interface/LookAndFeel/TextLookAndFeel.h"/>
         </GROUP>
         <GROUP id="{E9C8DE45-B6CF-DC49-BDD9-B9085C174664}" name="Sections">
+          <FILE id="ENQstn" name="HeaderFooterSections.cpp" compile="1" resource="0"
+                file="Source/Interface/Sections/HeaderFooterSections.cpp"/>
+          <FILE id="xtxVaz" name="HeaderFooterSections.h" compile="0" resource="0"
+                file="Source/Interface/Sections/HeaderFooterSections.h"/>
           <FILE id="PdwHho" name="EffectModuleSection.cpp" compile="1" resource="0"
                 file="Source/Interface/Sections/EffectModuleSection.cpp"/>
           <FILE id="CRvCd9" name="EffectModuleSection.h" compile="0" resource="0"
@@ -127,19 +125,18 @@
           <FILE id="EB8cKV" name="Popups.h" compile="0" resource="0" file="Source/Interface/Sections/Popups.h"/>
         </GROUP>
         <GROUP id="{50266DCB-6FE6-2EB4-7810-AA54D2CA723F}" name="Components">
+          <FILE id="OFZQ0M" name="LaneSelector.cpp" compile="1" resource="0"
+                file="Source/Interface/Components/LaneSelector.cpp"/>
+          <FILE id="j1bcSK" name="LaneSelector.h" compile="0" resource="0" file="Source/Interface/Components/LaneSelector.h"/>
+          <FILE id="Jgtfgx" name="DraggableComponent.cpp" compile="1" resource="0"
+                file="Source/Interface/Components/DraggableComponent.cpp"/>
+          <FILE id="PFwFw7" name="DraggableComponent.h" compile="0" resource="0"
+                file="Source/Interface/Components/DraggableComponent.h"/>
           <FILE id="IjUl71" name="PinBoundsBox.cpp" compile="1" resource="0"
                 file="Source/Interface/Components/PinBoundsBox.cpp"/>
           <FILE id="lTHyNW" name="PinBoundsBox.h" compile="0" resource="0" file="Source/Interface/Components/PinBoundsBox.h"/>
-          <FILE id="eY8Xhm" name="DraggableEffect.cpp" compile="1" resource="0"
-                file="Source/Interface/Components/DraggableEffect.cpp"/>
-          <FILE id="TMDAqp" name="DraggableEffect.h" compile="0" resource="0"
-                file="Source/Interface/Components/DraggableEffect.h"/>
           <FILE id="nJfXup" name="BarRenderer.cpp" compile="1" resource="0" file="Source/Interface/Components/BarRenderer.cpp"/>
           <FILE id="sZaq5X" name="BarRenderer.h" compile="0" resource="0" file="Source/Interface/Components/BarRenderer.h"/>
-          <FILE id="KPepiT" name="DropdownSlider.cpp" compile="1" resource="0"
-                file="Source/Interface/Components/DropdownSlider.cpp"/>
-          <FILE id="kyoGWI" name="DropdownSlider.h" compile="0" resource="0"
-                file="Source/Interface/Components/DropdownSlider.h"/>
           <FILE id="koM8rk" name="OpenGlBackground.cpp" compile="1" resource="0"
                 file="Source/Interface/Components/OpenGlBackground.cpp" skipPCH="0"/>
           <FILE id="lYYjPY" name="OpenGlBackground.h" compile="0" resource="0"
@@ -174,12 +171,13 @@
                 file="Source/Interface/Components/PresetSelector.h"/>
           <FILE id="DWFQ8L" name="Spectrogram.cpp" compile="1" resource="0" file="Source/Interface/Components/Spectrogram.cpp"/>
           <FILE id="wp0P1I" name="Spectrogram.h" compile="0" resource="0" file="Source/Interface/Components/Spectrogram.h"/>
-          <FILE id="TNk2IN" name="TextSelector.cpp" compile="1" resource="0"
-                file="Source/Interface/Components/TextSelector.cpp"/>
-          <FILE id="gDOEkY" name="TextSelector.h" compile="0" resource="0" file="Source/Interface/Components/TextSelector.h"/>
         </GROUP>
       </GROUP>
       <GROUP id="{E3C7034B-FA4E-F562-AA1E-A10D545C55F4}" name="Third Party">
+        <GROUP id="{C3E5979F-2D2C-018F-ACF8-1B68463DE9FA}" name="fixed_string">
+          <FILE id="wuijLK" name="fixed_string.hpp" compile="0" resource="0"
+                file="Source/Third Party/fixed_string/fixed_string.hpp"/>
+        </GROUP>
         <GROUP id="{9CE29610-22F5-31DC-35FA-6609FA4E005B}" name="gcem">
           <GROUP id="{F25871F1-D828-D2D4-201A-2D9AADD27ABE}" name="gcem_incl">
             <GROUP id="{F277BB24-A731-8AAD-CCB6-CD6155EB9D0B}" name="quadrature">
@@ -264,6 +262,19 @@
         <GROUP id="{4BC6B690-99FC-B123-DF07-0B3409E02007}" name="json">
           <FILE id="Vsq2ii" name="json.hpp" compile="0" resource="0" file="Source/Third Party/json/json.hpp"/>
         </GROUP>
+        <GROUP id="{2BACFE6F-7C88-8D74-1ECF-3015D6519F22}" name="magic_enum">
+          <FILE id="vr3e2k" name="magic_enum.hpp" compile="0" resource="0" file="Source/Third Party/magic_enum/magic_enum.hpp"/>
+          <FILE id="G18IH5" name="magic_enum_containers.hpp" compile="0" resource="0"
+                file="Source/Third Party/magic_enum/magic_enum_containers.hpp"/>
+          <FILE id="kAhCZ6" name="magic_enum_format.hpp" compile="0" resource="0"
+                file="Source/Third Party/magic_enum/magic_enum_format.hpp"/>
+          <FILE id="sv71q4" name="magic_enum_fuse.hpp" compile="0" resource="0"
+                file="Source/Third Party/magic_enum/magic_enum_fuse.hpp"/>
+          <FILE id="jhvcsl" name="magic_enum_iostream.hpp" compile="0" resource="0"
+                file="Source/Third Party/magic_enum/magic_enum_iostream.hpp"/>
+          <FILE id="dLD4e6" name="magic_enum_switch.hpp" compile="0" resource="0"
+                file="Source/Third Party/magic_enum/magic_enum_switch.hpp"/>
+        </GROUP>
         <GROUP id="{0505C1EF-6A7A-76E3-BAD2-2497C6CC2E83}" name="mdspan">
           <GROUP id="{CAF135BB-1136-1937-EC22-16646ED738D6}" name="experimental">
             <GROUP id="{25988BE3-FDC2-483A-653E-7001D0865FF4}" name="__p0009_bits">
@@ -303,9 +314,6 @@
             <FILE id="atJ49B" name="mdarray.h" compile="0" resource="0" file="Source/Third Party/mdspan/experimental/mdarray.h"/>
             <FILE id="WaUSyG" name="mdspan.h" compile="0" resource="0" file="Source/Third Party/mdspan/experimental/mdspan.h"/>
           </GROUP>
-        </GROUP>
-        <GROUP id="{76FBC8EA-DA82-E4BA-61F1-4D673B9E5F81}" name="refl-cpp">
-          <FILE id="FgioLZ" name="refl.hpp" compile="0" resource="0" file="Source/Third Party/refl-cpp/refl.hpp"/>
         </GROUP>
       </GROUP>
     </GROUP>

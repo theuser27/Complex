@@ -160,7 +160,7 @@ namespace Framework
 		#endif
 		}
 
-		template <typename T, u64 alignment = alignof(T)>
+		template <typename T, u64 alignment>
 		friend class MemoryBlockView;
 	};
 

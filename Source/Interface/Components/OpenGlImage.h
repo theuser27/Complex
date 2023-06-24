@@ -79,15 +79,15 @@ namespace Interface
     bool useAlpha_ = false;
     bool scissor_ = false;
 
-    OpenGLShaderProgram *imageShader_;
+    OpenGLShaderProgram *imageShader_ = nullptr;
     std::unique_ptr<OpenGLShaderProgram::Uniform> imageColor_;
     std::unique_ptr<OpenGLShaderProgram::Attribute> imagePosition_;
     std::unique_ptr<OpenGLShaderProgram::Attribute> textureCoordinates_;
 
     std::unique_ptr<float[]> positionVertices_;
     std::unique_ptr<int[]> positionTriangles_;
-    GLuint vertexBuffer_;
-    GLuint triangleBuffer_;
+    GLuint vertexBuffer_{};
+    GLuint triangleBuffer_{};
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(OpenGlImage)
   };

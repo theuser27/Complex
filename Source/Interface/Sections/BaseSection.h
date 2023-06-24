@@ -17,46 +17,17 @@
 #include "../LookAndFeel/Skin.h"
 #include "../Components/OpenGLMultiQuad.h"
 #include "../Components/BaseButton.h"
+#include "../Components/BaseSlider.h"
 
 namespace Interface
 {
-	class OpenGlComponent;
-	class BaseSlider;
 	class ModulationButton;
-	class PresetSelector;
 
-	struct PopupItems
-	{
-		std::vector<PopupItems> items{};
-		std::string name{};
-		int id = 0;
-		bool selected = false;
-		bool active = false;
-
-		PopupItems() = default;
-		PopupItems(std::string name) : name(std::move(name)) { }
-
-		PopupItems(int id, std::string name, bool selected = false, bool active = false)
-		{
-			this->name = std::move(name);
-			this->id = id;
-			this->selected = selected;
-			this->active = active;
-		}
-
-		void addItem(int subId, std::string subName, bool subSelected = false, bool active = false)
-		{ items.emplace_back(subId, std::move(subName), subSelected, active); }
-
-		void addItem(const PopupItems &item) { items.push_back(item); }
-		void addItem(PopupItems &&item) { items.emplace_back(std::move(item)); }
-		u32 size() const { return (u32)items.size(); }
-	};
-
-	class BaseSection : public juce::Component, public Slider::Listener, public Button::Listener,
-		public BaseButton::ButtonListener, public utils::Downcastable
+	class BaseSection : public Component, public Slider::Listener, public Button::Listener,
+		public BaseButton::ButtonListener, public TextSelector::TextSelectorListener
 	{
 	public:
-		static constexpr int kDefaultPowerButtonOffset = 0;
+		static constexpr int kDefaultActivatorSize = 12;
 		static constexpr float kPowerButtonPaddingPercent = 0.29f;
 		static constexpr float kTransposeHeightPercent = 0.5f;
 		static constexpr float kTuneHeightPercent = 0.4f;
@@ -96,7 +67,7 @@ namespace Interface
 		public:
 			OffOverlay() : OpenGlQuad(Shaders::kColorFragment) { }
 
-			void paint(Graphics &g) override { }
+			void paint([[maybe_unused]] Graphics &g) override { }
 		};
 
 		BaseSection(std::string_view name);
@@ -108,7 +79,7 @@ namespace Interface
 			if (valueLookup_.contains(valueId))
 			{
 				if (Skin::shouldScaleValue(valueId))
-					return size_ratio_ * valueLookup_.at(valueId);
+					return scaling_ * valueLookup_.at(valueId);
 				return valueLookup_.at(valueId);
 			}
 			if (parent_)
@@ -118,11 +89,11 @@ namespace Interface
 		}
 
 		void resized() override;
-		void paint(Graphics &g) override { }
+		void paint(Graphics &) override { }
 
 		// paint anything that doesn't move/is static
 		virtual void paintBackground(Graphics &g);
-		virtual void repaintBackground();
+		void repaintBackground();
 
 		virtual void setSkinValues(const Skin &skin, bool topLevel);
 		void setSkinOverride(Skin::SectionOverride skinOverride) { skinOverride_ = skinOverride; }
@@ -141,10 +112,10 @@ namespace Interface
 
 		void paintTabShadow(Graphics &g, Rectangle<int> bounds);
 		void paintTabShadow(Graphics &g) { paintTabShadow(g, getLocalBounds()); }
-		virtual void paintBackgroundShadow(Graphics &g) { }
+		virtual void paintBackgroundShadow(Graphics &) { }
 		void paintKnobShadows(Graphics &g);
-		virtual void setSizeRatio(float ratio);
-		int getComponentShadowWidth() const noexcept { return std::round(size_ratio_ * 2.0f); }
+		virtual void setScaling(float ratio);
+		int getComponentShadowWidth() const noexcept { return (int)std::round(scaling_ * 2.0f); }
 
 		Font getLabelFont() const noexcept;
 		void setLabelFont(Graphics &g);
@@ -159,6 +130,8 @@ namespace Interface
 			return getLabelBackgroundBounds(component->getBounds(), text_component);
 		}
 		void drawLabel(Graphics &g, String text, Rectangle<int> component_bounds, bool text_component = false);
+		void drawSliderLabel(Graphics &g, BaseSlider *slider) const;
+		void drawNumberBoxBackground(Graphics &g, NumberBox *numberBox) const;
 		void drawLabelForComponent(Graphics &g, String text, Component *component, bool text_component = false)
 		{
 			drawLabel(g, std::move(text), component->getBounds(), text_component);
@@ -173,33 +146,29 @@ namespace Interface
 		void paintOpenGlBackground(Graphics &g, OpenGlComponent *openGlComponent);
 		void drawTextComponentBackground(Graphics &g, Rectangle<int> bounds, bool extend_to_label);
 		virtual void initOpenGlComponents(OpenGlWrapper &open_gl);
-		virtual void renderOpenGlComponents(OpenGlWrapper &open_gl, bool animate);
+		virtual void renderOpenGlComponents(OpenGlWrapper &openGl, bool animate);
 		virtual void destroyOpenGlComponents(OpenGlWrapper &open_gl);
 
-		void sliderValueChanged(Slider *movedSlider) override { }
-		void buttonClicked(Button *clickedButton) override { }
+		void sliderValueChanged([[maybe_unused]] Slider *movedSlider) override { }
+		void buttonClicked([[maybe_unused]] Button *clickedButton) override { }
 		void guiChanged(BaseButton* button) override;
+		void resizeForText(TextSelector *textSelector, int requestedWidthChange) override;
 
 		virtual void setActive(bool active);
 		bool isActive() const { return active_; }
-		virtual void animate(bool animate)
-		{
-			for (auto &sub_section : subSections_)
-				sub_section->animate(animate);
-		}
 
-		void updateAllValues();
+		virtual void updateAllValues();
 		GeneralButton *activator() const { return activator_; }
 
 		virtual void reset();
-		virtual void loadFile(const File &file) {}
+		virtual void loadFile([[maybe_unused]] const File &file) { }
 		virtual File getCurrentFile() { return {}; }
 
-		void addSubSection(BaseSection *section, bool show = true);
-		void removeSubSection(BaseSection *section);
+		virtual void addSubSection(BaseSection *section, bool show = true);
+		virtual void removeSubSection(BaseSection *section);
 
+		float getScaling() const noexcept { return scaling_; }
 		float getPadding() const noexcept { return findValue(Skin::kPadding); }
-		float getPowerButtonOffset() const noexcept { return size_ratio_ * kDefaultPowerButtonOffset; }
 		float getKnobSectionHeight() const noexcept { return findValue(Skin::kKnobSectionHeight); }
 		float getSliderWidth() const noexcept { return findValue(Skin::kSliderWidth); }
 		float getSliderOverlap() const noexcept;
@@ -212,11 +181,13 @@ namespace Interface
 		float getModFontSize() const noexcept { return findValue(Skin::kModulationFontSize); }
 		float getWidgetMargin() const noexcept { return findValue(Skin::kWidgetMargin); }
 		float getWidgetRounding() const noexcept { return findValue(Skin::kWidgetMargin); }
-		float getSizeRatio() const noexcept { return size_ratio_; }
-		int getPopupWidth() const noexcept { return (int)((float)kDefaultPopupMenuWidth * size_ratio_); }
+		int getPopupWidth() const noexcept { return (int)((float)kDefaultPopupMenuWidth * scaling_); }
 
 		void setSkinValues(std::map<Skin::ValueId, float> values) { valueLookup_ = std::move(values); }
 		void setSkinValue(Skin::ValueId id, float value) { valueLookup_[id] = value; }
+
+		auto *getButton(std::string_view buttonName) noexcept { return buttons_.at(buttonName); }
+		auto *getSlider(std::string_view sliderName) noexcept { return sliders_.at(sliderName); }
 
 	protected:
 		void addButton(BaseButton *button, bool show = true);
@@ -230,9 +201,10 @@ namespace Interface
 		void placeRotaryOption(Component *option, BaseSlider *rotary);
 		void placeKnobsInArea(Rectangle<int> area, std::vector<Component *> knobs);
 
-		Rectangle<int> getPowerButtonBounds() const noexcept;
+		virtual Rectangle<int> getPowerButtonBounds() const noexcept
+		{ return {0, 0, kDefaultActivatorSize, kDefaultActivatorSize }; }
+
 		float getDisplayScale() const;
-		virtual int getPixelMultiple() const { return (parent_) ? parent_->getPixelMultiple() : 1; }
 
 		std::map<Skin::ValueId, float> valueLookup_{};
 
@@ -246,12 +218,23 @@ namespace Interface
 		const BaseSection *parent_ = nullptr;
 		GeneralButton *activator_ = nullptr;
 
-		std::unique_ptr<OffOverlay> off_overlay_ = nullptr;
+		std::unique_ptr<OffOverlay> offOverlay_ = nullptr;
 
 		Skin::SectionOverride skinOverride_ = Skin::kNone;
-		float size_ratio_ = 1.0f;
+		float scaling_ = 1.0f;
 		bool active_ = true;
 	};
-}
 
-REFL_AUTO(type(Interface::BaseSection))
+	class ProcessorSection : public BaseSection
+	{
+	public:
+		ProcessorSection(std::string_view name, Generation::BaseProcessor *processor) :
+			BaseSection(name), processor_(processor) { }
+
+		[[nodiscard]] std::optional<u64> getProcessorId() const noexcept { return (processor_) ? 
+			processor_->getProcessorId() : std::optional<u64>{ std::nullopt }; }
+		[[nodiscard]] auto getProcessor() const noexcept { return processor_; }
+	protected:
+		Generation::BaseProcessor *processor_ = nullptr;
+	};
+}

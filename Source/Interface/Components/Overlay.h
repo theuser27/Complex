@@ -69,7 +69,7 @@ namespace Interface
     }
 
     void paintBackground(Graphics &g) override { paintOpenGlChildrenBackgrounds(g); }
-    void setSizeRatio(float ratio) override { size_ratio_ = ratio; }
+    void setScaling(float ratio) override { size_ratio_ = ratio; }
 
   protected:
     float size_ratio_;

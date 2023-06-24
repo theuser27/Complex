@@ -38,18 +38,18 @@ namespace Framework
 		void complexTranspose() noexcept
 		{ simd_float::complexTranspose(rows_); }
 
-		simd_float sumRows() noexcept
+		simd_float sumRows() const noexcept
 		{ 
 			simd_float sum{ 0.0f };
-			for (size_t i = 0; i < rows_.size(); i++)
-				sum += rows_[i];
+			for (auto row : rows_)
+				sum += row;
 			return sum;
 		}
 
-		simd_float complexCartSumRows() noexcept
+		simd_float complexCartSumRows() const noexcept
 		{ return sumRows(); }
 
-		simd_float multiplyAndSumRows(const Matrix &other) noexcept
+		simd_float multiplyAndSumRows(const Matrix &other) const noexcept
 		{
 			simd_float summedVector = 0;
 			for (size_t i = 0; i < simd_float::kSize; i += 2)

@@ -9,95 +9,103 @@
 */
 
 #include "EffectModules.h"
+#include "../Plugin/ProcessorTree.h"
 
 namespace Generation
 {
+	///////////////////////////////////////////////
+	///////////////////////////////////////////////
+	//////////////// Constructors /////////////////
+	///////////////////////////////////////////////
+	///////////////////////////////////////////////
+
 	utilityEffect::utilityEffect(Plugin::ProcessorTree *globalModulesState, u64 parentModuleId) :
-		baseEffect(globalModulesState, parentModuleId, utils::getClassName<utilityEffect>())
+		baseEffect(globalModulesState, parentModuleId, getClassType())
 	{
 
 	}
 
 	filterEffect::filterEffect(Plugin::ProcessorTree *globalModulesState, u64 parentModuleId) :
-		baseEffect(globalModulesState, parentModuleId, utils::getClassName<filterEffect>())
+		baseEffect(globalModulesState, parentModuleId, getClassType())
 	{
-		auto parameterSize = Framework::baseEffectParameterList.size() +
-			Framework::filterEffectParameterList.size();
+		auto parameterSize = Framework::baseEffectParameterList.size() + (u32)Framework::FilterEffectParameters::size;
 		processorParameters_.data.reserve(parameterSize);
-		createProcessorParameters(Framework::filterEffectParameterList[0].data(), (u32)Framework::FilterParameters::SizeNormal);
-		//Framework::Parameters::setEffectType(getEffectType()->getParameterDetails(), Framework::EffectModuleTypes::Filter);
-	}
-
-	contrastEffect::contrastEffect(Plugin::ProcessorTree *globalModulesState, u64 parentModuleId) :
-		baseEffect(globalModulesState, parentModuleId, utils::getClassName<contrastEffect>())
-	{
-		auto parameterSize = Framework::baseEffectParameterList.size() +
-			Framework::contrastEffectParameterList.size();
-		processorParameters_.data.reserve(parameterSize);
-		createProcessorParameters(Framework::contrastEffectParameterList[0].data(), (u32)Framework::ContrastParameters::SizeClassic);
-		//Framework::Parameters::setEffectType(getEffectType()->getParameterDetails(), Framework::EffectModuleTypes::Contrast);
+		createProcessorParameters(Framework::filterEffectParameterList[0].data(), (u32)Framework::FilterEffectParameters::size);
+		setEffectModeStrings(Framework::EffectTypes::Filter);
 	}
 
 	dynamicsEffect::dynamicsEffect(Plugin::ProcessorTree *globalModulesState, u64 parentModuleId) :
-		baseEffect(globalModulesState, parentModuleId, utils::getClassName<dynamicsEffect>())
+		baseEffect(globalModulesState, parentModuleId, getClassType())
 	{
-
+		auto parameterSize = Framework::baseEffectParameterList.size() + (u32)Framework::DynamicsEffectParameters::size;
+		processorParameters_.data.reserve(parameterSize);
+		createProcessorParameters(Framework::dynamicsEffectParameterList[0].data(), (u32)Framework::DynamicsEffectParameters::size);
+		setEffectModeStrings(Framework::EffectTypes::Dynamics);
 	}
 
 	phaseEffect::phaseEffect(Plugin::ProcessorTree *globalModulesState, u64 parentModuleId) :
-		baseEffect(globalModulesState, parentModuleId, utils::getClassName<phaseEffect>())
+		baseEffect(globalModulesState, parentModuleId, getClassType())
 	{
 
 	}
 
 	pitchEffect::pitchEffect(Plugin::ProcessorTree *globalModulesState, u64 parentModuleId) :
-		baseEffect(globalModulesState, parentModuleId, utils::getClassName<pitchEffect>())
+		baseEffect(globalModulesState, parentModuleId, getClassType())
 	{
 
 	}
 
 	stretchEffect::stretchEffect(Plugin::ProcessorTree *globalModulesState, u64 parentModuleId) :
-		baseEffect(globalModulesState, parentModuleId, utils::getClassName<stretchEffect>())
+		baseEffect(globalModulesState, parentModuleId, getClassType())
 	{
 
 	}
 
 	warpEffect::warpEffect(Plugin::ProcessorTree *globalModulesState, u64 parentModuleId) :
-		baseEffect(globalModulesState, parentModuleId, utils::getClassName<warpEffect>())
+		baseEffect(globalModulesState, parentModuleId, getClassType())
 	{
 
 	}
 
 	destroyEffect::destroyEffect(Plugin::ProcessorTree *globalModulesState, u64 parentModuleId) :
-		baseEffect(globalModulesState, parentModuleId, utils::getClassName<destroyEffect>())
+		baseEffect(globalModulesState, parentModuleId, getClassType())
 	{
 
 	}
 
+	///////////////////////////////////////////////
+	///////////////////////////////////////////////
+	////////////////// Utilities //////////////////
+	///////////////////////////////////////////////
+	///////////////////////////////////////////////
+
 	std::pair<simd_float, simd_float> baseEffect::getShiftedBounds(BoundRepresentation representation,
-		float maxFrequency, u32 FFTSize, bool isLinearShift) const noexcept
+		float sampleRate, u32 FFTSize, bool isLinearShift) const noexcept
 	{
 		using namespace utils;
 		using namespace Framework;
-		simd_float lowBound = processorParameters_[(u32)BaseEffectParameters::LowBound]->getInternalValue<simd_float>(true);
-		simd_float highBound = processorParameters_[(u32)BaseEffectParameters::HighBound]->getInternalValue<simd_float>(true);
+		simd_float lowBound = processorParameters_[(u32)BaseEffectParameters::LowBound]->getInternalValue<simd_float>(sampleRate, true);
+		simd_float highBound = processorParameters_[(u32)BaseEffectParameters::HighBound]->getInternalValue<simd_float>(sampleRate, true);
 		// TODO: do dynamic min frequency based on FFTOrder
 		// TODO: get shifted bounds as normalised value/frequency/FFT bin
-		float maxOctave = static_cast<float>(std::log2(maxFrequency / kMinFrequency));
+		float nyquistFreq = sampleRate * 0.5f;
+		float maxOctave = static_cast<float>(std::log2(nyquistFreq / kMinFrequency));
 
 		if (isLinearShift)
 		{
 			// TODO: linear shift
-			simd_float boundShift = processorParameters_[(u32)BaseEffectParameters::ShiftBounds]->getInternalValue<simd_float>() * maxFrequency;
-			lowBound = simd_float::clamp(exp2(lowBound * maxOctave) * kMinFrequency + boundShift, kMinFrequency, maxFrequency);
-			highBound = simd_float::clamp(exp2(highBound * maxOctave) * kMinFrequency + boundShift, kMinFrequency, maxFrequency);
+			simd_float boundShift = processorParameters_[(u32)BaseEffectParameters::ShiftBounds]
+				->getInternalValue<simd_float>(sampleRate) * nyquistFreq;
+			lowBound = simd_float::clamp(exp2(lowBound * maxOctave) * kMinFrequency + boundShift, kMinFrequency, nyquistFreq);
+			highBound = simd_float::clamp(exp2(highBound * maxOctave) * kMinFrequency + boundShift, kMinFrequency, nyquistFreq);
 			// snapping to 0 hz if it's below the minimum frequency
 			lowBound &= simd_float::greaterThan(lowBound, kMinFrequency);
 			highBound &= simd_float::greaterThan(highBound, kMinFrequency);
 		}
 		else
 		{
-			simd_float boundShift = processorParameters_[(u32)BaseEffectParameters::ShiftBounds]->getInternalValue<simd_float>();
+			simd_float boundShift = processorParameters_[(u32)BaseEffectParameters::ShiftBounds]
+				->getInternalValue<simd_float>(sampleRate);
 			lowBound = simd_float::clamp(lowBound + boundShift, 0.0f, 1.0f);
 			highBound = simd_float::clamp(highBound + boundShift, 0.0f, 1.0f);
 
@@ -114,8 +122,8 @@ namespace Generation
 
 				break;
 			case BoundRepresentation::BinIndex:
-				lowBound = normalisedToBin(lowBound, FFTSize, maxFrequency * 2.0f);
-				highBound = normalisedToBin(highBound, FFTSize, maxFrequency * 2.0f);
+				lowBound = normalisedToBin(lowBound, FFTSize, sampleRate);
+				highBound = normalisedToBin(highBound, FFTSize, sampleRate);
 
 				break;
 			default:
@@ -125,7 +133,7 @@ namespace Generation
 		return { lowBound, highBound };
 	}
 
-	std::pair<u32, u32> vector_call baseEffect::getRange(const simd_int &lowIndices, const simd_int &highIndices,
+	std::pair<u32, u32> vector_call baseEffect::getRange(simd_int lowIndices, simd_int highIndices,
 		u32 effectiveFFTSize, bool isProcessedRange) const noexcept
 	{
 		// 1. all the indices in the respective bounds are the same (mono)
@@ -162,7 +170,8 @@ namespace Generation
 		}
 
 		// 2.
-		// trying to rationalise what what parts to cover is proving too complicated
+		// trying to rationalise what parts to cover is proving too complicated
+		// TODO: if the range is [start, end], then why are we specifying a range that's [start, end)????
 		return { 0, effectiveFFTSize };
 	}
 
@@ -205,12 +214,12 @@ namespace Generation
 
 		simd_mask cutoffAbovePositions = simd_mask::greaterThanOrEqualSigned(cutoffIndices, positionIndices);
 
-		// masks for 1.
+		// preparing masks for 1.
 		simd_mask positionsAboveLowMask = simd_mask::greaterThanOrEqualSigned(positionIndices, lowBoundIndices);
 		simd_mask cutoffAboveLowMask = simd_mask::greaterThanOrEqualSigned(cutoffIndices, lowBoundIndices);
 		simd_mask bothAboveOrBelowLowMask = ~(positionsAboveLowMask ^ cutoffAboveLowMask);
 
-		// masks for 2.
+		// preparing masks for 2.
 		simd_mask positionsBelowLowBoundAndCutoffsMask = ~positionsAboveLowMask & cutoffAboveLowMask;
 		simd_mask cutoffBelowLowBoundAndPositionsMask = positionsAboveLowMask & ~cutoffAboveLowMask;
 
@@ -232,19 +241,30 @@ namespace Generation
 		return getDecimalPlaces(simd_float(1.0f) + succeedingIndicesRatios - precedingIndicesRatios);
 	}
 
+	/////////////////////////////////////////////////////////////
+	//           _                  _ _   _                    //
+	//     /\   | |                (_) | | |                   //
+	//    /  \  | | __ _  ___  _ __ _| |_| |__  _ __ ___  ___  //
+	//   / /\ \ | |/ _` |/ _ \| '__| | __| '_ \| '_ ` _ \/ __| //
+	//  / ____ \| | (_| | (_) | |  | | |_| | | | | | | | \__ \ //
+	// /_/    \_\_|\__, |\___/|_|  |_|\__|_| |_|_| |_| |_|___/ //
+	//              __/ |                                      //
+	//             |___/																			 //
+	/////////////////////////////////////////////////////////////
+
 	perf_inline void filterEffect::runNormal(Framework::SimdBufferView<std::complex<float>, simd_float> &source,
 		Framework::SimdBuffer<std::complex<float>, simd_float> &destination, u32 effectiveFFTSize, float sampleRate) const noexcept
 	{
 		using namespace utils;
 		using namespace Framework;
 
-		simd_float lowBoundNorm = processorParameters_[(u32)BaseEffectParameters::LowBound]->getInternalValue<simd_float>(true);
-		simd_float highBoundNorm = processorParameters_[(u32)BaseEffectParameters::HighBound]->getInternalValue<simd_float>(true);
-		simd_float boundShift = processorParameters_[(u32)BaseEffectParameters::ShiftBounds]->getInternalValue<simd_float>();
+		simd_float lowBoundNorm = processorParameters_[(u32)BaseEffectParameters::LowBound]->getInternalValue<simd_float>(sampleRate, true);
+		simd_float highBoundNorm = processorParameters_[(u32)BaseEffectParameters::HighBound]->getInternalValue<simd_float>(sampleRate, true);
+		simd_float boundShift = processorParameters_[(u32)BaseEffectParameters::ShiftBounds]->getInternalValue<simd_float>(sampleRate);
 		simd_float boundsDistance = modOnce(simd_float(1.0f) + highBoundNorm - lowBoundNorm, 1.0f);
 
 		// getting the boundaries in terms of bin position
-		auto shiftedBoundsIndices = getShiftedBounds(BoundRepresentation::BinIndex, sampleRate / 2.0f, effectiveFFTSize * 2);
+		auto shiftedBoundsIndices = getShiftedBounds(BoundRepresentation::BinIndex, sampleRate, effectiveFFTSize * 2);
 		simd_int lowBoundIndices = toInt(shiftedBoundsIndices.first);
 		simd_int highBoundIndices = toInt(shiftedBoundsIndices.second);
 
@@ -256,19 +276,19 @@ namespace Generation
 		// cutoff is described as exponential normalised value of the sample rate
 		// it is dependent on the values of the low/high bounds
 		simd_float cutoffNorm = modOnce(lowBoundNorm + boundShift + boundsDistance * 
-			processorParameters_[(u32)FilterParameters::NormalCutoff]->getInternalValue<simd_float>(), 1.0f);
+			processorParameters_[(u32)FilterEffectParameters::Normal::Cutoff]->getInternalValue<simd_float>(sampleRate), 1.0f);
 		simd_int cutoffIndices = toInt(normalisedToBin(cutoffNorm, effectiveFFTSize * 2, sampleRate));
 
 		// if mask scalars are negative -> brickwall, if positive -> linear slope
 		// slopes are logarithmic
-		simd_float slopes = processorParameters_[(u32)FilterParameters::NormalSlope]->getInternalValue<simd_float>() / 2.0f;
-		simd_mask slopeMask = unsignFloat(slopes, true);
+		simd_float slopes = processorParameters_[(u32)FilterEffectParameters::Normal::Slope]->getInternalValue<simd_float>(sampleRate) / 2.0f;
+		simd_mask slopeMask = unsignSimd(slopes, true);
 		simd_mask slopeZeroMask = simd_float::equal(slopes, 0.0f);
 
 		// if scalars are negative -> attenuate at cutoff, if positive -> around cutoff
 		// (gains is gain reduction in db and NOT a gain multiplier)
-		simd_float gains = processorParameters_[(u32)FilterParameters::NormalGain]->getInternalValue<simd_float>();
-		simd_mask gainMask = unsignFloat(gains, true);
+		simd_float gains = processorParameters_[(u32)FilterEffectParameters::Normal::Gain]->getInternalValue<simd_float>(sampleRate);
+		simd_mask gainMask = unsignSimd(gains, true);
 
 		for (u32 i = 0; i < numBins; i++)
 		{
@@ -299,25 +319,25 @@ namespace Generation
 		Framework::SimdBuffer<std::complex<float>, simd_float> &destination, u32 effectiveFFTSize, float sampleRate) noexcept
 	{
 		using namespace Framework;
-		switch (getEffectType()->getInternalValue<u32>())
+		switch (getEffectMode())
 		{
-		case static_cast<u32>(FilterTypes::Normal):
+		case (u32)FilterModes::Normal:
 			runNormal(source, destination, effectiveFFTSize, sampleRate);
 			break;
-		case static_cast<u32>(FilterTypes::Regular):
+		case (u32)FilterModes::Regular:
 		default:
 			break;
 		}
 	}
 
-	perf_inline void contrastEffect::runContrast(Framework::SimdBufferView<std::complex<float>, simd_float> &source,
-		Framework::SimdBuffer<std::complex<float>, simd_float> &destination, u32 effectiveFFTSize, float sampleRate) noexcept
+	perf_inline void dynamicsEffect::runContrast(Framework::SimdBufferView<std::complex<float>, simd_float> &source,
+		Framework::SimdBuffer<std::complex<float>, simd_float> &destination, u32 effectiveFFTSize, float sampleRate) const noexcept
 	{
 		using namespace utils;
 		using namespace Framework;
 
 		// getting the boundaries in terms of bin position
-		auto shiftedBoundsIndices = getShiftedBounds(BoundRepresentation::BinIndex, sampleRate / 2.0f, effectiveFFTSize * 2);
+		auto shiftedBoundsIndices = getShiftedBounds(BoundRepresentation::BinIndex, sampleRate, effectiveFFTSize * 2);
 		simd_int lowBoundIndices = toInt(shiftedBoundsIndices.first);
 		simd_int highBoundIndices = toInt(shiftedBoundsIndices.second);
 		simd_int boundDistanceCount = maskLoad(((simd_int(effectiveFFTSize) + highBoundIndices - lowBoundIndices) & simd_int(effectiveFFTSize - 1)) + 1,
@@ -329,11 +349,12 @@ namespace Generation
 		u32 numBins = processedIndexAndRange.second;
 
 		// calculating contrast
-		simd_float contrastParameter = processorParameters_[(u32)ContrastParameters::ClassicContrastDepth]->getInternalValue<simd_float>();
+		simd_float contrastParameter = processorParameters_[(u32)DynamicsEffectParameters::Contrast::Depth]
+			->getInternalValue<simd_float>(sampleRate);
 		simd_float contrast = contrastParameter * contrastParameter;
 		contrast = maskLoad(
-			lerp(simd_float(0.0f), simd_float(kMaxNegativeValue), contrast),
-			lerp(simd_float(0.0f), simd_float(kMaxPositiveValue), contrast),
+			lerp(simd_float(0.0f), simd_float(kContrastMaxNegativeValue), contrast),
+			lerp(simd_float(0.0f), simd_float(kContrastMaxPositiveValue), contrast),
 			simd_float::greaterThanOrEqual(contrastParameter, 0.0f));
 
 		simd_float min = exp(simd_float(-80.0f) / (contrast * 2.0f + 1.0f));
@@ -368,8 +389,8 @@ namespace Generation
 		}
 		index = processedIndexAndRange.first;
 
+		// normalising 
 		simd_float outScale = matchPower(inPower, outPower);
-		
 		for (u32 i = 0; i < numBins; i++)
 		{
 			destination.multiply(outScale, 0, index);
@@ -379,13 +400,13 @@ namespace Generation
 		copyUnprocessedData(source, destination, lowBoundIndices, highBoundIndices, effectiveFFTSize);
 	}
 
-	void contrastEffect::run(Framework::SimdBufferView<std::complex<float>, simd_float> &source,
+	void dynamicsEffect::run(Framework::SimdBufferView<std::complex<float>, simd_float> &source,
 		Framework::SimdBuffer<std::complex<float>, simd_float> &destination, u32 effectiveFFTSize, float sampleRate) noexcept
 	{
 		using namespace Framework;
-		switch (getEffectType()->getInternalValue<u32>())
+		switch (getEffectMode())
 		{
-		case static_cast<u32>(Framework::ContrastTypes::Contrast):
+		case (u32)DynamicsModes::Contrast:
 			// based on dtblkfx' contrast
 			runContrast(source, destination, effectiveFFTSize, sampleRate);
 			break;
@@ -405,57 +426,57 @@ namespace Generation
 	}
 
 	EffectModule::EffectModule(Plugin::ProcessorTree *moduleTree, u64 parentModuleId, std::string_view effectType) noexcept :
-		BaseProcessor(moduleTree, parentModuleId, utils::getClassName<EffectModule>())
+		BaseProcessor(moduleTree, parentModuleId, getClassType())
 	{
-		subProcessors_.emplace_back();
-		updateSubProcessor(0, effectType);
+		subProcessors_.emplace_back(createSubProcessor(effectType));
+		dataBuffer_.reserve(kNumChannels, kMaxFFTBufferLength);
 
 		processorParameters_.data.reserve(Framework::effectModuleParameterList.size());
 		createProcessorParameters(Framework::effectModuleParameterList.data(), Framework::effectModuleParameterList.size());
 	}
 
-	BaseProcessor *EffectModule::updateSubProcessor([[maybe_unused]] u32 index, std::string_view newModuleType, BaseProcessor *newSubModule) noexcept
+	baseEffect *EffectModule::createEffect(std::string_view type) const noexcept
 	{
-		using namespace Framework;
+		if (type == utilityEffect::getClassType()) return makeSubProcessor<utilityEffect>();
+		if (type == filterEffect::getClassType()) return makeSubProcessor<filterEffect>();
+		if (type == dynamicsEffect::getClassType()) return makeSubProcessor<dynamicsEffect>();
+		if (type == phaseEffect::getClassType()) return makeSubProcessor<phaseEffect>();
+		if (type == pitchEffect::getClassType()) return makeSubProcessor<pitchEffect>();
+		if (type == stretchEffect::getClassType()) return makeSubProcessor<stretchEffect>();
+		if (type == warpEffect::getClassType()) return makeSubProcessor<warpEffect>();
+		if (type == destroyEffect::getClassType()) return makeSubProcessor<destroyEffect>();
 
-		if (newSubModule == nullptr)
-		{
-			if (newModuleType == effectModuleTypes[(u32)EffectModuleTypes::Utility])
-				newSubModule = createSubProcessor<utilityEffect>();
-			else if (newModuleType == effectModuleTypes[(u32)EffectModuleTypes::Filter])
-				newSubModule = createSubProcessor<filterEffect>();
-			else if (newModuleType == effectModuleTypes[(u32)EffectModuleTypes::Contrast])
-				newSubModule = createSubProcessor<contrastEffect>();
-			else if (newModuleType == effectModuleTypes[(u32)EffectModuleTypes::Dynamics])
-				newSubModule = createSubProcessor<dynamicsEffect>();
-			else if (newModuleType == effectModuleTypes[(u32)EffectModuleTypes::Phase])
-				newSubModule = createSubProcessor<phaseEffect>();
-			else if (newModuleType == effectModuleTypes[(u32)EffectModuleTypes::Pitch])
-				newSubModule = createSubProcessor<pitchEffect>();
-			else if (newModuleType == effectModuleTypes[(u32)EffectModuleTypes::Stretch])
-				newSubModule = createSubProcessor<stretchEffect>();
-			else if (newModuleType == effectModuleTypes[(u32)EffectModuleTypes::Warp])
-				newSubModule = createSubProcessor<warpEffect>();
-			else if (newModuleType == effectModuleTypes[(u32)EffectModuleTypes::Destroy])
-				newSubModule = createSubProcessor<destroyEffect>();
-			else COMPLEX_ASSERT(false && "You're inserting a non-Effect into an EffectModule");
-		}
+		COMPLEX_ASSERT_FALSE("Uncaught EffectType was provided, please add it to the list");
+		return nullptr;
+	}
 
-		COMPLEX_ASSERT((effectModuleTypes.end() != std::find(effectModuleTypes.begin(), effectModuleTypes.end(),
-			newSubModule->getProcessorType())) && "You're inserting a non-Effect into an EffectModule");	
+	BaseProcessor *EffectModule::updateSubProcessor([[maybe_unused]] size_t index, BaseProcessor *newSubModule) noexcept
+	{
+		COMPLEX_ASSERT(magic_enum::enum_contains<Framework::EffectTypes>(newSubModule->getProcessorType()) 
+			&& "You're inserting a non-Effect into an EffectModule");
 
-		auto *replacedEffect = effect;
-		effect = static_cast<baseEffect *>(newSubModule);
+		auto *replacedEffect = subProcessors_[0];
 		subProcessors_[0] = newSubModule;
 		return replacedEffect;
+	}
+
+	[[nodiscard]] BaseProcessor *EffectModule::createSubProcessor(std::string_view type) const noexcept
+	{
+		COMPLEX_ASSERT(std::ranges::count(effectsTypes, type) && 
+			"You're trying to create a non-Effect subProcessor of EffectModule");
+
+		return createEffect(type);
 	}
 
 	void EffectModule::processEffect(ComplexDataSource &source, u32 effectiveFFTSize, float sampleRate)
 	{
 		using namespace Framework;
 
-		if (!processorParameters_[(u32)EffectModuleParameters::ModuleEnabled]->getInternalValue<u32>())
+		if (!processorParameters_[(u32)EffectModuleParameters::ModuleEnabled]->getInternalValue<u32>(sampleRate))
 			return;
+
+		// SAFETY: static_cast is safe because we're only supposed to have baseEffects by design
+		auto *effect = static_cast<baseEffect *>(subProcessors_[0]);
 
 		if (source.isPolar != effect->needsPolarData())
 		{
@@ -468,7 +489,7 @@ namespace Generation
 		effect->run(source.sourceBuffer, dataBuffer_, effectiveFFTSize, sampleRate);
 
 		// if the mix is 100% for all channels, we can skip mixing entirely
-		simd_float wetMix = processorParameters_[(u32)EffectModuleParameters::ModuleMix]->getInternalValue<simd_float>();
+		simd_float wetMix = processorParameters_[(u32)EffectModuleParameters::ModuleMix]->getInternalValue<simd_float>(sampleRate);
 		if (!utils::completelyEqual(wetMix, 1.0f))
 		{
 			simd_float dryMix = simd_float(1.0f) - wetMix;
@@ -478,15 +499,6 @@ namespace Generation
 					dryMix * source.sourceBuffer.readSimdValueAt(0, i),
 					wetMix, dataBuffer_.readSimdValueAt(0, i)), 0, i);
 			}
-		}
-
-		// if there's no gain change for any channels, we can skip it entirely
-		simd_float gain = processorParameters_[(u32)EffectModuleParameters::ModuleGain]->getInternalValue<simd_float>();
-		if (!utils::completelyEqual(gain, 0.0f))
-		{
-			simd_float magnitude = utils::dbToAmplitude(gain);
-			for (u32 i = 0; i < effectiveFFTSize; i++)
-				dataBuffer_.multiply(magnitude, 0, i);
 		}
 
 		source.sourceBuffer = dataBuffer_;

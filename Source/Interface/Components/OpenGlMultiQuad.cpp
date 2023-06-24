@@ -15,7 +15,7 @@ namespace Interface
 	using namespace juce::gl;
 
 	OpenGlMultiQuad::OpenGlMultiQuad(int max_quads, Shaders::FragmentShader shader) :
-		fragmentShader_(shader), maxQuads_(max_quads), numQuads_(max_quads)
+		OpenGlComponent("quad"), fragmentShader_(shader), maxQuads_(max_quads), numQuads_(max_quads)
 	{
 		static const int triangles[] = {
 			0, 1, 2,
@@ -29,12 +29,12 @@ namespace Interface
 
 		modColor_ = Colours::transparentBlack;
 
-		for (u32 i = 0; i < maxQuads_; ++i)
+		for (size_t i = 0; i < maxQuads_; ++i)
 		{
 			setCoordinates(i, -1.0f, -1.0f, 2.0f, 2.0f);
 			setShaderValue(i, 1.0f);
 
-			for (u32 j = 0; j < kNumIndicesPerQuad; ++j)
+			for (size_t j = 0; j < kNumIndicesPerQuad; ++j)
 				indices_[i * kNumIndicesPerQuad + j] = triangles[j] + i * kNumVertices;
 		}
 
@@ -46,14 +46,14 @@ namespace Interface
 		glGenBuffers(1, &vertexBuffer_);
 		glBindBuffer(GL_ARRAY_BUFFER, vertexBuffer_);
 
-		GLsizeiptr vert_size = static_cast<GLsizeiptr>(maxQuads_ * kNumFloatsPerQuad * sizeof(float));
-		glBufferData(GL_ARRAY_BUFFER, vert_size, data_.get(), GL_STATIC_DRAW);
+		GLsizeiptr vertSize = (GLsizeiptr)(maxQuads_ * kNumFloatsPerQuad * sizeof(float));
+		glBufferData(GL_ARRAY_BUFFER, vertSize, data_.get(), GL_STATIC_DRAW);
 
 		glGenBuffers(1, &indicesBuffer_);
 		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, indicesBuffer_);
 
-		GLsizeiptr bar_size = static_cast<GLsizeiptr>(maxQuads_ * kNumIndicesPerQuad * sizeof(int));
-		glBufferData(GL_ELEMENT_ARRAY_BUFFER, bar_size, indices_.get(), GL_STATIC_DRAW);
+		GLsizeiptr barSize = (GLsizeiptr)(maxQuads_ * kNumIndicesPerQuad * sizeof(int));
+		glBufferData(GL_ELEMENT_ARRAY_BUFFER, barSize, indices_.get(), GL_STATIC_DRAW);
 
 		shader_ = openGl.shaders->getShaderProgram(Shaders::kPassthroughVertex, fragmentShader_);
 		shader_->use();
@@ -125,13 +125,13 @@ namespace Interface
 		{
 			dirty_ = false;
 
-			for (int i = 0; i < numQuads_; ++i)
-				setDimensions(i, getQuadWidth(i), getQuadHeight(i), component->getWidth(), component->getHeight());
+			for (u32 i = 0; i < numQuads_; ++i)
+				setDimensions(i, getQuadWidth(i), getQuadHeight(i), (float)component->getWidth(), (float)component->getHeight());
 
 			glBindBuffer(GL_ARRAY_BUFFER, vertexBuffer_);
 
-			GLsizeiptr vert_size = static_cast<GLsizeiptr>(kNumFloatsPerQuad * maxQuads_ * sizeof(float));
-			glBufferData(GL_ARRAY_BUFFER, vert_size, data_.get(), GL_STATIC_DRAW);
+			GLsizeiptr vertSize = static_cast<GLsizeiptr>(kNumFloatsPerQuad * maxQuads_ * sizeof(float));
+			glBufferData(GL_ARRAY_BUFFER, vertSize, data_.get(), GL_STATIC_DRAW);
 			glBindBuffer(GL_ARRAY_BUFFER, 0);
 		}
 
@@ -142,14 +142,14 @@ namespace Interface
 		else
 			currentAlphaMult_ = std::max(alphaMult_, currentAlphaMult_ - kAlphaInc);
 
-		float alpha_color_mult = 1.0f;
+		float alphaColorMult = 1.0f;
 		if (alphaMultUniform_)
 			alphaMultUniform_->set(currentAlphaMult_);
 		else
-			alpha_color_mult = currentAlphaMult_;
+			alphaColorMult = currentAlphaMult_;
 
 		colorUniform_->set(color_.getFloatRed(), color_.getFloatGreen(),
-			color_.getFloatBlue(), alpha_color_mult * color_.getFloatAlpha());
+			color_.getFloatBlue(), alphaColorMult * color_.getFloatAlpha());
 
 		if (altColorUniform_)
 			altColorUniform_->set(altColor_.getFloatRed(), altColor_.getFloatGreen(),
@@ -208,7 +208,7 @@ namespace Interface
 		}
 
 		// render
-		glDrawElements(GL_TRIANGLES, numQuads_ * kNumIndicesPerQuad, GL_UNSIGNED_INT, nullptr);
+		glDrawElements(GL_TRIANGLES, (GLsizei)(numQuads_ * kNumIndicesPerQuad), GL_UNSIGNED_INT, nullptr);
 
 		// clean-up
 		glDisableVertexAttribArray(position_->attributeID);

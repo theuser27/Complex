@@ -18,6 +18,11 @@
 #include "Framework/parameter_value.h"
 #include "BaseProcessor.h"
 
+namespace Interface
+{
+	class EffectModuleSection;
+}
+
 namespace Generation
 {
 	struct ComplexDataSource
@@ -25,7 +30,7 @@ namespace Generation
 		// scratch buffer for conversion between cartesian and polar data
 		Framework::SimdBuffer<std::complex<float>, simd_float> conversionBuffer{ kNumChannels, kMaxFFTBufferLength };
 		// is the data in sourceBuffer polar or cartesian
-		bool isPolar = true;
+		bool isPolar = false;
 		Framework::SimdBufferView<std::complex<float>, simd_float> sourceBuffer;
 	};
 
@@ -39,10 +44,7 @@ namespace Generation
 
 		baseEffect(Plugin::ProcessorTree *globalModulesState, u64 parentModuleId, std::string_view effectType) :
 			BaseProcessor(globalModulesState, parentModuleId, effectType)
-		{
-			createProcessorParameters(Framework::baseEffectParameterList.data(), Framework::baseEffectParameterList.size());
-		}
-		~baseEffect() override { BaseProcessor::~BaseProcessor(); };
+		{ createProcessorParameters(Framework::baseEffectParameterList.data(), Framework::baseEffectParameterList.size()); }
 
 		baseEffect(const baseEffect &other, u64 parentModuleId) noexcept : BaseProcessor(other, parentModuleId) { }
 		baseEffect &operator=(const baseEffect &other) noexcept
@@ -53,22 +55,29 @@ namespace Generation
 		{ BaseProcessor::operator=(std::move(other)); return *this; }
 
 		// Inherited via BaseProcessor
-		[[nodiscard]] BaseProcessor *createCopy(u64 parentModuleId) const noexcept override
-		{ return new baseEffect(*this, parentModuleId); }
+		[[nodiscard]] BaseProcessor *createCopy(std::optional<u64> parentModuleId) const noexcept override
+		{ return makeSubProcessor<baseEffect>(*this, parentModuleId.value_or(parentProcessorId_)); }
+		[[nodiscard]] BaseProcessor *createSubProcessor([[maybe_unused]] std::string_view type) const noexcept override
+		{ COMPLEX_ASSERT(false && "This type cannot have subProcessors"); return nullptr; }
 
-		virtual void run(Framework::SimdBufferView<std::complex<float>, simd_float> &source, 
-			Framework::SimdBuffer<std::complex<float>, simd_float> &destination, 
-			[[maybe_unused]] u32 effectiveFFTSize, [[maybe_unused]] float sampleRate) noexcept
-		{
-			
-		}
+		virtual void run([[maybe_unused]] Framework::SimdBufferView<std::complex<float>, simd_float> &source,
+			[[maybe_unused]] Framework::SimdBuffer<std::complex<float>, simd_float> &destination,
+			[[maybe_unused]] u32 effectiveFFTSize, [[maybe_unused]] float sampleRate) noexcept { }
 
 		virtual bool needsPolarData() const noexcept { return false; }
+		auto getEffectMode() const { return processorParameters_[(u32)Framework::BaseEffectParameters::Mode]->getInternalValue<u32>(); }
 
 	protected:
 		enum class BoundRepresentation : u32 { Normalised, Frequency, BinIndex };
 
-		[[nodiscard]] auto getEffectType() const { return processorParameters_[(u32)Framework::BaseEffectParameters::Type]; }
+		void setEffectModeStrings(Framework::EffectTypes type) const
+		{
+			auto strings = Framework::Parameters::getEffectModesStrings(type);
+			auto modeIndex = (u32)Framework::BaseEffectParameters::Mode;
+			auto details = Framework::baseEffectParameterList[modeIndex];
+			details.stringLookup = strings;
+			processorParameters_[modeIndex]->setParameterDetails(details);
+		}
 
 		// first - low shifted boundary, second - high shifted boundary
 		[[nodiscard]] std::pair<simd_float, simd_float> getShiftedBounds(BoundRepresentation representation,
@@ -95,7 +104,7 @@ namespace Generation
 		}
 
 		// returns starting point and distance to end of processed/unprocessed range
-		[[nodiscard]] std::pair<u32, u32> vector_call getRange(const simd_int &lowIndices, const simd_int &highIndices,
+		std::pair<u32, u32> vector_call getRange(simd_int lowIndices, simd_int highIndices,
 			u32 effectiveFFTSize, bool isProcessedRange) const noexcept;
 
 		void copyUnprocessedData(Framework::SimdBufferView<std::complex<float>, simd_float> &source,
@@ -107,11 +116,13 @@ namespace Generation
 		// 1. internal fx type (mono) - [0, n]
 		// 2. and 3. normalised frequency boundaries of processed region (stereo) - [0.0f, 1.0f]
 		// 4. shifting of the freq boundaries (stereo) - [-1.0f; 1.0f]
-};
+	};
 
 	class utilityEffect final : public baseEffect
 	{
 	public:
+		DEFINE_CLASS_TYPE("{A8129602-D351-46D5-B85B-D5764C071575}")
+
 		utilityEffect() = delete;
 		utilityEffect(const utilityEffect &) = delete;
 		utilityEffect(utilityEffect &&) = delete;
@@ -139,6 +150,8 @@ namespace Generation
 	class filterEffect final : public baseEffect
 	{
 	public:
+		DEFINE_CLASS_TYPE("{809BD1B8-AA18-467E-8DD2-E396F70D6253}")
+
 		filterEffect() = delete;
 		filterEffect(const filterEffect &) = delete;
 		filterEffect(filterEffect &&) = delete;
@@ -176,23 +189,27 @@ namespace Generation
 		// TODO: write a constexpr generator for all of the weird mask types (triangle, saw, square, etc)
 	};
 
-	class contrastEffect final : public baseEffect
+
+
+	class dynamicsEffect final : public baseEffect
 	{
 	public:
-		contrastEffect() = delete;
-		contrastEffect(const contrastEffect &) = delete;
-		contrastEffect(contrastEffect &&) = delete;
+		DEFINE_CLASS_TYPE("{D5DADD9A-5B0F-45C6-ADF5-B6A6415AF2D7}")
 
-		contrastEffect(Plugin::ProcessorTree *globalModulesState, u64 parentModuleId);
+		dynamicsEffect() = delete;
+		dynamicsEffect(const dynamicsEffect &) = delete;
+		dynamicsEffect(dynamicsEffect &&) = delete;
+
+		dynamicsEffect(Plugin::ProcessorTree *globalModulesState, u64 parentModuleId);
 
 		void run(Framework::SimdBufferView<std::complex<float>, simd_float> &source,
 			Framework::SimdBuffer<std::complex<float>, simd_float> &destination, u32 effectiveFFTSize, float sampleRate) noexcept override;
 
 	private:
 		void runContrast(Framework::SimdBufferView<std::complex<float>, simd_float> &source,
-			Framework::SimdBuffer<std::complex<float>, simd_float> &destination, u32 effectiveFFTSize, float sampleRate) noexcept;
+			Framework::SimdBuffer<std::complex<float>, simd_float> &destination, u32 effectiveFFTSize, float sampleRate) const noexcept;
 
-		simd_float vector_call matchPower(simd_float target, simd_float current)
+		simd_float vector_call matchPower(simd_float target, simd_float current) const
 		{
 			simd_float result = 1.0f;
 			result = utils::maskLoad(result, simd_float(0.0f), simd_float::greaterThanOrEqual(0.0f, target));
@@ -203,32 +220,29 @@ namespace Generation
 			return result;
 		}
 
-		//// Parameters
+
+		//// Dtblkfx Contrast
+		/// Parameters
 		//
 		// 5. contrast (stereo) - range[-1.0f, 1.0f]; controls the relative loudness of the bins
-		 
-		
-		// dtblkfx contrast, specops noise filter/focus, thinner
+		//
+		/// Constants
+		static constexpr float kContrastMaxPositiveValue = 4.0f;
+		static constexpr float kContrastMaxNegativeValue = -0.5f;
+		//
+		//
 
-		static constexpr float kMaxPositiveValue = 4.0f;
-		static constexpr float kMaxNegativeValue = -0.5f;
-	};
-
-	class dynamicsEffect final : public baseEffect
-	{
-	public:
-		dynamicsEffect() = delete;
-		dynamicsEffect(const dynamicsEffect &) = delete;
-		dynamicsEffect(dynamicsEffect &&) = delete;
-
-		dynamicsEffect(Plugin::ProcessorTree *globalModulesState, u64 parentModuleId);
-
+		// specops noise filter/focus, thinner
 		// spectral compander, gate (threshold), clipping
 	};
+
+
 
 	class phaseEffect final : public baseEffect
 	{
 	public:
+		DEFINE_CLASS_TYPE("{5670932B-8B6F-4475-9926-000F6C36C5AD}")
+
 		phaseEffect() = delete;
 		phaseEffect(const phaseEffect &) = delete;
 		phaseEffect(phaseEffect &&) = delete;
@@ -236,12 +250,17 @@ namespace Generation
 		phaseEffect(Plugin::ProcessorTree *globalModulesState, u64 parentModuleId);
 
 		// phase zeroer, (constrained) phase randomiser (smear), channel phase shifter (pha-979), etc
+		// phase filter - filtering based on phase
 		// mfreeformphase impl
 	};
+
+
 
 	class pitchEffect final : public baseEffect
 	{
 	public:
+		DEFINE_CLASS_TYPE("{71133386-9421-4B23-91F9-C826DFC506B8}")
+
 		pitchEffect() = delete;
 		pitchEffect(const pitchEffect &) = delete;
 		pitchEffect(pitchEffect &&) = delete;
@@ -251,9 +270,13 @@ namespace Generation
 		// resample, shift, const shift, harmonic shift, harmonic repitch
 	};
 
+
+
 	class stretchEffect final : public baseEffect
 	{
 	public:
+		DEFINE_CLASS_TYPE("{D700C4AA-EC95-4703-9837-7AD5BDF5C810}")
+
 		stretchEffect() = delete;
 		stretchEffect(const stretchEffect &) = delete;
 		stretchEffect(stretchEffect &&) = delete;
@@ -263,9 +286,13 @@ namespace Generation
 		// specops geometry
 	};
 
+
+
 	class warpEffect final : public baseEffect
 	{
 	public:
+		DEFINE_CLASS_TYPE("{5FC3802A-B916-4D36-A853-78A29A5F5687}")
+
 		warpEffect() = delete;
 		warpEffect(const warpEffect &) = delete;
 		warpEffect(warpEffect &&) = delete;
@@ -275,9 +302,13 @@ namespace Generation
 		// vocode, harmonic match, cross/warp mix
 	};
 
+
+
 	class destroyEffect final : public baseEffect
 	{
 	public:
+		DEFINE_CLASS_TYPE("{EA1DD088-A73A-4FD4-BB27-38EC0BF91850}")
+
 		destroyEffect() = delete;
 		destroyEffect(const destroyEffect &) = delete;
 		destroyEffect(destroyEffect &&) = delete;
@@ -290,10 +321,16 @@ namespace Generation
 	// TODO: freezer and glitcher classes
 
 
+	static constexpr std::array effectsTypes = { utilityEffect::getClassType(), filterEffect::getClassType(),
+		dynamicsEffect::getClassType(), phaseEffect::getClassType(), pitchEffect::getClassType(),
+		stretchEffect::getClassType(), warpEffect::getClassType(), destroyEffect::getClassType(), };
+
 	// class for the whole FX unit
 	class EffectModule : public BaseProcessor
 	{
 	public:
+		DEFINE_CLASS_TYPE("{763F9D86-D535-4D63-B486-F863F88CC259}")
+
 		EffectModule() = delete;
 		EffectModule(const EffectModule &) = delete;
 		EffectModule(EffectModule &&) = delete;
@@ -308,46 +345,23 @@ namespace Generation
 		EffectModule &operator=(EffectModule &&other) noexcept
 		{ BaseProcessor::operator=(std::move(other)); return *this; }
 
-		~EffectModule() override = default;
-
-		// Inherited via BaseProcessor
-		BaseProcessor *updateSubProcessor(u32 index, std::string_view newModuleType = {}, 
-			BaseProcessor *newSubModule = nullptr) noexcept override;
-		[[nodiscard]] BaseProcessor *createCopy(u64 parentModuleId) const noexcept override
-		{ return createSubProcessor<EffectModule>(*this, parentModuleId); }
-
 		void processEffect(ComplexDataSource &source, u32 effectiveFFTSize, float sampleRate);
 
+		// Inherited via BaseProcessor
+		BaseProcessor *updateSubProcessor(size_t index, BaseProcessor *newSubModule) noexcept override;
+		[[nodiscard]] BaseProcessor *createSubProcessor(std::string_view type) const noexcept override;
+
 	private:
+		[[nodiscard]] BaseProcessor *createCopy(std::optional<u64> parentModuleId) const noexcept override
+		{ return makeSubProcessor<EffectModule>(*this, parentModuleId.value_or(parentProcessorId_)); }
+		baseEffect *createEffect(std::string_view type) const noexcept;
+
 		Framework::SimdBuffer<std::complex<float>, simd_float> buffer_{ kNumChannels, kMaxFFTBufferLength };
-		baseEffect *effect = nullptr;
 
 		//// Parameters
 		//  
 		// 1. module enabled
 		// 2. effect type
 		// 3. module mix
-		// 4. module gain
-
-		static constexpr float kMaxPositiveGain = utils::dbToAmplitudeConstexpr(30.0f);
-		static constexpr float kMaxNegativeGain = utils::dbToAmplitudeConstexpr(-30.0f);
 	};
 }
-
-REFL_AUTO(type(Generation::EffectModule, bases<Generation::BaseProcessor>))
-REFL_AUTO(type(Generation::baseEffect, bases<Generation::BaseProcessor>))
-REFL_AUTO(type(Generation::utilityEffect, bases<Generation::baseEffect>))
-REFL_AUTO(type(Generation::filterEffect, bases<Generation::baseEffect>))
-REFL_AUTO(type(Generation::contrastEffect, bases<Generation::baseEffect>))
-REFL_AUTO(type(Generation::dynamicsEffect, bases<Generation::baseEffect>))
-REFL_AUTO(type(Generation::phaseEffect, bases<Generation::baseEffect>))
-REFL_AUTO(type(Generation::pitchEffect, bases<Generation::baseEffect>))
-REFL_AUTO(type(Generation::stretchEffect, bases<Generation::baseEffect>))
-REFL_AUTO(type(Generation::warpEffect, bases<Generation::baseEffect>))
-REFL_AUTO(type(Generation::destroyEffect, bases<Generation::baseEffect>))
-
-inline constexpr std::array effectModuleTypes = { utils::getClassName<Generation::utilityEffect>(), 
-	utils::getClassName<Generation::filterEffect>(), utils::getClassName<Generation::contrastEffect>(),
-	utils::getClassName<Generation::dynamicsEffect>(), utils::getClassName<Generation::phaseEffect>(),
-	utils::getClassName<Generation::pitchEffect>(), utils::getClassName<Generation::stretchEffect>(), 
-	utils::getClassName<Generation::warpEffect>(), utils::getClassName<Generation::destroyEffect>() };

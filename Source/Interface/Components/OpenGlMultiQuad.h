@@ -18,17 +18,16 @@ namespace Interface
 	class OpenGlMultiQuad : public OpenGlComponent
 	{
 	public:
-		static constexpr u32 kNumVertices = 4;
-		static constexpr u32 kNumFloatsPerVertex = 10;
-		static constexpr u32 kNumFloatsPerQuad = kNumVertices * kNumFloatsPerVertex;
-		static constexpr u32 kNumIndicesPerQuad = 6;
+		static constexpr size_t kNumVertices = 4;
+		static constexpr size_t kNumFloatsPerVertex = 10;
+		static constexpr size_t kNumFloatsPerQuad = kNumVertices * kNumFloatsPerVertex;
+		static constexpr size_t kNumIndicesPerQuad = 6;
 		static constexpr float kThicknessDecay = 0.4f;
 		static constexpr float kAlphaInc = 0.2f;
 
 		OpenGlMultiQuad(int max_quads, Shaders::FragmentShader shader = Shaders::kColorFragment);
-		~OpenGlMultiQuad() override = default;
 
-		void paint(Graphics &g) override { }
+		void paint(Graphics &) override { }
 		void resized() override
 		{
 			OpenGlComponent::resized();
@@ -43,33 +42,33 @@ namespace Interface
 
 		Colour getColor() const noexcept { return color_; }
 		float getMaxArc() const noexcept { return maxArc_; }
-		float getQuadX(u32 i) const noexcept
+		float getQuadX(size_t i) const noexcept
 		{
-			u32 index = kNumFloatsPerQuad * i;
+			size_t index = kNumFloatsPerQuad * i;
 			return data_[index];
 		}
 
-		float getQuadY(u32 i) const noexcept
+		float getQuadY(size_t i) const noexcept
 		{
-			u32 index = kNumFloatsPerQuad * i;
+			size_t index = kNumFloatsPerQuad * i;
 			return data_[index + 1];
 		}
 
-		float getQuadWidth(u32 i) const noexcept
+		float getQuadWidth(size_t i) const noexcept
 		{
-			u32 index = kNumFloatsPerQuad * i;
+			size_t index = kNumFloatsPerQuad * i;
 			return data_[2 * kNumFloatsPerVertex + index] - data_[index];
 		}
 
-		float getQuadHeight(u32 i) const noexcept
+		float getQuadHeight(size_t i) const noexcept
 		{
-			u32 index = kNumFloatsPerQuad * i;
+			size_t index = kNumFloatsPerQuad * i;
 			return data_[kNumFloatsPerVertex + index + 1] - data_[index + 1];
 		}
 
-		float *getVerticesData(u32 i) const noexcept
+		float *getVerticesData(size_t i) const noexcept
 		{
-			u32 index = kNumFloatsPerQuad * i;
+			size_t index = kNumFloatsPerQuad * i;
 			return data_.get() + index;
 		}
 
@@ -82,7 +81,7 @@ namespace Interface
 		void setStartPos(float position) noexcept { startPosition_ = position; }
 		void setMaxArc(float maxArc) noexcept { maxArc_ = maxArc; }
 		void setActive(bool active) noexcept { active_ = active; }
-		void setNumQuads(u32 numQuads) noexcept
+		void setNumQuads(size_t numQuads) noexcept
 		{
 			COMPLEX_ASSERT(numQuads <= maxQuads_);
 			numQuads_ = numQuads;
@@ -122,10 +121,10 @@ namespace Interface
 
 		void setDrawWhenNotVisible(bool draw) noexcept { drawWhenNotVisible_ = draw; }
 
-		void setRotatedCoordinates(u32 i, float x, float y, float w, float h) noexcept
+		void setRotatedCoordinates(size_t i, float x, float y, float w, float h) noexcept
 		{
 			COMPLEX_ASSERT(i < maxQuads_);
-			u32 index = i * kNumFloatsPerQuad;
+			size_t index = i * kNumFloatsPerQuad;
 
 			data_[index + 4] = x;
 			data_[index + 5] = y + h;
@@ -137,10 +136,10 @@ namespace Interface
 			data_[3 * kNumFloatsPerVertex + index + 5] = y;
 		}
 
-		void setCoordinates(u32 i, float x, float y, float w, float h) noexcept
+		void setCoordinates(size_t i, float x, float y, float w, float h) noexcept
 		{
 			COMPLEX_ASSERT(i < maxQuads_);
-			u32 index = i * kNumFloatsPerQuad;
+			size_t index = i * kNumFloatsPerQuad;
 
 			data_[index + 4] = x;
 			data_[index + 5] = y;
@@ -152,10 +151,10 @@ namespace Interface
 			data_[3 * kNumFloatsPerVertex + index + 5] = y;
 		}
 
-		void setShaderValue(u32 i, float shaderValue, int valueIndex = 0) noexcept
+		void setShaderValue(size_t i, float shaderValue, int valueIndex = 0) noexcept
 		{
 			COMPLEX_ASSERT(i < maxQuads_);
-			u32 index = i * kNumFloatsPerQuad + 6 + valueIndex;
+			size_t index = i * kNumFloatsPerQuad + 6 + valueIndex;
 			data_[index] = shaderValue;
 			data_[kNumFloatsPerVertex + index] = shaderValue;
 			data_[2 * kNumFloatsPerVertex + index] = shaderValue;
@@ -163,9 +162,9 @@ namespace Interface
 			dirty_ = true;
 		}
 
-		void setDimensions(u32 i, float quadWidth, float quadHeight, float fullWidth, float fullHeight) noexcept
+		void setDimensions(size_t i, float quadWidth, float quadHeight, float fullWidth, float fullHeight) noexcept
 		{
-			u32 index = i * kNumFloatsPerQuad;
+			size_t index = i * kNumFloatsPerQuad;
 			float w = quadWidth * fullWidth / 2.0f;
 			float h = quadHeight * fullHeight / 2.0f;
 
@@ -179,10 +178,10 @@ namespace Interface
 			data_[3 * kNumFloatsPerVertex + index + 3] = h;
 		}
 
-		void setQuadHorizontal(u32 i, float x, float w) noexcept
+		void setQuadHorizontal(size_t i, float x, float w) noexcept
 		{
 			COMPLEX_ASSERT(i < maxQuads_);
-			u32 index = i * kNumFloatsPerQuad;
+			size_t index = i * kNumFloatsPerQuad;
 			data_[index] = x;
 			data_[kNumFloatsPerVertex + index] = x;
 			data_[2 * kNumFloatsPerVertex + index] = x + w;
@@ -191,10 +190,10 @@ namespace Interface
 			dirty_ = true;
 		}
 
-		void setQuadVertical(u32 i, float y, float h) noexcept
+		void setQuadVertical(size_t i, float y, float h) noexcept
 		{
 			COMPLEX_ASSERT(i < maxQuads_);
-			u32 index = i * kNumFloatsPerQuad;
+			size_t index = i * kNumFloatsPerQuad;
 			data_[index + 1] = y;
 			data_[kNumFloatsPerVertex + index + 1] = y + h;
 			data_[2 * kNumFloatsPerVertex + index + 1] = y + h;
@@ -203,10 +202,10 @@ namespace Interface
 			dirty_ = true;
 		}
 
-		void setQuad(u32 i, float x, float y, float w, float h) noexcept
+		void setQuad(size_t i, float x, float y, float w, float h) noexcept
 		{
 			COMPLEX_ASSERT(i < maxQuads_);
-			u32 index = i * kNumFloatsPerQuad;
+			size_t index = i * kNumFloatsPerQuad;
 			data_[index] = x;
 			data_[index + 1] = y;
 			data_[kNumFloatsPerVertex + index] = x;
@@ -223,8 +222,8 @@ namespace Interface
 		Component *targetComponent_ = nullptr;
 		Component *scissorComponent_ = nullptr;
 		Shaders::FragmentShader fragmentShader_;
-		u32 maxQuads_;
-		u32 numQuads_;
+		size_t maxQuads_;
+		size_t numQuads_;
 
 		bool drawWhenNotVisible_ = false;
 		bool active_ = true;
@@ -245,9 +244,9 @@ namespace Interface
 
 		/*
 		 * data_ array indices per quad
-		 * 0 - 1: quad xy-expansion when hovered over (necessary for knobs/sliders)
-		 * 2 - 3: scaled width and height
-		 * 4 - 5: xy-positions
+		 * 0 - 1: vertex ndc position
+		 * 2 - 3: scaled width and height for quad (acts like a uniform but idk why isn't one)
+		 * 4 - 5: coordinates inside the quad (ndc for most situations, normalised for OpenGLCorners)
 		 * 6 - 7: shader values (doubles as left channel shader values)
 		 * 6 - 9: right channel shader values (necessary for the modulation meters/indicators)
 		 */
@@ -288,7 +287,6 @@ namespace Interface
 	{
 	public:
 		OpenGlScrollQuad() : OpenGlQuad(Shaders::kRoundedRectangleFragment) { }
-		~OpenGlScrollQuad() override = default;
 
 		void render(OpenGlWrapper &open_gl, bool animate) override
 		{
@@ -313,7 +311,9 @@ namespace Interface
 			float end_ratio = (range.getEnd() - total_range.getStart()) / total_range.getLength();
 			setQuadVertical(0, 1.0f - 2.0f * end_ratio, 2.0f * (end_ratio - start_ratio));
 
-			OpenGlQuad::render(open_gl, animate);
+			// TODO: add fade in/out when hovering over
+			if (hover_)
+				OpenGlQuad::render(open_gl, animate);
 		}
 
 		void setHover(bool hover) { hover_ = hover; }
@@ -336,7 +336,6 @@ namespace Interface
 			addAndMakeVisible(bar_);
 			bar_.setScrollBar(this);
 		}
-		~OpenGlScrollBar() override = default;
 
 		OpenGlQuad *getGlComponent() { return &bar_; }
 
@@ -389,7 +388,6 @@ namespace Interface
 			setCoordinates(2, 0.0f, 0.0f, 1.0f, 1.0f);
 			setCoordinates(3, 0.0f, 1.0f, 1.0f, -1.0f);
 		}
-		~OpenGlCorners() override = default;
 
 		void setCorners(Rectangle<int> bounds, float rounding)
 		{
@@ -400,6 +398,19 @@ namespace Interface
 			setQuad(1, -1.0f, 1.0f - height, width, height);
 			setQuad(2, 1.0f - width, 1.0f - height, width, height);
 			setQuad(3, 1.0f - width, -1.0f, width, height);
+		}
+
+		void setCorners(Rectangle<int> bounds, float topRounding, float bottomRounding)
+		{
+			float topWidth = topRounding / bounds.getWidth() * 2.0f;
+			float topHeight = topRounding / bounds.getHeight() * 2.0f;
+			float bottomWidth = bottomRounding / bounds.getWidth() * 2.0f;
+			float bottomHeight = bottomRounding / bounds.getHeight() * 2.0f;
+
+			setQuad(0, -1.0f, -1.0f, bottomWidth, bottomHeight);
+			setQuad(1, -1.0f, 1.0f - topHeight, topWidth, topHeight);
+			setQuad(2, 1.0f - topWidth, 1.0f - topHeight, topWidth, topHeight);
+			setQuad(3, 1.0f - bottomWidth, -1.0f, bottomWidth, bottomHeight);
 		}
 
 		void setTopCorners(Rectangle<int> bounds, float topRounding)

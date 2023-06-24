@@ -10,27 +10,29 @@
 
 #include <JuceHeader.h>
 #include "PluginProcessor.h"
-#include "ModuleTreeUpdater.h"
+#include "Interface/Sections/InterfaceEngineLink.h"
+#include "Interface/LookAndFeel/BorderBoundsConstrainer.h"
 
 //==============================================================================
 /**
 */
-class ComplexAudioProcessorEditor  : public juce::AudioProcessorEditor
+class ComplexAudioProcessorEditor : public juce::AudioProcessorEditor, public Interface::InterfaceEngineLink
 {
 public:
-		ComplexAudioProcessorEditor (ComplexAudioProcessor&);
-		~ComplexAudioProcessorEditor() override;
+	ComplexAudioProcessorEditor (ComplexAudioProcessor&);
+	~ComplexAudioProcessorEditor() override = default;
 
-		//==============================================================================
-		void paint (juce::Graphics&) override;
-		void resized() override;
+	//==============================================================================
+	void paint (juce::Graphics &g) override { }
+	void resized() override;
+	void setScaleFactor(float newScale) override;
+	void updateFullGui() override;
 
 private:
-		// This reference is provided as a quick way for your editor to
-		// access the processor object that created it.
-		ComplexAudioProcessor& audioProcessor;
+	// This reference is provided as a quick way for your editor to
+	// access the processor object that created it.
+	ComplexAudioProcessor& audioProcessor_;
+	Interface::BorderBoundsConstrainer constrainer_{};
 
-		Plugin::ModuleTreeUpdater moduleTreeUpdater_;
-
-		JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (ComplexAudioProcessorEditor)
+	JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (ComplexAudioProcessorEditor)
 };

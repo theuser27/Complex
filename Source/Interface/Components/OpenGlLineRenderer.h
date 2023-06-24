@@ -156,7 +156,7 @@ namespace Interface
     std::unique_ptr<int[]> indices_data_;
 
     // TODO: template the extents later
-    stdex::mdspan<float, stdex::extents<u32, stdex::dynamic_extent, stdex::dynamic_extent>> data2d{};
+    //stdex::mdspan<float, stdex::extents<u32, stdex::dynamic_extent, stdex::dynamic_extent>> data2d{};
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(OpenGlLineRenderer)
   };

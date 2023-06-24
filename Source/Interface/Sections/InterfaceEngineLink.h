@@ -12,21 +12,11 @@
 
 #include "JuceHeader.h"
 #include "Plugin/Complex.h"
+#include "MainInterface.h"
 
 namespace Interface
 {
   class MainInterface;
-
-  struct GuiData
-  {
-    GuiData(Plugin::ComplexPlugin &plugin) : plugin_(plugin),
-  		parameterBridges_(plugin.getParameterBridges()),
-  		parameterModulators_(plugin.getParameterModulators()) { }
-
-    Plugin::ComplexPlugin &plugin_;
-    std::vector<Framework::ParameterBridge *> &parameterBridges_;
-    std::vector<Framework::ParameterModulator *> &parameterModulators_;
-  };
 
   class InterfaceEngineLink : private juce::Timer
   {
@@ -35,10 +25,9 @@ namespace Interface
     ~InterfaceEngineLink() override { stopTimer(); }
 
     // Inherited from juce::Timer
-    void timerCallback() override { updateParameterValues(); }
+    void timerCallback() override { getPlugin().updateGUIParameters(); }
 
-    auto *getPlugin() { return &plugin_; }
-    auto *getGUI() { return gui_.get(); }
+    Plugin::ComplexPlugin &getPlugin() { return plugin_; }
 
     virtual void updateFullGui();
 
@@ -52,13 +41,11 @@ namespace Interface
     //void disconnectModulation(std::string source, std::string destination);
     //void disconnectModulation(vital::ModulationConnection *connection);
 
-    void setFocus();
-    void setGuiSize(float scale);
+  	void setGuiScale(double scale);
 
-    // TODO: specify function body to update all parameters linked to a bridge
-    void updateParameterValues();
+  protected:
+    double clampScaleFactorToFit(double desiredScale, int windowWidth, int windowHeight) const;
 
-  private:
     Plugin::ComplexPlugin &plugin_;
     std::unique_ptr<MainInterface> gui_ = nullptr;
   };

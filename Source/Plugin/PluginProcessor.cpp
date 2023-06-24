@@ -19,9 +19,8 @@ ComplexAudioProcessor::ComplexAudioProcessor()
 											#endif
 											 .withOutput ("Output", juce::AudioChannelSet::stereo(), true)
 										 #endif
-											 ),
+											 )
 #endif
-				ComplexPlugin()
 {
 	using namespace Framework;
 
@@ -29,23 +28,23 @@ ComplexAudioProcessor::ComplexAudioProcessor()
 
 	for (auto &parameterDetails : pluginParameterList)
 	{
-		auto parameter = getProcessorParameter(soundEngine->getProcessorId(), parameterDetails.name);
+		auto parameter = getProcessorParameter(soundEngine_->getProcessorId(), parameterDetails.name);
 		if (auto parameterPointer = parameter.lock())
 		{
-			Framework::ParameterBridge *bridge = new Framework::ParameterBridge((u32)(-1), parameterPointer->getParameterLink());
+			auto *bridge = new ParameterBridge(this, (u32)(-1), parameterPointer->getParameterLink());
 			parameterBridges_.push_back(bridge);
 			addParameter(bridge);
 		}
 	}
 
 	// temporary, used for testing
-	size_t index = 0;
+	u32 index = 0;
 	for (auto &parameterDetails : effectModuleParameterList)
 	{
 		auto parameter = getProcessorParameter(3, parameterDetails.name);
 		if (auto parameterPointer = parameter.lock())
 		{
-			Framework::ParameterBridge *bridge = new Framework::ParameterBridge(index, parameterPointer->getParameterLink());
+			auto *bridge = new ParameterBridge(this, index, parameterPointer->getParameterLink());
 			parameterBridges_.push_back(bridge);
 			addParameter(bridge);
 		}
@@ -57,19 +56,19 @@ ComplexAudioProcessor::ComplexAudioProcessor()
 		auto parameter = getProcessorParameter(4, parameterDetails.name);
 		if (auto parameterPointer = parameter.lock())
 		{
-			Framework::ParameterBridge *bridge = new Framework::ParameterBridge(index, parameterPointer->getParameterLink());
+			auto *bridge = new ParameterBridge(this, index, parameterPointer->getParameterLink());
 			parameterBridges_.push_back(bridge);
 			addParameter(bridge);
 		}
 		index++;
 	}
 
-	for (auto &parameterDetails : contrastEffectParameterList)
+	for (auto &parameterDetails : dynamicsEffectParameterList[0])
 	{
-		auto parameter = getProcessorParameter(4, parameterDetails[0].name);
+		auto parameter = getProcessorParameter(4, parameterDetails.name);
 		if (auto parameterPointer = parameter.lock())
 		{
-			Framework::ParameterBridge *bridge = new Framework::ParameterBridge(index, parameterPointer->getParameterLink());
+			auto *bridge = new ParameterBridge(this, index, parameterPointer->getParameterLink());
 			parameterBridges_.push_back(bridge);
 			addParameter(bridge);
 		}
@@ -78,12 +77,11 @@ ComplexAudioProcessor::ComplexAudioProcessor()
 
 	/*for (size_t i = 0; i < kMaxParameterMappings; i++)
 	{
-		Framework::ParameterBridge *bridge = new Framework::ParameterBridge(i);
+		Framework::ParameterBridge *bridge = new Framework::ParameterBridge(this, i);
 		parameterBridges_.push_back(bridge);
 		addParameter(bridge);
 	}*/
 }
-ComplexAudioProcessor::~ComplexAudioProcessor() {}
 
 //==============================================================================
 const juce::String ComplexAudioProcessor::getName() const { return JucePlugin_Name; }
@@ -100,8 +98,8 @@ void ComplexAudioProcessor::changeProgramName([[maybe_unused]] int index, [[mayb
 //==============================================================================
 void ComplexAudioProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
 {
-	Initialise(sampleRate, samplesPerBlock);
-	setLatencySamples(getProcessingDelay());
+	Initialise((float)sampleRate, samplesPerBlock);
+	setLatencySamples((int)getProcessingDelay());
 }
 
 void ComplexAudioProcessor::releaseResources()
@@ -146,12 +144,13 @@ void ComplexAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, [[ma
 	//DBG(numSamples);
 
 	//CheckGlobalParameters();
-	updateParameters(UpdateFlag::BeforeProcess);
-	setLatencySamples(getProcessingDelay());
+	auto sampleRate = ComplexPlugin::getSampleRate();
+	updateParameters(UpdateFlag::BeforeProcess, sampleRate);
+	setLatencySamples((int)getProcessingDelay());
 
-	Process(buffer, (u32)numSamples, (u32)inputs, (u32)outputs);
+	Process(buffer, (u32)numSamples, sampleRate, (u32)inputs, (u32)outputs);
 
-	updateParameters(UpdateFlag::AfterProcess);
+	updateParameters(UpdateFlag::AfterProcess, sampleRate);
 }
 
 //==============================================================================

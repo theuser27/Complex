@@ -14,129 +14,95 @@
 namespace Generation
 {
 	EffectsLane::EffectsLane(Plugin::ProcessorTree *moduleTree, u64 parentModuleId) noexcept :
-		BaseProcessor(moduleTree, parentModuleId, utils::getClassName<EffectsLane>())
+		BaseProcessor(moduleTree, parentModuleId, getClassType())
 	{
-		effectModules_.reserve(kInitialNumEffects);
 		subProcessors_.reserve(kInitialNumEffects);
 		dataBuffer_.reserve(kNumTotalChannels, kMaxFFTBufferLength);
-		insertSubProcessor(0, utils::getClassName<contrastEffect>());
+		insertSubProcessor(0, makeSubProcessor<EffectModule>(dynamicsEffect::getClassType()));
 
 		processorParameters_.data.reserve(Framework::effectChainParameterList.size());
 		createProcessorParameters(Framework::effectChainParameterList.data(), Framework::effectChainParameterList.size());
 	}
 
-	EffectsLane::EffectsLane(const EffectsLane &other, u64 parentModuleId) noexcept :
-		BaseProcessor(other, parentModuleId), effectModules_(other.effectModules_)
+	bool EffectsLane::insertSubProcessor(size_t index, BaseProcessor *newSubProcessor) noexcept
 	{
-		COMPLEX_ASSERT(processorType_ == utils::getClassName<EffectsLane>());
+		COMPLEX_ASSERT(newSubProcessor && "A valid BaseProcessor needs to be passed in");
+		COMPLEX_ASSERT(newSubProcessor->getProcessorType() == EffectModule::getClassType()
+			&& "You're trying to move a non-EffectModule into EffectChain");
+
+		subProcessors_.insert(subProcessors_.begin() + index, newSubProcessor);
+
+		for (auto *listener : listeners_)
+			listener->insertedSubProcessor(index, newSubProcessor);
+
+		return true;
 	}
 
-	void EffectsLane::insertSubProcessor(u32 index, std::string_view newModuleType, BaseProcessor *newSubModule) noexcept
+	BaseProcessor *EffectsLane::deleteSubProcessor(size_t index) noexcept
 	{
-		if (newSubModule == nullptr)
-		{ 
-			COMPLEX_ASSERT(effectModuleTypes.end() != std::find(effectModuleTypes.begin(), effectModuleTypes.end(), 
-				newModuleType) && "You're trying to insert a non-EffectModule into EffectChain");
+		COMPLEX_ASSERT(index < subProcessors_.size());
 
-			auto newEffectModule = createSubProcessor<EffectModule>(newModuleType);
-			effectModules_.insert(effectModules_.begin() + index, newEffectModule);
-			subProcessors_.insert(subProcessors_.begin() + index, newEffectModule);
-		}
-		else
-		{
-			COMPLEX_ASSERT(newSubModule->getProcessorType() == utils::getClassName<EffectModule>()
-				&& "You're trying to move a non-EffectModule into EffectChain");
-
-			effectModules_.insert(effectModules_.begin() + index, static_cast<EffectModule *>(newSubModule));
-			subProcessors_.insert(subProcessors_.begin() + index, newSubModule);
-		}
-	}
-
-	BaseProcessor *EffectsLane::deleteSubProcessor(u32 index) noexcept
-	{
-		BaseProcessor *deletedModule = effectModules_[index];
-		effectModules_.erase(effectModules_.begin() + index);
+		BaseProcessor *deletedModule = subProcessors_[index];
 		subProcessors_.erase(subProcessors_.begin() + index);
+
+		for (auto *listener : listeners_)
+			listener->deletedSubProcessor(index, deletedModule);
+
 		return deletedModule;
 	}
 
-	BaseProcessor *EffectsLane::updateSubProcessor(u32 index, std::string_view newModuleType, BaseProcessor *newSubModule) noexcept
-	{
-		BaseProcessor *replacedSubModule = effectModules_[index];
-
-		if (newSubModule == nullptr)
-		{
-			COMPLEX_ASSERT(effectModuleTypes.end() != std::find(effectModuleTypes.begin(), effectModuleTypes.end(),
-				newModuleType) && "You're trying to put a non-EffectModule into EffectChain");
-			
-			auto newEffectModule = createSubProcessor<EffectModule>(newModuleType);
-			effectModules_[index] = newEffectModule;
-			subProcessors_[index] = newEffectModule;
-		}
-		else
-		{
-			COMPLEX_ASSERT(newSubModule->getProcessorType() == utils::getClassName<EffectModule>()
-				&& "You're trying to move a non-EffectModule into EffectChain");
-
-			effectModules_[index] = static_cast<EffectModule *>(newSubModule);
-			subProcessors_[index] = newSubModule;
-		}
-
-		return replacedSubModule;
-	}
-
 	EffectsState::EffectsState(Plugin::ProcessorTree *moduleTree, u64 parentModuleId) noexcept :
-		BaseProcessor(moduleTree, parentModuleId, utils::getClassName<EffectsState>())
+		BaseProcessor(moduleTree, parentModuleId, getClassType())
 	{
+		static_assert(kMaxNumChains >= 1, "Why would you have 0 lanes???");
+
 		chains_.reserve(kMaxNumChains);
 		subProcessors_.reserve(kMaxNumChains);
 		// size is half the max because a single SIMD package stores both real and imaginary parts
 		dataBuffer_.reserve(kNumTotalChannels, kMaxFFTBufferLength);
 		chainThreads_.reserve(kMaxNumChains);
 
-		insertSubProcessor(0, utils::getClassName<EffectsLane>());
+		insertSubProcessor(0, makeSubProcessor<EffectsLane>());
 	}
 
-	void EffectsState::insertSubProcessor([[maybe_unused]] u32 index, std::string_view newModuleType, BaseProcessor *newSubModule) noexcept
+	bool EffectsState::insertSubProcessor([[maybe_unused]] size_t index, BaseProcessor *newSubProcessor) noexcept
 	{
+		COMPLEX_ASSERT(newSubProcessor && "A valid BaseProcessor needs to be passed in");
+		COMPLEX_ASSERT(newSubProcessor->getProcessorType() == EffectsLane::getClassType() &&
+			"You're trying to insert a non-EffectChain into EffectsState");
+
 		// have we reached the max chain capacity?
 		if (chains_.size() >= kMaxNumChains)
-			return;
+			return false;
 
-		if (newSubModule == nullptr)
-		{
-			COMPLEX_ASSERT(newModuleType == utils::getClassName<EffectsLane>() &&
-				"You're trying to insert a non-EffectChain into EffectsState");
-
-			auto newEffectsChain = createSubProcessor<EffectsLane>();
-			chains_.emplace_back(newEffectsChain);
-			subProcessors_.emplace_back(newEffectsChain);
-		}
-		else
-		{
-			COMPLEX_ASSERT(newSubModule->getProcessorType() == utils::getClassName<EffectsLane>() &&
-				"You're trying to insert a non-EffectChain into EffectsState");
-			
-			chains_.emplace_back(static_cast<EffectsLane *>(newSubModule));
-			subProcessors_.emplace_back(newSubModule);
-		}
-
+		chains_.emplace_back(static_cast<EffectsLane *>(newSubProcessor));
+		subProcessors_.emplace_back(newSubProcessor);
 		chainThreads_.emplace_back(std::bind_front(&EffectsState::processIndividualChains, std::ref(*this)), chains_.size() - 1);
+
+		for (auto *listener : listeners_)
+			listener->insertedSubProcessor(index, newSubProcessor);
+
+		return true;
 	}
 
-	BaseProcessor *EffectsState::deleteSubProcessor(u32 index) noexcept
+	BaseProcessor *EffectsState::deleteSubProcessor(size_t index) noexcept
 	{
+		COMPLEX_ASSERT(index < subProcessors_.size());
+
 		chainThreads_[index].~jthread();
 		BaseProcessor *deletedModule = chains_[index];
 		chains_.erase(chains_.begin() + index);
 		subProcessors_.erase(subProcessors_.begin() + index);
+
+		for (auto *listener : listeners_)
+			listener->deletedSubProcessor(index, deletedModule);
+
 		return deletedModule;
 	}
 
 	void EffectsState::writeInputData(const AudioBuffer<float> &inputBuffer) noexcept
 	{
 		auto channelPointers = inputBuffer.getArrayOfReadPointers();
-
 		for (u32 i = 0; i < (u32)inputBuffer.getNumChannels(); i += kComplexSimdRatio)
 		{
 			// if the input is not used we skip it
@@ -153,20 +119,26 @@ namespace Generation
 					dataBuffer_.writeSimdValueAt(matrix.rows_[k], i, j * kComplexSimdRatio + k);
 			}
 		}
+
+
 	}
 
-	void EffectsState::processChains() noexcept
+	void EffectsState::processChains() const noexcept
 	{
+		// the reason for sequential consistency for the triggers is because we don't want
+		// the waiting and trigger stage to be rearranged/out-of-order executed
+		// (release/acquire barriers can cross each other but not seq_cst/acquire)
+
 		// triggers the chains to run again
 		for (auto &chain : chains_)
-			chain->isFinished_.store(false, std::memory_order_release);
+			chain->isFinished_.store(false, std::memory_order_seq_cst);
 
 		// waiting for chains to finish
 		for (auto &chain : chains_)
-			while (chain->isFinished_.load(std::memory_order_acquire) == false);
+			while (chain->isFinished_.load(std::memory_order_acquire) == false) { utils::wait(); }
 	}
 
-	void EffectsState::processIndividualChains(std::stop_token stoken, u32 chainIndex) noexcept
+	void EffectsState::processIndividualChains(std::stop_token stoken, u32 chainIndex) const noexcept
 	{
 		while (true)
 		{
@@ -187,7 +159,7 @@ namespace Generation
 
 			// Chain On/Off
 			// if this chain is turned off, we set it as finished and skip everything
-			if (!thisChain->processorParameters_[0]->getInternalValue<u32>())
+			if (!thisChain->processorParameters_[0]->getInternalValue<u32>(getSampleRate()))
 			{
 				thisChain->isFinished_.store(true, std::memory_order_release);
 				continue;
@@ -199,7 +171,8 @@ namespace Generation
 			// Chain Input 
 			// if this chain's input is another's output and that chain can be used,
 			// we wait until it is finished and then copy its data
-			if (auto inputIndex = thisChain->processorParameters_[1]->getInternalValue<u32>(); inputIndex & kChainInputMask)
+			if (auto inputIndex = thisChain->processorParameters_[1]
+				->getInternalValue<u32>(getSampleRate()); inputIndex & kChainInputMask)
 			{
 				inputIndex ^= kChainInputMask;
 				while (chains_[inputIndex]->isFinished_.load(std::memory_order_acquire) == false)
@@ -212,9 +185,10 @@ namespace Generation
 				chainDataSource.sourceBuffer = Framework::SimdBufferView(dataBuffer_, kNumChannels, inputIndex * kNumChannels);
 
 			// main processing loop
-			for (auto &effectModule : thisChain->effectModules_)
+			for (auto &effectModule : thisChain->subProcessors_)
 			{
-				effectModule->processEffect(chainDataSource, effectiveFFTSize_, sampleRate_);
+				// this is safe because by design only EffectModules are contained in a lane
+				static_cast<EffectModule *>(effectModule)->processEffect(chainDataSource, effectiveFFTSize_, getSampleRate());
 
 				// TODO: fit links between modules here
 
@@ -237,7 +211,7 @@ namespace Generation
 		// (instead of magnitude-phase pairs) and if not, gets converted
 		for (auto &chain : chains_)
 		{
-			if (chain->chainDataSource_.isPolar && chain->processorParameters_[0]->getInternalValue<u32>())
+			if (chain->chainDataSource_.isPolar && chain->processorParameters_[0]->getInternalValue<u32>(getSampleRate()))
 			{
 				auto &buffer = chain->chainDataSource_.sourceBuffer;
 				auto &conversionhBuffer = chain->chainDataSource_.conversionBuffer;
@@ -261,7 +235,7 @@ namespace Generation
 		// for every chain we add its scaled output to the main sourceBuffer_ at the designated output channels
 		for (auto &chain : chains_)
 		{
-			auto chainOutput = chain->processorParameters_[2]->getInternalValue<u32>();
+			auto chainOutput = chain->processorParameters_[2]->getInternalValue<u32>(getSampleRate());
 			if (chainOutput == kDefaultOutput)
 				continue;
 
