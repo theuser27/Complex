@@ -11,8 +11,8 @@ namespace BinaryData
     extern const char*   Icon_Contrast_svg;
     const int            Icon_Contrast_svgSize = 1337;
 
-    extern const char*   DDIN_otf;
-    const int            DDIN_otfSize = 59860;
+    extern const char*   DDINBold_ttf;
+    const int            DDINBold_ttfSize = 52204;
 
     extern const char*   InterMedium_ttf;
     const int            InterMedium_ttfSize = 367772;

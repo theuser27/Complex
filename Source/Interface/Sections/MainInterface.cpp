@@ -15,7 +15,8 @@
 
 namespace Interface
 {
-	MainInterface::MainInterface(Plugin::ComplexPlugin &plugin) : BaseSection("MainInterface"), plugin_(plugin)
+	MainInterface::MainInterface(Plugin::ComplexPlugin &plugin) :
+		BaseSection(typeid(MainInterface).name()), plugin_(plugin)
 	{
 		Skin default_skin;
 		setSkinValues(default_skin, true);
@@ -68,10 +69,13 @@ namespace Interface
 		openGlContext_.setRenderer(this);
 		openGlContext_.setComponentPaintingEnabled(false);
 		openGlContext_.attachTo(*this);
+
+		startTimerHz(kParameterUpdateIntervalHz);
 	}
 
 	MainInterface::~MainInterface()
 	{
+		stopTimer();
 		openGlContext_.detach();
 		openGlContext_.setRenderer(nullptr);
 	}

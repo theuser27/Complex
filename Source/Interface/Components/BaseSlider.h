@@ -99,8 +99,8 @@ namespace Interface
 		static constexpr float kDefaultTextEntryWidthPercent = 0.9f;
 		static constexpr float kTextEntryHeightPercent = 0.6f;
 
-		static constexpr u32 kDefaultFormatLength = 5;
-		static constexpr u32 kDefaultFormatDecimalPlaces = 2;
+		static constexpr int kDefaultMaxTotalCharacters = 5;
+		static constexpr int kDefaultMaxDecimalCharacters = 2;
 
 		static constexpr float kSlowDragMultiplier = 0.1f;
 		static constexpr float kDefaultSensitivity = 1.0f;
@@ -152,7 +152,7 @@ namespace Interface
 		String getTextFromValue(double value) override { return getSliderTextFromValue(value); }
 		double getValueFromText(const String &text) override;
 		String getRawTextFromValue(double value);
-		String getSliderTextFromValue(double value);
+		String getSliderTextFromValue(double value, bool retrieveSampleRate = true);
 
 		// override this to define drawing logic for the image component
 		void paint(Graphics &) override { }
@@ -213,6 +213,7 @@ namespace Interface
 		virtual void redoImage() = 0;
 		virtual void setSliderBounds() = 0;
 		virtual void drawShadow(Graphics &) { }
+		// override to set the colours of the entry box
 		virtual void showTextEntry();
 
 		void updateValueFromParameter() noexcept
@@ -296,9 +297,9 @@ namespace Interface
 		auto *getExtraModulationTarget() { return extraModulationTarget_; }
 		auto getModulationArea() const noexcept { return (modulationArea_.getWidth()) ? modulationArea_ : getLocalBounds(); }
 
-		virtual Colour getSelectedColor() const = 0;
-		virtual Colour getUnselectedColor() const { return Colours::transparentBlack; };
-		virtual Colour getThumbColor() const = 0;
+		virtual Colour getSelectedColor() const { return findColour(Skin::kWidgetPrimary1, true); }
+		virtual Colour getUnselectedColor() const { return Colours::transparentBlack; }
+		virtual Colour getThumbColor() const { return Colours::white; }
 		virtual Colour getBackgroundColor() const { return findColour(Skin::kWidgetBackground, true); }
 		virtual Colour getModColor() const { return findColour(Skin::kModulationMeterControl, true); }
 		virtual Rectangle<int> getModulationMeterBounds() const { return getLocalBounds(); }
@@ -366,9 +367,10 @@ namespace Interface
 		void setSensitivity(double sensitivity) noexcept { sensitivity_ = sensitivity; }
 		void setPopupPlacement(BubbleComponent::BubblePlacement placement) { popupPlacement_ = placement; }
 		void setModulationPlacement(BubbleComponent::BubblePlacement placement) { modulationControlPlacement_ = placement; }
-		void setMaxDisplayCharacters(int characters) noexcept { maxDisplayCharacters_ = characters; }
-		void setMaxDecimalPlaces(int decimalPlaces) noexcept { maxDecimalPlaces_ = decimalPlaces; }
-
+		void setMaxTotalCharacters(int totalCharacters) noexcept
+		{ COMPLEX_ASSERT(totalCharacters > 0); maxTotalCharacters_ = totalCharacters; }
+		void setMaxDecimalCharacters(int decimalCharacters) noexcept
+		{ COMPLEX_ASSERT(decimalCharacters > -1);maxDecimalCharacters_ = decimalCharacters; }
 		void setPopupPrefix(String prefix) noexcept { popupPrefix_ = std::move(prefix); }
 
 
@@ -410,12 +412,11 @@ namespace Interface
 		double sensitivity_ = kDefaultSensitivity;
 		BubbleComponent::BubblePlacement popupPlacement_ = BubbleComponent::below;
 		BubbleComponent::BubblePlacement modulationControlPlacement_ = BubbleComponent::below;
-		u32 maxDisplayCharacters_ = kDefaultFormatLength;
-		u32 maxDecimalPlaces_ = kDefaultFormatDecimalPlaces;
+		int maxTotalCharacters_ = kDefaultMaxTotalCharacters;
+		int maxDecimalCharacters_ = kDefaultMaxDecimalCharacters;
 		std::function<double(BaseSlider *)> getValueForDrawing = [](const BaseSlider *self) { return self->getValue(); };
 
 		Component *extraModulationTarget_ = nullptr;
-		InterfaceEngineLink *interfaceEngineLink_ = nullptr;
 
 		Rectangle<int> drawBox_{};
 		bool useImage_ = false;
@@ -447,6 +448,7 @@ namespace Interface
 		RotarySlider(Framework::ParameterValue *parameter, String name = {}) : BaseSlider(parameter, std::move(name))
 		{
 			setUseQuad(true);
+			sliderQuad_.setMaxArc(kRotaryAngle);
 			sliderQuad_.setFragmentShader(Shaders::kRotarySliderFragment);
 			label_.setValueEntry(textEntry_.get());
 			setRotaryParameters(2.0f * kPi - kRotaryAngle, 2.0f * kPi + kRotaryAngle, true);
@@ -653,7 +655,7 @@ namespace Interface
 	{
 	public:
 		static constexpr int kDefaultFontSize = 11;
-		static constexpr int kArrowOffset = 6;
+		static constexpr int kArrowOffset = 4;
 		static constexpr int kArrowWidth = 5;
 		static constexpr float kArrowWidthHeightRatio = 0.5f;
 
@@ -664,37 +666,16 @@ namespace Interface
 			virtual void resizeForText(TextSelector *textSelector, int requestedWidthChange) = 0;
 		};
 
-		TextSelector(Framework::ParameterValue *parameter, Font usedFont = {}, 
-			String name = {}) : BaseSlider(parameter, std::move(name))
-		{
-			setUseQuad(true);
-			sliderQuad_.setFragmentShader(Shaders::kRoundedRectangleFragment);
-			setUseImage(true);
-			setIsImageOnTop(true);
-
-			// checking if the font has not been set, sans serif is not used here
-			if (usedFont.getTypefaceName() == Font::getDefaultSansSerifFontName())
-				usedFont_ = Fonts::instance()->getInterVFont();
-			else
-				usedFont_ = std::move(usedFont);
-		}
+		TextSelector(Framework::ParameterValue *parameter, Font usedFont = {}, String name = {});
 
 		void mouseDown(const MouseEvent &e) override;
 		void mouseUp(const MouseEvent &e) override;
 
 		void paint(Graphics &g) override;
-		void valueChanged() override { resizeForText(); BaseSlider::valueChanged(); }
-		void redoImage() override
-		{
-			sliderQuad_.setRounding(findValue(Skin::kWidgetRoundedCorner));
-			if (isMouseOverOrDragging())
-				sliderQuad_.setColor(getBackgroundColor());
-			else
-				sliderQuad_.setColor(Colours::transparentBlack);
-			imageComponent_.redrawImage();
-		}
+		void valueChanged() override;
+		void redoImage() override;
 		void showTextEntry() override;
-		void setSliderBounds() override { resizeForText(); }
+		void setSliderBounds() override;
 
 		Rectangle<int> getModulationMeterBounds() const override
 		{
@@ -716,9 +697,6 @@ namespace Interface
 			return BaseSlider::getTextFromValue(value);
 		}*/
 
-		Colour getSelectedColor() const override { return Colours::transparentBlack; }
-		Colour getThumbColor() const override { return Colours::transparentBlack; }
-
 		// if the stringLookup changes we need to resize and redraw to fit the new text
 		void setParameterDetails(const Framework::ParameterDetails &details) override
 		{
@@ -735,28 +713,12 @@ namespace Interface
 		void setDrawArrow(bool drawArrow) noexcept { drawArrow_ = drawArrow; }
 		void setTextSelectorListener(TextSelectorListener *listener) noexcept { textSelectorListener_ = listener; }
 
+		// returns the resulting width from the new height
+		// use it to set the width of the new bound
+		[[nodiscard]] int setHeight(float height) noexcept;
+
 	protected:
-		void resizeForText() noexcept
-		{
-			String text = getSliderTextFromValue(getValue());
-			auto totalWidth = textWidth_ = usedFont_.getStringWidth(text);
-			// there's always some padding at the end regardless whether the arrow is drawn
-			totalWidth += kArrowOffset;
-
-			if (drawArrow_)
-			{
-				totalWidth += kArrowOffset;
-				auto fontSize = usedFont_.getHeight();
-				auto arrowRatio = fontSize / (float)kDefaultFontSize;
-				totalWidth += (int)std::round(arrowRatio * (float)kArrowWidth);
-			}
-
-			totalDrawWidth_ = totalWidth;
-
-			// not checking for nullptr because if i haven't added a listener
-			// by this stage im already doing something wrong
-			textSelectorListener_->resizeForText(this, drawBox_.getWidth() - totalWidth);
-		}
+		void resizeForText() noexcept;
 
 		Font usedFont_{};
 		TextSelectorListener *textSelectorListener_ = nullptr;
@@ -783,9 +745,7 @@ namespace Interface
 
 		void setSliderBounds() override;
 
-		Colour getSelectedColor() const override { return Colours::white; }
-		Colour getThumbColor() const override { return Colours::white; }
-		//Colour getBackgroundColor() const override { return Colours::white; }
+		void showTextEntry() override;
 
 		auto getTotalDrawWidth() const noexcept { return totalDrawWidth_; }
 

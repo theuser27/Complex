@@ -18,7 +18,6 @@ namespace Interface
 	InterfaceEngineLink::InterfaceEngineLink(Plugin::ComplexPlugin &plugin) : plugin_(plugin)
 	{
 		gui_ = std::make_unique<MainInterface>(plugin);
-		startTimerHz(kParameterUpdateIntervalHz);
 	}
 
 	void InterfaceEngineLink::updateFullGui()

@@ -57,7 +57,6 @@ namespace Interface
 	BaseSlider::BaseSlider(Framework::ParameterValue *parameter, String name) : Slider(LinearVertical, NoTextBox)
 	{
 		sliderQuad_.setTargetComponent(this);
-		sliderQuad_.setMaxArc(kRotaryAngle);
 
 		imageComponent_.paintEntireComponent(false);
 		imageComponent_.setComponent(this);
@@ -66,7 +65,7 @@ namespace Interface
 		sliderQuad_.setActive(false);
 		imageComponent_.setActive(false);
 
-		textEntry_ = std::make_unique<OpenGlTextEditor>("text_entry");
+		textEntry_ = std::make_unique<OpenGlTextEditor>("textEntry");
 		textEntry_->setMultiLine(false);
 		textEntry_->setScrollToShowCursor(false);
 		textEntry_->addListener(this);
@@ -85,15 +84,12 @@ namespace Interface
 		if (!parameter)
 		{
 			setName(name);
-			hasParameterAssignment_ = Framework::Parameters::isParameter(getName().toRawUTF8());
-			if (!hasParameterAssignment_)
-				return;
+			hasParameterAssignment_ = false;
+			return;
 		}
-		else
-		{
-			hasParameterAssignment_ = true;
-			setName(parameter->getParameterDetails().name.data());
-		}
+		
+		hasParameterAssignment_ = true;
+		setName(parameter->getParameterDetails().name.data());
 
 		setParameterLink(parameter->getParameterLink());
 		setParameterDetails(parameter->getParameterDetails());
@@ -215,15 +211,14 @@ namespace Interface
 
 	void BaseSlider::parentHierarchyChanged()
 	{
-		interfaceEngineLink_ = findParentComponentOfClass<InterfaceEngineLink>();
 		parent_ = findParentComponentOfClass<BaseSection>();
 		Slider::parentHierarchyChanged();
 	}
 
 	void BaseSlider::endChange()
 	{
-		auto *engineLink = findParentComponentOfClass<InterfaceEngineLink>();
-		engineLink->getPlugin().pushUndo(new Framework::ParameterUpdate(this, valueBeforeChange_, getValue()));
+		auto *mainInterface = findParentComponentOfClass<MainInterface>();
+		mainInterface->getPlugin().pushUndo(new Framework::ParameterUpdate(this, valueBeforeChange_, getValue()));
 	}
 
 	String BaseSlider::getRawTextFromValue(double value)
@@ -234,18 +229,19 @@ namespace Interface
 		return String(Framework::scaleValue(value, details_, getSampleRate(), true));
 	}
 
-	String BaseSlider::getSliderTextFromValue(double value)
+	String BaseSlider::getSliderTextFromValue(double value, bool retrieveSampleRate)
 	{
-		double scaledValue = Framework::scaleValue(value, details_, getSampleRate(), true);
+		if (!hasParameterAssignment_)
+			return Slider::getTextFromValue(value);
+
+		float sampleRate = (retrieveSampleRate) ? getSampleRate() : (float)kDefaultSampleRate;
+		double scaledValue = Framework::scaleValue(value, details_, sampleRate, true);
 		if (!details_.stringLookup.empty())
 		{
 			size_t lookup = (size_t)(std::clamp(scaledValue, (double)details_.minValue, 
 				(double)details_.maxValue) - details_.minValue);
 			return popupPrefix_ + details_.stringLookup[lookup].data();
 		}
-
-		if (!hasParameterAssignment_)
-			return Slider::getTextFromValue(scaledValue);
 		
 		return popupPrefix_ + formatValue(scaledValue);
 	}
@@ -283,12 +279,6 @@ namespace Interface
 	void BaseSlider::showTextEntry()
 	{
 		textEntry_->setVisible(true);
-
-		textEntry_->setColour(CaretComponent::caretColourId, findColour(Skin::kTextEditorCaret, true));
-		textEntry_->setColour(TextEditor::textColourId, findColour(Skin::kBodyText, true));
-		textEntry_->setColour(TextEditor::highlightedTextColourId, findColour(Skin::kBodyText, true));
-		textEntry_->setColour(TextEditor::highlightColourId, findColour(Skin::kTextEditorSelection, true));
-
 		textEntry_->redoImage();
 		textEntry_->setText(getRawTextFromValue(getValue()));
 		textEntry_->selectAll();
@@ -309,9 +299,9 @@ namespace Interface
 
 	float BaseSlider::getNumericTextMaxWidth(const Font &usedFont) const
 	{
-		auto integerPlaces = std::max(maxDisplayCharacters_ - maxDecimalPlaces_, 0U);
+		int integerPlaces = std::max(maxTotalCharacters_ - maxDecimalCharacters_, 0);
 		// for the separating '.' between integer and decimal parts
-		if (maxDecimalPlaces_)
+		if (maxDecimalCharacters_)
 			integerPlaces--;
 
 		String maxStringLength;
@@ -319,14 +309,14 @@ namespace Interface
 			maxStringLength += '+';
 
 		// figured out that 8s take up the most space in DDin
-		for (size_t i = 0; i < integerPlaces; i++)
+		for (int i = 0; i < integerPlaces; i++)
 			maxStringLength += '8';
 
-		if (maxDecimalPlaces_)
+		if (maxDecimalCharacters_)
 		{
 			maxStringLength += '.';
 
-			for (size_t i = 0; i < maxDecimalPlaces_; i++)
+			for (int i = 0; i < maxDecimalCharacters_; i++)
 				maxStringLength += '8';
 		}
 
@@ -345,52 +335,46 @@ namespace Interface
 
 	String BaseSlider::formatValue(double value) const noexcept
 	{
-		auto insertLeadingZeroes = [](int numZeroesToInsert, int insertIndex, String &string)
-		{
-			// i hate this
-			static constexpr auto zeroChar = '0';
-			for (int i = 0; i < numZeroesToInsert; i++)
-				string = string.replaceSection(insertIndex, 0, &zeroChar);
-		};
-		
+		if (details_.scale == Framework::ParameterScale::Indexed)
+			return String(value) + details_.displayUnits.data();
 
 		String format;
-		if (details_.scale == Framework::ParameterScale::Indexed)
-			format = String(value);
+
+		int integerCharacters = maxTotalCharacters_;
+		if (maxDecimalCharacters_ == 0)
+			format = String(std::round(value));
 		else
 		{
-			int integerCharacters = maxDisplayCharacters_;
-			if (maxDecimalPlaces_ == 0)
-				format = String(std::round(value));
-			else
-			{
-				format = String(value, maxDecimalPlaces_);
-				// +1 because of the dot
-				integerCharacters -= maxDecimalPlaces_ + 1;
-			}
-
-			auto numberOfIntegers = format.indexOfChar('.');
-			int insertIndex = 0;
-			int displayCharacters = maxDisplayCharacters_;
-			if (format[0] == '-')
-			{
-				insertIndex++;
-				numberOfIntegers--;
-				displayCharacters += 1;
-			}
-			else if (shouldUsePlusMinusPrefix_)
-			{
-				insertIndex++;
-				displayCharacters += 1;
-				format = String("+") + format;
-			}
-
-			insertLeadingZeroes(integerCharacters - numberOfIntegers, insertIndex, format);
-
-			format = format.substring(0, displayCharacters);
-			if (format.getLastCharacter() == '.')
-				format = format.removeCharacters(".");
+			format = String(value, maxDecimalCharacters_);
+			// +1 because of the dot
+			integerCharacters -= maxDecimalCharacters_ + 1;
 		}
+
+		int numberOfIntegers = format.indexOfChar('.');
+		int insertIndex = 0;
+		int displayCharacters = maxTotalCharacters_;
+		if (format[0] == '-')
+		{
+			insertIndex++;
+			numberOfIntegers--;
+			displayCharacters += 1;
+		}
+		else if (shouldUsePlusMinusPrefix_)
+		{
+			insertIndex++;
+			displayCharacters += 1;
+			format = String("+") + format;
+		}
+
+		// insert leading zeroes
+		int numZeroesToInsert = integerCharacters - numberOfIntegers;
+		for (int i = 0; i < numZeroesToInsert; i++)
+			format = format.replaceSection(insertIndex, 0, StringRef("0"));
+
+		// truncating string to fit
+		format = format.substring(0, displayCharacters);
+		if (format.getLastCharacter() == '.')
+			format = format.removeCharacters(".");
 
 		// adding suffix
 		return format + details_.displayUnits.data();
@@ -398,8 +382,10 @@ namespace Interface
 
 	void BaseSlider::handlePopupResult(int result)
 	{
-		auto &synth = interfaceEngineLink_->getPlugin();
-		auto connections = getMappedParameters();
+		auto mainInterface = findParentComponentOfClass<MainInterface>();
+		COMPLEX_ASSERT(mainInterface && "What component owns this slider that isn't a child of MainInterface??");
+
+		auto &plugin = mainInterface->getPlugin();
 
 		//if (result == kArmMidiLearn)
 		//  synth->armMidiLearn(getName().toStdString());
@@ -444,7 +430,7 @@ namespace Interface
 			if (parameterLink_)
 			{
 				int connection_index = result - kMappingList;
-				synth.getParameterBridges()[connection_index]->resetParameterLink(parameterLink_);
+				plugin.getParameterBridges()[connection_index]->resetParameterLink(parameterLink_);
 				notifyModulationsChanged();
 			}
 		}
@@ -452,10 +438,10 @@ namespace Interface
 
 	std::vector<Framework::ParameterBridge *> BaseSlider::getMappedParameters() const noexcept
 	{
-		if (interfaceEngineLink_ == nullptr)
-			return {};
+		auto mainInterface = findParentComponentOfClass<MainInterface>();
+		COMPLEX_ASSERT(mainInterface && "What component owns this slider that isn't a child of MainInterface??");
 
-		auto &synth = interfaceEngineLink_->getPlugin();
+		auto &synth = mainInterface->getPlugin();
 		return synth.getParameterBridges();
 	}
 
@@ -512,8 +498,9 @@ namespace Interface
 
 	float BaseSlider::getSampleRate() const noexcept
 	{
-		auto engineLink = findParentComponentOfClass<InterfaceEngineLink>();
-		return engineLink->getPlugin().getSampleRate();
+		auto mainInterface = findParentComponentOfClass<MainInterface>();
+		COMPLEX_ASSERT(mainInterface && "What component owns this slider that isn't a child of MainInterface??");
+		return mainInterface->getPlugin().getSampleRate();
 	}
 
 	void RotarySlider::mouseDrag(const MouseEvent &e)
@@ -767,6 +754,21 @@ namespace Interface
 			2.0f - leftOffset - rightOffset, 2.0f - bottomOffset - topOffset);
 	}
 
+	TextSelector::TextSelector(Framework::ParameterValue *parameter, 
+		Font usedFont, String name) : BaseSlider(parameter, std::move(name))
+	{
+		setUseQuad(true);
+		sliderQuad_.setFragmentShader(Shaders::kRoundedRectangleFragment);
+		setUseImage(true);
+		setIsImageOnTop(true);
+
+		// checking if the font has not been set, sans serif is not used here
+		if (usedFont.getTypefaceName() == Font::getDefaultSansSerifFontName())
+			usedFont_ = Fonts::instance()->getInterVFont();
+		else
+			usedFont_ = std::move(usedFont);
+	}
+
 	void TextSelector::mouseDown(const juce::MouseEvent &e)
 	{
 		if (e.mods.isPopupMenu())
@@ -795,29 +797,6 @@ namespace Interface
 
 	void TextSelector::paint(Graphics &g)
 	{
-		Colour text_color = findColour(Skin::kWidgetPrimary1, true);
-		if (!isActive())
-			text_color = text_color.withMultipliedAlpha(0.5f);
-
-		String text = getSliderTextFromValue(getValue());
-		float offset = findValue(Skin::kTextComponentOffset);
-
-		g.setColour(text_color);
-		g.setFont(usedFont_);
-		g.drawText(text, 0, (int)std::round(offset), drawBox_.getWidth(), drawBox_.getHeight(), Justification::centredLeft, true);
-
-		if (!drawArrow_)
-			return;
-
-		Rectangle<int> arrowBounds;
-		arrowBounds.setX(textWidth_ + kArrowOffset);
-		arrowBounds.setY(drawBox_.getHeight() / 2 + 1);
-
-		auto fontSize = usedFont_.getHeight();
-		auto arrowRatio = fontSize / kDefaultFontSize;
-		arrowBounds.setWidth((int)std::round(arrowRatio * (float)kArrowWidth));
-		arrowBounds.setHeight((int)std::round(kArrowWidthHeightRatio * arrowRatio * (float)kArrowWidth));
-
 		static Path arrowPath = []()
 		{
 			Path path;
@@ -827,9 +806,45 @@ namespace Interface
 			return path;
 		}();
 
-		g.setColour(findColour(Skin::kBody, true));
+		auto height = drawBox_.getHeight();
+		auto leftOffset = height / 4;
+
+		String text = getSliderTextFromValue(getValue());
+		g.setColour(selectedColor_);
+		g.setFont(usedFont_);
+		g.drawText(text, leftOffset, 0, textWidth_, height, Justification::centred, false);
+
+		if (!drawArrow_)
+			return;
+
+		Rectangle<int> arrowBounds;
+		arrowBounds.setX(leftOffset + textWidth_ + kArrowOffset);
+		arrowBounds.setY(height / 2 - 1);
+
+		auto fontSize = usedFont_.getHeight();
+		auto arrowRatio = fontSize / Fonts::instance()->getDefaultFontHeight(usedFont_);
+		arrowBounds.setWidth((int)std::round(arrowRatio * (float)kArrowWidth));
+		arrowBounds.setHeight((int)std::round(kArrowWidthHeightRatio * arrowRatio * (float)kArrowWidth));
+
+		g.setColour(selectedColor_);
 		g.strokePath(arrowPath, PathStrokeType{ 1.0f, PathStrokeType::mitered, PathStrokeType::square }, 
 			arrowPath.getTransformToScaleToFit(arrowBounds.toFloat(), true));
+	}
+
+	void TextSelector::valueChanged()
+	{
+		resizeForText();
+		BaseSlider::valueChanged();
+	}
+
+	void TextSelector::redoImage()
+	{
+		sliderQuad_.setRounding(findValue(Skin::kWidgetRoundedCorner));
+		if (isMouseOverOrDragging())
+			sliderQuad_.setColor(getBackgroundColor());
+		else
+			sliderQuad_.setColor(Colours::transparentBlack);
+		imageComponent_.redrawImage();
 	}
 
 	void TextSelector::showTextEntry()
@@ -843,6 +858,53 @@ namespace Interface
 			(drawBox_.getHeight() - text_height + 1) / 2 + y_offset, text_width, text_height);
 
 		BaseSlider::showTextEntry();
+	}
+
+	void TextSelector::setSliderBounds()
+	{
+		drawBox_ = getLocalBounds();
+		redoImage();
+	}
+
+	[[nodiscard]] int TextSelector::setHeight(float height) noexcept
+	{
+		if (getHeight() == (int)height)
+			return totalDrawWidth_;
+
+		auto fontHeight = Fonts::instance()->getHeightFromAscent(usedFont_, height * 0.5f);
+		usedFont_.setHeight(fontHeight);
+		usedFont_.setExtraKerningFactor((fontHeight + 0.5f) / fontHeight - 1.0f);
+
+		String text = getSliderTextFromValue(getValue(), false);
+		textWidth_ = usedFont_.getStringWidth(text);
+		float totalDrawWidth = (float)textWidth_;
+
+		if (drawArrow_)
+		{
+			totalDrawWidth += kArrowOffset;
+			auto arrowRatio = fontHeight / Fonts::instance()->getDefaultFontHeight(usedFont_);
+			totalDrawWidth += arrowRatio * (float)kArrowWidth;
+		}
+
+		// there's always some padding at the beginning and end regardless whether the arrow is drawn
+		totalDrawWidth += height * 0.5f;
+
+		totalDrawWidth_ = (int)std::round(totalDrawWidth);
+
+		return totalDrawWidth_;
+	}
+
+	void TextSelector::resizeForText() noexcept
+	{
+		String text = getSliderTextFromValue(getValue(), false);
+		auto newTextWidth = usedFont_.getStringWidth(text);
+		auto sizeChange = newTextWidth - textWidth_;
+
+		if (textSelectorListener_)
+			textSelectorListener_->resizeForText(this, sizeChange);
+
+		textWidth_ = newTextWidth;
+		totalDrawWidth_ += sizeChange;
 	}
 
 	NumberBox::NumberBox(Framework::ParameterValue *parameter, String name) :
@@ -870,7 +932,7 @@ namespace Interface
 	void NumberBox::mouseDrag(const MouseEvent& e)
 	{
 		static constexpr float kNormalDragMultiplier = 0.5f;
-		static constexpr float kSlowDragMultiplier = 0.08f;
+		static constexpr float kSlowDragMultiplier = 0.1f;
 
 		sensitiveMode_ = e.mods.isShiftDown();
 		float multiply = kNormalDragMultiplier;
@@ -886,7 +948,7 @@ namespace Interface
 
 	void NumberBox::paint(Graphics& g)
 	{
-		static constexpr int kTextLeftOffset = 2;
+		//static constexpr int kTextLeftOffset = 2;
 
 		static constexpr float kEdgeRounding = 2.0f;
 		static constexpr float kCornerRounding = 3.0f;
@@ -936,6 +998,7 @@ namespace Interface
 
 	void NumberBox::redoImage()
 	{
+		textEntry_->setColour(TextEditor::textColourId, selectedColor_);
 		textEntry_->setText(getSliderTextFromValue(getValue()));
 
 		imageComponent_.redrawImage();
@@ -955,29 +1018,33 @@ namespace Interface
 		auto xOffset = height * kTriangleWidthRatio + height * kTriangleToValueMarginRatio;
 
 		// extra offsets are pretty much magic values, don't change
-		//bounds.removeFromTop(1.0f);
 		if (drawBackground_)
 			bounds.removeFromLeft(xOffset - 1.0f);
 		else
 			bounds.removeFromLeft(2.0f);
-		//bounds.setLeft(height * kTriangleWidthRatio + height * kTriangleToValueMarginRatio);
-		//bounds.removeFromLeft(height * kTriangleWidthRatio + height * kTriangleToValueMarginRatio);
-		//bounds.setRight(height * kValueToEndMarginRatio);
-		//bounds.removeFromRight(height * kValueToEndMarginRatio);
+ 
 		textEntry_->setBounds(bounds.toNearestInt());
 		textEntry_->setVisible(true);
 
 		redoImage();
 	}
 
+	void NumberBox::showTextEntry()
+	{
+		textEntry_->setColour(CaretComponent::caretColourId, findColour(Skin::kTextEditorCaret, true));
+		textEntry_->setColour(TextEditor::textColourId, findColour(Skin::kBodyText, true));
+		textEntry_->setColour(TextEditor::highlightedTextColourId, findColour(Skin::kBodyText, true));
+		textEntry_->setColour(TextEditor::highlightColourId, findColour(Skin::kTextEditorSelection, true));
+
+		BaseSlider::showTextEntry();
+	}
+
 	[[nodiscard]] int NumberBox::setHeight(float height) noexcept
 	{
-		static constexpr float fontHeightOffset = 4.5f;
-
 		if (getHeight() == (int)height)
 			return totalDrawWidth_;
 
-		auto fontHeight = height - fontHeightOffset;
+		auto fontHeight = Fonts::instance()->getHeightFromAscent(usedFont_, height * 0.5f);
 		usedFont_.setHeight(fontHeight);
 		usedFont_.setExtraKerningFactor((fontHeight + 0.5f) / fontHeight - 1.0f);
 		textEntry_->setUsedFont(usedFont_);
@@ -989,7 +1056,12 @@ namespace Interface
 			totalDrawWidth += kTriangleToValueMarginRatio * height;
 			totalDrawWidth += kValueToEndMarginRatio * height;
 		}
-		totalDrawWidth_ = (int)std::round(totalDrawWidth);		
+		else
+		{
+			// extra space around the value
+			totalDrawWidth += height * 0.5f;
+		}
+		totalDrawWidth_ = (int)std::ceil(totalDrawWidth);		
 
 		return totalDrawWidth_;
 	}

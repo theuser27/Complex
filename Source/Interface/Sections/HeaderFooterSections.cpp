@@ -19,28 +19,28 @@ namespace Interface
 
 		mixNumberBox_ = std::make_unique<NumberBox>(
 			soundEngine.getParameterUnchecked((u32)PluginParameters::MasterMix));
-		mixNumberBox_->setMaxDisplayCharacters(5);
-		mixNumberBox_->setMaxDecimalPlaces(2);
+		mixNumberBox_->setMaxTotalCharacters(5);
+		mixNumberBox_->setMaxDecimalCharacters(2);
 		addSlider(mixNumberBox_.get());
 
 		gainNumberBox_ = std::make_unique<NumberBox>(
 			soundEngine.getParameterUnchecked((u32)PluginParameters::OutGain));
-		gainNumberBox_->setMaxDisplayCharacters(5);
-		gainNumberBox_->setMaxDecimalPlaces(2);
+		gainNumberBox_->setMaxTotalCharacters(5);
+		gainNumberBox_->setMaxDecimalCharacters(2);
 		gainNumberBox_->setShouldUsePlusMinusPrefix(true);
 		addSlider(gainNumberBox_.get());
 
 		blockSizeNumberBox_ = std::make_unique<NumberBox>(
 			soundEngine.getParameterUnchecked((u32)PluginParameters::BlockSize));
-		blockSizeNumberBox_->setMaxDisplayCharacters(5);
-		blockSizeNumberBox_->setMaxDecimalPlaces(0);
+		blockSizeNumberBox_->setMaxTotalCharacters(5);
+		blockSizeNumberBox_->setMaxDecimalCharacters(0);
 		blockSizeNumberBox_->setAlternativeMode(true);
 		addSlider(blockSizeNumberBox_.get());
 
 		overlapNumberBox_ = std::make_unique<NumberBox>(
 			soundEngine.getParameterUnchecked((u32)PluginParameters::Overlap));
-		overlapNumberBox_->setMaxDisplayCharacters(4);
-		overlapNumberBox_->setMaxDecimalPlaces(2);
+		overlapNumberBox_->setMaxTotalCharacters(4);
+		overlapNumberBox_->setMaxDecimalCharacters(2);
 		overlapNumberBox_->setAlternativeMode(true);
 		addSlider(overlapNumberBox_.get());
 
@@ -105,31 +105,29 @@ namespace Interface
 	{
 		auto bounds = getLocalBounds();
 		auto yOffset = kFooterHeight - (kFooterHeight - kNumberBoxHeight) / 2;
-		auto currentBound = Rectangle{ kHorizontalEdgePadding + kFooterHorizontalEdgePadding, bounds.getBottom() - yOffset,
-			bounds.getWidth() - 2 * (kHorizontalEdgePadding + kFooterHorizontalEdgePadding), kNumberBoxHeight };
-
-		// set some random size to trigger the width calculation
-		windowTypeSelector_->setBounds(currentBound);
+		auto currentBound = Rectangle{ kFooterHorizontalEdgePadding, bounds.getBottom() - yOffset,
+			bounds.getWidth() - 2 * kFooterHorizontalEdgePadding, kNumberBoxHeight };
 
 		auto blockSizeLabelWidth = blockSizeNumberBox_->getLabelComponent()->getLabelTextWidth();
 		auto blockSizeNumberBoxWidth = blockSizeNumberBox_->setHeight(kNumberBoxHeight);
 		auto overlapLabelWidth = overlapNumberBox_->getLabelComponent()->getLabelTextWidth();
 		auto overlapNumberBoxWidth = overlapNumberBox_->setHeight(kNumberBoxHeight);
 		auto windowTypeLabelWidth = windowTypeSelector_->getLabelComponent()->getLabelTextWidth();
-		auto windowTypeSelectorWidth = windowTypeSelector_->getTotalDrawWidth();
+		auto windowTypeSelectorWidth = windowTypeSelector_->setHeight(kNumberBoxHeight);
 
-		auto elementOffset = (currentBound.getWidth() - blockSizeLabelWidth - kLabelToControlMargin - blockSizeNumberBoxWidth
-			- overlapLabelWidth - kLabelToControlMargin - overlapNumberBoxWidth - windowTypeLabelWidth - kLabelToControlMargin 
-			- windowTypeSelectorWidth) / 2;
+		auto totalElementsLength = blockSizeLabelWidth + kLabelToControlMargin + blockSizeNumberBoxWidth + overlapLabelWidth
+			+ kLabelToControlMargin + overlapNumberBoxWidth + windowTypeLabelWidth + kLabelToControlMargin + windowTypeSelectorWidth;
+
+		auto elementOffset = (currentBound.getWidth() - totalElementsLength) / 2;
 
 		blockSizeNumberBox_->getLabelComponent()->setBounds(currentBound.removeFromLeft(blockSizeLabelWidth));
 		currentBound.removeFromLeft(kLabelToControlMargin);
-		blockSizeNumberBox_->setBounds(currentBound.removeFromLeft(blockSizeNumberBoxWidth + 2 * kLabelToControlMargin));
+		blockSizeNumberBox_->setBounds(currentBound.removeFromLeft(blockSizeNumberBoxWidth));
 
 		currentBound.removeFromLeft(elementOffset);
 		overlapNumberBox_->getLabelComponent()->setBounds(currentBound.removeFromLeft(overlapLabelWidth));
 		currentBound.removeFromLeft(kLabelToControlMargin);
-		overlapNumberBox_->setBounds(currentBound.removeFromLeft(overlapNumberBoxWidth + 2 * kLabelToControlMargin));
+		overlapNumberBox_->setBounds(currentBound.removeFromLeft(overlapNumberBoxWidth));
 
 		currentBound.removeFromLeft(elementOffset);
 		windowTypeSelector_->getLabelComponent()->setBounds(currentBound.removeFromLeft(windowTypeLabelWidth));

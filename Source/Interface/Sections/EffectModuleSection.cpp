@@ -130,8 +130,8 @@ namespace Interface
 
 		mixNumberBox_ = std::make_unique<NumberBox>(
 			effectModule->getParameterUnchecked((u32)EffectModuleParameters::ModuleMix));
-		mixNumberBox_->setMaxDisplayCharacters(4);
-		mixNumberBox_->setMaxDecimalPlaces(2);
+		mixNumberBox_->setMaxTotalCharacters(2);
+		mixNumberBox_->setMaxDecimalCharacters(2);
 		addSlider(mixNumberBox_.get());
 
 		auto *baseEffect = effectModule->getSubProcessor(0);

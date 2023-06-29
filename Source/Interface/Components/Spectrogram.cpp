@@ -134,11 +134,10 @@ namespace Interface
 
   void Spectrogram::render(OpenGlWrapper &open_gl, bool animate)
   {
-    InterfaceEngineLink *synth_interface = findParentComponentOfClass<InterfaceEngineLink>();
-    if (synth_interface == nullptr)
-      return;
+    auto *mainInterface = findParentComponentOfClass<MainInterface>();
+    COMPLEX_ASSERT(mainInterface && "Who owns this component that isn't a child of MainInterface??");
 
-    nyquistFreq_ = synth_interface->getPlugin().getSampleRate() / 2.0f;
+    nyquistFreq_ = mainInterface->getPlugin().getSampleRate() / 2.0f;
 
     setLineWidth(2.0f);
     setFillCenter(-1.0f);

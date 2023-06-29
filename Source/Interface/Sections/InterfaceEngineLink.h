@@ -16,18 +16,11 @@
 
 namespace Interface
 {
-  class MainInterface;
-
-  class InterfaceEngineLink : private juce::Timer
+  class InterfaceEngineLink
   {
   public:
     InterfaceEngineLink(Plugin::ComplexPlugin &plugin);
-    ~InterfaceEngineLink() override { stopTimer(); }
-
-    // Inherited from juce::Timer
-    void timerCallback() override { getPlugin().updateGUIParameters(); }
-
-    Plugin::ComplexPlugin &getPlugin() { return plugin_; }
+    virtual ~InterfaceEngineLink() = default;
 
     virtual void updateFullGui();
 

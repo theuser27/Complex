@@ -10,13 +10,10 @@
 
 #pragma once
 
-#include "Third Party/mdspan/experimental/mdspan.h"
 #include "OpenGlComponent.h"
 
 namespace Interface
 {
-  namespace stdex = std::experimental;
-
   class OpenGlLineRenderer : public OpenGlComponent
   {
   public:

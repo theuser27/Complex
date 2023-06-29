@@ -9,12 +9,14 @@
             file="Icons/Icon_Contrast.svg"/>
     </GROUP>
     <GROUP id="{7DCBD02E-5965-7719-7CD3-51C632FE14C8}" name="Fonts">
-      <FILE id="i2TP30" name="D-DIN.otf" compile="0" resource="1" file="Fonts/D-DIN.otf"/>
+      <FILE id="P00tpO" name="D-DIN-Bold.ttf" compile="0" resource="1" file="Fonts/D-DIN-Bold.ttf"/>
       <FILE id="lerx3Z" name="Inter-Medium.ttf" compile="0" resource="1"
             file="Fonts/Inter-Medium.ttf"/>
     </GROUP>
     <GROUP id="{EA56D449-367C-4F87-53C4-8DB58E6C0431}" name="Source">
       <GROUP id="{32A822E4-0A2D-7496-308D-972ADD4D4F30}" name="Framework">
+        <FILE id="abGidz" name="platform_definitions.h" compile="0" resource="0"
+              file="Source/Framework/platform_definitions.h"/>
         <FILE id="qmhZRh" name="load_save.cpp" compile="1" resource="0" file="Source/Framework/load_save.cpp"/>
         <FILE id="JcZofO" name="load_save.h" compile="0" resource="0" file="Source/Framework/load_save.h"/>
         <FILE id="QZdRAA" name="constants.h" compile="0" resource="0" file="Source/Framework/constants.h"/>
@@ -274,46 +276,6 @@
                 file="Source/Third Party/magic_enum/magic_enum_iostream.hpp"/>
           <FILE id="dLD4e6" name="magic_enum_switch.hpp" compile="0" resource="0"
                 file="Source/Third Party/magic_enum/magic_enum_switch.hpp"/>
-        </GROUP>
-        <GROUP id="{0505C1EF-6A7A-76E3-BAD2-2497C6CC2E83}" name="mdspan">
-          <GROUP id="{CAF135BB-1136-1937-EC22-16646ED738D6}" name="experimental">
-            <GROUP id="{25988BE3-FDC2-483A-653E-7001D0865FF4}" name="__p0009_bits">
-              <FILE id="Jl741B" name="compressed_pair.hpp" compile="0" resource="0"
-                    file="Source/Third Party/mdspan/experimental/__p0009_bits/compressed_pair.hpp"/>
-              <FILE id="YYxshy" name="config.hpp" compile="0" resource="0" file="Source/Third Party/mdspan/experimental/__p0009_bits/config.hpp"/>
-              <FILE id="M1BFJv" name="default_accessor.hpp" compile="0" resource="0"
-                    file="Source/Third Party/mdspan/experimental/__p0009_bits/default_accessor.hpp"/>
-              <FILE id="gIWU1M" name="dynamic_extent.hpp" compile="0" resource="0"
-                    file="Source/Third Party/mdspan/experimental/__p0009_bits/dynamic_extent.hpp"/>
-              <FILE id="Kz10y1" name="extents.hpp" compile="0" resource="0" file="Source/Third Party/mdspan/experimental/__p0009_bits/extents.hpp"/>
-              <FILE id="aEH7A1" name="full_extent_t.hpp" compile="0" resource="0"
-                    file="Source/Third Party/mdspan/experimental/__p0009_bits/full_extent_t.hpp"/>
-              <FILE id="I5nmdr" name="layout_left.hpp" compile="0" resource="0" file="Source/Third Party/mdspan/experimental/__p0009_bits/layout_left.hpp"/>
-              <FILE id="fy7Hcw" name="layout_right.hpp" compile="0" resource="0"
-                    file="Source/Third Party/mdspan/experimental/__p0009_bits/layout_right.hpp"/>
-              <FILE id="FtdBwp" name="layout_stride.hpp" compile="0" resource="0"
-                    file="Source/Third Party/mdspan/experimental/__p0009_bits/layout_stride.hpp"/>
-              <FILE id="dDgSaG" name="macros.hpp" compile="0" resource="0" file="Source/Third Party/mdspan/experimental/__p0009_bits/macros.hpp"/>
-              <FILE id="fUJDax" name="maybe_static_value.hpp" compile="0" resource="0"
-                    file="Source/Third Party/mdspan/experimental/__p0009_bits/maybe_static_value.hpp"/>
-              <FILE id="HAIMkA" name="mdspan.hpp" compile="0" resource="0" file="Source/Third Party/mdspan/experimental/__p0009_bits/mdspan.hpp"/>
-              <FILE id="X7084c" name="no_unique_address.hpp" compile="0" resource="0"
-                    file="Source/Third Party/mdspan/experimental/__p0009_bits/no_unique_address.hpp"/>
-              <FILE id="n1qQzm" name="standard_layout_static_array.hpp" compile="0"
-                    resource="0" file="Source/Third Party/mdspan/experimental/__p0009_bits/standard_layout_static_array.hpp"/>
-              <FILE id="IGUlYl" name="static_array.hpp" compile="0" resource="0"
-                    file="Source/Third Party/mdspan/experimental/__p0009_bits/static_array.hpp"/>
-              <FILE id="eHB3C1" name="submdspan.hpp" compile="0" resource="0" file="Source/Third Party/mdspan/experimental/__p0009_bits/submdspan.hpp"/>
-              <FILE id="mot69X" name="trait_backports.hpp" compile="0" resource="0"
-                    file="Source/Third Party/mdspan/experimental/__p0009_bits/trait_backports.hpp"/>
-              <FILE id="qMqrNu" name="type_list.hpp" compile="0" resource="0" file="Source/Third Party/mdspan/experimental/__p0009_bits/type_list.hpp"/>
-            </GROUP>
-            <GROUP id="{C7E24A55-7222-91D7-EA43-B215FB517C4B}" name="__p1684_bits">
-              <FILE id="XZq4Bk" name="mdarray.hpp" compile="0" resource="0" file="Source/Third Party/mdspan/experimental/__p1684_bits/mdarray.hpp"/>
-            </GROUP>
-            <FILE id="atJ49B" name="mdarray.h" compile="0" resource="0" file="Source/Third Party/mdspan/experimental/mdarray.h"/>
-            <FILE id="WaUSyG" name="mdspan.h" compile="0" resource="0" file="Source/Third Party/mdspan/experimental/mdspan.h"/>
-          </GROUP>
         </GROUP>
       </GROUP>
     </GROUP>

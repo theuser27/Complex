@@ -22,29 +22,29 @@ namespace Framework
 
 		// static windows
 
-		inline constexpr strict_inline float createHannWindow(float position)
-		{	return 0.5f * (1.0f - gcem::cos(common::k2Pi * position)); }
+		constexpr strict_inline float createHannWindow(float position)
+		{	return 0.5f * (1.0f - gcem::cos(k2Pi * position)); }
 
 		// an accurate version of the traditional hamming window
-		inline constexpr strict_inline float createHammingWindow(float position)
+		constexpr strict_inline float createHammingWindow(float position)
 		{	return (25.0f / 46.0f) + ((-21.0f / 46.0f) * gcem::cos(k2Pi * position)); }
 
-		inline constexpr strict_inline float createTriangleWindow(float position)
+		constexpr strict_inline float createTriangleWindow(float position)
 		{	return 1 - 2 * gcem::abs(position - 0.5f); }
 
-		inline constexpr strict_inline float createSineWindow(float position)
-		{	return gcem::sin(common::k2Pi * position); }
+		constexpr strict_inline float createSineWindow(float position)
+		{	return gcem::sin(k2Pi * position); }
 
 		// dynamic windows
 
-		inline constexpr strict_inline float createExponentialWindow(float position)
-		{	return gcem::exp((-common::k2Pi) * gcem::abs(position - 0.5f)); }
+		constexpr strict_inline float createExponentialWindow(float position)
+		{	return gcem::exp((-k2Pi) * gcem::abs(position - 0.5f)); }
 
-		inline constexpr strict_inline float createLanczosWindow(float position)
+		constexpr strict_inline float createLanczosWindow(float position)
 		{
 			float adjustedPosition = position - 0.5f;
 			return adjustedPosition == 0.0f ? 1.0f :
-				gcem::sin(common::k2Pi * adjustedPosition) / common::k2Pi * adjustedPosition;
+				gcem::sin(k2Pi * adjustedPosition) / k2Pi * adjustedPosition;
 		}
 	}
 
@@ -62,13 +62,13 @@ namespace Framework
 		Window() = default;
 		~Window() = default;
 
-		static constexpr auto hannWindowLookup = Lookup<common::kWindowResolution>(Framework::createHannWindow);
-		static constexpr auto hammingWindowLookup = Lookup<common::kWindowResolution>(Framework::createHammingWindow);
-		static constexpr auto triangleWindowLookup = Lookup<common::kWindowResolution>(Framework::createTriangleWindow);
-		static constexpr auto sineWindowLookup = Lookup<common::kWindowResolution>(Framework::createSineWindow);
+		static constexpr auto hannWindowLookup = Lookup<kWindowResolution>(createHannWindow);
+		static constexpr auto hammingWindowLookup = Lookup<kWindowResolution>(createHammingWindow);
+		static constexpr auto triangleWindowLookup = Lookup<kWindowResolution>(createTriangleWindow);
+		static constexpr auto sineWindowLookup = Lookup<kWindowResolution>(createSineWindow);
 
-		static constexpr auto exponentialWindowLookup = Lookup<common::kWindowResolution>(Framework::createExponentialWindow);
-		static constexpr auto lanczosWindowLookup = Lookup<common::kWindowResolution>(Framework::createLanczosWindow);
+		static constexpr auto exponentialWindowLookup = Lookup<kWindowResolution>(createExponentialWindow);
+		static constexpr auto lanczosWindowLookup = Lookup<kWindowResolution>(createLanczosWindow);
 
 	public:
 

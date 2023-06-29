@@ -35,7 +35,7 @@ namespace Interface
 	class SinglePopupSelector;
 	class DualPopupSelector;
 
-	class MainInterface : public BaseSection, public OpenGLRenderer, DragAndDropContainer
+	class MainInterface : public BaseSection, public OpenGLRenderer, juce::DragAndDropContainer, juce::Timer
 	{
 	public:
 		static constexpr double kMinOpenGlVersion = 1.4;
@@ -79,6 +79,9 @@ namespace Interface
 		void renderOpenGL() override;
 		void openGLContextClosing() override;
 
+		// Inherited from juce::Timer
+		void timerCallback() override { plugin_.updateGUIParameters(); }
+
 		//void effectsMoved() override;
 
 		void notifyChange();
@@ -97,6 +100,8 @@ namespace Interface
 			if (enable)
 				resized();
 		}
+
+		auto &getPlugin() noexcept { return plugin_; }
 
 	private:
 		std::unique_ptr<HeaderFooterSections> headerFooter_;

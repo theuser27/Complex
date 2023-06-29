@@ -103,8 +103,8 @@ namespace Interface
 
 	void BaseButton::endChange()
   {
-    auto *link = findParentComponentOfClass<InterfaceEngineLink>();
-    link->getPlugin().pushUndo(new Framework::ParameterUpdate(this, valueBeforeChange_, (double)getToggleState()));
+    auto *mainInterface = findParentComponentOfClass<MainInterface>();
+    mainInterface->getPlugin().pushUndo(new Framework::ParameterUpdate(this, valueBeforeChange_, (double)getToggleState()));
   }
 
   void BaseButton::clicked(const ModifierKeys &modifiers)
