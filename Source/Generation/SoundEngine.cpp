@@ -32,8 +32,8 @@ namespace Generation
 		outBuffer.reserve(kNumTotalChannels, kMaxFFTBufferLength * 2);
 		windows = Window::getInstance();
 
-		effectsState = makeSubProcessor<EffectsState>();
-		subProcessors_.emplace_back(effectsState);
+		effectsState_ = makeSubProcessor<EffectsState>();
+		subProcessors_.emplace_back(effectsState_);
 
 		processorParameters_.data.reserve(pluginParameterList.size());
 		createProcessorParameters(pluginParameterList.data(), pluginParameterList.size());
@@ -50,8 +50,8 @@ namespace Generation
 		inputBuffer.writeToBufferEnd(buffer, numInputs, numSamples);
 
 		// we update them here because we could get broken up blocks if done inside the loop
-		usedInputChannels_ = effectsState->getUsedInputChannels();
-		usedOutputChannels_ = effectsState->getUsedOutputChannels();
+		usedInputChannels_ = effectsState_->getUsedInputChannels();
+		usedOutputChannels_ = effectsState_->getUsedOutputChannels();
 	}
 
 	perf_inline void SoundEngine::IsReadyToPerform(u32 numSamples) noexcept
@@ -141,13 +141,13 @@ namespace Generation
 
 	perf_inline void SoundEngine::ProcessFFT(float sampleRate) noexcept
 	{
-		effectsState->setEffectiveFFTSize(FFTNumSamples_ / 2);
-		effectsState->setSampleRate(sampleRate);
+		effectsState_->setEffectiveFFTSize(FFTNumSamples_ / 2);
+		effectsState_->setSampleRate(sampleRate);
 
-		effectsState->writeInputData(FFTBuffer);
-		effectsState->processChains();
-		effectsState->sumChains();
-		effectsState->writeOutputData(FFTBuffer);
+		effectsState_->writeInputData(FFTBuffer);
+		effectsState_->processChains();
+		effectsState_->sumChains();
+		effectsState_->writeOutputData(FFTBuffer);
 	}
 
 	perf_inline void SoundEngine::DoIFFT() noexcept
@@ -237,9 +237,9 @@ namespace Generation
 					outBuffer.multiply(mult, i, sampleIndex);
 				}
 				break;
-			case WindowTypes::Exponential:
+			case WindowTypes::Exp:
 				break;
-			case WindowTypes::HannExponential:
+			case WindowTypes::HannExp:
 				break;
 			case WindowTypes::Lanczos:
 				break;

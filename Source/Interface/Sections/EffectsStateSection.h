@@ -22,36 +22,29 @@ namespace Interface
 		static constexpr int kLaneSelectorHeight = 38;
 
 		static constexpr int kLaneSelectorToLanesMargin = 8;
-		static constexpr int kTopToLaneSelectorMargin = 8;
+		static constexpr int kLaneToLaneMargin = 4;
+
+		static constexpr int kMinWidth = EffectsLaneSection::kWidth;
+		static constexpr int kMinHeight = kLaneSelectorHeight + kLaneSelectorToLanesMargin + EffectsLaneSection::kMinHeight;
 
 		EffectsStateSection(Generation::EffectsState &state);
 
-		void registerModule(std::unique_ptr<EffectModuleSection> effectModuleSection)
-		{
-			effectModuleSection->getDraggableComponent().setListener(this);
-			effectModules_.emplace_back(std::move(effectModuleSection));
-		}
-		auto unregisterModule(EffectModuleSection *effectModuleSection)
-		{
-			auto iter = std::ranges::find_if(effectModules_, [effectModuleSection](const auto &pointer) 
-				{ return effectModuleSection == pointer.get(); });
-			COMPLEX_ASSERT(iter != effectModules_.end() && "The effectModule to be unregistered wasn't found");
-			auto pointer = std::unique_ptr<EffectModuleSection>(iter->release());
-			effectModules_.erase(iter);
-			return pointer;
-		}
-
-		void paintBackground(Graphics &g) override { paintChildrenBackgrounds(g); }
-		void resized() override;
-
 		void mouseWheelMove(const MouseEvent &e, const MouseWheelDetails &wheel) override;
 
+		void resized() override;
+
+		// Inherited via DraggableComponent::Listener
 		void prepareToMove(EffectModuleSection *effectModule, const MouseEvent &e, bool isCopying = false) override;
 		void draggingComponent(EffectModuleSection *effectModule, const MouseEvent &e) override;
 		void releaseComponent(EffectModuleSection *effectModule, const MouseEvent &e) override;
 
+		void createLane(EffectsLaneSection *laneToCopy = nullptr);
+		void deleteLane(EffectsLaneSection *laneToDelete);
+		void registerModule(std::unique_ptr<EffectModuleSection> effectModuleSection);
+		std::unique_ptr<EffectModuleSection> unregisterModule(EffectModuleSection *effectModuleSection);
+
 	private:
-		std::array<std::unique_ptr<EffectsLaneSection>, kMaxNumChains> lanes_{};
+		std::array<std::unique_ptr<EffectsLaneSection>, kMaxNumLanes> lanes_{};
 		std::vector<std::unique_ptr<EffectModuleSection>> effectModules_{};
 
 		LaneSelector laneSelector_{};

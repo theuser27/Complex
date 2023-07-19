@@ -319,7 +319,7 @@ namespace Generation
 		Framework::SimdBuffer<std::complex<float>, simd_float> &destination, u32 effectiveFFTSize, float sampleRate) noexcept
 	{
 		using namespace Framework;
-		switch (getEffectMode())
+		switch (getEffectAlgorithm())
 		{
 		case (u32)FilterModes::Normal:
 			runNormal(source, destination, effectiveFFTSize, sampleRate);
@@ -404,7 +404,7 @@ namespace Generation
 		Framework::SimdBuffer<std::complex<float>, simd_float> &destination, u32 effectiveFFTSize, float sampleRate) noexcept
 	{
 		using namespace Framework;
-		switch (getEffectMode())
+		switch (getEffectAlgorithm())
 		{
 		case (u32)DynamicsModes::Contrast:
 			// based on dtblkfx' contrast
@@ -433,6 +433,11 @@ namespace Generation
 
 		processorParameters_.data.reserve(Framework::effectModuleParameterList.size());
 		createProcessorParameters(Framework::effectModuleParameterList.data(), Framework::effectModuleParameterList.size());
+
+		auto scaledValue = (double)(std::ranges::find(effectsTypes, effectType) - effectsTypes.begin());
+		auto *parameter = getParameterUnchecked((size_t)Framework::EffectModuleParameters::ModuleType);
+		parameter->updateValues(getProcessorTree()->getSampleRate(), 
+			Framework::unscaleValue(scaledValue, parameter->getParameterDetails()));
 	}
 
 	baseEffect *EffectModule::createEffect(std::string_view type) const noexcept
@@ -452,7 +457,7 @@ namespace Generation
 
 	BaseProcessor *EffectModule::updateSubProcessor([[maybe_unused]] size_t index, BaseProcessor *newSubModule) noexcept
 	{
-		COMPLEX_ASSERT(magic_enum::enum_contains<Framework::EffectTypes>(newSubModule->getProcessorType()) 
+		COMPLEX_ASSERT(std::ranges::count(effectsTypes, newSubModule->getProcessorType())
 			&& "You're inserting a non-Effect into an EffectModule");
 
 		auto *replacedEffect = subProcessors_[0];

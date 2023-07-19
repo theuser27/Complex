@@ -46,23 +46,21 @@ namespace Interface
 {
 	using namespace juce::gl;
 
-	bool OpenGlComponent::setViewPort(const Component *component, Rectangle<int> bounds, OpenGlWrapper &openGl)
+	bool OpenGlComponent::setViewPort(const Component *component, Rectangle<int> bounds, const OpenGlWrapper &openGl)
 	{
-		auto *topLevel = component->findParentComponentOfClass<MainInterface>();
-		float scale = openGl.display_scale;
-
-		float topLevelHeight = (float)topLevel->getHeight();
-		Rectangle<int> globalBounds = getGlobalBounds(component, bounds);
 		Rectangle<int> visibleBounds = getGlobalVisibleBounds(component, bounds);
+		if (visibleBounds.getWidth() <= 0 || visibleBounds.getHeight() <= 0)
+			return false;
+
+		float scale = openGl.displayScale;
+		float topLevelHeight = (float)component->findParentComponentOfClass<MainInterface>()->getHeight();
+		Rectangle<int> globalBounds = getGlobalBounds(component, bounds);
 
 		/*glViewport(globalBounds.getX(),
 			(int)std::ceil(scale * topLevelHeight) - globalBounds.getBottom(),
 			globalBounds.getWidth(), globalBounds.getHeight());*/
 		glViewport(globalBounds.getX(), (int)std::ceil(scale * topLevelHeight) - globalBounds.getBottom(), 
 			globalBounds.getWidth(), globalBounds.getHeight());
-
-		if (visibleBounds.getWidth() <= 0 || visibleBounds.getHeight() <= 0)
-			return false;
 
 		glScissor(visibleBounds.getX(),
 			(int)std::ceil(scale * topLevelHeight) - visibleBounds.getBottom(),
@@ -71,35 +69,30 @@ namespace Interface
 		return true;
 	}
 
-	bool OpenGlComponent::setViewPort(const Component *component, OpenGlWrapper &openGl)
+	bool OpenGlComponent::setViewPort(const Component *component, const OpenGlWrapper &openGl)
 	{ return setViewPort(component, component->getLocalBounds(), openGl); }
 
-	bool OpenGlComponent::setViewPort(OpenGlWrapper &openGl) const
+	bool OpenGlComponent::setViewPort(const OpenGlWrapper &openGl) const
 	{ return setViewPort(this, openGl); }
 
-	void OpenGlComponent::setScissor(const Component *component, OpenGlWrapper &openGl)
+	void OpenGlComponent::setScissor(const Component *component, const OpenGlWrapper &openGl)
 	{ setScissorBounds(component, component->getLocalBounds(), openGl); }
 
-	void OpenGlComponent::setScissorBounds(const Component *component, Rectangle<int> bounds, OpenGlWrapper &openGl)
+	void OpenGlComponent::setScissorBounds(const Component *component, Rectangle<int> bounds, const OpenGlWrapper &openGl)
 	{
 		if (component == nullptr)
 			return;
 
-		auto *topLevel = dynamic_cast<const MainInterface *>(component);
-		if (!topLevel)
-			topLevel = component->findParentComponentOfClass<MainInterface>();
-
-		float scale = openGl.display_scale;
-
-		float topLevelHeight = (float)topLevel->getHeight();
 		Rectangle<int> visibleBounds = getGlobalVisibleBounds(component, bounds);
+		if (visibleBounds.getWidth() <= 0 || visibleBounds.getHeight() <= 0)
+			return;
 
-		if (visibleBounds.getHeight() > 0 && visibleBounds.getWidth() > 0)
-		{
-			glScissor(visibleBounds.getX(),
-				(int)std::ceil(scale * topLevelHeight) - visibleBounds.getBottom(),
-				visibleBounds.getWidth(), visibleBounds.getHeight());
-		}
+		float scale = openGl.displayScale;
+		float topLevelHeight = (float)component->findParentComponentOfClass<MainInterface>()->getHeight();
+
+		glScissor(visibleBounds.getX(),
+			(int)std::ceil(scale * topLevelHeight) - visibleBounds.getBottom(),
+			visibleBounds.getWidth(), visibleBounds.getHeight());
 	}
 
 	OpenGlComponent::OpenGlComponent(String name) : Component(name) { }
@@ -112,7 +105,7 @@ namespace Interface
 		if (!isVisible())
 			return;
 
-		g.fillAll(findColour(Skin::kWidgetBackground, true));
+		g.fillAll(getColour(Skin::kWidgetBackground1));
 	}
 
 	void OpenGlComponent::repaintBackground()
@@ -129,7 +122,7 @@ namespace Interface
 		if (corners_)
 			corners_->setBounds(getLocalBounds());
 
-		bodyColor_ = findColour(Skin::kBody, true);
+		bodyColor_ = getColour(Skin::kBody);
 	}
 
 	void OpenGlComponent::addRoundedCorners()
@@ -150,6 +143,12 @@ namespace Interface
 			corners_->init(openGl);
 	}
 
+	void OpenGlComponent::destroy(OpenGlWrapper &openGl)
+	{
+		if (corners_)
+			corners_->destroy(openGl);
+	}
+
 	void OpenGlComponent::renderCorners(OpenGlWrapper &openGl, bool animate, Colour color, float rounding)
 	{
 		if (corners_)
@@ -165,20 +164,22 @@ namespace Interface
 
 	void OpenGlComponent::renderCorners(OpenGlWrapper &openGl, bool animate)
 	{
-		renderCorners(openGl, animate, bodyColor_, findValue(Skin::kWidgetRoundedCorner));
+		renderCorners(openGl, animate, bodyColor_, getValue(Skin::kWidgetRoundedCorner));
 	}
 
-	void OpenGlComponent::destroy(OpenGlWrapper &openGl)
-	{
-		if (corners_)
-			corners_->destroy(openGl);
-	}
-
-	float OpenGlComponent::findValue(Skin::ValueId valueId) const 
+	float OpenGlComponent::getValue(Skin::ValueId valueId) const 
 	{
 		if (parent_)
-			return parent_->findValue(valueId);
+			return parent_->getValue(valueId);
 
 		return 0.0f;
+	}
+
+	Colour OpenGlComponent::getColour(Skin::ColorId colourId) const
+	{
+		if (parent_)
+			return parent_->getColour(colourId);
+
+		return Colours::black;
 	}
 }

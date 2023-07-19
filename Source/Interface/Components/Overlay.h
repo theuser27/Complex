@@ -28,7 +28,7 @@ namespace Interface
     void init(OpenGlWrapper &openGl) override;
     void render(OpenGlWrapper &openGl, bool animate) override;
     void destroy(OpenGlWrapper &openGl) override;
-    void paint(Graphics &g) override {}
+    void paint(Graphics &) override {}
 
     void setColor(const Colour &color) { color_ = color; }
     void setAdditiveBlending(bool additiveBlending) { additiveBlending_ = additiveBlending; }
@@ -60,11 +60,10 @@ namespace Interface
       setSkinOverride(Skin::kOverlay);
       addOpenGlComponent(&background_);
     }
-    ~Overlay() override = default;
 
     void resized() override
     {
-      background_.setColor(findColour(Skin::kOverlayScreen, true));
+      background_.setColor(getColour(Skin::kOverlayScreen));
       background_.setBounds(getLocalBounds());
     }
 

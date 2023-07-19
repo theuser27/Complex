@@ -56,12 +56,12 @@ namespace Interface
     position_ = getAttribute(*shader_, "position");
   }
 
-  void OverlayBackgroundRenderer::render(OpenGlWrapper &openGl, bool animate)
+  void OverlayBackgroundRenderer::render(OpenGlWrapper &openGl, [[maybe_unused]] bool animate)
   {
     drawOverlay(openGl);
   }
 
-  void OverlayBackgroundRenderer::destroy(OpenGlWrapper &openGl)
+  void OverlayBackgroundRenderer::destroy([[maybe_unused]] OpenGlWrapper &openGl)
   {
     shader_ = nullptr;
     position_ = nullptr;

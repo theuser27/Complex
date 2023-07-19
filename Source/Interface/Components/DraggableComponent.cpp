@@ -9,21 +9,28 @@
 */
 
 #include "DraggableComponent.h"
+#include "../Sections/EffectModuleSection.h"
 
 namespace Interface
 {
 	void DraggableComponent::paint(Graphics &g)
 	{
-		static constexpr float kDotDiameter = 2;
-		auto height = (float)getHeight();
-		auto centreRectangle = Rectangle<float>{ (float)getWidth() / 2 - height / 7 + kDotDiameter,
-			height / 2 - height / 7 + kDotDiameter, height / 7 - kDotDiameter, height / 7 - kDotDiameter };
+		static constexpr float kDotDiameter = 2.0f;
+		static constexpr float kDotsOffset = 6.0f;
 
-		g.setColour(findColour(Skin::kBody, true));
-		g.fillRoundedRectangle(centreRectangle.getX(), centreRectangle.getY(), kDotDiameter, kDotDiameter, kDotDiameter / 2.0f);
-		g.fillRoundedRectangle(centreRectangle.getX(), centreRectangle.getBottom(), kDotDiameter, kDotDiameter, kDotDiameter / 2.0f);
-		g.fillRoundedRectangle(centreRectangle.getRight(), centreRectangle.getY(), kDotDiameter, kDotDiameter, kDotDiameter / 2.0f);
-		g.fillRoundedRectangle(centreRectangle.getRight(), centreRectangle.getBottom(), kDotDiameter, kDotDiameter, kDotDiameter / 2.0f);
+		auto dotsDiameter = getDraggedComponent()->scaleValueRoundInt(kDotDiameter);
+		auto dotsOffset = getDraggedComponent()->scaleValueRoundInt(kDotsOffset);
+
+		auto centeredX = BaseSection::centerHorizontally(0, dotsDiameter + dotsOffset, getWidth());
+		auto centeredY = BaseSection::centerVertically(0, dotsDiameter + dotsOffset, getHeight());
+
+		auto centreRectangle = Rectangle{ centeredX, centeredY, dotsOffset, dotsOffset }.toFloat();
+
+		g.setColour(getDraggedComponent()->getColour(Skin::kWidgetSecondary1));
+		g.fillEllipse(centreRectangle.getX(), centreRectangle.getY(), kDotDiameter, kDotDiameter);
+		g.fillEllipse(centreRectangle.getX(), centreRectangle.getBottom(), kDotDiameter, kDotDiameter);
+		g.fillEllipse(centreRectangle.getRight(), centreRectangle.getY(), kDotDiameter, kDotDiameter);
+		g.fillEllipse(centreRectangle.getRight(), centreRectangle.getBottom(), kDotDiameter, kDotDiameter);
 	}
 
 	void DraggableComponent::mouseMove(const MouseEvent &e)

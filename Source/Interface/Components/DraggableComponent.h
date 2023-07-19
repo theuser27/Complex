@@ -11,7 +11,6 @@
 #pragma once
 
 #include "../Sections/BaseSection.h"
-#include "OpenGlImageComponent.h"
 
 namespace Interface
 {

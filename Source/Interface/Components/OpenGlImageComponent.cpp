@@ -18,7 +18,7 @@ namespace Interface
     if (!active_)
       return;
 
-    Component *component = component_ ? component_ : this;
+    Component *component = targetComponent_ ? targetComponent_ : this;
 
     auto *display = Desktop::getInstance().getDisplays().getDisplayForPoint(getScreenPosition());
     COMPLEX_ASSERT(display && "We're running graphics classes on a system with no display??");
@@ -43,14 +43,14 @@ namespace Interface
     paintToImage(g);
     image_.setImage(drawImage_.get());
 
-    float glWidth = utils::nextPowerOfTwo((float)width);
-    float glHeight = utils::nextPowerOfTwo((float)height);
-    float widthRatio = glWidth / (float)width;
-    float heightRatio = glHeight / (float)height;
-
     // TODO: figure out what these calculations were supposed to do
-  	float right = -1.0f + 2.0f * widthRatio;
-    float bottom = 1.0f - 2.0f * heightRatio;
+  	//float glWidth = utils::nextPowerOfTwo((float)width);
+   // float glHeight = utils::nextPowerOfTwo((float)height);
+   // float widthRatio = glWidth / (float)width;
+   // float heightRatio = glHeight / (float)height;
+  	//float right = -1.0f + 2.0f * widthRatio;
+    //float bottom = 1.0f - 2.0f * heightRatio;
+
     image_.setTopLeft(-1.0f, 1.0f);
   	image_.setTopRight(1.0f, 1.0f);
     image_.setBottomLeft(-1.0f, -1.0f);
@@ -61,10 +61,12 @@ namespace Interface
   void OpenGlImageComponent::init(OpenGlWrapper &openGl)
   { image_.init(openGl); }
 
-  void OpenGlImageComponent::render(OpenGlWrapper &openGl, [[maybe_unused]] bool animate)
+  void OpenGlImageComponent::render(OpenGlWrapper &openGl, bool animate)
   {
-    Component *component = component_ ? component_ : this;
-    if (!active_ || !setViewPort(component, openGl) || !component->isVisible())
+    animator_.tick(animate);
+
+    Component *targetComponent = targetComponent_ ? targetComponent_ : this;
+    if (!active_ || !setViewPort(targetComponent, openGl) || !targetComponent->isVisible())
       return;
 
     image_.render();
@@ -72,4 +74,41 @@ namespace Interface
 
   void OpenGlImageComponent::destroy([[maybe_unused]] OpenGlWrapper &openGl)
   { image_.destroy(); }
+
+  void PlainTextComponent::paintToImage(Graphics &g)
+  {
+    if (font_type_ == kTitle)
+    {
+      g.setColour(getColour(Skin::kHeadingText));
+      g.setFont(Fonts::instance()->getInterVFont().withHeight(text_size_).boldened());
+    }
+    else if (font_type_ == kText)
+    {
+      g.setColour(getColour(Skin::kNormalText));
+      g.setFont(Fonts::instance()->getInterVFont().withHeight(text_size_));
+    }
+    else
+    {
+      g.setColour(getColour(Skin::kWidgetPrimary1));
+      g.setFont(Fonts::instance()->getDDinFont().withHeight(text_size_));
+    }
+
+    Component *component = targetComponent_ ? targetComponent_ : this;
+
+    g.drawText(text_, buffer_, 0, component->getWidth() - 2 * buffer_,
+      component->getHeight(), justification_, true);
+  }
+
+	void PlainShapeComponent::paintToImage(Graphics &g)
+  {
+    Component *component = targetComponent_ ? targetComponent_ : this;
+    Rectangle<float> bounds = component->getLocalBounds().toFloat();
+    Path shape = shape_;
+    shape.applyTransform(shape.getTransformToScaleToFit(bounds, true, justification_));
+
+    g.setColour(Colours::white);
+    //g.fillPath(shape);
+    g.strokePath(shape, PathStrokeType(1.0f, PathStrokeType::JointStyle::mitered, PathStrokeType::EndCapStyle::rounded));
+  }
+
 }

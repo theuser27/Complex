@@ -2,10 +2,11 @@
 
 <JUCERPROJECT id="MQJhEl" name="Complex" projectType="audioplug" addUsingNamespaceToJuceHeader="1"
               jucerFormatVersion="1" cppLanguageStandard="20" pluginFormats="buildStandalone,buildVST3"
-              displaySplashScreen="1">
+              displaySplashScreen="1" pluginCode="Cmpx" pluginManufacturerCode="Lirn"
+              pluginManufacturer="Lirion" version="0.7.0" pluginDesc="Multi-lane Spectral Suite">
   <MAINGROUP id="zNsp6a" name="Complex">
     <GROUP id="{65E7BD15-F97F-DFD8-8405-B6E4F140ACA3}" name="Icons">
-      <FILE id="uKFipr" name="Icon_Contrast.svg" compile="0" resource="1"
+      <FILE id="xB9sL8" name="Icon_Contrast.svg" compile="0" resource="1"
             file="Icons/Icon_Contrast.svg"/>
     </GROUP>
     <GROUP id="{7DCBD02E-5965-7719-7CD3-51C632FE14C8}" name="Fonts">
@@ -15,25 +16,17 @@
     </GROUP>
     <GROUP id="{EA56D449-367C-4F87-53C4-8DB58E6C0431}" name="Source">
       <GROUP id="{32A822E4-0A2D-7496-308D-972ADD4D4F30}" name="Framework">
-        <FILE id="abGidz" name="platform_definitions.h" compile="0" resource="0"
-              file="Source/Framework/platform_definitions.h"/>
-        <FILE id="qmhZRh" name="load_save.cpp" compile="1" resource="0" file="Source/Framework/load_save.cpp"/>
-        <FILE id="JcZofO" name="load_save.h" compile="0" resource="0" file="Source/Framework/load_save.h"/>
-        <FILE id="QZdRAA" name="constants.h" compile="0" resource="0" file="Source/Framework/constants.h"/>
-        <FILE id="JwyCA1" name="update_types.cpp" compile="1" resource="0"
-              file="Source/Framework/update_types.cpp"/>
-        <FILE id="ZPzEka" name="update_types.h" compile="0" resource="0" file="Source/Framework/update_types.h"/>
-        <FILE id="UfJMry" name="plugin_strings.h" compile="0" resource="0"
-              file="Source/Framework/plugin_strings.h"/>
         <FILE id="xWYami" name="circular_buffer.h" compile="0" resource="0"
               file="Source/Framework/circular_buffer.h"/>
         <FILE id="Xl7rEP" name="common.h" compile="0" resource="0" file="Source/Framework/common.h"/>
+        <FILE id="QZdRAA" name="constants.h" compile="0" resource="0" file="Source/Framework/constants.h"/>
         <FILE id="tzFNy3" name="fourier_transform.h" compile="0" resource="0"
               file="Source/Framework/fourier_transform.h"/>
+        <FILE id="qmhZRh" name="load_save.cpp" compile="1" resource="0" file="Source/Framework/load_save.cpp"/>
+        <FILE id="JcZofO" name="load_save.h" compile="0" resource="0" file="Source/Framework/load_save.h"/>
         <FILE id="unsKpG" name="lookup.h" compile="0" resource="0" file="Source/Framework/lookup.h"/>
         <FILE id="sHvuc0" name="matrix.h" compile="0" resource="0" file="Source/Framework/matrix.h"/>
         <FILE id="xFpIpz" name="memory_block.h" compile="0" resource="0" file="Source/Framework/memory_block.h"/>
-        <FILE id="DaUolN" name="parameters.h" compile="0" resource="0" file="Source/Framework/parameters.h"/>
         <FILE id="nzaVCq" name="parameter_bridge.cpp" compile="1" resource="0"
               file="Source/Framework/parameter_bridge.cpp"/>
         <FILE id="VbaYQ5" name="parameter_bridge.h" compile="0" resource="0"
@@ -42,11 +35,20 @@
               file="Source/Framework/parameter_value.cpp"/>
         <FILE id="QQTdZ0" name="parameter_value.h" compile="0" resource="0"
               file="Source/Framework/parameter_value.h"/>
+        <FILE id="DaUolN" name="parameters.h" compile="0" resource="0" file="Source/Framework/parameters.h"/>
+        <FILE id="abGidz" name="platform_definitions.h" compile="0" resource="0"
+              file="Source/Framework/platform_definitions.h"/>
+        <FILE id="UfJMry" name="plugin_strings.h" compile="0" resource="0"
+              file="Source/Framework/plugin_strings.h"/>
         <FILE id="wxbrKx" name="simd_buffer.h" compile="0" resource="0" file="Source/Framework/simd_buffer.h"/>
         <FILE id="RfTiiz" name="simd_utils.h" compile="0" resource="0" file="Source/Framework/simd_utils.h"/>
         <FILE id="ZaoMau" name="simd_values.h" compile="0" resource="0" file="Source/Framework/simd_values.h"/>
         <FILE id="rAmG5N" name="spectral_support_functions.h" compile="0" resource="0"
               file="Source/Framework/spectral_support_functions.h"/>
+        <FILE id="JuQs8V" name="string_utils.h" compile="0" resource="0" file="Source/Framework/string_utils.h"/>
+        <FILE id="JwyCA1" name="update_types.cpp" compile="1" resource="0"
+              file="Source/Framework/update_types.cpp"/>
+        <FILE id="ZPzEka" name="update_types.h" compile="0" resource="0" file="Source/Framework/update_types.h"/>
         <FILE id="YWf5ti" name="utils.h" compile="0" resource="0" file="Source/Framework/utils.h"/>
         <FILE id="x0ygLa" name="vector_map.h" compile="0" resource="0" file="Source/Framework/vector_map.h"/>
         <FILE id="M5uHmH" name="windows.h" compile="0" resource="0" file="Source/Framework/windows.h"/>
@@ -176,6 +178,10 @@
         </GROUP>
       </GROUP>
       <GROUP id="{E3C7034B-FA4E-F562-AA1E-A10D545C55F4}" name="Third Party">
+        <GROUP id="{E0346729-DF17-00E3-E470-B12865A33BEA}" name="constexpr-to-string">
+          <FILE id="O3V7oS" name="f_to_string.hpp" compile="0" resource="0" file="Source/Third Party/constexpr-to-string/f_to_string.hpp"/>
+          <FILE id="fhbbBB" name="to_string.hpp" compile="0" resource="0" file="Source/Third Party/constexpr-to-string/to_string.hpp"/>
+        </GROUP>
         <GROUP id="{C3E5979F-2D2C-018F-ACF8-1B68463DE9FA}" name="fixed_string">
           <FILE id="wuijLK" name="fixed_string.hpp" compile="0" resource="0"
                 file="Source/Third Party/fixed_string/fixed_string.hpp"/>
@@ -292,6 +298,7 @@
         <CONFIGURATION isDebug="0" name="Release" headerPath="../../Source" fastMath="1"
                        enablePluginBinaryCopyStep="1" vst3BinaryLocation="C:\Program Files\Common Files\VST3\DEV"
                        winArchitecture="x64"/>
+        <CONFIGURATION isDebug="1" fastMath="1" headerPath="../../Source" name="RelWithDebugInfo"/>
       </CONFIGURATIONS>
       <MODULEPATHS>
         <MODULEPATH id="juce_audio_basics" path="E:\JUCE dev\JUCE 7.0\JUCE\modules"/>

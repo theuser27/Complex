@@ -24,6 +24,8 @@ namespace Interface
     void checkBounds(Rectangle<int> &bounds, const Rectangle<int> &previous, const Rectangle<int> &limits,
       bool isStretchingTop, bool isStretchingLeft, bool isStretchingBottom, bool isStretchingRight) override
     {
+
+
       ComponentBoundsConstrainer::checkBounds(bounds, previous, limits,
         isStretchingTop, isStretchingLeft, isStretchingBottom, isStretchingRight);
 
@@ -35,31 +37,29 @@ namespace Interface
       // TODO: make resizing snap horizontally to the width of individual lanes 
     }
 
-    void resizeStart() override
-    {
-      if (gui_)
-        gui_->enableRedoBackground(false);
-    }
     void resizeEnd() override
     {
-      if (gui_)
-      {
-        Framework::LoadSave::saveWindowSize(gui_->getWidth(), gui_->getHeight());
-        gui_->enableRedoBackground(true);
-      }
+      if (!gui_)
+        return;
+      auto unscaledDimensions = unscaleDimensions(gui_->getWidth(), gui_->getHeight(), gui_->getScaling());
+    	Framework::LoadSave::saveWindowSize(unscaledDimensions.first, unscaledDimensions.second);
+      if (resizableBorder_)
+        resizableBorder_->setBounds(gui_->getParentComponent()->getLocalBounds());
     }
 
     void setGui(MainInterface *gui) noexcept { gui_ = gui; }
+    void setResizableBorder(ResizableBorderComponent *border) noexcept { resizableBorder_ = border; }
     void setScaleFactor(double scaleFactor) noexcept { lastScaleFactor_ = scaleFactor; }
 
   protected:
-    static auto unscaleDimensions(const Rectangle<int> &bounds, double currentScaling) noexcept
+    static std::pair<int, int> unscaleDimensions(int width, int height, double currentScaling) noexcept
     {
-      std::pair unscaledDimensions = { (double)bounds.getWidth() / currentScaling, (double)bounds.getHeight() / currentScaling };
-      return Rectangle{ bounds.getX(), bounds.getY(), roundToInt(unscaledDimensions.first), roundToInt(unscaledDimensions.second) };
+      return std::pair{ roundToInt((double)width / currentScaling),
+      	roundToInt((double)height / currentScaling) };
     }
 
     MainInterface *gui_ = nullptr;
+    ResizableBorderComponent *resizableBorder_ = nullptr;
     double lastScaleFactor_ = 1.0;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(BorderBoundsConstrainer)

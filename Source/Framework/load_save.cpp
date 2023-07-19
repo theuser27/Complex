@@ -9,6 +9,7 @@
 */
 
 #include "load_save.h"
+#include "Interface/Sections/MainInterface.h"
 
 namespace Framework
 {
@@ -84,10 +85,10 @@ namespace Framework
   {
     json data = getConfigJson();
 
-    if (!data.count("plugin_version"))
+    if (!data.count("pluginVersion"))
       return "0.0.0";
 
-    std::string version = data["plugin_version"];
+    std::string version = data["pluginVersion"];
     return version;
   }
 
@@ -98,15 +99,15 @@ namespace Framework
     int width;
     int height;
 
-    if (!data.count("window_width"))
+    if (!data.count("windowWidth"))
       width = kDefaultWindowWidth;
     else
-      width = std::max<int>(kMinWindowWidth, data["window_width"]);
+      width = std::max<int>(Interface::MainInterface::kMinWidth, data["windowWidth"]);
 
-    if (!data.count("window_height"))
+    if (!data.count("windowHeight"))
       height = kDefaultWindowHeight;
     else
-      height = std::max<int>(kMinWindowHeight, data["window_width"]);
+      height = std::max<int>(Interface::MainInterface::kMinHeight, data["windowHeight"]);
     
     return { width, height };
   }
@@ -116,10 +117,10 @@ namespace Framework
     json data = getConfigJson();
     double scale;
 
-    if (!data.count("window_scale"))
+    if (!data.count("windowScale"))
       scale = 1.0;
     else
-      scale = data["window_scale"];
+      scale = data["windowScale"];
 
     return scale;
   }
@@ -127,15 +128,15 @@ namespace Framework
   void LoadSave::saveWindowSize(int windowWidth, int windowHeight)
   {
     json data = getConfigJson();
-    data["window_width"] = windowWidth;
-    data["window_height"] = windowHeight;
+    data["windowWidth"] = windowWidth;
+    data["windowHeight"] = windowHeight;
     saveConfigJson(data);
   }
 
   void LoadSave::saveWindowScale(double windowScale)
   {
     json data = getConfigJson();
-    data["window_scale"] = windowScale;
+    data["windowScale"] = windowScale;
     saveConfigJson(data);
   }
 

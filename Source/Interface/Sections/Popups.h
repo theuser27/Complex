@@ -21,14 +21,13 @@ namespace Interface
 
 		void resized() override;
 
-		void setContent(const std::string &text, Rectangle<int> bounds, BubbleComponent::BubblePlacement placement);
+		void setContent(const std::string &text, Rectangle<int> bounds, 
+			BubbleComponent::BubblePlacement placement, Skin::SectionOverride sectionOverride = Skin::kPopupBrowser);
 
 	private:
 		PlainTextComponent text_{ "Popup Text", "" };
 		OpenGlQuad body_{ Shaders::kRoundedRectangleFragment };
 		OpenGlQuad border_{ Shaders::kRoundedRectangleBorderFragment };
-
-		JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(PopupDisplay)
 	};
 
 	class PopupList : public BaseSection, ScrollBar::Listener
@@ -43,35 +42,36 @@ namespace Interface
 			virtual void doubleClickedSelected(PopupList *list, int id, int index) { }
 		};
 
-		static constexpr float kRowHeight = 24.0f;
+		static constexpr float kRowHeight = 16.0f;
 		static constexpr float kScrollSensitivity = 200.0f;
 		static constexpr float kScrollBarWidth = 15.0f;
 
 		PopupList();
 
+		void mouseMove(const MouseEvent &e) override;
+		void mouseDrag(const MouseEvent &e) override;
+		void mouseExit(const MouseEvent &e) override;
+		void mouseUp(const MouseEvent &e) override;
+		void mouseDoubleClick(const MouseEvent &e) override;
 		void paintBackground(Graphics &g) override { }
 		void paintBackgroundShadow(Graphics &g) override { }
 		void resized() override;
 
 		void setSelections(PopupItems selections);
-		PopupItems getSelectionItems(int index) const { return selections_.items_[index]; }
+		PopupItems getSelectionItems(int index) const { return selections_.items[index]; }
 		int getRowFromPosition(float mouse_position);
-		int getRowHeight() { return scaling_ * kRowHeight; }
-		int getTextPadding() { return getRowHeight() / 4; }
-		int getBrowseWidth();
-		int getBrowseHeight() { return getRowHeight() * selections_.size(); }
-		Font getFont()
+		int getRowHeight() const noexcept { return (int)std::round(scaling_ * kRowHeight); }
+		int getTextPadding() const noexcept { return getRowHeight() / 4; }
+		int getBrowseWidth() const;
+		int getBrowseHeight() const noexcept { return getRowHeight() * selections_.size(); }
+		Font getFont() const
 		{
-			return Fonts::instance()->getInterVFont()
-				.withPointHeight(getRowHeight() * 0.55f);
+			auto fontsInstance = Fonts::instance();
+			auto usedFont = fontsInstance->getInterVFont();
+			fontsInstance->setFontForAscent(usedFont, (float)getRowHeight() * 0.5f);
+			return usedFont;
 		}
-		void mouseMove(const MouseEvent &e) override;
-		void mouseDrag(const MouseEvent &e) override;
-		void mouseExit(const MouseEvent &e) override;
 		int getSelection(const MouseEvent &e);
-
-		void mouseUp(const MouseEvent &e) override;
-		void mouseDoubleClick(const MouseEvent &e) override;
 
 		void setSelected(int selection) { selected_ = selection; }
 		int getSelected() const { return selected_; }
@@ -92,10 +92,10 @@ namespace Interface
 		void select(int select);
 
 	private:
-		int getViewPosition()
+		int getViewPosition() const
 		{
 			int view_height = getHeight();
-			return std::max(0, std::min<int>(selections_.size() * getRowHeight() - view_height, view_position_));
+			return std::clamp((int)view_position_, 0, selections_.size() * getRowHeight() - view_height);
 		}
 		void redoImage();
 		void moveQuadToRow(OpenGlQuad &quad, int row);
@@ -199,8 +199,8 @@ namespace Interface
 
 			for (int i = 0; i < selections.size(); ++i)
 			{
-				if (selections.items_[i].selected_)
-					right_list_->setSelections(selections.items_[i]);
+				if (selections.items[i].selected)
+					right_list_->setSelections(selections.items[i]);
 			}
 		}
 

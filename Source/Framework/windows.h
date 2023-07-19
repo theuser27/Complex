@@ -126,31 +126,31 @@ namespace Framework
 				u32 centerSample = numSamples / 2;
 				switch (type)
 				{
-				case Framework::WindowTypes::Hann:
+				case WindowTypes::Hann:
 					window = getHannWindow(position);
 					centerWindow = getHannWindow(0.5f);
 					break;
-				case Framework::WindowTypes::Hamming:
+				case WindowTypes::Hamming:
 					window = getHammingWindow(position);
 					centerWindow = getHammingWindow(0.5f);
 					break;
-				case Framework::WindowTypes::Triangle:
+				case WindowTypes::Triangle:
 					window = getTriangleWindow(position);
 					centerWindow = getTriangleWindow(0.5f);
 					break;
-				case Framework::WindowTypes::Sine:
+				case WindowTypes::Sine:
 					window = getSineWindow(position);
 					centerWindow = getSineWindow(0.5f);
 					break;
-				case Framework::WindowTypes::Exponential:
+				case WindowTypes::Exp:
 					window = getExponentialWindow(position, alpha);
 					centerWindow = getExponentialWindow(0.5f, alpha);
 					break;
-				case Framework::WindowTypes::HannExponential:
+				case WindowTypes::HannExp:
 					window = getHannExponentialWindow(position, alpha);
 					centerWindow = getHannExponentialWindow(0.5f, alpha);
 					break;
-				case Framework::WindowTypes::Lanczos:
+				case WindowTypes::Lanczos:
 					window = getLanczosWindow(position, alpha);
 					centerWindow = getLanczosWindow(0.5f, alpha);
 					break;
@@ -172,25 +172,25 @@ namespace Framework
 			{
 				switch (type)
 				{
-				case Framework::WindowTypes::Hann:
+				case WindowTypes::Hann:
 					window = getHannWindow(position);
 					break;
-				case Framework::WindowTypes::Hamming:
+				case WindowTypes::Hamming:
 					window = getHammingWindow(position);
 					break;
-				case Framework::WindowTypes::Triangle:
+				case WindowTypes::Triangle:
 					window = getTriangleWindow(position);
 					break;
-				case Framework::WindowTypes::Sine:
+				case WindowTypes::Sine:
 					window = getSineWindow(position);
 					break;
-				case Framework::WindowTypes::Exponential:
+				case WindowTypes::Exp:
 					window = getExponentialWindow(position, alpha);
 					break;
-				case Framework::WindowTypes::HannExponential:
+				case WindowTypes::HannExp:
 					window = getHannExponentialWindow(position, alpha);
 					break;
-				case Framework::WindowTypes::Lanczos:
+				case WindowTypes::Lanczos:
 					window = getLanczosWindow(position, alpha);
 					break;
 				default:

@@ -16,6 +16,7 @@
 namespace Interface
 {
 	class EffectsStateSection;
+	class EffectsLaneSection;
 
 	class EffectsViewport : public Viewport
 	{
@@ -26,6 +27,25 @@ namespace Interface
 			virtual ~Listener() = default;
 			virtual void effectsScrolled(int position) = 0;
 		};
+
+		class EffectsContainer : public BaseSection
+		{
+		public:
+			EffectsContainer() : BaseSection(typeid(EffectsContainer).name())
+			{ setSkinOverride(Skin::kEffectsLane); }
+
+			void paintBackground(Graphics &g) override
+			{
+				paintChildrenShadows(g);
+				paintChildrenBackgrounds(g);
+			}
+		};
+
+		EffectsViewport() : Viewport(typeid(EffectsViewport).name())
+		{
+			setViewedComponent(&container_);
+			addAndMakeVisible(&container_);
+		}
 
 		void mouseWheelMove(const MouseEvent &e, const MouseWheelDetails &wheel) override
 		{
@@ -44,23 +64,35 @@ namespace Interface
 		}
 
 	private:
+		EffectsContainer container_{};
+
 		std::vector<Listener *> listeners_;
+
+		friend class EffectsLaneSection;
 	};
 
 	class EffectsLaneSection : public ProcessorSection, public ScrollBar::Listener, EffectsViewport::Listener,
 		public Generation::BaseProcessor::Listener
 	{
 	public:
-		static constexpr int kWidth = 418;
 		static constexpr int kTopBarHeight = 28;
 		static constexpr int kBottomBarHeight = 28;
-		static constexpr int kAddModuleButtonHeight = 32;
+
+		static constexpr int kLeftEdgePadding = 12;
+		static constexpr int kRightEdgePadding = 8;
 
 		static constexpr int kModulesHorizontalVerticalPadding = 8;
 		static constexpr int kBetweenModulePadding = 8;
 
+		static constexpr int kAddModuleButtonHeight = 32;
+		static constexpr int kGainMatchButtonDimensions = 10;
+
 		static constexpr int kInsideRouding = 4;
-		static constexpr float kOutlineThickness = 1.0f;
+		static constexpr int kOutlineThickness = 1;
+
+		static constexpr int kWidth = EffectModuleSection::kWidth + 2 * kModulesHorizontalVerticalPadding + 2 * kOutlineThickness;
+		static constexpr int kMinHeight = kTopBarHeight + kModulesHorizontalVerticalPadding + EffectModuleSection::kMinHeight +
+			kBetweenModulePadding + kAddModuleButtonHeight + kModulesHorizontalVerticalPadding + kBottomBarHeight;
 
 		class Listener
 		{
@@ -74,11 +106,14 @@ namespace Interface
 
 		void paintBackground(Graphics &g) override;
 		void resized() override;
-		void redoBackgroundImage();
 
-		void initOpenGlComponents(OpenGlWrapper &openGl) override;
-		void renderOpenGlComponents(OpenGlWrapper &openGl, bool animate) override;
-		void destroyOpenGlComponents(OpenGlWrapper &openGl) override;
+		Rectangle<int> getPowerButtonBounds() const noexcept override
+		{
+			auto widthHeight = (int)std::round(scaleValue(kDefaultActivatorSize));
+			return { getWidth() - (int)std::round(scaleValue(kRightEdgePadding)) - widthHeight,
+				centerVertically(0, widthHeight, (int)std::round(scaleValue(kTopBarHeight))),
+				widthHeight, widthHeight };
+		}
 
 		void scrollBarMoved([[maybe_unused]] ScrollBar *scrollBar, double rangeStart) override
 		{ viewport_.setViewPosition(Point{ 0, (int)rangeStart }); }
@@ -90,7 +125,7 @@ namespace Interface
 		}
 		void setScrollBarRange()
 		{
-			scrollBar_.setRangeLimits(0.0, container_.getHeight());
+			scrollBar_.setRangeLimits(0.0, viewport_.container_.getHeight());
 			scrollBar_.setCurrentRange(scrollBar_.getCurrentRangeStart(), 
 				viewport_.getHeight(), dontSendNotification);
 		}
@@ -119,38 +154,27 @@ namespace Interface
 		// needs a point local to the EffectsLaneSection
 		size_t getIndexFromScreenPosition(juce::Point<int> point) const noexcept;
 
-		void setLaneName(String newName) { laneName_ = std::move(newName); }
+		void setLaneName(String newName) { laneTitle_.setText(std::move(newName)); }
 		void addListener(Listener *listener) { laneListeners_.push_back(listener); }
 
 	private:
-		class EffectsContainer : public BaseSection
-		{
-		public:
-			EffectsContainer() : BaseSection("container") { }
-			void paintBackground(Graphics &g) override
-			{
-				g.fillAll(findColour(Skin::kBackground, true));
-				paintChildrenShadows(g);
-				paintChildrenBackgrounds(g);
-			}
-		};
+
 
 		EffectsViewport viewport_{};
-		EffectsContainer container_{};
+
 		OpenGlImage background_{};
 		CriticalSection openGlCriticalSection_{};
 
+		PlainTextComponent laneTitle_;
 		OpenGlScrollBar scrollBar_{};
 		std::vector<EffectModuleSection *> effectModules_{};
 
-		std::unique_ptr<GeneralButton> gainMatchingButton_ = nullptr;
-		std::unique_ptr<GeneralButton> laneActivator_ = nullptr;
+		std::unique_ptr<BaseButton> laneActivator_ = nullptr;
+		std::unique_ptr<BaseButton> gainMatchingButton_ = nullptr;
 		std::unique_ptr<TextSelector> inputSelector_ = nullptr;
 		std::unique_ptr<TextSelector> outputSelector_ = nullptr;
 
 		Generation::EffectsLane *effectsLane_ = nullptr;
-		String laneName_{};
-
 		EffectsStateSection *parentState_ = nullptr;
 
 		std::vector<Listener *> laneListeners_{};

@@ -112,7 +112,7 @@ namespace Interface
     */
   }
 
-  void Spectrogram::setLineValues(OpenGlWrapper &open_gl)
+  void Spectrogram::setLineValues(OpenGlWrapper &openGl)
   {
     /*float *amps = index == 0 ? left_amps_ : right_amps_;
     float height = getHeight();
@@ -129,7 +129,7 @@ namespace Interface
       setXAt(i, t * width);
       setYAt(i, height - y * height);
     }
-    OpenGlLineRenderer::render(open_gl, true);*/
+    OpenGlLineRenderer::render(openGl, true);*/
   }
 
   void Spectrogram::render(OpenGlWrapper &open_gl, bool animate)
@@ -144,12 +144,12 @@ namespace Interface
 
     updateAmplitudes();
 
-    Colour color = findColour(Skin::kWidgetPrimary1, true);
+    Colour color = getColour(Skin::kWidgetPrimary1);
     setColor(color);
-    Colour fill_color = findColour(Skin::kWidgetPrimary2, true);
+    Colour fill_color = getColour(Skin::kWidgetPrimary2);
     float fill_fade = 0.0f;
     if (parent_)
-      fill_fade = parent_->findValue(Skin::kWidgetFillFade);
+      fill_fade = parent_->getValue(Skin::kWidgetFillFade);
     setFillColors(fill_color.withMultipliedAlpha(1.0f - fill_fade), fill_color);
     setLineValues(open_gl);
     renderCorners(open_gl, animate);
@@ -165,7 +165,7 @@ namespace Interface
 
     int height = getHeight();
     float max_octave = log2f(max_frequency_ / min_frequency_);
-    g.setColour(findColour(Skin::kLightenScreen, true).withMultipliedAlpha(0.5f));
+    g.setColour(getColour(Skin::kLightenScreen).withMultipliedAlpha(0.5f));
     float frequency = 0.0f;
     float increment = 1.0f;
 

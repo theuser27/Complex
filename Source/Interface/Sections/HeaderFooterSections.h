@@ -19,20 +19,21 @@ namespace Interface
 	{
 	public:
 		static constexpr int kHeaderHeight = 40;
-		static constexpr int kHeaderNumberBoxPadding = 6;
-		static constexpr int kLabelToControlMargin = 4;
-		static constexpr int kHorizontalEdgePadding = 4;
+		static constexpr int kHeaderHorizontalEdgePadding = 4;
+		static constexpr int kHeaderNumberBoxMargin = 6;
+
 		static constexpr int kFooterHeight = 24;
 		static constexpr int kFooterHorizontalEdgePadding = 16;
 
-		static constexpr int kNumberBoxHeight = 16;
+		static constexpr int kLabelToControlMargin = 4;
 
 		HeaderFooterSections(Generation::SoundEngine &soundEngine);
 
 		void paintBackground(Graphics &g) override;
 		void resized() override;
-		void renderOpenGlComponents(OpenGlWrapper &openGl, bool animate) override
-		{ BaseSection::renderOpenGlComponents(openGl, animate); }
+		void sliderValueChanged(Slider *movedSlider) override;
+		void resizeForText([[maybe_unused]] TextSelector *textSelector, 
+			[[maybe_unused]] int requestedWidthChange) override { }
 
 		void arrangeHeader();
 		void arrangeFooter();
@@ -43,5 +44,8 @@ namespace Interface
 		std::unique_ptr<NumberBox> blockSizeNumberBox_;
 		std::unique_ptr<NumberBox> overlapNumberBox_;
 		std::unique_ptr<TextSelector> windowTypeSelector_;
+		std::unique_ptr<NumberBox> windowAlphaNumberBox_;
+
+		bool showAlpha_ = false;
 	};
 }

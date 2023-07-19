@@ -58,7 +58,7 @@ namespace Interface
   void PresetSelector::paintBackground(Graphics &g)
   {
     float round_amount = findValue(Skin::kWidgetRoundedCorner);
-    g.setColour(findColour(Skin::kPopupSelectorBackground, true));
+    g.setColour(getColour(Skin::kPopupSelectorBackground));
     g.fillRoundedRectangle(0, 0, getWidth(), getHeight(), round_amount);
   }
 
@@ -84,7 +84,7 @@ namespace Interface
       text_->setTextSize(height * font_height_ratio_);
       prev_preset_->setBounds(0, 0, height, height);
       next_preset_->setBounds(getWidth() - height, 0, height, height);
-      text_->setColor(findColour(Skin::kPresetText, true));
+      text_->setColor(getColour(Skin::kPresetText));
     }
   }*/
 }

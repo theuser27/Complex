@@ -38,7 +38,7 @@ namespace Interface
 
     virtual void paintToImage(Graphics &g)
     {
-      Component *component = component_ ? component_ : this;
+      Component *component = targetComponent_ ? targetComponent_ : this;
       if (paintEntireComponent_)
         component->paintEntireComponent(g, false);
       else
@@ -53,7 +53,7 @@ namespace Interface
     // (i.e. isn't a hierarchy propaged paint call from a top level object that paints its children) 
   	void redrawImage(bool force = true);
 
-    void setComponent(Component *component) { component_ = component; }
+    void setTargetComponent(Component *targetComponent) { targetComponent_ = targetComponent; }
     void setScissor(bool scissor) { image_.setScissor(scissor); }
     void setUseAlpha(bool useAlpha) { image_.setUseAlpha(useAlpha); }
     void setColor(Colour color) { image_.setColor(color); }
@@ -64,7 +64,7 @@ namespace Interface
     bool isActive() const { return active_; }
 
   protected:
-    Component *component_ = nullptr;
+    Component *targetComponent_ = nullptr;
     bool active_ = true;
     bool staticImage_ = false;
     bool paintEntireComponent_ = true;
@@ -129,14 +129,11 @@ namespace Interface
   public:
     OpenGlTextEditor(String name) : OpenGlAutoImageComponent(std::move(name))
     {
-      imageComponent_.setComponent(this);
+      imageComponent_.setTargetComponent(this);
       addListener(this);
-      //imageComponent_.image().setAdditive(true);
-      //setJustification(Justification::centred);
-      /*setBorder({ 1, 1, 1, 1 });
-      setIndents(0, 0);*/
     }
 
+    void colourChanged() override { redoImage(); }
     void textEditorTextChanged(TextEditor &) override { redoImage(); }
     void textEditorFocusLost(TextEditor &) override { redoImage(); }
 
@@ -144,11 +141,6 @@ namespace Interface
     {
       TextEditor::mouseDrag(e);
       redoImage();
-    }
-
-    void paint(Graphics &g) override
-    {
-      g.setFont(usedFont_);
     }
 
     void applyFont()
@@ -165,19 +157,25 @@ namespace Interface
         applyFont();
     }
 
+    bool keyPressed(const KeyPress &key) override
+    {
+      bool result = TextEditor::keyPressed(key);
+      redoImage();
+      return result;
+    }
+
     void resized() override
     {
       TextEditor::resized();
       if (isMultiLine())
       {
-        auto indent = (int)imageComponent_.findValue(Skin::kLabelBackgroundRounding);
+        auto indent = (int)imageComponent_.getValue(Skin::kLabelBackgroundRounding);
         setIndents(indent, indent);
         return;
       }
 
       if (isVisible())
         applyFont();
-
     }
 
     auto getUsedFont() const { return usedFont_; }
@@ -200,7 +198,7 @@ namespace Interface
       kNumFontTypes
     };
 
-    PlainTextComponent(String name, String text) : OpenGlImageComponent(name), text_(std::move(text))
+    PlainTextComponent(String name, String text = {}) : OpenGlImageComponent(name), text_(std::move(text))
     { setInterceptsMouseClicks(false, false); }
 
     void resized() override
@@ -209,22 +207,7 @@ namespace Interface
       redrawImage();
     }
 
-    void paintToImage(Graphics &g) override
-    {
-      g.setColour(Colours::white);
-
-      if (font_type_ == kTitle)
-        g.setFont(Fonts::instance()->getInterVFont().withPointHeight(text_size_).boldened());
-      else if (font_type_ == kText)
-        g.setFont(Fonts::instance()->getInterVFont().withPointHeight(text_size_));
-      else
-        g.setFont(Fonts::instance()->getDDinFont().withPointHeight(text_size_));
-
-      Component *component = component_ ? component_ : this;
-
-      g.drawFittedText(text_, buffer_, 0, component->getWidth() - 2 * buffer_,
-        component->getHeight(), justification_, false);
-    }
+    void paintToImage(Graphics &g) override;
 
     String getText() const { return text_; }
 
@@ -233,23 +216,18 @@ namespace Interface
       if (text_ == text)
         return;
 
-      text_ = text;
+      text_ = std::move(text);
       redrawImage();
     }
 
-    void setTextSize(float size)
-    {
-      text_size_ = size;
-      redrawImage();
-    }
-
+    void setTextHeight(float size) noexcept { text_size_ = size; }
     void setFontType(FontType font_type) { font_type_ = font_type; }
     void setJustification(Justification justification) { justification_ = justification; }
     void setBuffer(int buffer) { buffer_ = buffer; }
 
   private:
     String text_;
-    float text_size_ = 1.0f;
+    float text_size_ = 11.0f;
     FontType font_type_ = kText;
     Justification justification_ = Justification::centred;
     int buffer_ = 0;
@@ -260,19 +238,10 @@ namespace Interface
   class PlainShapeComponent : public OpenGlImageComponent
   {
   public:
-    PlainShapeComponent(String name) : OpenGlImageComponent(name)
+    PlainShapeComponent(String name) : OpenGlImageComponent(std::move(name))
     { setInterceptsMouseClicks(false, false); }
 
-    void paintToImage(Graphics &g) override
-    {
-      Component *component = component_ ? component_ : this;
-      Rectangle<float> bounds = component->getLocalBounds().toFloat();
-      Path shape = shape_;
-      shape.applyTransform(shape.getTransformToScaleToFit(bounds, true, justification_));
-
-      g.setColour(Colours::white);
-      g.fillPath(shape);
-    }
+    void paintToImage(Graphics &g) override;
 
     void setShape(Path shape)
     {
@@ -285,7 +254,5 @@ namespace Interface
   private:
     Path shape_;
     Justification justification_ = Justification::centred;
-
-    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(PlainShapeComponent)
   };
 }

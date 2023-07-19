@@ -56,13 +56,11 @@ namespace Plugin
 
 	std::weak_ptr<Framework::ParameterValue> ProcessorTree::getProcessorParameter(u64 parentModuleId, std::string_view parameter) const noexcept
 	{
-		auto modulePointer = getProcessor(parentModuleId);
-		if (!modulePointer)
+		auto *processorPointer = getProcessor(parentModuleId);
+		if (!processorPointer)
 			return {};
 
-		auto parameterIter = modulePointer->processorParameters_.find(parameter);
-		return (parameterIter == modulePointer->processorParameters_.data.end()) ?
-			std::weak_ptr<Framework::ParameterValue>() : parameterIter->second;
+		return processorPointer->getParameter(parameter);
 	}
 	
 	void ProcessorTree::pushUndo(Framework::WaitingUpdate *action, bool isNewTransaction)

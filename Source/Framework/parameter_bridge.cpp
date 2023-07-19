@@ -10,7 +10,7 @@
 
 #include "parameter_bridge.h"
 #include "Interface/Components/BaseSlider.h"
-#include "Interface/Sections/InterfaceEngineLink.h"
+#include "Plugin/Complex.h"
 
 namespace Framework
 {
@@ -54,7 +54,8 @@ namespace Framework
 		parameterLinkPointer_.store(link, std::memory_order_release);
 		utils::ScopedSpinLock guard{ name_.first };
 
-		size_t index = name_.second.indexOfChar(0, ' ');
+		auto index = name_.second.indexOfChar(0, ' ');
+		index = (index < 0) ? name_.second.length() : index;
 		if (!link)
 		{
 			name_.second = String(name_.second.begin(), index);
@@ -109,23 +110,22 @@ namespace Framework
 
 	String ParameterBridge::getText(float value, int maximumStringLength) const
 	{
-		if (auto pointer = parameterLinkPointer_.load(std::memory_order_acquire))
-		{
-			auto details = pointer->parameter->getParameterDetails();
-			auto sampleRate = plugin_->getSampleRate();
-			double internalValue = scaleValue(value_.load(std::memory_order_acquire), details, sampleRate, true);
-			if (!details.stringLookup.empty())
-			{
-				auto index = (size_t)std::clamp((float)internalValue, details.minValue, details.maxValue) - (size_t)details.minValue;
-				// clamping in case the value goes above the string count inside the array
-				index = std::clamp(index, (size_t)0, details.stringLookup.size());
-				return details.stringLookup[index].data();
-			}
+		auto pointer = parameterLinkPointer_.load(std::memory_order_acquire);
+		if (!pointer)
+			return String(value);
 
-			return String(internalValue);
+		auto details = pointer->parameter->getParameterDetails();
+		auto sampleRate = plugin_->getSampleRate();
+		double internalValue = scaleValue(value, details, sampleRate, true);
+		if (!details.stringLookup.empty())
+		{
+			auto index = (size_t)std::clamp((float)internalValue, details.minValue, details.maxValue) - (size_t)details.minValue;
+			// clamping in case the value goes above the string count inside the array
+			index = std::clamp(index, (size_t)0, details.stringLookup.size());
+			return details.stringLookup[index].data();
 		}
 
-		return String(value_.load(std::memory_order_acquire));
+		return String(internalValue);
 	}
 
 	float ParameterBridge::getValueForText(const String &text) const

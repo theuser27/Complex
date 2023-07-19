@@ -12,6 +12,7 @@
 
 #include <concepts>
 #include <span>
+#include "Third Party/constexpr-to-string/to_string.hpp"
 #include "common.h"
 
 namespace utils
@@ -23,37 +24,13 @@ namespace utils
 
 	// get you the N-th element of a parameter pack
 	template <auto N, auto I = 0, typename T, typename ... Args>
-	decltype(auto) getNthElement(T &&arg, Args&& ... args)
+	decltype(auto) getNthElement(T &&arg, [[maybe_unused]] Args&& ... args)
 	{
 		if constexpr (I == N)
 			return std::forward<T>(arg);
 		else if constexpr (sizeof...(args) > 0)
 			return getNthElement<N, I + 1>(std::forward<Args>(args)...);
 	}
-
-	template<size_t desiredSize, size_t trimSource = 0, size_t trimDestination = 0, size_t currentSize, typename T>
-	strict_inline consteval std::array<T, desiredSize> toDifferentSizeArray(std::array<T, currentSize> source)
-	{
-		std::array<T, desiredSize> destination{};
-		auto moveSize = std::min(desiredSize - trimDestination, currentSize - trimSource);
-		for (size_t i = 0; i < moveSize; i++)
-			destination[i] = std::move(source[i]);
-		return destination;
-	}
-
-	template <auto Start, auto End, auto Inc, class F>
-	constexpr void constexpr_for(F &&f)
-	{
-		if constexpr (Start < End)
-		{
-			f(std::integral_constant<decltype(Start), Start>());
-			constexpr_for<Start + Inc, End, Inc>(f);
-		}
-	}
-
-	template<size_t size>
-	strict_inline consteval fixstr::fixed_string<size> toConstantString(std::string_view view)
-	{ return fixstr::fixed_string<size>(view.data()); }
 
 	strict_inline float mod(double value, double *divisor) noexcept
 	{ return static_cast<float>(modf(value, divisor)); }
@@ -204,6 +181,31 @@ namespace utils
 		return (T(3) * sqr) - (T(2) * sqr * value);
 	}
 
+	strict_inline void wait() noexcept
+	{
+	#if COMPLEX_SSE4_1
+		_mm_pause();
+	#elif COMPLEX_NEON
+		__yield();
+	#endif
+	}
+
+	strict_inline void longWait(size_t iterations) noexcept
+	{
+		for (size_t i = 0; i < iterations; i++)
+		{
+		#if COMPLEX_SSE4_1
+			_mm_pause();
+			_mm_pause();
+			_mm_pause();
+			_mm_pause();
+			_mm_pause();
+		#elif COMPLEX_NEON
+			__yield();
+		#endif
+		}
+	}
+
 	strict_inline void spinAndLock(std::atomic<bool> &atomic, bool expectedState) noexcept
 	{
 		bool expected = expectedState;
@@ -212,7 +214,7 @@ namespace utils
 			expected = expectedState;
 			// taking advantage of the MESI protocol where we only want shared access to read until the value is changed,
 			// instead of read/write with exclusive access thereby slowing down other threads trying to read as well
-			while (atomic.load(std::memory_order_acquire) != expected);
+			while (atomic.load(std::memory_order_relaxed) != expected) { wait(); }
 		}
 	}
 
@@ -223,7 +225,7 @@ namespace utils
 		{
 			expected = expectedState;
 			// see the comment for spinAndLock with atomic<bool>
-			while (atomic.load(std::memory_order_acquire) != expected);
+			while (atomic.load(std::memory_order_relaxed) != expected) { wait(); }
 		}
 	}
 
@@ -242,8 +244,7 @@ namespace utils
 			return *this;
 		}
 
-		~ScopedSpinLock() noexcept 
-		{ atomic_.get().store(false, std::memory_order_release); }
+		~ScopedSpinLock() noexcept { atomic_.get().store(false, std::memory_order_release); }
 
 		ScopedSpinLock(const ScopedSpinLock &) = delete;
 		ScopedSpinLock operator=(const ScopedSpinLock &) = delete;
@@ -281,6 +282,18 @@ namespace utils
 		simd_float value = 0.0f;
 		mutable std::atomic<bool> guard = false;
 	};
+
+	template<commonConcepts::Pointer T>
+	strict_inline T as(commonConcepts::Pointer auto pointer)
+	{
+	#if COMPLEX_DEBUG
+		auto *castPointer = dynamic_cast<T>(pointer);
+		COMPLEX_ASSERT(castPointer && "Unsuccessful cast");
+		return castPointer;
+	#else
+		return static_cast<T>(pointer);
+	#endif
+	}
 
 	// for debugging purposes
 	strict_inline void printBuffer([[maybe_unused]] const float *begin, u32 numSamples)

@@ -25,7 +25,7 @@ namespace Interface
 		static constexpr float kThicknessDecay = 0.4f;
 		static constexpr float kAlphaInc = 0.2f;
 
-		OpenGlMultiQuad(int max_quads, Shaders::FragmentShader shader = Shaders::kColorFragment);
+		OpenGlMultiQuad(int maxQuads, Shaders::FragmentShader shader = Shaders::kColorFragment);
 
 		void paint(Graphics &) override { }
 		void resized() override
@@ -34,9 +34,9 @@ namespace Interface
 			dirty_ = true;
 		}
 
-		void init(OpenGlWrapper &open_gl) override;
-		void render(OpenGlWrapper &open_gl, bool animate) override;
-		void destroy(OpenGlWrapper &open_gl) override;
+		void init(OpenGlWrapper &openGl) override;
+		void render(OpenGlWrapper &openGl, bool animate) override;
+		void destroy(OpenGlWrapper &openGl) override;
 
 		void markDirty() noexcept { dirty_ = true; }
 
@@ -105,12 +105,8 @@ namespace Interface
 			}
 		}
 
-		void setTargetComponent(Component *targetComponent) noexcept
-		{ targetComponent_ = targetComponent; }
-
-		void setScissorComponent(Component *scissorComponent) noexcept
-		{ scissorComponent_ = scissorComponent; }
-
+		void setTargetComponent(Component *targetComponent) noexcept { targetComponent_ = targetComponent; }
+		void setScissorComponent(Component *scissorComponent) noexcept { scissorComponent_ = scissorComponent; }
 		void setAdditive(bool additive) noexcept { additiveBlending_ = additive; }
 		void setAlpha(float alpha, bool reset = false) noexcept
 		{
@@ -120,6 +116,7 @@ namespace Interface
 		}
 
 		void setDrawWhenNotVisible(bool draw) noexcept { drawWhenNotVisible_ = draw; }
+		void setCustomDrawBounds(Rectangle<int> bounds) noexcept { customDrawBounds_ = bounds; }
 
 		void setRotatedCoordinates(size_t i, float x, float y, float w, float h) noexcept
 		{
@@ -220,6 +217,7 @@ namespace Interface
 
 	protected:
 		Component *targetComponent_ = nullptr;
+		Rectangle<int> customDrawBounds_{};
 		Component *scissorComponent_ = nullptr;
 		Shaders::FragmentShader fragmentShader_;
 		size_t maxQuads_;
@@ -286,18 +284,19 @@ namespace Interface
 	class OpenGlScrollQuad : public OpenGlQuad
 	{
 	public:
-		OpenGlScrollQuad() : OpenGlQuad(Shaders::kRoundedRectangleFragment) { }
+		static constexpr float kHoverChange = 0.2f;
 
-		void render(OpenGlWrapper &open_gl, bool animate) override
+		OpenGlScrollQuad() : OpenGlQuad(Shaders::kRoundedRectangleFragment)
 		{
-			static constexpr float kHoverChange = 0.2f;
-			float last_hover = hoverAmount_;
-			if (hover_)
-				hoverAmount_ = std::min(1.0f, hoverAmount_ + kHoverChange);
-			else
-				hoverAmount_ = std::max(0.0f, hoverAmount_ - kHoverChange);
+			animator_.setHoverIncrement(kHoverChange);
+		}
 
-			if (last_hover != hoverAmount_)
+		void render(OpenGlWrapper &openGl, bool animate) override
+		{
+			float lastHover = hoverAmount_;
+			hoverAmount_ = animator_.getValue(Animator::Hover);
+
+			if (lastHover != hoverAmount_)
 			{
 				if (shrinkLeft_)
 					setQuadHorizontal(0, -1.0f, 1.0f + hoverAmount_);
@@ -306,17 +305,14 @@ namespace Interface
 			}
 
 			Range<double> range = scrollBar_->getCurrentRange();
-			Range<double> total_range = scrollBar_->getRangeLimit();
-			float start_ratio = (range.getStart() - total_range.getStart()) / total_range.getLength();
-			float end_ratio = (range.getEnd() - total_range.getStart()) / total_range.getLength();
-			setQuadVertical(0, 1.0f - 2.0f * end_ratio, 2.0f * (end_ratio - start_ratio));
+			Range<double> totalRange = scrollBar_->getRangeLimit();
+			double startRatio = (range.getStart() - totalRange.getStart()) / totalRange.getLength();
+			double endRatio = (range.getEnd() - totalRange.getStart()) / totalRange.getLength();
+			setQuadVertical(0, 1.0f - 2.0f * (float)endRatio, 2.0f * (float)(endRatio - startRatio));
 
-			// TODO: add fade in/out when hovering over
-			if (hover_)
-				OpenGlQuad::render(open_gl, animate);
+			OpenGlQuad::render(openGl, animate);
 		}
 
-		void setHover(bool hover) { hover_ = hover; }
 		void setShrinkLeft(bool shrinkLeft) { shrinkLeft_ = shrinkLeft; }
 		void setScrollBar(ScrollBar *scrollBar) { scrollBar_ = scrollBar; }
 
@@ -349,13 +345,13 @@ namespace Interface
 		void mouseEnter(const MouseEvent &e) override
 		{
 			ScrollBar::mouseEnter(e);
-			bar_.setHover(true);
+			bar_.getAnimator().setIsHovered(true);
 		}
 
 		void mouseExit(const MouseEvent &e) override
 		{
 			ScrollBar::mouseExit(e);
-			bar_.setHover(false);
+			bar_.getAnimator().setIsHovered(false);
 		}
 
 		void mouseDown(const MouseEvent &e) override

@@ -27,7 +27,7 @@ namespace Framework
 		utils::ScopedSpinLock wait() const { return waitFunction_(); }
 		std::function<utils::ScopedSpinLock()> waitFunction_ = []()
 		{ 
-			COMPLEX_ASSERT(false && "Wait function for update hasn't been set");
+			COMPLEX_ASSERT_FALSE("Wait function for update hasn't been set");
 			std::atomic<bool> temp{};
 			return utils::ScopedSpinLock{ temp };
 		};

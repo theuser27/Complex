@@ -428,13 +428,4 @@ namespace utils
 	#endif
 	}
 
-	strict_inline void wait() noexcept
-	{
-	#if COMPLEX_SSE4_1
-		_mm_pause();
-	#elif COMPLEX_NEON
-		__yield();
-	#endif
-	}
-
 }

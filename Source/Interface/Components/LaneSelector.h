@@ -27,7 +27,7 @@ namespace Interface
 			virtual void selectorChangedStartIndex(u32 newStartIndex) = 0;
 		};
 
-		LaneSelector() : BaseSection("Lane Selector") { }
+		LaneSelector() : BaseSection(typeid(LaneSelector).name()) { }
 
 		void resized() override;
 		void paintBackground(Graphics &g) override;

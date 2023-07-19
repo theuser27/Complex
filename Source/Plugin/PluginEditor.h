@@ -20,7 +20,7 @@ class ComplexAudioProcessorEditor : public juce::AudioProcessorEditor, public In
 {
 public:
 	ComplexAudioProcessorEditor (ComplexAudioProcessor&);
-	~ComplexAudioProcessorEditor() override = default;
+	~ComplexAudioProcessorEditor() override;
 
 	//==============================================================================
 	void paint (juce::Graphics &g) override { }

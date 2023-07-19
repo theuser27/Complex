@@ -13,12 +13,23 @@
 
 namespace Framework
 {
-	void ParameterValue::updateValues(float sampleRate) noexcept
+	void ParameterValue::updateValues(float sampleRate, std::optional<float> value) noexcept
 	{
 		utils::ScopedSpinLock lock(waitLock_);
 
 		bool isChanged = false;
 
+		if (value.has_value())
+		{
+			isChanged = (normalisedValue_ == value.value());
+			normalisedValue_ = value.value();
+
+			if (parameterLink_.hostControl)
+				parameterLink_.hostControl->setValue(normalisedValue_);
+			if (parameterLink_.UIControl)
+				parameterLink_.UIControl->setValueSafe(normalisedValue_);
+		}
+		else
 		{
 			float newNormalisedValue = normalisedValue_;
 

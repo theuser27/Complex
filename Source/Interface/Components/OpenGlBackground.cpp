@@ -36,14 +36,14 @@ namespace Interface
     glGenBuffers(1, &vertex_buffer_);
     glBindBuffer(GL_ARRAY_BUFFER, vertex_buffer_);
 
-    GLsizeiptr vert_size = static_cast<GLsizeiptr>(static_cast<size_t>(sizeof(vertices)));
-    glBufferData(GL_ARRAY_BUFFER, vert_size, vertices_, GL_STATIC_DRAW);
+    GLsizeiptr verticesSize = static_cast<GLsizeiptr>(static_cast<size_t>(sizeof(vertices)));
+    glBufferData(GL_ARRAY_BUFFER, verticesSize, vertices_, GL_STATIC_DRAW);
 
     glGenBuffers(1, &triangle_buffer_);
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, triangle_buffer_);
 
-    GLsizeiptr tri_size = static_cast<GLsizeiptr>(static_cast<size_t>(sizeof(triangles)));
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, tri_size, triangles, GL_STATIC_DRAW);
+    GLsizeiptr trianglesSize = static_cast<GLsizeiptr>(static_cast<size_t>(sizeof(triangles)));
+    glBufferData(GL_ELEMENT_ARRAY_BUFFER, trianglesSize, triangles, GL_STATIC_DRAW);
 
     image_shader_ = openGl.shaders->getShaderProgram(Shaders::kImageVertex, Shaders::kImageFragment);
     image_shader_->use();
@@ -109,8 +109,8 @@ namespace Interface
       vertices_[5] = vertices_[9] = heightEnd;
 
       glBindBuffer(GL_ARRAY_BUFFER, vertex_buffer_);
-      GLsizeiptr vert_size = static_cast<GLsizeiptr>(16 * sizeof(float));
-      glBufferData(GL_ARRAY_BUFFER, vert_size, vertices_, GL_STATIC_DRAW);
+      GLsizeiptr verticesSize = static_cast<GLsizeiptr>(16 * sizeof(float));
+      glBufferData(GL_ARRAY_BUFFER, verticesSize, vertices_, GL_STATIC_DRAW);
     }
 
     glDisable(GL_BLEND);

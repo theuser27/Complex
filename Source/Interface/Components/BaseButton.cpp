@@ -1,379 +1,422 @@
 /*
-  ==============================================================================
+	==============================================================================
 
-    PluginButton.cpp
-    Created: 14 Dec 2022 7:01:32am
-    Author:  theuser27
+		PluginButton.cpp
+		Created: 14 Dec 2022 7:01:32am
+		Author:  theuser27
 
-  ==============================================================================
+	==============================================================================
 */
 
 #include "Framework/update_types.h"
 #include "BaseButton.h"
-#include "../Sections/BaseSection.h"
-#include "../Sections/InterfaceEngineLink.h"
+#include "../Sections/MainInterface.h"
 
 namespace Interface
 {
-  BaseButton::BaseButton(Framework::ParameterValue *parameter, String name)
-  {
-    if (!parameter)
-    {
-      setName(name);
-      hasParameterAssignment_ = Framework::Parameters::isParameter(getName().toRawUTF8());
-      if (!hasParameterAssignment_)
-        return;
-    }
+	void ButtonLabel::setParent(BaseButton *parent) noexcept
+	{
+		parent_ = parent;
+		labelText_ = (!parent->hasParameter()) ? parent->getName() :
+			parent->getParameterDetails().displayName.data();
+	}
 
-    setParameterLink(parameter->getParameterLink());
-    setParameterDetails(parameter->getParameterDetails());
-  }
+	void ButtonLabel::paint(Graphics &g)
+	{
+		// painting only the label text, the other components will be handled by the owning section
+		if (!parent_)
+			return;
 
-  String BaseButton::getTextFromValue(bool value) const noexcept
-  {
-    int lookup = value ? 1 : 0;
+		auto textRectangle = Rectangle{ 0.0f, 0.0f, (float)getWidth(), (float)getHeight() };
+		g.setFont(usedFont_);
+		g.setColour(parent_->getColour(Skin::kNormalText));
+		g.drawText(parent_->getParameterDetails().displayName.data(), textRectangle, Justification::centredLeft);
+	}
 
-    if (!details_.stringLookup.empty())
-      return details_.stringLookup[lookup].data();
+	ButtonComponent::ButtonComponent(BaseButton *button) : button_(button)
+	{
+		animator_.setHoverIncrement(kHoverIncrement);
 
-    return Framework::kOffOnNames[lookup].data();
-  }
+		background_.setTargetComponent(button);
+		background_.setColor(Colours::orange);
+		background_.setQuad(0, -1.0f, -1.0f, 2.0f, 2.0f);
 
-  void BaseButton::handlePopupResult(int result)
-  {
-    //InterfaceEngineLink *parent = findParentComponentOfClass<InterfaceEngineLink>();
-    //if (parent == nullptr)
-    //  return;
+		text_.setActive(false);
+		text_.setScissor(true);
+		text_.setTargetComponent(button);
+		text_.setFontType(PlainTextComponent::kText);
+		addChildComponent(text_);
 
-    //SynthBase *synth = parent->getSynth();
+		shape_.setTargetComponent(button);
+		shape_.setScissor(true);
+	}
 
-    //if (result == kArmMidiLearn)
-    //  synth->armMidiLearn(getName().toStdString());
-    //else if (result == kClearMidiLearn)
-    //  synth->clearMidiLearn(getName().toStdString());
-  }
+	void ButtonComponent::renderTextButton(OpenGlWrapper &openGl, bool animate)
+	{
+		Colour activeColor;
+		Colour hoverColor;
+		if (button_->getToggleState() && isButtonAccented_)
+		{
+			if (down_)
+				activeColor = onDownColor_;
+			else
+				activeColor = onNormalColor_;
 
-  void BaseButton::mouseDown(const MouseEvent &e)
-  {
-    if (e.mods.isPopupMenu())
-    {
-      ToggleButton::mouseExit(e);
+			hoverColor = onHoverColor_;
+		}
+		else
+		{
+			if (down_)
+				activeColor = offDownColor_;
+			else
+				activeColor = offNormalColor_;
 
-      // this implies that the button is not a parameter
-      if (details_.name.empty())
-        return;
+			hoverColor = offHoverColor_;
+		}
 
-      PopupItems options;
-      //options.addItem(kArmMidiLearn, "Learn MIDI Assignment");
-      //if (synth->isMidiMapped(getName().toStdString()))
-      //  options.addItem(kClearMidiLearn, "Clear MIDI Assignment");
+		if (!down_)
+			activeColor = activeColor.interpolatedWith(hoverColor, animator_.getValue(Animator::Hover));
 
-      BaseSection *parent = findParentComponentOfClass<BaseSection>();
-      parent->showPopupSelector(this, e.getPosition(), options, [=](int selection) { handlePopupResult(selection); });
-    }
-    else
-    {
-      ToggleButton::mouseDown(e);
+		background_.setRounding(getValue(Skin::kLabelBackgroundRounding));
+		if (!text_.isActive())
+		{
+			background_.setColor(activeColor);
+			background_.render(openGl, animate);
+			return;
+		}
 
-      // this implies that the button is not a parameter
-      if (details_.name.empty())
-        return;
+		if (style_ != kJustText)
+		{
+			background_.setColor(backgroundColor_);
+			background_.render(openGl, animate);
+		}
+		text_.setColor(activeColor);
+		text_.render(openGl, animate);
+	}
 
-      if (parameterLink_ && parameterLink_->hostControl)
-        parameterLink_->hostControl->beginChangeGesture();
-    }
-  }
+	void ButtonComponent::renderRadioButton(OpenGlWrapper &openGl, bool animate)
+	{
+		static constexpr float kPowerRadius = 0.8f;
+		static constexpr float kPowerHoverRadius = 1.0f;
 
-  void BaseButton::mouseUp(const MouseEvent &e)
-  {
-    if (!e.mods.isPopupMenu())
-    {
-      ToggleButton::mouseUp(e);
+		auto hoverAmount = animator_.getValue(Animator::Hover);
 
-      // this implies that the button is not a parameter
-      if (details_.name.empty())
-        return;
+		background_.setQuad(0, -kPowerHoverRadius, -kPowerHoverRadius, 2.0f * kPowerHoverRadius, 2.0f * kPowerHoverRadius);
+		if (down_ || !button_->getToggleState())
+		{
+			background_.setColor(backgroundColor_);
+			background_.render(openGl, animate);
+		}
+		else if (hoverAmount != 0.0f)
+		{
+			background_.setColor(backgroundColor_.withMultipliedAlpha(hoverAmount));
+			background_.render(openGl, animate);
+		}
 
-      if (parameterLink_ && parameterLink_->hostControl)
-        parameterLink_->hostControl->endChangeGesture();
-    }
-  }
+		if (button_->getToggleState())
+			background_.setColor(onNormalColor_);
+		else
+			background_.setColor(offNormalColor_);
 
-  void BaseButton::clicked() { setValueSafe(getToggleState()); }
+		background_.setQuad(0, -kPowerRadius, -kPowerRadius, 2.0f * kPowerRadius, 2.0f * kPowerRadius);
+		background_.render(openGl, animate);
+	}
+
+	void ButtonComponent::renderActionButton(OpenGlWrapper &openGl, bool animate)
+	{
+		bool enabled = button_->isEnabled();
+
+		Colour active_color;
+		if (down_)
+			active_color = onDownColor_;
+		else
+			active_color = onNormalColor_;
+
+		if (!down_ && enabled)
+			active_color = active_color.interpolatedWith(onHoverColor_, animator_.getValue(Animator::Hover));
+
+		background_.setRounding(getValue(Skin::kLabelBackgroundRounding));
+		background_.setColor(active_color);
+		background_.render(openGl, animate);
+
+		text_.setColor(backgroundColor_);
+		if (!enabled)
+		{
+			text_.setColor(onNormalColor_);
+
+			float border_x = 4.0f / (float)button_->getWidth();
+			float border_y = 4.0f / (float)button_->getHeight();
+			background_.setQuad(0, -1.0f + border_x, -1.0f + border_y, 2.0f - 2.0f * border_x, 2.0f - 2.0f * border_y);
+			background_.setColor(bodyColor_);
+			background_.render(openGl, animate);
+
+			background_.setQuad(0, -1.0f, -1.0f, 2.0f, 2.0f);
+		}
+
+		text_.render(openGl, animate);
+	}
+
+	void ButtonComponent::renderLightenButton(OpenGlWrapper &openGl, bool animate)
+	{
+		bool enabled = button_->isEnabled();
+
+		Colour active_color;
+		if (down_)
+			active_color = onDownColor_;
+		else
+			active_color = onNormalColor_;
+
+		if (!down_ && enabled)
+			active_color = active_color.interpolatedWith(onHoverColor_, animator_.getValue(Animator::Hover));
+
+		background_.setRounding(getValue(Skin::kLabelBackgroundRounding));
+		background_.setColor(active_color);
+		background_.render(openGl, animate);
+	}
+
+	void ButtonComponent::renderShapeButton(OpenGlWrapper &openGl, bool animate)
+	{
+		Colour activeColor;
+		Colour hoverColor;
+		if (button_->getToggleState())
+		{
+			if (down_)
+				activeColor = onDownColor_;
+			else
+				activeColor = onNormalColor_;
+
+			hoverColor = onHoverColor_;
+		}
+		else
+		{
+			if (down_)
+				activeColor = offDownColor_;
+			else
+				activeColor = offNormalColor_;
+
+			hoverColor = offHoverColor_;
+		}
+
+		if (!down_)
+			activeColor = activeColor.interpolatedWith(hoverColor, animator_.getValue(Animator::Hover));
+
+		shape_.setColor(activeColor);
+		shape_.render(openGl, animate);
+	}
+
+	void ButtonComponent::setColors()
+	{
+		if (!button_->findParentComponentOfClass<MainInterface>())
+			return;
+
+		bodyColor_ = button_->getColour(Skin::kBody);
+		if (style_ == kTextButton || style_ == kJustText)
+		{
+			onNormalColor_ = button_->getColour(Skin::kIconButtonOn);
+			onDownColor_ = button_->getColour(Skin::kIconButtonOnPressed);
+			onHoverColor_ = button_->getColour(Skin::kIconButtonOnHover);
+			offNormalColor_ = button_->getColour(Skin::kIconButtonOff);
+			offDownColor_ = button_->getColour(Skin::kIconButtonOffPressed);
+			offHoverColor_ = button_->getColour(Skin::kIconButtonOffHover);
+			backgroundColor_ = button_->getColour(Skin::kTextComponentBackground);
+		}
+		else if (style_ == kRadioButton)
+		{
+			onNormalColor_ = button_->getColour(Skin::kWidgetAccent1);
+			onDownColor_ = button_->getColour(Skin::kOverlayScreen);
+			onHoverColor_ = button_->getColour(Skin::kLightenScreen);
+			offNormalColor_ = button_->getColour(Skin::kPowerButtonOff);
+			offDownColor_ = onDownColor_;
+			offHoverColor_ = onHoverColor_;
+			backgroundColor_ = button_->getColour(Skin::kBackground);
+		}
+		else if (style_ == kActionButton)
+		{
+			if (isButtonAccented_)
+			{
+				onNormalColor_ = button_->getColour(Skin::kActionButtonSecondary);
+				onDownColor_ = button_->getColour(Skin::kActionButtonSecondaryPressed);
+				onHoverColor_ = button_->getColour(Skin::kActionButtonSecondaryHover);
+			}
+			else
+			{
+				onNormalColor_ = button_->getColour(Skin::kActionButtonPrimary);
+				onDownColor_ = button_->getColour(Skin::kActionButtonPrimaryPressed);
+				onHoverColor_ = button_->getColour(Skin::kActionButtonPrimaryHover);
+			}
+			backgroundColor_ = button_->getColour(Skin::kActionButtonText);
+		}
+		else if (style_ == kLightenButton)
+		{
+			onNormalColor_ = Colours::transparentWhite;
+			onDownColor_ = button_->getColour(Skin::kOverlayScreen);
+			onHoverColor_ = button_->getColour(Skin::kLightenScreen);
+			offNormalColor_ = onNormalColor_;
+			offDownColor_ = onDownColor_;
+			offHoverColor_ = onHoverColor_;
+			backgroundColor_ = onNormalColor_;
+		}
+		else if (style_ == kShapeButton || style_ == kPowerButton)
+		{
+			onNormalColor_ = button_->getColour(Skin::kWidgetAccent1);
+			onHoverColor_ = onNormalColor_.brighter(0.6f);
+			onDownColor_ = onNormalColor_.withBrightness(0.7f);
+			offNormalColor_ = onDownColor_;
+			offHoverColor_ = onNormalColor_;
+			offDownColor_ = onDownColor_;
+		}
+	}
+
+	void ButtonComponent::setText() noexcept
+	{
+		String text = button_->getButtonText();
+		if (!text.isEmpty())
+		{
+			text_.setActive(true);
+			text_.setText(text);
+		}
+	}
+
+	BaseButton::BaseButton(Framework::ParameterValue *parameter, String name)
+	{
+		if (!parameter)
+		{
+			setName(name);
+			hasParameter_ = false;
+			return;
+		}
+
+		hasParameter_ = true;
+		setName(parameter->getParameterDetails().name.data());
+
+		setParameterLink(parameter->getParameterLink());
+		setParameterDetails(parameter->getParameterDetails());
+
+		setToggleState(std::round(details_.defaultNormalisedValue) == 1.0f, NotificationType::dontSendNotification);
+		setValueSafe(std::round(details_.defaultNormalisedValue));
+	}
+
+	void BaseButton::resized()
+	{
+		static constexpr float kUiButtonSizeMult = 0.45f;
+
+		ToggleButton::resized();
+		buttonComponent_.setText();
+		buttonComponent_.background().markDirty();
+
+		if (buttonComponent_.style() == ButtonComponent::kActionButton)
+		{
+			buttonComponent_.text().setFontType(PlainTextComponent::kText);
+			buttonComponent_.text().setTextHeight(kUiButtonSizeMult * (float)getHeight());
+		}
+		else if (buttonComponent_.style() == ButtonComponent::kShapeButton || 
+			buttonComponent_.style() == ButtonComponent::kPowerButton)
+			buttonComponent_.shape().redrawImage();
+		else
+			buttonComponent_.text().setTextHeight(parent_->getValue(Skin::kButtonFontSize));
+
+		buttonComponent_.setColors();
+	}
+
+	void BaseButton::mouseDown(const MouseEvent &e)
+	{
+		if (e.mods.isPopupMenu())
+		{
+			ToggleButton::mouseExit(e);
+
+			// this implies that the button is not a parameter
+			if (details_.name.empty())
+				return;
+
+			PopupItems options;
+			//options.addItem(kArmMidiLearn, "Learn MIDI Assignment");
+			//if (synth->isMidiMapped(getName().toStdString()))
+			//  options.addItem(kClearMidiLearn, "Clear MIDI Assignment");
+
+			parent_->showPopupSelector(this, e.getPosition(), options, 
+				[this](int selection) { handlePopupResult(selection); });
+		}
+		else
+		{
+			ToggleButton::mouseDown(e);
+
+			beginChange(getToggleState());
+
+			if (parameterLink_ && parameterLink_->hostControl)
+				parameterLink_->hostControl->beginChangeGesture();
+		}
+
+		buttonComponent_.getAnimator().setIsClicked(true);
+		buttonComponent_.setDown(true);
+	}
+
+	void BaseButton::mouseUp(const MouseEvent &e)
+	{
+		if (e.mods.isPopupMenu())
+			return;
+
+		ToggleButton::mouseUp(e);
+
+		setValueSafe(getToggleState());
+		setValueToHost();
+		endChange();
+
+		if (parameterLink_ && parameterLink_->hostControl)
+			parameterLink_->hostControl->endChangeGesture();
+
+		buttonComponent_.getAnimator().setIsClicked(false);
+		buttonComponent_.setDown(false);
+	}
+
+	void BaseButton::parentHierarchyChanged()
+	{
+		parent_ = findParentComponentOfClass<BaseSection>();
+		ToggleButton::parentHierarchyChanged();
+	}
+
+	void BaseButton::clicked() { setValueSafe(getToggleState()); }
 
 	void BaseButton::endChange()
-  {
-    auto *mainInterface = findParentComponentOfClass<MainInterface>();
-    mainInterface->getPlugin().pushUndo(new Framework::ParameterUpdate(this, valueBeforeChange_, (double)getToggleState()));
-  }
+	{
+		auto *mainInterface = findParentComponentOfClass<MainInterface>();
+		mainInterface->getPlugin().pushUndo(new Framework::ParameterUpdate(this, valueBeforeChange_, (double)getToggleState()));
+	}
 
-  void BaseButton::clicked(const ModifierKeys &modifiers)
-  {
-    ToggleButton::clicked(modifiers);
+	Colour BaseButton::getColour(Skin::ColorId colourId) const noexcept { return parent_->getColour(colourId); }
 
-    if (!modifiers.isPopupMenu())
-      for (ButtonListener *listener : button_listeners_)
-        listener->guiChanged(this);
-  }
+	String BaseButton::getTextFromValue(bool value) const noexcept
+	{
+		size_t lookup = value;
+		if (!details_.stringLookup.empty())
+			return details_.stringLookup[lookup].data();
 
+		return Framework::kOffOnNames[lookup].data();
+	}
 
-  void ShapeButtonComponent::parentHierarchyChanged()
-  {
-  	if (findParentComponentOfClass<InterfaceEngineLink>())
-  		setColors();
-  }
+	void BaseButton::handlePopupResult(int result)
+	{
+		//InterfaceEngineLink *parent = findParentComponentOfClass<InterfaceEngineLink>();
+		//if (parent == nullptr)
+		//  return;
 
-  void ShapeButtonComponent::render(OpenGlWrapper &open_gl, bool animate)
-  {
-    incrementHover();
+		//SynthBase *synth = parent->getSynth();
 
-    Colour active_color;
-    Colour hover_color;
-    if (button_->getToggleState() && use_on_colors_)
-    {
-      if (down_)
-        active_color = on_down_color_;
-      else
-        active_color = on_normal_color_;
+		//if (result == kArmMidiLearn)
+		//  synth->armMidiLearn(getName().toStdString());
+		//else if (result == kClearMidiLearn)
+		//  synth->clearMidiLearn(getName().toStdString());
+	}
 
-      hover_color = on_hover_color_;
-    }
-    else
-    {
-      if (down_)
-        active_color = off_down_color_;
-      else
-        active_color = off_normal_color_;
+	void BaseButton::clicked(const ModifierKeys &modifiers)
+	{
+		ToggleButton::clicked(modifiers);
 
-      hover_color = off_hover_color_;
-    }
+		if (!modifiers.isPopupMenu())
+			for (ButtonListener *listener : buttonListeners_)
+				listener->guiChanged(this);
 
-    if (!down_)
-      active_color = active_color.interpolatedWith(hover_color, hover_amount_);
-
-    shape_.setColor(active_color);
-    shape_.render(open_gl, animate);
-  }
-
-  GeneralButtonComponent::GeneralButtonComponent(Button *button) : button_(button)
-  {
-    background_.setTargetComponent(button);
-    background_.setColor(Colours::orange);
-    background_.setQuad(0, -1.0f, -1.0f, 2.0f, 2.0f);
-
-    addChildComponent(text_);
-    text_.setActive(false);
-    text_.setScissor(true);
-    text_.setComponent(button);
-    text_.setFontType(PlainTextComponent::kText);
-  }
-
-  void GeneralButtonComponent::setColors()
-  {
-    if (button_->findParentComponentOfClass<InterfaceEngineLink>() == nullptr)
-      return;
-
-    body_color_ = button_->findColour(Skin::kBody, true);
-    if (style_ == kTextButton || style_ == kJustText)
-    {
-      on_color_ = button_->findColour(Skin::kIconButtonOn, true);
-      on_pressed_color_ = button_->findColour(Skin::kIconButtonOnPressed, true);
-      on_hover_color_ = button_->findColour(Skin::kIconButtonOnHover, true);
-      off_color_ = button_->findColour(Skin::kIconButtonOff, true);
-      off_pressed_color_ = button_->findColour(Skin::kIconButtonOffPressed, true);
-      off_hover_color_ = button_->findColour(Skin::kIconButtonOffHover, true);
-      background_color_ = button_->findColour(Skin::kTextComponentBackground, true);
-    }
-    else if (style_ == kPowerButton)
-    {
-      on_color_ = button_->findColour(Skin::kPowerButtonOn, true);
-      on_pressed_color_ = button_->findColour(Skin::kOverlayScreen, true);
-      on_hover_color_ = button_->findColour(Skin::kLightenScreen, true);
-      off_color_ = button_->findColour(Skin::kPowerButtonOff, true);
-      off_pressed_color_ = on_pressed_color_;
-      off_hover_color_ = on_hover_color_;
-      background_color_ = on_color_;
-    }
-    else if (style_ == kUiButton)
-    {
-      if (primary_ui_button_)
-      {
-        on_color_ = button_->findColour(Skin::kUiActionButton, true);
-        on_pressed_color_ = button_->findColour(Skin::kUiActionButtonPressed, true);
-        on_hover_color_ = button_->findColour(Skin::kUiActionButtonHover, true);
-      }
-      else
-      {
-        on_color_ = button_->findColour(Skin::kUiButton, true);
-        on_pressed_color_ = button_->findColour(Skin::kUiButtonPressed, true);
-        on_hover_color_ = button_->findColour(Skin::kUiButtonHover, true);
-      }
-      background_color_ = button_->findColour(Skin::kUiButtonText, true);
-    }
-    else if (style_ == kLightenButton)
-    {
-      on_color_ = Colours::transparentWhite;
-      on_pressed_color_ = button_->findColour(Skin::kOverlayScreen, true);
-      on_hover_color_ = button_->findColour(Skin::kLightenScreen, true);
-      off_color_ = on_color_;
-      off_pressed_color_ = on_pressed_color_;
-      off_hover_color_ = on_hover_color_;
-      background_color_ = on_color_;
-    }
-  }
-
-  void GeneralButtonComponent::renderTextButton(OpenGlWrapper &open_gl, bool animate)
-  {
-    incrementHover();
-
-    Colour active_color;
-    Colour hover_color;
-    if (button_->getToggleState() && show_on_colors_)
-    {
-      if (down_)
-        active_color = on_pressed_color_;
-      else
-        active_color = on_color_;
-
-      hover_color = on_hover_color_;
-    }
-    else
-    {
-      if (down_)
-        active_color = off_pressed_color_;
-      else
-        active_color = off_color_;
-
-      hover_color = off_hover_color_;
-    }
-
-    if (!down_)
-      active_color = active_color.interpolatedWith(hover_color, hover_amount_);
-
-    background_.setRounding(findValue(Skin::kLabelBackgroundRounding));
-    if (!text_.isActive())
-    {
-      background_.setColor(active_color);
-      background_.render(open_gl, animate);
-      return;
-    }
-
-    if (style_ != kJustText)
-    {
-      background_.setColor(background_color_);
-      background_.render(open_gl, animate);
-    }
-    text_.setColor(active_color);
-    text_.render(open_gl, animate);
-  }
-
-  void GeneralButtonComponent::renderPowerButton(OpenGlWrapper &open_gl, bool animate)
-  {
-    static constexpr float kPowerRadius = 0.45f;
-    static constexpr float kPowerHoverRadius = 0.65f;
-
-    if (button_->getToggleState())
-      background_.setColor(on_color_);
-    else
-      background_.setColor(off_color_);
-
-    background_.setQuad(0, -kPowerRadius, -kPowerRadius, 2.0f * kPowerRadius, 2.0f * kPowerRadius);
-    background_.render(open_gl, animate);
-
-    incrementHover();
-
-    background_.setQuad(0, -kPowerHoverRadius, -kPowerHoverRadius, 2.0f * kPowerHoverRadius, 2.0f * kPowerHoverRadius);
-    if (down_)
-    {
-      background_.setColor(on_pressed_color_);
-      background_.render(open_gl, animate);
-    }
-    else if (hover_amount_ != 0.0f)
-    {
-      background_.setColor(on_hover_color_.withMultipliedAlpha(hover_amount_));
-      background_.render(open_gl, animate);
-    }
-  }
-
-  void GeneralButtonComponent::renderUiButton(OpenGlWrapper &open_gl, bool animate)
-  {
-    bool enabled = button_->isEnabled();
-    incrementHover();
-
-    Colour active_color;
-    if (down_)
-      active_color = on_pressed_color_;
-    else
-      active_color = on_color_;
-
-    if (!down_ && enabled)
-      active_color = active_color.interpolatedWith(on_hover_color_, hover_amount_);
-
-    background_.setRounding(findValue(Skin::kLabelBackgroundRounding));
-    background_.setColor(active_color);
-    background_.render(open_gl, animate);
-
-    text_.setColor(background_color_);
-    if (!enabled)
-    {
-      text_.setColor(on_color_);
-
-      float border_x = 4.0f / (float)button_->getWidth();
-      float border_y = 4.0f / (float)button_->getHeight();
-      background_.setQuad(0, -1.0f + border_x, -1.0f + border_y, 2.0f - 2.0f * border_x, 2.0f - 2.0f * border_y);
-      background_.setColor(body_color_);
-      background_.render(open_gl, animate);
-
-      background_.setQuad(0, -1.0f, -1.0f, 2.0f, 2.0f);
-    }
-
-    text_.render(open_gl, animate);
-  }
-
-  void GeneralButtonComponent::renderLightenButton(OpenGlWrapper &open_gl, bool animate)
-  {
-    bool enabled = button_->isEnabled();
-    incrementHover();
-
-    Colour active_color;
-    if (down_)
-      active_color = on_pressed_color_;
-    else
-      active_color = on_color_;
-
-    if (!down_ && enabled)
-      active_color = active_color.interpolatedWith(on_hover_color_, hover_amount_);
-
-    background_.setRounding(findValue(Skin::kLabelBackgroundRounding));
-    background_.setColor(active_color);
-    background_.render(open_gl, animate);
-  }
-
-  void GeneralButton::resized()
-  {
-    static constexpr float kUiButtonSizeMult = 0.45f;
-
-    ToggleButton::resized();
-    getGlComponent()->setText();
-    getGlComponent()->background().markDirty();
-    if (auto *section = findParentComponentOfClass<BaseSection>(); section)
-    {
-      if (getGlComponent()->style() == GeneralButtonComponent::kUiButton)
-      {
-        getGlComponent()->text().setFontType(PlainTextComponent::kText);
-        getGlComponent()->text().setTextSize(kUiButtonSizeMult * (float)getHeight());
-      }
-      else
-        getGlComponent()->text().setTextSize(section->findValue(Skin::kButtonFontSize));
-      button_component_.setColors();
-    }
-  }
-
-  void GeneralButton::clicked()
-  {
-    BaseButton::clicked();
-    if (!details_.stringLookup.empty())
-      setText(details_.stringLookup[getToggleState() ? 1 : 0].data());
-  }
+		if (!details_.stringLookup.empty())
+			setText(details_.stringLookup[getToggleState() ? 1 : 0].data());
+	}
 
 }

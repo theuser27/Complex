@@ -26,18 +26,25 @@ namespace Interface
     enum SectionOverride
     {
       kNone,
-      kHeaderFooter,
       kOverlay,
       kEffectsLane,
-      kEffectModule,
       kPopupBrowser,
-      kNumSectionOverrides
+      kFilterModule,
+      kDynamicsModule
     };
 
     enum ValueId
     {
       kBodyRoundingTop,
       kBodyRoundingBottom,
+
+      kWidgetLineWidth,
+      kWidgetLineBoost,
+      kWidgetFillCenter,
+      kWidgetFillFade,
+      kWidgetFillBoost,
+      kWidgetMargin,
+      kWidgetRoundedCorner,
 
       kLabelHeight,
       kLabelBackgroundHeight,
@@ -49,7 +56,6 @@ namespace Interface
       kRotaryOptionYOffset,
       kRotaryOptionWidth,
 
-      kTitleWidth,
       kPadding,
       kLargePadding,
       kSliderWidth,
@@ -58,7 +64,6 @@ namespace Interface
       kTextComponentOffset,
       kTextComponentFontSize,
       kTextButtonHeight,
-
       kButtonFontSize,
 
       kKnobArcSize,
@@ -77,19 +82,7 @@ namespace Interface
       kKnobShadowOffset,
 
       kModulationButtonWidth,
-      kModulationFontSize,
-
-      kWidgetMargin,
-      kWidgetRoundedCorner,
-      kWidgetLineWidth,
-      kWidgetLineBoost,
-      kWidgetFillCenter,
-      kWidgetFillFade,
-      kWidgetFillBoost,
-
-      kNumSkinValueIds,
-      kFrequencyDisplay = kNumSkinValueIds,
-      kNumAllValueIds,
+      kModulationFontSize
     };
 
     enum ColorId
@@ -97,15 +90,22 @@ namespace Interface
       kInitialColor = 0x42345678,
       kBackground = kInitialColor,
       kBody,
-      kBodyHeading,
-      kHeadingText,
-      kPresetText,
-      kBodyText,
+      kBackgroundElement,
+    	kHeadingText,
+      kNormalText,
       kBorder,
-      kLabelBackground,
-      kLabelConnection,
-      kPowerButtonOn,
-      kPowerButtonOff,
+
+      kWidgetPrimary1,
+      kWidgetPrimary2,
+      kWidgetPrimaryDisabled,
+      kWidgetSecondary1,
+      kWidgetSecondary2,
+      kWidgetSecondaryDisabled,
+      kWidgetAccent1,
+      kWidgetAccent2,
+      kWidgetBackground1,
+      kWidgetBackground2,
+      kWidgetCenterLine,
 
       kOverlayScreen,
       kLightenScreen,
@@ -131,27 +131,6 @@ namespace Interface
       kLinearSliderThumb,
       kLinearSliderThumbDisabled,
 
-      kPinSlider,
-      kPinSliderDisabled,
-      kPinSliderThumb,
-      kPinSliderThumbDisabled,
-
-      kTextSelectorText,
-      kTextSelectorTextDisabled,
-
-      kNumberBoxSlider,
-
-      kWidgetCenterLine,
-      kWidgetPrimary1,
-      kWidgetPrimary2,
-      kWidgetPrimaryDisabled,
-      kWidgetSecondary1,
-      kWidgetSecondary2,
-      kWidgetSecondaryDisabled,
-      kWidgetAccent1,
-      kWidgetAccent2,
-      kWidgetBackground,
-
       kModulationMeter,
       kModulationMeterLeft,
       kModulationMeterRight,
@@ -160,8 +139,6 @@ namespace Interface
       kModulationButtonDragging,
       kModulationButtonUnselected,
 
-      kIconSelectorIcon,
-
       kIconButtonOff,
       kIconButtonOffHover,
       kIconButtonOffPressed,
@@ -169,13 +146,16 @@ namespace Interface
       kIconButtonOnHover,
       kIconButtonOnPressed,
 
-      kUiButton,
-      kUiButtonText,
-      kUiButtonHover,
-      kUiButtonPressed,
-      kUiActionButton,
-      kUiActionButtonHover,
-      kUiActionButtonPressed,
+      kActionButtonPrimary,
+      kActionButtonPrimaryHover,
+      kActionButtonPrimaryPressed,
+      kActionButtonSecondary,
+      kActionButtonSecondaryHover,
+      kActionButtonSecondaryPressed,
+      kActionButtonText,
+
+      kPowerButtonOn,
+      kPowerButtonOff,
 
       kTextEditorBackground,
       kTextEditorBorder,
@@ -185,32 +165,36 @@ namespace Interface
       kFinalColor
     };
 
-    static constexpr int kNumColors = kFinalColor - kInitialColor;
-    static bool shouldScaleValue(ValueId valueId) noexcept;
+    static constexpr auto kSectionOverrideCount = magic_enum::enum_count<SectionOverride>();
+    static constexpr auto kValueIdCount = magic_enum::enum_count<ValueId>();
+  	static constexpr auto kColorIdCount = kFinalColor - kInitialColor;
 
     Skin();
 
-    void applyComponentColors(Component *component) const;
+    /*void applyComponentColors(Component *component) const;
     void applyComponentColors(Component *component, SectionOverride sectionOverride, bool topLevel = false) const;
-    void applyComponentValues(BaseSection *component) const;
-    void applyComponentValues(BaseSection *component, SectionOverride sectionOverride, bool topLevel = false) const;
+    void applyComponentValues(BaseSection *section) const;
+    void applyComponentValues(BaseSection *section, SectionOverride sectionOverride, bool topLevel = false) const;*/
 
     void setColor(ColorId colorId, const Colour &color) { colors_[colorId - kInitialColor] = color; }
     Colour getColor(ColorId colorId) const { return colors_[colorId - kInitialColor]; }
     Colour getColor(int section, ColorId colorId) const;
-    bool overridesColor(int section, ColorId colorId) const;
-    bool overridesValue(int section, ValueId colorId) const;
-    void copyValuesToLookAndFeel(LookAndFeel *lookAndFeel) const;
+    Colour getColor(const BaseSection *section, ColorId colorId) const;
 
-    void setValue(ValueId valueId, float value) { values_[valueId] = value; }
+  	void setValue(ValueId valueId, float value) { values_[valueId] = value; }
     float getValue(ValueId valueId) const { return values_[valueId]; }
     float getValue(int section, ValueId valueId) const;
+    float getValue(const BaseSection *section, ValueId valueId) const;
 
     void addOverrideColor(int section, ColorId colorId, Colour color);
     void removeOverrideColor(int section, ColorId colorId);
+    bool overridesColor(int section, ColorId colorId) const;
 
     void addOverrideValue(int section, ValueId valueId, float value);
     void removeOverrideValue(int section, ValueId valueId);
+    bool overridesValue(int section, ValueId valueId) const;
+
+    void copyValuesToLookAndFeel(LookAndFeel *lookAndFeel) const;
 
     json stateToJson();
     String stateToString();
@@ -222,10 +206,17 @@ namespace Interface
     bool loadFromFile(const File &source);
     void clearSkin();
 
+    static bool shouldScaleValue(ValueId valueId) noexcept
+    {
+      return valueId != kWidgetFillFade && valueId != kWidgetFillBoost &&
+        valueId != kWidgetLineBoost && valueId != kKnobHandleLength &&
+        valueId != kWidgetFillCenter;
+    }
+
   protected:
-    std::array<Colour, kNumColors> colors_{};
-    std::array<float, kNumSkinValueIds> values_{};
-    std::array<std::map<ColorId, Colour>, kNumSectionOverrides> colorOverrides_{};
-    std::array<std::map<ValueId, float>, kNumSectionOverrides> valueOverrides_{};
+    std::array<Colour, kColorIdCount> colors_{};
+    std::array<float, kValueIdCount> values_{};
+    std::array<std::map<ColorId, Colour>, kSectionOverrideCount> colorOverrides_{};
+    std::array<std::map<ValueId, float>, kSectionOverrideCount> valueOverrides_{};
   };
 }

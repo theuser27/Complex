@@ -18,17 +18,15 @@ namespace Interface
 	MainInterface::MainInterface(Plugin::ComplexPlugin &plugin) :
 		BaseSection(typeid(MainInterface).name()), plugin_(plugin)
 	{
-		Skin default_skin;
-		setSkinValues(default_skin, true);
-		default_skin.copyValuesToLookAndFeel(DefaultLookAndFeel::instance());
-
-		/*effects_interface_ = std::make_unique<EffectsInterface>(synth_data->mono_modulations);
-		addSubSection(effects_interface_.get());
-		effects_interface_->setVisible(false);
-		effects_interface_->addListener(this);*/
+		skinInstance_ = std::make_unique<Skin>();
+		skinInstance_->copyValuesToLookAndFeel(DefaultLookAndFeel::instance());
+		skin_ = skinInstance_.get();
 
 		headerFooter_ = std::make_unique<HeaderFooterSections>(plugin.getSoundEngine());
 		addSubSection(headerFooter_.get());
+
+		effectsStateSection_ = std::make_unique<EffectsStateSection>(plugin.getSoundEngine().getEffectsState());
+		addSubSection(effectsStateSection_.get());
 
 		popupSelector_ = std::make_unique<SinglePopupSelector>();
 		addSubSection(popupSelector_.get());
@@ -59,15 +57,14 @@ namespace Interface
 		popupDisplay1_->toFront(true);
 		popupDisplay2_->toFront(true);
 
-		//setAllValues(synth_data->controls);
 		setOpaque(true);
-		setSkinValues(default_skin, true);
+		setSkin(skin_);
 
-		openGlContext_.setContinuousRepainting(true);
+		openGlContext_.setContinuousRepainting(false);
 		openGlContext_.setOpenGLVersionRequired(OpenGLContext::openGL3_2);
-		openGlContext_.setSwapInterval(0);
+		openGlContext_.setSwapInterval(1);
 		openGlContext_.setRenderer(this);
-		openGlContext_.setComponentPaintingEnabled(false);
+		openGlContext_.setComponentPaintingEnabled(true);
 		openGlContext_.attachTo(*this);
 
 		startTimerHz(kParameterUpdateIntervalHz);
@@ -82,13 +79,12 @@ namespace Interface
 
 	void MainInterface::paintBackground(Graphics &g)
 	{
-		//g.fillAll(findColour(Skin::kBackground, true));
-		//g.fillAll(Colours::white);
+		g.fillAll(getColour(Skin::kBackground));
 		paintChildrenShadows(g);
 
 		/*int padding = getPadding();
 		int bar_width = 6 * padding;
-		g.setColour(headerFooter_->findColour(Skin::kBody, true));
+		g.setColour(headerFooter_->getColour(Skin::kBody));
 		int y = header_->getBottom();
 		int height = keyboard_interface_->getY() - y;
 		int x1 = extra_mod_section_->getRight() + padding;
@@ -102,7 +98,6 @@ namespace Interface
 	{
 		ScopedLock open_gl_lock(openGlCriticalSection_);
 		skin.copyValuesToLookAndFeel(DefaultLookAndFeel::instance());
-		setSkinValues(skin, true);
 	}
 
 	void MainInterface::reloadSkin(const Skin &skin)
@@ -145,7 +140,7 @@ namespace Interface
 	{
 		int width = std::ceil(displayScale_ * getWidth());
 		int height = std::ceil(displayScale_ * getHeight());
-		if (width < kMinWindowWidth || height < kMinWindowHeight)
+		if (width < kMinWidth || height < kMinHeight)
 			return;
 
 		ScopedLock open_gl_lock(openGlCriticalSection_);
@@ -176,16 +171,20 @@ namespace Interface
 
 		ScopedLock lock(openGlCriticalSection_);
 
-
-		// TODO: lay out all the things here
-		int left = 0;
-		int top = 0;
-		int width = std::ceil(getWidth() * displayScale_);
-		int height = std::ceil(getHeight() * displayScale_);
-		Rectangle bounds{ 0, 0, width, height };
+		int width = getWidth();
+		int height = getHeight();
 
 		headerFooter_->setBounds(0, 0, width, height);
 
+		int effectsStateXStart = (int)std::round(scaleValue(kHorizontalWindowEdgeMargin));
+		int effectsStateYStart = (int)std::round(scaleValue(HeaderFooterSections::kHeaderHeight +
+			kMainVisualiserHeight + kVerticalGlobalMargin));
+		int effectsStateWidth = (int)std::round(scaleValue(EffectsStateSection::kMinWidth));
+		int effectsStateHeight = getHeight() - effectsStateYStart - 
+			(int)std::round(scaleValue(kLaneToBottomSettingsMargin + HeaderFooterSections::kFooterHeight));
+		Rectangle bounds{ effectsStateXStart, effectsStateYStart, effectsStateWidth, effectsStateHeight };
+
+		effectsStateSection_->setBounds(bounds);
 
 		if (getWidth() && getHeight())
 			redoBackground();
@@ -226,7 +225,7 @@ namespace Interface
 
 		shaders_ = std::make_unique<Shaders>(openGlContext_);
 		openGl_.shaders = shaders_.get();
-		openGl_.display_scale = displayScale_;
+		openGl_.displayScale = displayScale_;
 		lastRenderScale_ = displayScale_;
 
 		background_.init(openGl_);
@@ -238,15 +237,23 @@ namespace Interface
 		if (unsupported_)
 			return;
 
-		float renderScale = openGl_.context.getRenderingScale();
+		// this HAS to be true otherwise we have data races between the GL and JUCE Message threads
+		// if this fails then either:
+		// 1. continuous repainting is on and triggerRepaint wasn't called
+		// 2. component painting is off, so there's no way MessageManager could be locked
+		// NB: the paint call inside the OpenGlContext renderFrame needs to be commented out
+		//     otherwise it will call the paint methods the entire component tree
+		COMPLEX_ASSERT(MessageManager::existsAndIsLockedByCurrentThread());
+
+		float renderScale = (float)openGl_.context.getRenderingScale();
 		if (renderScale != lastRenderScale_)
 		{
 			lastRenderScale_ = renderScale;
-			MessageManager::callAsync([=] { checkShouldReposition(true); });
+			MessageManager::callAsync([this]() { checkShouldReposition(); });
 		}
 
 		ScopedLock lock(openGlCriticalSection_);
-		openGl_.display_scale = displayScale_;
+		openGl_.displayScale = displayScale_;
 		background_.render(openGl_);
 		renderOpenGlComponents(openGl_, animate_);
 	}
@@ -268,7 +275,7 @@ namespace Interface
 		popupSelector_->setCallback(std::move(callback));
 		popupSelector_->setCancelCallback(std::move(cancel));
 		popupSelector_->showSelections(options);
-		Rectangle<int> bounds(0, 0, std::ceil(displayScale_ * getWidth()), std::ceil(displayScale_ * getHeight()));
+		Rectangle bounds{ 0, 0, getWidth(), getHeight() };
 		popupSelector_->setPosition(getLocalPoint(source, position), bounds);
 		popupSelector_->setVisible(true);
 	}
@@ -278,16 +285,16 @@ namespace Interface
 	{
 		dualPopupSelector_->setCallback(std::move(callback));
 		dualPopupSelector_->showSelections(options);
-		Rectangle<int> bounds(0, 0, std::ceil(displayScale_ * getWidth()), std::ceil(displayScale_ * getHeight()));
+		Rectangle bounds{ 0, 0, getWidth(), getHeight() };
 		dualPopupSelector_->setPosition(getLocalPoint(source, position), width, bounds);
 		dualPopupSelector_->setVisible(true);
 	}
 
 	void MainInterface::popupDisplay(Component *source, const std::string &text,
-		BubbleComponent::BubblePlacement placement, bool primary)
+		BubbleComponent::BubblePlacement placement, bool primary, Skin::SectionOverride sectionOverride)
 	{
 		PopupDisplay *display = primary ? popupDisplay1_.get() : popupDisplay2_.get();
-		display->setContent(text, getLocalArea(source, source->getLocalBounds()), placement);
+		display->setContent(text, getLocalArea(source, source->getLocalBounds()), placement, sectionOverride);
 		display->setVisible(true);
 	}
 

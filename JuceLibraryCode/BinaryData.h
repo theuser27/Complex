@@ -9,7 +9,7 @@
 namespace BinaryData
 {
     extern const char*   Icon_Contrast_svg;
-    const int            Icon_Contrast_svgSize = 1337;
+    const int            Icon_Contrast_svgSize = 368;
 
     extern const char*   DDINBold_ttf;
     const int            DDINBold_ttfSize = 52204;

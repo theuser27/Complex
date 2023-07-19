@@ -19,12 +19,7 @@ namespace Interface
 	{
 	public:
 		static constexpr float kDDinDefaultHeight = 11.5f;
-		// windows font rendering is poop
-	#if COMPLEX_MSVC
 		static constexpr float kInterVDefaultHeight = 12.0f;
-	#elif
-		static constexpr float kInterVDefaultHeight = 11.0f;
-	#endif
 
 		static constexpr float kDDinDefaultKerning = 0.5f;
 		static constexpr float kInterVDefaultKerning = 0.5f;
@@ -33,8 +28,10 @@ namespace Interface
 		Font &getInterVFont() { return InterVFont_; }
 
 		float getAscentFromHeight(const Font &font, float height) const noexcept;
-		float getHeightFromAscent(const Font &font, float height) const noexcept;
+		float getHeightFromAscent(const Font &font, float ascent) const noexcept;
 		float getDefaultFontHeight(const Font &font) const noexcept;
+
+		void setFontForAscent(Font &font, float ascent) const;
 
 		static Fonts *instance()
 		{

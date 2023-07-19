@@ -69,14 +69,10 @@ namespace Framework
 			data_.clear(0, samplesLeft);
 		}
 
-		void clear() noexcept
-		{ data_.clear(); }
+		void clear() noexcept { data_.clear(); }
 
-		u32 advanceEnd(u32 numSamples) noexcept
-		{ return end_ = (end_ + numSamples) % size_; }
-
-		u32 setEnd(u32 index) noexcept
-		{ return end_ = index % size_; }
+		u32 advanceEnd(u32 numSamples) noexcept { return end_ = (end_ + numSamples) % size_; }
+		u32 setEnd(u32 index) noexcept { return end_ = index % size_; }
 
 		// applies on operation on the samples of otherBuffer and thisBuffer 
 		// and writes the results to the respective channels of thisBuffer
@@ -114,24 +110,23 @@ namespace Framework
 				break;
 			}
 
-			u32 thisBufferSize{};
-			u32 otherBufferSize{};
+			u32 thisBufferSize;
+			u32 otherBufferSize;
 			float increment = 1.0f / (float)numSamples;
 
 			u32(*indexFunction)(u32, u32);
-			switch (isPowerOfTwo(static_cast<u32>(thisBuffer.getNumSamples())) &
+			if (isPowerOfTwo(static_cast<u32>(thisBuffer.getNumSamples())) &&
 				isPowerOfTwo(static_cast<u32>(otherBuffer.getNumSamples())))
 			{
-			case true:
 				indexFunction = [](u32 value, u32 size) { return value & size; };
 				thisBufferSize = thisBuffer.getNumSamples() - 1;
 				otherBufferSize = otherBuffer.getNumSamples() - 1;
-				break;
-			default:
+			}
+			else
+			{
 				indexFunction = [](u32 value, u32 size) { return value % size; };
 				thisBufferSize = thisBuffer.getNumSamples();
 				otherBufferSize = otherBuffer.getNumSamples();
-				break;
 			}
 
 			auto otherDataReadPointers = otherBuffer.getArrayOfReadPointers();
@@ -160,7 +155,7 @@ namespace Framework
 		//	reader's starting index = readeeIndex
 		// - Can decide whether to advance the block or not
 		void readBuffer(AudioBuffer<float> &reader, u32 numChannels,u32 numSamples, 
-			u32 readeeIndex = 0, u32 readerIndex = 0, const bool* channelsToRead = nullptr) noexcept
+			u32 readeeIndex = 0, u32 readerIndex = 0, const bool* channelsToRead = nullptr) const noexcept
 		{
 			applyToBuffer(reader, data_, numChannels, numSamples, readerIndex, readeeIndex, channelsToRead);
 		}
@@ -217,20 +212,14 @@ namespace Framework
 			return data_.getSample(channel, index);
 		}
 
-		auto &getData() noexcept
-		{ return data_; }
-
-		u32 getNumChannels() const noexcept
-		{ return channels_; }
-
-		u32 getSize() const noexcept
-		{ return size_; }
-
-		u32 getEnd() const noexcept
-		{ return end_; }
+		auto &getData() noexcept { return data_; }
+		u32 getNumChannels() const noexcept { return channels_; }
+		u32 getSize() const noexcept { return size_; }
+		u32 getEnd() const noexcept { return end_; }
 
 	private:
-		u32 channels_ = 0, size_ = 0;
+		u32 channels_ = 0;
+		u32 size_ = 0;
 		u32 end_ = 0;
 
 		AudioBuffer<float> data_;

@@ -15,16 +15,14 @@
 #include "Framework/simd_buffer.h"
 #include "Framework/parameter_value.h"
 
+// this macro is used to give every type an identifier separate from its name
+// the rationale for using a separate value from the name is because names can change
+// and further down the line that could brick stuff
 #define DEFINE_CLASS_TYPE(Token) static constexpr std::string_view getClassType() noexcept { return Token; }
 
 namespace Plugin
 {
 	class ProcessorTree;
-}
-
-namespace Framework
-{
-	class ProcessorUpdate;
 }
 
 namespace Generation
@@ -61,6 +59,7 @@ namespace Generation
 		}
 
 		[[nodiscard]] virtual BaseProcessor *createSubProcessor(std::string_view type) const noexcept = 0;
+		[[nodiscard]] virtual BaseProcessor *createCopy(std::optional<u64> parentModuleId) const noexcept = 0;
 		void clearSubProcessors() noexcept { subProcessors_.clear(); }
 
 		BaseProcessor *getSubProcessor(size_t index) const noexcept { return subProcessors_[index]; }
@@ -104,10 +103,12 @@ namespace Generation
 
 
 		// i use this is a helper function so that i don't freak out when i see "new"
-		// the processors get added to the tree when they get their moduleId
+		// the processors get added to the tree when they get their processorId
 		// this is NOT a memory leak
-		template<typename T, typename ... Args>
+		// only subProcessors that have a defined class type can be created, this is by design
+		template<std::derived_from<BaseProcessor> T, typename ... Args>
 		T *makeSubProcessor(Args&& ... args) const
+			requires requires { T::getClassType(); }
 		{
 			// default construction, no extra arguments
 			if constexpr (sizeof...(Args) == 0)
@@ -132,7 +133,6 @@ namespace Generation
 		void addListener(Listener *listener) { listeners_.push_back(listener); }
 
 	protected:
-		[[nodiscard]] virtual BaseProcessor *createCopy(std::optional<u64> parentModuleId) const noexcept = 0;
 		void createProcessorParameters(const Framework::ParameterDetails *details, size_t size) noexcept;
 
 		// data contextual to every individual module
@@ -148,8 +148,5 @@ namespace Generation
 		const std::string_view processorType_{};
 
 		std::vector<Listener *> listeners_{};
-
-		friend class Plugin::ProcessorTree;
-		friend class Framework::ProcessorUpdate;
 	};
 }

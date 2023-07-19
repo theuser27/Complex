@@ -10,9 +10,7 @@
 
 #include "BaseSection.h"
 
-#include "../Components/PresetSelector.h"
 #include "MainInterface.h"
-#include "../Components/BaseSlider.h"
 
 namespace Interface
 {
@@ -27,7 +25,7 @@ namespace Interface
 		if (offOverlay_)
 		{
 			offOverlay_->setBounds(getLocalBounds());
-			offOverlay_->setColor(findColour(Skin::kBackground, true).withMultipliedAlpha(0.8f));
+			offOverlay_->setColor(getColour(Skin::kBackground).withMultipliedAlpha(0.8f));
 		}
 		if (activator_)
 			activator_->setBounds(getPowerButtonBounds());
@@ -35,21 +33,8 @@ namespace Interface
 
 	void BaseSection::paintBackground(Graphics &g)
 	{
-		paintBody(g);
 		paintKnobShadows(g);
 		paintChildrenBackgrounds(g);
-		paintBorder(g);
-	}
-
-	void BaseSection::setSkinValues(const Skin &skin, bool topLevel)
-	{
-		skin.applyComponentColors(this, skinOverride_, topLevel);
-		skin.applyComponentValues(this, skinOverride_, topLevel);
-		for (auto &subSection : subSections_)
-			subSection->setSkinValues(skin, false);
-
-		for (auto &openGlComponent : openGlComponents_)
-			openGlComponent->setSkinValues(skin);
 	}
 
 	void BaseSection::repaintBackground()
@@ -72,7 +57,7 @@ namespace Interface
 		BubbleComponent::BubblePlacement placement, bool primary)
 	{
 		if (auto *parent = findParentComponentOfClass<MainInterface>())
-			parent->popupDisplay(source, text, placement, primary);
+			parent->popupDisplay(source, text, placement, primary, getSectionOverride());
 	}
 
 	void BaseSection::hidePopupDisplay(bool primary)
@@ -83,8 +68,8 @@ namespace Interface
 
 	Path BaseSection::getRoundedPath(Rectangle<float> bounds, float topRounding, float bottomRounding) const
 	{
-		float topRoundness = (topRounding != 0.0f) ? topRounding : findValue(Skin::kBodyRoundingTop);
-		float bottomRoundness = (bottomRounding != 0.0f) ? bottomRounding : findValue(Skin::kBodyRoundingBottom);
+		float topRoundness = (topRounding != 0.0f) ? topRounding : getValue(Skin::kBodyRoundingTop);
+		float bottomRoundness = (bottomRounding != 0.0f) ? bottomRounding : getValue(Skin::kBodyRoundingBottom);
 
 		auto x = bounds.getX();
 		auto y = bounds.getY();
@@ -108,14 +93,14 @@ namespace Interface
 	void BaseSection::paintBody(Graphics &g, Rectangle<int> bounds, float topRounding, float bottomRounding) const
 	{
 		auto path = getRoundedPath(bounds.toFloat(), topRounding, bottomRounding);
-		g.setColour(findColour(Skin::kBody, true));
+		g.setColour(getColour(Skin::kBody));
 		g.fillPath(path);
 	}
 
 	void BaseSection::paintBorder(Graphics &g, Rectangle<int> bounds, float topRounding, float bottomRounding) const
 	{
 		auto path = getRoundedPath(bounds.toFloat().reduced(0.5f), topRounding, bottomRounding);
-		g.setColour(findColour(Skin::kBorder, true));
+		g.setColour(getColour(Skin::kBorder));
 		g.strokePath(path, PathStrokeType (1.0f));
 	}
 
@@ -123,14 +108,14 @@ namespace Interface
 	{
 		static constexpr float kCornerScale = 0.70710678119f;
 		// TODO: redo to match the different rounding, hardcoded to topRounding for now
-		int corner_size = findValue(Skin::kBodyRoundingTop);
+		int corner_size = getValue(Skin::kBodyRoundingTop);
 		int shadow_size = getComponentShadowWidth();
 		int corner_and_shadow = corner_size + shadow_size;
 
 		float corner_shadow_offset = corner_size - corner_and_shadow * kCornerScale;
 		float corner_ratio = corner_size * 1.0f / corner_and_shadow;
 
-		Colour shadow_color = findColour(Skin::kShadow, true);
+		Colour shadow_color = getColour(Skin::kShadow);
 		Colour transparent = shadow_color.withAlpha(0.0f);
 
 		int left = bounds.getX();
@@ -241,14 +226,12 @@ namespace Interface
 
 	void BaseSection::paintOpenGlBackground(Graphics &g, OpenGlComponent *openGlComponent)
 	{
-		g.saveState();
+		Graphics::ScopedSaveState s(g);
 
 		Rectangle<int> bounds = getLocalArea(openGlComponent, openGlComponent->getLocalBounds());
 		g.reduceClipRegion(bounds);
 		g.setOrigin(bounds.getTopLeft());
 		openGlComponent->paint(g);
-
-		g.restoreState();
 	}
 
 	void BaseSection::drawTextComponentBackground(Graphics &g, Rectangle<int> bounds, bool extend_to_label)
@@ -256,14 +239,14 @@ namespace Interface
 		if (bounds.getWidth() <= 0 || bounds.getHeight() <= 0)
 			return;
 
-		g.setColour(findColour(Skin::kTextComponentBackground, true));
+		g.setColour(getColour(Skin::kTextComponentBackground));
 		int y = bounds.getY();
 		int rounding = bounds.getHeight() / 2;
 
 		if (extend_to_label)
 		{
-			int label_bottom = bounds.getBottom() + findValue(Skin::kTextComponentLabelOffset);
-			rounding = findValue(Skin::kLabelBackgroundRounding);
+			int label_bottom = bounds.getBottom() + getValue(Skin::kTextComponentLabelOffset);
+			rounding = getValue(Skin::kLabelBackgroundRounding);
 			g.fillRoundedRectangle(bounds.toFloat(), rounding);
 
 			int extend_y = y + bounds.getHeight() / 2;
@@ -273,13 +256,13 @@ namespace Interface
 			g.fillRoundedRectangle(bounds.toFloat(), rounding);
 	}
 
-	void BaseSection::initOpenGlComponents(OpenGlWrapper &open_gl)
+	void BaseSection::initOpenGlComponents(OpenGlWrapper &openGl)
 	{
 		for (auto &openGlComponent : openGlComponents_)
-			openGlComponent->init(open_gl);
+			openGlComponent->init(openGl);
 
 		for (auto &subSection : subSections_)
-			subSection->initOpenGlComponents(open_gl);
+			subSection->initOpenGlComponents(openGl);
 	}
 
 	void BaseSection::renderOpenGlComponents(OpenGlWrapper &openGl, bool animate)
@@ -317,13 +300,13 @@ namespace Interface
 		}
 	}
 
-	void BaseSection::destroyOpenGlComponents(OpenGlWrapper &open_gl)
+	void BaseSection::destroyOpenGlComponents(OpenGlWrapper &openGl)
 	{
 		for (auto &openGlComponent : openGlComponents_)
-			openGlComponent->destroy(open_gl);
+			openGlComponent->destroy(openGl);
 
 		for (auto &subSection : subSections_)
-			subSection->destroyOpenGlComponents(open_gl);
+			subSection->destroyOpenGlComponents(openGl);
 	}
 
 	void BaseSection::guiChanged(BaseButton *button)
@@ -336,27 +319,61 @@ namespace Interface
 	{
 		auto currentBounds = textSelector->getBounds();
 		auto currentDrawBox = textSelector->getDrawBox();
-		textSelector->setBounds(currentBounds.withWidth(currentBounds.getWidth() + requestedWidthChange));
-		textSelector->setDrawBox(currentDrawBox.withWidth(currentDrawBox.getWidth() + requestedWidthChange));
+		textSelector->setBoundsAndDrawBounds(currentBounds.withWidth(currentBounds.getWidth() + requestedWidthChange),
+			currentDrawBox.withWidth(currentDrawBox.getWidth() + requestedWidthChange));
 	}
 
-	void BaseSection::addButton(BaseButton *button, bool show)
+	void BaseSection::addSubSection(BaseSection *subSection, bool show)
 	{
-		buttons_[button->getName().toStdString()] = button;
-		button->addListener(this);
+		subSection->setParent(this);
+		subSection->setSkin(skin_);
+
 		if (show)
-			addAndMakeVisible(button);
+			addAndMakeVisible(subSection);
+
+		subSections_.push_back(subSection);
+	}
+
+	void BaseSection::removeSubSection(BaseSection *section)
+	{
+		auto location = std::ranges::find(subSections_.begin(), subSections_.end(), section);
+		if (location != subSections_.end())
+			subSections_.erase(location);
+	}
+
+	void BaseSection::addButton(BaseButton *button)
+	{
+		if (!button)
+			return;
+
+		buttons_[button->getName().toRawUTF8()] = button;
+		button->addListener(this);
+
+		addAndMakeVisible(button);
 		addOpenGlComponent(button->getGlComponent());
 	}
 
-	void BaseSection::addSlider(BaseSlider *slider, bool show, bool listen)
+	void BaseSection::removeButton(BaseButton *button)
 	{
-		sliders_[slider->getParameterDetails().name] = slider;
-		if (listen)
-			slider->addListener(this);
-		if (show)
-			addAndMakeVisible(slider);
+		if (!button)
+			return;
 
+		removeOpenGlComponent(button->getGlComponent());
+		removeChildComponent(button);
+
+		button->removeListener(this);
+		buttons_.erase(button->getName().toRawUTF8());
+	}
+
+	void BaseSection::addSlider(BaseSlider *slider)
+	{
+		if (!slider)
+			return;
+
+		sliders_[slider->getName().toRawUTF8()] = slider;
+		slider->addListener(this);
+
+		addAndMakeVisible(slider);
 		if (slider->isImageOnTop())
 		{
 			addOpenGlComponent(slider->getQuadComponent());
@@ -370,29 +387,26 @@ namespace Interface
 		addOpenGlComponent(slider->getTextEditorComponent());
 	}
 
-	void BaseSection::addSubSection(BaseSection *subSection, bool show)
+	void BaseSection::removeSlider(BaseSlider *slider)
 	{
-		subSection->setParent(this);
+		if (!slider)
+			return;
 
-		if (show)
-			addAndMakeVisible(subSection);
+		removeOpenGlComponent(slider->getQuadComponent());
+		removeOpenGlComponent(slider->getImageComponent());
+		removeOpenGlComponent(slider->getTextEditorComponent());
+		removeChildComponent(slider);
 
-		subSections_.push_back(subSection);
-	}
-
-	void BaseSection::removeSubSection(BaseSection *section)
-	{
-		auto location = std::find(subSections_.begin(), subSections_.end(), section);
-		if (location != subSections_.end())
-			subSections_.erase(location);
+		slider->removeListener(this);
+		sliders_.erase(slider->getName().toRawUTF8());
 	}
 
 	void BaseSection::addOpenGlComponent(OpenGlComponent *openGlComponent, bool toBeginning)
 	{
-		if (openGlComponent == nullptr)
+		if (!openGlComponent)
 			return;
 
-		COMPLEX_ASSERT(std::find(openGlComponents_.begin(), openGlComponents_.end(),
+		COMPLEX_ASSERT(std::ranges::find(openGlComponents_.begin(), openGlComponents_.end(),
 			openGlComponent) == openGlComponents_.end());
 
 		openGlComponent->setParent(this);
@@ -403,15 +417,24 @@ namespace Interface
 		addAndMakeVisible(openGlComponent);
 	}
 
-	void BaseSection::setActivator(GeneralButton *activator)
+	void BaseSection::removeOpenGlComponent(OpenGlComponent *openGlComponent)
+	{
+		if (openGlComponent == nullptr)
+			return;
+
+		auto erasedElementsSize = std::erase(openGlComponents_, openGlComponent);
+		if (erasedElementsSize)
+			removeChildComponent(openGlComponent);
+	}
+
+	void BaseSection::setActivator(BaseButton *activator)
 	{
 		createOffOverlay();
 
 		activator_ = activator;
 		activator->setPowerButton();
-		activator_->getGlComponent()->setAlwaysOnTop(true);
 		activator->addButtonListener(this);
-		setActive(activator_->getToggleStateValue().getValue());
+		setActive(activator_->getToggleState());
 	}
 
 	void BaseSection::createOffOverlay()
@@ -426,64 +449,18 @@ namespace Interface
 		offOverlay_->setInterceptsMouseClicks(false, false);
 	}
 
-	void BaseSection::paintJointControlBackground(Graphics &g, int x, int y, int width, int height)
-	{
-		float rounding = findValue(Skin::kLabelBackgroundRounding);
-		g.setColour(findColour(Skin::kLabelBackground, true));
-		g.fillRect(x + rounding, y * 1.0f, width - 2.0f * rounding, height / 2.0f);
-
-		int label_height = findValue(Skin::kLabelBackgroundHeight);
-		int half_label_height = label_height / 2;
-		int side_width = height;
-		g.setColour(findColour(Skin::kTextComponentBackground, true));
-		g.fillRoundedRectangle(x, y + half_label_height, width, height - half_label_height, rounding);
-		g.fillRoundedRectangle(x, y, side_width, height, rounding);
-		g.fillRoundedRectangle(x + width - side_width, y, side_width, height, rounding);
-
-		Colour label_color = findColour(Skin::kLabelBackground, true);
-		if (label_color.getAlpha() == 0)
-			label_color = findColour(Skin::kBody, true);
-		g.setColour(label_color);
-		int rect_width = std::max(width - 2 * side_width, 0);
-		g.fillRect(x + side_width, y, rect_width, half_label_height);
-		g.fillRoundedRectangle(x + side_width, y, rect_width, label_height, rounding);
-	}
-
-	void BaseSection::paintJointControl(Graphics &g, int x, int y, int width, int height, const std::string &name)
-	{
-		paintJointControlBackground(g, x, y, width, height);
-
-		setLabelFont(g);
-		g.setColour(findColour(Skin::kBodyText, true));
-		g.drawText(name, x, y, width, findValue(Skin::kLabelBackgroundHeight), Justification::centred, false);
-	}
-
-	void BaseSection::placeJointControls(int x, int y, int width, int height,
-		BaseSlider *left, BaseSlider *right, Component *widget)
-	{
-		int width_control = height;
-		left->setBounds(x, y, width_control, height);
-
-		if (widget)
-		{
-			int label_height = findValue(Skin::kLabelBackgroundHeight);
-			widget->setBounds(x + width_control, y + label_height, width - 2 * width_control, height - label_height);
-		}
-		right->setBounds(x + width - width_control, y, width_control, height);
-	}
-
 	void BaseSection::placeRotaryOption(Component *option, BaseSlider *rotary)
 	{
-		int width = findValue(Skin::kRotaryOptionWidth);
-		int offset_x = findValue(Skin::kRotaryOptionXOffset) - width / 2;
-		int offset_y = findValue(Skin::kRotaryOptionYOffset) - width / 2;
+		int width = getValue(Skin::kRotaryOptionWidth);
+		int offset_x = getValue(Skin::kRotaryOptionXOffset) - width / 2;
+		int offset_y = getValue(Skin::kRotaryOptionYOffset) - width / 2;
 		Point<int> point = rotary->getBounds().getCentre() + Point<int>(offset_x, offset_y);
 		option->setBounds(point.x, point.y, width, width);
 	}
 
 	void BaseSection::placeKnobsInArea(Rectangle<int> area, std::vector<Component *> knobs)
 	{
-		int widget_margin = findValue(Skin::kWidgetMargin);
+		int widget_margin = getValue(Skin::kWidgetMargin);
 		float component_width = (area.getWidth() - (knobs.size() + 1) * widget_margin) / (1.0f * knobs.size());
 
 		int y = area.getY();
@@ -507,12 +484,6 @@ namespace Interface
 		return (total_width - slider_width) / 2;
 	}
 
-	/*Rectangle<int> BaseSection::getPowerButtonBounds() const noexcept
-	{
-		int title_width = getTitleWidth();
-		return Rectangle<int>(getPowerButtonOffset(), 0, title_width, title_width);
-	}*/
-
 	float BaseSection::getDisplayScale() const
 	{
 		if (getWidth() <= 0)
@@ -527,35 +498,14 @@ namespace Interface
 
 	Font BaseSection::getLabelFont() const noexcept
 	{
-		float height = findValue(Skin::kLabelHeight);
+		float height = getValue(Skin::kLabelHeight);
 		return Fonts::instance()->getInterVFont().withPointHeight(height);
 	}
 
 	void BaseSection::setLabelFont(Graphics &g)
 	{
-		g.setColour(findColour(Skin::kBodyText, true));
+		g.setColour(getColour(Skin::kNormalText));
 		g.setFont(getLabelFont());
-	}
-
-	void BaseSection::drawLabelConnectionForComponents(Graphics &g, Component *left, Component *right)
-	{
-		int label_offset = findValue(Skin::kLabelOffset);
-		int background_height = findValue(Skin::kLabelBackgroundHeight);
-		g.setColour(findColour(Skin::kLabelConnection, true));
-		int background_y = left->getBounds().getBottom() - background_height + label_offset;
-
-		int rect_width = right->getBounds().getCentreX() - left->getBounds().getCentreX();
-		g.fillRect(left->getBounds().getCentreX(), background_y, rect_width, background_height);
-	}
-
-	void BaseSection::drawLabelBackground(Graphics &g, Rectangle<int> bounds, bool text_component)
-	{
-		int background_rounding = findValue(Skin::kLabelBackgroundRounding);
-		g.setColour(findColour(Skin::kLabelBackground, true));
-		Rectangle<float> label_bounds = getLabelBackgroundBounds(bounds, text_component).toFloat();
-		g.fillRoundedRectangle(label_bounds, background_rounding);
-		if (text_component && !findColour(Skin::kTextComponentBackground, true).isTransparent())
-			g.fillRect(label_bounds.withHeight(label_bounds.getHeight() / 2));
 	}
 
 	Rectangle<int> BaseSection::getDividedAreaUnbuffered(Rectangle<int> full_area, int num_sections, int section, int buffer)
@@ -574,8 +524,8 @@ namespace Interface
 
 	Rectangle<int> BaseSection::getLabelBackgroundBounds(Rectangle<int> bounds, bool text_component)
 	{
-		int background_height = findValue(Skin::kLabelBackgroundHeight);
-		int label_offset = text_component ? findValue(Skin::kTextComponentLabelOffset) : findValue(Skin::kLabelOffset);
+		int background_height = getValue(Skin::kLabelBackgroundHeight);
+		int label_offset = text_component ? getValue(Skin::kTextComponentLabelOffset) : getValue(Skin::kLabelOffset);
 		int background_y = bounds.getBottom() - background_height + label_offset;
 		return Rectangle<int>(bounds.getX(), background_y, bounds.getWidth(), background_height);
 	}
@@ -587,7 +537,7 @@ namespace Interface
 
 		//drawLabelBackground(g, component_bounds, text_component);
 		setLabelFont(g);
-		g.setColour(findColour(Skin::kBodyText, true));
+		g.setColour(getColour(Skin::kNormalText));
 		Rectangle<int> background_bounds = getLabelBackgroundBounds(component_bounds, text_component);
 		g.drawText(text, component_bounds.getX(), background_bounds.getY(),
 			component_bounds.getWidth(), background_bounds.getHeight(), Justification::centred, false);
@@ -596,22 +546,32 @@ namespace Interface
 	void BaseSection::drawSliderLabel(Graphics &g, BaseSlider *slider) const
 	{
 		Graphics::ScopedSaveState s(g);
+
 		auto *label = slider->getLabelComponent();
+		g.setOrigin(label->getPosition());
+		label->paint(g);
+	}
+
+	void BaseSection::drawButtonLabel(Graphics &g, BaseButton *button) const
+	{
+		Graphics::ScopedSaveState s(g);
+
+		auto *label = button->getLabelComponent();
 		auto rectangle = label->getBounds();
 		g.setFont(label->getFont());
-		g.setColour(findColour(Skin::kBodyText, true));
+		g.setColour(getColour(Skin::kNormalText));
 		g.drawText(label->getLabelText(), rectangle, Justification::centred, false);
 	}
 
-	void BaseSection::drawNumberBoxBackground(Graphics &g, NumberBox *numberBox) const
+	void BaseSection::drawSliderBackground(Graphics &g, BaseSlider *slider) const
 	{
 		Graphics::ScopedSaveState s(g);
-		numberBox->paint(g);
+		slider->paint(g);
 	}
 
 	void BaseSection::drawTextBelowComponent(Graphics &g, String text, Component *component, int space, int padding)
 	{
-		int height = findValue(Skin::kLabelBackgroundHeight);
+		int height = getValue(Skin::kLabelBackgroundHeight);
 		g.drawText(text, component->getX() - padding, component->getBottom() + space,
 			component->getWidth() + 2 * padding, height, Justification::centred, false);
 	}
@@ -627,8 +587,6 @@ namespace Interface
 		active_ = active;
 		for (auto &slider : sliders_)
 			slider.second->setActive(active);
-		for (auto &subSection : subSections_)
-			subSection->setActive(active);
 
 		repaintBackground();
 	}

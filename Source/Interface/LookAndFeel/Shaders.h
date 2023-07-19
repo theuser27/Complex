@@ -28,8 +28,7 @@ namespace Interface
 			kLineVertex,
 			kFillVertex,
 			kBarHorizontalVertex,
-			kBarVerticalVertex,
-			kNumVertexShaders
+			kBarVerticalVertex
 		};
 
 		enum FragmentShader
@@ -55,9 +54,11 @@ namespace Interface
 			kModulationKnobFragment,
 			kLineFragment,
 			kFillFragment,
-			kBarFragment,
-			kNumFragmentShaders
+			kBarFragment
 		};
+
+		static constexpr auto kVertexShaderCount = magic_enum::enum_count<VertexShader>();
+		static constexpr auto kFragmentShaderCount = magic_enum::enum_count<FragmentShader>();
 
 		Shaders(OpenGLContext &openGlContext) : openGlContext_(&openGlContext) { }
 
@@ -85,18 +86,18 @@ namespace Interface
 		GLuint createFragmentShader(FragmentShader shader) const;
 
 		OpenGLContext *openGlContext_;
-		GLuint vertexShaderIds_[kNumVertexShaders]{};
-		GLuint fragmentShaderIds_[kNumFragmentShaders]{};
+		std::array<GLuint, kVertexShaderCount> vertexShaderIds_{};
+		std::array<GLuint, kFragmentShaderCount> fragmentShaderIds_{};
 
 		std::map<int, std::unique_ptr<OpenGLShaderProgram>> shaderPrograms_;
 	};
 
 	struct OpenGlWrapper
 	{
-		OpenGlWrapper(OpenGLContext &c) : context(c), shaders(nullptr), display_scale(1.0f) { }
+		OpenGlWrapper(OpenGLContext &c) : context(c), shaders(nullptr), displayScale(1.0f) { }
 
 		OpenGLContext &context;
 		Shaders *shaders;
-		float display_scale;
+		float displayScale;
 	};
 }

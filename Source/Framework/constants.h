@@ -34,6 +34,7 @@ namespace common
 
 	// channel constants
 	inline constexpr u32 kNumInputsOutputs = 1;																				// (can be changed)   in/out sources
+	inline constexpr u32 kNumSidechains = kNumInputsOutputs - 1;											// (can be changed)   in/out sources
 	inline constexpr u32 kNumChannels = 2;																						// (can't be changed) currently the plugin only works with stereo signals
 	inline constexpr u32 kNumTotalChannels = kNumInputsOutputs * kNumChannels;
 	inline constexpr u32 kSimdsPerInput = kSimdRatio / kNumChannels;
@@ -53,13 +54,13 @@ namespace common
 																																										//                    a distinct sample in the middle)
 
 	// misc constants
-	inline constexpr u32 kMaxNumChains = 16;																					// (can be changed)   an artificial limit is needed
+	inline constexpr u32 kMaxNumLanes = 16;																						// (can be changed)   an artificial limit is needed
 	inline constexpr u32 kMaxEffectModes = 16;																				// (can be changed)   types of effects per module; an artificial limit is needed
 	inline constexpr u32 kMaxParameterMappings = 64;																	// (can be changed)   max number of parameters that can be mapped out
 	inline constexpr u32 kInitialNumEffects = 50;																			// (can be changed)   initial number of effect slots in a chain
 
 	// processing constants
-	inline constexpr double kMinFrequency = kMidi0Frequency / 4.0;										// (can be changed)   lowest frequency that will be displayed
+	inline constexpr double kMinFrequency = kMidi0Frequency;													// (can be changed)   lowest frequency that will be displayed
 	inline constexpr float kNormalisedToDbMultiplier = 120.0f;												// (can be changed)   symmetrical loudness range in which we're processing	
 
 	// GUI constants

@@ -24,12 +24,12 @@ namespace Interface
 		return 1.0f;
 	}
 
-	float Fonts::getHeightFromAscent(const Font &font, float height) const noexcept
+	float Fonts::getHeightFromAscent(const Font &font, float ascent) const noexcept
 	{
 		if (font.getTypefaceName() == DDinFont_.getTypefaceName())
-			return height * kDDinDefaultHeight / 8.0f;
+			return ascent * kDDinDefaultHeight / 8.0f;
 		if (font.getTypefaceName() == InterVFont_.getTypefaceName())
-			return height * kInterVDefaultHeight / 8.0f;
+			return ascent * kInterVDefaultHeight / 8.0f;
 
 		COMPLEX_ASSERT_FALSE("Unknown font was provided to get height for");
 		return 1.0f;
@@ -44,6 +44,18 @@ namespace Interface
 
 		COMPLEX_ASSERT_FALSE("Unknown font was provided to get default height for");
 		return 11.0f;
+	}
+
+	void Fonts::setFontForAscent(Font &font, float ascent) const
+	{
+		auto fontHeight = getHeightFromAscent(font, ascent);
+		font.setHeight(fontHeight);
+
+		if (font.getTypefaceName() == DDinFont_.getTypefaceName())
+			font.setExtraKerningFactor((fontHeight + kDDinDefaultKerning) / fontHeight - 1.0f);
+		else if (font.getTypefaceName() == InterVFont_.getTypefaceName())
+			font.setExtraKerningFactor((fontHeight + kInterVDefaultKerning) / fontHeight - 1.0f);
+		else COMPLEX_ASSERT_FALSE("Unknown font was provided to set");
 	}
 
 	Fonts::Fonts() :

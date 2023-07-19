@@ -11,16 +11,9 @@
 
 //==============================================================================
 ComplexAudioProcessor::ComplexAudioProcessor()
-#ifndef JucePlugin_PreferredChannelConfigurations
-		 : AudioProcessor (BusesProperties()
-										 #if ! JucePlugin_IsMidiEffect
-											#if ! JucePlugin_IsSynth
-											 .withInput  ("Input",  juce::AudioChannelSet::stereo(), true)
-											#endif
-											 .withOutput ("Output", juce::AudioChannelSet::stereo(), true)
-										 #endif
-											 )
-#endif
+		 : AudioProcessor (BusesProperties().withInput("Input", juce::AudioChannelSet::stereo(), true)
+																				.withOutput("Output", juce::AudioChannelSet::stereo(), true))
+
 {
 	using namespace Framework;
 
@@ -38,7 +31,7 @@ ComplexAudioProcessor::ComplexAudioProcessor()
 	}
 
 	// temporary, used for testing
-	u32 index = 0;
+	/*u32 index = 0;
 	for (auto &parameterDetails : effectModuleParameterList)
 	{
 		auto parameter = getProcessorParameter(3, parameterDetails.name);
@@ -73,14 +66,14 @@ ComplexAudioProcessor::ComplexAudioProcessor()
 			addParameter(bridge);
 		}
 		index++;
-	}
+	}*/
 
-	/*for (size_t i = 0; i < kMaxParameterMappings; i++)
+	for (u32 i = 0; i < kMaxParameterMappings; i++)
 	{
-		Framework::ParameterBridge *bridge = new Framework::ParameterBridge(this, i);
+		auto *bridge = new ParameterBridge(this, i);
 		parameterBridges_.push_back(bridge);
 		addParameter(bridge);
-	}*/
+	}
 }
 
 //==============================================================================
@@ -108,13 +101,8 @@ void ComplexAudioProcessor::releaseResources()
 	// spare memory, etc.
 }
 
-#ifndef JucePlugin_PreferredChannelConfigurations
 bool ComplexAudioProcessor::isBusesLayoutSupported (const BusesLayout& layouts) const
 {
-#if JucePlugin_IsMidiEffect
-	juce::ignoreUnused (layouts);
-	return true;
-#else
 	// This is the place where you check if the layout is supported.
 	// In this template code we only support mono or stereo.
 	// Some plugin hosts, such as certain GarageBand versions, will only
@@ -130,9 +118,7 @@ bool ComplexAudioProcessor::isBusesLayoutSupported (const BusesLayout& layouts) 
 #endif
 
 	return true;
-#endif
 }
-#endif
 
 void ComplexAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, [[maybe_unused]] juce::MidiBuffer& midiMessages)
 {

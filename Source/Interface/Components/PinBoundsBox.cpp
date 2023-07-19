@@ -21,7 +21,7 @@ namespace Interface
 
 		highlight_ = std::make_unique<OpenGlImageComponent>("highlight");
 		addOpenGlComponent(highlight_.get());
-		highlight_->setComponent(this);
+		highlight_->setTargetComponent(this);
 		highlight_->paintEntireComponent(false);
 		highlight_->setInterceptsMouseClicks(false, false);
 
@@ -38,31 +38,26 @@ namespace Interface
 		roundedCorners_ = std::make_unique<OpenGlCorners>();
 		addOpenGlComponent(roundedCorners_.get());
 		roundedCorners_->setInterceptsMouseClicks(false, false);
+	}
 
+	void PinBoundsBox::paintBackground(Graphics &g)
+	{
+		g.setColour(getColour(Skin::kBody));
+		g.fillRect(getLocalBounds());
 	}
 
 	void PinBoundsBox::paint(Graphics &g)
 	{
 		paintHighlightBox(g, (float)lowBound_->getValue(), (float)highBound_->getValue(),
-			findColour(Skin::kPinSlider, true).withAlpha(0.15f));
+			getColour(Skin::kWidgetPrimary1).withAlpha(0.15f));
 	}
 
 	void PinBoundsBox::resized()
 	{
-		static constexpr int additionalOffsetY = 8;
-
 		highlight_->setBounds(0, 0, getWidth(), getHeight());
 
-		auto width = (float)getWidth();
-		auto lowBound = (float)lowBound_->getValue();
-		auto lowBoundWidth = lowBound_->getWidth();
-		auto highBound = (float)highBound_->getValue();
-		auto highBoundWidth = highBound_->getWidth();
-
-		lowBound_->setBounds((int)(lowBound * width) - lowBoundWidth / 2, -additionalOffsetY, 
-			lowBoundWidth, getHeight() + additionalOffsetY);
-		highBound_->setBounds((int)(highBound * width) - highBoundWidth / 2, - additionalOffsetY, 
-			highBoundWidth, getHeight() + additionalOffsetY);
+		positionSliders();
+		roundedCorners_->setBounds(getLocalBounds());
 
 		repaintBackground();
 	}
@@ -70,33 +65,58 @@ namespace Interface
 	void PinBoundsBox::sliderValueChanged(Slider *slider)
 	{
 		if (lowBound_.get() == slider || highBound_.get() == slider)
-			repaintBackground();
+			positionSliders();
 	}
 
-	void PinBoundsBox::paintHighlightBox(Graphics &g, float lowBoundValue, float highBoundValue, Colour colour) const
+	void PinBoundsBox::positionSliders()
 	{
+		static constexpr int kAdditionalWidth = 16;
+
+		auto width = (float)getWidth();
+		auto pinSlidersWidth = scaleValueRoundInt(PinSlider::kDefaultPinSliderWidth + kAdditionalWidth);
+		auto pinSlidersDrawWidthOffset = scaleValueRoundInt(kAdditionalWidth / 2.0f);
+		auto lowBoundPosition = (int)std::round((float)lowBound_->getValue() * width);
+		auto highBoundPosition = (int)std::round((float)highBound_->getValue() * width);
+
+		lowBound_->setBoundsAndDrawBounds(
+			{ lowBoundPosition - pinSlidersWidth / 2, 0, pinSlidersWidth, getHeight() },
+			{ pinSlidersDrawWidthOffset, 0, pinSlidersWidth - 2 * pinSlidersDrawWidthOffset, getHeight() });
+		lowBound_->setTotalRange(width);
+		highBound_->setBoundsAndDrawBounds(
+			{ highBoundPosition - pinSlidersWidth / 2, 0, pinSlidersWidth, getHeight() },
+			{ pinSlidersDrawWidthOffset, 0, pinSlidersWidth - 2 * pinSlidersDrawWidthOffset, getHeight() });
+		highBound_->setTotalRange(width);
+
+		highlight_->redrawImage();
+	}
+
+	void PinBoundsBox::paintHighlightBox(Graphics &g, float lowBoundValue, 
+		float highBoundValue, Colour colour, float shiftValue) const
+	{
+		g.setColour(colour);
+
 		auto width = (float)getWidth();
 		auto height = (float)getHeight();
+		auto lowBoundShifted = std::clamp(lowBoundValue + shiftValue, 0.0f, 1.0f);
+		auto highBoundShifted = std::clamp(highBoundValue + shiftValue, 0.0f, 1.0f);
 
-		if (lowBoundValue <= highBoundValue)
+		if (lowBoundValue < highBoundValue)
 		{
-			auto lowPixel = lowBoundValue * width;
-			auto highlightWidth = highBoundValue * width - lowPixel;
+			auto lowPixel = lowBoundShifted * width;
+			auto highlightWidth = highBoundShifted * width - lowPixel;
 			Rectangle bounds{ lowPixel, 0.0f, highlightWidth, height };
 
-			g.setColour(colour);
 			g.fillRect(bounds);
 		}
-		else
+		else if (lowBoundValue > highBoundValue)
 		{
-			auto lowPixel = lowBoundValue * width;
+			auto lowPixel = lowBoundShifted * width;
 			auto upperHighlightWidth = width - lowPixel;
-			auto lowerHighlightWidth = highBoundValue * width;
+			auto lowerHighlightWidth = highBoundShifted * width;
 
 			Rectangle upperBounds{ lowPixel, 0.0f, upperHighlightWidth, height };
 			Rectangle lowerBounds{ 0.0f, 0.0f, lowerHighlightWidth, height };
 
-			g.setColour(colour);
 			g.fillRect(upperBounds);
 			g.fillRect(lowerBounds);
 		}

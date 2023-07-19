@@ -19,7 +19,7 @@ ComplexAudioProcessorEditor::ComplexAudioProcessorEditor (ComplexAudioProcessor&
 
 	setLookAndFeel(DefaultLookAndFeel::instance());
 
-	constrainer_.setMinimumSize(kMinWindowWidth, kMinWindowHeight);
+	constrainer_.setMinimumSize(MainInterface::kMinWidth, MainInterface::kMinHeight);
 	constrainer_.setGui(gui_.get());
 	setConstrainer(&constrainer_);
 	addAndMakeVisible(gui_.get());
@@ -32,8 +32,18 @@ ComplexAudioProcessorEditor::ComplexAudioProcessorEditor (ComplexAudioProcessor&
 	constrainer_.setScaleFactor(clampedScale);
 	gui_->setScaling((float)clampedScale);
 
-	setResizable(true, true);
+	setResizable(false, true);
 	setSize((int)std::round(windowWidth * clampedScale), (int)std::round(windowHeight * clampedScale));
+}
+
+ComplexAudioProcessorEditor::~ComplexAudioProcessorEditor()
+{
+	auto scaling = gui_->getScaling();
+	Framework::LoadSave::saveWindowScale(scaling);
+
+	auto unscaledWidth = (float)getWidth() / scaling;
+	auto unscaledHeight = (float)getHeight() / scaling;
+	Framework::LoadSave::saveWindowSize((int)std::round(unscaledWidth), (int)std::round(unscaledHeight));
 }
 
 void ComplexAudioProcessorEditor::resized()

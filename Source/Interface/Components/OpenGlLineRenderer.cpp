@@ -152,7 +152,7 @@ namespace Interface
   }
 
   void OpenGlLineRenderer::render(OpenGlWrapper &open_gl, bool animate)
-  { drawLines(open_gl, true); }
+  { drawLines(open_gl, animate); }
 
   void OpenGlLineRenderer::boostLeftRange(float start, float end, int buffer_vertices, float min)
   { boostRange(boost_left_.get(), start, end, buffer_vertices, min); }
@@ -168,7 +168,7 @@ namespace Interface
     int active_points = num_points_ - 2 * buffer_vertices;
     int start_index = std::max((int)std::ceil(start * (active_points - 1)), 0);
     float end_position = end * (active_points - 1);
-    int end_index = std::max(std::ceil(end_position), 0.0f);
+    int end_index = std::max((int)std::ceil(end_position), 0);
     float progress = end_position - (int)end_position;
 
     start_index %= active_points;
@@ -193,8 +193,8 @@ namespace Interface
     last_negative_boost_ = direction < 0;
     if (last_negative_boost_)
     {
-      start_index = std::max((int)std::floor(start * (active_points - 1)), 0);
-      end_index = std::max(std::floor(end_position), 0.0f);
+      start_index = std::max((int)std::floor(start * (float)(active_points - 1)), 0);
+      end_index = std::max((int)std::floor(end_position), 0);
       start_index %= active_points;
       end_index %= active_points;
 

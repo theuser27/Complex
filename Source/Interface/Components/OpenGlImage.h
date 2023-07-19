@@ -21,7 +21,6 @@ namespace Interface
   {
   public:
     OpenGlImage();
-    virtual ~OpenGlImage() = default;
 
     void init(OpenGlWrapper &openGl);
     void render();
@@ -73,7 +72,7 @@ namespace Interface
     int imageWidth_ = 0;
     int imageHeight_ = 0;
     std::unique_ptr<Image> ownedImage_;
-    Colour color_;
+    Colour color_ = Colours::white;
     OpenGLTexture texture_;
     bool additive_ = false;
     bool useAlpha_ = false;

@@ -24,7 +24,6 @@
 
 #include <Third Party/gcem/gcem.hpp>
 #include <Third Party/magic_enum/magic_enum.hpp>
-#include <Third Party/fixed_string/fixed_string.hpp>
 #include "JuceHeader.h"
 #include "constants.h"
 
@@ -35,6 +34,9 @@ namespace common
 
 	namespace commonConcepts
 	{
+		template<typename T>
+		concept Pointer = std::is_pointer_v<T>;
+
 		template<typename T>
 		concept Addable = requires (T x) { x + x; x += x; };
 
@@ -58,7 +60,7 @@ using namespace common;
 namespace Framework
 {
 	enum class WindowTypes : u32 
-	{ Lerp = 0, Hann, Hamming, Triangle, Sine, Rectangle, Exponential, HannExponential, Lanczos };
+	{ Lerp = 0, Hann, Hamming, Triangle, Sine, Rectangle, Exp, HannExp, Lanczos };
 
 	enum class EffectTypes : u32 { Utility, Filter, Dynamics, Phase, Pitch, Stretch, Warp, Destroy };
 

@@ -14,8 +14,8 @@ namespace Interface
 {
 	using namespace juce::gl;
 
-	OpenGlMultiQuad::OpenGlMultiQuad(int max_quads, Shaders::FragmentShader shader) :
-		OpenGlComponent("quad"), fragmentShader_(shader), maxQuads_(max_quads), numQuads_(max_quads)
+	OpenGlMultiQuad::OpenGlMultiQuad(int maxQuads, Shaders::FragmentShader shader) :
+		OpenGlComponent("quad"), fragmentShader_(shader), maxQuads_(maxQuads), numQuads_(maxQuads)
 	{
 		static const int triangles[] = {
 			0, 1, 2,
@@ -29,13 +29,13 @@ namespace Interface
 
 		modColor_ = Colours::transparentBlack;
 
-		for (size_t i = 0; i < maxQuads_; ++i)
+		for (int i = 0; i < (int)maxQuads_; i++)
 		{
 			setCoordinates(i, -1.0f, -1.0f, 2.0f, 2.0f);
 			setShaderValue(i, 1.0f);
 
-			for (size_t j = 0; j < kNumIndicesPerQuad; ++j)
-				indices_[i * kNumIndicesPerQuad + j] = triangles[j] + i * kNumVertices;
+			for (int j = 0; j < (int)kNumIndicesPerQuad; j++)
+				indices_[i * kNumIndicesPerQuad + j] = triangles[j] + i * (int)kNumVertices;
 		}
 
 		setInterceptsMouseClicks(false, false);
@@ -74,7 +74,7 @@ namespace Interface
 		alphaMultUniform_ = getUniform(*shader_, "alpha_mult");
 	}
 
-	void OpenGlMultiQuad::destroy(OpenGlWrapper &open_gl)
+	void OpenGlMultiQuad::destroy(OpenGlWrapper &openGl)
 	{
 		shader_ = nullptr;
 		position_ = nullptr;
@@ -98,20 +98,24 @@ namespace Interface
 		indicesBuffer_ = 0;
 	}
 
-	void OpenGlMultiQuad::render(OpenGlWrapper &open_gl, bool animate)
+	void OpenGlMultiQuad::render(OpenGlWrapper &openGl, bool animate)
 	{
+		animator_.tick(animate);
+
 		Component *component = targetComponent_ ? targetComponent_ : this;
-		if (!active_ || (!drawWhenNotVisible_ && !component->isVisible()) || !setViewPort(component, open_gl))
+		auto bounds = (customDrawBounds_.getWidth() * customDrawBounds_.getHeight() != 0) ? 
+			customDrawBounds_ : component->getLocalBounds();
+		if (!active_ || (!drawWhenNotVisible_ && !component->isVisible()) || !setViewPort(component, bounds, openGl))
 			return;
 
 		if (scissorComponent_)
-			setScissor(scissorComponent_, open_gl);
+			setScissor(scissorComponent_, openGl);
 
 		if (currentAlphaMult_ == 0.0f && alphaMult_ == 0.0f)
 			return;
 
 		if (shader_ == nullptr)
-			init(open_gl);
+			init(openGl);
 
 		// setup
 		glEnable(GL_BLEND);
@@ -126,7 +130,7 @@ namespace Interface
 			dirty_ = false;
 
 			for (u32 i = 0; i < numQuads_; ++i)
-				setDimensions(i, getQuadWidth(i), getQuadHeight(i), (float)component->getWidth(), (float)component->getHeight());
+				setDimensions(i, getQuadWidth(i), getQuadHeight(i), (float)bounds.getWidth(), (float)bounds.getHeight());
 
 			glBindBuffer(GL_ARRAY_BUFFER, vertexBuffer_);
 

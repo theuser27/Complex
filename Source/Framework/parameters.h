@@ -37,18 +37,19 @@ namespace Framework
 
 	struct ParameterDetails
 	{
-		std::string_view name{};
-		std::string_view displayName{};
-		float minValue = 0.0f;
-		float maxValue = 1.0f;
-		float defaultValue = 0.0f;
-		float defaultNormalisedValue = 0.0f;
-		ParameterScale scale = ParameterScale::Linear;
-		std::string_view displayUnits = "";
-		std::span<const std::string_view> stringLookup{};
-		bool isStereo = false;
-		bool isModulatable = true;
-		UpdateFlag updateFlag = UpdateFlag::Realtime;
+		std::string_view name{};															// internal plugin name
+		std::string_view displayName{};												// name displayed to the user
+		float minValue = 0.0f;																// minimum scaled value
+		float maxValue = 1.0f;																// maximum scaled value
+		float defaultValue = 0.0f;														// default scaled value
+		float defaultNormalisedValue = 0.0f;									// default normalised value
+		ParameterScale scale = ParameterScale::Linear;				// value skew factor
+		std::string_view displayUnits{};											// "%", "db", etc.
+		std::span<const std::string_view> stringLookup{};			// if scale is Indexed, you can use a text lookup
+		bool isStereo = false;																// if parameter allows stereo modulation
+		bool isModulatable = true;														// if parameter allows modulation at all
+		UpdateFlag updateFlag = UpdateFlag::Realtime;					// at which point during processing the parameter is updated
+		bool isExtensible = false;														// if parameter's minimum and maximum can change
 	};
 
 	enum class PluginParameters : u32 { MasterMix = 0, BlockSize, Overlap, WindowType, WindowAlpha, OutGain };
@@ -62,8 +63,9 @@ namespace Framework
 		                  kFFTSizeNames, false, true, UpdateFlag::BeforeProcess },
 		{ "OVERLAP", "Overlap", 0.0f, kMaxWindowOverlap, kDefaultWindowOverlap, kDefaultWindowOverlap, ParameterScale::Clamp, "%" },
 		{ "WINDOW_TYPE", "Window", 0.0f, (float)magic_enum::enum_count<WindowTypes>() - 1.0f, 1.0f,
-											1.0f / (float)magic_enum::enum_count<WindowTypes>(), ParameterScale::Indexed, "", kWindowNames },
-		{ "WINDOW_ALPHA", "Alpha", 0.0f, 1.0f, 0.0f, 0.0f, ParameterScale::Linear },
+											1.0f / (float)magic_enum::enum_count<WindowTypes>(), ParameterScale::Indexed, {},
+											kWindowNames, false, false, UpdateFlag::BeforeProcess },
+		{ "WINDOW_ALPHA", "Alpha", 0.0f, 1.0f, 0.0f, 0.0f, ParameterScale::Linear, "%", {}, false, false, UpdateFlag::BeforeProcess },
 		{ "OUT_GAIN", "Gain" , -30.0f, 30.0f, 0.0f, 0.5f, ParameterScale::Linear, " dB", {}, false, true, UpdateFlag::BeforeProcess }
 	};
 	
@@ -72,10 +74,10 @@ namespace Framework
 	inline constexpr std::array<ParameterDetails, magic_enum::enum_count<EffectsLaneParameters>()> effectChainParameterList =
 	{
 		ParameterDetails
-		{ "CHAIN_ENABLED", "Chain Enabled", 0.0f, 1.0f, 1.0f, 1.0f, ParameterScale::Toggle, "", kOffOnNames },
-		{ "INPUT", "Input", 0.0f, kNumInputsOutputs + kMaxNumChains, 0.0f, 0.0f, ParameterScale::Indexed, "",
-		                  kInputNames, false, true, UpdateFlag::BeforeProcess },
-		{ "OUTPUT", "Output", 0.0f, kNumInputsOutputs, 0.0f, 0.0f, ParameterScale::Indexed, "",
+		{ "LANE_ENABLED", "Lane Enabled", 0.0f, 1.0f, 1.0f, 1.0f, ParameterScale::Toggle, "", kOffOnNames },
+		{ "INPUT", "Input", 0.0f, kNumInputsOutputs + kMaxNumLanes - 1.0f, 0.0f, 0.0f, ParameterScale::Indexed, "",
+		                  kInputNames.getSpan(), false, true, UpdateFlag::BeforeProcess },
+		{ "OUTPUT", "Output", 0.0f, kNumInputsOutputs - 1.0f, 0.0f, 0.0f, ParameterScale::Indexed, "",
 		                  kOutputNames, false, true, UpdateFlag::BeforeProcess },
 		{ "GAIN_MATCHING", "Gain Matching", 0.0f, 1.0f, 1.0f, 1.0f, ParameterScale::Toggle, "", 
 		                  kOffOnNames, false, true, UpdateFlag::BeforeProcess }
@@ -90,18 +92,19 @@ namespace Framework
 		{ "MODULE_TYPE", "Module Type", 0.0f, (float)magic_enum::enum_count<EffectTypes>() - 1.0f, 1.0f,
 											1.0f / (float)magic_enum::enum_count<EffectTypes>(), ParameterScale::Indexed, "",
 											kEffectModuleNames, false, true, UpdateFlag::AfterProcess },
-		{ "MODULE_MIX", "Module Mix", 0.0f, 1.0f, 1.0f, 1.0f, ParameterScale::Linear, "%", {}, true },
+		{ "MODULE_MIX", "Mix", 0.0f, 1.0f, 1.0f, 1.0f, ParameterScale::Linear, "%", {}, true },
 	};
 
-	enum class BaseEffectParameters : u32 { Mode = 0, LowBound, HighBound, ShiftBounds };
+	enum class BaseEffectParameters : u32 { Algorithm = 0, LowBound, HighBound, ShiftBounds };
 
 	inline constexpr std::array<ParameterDetails, magic_enum::enum_count<BaseEffectParameters>()> baseEffectParameterList =
 	{
 		ParameterDetails
-		{ "FX_MODE", "Mode", 0.0f, kMaxEffectModes - 1, 0.0f, 0.0f, ParameterScale::Indexed, "", kGenericEffectModeNames },
-		{ "FX_LOW_BOUND", "Low Bound", 0.0f, 1.0f, 0.0f, 0.0f, ParameterScale::Frequency, "", {}, true },
-		{ "FX_HIGH_BOUND", "High Bound", 0.0f, 1.0f, 1.0f, 1.0f, ParameterScale::Frequency, "", {}, true },
-		{ "FX_SHIFT_BOUNDS", "Shift Bounds", -1.0f, 1.0f, 0.0f, 0.5f, ParameterScale::Linear, "", {}, true }
+		{ "FX_ALGORITHM", "Algorithm", 0.0f, kMaxEffectModes - 1, 0.0f, 0.0f, ParameterScale::Indexed,
+											"", kGenericEffectModeNames.getSpan() },
+		{ "FX_LOW_BOUND", "Low Bound", 0.0f, 1.0f, 0.0f, 0.0f, ParameterScale::Frequency, " hz", {}, true },
+		{ "FX_HIGH_BOUND", "High Bound", 0.0f, 1.0f, 1.0f, 1.0f, ParameterScale::Frequency, " hz", {}, true },
+		{ "FX_SHIFT_BOUNDS", "Shift Bounds", -1.0f, 1.0f, 0.0f, 0.5f, ParameterScale::Linear, "%", {}, true }
 	};
 
 	namespace FilterEffectParameters
@@ -130,16 +133,16 @@ namespace Framework
 		std::array<ParameterDetails, (u32)FilterEffectParameters::size>
 		{
 			ParameterDetails
-			{ "FILTER_NORMAL_FX_GAIN", "Filter Gain", -1.0f, 1.0f, 0.0f, 0.5f, ParameterScale::SymmetricLoudness, "", {}, true },
-			{ "FILTER_NORMAL_FX_CUTOFF", "Filter Cutoff", 0.0f, 1.0f, 0.5f, 0.5f, ParameterScale::Linear, "", {}, true },
-			{ "FILTER_NORMAL_FX_SLOPE", "Filter Slope", -1.0f, 1.0f, 0.25f, 0.75f, ParameterScale::SymmetricQuadratic, "", {}, true }
+			{ "FILTER_NORMAL_FX_GAIN", "Gain", -1.0f, 1.0f, 0.0f, 0.5f, ParameterScale::SymmetricLoudness, " db", {}, true },
+			{ "FILTER_NORMAL_FX_CUTOFF", "Cutoff", 0.0f, 1.0f, 0.5f, 0.5f, ParameterScale::Frequency, " hz", {}, true },
+			{ "FILTER_NORMAL_FX_SLOPE", "Slope", -1.0f, 1.0f, 0.25f, 0.75f, ParameterScale::SymmetricQuadratic, "%", {}, true }
 		},
 		{
 			ParameterDetails
-			{ "FILTER_REGULAR_FX_GAIN", "Filter Gain", -1.0f, 1.0f, 0.0f, 0.5f, ParameterScale::SymmetricLoudness, "", {}, true },
-			{ "FILTER_REGULAR_FX_CUTOFF", "Filter Cutoff", 0.0f, 1.0f, 0.5f, 0.5f, ParameterScale::Linear, "", {}, true },
-			{ "FILTER_REGULAR_FX_PHASE", "Filter Phase", -1.0f, 1.0f, 0.25f, 0.75f, ParameterScale::SymmetricQuadratic, "", {}, true },
-			{ "FILTER_REGULAR_FX_STRETCH", "Filter Stretch", 0.0f, 1.0f, 0.5f, 0.5f, ParameterScale::Linear, "", {}, true }
+			{ "FILTER_REGULAR_FX_GAIN", "Gain", -1.0f, 1.0f, 0.0f, 0.5f, ParameterScale::SymmetricLoudness, "", {}, true },
+			{ "FILTER_REGULAR_FX_CUTOFF", "Cutoff", 0.0f, 1.0f, 0.5f, 0.5f, ParameterScale::Linear, "", {}, true },
+			{ "FILTER_REGULAR_FX_PHASE", "Phase", -1.0f, 1.0f, 0.25f, 0.75f, ParameterScale::SymmetricQuadratic, "", {}, true },
+			{ "FILTER_REGULAR_FX_STRETCH", "Stretch", 0.0f, 1.0f, 0.5f, 0.5f, ParameterScale::Linear, "", {}, true }
 		}
 	};
 
@@ -166,7 +169,7 @@ namespace Framework
 		std::array<ParameterDetails, (u32)DynamicsEffectParameters::size>
 		{
 			ParameterDetails
-			{ "CONTRAST_FX_DEPTH", "Contrast Depth", -1.0f, 1.0f, 0.0f, 0.5f, ParameterScale::Linear, "", {}, true }
+			{ "CONTRAST_FX_DEPTH", "Depth", -1.0f, 1.0f, 0.0f, 0.5f, ParameterScale::Linear, "%", {}, true }
 		}
 	};
 
@@ -291,7 +294,7 @@ namespace Framework
 			case EffectTypes::Dynamics:
 				return kDynamicsModeNames;
 			default:
-				return kGenericEffectModeNames;
+				return kGenericEffectModeNames.getSpan();
 			}
 		}
 
@@ -362,13 +365,16 @@ namespace Framework
 		}();*/
 	};
 
-	inline double scaleValue(double value, ParameterDetails details, float sampleRate = kDefaultSampleRate,
+	// with skewOnly == true a normalised value between [0,1] or [-0.5, 0.5] is returned,
+	// depending on whether the parameter is bipolar
+	inline double scaleValue(double value, const ParameterDetails &details, float sampleRate = kDefaultSampleRate,
 		bool scalePercent = false, bool skewOnly = false) noexcept
 	{
 		using namespace utils;
 
 		double result{};
 		double sign;
+		double range;
 		switch (details.scale)
 		{
 		case ParameterScale::Toggle:
@@ -379,17 +385,19 @@ namespace Framework
 				std::round(value * (details.maxValue - details.minValue) + details.minValue) / (details.maxValue - details.minValue);
 			break;
 		case ParameterScale::Linear:
-			result = (!skewOnly) ? value * (details.maxValue - details.minValue) + details.minValue : value;
+			result = (!skewOnly) ? value * (details.maxValue - details.minValue) + details.minValue : 
+				value + details.minValue / (details.maxValue - details.minValue);
 			break;
 		case ParameterScale::Clamp:
 			result = std::clamp(value, (double)details.minValue, (double)details.maxValue);
 			result = (!skewOnly) ? result : result / ((double)details.maxValue - (double)details.minValue);
 			break;
 		case ParameterScale::SymmetricQuadratic:
-			value = value * 2.0f - 1.0f;
+			value = value * 2.0 - 1.0;
 			sign = unsignFloat(value);
 			value *= value;
-			result = (!skewOnly) ? (value * (details.maxValue - details.minValue) * 0.5) * sign : value * sign;
+			range = details.maxValue - details.minValue;
+			result = (!skewOnly) ? (value * sign * range + range) * 0.5 + details.minValue : value * 0.5 * sign;
 			break;
 		case ParameterScale::Quadratic:
 			result = (!skewOnly) ? value * value * (details.maxValue - details.minValue) + details.minValue : value * value;
@@ -398,38 +406,39 @@ namespace Framework
 			result = (!skewOnly) ? value * value * value * (details.maxValue - details.minValue) + details.minValue : value * value * value;
 			break;
 		case ParameterScale::SymmetricLoudness:
-			value = (value * 2.0f - 1.0f);
+			value = value * 2.0 - 1.0;
 			sign = unsignFloat(value);
-			result = (!skewOnly) ? normalisedToDb(value, (double)kNormalisedToDbMultiplier) * sign : normalisedToDb(value, 1.0) * sign;
+			result = (!skewOnly) ? normalisedToDb(value, (double)kNormalisedToDbMultiplier) * sign :
+				normalisedToDb(value, 1.0) * 0.5 * sign;
 			break;
 		case ParameterScale::Loudness:
 			result = (!skewOnly) ? normalisedToDb(value, (double)kNormalisedToDbMultiplier) : normalisedToDb(value, 1.0);
 			break;
 		case ParameterScale::SymmetricFrequency:
-			value = value * 2.0f - 1.0f;
+			value = value * 2.0 - 1.0;
 			sign = unsignFloat(value);
 			result = (!skewOnly) ? normalisedToFrequency(value, (double)sampleRate) * sign :
 				(normalisedToFrequency(value, (double)sampleRate) * sign) / sampleRate;
 			break;
 		case ParameterScale::Frequency:
 			result = (!skewOnly) ? normalisedToFrequency(value, (double)sampleRate) : 
-				normalisedToFrequency(value, (double)sampleRate) / sampleRate;
+				normalisedToFrequency(value, (double)sampleRate) * 2.0 / sampleRate;
 			break;
 		}
 
 		if (details.displayUnits == "%" && scalePercent)
-			result *= 100.0f;
+			result *= 100.0;
 
 		return result;
 	}
 
-	inline double unscaleValue(double value, ParameterDetails details, 
-		float sampleRate = kDefaultSampleRate, bool unscalePercent = false) noexcept
+	inline double unscaleValue(double value, const ParameterDetails &details, 
+		float sampleRate = kDefaultSampleRate, bool unscalePercent = true) noexcept
 	{
 		using namespace utils;
 
 		if (details.displayUnits == "%" && unscalePercent)
-			value /= 100.0f;
+			value *= 0.01f;
 
 		double result{};
 		double sign;
@@ -448,10 +457,9 @@ namespace Framework
 			result = (value - details.minValue) / (details.maxValue - details.minValue);
 			break;
 		case ParameterScale::SymmetricQuadratic:
+			value = 2.0 * (value - details.minValue) / (details.maxValue - details.minValue) - 1.0;
 			sign = unsignFloat(value);
-			value = (value - details.minValue) / (details.maxValue - details.minValue);
-			value = std::sqrt(value);
-			result = (value * sign + 1.0f) / 2.0f;
+			result = std::sqrt(value) * sign;
 			break;
 		case ParameterScale::Quadratic:
 			result = std::sqrt((value - details.minValue) / (details.maxValue - details.minValue));
@@ -463,7 +471,7 @@ namespace Framework
 		case ParameterScale::SymmetricLoudness:
 			sign = unsignFloat(value);
 			value = dbToAmplitude(value);
-			result = (value * sign + 1.0f) / 2.0f;
+			result = (value * sign + 1.0f) * 0.5f;
 			break;
 		case ParameterScale::Loudness:
 			result = dbToAmplitude(value);
@@ -471,7 +479,7 @@ namespace Framework
 		case ParameterScale::SymmetricFrequency:
 			sign = unsignFloat(value);
 			value = frequencyToNormalised(value, (double)sampleRate);
-			result = (value * sign + 1.0f) / 2.0f;
+			result = (value * sign + 1.0f) * 0.5f;
 			break;
 		case ParameterScale::Frequency:
 			result = frequencyToNormalised(value, (double)sampleRate);
@@ -481,12 +489,13 @@ namespace Framework
 		return result;
 	}
 
-	inline simd_float scaleValue(simd_float value, ParameterDetails details, float sampleRate = kDefaultSampleRate) noexcept
+	inline simd_float scaleValue(simd_float value, const ParameterDetails &details, float sampleRate = kDefaultSampleRate) noexcept
 	{
 		using namespace utils;
 
 		simd_float result{};
 		simd_mask sign{};
+		simd_float range;
 		switch (details.scale)
 		{
 		case ParameterScale::Toggle:
@@ -502,7 +511,8 @@ namespace Framework
 			value = value * 2.0f - 1.0f;
 			sign = unsignSimd(value);
 			value *= value;
-			result = (value * (details.maxValue - details.minValue) / 2.0f) | sign;
+			range = details.maxValue - details.minValue;
+			result = ((value | sign) * range + range) * 0.5f + details.minValue;
 			break;
 		case ParameterScale::Quadratic:
 			result = value * value * (details.maxValue - details.minValue) + details.minValue;

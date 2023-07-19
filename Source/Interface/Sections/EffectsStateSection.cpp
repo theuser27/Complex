@@ -16,14 +16,35 @@ namespace Interface
 	EffectsStateSection::EffectsStateSection(Generation::EffectsState &state) :
 		ProcessorSection(typeid(EffectsLaneSection).name(), &state), state_(state)
 	{
-		
+		auto *lane = state_.getEffectsLane(0);
+		lanes_[0] = std::make_unique<EffectsLaneSection>(lane, this, "Lane A");
+		addSubSection(lanes_[0].get());
 	}
 
 
 	void EffectsStateSection::resized()
 	{
-		auto y = kTopToLaneSelectorMargin;
-		laneSelector_.setBounds(0, y, getWidth(), kLaneSelectorHeight);
+		int laneSelectorHeight = (int)std::round(scaleValue(kLaneSelectorHeight));
+		laneSelector_.setBounds(0, 0, getWidth(), laneSelectorHeight);
+
+		int laneSelectorMargin = (int)std::round(scaleValue(kLaneSelectorToLanesMargin));
+		int lanesX = 0;
+		int lanesY = laneSelectorHeight + laneSelectorMargin;
+		int lanesWidth = (int)std::round(scaleValue(EffectsLaneSection::kWidth));
+		int lanesHeight = getHeight() - lanesY;
+		int laneToLaneMargin = (int)std::round(scaleValue(kLaneToLaneMargin));
+
+		for (auto &lane : lanes_)
+		{
+			if (!lane)
+				return;
+
+			lane->setBounds(lanesX, lanesY, lanesWidth, lanesHeight);
+			lanesX += lanesWidth + laneToLaneMargin;
+		}
+			
+
+
 	}
 
 	void EffectsStateSection::mouseWheelMove(const MouseEvent &e, const MouseWheelDetails &wheel)
@@ -36,10 +57,10 @@ namespace Interface
 				if (!lane)
 					continue;
 
-				if (auto event = e.getEventRelativeTo(lane.get()); 
-					lane->hitTest((int)event.position.x, (int)event.position.y))
+				if (auto mouseEvent = e.getEventRelativeTo(lane.get()); 
+					lane->hitTest((int)mouseEvent.position.x, (int)mouseEvent.position.y))
 				{
-					lane->scrollLane(event, wheel);
+					lane->scrollLane(mouseEvent, wheel);
 					break;
 				}
 			}
@@ -139,5 +160,36 @@ namespace Interface
 
 		state_.getProcessorTree()->pushUndo(update);
 		currentlyMovedModule_ = nullptr;
+	}
+
+	void EffectsStateSection::createLane(EffectsLaneSection *laneToCopy)
+	{
+		// if a lane is provided then we're copying
+		if (laneToCopy)
+		{
+
+			return;
+		}
+	}
+
+	void EffectsStateSection::deleteLane(EffectsLaneSection *laneToDelete)
+	{
+		COMPLEX_ASSERT(laneToDelete && "The lane to delete must not be nullptr");
+	}
+
+	void EffectsStateSection::registerModule(std::unique_ptr<EffectModuleSection> effectModuleSection)
+	{
+		effectModuleSection->getDraggableComponent().setListener(this);
+		effectModules_.emplace_back(std::move(effectModuleSection));
+	}
+
+	std::unique_ptr<EffectModuleSection> EffectsStateSection::unregisterModule(EffectModuleSection *effectModuleSection)
+	{
+		auto iter = std::ranges::find_if(effectModules_, [effectModuleSection](const auto &pointer)
+			{ return effectModuleSection == pointer.get(); });
+		COMPLEX_ASSERT(iter != effectModules_.end() && "The effectModule to be unregistered wasn't found");
+		auto pointer = std::unique_ptr<EffectModuleSection>(iter->release());
+		effectModules_.erase(iter);
+		return pointer;
 	}
 }

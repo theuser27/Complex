@@ -54,26 +54,28 @@ namespace Generation
 		baseEffect &operator=(baseEffect &&other) noexcept
 		{ BaseProcessor::operator=(std::move(other)); return *this; }
 
-		// Inherited via BaseProcessor
-		[[nodiscard]] BaseProcessor *createCopy(std::optional<u64> parentModuleId) const noexcept override
-		{ return makeSubProcessor<baseEffect>(*this, parentModuleId.value_or(parentProcessorId_)); }
-		[[nodiscard]] BaseProcessor *createSubProcessor([[maybe_unused]] std::string_view type) const noexcept override
-		{ COMPLEX_ASSERT(false && "This type cannot have subProcessors"); return nullptr; }
-
 		virtual void run([[maybe_unused]] Framework::SimdBufferView<std::complex<float>, simd_float> &source,
 			[[maybe_unused]] Framework::SimdBuffer<std::complex<float>, simd_float> &destination,
 			[[maybe_unused]] u32 effectiveFFTSize, [[maybe_unused]] float sampleRate) noexcept { }
 
 		virtual bool needsPolarData() const noexcept { return false; }
-		auto getEffectMode() const { return processorParameters_[(u32)Framework::BaseEffectParameters::Mode]->getInternalValue<u32>(); }
+		auto getEffectAlgorithm() const
+		{ return processorParameters_[(u32)Framework::BaseEffectParameters::Algorithm]->getInternalValue<u32>(); }
+		auto *getEffectParameter(size_t effectIndex) const
+		{ return processorParameters_[effectIndex + magic_enum::enum_count<Framework::BaseEffectParameters>()].get(); }
 
 	protected:
+		[[nodiscard]] BaseProcessor *createCopy(std::optional<u64> parentModuleId) const noexcept override
+		{ COMPLEX_ASSERT_FALSE("This type cannot be copied directly, you need a derived type"); return nullptr; }
+		[[nodiscard]] BaseProcessor *createSubProcessor([[maybe_unused]] std::string_view type) const noexcept override
+		{ COMPLEX_ASSERT_FALSE("This type cannot have subProcessors"); return nullptr; }
+
 		enum class BoundRepresentation : u32 { Normalised, Frequency, BinIndex };
 
 		void setEffectModeStrings(Framework::EffectTypes type) const
 		{
 			auto strings = Framework::Parameters::getEffectModesStrings(type);
-			auto modeIndex = (u32)Framework::BaseEffectParameters::Mode;
+			auto modeIndex = (u32)Framework::BaseEffectParameters::Algorithm;
 			auto details = Framework::baseEffectParameterList[modeIndex];
 			details.stringLookup = strings;
 			processorParameters_[modeIndex]->setParameterDetails(details);
@@ -350,10 +352,11 @@ namespace Generation
 		// Inherited via BaseProcessor
 		BaseProcessor *updateSubProcessor(size_t index, BaseProcessor *newSubModule) noexcept override;
 		[[nodiscard]] BaseProcessor *createSubProcessor(std::string_view type) const noexcept override;
-
-	private:
 		[[nodiscard]] BaseProcessor *createCopy(std::optional<u64> parentModuleId) const noexcept override
 		{ return makeSubProcessor<EffectModule>(*this, parentModuleId.value_or(parentProcessorId_)); }
+
+		auto *getEffect() const noexcept { return static_cast<baseEffect *>(subProcessors_[0]); }
+	private:
 		baseEffect *createEffect(std::string_view type) const noexcept;
 
 		Framework::SimdBuffer<std::complex<float>, simd_float> buffer_{ kNumChannels, kMaxFFTBufferLength };

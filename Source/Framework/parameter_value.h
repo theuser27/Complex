@@ -89,14 +89,15 @@ namespace Framework
 			internalValue_ = other.internalValue_;
 		}
 
-		void initialise()
+		void initialise(std::optional<float> value = {})
 		{
 			utils::ScopedSpinLock lock(waitLock_);
 
-			normalisedValue_ = details_.defaultNormalisedValue;
+			normalisedValue_ = value.value_or(details_.defaultNormalisedValue);
 			modulations_ = 0.0f;
-			normalisedInternalValue_ = details_.defaultNormalisedValue;
-			internalValue_ = details_.defaultValue;
+			normalisedInternalValue_ = value.value_or(details_.defaultNormalisedValue);
+			internalValue_ = (!value.has_value()) ? details_.defaultValue :
+				(float)Framework::scaleValue(value.value(), details_);
 		}
 		
 		// prefer calling this only once if possible
@@ -216,11 +217,11 @@ namespace Framework
 			utils::ScopedSpinLock lock(waitLock_);
 
 			auto deletedModulator = parameterLink_.modulators[index];
-			parameterLink_.modulators.erase(parameterLink_.modulators.begin() + index);
+			parameterLink_.modulators.erase(parameterLink_.modulators.begin() + (std::ptrdiff_t)index);
 			return deletedModulator;
 		}
 
-		void updateValues(float sampleRate) noexcept;
+		void updateValues(float sampleRate, std::optional<float> value = {}) noexcept;
 
 		float getNormalisedValue() const noexcept
 		{
@@ -271,34 +272,78 @@ namespace Interface
 		virtual void setParameterDetails(const Framework::ParameterDetails &details) { details_ = details; }
 
 		Framework::ParameterLink *getParameterLink() const noexcept { return parameterLink_; }
-		void setParameterLink(Framework::ParameterLink *parameterLink) noexcept
+		// returns the replaced link
+		Framework::ParameterLink *setParameterLink(Framework::ParameterLink *parameterLink) noexcept
 		{
+			auto replacedLink = parameterLink_;
+			if (replacedLink)
+				replacedLink->parameter->changeControl(std::variant<ParameterUI *,
+					Framework::ParameterBridge *>(std::in_place_index<0>, nullptr));
+
 			parameterLink_ = parameterLink;
-			parameterLink_->parameter->changeControl(this);
+
+			if (parameterLink_)
+				parameterLink_->parameter->changeControl(this);
+
+			return replacedLink;
 		}
 
 		void setValueFromHost(double newValue) noexcept { setValueSafe(newValue); }
 		void setValueToHost() noexcept;
 
 		// called on the UI thread from:
-		// - on a timer in InterfaceEngineLink to watch for updates from the host
+		// - on a timer in MainInterface to watch for updates from the host
 		// - the UndoManager when undo/redo happens
 		virtual bool updateValue() = 0;
 
 		double getValueSafe() const noexcept
 		{ return value_.load(std::memory_order_acquire); }
 
+		double getValueSafeScaled(float sampleRate = kDefaultSampleRate) const noexcept
+		{ return Framework::scaleValue(getValueSafe(), details_, sampleRate, true); }
+
 		void setValueSafe(double newValue) noexcept
 		{ value_.store(newValue, std::memory_order_release); }
 
-		void beginChange(double oldValue) noexcept { valueBeforeChange_ = oldValue; }
+		void beginChange(double oldValue) noexcept { valueBeforeChange_ = oldValue; hasBegunChange_ = true; }
 		virtual void endChange() = 0;
+
+		bool hasParameter() const noexcept { return hasParameter_; }
 
 	protected:
 		std::atomic<double> value_ = 0.0;
 		double valueBeforeChange_ = 0.0;
+		bool hasBegunChange_ = false;
+
+		bool hasParameter_ = false;
 
 		Framework::ParameterLink *parameterLink_ = nullptr;
 		Framework::ParameterDetails details_{};
+	};
+
+	struct PopupItems
+	{
+		std::vector<PopupItems> items{};
+		std::string name{};
+		int id = 0;
+		bool selected = false;
+		bool isActive = false;
+
+		PopupItems() = default;
+		PopupItems(std::string name) : name(std::move(name)) { }
+
+		PopupItems(int id, std::string name, bool selected = false, bool active = false) :
+			name(std::move(name)), id(id), selected(selected), isActive(active)
+		{
+		}
+
+		void addItem(int subId, std::string subName, bool subSelected = false, bool active = false)
+		{
+			items.emplace_back(subId, std::move(subName), subSelected, active);
+		}
+
+		void addItem(const PopupItems &item) { items.push_back(item); }
+		void addItem(PopupItems &&item) { items.emplace_back(std::move(item)); }
+		int size() const noexcept { return (int)items.size(); }
 	};
 }

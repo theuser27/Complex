@@ -55,9 +55,9 @@ namespace Generation
 				// recalculating indices based on the new size
 				if (getNumChannels() * getSize())
 				{
-					blockEnd_ = std::clamp(((i32)newSize - (i32)getBlockEndToEnd()) % (i32)newSize, i32(0), (i32)newSize - 1);
-					blockBegin_ = std::clamp(((i32)blockEnd_ - (i32)getBlockBeginToBlockEnd()) % (i32)newSize, i32(0), (i32)newSize - 1);
-					lastOutputBlock_ = std::clamp(((i32)blockBegin_ - (i32)getLastOutputBlockToBlockBegin()) % (i32)newSize, i32(0), (i32)newSize - 1);
+					blockEnd_ = std::clamp(((i32)newSize - (i32)getBlockEndToEnd()) % (i32)newSize, 0, (i32)newSize - 1);
+					blockBegin_ = std::clamp(((i32)blockEnd_ - (i32)getBlockBeginToBlockEnd()) % (i32)newSize, 0, (i32)newSize - 1);
+					lastOutputBlock_ = std::clamp(((i32)blockBegin_ - (i32)getLastOutputBlockToBlockBegin()) % (i32)newSize, 0, (i32)newSize - 1);
 				}
 				else
 				{
@@ -70,11 +70,11 @@ namespace Generation
 				buffer_.reserve(newNumChannels, newSize, fitToSize);
 			}
 
-			perf_inline void advanceLastOutputBlock(i32 numSamples)
+			strict_inline void advanceLastOutputBlock(i32 numSamples)
 			{ lastOutputBlock_ = (lastOutputBlock_ + numSamples) % getSize(); }
 
 			// used for manually advancing the block to a desired position
-			perf_inline void advanceBlock(u32 newBegin, i32 numSamples)
+			strict_inline void advanceBlock(u32 newBegin, i32 numSamples)
 			{
 				blockBegin_ = newBegin;
 				blockEnd_ = (newBegin + numSamples) % getSize();
@@ -102,7 +102,7 @@ namespace Generation
 				return (getSize() + getEnd() - currentBufferStart) % getSize();
 			}
 
-			perf_inline void readBuffer(AudioBuffer<float> &reader, u32 numChannels, 
+			strict_inline void readBuffer(AudioBuffer<float> &reader, u32 numChannels,
 				const bool* channelsToCopy, u32 numSamples, BeginPoint beginPoint = BeginPoint::BlockBegin, 
 				i32 inputBufferOffset = 0, u32 readerBeginIndex = 0, bool advanceBlock = true) noexcept
 			{
@@ -132,13 +132,13 @@ namespace Generation
 					this->advanceBlock(currentBufferBegin, numSamples);
 			}
 
-			perf_inline void writeToBufferEnd(const AudioBuffer<float> &writer, 
+			strict_inline void writeToBufferEnd(const AudioBuffer<float> &writer,
 				u32 numChannels, u32 numSamples, u32 writerIndex = 0) noexcept
 			{
 				buffer_.writeToBufferEnd(writer, numChannels, numSamples, writerIndex);
 			}
 
-			perf_inline void outBufferRead(Framework::CircularBuffer &outBuffer, 
+			strict_inline void outBufferRead(Framework::CircularBuffer &outBuffer,
 				u32 numChannels, const bool* channelsToCopy, u32 numSamples, u32 outBufferIndex = 0, 
 				i32 inputBufferOffset = 0, BeginPoint beginPoint = BeginPoint::LastOutputBlock) noexcept
 			{
@@ -184,13 +184,13 @@ namespace Generation
 			strict_inline u32 getEnd() const noexcept
 			{ return buffer_.getEnd(); }
 
-			perf_inline u32 getLastOutputBlockToBlockBegin() const noexcept
+			strict_inline u32 getLastOutputBlockToBlockBegin() const noexcept
 			{ return (getSize() + blockBegin_ - lastOutputBlock_) % getSize(); }
 
-			perf_inline u32 getBlockBeginToBlockEnd() const noexcept
+			strict_inline u32 getBlockBeginToBlockEnd() const noexcept
 			{ return (getSize() + blockEnd_ - blockBegin_) % getSize(); }
 
-			perf_inline u32 getBlockEndToEnd() const noexcept
+			strict_inline u32 getBlockEndToEnd() const noexcept
 			{ return (getSize() + getEnd() - blockEnd_) % getSize(); }
 
 		private:
@@ -315,7 +315,7 @@ namespace Generation
 			{ buffer_.multiply(value, channel, index); }
 
 
-			perf_inline void setLatencyOffset(i32 newLatencyOffset) noexcept
+			strict_inline void setLatencyOffset(i32 newLatencyOffset) noexcept
 			{
 				if (latencyOffset_ == newLatencyOffset)
 					return;
@@ -363,13 +363,13 @@ namespace Generation
 			strict_inline u32 getEnd() const noexcept
 			{ return buffer_.getEnd(); }
 
-			perf_inline u32 getBeginOutputToToScaleOutput() const noexcept
+			strict_inline u32 getBeginOutputToToScaleOutput() const noexcept
 			{ return (getSize() + toScaleOutput_ - beginOutput_) % getSize(); }
 			
-			perf_inline u32 getToScaleOutputToAddOverlap() const noexcept
+			strict_inline u32 getToScaleOutputToAddOverlap() const noexcept
 			{ return (getSize() + addOverlap_ - toScaleOutput_) % getSize(); }
 
-			perf_inline u32 getAddOverlapToEnd() const noexcept
+			strict_inline u32 getAddOverlapToEnd() const noexcept
 			{ return (getSize() + getEnd() - addOverlap_) % getSize(); }
 
 		private:
@@ -391,7 +391,7 @@ namespace Generation
 		std::vector<std::unique_ptr<Framework::FFT>> transforms;
 		//
 		//
-		EffectsState *effectsState = nullptr;
+		EffectsState *effectsState_ = nullptr;
 
 		//=========================================================================================
 		// Methods
@@ -406,7 +406,7 @@ namespace Generation
 		void FillOutput(AudioBuffer<float> &buffer, u32 numOutputs, u32 numSamples) noexcept;
 
 		// Inherited via BaseProcessor
-		BaseProcessor *createCopy(std::optional<u64> parentModuleId) const noexcept override
+		BaseProcessor *createCopy([[maybe_unused]] std::optional<u64> parentModuleId) const noexcept override
 		{ COMPLEX_ASSERT_FALSE("You're trying to copy SoundEngine, which is not meant to be copied"); return nullptr; }
 		BaseProcessor *createSubProcessor([[maybe_unused]] std::string_view type) const noexcept override
 		{
@@ -422,6 +422,7 @@ namespace Generation
 			float sampleRate, u32 numInputs, u32 numOutputs) noexcept;
 
 		[[nodiscard]] u32 getProcessingDelay() const noexcept { return FFTNumSamples_ + processorTree_->getSamplesPerBlock(); }
+		auto &getEffectsState() const noexcept { return *effectsState_; }
 
 		void setMix(float mix) noexcept { mix_ = mix; }
 		void setFFTOrder(u32 order) noexcept { FFTOrder_ = order; }

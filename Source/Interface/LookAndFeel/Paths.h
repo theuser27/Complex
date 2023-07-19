@@ -11,6 +11,7 @@
 #pragma once
 
 #include "JuceHeader.h"
+#include "Framework/constants.h"
 
 namespace Interface
 {
@@ -25,9 +26,25 @@ namespace Interface
   public:
     Paths() = delete;
 
-    static Path contrastIcon()
+    static Path contrastIcon() { return fromSvgData(BinaryData::Icon_Contrast_svg, BinaryData::Icon_Contrast_svgSize); }
+    static Path powerButtonIcon()
     {
-      return fromSvgData(BinaryData::Icon_Contrast_svg, BinaryData::Icon_Contrast_svgSize);
+      static Path powerButtonPath = []()
+      {
+        static constexpr float kAngle = 0.8f * k2Pi;
+        static constexpr float kAngleStart = kPi - kAngle * 0.5f;
+        Path path;
+
+        path.startNewSubPath(5.5f, 0.0f);
+        path.lineTo(5.5f, 5.0f);
+        path.closeSubPath();
+
+        path.addArc(0.0f, 2.0f, 11.0f, 11.0f, kAngleStart, kAngle + kAngleStart, true);
+
+        return path;
+      }();
+
+      return powerButtonPath;
     }
 
     static Path downTriangle()

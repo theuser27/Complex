@@ -52,8 +52,6 @@ namespace Interface
 		public Generation::BaseProcessor::Listener
 	{
 	public:
-		static constexpr int kEffectModuleWidth = 400;
-		static constexpr int kEffectModuleHeight = 144;
 		static constexpr int kSpectralMaskContractedHeight = 20;
 		static constexpr int kSpectralMaskExpandedHeight = 92;
 		static constexpr int kSpectralMaskMargin = 2;
@@ -62,71 +60,114 @@ namespace Interface
 		static constexpr int kIconSize = 14;
 		static constexpr int kIconToTextSelectorMargin = 4;
 		static constexpr int kDelimiterWidth = 1;
-		static constexpr int kDelimiterToTextSelectorExtraMargin = 2;
-		static constexpr int kNumberBoxSectionPadding = 6;
+		static constexpr int kDelimiterToTextSelectorMargin = 2;
+		static constexpr int kNumberBoxToPowerButtonMargin = 6;
 		static constexpr int kLabelToNumberBoxMargin = 4;
-		static constexpr int kNumberBoxesMargin = 12;
+		static constexpr int kPowerButtonPadding = 8;
 
 		static constexpr int kOuterPixelRounding = 8;
 		static constexpr int kInnerPixelRounding = 3;
+
+		static constexpr int kWidth = 400;
+		static constexpr int kMainBodyHeight = 144;
+		static constexpr int kMinHeight = kSpectralMaskContractedHeight + kSpectralMaskMargin + kMainBodyHeight;
 
 		EffectModuleSection(Generation::EffectModule *effectModule);
 		~EffectModuleSection() override;
 		std::unique_ptr<EffectModuleSection> createCopy() const;
 
 		void resized() override;
+
 		void paintBackground(Graphics &g) override;
+		void repaintBackground() override;
+		void initOpenGlComponents(OpenGlWrapper &openGl) override
+		{ background_.init(openGl); BaseSection::initOpenGlComponents(openGl); }
+		void renderOpenGlComponents(OpenGlWrapper &openGl, bool animate) override;
+		void destroyOpenGlComponents(OpenGlWrapper &openGl) override
+		{ background_.destroy(); BaseSection::destroyOpenGlComponents(openGl); }
+
 		void resizeForText(TextSelector *textSelector, int requestedWidthChange) override;
 		void expansionChange(bool isExpanded) override;
-
 		void sliderValueChanged(Slider *slider) override;
+
+		Rectangle<int> getPowerButtonBounds() const noexcept override
+		{
+			auto widthHeight = (int)std::round(scaleValue(kDefaultActivatorSize));
+			return { getWidth() - (int)std::round(scaleValue(kPowerButtonPadding)) - widthHeight,
+				getYMaskOffset() + centerVertically(0, widthHeight, (int)std::round(scaleValue(kTopMenuHeight))),
+				widthHeight, widthHeight };
+		}
 
 		// (re)initialises parameter to be whatever they need to be for the specific module type/effect mode
 		void initialiseParameters()
 		{
 			COMPLEX_ASSERT(initialiseParametersFunction_ && "No initParametersFunction was provided");
-			initialiseParametersFunction_(effectSliders_, effectModule_);
+
+			for (auto &parameter : effectParameters_)
+			{
+				if (auto *slider = dynamic_cast<BaseSlider *>(parameter.get()))
+					removeSlider(slider);
+				else
+					removeButton(static_cast<BaseButton *>(parameter.get()));
+
+				parameter->setParameterLink(nullptr);
+			}
+			effectParameters_.clear();
+			initialiseParametersFunction_(effectParameters_, this);
 		}
 		// sets positions and dimensions of contained UI elements for the specific module type/effect mode
 		void arrangeUI()
 		{
 			COMPLEX_ASSERT(arrangeUIFunction_ && "No arrangeUIFunction was provided");
-			arrangeUIFunction_(this);
+			arrangeUIFunction_(this, getUIBounds());
 		}
+		// paints static/background elements of the specific module
+		void paintUIBackground(Graphics &g)
+		{
+			if (paintBackgroundFunction_)
+				paintBackgroundFunction_(g, this);
+		}
+
+		auto &getDraggableComponent() noexcept { return draggableBox_; }
+		auto *getEffect() noexcept { return effectModule_->getEffect(); }
+		ParameterUI *getEffectParameter(size_t index) noexcept;
+		Rectangle<int> getUIBounds() const noexcept
+		{ return getLocalBounds().withTop(getYMaskOffset() + scaleValueRoundInt(kTopMenuHeight) + 1); }
+
 		// sets positions and dimensions of the module header
 		void arrangeHeader();
 
-		auto &getDraggableComponent() noexcept { return draggableBox_; }
-		BaseSlider *getModuleSlider(Framework::EffectModuleParameters index) noexcept;
-		BaseSlider *getEffectSlider(size_t index) noexcept;
-		Rectangle<int> getUIBounds() const noexcept
-		{ return getLocalBounds().withTop(getYMaskOffset() + kTopMenuHeight + 1); }
-
-		void setEffectType(Framework::EffectTypes type);
-
 	protected:
+		void changeEffect();
+		void setEffectType(std::string_view type);
+
 		int getYMaskOffset() const noexcept
 		{
-			return kSpectralMaskMargin + ((isMaskExpanded_) ? 
+			auto offset = kSpectralMaskMargin + ((isMaskExpanded_) ? 
 				kSpectralMaskExpandedHeight : kSpectralMaskContractedHeight);
+			return (int)std::round(scaleValue((float)offset));
 		}
 
+		OpenGlImage background_{};
+
 		DraggableComponent draggableBox_{};
-		Path effectTypeIcon_{};
+		PlainShapeComponent effectTypeIcon_{ "Effect Type Icon" };
 		std::unique_ptr<TextSelector> effectTypeSelector_ = nullptr;
 		std::unique_ptr<NumberBox> mixNumberBox_ = nullptr;
+		std::unique_ptr<BaseButton> moduleActivator_ = nullptr;
 
-		std::unique_ptr<TextSelector> effectModeSelector_ = nullptr;
+		std::unique_ptr<TextSelector> effectAlgoSelector_ = nullptr;
 		std::unique_ptr<SpectralMaskComponent> maskComponent_ = nullptr;
 
 		Generation::EffectModule *effectModule_ = nullptr;
 		std::array<Generation::baseEffect *, magic_enum::enum_count<Framework::EffectTypes>()> cachedEffects_{};
-		std::vector<std::unique_ptr<BaseSlider>> effectSliders_{};
+		std::vector<std::unique_ptr<ParameterUI>> effectParameters_{};
 
 		bool isMaskExpanded_ = false;
 
-		void (*initialiseParametersFunction_)(std::vector<std::unique_ptr<BaseSlider>> &effectSliders,
-			Generation::EffectModule *effectModule) = nullptr;
-		void (*arrangeUIFunction_)(EffectModuleSection *section) = nullptr;
+		void (*initialiseParametersFunction_)(std::vector<std::unique_ptr<ParameterUI>> &effectSliders,
+			EffectModuleSection *section) = nullptr;
+		void (*arrangeUIFunction_)(EffectModuleSection *section, Rectangle<int> bounds) = nullptr;
+		void (*paintBackgroundFunction_)(Graphics &g, EffectModuleSection *section) = nullptr;
 	};	
 }

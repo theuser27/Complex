@@ -17,6 +17,12 @@
 		#define COMPLEX_GCC 1
 	#endif
 
+	#ifdef NDEBUG
+		#define COMPLEX_DEBUG 0
+	#else
+		#define COMPLEX_DEBUG 1
+	#endif
+
 	#if defined (__x86_64__)
 		#define COMPLEX_X64 1
 	#elif defined (__aarch64__) 
@@ -27,6 +33,12 @@
 	#define COMPLEX_MSVC 1
 	#if defined (_M_X64)
 		#define COMPLEX_X64 1
+
+		#ifdef _DEBUG
+			#define COMPLEX_DEBUG 1
+		#else
+			#define COMPLEX_DEBUG 0
+		#endif
 
 		// MSVC doesn't define these macros for some reason
 		// if your computer doesn't support FMA you can change the value to 0

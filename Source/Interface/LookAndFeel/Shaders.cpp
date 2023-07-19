@@ -416,7 +416,7 @@ namespace
 		"\n"
 		"void main() {\n"
 		"    float pinXAlpha = constrainAxis(coordinates_out.x, 0.2, 0.0);\n"
-		"    float pinYAlpha = clamp((st.y + 1.0) * 0.75, 0.05, 1.0);\n"
+		"    float pinYAlpha = clamp((coordinates_out.y + 1.0) * 0.75, 0.05, 1.0);\n"
 		"    float alpha = pinXAlpha * pinYAlpha;\n"
 		"    gl_FragColor = color;\n"
 		"    gl_FragColor.a = color.a * alpha;\n"
@@ -615,7 +615,7 @@ namespace Interface
 	OpenGLShaderProgram *Shaders::getShaderProgram(VertexShader vertex_shader, 
 		FragmentShader fragment_shader, const GLchar **varyings)
 	{
-		int shaderProgramIndex = vertex_shader * (int)kNumFragmentShaders + fragment_shader;
+		int shaderProgramIndex = vertex_shader * (int)kFragmentShaderCount + fragment_shader;
 		if (shaderPrograms_.contains(shaderProgramIndex))
 			return shaderPrograms_.at(shaderProgramIndex).get();
 

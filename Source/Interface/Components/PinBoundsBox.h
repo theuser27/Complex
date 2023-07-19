@@ -20,22 +20,22 @@ namespace Interface
 	public:
 		PinBoundsBox(std::string_view name, Framework::ParameterValue *lowBound, Framework::ParameterValue *highBound);
 
-		void paintBackground(Graphics &g) override
-		{
-			g.setColour(findColour(Skin::kBody, true));
-			g.fillRect(getBounds());
-		}
+		void paintBackground(Graphics &g) override;
 		void paint(Graphics &g) override;
 		void resized() override;
 
 		void sliderValueChanged(Slider *slider) override;
 
-		void paintHighlightBox(Graphics &g, float lowBoundValue, float highBoundValue, Colour colour) const;
+		void paintHighlightBox(Graphics &g, float lowBoundValue, 
+			float highBoundValue, Colour colour, float shiftValue = 0.0f) const;
+		void positionSliders();
 
-		void setRounding(float topRounding, float bottomRounding) noexcept
-		{ roundedCorners_->setCorners(getLocalBounds(), topRounding, bottomRounding); }
+		void setRounding(float rounding) noexcept { roundedCorners_->setCorners(getLocalBounds(), rounding); }
 		void setTopRounding(float topRounding) noexcept { roundedCorners_->setTopCorners(getLocalBounds(), topRounding); }
 		void setBottomRounding(float bottomRounding) noexcept { roundedCorners_->setTopCorners(getLocalBounds(), bottomRounding); }
+		void setRounding(float topRounding, float bottomRounding) noexcept
+		{ roundedCorners_->setCorners(getLocalBounds(), topRounding, bottomRounding); }
+		void setRoundedCornerColour(Colour colour) noexcept { roundedCorners_->setColor(colour); }
 
 	protected:
 		std::unique_ptr<PinSlider> lowBound_ = nullptr;

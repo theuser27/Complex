@@ -12,14 +12,8 @@ namespace BinaryData
 //================== Icon_Contrast.svg ==================
 static const unsigned char temp_binary_data_0[] =
 "<svg width=\"14\" height=\"14\" viewBox=\"0 0 14 14\" fill=\"none\" xmlns=\"http://www.w3.org/2000/svg\">\n"
-"<path d=\"M0.5 4.5V9.5C0.5 11.7091 2.29086 13.5 4.5 13.5H9.5C11.7091 13.5 13.5 11.7091 13.5 9.5V4.5C13.5 2.29086 11.7091 0.5 9.5 0.5H4.5C2.29086 0.5 0.5 2.29086 0.5 4.5Z\" stroke=\"black\" stroke-linecap=\"round\"/>\n"
-"<mask id=\"path-2-inside-1_1970_66425\" fill=\"white\">\n"
-"<path d=\"M7.00001 0.999991V13L9.99999 13C11.6568 13 13 11.6569 13 10L13 3.99999C13 2.34314 11.6568 0.999996 9.99999 0.999994L7.00001 0.999991Z\"/>\n"
-"</mask>\n"
-"<path d=\"M7.00001 13H9.18674e-06V20L7.00002 20L7.00001 13ZM7.00001 0.999991L7.00002 -6.00001L9.18674e-06 -6.00002V0.999991H7.00001ZM9.99999 13L9.99999 6.00001L9.99999 6.00001L9.99999 13ZM13 10L5.99999 10L5.99999 10L13 10ZM13 3.99999L5.99999 3.99999L"
-"5.99999 4L13 3.99999ZM9.99999 0.999994L9.99998 7.99999L9.99998 7.99999L9.99999 0.999994ZM14 13V0.999991H9.18674e-06V13H14ZM7.00002 20L10 20L9.99999 6.00001L7 6.00001L7.00002 20ZM20 10L20 3.99999L5.99999 4L5.99999 10L20 10ZM10 -6.00001L7.00002 -6.0000"
-"1L7 7.99999L9.99998 7.99999L10 -6.00001ZM20 3.99999C20 -1.52285 15.5228 -6 10 -6.00001L9.99998 7.99999C7.79084 7.99999 5.99999 6.20913 5.99999 3.99999L20 3.99999ZM10 20C15.5229 20 20 15.5228 20 10L5.99999 10C5.99999 7.79087 7.79084 6.00001 9.99999 6."
-"00001L10 20Z\" fill=\"black\" mask=\"url(#path-2-inside-1_1970_66425)\"/>\n"
+"<path fill-rule=\"evenodd\" clip-rule=\"evenodd\" d=\"M4.5 0C2.01472 0 0 2.01472 0 4.5V9.5C0 11.9853 2.01472 14 4.5 14H9.5C11.9853 14 14 11.9853 14 9.5V4.5C14 2.01472 11.9853 0 9.5 0H4.5ZM4.5 1C2.567 1 1 2.567 1 4.5V9.5C1 11.433 2.567 13 4.5 13H7V1H4"
+".5Z\" fill=\"black\"/>\n"
 "</svg>\n";
 
 const char* Icon_Contrast_svg = (const char*) temp_binary_data_0;
@@ -4737,7 +4731,7 @@ const char* getNamedResource (const char* resourceNameUTF8, int& numBytes)
 
     switch (hash)
     {
-        case 0x93703dad:  numBytes = 1337; return Icon_Contrast_svg;
+        case 0x93703dad:  numBytes = 368; return Icon_Contrast_svg;
         case 0xe39541f1:  numBytes = 52204; return DDINBold_ttf;
         case 0x247953f8:  numBytes = 367772; return InterMedium_ttf;
         default: break;

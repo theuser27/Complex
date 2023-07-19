@@ -15,68 +15,85 @@
 
 namespace
 {
-  inline constexpr std::array<std::string_view, Interface::Skin::kNumSectionOverrides> kOverrideNames = {
+  inline constexpr std::array<std::string_view, Interface::Skin::kSectionOverrideCount> kOverrideNames = {
     "All",
-    "Header",
     "Overlays",
     "Effects Lane",
-    "Effect Module"
+  	"Popup Browser",
+    "Filter Module",
+    "Dynamics Module"
   };
 
-  inline constexpr std::array<std::string_view, Interface::Skin::kNumSkinValueIds> kValueNames = {
-    "Body Rounding",
+  inline constexpr std::array<std::string_view, Interface::Skin::kValueIdCount> kValueNames = {
+    "Body Rounding Top",
+    "Body Rounding Bottom",
+
+  	"Widget Line Width",
+    "Widget Line Boost",
+    "Widget Fill Center",
+    "Widget Fill Fade",
+    "Widget Fill Boost",
+  	"Widget Margin",
+    "Widget Rounded Corner",
+
     "Label Height",
     "Label Background Height",
     "Label Rounding",
     "Label Offset",
     "Text Component Label Offset",
+
     "Rotary Option X Offset",
     "Rotary Option Y Offset",
     "Rotary Option Width",
-    "Title Width",
+
     "Padding",
     "Large Padding",
     "Slider Width",
+
     "Text Component Height",
     "Text Component Offset",
     "Text Component Font Size",
     "Text Button Height",
-    "Button Font Size",
+  	"Button Font Size",
+
     "Knob Arc Size",
     "Knob Arc Thickness",
     "Knob Body Size",
     "Knob Handle Length",
+
     "Knob Mod Amount Arc Size",
     "Knob Mod Amount Arc Thickness",
     "Knob Mod Meter Arc Size",
     "Knob Mod Meter Arc Thickness",
+
     "Knob Offset",
     "Knob Section Height",
     "Knob Shadow Width",
     "Knob Shadow Offset",
+
     "Modulation Button Width",
-    "Modulation Font Size",
-    "Widget Margin",
-    "Widget Rounded Corner",
-    "Widget Line Width",
-    "Widget Line Boost",
-    "Widget Fill Center",
-    "Widget Fill Fade",
-    "Widget Fill Boost"
+    "Modulation Font Size"
   };
 
-  inline constexpr std::array<std::string_view, Interface::Skin::kNumColors> kColorNames = {
+  inline constexpr std::array<std::string_view, Interface::Skin::kColorIdCount> kColorNames = {
     "Background",
     "Body",
-    "Body Heading Background",
+    "Background Element",
     "Heading Text",
-    "Preset Text",
-    "Body Text",
+    "Normal Text",
     "Border",
-    "Label Background",
-    "Label Connection",
-    "Power Button On",
-    "Power Button Off",
+
+    "Widget Primary 1",
+    "Widget Primary 2",
+    "Widget Primary Disabled",
+    "Widget Secondary 1",
+    "Widget Secondary 2",
+    "Widget Secondary Disabled",
+    "Widget Accent 1",
+    "Widget Accent 2",
+    "Widget Background 1",
+    "Widget Background 2",
+    "Widget Center Line",
 
     "Overlay Screen",
     "Lighten Screen",
@@ -102,27 +119,6 @@ namespace
     "Linear Slider Thumb",
     "Linear Slider Thumb Disabled",
 
-    "Pin Slider",
-    "Pin Slider Disabled",
-    "Pin Slider Thumb",
-    "Pin Slider Thumb Disabled",
-
-    "Text Selector Text",
-    "Text Selector Text Disabled",
-
-    "Number Box Slider",
-
-    "Widget Center Line",
-    "Widget Primary 1",
-    "Widget Primary 2",
-    "Widget Primary Disabled",
-    "Widget Secondary 1",
-    "Widget Secondary 2",
-    "Widget Secondary Disabled",
-    "Widget Accent 1",
-    "Widget Accent 2",
-    "Widget Background",
-
     "Modulation Meter",
     "Modulation Meter Left",
     "Modulation Meter Right",
@@ -131,8 +127,6 @@ namespace
     "Modulation Button Dragging",
     "Modulation Button Unselected",
 
-    "Icon Selector Icon",
-
     "Icon Button Off",
     "Icon Button Off Hover",
     "Icon Button Off Pressed",
@@ -140,13 +134,16 @@ namespace
     "Icon Button On Hover",
     "Icon Button On Pressed",
 
-    "UI Button",
-    "UI Button Text",
-    "UI Button Hover",
-    "UI Button Press",
-    "UI Action Button",
-    "UI Action Button Hover",
-    "UI Action Button Press",
+    "Action Button Primary",
+    "Action Button Primary Hover",
+    "Action Button Primary Press",
+    "Action Button Secondary",
+    "Action Button Secondary Hover",
+    "Action Button Secondary Press",
+  	"Action Button Text",
+
+  	"Power Button On",
+    "Power Button Off",
 
     "Text Editor Background",
     "Text Editor Border",
@@ -157,13 +154,6 @@ namespace
 
 namespace Interface
 {
-  bool Skin::shouldScaleValue(ValueId valueId) noexcept
-  {
-    return valueId != kWidgetFillFade && valueId != kWidgetFillBoost &&
-      valueId != kWidgetLineBoost && valueId != kKnobHandleLength &&
-      valueId != kWidgetFillCenter && valueId != kFrequencyDisplay;
-  }
-
   Skin::Skin()
   {
     File defaultSkin = Framework::LoadSave::getDefaultSkin();
@@ -188,18 +178,18 @@ namespace Interface
 
   void Skin::clearSkin()
   {
-    for (int i = 0; i < kNumSectionOverrides; ++i)
+    for (int i = 0; i < kSectionOverrideCount; ++i)
       colorOverrides_[i].clear();
-    for (int i = 0; i < kNumSectionOverrides; ++i)
+    for (int i = 0; i < kSectionOverrideCount; ++i)
       valueOverrides_[i].clear();
   }
 
-  void Skin::applyComponentColors(Component *component) const
+  /*void Skin::applyComponentColors(Component *component) const
   {
-    for (int i = 0; i < Skin::kNumColors; ++i)
+    for (int i = 0; i < kColorIdCount; ++i)
     {
-      int colorId = i + Skin::kInitialColor;
-      Colour color = getColor(static_cast<Skin::ColorId>(colorId));
+      int colorId = i + kInitialColor;
+      Colour color = getColor(static_cast<ColorId>(colorId));
       component->setColour(colorId, color);
     }
   }
@@ -219,22 +209,22 @@ namespace Interface
       component->setColour(color.first, color.second);
   }
 
-  void Skin::applyComponentValues(BaseSection *component) const
+  void Skin::applyComponentValues(BaseSection *section) const
   {
     std::map<ValueId, float> values;
-    for (int i = 0; i < kNumSkinValueIds; ++i)
+    for (int i = 0; i < kValueIdCount; ++i)
       values[(ValueId)i] = values_[i];
 
-    component->setSkinValues(values);
+    section->setSkinValues(values);
   }
 
-  void Skin::applyComponentValues(BaseSection *component, SectionOverride section_override, bool topLevel) const
+  void Skin::applyComponentValues(BaseSection *section, SectionOverride sectionOverride, bool topLevel) const
   {
     if (topLevel)
-      applyComponentValues(component);
+      applyComponentValues(section);
     else
-      component->setSkinValues(valueOverrides_[section_override]);
-  }
+      section->setSkinValues(valueOverrides_[sectionOverride]);
+  }*/
 
   bool Skin::overridesColor(int section, ColorId colorId) const
   {
@@ -255,14 +245,14 @@ namespace Interface
   void Skin::copyValuesToLookAndFeel(LookAndFeel *lookAndFeel) const
   {
     lookAndFeel->setColour(PopupMenu::backgroundColourId, getColor(Skin::kPopupBackground));
-    lookAndFeel->setColour(PopupMenu::textColourId, getColor(Skin::kBodyText));
-    lookAndFeel->setColour(TooltipWindow::textColourId, getColor(Skin::kBodyText));
+    lookAndFeel->setColour(PopupMenu::textColourId, getColor(Skin::kNormalText));
+    lookAndFeel->setColour(TooltipWindow::textColourId, getColor(Skin::kNormalText));
 
     lookAndFeel->setColour(BubbleComponent::backgroundColourId, getColor(Skin::kPopupBackground));
     lookAndFeel->setColour(BubbleComponent::outlineColourId, getColor(Skin::kPopupBorder));
 
     for (int i = kInitialColor; i < kFinalColor; ++i)
-      lookAndFeel->setColour(i, getColor(static_cast<Skin::ColorId>(i)));
+      lookAndFeel->setColour(i, getColor(static_cast<ColorId>(i)));
   }
 
   Colour Skin::getColor(int section, ColorId colorId) const
@@ -270,16 +260,46 @@ namespace Interface
     if (section == kNone)
       return getColor(colorId);
 
-    if (colorOverrides_[section].count(colorId))
+    if (colorOverrides_[section].contains(colorId))
       return colorOverrides_[section].at(colorId);
 
     return Colours::black;
   }
 
+  Colour Skin::getColor(const BaseSection *section, ColorId colorId) const
+  {
+    SectionOverride sectionOverride = section->getSectionOverride();
+    while (sectionOverride != kNone)
+    {
+      if (colorOverrides_[sectionOverride].contains(colorId))
+        return colorOverrides_[sectionOverride].at(colorId);
+
+      section = section->getParent();
+      sectionOverride = section->getSectionOverride();
+    }
+
+    return getColor(colorId);
+  }
+
   float Skin::getValue(int section, ValueId valueId) const
   {
-    if (valueOverrides_[section].count(valueId))
+    if (valueOverrides_[section].contains(valueId))
       return valueOverrides_[section].at(valueId);
+
+    return getValue(valueId);
+  }
+
+  float Skin::getValue(const BaseSection *section, ValueId valueId) const
+  {
+    SectionOverride sectionOverride = section->getSectionOverride();
+    while (sectionOverride != kNone)
+    {
+      if (valueOverrides_[sectionOverride].contains(valueId))
+        return valueOverrides_[sectionOverride].at(valueId);
+
+      section = section->getParent();
+      sectionOverride = section->getSectionOverride();
+    }
 
     return getValue(valueId);
   }
@@ -315,14 +335,14 @@ namespace Interface
   json Skin::stateToJson()
   {
     json data;
-    for (int i = 0; i < kNumColors; ++i)
+    for (int i = 0; i < kColorIdCount; ++i)
       data[kColorNames[i]] = colors_[i].toString().toStdString();
 
-    for (int i = 0; i < kNumSkinValueIds; ++i)
+    for (int i = 0; i < kValueIdCount; ++i)
       data[kValueNames[i]] = values_[i];
 
     json overrides;
-    for (int override_index = 0; override_index < kNumSectionOverrides; ++override_index)
+    for (int override_index = 0; override_index < kSectionOverrideCount; ++override_index)
     {
       json override_section;
       for (const auto &color : colorOverrides_[override_index])
@@ -371,7 +391,7 @@ namespace Interface
     if (data.count("overrides"))
     {
       json overrides = data["overrides"];
-      for (int overrideIndex = 0; overrideIndex < kNumSectionOverrides; ++overrideIndex)
+      for (int overrideIndex = 0; overrideIndex < kSectionOverrideCount; ++overrideIndex)
       {
         std::string_view name = kOverrideNames[overrideIndex];
         colorOverrides_[overrideIndex].clear();
@@ -381,7 +401,7 @@ namespace Interface
           continue;
 
         json overrideSection = overrides[name];
-        for (int i = 0; i < kNumColors; ++i)
+        for (int i = 0; i < kColorIdCount; ++i)
         {
           if (overrideSection.count(kColorNames[i]))
           {
@@ -392,7 +412,7 @@ namespace Interface
           }
         }
 
-        for (int i = 0; i < kNumSkinValueIds; ++i)
+        for (int i = 0; i < kValueIdCount; ++i)
         {
           if (overrideSection.count(kValueNames[i]))
           {
@@ -404,7 +424,7 @@ namespace Interface
       }
     }
 
-    for (int i = 0; i < kNumColors; ++i)
+    for (int i = 0; i < kColorIdCount; ++i)
     {
       if (data.count(kColorNames[i]))
       {
@@ -413,7 +433,7 @@ namespace Interface
       }
     }
 
-    for (int i = 0; i < kNumSkinValueIds; ++i)
+    for (int i = 0; i < kValueIdCount; ++i)
     {
       if (data.count(kValueNames[i]))
         values_[i] = data[kValueNames[i]];

@@ -24,7 +24,6 @@ namespace Interface
 	class AboutSection;
 	class DeleteSection;
 	class ExtraModSection;
-	class HeaderFooterSections;
 	class EffectsStateSection;
 	class MasterControlsInterface;
 	class ModulationInterface;
@@ -41,19 +40,15 @@ namespace Interface
 		static constexpr double kMinOpenGlVersion = 1.4;
 
 		static constexpr int kMainVisualiserHeight = 112;
-		static constexpr int kLaneScrollHeight = 38;
-		static constexpr int kLaneWidth = 418;
-		static constexpr int kLaneStartingHeight = 384;
 		
 		static constexpr int kVerticalGlobalMargin = 8;
 		static constexpr int kHorizontalWindowEdgeMargin = 4;
 		static constexpr int kLaneToLaneMargin = 4;
-		static constexpr int kLaneToBottomSettingsMargin = 32;
+		static constexpr int kLaneToBottomSettingsMargin = 20;
 
-		static constexpr int kWindowStartingWidth = kLaneWidth + 2 * kHorizontalWindowEdgeMargin;
-		static constexpr int kWindowStartingHeight = HeaderFooterSections::kHeaderHeight + kMainVisualiserHeight + 
-			kVerticalGlobalMargin + kLaneScrollHeight + kVerticalGlobalMargin + kLaneStartingHeight + 
-			kLaneToBottomSettingsMargin + HeaderFooterSections::kFooterHeight;
+		static constexpr int kMinWidth = EffectsStateSection::kMinWidth + 2 * kHorizontalWindowEdgeMargin;
+		static constexpr int kMinHeight = HeaderFooterSections::kHeaderHeight + kMainVisualiserHeight + 
+			kVerticalGlobalMargin + EffectsStateSection::kMinHeight + kLaneToBottomSettingsMargin + HeaderFooterSections::kFooterHeight;
 
 		MainInterface(Plugin::ComplexPlugin &plugin);
 		~MainInterface() override;
@@ -80,7 +75,7 @@ namespace Interface
 		void openGLContextClosing() override;
 
 		// Inherited from juce::Timer
-		void timerCallback() override { plugin_.updateGUIParameters(); }
+		void timerCallback() override { plugin_.updateGUIParameters(); openGlContext_.triggerRepaint(); }
 
 		//void effectsMoved() override;
 
@@ -92,7 +87,8 @@ namespace Interface
 		void dualPopupSelector(Component *source, Point<int> position, int width,
 			const PopupItems &options, std::function<void(int)> callback);
 		void popupDisplay(Component *source, const std::string &text,
-			BubbleComponent::BubblePlacement placement, bool primary);
+			BubbleComponent::BubblePlacement placement, bool primary, 
+			Skin::SectionOverride sectionOverride = Skin::kPopupBrowser);
 		void hideDisplay(bool primary);
 		void enableRedoBackground(bool enable)
 		{
@@ -125,6 +121,7 @@ namespace Interface
 		OpenGlWrapper openGl_{ openGlContext_ };
 		Image backgroundImage_;
 		OpenGlBackground background_;
+		std::unique_ptr<Skin> skinInstance_ = nullptr;
 
 		Plugin::ComplexPlugin &plugin_;
 
