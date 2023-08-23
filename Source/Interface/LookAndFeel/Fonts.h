@@ -3,7 +3,7 @@
 
 		Fonts.h
 		Created: 5 Dec 2022 2:08:35am
-		Author:  Lenovo
+		Author:  theuser27
 
 	==============================================================================
 */
@@ -11,7 +11,6 @@
 #pragma once
 
 #include "JuceHeader.h"
-#include "Framework/platform_definitions.h"
 
 namespace Interface
 {
@@ -31,7 +30,9 @@ namespace Interface
 		float getHeightFromAscent(const Font &font, float ascent) const noexcept;
 		float getDefaultFontHeight(const Font &font) const noexcept;
 
-		void setFontForAscent(Font &font, float ascent) const;
+		void setFontFromHeight(Font &font, float height) const;
+		void setFontFromAscent(Font &font, float ascent) const
+		{ setFontFromHeight(font, getHeightFromAscent(font, ascent)); }
 
 		static Fonts *instance()
 		{

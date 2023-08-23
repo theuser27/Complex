@@ -25,9 +25,10 @@ namespace Interface
 		static constexpr float kThicknessDecay = 0.4f;
 		static constexpr float kAlphaInc = 0.2f;
 
-		OpenGlMultiQuad(int maxQuads, Shaders::FragmentShader shader = Shaders::kColorFragment);
+		OpenGlMultiQuad(int maxQuads, Shaders::FragmentShader shader = Shaders::kColorFragment, 
+			String name = typeid(OpenGlMultiQuad).name());
 
-		void paint(Graphics &) override { }
+		void paintBackground(Graphics &) override { }
 		void resized() override
 		{
 			OpenGlComponent::resized();
@@ -36,7 +37,7 @@ namespace Interface
 
 		void init(OpenGlWrapper &openGl) override;
 		void render(OpenGlWrapper &openGl, bool animate) override;
-		void destroy(OpenGlWrapper &openGl) override;
+		void destroy() override;
 
 		void markDirty() noexcept { dirty_ = true; }
 
@@ -277,7 +278,8 @@ namespace Interface
 	class OpenGlQuad : public OpenGlMultiQuad
 	{
 	public:
-		OpenGlQuad(Shaders::FragmentShader shader) : OpenGlMultiQuad(1, shader)
+		OpenGlQuad(Shaders::FragmentShader shader, String name = typeid(OpenGlQuad).name()) :
+			OpenGlMultiQuad(1, shader, std::move(name))
 		{ setQuad(0, -1.0f, -1.0f, 2.0f, 2.0f); }
 	};
 
@@ -286,7 +288,7 @@ namespace Interface
 	public:
 		static constexpr float kHoverChange = 0.2f;
 
-		OpenGlScrollQuad() : OpenGlQuad(Shaders::kRoundedRectangleFragment)
+		OpenGlScrollQuad() : OpenGlQuad(Shaders::kRoundedRectangleFragment, typeid(OpenGlScrollQuad).name())
 		{
 			animator_.setHoverIncrement(kHoverChange);
 		}
@@ -328,56 +330,57 @@ namespace Interface
 	public:
 		OpenGlScrollBar() : ScrollBar(true)
 		{
-			bar_.setTargetComponent(this);
-			addAndMakeVisible(bar_);
-			bar_.setScrollBar(this);
+			bar_ = makeOpenGlComponent<OpenGlScrollQuad>();
+			bar_->setTargetComponent(this);
+			addAndMakeVisible(bar_.get());
+			bar_->setScrollBar(this);
 		}
 
-		OpenGlQuad *getGlComponent() { return &bar_; }
+		auto getGlComponent() { return bar_; }
 
 		void resized() override
 		{
 			ScrollBar::resized();
-			bar_.setBounds(getLocalBounds());
-			bar_.setRounding(getWidth() * 0.25f);
+			bar_->setBounds(getLocalBounds());
+			bar_->setRounding(getWidth() * 0.25f);
 		}
 
 		void mouseEnter(const MouseEvent &e) override
 		{
 			ScrollBar::mouseEnter(e);
-			bar_.getAnimator().setIsHovered(true);
+			bar_->getAnimator().setIsHovered(true);
 		}
 
 		void mouseExit(const MouseEvent &e) override
 		{
 			ScrollBar::mouseExit(e);
-			bar_.getAnimator().setIsHovered(false);
+			bar_->getAnimator().setIsHovered(false);
 		}
 
 		void mouseDown(const MouseEvent &e) override
 		{
 			ScrollBar::mouseDown(e);
-			bar_.setColor(color_.overlaidWith(color_));
+			bar_->setColor(color_.overlaidWith(color_));
 		}
 
 		void mouseUp(const MouseEvent &e) override
 		{
 			ScrollBar::mouseDown(e);
-			bar_.setColor(color_);
+			bar_->setColor(color_);
 		}
 
-		void setColor(Colour color) { color_ = color; bar_.setColor(color); }
-		void setShrinkLeft(bool shrink_left) { bar_.setShrinkLeft(shrink_left); }
+		void setColor(Colour color) { color_ = color; bar_->setColor(color); }
+		void setShrinkLeft(bool shrink_left) { bar_->setShrinkLeft(shrink_left); }
 
 	private:
 		Colour color_;
-		OpenGlScrollQuad bar_;
+		gl_ptr<OpenGlScrollQuad> bar_;
 	};
 
 	class OpenGlCorners : public OpenGlMultiQuad
 	{
 	public:
-		OpenGlCorners() : OpenGlMultiQuad(4, Shaders::kRoundedCornerFragment)
+		OpenGlCorners() : OpenGlMultiQuad(4, Shaders::kRoundedCornerFragment, typeid(OpenGlCorners).name())
 		{
 			setCoordinates(0, 1.0f, 1.0f, -1.0f, -1.0f);
 			setCoordinates(1, 1.0f, 0.0f, -1.0f, 1.0f);

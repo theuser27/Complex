@@ -79,12 +79,8 @@ namespace Interface
 		void resized() override;
 
 		void paintBackground(Graphics &g) override;
-		void repaintBackground() override;
-		void initOpenGlComponents(OpenGlWrapper &openGl) override
-		{ background_.init(openGl); BaseSection::initOpenGlComponents(openGl); }
-		void renderOpenGlComponents(OpenGlWrapper &openGl, bool animate) override;
-		void destroyOpenGlComponents(OpenGlWrapper &openGl) override
-		{ background_.destroy(); BaseSection::destroyOpenGlComponents(openGl); }
+		void renderOpenGlComponents(OpenGlWrapper &openGl, bool animate = false) override
+		{ BaseSection::renderOpenGlComponents(openGl, animate); }
 
 		void resizeForText(TextSelector *textSelector, int requestedWidthChange) override;
 		void expansionChange(bool isExpanded) override;
@@ -103,18 +99,17 @@ namespace Interface
 		{
 			COMPLEX_ASSERT(initialiseParametersFunction_ && "No initParametersFunction was provided");
 
-			for (auto &parameter : effectParameters_)
-			{
-				if (auto *slider = dynamic_cast<BaseSlider *>(parameter.get()))
-					removeSlider(slider);
-				else
-					removeButton(static_cast<BaseButton *>(parameter.get()));
+			for (auto &control : effectControls_)
+				removeControl(control.get());
+			
+			effectControls_ = decltype(effectControls_){};
 
-				parameter->setParameterLink(nullptr);
-			}
-			effectParameters_.clear();
-			initialiseParametersFunction_(effectParameters_, this);
+			initialiseParametersFunction_(effectControls_, this);
 		}
+
+		// sets positions and dimensions of the module header
+		void arrangeHeader();
+
 		// sets positions and dimensions of contained UI elements for the specific module type/effect mode
 		void arrangeUI()
 		{
@@ -130,12 +125,9 @@ namespace Interface
 
 		auto &getDraggableComponent() noexcept { return draggableBox_; }
 		auto *getEffect() noexcept { return effectModule_->getEffect(); }
-		ParameterUI *getEffectParameter(size_t index) noexcept;
+		BaseControl *getEffectParameter(size_t index) noexcept;
 		Rectangle<int> getUIBounds() const noexcept
 		{ return getLocalBounds().withTop(getYMaskOffset() + scaleValueRoundInt(kTopMenuHeight) + 1); }
-
-		// sets positions and dimensions of the module header
-		void arrangeHeader();
 
 	protected:
 		void changeEffect();
@@ -145,13 +137,11 @@ namespace Interface
 		{
 			auto offset = kSpectralMaskMargin + ((isMaskExpanded_) ? 
 				kSpectralMaskExpandedHeight : kSpectralMaskContractedHeight);
-			return (int)std::round(scaleValue((float)offset));
+			return scaleValueRoundInt((float)offset);
 		}
 
-		OpenGlImage background_{};
-
 		DraggableComponent draggableBox_{};
-		PlainShapeComponent effectTypeIcon_{ "Effect Type Icon" };
+		gl_ptr<PlainShapeComponent> effectTypeIcon_ = nullptr;
 		std::unique_ptr<TextSelector> effectTypeSelector_ = nullptr;
 		std::unique_ptr<NumberBox> mixNumberBox_ = nullptr;
 		std::unique_ptr<BaseButton> moduleActivator_ = nullptr;
@@ -161,11 +151,11 @@ namespace Interface
 
 		Generation::EffectModule *effectModule_ = nullptr;
 		std::array<Generation::baseEffect *, magic_enum::enum_count<Framework::EffectTypes>()> cachedEffects_{};
-		std::vector<std::unique_ptr<ParameterUI>> effectParameters_{};
+		std::vector<std::unique_ptr<BaseControl>> effectControls_{};
 
 		bool isMaskExpanded_ = false;
 
-		void (*initialiseParametersFunction_)(std::vector<std::unique_ptr<ParameterUI>> &effectSliders,
+		void (*initialiseParametersFunction_)(std::vector<std::unique_ptr<BaseControl>> &effectSliders,
 			EffectModuleSection *section) = nullptr;
 		void (*arrangeUIFunction_)(EffectModuleSection *section, Rectangle<int> bounds) = nullptr;
 		void (*paintBackgroundFunction_)(Graphics &g, EffectModuleSection *section) = nullptr;

@@ -9,14 +9,13 @@
 namespace BinaryData
 {
 
-//================== Icon_Contrast.svg ==================
+//================== Icon_Filter.svg ==================
 static const unsigned char temp_binary_data_0[] =
-"<svg width=\"14\" height=\"14\" viewBox=\"0 0 14 14\" fill=\"none\" xmlns=\"http://www.w3.org/2000/svg\">\n"
-"<path fill-rule=\"evenodd\" clip-rule=\"evenodd\" d=\"M4.5 0C2.01472 0 0 2.01472 0 4.5V9.5C0 11.9853 2.01472 14 4.5 14H9.5C11.9853 14 14 11.9853 14 9.5V4.5C14 2.01472 11.9853 0 9.5 0H4.5ZM4.5 1C2.567 1 1 2.567 1 4.5V9.5C1 11.433 2.567 13 4.5 13H7V1H4"
-".5Z\" fill=\"black\"/>\n"
+"<svg width=\"13\" height=\"9\" viewBox=\"0 0 13 9\" fill=\"none\" xmlns=\"http://www.w3.org/2000/svg\">\n"
+"<path d=\"M12.5 8.50079L10.3662 2.81071C9.912 1.59946 8.48121 1.08295 7.35804 1.72476L7.17593 1.82883C6.40533 2.26917 5.53316 2.50079 4.64562 2.50079H0.5\" stroke=\"black\" stroke-linecap=\"round\"/>\n"
 "</svg>\n";
 
-const char* Icon_Contrast_svg = (const char*) temp_binary_data_0;
+const char* Icon_Filter_svg = (const char*) temp_binary_data_0;
 
 //================== D-DIN-Bold.ttf ==================
 static const unsigned char temp_binary_data_1[] =
@@ -4731,7 +4730,7 @@ const char* getNamedResource (const char* resourceNameUTF8, int& numBytes)
 
     switch (hash)
     {
-        case 0x93703dad:  numBytes = 368; return Icon_Contrast_svg;
+        case 0x0c9e94a3:  numBytes = 295; return Icon_Filter_svg;
         case 0xe39541f1:  numBytes = 52204; return DDINBold_ttf;
         case 0x247953f8:  numBytes = 367772; return InterMedium_ttf;
         default: break;
@@ -4743,14 +4742,14 @@ const char* getNamedResource (const char* resourceNameUTF8, int& numBytes)
 
 const char* namedResourceList[] =
 {
-    "Icon_Contrast_svg",
+    "Icon_Filter_svg",
     "DDINBold_ttf",
     "InterMedium_ttf"
 };
 
 const char* originalFilenames[] =
 {
-    "Icon_Contrast.svg",
+    "Icon_Filter.svg",
     "D-DIN-Bold.ttf",
     "Inter-Medium.ttf"
 };

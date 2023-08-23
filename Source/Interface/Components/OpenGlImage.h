@@ -17,22 +17,23 @@
 
 namespace Interface
 {
-  class OpenGlImage
+  class OpenGlImage : public OpenGlComponent
   {
   public:
-    OpenGlImage();
+    OpenGlImage(String name = typeid(OpenGlImage).name());
 
-    void init(OpenGlWrapper &openGl);
-    void render();
-    void destroy();
+    void init(OpenGlWrapper &openGl) override;
+    void render(OpenGlWrapper &openGl, bool animate) override;
+    void destroy() override;
 
     void lock() { mutex_.lock(); }
     void unlock() { mutex_.unlock(); }
 
-    void setOwnImage(Image &image)
+    auto *getOwnImage() noexcept { return ownedImage_.get(); }
+    void setOwnImage(Image image)
     {
+      ownedImage_ = std::make_unique<Image>(std::move(image));
       mutex_.lock();
-      ownedImage_ = std::make_unique<Image>(image);
       setImage(ownedImage_.get());
       mutex_.unlock();
     }
@@ -71,7 +72,7 @@ namespace Interface
     Image *image_ = nullptr;
     int imageWidth_ = 0;
     int imageHeight_ = 0;
-    std::unique_ptr<Image> ownedImage_;
+    std::unique_ptr<Image> ownedImage_ = nullptr;
     Colour color_ = Colours::white;
     OpenGLTexture texture_;
     bool additive_ = false;

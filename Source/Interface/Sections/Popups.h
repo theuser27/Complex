@@ -25,9 +25,9 @@ namespace Interface
 			BubbleComponent::BubblePlacement placement, Skin::SectionOverride sectionOverride = Skin::kPopupBrowser);
 
 	private:
-		PlainTextComponent text_{ "Popup Text", "" };
-		OpenGlQuad body_{ Shaders::kRoundedRectangleFragment };
-		OpenGlQuad border_{ Shaders::kRoundedRectangleBorderFragment };
+		gl_ptr<OpenGlQuad> body_;
+		gl_ptr<OpenGlQuad> border_;
+		gl_ptr<PlainTextComponent> text_;
 	};
 
 	class PopupList : public BaseSection, ScrollBar::Listener
@@ -39,7 +39,8 @@ namespace Interface
 			virtual ~Listener() = default;
 
 			virtual void newSelection(PopupList *list, int id, int index) = 0;
-			virtual void doubleClickedSelected(PopupList *list, int id, int index) { }
+			virtual void doubleClickedSelected([[maybe_unused]] PopupList *list, 
+				[[maybe_unused]] int id, [[maybe_unused]] int index) { }
 		};
 
 		static constexpr float kRowHeight = 16.0f;
@@ -53,22 +54,22 @@ namespace Interface
 		void mouseExit(const MouseEvent &e) override;
 		void mouseUp(const MouseEvent &e) override;
 		void mouseDoubleClick(const MouseEvent &e) override;
-		void paintBackground(Graphics &g) override { }
-		void paintBackgroundShadow(Graphics &g) override { }
+		void paintBackground(Graphics &) override { }
+		void paintBackgroundShadow(Graphics &) override { }
 		void resized() override;
 
 		void setSelections(PopupItems selections);
 		PopupItems getSelectionItems(int index) const { return selections_.items[index]; }
 		int getRowFromPosition(float mouse_position);
-		int getRowHeight() const noexcept { return (int)std::round(scaling_ * kRowHeight); }
+		int getRowHeight() const noexcept { return scaleValueRoundInt(kRowHeight); }
 		int getTextPadding() const noexcept { return getRowHeight() / 4; }
 		int getBrowseWidth() const;
 		int getBrowseHeight() const noexcept { return getRowHeight() * selections_.size(); }
 		Font getFont() const
 		{
 			auto fontsInstance = Fonts::instance();
-			auto usedFont = fontsInstance->getInterVFont();
-			fontsInstance->setFontForAscent(usedFont, (float)getRowHeight() * 0.5f);
+			Font usedFont = fontsInstance->getInterVFont();
+			fontsInstance->setFontFromAscent(usedFont, (float)getRowHeight() * 0.5f);
 			return usedFont;
 		}
 		int getSelection(const MouseEvent &e);
@@ -77,17 +78,12 @@ namespace Interface
 		int getSelected() const { return selected_; }
 		void mouseWheelMove(const MouseEvent &e, const MouseWheelDetails &wheel) override;
 		void resetScrollPosition();
-		void scrollBarMoved(ScrollBar *scroll_bar, double range_start) override { view_position_ = range_start; }
+		void scrollBarMoved([[maybe_unused]] ScrollBar *scroll_bar, double range_start) override 
+		{ view_position_ = (float)range_start; }
 		void setScrollBarRange();
 		int getScrollableRange();
 
-		void initOpenGlComponents(OpenGlWrapper &open_gl) override;
-		void renderOpenGlComponents(OpenGlWrapper &open_gl, bool animate) override;
-		void destroyOpenGlComponents(OpenGlWrapper &open_gl) override;
-		void addListener(Listener *listener)
-		{
-			listeners_.push_back(listener);
-		}
+		void addListener(Listener *listener) { listeners_.push_back(listener); }
 		void showSelected(bool show) { show_selected_ = show; }
 		void select(int select);
 
@@ -108,9 +104,9 @@ namespace Interface
 
 		float view_position_ = 0.0f;
 		std::unique_ptr<OpenGlScrollBar> scroll_bar_;
-		OpenGlImage rows_;
-		OpenGlQuad highlight_{ Shaders::kColorFragment };
-		OpenGlQuad hover_{ Shaders::kColorFragment };
+		gl_ptr<OpenGlImage> rows_;
+		gl_ptr<OpenGlQuad> highlight_;
+		gl_ptr<OpenGlQuad> hover_;
 
 		JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(PopupList)
 	};
@@ -120,11 +116,8 @@ namespace Interface
 	public:
 		SinglePopupSelector();
 
-		void renderOpenGlComponents(OpenGlWrapper &openGl, bool animate) override
-		{ BaseSection::renderOpenGlComponents(openGl, animate); }
-
-		void paintBackground(Graphics &g) override {}
-		void paintBackgroundShadow(Graphics &g) override {}
+		void paintBackground(Graphics &) override { }
+		void paintBackgroundShadow(Graphics &) override { }
 		void resized() override;
 
 		void visibilityChanged() override
@@ -135,7 +128,8 @@ namespace Interface
 
 		void setPosition(Point<int> position, Rectangle<int> bounds);
 
-		void newSelection(PopupList *list, int id, int index) override
+		void newSelection([[maybe_unused]] PopupList *list, int id, 
+			[[maybe_unused]] int index) override
 		{
 			if (id >= 0)
 			{
@@ -147,7 +141,7 @@ namespace Interface
 				cancel_();
 		}
 
-		void focusLost(FocusChangeType cause) override
+		void focusLost(FocusChangeType) override
 		{
 			setVisible(false);
 			if (cancel_)
@@ -157,11 +151,11 @@ namespace Interface
 		void setCallback(std::function<void(int)> callback) { callback_ = std::move(callback); }
 		void setCancelCallback(std::function<void()> cancel) { cancel_ = std::move(cancel); }
 
-		void showSelections(const PopupItems &selections) { popup_list_->setSelections(selections); }
+		void showSelections(PopupItems selections) { popup_list_->setSelections(std::move(selections)); }
 
 	private:
-		OpenGlQuad body_{ Shaders::kRoundedRectangleFragment };
-		OpenGlQuad border_{ Shaders::kRoundedRectangleBorderFragment };
+		gl_ptr<OpenGlQuad> body_;
+		gl_ptr<OpenGlQuad> border_;
 
 		std::function<void(int)> callback_{};
 		std::function<void()> cancel_{};
@@ -175,8 +169,8 @@ namespace Interface
 	public:
 		DualPopupSelector();
 
-		void paintBackground(Graphics &g) override {}
-		void paintBackgroundShadow(Graphics &g) override {}
+		void paintBackground(Graphics &) override { }
+		void paintBackgroundShadow(Graphics &) override { }
 		void resized() override;
 		void visibilityChanged() override
 		{
@@ -187,9 +181,10 @@ namespace Interface
 		void setPosition(Point<int> position, int width, Rectangle<int> bounds);
 
 		void newSelection(PopupList *list, int id, int index) override;
-		void doubleClickedSelected(PopupList *list, int id, int index) override { setVisible(false); }
+		void doubleClickedSelected([[maybe_unused]] PopupList *list, 
+			[[maybe_unused]] int id, [[maybe_unused]] int index) override { setVisible(false); }
 
-		void focusLost(FocusChangeType cause) override { setVisible(false); }
+		void focusLost(FocusChangeType) override { setVisible(false); }
 
 		void setCallback(std::function<void(int)> callback) { callback_ = std::move(callback); }
 
@@ -205,9 +200,9 @@ namespace Interface
 		}
 
 	private:
-		OpenGlQuad body_{ Shaders::kRoundedRectangleFragment };
-		OpenGlQuad border_{ Shaders::kRoundedRectangleBorderFragment };
-		OpenGlQuad divider_{ Shaders::kColorFragment };
+		gl_ptr<OpenGlQuad> body_;
+		gl_ptr<OpenGlQuad> border_;
+		gl_ptr<OpenGlQuad> divider_;
 
 		std::function<void(int)> callback_{};
 		std::unique_ptr<PopupList> left_list_;

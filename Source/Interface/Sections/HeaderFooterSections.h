@@ -19,8 +19,8 @@ namespace Interface
 	{
 	public:
 		static constexpr int kHeaderHeight = 40;
-		static constexpr int kHeaderHorizontalEdgePadding = 4;
-		static constexpr int kHeaderNumberBoxMargin = 6;
+		static constexpr int kHeaderHorizontalEdgePadding = 10;
+		static constexpr int kHeaderNumberBoxMargin = 12;
 
 		static constexpr int kFooterHeight = 24;
 		static constexpr int kFooterHorizontalEdgePadding = 16;
@@ -45,6 +45,9 @@ namespace Interface
 		std::unique_ptr<NumberBox> overlapNumberBox_;
 		std::unique_ptr<TextSelector> windowTypeSelector_;
 		std::unique_ptr<NumberBox> windowAlphaNumberBox_;
+
+		gl_ptr<OpenGlQuad> backgroundColour_;
+		gl_ptr<OpenGlQuad> bottomBarColour_;
 
 		bool showAlpha_ = false;
 	};

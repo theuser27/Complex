@@ -20,8 +20,8 @@ namespace Generation
 		dataBuffer_.reserve(kNumTotalChannels, kMaxFFTBufferLength);
 		insertSubProcessor(0, makeSubProcessor<EffectModule>(dynamicsEffect::getClassType()));
 
-		processorParameters_.data.reserve(Framework::effectChainParameterList.size());
-		createProcessorParameters(Framework::effectChainParameterList.data(), Framework::effectChainParameterList.size());
+		processorParameters_.data.reserve(Framework::effectLaneParameterList.size());
+		createProcessorParameters(Framework::effectLaneParameterList.data(), Framework::effectLaneParameterList.size());
 	}
 
 	bool EffectsLane::insertSubProcessor(size_t index, BaseProcessor *newSubProcessor) noexcept
@@ -30,8 +30,8 @@ namespace Generation
 		COMPLEX_ASSERT(newSubProcessor->getProcessorType() == EffectModule::getClassType()
 			&& "You're trying to move a non-EffectModule into EffectChain");
 
-		effectModules_.insert(effectModules_.begin() + index, static_cast<EffectModule *>(newSubProcessor));
-		subProcessors_.insert(subProcessors_.begin() + index, newSubProcessor);
+		effectModules_.insert(effectModules_.begin() + (std::ptrdiff_t)index, static_cast<EffectModule *>(newSubProcessor));
+		subProcessors_.insert(subProcessors_.begin() + (std::ptrdiff_t)index, newSubProcessor);
 
 		for (auto *listener : listeners_)
 			listener->insertedSubProcessor(index, newSubProcessor);
@@ -124,8 +124,6 @@ namespace Generation
 					dataBuffer_.writeSimdValueAt(matrix.rows_[k], i, j * kComplexSimdRatio + k);
 			}
 		}
-
-
 	}
 
 	void EffectsState::processChains() const noexcept
@@ -135,12 +133,12 @@ namespace Generation
 		// (release/acquire barriers can cross each other but not seq_cst/acquire)
 
 		// triggers the chains to run again
-		for (auto &chain : lanes_)
-			chain->isFinished_.store(false, std::memory_order_seq_cst);
+		for (auto &lane : lanes_)
+			lane->isFinished_.store(false, std::memory_order_seq_cst);
 
 		// waiting for chains to finish
-		for (auto &chain : lanes_)
-			while (chain->isFinished_.load(std::memory_order_acquire) == false) { utils::longWait(5); }
+		for (auto &lane : lanes_)
+			while (lane->isFinished_.load(std::memory_order_acquire) == false) { utils::longWait(5); }
 	}
 
 	void EffectsState::processIndividualChains(std::stop_token stoken, size_t chainIndex) const noexcept
@@ -195,7 +193,7 @@ namespace Generation
 			for (auto &effectModule : thisLane->subProcessors_)
 			{
 				// this is safe because by design only EffectModules are contained in a lane
-				static_cast<EffectModule *>(effectModule)->processEffect(laneDataSource, effectiveFFTSize_, getSampleRate());
+				utils::as<EffectModule *>(effectModule)->processEffect(laneDataSource, effectiveFFTSize_, getSampleRate());
 
 				// TODO: fit links between modules here
 
@@ -297,7 +295,7 @@ namespace Generation
 
 				matrix.complexTranspose();
 				for (u32 k = 0; k < kComplexSimdRatio; k++)
-					std::memcpy(outputBuffer.getWritePointer(i + k, j * 2 * kComplexSimdRatio), 
+					std::memcpy(outputBuffer.getWritePointer((int)(i + k), (int)j * 2 * kComplexSimdRatio), 
 						&matrix.rows_[k], size_t(2) * kComplexSimdRatio * sizeof(float));
 			}
 		}

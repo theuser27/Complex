@@ -9,6 +9,7 @@
 */
 
 #include "Complex.h"
+#include "Interface/Components/BaseControl.h"
 
 namespace Plugin
 {

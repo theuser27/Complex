@@ -19,7 +19,7 @@
 
 namespace Interface
 {
-	class ParameterUI;
+	class BaseControl;
 }
 
 namespace Framework
@@ -46,7 +46,7 @@ namespace Framework
 		// the lifetime of the UIControl and parameter are the same, so there's no danger of accessing freed memory
 		// as for the hostControl, in the destructor of the UI element, tied to the BaseProcessor,
 		// we reset it's pointer to the ParameterLink and so it cannot access the parameter/UIControl
-		Interface::ParameterUI *UIControl = nullptr;
+		Interface::BaseControl *UIControl = nullptr;
 		ParameterBridge *hostControl = nullptr;
 		std::vector<std::weak_ptr<ParameterModulator>> modulators{};
 		ParameterValue *parameter = nullptr;
@@ -62,13 +62,7 @@ namespace Framework
 		ParameterValue &operator=(ParameterValue &&) = delete;
 
 		ParameterValue(ParameterDetails details, u64 parentModuleId) noexcept :
-			details_(details), parentProcessorId_(parentModuleId)
-		{
-			normalisedValue_ = details_.defaultNormalisedValue;
-			modulations_ = 0.0f;
-			normalisedInternalValue_ = details_.defaultNormalisedValue;
-			internalValue_ = details_.defaultValue;
-		}
+			details_(details), parentProcessorId_(parentModuleId) { initialise(); }
 
 		ParameterValue(const ParameterValue &other, u64 parentModuleId) noexcept : 
 			details_(other.details_), parentProcessorId_(parentModuleId)
@@ -81,13 +75,7 @@ namespace Framework
 		}
 
 		ParameterValue(ParameterValue &&other, u64 parentModuleId) noexcept : 
-			details_(other.details_), parentProcessorId_(parentModuleId)
-		{
-			normalisedValue_ = other.normalisedValue_;
-			modulations_ = other.modulations_;
-			normalisedInternalValue_ = other.normalisedInternalValue_;
-			internalValue_ = other.internalValue_;
-		}
+			ParameterValue(other, parentModuleId) { }
 
 		void initialise(std::optional<float> value = {})
 		{
@@ -97,7 +85,8 @@ namespace Framework
 			modulations_ = 0.0f;
 			normalisedInternalValue_ = value.value_or(details_.defaultNormalisedValue);
 			internalValue_ = (!value.has_value()) ? details_.defaultValue :
-				(float)Framework::scaleValue(value.value(), details_);
+				(float)scaleValue(value.value(), details_);
+			isDirty_ = false;
 		}
 		
 		// prefer calling this only once if possible
@@ -169,20 +158,20 @@ namespace Framework
 			return result;
 		}
 
-		auto changeControl(std::variant<Interface::ParameterUI *, ParameterBridge *> control) noexcept
+		auto changeControl(std::variant<Interface::BaseControl *, ParameterBridge *> control) noexcept
 		{
 			utils::ScopedSpinLock lock(waitLock_);
 			
-			if (std::holds_alternative<Interface::ParameterUI *>(control))
+			if (std::holds_alternative<Interface::BaseControl *>(control))
 			{
-				auto variant = std::variant<Interface::ParameterUI *,
+				auto variant = std::variant<Interface::BaseControl *,
 					ParameterBridge *>{ std::in_place_index<0>, parameterLink_.UIControl };
 				parameterLink_.UIControl = std::get<0>(control);
 				return variant;
 			}
 			else
 			{
-				auto variant = std::variant<Interface::ParameterUI *,
+				auto variant = std::variant<Interface::BaseControl *,
 					ParameterBridge *>{ std::in_place_index<1>, parameterLink_.hostControl };
 				parameterLink_.hostControl = std::get<1>(control);
 				return variant;
@@ -197,6 +186,8 @@ namespace Framework
 
 			if (index < 0) parameterLink_.modulators.emplace_back(std::move(modulator));
 			else parameterLink_.modulators.emplace(parameterLink_.modulators.begin() + index, std::move(modulator));
+
+			isDirty_ = true;
 		}
 
 		auto updateModulator(std::weak_ptr<ParameterModulator> modulator, size_t index)
@@ -207,6 +198,9 @@ namespace Framework
 
 			auto replacedModulator = parameterLink_.modulators[index];
 			parameterLink_.modulators[index] = std::move(modulator);
+			
+			isDirty_ = true;
+
 			return replacedModulator;
 		}
 
@@ -218,6 +212,9 @@ namespace Framework
 
 			auto deletedModulator = parameterLink_.modulators[index];
 			parameterLink_.modulators.erase(parameterLink_.modulators.begin() + (std::ptrdiff_t)index);
+
+			isDirty_ = true;
+
 			return deletedModulator;
 		}
 
@@ -236,10 +233,11 @@ namespace Framework
 		auto *getParameterLink() noexcept { return &parameterLink_; }
 		u64 getParentProcessorId() const noexcept { return parentProcessorId_; }
 
-		void setParameterDetails(ParameterDetails details) noexcept
+		void setParameterDetails(const ParameterDetails &details) noexcept
 		{
 			utils::ScopedSpinLock guard(waitLock_);
 			details_ = details;
+			isDirty_ = true;
 		}
 
 	private:
@@ -258,92 +256,6 @@ namespace Framework
 		const u64 parentProcessorId_;
 
 		mutable std::atomic<bool> waitLock_ = false;
-	};
-}
-
-namespace Interface
-{
-	class ParameterUI
-	{
-	public:
-		virtual ~ParameterUI() = default;
-
-		Framework::ParameterDetails getParameterDetails() const noexcept { return details_; }
-		virtual void setParameterDetails(const Framework::ParameterDetails &details) { details_ = details; }
-
-		Framework::ParameterLink *getParameterLink() const noexcept { return parameterLink_; }
-		// returns the replaced link
-		Framework::ParameterLink *setParameterLink(Framework::ParameterLink *parameterLink) noexcept
-		{
-			auto replacedLink = parameterLink_;
-			if (replacedLink)
-				replacedLink->parameter->changeControl(std::variant<ParameterUI *,
-					Framework::ParameterBridge *>(std::in_place_index<0>, nullptr));
-
-			parameterLink_ = parameterLink;
-
-			if (parameterLink_)
-				parameterLink_->parameter->changeControl(this);
-
-			return replacedLink;
-		}
-
-		void setValueFromHost(double newValue) noexcept { setValueSafe(newValue); }
-		void setValueToHost() noexcept;
-
-		// called on the UI thread from:
-		// - on a timer in MainInterface to watch for updates from the host
-		// - the UndoManager when undo/redo happens
-		virtual bool updateValue() = 0;
-
-		double getValueSafe() const noexcept
-		{ return value_.load(std::memory_order_acquire); }
-
-		double getValueSafeScaled(float sampleRate = kDefaultSampleRate) const noexcept
-		{ return Framework::scaleValue(getValueSafe(), details_, sampleRate, true); }
-
-		void setValueSafe(double newValue) noexcept
-		{ value_.store(newValue, std::memory_order_release); }
-
-		void beginChange(double oldValue) noexcept { valueBeforeChange_ = oldValue; hasBegunChange_ = true; }
-		virtual void endChange() = 0;
-
-		bool hasParameter() const noexcept { return hasParameter_; }
-
-	protected:
-		std::atomic<double> value_ = 0.0;
-		double valueBeforeChange_ = 0.0;
-		bool hasBegunChange_ = false;
-
-		bool hasParameter_ = false;
-
-		Framework::ParameterLink *parameterLink_ = nullptr;
-		Framework::ParameterDetails details_{};
-	};
-
-	struct PopupItems
-	{
-		std::vector<PopupItems> items{};
-		std::string name{};
-		int id = 0;
-		bool selected = false;
-		bool isActive = false;
-
-		PopupItems() = default;
-		PopupItems(std::string name) : name(std::move(name)) { }
-
-		PopupItems(int id, std::string name, bool selected = false, bool active = false) :
-			name(std::move(name)), id(id), selected(selected), isActive(active)
-		{
-		}
-
-		void addItem(int subId, std::string subName, bool subSelected = false, bool active = false)
-		{
-			items.emplace_back(subId, std::move(subName), subSelected, active);
-		}
-
-		void addItem(const PopupItems &item) { items.push_back(item); }
-		void addItem(PopupItems &&item) { items.emplace_back(std::move(item)); }
-		int size() const noexcept { return (int)items.size(); }
+		bool isDirty_ = false;
 	};
 }

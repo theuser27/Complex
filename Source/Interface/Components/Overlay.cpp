@@ -61,7 +61,7 @@ namespace Interface
     drawOverlay(openGl);
   }
 
-  void OverlayBackgroundRenderer::destroy([[maybe_unused]] OpenGlWrapper &openGl)
+  void OverlayBackgroundRenderer::destroy()
   {
     shader_ = nullptr;
     position_ = nullptr;

@@ -18,6 +18,8 @@ namespace Interface
 	class PinBoundsBox : public BaseSection
 	{
 	public:
+		static constexpr int kAdditionalPinWidth = 20;
+
 		PinBoundsBox(std::string_view name, Framework::ParameterValue *lowBound, Framework::ParameterValue *highBound);
 
 		void paintBackground(Graphics &g) override;
@@ -40,7 +42,7 @@ namespace Interface
 	protected:
 		std::unique_ptr<PinSlider> lowBound_ = nullptr;
 		std::unique_ptr<PinSlider> highBound_ = nullptr;
-		std::unique_ptr<OpenGlImageComponent> highlight_ = nullptr;
-		std::unique_ptr<OpenGlCorners> roundedCorners_ = nullptr;
+		gl_ptr<OpenGlImageComponent> highlight_ = nullptr;
+		gl_ptr<OpenGlCorners> roundedCorners_ = nullptr;
 	};
 }

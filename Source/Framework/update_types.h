@@ -146,8 +146,8 @@ namespace Framework
 	class ParameterUpdate : public WaitingUpdate
 	{
 	public:
-		ParameterUpdate(Interface::ParameterUI *parameterUI, double oldValue, double newValue) :
-			parameterUI_(parameterUI), oldValue_(oldValue), newValue_(newValue) { }
+		ParameterUpdate(Interface::BaseControl *parameterUI, double oldValue, double newValue) :
+			baseParameter_(parameterUI), oldValue_(oldValue), newValue_(newValue) { }
 
 		bool perform() override;
 		bool undo() override;
@@ -155,7 +155,7 @@ namespace Framework
 		int getSizeInUnits() override { return sizeof(*this); }
 
 	private:
-		Interface::ParameterUI *parameterUI_;
+		Interface::BaseControl *baseParameter_;
 		double oldValue_;
 		double newValue_;
 		bool firstTime_ = true;

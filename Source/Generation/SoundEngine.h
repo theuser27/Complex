@@ -84,7 +84,7 @@ namespace Generation
 			// starting at blockBegin_/blockEnd_until end_
 			strict_inline u32 newSamplesToRead(i32 overlapOffset = 0, BeginPoint beginPoint = BlockBegin) const noexcept
 			{
-				u32 begin = 0;
+				u32 begin;
 				switch (beginPoint)
 				{
 				case BlockBegin:
@@ -129,7 +129,7 @@ namespace Generation
 					currentBufferBegin, readerBeginIndex, channelsToCopy);
 
 				if (advanceBlock)
-					this->advanceBlock(currentBufferBegin, numSamples);
+					this->advanceBlock(currentBufferBegin, (i32)numSamples);
 			}
 
 			strict_inline void writeToBufferEnd(const AudioBuffer<float> &writer,
@@ -140,7 +140,7 @@ namespace Generation
 
 			strict_inline void outBufferRead(Framework::CircularBuffer &outBuffer,
 				u32 numChannels, const bool* channelsToCopy, u32 numSamples, u32 outBufferIndex = 0, 
-				i32 inputBufferOffset = 0, BeginPoint beginPoint = BeginPoint::LastOutputBlock) noexcept
+				i32 inputBufferOffset = 0, BeginPoint beginPoint = BeginPoint::LastOutputBlock) const noexcept
 			{
 				u32 inputBufferBegin = 0;
 				switch (beginPoint)
@@ -163,26 +163,14 @@ namespace Generation
 				buffer_.readBuffer(outBuffer.getData(), numChannels, numSamples, inputBufferIndex, outBufferIndex, channelsToCopy);
 			}
 
-			strict_inline Framework::CircularBuffer& getBuffer() noexcept
-			{	return buffer_; }
+			strict_inline Framework::CircularBuffer& getBuffer() noexcept {	return buffer_; }
+			strict_inline u32 getNumChannels() const noexcept { return buffer_.getNumChannels(); }
+			strict_inline u32 getSize() const noexcept { return buffer_.getSize(); }
 
-			strict_inline u32 getNumChannels() const noexcept
-			{ return buffer_.getNumChannels(); }
-
-			strict_inline u32 getSize() const noexcept
-			{ return buffer_.getSize(); }
-
-			strict_inline u32 getLastOutputBlock() const noexcept
-			{ return lastOutputBlock_; }
-
-			strict_inline u32 getBlockBegin() const noexcept
-			{ return blockBegin_; }
-
-			strict_inline u32 getBlockEnd() const noexcept
-			{ return blockEnd_; }
-
-			strict_inline u32 getEnd() const noexcept
-			{ return buffer_.getEnd(); }
+			strict_inline u32 getLastOutputBlock() const noexcept { return lastOutputBlock_; }
+			strict_inline u32 getBlockBegin() const noexcept { return blockBegin_; }
+			strict_inline u32 getBlockEnd() const noexcept { return blockEnd_; }
+			strict_inline u32 getEnd() const noexcept { return buffer_.getEnd(); }
 
 			strict_inline u32 getLastOutputBlockToBlockBegin() const noexcept
 			{ return (getSize() + blockBegin_ - lastOutputBlock_) % getSize(); }
@@ -339,29 +327,15 @@ namespace Generation
 			{ addOverlap_ = (addOverlap_ + numSamples) % getSize(); }
 
 
-			strict_inline Framework::CircularBuffer& getBuffer() noexcept
-			{	return buffer_; }
+			strict_inline Framework::CircularBuffer& getBuffer() noexcept {	return buffer_; }
+			strict_inline u32 getNumChannels() const noexcept { return buffer_.getNumChannels(); }
+			strict_inline u32 getSize() const noexcept { return buffer_.getSize(); }
 
-			strict_inline u32 getNumChannels() const noexcept
-			{ return buffer_.getNumChannels(); }
-
-			strict_inline u32 getSize() const noexcept
-			{ return buffer_.getSize(); }
-
-			strict_inline i32 getLatencyOffset() const noexcept
-			{ return latencyOffset_; }
-			
-			strict_inline u32 getBeginOutput() const noexcept
-			{ return beginOutput_; }
-			
-			strict_inline u32 getToScaleOutput() const noexcept
-			{ return toScaleOutput_; }
-
-			strict_inline u32 getAddOverlap() const noexcept
-			{ return addOverlap_; }
-
-			strict_inline u32 getEnd() const noexcept
-			{ return buffer_.getEnd(); }
+			strict_inline i32 getLatencyOffset() const noexcept { return latencyOffset_; }
+			strict_inline u32 getBeginOutput() const noexcept { return beginOutput_; }
+			strict_inline u32 getToScaleOutput() const noexcept { return toScaleOutput_; }
+			strict_inline u32 getAddOverlap() const noexcept { return addOverlap_; }
+			strict_inline u32 getEnd() const noexcept { return buffer_.getEnd(); }
 
 			strict_inline u32 getBeginOutputToToScaleOutput() const noexcept
 			{ return (getSize() + toScaleOutput_ - beginOutput_) % getSize(); }
@@ -421,7 +395,7 @@ namespace Generation
 		void MainProcess(AudioBuffer<float> &buffer, u32 numSamples,
 			float sampleRate, u32 numInputs, u32 numOutputs) noexcept;
 
-		[[nodiscard]] u32 getProcessingDelay() const noexcept { return FFTNumSamples_ + processorTree_->getSamplesPerBlock(); }
+		u32 getProcessingDelay() const noexcept { return FFTNumSamples_ + processorTree_->getSamplesPerBlock(); }
 		auto &getEffectsState() const noexcept { return *effectsState_; }
 
 		void setMix(float mix) noexcept { mix_ = mix; }
@@ -479,16 +453,16 @@ namespace Generation
 		// internal methods
 		// 
 		// getting the number of FFT samples
-		[[nodiscard]] u32 getFFTNumSamples() const noexcept { return 1 << FFTOrder_; }
+		u32 getFFTNumSamples() const noexcept { return 1 << FFTOrder_; }
 		//
 		// getting array position of FFT
-		[[nodiscard]] u32 getFFTPlan() const noexcept { return FFTOrder_ - kMinFFTOrder; }
+		u32 getFFTPlan() const noexcept { return FFTOrder_ - kMinFFTOrder; }
 		//
 		// getting the dry/wet balance for the whole plugin
-		[[nodiscard]] float getMix() const noexcept { return mix_; }
+		float getMix() const noexcept { return mix_; }
 		//
 		// calculating the overlap offset
-		[[nodiscard]] u32 getOverlapOffset() const noexcept
+		u32 getOverlapOffset() const noexcept
 		{ return (u32)std::floorf((float)FFTNumSamples_ * (1.0f - overlap_)); }
 	};
 }

@@ -77,28 +77,28 @@ namespace Framework
 		}
 
 		constexpr void add(Key key, Value value) noexcept
-		{ data.emplace_back(key, std::move(value)); }
+		{ data.emplace_back(std::move(key), std::move(value)); }
 
-		constexpr void update(const Key &key, const Value &newValue) noexcept
+		constexpr void update(const Key &key, Value newValue) noexcept
 		{
 			auto iter = find(key);
 			if (iter == data.end())
 				return;
-			iter->second = newValue;
+			iter->second = std::move(newValue);
 		}
 
-		constexpr void update(const Key &key, const std::pair<Key, Value> &newEntry) noexcept
+		constexpr void update(const Key &key, std::pair<Key, Value> newEntry) noexcept
 		{
 			auto iter = find(key);
 			if (iter != data.end())
 				return;
 
-			iter->first = newEntry.first;
-			iter->second = newEntry.second;
+			iter->first = std::move(newEntry.first);
+			iter->second = std::move(newEntry.second);
 		}
 
 		constexpr void erase(const Key &key) noexcept
-		{ std::erase_if(data, [&key](const auto &v) { return v.first == key; }); }
+		{ std::erase_if(data, [&](const auto &v) { return v.first == key; }); }
 
 		const Value &operator[](size_t index) const noexcept
 		{ return data[index].second; }

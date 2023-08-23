@@ -21,36 +21,64 @@ namespace Interface
 
 	void BaseSection::resized()
 	{
-		Component::resized();
-		if (offOverlay_)
+		if (offOverlayQuad_)
 		{
-			offOverlay_->setBounds(getLocalBounds());
-			offOverlay_->setColor(getColour(Skin::kBackground).withMultipliedAlpha(0.8f));
+			offOverlayQuad_->setBounds(getLocalBounds());
+			offOverlayQuad_->setColor(getColour(Skin::kBackground).withMultipliedAlpha(0.8f));
 		}
 		if (activator_)
 			activator_->setBounds(getPowerButtonBounds());
+		if (background_)
+			background_->setBounds(getLocalBounds());
 	}
 
 	void BaseSection::paintBackground(Graphics &g)
 	{
 		paintKnobShadows(g);
-		paintChildrenBackgrounds(g);
+		paintOpenGlChildrenBackgrounds(g);
 	}
 
 	void BaseSection::repaintBackground()
 	{
-		if (!isShowing())
-			return;
+		if (!background_)
+			createBackground();
 
-		if (auto *parent = findParentComponentOfClass<MainInterface>())
-			parent->repaintChildBackground(this);
+		background_->setComponentToRedraw(this);
+		background_->redrawImage();
 	}
 
-	void BaseSection::showPopupSelector(Component *source, Point<int> position, const PopupItems &options,
-		std::function<void(int)> callback, std::function<void()> cancel)
+	void BaseSection::paintOpenGlBackground(Graphics &g, OpenGlComponent *openGlComponent)
+	{
+		Graphics::ScopedSaveState s(g);
+
+		Rectangle<int> bounds = getLocalArea(openGlComponent, openGlComponent->getLocalBounds());
+		g.reduceClipRegion(bounds);
+		g.setOrigin(bounds.getTopLeft());
+		openGlComponent->paintBackground(g);
+	}
+
+	void BaseSection::repaintOpenGlBackground(OpenGlComponent *openGlComponent)
+	{
+		if (!background_)
+			createBackground();
+
+		background_->setComponentToRedraw(openGlComponent);
+		background_->redrawImage(false);
+	}
+
+	void BaseSection::paintOpenGlChildrenBackgrounds(Graphics &g)
+	{
+		for (auto &openGlComponent : openGlComponents_)
+			if (openGlComponent->isVisible())
+				paintOpenGlBackground(g, openGlComponent.get());
+	}
+
+	void BaseSection::showPopupSelector(const Component *source, Point<int> position, 
+		PopupItems options, std::function<void(int)> callback, std::function<void()> cancel) const
 	{
 		if (auto *parent = findParentComponentOfClass<MainInterface>())
-			parent->popupSelector(source, position, options, callback, cancel);
+			parent->popupSelector(source, position, std::move(options), 
+				std::move(callback), std::move(cancel));
 	}
 
 	void BaseSection::showPopupDisplay(Component *source, const std::string &text,
@@ -108,9 +136,9 @@ namespace Interface
 	{
 		static constexpr float kCornerScale = 0.70710678119f;
 		// TODO: redo to match the different rounding, hardcoded to topRounding for now
-		int corner_size = getValue(Skin::kBodyRoundingTop);
-		int shadow_size = getComponentShadowWidth();
-		int corner_and_shadow = corner_size + shadow_size;
+		float corner_size = getValue(Skin::kBodyRoundingTop);
+		float shadow_size = getComponentShadowWidth();
+		float corner_and_shadow = corner_size + shadow_size;
 
 		float corner_shadow_offset = corner_size - corner_and_shadow * kCornerScale;
 		float corner_ratio = corner_size * 1.0f / corner_and_shadow;
@@ -118,10 +146,10 @@ namespace Interface
 		Colour shadow_color = getColour(Skin::kShadow);
 		Colour transparent = shadow_color.withAlpha(0.0f);
 
-		int left = bounds.getX();
-		int top = bounds.getY();
-		int right = bounds.getRight();
-		int bottom = bounds.getBottom();
+		float left = (float)bounds.getX();
+		float top = (float)bounds.getY();
+		float right = (float)bounds.getRight();
+		float bottom = (float)bounds.getBottom();
 
 		g.setGradientFill(ColourGradient(shadow_color, left, 0, transparent, left - shadow_size, 0, false));
 		g.fillRect(left - shadow_size, top + corner_size, shadow_size, bottom - top - corner_size * 2);
@@ -176,137 +204,57 @@ namespace Interface
 
 	void BaseSection::paintKnobShadows(Graphics &g)
 	{
-		for (auto &slider : sliders_)
-			if (slider.second->isVisible() && slider.second->getWidth() && slider.second->getHeight())
-				slider.second->drawShadow(g);
-	}
-
-	void BaseSection::paintChildrenShadows(Graphics &g)
-	{
-		for (auto &subSection : subSections_)
-			if (subSection->isVisible())
-				paintChildShadow(g, subSection);
-	}
-
-	void BaseSection::paintOpenGlChildrenBackgrounds(Graphics &g)
-	{
-		for (auto &openGlComponent : openGlComponents_)
-			if (openGlComponent->isVisible())
-				paintOpenGlBackground(g, openGlComponent);
-	}
-
-	void BaseSection::paintChildrenBackgrounds(Graphics &g)
-	{
-		for (auto &subSection : subSections_)
-			if (subSection->isVisible())
-				paintChildBackground(g, subSection);
-
-		paintOpenGlChildrenBackgrounds(g);
-	}
-
-	void BaseSection::paintChildBackground(Graphics &g, BaseSection *child)
-	{
-		Graphics::ScopedSaveState s(g);
-
-		Rectangle<int> bounds = getLocalArea(child, child->getLocalBounds());
-		g.reduceClipRegion(bounds);
-		g.setOrigin(bounds.getTopLeft());
-		child->paintBackground(g);
-	}
-
-	void BaseSection::paintChildShadow(Graphics &g, BaseSection *child)
-	{
-		Graphics::ScopedSaveState s(g);
-
-		Rectangle<int> bounds = getLocalArea(child, child->getLocalBounds());
-		g.setOrigin(bounds.getTopLeft());
-		child->paintBackgroundShadow(g);
-		child->paintChildrenShadows(g);
-	}
-
-	void BaseSection::paintOpenGlBackground(Graphics &g, OpenGlComponent *openGlComponent)
-	{
-		Graphics::ScopedSaveState s(g);
-
-		Rectangle<int> bounds = getLocalArea(openGlComponent, openGlComponent->getLocalBounds());
-		g.reduceClipRegion(bounds);
-		g.setOrigin(bounds.getTopLeft());
-		openGlComponent->paint(g);
-	}
-
-	void BaseSection::drawTextComponentBackground(Graphics &g, Rectangle<int> bounds, bool extend_to_label)
-	{
-		if (bounds.getWidth() <= 0 || bounds.getHeight() <= 0)
-			return;
-
-		g.setColour(getColour(Skin::kTextComponentBackground));
-		int y = bounds.getY();
-		int rounding = bounds.getHeight() / 2;
-
-		if (extend_to_label)
-		{
-			int label_bottom = bounds.getBottom() + getValue(Skin::kTextComponentLabelOffset);
-			rounding = getValue(Skin::kLabelBackgroundRounding);
-			g.fillRoundedRectangle(bounds.toFloat(), rounding);
-
-			int extend_y = y + bounds.getHeight() / 2;
-			g.fillRect(bounds.getX(), extend_y, bounds.getWidth(), label_bottom - extend_y - rounding);
-		}
-		else
-			g.fillRoundedRectangle(bounds.toFloat(), rounding);
-	}
-
-	void BaseSection::initOpenGlComponents(OpenGlWrapper &openGl)
-	{
-		for (auto &openGlComponent : openGlComponents_)
-			openGlComponent->init(openGl);
-
-		for (auto &subSection : subSections_)
-			subSection->initOpenGlComponents(openGl);
+		for (auto &control : controls_)
+			if (auto slider = dynamic_cast<BaseSlider *>(control.second); 
+				slider && slider->isVisible() && slider->getWidth() && slider->getHeight())
+				slider->drawShadow(g);
 	}
 
 	void BaseSection::renderOpenGlComponents(OpenGlWrapper &openGl, bool animate)
 	{
-		// TODO: change order of current and subSections if draw order is switched
-
-		for (auto &subSection : subSections_)
+		if (background_)
 		{
+			background_.doWorkOnComponent(openGl, animate);
+			COMPLEX_ASSERT(juce::gl::glGetError() == juce::gl::GL_NO_ERROR);
+		}
+		
+		for (auto &subSection : subSections_)
 			if (subSection->isVisible() && !subSection->isAlwaysOnTop())
 				subSection->renderOpenGlComponents(openGl, animate);
-		}
 
 		for (auto &openGlComponent : openGlComponents_)
 		{
 			if (openGlComponent->isVisible() && !openGlComponent->isAlwaysOnTop())
 			{
-				openGlComponent->render(openGl, animate);
+				openGlComponent.doWorkOnComponent(openGl, animate);
 				COMPLEX_ASSERT(juce::gl::glGetError() == juce::gl::GL_NO_ERROR);
 			}
 		}
 
 		for (auto &subSection : subSections_)
-		{
 			if (subSection->isVisible() && subSection->isAlwaysOnTop())
 				subSection->renderOpenGlComponents(openGl, animate);
-		}
 
 		for (auto &openGlComponent : openGlComponents_)
 		{
 			if (openGlComponent->isVisible() && openGlComponent->isAlwaysOnTop())
 			{
-				openGlComponent->render(openGl, animate);
+				openGlComponent.doWorkOnComponent(openGl, animate);
 				COMPLEX_ASSERT(juce::gl::glGetError() == juce::gl::GL_NO_ERROR);
 			}
 		}
 	}
 
-	void BaseSection::destroyOpenGlComponents(OpenGlWrapper &openGl)
+	void BaseSection::destroyAllOpenGlComponents()
 	{
+		if (background_)
+			background_.deinitialise();
+
 		for (auto &openGlComponent : openGlComponents_)
-			openGlComponent->destroy(openGl);
+			openGlComponent.deinitialise();
 
 		for (auto &subSection : subSections_)
-			subSection->destroyOpenGlComponents(openGl);
+			subSection->destroyAllOpenGlComponents();
 	}
 
 	void BaseSection::guiChanged(BaseButton *button)
@@ -318,20 +266,18 @@ namespace Interface
 	void BaseSection::resizeForText(TextSelector *textSelector, int requestedWidthChange)
 	{
 		auto currentBounds = textSelector->getBounds();
-		auto currentDrawBox = textSelector->getDrawBox();
-		textSelector->setBoundsAndDrawBounds(currentBounds.withWidth(currentBounds.getWidth() + requestedWidthChange),
-			currentDrawBox.withWidth(currentDrawBox.getWidth() + requestedWidthChange));
+		textSelector->setBounds(currentBounds.withWidth(currentBounds.getWidth() + requestedWidthChange));
 	}
 
-	void BaseSection::addSubSection(BaseSection *subSection, bool show)
+	void BaseSection::addSubSection(BaseSection *section, bool show)
 	{
-		subSection->setParent(this);
-		subSection->setSkin(skin_);
+		section->setParent(this);
+		section->setRenderer(renderer_);
 
 		if (show)
-			addAndMakeVisible(subSection);
+			addAndMakeVisible(section);
 
-		subSections_.push_back(subSection);
+		subSections_.push_back(section);
 	}
 
 	void BaseSection::removeSubSection(BaseSection *section)
@@ -339,82 +285,59 @@ namespace Interface
 		auto location = std::ranges::find(subSections_.begin(), subSections_.end(), section);
 		if (location != subSections_.end())
 			subSections_.erase(location);
+
+		removeChildComponent(section);
 	}
 
-	void BaseSection::addButton(BaseButton *button)
+	void BaseSection::addControl(BaseControl *control)
 	{
-		if (!button)
-			return;
+		// TODO: have custom implementations for slider and button 
+		// and have BaseControl inherit from Component
 
-		buttons_[button->getName().toRawUTF8()] = button;
-		button->addListener(this);
+		controls_[control->getParameterDetails().id] = control;
+		control->addListener(this);
 
-		addAndMakeVisible(button);
-		addOpenGlComponent(button->getGlComponent());
+		if (auto slider = dynamic_cast<BaseSlider *>(control))
+			addAndMakeVisible(slider);
+		else if (auto button = dynamic_cast<BaseButton *>(control))
+			addAndMakeVisible(button);
+		else COMPLEX_ASSERT_FALSE("bruh");
+
+		addOpenGlComponent(control->getLabelComponent());		
+		for (const auto &component : control->getComponents())
+			addOpenGlComponent(component);
 	}
 
-	void BaseSection::removeButton(BaseButton *button)
+	void BaseSection::removeControl(BaseControl *control)
 	{
-		if (!button)
-			return;
+		for (const auto &component : control->getComponents())
+			removeOpenGlComponent(component.get());
+		removeOpenGlComponent(control->getLabelComponent().get());
 
-		removeOpenGlComponent(button->getGlComponent());
-		removeChildComponent(button);
+		if (auto slider = dynamic_cast<BaseSlider *>(control))
+			removeChildComponent(slider);
+		else if (auto button = dynamic_cast<BaseButton *>(control))
+			removeChildComponent(button);
+		else COMPLEX_ASSERT_FALSE("bruh");
 
-		button->removeListener(this);
-		buttons_.erase(button->getName().toRawUTF8());
+		control->removeListener(this);
+		controls_.erase(control->getParameterDetails().id);
 	}
 
-	void BaseSection::addSlider(BaseSlider *slider)
-	{
-		if (!slider)
-			return;
-
-		sliders_[slider->getName().toRawUTF8()] = slider;
-		slider->addListener(this);
-
-		addAndMakeVisible(slider);
-		if (slider->isImageOnTop())
-		{
-			addOpenGlComponent(slider->getQuadComponent());
-			addOpenGlComponent(slider->getImageComponent());
-		}
-		else
-		{
-			addOpenGlComponent(slider->getImageComponent());
-			addOpenGlComponent(slider->getQuadComponent());
-		}
-		addOpenGlComponent(slider->getTextEditorComponent());
-	}
-
-	void BaseSection::removeSlider(BaseSlider *slider)
-	{
-		if (!slider)
-			return;
-
-		removeOpenGlComponent(slider->getQuadComponent());
-		removeOpenGlComponent(slider->getImageComponent());
-		removeOpenGlComponent(slider->getTextEditorComponent());
-		removeChildComponent(slider);
-
-		slider->removeListener(this);
-		sliders_.erase(slider->getName().toRawUTF8());
-	}
-
-	void BaseSection::addOpenGlComponent(OpenGlComponent *openGlComponent, bool toBeginning)
+	void BaseSection::addOpenGlComponent(gl_ptr<OpenGlComponent> openGlComponent, bool toBeginning)
 	{
 		if (!openGlComponent)
 			return;
 
-		COMPLEX_ASSERT(std::ranges::find(openGlComponents_.begin(), openGlComponents_.end(),
-			openGlComponent) == openGlComponents_.end());
+		COMPLEX_ASSERT(std::ranges::find(openGlComponents_, openGlComponent) == openGlComponents_.end() 
+			&& "We're adding a component that is already a child of this section");
 
 		openGlComponent->setParent(this);
 		if (toBeginning)
 			openGlComponents_.insert(openGlComponents_.begin(), openGlComponent);
 		else
 			openGlComponents_.push_back(openGlComponent);
-		addAndMakeVisible(openGlComponent);
+		addAndMakeVisible(openGlComponent.get());
 	}
 
 	void BaseSection::removeOpenGlComponent(OpenGlComponent *openGlComponent)
@@ -422,9 +345,11 @@ namespace Interface
 		if (openGlComponent == nullptr)
 			return;
 
-		auto erasedElementsSize = std::erase(openGlComponents_, openGlComponent);
-		if (erasedElementsSize)
+		if (std::erase_if(openGlComponents_, [&](auto &&value) { return value.get() == openGlComponent; }))
+		{
 			removeChildComponent(openGlComponent);
+			//openGlComponent->setParent(nullptr);
+		}
 	}
 
 	void BaseSection::setActivator(BaseButton *activator)
@@ -433,47 +358,29 @@ namespace Interface
 
 		activator_ = activator;
 		activator->setPowerButton();
-		activator->addButtonListener(this);
-		setActive(activator_->getToggleState());
+		activator->addListener(this);
+		setActive(activator->getToggleState());
 	}
 
 	void BaseSection::createOffOverlay()
 	{
-		if (offOverlay_)
+		if (offOverlayQuad_)
 			return;
 
-		offOverlay_ = std::make_unique<OffOverlay>();
-		addOpenGlComponent(offOverlay_.get(), true);
-		offOverlay_->setVisible(false);
-		offOverlay_->setAlwaysOnTop(true);
-		offOverlay_->setInterceptsMouseClicks(false, false);
+		offOverlayQuad_ = makeOpenGlComponent<OffOverlayQuad>();
+		addOpenGlComponent(offOverlayQuad_, true);
+		offOverlayQuad_->setVisible(false);
+		offOverlayQuad_->setAlwaysOnTop(true);
+		offOverlayQuad_->setInterceptsMouseClicks(false, false);
 	}
 
-	void BaseSection::placeRotaryOption(Component *option, BaseSlider *rotary)
+	void BaseSection::createBackground()
 	{
-		int width = getValue(Skin::kRotaryOptionWidth);
-		int offset_x = getValue(Skin::kRotaryOptionXOffset) - width / 2;
-		int offset_y = getValue(Skin::kRotaryOptionYOffset) - width / 2;
-		Point<int> point = rotary->getBounds().getCentre() + Point<int>(offset_x, offset_y);
-		option->setBounds(point.x, point.y, width, width);
-	}
-
-	void BaseSection::placeKnobsInArea(Rectangle<int> area, std::vector<Component *> knobs)
-	{
-		int widget_margin = getValue(Skin::kWidgetMargin);
-		float component_width = (area.getWidth() - (knobs.size() + 1) * widget_margin) / (1.0f * knobs.size());
-
-		int y = area.getY();
-		int height = area.getHeight() - widget_margin;
-		float x = area.getX() + widget_margin;
-		for (Component *knob : knobs)
-		{
-			int left = std::round(x);
-			int right = std::round(x + component_width);
-			if (knob)
-				knob->setBounds(left, y, right - left, height);
-			x += component_width + widget_margin;
-		}
+		background_ = makeOpenGlComponent<OpenGlBackground>();
+		background_->setTargetComponent(this);
+		background_->setParent(this);
+		addAndMakeVisible(background_.get());
+		background_->setBounds({ 0, 0, getWidth(), getHeight() });
 	}
 
 	float BaseSection::getSliderOverlap() const noexcept
@@ -494,18 +401,6 @@ namespace Interface
 		float displayScale = (float)Desktop::getInstance().getDisplays()
 			.getDisplayForRect(topLevelComponent->getScreenBounds())->scale;
 		return displayScale * globalWidth / (float)getWidth();
-	}
-
-	Font BaseSection::getLabelFont() const noexcept
-	{
-		float height = getValue(Skin::kLabelHeight);
-		return Fonts::instance()->getInterVFont().withPointHeight(height);
-	}
-
-	void BaseSection::setLabelFont(Graphics &g)
-	{
-		g.setColour(getColour(Skin::kNormalText));
-		g.setFont(getLabelFont());
 	}
 
 	Rectangle<int> BaseSection::getDividedAreaUnbuffered(Rectangle<int> full_area, int num_sections, int section, int buffer)
@@ -530,74 +425,26 @@ namespace Interface
 		return Rectangle<int>(bounds.getX(), background_y, bounds.getWidth(), background_height);
 	}
 
-	void BaseSection::drawLabel(Graphics &g, String text, Rectangle<int> component_bounds, bool text_component)
-	{
-		if (component_bounds.getWidth() <= 0 || component_bounds.getHeight() <= 0)
-			return;
-
-		//drawLabelBackground(g, component_bounds, text_component);
-		setLabelFont(g);
-		g.setColour(getColour(Skin::kNormalText));
-		Rectangle<int> background_bounds = getLabelBackgroundBounds(component_bounds, text_component);
-		g.drawText(text, component_bounds.getX(), background_bounds.getY(),
-			component_bounds.getWidth(), background_bounds.getHeight(), Justification::centred, false);
-	}
-
-	void BaseSection::drawSliderLabel(Graphics &g, BaseSlider *slider) const
-	{
-		Graphics::ScopedSaveState s(g);
-
-		auto *label = slider->getLabelComponent();
-		g.setOrigin(label->getPosition());
-		label->paint(g);
-	}
-
-	void BaseSection::drawButtonLabel(Graphics &g, BaseButton *button) const
-	{
-		Graphics::ScopedSaveState s(g);
-
-		auto *label = button->getLabelComponent();
-		auto rectangle = label->getBounds();
-		g.setFont(label->getFont());
-		g.setColour(getColour(Skin::kNormalText));
-		g.drawText(label->getLabelText(), rectangle, Justification::centred, false);
-	}
-
-	void BaseSection::drawSliderBackground(Graphics &g, BaseSlider *slider) const
-	{
-		Graphics::ScopedSaveState s(g);
-		slider->paint(g);
-	}
-
-	void BaseSection::drawTextBelowComponent(Graphics &g, String text, Component *component, int space, int padding)
-	{
-		int height = getValue(Skin::kLabelBackgroundHeight);
-		g.drawText(text, component->getX() - padding, component->getBottom() + space,
-			component->getWidth() + 2 * padding, height, Justification::centred, false);
-	}
-
 	void BaseSection::setActive(bool active)
 	{
 		if (active_ == active)
 			return;
 
-		if (offOverlay_)
-			offOverlay_->setVisible(!active);
+		if (offOverlayQuad_)
+			offOverlayQuad_->setVisible(!active);
 
 		active_ = active;
-		for (auto &slider : sliders_)
-			slider.second->setActive(active);
+		for (auto &control : controls_)
+			if (auto *slider = dynamic_cast<BaseSlider *>(control.second))
+				slider->setActive(active);
 
 		repaintBackground();
 	}
 
 	void BaseSection::updateAllValues()
 	{
-		for (auto &slider : sliders_)
-			slider.second->updateValueFromParameter();
-
-		for (auto &button : buttons_)
-			button.second->updateValueFromParameter();
+		for (auto &control : controls_)
+			control.second->setValueFromParameter();
 
 		for (auto &subSection : subSections_)
 			subSection->updateAllValues();

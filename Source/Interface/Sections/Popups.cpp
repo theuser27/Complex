@@ -14,12 +14,16 @@ namespace Interface
 {
 	PopupDisplay::PopupDisplay() : BaseSection("Popup Display")
 	{
-		addOpenGlComponent(&body_);
-		addOpenGlComponent(&border_);
-		addOpenGlComponent(&text_);
+		body_ = makeOpenGlComponent<OpenGlQuad>(Shaders::kRoundedRectangleFragment);
+		border_ = makeOpenGlComponent<OpenGlQuad>(Shaders::kRoundedRectangleBorderFragment);
+		text_ = makeOpenGlComponent<PlainTextComponent>("Popup Text", "");
+		
+		addOpenGlComponent(body_);
+		addOpenGlComponent(border_);
+		addOpenGlComponent(text_);
 
-		text_.setJustification(Justification::centred);
-		text_.setFontType(PlainTextComponent::kValues);
+		text_->setJustification(Justification::centred);
+		text_->setFontType(PlainTextComponent::kValues);
 
 		setSkinOverride(Skin::kPopupBrowser);
 	}
@@ -29,17 +33,17 @@ namespace Interface
 		Rectangle<int> bounds = getLocalBounds();
 		float rounding = getValue(Skin::kBodyRoundingTop);
 
-		body_.setBounds(bounds);
-		body_.setRounding(rounding);
-		body_.setColor(getColour(Skin::kBody));
+		body_->setBounds(bounds);
+		body_->setRounding(rounding);
+		body_->setColor(getColour(Skin::kBody));
 
-		border_.setBounds(bounds);
-		border_.setRounding(rounding);
-		border_.setThickness(1.0f, true);
-		border_.setColor(getColour(Skin::kBorder));
+		border_->setBounds(bounds);
+		border_->setRounding(rounding);
+		border_->setThickness(1.0f, true);
+		border_->setColor(getColour(Skin::kBorder));
 
-		text_.setBounds(bounds);
-		text_.setColor(getColour(Skin::kNormalText));
+		text_->setBounds(bounds);
+		text_->setColor(getColour(Skin::kNormalText));
 	}
 
 	void PopupDisplay::setContent(const std::string &text, Rectangle<int> bounds,
@@ -49,9 +53,9 @@ namespace Interface
 
 		setSkinOverride(sectionOverride);
 
-		int height = kHeight * scaling_;
+		float height = std::round(scaleValue(kHeight));
 		Font font = Fonts::instance()->getDDinFont().withPointHeight(height * 0.5f);
-		int padding = height / 4;
+		int padding = (int)height / 4;
 		int buffer = padding * 2 + 2;
 		int width = font.getStringWidth(text) + buffer;
 
@@ -67,17 +71,57 @@ namespace Interface
 		else if (placement == BubbleComponent::right)
 			setBounds(bounds.getRight(), middle_y - height / 2, width, height);
 
-		text_.setText(text);
-		text_.setTextHeight(height * 0.5f);
+		text_->setTextHeight(height * 0.5f);
+		text_->setText(text);
 	}
 
 	PopupList::PopupList() : BaseSection("Popup List")
 	{
-		highlight_.setTargetComponent(this);
-		highlight_.setAdditive(true);
+		rows_ = makeOpenGlComponent<OpenGlImage>("Popup List Items");
+		rows_->setColor(Colours::white);
+		rows_->setCustomRenderFunction([this](OpenGlWrapper &openGl, bool animate)
+			{
+				OpenGlComponent::setViewPort(this, getLocalBounds(), openGl);
 
-		hover_.setTargetComponent(this);
-		hover_.setAdditive(true);
+				rows_->setTopLeft(-1.0f, 1.0f);
+				rows_->setTopRight(1.0f, 1.0f);
+				rows_->setBottomLeft(-1.0f, -1.0f);
+				rows_->setBottomRight(1.0f, -1.0f);
+
+				rows_->render(openGl, animate);
+			});
+		addOpenGlComponent(rows_);
+		
+		highlight_ = makeOpenGlComponent<OpenGlQuad>(Shaders::kColorFragment);
+		highlight_->setTargetComponent(this);
+		highlight_->setAdditive(true);
+		highlight_->setCustomRenderFunction([this](OpenGlWrapper &openGl, bool animate)
+			{
+				if (selected_ >= 0 && show_selected_)
+				{
+					moveQuadToRow(*highlight_, selected_);
+					highlight_->setColor(getColour(Skin::kWidgetPrimary1).darker(0.8f));
+					highlight_->render(openGl, animate);
+				}
+			});
+		addOpenGlComponent(highlight_);
+
+		hover_ = makeOpenGlComponent<OpenGlQuad>(Shaders::kColorFragment);
+		hover_->setTargetComponent(this);
+		hover_->setAdditive(true);
+		hover_->setCustomRenderFunction([this](OpenGlWrapper &openGl, bool animate)
+			{
+				if (hovered_ < 0)
+					return;
+				
+				moveQuadToRow(*hover_, hovered_);
+				if (show_selected_)
+					hover_->setColor(getColour(Skin::kLightenScreen));
+				else
+					hover_->setColor(getColour(Skin::kWidgetPrimary1).darker(0.8f));
+				hover_->render(openGl, animate);
+			});
+		addOpenGlComponent(hover_);
 
 		scroll_bar_ = std::make_unique<OpenGlScrollBar>();
 		addAndMakeVisible(scroll_bar_.get());
@@ -199,50 +243,40 @@ namespace Interface
 			listener->newSelection(this, selections_.items[selection].id, selection);
 	}
 
-	void PopupList::initOpenGlComponents(OpenGlWrapper &open_gl)
-	{
-		rows_.init(open_gl);
-		rows_.setColor(Colours::white);
-
-		highlight_.init(open_gl);
-		hover_.init(open_gl);
-		BaseSection::initOpenGlComponents(open_gl);
-	}
-
 	void PopupList::redoImage()
 	{
 		if (getWidth() <= 0 || getHeight() <= 0)
 			return;
 
-		int row_height = getRowHeight();
-		int image_width = getWidth();
+		int rowHeight = getRowHeight();
+		int imageWidth = getWidth();
+		int imageHeight = std::max(rowHeight * selections_.size(), getHeight());
+		Image rowsImage(Image::ARGB, imageWidth, imageHeight, true);
+		Graphics g(rowsImage);
 
-		Colour text_color = getColour(Skin::kTextComponentText);
+		Colour textColor = getColour(Skin::kTextComponentText);
 		Colour lighten = getColour(Skin::kLightenScreen);
-		int image_height = std::max(row_height * (int)selections_.size(), getHeight());
-		Image rows_image(Image::ARGB, image_width, image_height, true);
-		Graphics g(rows_image);
-		g.setColour(text_color);
+		int padding = getTextPadding();
+		int width = getWidth() - 2 * padding;
+
+		g.setColour(textColor);
 		g.setFont(getFont());
 
-		int padding = getTextPadding();
-		int width = (getWidth() - 2 * padding);
 		for (int i = 0; i < selections_.size(); ++i)
 		{
 			if (selections_.items[i].id < 0)
 			{
 				g.setColour(lighten);
-				int y = row_height * (i + 0.5f);
-				g.drawRect(padding, y, width, 1);
+				g.drawRect(padding, (int)std::truncf((float)rowHeight * ((float)i + 0.5f)), width, 1);
 			}
 			else
 			{
-				g.setColour(text_color);
-				String name = selections_.items[i].name;
-				g.drawText(name, padding, row_height * i, width, row_height, Justification::centredLeft, true);
+				g.setColour(textColor);
+				g.drawText(selections_.items[i].name, padding, rowHeight * i,
+					width, rowHeight, Justification::centredLeft, true);
 			}
 		}
-		rows_.setOwnImage(rows_image);
+		rows_->setOwnImage(std::move(rowsImage));
 	}
 
 	void PopupList::moveQuadToRow(OpenGlQuad &quad, int row)
@@ -254,55 +288,6 @@ namespace Interface
 
 		float y = 1.0f - offset;
 		quad.setQuad(0, -1.0f, y - open_gl_row_height, 2.0f, open_gl_row_height);
-	}
-
-	void PopupList::renderOpenGlComponents(OpenGlWrapper &open_gl, bool animate)
-	{
-		Rectangle<int> view_bounds(getLocalBounds());
-		OpenGlComponent::setViewPort(this, view_bounds, open_gl);
-
-		float image_width = utils::nextPowerOfTwo(getWidth());
-		float image_height = utils::nextPowerOfTwo(rows_.getImageHeight());
-		float width_ratio = image_width / getWidth();
-		float height_ratio = image_height / getHeight();
-		float y_offset = 2.0f * getViewPosition() / getHeight();
-
-		/*rows_.setTopLeft(-1.0f, 1.0f + y_offset);
-		rows_.setTopRight(2.0f * width_ratio - 1.0f, 1.0f + y_offset);
-		rows_.setBottomLeft(-1.0f, 1.0f + y_offset - 2.0f * height_ratio);
-		rows_.setBottomRight(2.0f * width_ratio - 1.0f, 1.0f + y_offset - 2.0f * height_ratio);*/
-		rows_.setTopLeft(-1.0f, 1.0f);
-		rows_.setTopRight(1.0f, 1.0f);
-		rows_.setBottomLeft(-1.0f, -1.0f);
-		rows_.setBottomRight(1.0f, -1.0f);
-
-		rows_.render();
-
-		if (hovered_ >= 0)
-		{
-			moveQuadToRow(hover_, hovered_);
-			if (show_selected_)
-				hover_.setColor(getColour(Skin::kLightenScreen));
-			else
-				hover_.setColor(getColour(Skin::kWidgetPrimary1).darker(0.8f));
-			hover_.render(open_gl, animate);
-		}
-		if (selected_ >= 0 && show_selected_)
-		{
-			moveQuadToRow(highlight_, selected_);
-			highlight_.setColor(getColour(Skin::kWidgetPrimary1).darker(0.8f));
-			highlight_.render(open_gl, animate);
-		}
-
-		BaseSection::renderOpenGlComponents(open_gl, animate);
-	}
-
-	void PopupList::destroyOpenGlComponents(OpenGlWrapper &open_gl)
-	{
-		rows_.destroy();
-		highlight_.destroy(open_gl);
-		hover_.destroy(open_gl);
-		BaseSection::destroyOpenGlComponents(open_gl);
 	}
 
 	void PopupList::resetScrollPosition()
@@ -341,8 +326,11 @@ namespace Interface
 
 	SinglePopupSelector::SinglePopupSelector() : BaseSection("Popup Selector")
 	{
-		addOpenGlComponent(&body_);
-		addOpenGlComponent(&border_);
+		body_ = makeOpenGlComponent<OpenGlQuad>(Shaders::kRoundedRectangleFragment);
+		border_ = makeOpenGlComponent<OpenGlQuad>(Shaders::kRoundedRectangleBorderFragment);
+
+		addOpenGlComponent(body_);
+		addOpenGlComponent(border_);
 
 		popup_list_ = std::make_unique<PopupList>();
 		popup_list_->addListener(this);
@@ -361,14 +349,14 @@ namespace Interface
 		int rounding = getValue(Skin::kBodyRoundingTop);
 		popup_list_->setBounds(1, rounding, getWidth() - 2, getHeight() - 2 * rounding);
 
-		body_.setBounds(bounds);
-		body_.setRounding(getValue(Skin::kBodyRoundingTop));
-		body_.setColor(getColour(Skin::kBody));
+		body_->setBounds(bounds);
+		body_->setRounding(getValue(Skin::kBodyRoundingTop));
+		body_->setColor(getColour(Skin::kBody));
 
-		border_.setBounds(bounds);
-		border_.setRounding(getValue(Skin::kBodyRoundingTop));
-		border_.setThickness(1.0f, true);
-		border_.setColor(getColour(Skin::kBorder));
+		border_->setBounds(bounds);
+		border_->setRounding(getValue(Skin::kBodyRoundingTop));
+		border_->setThickness(1.0f, true);
+		border_->setColor(getColour(Skin::kBorder));
 	}
 
 	void SinglePopupSelector::setPosition(Point<int> position, Rectangle<int> bounds)
@@ -387,9 +375,13 @@ namespace Interface
 
 	DualPopupSelector::DualPopupSelector() : BaseSection("Dual Popup Selector")
 	{
-		addOpenGlComponent(&body_);
-		addOpenGlComponent(&border_);
-		addOpenGlComponent(&divider_);
+		body_ = makeOpenGlComponent<OpenGlQuad>(Shaders::kRoundedRectangleFragment);
+		border_ = makeOpenGlComponent<OpenGlQuad>(Shaders::kRoundedRectangleBorderFragment);
+		divider_ = makeOpenGlComponent<OpenGlQuad>(Shaders::kColorFragment);
+		
+		addOpenGlComponent(body_);
+		addOpenGlComponent(border_);
+		addOpenGlComponent(divider_);
 
 		left_list_ = std::make_unique<PopupList>();
 		left_list_->addListener(this);
@@ -419,19 +411,19 @@ namespace Interface
 		int right_x = left_list_->getRight() + 1;
 		right_list_->setBounds(right_x, rounding, getWidth() - right_x - 1, height);
 
-		body_.setBounds(bounds);
-		body_.setRounding(getValue(Skin::kBodyRoundingTop));
-		body_.setColor(getColour(Skin::kBody));
+		body_->setBounds(bounds);
+		body_->setRounding(getValue(Skin::kBodyRoundingTop));
+		body_->setColor(getColour(Skin::kBody));
 
-		border_.setBounds(bounds);
-		border_.setRounding(getValue(Skin::kBodyRoundingTop));
-		border_.setThickness(1.0f, true);
+		border_->setBounds(bounds);
+		border_->setRounding(getValue(Skin::kBodyRoundingTop));
+		border_->setThickness(1.0f, true);
 
-		divider_.setBounds(getWidth() / 2 - 1, 1, 1, getHeight() - 2);
+		divider_->setBounds(getWidth() / 2 - 1, 1, 1, getHeight() - 2);
 
 		Colour border = getColour(Skin::kBorder);
-		border_.setColor(border);
-		divider_.setColor(border);
+		border_->setColor(border);
+		divider_->setColor(border);
 	}
 
 	void DualPopupSelector::setPosition(Point<int> position, int width, Rectangle<int> bounds)

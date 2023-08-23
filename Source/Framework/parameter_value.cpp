@@ -10,6 +10,7 @@
 
 #include "parameter_value.h"
 #include "parameter_bridge.h"
+#include "Interface/Components/BaseControl.h"
 
 namespace Framework
 {
@@ -17,11 +18,9 @@ namespace Framework
 	{
 		utils::ScopedSpinLock lock(waitLock_);
 
-		bool isChanged = false;
-
 		if (value.has_value())
 		{
-			isChanged = (normalisedValue_ == value.value());
+			isDirty_ = isDirty_ || normalisedValue_ != value.value();
 			normalisedValue_ = value.value();
 
 			if (parameterLink_.hostControl)
@@ -48,7 +47,7 @@ namespace Framework
 			if (normalisedValue_ != newNormalisedValue)
 			{
 				normalisedValue_ = newNormalisedValue;
-				isChanged = true;
+				isDirty_ = true;
 			}
 		}
 
@@ -60,25 +59,18 @@ namespace Framework
 				newModulations += modulatorPointer->getDeltaValue();
 		}
 
-		if (isChanged || !utils::completelyEqual(modulations_, newModulations))
+		if (isDirty_ || !utils::completelyEqual(modulations_, newModulations))
 		{
 			modulations_ = newModulations;
-			isChanged = true;
+			isDirty_ = true;
 		}
 
-		if (isChanged)
+		if (isDirty_)
 		{
 			normalisedInternalValue_ = simd_float::clamp(modulations_ + normalisedValue_, 0.0f, 1.0f);
 			internalValue_ = scaleValue(normalisedInternalValue_, details_, sampleRate);
 		}
-	}
-}
 
-namespace Interface
-{
-	void ParameterUI::setValueToHost() noexcept
-	{
-		if (parameterLink_ && parameterLink_->hostControl)
-			parameterLink_->hostControl->setValueFromUI((float)getValueSafe());
+		isDirty_ = false;
 	}
 }

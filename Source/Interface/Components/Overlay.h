@@ -27,7 +27,7 @@ namespace Interface
 
     void init(OpenGlWrapper &openGl) override;
     void render(OpenGlWrapper &openGl, bool animate) override;
-    void destroy(OpenGlWrapper &openGl) override;
+    void destroy() override;
     void paint(Graphics &) override {}
 
     void setColor(const Colour &color) { color_ = color; }
@@ -55,24 +55,21 @@ namespace Interface
   {
   public:
 
-    Overlay(std::string_view name) : BaseSection(name), size_ratio_(1.0f)
+    Overlay(std::string_view name) : BaseSection(name)
     {
+      background_ = makeOpenGlComponent<OverlayBackgroundRenderer>();
       setSkinOverride(Skin::kOverlay);
-      addOpenGlComponent(&background_);
+      addOpenGlComponent(background_);
     }
 
     void resized() override
     {
-      background_.setColor(getColour(Skin::kOverlayScreen));
-      background_.setBounds(getLocalBounds());
+      background_->setColor(getColour(Skin::kOverlayScreen));
+      background_->setBounds(getLocalBounds());
     }
 
-    void paintBackground(Graphics &g) override { paintOpenGlChildrenBackgrounds(g); }
-    void setScaling(float ratio) override { size_ratio_ = ratio; }
-
   protected:
-    float size_ratio_;
-    OverlayBackgroundRenderer background_;
+    gl_ptr<OverlayBackgroundRenderer> background_;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(Overlay)
   };

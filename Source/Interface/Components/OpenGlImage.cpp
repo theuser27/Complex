@@ -20,7 +20,7 @@ namespace Interface
   static constexpr int kNumPositions = 16;
   static constexpr int kNumTriangleIndices = 6;
 
-  OpenGlImage::OpenGlImage()
+  OpenGlImage::OpenGlImage(String name) : OpenGlComponent(std::move(name))
   {
     positionVertices_ = std::make_unique<float[]>(kNumPositions);
     float position_vertices[kNumPositions] = 
@@ -58,12 +58,12 @@ namespace Interface
     imageShader_ = openGl.shaders->getShaderProgram(Shaders::kImageVertex, Shaders::kTintedImageFragment);
 
     imageShader_->use();
-    imageColor_ = OpenGlComponent::getUniform(*imageShader_, "color");
-    imagePosition_ = OpenGlComponent::getAttribute(*imageShader_, "position");
-    textureCoordinates_ = OpenGlComponent::getAttribute(*imageShader_, "tex_coord_in");
+    imageColor_ = getUniform(*imageShader_, "color");
+    imagePosition_ = getAttribute(*imageShader_, "position");
+    textureCoordinates_ = getAttribute(*imageShader_, "tex_coord_in");
   }
 
-  void OpenGlImage::render()
+  void OpenGlImage::render([[maybe_unused]] OpenGlWrapper &openGl, [[maybe_unused]] bool animate)
   {
     mutex_.lock();
     if (image_)

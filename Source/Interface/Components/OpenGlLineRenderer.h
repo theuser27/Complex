@@ -29,7 +29,7 @@ namespace Interface
 
     void init(OpenGlWrapper &open_gl) override;
     void render(OpenGlWrapper &open_gl, bool animate) override;
-    void destroy(OpenGlWrapper &open_gl) override;
+    void destroy() override;
 
     strict_inline float getBoostLeftAt(int index) const noexcept { return boost_left_[index]; }
     strict_inline float getBoostRightAt(int index) const noexcept { return boost_right_[index]; }

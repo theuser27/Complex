@@ -12,6 +12,7 @@
 
 #include <memory>
 #include <numbers>
+#include <complex>
 
 #if DEBUG
 	#include <cassert>
@@ -36,6 +37,9 @@ namespace common
 	{
 		template<typename T>
 		concept Pointer = std::is_pointer_v<T>;
+
+		template<typename Derived, typename Base>
+		concept DerivedOrIs = std::derived_from<Derived, Base> || std::same_as<Derived, Base>;
 
 		template<typename T>
 		concept Addable = requires (T x) { x + x; x += x; };
@@ -69,5 +73,5 @@ namespace Framework
 	enum class FilterModes : u32 { Normal = 0, Regular };
 	// Contrast - dtblkfx contrast
 	// Compressor - specops spectral compander/compressor
-	enum class DynamicsModes : u32 { Contrast = 0, Compressor };
+	enum class DynamicsModes : u32 { Contrast = 0, Clip, Compressor };
 }

@@ -31,7 +31,7 @@ namespace Interface
 
       Rectangle<int> displayArea = Desktop::getInstance().getDisplays().getTotalBounds(true);
       if (gui_)
-        if (ComponentPeer *peer = gui_->getPeer())
+        if (auto *peer = gui_->getPeer())
           peer->getFrameSize().subtractFrom(displayArea);
       
       // TODO: make resizing snap horizontally to the width of individual lanes 
@@ -41,8 +41,10 @@ namespace Interface
     {
       if (!gui_)
         return;
-      auto unscaledDimensions = unscaleDimensions(gui_->getWidth(), gui_->getHeight(), gui_->getScaling());
-    	Framework::LoadSave::saveWindowSize(unscaledDimensions.first, unscaledDimensions.second);
+
+      auto [unscaledWidth, unscaledHeight] = unscaleDimensions(gui_->getWidth(), gui_->getHeight(), gui_->getScaling());
+    	Framework::LoadSave::saveWindowSize(unscaledWidth, unscaledHeight);
+
       if (resizableBorder_)
         resizableBorder_->setBounds(gui_->getParentComponent()->getLocalBounds());
     }

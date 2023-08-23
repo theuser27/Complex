@@ -15,17 +15,15 @@
 
 namespace Interface
 {
-	MainInterface::MainInterface(Plugin::ComplexPlugin &plugin) :
-		BaseSection(typeid(MainInterface).name()), plugin_(plugin)
+	MainInterface::MainInterface(Renderer *renderer) : BaseSection(typeid(MainInterface).name())
 	{
-		skinInstance_ = std::make_unique<Skin>();
-		skinInstance_->copyValuesToLookAndFeel(DefaultLookAndFeel::instance());
-		skin_ = skinInstance_.get();
+		renderer_ = renderer;
 
-		headerFooter_ = std::make_unique<HeaderFooterSections>(plugin.getSoundEngine());
+		headerFooter_ = std::make_unique<HeaderFooterSections>(renderer->getPlugin().getSoundEngine());
 		addSubSection(headerFooter_.get());
 
-		effectsStateSection_ = std::make_unique<EffectsStateSection>(plugin.getSoundEngine().getEffectsState());
+		effectsStateSection_ = std::make_unique<EffectsStateSection>(
+			renderer->getPlugin().getSoundEngine().getEffectsState());
 		addSubSection(effectsStateSection_.get());
 
 		popupSelector_ = std::make_unique<SinglePopupSelector>();
@@ -57,224 +55,50 @@ namespace Interface
 		popupDisplay1_->toFront(true);
 		popupDisplay2_->toFront(true);
 
-		setOpaque(true);
-		setSkin(skin_);
-
-		openGlContext_.setContinuousRepainting(false);
-		openGlContext_.setOpenGLVersionRequired(OpenGLContext::openGL3_2);
-		openGlContext_.setSwapInterval(1);
-		openGlContext_.setRenderer(this);
-		openGlContext_.setComponentPaintingEnabled(true);
-		openGlContext_.attachTo(*this);
-
-		startTimerHz(kParameterUpdateIntervalHz);
-	}
-
-	MainInterface::~MainInterface()
-	{
-		stopTimer();
-		openGlContext_.detach();
-		openGlContext_.setRenderer(nullptr);
-	}
-
-	void MainInterface::paintBackground(Graphics &g)
-	{
-		g.fillAll(getColour(Skin::kBackground));
-		paintChildrenShadows(g);
-
-		/*int padding = getPadding();
-		int bar_width = 6 * padding;
-		g.setColour(headerFooter_->getColour(Skin::kBody));
-		int y = header_->getBottom();
-		int height = keyboard_interface_->getY() - y;
-		int x1 = extra_mod_section_->getRight() + padding;
-		g.fillRect(x1, y, bar_width, height);*/
-
-		paintKnobShadows(g);
-		paintChildrenBackgrounds(g);
-	}
-
-	void MainInterface::copySkinValues(const Skin &skin)
-	{
-		ScopedLock open_gl_lock(openGlCriticalSection_);
-		skin.copyValuesToLookAndFeel(DefaultLookAndFeel::instance());
+		setOpaque(false);
 	}
 
 	void MainInterface::reloadSkin(const Skin &skin)
 	{
-		copySkinValues(skin);
+		skin.copyValuesToLookAndFeel(DefaultLookAndFeel::instance());
 		Rectangle<int> bounds = getBounds();
 		// triggering repainting like a boss
 		setBounds(0, 0, bounds.getWidth() / 4, bounds.getHeight() / 4);
 		setBounds(bounds);
 	}
 
-	void MainInterface::repaintChildBackground(BaseSection *child)
-	{
-		if (!backgroundImage_.isValid() || setting_all_values_)
-			return;
-
-		/*if (effects_interface_ != nullptr && effects_interface_->isParentOf(child))
-			child = effects_interface_.get();*/
-
-		background_.lock();
-		Graphics g(backgroundImage_);
-		paintChildBackground(g, child);
-		background_.updateBackgroundImage(backgroundImage_);
-		background_.unlock();
-	}
-
-	void MainInterface::repaintOpenGlBackground(OpenGlComponent *component)
-	{
-		if (!backgroundImage_.isValid())
-			return;
-
-		background_.lock();
-		Graphics g(backgroundImage_);
-		paintOpenGlBackground(g, component);
-		background_.updateBackgroundImage(backgroundImage_);
-		background_.unlock();
-	}
-
-	void MainInterface::redoBackground()
-	{
-		int width = std::ceil(displayScale_ * getWidth());
-		int height = std::ceil(displayScale_ * getHeight());
-		if (width < kMinWidth || height < kMinHeight)
-			return;
-
-		ScopedLock open_gl_lock(openGlCriticalSection_);
-
-		background_.lock();
-		backgroundImage_ = Image(Image::RGB, width, height, true);
-		Graphics g(backgroundImage_);
-		paintBackground(g);
-		background_.updateBackgroundImage(backgroundImage_);
-		background_.unlock();
-	}
-
-	void MainInterface::checkShouldReposition(bool resize)
-	{
-		float old_scale = displayScale_;
-		displayScale_ = getDisplayScale();
-
-		if (resize && (old_scale != displayScale_))
-			resized();
-	}
-
 	void MainInterface::resized()
 	{
-		checkShouldReposition(false);
-
-		if (!enableRedoBackground_)
-			return;
-
-		ScopedLock lock(openGlCriticalSection_);
-
 		int width = getWidth();
 		int height = getHeight();
 
 		headerFooter_->setBounds(0, 0, width, height);
 
-		int effectsStateXStart = (int)std::round(scaleValue(kHorizontalWindowEdgeMargin));
-		int effectsStateYStart = (int)std::round(scaleValue(HeaderFooterSections::kHeaderHeight +
-			kMainVisualiserHeight + kVerticalGlobalMargin));
-		int effectsStateWidth = (int)std::round(scaleValue(EffectsStateSection::kMinWidth));
+		int effectsStateXStart = scaleValueRoundInt(kHorizontalWindowEdgeMargin);
+		int effectsStateYStart = scaleValueRoundInt(HeaderFooterSections::kHeaderHeight +
+			kMainVisualiserHeight + kVerticalGlobalMargin);
+		int effectsStateWidth = scaleValueRoundInt(EffectsStateSection::kMinWidth);
 		int effectsStateHeight = getHeight() - effectsStateYStart - 
-			(int)std::round(scaleValue(kLaneToBottomSettingsMargin + HeaderFooterSections::kFooterHeight));
+			scaleValueRoundInt(kLaneToBottomSettingsMargin + HeaderFooterSections::kFooterHeight);
 		Rectangle bounds{ effectsStateXStart, effectsStateYStart, effectsStateWidth, effectsStateHeight };
 
 		effectsStateSection_->setBounds(bounds);
-
-		if (getWidth() && getHeight())
-			redoBackground();
 	}
 
 	void MainInterface::reset()
 	{
-		ScopedLock lock(openGlCriticalSection_);
-
-		setting_all_values_ = true;
 		BaseSection::reset();
 		//modulationChanged();
 		/*if (effects_interface_ && effects_interface_->isVisible())
 			effects_interface_->redoBackgroundImage();*/
-
-		setting_all_values_ = false;
 	}
 
-	void MainInterface::updateAllValues()
-	{
-		ScopedLock lock(openGlCriticalSection_);
-		setting_all_values_ = true;
-		BaseSection::updateAllValues();
-		setting_all_values_ = false;
-	}
-
-	void MainInterface::newOpenGLContextCreated()
-	{
-		double versionSupported = OpenGLShaderProgram::getLanguageVersion();
-		unsupported_ = versionSupported < kMinOpenGlVersion;
-		if (unsupported_)
-		{
-			NativeMessageBox::showMessageBoxAsync(AlertWindow::WarningIcon, "Unsupported OpenGl Version",
-				String("Complex requires OpenGL version: ") + String(kMinOpenGlVersion) +
-				String("\nSupported version: ") + String(versionSupported));
-			return;
-		}
-
-		shaders_ = std::make_unique<Shaders>(openGlContext_);
-		openGl_.shaders = shaders_.get();
-		openGl_.displayScale = displayScale_;
-		lastRenderScale_ = displayScale_;
-
-		background_.init(openGl_);
-		initOpenGlComponents(openGl_);
-	}
-
-	void MainInterface::renderOpenGL()
-	{
-		if (unsupported_)
-			return;
-
-		// this HAS to be true otherwise we have data races between the GL and JUCE Message threads
-		// if this fails then either:
-		// 1. continuous repainting is on and triggerRepaint wasn't called
-		// 2. component painting is off, so there's no way MessageManager could be locked
-		// NB: the paint call inside the OpenGlContext renderFrame needs to be commented out
-		//     otherwise it will call the paint methods the entire component tree
-		COMPLEX_ASSERT(MessageManager::existsAndIsLockedByCurrentThread());
-
-		float renderScale = (float)openGl_.context.getRenderingScale();
-		if (renderScale != lastRenderScale_)
-		{
-			lastRenderScale_ = renderScale;
-			MessageManager::callAsync([this]() { checkShouldReposition(); });
-		}
-
-		ScopedLock lock(openGlCriticalSection_);
-		openGl_.displayScale = displayScale_;
-		background_.render(openGl_);
-		renderOpenGlComponents(openGl_, animate_);
-	}
-
-	void MainInterface::openGLContextClosing()
-	{
-		if (unsupported_)
-			return;
-
-		background_.destroy(openGl_);
-		destroyOpenGlComponents(openGl_);
-		openGl_.shaders = nullptr;
-		shaders_ = nullptr;
-	}
-
-	void MainInterface::popupSelector(Component *source, Point<int> position, const PopupItems &options,
+	void MainInterface::popupSelector(const Component *source, Point<int> position, PopupItems options,
 		std::function<void(int)> callback, std::function<void()> cancel)
 	{
 		popupSelector_->setCallback(std::move(callback));
 		popupSelector_->setCancelCallback(std::move(cancel));
-		popupSelector_->showSelections(options);
+		popupSelector_->showSelections(std::move(options));
 		Rectangle bounds{ 0, 0, getWidth(), getHeight() };
 		popupSelector_->setPosition(getLocalPoint(source, position), bounds);
 		popupSelector_->setVisible(true);

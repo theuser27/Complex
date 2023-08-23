@@ -74,10 +74,12 @@ namespace Generation
 		simd_float inputVolume_, outputVolume_;
 		std::atomic<u32> currentEffectIndex_ = 0;
 
-		// has this chain been stopped temporarily?
+		// has this lane been stopped temporarily?
 		std::atomic<bool> isStopped_ = false;
-		// has this chain finished all processing?
+		// has this lane finished all processing?
 		std::atomic<bool> isFinished_ = true;
+		// has a thread begun work on this lane?
+		std::atomic<bool> hasBegunProcessing_ = false;
 
 		friend class EffectsState;
 	};

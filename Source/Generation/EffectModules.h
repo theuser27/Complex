@@ -56,7 +56,7 @@ namespace Generation
 
 		virtual void run([[maybe_unused]] Framework::SimdBufferView<std::complex<float>, simd_float> &source,
 			[[maybe_unused]] Framework::SimdBuffer<std::complex<float>, simd_float> &destination,
-			[[maybe_unused]] u32 effectiveFFTSize, [[maybe_unused]] float sampleRate) noexcept { }
+			[[maybe_unused]] u32 binCount, [[maybe_unused]] float sampleRate) noexcept { }
 
 		virtual bool needsPolarData() const noexcept { return false; }
 		auto getEffectAlgorithm() const
@@ -64,8 +64,10 @@ namespace Generation
 		auto *getEffectParameter(size_t effectIndex) const
 		{ return processorParameters_[effectIndex + magic_enum::enum_count<Framework::BaseEffectParameters>()].get(); }
 
+		void updateParameterDetails(std::span<const Framework::ParameterDetails> newDetails);
+
 	protected:
-		[[nodiscard]] BaseProcessor *createCopy(std::optional<u64> parentModuleId) const noexcept override
+		[[nodiscard]] BaseProcessor *createCopy([[maybe_unused]] std::optional<u64> parentModuleId) const noexcept override
 		{ COMPLEX_ASSERT_FALSE("This type cannot be copied directly, you need a derived type"); return nullptr; }
 		[[nodiscard]] BaseProcessor *createSubProcessor([[maybe_unused]] std::string_view type) const noexcept override
 		{ COMPLEX_ASSERT_FALSE("This type cannot have subProcessors"); return nullptr; }
@@ -83,10 +85,10 @@ namespace Generation
 
 		// first - low shifted boundary, second - high shifted boundary
 		[[nodiscard]] std::pair<simd_float, simd_float> getShiftedBounds(BoundRepresentation representation,
-			float maxFrequency, u32 FFTSize, bool isLinearShift = false) const noexcept;
+			float sampleRate, u32 FFTSize, bool isLinearShift = false) const noexcept;
 
-		[[nodiscard]] simd_mask vector_call isOutsideBounds(simd_int positionIndices, 
-			simd_int lowBoundIndices, simd_int highBoundIndices) const noexcept
+		[[nodiscard]] static strict_inline simd_mask vector_call isOutsideBounds(
+			simd_int positionIndices, simd_int lowBoundIndices, simd_int highBoundIndices)
 		{
 			simd_mask highAboveLow = simd_int::greaterThanSigned(highBoundIndices, lowBoundIndices);
 			simd_mask positionsGreaterThanHigh = simd_int::greaterThanSigned(positionIndices, highBoundIndices);
@@ -95,8 +97,8 @@ namespace Generation
 				(~highAboveLow & (positionsGreaterThanHigh & positionsLessThanLow));
 		}
 
-		[[nodiscard]] simd_mask vector_call isInsideBounds(simd_int positionIndices, 
-			simd_int lowBoundIndices, simd_int highBoundIndices) const noexcept
+		[[nodiscard]] static strict_inline simd_mask vector_call isInsideBounds(
+			simd_int positionIndices, simd_int lowBoundIndices, simd_int highBoundIndices)
 		{
 			simd_mask highAboveLow = simd_int::greaterThanSigned(highBoundIndices, lowBoundIndices);
 			simd_mask positionsLessOrThanEqualHigh = ~simd_int::greaterThanSigned(positionIndices, highBoundIndices);
@@ -106,8 +108,8 @@ namespace Generation
 		}
 
 		// returns starting point and distance to end of processed/unprocessed range
-		std::pair<u32, u32> vector_call getRange(simd_int lowIndices, simd_int highIndices,
-			u32 effectiveFFTSize, bool isProcessedRange) const noexcept;
+		static std::pair<u32, u32> vector_call getRange(simd_int lowIndices, simd_int highIndices,
+			u32 binCount, bool isProcessedRange);
 
 		void copyUnprocessedData(Framework::SimdBufferView<std::complex<float>, simd_float> &source,
 			Framework::SimdBuffer<std::complex<float>, simd_float> &destination, const simd_int &lowBoundIndices,
@@ -132,9 +134,9 @@ namespace Generation
 		utilityEffect(Plugin::ProcessorTree *globalModulesState, u64 parentModuleId);
 
 		void run(Framework::SimdBufferView<std::complex<float>, simd_float> &source,
-			Framework::SimdBuffer<std::complex<float>, simd_float> &destination, u32 effectiveFFTSize, float sampleRate) noexcept override
+			Framework::SimdBuffer<std::complex<float>, simd_float> &destination, u32 binCount, float sampleRate) noexcept override
 		{
-			baseEffect::run(source, destination, effectiveFFTSize, sampleRate);
+			baseEffect::run(source, destination, binCount, sampleRate);
 		}
 
 	private:
@@ -161,11 +163,11 @@ namespace Generation
 		filterEffect(Plugin::ProcessorTree *globalModulesState, u64 parentModuleId);
 
 		void run(Framework::SimdBufferView<std::complex<float>, simd_float> &source,
-			Framework::SimdBuffer<std::complex<float>, simd_float> &destination, u32 effectiveFFTSize, float sampleRate) noexcept override;
+			Framework::SimdBuffer<std::complex<float>, simd_float> &destination, u32 binCount, float sampleRate) noexcept override;
 
 	private:
 		void runNormal(Framework::SimdBufferView<std::complex<float>, simd_float> &source,
-			Framework::SimdBuffer<std::complex<float>, simd_float> &destination, u32 effectiveFFTSize, float sampleRate) const noexcept;
+			Framework::SimdBuffer<std::complex<float>, simd_float> &destination, u32 binCount, float sampleRate) const noexcept;
 
 		simd_float vector_call getDistancesFromCutoffs(simd_int positionIndices,
 			simd_int cutoffIndices, simd_int lowBoundIndices, u32 FFTSize, float sampleRate) const noexcept;
@@ -209,7 +211,10 @@ namespace Generation
 
 	private:
 		void runContrast(Framework::SimdBufferView<std::complex<float>, simd_float> &source,
-			Framework::SimdBuffer<std::complex<float>, simd_float> &destination, u32 effectiveFFTSize, float sampleRate) const noexcept;
+			Framework::SimdBuffer<std::complex<float>, simd_float> &destination, u32 binCount, float sampleRate) const noexcept;
+
+		void runClip(Framework::SimdBufferView<std::complex<float>, simd_float> &source,
+			Framework::SimdBuffer<std::complex<float>, simd_float> &destination, u32 binCount, float sampleRate) const noexcept;
 
 		simd_float vector_call matchPower(simd_float target, simd_float current) const
 		{
@@ -328,7 +333,7 @@ namespace Generation
 		stretchEffect::getClassType(), warpEffect::getClassType(), destroyEffect::getClassType(), };
 
 	// class for the whole FX unit
-	class EffectModule : public BaseProcessor
+	class EffectModule final : public BaseProcessor
 	{
 	public:
 		DEFINE_CLASS_TYPE("{763F9D86-D535-4D63-B486-F863F88CC259}")

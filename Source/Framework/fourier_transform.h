@@ -58,9 +58,9 @@ namespace Framework
 
 	private:
 		int size_;
-		IppsFFTSpec_R_32f *ippSpecs_ = nullptr;
+		IppsFFTSpec_R_32f *ippSpecs_;
 		std::unique_ptr<Ipp8u[]> memory_;
-		Ipp8u* spec_;
+		Ipp8u *spec_;
 		Ipp8u *specBuffer_;
 		Ipp8u *buffer_;
 
@@ -90,5 +90,7 @@ namespace Framework
 
 	// TODO: add more FFT options
 
+#else
+	#error No FFT algorithm could be chosen
 #endif
 }

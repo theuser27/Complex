@@ -53,11 +53,8 @@ namespace Interface
 		EffectModuleSection *currentlyMovedModule_ = nullptr;
 		std::pair<size_t, size_t> dragStartIndices_{};
 		std::pair<size_t, size_t> dragEndIndices_{};
-		juce::Point<int> movedModulePosition_{};
+		Point<int> movedModulePosition_{};
 		bool isCopyingModule_ = false;
-
-		OpenGlImage background_{};
-		CriticalSection openGlCriticalSection_{};
 
 		Generation::EffectsState &state_;
 	};

@@ -10,7 +10,6 @@
 
 #pragma once
 
-#include "common.h"
 #include "parameter_value.h"
 
 namespace Plugin

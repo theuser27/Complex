@@ -10,6 +10,7 @@
 
 #include "update_types.h"
 #include "Framework/parameter_value.h"
+#include "Interface/Components/BaseControl.h"
 
 namespace Framework
 {
@@ -133,9 +134,9 @@ namespace Framework
 		// on the other hand, if this is being called on a redo, we need to change the value appropriately
 		if (!firstTime_)
 		{
-			parameterUI_->setValueSafe(newValue_);
-			parameterUI_->updateValue();
-			parameterUI_->setValueToHost();
+			baseParameter_->setValueSafe(newValue_);
+			baseParameter_->updateValue();
+			baseParameter_->setValueToHost();
 		}
 		
 		firstTime_ = false;
@@ -144,9 +145,9 @@ namespace Framework
 
 	bool ParameterUpdate::undo()
 	{
-		parameterUI_->setValueSafe(oldValue_);
-		parameterUI_->updateValue();
-		parameterUI_->setValueToHost();
+		baseParameter_->setValueSafe(oldValue_);
+		baseParameter_->updateValue();
+		baseParameter_->setValueToHost();
 		return true;
 	}
 

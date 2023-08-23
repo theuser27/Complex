@@ -60,7 +60,7 @@ namespace Interface
 		static constexpr auto kVertexShaderCount = magic_enum::enum_count<VertexShader>();
 		static constexpr auto kFragmentShaderCount = magic_enum::enum_count<FragmentShader>();
 
-		Shaders(OpenGLContext &openGlContext) : openGlContext_(&openGlContext) { }
+		Shaders(OpenGLContext &openGlContext) : openGlContext_(openGlContext) { }
 
 		GLuint getVertexShaderId(VertexShader shader) {
 			if (vertexShaderIds_[shader] == 0)
@@ -74,8 +74,8 @@ namespace Interface
 			return fragmentShaderIds_[shader];
 		}
 
-		OpenGLShaderProgram *getShaderProgram(VertexShader vertex_shader, FragmentShader fragment_shader,
-			const GLchar **varyings = nullptr);
+		OpenGLShaderProgram *getShaderProgram(VertexShader vertex_shader, 
+			FragmentShader fragment_shader, const GLchar **varyings = nullptr);
 
 	private:
 		static const char *getVertexShader(VertexShader shader);
@@ -85,7 +85,7 @@ namespace Interface
 		GLuint createVertexShader(VertexShader shader) const;
 		GLuint createFragmentShader(FragmentShader shader) const;
 
-		OpenGLContext *openGlContext_;
+		OpenGLContext &openGlContext_;
 		std::array<GLuint, kVertexShaderCount> vertexShaderIds_{};
 		std::array<GLuint, kFragmentShaderCount> fragmentShaderIds_{};
 
@@ -94,10 +94,9 @@ namespace Interface
 
 	struct OpenGlWrapper
 	{
-		OpenGlWrapper(OpenGLContext &c) : context(c), shaders(nullptr), displayScale(1.0f) { }
+		OpenGlWrapper(OpenGLContext &c) : context(c) { }
 
 		OpenGLContext &context;
-		Shaders *shaders;
-		float displayScale;
+		Shaders *shaders = nullptr;
 	};
 }

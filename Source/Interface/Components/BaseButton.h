@@ -14,35 +14,11 @@
 #include "OpenGlImageComponent.h"
 #include "OpenGlMultiQuad.h"
 #include "Interface/LookAndFeel/Paths.h"
+#include "BaseControl.h"
 
 namespace Interface
 {
 	class BaseButton;
-
-	class ButtonLabel : public Component
-	{
-	public:
-		ButtonLabel(BaseButton *parent) : Component("Button Label")
-		{
-			setParent(parent);
-			setInterceptsMouseClicks(false, false);
-		}
-
-		void paint(Graphics &g) override;
-
-		int getTotalWidth() const { return (int)std::round(usedFont_.getStringWidthFloat(labelText_)); }
-		auto getLabelText() const noexcept { return labelText_; }
-		auto getLabelTextWidth() const noexcept { return usedFont_.getStringWidth(labelText_); }
-		auto &getFont() const noexcept { return usedFont_; }
-
-		void setParent(BaseButton *parent) noexcept;
-		void setFont(Font font) noexcept { usedFont_ = std::move(font); }
-
-	private:
-		Font usedFont_{ Fonts::instance()->getInterVFont() };
-		String labelText_{};
-		BaseButton *parent_ = nullptr;
-	};
 
 	class ButtonComponent : public OpenGlComponent
 	{
@@ -62,15 +38,18 @@ namespace Interface
 
 		ButtonComponent(BaseButton *button);
 
-		void paint([[maybe_unused]] Graphics &g) override { }
+		void paint(Graphics &) override { }
 
 		void init(OpenGlWrapper &openGl) override
 		{
 			if (style_ == kRadioButton)
 				background_.setFragmentShader(Shaders::kRoundedRectangleFragment);
 
+			background_.setParent(parent_);
 			background_.init(openGl);
+			text_.setParent(parent_);
 			text_.init(openGl);
+			shape_.setParent(parent_);
 			shape_.init(openGl);
 
 			setColors();
@@ -98,17 +77,17 @@ namespace Interface
 				renderShapeButton(openGl, animate);
 		}
 
-		void destroy(OpenGlWrapper &openGl) override
+		void destroy() override
 		{
-			background_.destroy(openGl);
-			text_.destroy(openGl);
-			shape_.destroy(openGl);
+			background_.destroy();
+			text_.destroy();
+			shape_.destroy();
 		}
 
 		void setColors();
 		void setText() noexcept;
 		void setJustification(Justification justification) noexcept { text_.setJustification(justification); }
-		void setShape(const Path &shape) { shape_.setShape(shape); }
+		void setShape(std::pair<Path, Path> strokeFillShapes) { shape_.setShapes(std::move(strokeFillShapes)); }
 		void setDown(bool down) noexcept { down_ = down; }
 		void setStyle(ButtonStyle style) noexcept { style_ = style; }
 		void setAccentedButton(bool isButtonAccented) noexcept { isButtonAccented_ = isButtonAccented; }
@@ -140,9 +119,11 @@ namespace Interface
 		JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(ButtonComponent)
 	};
 
-	class BaseButton : public ToggleButton, public ParameterUI
+	class BaseButton : public ToggleButton, public BaseControl
 	{
 	public:
+		static constexpr int kLabelOffset = 8;
+
 		enum MenuId
 		{
 			kCancel = 0,
@@ -150,10 +131,10 @@ namespace Interface
 			kClearMidiLearn
 		};
 
-		class ButtonListener
+		class Listener
 		{
 		public:
-			virtual ~ButtonListener() = default;
+			virtual ~Listener() = default;
 			virtual void guiChanged([[maybe_unused]] BaseButton *button) { }
 		};
 
@@ -161,12 +142,16 @@ namespace Interface
 		~BaseButton() override = default;
 
 		// Inherited via ToggleButton
-		void parentHierarchyChanged() override;
+		void parentHierarchyChanged() override
+		{
+			parent_ = findParentComponentOfClass<BaseSection>();
+			ToggleButton::parentHierarchyChanged();
+		}
 		void resized() override;
 		void enablementChanged() override
 		{
 			ToggleButton::enablementChanged();
-			buttonComponent_.setColors();
+			buttonComponent_->setColors();
 		}
 		void clicked() override;
 
@@ -175,72 +160,58 @@ namespace Interface
 		void mouseEnter(const MouseEvent &e) override
 		{
 			ToggleButton::mouseEnter(e);
-			buttonComponent_.getAnimator().setIsHovered(true);
+			buttonComponent_->getAnimator().setIsHovered(true);
 		}
 		void mouseExit(const MouseEvent &e) override
 		{
 			ToggleButton::mouseExit(e);
-			buttonComponent_.getAnimator().setIsHovered(false);
+			buttonComponent_->getAnimator().setIsHovered(false);
 		}
 
-		// Inherited via ParameterUI
-		bool updateValue() override
-		{
-			bool newValue = (bool)std::round(getValueSafe());
-			bool needsUpdate = getToggleState() != newValue;
-			if (needsUpdate)
-				setToggleState(newValue, NotificationType::dontSendNotification);
-			return needsUpdate;
-		}
+		// Inherited via BaseControl
+		double getValueInternal() const noexcept override { return getToggleState(); }
+		void setValueInternal(double value, NotificationType notification) noexcept override 
+		{ setToggleState(std::round(value) == 1.0f, notification); }
+		void setBoundsInternal(Rectangle<int> bounds) override { setBounds(bounds); }
+		[[nodiscard]] Rectangle<int> getOverallBoundsForHeight(int height) override;
+		void positionExtraElements(Rectangle<int> anchorBounds) override;
+		void refresh() override { resized(); }
 
-		void endChange() override;
-
-		void updateValueFromParameter()
-		{
-			auto value = (bool)std::round(parameterLink_->parameter->getNormalisedValue());
-			setToggleState(value, sendNotificationSync);
-			setValueSafe(value);
-		}
-
-		auto *getGlComponent() noexcept { return &buttonComponent_; }
-		auto *getLabelComponent() const noexcept { return label_.get(); }
-		Colour getColour(Skin::ColorId colourId) const noexcept;
+		auto getGlComponent() noexcept { return buttonComponent_; }
 
 		void setText(const String &newText)
 		{
 			setButtonText(newText);
-			buttonComponent_.setText();
+			buttonComponent_->setText();
 		}
 
-		void setShape(const Path &shape) { buttonComponent_.setShape(shape); }
-		void setAccentedButton(bool isAccented) noexcept { buttonComponent_.setAccentedButton(isAccented); }
-		void setJustification(Justification justification) noexcept { buttonComponent_.setJustification(justification); }
+		void setShape(std::pair<Path, Path> strokeFillShapes) { buttonComponent_->setShape(std::move(strokeFillShapes)); }
+		void setAccentedButton(bool isAccented) noexcept { buttonComponent_->setAccentedButton(isAccented); }
+		void setJustification(Justification justification) noexcept { buttonComponent_->setJustification(justification); }
 
-		void setPowerButton() { buttonComponent_.setStyle(ButtonComponent::kPowerButton); setShape(Paths::powerButtonIcon()); }
-		void setRadioButton() noexcept { buttonComponent_.setStyle(ButtonComponent::kRadioButton); }
-		void setNoBackground() noexcept { buttonComponent_.setStyle(ButtonComponent::kJustText); }
-		void setTextButton() noexcept { buttonComponent_.setStyle(ButtonComponent::kTextButton); }
-		void setLightenButton() noexcept { buttonComponent_.setStyle(ButtonComponent::kLightenButton); }
-		void setUiButton() noexcept { buttonComponent_.setStyle(ButtonComponent::kActionButton); }
-		void setShapeButton() noexcept { buttonComponent_.setStyle(ButtonComponent::kShapeButton); }
+		void setPowerButton() noexcept { buttonComponent_->setStyle(ButtonComponent::kPowerButton); setShape(Paths::powerButtonIcon()); }
+		void setRadioButton() noexcept { buttonComponent_->setStyle(ButtonComponent::kRadioButton); addLabel(); }
+		void setNoBackground() noexcept { buttonComponent_->setStyle(ButtonComponent::kJustText); }
+		void setTextButton() noexcept { buttonComponent_->setStyle(ButtonComponent::kTextButton); }
+		void setLightenButton() noexcept { buttonComponent_->setStyle(ButtonComponent::kLightenButton); }
+		void setUiButton() noexcept { buttonComponent_->setStyle(ButtonComponent::kActionButton); }
+		void setShapeButton() noexcept { buttonComponent_->setStyle(ButtonComponent::kShapeButton); }
 
 		std::span<const std::string_view> getStringLookup() const { return details_.stringLookup; }
 		void setStringLookup(std::span<const std::string_view> lookup) { details_.stringLookup = lookup; }
 
 		String getTextFromValue(bool value) const noexcept;
 		void handlePopupResult(int result);
-		void createLabel() { label_ = std::make_unique<ButtonLabel>(this); }
 
-		void addButtonListener(ButtonListener *listener) { buttonListeners_.push_back(listener); }
+		void addListener(BaseSection *listener) override;
+		void removeListener(BaseSection *listener) override;
 
 	protected:
 		void clicked(const ModifierKeys &modifiers) override;
 
-		ButtonComponent buttonComponent_{ this };
-		std::unique_ptr<ButtonLabel> label_ = nullptr;
+		gl_ptr<ButtonComponent> buttonComponent_;
 
-		BaseSection *parent_ = nullptr;
-		std::vector<ButtonListener *> buttonListeners_{};
+		std::vector<Listener *> buttonListeners_{};
 
 		JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(BaseButton)
 	};

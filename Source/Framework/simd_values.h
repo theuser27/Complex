@@ -259,9 +259,9 @@ namespace simd_values
 		{	return greaterThanSigned(one, two) | equal(one, two); }
 
 
-		//////////////////////////////////
-		// Constructors and Destructors //
-		//////////////////////////////////
+		//////////////////
+		// Constructors //
+		//////////////////
 
 		strict_inline simd_int() noexcept : simd_int(0) { }
 		strict_inline simd_int(u32 initialValue) noexcept : simd_int(init(initialValue)) { }

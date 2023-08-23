@@ -14,8 +14,8 @@ namespace Interface
 {
 	using namespace juce::gl;
 
-	OpenGlMultiQuad::OpenGlMultiQuad(int maxQuads, Shaders::FragmentShader shader) :
-		OpenGlComponent("quad"), fragmentShader_(shader), maxQuads_(maxQuads), numQuads_(maxQuads)
+	OpenGlMultiQuad::OpenGlMultiQuad(int maxQuads, Shaders::FragmentShader shader, String name) :
+		OpenGlComponent(std::move(name)), fragmentShader_(shader), maxQuads_(maxQuads), numQuads_(maxQuads)
 	{
 		static const int triangles[] = {
 			0, 1, 2,
@@ -74,7 +74,7 @@ namespace Interface
 		alphaMultUniform_ = getUniform(*shader_, "alpha_mult");
 	}
 
-	void OpenGlMultiQuad::destroy(OpenGlWrapper &openGl)
+	void OpenGlMultiQuad::destroy()
 	{
 		shader_ = nullptr;
 		position_ = nullptr;
@@ -98,13 +98,10 @@ namespace Interface
 		indicesBuffer_ = 0;
 	}
 
-	void OpenGlMultiQuad::render(OpenGlWrapper &openGl, bool animate)
+	void OpenGlMultiQuad::render(OpenGlWrapper &openGl, bool)
 	{
-		animator_.tick(animate);
-
 		Component *component = targetComponent_ ? targetComponent_ : this;
-		auto bounds = (customDrawBounds_.getWidth() * customDrawBounds_.getHeight() != 0) ? 
-			customDrawBounds_ : component->getLocalBounds();
+		auto bounds = (!customDrawBounds_.isEmpty()) ? customDrawBounds_ : component->getLocalBounds();
 		if (!active_ || (!drawWhenNotVisible_ && !component->isVisible()) || !setViewPort(component, bounds, openGl))
 			return;
 

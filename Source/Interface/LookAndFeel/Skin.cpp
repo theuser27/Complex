@@ -433,7 +433,7 @@ namespace Interface
       }
     }
 
-    for (int i = 0; i < kValueIdCount; ++i)
+    for (size_t i = 0; i < kValueIdCount; ++i)
     {
       if (data.count(kValueNames[i]))
         values_[i] = data[kValueNames[i]];
@@ -449,7 +449,7 @@ namespace Interface
       json data = json::parse(skin_string.toStdString(), nullptr, false);
       jsonToState(data);
     }
-    catch (const json::exception &e)
+    catch (const json::exception &)
     {
       return false;
     }

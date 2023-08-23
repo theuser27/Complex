@@ -46,15 +46,14 @@ namespace Interface
 		return 11.0f;
 	}
 
-	void Fonts::setFontForAscent(Font &font, float ascent) const
+	void Fonts::setFontFromHeight(Font &font, float height) const
 	{
-		auto fontHeight = getHeightFromAscent(font, ascent);
-		font.setHeight(fontHeight);
+		font.setHeight(height);
 
 		if (font.getTypefaceName() == DDinFont_.getTypefaceName())
-			font.setExtraKerningFactor((fontHeight + kDDinDefaultKerning) / fontHeight - 1.0f);
+			font.setExtraKerningFactor((height + kDDinDefaultKerning) / height - 1.0f);
 		else if (font.getTypefaceName() == InterVFont_.getTypefaceName())
-			font.setExtraKerningFactor((fontHeight + kInterVDefaultKerning) / fontHeight - 1.0f);
+			font.setExtraKerningFactor((height + kInterVDefaultKerning) / height - 1.0f);
 		else COMPLEX_ASSERT_FALSE("Unknown font was provided to set");
 	}
 

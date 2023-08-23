@@ -14,7 +14,6 @@
 #include "../LookAndFeel/Shaders.h"
 #include "Spectrogram.h"
 #include "../Sections/BaseSection.h"
-#include "../Sections/InterfaceEngineLink.h"
 
 namespace Interface
 {
@@ -134,10 +133,7 @@ namespace Interface
 
   void Spectrogram::render(OpenGlWrapper &open_gl, bool animate)
   {
-    auto *mainInterface = findParentComponentOfClass<MainInterface>();
-    COMPLEX_ASSERT(mainInterface && "Who owns this component that isn't a child of MainInterface??");
-
-    nyquistFreq_ = mainInterface->getPlugin().getSampleRate() / 2.0f;
+    nyquistFreq_ = parent_->getInterfaceLink()->getPlugin().getSampleRate() / 2.0f;
 
     setLineWidth(2.0f);
     setFillCenter(-1.0f);
@@ -176,7 +172,7 @@ namespace Interface
       {
         frequency += increment;
         float t = log2f(frequency / min_frequency_) / max_octave;
-        x = std::round(t * getWidth());
+        x = (int)std::round(t * (float)getWidth());
         g.fillRect(x, 0, 1, height);
       }
       g.fillRect(x, 0, 1, height);

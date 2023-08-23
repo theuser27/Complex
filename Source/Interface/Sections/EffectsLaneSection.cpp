@@ -15,14 +15,19 @@
 namespace Interface
 {
 	EffectsLaneSection::EffectsLaneSection(Generation::EffectsLane *effectsLane, EffectsStateSection *parentState, String name) :
-		ProcessorSection(typeid(EffectsLaneSection).name(), effectsLane), laneTitle_("Lane Title", std::move(name)),
-		effectsLane_(effectsLane), parentState_(parentState)
+		ProcessorSection(typeid(EffectsLaneSection).name(), effectsLane), effectsLane_(effectsLane), parentState_(parentState)
 	{
 		using namespace Framework;
 
 		effectsLane_->addListener(this);
 
-		addOpenGlComponent(&laneTitle_);
+		outerRectangle = makeOpenGlComponent<OpenGlQuad>(Shaders::kRoundedRectangleFragment);
+		addOpenGlComponent(outerRectangle);
+		innerRectangle = makeOpenGlComponent<OpenGlQuad>(Shaders::kRoundedRectangleFragment);
+		addOpenGlComponent(innerRectangle);
+
+		laneTitle_ = makeOpenGlComponent<PlainTextComponent>("Lane Title", std::move(name));
+		addOpenGlComponent(laneTitle_);
 
 		addAndMakeVisible(&scrollBar_);
 		addOpenGlComponent(scrollBar_.getGlComponent());
@@ -30,33 +35,30 @@ namespace Interface
 
 		laneActivator_ = std::make_unique<BaseButton>(
 			effectsLane->getParameterUnchecked((u32)EffectsLaneParameters::LaneEnabled));
-		laneActivator_->addButtonListener(this);
+		laneActivator_->addListener(this);
 		setActivator(laneActivator_.get());
-		addButton(laneActivator_.get());
+		addControl(laneActivator_.get());
 
 		gainMatchingButton_ = std::make_unique<BaseButton>(
 			effectsLane->getParameterUnchecked((u32)EffectsLaneParameters::GainMatching));
 		gainMatchingButton_->setRadioButton();
-		gainMatchingButton_->createLabel();
-		addButton(gainMatchingButton_.get());
+		addControl(gainMatchingButton_.get());
 
 		inputSelector_ = std::make_unique<TextSelector>(
 			effectsLane->getParameterUnchecked((u32)EffectsLaneParameters::Input),
 			Fonts::instance()->getInterVFont());
 		inputSelector_->setPopupPrefix("From: ");
-		inputSelector_->setDrawArrow(true);
-		inputSelector_->setTextSelectorListener(this);
 		inputSelector_->setScrollWheelEnabled(true);
-		addSlider(inputSelector_.get());
+		inputSelector_->removeLabel();
+		addControl(inputSelector_.get());
 
 		outputSelector_ = std::make_unique<TextSelector>(
 			effectsLane->getParameterUnchecked((u32)EffectsLaneParameters::Output),
 			Fonts::instance()->getInterVFont());
 		outputSelector_->setPopupPrefix("To: ");
-		outputSelector_->setDrawArrow(true);
-		outputSelector_->setTextSelectorListener(this);
 		outputSelector_->setScrollWheelEnabled(true);
-		addSlider(outputSelector_.get());
+		outputSelector_->removeLabel();
+		addControl(outputSelector_.get());
 
 		addAndMakeVisible(viewport_);
 		viewport_.addListener(this);
@@ -79,29 +81,39 @@ namespace Interface
 	std::unique_ptr<EffectsLaneSection> EffectsLaneSection::createCopy()
 	{
 		auto *newEffectsLane = static_cast<Generation::EffectsLane *>(effectsLane_->getProcessorTree()->copyProcessor(effectsLane_));
-		return  std::make_unique<EffectsLaneSection>(newEffectsLane, parentState_, laneTitle_.getText() + " - Copy");
+		return  std::make_unique<EffectsLaneSection>(newEffectsLane, parentState_, laneTitle_->getText() + " - Copy");
 	}
 
 	void EffectsLaneSection::resized()
 	{
-		ScopedLock lock(openGlCriticalSection_);
-
 		BaseSection::resized();
 
 		auto topBarHeight = scaleValueRoundInt(kTopBarHeight);
 		auto bottomBarHeight = scaleValueRoundInt(kBottomBarHeight);
+		auto rectangleRounding = scaleValue(kInsideRouding);
+		auto outlineThickness = scaleValueRoundInt(kOutlineThickness);
+
+		outerRectangle->setColor(getColour(Skin::kBody));
+		outerRectangle->setRounding(rectangleRounding);
+		outerRectangle->setBounds(getLocalBounds());
+
+		innerRectangle->setColor(getColour(Skin::kBackground));
+		innerRectangle->setRounding(rectangleRounding);
+		innerRectangle->setBounds(getLocalBounds().withTrimmedLeft(outlineThickness).withTrimmedRight(outlineThickness)
+			.withTrimmedTop(topBarHeight).withTrimmedBottom(bottomBarHeight));
+
 		auto leftEdgePadding = scaleValueRoundInt(kLeftEdgePadding);
 		auto rightEdgePadding = scaleValueRoundInt(kRightEdgePadding);
 		auto textSelectorHeight = scaleValueRoundInt(TextSelector::kDefaultTextSelectorHeight);
 
-		auto inputSelectorWidth = inputSelector_->setHeight(textSelectorHeight);
-		inputSelector_->setBounds(laneActivator_->getX() - rightEdgePadding - inputSelectorWidth,
-			(topBarHeight - textSelectorHeight) / 2, inputSelectorWidth, textSelectorHeight);
+		auto inputSelectorWidth = inputSelector_->getOverallBoundsForHeight(textSelectorHeight).getWidth();
+		inputSelector_->setOverallBounds({ laneActivator_->getX() - rightEdgePadding - inputSelectorWidth,
+			(topBarHeight - textSelectorHeight) / 2 });
 
-		laneTitle_.setTextHeight(scaleValue(Fonts::kInterVDefaultHeight));
-		laneTitle_.setFontType(PlainTextComponent::kTitle);
-		laneTitle_.setJustification(Justification::centredLeft);
-		laneTitle_.setBounds(leftEdgePadding, (topBarHeight - textSelectorHeight) / 2,
+		laneTitle_->setTextHeight(Fonts::kInterVDefaultHeight);
+		laneTitle_->setFontType(PlainTextComponent::kTitle);
+		laneTitle_->setJustification(Justification::centredLeft);
+		laneTitle_->setBounds(leftEdgePadding, (topBarHeight - textSelectorHeight) / 2,
 			inputSelector_->getX() - 2 * leftEdgePadding, textSelectorHeight);
 
 		auto gainMatchDimensions = scaleValueRoundInt(kGainMatchButtonDimensions);
@@ -112,9 +124,9 @@ namespace Interface
 		gainMatchingButton_->getLabelComponent()->setBounds(gainMatchingButton_->getRight() + rightEdgePadding,
 			getHeight() - (bottomBarHeight + textSelectorHeight) / 2, gainMatchLabelWidth, textSelectorHeight);
 
-		auto outputSelectorWidth = outputSelector_->setHeight(textSelectorHeight);
-		outputSelector_->setBounds(getWidth() - rightEdgePadding - outputSelectorWidth,
-			getHeight() - (bottomBarHeight + textSelectorHeight) / 2, outputSelectorWidth, textSelectorHeight);
+		auto outputSelectorWidth = outputSelector_->getOverallBoundsForHeight(textSelectorHeight).getWidth();
+		outputSelector_->setOverallBounds({ getWidth() - rightEdgePadding - outputSelectorWidth,
+			getHeight() - (bottomBarHeight + textSelectorHeight) / 2 });
 
 		auto viewportXOffset = scaleValueRoundInt(kModulesHorizontalVerticalPadding + kOutlineThickness);
 		auto viewportY = scaleValueRoundInt(kTopBarHeight);
@@ -129,28 +141,9 @@ namespace Interface
 		scrollBar_.setColor(getColour(Skin::kLightenScreen));
 	}
 
-	void EffectsLaneSection::paintBackground(Graphics &g)
-	{
-		auto bounds = getLocalBounds().toFloat();
-
-		auto insideRounding = scaleValue(kInsideRouding);
-
-		auto colour = getColour(Skin::kBody);
-		g.setColour(colour);
-		g.fillRoundedRectangle(bounds, insideRounding);
-
-		g.setColour(getColour(Skin::kBackground));
-		g.fillRoundedRectangle(bounds.withTrimmedLeft(kOutlineThickness).withTrimmedRight(kOutlineThickness)
-			.withTrimmedTop(kTopBarHeight).withTrimmedBottom(kBottomBarHeight), insideRounding);
-
-		drawButtonLabel(g, gainMatchingButton_.get());
-	}
-
 	void EffectsLaneSection::insertedSubProcessor(size_t index, Generation::BaseProcessor *newSubProcessor)
 	{
-		// SAFETY: static_cast is safe because this is the type we just inserted
-		auto newModule = std::make_unique<EffectModuleSection>
-			(static_cast<Generation::EffectModule *>(newSubProcessor));
+		auto newModule = std::make_unique<EffectModuleSection>(utils::as<Generation::EffectModule *>(newSubProcessor));
 		effectModules_.insert(effectModules_.begin() + (std::ptrdiff_t)index, newModule.get());
 		parentState_->registerModule(std::move(newModule));
 		setEffectPositions();
@@ -159,7 +152,7 @@ namespace Interface
 	void EffectsLaneSection::deletedSubProcessor(size_t index, [[maybe_unused]] Generation::BaseProcessor *deletedSubProcessor)
 	{
 		auto deletedModule = parentState_->unregisterModule(effectModules_[index]);
-		effectModules_.erase(effectModules_.begin() + index);
+		effectModules_.erase(effectModules_.begin() + (std::ptrdiff_t)index);
 		viewport_.container_.removeSubSection(deletedModule.get());
 		setEffectPositions();
 	}
@@ -177,7 +170,7 @@ namespace Interface
 	{
 		COMPLEX_ASSERT(movedModule && "A module was not provided to insert");
 
-		effectModules_.insert(effectModules_.begin() + index, movedModule);
+		effectModules_.insert(effectModules_.begin() + (std::ptrdiff_t)index, movedModule);
 		viewport_.container_.addSubSection(movedModule);
 	}
 
@@ -190,7 +183,7 @@ namespace Interface
 		}
 
 		auto removedModule = effectModules_[index];
-		effectModules_.erase(effectModules_.begin() + index);
+		effectModules_.erase(effectModules_.begin() + (std::ptrdiff_t)index);
 		viewport_.container_.removeSubSection(removedModule);
 		return removedModule;
 	}
@@ -198,8 +191,8 @@ namespace Interface
 	void EffectsLaneSection::moveModule(size_t oldIndex, size_t newIndex)
 	{
 		auto movedModule = effectModules_[oldIndex];
-		effectModules_.erase(effectModules_.begin() + oldIndex);
-		effectModules_.insert(effectModules_.begin() + newIndex, movedModule);
+		effectModules_.erase(effectModules_.begin() + (std::ptrdiff_t)oldIndex);
+		effectModules_.insert(effectModules_.begin() + (std::ptrdiff_t)newIndex, movedModule);
 	}
 
 	void EffectsLaneSection::setEffectPositions()
@@ -228,7 +221,6 @@ namespace Interface
 		viewport_.setViewPosition(position);
 
 		setScrollBarRange();
-		repaintBackground();
 	}
 
 	size_t EffectsLaneSection::getIndexFromScreenPosition(juce::Point<int> point) const noexcept

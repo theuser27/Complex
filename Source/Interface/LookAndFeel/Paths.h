@@ -26,10 +26,44 @@ namespace Interface
   public:
     Paths() = delete;
 
-    static Path contrastIcon() { return fromSvgData(BinaryData::Icon_Contrast_svg, BinaryData::Icon_Contrast_svgSize); }
-    static Path powerButtonIcon()
+    static std::pair<Path, Path> filterIcon()
     {
-      static Path powerButtonPath = []()
+      return { fromSvgData(BinaryData::Icon_Filter_svg, BinaryData::Icon_Filter_svgSize), {} };
+    }
+    
+    static std::pair<Path, Path> contrastIcon()
+    {
+      float width = 14.0f;
+      float height = 14.0f;
+      float rounding = 6.0f;
+
+      Path strokePath;
+      Path fillPath;
+
+      strokePath.startNewSubPath(width - rounding, 0.0f);
+      strokePath.quadraticTo(width, 0.0f, width, rounding);
+      strokePath.lineTo(width, height - rounding);
+      strokePath.quadraticTo(width, height, width - rounding, height);
+      strokePath.lineTo(rounding, height);
+      strokePath.quadraticTo(0.0f, height, 0.0f, height - rounding);
+      strokePath.lineTo(0.0f, rounding);
+      strokePath.quadraticTo(0.0f, 0.0f, rounding, 0.0f);
+      strokePath.closeSubPath();
+
+      fillPath.startNewSubPath(width * 0.5f, 0.0f);
+      fillPath.lineTo(width - rounding, 0.0f);
+      fillPath.quadraticTo(width, 0.0f, width, rounding);
+      fillPath.lineTo(width, height - rounding);
+      fillPath.quadraticTo(width, height, width - rounding, height);
+      fillPath.lineTo(width * 0.5f, height);
+      fillPath.closeSubPath();
+
+      return { strokePath, fillPath };
+    }
+
+    static std::pair<Path, Path> powerButtonIcon()
+    {
+      static Path strokePath = []()
       {
         static constexpr float kAngle = 0.8f * k2Pi;
         static constexpr float kAngleStart = kPi - kAngle * 0.5f;
@@ -44,7 +78,7 @@ namespace Interface
         return path;
       }();
 
-      return powerButtonPath;
+      return { strokePath, {} };
     }
 
     static Path downTriangle()

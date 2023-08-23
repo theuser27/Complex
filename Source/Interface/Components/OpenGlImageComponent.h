@@ -3,12 +3,14 @@
 
     OpenGlImageComponent.h
     Created: 14 Dec 2022 2:07:44am
-    Author:  Lenovo
+    Author:  theuser27
 
   ==============================================================================
 */
 
 #pragma once
+
+#include <variant>
 
 #include "../LookAndFeel/Fonts.h"
 #include "OpenGlComponent.h"
@@ -30,34 +32,28 @@ namespace Interface
       image_.setBottomRight(1.0f, -1.0f);
       image_.setColor(Colours::white);
 
-      if (getName() == "")
-        setInterceptsMouseClicks(false, false);
+      setInterceptsMouseClicks(false, false);
     }
 
-    void paint([[maybe_unused]] Graphics &g) override { redrawImage(false); }
-
-    virtual void paintToImage(Graphics &g)
+    void paintBackground([[maybe_unused]] Graphics &g) override { }
+    
+    void redrawImage(bool clearOnRedraw = true);
+    virtual void paintToImage(Graphics &g, Component *target)
     {
-      Component *component = targetComponent_ ? targetComponent_ : this;
       if (paintEntireComponent_)
-        component->paintEntireComponent(g, false);
+        target->paintEntireComponent(g, false);
       else
-        component->paint(g);
+        target->paint(g);
     }
 
-    void init(OpenGlWrapper &openGl) override;
+    void init(OpenGlWrapper &openGl) override { image_.init(openGl); }
     void render(OpenGlWrapper &openGl, bool animate) override;
-    void destroy(OpenGlWrapper &openGl) override;
-
-    // the force argument is for when we KNOW we need to repaint
-    // (i.e. isn't a hierarchy propaged paint call from a top level object that paints its children) 
-  	void redrawImage(bool force = true);
+    void destroy() override { image_.destroy(); }
 
     void setTargetComponent(Component *targetComponent) { targetComponent_ = targetComponent; }
     void setScissor(bool scissor) { image_.setScissor(scissor); }
     void setUseAlpha(bool useAlpha) { image_.setUseAlpha(useAlpha); }
     void setColor(Colour color) { image_.setColor(color); }
-    OpenGlImage &image() { return image_; }
     void setActive(bool active) { active_ = active; }
     void setStatic(bool staticImage) { staticImage_ = staticImage; }
     void paintEntireComponent(bool paintEntireComponent) { paintEntireComponent_ = paintEntireComponent; }
@@ -68,10 +64,26 @@ namespace Interface
     bool active_ = true;
     bool staticImage_ = false;
     bool paintEntireComponent_ = true;
+    bool isDirty_ = true;
     std::unique_ptr<Image> drawImage_;
     OpenGlImage image_;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(OpenGlImageComponent)
+  };
+
+  class OpenGlBackground : public OpenGlImageComponent
+  {
+  public:
+    OpenGlBackground() : OpenGlImageComponent(typeid(OpenGlBackground).name()) { }
+
+    void paintToImage(Graphics &g, Component *target) override;
+    void setComponentToRedraw(std::variant<BaseSection *, OpenGlComponent *> componentToRedraw)
+    { componentToRedraw_ = componentToRedraw; }
+
+  protected:
+    std::variant<BaseSection *, OpenGlComponent *> componentToRedraw_;
+
+    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(OpenGlBackground)
   };
 
   template <typename ComponentType>
@@ -117,11 +129,11 @@ namespace Interface
       redoImage();
     }
 
-    OpenGlImageComponent *getImageComponent() { return &imageComponent_; }
-    void redoImage() { imageComponent_.redrawImage(); }
+    gl_ptr<OpenGlImageComponent> getImageComponent() { return imageComponent_; }
+    void redoImage() { imageComponent_->redrawImage(); }
 
   protected:
-    OpenGlImageComponent imageComponent_;
+    gl_ptr<OpenGlImageComponent> imageComponent_;
   };
 
   class OpenGlTextEditor : public OpenGlAutoImageComponent<TextEditor>, public TextEditor::Listener
@@ -129,7 +141,8 @@ namespace Interface
   public:
     OpenGlTextEditor(String name) : OpenGlAutoImageComponent(std::move(name))
     {
-      imageComponent_.setTargetComponent(this);
+      imageComponent_ = makeOpenGlComponent<OpenGlImageComponent>("Text Editor Image");
+      imageComponent_->setTargetComponent(this);
       addListener(this);
     }
 
@@ -169,7 +182,7 @@ namespace Interface
       TextEditor::resized();
       if (isMultiLine())
       {
-        auto indent = (int)imageComponent_.getValue(Skin::kLabelBackgroundRounding);
+        auto indent = (int)imageComponent_->getValue(Skin::kLabelBackgroundRounding);
         setIndents(indent, indent);
         return;
       }
@@ -194,12 +207,11 @@ namespace Interface
     {
       kTitle,
       kText,
-      kValues,
-      kNumFontTypes
+      kValues
     };
 
-    PlainTextComponent(String name, String text = {}) : OpenGlImageComponent(name), text_(std::move(text))
-    { setInterceptsMouseClicks(false, false); }
+    PlainTextComponent(String name, String text = {}) :
+  		OpenGlImageComponent(std::move(name)), text_(std::move(text)) { }
 
     void resized() override
     {
@@ -207,52 +219,47 @@ namespace Interface
       redrawImage();
     }
 
-    void paintToImage(Graphics &g) override;
+    void paintToImage(Graphics &g, Component *target) override;
 
     String getText() const { return text_; }
+    int getTotalWidth() const { return font_.getStringWidth(text_); }
+    void updateState();
 
-    void setText(String text)
-    {
-      if (text_ == text)
-        return;
-
-      text_ = std::move(text);
-      redrawImage();
-    }
-
-    void setTextHeight(float size) noexcept { text_size_ = size; }
-    void setFontType(FontType font_type) { font_type_ = font_type; }
-    void setJustification(Justification justification) { justification_ = justification; }
-    void setBuffer(int buffer) { buffer_ = buffer; }
+    void setText(String text) noexcept { isDirty_ = isDirty_ || text_ != text; text_ = std::move(text); redrawImage(); }
+    void setTextHeight(float textSize) noexcept { isDirty_ = isDirty_ || textSize_ != textSize; textSize_ = textSize; }
+    void setFontType(FontType type) noexcept { isDirty_ = isDirty_ || fontType_ != type; fontType_ = type; }
+    void setJustification(Justification justification) noexcept
+  	{ isDirty_ = isDirty_ || justification_ != justification; justification_ = justification; }
 
   private:
     String text_;
-    float text_size_ = 11.0f;
-    FontType font_type_ = kText;
+    float textSize_ = 11.0f;
+    Colour textColour_ = Colours::white;
+    Font font_{ Fonts::instance()->getInterVFont() };
+    FontType fontType_ = kText;
     Justification justification_ = Justification::centred;
-    int buffer_ = 0;
-
-    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(PlainTextComponent)
   };
 
   class PlainShapeComponent : public OpenGlImageComponent
   {
   public:
-    PlainShapeComponent(String name) : OpenGlImageComponent(std::move(name))
-    { setInterceptsMouseClicks(false, false); }
+    PlainShapeComponent(String name) : OpenGlImageComponent(std::move(name)) { }
 
-    void paintToImage(Graphics &g) override;
+    void resized() override { redrawImage(); }
+    void paintToImage(Graphics &g, Component *target) override;
 
-    void setShape(Path shape)
+    void setShapes(std::pair<Path, Path> strokeFillShapes)
     {
-      shape_ = std::move(shape);
+      strokeShape_ = std::move(strokeFillShapes.first);
+      fillShape_ = std::move(strokeFillShapes.second);
       redrawImage();
     }
 
     void setJustification(Justification justification) { justification_ = justification; }
 
   private:
-    Path shape_;
+    Path strokeShape_;
+    Path fillShape_;
     Justification justification_ = Justification::centred;
   };
 }

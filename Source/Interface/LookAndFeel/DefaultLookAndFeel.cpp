@@ -12,7 +12,6 @@
 #include "Skin.h"
 #include "Paths.h"
 #include "Fonts.h"
-#include "Interface/Sections/BaseSection.h"
 #include "Interface/Components/BaseSlider.h"
 
 namespace Interface
@@ -39,8 +38,8 @@ namespace Interface
     g.drawRoundedRectangle(0.5f, 0.5f, (float)width - 1.0f, (float)height - 1.0f, kPopupMenuBorder, 1.0f);
   }
 
-  void DefaultLookAndFeel::drawScrollbar(Graphics &g, ScrollBar &scrollBar, int x, int y, int width, 
-    int height, bool vertical, int thumbPosition, int thumbSize, bool mouseOver, bool mouseDown)
+  void DefaultLookAndFeel::drawScrollbar(Graphics &g, ScrollBar &scrollBar, int, int, int width, 
+    int height, bool, int thumbPosition, int thumbSize, bool mouseOver, bool mouseDown)
   {
     if (thumbSize >= height)
       return;
@@ -61,8 +60,8 @@ namespace Interface
         (float)thumbSize, (float)drawWidth / 2.0f);
   }
 
-  void DefaultLookAndFeel::drawComboBox(Graphics &g, int width, int height, const bool buttonDown,
-    int buttonX, int buttonY, int buttonW, int buttonH, ComboBox &box)
+  void DefaultLookAndFeel::drawComboBox(Graphics &g, int, int height, const bool,
+    int, int, int, int, ComboBox &box)
   {
     static constexpr float kRoundness = 4.0f;
     g.setColour(findColour(BubbleComponent::backgroundColourId));
@@ -75,7 +74,7 @@ namespace Interface
   }
 
   void DefaultLookAndFeel::drawTickBox(Graphics &g, Component &component, float x, float y, 
-    float w, float h, bool ticked, bool enabled, bool mouseOver, bool buttonDown)
+    float w, float h, bool ticked, bool, bool, bool)
   {
     static constexpr float kBorderPercent = 0.15f;
     if (ticked)
@@ -97,7 +96,7 @@ namespace Interface
   }
 
   void DefaultLookAndFeel::drawButtonBackground(Graphics &g, Button &button, 
-    const Colour &backgroundColor, bool hover, bool down)
+    const Colour &, bool, bool)
   {
     g.setColour(button.findColour(Skin::kPopupSelectorBackground, true));
     g.fillRoundedRectangle(button.getLocalBounds().toFloat(), 5.0f);
@@ -114,7 +113,7 @@ namespace Interface
   Font DefaultLookAndFeel::getPopupMenuFont()
   { return Fonts::instance()->getInterVFont().withPointHeight(14.0f); }
 
-  Font DefaultLookAndFeel::getSliderPopupFont(Slider &slider)
+  Font DefaultLookAndFeel::getSliderPopupFont(Slider &)
   { return Fonts::instance()->getInterVFont().withPointHeight(14.0f); }
 
 }

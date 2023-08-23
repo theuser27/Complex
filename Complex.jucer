@@ -3,11 +3,10 @@
 <JUCERPROJECT id="MQJhEl" name="Complex" projectType="audioplug" addUsingNamespaceToJuceHeader="1"
               jucerFormatVersion="1" cppLanguageStandard="20" pluginFormats="buildStandalone,buildVST3"
               displaySplashScreen="1" pluginCode="Cmpx" pluginManufacturerCode="Lirn"
-              pluginManufacturer="Lirion" version="0.7.0" pluginDesc="Multi-lane Spectral Suite">
+              pluginManufacturer="Lirion" version="0.7.0.1" pluginDesc="Multi-lane Spectral Suite">
   <MAINGROUP id="zNsp6a" name="Complex">
     <GROUP id="{65E7BD15-F97F-DFD8-8405-B6E4F140ACA3}" name="Icons">
-      <FILE id="xB9sL8" name="Icon_Contrast.svg" compile="0" resource="1"
-            file="Icons/Icon_Contrast.svg"/>
+      <FILE id="W5loec" name="Icon_Filter.svg" compile="0" resource="1" file="Icons/Icon_Filter.svg"/>
     </GROUP>
     <GROUP id="{7DCBD02E-5965-7719-7CD3-51C632FE14C8}" name="Fonts">
       <FILE id="P00tpO" name="D-DIN-Bold.ttf" compile="0" resource="1" file="Fonts/D-DIN-Bold.ttf"/>
@@ -79,6 +78,8 @@
         <FILE id="zGFnUK" name="ProcessorTree.cpp" compile="1" resource="0"
               file="Source/Plugin/ProcessorTree.cpp"/>
         <FILE id="h6BWjT" name="ProcessorTree.h" compile="0" resource="0" file="Source/Plugin/ProcessorTree.h"/>
+        <FILE id="PrOzjp" name="Renderer.cpp" compile="1" resource="0" file="Source/Plugin/Renderer.cpp"/>
+        <FILE id="Hbp2tZ" name="Renderer.h" compile="0" resource="0" file="Source/Plugin/Renderer.h"/>
       </GROUP>
       <GROUP id="{F4BA8DFF-28C8-EF00-62C9-202FF4771AD8}" name="Interface">
         <GROUP id="{4D931D97-4A4F-8153-12B4-A9C0FA52764F}" name="LookAndFeel">
@@ -113,10 +114,6 @@
                 file="Source/Interface/Sections/EffectsStateSection.cpp"/>
           <FILE id="eQuSO0" name="EffectsStateSection.h" compile="0" resource="0"
                 file="Source/Interface/Sections/EffectsStateSection.h"/>
-          <FILE id="k90D0h" name="InterfaceEngineLink.cpp" compile="1" resource="0"
-                file="Source/Interface/Sections/InterfaceEngineLink.cpp"/>
-          <FILE id="FzPKX4" name="InterfaceEngineLink.h" compile="0" resource="0"
-                file="Source/Interface/Sections/InterfaceEngineLink.h"/>
           <FILE id="dQn10O" name="MacroSection.cpp" compile="1" resource="0"
                 file="Source/Interface/Sections/MacroSection.cpp"/>
           <FILE id="R6UyZo" name="MacroSection.h" compile="0" resource="0" file="Source/Interface/Sections/MacroSection.h"/>
@@ -129,22 +126,21 @@
           <FILE id="EB8cKV" name="Popups.h" compile="0" resource="0" file="Source/Interface/Sections/Popups.h"/>
         </GROUP>
         <GROUP id="{50266DCB-6FE6-2EB4-7810-AA54D2CA723F}" name="Components">
-          <FILE id="OFZQ0M" name="LaneSelector.cpp" compile="1" resource="0"
-                file="Source/Interface/Components/LaneSelector.cpp"/>
-          <FILE id="j1bcSK" name="LaneSelector.h" compile="0" resource="0" file="Source/Interface/Components/LaneSelector.h"/>
+          <FILE id="nJfXup" name="BarRenderer.cpp" compile="1" resource="0" file="Source/Interface/Components/BarRenderer.cpp"/>
+          <FILE id="sZaq5X" name="BarRenderer.h" compile="0" resource="0" file="Source/Interface/Components/BarRenderer.h"/>
+          <FILE id="D6nWjT" name="BaseButton.cpp" compile="1" resource="0" file="Source/Interface/Components/BaseButton.cpp"/>
+          <FILE id="tHcNDP" name="BaseButton.h" compile="0" resource="0" file="Source/Interface/Components/BaseButton.h"/>
+          <FILE id="iKXGhc" name="BaseControl.cpp" compile="1" resource="0" file="Source/Interface/Components/BaseControl.cpp"/>
+          <FILE id="eI5KYW" name="BaseControl.h" compile="0" resource="0" file="Source/Interface/Components/BaseControl.h"/>
+          <FILE id="fUp6hX" name="BaseSlider.cpp" compile="1" resource="0" file="Source/Interface/Components/BaseSlider.cpp"/>
+          <FILE id="c8fHLI" name="BaseSlider.h" compile="0" resource="0" file="Source/Interface/Components/BaseSlider.h"/>
           <FILE id="Jgtfgx" name="DraggableComponent.cpp" compile="1" resource="0"
                 file="Source/Interface/Components/DraggableComponent.cpp"/>
           <FILE id="PFwFw7" name="DraggableComponent.h" compile="0" resource="0"
                 file="Source/Interface/Components/DraggableComponent.h"/>
-          <FILE id="IjUl71" name="PinBoundsBox.cpp" compile="1" resource="0"
-                file="Source/Interface/Components/PinBoundsBox.cpp"/>
-          <FILE id="lTHyNW" name="PinBoundsBox.h" compile="0" resource="0" file="Source/Interface/Components/PinBoundsBox.h"/>
-          <FILE id="nJfXup" name="BarRenderer.cpp" compile="1" resource="0" file="Source/Interface/Components/BarRenderer.cpp"/>
-          <FILE id="sZaq5X" name="BarRenderer.h" compile="0" resource="0" file="Source/Interface/Components/BarRenderer.h"/>
-          <FILE id="koM8rk" name="OpenGlBackground.cpp" compile="1" resource="0"
-                file="Source/Interface/Components/OpenGlBackground.cpp" skipPCH="0"/>
-          <FILE id="lYYjPY" name="OpenGlBackground.h" compile="0" resource="0"
-                file="Source/Interface/Components/OpenGlBackground.h"/>
+          <FILE id="OFZQ0M" name="LaneSelector.cpp" compile="1" resource="0"
+                file="Source/Interface/Components/LaneSelector.cpp"/>
+          <FILE id="j1bcSK" name="LaneSelector.h" compile="0" resource="0" file="Source/Interface/Components/LaneSelector.h"/>
           <FILE id="lwVbDW" name="OpenGlComponent.cpp" compile="1" resource="0"
                 file="Source/Interface/Components/OpenGlComponent.cpp"/>
           <FILE id="tzoee2" name="OpenGlComponent.h" compile="0" resource="0"
@@ -165,10 +161,9 @@
                 file="Source/Interface/Components/OpenGlMultiQuad.h"/>
           <FILE id="uJxcL0" name="Overlay.cpp" compile="1" resource="0" file="Source/Interface/Components/Overlay.cpp"/>
           <FILE id="bwhbWS" name="Overlay.h" compile="0" resource="0" file="Source/Interface/Components/Overlay.h"/>
-          <FILE id="D6nWjT" name="BaseButton.cpp" compile="1" resource="0" file="Source/Interface/Components/BaseButton.cpp"/>
-          <FILE id="tHcNDP" name="BaseButton.h" compile="0" resource="0" file="Source/Interface/Components/BaseButton.h"/>
-          <FILE id="fUp6hX" name="BaseSlider.cpp" compile="1" resource="0" file="Source/Interface/Components/BaseSlider.cpp"/>
-          <FILE id="c8fHLI" name="BaseSlider.h" compile="0" resource="0" file="Source/Interface/Components/BaseSlider.h"/>
+          <FILE id="IjUl71" name="PinBoundsBox.cpp" compile="1" resource="0"
+                file="Source/Interface/Components/PinBoundsBox.cpp"/>
+          <FILE id="lTHyNW" name="PinBoundsBox.h" compile="0" resource="0" file="Source/Interface/Components/PinBoundsBox.h"/>
           <FILE id="uqwIPe" name="PresetSelector.cpp" compile="1" resource="0"
                 file="Source/Interface/Components/PresetSelector.cpp"/>
           <FILE id="jtGKCf" name="PresetSelector.h" compile="0" resource="0"
@@ -287,7 +282,7 @@
     </GROUP>
   </MAINGROUP>
   <JUCEOPTIONS JUCE_STRICT_REFCOUNTEDPOINTER="1" JUCE_VST3_CAN_REPLACE_VST2="0"
-               JUCE_PLUGINHOST_VST3="1"/>
+               JUCE_PLUGINHOST_VST3="1" JUCE_WEB_BROWSER="0"/>
   <EXPORTFORMATS>
     <VS2022 targetFolder="Builds/VisualStudio2022" extraDefs="INTEL_IPP=1"
             IPP1ALibrary="Static_Library">
@@ -306,15 +301,14 @@
         <MODULEPATH id="juce_audio_formats" path="E:\JUCE dev\JUCE 7.0\JUCE\modules"/>
         <MODULEPATH id="juce_audio_plugin_client" path="E:\JUCE dev\JUCE 7.0\JUCE\modules"/>
         <MODULEPATH id="juce_audio_processors" path="E:\JUCE dev\JUCE 7.0\JUCE\modules"/>
-        <MODULEPATH id="juce_audio_utils" path="E:\JUCE dev\JUCE 7.0\JUCE\modules"/>
         <MODULEPATH id="juce_core" path="E:\JUCE dev\JUCE 7.0\JUCE\modules"/>
         <MODULEPATH id="juce_data_structures" path="E:\JUCE dev\JUCE 7.0\JUCE\modules"/>
-        <MODULEPATH id="juce_dsp" path="E:\JUCE dev\JUCE 7.0\JUCE\modules"/>
         <MODULEPATH id="juce_events" path="E:\JUCE dev\JUCE 7.0\JUCE\modules"/>
         <MODULEPATH id="juce_graphics" path="E:\JUCE dev\JUCE 7.0\JUCE\modules"/>
         <MODULEPATH id="juce_gui_basics" path="E:\JUCE dev\JUCE 7.0\JUCE\modules"/>
-        <MODULEPATH id="juce_gui_extra" path="E:\JUCE dev\JUCE 7.0\JUCE\modules"/>
         <MODULEPATH id="juce_opengl" path="../JUCE 7.0.2/JUCE/modules"/>
+        <MODULEPATH id="juce_gui_extra" path="../JUCE 7.0.5/JUCE/modules"/>
+        <MODULEPATH id="juce_audio_utils" path="../JUCE 7.0.5/JUCE/modules"/>
       </MODULEPATHS>
     </VS2022>
   </EXPORTFORMATS>
@@ -328,7 +322,6 @@
     <MODULE id="juce_audio_utils" showAllCode="1" useLocalCopy="0" useGlobalPath="1"/>
     <MODULE id="juce_core" showAllCode="1" useLocalCopy="0" useGlobalPath="1"/>
     <MODULE id="juce_data_structures" showAllCode="1" useLocalCopy="0" useGlobalPath="1"/>
-    <MODULE id="juce_dsp" showAllCode="1" useLocalCopy="0" useGlobalPath="1"/>
     <MODULE id="juce_events" showAllCode="1" useLocalCopy="0" useGlobalPath="1"/>
     <MODULE id="juce_graphics" showAllCode="1" useLocalCopy="0" useGlobalPath="1"/>
     <MODULE id="juce_gui_basics" showAllCode="1" useLocalCopy="0" useGlobalPath="1"/>

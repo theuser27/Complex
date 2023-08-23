@@ -21,7 +21,7 @@ ComplexAudioProcessor::ComplexAudioProcessor()
 
 	for (auto &parameterDetails : pluginParameterList)
 	{
-		auto parameter = getProcessorParameter(soundEngine_->getProcessorId(), parameterDetails.name);
+		auto parameter = getProcessorParameter(soundEngine_->getProcessorId(), parameterDetails.id);
 		if (auto parameterPointer = parameter.lock())
 		{
 			auto *bridge = new ParameterBridge(this, (u32)(-1), parameterPointer->getParameterLink());
@@ -29,44 +29,6 @@ ComplexAudioProcessor::ComplexAudioProcessor()
 			addParameter(bridge);
 		}
 	}
-
-	// temporary, used for testing
-	/*u32 index = 0;
-	for (auto &parameterDetails : effectModuleParameterList)
-	{
-		auto parameter = getProcessorParameter(3, parameterDetails.name);
-		if (auto parameterPointer = parameter.lock())
-		{
-			auto *bridge = new ParameterBridge(this, index, parameterPointer->getParameterLink());
-			parameterBridges_.push_back(bridge);
-			addParameter(bridge);
-		}
-		index++;
-	}
-
-	for (auto &parameterDetails : baseEffectParameterList)
-	{
-		auto parameter = getProcessorParameter(4, parameterDetails.name);
-		if (auto parameterPointer = parameter.lock())
-		{
-			auto *bridge = new ParameterBridge(this, index, parameterPointer->getParameterLink());
-			parameterBridges_.push_back(bridge);
-			addParameter(bridge);
-		}
-		index++;
-	}
-
-	for (auto &parameterDetails : dynamicsEffectParameterList[0])
-	{
-		auto parameter = getProcessorParameter(4, parameterDetails.name);
-		if (auto parameterPointer = parameter.lock())
-		{
-			auto *bridge = new ParameterBridge(this, index, parameterPointer->getParameterLink());
-			parameterBridges_.push_back(bridge);
-			addParameter(bridge);
-		}
-		index++;
-	}*/
 
 	for (u32 i = 0; i < kMaxParameterMappings; i++)
 	{
@@ -86,7 +48,7 @@ int ComplexAudioProcessor::getNumPrograms() { return 1; }
 int ComplexAudioProcessor::getCurrentProgram() { return 0; }
 void ComplexAudioProcessor::setCurrentProgram([[maybe_unused]] int index) {}
 const juce::String ComplexAudioProcessor::getProgramName([[maybe_unused]] int index) { return {}; }
-void ComplexAudioProcessor::changeProgramName([[maybe_unused]] int index, [[maybe_unused]] const juce::String &newName) {}
+void ComplexAudioProcessor::changeProgramName([[maybe_unused]] int index, [[maybe_unused]] const juce::String &newName) { }
 
 //==============================================================================
 void ComplexAudioProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)

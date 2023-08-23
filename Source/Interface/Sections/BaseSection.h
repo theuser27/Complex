@@ -15,13 +15,14 @@
 #include "../LookAndFeel/Skin.h"
 #include "../Components/BaseButton.h"
 #include "../Components/BaseSlider.h"
+#include "Plugin/Renderer.h"
 
 namespace Interface
 {
 	class ModulationButton;
 
 	class BaseSection : public Component, public Slider::Listener, public Button::Listener,
-		public BaseButton::ButtonListener, public TextSelector::TextSelectorListener
+		public BaseSlider::SliderListener, public BaseButton::Listener, public TextSelector::TextSelectorListener
 	{
 	public:
 		static constexpr int kDefaultActivatorSize = 12;
@@ -59,12 +60,12 @@ namespace Interface
 		static constexpr float kDefaultWidgetLineWidth = 4.0f;
 		static constexpr float kDefaultWidgetFillCenter = 0.0f;
 
-		class OffOverlay : public OpenGlQuad
+		class OffOverlayQuad : public OpenGlQuad
 		{
 		public:
-			OffOverlay() : OpenGlQuad(Shaders::kColorFragment) { }
+			OffOverlayQuad() : OpenGlQuad(Shaders::kColorFragment) { }
 
-			void paint([[maybe_unused]] Graphics &g) override { }
+			void paintBackground(Graphics &) override { }
 		};
 
 		BaseSection(std::string_view name);
@@ -75,12 +76,16 @@ namespace Interface
 
 		void sliderValueChanged([[maybe_unused]] Slider *movedSlider) override { }
 		void buttonClicked([[maybe_unused]] Button *clickedButton) override { }
+		void guiChanged([[maybe_unused]] BaseSlider *slider) override { }
 		void guiChanged(BaseButton *button) override;
 		void resizeForText(TextSelector *textSelector, int requestedWidthChange) override;
 
 		// paint anything that doesn't move/is static
 		virtual void paintBackground(Graphics &g);
 		virtual void repaintBackground();
+		void paintOpenGlBackground(Graphics &g, OpenGlComponent *openGlComponent);
+		void repaintOpenGlBackground(OpenGlComponent *openGlComponent);
+		void paintOpenGlChildrenBackgrounds(Graphics &g);
 
 		Path getRoundedPath(Rectangle<float> bounds, float topRounding = 0.0f, float bottomRounding = 0.0f) const;
 		void paintBody(Graphics &g, Rectangle<int> bounds, float topRounding = 0.0f, float bottomRounding = 0.0f) const;
@@ -92,39 +97,21 @@ namespace Interface
 		void paintTabShadow(Graphics &g) { paintTabShadow(g, getLocalBounds()); }
 		virtual void paintBackgroundShadow(Graphics &) { }
 		void paintKnobShadows(Graphics &g);
-		virtual void setScaling(float ratio);
-		int getComponentShadowWidth() const noexcept { return (int)std::round(scaling_ * 2.0f); }
+		void setScaling(float scale);
+		float getComponentShadowWidth() const noexcept { return scaling_ * 2.0f; }
 
-		Font getLabelFont() const noexcept;
-		void setLabelFont(Graphics &g);
 		Rectangle<int> getDividedAreaBuffered(Rectangle<int> full_area, int num_sections, int section, int buffer);
 		Rectangle<int> getDividedAreaUnbuffered(Rectangle<int> full_area, int num_sections, int section, int buffer);
 		Rectangle<int> getLabelBackgroundBounds(Rectangle<int> bounds, bool text_component = false);
 		Rectangle<int> getLabelBackgroundBounds(Component *component, bool text_component = false)
-		{
-			return getLabelBackgroundBounds(component->getBounds(), text_component);
-		}
-		void drawLabel(Graphics &g, String text, Rectangle<int> component_bounds, bool text_component = false);
-		void drawSliderLabel(Graphics &g, BaseSlider *slider) const;
-		void drawButtonLabel(Graphics &g, BaseButton *button) const;
-		void drawSliderBackground(Graphics &g, BaseSlider *slider) const;
-		void drawLabelForComponent(Graphics &g, String text, Component *component, bool text_component = false)
-		{ drawLabel(g, std::move(text), component->getBounds(), text_component); }
-		void drawTextBelowComponent(Graphics &g, String text, Component *component, int space, int padding = 0);
+		{ return getLabelBackgroundBounds(component->getBounds(), text_component); }
+		
+		// main opengl render loop
+		virtual void renderOpenGlComponents(OpenGlWrapper &openGl, bool animate = false);
+		void destroyAllOpenGlComponents();
 
-		void paintChildrenBackgrounds(Graphics &g);
-		void paintOpenGlChildrenBackgrounds(Graphics &g);
-		void paintChildBackground(Graphics &g, BaseSection *child);
-		void paintChildShadow(Graphics &g, BaseSection *child);
-		void paintChildrenShadows(Graphics &g);
-		void paintOpenGlBackground(Graphics &g, OpenGlComponent *openGlComponent);
-		void drawTextComponentBackground(Graphics &g, Rectangle<int> bounds, bool extend_to_label);
-		virtual void initOpenGlComponents(OpenGlWrapper &openGl);
-		virtual void renderOpenGlComponents(OpenGlWrapper &openGl, bool animate);
-		virtual void destroyOpenGlComponents(OpenGlWrapper &openGl);
-
-		void showPopupSelector(Component *source, Point<int> position, const PopupItems &options,
-			std::function<void(int)> callback, std::function<void()> cancel = { });
+		void showPopupSelector(const Component *source, Point<int> position, PopupItems options,
+			std::function<void(int)> callback, std::function<void()> cancel = {}) const;
 		void showPopupDisplay(Component *source, const std::string &text,
 			BubbleComponent::BubblePlacement placement, bool primary);
 		void hidePopupDisplay(bool primary);
@@ -141,11 +128,9 @@ namespace Interface
 
 		virtual void addSubSection(BaseSection *section, bool show = true);
 		virtual void removeSubSection(BaseSection *section);
-		void addButton(BaseButton *button);
-		void removeButton(BaseButton *button);
-		void addSlider(BaseSlider *slider);
-		void removeSlider(BaseSlider *slider);
-		void addOpenGlComponent(OpenGlComponent *openGlComponent, bool toBeginning = false);
+		void addControl(BaseControl *control);
+		void removeControl(BaseControl *control);
+		void addOpenGlComponent(gl_ptr<OpenGlComponent> openGlComponent, bool toBeginning = false);
 		void removeOpenGlComponent(OpenGlComponent *openGlComponent);
 
 		float getScaling() const noexcept { return scaling_; }
@@ -162,25 +147,25 @@ namespace Interface
 		float getModFontSize() const noexcept { return getValue(Skin::kModulationFontSize); }
 		float getWidgetMargin() const noexcept { return getValue(Skin::kWidgetMargin); }
 		float getWidgetRounding() const noexcept { return getValue(Skin::kWidgetMargin); }
-		int getPopupWidth() const noexcept { return (int)((float)kDefaultPopupMenuWidth * scaling_); }
+		int getPopupWidth() const noexcept { return scaleValueRoundInt(kDefaultPopupMenuWidth); }
 		auto getSectionOverride() const noexcept { return skinOverride_; }
 		auto *getParent() const noexcept { return parent_; }
 
-		auto *getButton(std::string_view buttonName) noexcept { return buttons_.at(buttonName); }
-		auto *getSlider(std::string_view sliderName) noexcept { return sliders_.at(sliderName); }
+		auto *getControl(std::string_view name) noexcept { return controls_.at(name); }
 
 		void setSkinOverride(Skin::SectionOverride skinOverride) noexcept { skinOverride_ = skinOverride; }
 		void setParent(const BaseSection *parent) noexcept { parent_ = parent; }
-		void setSkin(Skin *skin) noexcept
+		void setRenderer(Renderer *renderer) noexcept
 		{
-			skin_ = skin;
+			renderer_ = renderer;
 			for (auto &subSection : subSections_)
-				subSection->setSkin(skin);
+				subSection->setRenderer(renderer_);
 		}
 
 		// helper functions
-		float getValue(Skin::ValueId valueId) const { return skin_->getValue(this, valueId); }
-		Colour getColour(Skin::ColorId colorId) const { return skin_->getColor(this, colorId); }
+		Renderer *getInterfaceLink() const { return renderer_; }
+		float getValue(Skin::ValueId valueId) const { return renderer_->getSkin()->getValue(this, valueId); }
+		Colour getColour(Skin::ColorId colorId) const { return renderer_->getSkin()->getColor(this, colorId); }
 		float scaleValue(float value) const noexcept { return scaling_ * value; }
 		int scaleValueRoundInt(float value) const noexcept { return (int)std::round(scaling_ * value); }
 		// returns the xPosition of the horizontally centered element
@@ -190,35 +175,33 @@ namespace Interface
 		static int centerVertically(int yPosition, int elementHeight, int containerHeight) noexcept
 		{ return yPosition + (containerHeight - elementHeight) / 2; }
 
-
 	protected:
 		void setActivator(BaseButton *activator);
 		void createOffOverlay();
-		void placeRotaryOption(Component *option, BaseSlider *rotary);
-		void placeKnobsInArea(Rectangle<int> area, std::vector<Component *> knobs);
+		void createBackground();
 
 		virtual Rectangle<int> getPowerButtonBounds() const noexcept
 		{
-			return {0, 0, (int)std::round(scaleValue(kDefaultActivatorSize)),
+			return { 0, 0, (int)std::round(scaleValue(kDefaultActivatorSize)),
 				(int)std::round(scaleValue(kDefaultActivatorSize)) };
 		}
 
 		float getDisplayScale() const;
 
 		std::vector<BaseSection *> subSections_{};
-		std::vector<OpenGlComponent *> openGlComponents_{};
+		std::vector<gl_ptr<OpenGlComponent>> openGlComponents_{};
+		gl_ptr<OpenGlBackground> background_ = nullptr;
+		gl_ptr<OffOverlayQuad> offOverlayQuad_ = nullptr;
 
-		std::map<std::string_view, BaseSlider *> sliders_{};
-		std::map<std::string_view, BaseButton *> buttons_{};
+		std::map<std::string_view, BaseControl *> controls_{};
 		std::map<std::string_view, ModulationButton *> modulationButtons_{};
 
-		const BaseSection *parent_ = nullptr;
 		BaseButton *activator_ = nullptr;
 
-		std::unique_ptr<OffOverlay> offOverlay_ = nullptr;
+		Renderer *renderer_ = nullptr;
+		const BaseSection *parent_ = nullptr;
 
 		Skin::SectionOverride skinOverride_ = Skin::kNone;
-		Skin *skin_ = nullptr;
 		float scaling_ = 1.0f;
 		bool active_ = true;
 	};

@@ -96,14 +96,8 @@ namespace Generation
 	{
 		using namespace Framework;
 		for (size_t i = 0; i < size; i++)
-		{
-			if (details[i].name.empty())
-				continue;
-
-			processorParameters_.data.emplace_back(details[i].name,
-				std::make_shared<ParameterValue>(Parameters::getDetails(details[i].name), processorId_));
-		}
-			
+			processorParameters_.data.emplace_back(details[i].id,
+				std::make_shared<ParameterValue>(Parameters::getDetails(details[i].id), processorId_));
 	}
 
 	void BaseProcessor::updateParameters(UpdateFlag flag, float sampleRate, bool updateSubModuleParameters)

@@ -122,9 +122,9 @@ namespace Interface
     fill_position_ = getAttribute(*fill_shader_, "position");
   }
 
-  void OpenGlLineRenderer::destroy(OpenGlWrapper &open_gl)
+  void OpenGlLineRenderer::destroy()
   {
-    OpenGlComponent::destroy(open_gl);
+    OpenGlComponent::destroy();
 
     shader_ = nullptr;
     position_ = nullptr;

@@ -12,7 +12,6 @@
 
 #include <concepts>
 #include <span>
-#include "Third Party/constexpr-to-string/to_string.hpp"
 #include "common.h"
 
 namespace utils
@@ -31,6 +30,10 @@ namespace utils
 		else if constexpr (sizeof...(args) > 0)
 			return getNthElement<N, I + 1>(std::forward<Args>(args)...);
 	}
+
+	// helper type for the std::visit visitor
+	template<class... Ts>
+	struct overloaded : Ts... { using Ts::operator()...; };
 
 	strict_inline float mod(double value, double *divisor) noexcept
 	{ return static_cast<float>(modf(value, divisor)); }

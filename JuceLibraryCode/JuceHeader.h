@@ -22,7 +22,6 @@
 #include <juce_audio_utils/juce_audio_utils.h>
 #include <juce_core/juce_core.h>
 #include <juce_data_structures/juce_data_structures.h>
-#include <juce_dsp/juce_dsp.h>
 #include <juce_events/juce_events.h>
 #include <juce_graphics/juce_graphics.h>
 #include <juce_gui_basics/juce_gui_basics.h>
@@ -51,7 +50,7 @@ namespace ProjectInfo
 {
     const char* const  projectName    = "Complex";
     const char* const  companyName    = "";
-    const char* const  versionString  = "0.7.0";
-    const int          versionNumber  = 0x700;
+    const char* const  versionString  = "0.7.0.1";
+    const int          versionNumber  = 0x70001;
 }
 #endif

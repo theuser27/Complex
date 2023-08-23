@@ -1,7 +1,7 @@
 /*
 	==============================================================================
 
-		PluginSlider.cpp
+		BaseSlider.cpp
 		Created: 14 Dec 2022 6:59:59am
 		Author:  theuser27
 
@@ -11,89 +11,36 @@
 #include "Framework/update_types.h"
 #include "BaseSlider.h"
 #include "../LookAndFeel/Paths.h"
-#include "../Sections/InterfaceEngineLink.h"
+#include "Plugin/Renderer.h"
+
 #include "../Sections/BaseSection.h"
 
 namespace Interface
 {
-	void SliderLabel::setParent(BaseSlider *parent) noexcept
-	{
-		parent_ = parent;
-		labelText_ = (!parent->hasParameter()) ? parent->getName() :
-			parent->getParameterDetails().displayName.data();
-	}
-
-	void SliderLabel::resized()
-	{
-		auto height = getHeight();
-		if (labelModifier_)
-			labelModifier_->setBounds(0, height / 2, labelModifier_->getWidth(), height / 2);
-		else if (valueEntry_)
-		{
-			valueEntry_->setVisible(true);
-			valueEntry_->setBounds(0, height / 2, valueEntry_->getWidth(), height / 2);
-		}
-	}
-
-	void SliderLabel::paint(Graphics& g)
-	{
-		// painting only the label text, the other components will be handled by the owning section
-		if (!parent_)
-			return;
-
-		auto textRectangle = Rectangle{ 0.0f, 0.0f, (float)getWidth(), (float)getHeight() };
-		g.setFont(usedFont_);
-		g.setColour(parent_->getColour(Skin::kNormalText));
-		g.drawText(parent_->getParameterDetails().displayName.data(), textRectangle, textJustification_);
-	}
-
-	int SliderLabel::getTotalWidth() const
-	{
-		auto totalWidth = usedFont_.getStringWidthFloat(labelText_);
-
-		if (labelModifier_)
-			totalWidth = std::max(totalWidth, (float)labelModifier_->getTotalDrawWidth());
-		else if (valueEntry_)
-			totalWidth = std::max(totalWidth, parent_->getNumericTextMaxWidth(valueEntry_->getUsedFont()));
-
-		return (int)std::round(totalWidth);
-	}
-
 	BaseSlider::BaseSlider(Framework::ParameterValue *parameter, String name, SliderStyle style) : Slider(style, NoTextBox)
 	{
-		sliderQuad_.setTargetComponent(this);
+		quadComponent_ = makeOpenGlComponent<OpenGlQuad>(Shaders::kRotarySliderFragment, "Slider Quad");
+		quadComponent_->setTargetComponent(this);
+		quadComponent_->setInterceptsMouseClicks(false, false);
 
-		imageComponent_.paintEntireComponent(false);
-		imageComponent_.setTargetComponent(this);
-		imageComponent_.setScissor(true);
+		imageComponent_ = makeOpenGlComponent<OpenGlImageComponent>("Slider Image");
+		imageComponent_->paintEntireComponent(false);
+		imageComponent_->setTargetComponent(this);
+		imageComponent_->setScissor(true);
+		imageComponent_->setInterceptsMouseClicks(false, false);
 
-		sliderQuad_.setActive(false);
-		imageComponent_.setActive(false);
-
-		textEntry_ = std::make_unique<OpenGlTextEditor>("textEntry");
-		textEntry_->setMultiLine(false);
-		textEntry_->setScrollToShowCursor(true);
-		textEntry_->addListener(this);
-		textEntry_->setSelectAllWhenFocused(true);
-		textEntry_->setKeyboardType(TextEditor::numericKeyboard);
-		textEntry_->setJustification(Justification::centred);
-		textEntry_->setIndents(0, 0);
-		textEntry_->setBorder({ 0, 0, 0, 0 });
-		textEntry_->setAlwaysOnTop(true);
-		addChildComponent(textEntry_.get());
+		quadComponent_->setActive(true);
+		imageComponent_->setActive(true);
 
 		setWantsKeyboardFocus(true);
 
 		if (!parameter)
 		{
-			setName(name);
-			hasParameter_ = false;
+			BaseControl::setName(std::move(name));
 			return;
 		}
 		
-		hasParameter_ = true;
-		changeLinkedParameter(parameter);
-		label_.setParent(this);
+		changeLinkedParameter(*parameter);
 
 		setDoubleClickReturnValue(true, details_.defaultNormalisedValue);
 		setVelocityBasedMode(false);
@@ -101,39 +48,14 @@ namespace Interface
 		setSliderSnapsToMousePosition(false);
 		setScrollWheelEnabled(false);
 		setDefaultRange();
-	}
-
-	Framework::ParameterValue *BaseSlider::changeLinkedParameter(Framework::ParameterValue *parameter, 
-		bool getValueFromParameter)
-	{
-		setName(parameter->getParameterDetails().name.data());
-		auto replacedLink = setParameterLink(parameter->getParameterLink());
-
-		Framework::ParameterValue *replacedParameter = nullptr;
-		if (replacedLink)
-			replacedParameter = replacedLink->parameter;
-
-		if (getValueFromParameter)
-		{
-			setValue(parameter->getNormalisedValue(), NotificationType::dontSendNotification);
-			setValueSafe(parameter->getNormalisedValue());
-		}
-		else
-		{
-			parameter->updateValues(getSampleRate(), (float)getValue());
-			setValueSafe(getValue());
-		}
-
-		setParameterDetails(parameter->getParameterDetails());
-
-		return replacedParameter;
+		setRepaintsOnMouseActivity(false);
 	}
 
 	void BaseSlider::mouseDown(const MouseEvent &e)
 	{
 		updateValue();
 
-		if (e.mods.isAltDown())
+		if (e.mods.isAltDown() && canInputValue_)
 		{
 			showTextEntry();
 			return;
@@ -142,7 +64,7 @@ namespace Interface
 		if (e.mods.isPopupMenu())
 		{
 			PopupItems options = createPopupMenu();
-			parent_->showPopupSelector(this, e.getPosition(), options, 
+			parent_->showPopupSelector(this, e.getPosition(), std::move(options), 
 				[this](int selection) { handlePopupResult(selection); });
 			return;
 		}
@@ -154,8 +76,8 @@ namespace Interface
 		// mouseDown calls mouseDrag internally
 		Slider::mouseDown(e);
 
-		sliderQuad_.getAnimator().setIsClicked(true);
-		imageComponent_.getAnimator().setIsClicked(true);
+		quadComponent_->getAnimator().setIsClicked(true);
+		imageComponent_->getAnimator().setIsClicked(true);
 
 		for (SliderListener *listener : sliderListeners_)
 			listener->mouseDown(this);
@@ -180,8 +102,8 @@ namespace Interface
 
 		Slider::mouseUp(e);
 
-		sliderQuad_.getAnimator().setIsClicked(false);
-		imageComponent_.getAnimator().setIsClicked(false);
+		quadComponent_->getAnimator().setIsClicked(false);
+		imageComponent_->getAnimator().setIsClicked(false);
 
 		setValueSafe(getValue());
 		setValueToHost();
@@ -198,8 +120,8 @@ namespace Interface
 	{
 		Slider::mouseEnter(e);
 
-		sliderQuad_.getAnimator().setIsHovered(true);
-		imageComponent_.getAnimator().setIsHovered(true);
+		quadComponent_->getAnimator().setIsHovered(true);
+		imageComponent_->getAnimator().setIsHovered(true);
 
 		for (SliderListener *listener : sliderListeners_)
 			listener->hoverStarted(this);
@@ -215,8 +137,8 @@ namespace Interface
 	{
 		Slider::mouseExit(e);
 
-		sliderQuad_.getAnimator().setIsHovered(false);
-		imageComponent_.getAnimator().setIsHovered(false);
+		quadComponent_->getAnimator().setIsHovered(false);
+		imageComponent_->getAnimator().setIsHovered(false);
 
 		for (SliderListener *listener : sliderListeners_)
 			listener->hoverEnded(this);
@@ -259,49 +181,6 @@ namespace Interface
 			parameterLink_->hostControl->endChangeGesture();
 	}
 
-	void BaseSlider::focusLost(FocusChangeType cause)
-	{
-		for (SliderListener *listener : sliderListeners_)
-			listener->focusLost(this);
-	}
-
-	void BaseSlider::parentHierarchyChanged()
-	{
-		parent_ = findParentComponentOfClass<BaseSection>();
-		Slider::parentHierarchyChanged();
-	}
-
-	void BaseSlider::textEditorReturnKeyPressed(TextEditor &editor)
-	{
-		updateValueFromTextEntry();
-		textEntry_->setVisible(false);
-
-		for (SliderListener *listener : sliderListeners_)
-			listener->menuFinished(this);
-	}
-
-	bool BaseSlider::updateValue()
-	{
-		if (!hasParameter())
-			return false;
-
-		auto oldValue = getValue();
-		auto newValue = getValueSafe();
-
-		bool needsUpdate = oldValue != newValue;
-		if (needsUpdate)
-			setValue(newValue, NotificationType::sendNotificationSync);
-
-		return needsUpdate;
-	}
-
-	void BaseSlider::endChange()
-	{
-		hasBegunChange_ = false;
-		auto *mainInterface = findParentComponentOfClass<MainInterface>();
-		mainInterface->getPlugin().pushUndo(new Framework::ParameterUpdate(this, valueBeforeChange_, getValue()));
-	}
-
 	String BaseSlider::getRawTextFromValue(double value)
 	{
 		if (!hasParameter())
@@ -327,6 +206,22 @@ namespace Interface
 		return popupPrefix_ + formatValue(scaledValue);
 	}
 
+	void BaseSlider::resized()
+	{
+		Slider::resized();
+		setColors();
+		setComponentsBounds();
+		positionExtraElements(drawBounds_.isEmpty() ? getLocalBounds() : drawBounds_);
+
+		moved();
+	}
+
+	void BaseSlider::moved()
+	{
+		for (auto &extraElement : extraElements_.data)
+			extraElement.first->setBounds(parent_->getLocalArea(this, extraElement.second));
+	}
+
 	double BaseSlider::getValueFromText(const String &text)
 	{
 		String cleaned = text.removeCharacters(" ").toLowerCase();
@@ -343,7 +238,7 @@ namespace Interface
 
 	double BaseSlider::snapValue(double attemptedValue, DragMode dragMode)
 	{
-		constexpr double percent = 0.05;
+		static constexpr double percent = 0.025;
 		if (!snapToValue_ || sensitiveMode_ || dragMode != DragMode::absoluteDrag)
 			return attemptedValue;
 
@@ -352,6 +247,12 @@ namespace Interface
 		if (attemptedValue - snapValue_ <= radius && attemptedValue - snapValue_ >= -radius)
 			return snapValue_;
 		return attemptedValue;
+	}
+
+	void BaseSlider::parentHierarchyChanged()
+	{
+		parent_ = findParentComponentOfClass<BaseSection>();
+		Slider::parentHierarchyChanged();
 	}
 
 	void BaseSlider::showTextEntry()
@@ -460,10 +361,9 @@ namespace Interface
 
 	void BaseSlider::handlePopupResult(int result)
 	{
-		auto mainInterface = findParentComponentOfClass<MainInterface>();
-		COMPLEX_ASSERT(mainInterface && "What component owns this slider that isn't a child of MainInterface??");
+		COMPLEX_ASSERT(parent_ && "This slider isn't owned by a component??");
 
-		auto &plugin = mainInterface->getPlugin();
+		auto &plugin = parent_->getInterfaceLink()->getPlugin();
 
 		//if (result == kArmMidiLearn)
 		//  synth->armMidiLearn(getName().toStdString());
@@ -529,23 +429,58 @@ namespace Interface
 
 	std::vector<Framework::ParameterBridge *> &BaseSlider::getMappedParameters() const noexcept
 	{
-		auto mainInterface = findParentComponentOfClass<MainInterface>();
-		COMPLEX_ASSERT(mainInterface && "What component owns this slider that isn't a child of MainInterface??");
-
-		auto &synth = mainInterface->getPlugin();
-		return synth.getParameterBridges();
+		COMPLEX_ASSERT(parent_ && "This slider isn't owned by a component??");
+		return parent_->getInterfaceLink()->getPlugin().getParameterBridges();
 	}
 
-	float BaseSlider::findValue(Skin::ValueId valueId) const
+
+
+	void BaseSlider::addListener(BaseSection *listener) 
 	{
-		if (parent_)
-			return parent_->getValue(valueId);
-		return 0.0f;
+		sliderListeners_.push_back(listener);
+		Slider::addListener(listener);
+	}
+
+	void BaseSlider::removeListener(BaseSection *listener)
+	{
+		std::erase(sliderListeners_, listener);
+		Slider::removeListener(listener);
+	}
+
+	void BaseSlider::addTextEntry()
+	{
+		if (textEntry_)
+			return;
+
+		canInputValue_ = true;
+
+		textEntry_ = std::make_unique<OpenGlTextEditor>("Slider Text Entry");
+		textEntry_->setMultiLine(false);
+		textEntry_->setScrollToShowCursor(true);
+		textEntry_->addListener(this);
+		textEntry_->setSelectAllWhenFocused(true);
+		textEntry_->setKeyboardType(TextEditor::numericKeyboard);
+		textEntry_->setJustification(Justification::centred);
+		textEntry_->setIndents(0, 0);
+		textEntry_->setBorder({ 0, 0, 0, 0 });
+		textEntry_->setAlwaysOnTop(true);
+		textEntry_->setInterceptsMouseClicks(true, false);
+		addChildComponent(textEntry_.get());
+	}
+
+	void BaseSlider::removeTextEntry()
+	{
+		canInputValue_ = false;
+		if (textEntry_)
+		{
+			removeChildComponent(textEntry_.get());
+			textEntry_ = nullptr;
+		}
 	}
 
 	PopupItems BaseSlider::createPopupMenu() const noexcept
 	{
-		PopupItems options{ getName().toStdString() };
+		PopupItems options{ BaseControl::getName().toStdString() };
 
 		if (isDoubleClickReturnEnabled())
 			options.addItem(kDefaultValue, "Set to Default Value");
@@ -559,18 +494,21 @@ namespace Interface
 		if (canInputValue_)
 			options.addItem(kManualEntry, "Enter Value");
 
-		if (parameterLink_ && parameterLink_->hostControl)
-			options.addItem(kClearMapping, "Clear Parameter Mapping");
-		else
+		if (details_.isAutomatable)
 		{
-			options.addItem(kMapFirstSlot, "Quick Link");
+			if (parameterLink_ && parameterLink_->hostControl)
+				options.addItem(kClearMapping, "Clear Parameter Mapping");
+			else
+			{
+				options.addItem(kMapFirstSlot, "Quick Link");
 
-			PopupItems automationSlots{ kMappingList, "Assign to Automation Slot" };
-			std::vector<Framework::ParameterBridge *> connections = getMappedParameters();
-			for (size_t i = 0; i < connections.size(); i++)
-				automationSlots.addItem((int)i, connections[i]->getName(20).toStdString());
+				PopupItems automationSlots{ kMappingList, "Assign to Automation Slot" };
+				std::vector<Framework::ParameterBridge *> connections = getMappedParameters();
+				for (size_t i = 0; i < connections.size(); i++)
+					automationSlots.addItem((int)i, connections[i]->getName(20).toStdString());
 
-			options.addItem(std::move(automationSlots));
+				options.addItem(std::move(automationSlots));
+			}
 		}
 
 		//std::string disconnect = "Disconnect from ";
@@ -588,32 +526,39 @@ namespace Interface
 
 	float BaseSlider::getSampleRate() const noexcept
 	{
-		auto mainInterface = findParentComponentOfClass<MainInterface>();
-		COMPLEX_ASSERT(mainInterface && "What component owns this slider that isn't a child of MainInterface??");
-		return mainInterface->getPlugin().getSampleRate();
+		COMPLEX_ASSERT(parent_ && "This slider isn't owned by a component??");
+		return parent_->getInterfaceLink()->getPlugin().getSampleRate();
 	}
 
-	Colour BaseSlider::getColour(Skin::ColorId colourId) const noexcept
-	{ return parent_->getColour(colourId); }
+	//=================================Specialisations=================================
 
 	RotarySlider::RotarySlider(Framework::ParameterValue *parameter, String name) : BaseSlider(parameter, std::move(name))
 	{
-		setUseQuad(true);
-		sliderQuad_.setMaxArc(kRotaryAngle);
-		sliderQuad_.setFragmentShader(Shaders::kRotarySliderFragment);
-		sliderQuad_.getAnimator().setHoverIncrement(0.2f);
-		sliderQuad_.getAnimator().addTickCallback(Animator::Hover,
-			[this](float value)
+		addLabel();
+		setLabelPlacement(BubbleComponent::right);
+
+		addTextEntry();
+		changeTextEntryFont(Fonts::instance()->getDDinFont());
+
+		quadComponent_->setMaxArc(kRotaryAngle);
+		quadComponent_->setFragmentShader(Shaders::kRotarySliderFragment);
+		quadComponent_->getAnimator().setHoverIncrement(0.2f);
+		quadComponent_->setCustomRenderFunction(
+			[this](OpenGlWrapper &openGl, bool animate)
 			{
+				auto &animator = quadComponent_->getAnimator();
+				animator.tick(animate);
 				float thickness = findValue(Skin::kKnobArcThickness);
-				sliderQuad_.setThickness(thickness + thickness * 0.15f * value);
+				quadComponent_->setThickness(thickness + thickness * 0.15f * 
+					quadComponent_->getAnimator().getValue(Animator::Hover));
+				quadComponent_->render(openGl, animate);
 			});
 
-		label_.setValueEntry(textEntry_.get());
-		label_.setTextJustification(Justification::topLeft);
+		components_.push_back(quadComponent_);
+		components_.push_back(textEntry_->getImageComponent());
 
 		setRotaryParameters(2.0f * kPi - kRotaryAngle, 2.0f * kPi + kRotaryAngle, true);
-		// TODO: think of a proper way of handling bipolar controls
+		// yes i know this is dumb but it works for now
 		setBipolar(details_.minValue == -details_.maxValue);
 		setShouldShowPopup(true);
 	}
@@ -636,17 +581,19 @@ namespace Interface
 		if (drawBounds_.getWidth() <= 0 || drawBounds_.getHeight() <= 0)
 			return;
 
-		float arc = sliderQuad_.getMaxArc();
-		sliderQuad_.setShaderValue(0, std::lerp(-arc, arc, (float)getValue()));
-		sliderQuad_.setColor(selectedColor_);
-		sliderQuad_.setAltColor(unselectedColor_);
-		sliderQuad_.setThumbColor(thumbColor_);
-		sliderQuad_.setStartPos(isBipolar() ? 0.0f : -kPi);
+		float arc = quadComponent_->getMaxArc();
+		quadComponent_->setShaderValue(0, std::lerp(-arc, arc, (float)getValue()));
+		quadComponent_->setColor(selectedColor_);
+		quadComponent_->setAltColor(unselectedColor_);
+		quadComponent_->setThumbColor(thumbColor_);
+		quadComponent_->setStartPos(isBipolar() ? 0.0f : -kPi);
 	}
 
-	void RotarySlider::setSliderBounds()
+	void RotarySlider::setComponentsBounds()
 	{
-		drawBounds_ = getBounds();
+		if (drawBounds_.isEmpty())
+			drawBounds_ = getBounds();
+
 		auto width = (float)drawBounds_.getWidth();
 		auto height = (float)drawBounds_.getHeight();
 
@@ -654,13 +601,15 @@ namespace Interface
 		float size = findValue(Skin::kKnobArcSize) * getKnobSizeScale() + thickness;
 		float radius_x = (size + 0.5f) / width;
 		float radius_y = (size + 0.5f) / height;
-		sliderQuad_.setQuad(0, -radius_x, -radius_y, 2.0f * radius_x, 2.0f * radius_y);
-		sliderQuad_.setThumbAmount(findValue(Skin::kKnobHandleLength));
+		quadComponent_->setQuad(0, -radius_x, -radius_y, 2.0f * radius_x, 2.0f * radius_y);
+		quadComponent_->setThumbAmount(findValue(Skin::kKnobHandleLength));
 		redoImage();
 	}
 
 	void RotarySlider::drawShadow(Graphics &g)
 	{
+		Graphics::ScopedSaveState s(g);
+		
 		Colour shadow_color = getColour(Skin::kShadow);
 
 		auto width = (float)drawBounds_.getWidth();
@@ -676,7 +625,6 @@ namespace Interface
 		PathStrokeType outer_stroke(stroke_width, PathStrokeType::beveled, PathStrokeType::rounded);
 		PathStrokeType shadow_stroke(stroke_width + 1, PathStrokeType::beveled, PathStrokeType::rounded);
 
-		g.saveState();
 		g.setOrigin(getX(), getY());
 
 		Colour body = getColour(Skin::kRotaryBody);
@@ -721,8 +669,6 @@ namespace Interface
 			g.setColour(shadow_color);
 			g.fillPath(shadow_path);
 		}
-
-		g.restoreState();
 	}
 
 	void RotarySlider::showTextEntry()
@@ -740,38 +686,107 @@ namespace Interface
 		BaseSlider::showTextEntry();
 	}
 
+	void RotarySlider::positionExtraElements(Rectangle<int> anchorBounds)
+	{
+		static constexpr int kVerticalOffset = 2;
+
+		if (!label_)
+			return;
+
+		auto labelIter = extraElements_.find(label_.get());
+		label_->updateState();
+		auto labelTextWidth = label_->getTotalWidth();
+		auto labelX = anchorBounds.getX();
+		auto verticalOffset = parent_->scaleValueRoundInt(kVerticalOffset);
+		switch (labelPlacement_)
+		{
+		case BubbleComponent::left:
+			labelX -= parent_->scaleValueRoundInt(kLabelOffset) + labelTextWidth;
+			label_->setJustification(Justification::centredRight);
+			labelIter->second = { labelX, verticalOffset, labelTextWidth,
+				(anchorBounds.getHeight() - 2 * verticalOffset) / 2 };
+
+			if (modifier_)
+				extraElements_.find(modifier_)->second = { labelX, labelIter->second.getBottom(),
+					modifier_->getDrawBounds().getWidth(), modifier_->getDrawBounds().getHeight() };
+			break;
+		default:
+		case BubbleComponent::above:
+		case BubbleComponent::below:
+		case BubbleComponent::right:
+			labelX += anchorBounds.getWidth() + parent_->scaleValueRoundInt(kLabelOffset);
+			label_->setJustification(Justification::centredLeft);
+			labelIter->second = { labelX, verticalOffset, labelTextWidth,
+				(anchorBounds.getHeight() - 2 * verticalOffset) / 2 };
+
+			if (modifier_)
+				extraElements_.find(modifier_)->second = { labelX, labelIter->second.getBottom(),
+					modifier_->getDrawBounds().getWidth(), modifier_->getDrawBounds().getHeight() };
+			break;
+		}
+	}
+
+	Rectangle<int> RotarySlider::getOverallBoundsForHeight(int height)
+	{
+		auto widthHeight = parent_->scaleValueRoundInt((float)height);
+		drawBounds_ = { widthHeight, widthHeight };
+
+		positionExtraElements(drawBounds_);
+		if (modifier_)
+			return getUnionOfAllElements();
+
+		auto labelBounds = extraElements_.find(label_.get())->second;
+		auto usedFont = textEntry_->getUsedFont();
+		Fonts::instance()->setFontFromAscent(usedFont, (float)labelBounds.getHeight() * 0.5f);
+		textEntry_->setUsedFont(usedFont);
+
+		auto valueBounds = Rectangle{ labelBounds.getX(), labelBounds.getBottom(), 
+			(int)std::ceil(getNumericTextMaxWidth(usedFont)), labelBounds.getHeight() };
+		
+		return drawBounds_.getUnion(labelBounds).getUnion(valueBounds);
+	}
+
+	void RotarySlider::setModifier(TextSelector *modifier) noexcept
+	{
+		if (modifier)
+			extraElements_.add(modifier, {});
+		else
+			extraElements_.erase(modifier_);
+		modifier_ = modifier;
+	}
+
 	void LinearSlider::redoImage()
 	{
 		if (drawBounds_.getWidth() <= 0 || drawBounds_.getHeight() <= 0)
 			return;
 
-		sliderQuad_.setActive(true);
+		quadComponent_->setActive(true);
 		auto t = (float)Framework::scaleValue(getValue(), details_, getSampleRate(), false, true);
-		sliderQuad_.setShaderValue(0, t);
-		sliderQuad_.setColor(selectedColor_);
-		sliderQuad_.setAltColor(unselectedColor_);
-		sliderQuad_.setThumbColor(thumbColor_);
-		sliderQuad_.setStartPos(isBipolar_ ? 0.0f : -1.0f);
+		quadComponent_->setShaderValue(0, t);
+		quadComponent_->setColor(selectedColor_);
+		quadComponent_->setAltColor(unselectedColor_);
+		quadComponent_->setThumbColor(thumbColor_);
+		quadComponent_->setStartPos(isBipolar_ ? 0.0f : -1.0f);
 
 		int total_width = isHorizontal() ? drawBounds_.getHeight() : drawBounds_.getWidth();
 		int extra = total_width % 2;
 		auto slider_width = (float)(total_width + extra);
 
-		sliderQuad_.setThickness(slider_width);
-		sliderQuad_.setRounding(slider_width / 2.0f);
+		quadComponent_->setThickness(slider_width);
+		quadComponent_->setRounding(slider_width / 2.0f);
 	}
 
-	void LinearSlider::setSliderBounds()
+	void LinearSlider::setComponentsBounds()
 	{
 		if (isHorizontal())
 		{
 			float margin = 2.0f * (findValue(Skin::kWidgetMargin) - 0.5f) / (float)drawBounds_.getWidth();
-			sliderQuad_.setQuad(0, -1.0f + margin, -1.0f, 2.0f - 2.0f * margin, 2.0f);
+			quadComponent_->setQuad(0, -1.0f + margin, -1.0f, 2.0f - 2.0f * margin, 2.0f);
 		}
 		else
 		{
 			float margin = 2.0f * (findValue(Skin::kWidgetMargin) - 0.5f) / (float)drawBounds_.getHeight();
-			sliderQuad_.setQuad(0, -1.0f, -1.0f + margin, 2.0f, 2.0f - 2.0f * margin);
+			quadComponent_->setQuad(0, -1.0f, -1.0f + margin, 2.0f, 2.0f - 2.0f * margin);
 		}
 	}
 
@@ -792,14 +807,26 @@ namespace Interface
 	PinSlider::PinSlider(Framework::ParameterValue *parameter, String name) :
 		BaseSlider(parameter, std::move(name), SliderStyle::LinearHorizontal)
 	{
-		setUseQuad(true);
-		sliderQuad_.setFragmentShader(Shaders::kPinSliderFragment);
-		setUseImage(true);
+		quadComponent_->setFragmentShader(Shaders::kPinSliderFragment);
+		imageComponent_->setAlwaysOnTop(true);
+		addTextEntry();
 		setShouldShowPopup(true);
+
+		components_.push_back(quadComponent_);
+		components_.push_back(imageComponent_);
+		components_.push_back(textEntry_->getImageComponent());
 	}
 
 	void PinSlider::mouseDown(const MouseEvent &e)
 	{
+		if (e.mods.isPopupMenu())
+		{
+			PopupItems options = createPopupMenu();
+			parent_->showPopupSelector(this, e.getPosition(), std::move(options),
+				[this](int selection) { handlePopupResult(selection); });
+			return;
+		}
+
 		auto mouseEvent = e.getEventRelativeTo(parent_);
 		lastDragPosition_ = mouseEvent.position.x;
 		runningTotal_ = getValue();
@@ -882,36 +909,47 @@ namespace Interface
 
 	void PinSlider::redoImage()
 	{
-		sliderQuad_.setColor(selectedColor_);
-		sliderQuad_.setThumbColor(thumbColor_);
+		quadComponent_->setColor(selectedColor_);
+		quadComponent_->setThumbColor(thumbColor_);
 
-		imageComponent_.redrawImage();
+		imageComponent_->redrawImage();
 	}
 
-	void PinSlider::setSliderBounds()
+	void PinSlider::setComponentsBounds()
 	{
-		if (areDrawBoundsSet_)
-			sliderQuad_.setCustomDrawBounds(drawBounds_);
+		if (!drawBounds_.isEmpty())
+			quadComponent_->setCustomDrawBounds(drawBounds_);
 		else
 			drawBounds_ = getLocalBounds();
 
 		redoImage();
 	}
 
+	Rectangle<int> PinSlider::getOverallBoundsForHeight(int height)
+	{
+		auto width = parent_->scaleValueRoundInt(kDefaultPinSliderWidth);
+		drawBounds_ = { width, height };
+		return drawBounds_;
+	}
+
 	TextSelector::TextSelector(Framework::ParameterValue *parameter, 
 		std::optional<Font> usedFont, String name) : BaseSlider(parameter, std::move(name))
 	{
-		setUseQuad(true);
-		sliderQuad_.setFragmentShader(Shaders::kRoundedRectangleFragment);
-		sliderQuad_.getAnimator().setHoverIncrement(0.2f);
-		sliderQuad_.getAnimator().addTickCallback(Animator::Hover,
-			[this](float value)
+		setLabelPlacement(BubbleComponent::BubblePlacement::left);
+
+		quadComponent_->setFragmentShader(Shaders::kRoundedRectangleFragment);
+		quadComponent_->getAnimator().setHoverIncrement(0.2f);
+		quadComponent_->setCustomRenderFunction(
+			[this](OpenGlWrapper &openGl, bool animate)
 			{
-				sliderQuad_.setColor(backgroundColor_.withMultipliedAlpha(value));
+				auto &animator = quadComponent_->getAnimator();
+				animator.tick(animate);
+				quadComponent_->setColor(backgroundColor_.withMultipliedAlpha(animator.getValue(Animator::Hover)));
+				quadComponent_->render(openGl, animate);
 			});
-		setUseImage(true);
-		setIsImageOnTop(true);
-		setCanInputValue(false);
+
+		components_.push_back(quadComponent_);
+		components_.push_back(imageComponent_);
 
 		if (usedFont)
 			usedFont_ = std::move(usedFont.value());
@@ -929,7 +967,7 @@ namespace Interface
 		if (e.mods.isPopupMenu())
 		{
 			PopupItems options = createPopupMenu();
-			parent_->showPopupSelector(this, e.getPosition(), options,
+			parent_->showPopupSelector(this, e.getPosition(), std::move(options),
 				[this](int selection) { handlePopupResult(selection); });
 			return;
 		}
@@ -942,7 +980,7 @@ namespace Interface
 		for (int i = 0; i <= (int)details_.maxValue; ++i)
 			options.addItem(i, details_.stringLookup[i].data());
 
-		parent_->showPopupSelector(this, Point{ 0, 0 }, options,
+		parent_->showPopupSelector(this, Point{ 0, 0 }, std::move(options),
 			[this](int value)
 			{
 				if (parameterLink_ && parameterLink_->hostControl)
@@ -968,7 +1006,7 @@ namespace Interface
 
 	void TextSelector::mouseWheelMove(const MouseEvent &e, const MouseWheelDetails &wheel)
 	{
-		auto newWheel = wheel;
+		MouseWheelDetails newWheel = wheel;
 		newWheel.isReversed = true;
 		BaseSlider::mouseWheelMove(e, newWheel);
 	}
@@ -984,70 +1022,146 @@ namespace Interface
 			return path;
 		}();
 
-		auto height = drawBounds_.getHeight();
-		auto leftOffset = height / 4 + drawBounds_.getX();
+		float height = (float)drawBounds_.getHeight();
+		float leftOffset = kMarginsHeightRatio * height + (float)drawBounds_.getX() + 
+			((extraIcon_ && labelPlacement_ == BubbleComponent::left) ? 
+			(float)extraIcon_->getWidth() + kMarginsHeightRatio * height : 0.0f);
 
 		String text = getSliderTextFromValue(getValue());
 		g.setColour(selectedColor_);
 		g.setFont(usedFont_);
-		g.drawText(text, leftOffset, 0, textWidth_, height, Justification::centred, false);
+		g.drawText(text, Rectangle{ leftOffset, 0.0f, (float)textWidth_, height }, Justification::centred, false);
 
 		if (!drawArrow_)
 			return;
 
-		int arrowOffsetX = (int)std::round(kArrowOffsetRatio * (float)height);
-		int arrowOffsetY = height / 2 - 1;
-		float arrowWidth = (float)height * kHeightToArrowWidthRatio;
+		float arrowOffsetX = std::round(kMarginsHeightRatio * height);
+		float arrowOffsetY = height / 2 - 1;
+		float arrowWidth = height * kHeightToArrowWidthRatio;
 
-		Rectangle<int> arrowBounds;
-		arrowBounds.setX(leftOffset + textWidth_ + arrowOffsetX);
+		Rectangle<float> arrowBounds;
+		arrowBounds.setX(leftOffset + (float)textWidth_ + arrowOffsetX);
 		arrowBounds.setY(arrowOffsetY);
-		arrowBounds.setWidth((int)std::round(arrowWidth));
-		arrowBounds.setHeight((int)std::round(kArrowWidthHeightRatio * arrowWidth));
+		arrowBounds.setWidth(std::round(arrowWidth));
+		arrowBounds.setHeight(std::round(kArrowWidthHeightRatio * arrowWidth));
 
 		g.setColour(selectedColor_);
 		g.strokePath(arrowPath, PathStrokeType{ 1.0f, PathStrokeType::mitered, PathStrokeType::square }, 
-			arrowPath.getTransformToScaleToFit(arrowBounds.toFloat(), true));
+			arrowPath.getTransformToScaleToFit(arrowBounds, true));
 	}
 
 	void TextSelector::redoImage()
 	{
-		sliderQuad_.setRounding(findValue(Skin::kWidgetRoundedCorner));
-		imageComponent_.redrawImage();
+		quadComponent_->setRounding(findValue(Skin::kWidgetRoundedCorner));
+		imageComponent_->redrawImage();
 	}
 
-	void TextSelector::setSliderBounds()
+	void TextSelector::setComponentsBounds()
 	{
-		if (!areDrawBoundsSet_)
-			drawBounds_ = getLocalBounds();
+		quadComponent_->setCustomDrawBounds(drawBounds_);
+		if (extraIcon_)
+			extraIcon_->setTopLeftPosition(parent_->getLocalPoint(
+				this, extraElements_.find(extraIcon_)->second.getPosition()));
+		
 		redoImage();
 	}
 
-	[[nodiscard]] int TextSelector::setHeight(int height) noexcept
+	void TextSelector::positionExtraElements(Rectangle<int> anchorBounds)
 	{
-		if (getHeight() == height && !isDirty_)
-			return totalDrawWidth_;
+		if (!label_ && !extraIcon_)
+			return;
 
-		float floatHeight = (float)height;
-		Fonts::instance()->setFontForAscent(usedFont_, floatHeight * 0.5f);
-
-		String text = getSliderTextFromValue(getValue(), false);
-		textWidth_ = usedFont_.getStringWidth(text);
-		float totalDrawWidth = (float)textWidth_;
-
-		if (drawArrow_)
+		switch (labelPlacement_)
 		{
-			totalDrawWidth += floatHeight * kArrowOffsetRatio;
-			totalDrawWidth += floatHeight * kHeightToArrowWidthRatio;
+		case BubbleComponent::right:
+			if (extraIcon_)
+			{
+				auto addedMargin = (int)std::round(kMarginsHeightRatio * (float)drawBounds_.getHeight());
+				extraElements_.find(extraIcon_)->second = Rectangle{
+					anchorBounds.getRight() - extraIcon_->getWidth() - addedMargin,
+					(anchorBounds.getHeight() - extraIcon_->getHeight()) / 2, 
+					extraIcon_->getWidth(), extraIcon_->getHeight() };
+			}
+
+			if (label_)
+			{
+				label_->updateState();
+				label_->setJustification(Justification::centredLeft);
+				extraElements_.find(label_.get())->second = Rectangle{
+					anchorBounds.getRight() + parent_->scaleValueRoundInt(kLabelOffset), 
+					anchorBounds.getY(), label_->getTotalWidth(), anchorBounds.getHeight() };
+			}
+			break;
+		default:
+		case BubbleComponent::above:
+		case BubbleComponent::below:
+		case BubbleComponent::left:
+			if (extraIcon_)
+			{
+				auto addedMargin = (int)std::round(kMarginsHeightRatio * (float)drawBounds_.getHeight());
+				extraElements_.find(extraIcon_)->second = Rectangle{
+					anchorBounds.getX() + addedMargin,
+					(anchorBounds.getHeight() - extraIcon_->getHeight()) / 2,
+					extraIcon_->getWidth(), extraIcon_->getHeight() };
+			}
+
+			if (label_)
+			{
+				label_->updateState();
+				auto labelTextWidth = label_->getTotalWidth();
+				label_->setJustification(Justification::centredRight);
+				extraElements_.find(label_.get())->second = Rectangle{
+					anchorBounds.getX() - parent_->scaleValueRoundInt(kLabelOffset) - labelTextWidth,
+					anchorBounds.getY(), labelTextWidth, anchorBounds.getHeight() };
+			}
+			break;
+		}
+	}
+
+	[[nodiscard]] Rectangle<int> TextSelector::getOverallBoundsForHeight(int height)
+	{
+		if (drawBounds_.getHeight() != height || isDirty_)
+		{
+			float floatHeight = (float)height;
+			Fonts::instance()->setFontFromAscent(usedFont_, floatHeight * 0.5f);
+
+			String text = getSliderTextFromValue(getValue(), false);
+			textWidth_ = usedFont_.getStringWidth(text);
+			float totalDrawWidth = (float)textWidth_;
+
+			if (drawArrow_)
+			{
+				totalDrawWidth += floatHeight * kMarginsHeightRatio;
+				totalDrawWidth += floatHeight * kHeightToArrowWidthRatio;
+			}
+
+			if (extraIcon_)
+			{
+				totalDrawWidth += floatHeight * kMarginsHeightRatio;
+				totalDrawWidth += (float)extraIcon_->getWidth();
+			}
+
+			// there's always some padding at the beginning and end regardless whether anything is added
+			totalDrawWidth += floatHeight * 0.5f;
+
+			drawBounds_ = { (int)std::round(totalDrawWidth), height };
+			isDirty_ = false;
 		}
 
-		// there's always some padding at the beginning and end regardless whether the arrow is drawn
-		totalDrawWidth += floatHeight * 0.5f;
+		positionExtraElements(drawBounds_);
+		return getUnionOfAllElements();
+	}
 
-		totalDrawWidth_ = (int)std::round(totalDrawWidth);
-		isDirty_ = false;
+	void TextSelector::addListener(BaseSection *listener)
+	{
+		setTextSelectorListener(listener);
+		BaseSlider::addListener(listener);
+	}
 
-		return totalDrawWidth_;
+	void TextSelector::removeListener(BaseSection *listener)
+	{
+		setTextSelectorListener(nullptr);
+		BaseSlider::removeListener(listener);
 	}
 
 	void TextSelector::resizeForText() noexcept
@@ -1055,30 +1169,41 @@ namespace Interface
 		String text = getSliderTextFromValue(getValue(), false);
 		auto newTextWidth = usedFont_.getStringWidth(text);
 		auto sizeChange = newTextWidth - textWidth_;
+		
+		textWidth_ = newTextWidth;
+		drawBounds_.setWidth(drawBounds_.getWidth() + sizeChange);
 
 		if (textSelectorListener_)
 			textSelectorListener_->resizeForText(this, sizeChange);
-
-		textWidth_ = newTextWidth;
-		totalDrawWidth_ += sizeChange;
 	}
 
 	NumberBox::NumberBox(Framework::ParameterValue *parameter, String name) :
 		BaseSlider(parameter, std::move(name))
 	{
+		addLabel();
+		setLabelPlacement(BubbleComponent::BubblePlacement::left);
+
+		quadComponent_->setActive(false);
+		setShouldRepaintOnHover(false);
+		quadComponent_->setFragmentShader(Shaders::kRoundedRectangleFragment);
+		quadComponent_->getAnimator().setHoverIncrement(0.2f);
+		quadComponent_->setCustomRenderFunction(
+			[this](OpenGlWrapper &openGl, bool animate)
+			{
+				auto &animator = quadComponent_->getAnimator();
+				animator.tick(animate);
+				quadComponent_->setColor(backgroundColor_
+					.withMultipliedAlpha(animator.getValue(Animator::Hover)));
+				quadComponent_->render(openGl, animate);
+			});
+
+		addTextEntry();
+		changeTextEntryFont(Fonts::instance()->getDDinFont());
 		textEntry_->setInterceptsMouseClicks(false, false);
 
-		setUseImage(true);
-
-		setUseQuad(false);
-		setShouldRepaintOnHover(false);
-		sliderQuad_.setFragmentShader(Shaders::kRoundedRectangleFragment);
-		sliderQuad_.getAnimator().setHoverIncrement(0.2f);
-		sliderQuad_.getAnimator().addTickCallback(Animator::Hover,
-			[this](float value)
-			{
-				sliderQuad_.setColor(backgroundColor_.withMultipliedAlpha(value));
-			});
+		components_.push_back(quadComponent_);
+		components_.push_back(imageComponent_);
+		components_.push_back(textEntry_->getImageComponent());
 	}
 
 	void NumberBox::mouseDrag(const MouseEvent& e)
@@ -1149,14 +1274,14 @@ namespace Interface
 	{
 		if (!shouldBeVisible)
 		{
-			sliderQuad_.setActive(false);
-			imageComponent_.setActive(false);
+			quadComponent_->setActive(false);
+			imageComponent_->setActive(false);
 			textEntry_->setVisible(false);
 		}
 		else
 		{
-			sliderQuad_.setActive(isUsingQuad());
-			imageComponent_.setActive(isUsingImage());
+			quadComponent_->setActive(!drawBackground_);
+			imageComponent_->setActive(drawBackground_);
 			textEntry_->setVisible(true);
 		}
 
@@ -1189,24 +1314,16 @@ namespace Interface
 			textEntry_->setText(getSliderTextFromValue(getValue()));
 		}
 
-		imageComponent_.redrawImage();
+		imageComponent_->redrawImage();
 		textEntry_->redoImage();
-		sliderQuad_.setRounding(findValue(Skin::kWidgetRoundedCorner));
-		//sliderQuad_.setColor(backgroundColor_.withMultipliedAlpha(sliderQuad_.getAnimator().getValue(Animator::Click)));
-		/*sliderQuad_.setColor(Colours::transparentBlack.interpolatedWith(backgroundColor_, 
-			sliderQuad_.getAnimator().getValue(Animator::Hover)));*/
-		/*if (isMouseOverOrDragging())
-			sliderQuad_.setColor(backgroundColor_);
-		else
-			sliderQuad_.setColor(Colours::transparentBlack);*/
+		quadComponent_->setRounding(findValue(Skin::kWidgetRoundedCorner));
 	}
 
-	void NumberBox::setSliderBounds()
+	void NumberBox::setComponentsBounds()
 	{
-		drawBounds_ = getLocalBounds();
 		auto bounds = drawBounds_.toFloat();
-		auto height = (float)drawBounds_.getHeight();
-		auto xOffset = height * kTriangleWidthRatio + height * kTriangleToValueMarginRatio;
+		auto xOffset = bounds.getHeight() * kTriangleWidthRatio + 
+			bounds.getHeight() * kTriangleToValueMarginRatio;
 
 		// extra offsets are pretty much magic values, don't change
 		if (drawBackground_)
@@ -1232,30 +1349,59 @@ namespace Interface
 		BaseSlider::showTextEntry();
 	}
 
-	[[nodiscard]] int NumberBox::setHeight(int height) noexcept
+	void NumberBox::positionExtraElements(Rectangle<int> anchorBounds)
 	{
-		if (getHeight() == height)
-			return totalDrawWidth_;
+		if (!label_)
+			return;
 
-		auto floatHeight = (float)height;
-		Fonts::instance()->setFontForAscent(usedFont_, floatHeight * 0.5f);
-		textEntry_->setUsedFont(usedFont_);
-
-		float totalDrawWidth = getNumericTextMaxWidth(usedFont_);
-		if (drawBackground_)
+		label_->updateState();
+		auto labelTextWidth = label_->getTotalWidth();
+		auto labelX = anchorBounds.getX();
+		switch (labelPlacement_)
 		{
-			totalDrawWidth += floatHeight * kTriangleWidthRatio;
-			totalDrawWidth += kTriangleToValueMarginRatio * floatHeight;
-			totalDrawWidth += kValueToEndMarginRatio * floatHeight;
+		case BubbleComponent::right:
+			labelX += anchorBounds.getWidth() + parent_->scaleValueRoundInt(kLabelOffset);
+			label_->setJustification(Justification::centredLeft);
+			break;
+		default:
+		case BubbleComponent::above:
+		case BubbleComponent::below:
+		case BubbleComponent::left:
+			labelX -= parent_->scaleValueRoundInt(kLabelOffset) + labelTextWidth;
+			label_->setJustification(Justification::centredRight);
+			break;
 		}
-		else
-		{
-			// extra space around the value
-			totalDrawWidth += floatHeight * 0.5f;
-		}
-		totalDrawWidth_ = (int)std::ceil(totalDrawWidth);		
 
-		return totalDrawWidth_;
+		extraElements_.find(label_.get())->second = 
+			Rectangle{ labelX, anchorBounds.getY(), labelTextWidth, anchorBounds.getHeight() };
+	}
+
+	[[nodiscard]] Rectangle<int> NumberBox::getOverallBoundsForHeight(int height)
+	{
+		if (drawBounds_.getHeight() != height)
+		{
+			auto floatHeight = (float)height;
+			auto usedFont = textEntry_->getUsedFont();
+			Fonts::instance()->setFontFromAscent(usedFont, floatHeight * 0.5f);
+			textEntry_->setUsedFont(usedFont);
+
+			float totalDrawWidth = getNumericTextMaxWidth(usedFont);
+			if (drawBackground_)
+			{
+				totalDrawWidth += floatHeight * kTriangleWidthRatio;
+				totalDrawWidth += kTriangleToValueMarginRatio * floatHeight;
+				totalDrawWidth += kValueToEndMarginRatio * floatHeight;
+			}
+			else
+			{
+				// extra space around the value
+				totalDrawWidth += floatHeight * 0.5f;
+			}
+			drawBounds_ = { (int)std::ceil(totalDrawWidth), height };
+		}
+
+		positionExtraElements(drawBounds_);
+		return getUnionOfAllElements();
 	}
 
 	void ModulationSlider::redoImage()
@@ -1264,25 +1410,25 @@ namespace Interface
 			return;
 
 		float t = 2.0f * (float)getValue() - 1.0f;
-		sliderQuad_.setThumbColor(thumbColor_);
+		quadComponent_->setThumbColor(thumbColor_);
 
 		if (t > 0.0f)
 		{
-			sliderQuad_.setShaderValue(0, std::lerp(kPi, -kPi, t));
-			sliderQuad_.setColor(unselectedColor_);
-			sliderQuad_.setAltColor(selectedColor_);
+			quadComponent_->setShaderValue(0, std::lerp(kPi, -kPi, t));
+			quadComponent_->setColor(unselectedColor_);
+			quadComponent_->setAltColor(selectedColor_);
 		}
 		else
 		{
-			sliderQuad_.setShaderValue(0, std::lerp(-kPi, kPi, -t));
-			sliderQuad_.setColor(selectedColor_);
-			sliderQuad_.setAltColor(unselectedColor_);
+			quadComponent_->setShaderValue(0, std::lerp(-kPi, kPi, -t));
+			quadComponent_->setColor(selectedColor_);
+			quadComponent_->setAltColor(unselectedColor_);
 		}
 
 		if (isMouseOverOrDragging())
-			sliderQuad_.setThickness(1.8f);
+			quadComponent_->setThickness(1.8f);
 		else
-			sliderQuad_.setThickness(1.0f);
+			quadComponent_->setThickness(1.0f);
 	}
 
 }

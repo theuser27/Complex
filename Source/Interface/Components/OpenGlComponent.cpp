@@ -14,6 +14,15 @@
 
 namespace
 {
+	template<typename T>
+	const T *findComponentOfClass(const Component *component)
+	{
+		const T *target = dynamic_cast<const T *>(component);
+		if (!target)
+			target = component->findParentComponentOfClass<T>();
+		return target;
+	}
+
 	Rectangle<int> getGlobalBounds(const Component *component, Rectangle<int> bounds)
 	{
 		Component *parent = component->getParentComponent();
@@ -46,24 +55,20 @@ namespace Interface
 {
 	using namespace juce::gl;
 
-	bool OpenGlComponent::setViewPort(const Component *component, Rectangle<int> bounds, const OpenGlWrapper &openGl)
+	bool OpenGlComponent::setViewPort(const Component *component, Rectangle<int> bounds, 
+		[[maybe_unused]] const OpenGlWrapper &openGl)
 	{
 		Rectangle<int> visibleBounds = getGlobalVisibleBounds(component, bounds);
 		if (visibleBounds.getWidth() <= 0 || visibleBounds.getHeight() <= 0)
 			return false;
 
-		float scale = openGl.displayScale;
-		float topLevelHeight = (float)component->findParentComponentOfClass<MainInterface>()->getHeight();
+		int topLevelHeight = findComponentOfClass<MainInterface>(component)->getHeight();
 		Rectangle<int> globalBounds = getGlobalBounds(component, bounds);
 
-		/*glViewport(globalBounds.getX(),
-			(int)std::ceil(scale * topLevelHeight) - globalBounds.getBottom(),
-			globalBounds.getWidth(), globalBounds.getHeight());*/
-		glViewport(globalBounds.getX(), (int)std::ceil(scale * topLevelHeight) - globalBounds.getBottom(), 
+		glViewport(globalBounds.getX(), topLevelHeight - globalBounds.getBottom(), 
 			globalBounds.getWidth(), globalBounds.getHeight());
 
-		glScissor(visibleBounds.getX(),
-			(int)std::ceil(scale * topLevelHeight) - visibleBounds.getBottom(),
+		glScissor(visibleBounds.getX(), topLevelHeight - visibleBounds.getBottom(),
 			visibleBounds.getWidth(), visibleBounds.getHeight());
 
 		return true;
@@ -78,7 +83,8 @@ namespace Interface
 	void OpenGlComponent::setScissor(const Component *component, const OpenGlWrapper &openGl)
 	{ setScissorBounds(component, component->getLocalBounds(), openGl); }
 
-	void OpenGlComponent::setScissorBounds(const Component *component, Rectangle<int> bounds, const OpenGlWrapper &openGl)
+	void OpenGlComponent::setScissorBounds(const Component *component, Rectangle<int> bounds, 
+		[[maybe_unused]] const OpenGlWrapper &openGl)
 	{
 		if (component == nullptr)
 			return;
@@ -87,20 +93,16 @@ namespace Interface
 		if (visibleBounds.getWidth() <= 0 || visibleBounds.getHeight() <= 0)
 			return;
 
-		float scale = openGl.displayScale;
-		float topLevelHeight = (float)component->findParentComponentOfClass<MainInterface>()->getHeight();
+		int topLevelHeight = findComponentOfClass<MainInterface>(component)->getHeight();
 
-		glScissor(visibleBounds.getX(),
-			(int)std::ceil(scale * topLevelHeight) - visibleBounds.getBottom(),
+		glScissor(visibleBounds.getX(), topLevelHeight - visibleBounds.getBottom(),
 			visibleBounds.getWidth(), visibleBounds.getHeight());
 	}
 
 	OpenGlComponent::OpenGlComponent(String name) : Component(name) { }
-	// destructor is here because the destructor of OpenGlCorners needs to be visible
-	// so that the deleter of the unique_ptr corners_ can be created
 	OpenGlComponent::~OpenGlComponent() = default;
 
-	void OpenGlComponent::paint(Graphics &g)
+	void OpenGlComponent::paintBackground(Graphics &g)
 	{
 		if (!isVisible())
 			return;
@@ -113,8 +115,8 @@ namespace Interface
 		if (!isShowing())
 			return;
 
-		if (auto *parent = findParentComponentOfClass<MainInterface>())
-			parent->repaintOpenGlBackground(this);
+		if (parent_)
+			parent_->repaintOpenGlBackground(this);
 	}
 
 	void OpenGlComponent::resized()
@@ -143,10 +145,10 @@ namespace Interface
 			corners_->init(openGl);
 	}
 
-	void OpenGlComponent::destroy(OpenGlWrapper &openGl)
+	void OpenGlComponent::destroy()
 	{
 		if (corners_)
-			corners_->destroy(openGl);
+			corners_->destroy();
 	}
 
 	void OpenGlComponent::renderCorners(OpenGlWrapper &openGl, bool animate, Colour color, float rounding)
@@ -182,4 +184,7 @@ namespace Interface
 
 		return Colours::black;
 	}
+
+	void OpenGlComponent::pushForDeletion()
+	{ parent_->getInterfaceLink()->pushOpenGlComponentToDelete(this); }
 }

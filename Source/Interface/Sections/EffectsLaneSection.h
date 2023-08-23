@@ -33,16 +33,11 @@ namespace Interface
 		public:
 			EffectsContainer() : BaseSection(typeid(EffectsContainer).name())
 			{ setSkinOverride(Skin::kEffectsLane); }
-
-			void paintBackground(Graphics &g) override
-			{
-				paintChildrenShadows(g);
-				paintChildrenBackgrounds(g);
-			}
 		};
 
 		EffectsViewport() : Viewport(typeid(EffectsViewport).name())
 		{
+			container_.setAlwaysOnTop(true);
 			setViewedComponent(&container_);
 			addAndMakeVisible(&container_);
 		}
@@ -104,7 +99,6 @@ namespace Interface
 		EffectsLaneSection(Generation::EffectsLane *effectsLane, EffectsStateSection *state, String name = {});
 		std::unique_ptr<EffectsLaneSection> createCopy();
 
-		void paintBackground(Graphics &g) override;
 		void resized() override;
 
 		Rectangle<int> getPowerButtonBounds() const noexcept override
@@ -154,18 +148,15 @@ namespace Interface
 		// needs a point local to the EffectsLaneSection
 		size_t getIndexFromScreenPosition(juce::Point<int> point) const noexcept;
 
-		void setLaneName(String newName) { laneTitle_.setText(std::move(newName)); }
+		void setLaneName(String newName) { laneTitle_->setText(std::move(newName)); }
 		void addListener(Listener *listener) { laneListeners_.push_back(listener); }
 
 	private:
-
-
 		EffectsViewport viewport_{};
 
-		OpenGlImage background_{};
-		CriticalSection openGlCriticalSection_{};
-
-		PlainTextComponent laneTitle_;
+		gl_ptr<OpenGlQuad> outerRectangle;
+		gl_ptr<OpenGlQuad> innerRectangle;
+		gl_ptr<PlainTextComponent> laneTitle_;
 		OpenGlScrollBar scrollBar_{};
 		std::vector<EffectModuleSection *> effectModules_{};
 

@@ -22,34 +22,35 @@ namespace Framework
 	// all x values are normalised
 	enum class ParameterScale : u32
 	{
-		Toggle,									// round(x)
-		Indexed,								// round(x * n)
-		Linear,									// x
-		Clamp,									// clamp(x, min, max)
-		Quadratic,							// x^2
-		SymmetricQuadratic,			// x^2 for x >= 0, and -x^2 for x < 0
-		Cubic,									// x^3
-		Loudness,								// standard 20 * log10(x)
-		SymmetricLoudness,			// 20 * log10(x) for x >= 0, and -20 * log10(x) for x < 0
-		Frequency,							// (sampleRate / 2 * minFrequency) ^ x
-		SymmetricFrequency,			// same as above but -(sampleRate / 2 * minFrequency) ^ (-x) for x < 0
+		Toggle,                 // round(x)
+		Indexed,                // round(x * n)
+		Linear,                 // x
+		Clamp,                  // clamp(x, min, max)
+		Quadratic,              // x^2
+		SymmetricQuadratic,     // x^2 for x >= 0, and -x^2 for x < 0
+		Cubic,                  // x^3
+		Loudness,               // standard 20 * log10(x)
+		SymmetricLoudness,      // 20 * log10(x) for x >= 0, and -20 * log10(x) for x < 0
+		Frequency,              // (sampleRate / 2 * minFrequency) ^ x
+		SymmetricFrequency,     // same as above but -(sampleRate / 2 * minFrequency) ^ (-x) for x < 0
 	};
 
 	struct ParameterDetails
 	{
-		std::string_view name{};															// internal plugin name
-		std::string_view displayName{};												// name displayed to the user
-		float minValue = 0.0f;																// minimum scaled value
-		float maxValue = 1.0f;																// maximum scaled value
-		float defaultValue = 0.0f;														// default scaled value
-		float defaultNormalisedValue = 0.0f;									// default normalised value
-		ParameterScale scale = ParameterScale::Linear;				// value skew factor
-		std::string_view displayUnits{};											// "%", "db", etc.
-		std::span<const std::string_view> stringLookup{};			// if scale is Indexed, you can use a text lookup
-		bool isStereo = false;																// if parameter allows stereo modulation
-		bool isModulatable = true;														// if parameter allows modulation at all
-		UpdateFlag updateFlag = UpdateFlag::Realtime;					// at which point during processing the parameter is updated
-		bool isExtensible = false;														// if parameter's minimum and maximum can change
+		std::string_view id{};                                // internal plugin name
+		std::string_view displayName{};                       // name displayed to the user
+		float minValue = 0.0f;                                // minimum scaled value
+		float maxValue = 1.0f;                                // maximum scaled value
+		float defaultValue = 0.0f;                            // default scaled value
+		float defaultNormalisedValue = 0.0f;                  // default normalised value
+		ParameterScale scale = ParameterScale::Linear;        // value skew factor
+		std::string_view displayUnits{};                      // "%", "db", etc.
+		std::span<const std::string_view> stringLookup{};     // if scale is Indexed, you can use a text lookup
+		bool isStereo = false;                                // if parameter allows stereo modulation
+		bool isModulatable = true;                            // if parameter allows modulation at all
+		UpdateFlag updateFlag = UpdateFlag::Realtime;         // at which point during processing the parameter is updated
+		bool isExtensible = false;                            // if parameter's minimum/maximum/default values can change
+		bool isAutomatable = true;                            // if parameter allows host automation
 	};
 
 	enum class PluginParameters : u32 { MasterMix = 0, BlockSize, Overlap, WindowType, WindowAlpha, OutGain };
@@ -71,7 +72,7 @@ namespace Framework
 	
 	enum class EffectsLaneParameters : u32 { LaneEnabled = 0, Input, Output, GainMatching };
 
-	inline constexpr std::array<ParameterDetails, magic_enum::enum_count<EffectsLaneParameters>()> effectChainParameterList =
+	inline constexpr std::array<ParameterDetails, magic_enum::enum_count<EffectsLaneParameters>()> effectLaneParameterList =
 	{
 		ParameterDetails
 		{ "LANE_ENABLED", "Lane Enabled", 0.0f, 1.0f, 1.0f, 1.0f, ParameterScale::Toggle, "", kOffOnNames },
@@ -153,6 +154,11 @@ namespace Framework
 			Depth = magic_enum::enum_count<BaseEffectParameters>()
 		};
 
+		enum class Clip : u32
+		{
+			Threshold = magic_enum::enum_count<BaseEffectParameters>()
+		};
+
 		enum class Compressor : u32
 		{
 			Depth = magic_enum::enum_count<BaseEffectParameters>(),
@@ -160,7 +166,8 @@ namespace Framework
 			Ratio
 		};
 
-		inline constexpr size_t size = std::max(magic_enum::enum_count<Contrast>(), magic_enum::enum_count<Compressor>());
+		inline constexpr size_t size = std::max({ magic_enum::enum_count<Contrast>(),
+			magic_enum::enum_count<Clip>(), magic_enum::enum_count<Compressor>() });
 	}
 
 	inline constexpr std::array<std::array<ParameterDetails,
@@ -169,7 +176,11 @@ namespace Framework
 		std::array<ParameterDetails, (u32)DynamicsEffectParameters::size>
 		{
 			ParameterDetails
-			{ "CONTRAST_FX_DEPTH", "Depth", -1.0f, 1.0f, 0.0f, 0.5f, ParameterScale::Linear, "%", {}, true }
+			{ "DYNAMICS_CONTRAST_FX_DEPTH", "Depth", -1.0f, 1.0f, 0.0f, 0.5f, ParameterScale::Linear, "%", {}, true }
+		},
+		{
+			ParameterDetails
+			{ "DYNAMICS_CLIPPING_FX_THRESHOLD", "Threshold", 0.0f, 1.0f, 0.0f, 0.0f, ParameterScale::Linear, "%", {}, true }
 		}
 	};
 
@@ -188,17 +199,15 @@ namespace Framework
 			static consteval auto getParameterLookup()
 			{
 				constexpr size_t totalSize = pluginParameterList.size() + 
-					effectChainParameterList.size() + effectModuleParameterList.size() +
+					effectLaneParameterList.size() + effectModuleParameterList.size() +
 					baseEffectParameterList.size() + getParametersSize(filterEffectParameterList) +
 					getParametersSize(dynamicsEffectParameterList);
-
-				//constexpr size_t asdf = getParametersSize(filterEffectParameterList);
 
 				ConstexprMap<std::string_view, ParameterDetails, totalSize> map{};
 				size_t index = 0;
 
 				index = addParametersToMap(map, pluginParameterList, index);
-				index = addParametersToMap(map, effectChainParameterList, index);
+				index = addParametersToMap(map, effectLaneParameterList, index);
 				index = addParametersToMap(map, effectModuleParameterList, index);
 				index = addParametersToMap(map, baseEffectParameterList, index);
 
@@ -222,7 +231,7 @@ namespace Framework
 			{
 				for (auto &param : parameterList)
 				{
-					map.data[index] = { param.name, param };
+					map.data[index] = { param.id, param };
 					index++;
 				}
 				return index;
@@ -235,10 +244,10 @@ namespace Framework
 					for (auto &param : parameterList)
 					{
 						// in order to not include placeholder parameters
-						if (param.name.empty())
+						if (param.id.empty())
 							continue;
 
-						map.data[index] = { param.name, param };
+						map.data[index] = { param.id, param };
 						index++;
 					}
 				}

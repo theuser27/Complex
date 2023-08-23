@@ -3,112 +3,118 @@
 
     OpenGlImageComponent.cpp
     Created: 14 Dec 2022 2:07:44am
-    Author:  Lenovo
+    Author:  theuser27
 
   ==============================================================================
 */
 
 #include "OpenGlImageComponent.h"
-#include "Framework/utils.h"
+#include "../Sections/BaseSection.h"
 
 namespace Interface
 {
-  void OpenGlImageComponent::redrawImage(bool force)
+  void OpenGlImageComponent::redrawImage(bool clearOnRedraw)
   {
     if (!active_)
       return;
 
     Component *component = targetComponent_ ? targetComponent_ : this;
 
-    auto *display = Desktop::getInstance().getDisplays().getDisplayForPoint(getScreenPosition());
-    COMPLEX_ASSERT(display && "We're running graphics classes on a system with no display??");
-  	double pixelScale = display->scale;
-    int width = (int)(component->getWidth() * pixelScale);
-    int height = (int)(component->getHeight() * pixelScale);
+    int width = component->getWidth();
+    int height = component->getHeight();
     if (width <= 0 || height <= 0)
       return;
 
     bool newImage = drawImage_ == nullptr || drawImage_->getWidth() != width || drawImage_->getHeight() != height;
-    if (!newImage && (staticImage_ || !force))
+    if (!newImage && (staticImage_ /* || !isDirty_*/))
       return;
-
-    image_.lock();
 
     if (newImage)
       drawImage_ = std::make_unique<Image>(Image::ARGB, width, height, false);
 
-    drawImage_->clear(Rectangle<int>(0, 0, width, height));
+    if (clearOnRedraw)
+      drawImage_->clear(Rectangle{ 0, 0, width, height });
+
     Graphics g(*drawImage_);
-    g.addTransform(AffineTransform::scale((float)pixelScale));
-    paintToImage(g);
+    paintToImage(g, component);
+
+    image_.lock();
     image_.setImage(drawImage_.get());
 
-    // TODO: figure out what these calculations were supposed to do
-  	//float glWidth = utils::nextPowerOfTwo((float)width);
-   // float glHeight = utils::nextPowerOfTwo((float)height);
-   // float widthRatio = glWidth / (float)width;
-   // float heightRatio = glHeight / (float)height;
-  	//float right = -1.0f + 2.0f * widthRatio;
-    //float bottom = 1.0f - 2.0f * heightRatio;
-
     image_.setTopLeft(-1.0f, 1.0f);
-  	image_.setTopRight(1.0f, 1.0f);
+    image_.setTopRight(1.0f, 1.0f);
     image_.setBottomLeft(-1.0f, -1.0f);
     image_.setBottomRight(1.0f, -1.0f);
     image_.unlock();
-  }
 
-  void OpenGlImageComponent::init(OpenGlWrapper &openGl)
-  { image_.init(openGl); }
+    isDirty_ = false;
+  }
 
   void OpenGlImageComponent::render(OpenGlWrapper &openGl, bool animate)
   {
-    animator_.tick(animate);
-
     Component *targetComponent = targetComponent_ ? targetComponent_ : this;
     if (!active_ || !setViewPort(targetComponent, openGl) || !targetComponent->isVisible())
       return;
 
-    image_.render();
+    image_.render(openGl, animate);
   }
 
-  void OpenGlImageComponent::destroy([[maybe_unused]] OpenGlWrapper &openGl)
-  { image_.destroy(); }
-
-  void PlainTextComponent::paintToImage(Graphics &g)
+  void OpenGlBackground::paintToImage(Graphics &g, [[maybe_unused]] Component *target)
   {
-    if (font_type_ == kTitle)
+    std::visit([&](auto &&componentToRedraw)
+      {
+        Rectangle<int> bounds = targetComponent_->getLocalArea(componentToRedraw, 
+          componentToRedraw->getLocalBounds());
+        g.reduceClipRegion(bounds);
+        g.setOrigin(bounds.getTopLeft());
+        componentToRedraw->paintBackground(g);
+      }, componentToRedraw_);
+  }
+
+  void PlainTextComponent::paintToImage(Graphics &g, Component *target)
+  {
+    updateState();
+
+    g.setFont(font_);
+    g.setColour(textColour_);
+
+    g.drawText(text_, 0, 0, target->getWidth(), target->getHeight(), justification_, true);
+  }
+
+  void PlainTextComponent::updateState()
+  {
+    Font font;
+    if (fontType_ == kTitle)
     {
-      g.setColour(getColour(Skin::kHeadingText));
-      g.setFont(Fonts::instance()->getInterVFont().withHeight(text_size_).boldened());
+      textColour_ = getColour(Skin::kHeadingText);
+      font = Fonts::instance()->getInterVFont().boldened();
     }
-    else if (font_type_ == kText)
+    else if (fontType_ == kText)
     {
-      g.setColour(getColour(Skin::kNormalText));
-      g.setFont(Fonts::instance()->getInterVFont().withHeight(text_size_));
+      textColour_ = getColour(Skin::kNormalText);
+      font = Fonts::instance()->getInterVFont();
     }
     else
     {
-      g.setColour(getColour(Skin::kWidgetPrimary1));
-      g.setFont(Fonts::instance()->getDDinFont().withHeight(text_size_));
+      textColour_ = getColour(Skin::kWidgetPrimary1);
+      font = Fonts::instance()->getDDinFont();
     }
 
-    Component *component = targetComponent_ ? targetComponent_ : this;
-
-    g.drawText(text_, buffer_, 0, component->getWidth() - 2 * buffer_,
-      component->getHeight(), justification_, true);
+    Fonts::instance()->setFontFromHeight(font, parent_->scaleValue(textSize_));
+    font_ = std::move(font);
   }
 
-	void PlainShapeComponent::paintToImage(Graphics &g)
+  void PlainShapeComponent::paintToImage(Graphics &g, Component *target)
   {
-    Component *component = targetComponent_ ? targetComponent_ : this;
-    Rectangle<float> bounds = component->getLocalBounds().toFloat();
-    Path shape = shape_;
-    shape.applyTransform(shape.getTransformToScaleToFit(bounds, true, justification_));
+    Rectangle<float> bounds = target->getLocalBounds().toFloat();
 
     g.setColour(Colours::white);
-    //g.fillPath(shape);
-    g.strokePath(shape, PathStrokeType(1.0f, PathStrokeType::JointStyle::mitered, PathStrokeType::EndCapStyle::rounded));
+    auto transform = strokeShape_.getTransformToScaleToFit(bounds, true, justification_);
+    if (!strokeShape_.isEmpty())
+      g.strokePath(strokeShape_, PathStrokeType{ 1.0f, PathStrokeType::JointStyle::beveled, PathStrokeType::EndCapStyle::butt },
+        transform);
+    if (!fillShape_.isEmpty())
+      g.fillPath(fillShape_, transform);
   }
 
 }

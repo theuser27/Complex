@@ -10,6 +10,7 @@
 
 #pragma once
 
+#include <numbers>
 #include "simd_values.h"
 
 namespace common

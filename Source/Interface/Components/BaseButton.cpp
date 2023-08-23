@@ -14,25 +14,6 @@
 
 namespace Interface
 {
-	void ButtonLabel::setParent(BaseButton *parent) noexcept
-	{
-		parent_ = parent;
-		labelText_ = (!parent->hasParameter()) ? parent->getName() :
-			parent->getParameterDetails().displayName.data();
-	}
-
-	void ButtonLabel::paint(Graphics &g)
-	{
-		// painting only the label text, the other components will be handled by the owning section
-		if (!parent_)
-			return;
-
-		auto textRectangle = Rectangle{ 0.0f, 0.0f, (float)getWidth(), (float)getHeight() };
-		g.setFont(usedFont_);
-		g.setColour(parent_->getColour(Skin::kNormalText));
-		g.drawText(parent_->getParameterDetails().displayName.data(), textRectangle, Justification::centredLeft);
-	}
-
 	ButtonComponent::ButtonComponent(BaseButton *button) : button_(button)
 	{
 		animator_.setHoverIncrement(kHoverIncrement);
@@ -279,21 +260,16 @@ namespace Interface
 
 	BaseButton::BaseButton(Framework::ParameterValue *parameter, String name)
 	{
+		buttonComponent_ = makeOpenGlComponent<ButtonComponent>(this);
+		components_.push_back(buttonComponent_);
+		
 		if (!parameter)
 		{
-			setName(name);
-			hasParameter_ = false;
+			BaseControl::setName(std::move(name));
 			return;
 		}
 
-		hasParameter_ = true;
-		setName(parameter->getParameterDetails().name.data());
-
-		setParameterLink(parameter->getParameterLink());
-		setParameterDetails(parameter->getParameterDetails());
-
-		setToggleState(std::round(details_.defaultNormalisedValue) == 1.0f, NotificationType::dontSendNotification);
-		setValueSafe(std::round(details_.defaultNormalisedValue));
+		changeLinkedParameter(*parameter);
 	}
 
 	void BaseButton::resized()
@@ -301,21 +277,21 @@ namespace Interface
 		static constexpr float kUiButtonSizeMult = 0.45f;
 
 		ToggleButton::resized();
-		buttonComponent_.setText();
-		buttonComponent_.background().markDirty();
+		buttonComponent_->setText();
+		buttonComponent_->background().markDirty();
 
-		if (buttonComponent_.style() == ButtonComponent::kActionButton)
+		if (buttonComponent_->style() == ButtonComponent::kActionButton)
 		{
-			buttonComponent_.text().setFontType(PlainTextComponent::kText);
-			buttonComponent_.text().setTextHeight(kUiButtonSizeMult * (float)getHeight());
+			buttonComponent_->text().setFontType(PlainTextComponent::kText);
+			buttonComponent_->text().setTextHeight(kUiButtonSizeMult * (float)getHeight());
 		}
-		else if (buttonComponent_.style() == ButtonComponent::kShapeButton || 
-			buttonComponent_.style() == ButtonComponent::kPowerButton)
-			buttonComponent_.shape().redrawImage();
+		else if (buttonComponent_->style() == ButtonComponent::kShapeButton || 
+			buttonComponent_->style() == ButtonComponent::kPowerButton)
+			buttonComponent_->shape().redrawImage();
 		else
-			buttonComponent_.text().setTextHeight(parent_->getValue(Skin::kButtonFontSize));
+			buttonComponent_->text().setTextHeight(parent_->getValue(Skin::kButtonFontSize));
 
-		buttonComponent_.setColors();
+		buttonComponent_->setColors();
 	}
 
 	void BaseButton::mouseDown(const MouseEvent &e)
@@ -325,7 +301,7 @@ namespace Interface
 			ToggleButton::mouseExit(e);
 
 			// this implies that the button is not a parameter
-			if (details_.name.empty())
+			if (!hasParameter())
 				return;
 
 			PopupItems options;
@@ -333,7 +309,7 @@ namespace Interface
 			//if (synth->isMidiMapped(getName().toStdString()))
 			//  options.addItem(kClearMidiLearn, "Clear MIDI Assignment");
 
-			parent_->showPopupSelector(this, e.getPosition(), options, 
+			parent_->showPopupSelector(this, e.getPosition(), std::move(options),
 				[this](int selection) { handlePopupResult(selection); });
 		}
 		else
@@ -346,8 +322,8 @@ namespace Interface
 				parameterLink_->hostControl->beginChangeGesture();
 		}
 
-		buttonComponent_.getAnimator().setIsClicked(true);
-		buttonComponent_.setDown(true);
+		buttonComponent_->getAnimator().setIsClicked(true);
+		buttonComponent_->setDown(true);
 	}
 
 	void BaseButton::mouseUp(const MouseEvent &e)
@@ -364,25 +340,44 @@ namespace Interface
 		if (parameterLink_ && parameterLink_->hostControl)
 			parameterLink_->hostControl->endChangeGesture();
 
-		buttonComponent_.getAnimator().setIsClicked(false);
-		buttonComponent_.setDown(false);
+		buttonComponent_->getAnimator().setIsClicked(false);
+		buttonComponent_->setDown(false);
 	}
 
-	void BaseButton::parentHierarchyChanged()
+	Rectangle<int> BaseButton::getOverallBoundsForHeight(int height)
 	{
-		parent_ = findParentComponentOfClass<BaseSection>();
-		ToggleButton::parentHierarchyChanged();
+		// TODO: expand when needed
+		return { height, height };
+	}
+
+	void BaseButton::positionExtraElements(Rectangle<int> anchorBounds)
+	{
+		if (!label_)
+			return;
+
+		label_->updateState();
+		auto labelTextWidth = label_->getTotalWidth();
+		auto labelX = anchorBounds.getX();
+		switch (labelPlacement_)
+		{
+		case BubbleComponent::right:
+			labelX += anchorBounds.getWidth() + parent_->scaleValueRoundInt(kLabelOffset);
+			label_->setJustification(Justification::centredLeft);
+			break;
+		default:
+		case BubbleComponent::above:
+		case BubbleComponent::below:
+		case BubbleComponent::left:
+			labelX -= parent_->scaleValueRoundInt(kLabelOffset) + labelTextWidth;
+			label_->setJustification(Justification::centredRight);
+			break;
+		}
+
+		extraElements_.find(label_.get())->second = 
+			Rectangle{ labelX, 0, labelTextWidth, anchorBounds.getHeight() };
 	}
 
 	void BaseButton::clicked() { setValueSafe(getToggleState()); }
-
-	void BaseButton::endChange()
-	{
-		auto *mainInterface = findParentComponentOfClass<MainInterface>();
-		mainInterface->getPlugin().pushUndo(new Framework::ParameterUpdate(this, valueBeforeChange_, (double)getToggleState()));
-	}
-
-	Colour BaseButton::getColour(Skin::ColorId colourId) const noexcept { return parent_->getColour(colourId); }
 
 	String BaseButton::getTextFromValue(bool value) const noexcept
 	{
@@ -407,12 +402,24 @@ namespace Interface
 		//  synth->clearMidiLearn(getName().toStdString());
 	}
 
+	void BaseButton::addListener(BaseSection *listener)
+	{
+		buttonListeners_.push_back(listener);
+		ToggleButton::addListener(listener);
+	}
+
+	void BaseButton::removeListener(BaseSection *listener)
+	{
+		std::erase(buttonListeners_, listener);
+		ToggleButton::removeListener(listener);
+	}
+
 	void BaseButton::clicked(const ModifierKeys &modifiers)
 	{
 		ToggleButton::clicked(modifiers);
 
 		if (!modifiers.isPopupMenu())
-			for (ButtonListener *listener : buttonListeners_)
+			for (Listener *listener : buttonListeners_)
 				listener->guiChanged(this);
 
 		if (!details_.stringLookup.empty())

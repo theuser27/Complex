@@ -28,18 +28,18 @@ namespace Generation
 	filterEffect::filterEffect(Plugin::ProcessorTree *globalModulesState, u64 parentModuleId) :
 		baseEffect(globalModulesState, parentModuleId, getClassType())
 	{
-		auto parameterSize = Framework::baseEffectParameterList.size() + (u32)Framework::FilterEffectParameters::size;
+		auto parameterSize = Framework::baseEffectParameterList.size() + Framework::FilterEffectParameters::size;
 		processorParameters_.data.reserve(parameterSize);
-		createProcessorParameters(Framework::filterEffectParameterList[0].data(), (u32)Framework::FilterEffectParameters::size);
+		createProcessorParameters(Framework::filterEffectParameterList[0].data(), Framework::FilterEffectParameters::size);
 		setEffectModeStrings(Framework::EffectTypes::Filter);
 	}
 
 	dynamicsEffect::dynamicsEffect(Plugin::ProcessorTree *globalModulesState, u64 parentModuleId) :
 		baseEffect(globalModulesState, parentModuleId, getClassType())
 	{
-		auto parameterSize = Framework::baseEffectParameterList.size() + (u32)Framework::DynamicsEffectParameters::size;
+		auto parameterSize = Framework::baseEffectParameterList.size() + Framework::DynamicsEffectParameters::size;
 		processorParameters_.data.reserve(parameterSize);
-		createProcessorParameters(Framework::dynamicsEffectParameterList[0].data(), (u32)Framework::DynamicsEffectParameters::size);
+		createProcessorParameters(Framework::dynamicsEffectParameterList[0].data(), Framework::DynamicsEffectParameters::size);
 		setEffectModeStrings(Framework::EffectTypes::Dynamics);
 	}
 
@@ -73,6 +73,16 @@ namespace Generation
 
 	}
 
+	void baseEffect::updateParameterDetails(std::span<const Framework::ParameterDetails> newDetails)
+	{
+		auto updateParameters = [this, newDetails]()
+		{
+			for (size_t i = 0; i < newDetails.size(); i++)
+				getEffectParameter(i)->setParameterDetails(newDetails[i]);
+		};
+		getProcessorTree()->executeOutsideProcessing(updateParameters);
+	}
+
 	///////////////////////////////////////////////
 	///////////////////////////////////////////////
 	////////////////// Utilities //////////////////
@@ -80,7 +90,7 @@ namespace Generation
 	///////////////////////////////////////////////
 
 	std::pair<simd_float, simd_float> baseEffect::getShiftedBounds(BoundRepresentation representation,
-		float sampleRate, u32 FFTSize, bool isLinearShift) const noexcept
+	                                                               float sampleRate, u32 FFTSize, bool isLinearShift) const noexcept
 	{
 		using namespace utils;
 		using namespace Framework;
@@ -89,7 +99,7 @@ namespace Generation
 		// TODO: do dynamic min frequency based on FFTOrder
 		// TODO: get shifted bounds as normalised value/frequency/FFT bin
 		float nyquistFreq = sampleRate * 0.5f;
-		float maxOctave = static_cast<float>(std::log2(nyquistFreq / kMinFrequency));
+		float maxOctave = (float)std::log2(nyquistFreq / kMinFrequency);
 
 		if (isLinearShift)
 		{
@@ -133,55 +143,48 @@ namespace Generation
 		return { lowBound, highBound };
 	}
 
-	std::pair<u32, u32> vector_call baseEffect::getRange(simd_int lowIndices, simd_int highIndices,
-		u32 effectiveFFTSize, bool isProcessedRange) const noexcept
+	std::pair<u32, u32> vector_call baseEffect::getRange(simd_int lowIndices, 
+		simd_int highIndices, u32 binCount, bool isProcessedRange)
 	{
 		// 1. all the indices in the respective bounds are the same (mono)
 		// 2. the indices in the respective bounds are different (stereo)
 
-		// NB: the range for processing is [start, end] and NOT [start, end)
-
-		bool areAllSame = utils::areAllElementsSame(lowIndices) && utils::areAllElementsSame(highIndices);
-
 		// 1.
-		if (areAllSame)
+		if (utils::areAllElementsSame(lowIndices) && utils::areAllElementsSame(highIndices))
 		{
 			u32 start, end;
 			if (isProcessedRange)
 			{
 				start = lowIndices[0];
 				end = highIndices[0];
-				if ((((start + 1) & (effectiveFFTSize - 1)) == end) || 
-					 (((end + 1) & (effectiveFFTSize - 1)) == start) ||
+				if ((((start + 1) & (binCount - 1)) == end) ||
+					 (((end + 1) & (binCount - 1)) == start) ||
 					 (start == end))
-					return { start, effectiveFFTSize };
+					return { start, binCount };
 				else
-					return { start, ((effectiveFFTSize + end - start) & (effectiveFFTSize - 1)) + 1 };
+					return { start, ((binCount + end - start) & (binCount - 1)) + 1 };
 			}
 			else
 			{
 				start = highIndices[0];
 				end = lowIndices[0];
-				if ((((start + 1) & (effectiveFFTSize - 1)) == end) || (((end + 1) & (effectiveFFTSize - 1)) == start))
+				if ((((start + 1) & (binCount - 1)) == end) || (((end + 1) & (binCount - 1)) == start))
 					return { start, 0 };
 				else
-					return { (start + 1) & (effectiveFFTSize - 1), (effectiveFFTSize + end - start) & (effectiveFFTSize - 1) };
+					return { (start + 1) & (binCount - 1), (binCount + end - start) & (binCount - 1) };
 			}
 		}
 
 		// 2.
 		// trying to rationalise what parts to cover is proving too complicated
-		// TODO: if the range is [start, end], then why are we specifying a range that's [start, end)????
-		return { 0, effectiveFFTSize };
+		return { 0, binCount };
 	}
 
 	void baseEffect::copyUnprocessedData(Framework::SimdBufferView<std::complex<float>, simd_float> &source,
 		Framework::SimdBuffer<std::complex<float>, simd_float> &destination, const simd_int &lowBoundIndices,
 		const simd_int &highBoundIndices, u32 effectiveFFTSize) const noexcept
 	{
-		auto unprocessedIndexAndRange = getRange(lowBoundIndices, highBoundIndices, effectiveFFTSize, false);
-		u32 index = unprocessedIndexAndRange.first;
-		u32 numBins = unprocessedIndexAndRange.second;
+		auto [index, numBins] = getRange(lowBoundIndices, highBoundIndices, effectiveFFTSize, false);
 
 		// this is not possible, so we'll take it to mean that we have stereo bounds
 		if (index == 0 && numBins == effectiveFFTSize)
@@ -253,7 +256,7 @@ namespace Generation
 	/////////////////////////////////////////////////////////////
 
 	perf_inline void filterEffect::runNormal(Framework::SimdBufferView<std::complex<float>, simd_float> &source,
-		Framework::SimdBuffer<std::complex<float>, simd_float> &destination, u32 effectiveFFTSize, float sampleRate) const noexcept
+		Framework::SimdBuffer<std::complex<float>, simd_float> &destination, u32 binCount, float sampleRate) const noexcept
 	{
 		using namespace utils;
 		using namespace Framework;
@@ -264,20 +267,20 @@ namespace Generation
 		simd_float boundsDistance = modOnce(simd_float(1.0f) + highBoundNorm - lowBoundNorm, 1.0f);
 
 		// getting the boundaries in terms of bin position
-		auto shiftedBoundsIndices = getShiftedBounds(BoundRepresentation::BinIndex, sampleRate, effectiveFFTSize * 2);
-		simd_int lowBoundIndices = toInt(shiftedBoundsIndices.first);
-		simd_int highBoundIndices = toInt(shiftedBoundsIndices.second);
+		auto [lowBoundIndices, highBoundIndices] = [&]()
+		{
+			auto shiftedBoundsIndices = getShiftedBounds(BoundRepresentation::BinIndex, sampleRate, binCount * 2);
+			return std::pair{ toInt(shiftedBoundsIndices.first), toInt(shiftedBoundsIndices.second) };
+		}();
 
 		// minimising the bins to iterate on
-		auto processedIndexAndRange = getRange(lowBoundIndices, highBoundIndices, effectiveFFTSize, true);
-		u32 index = processedIndexAndRange.first;
-		u32 numBins = processedIndexAndRange.second;
+		auto [index, numBins] = getRange(lowBoundIndices, highBoundIndices, binCount, true);
 
 		// cutoff is described as exponential normalised value of the sample rate
 		// it is dependent on the values of the low/high bounds
 		simd_float cutoffNorm = modOnce(lowBoundNorm + boundShift + boundsDistance * 
 			processorParameters_[(u32)FilterEffectParameters::Normal::Cutoff]->getInternalValue<simd_float>(sampleRate), 1.0f);
-		simd_int cutoffIndices = toInt(normalisedToBin(cutoffNorm, effectiveFFTSize * 2, sampleRate));
+		simd_int cutoffIndices = toInt(normalisedToBin(cutoffNorm, binCount * 2, sampleRate));
 
 		// if mask scalars are negative -> brickwall, if positive -> linear slope
 		// slopes are logarithmic
@@ -292,9 +295,10 @@ namespace Generation
 
 		for (u32 i = 0; i < numBins; i++)
 		{
+			u32 currentIndex = (index + i) & (binCount - 1);
 			// the distances are logarithmic
-			simd_float distancesFromCutoff = getDistancesFromCutoffs(simd_int(index),
-				cutoffIndices, lowBoundIndices, effectiveFFTSize * 2, sampleRate);
+			simd_float distancesFromCutoff = getDistancesFromCutoffs(simd_int(currentIndex),
+				cutoffIndices, lowBoundIndices, binCount * 2, sampleRate);
 
 			// calculating linear slope and brickwall, both are ratio of the gain attenuation
 			// the higher tha value the more it will be affected by it
@@ -307,22 +311,20 @@ namespace Generation
 			// convert db reduction to amplitude multiplier
 			currentGains = dbToAmplitude(-currentGains);
 
-			destination.writeSimdValueAt(source.readSimdValueAt(0, index) * currentGains, 0, index);
-
-			index = (index + 1) & (effectiveFFTSize - 1);
+			destination.writeSimdValueAt(source.readSimdValueAt(0, currentIndex) * currentGains, 0, currentIndex);
 		}
 
-		copyUnprocessedData(source, destination, lowBoundIndices, highBoundIndices, effectiveFFTSize);
+		copyUnprocessedData(source, destination, lowBoundIndices, highBoundIndices, binCount);
 	}
 
 	void filterEffect::run(Framework::SimdBufferView<std::complex<float>, simd_float> &source,
-		Framework::SimdBuffer<std::complex<float>, simd_float> &destination, u32 effectiveFFTSize, float sampleRate) noexcept
+		Framework::SimdBuffer<std::complex<float>, simd_float> &destination, u32 binCount, float sampleRate) noexcept
 	{
 		using namespace Framework;
 		switch (getEffectAlgorithm())
 		{
 		case (u32)FilterModes::Normal:
-			runNormal(source, destination, effectiveFFTSize, sampleRate);
+			runNormal(source, destination, binCount, sampleRate);
 			break;
 		case (u32)FilterModes::Regular:
 		default:
@@ -331,31 +333,29 @@ namespace Generation
 	}
 
 	perf_inline void dynamicsEffect::runContrast(Framework::SimdBufferView<std::complex<float>, simd_float> &source,
-		Framework::SimdBuffer<std::complex<float>, simd_float> &destination, u32 effectiveFFTSize, float sampleRate) const noexcept
+		Framework::SimdBuffer<std::complex<float>, simd_float> &destination, u32 binCount, float sampleRate) const noexcept
 	{
 		using namespace utils;
 		using namespace Framework;
 
 		// getting the boundaries in terms of bin position
-		auto shiftedBoundsIndices = getShiftedBounds(BoundRepresentation::BinIndex, sampleRate, effectiveFFTSize * 2);
-		simd_int lowBoundIndices = toInt(shiftedBoundsIndices.first);
-		simd_int highBoundIndices = toInt(shiftedBoundsIndices.second);
-		simd_int boundDistanceCount = maskLoad(((simd_int(effectiveFFTSize) + highBoundIndices - lowBoundIndices) & simd_int(effectiveFFTSize - 1)) + 1,
-																					 simd_int(0), simd_int::equal(lowBoundIndices, highBoundIndices));
+		auto [lowBoundIndices, highBoundIndices] = [&]()
+		{
+			auto shiftedBoundsIndices = getShiftedBounds(BoundRepresentation::BinIndex, sampleRate, binCount * 2);
+			return std::pair{ toInt(shiftedBoundsIndices.first), toInt(shiftedBoundsIndices.second) };
+		}();
 
 		// minimising the bins to iterate on
-		auto processedIndexAndRange = getRange(lowBoundIndices, highBoundIndices, effectiveFFTSize, true);
-		u32 index = processedIndexAndRange.first;
-		u32 numBins = processedIndexAndRange.second;
+		auto [index, numBins] = getRange(lowBoundIndices, highBoundIndices, binCount, true);
 
 		// calculating contrast
-		simd_float contrastParameter = processorParameters_[(u32)DynamicsEffectParameters::Contrast::Depth]
+		simd_float depthParameter = processorParameters_[(u32)DynamicsEffectParameters::Contrast::Depth]
 			->getInternalValue<simd_float>(sampleRate);
-		simd_float contrast = contrastParameter * contrastParameter;
+		simd_float contrast = depthParameter * depthParameter;
 		contrast = maskLoad(
 			lerp(simd_float(0.0f), simd_float(kContrastMaxNegativeValue), contrast),
 			lerp(simd_float(0.0f), simd_float(kContrastMaxPositiveValue), contrast),
-			simd_float::greaterThanOrEqual(contrastParameter, 0.0f));
+			simd_float::greaterThanOrEqual(depthParameter, 0.0f));
 
 		simd_float min = exp(simd_float(-80.0f) / (contrast * 2.0f + 1.0f));
 		simd_float max = exp(simd_float(80.0f) / (contrast * 2.0f + 1.0f));
@@ -365,60 +365,132 @@ namespace Generation
 		simd_float inPower = 0.0f;
 		for (u32 i = 0; i < numBins; i++)
 		{
-			inPower += complexMagnitude(source.readSimdValueAt(0, index), false);
-			index = (index + 1) & (effectiveFFTSize - 1);
+			u32 currentIndex = (index + i) & (binCount - 1);
+			inPower += complexMagnitude(source.readSimdValueAt(0, currentIndex), false);
 		}
-		index = processedIndexAndRange.first;
 		
+		simd_int boundDistanceCount = maskLoad(((simd_int(binCount) + highBoundIndices - lowBoundIndices) & simd_int(binCount - 1)) + 1,
+		                                       simd_int(0), simd_int::equal(lowBoundIndices, highBoundIndices));
 		simd_float inScale = matchPower(toFloat(boundDistanceCount), inPower);
 		simd_float outPower = 0.0f;
 
 		// applying gain
 		for (u32 i = 0; i < numBins; i++)
 		{
-			simd_float bin = inScale * source.readSimdValueAt(0, index);
+			u32 currentIndex = (index + i) & (binCount - 1);
+			simd_float bin = inScale * source.readSimdValueAt(0, currentIndex);
 			simd_float magnitude = complexMagnitude(bin, true);
 
 			bin = maskLoad(bin, simd_float(0.0f), simd_float::greaterThan(min, magnitude));
 			bin = maskLoad(bin, bin * pow(magnitude, contrast), simd_float::greaterThan(max, magnitude));
 
 			outPower += complexMagnitude(bin, false);
-			destination.writeSimdValueAt(bin, 0, index);
-
-			index = (index + 1) & (effectiveFFTSize - 1);
+			destination.writeSimdValueAt(bin, 0, currentIndex);
 		}
-		index = processedIndexAndRange.first;
 
 		// normalising 
 		simd_float outScale = matchPower(inPower, outPower);
 		for (u32 i = 0; i < numBins; i++)
 		{
-			destination.multiply(outScale, 0, index);
-			index = (index + 1) & (effectiveFFTSize - 1);
+			u32 currentIndex = (index + i) & (binCount - 1);
+			destination.multiply(outScale, 0, currentIndex);
 		}
 
-		copyUnprocessedData(source, destination, lowBoundIndices, highBoundIndices, effectiveFFTSize);
+		copyUnprocessedData(source, destination, lowBoundIndices, highBoundIndices, binCount);
+	}
+
+	perf_inline void dynamicsEffect::runClip(Framework::SimdBufferView<std::complex<float>, simd_float> &source,
+		Framework::SimdBuffer<std::complex<float>, simd_float> &destination, u32 binCount, float sampleRate) const noexcept
+	{
+		using namespace utils;
+		using namespace Framework;
+
+		// getting the boundaries in terms of bin position
+		auto [lowBoundIndices, highBoundIndices] = [&]()
+		{
+			auto shiftedBoundsIndices = getShiftedBounds(BoundRepresentation::BinIndex, sampleRate, binCount * 2);
+			return std::pair{ toInt(shiftedBoundsIndices.first), toInt(shiftedBoundsIndices.second) };
+		}();
+
+		// minimising the bins to iterate on
+		auto [index, numBins] = getRange(lowBoundIndices, highBoundIndices, binCount, true);
+
+		// getting the min/max power in the range selected
+		std::pair<simd_float, simd_float> powerMinMax{ 1e30f, 1e-30f };
+		for (u32 i = 0; i < numBins; i++)
+		{
+			u32 currentIndex = (index + i) & (binCount - 1);
+
+			simd_float magnitudeForMin = complexMagnitude(source.readSimdValueAt(0, currentIndex), false);
+			simd_float magnitudeForMax = magnitudeForMin;
+
+			magnitudeForMin = simd_float::min(powerMinMax.first, magnitudeForMin);
+			magnitudeForMax = simd_float::max(powerMinMax.second, magnitudeForMax);
+
+			simd_mask indexMask = isInsideBounds(currentIndex, lowBoundIndices, highBoundIndices);
+			powerMinMax.first = maskLoad(powerMinMax.first, magnitudeForMin, indexMask);
+			powerMinMax.second = maskLoad(powerMinMax.second, magnitudeForMax, indexMask);
+		}
+
+		// calculating clipping
+		simd_float thresholdParameter = processorParameters_[(u32)DynamicsEffectParameters::Contrast::Depth]
+			->getInternalValue<simd_float>(sampleRate);
+		simd_float threshold = exp(lerp(log(simd_float::max(powerMinMax.first, 1e-36f)),
+		                                log(simd_float::max(powerMinMax.second, 1e-36f)),
+		                                simd_float(1.0f) - thresholdParameter));
+		simd_float sqrtThreshold = simd_float::sqrt(threshold);
+
+		// doing clipping
+		simd_float inPower = 0.0f;
+		simd_float outPower = 0.0f;
+		for (u32 i = 0; i < numBins; i++)
+		{
+			u32 currentIndex = (index + i) & (binCount - 1);
+
+			simd_float bin = source.readSimdValueAt(0, currentIndex);
+			simd_float magnitude = complexMagnitude(bin, false);
+			simd_float multiplier = maskLoad(simd_float(1.0f), sqrtThreshold / simd_float::sqrt(magnitude),
+				simd_float::greaterThanOrEqual(magnitude, threshold));
+
+			// we don't mask for the writing because copyUnprocessedData will overwrite any data outside the bounds
+			destination.writeSimdValueAt(bin * multiplier, 0, currentIndex);
+
+			simd_mask indexMask = isInsideBounds(currentIndex, lowBoundIndices, highBoundIndices);
+			inPower += maskLoad(simd_float(0.0f), magnitude, indexMask);
+			outPower += maskLoad(simd_float(0.0f), simd_float::min(magnitude, threshold), indexMask);
+		}
+
+		// normalising 
+		simd_float outScale = matchPower(inPower, outPower);
+		for (u32 i = 0; i < numBins; i++)
+		{
+			u32 currentIndex = (index + i) & (binCount - 1);
+			destination.multiply(outScale, 0, currentIndex);
+		}
+
+		copyUnprocessedData(source, destination, lowBoundIndices, highBoundIndices, binCount);
 	}
 
 	void dynamicsEffect::run(Framework::SimdBufferView<std::complex<float>, simd_float> &source,
-		Framework::SimdBuffer<std::complex<float>, simd_float> &destination, u32 effectiveFFTSize, float sampleRate) noexcept
+		Framework::SimdBuffer<std::complex<float>, simd_float> &destination, u32 binCount, float sampleRate) noexcept
 	{
 		using namespace Framework;
 		switch (getEffectAlgorithm())
 		{
 		case (u32)DynamicsModes::Contrast:
-			// based on dtblkfx' contrast
-			runContrast(source, destination, effectiveFFTSize, sampleRate);
+			// based on dtblkfx contrast
+			runContrast(source, destination, binCount, sampleRate);
 			break;
-		case 1:
-			baseEffect::run(source, destination, effectiveFFTSize, sampleRate);
+		case (u32)DynamicsModes::Clip:
+			// based on dtblkfx clip
+			runClip(source, destination, binCount, sampleRate);
 			break;
 		default:
 			
 			for (u32 i = 0; i < 10; i++)
 				destination.writeSimdValueAt(source.readSimdValueAt(0, i), 0, i);
 
-			for (u32 i = 10; i <= effectiveFFTSize; i++)
+			for (u32 i = 10; i <= binCount; i++)
 				destination.writeSimdValueAt(0.0f, 0, i);
 
 			break;
@@ -437,7 +509,7 @@ namespace Generation
 		auto scaledValue = (double)(std::ranges::find(effectsTypes, effectType) - effectsTypes.begin());
 		auto *parameter = getParameterUnchecked((size_t)Framework::EffectModuleParameters::ModuleType);
 		parameter->updateValues(getProcessorTree()->getSampleRate(), 
-			Framework::unscaleValue(scaledValue, parameter->getParameterDetails()));
+			(float)Framework::unscaleValue(scaledValue, parameter->getParameterDetails()));
 	}
 
 	baseEffect *EffectModule::createEffect(std::string_view type) const noexcept
@@ -480,8 +552,7 @@ namespace Generation
 		if (!processorParameters_[(u32)EffectModuleParameters::ModuleEnabled]->getInternalValue<u32>(sampleRate))
 			return;
 
-		// SAFETY: static_cast is safe because we're only supposed to have baseEffects by design
-		auto *effect = static_cast<baseEffect *>(subProcessors_[0]);
+		auto *effect = utils::as<baseEffect *>(subProcessors_[0]);
 
 		if (source.isPolar != effect->needsPolarData())
 		{

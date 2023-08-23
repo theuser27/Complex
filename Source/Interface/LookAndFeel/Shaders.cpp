@@ -619,7 +619,7 @@ namespace Interface
 		if (shaderPrograms_.contains(shaderProgramIndex))
 			return shaderPrograms_.at(shaderProgramIndex).get();
 
-		shaderPrograms_[shaderProgramIndex] = std::make_unique<OpenGLShaderProgram>(*openGlContext_);
+		shaderPrograms_[shaderProgramIndex] = std::make_unique<OpenGLShaderProgram>(openGlContext_);
 		OpenGLShaderProgram *result = shaderPrograms_[shaderProgramIndex].get();
 		GLuint program_id = result->getProgramID();
 		glAttachShader(program_id, getVertexShaderId(vertex_shader));

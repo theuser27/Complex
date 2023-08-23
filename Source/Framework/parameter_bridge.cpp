@@ -9,8 +9,8 @@
 */
 
 #include "parameter_bridge.h"
-#include "Interface/Components/BaseSlider.h"
-#include "Plugin/Complex.h"
+#include "Interface/Components/BaseControl.h"
+#include "Plugin/PluginProcessor.h"
 
 namespace Framework
 {
@@ -57,20 +57,26 @@ namespace Framework
 		auto index = name_.second.indexOfChar(0, ' ');
 		index = (index < 0) ? name_.second.length() : index;
 		if (!link)
-		{
 			name_.second = String(name_.second.begin(), index);
-			return;
+		else
+		{
+			link->parameter->changeControl(this);
+			auto newValue = link->parameter->getNormalisedValue();
+			value_.store(newValue, std::memory_order_release);
+			sendValueChangedMessageToListeners(newValue);
+
+			String newString{};
+			newString.preallocateBytes(64);
+			newString.append(name_.second, index);
+			newString += " > ";
+			newString += link->parameter->getParameterDetails().displayName.data();
+			name_.second = std::move(newString);
 		}
 
-		link->parameter->changeControl(this);
-		value_ = link->parameter->getNormalisedValue();
+		guard.~ScopedSpinLock();
 
-		String newString{};
-		newString.preallocateBytes(64);
-		newString.append(name_.second, index);
-		newString += " > ";
-		newString += link->parameter->getParameterDetails().displayName.data();
-		name_.second = std::move(newString);
+		utils::as<ComplexAudioProcessor *>(plugin_)
+			->updateHostDisplay(AudioProcessor::ChangeDetails{}.withParameterInfoChanged(true));
 	}
 
 	void ParameterBridge::setValue(float newValue)
@@ -79,13 +85,13 @@ namespace Framework
 		value_.store(newValue, std::memory_order_release);
 		if (auto pointer = parameterLinkPointer_.load(std::memory_order_acquire); 
 			pointer && pointer->UIControl)
-				pointer->UIControl->setValueFromHost(newValue);
+				pointer->UIControl->setValueFromHost();
 	}
 
 	float ParameterBridge::getDefaultValue() const
 	{
 		if (auto pointer = parameterLinkPointer_.load(std::memory_order_acquire))
-			return pointer->parameter->getParameterDetails().defaultNormalisedValue;
+			return std::clamp(pointer->parameter->getParameterDetails().defaultNormalisedValue, 0.0f, 1.0f);
 		return kDefaultParameterValue;
 	}
 
@@ -112,7 +118,7 @@ namespace Framework
 	{
 		auto pointer = parameterLinkPointer_.load(std::memory_order_acquire);
 		if (!pointer)
-			return String(value);
+			return { value, maximumStringLength };
 
 		auto details = pointer->parameter->getParameterDetails();
 		auto sampleRate = plugin_->getSampleRate();
@@ -122,10 +128,10 @@ namespace Framework
 			auto index = (size_t)std::clamp((float)internalValue, details.minValue, details.maxValue) - (size_t)details.minValue;
 			// clamping in case the value goes above the string count inside the array
 			index = std::clamp(index, (size_t)0, details.stringLookup.size());
-			return details.stringLookup[index].data();
+			return { details.stringLookup[index].data(), (size_t)maximumStringLength };
 		}
 
-		return String(internalValue);
+		return { internalValue, maximumStringLength };
 	}
 
 	float ParameterBridge::getValueForText(const String &text) const

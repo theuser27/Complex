@@ -19,24 +19,22 @@ namespace Interface
 
 		setInterceptsMouseClicks(false, true);
 
-		highlight_ = std::make_unique<OpenGlImageComponent>("highlight");
-		addOpenGlComponent(highlight_.get());
+		highlight_ = makeOpenGlComponent<OpenGlImageComponent>("highlight");
+		addOpenGlComponent(highlight_);
 		highlight_->setTargetComponent(this);
 		highlight_->paintEntireComponent(false);
 		highlight_->setInterceptsMouseClicks(false, false);
 
 		lowBound_ = std::make_unique<PinSlider>(lowBound);
-		lowBound_->setIsImageOnTop(true);
-		lowBound_->getImageComponent()->setAlwaysOnTop(true);
-		addSlider(lowBound_.get());
+		lowBound_->setAddedHitBox(BorderSize{ 0, kAdditionalPinWidth / 2, 0, kAdditionalPinWidth / 2 });
+		addControl(lowBound_.get());
 
 		highBound_ = std::make_unique<PinSlider>(highBound);
-		highBound_->setIsImageOnTop(true);
-		highBound_->getImageComponent()->setAlwaysOnTop(true);
-		addSlider(highBound_.get());
+		highBound_->setAddedHitBox(BorderSize{ 0, kAdditionalPinWidth / 2, 0, kAdditionalPinWidth / 2 });
+		addControl(highBound_.get());
 
-		roundedCorners_ = std::make_unique<OpenGlCorners>();
-		addOpenGlComponent(roundedCorners_.get());
+		roundedCorners_ = makeOpenGlComponent<OpenGlCorners>();
+		addOpenGlComponent(roundedCorners_);
 		roundedCorners_->setInterceptsMouseClicks(false, false);
 	}
 
@@ -70,21 +68,16 @@ namespace Interface
 
 	void PinBoundsBox::positionSliders()
 	{
-		static constexpr int kAdditionalWidth = 16;
-
 		auto width = (float)getWidth();
-		auto pinSlidersWidth = scaleValueRoundInt(PinSlider::kDefaultPinSliderWidth + kAdditionalWidth);
-		auto pinSlidersDrawWidthOffset = scaleValueRoundInt(kAdditionalWidth / 2.0f);
 		auto lowBoundPosition = (int)std::round((float)lowBound_->getValue() * width);
 		auto highBoundPosition = (int)std::round((float)highBound_->getValue() * width);
 
-		lowBound_->setBoundsAndDrawBounds(
-			{ lowBoundPosition - pinSlidersWidth / 2, 0, pinSlidersWidth, getHeight() },
-			{ pinSlidersDrawWidthOffset, 0, pinSlidersWidth - 2 * pinSlidersDrawWidthOffset, getHeight() });
+		auto lowBoundWidth = lowBound_->getOverallBoundsForHeight(getHeight()).getWidth();
+		lowBound_->setOverallBounds({ lowBoundPosition - lowBoundWidth / 2, 0 });
 		lowBound_->setTotalRange(width);
-		highBound_->setBoundsAndDrawBounds(
-			{ highBoundPosition - pinSlidersWidth / 2, 0, pinSlidersWidth, getHeight() },
-			{ pinSlidersDrawWidthOffset, 0, pinSlidersWidth - 2 * pinSlidersDrawWidthOffset, getHeight() });
+
+		auto highBoundWidth = highBound_->getOverallBoundsForHeight(getHeight()).getWidth();
+		highBound_->setOverallBounds({ highBoundPosition - highBoundWidth / 2, 0 });
 		highBound_->setTotalRange(width);
 
 		highlight_->redrawImage();
