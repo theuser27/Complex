@@ -36,7 +36,7 @@ namespace utils
 		{
 			float result = 1.0f;
 			for (size_t i = 0; i < Iterations; i++)
-				result *= 1.0f / std::sqrt(1.0f + std::exp2(-2.0f * i));
+				result *= 1.0f / std::sqrt(1.0f + std::exp2(-2.0f * (float)i));
 			return result;
 		}();
 
@@ -94,7 +94,7 @@ namespace utils
 		{
 			float result = 1.0f;
 			for (size_t i = 0; i < Iterations; i++)
-				result *= 1.0f / std::sqrt(1.0f + std::exp2(-2.0f * i));
+				result *= 1.0f / std::sqrt(1.0f + std::exp2(-2.0f * (float)i));
 			return result;
 		}();
 
@@ -108,22 +108,26 @@ namespace utils
 		}();
 
 
-		auto xNegativeMask = unsignSimd(x);
+		simd_mask xNegativeMask = unsignSimd(x);
 		simd_float angle = (simd_float(kPi) ^ getSign(y)) & simd_mask::equal(xNegativeMask, kSignMask);
 		for (u32 i = 0; i <= (u32)Iterations; i++)
 		{
-			auto signMask = getSign(y);
+			simd_mask signMask = getSign(y);
 			angle += thetaDeltas[i] ^ (signMask ^ xNegativeMask);
 
-			auto prevX = x;
-			auto prevY = y;
+			simd_float prevX = x;
+			simd_float prevY = y;
+
+			// depending on the values the exponents might be 0 and if that is the case the int will underflow, so we need to mask against that
+			simd_mask prevXExponent = maskLoad(reinterpretToInt(prevX & kFloatExponentMask) - (i << 23), 
+				simd_mask(0), simd_mask::equal(0, reinterpretToInt(prevX & kFloatExponentMask)));
+			simd_mask prevYExponent = maskLoad(reinterpretToInt(prevY & kFloatExponentMask) - (i << 23), 
+				simd_mask(0), simd_mask::equal(0, reinterpretToInt(prevY & kFloatExponentMask)));
 
 			// x[i] = x[i - 1] + y[i - 1] * 2^(-i) * "sign"
-			x = prevX + (((prevY & kNotFloatExponentMask) |
-				(reinterpretToInt(prevY & kFloatExponentMask) - (i << 23))) ^ signMask);
+			x = prevX + (((prevY & kNotFloatExponentMask) | prevYExponent) ^ signMask);
 			// y[i] = y[i - 1] - x[i - 1] * 2^(-i) * "sign"
-			y = prevY - (((prevX & kNotFloatExponentMask) |
-				(reinterpretToInt(prevX & kFloatExponentMask) - (i << 23))) ^ signMask);
+			y = prevY - (((prevX & kNotFloatExponentMask) | prevXExponent) ^ signMask);
 		}
 
 		return { x, angle, kFactor };
@@ -290,5 +294,22 @@ namespace utils
 		complexValueMerge(realImaginaryPairs.first, realImaginaryPairs.second);
 		one = realImaginaryPairs.first * magnitudesOne;
 		two = realImaginaryPairs.second * magnitudesTwo;
+	}
+
+	template<auto ConversionFunction>
+	strict_inline void convertBuffer(Framework::SimdBufferView<std::complex<float>, simd_float> source,
+		Framework::SimdBuffer<std::complex<float>, simd_float> &destination)
+	{
+		for (u32 i = 0; i < source.getSimdChannels(); i++)
+		{
+			for (u32 j = 0; j < source.getSize(); j += 2)
+			{
+				auto one = source.readSimdValueAt(i * kComplexSimdRatio, j);
+				auto two = source.readSimdValueAt(i * kComplexSimdRatio, j + 1);
+				ConversionFunction(one, two);
+				destination.writeSimdValueAt(one, i * kComplexSimdRatio, j);
+				destination.writeSimdValueAt(two, i * kComplexSimdRatio, j + 1);
+			}
+		}
 	}
 }

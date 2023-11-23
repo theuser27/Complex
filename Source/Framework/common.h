@@ -24,54 +24,44 @@
 #endif
 
 #include <Third Party/gcem/gcem.hpp>
-#include <Third Party/magic_enum/magic_enum.hpp>
+#include "nested_enum.h"
 #include "JuceHeader.h"
 #include "constants.h"
 
-namespace common
+namespace CommonConcepts
+{
+	template<typename T>
+	concept SimdInt = std::same_as<T, simd_int>;
+
+	template<typename T>
+	concept SimdFloat = std::same_as<T, simd_float>;
+
+	template<typename T>
+	concept SimdValue = SimdInt<T> || SimdFloat<T>;
+
+	template<typename T>
+	concept Pointer = std::is_pointer_v<T>;
+
+	template<typename T>
+	concept Addable = requires (T x) { x + x; x += x; };
+
+	template<typename T>
+	concept Multipliable = requires (T x) { x * x; x *= x; };
+
+	template<typename T>
+	concept OperatorParen = requires (T x) { x.operator(); };
+
+	template<typename T>
+	concept OperatorBracket = requires (T x) { x.operator[]; };
+
+	template<typename T>
+	concept ParameterRepresentation = std::same_as<T, float> || std::same_as<T, u32> || SimdValue<T>;
+}
+
+namespace Framework
 {
 	// used for updating parameters
 	enum class UpdateFlag : u32 { NoUpdates = 0, Realtime = 1, BeforeProcess = 2, AfterProcess = 3 };
 
-	namespace commonConcepts
-	{
-		template<typename T>
-		concept Pointer = std::is_pointer_v<T>;
-
-		template<typename Derived, typename Base>
-		concept DerivedOrIs = std::derived_from<Derived, Base> || std::same_as<Derived, Base>;
-
-		template<typename T>
-		concept Addable = requires (T x) { x + x; x += x; };
-
-		template<typename T>
-		concept Multipliable = requires (T x) { x * x; x *= x; };
-
-		template<typename T>
-		concept OperatorParen = requires (T x) { x.operator(); };
-
-		template<typename T>
-		concept OperatorBracket = requires (T x) { x.operator[]; };
-
-		template<typename T>
-		concept ParameterRepresentation = std::same_as<T, float> || std::same_as<T, u32> || SimdValue<T>;
-	}
-
-}
-
-using namespace common;
-
-namespace Framework
-{
-	enum class WindowTypes : u32 
-	{ Lerp = 0, Hann, Hamming, Triangle, Sine, Rectangle, Exp, HannExp, Lanczos };
-
-	enum class EffectTypes : u32 { Utility, Filter, Dynamics, Phase, Pitch, Stretch, Warp, Destroy };
-
-	// Normal - Lowpass/Highpass/Bandpass/Notch
-	// Regular - Harmonic/Bin based filters (like dtblkfx peaks)
-	enum class FilterModes : u32 { Normal = 0, Regular };
-	// Contrast - dtblkfx contrast
-	// Compressor - specops spectral compander/compressor
-	enum class DynamicsModes : u32 { Contrast = 0, Clip, Compressor };
+	NESTED_ENUM((WindowTypes, u32), (, Lerp, Hann, Hamming, Triangle, Sine, Rectangle, Exp, HannExp, Lanczos))
 }

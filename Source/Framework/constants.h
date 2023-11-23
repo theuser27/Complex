@@ -62,7 +62,6 @@ namespace common
 
 	// processing constants
 	inline constexpr double kMinFrequency = kMidi0Frequency;													// (can be changed)   lowest frequency that will be displayed
-	inline constexpr float kNormalisedToDbMultiplier = 120.0f;												// (can be changed)   symmetrical loudness range in which we're processing	
 
 	// GUI constants
 	inline constexpr int kMinWindowWidth = 426;
@@ -74,3 +73,5 @@ namespace common
 	inline constexpr float kMaxWindowScaleFactor = 3.0f;
 	inline constexpr int kParameterUpdateIntervalHz = 60;
 }
+
+using namespace common;

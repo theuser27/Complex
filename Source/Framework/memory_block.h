@@ -169,6 +169,22 @@ namespace Framework
 	{
 	public:
 		MemoryBlockView() = default;
+		MemoryBlockView(const MemoryBlockView &other)
+		{
+			block_.data_ = other.block_.data_;
+			block_.absoluteSize_ = other.block_.absoluteSize_;
+		}
+
+		MemoryBlockView &operator= (const MemoryBlockView &other) noexcept
+		{
+			if (this != &other)
+			{
+				block_.data_ = other.block_.data_;
+				block_.absoluteSize_ = other.block_.absoluteSize_;
+			}
+			return *this;
+		}
+
 		MemoryBlockView(const MemoryBlock<T, alignment> &block)
 		{
 			block_.data_ = block.data_;

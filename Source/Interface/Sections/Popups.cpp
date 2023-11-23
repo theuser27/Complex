@@ -46,7 +46,7 @@ namespace Interface
 		text_->setColor(getColour(Skin::kNormalText));
 	}
 
-	void PopupDisplay::setContent(const std::string &text, Rectangle<int> bounds,
+	void PopupDisplay::setContent(String text, Rectangle<int> bounds,
 		BubbleComponent::BubblePlacement placement, Skin::SectionOverride sectionOverride)
 	{
 		static constexpr int kHeight = 24;
@@ -72,7 +72,7 @@ namespace Interface
 			setBounds(bounds.getRight(), middle_y - height / 2, width, height);
 
 		text_->setTextHeight(height * 0.5f);
-		text_->setText(text);
+		text_->setText(std::move(text));
 	}
 
 	PopupList::PopupList() : BaseSection("Popup List")
@@ -136,7 +136,7 @@ namespace Interface
 
 		if (getScrollableRange() > getHeight())
 		{
-			int scroll_bar_width = kScrollBarWidth * getScaling();
+			int scroll_bar_width = scaleValueRoundInt(kScrollBarWidth);
 			int scroll_bar_height = getHeight();
 			scroll_bar_->setVisible(true);
 			scroll_bar_->setBounds(getWidth() - scroll_bar_width, 0, scroll_bar_width, scroll_bar_height);
@@ -174,7 +174,7 @@ namespace Interface
 		static constexpr int kMinWidth = 150;
 
 		Font font = getFont();
-		int max_width = kMinWidth * getScaling();
+		int max_width = scaleValueRoundInt(kMinWidth);
 		int buffer = getTextPadding() * 2 + 2;
 		for (int i = 0; i < selections_.size(); ++i)
 			max_width = std::max(max_width, font.getStringWidth(selections_.items[i].name) + buffer);
@@ -198,7 +198,7 @@ namespace Interface
 		hovered_ = row;
 	}
 
-	void PopupList::mouseExit(const MouseEvent &e)
+	void PopupList::mouseExit(const MouseEvent &)
 	{ hovered_ = -1; }
 
 	int PopupList::getSelection(const MouseEvent &e)
@@ -296,7 +296,7 @@ namespace Interface
 		setScrollBarRange();
 	}
 
-	void PopupList::mouseWheelMove(const MouseEvent &e, const MouseWheelDetails &wheel)
+	void PopupList::mouseWheelMove(const MouseEvent &, const MouseWheelDetails &wheel)
 	{
 		view_position_ -= wheel.deltaY * kScrollSensitivity;
 		view_position_ = std::max(0.0f, view_position_);

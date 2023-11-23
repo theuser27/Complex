@@ -44,7 +44,7 @@
  #define JucePlugin_Name                   "Complex"
 #endif
 #ifndef  JucePlugin_Desc
- #define JucePlugin_Desc                   "Multi-lane Spectral Suite"
+ #define JucePlugin_Desc                   "Multi-lane Spectral Effects Suite"
 #endif
 #ifndef  JucePlugin_Manufacturer
  #define JucePlugin_Manufacturer           "Lirion"
@@ -77,13 +77,13 @@
  #define JucePlugin_EditorRequiresKeyboardFocus  0
 #endif
 #ifndef  JucePlugin_Version
- #define JucePlugin_Version                0.7.0.1
+ #define JucePlugin_Version                0.7.0.2
 #endif
 #ifndef  JucePlugin_VersionCode
- #define JucePlugin_VersionCode            0x70001
+ #define JucePlugin_VersionCode            0x70002
 #endif
 #ifndef  JucePlugin_VersionString
- #define JucePlugin_VersionString          "0.7.0.1"
+ #define JucePlugin_VersionString          "0.7.0.2"
 #endif
 #ifndef  JucePlugin_VSTUniqueID
  #define JucePlugin_VSTUniqueID            JucePlugin_PluginCode
@@ -155,7 +155,7 @@
  #define JucePlugin_ARAFactoryID           "com.yourcompany.Complex.factory"
 #endif
 #ifndef  JucePlugin_ARADocumentArchiveID
- #define JucePlugin_ARADocumentArchiveID   "com.yourcompany.Complex.aradocumentarchive.0.7.0"
+ #define JucePlugin_ARADocumentArchiveID   "com.yourcompany.Complex.aradocumentarchive.0.7.0.2"
 #endif
 #ifndef  JucePlugin_ARACompatibleArchiveIDs
  #define JucePlugin_ARACompatibleArchiveIDs  ""

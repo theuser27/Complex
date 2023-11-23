@@ -17,14 +17,14 @@ ComplexAudioProcessor::ComplexAudioProcessor()
 {
 	using namespace Framework;
 
-	parameterBridges_.reserve(kMaxParameterMappings + pluginParameterList.size());
+	constexpr auto pluginParametersEnum = BaseProcessors::SoundEngine::enum_values<nested_enum::OuterNodes>();
+	parameterBridges_.reserve(kMaxParameterMappings + pluginParametersEnum.size());
 
-	for (auto &parameterDetails : pluginParameterList)
+	for (BaseProcessors::SoundEngine::type parameterDetails : pluginParametersEnum)
 	{
-		auto parameter = getProcessorParameter(soundEngine_->getProcessorId(), parameterDetails.id);
-		if (auto parameterPointer = parameter.lock())
+		if (auto parameter = getProcessorParameter(soundEngine_->getProcessorId(), parameterDetails))
 		{
-			auto *bridge = new ParameterBridge(this, (u32)(-1), parameterPointer->getParameterLink());
+			auto *bridge = new ParameterBridge(this, (u32)(-1), parameter->getParameterLink());
 			parameterBridges_.push_back(bridge);
 			addParameter(bridge);
 		}
@@ -93,12 +93,12 @@ void ComplexAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, [[ma
 
 	//CheckGlobalParameters();
 	auto sampleRate = ComplexPlugin::getSampleRate();
-	updateParameters(UpdateFlag::BeforeProcess, sampleRate);
+	updateParameters(Framework::UpdateFlag::BeforeProcess, sampleRate);
 	setLatencySamples((int)getProcessingDelay());
 
 	Process(buffer, (u32)numSamples, sampleRate, (u32)inputs, (u32)outputs);
 
-	updateParameters(UpdateFlag::AfterProcess, sampleRate);
+	updateParameters(Framework::UpdateFlag::AfterProcess, sampleRate);
 }
 
 //==============================================================================

@@ -64,7 +64,7 @@ namespace Interface
 			std::function<void(int)> callback, std::function<void()> cancel);
 		void dualPopupSelector(Component *source, Point<int> position, int width,
 			const PopupItems &options, std::function<void(int)> callback);
-		void popupDisplay(Component *source, const std::string &text,
+		void popupDisplay(Component *source, String text,
 			BubbleComponent::BubblePlacement placement, bool primary, 
 			Skin::SectionOverride sectionOverride = Skin::kPopupBrowser);
 		void hideDisplay(bool primary);

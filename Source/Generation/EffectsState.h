@@ -17,7 +17,7 @@ namespace Generation
 {
 	class EffectsState;
 
-	class EffectsLane : public BaseProcessor
+	class EffectsLane final : public BaseProcessor
 	{
 	public:
 		DEFINE_CLASS_TYPE("{F260616E-CF7D-4099-A880-9C52CED263C1}")
@@ -50,9 +50,9 @@ namespace Generation
 
 		auto *getEffectModule(size_t index) const noexcept { return effectModules_[index]; }
 
-		[[nodiscard]] BaseProcessor *createSubProcessor(std::string_view type) const noexcept override
+		[[nodiscard]] BaseProcessor *createSubProcessor([[maybe_unused]] std::string_view type) const noexcept override
 		{
-			COMPLEX_ASSERT(magic_enum::enum_contains<Framework::EffectTypes>(type) &&
+			COMPLEX_ASSERT(Framework::BaseProcessors::BaseEffect::enum_value(type).has_value() &&
 				"You're trying to create a subProcessor for EffectsLane, that isn't EffectModule");
 			return makeSubProcessor<EffectModule>(type);
 		}
@@ -66,7 +66,7 @@ namespace Generation
 
 		//// Parameters
 		// 
-		// 1. chain enabled
+		// 1. lane enabled
 		// 2. input index
 		// 3. output index
 		// 4. gain match
@@ -84,12 +84,12 @@ namespace Generation
 		friend class EffectsState;
 	};
 
-	class EffectsState : public BaseProcessor
+	class EffectsState final : public BaseProcessor
 	{
 	public:
 		DEFINE_CLASS_TYPE("{39B6A6C9-D33F-4AF0-BBDB-6C1F1960184F}")
 
-		// data link between modules in different chains
+		// data link between modules in different lanes
 		struct EffectsModuleLink
 		{
 			bool checkForFeedback();
@@ -115,7 +115,7 @@ namespace Generation
 		// Inherited via BaseProcessor
 		bool insertSubProcessor(size_t index, BaseProcessor *newSubProcessor) noexcept override;
 		BaseProcessor *deleteSubProcessor(size_t index) noexcept override;
-		[[nodiscard]] BaseProcessor *createSubProcessor(std::string_view type) const noexcept override
+		[[nodiscard]] BaseProcessor *createSubProcessor([[maybe_unused]] std::string_view type) const noexcept override
 		{
 			COMPLEX_ASSERT(type == EffectsLane::getClassType() &&
 				"You're trying to create a subProcessor for EffectsState, that isn't EffectsLane");
@@ -123,8 +123,8 @@ namespace Generation
 		}
 
 		void writeInputData(const AudioBuffer<float> &inputBuffer) noexcept;
-		void processChains() const noexcept;
-		void sumChains() noexcept;
+		void processLanes() noexcept;
+		void sumLanes() noexcept;
 		void writeOutputData(AudioBuffer<float> &outputBuffer) const noexcept;
 
 		auto getUsedInputChannels() noexcept
@@ -162,23 +162,23 @@ namespace Generation
 		}
 
 		size_t getNumChains() const noexcept { return lanes_.size(); }
-		u32 getEffectiveFFTSize() const noexcept { return effectiveFFTSize_; }
+		u32 getEffectiveFFTSize() const noexcept { return binCount_; }
 		float getSampleRate() const noexcept { return sampleRate_; }
 		auto *getEffectsLane(size_t index) const noexcept { return lanes_[index]; }
 
-		void setEffectiveFFTSize(u32 newEffectiveFFTSize) noexcept { effectiveFFTSize_ = newEffectiveFFTSize; }
+		void setBinCount(u32 newEffectiveFFTSize) noexcept { binCount_ = newEffectiveFFTSize; }
 		void setSampleRate(float newSampleRate) noexcept { sampleRate_ = newSampleRate; }
 
 	private:
 		BaseProcessor *createCopy([[maybe_unused]] std::optional<u64> parentModuleId) const noexcept override
 		{ COMPLEX_ASSERT_FALSE("You're trying to copy EffectsState, which is not meant to be copied"); return nullptr; }
 
-		void processIndividualChains(std::stop_token stoken, size_t chainIndex) const noexcept;
+		void processIndividualLanes(std::stop_token stoken, size_t chainIndex) const noexcept;
 
 		std::vector<EffectsLane *> lanes_{};
 
 		// current number of FFT bins (real-imaginary pairs)
-		u32 effectiveFFTSize_ = (1 << kDefaultFFTOrder) / 2;
+		u32 binCount_ = (1 << kDefaultFFTOrder) / 2;
 		float sampleRate_ = kDefaultSampleRate;
 
 		// if an input/output isn't used there's no need to process it at all

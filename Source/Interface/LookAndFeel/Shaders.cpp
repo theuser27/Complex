@@ -23,7 +23,7 @@ namespace
 	#endif
 
 #define CONSTRAIN_AXIS_FUNCTION \
-		"float constrainAxis(float normAxis, float constraint, float offset) {" \
+		"float constrainAxis(float normAxis, float constraint, float offset) {\n" \
 		"    return clamp(ceil(-abs(normAxis + offset) + constraint), 0.0, 1.0);\n" \
 		"}\n"
 
@@ -202,7 +202,7 @@ namespace
 		"    gl_FragColor.a = gl_FragColor.a * alpha_out;\n"
 		"}\n";
 
-	// rounded corners on the inside of sections (i.e corners of wavetable/lfo/envelope windows)
+	// rounded corners on the inside of sections (i.e. corners of wavetable/lfo/envelope windows)
 	const char *kRoundedCornerFragmentShader =
 		"uniform " MEDIUMP " vec4 color;\n"
 		"varying " MEDIUMP " vec2 dimensions_out;\n"
@@ -418,6 +418,26 @@ namespace
 		"    float pinXAlpha = constrainAxis(coordinates_out.x, 0.2, 0.0);\n"
 		"    float pinYAlpha = clamp((coordinates_out.y + 1.0) * 0.75, 0.05, 1.0);\n"
 		"    float alpha = pinXAlpha * pinYAlpha;\n"
+		"    gl_FragColor = color;\n"
+		"    gl_FragColor.a = color.a * alpha;\n"
+		"}\n";
+
+	// thumb_amount is plus thickness (width / dimensions)
+	const char *kPlusFragmentShader =
+		"uniform " MEDIUMP " vec4 color;\n"
+		"uniform " MEDIUMP " float thickness;\n"
+		"varying " MEDIUMP " vec2 dimensions_out;\n"
+		"varying " MEDIUMP " vec2 coordinates_out;\n"
+		CONSTRAIN_AXIS_FUNCTION
+		"\n"
+		"void main() {\n"
+		"    vec2 coordinates_out_norm = (coordinates_out * 0.5) + 0.5;\n"
+		"    float normBound = (1.0 - thickness) * 0.5;\n"
+		"    float xAlpha1 = constrainAxis(coordinates_out_norm.x, normBound, 0.0);\n"
+		"    float xAlpha2 = constrainAxis(-coordinates_out_norm.x, normBound, 1.0);\n"
+		"    float yAlpha1 = constrainAxis(coordinates_out_norm.y, normBound, 0.0);\n"
+		"    float yAlpha2 = constrainAxis(-coordinates_out_norm.y, normBound, 1.0);\n"
+		"    float alpha = (1.0 - xAlpha1 - xAlpha2) + (1.0 - yAlpha1 - yAlpha2);\n"
 		"    gl_FragColor = color;\n"
 		"    gl_FragColor.a = color.a * alpha;\n"
 		"}\n";
@@ -701,6 +721,8 @@ namespace Interface
 			return kVerticalSliderFragmentShader;
 		case kPinSliderFragment:
 			return kPinSliderFragmentShader;
+		case kPlusFragment:
+			return kPlusFragmentShader;
 		case kDotSliderFragment:
 			return kDotSliderFragmentShader;
 		case kLinearModulationFragment:

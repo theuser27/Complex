@@ -54,7 +54,7 @@ namespace Plugin
 			moduleIter->second.get() : nullptr;
 	}
 
-	std::weak_ptr<Framework::ParameterValue> ProcessorTree::getProcessorParameter(u64 parentModuleId, std::string_view parameter) const noexcept
+	Framework::ParameterValue *ProcessorTree::getProcessorParameter(u64 parentModuleId, std::string_view parameter) const noexcept
 	{
 		auto *processorPointer = getProcessor(parentModuleId);
 		if (!processorPointer)
@@ -68,7 +68,7 @@ namespace Plugin
 		std::function waitFunction = [this]()
 		{
 			// check if we're in the middle of an audio callback
-			while (getUpdateFlag() != UpdateFlag::AfterProcess) { utils::wait(); }
+			while (getUpdateFlag() != Framework::UpdateFlag::AfterProcess) { utils::wait(); }
 			return utils::ScopedSpinLock{ waitLock_ };
 		};
 		

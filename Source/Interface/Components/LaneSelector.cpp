@@ -16,11 +16,11 @@ namespace Interface
 	{
 	}
 
-	void LaneSelector::paintBackground(Graphics &g)
+	void LaneSelector::paintBackground([[maybe_unused]] Graphics &g)
 	{
 	}
 
-	void LaneSelector::laneTurnedOnOff(EffectsLaneSection *lane, bool isOn)
+	void LaneSelector::laneTurnedOnOff([[maybe_unused]] EffectsLaneSection *lane, [[maybe_unused]] bool isOn)
 	{
 	}
 

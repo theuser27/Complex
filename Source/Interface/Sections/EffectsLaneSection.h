@@ -32,7 +32,23 @@ namespace Interface
 		{
 		public:
 			EffectsContainer() : BaseSection(typeid(EffectsContainer).name())
-			{ setSkinOverride(Skin::kEffectsLane); }
+			{
+				setSkinOverride(Skin::kEffectsLane);
+
+				addModulesButton_ = std::make_unique<OptionsButton>(nullptr, "Add Modules Button");
+				addModulesButton_->removeLabel();
+				addControl(addModulesButton_.get());
+			}
+
+			void buttonClicked(BaseButton *clickedButton) override;
+			void handlePopupResult(int selection) const;
+			void setLane(EffectsLaneSection *lane) noexcept { lane_ = lane; }
+		private:
+			EffectsLaneSection *lane_ = nullptr;
+
+			std::unique_ptr<OptionsButton> addModulesButton_ = nullptr;
+
+			friend class EffectsLaneSection;
 		};
 
 		EffectsViewport() : Viewport(typeid(EffectsViewport).name())
@@ -146,7 +162,7 @@ namespace Interface
 		}
 
 		// needs a point local to the EffectsLaneSection
-		size_t getIndexFromScreenPosition(juce::Point<int> point) const noexcept;
+		size_t getIndexFromScreenPosition(Point<int> point) const noexcept;
 
 		void setLaneName(String newName) { laneTitle_->setText(std::move(newName)); }
 		void addListener(Listener *listener) { laneListeners_.push_back(listener); }
@@ -160,8 +176,8 @@ namespace Interface
 		OpenGlScrollBar scrollBar_{};
 		std::vector<EffectModuleSection *> effectModules_{};
 
-		std::unique_ptr<BaseButton> laneActivator_ = nullptr;
-		std::unique_ptr<BaseButton> gainMatchingButton_ = nullptr;
+		std::unique_ptr<PowerButton> laneActivator_ = nullptr;
+		std::unique_ptr<RadioButton> gainMatchingButton_ = nullptr;
 		std::unique_ptr<TextSelector> inputSelector_ = nullptr;
 		std::unique_ptr<TextSelector> outputSelector_ = nullptr;
 

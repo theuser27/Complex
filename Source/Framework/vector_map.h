@@ -12,7 +12,7 @@
 
 #include <array>
 #include <vector>
-#include "common.h"
+#include <utility>
 
 namespace Framework
 {
@@ -21,20 +21,21 @@ namespace Framework
 	{
 		std::array<std::pair<Key, Value>, size> data{};
 
+		using value_type = std::pair<Key, Value>;
+
 		constexpr ConstexprMap() = default;
 
-		[[nodiscard]] constexpr auto find(const Key &key)
+		[[nodiscard]] constexpr auto find(const Key &key) const noexcept
 		{
-			auto iter = std::find_if(data.begin(), data.end(),
-				[&key](const auto &v) { return v.first == key; });
+			auto iter = std::ranges::find_if(data, [&key](const auto &v) { return v.first == key; });
 			COMPLEX_ASSERT(iter != data.end());
 			return iter;
 		}
 
-		[[nodiscard]] constexpr auto find(const Key &key) const
+		template<typename Fn>
+		[[nodiscard]] constexpr auto find_if(Fn functor) const noexcept
 		{
-			auto iter = std::find_if(data.begin(), data.end(),
-				[&key](const auto &v) { return v.first == key; });
+			auto iter = std::ranges::find_if(data, functor);
 			COMPLEX_ASSERT(iter != data.end());
 			return iter;
 		}
@@ -43,6 +44,9 @@ namespace Framework
 	template<typename Key, typename Value>
 	struct VectorMap
 	{
+		using key = Key;
+		using value = Value;
+
 		std::vector<std::pair<Key, Value>> data{};
 
 		constexpr VectorMap() = default;
@@ -76,10 +80,24 @@ namespace Framework
 			return iter;
 		}
 
+		template<typename Fn>
+		[[nodiscard]] constexpr auto find_if(Fn functor) noexcept
+		{
+			auto iter = std::ranges::find_if(data, functor);
+			return iter;
+		}
+
+		template<typename Fn>
+		[[nodiscard]] constexpr auto find_if(Fn functor) const noexcept
+		{
+			auto iter = std::ranges::find_if(data, functor);
+			return iter;
+		}
+
 		constexpr void add(Key key, Value value) noexcept
 		{ data.emplace_back(std::move(key), std::move(value)); }
 
-		constexpr void update(const Key &key, Value newValue) noexcept
+		constexpr void updateValue(const Key &key, Value newValue) noexcept
 		{
 			auto iter = find(key);
 			if (iter == data.end())
@@ -87,20 +105,40 @@ namespace Framework
 			iter->second = std::move(newValue);
 		}
 
+		constexpr void updateValue(typename decltype(data)::iterator iterator, Value newValue) noexcept
+		{ (*iterator).second = std::move(newValue); }
+
+		constexpr void updateKey(const Key &key, Key newKey) noexcept
+		{
+			auto iter = find(key);
+			if (iter == data.end())
+				return;
+			iter->first = std::move(newKey);
+		}
+
+		constexpr void updateKey(typename decltype(data)::iterator iterator, Key newKey) noexcept
+		{ (*iterator).first = std::move(newKey); }
+
 		constexpr void update(const Key &key, std::pair<Key, Value> newEntry) noexcept
 		{
 			auto iter = find(key);
-			if (iter != data.end())
+			if (iter == data.end())
 				return;
 
 			iter->first = std::move(newEntry.first);
 			iter->second = std::move(newEntry.second);
 		}
 
+		constexpr void update(typename decltype(data)::iterator iterator, std::pair<Key, Value> newEntry) noexcept
+		{ (*iterator) = std::move(newEntry); }
+
 		constexpr void erase(const Key &key) noexcept
 		{ std::erase_if(data, [&](const auto &v) { return v.first == key; }); }
 
-		const Value &operator[](size_t index) const noexcept
-		{ return data[index].second; }
+		constexpr void erase(typename decltype(data)::iterator iterator) noexcept
+		{ data.erase(iterator); }
+
+		const Value &operator[](size_t index) const noexcept { return data[index].second; }
+		Value &operator[](size_t index) noexcept { return data[index].second; }
 	};
 }

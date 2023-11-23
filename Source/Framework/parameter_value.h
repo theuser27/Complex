@@ -90,7 +90,7 @@ namespace Framework
 		}
 		
 		// prefer calling this only once if possible
-		template<commonConcepts::ParameterRepresentation T>
+		template<CommonConcepts::ParameterRepresentation T>
 		T getInternalValue(float sampleRate = kDefaultSampleRate, bool isNormalised = false) const noexcept
 		{
 			utils::ScopedSpinLock lock(waitLock_);
@@ -164,15 +164,13 @@ namespace Framework
 			
 			if (std::holds_alternative<Interface::BaseControl *>(control))
 			{
-				auto variant = std::variant<Interface::BaseControl *,
-					ParameterBridge *>{ std::in_place_index<0>, parameterLink_.UIControl };
+				auto variant = decltype(control){ std::in_place_index<0>, parameterLink_.UIControl };
 				parameterLink_.UIControl = std::get<0>(control);
 				return variant;
 			}
 			else
 			{
-				auto variant = std::variant<Interface::BaseControl *,
-					ParameterBridge *>{ std::in_place_index<1>, parameterLink_.hostControl };
+				auto variant = decltype(control){ std::in_place_index<1>, parameterLink_.hostControl };
 				parameterLink_.hostControl = std::get<1>(control);
 				return variant;
 			}

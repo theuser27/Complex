@@ -25,7 +25,7 @@ namespace Framework
 		if (parameterIndex == (u32)(-1) && link)
 		{
 			parameterLinkPointer_.store(link, std::memory_order_release);
-			name_.second += link->parameter->getParameterDetails().displayName.data();
+			name_.second += utils::toJuceString(link->parameter->getParameterDetails().displayName);
 			link->hostControl = this;
 			value_ = link->parameter->getNormalisedValue();
 		}
@@ -35,7 +35,7 @@ namespace Framework
 			name_.second += (int)parameterIndex;
 			name_.second += " > ";
 			parameterLinkPointer_.store(link, std::memory_order_release);
-			name_.second += link->parameter->getParameterDetails().displayName.data();
+			name_.second += utils::toJuceString(link->parameter->getParameterDetails().displayName);
 			link->hostControl = this;
 			value_ = link->parameter->getNormalisedValue();
 		}
@@ -46,7 +46,7 @@ namespace Framework
 		}
 	}
 
-	void ParameterBridge::resetParameterLink(ParameterLink *link) noexcept
+	void ParameterBridge::resetParameterLink(ParameterLink *link, bool getValueFromParameter) noexcept
 	{
 		if (link == parameterLinkPointer_.load(std::memory_order_acquire))
 			return;
@@ -61,15 +61,20 @@ namespace Framework
 		else
 		{
 			link->parameter->changeControl(this);
-			auto newValue = link->parameter->getNormalisedValue();
-			value_.store(newValue, std::memory_order_release);
-			sendValueChangedMessageToListeners(newValue);
+			if (getValueFromParameter)
+			{
+				auto newValue = link->parameter->getNormalisedValue();
+				value_.store(newValue, std::memory_order_release);
+				sendValueChangedMessageToListeners(newValue);
+			}
+			else
+				link->UIControl->setValueFromHost();
 
 			String newString{};
 			newString.preallocateBytes(64);
 			newString.append(name_.second, index);
 			newString += " > ";
-			newString += link->parameter->getParameterDetails().displayName.data();
+			newString += utils::toJuceString(link->parameter->getParameterDetails().displayName);
 			name_.second = std::move(newString);
 		}
 

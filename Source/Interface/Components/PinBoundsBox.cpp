@@ -26,11 +26,11 @@ namespace Interface
 		highlight_->setInterceptsMouseClicks(false, false);
 
 		lowBound_ = std::make_unique<PinSlider>(lowBound);
-		lowBound_->setAddedHitBox(BorderSize{ 0, kAdditionalPinWidth / 2, 0, kAdditionalPinWidth / 2 });
+		lowBound_->setAddedHitbox(BorderSize{ 0, kAdditionalPinWidth / 2, 0, kAdditionalPinWidth / 2 });
 		addControl(lowBound_.get());
 
 		highBound_ = std::make_unique<PinSlider>(highBound);
-		highBound_->setAddedHitBox(BorderSize{ 0, kAdditionalPinWidth / 2, 0, kAdditionalPinWidth / 2 });
+		highBound_->setAddedHitbox(BorderSize{ 0, kAdditionalPinWidth / 2, 0, kAdditionalPinWidth / 2 });
 		addControl(highBound_.get());
 
 		roundedCorners_ = makeOpenGlComponent<OpenGlCorners>();
@@ -60,7 +60,7 @@ namespace Interface
 		repaintBackground();
 	}
 
-	void PinBoundsBox::sliderValueChanged(Slider *slider)
+	void PinBoundsBox::sliderValueChanged(BaseSlider *slider)
 	{
 		if (lowBound_.get() == slider || highBound_.get() == slider)
 			positionSliders();
@@ -72,11 +72,11 @@ namespace Interface
 		auto lowBoundPosition = (int)std::round((float)lowBound_->getValue() * width);
 		auto highBoundPosition = (int)std::round((float)highBound_->getValue() * width);
 
-		auto lowBoundWidth = lowBound_->getOverallBoundsForHeight(getHeight()).getWidth();
+		auto lowBoundWidth = lowBound_->getBoundsForSizes(getHeight()).getWidth();
 		lowBound_->setOverallBounds({ lowBoundPosition - lowBoundWidth / 2, 0 });
 		lowBound_->setTotalRange(width);
 
-		auto highBoundWidth = highBound_->getOverallBoundsForHeight(getHeight()).getWidth();
+		auto highBoundWidth = highBound_->getBoundsForSizes(getHeight()).getWidth();
 		highBound_->setOverallBounds({ highBoundPosition - highBoundWidth / 2, 0 });
 		highBound_->setTotalRange(width);
 

@@ -139,7 +139,7 @@ namespace Interface
 		movedModulePosition_ = position;
 	}
 
-	void EffectsStateSection::releaseComponent(EffectModuleSection *effectModule, const MouseEvent &e)
+	void EffectsStateSection::releaseComponent(EffectModuleSection *effectModule, [[maybe_unused]] const MouseEvent &e)
 	{
 		COMPLEX_ASSERT(effectModule == currentlyMovedModule_ &&
 			"Somehow we're releasing a different component from the one we were moving");

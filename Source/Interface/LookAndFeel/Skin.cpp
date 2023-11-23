@@ -15,7 +15,7 @@
 
 namespace
 {
-  inline constexpr std::array<std::string_view, Interface::Skin::kSectionOverrideCount> kOverrideNames = {
+  inline constexpr std::array<std::string_view, Interface::Skin::kSectionsCount> kOverrideNames = {
     "All",
     "Overlays",
     "Effects Lane",
@@ -178,53 +178,11 @@ namespace Interface
 
   void Skin::clearSkin()
   {
-    for (int i = 0; i < kSectionOverrideCount; ++i)
+    for (int i = 0; i < kSectionsCount; ++i)
       colorOverrides_[i].clear();
-    for (int i = 0; i < kSectionOverrideCount; ++i)
+    for (int i = 0; i < kSectionsCount; ++i)
       valueOverrides_[i].clear();
   }
-
-  /*void Skin::applyComponentColors(Component *component) const
-  {
-    for (int i = 0; i < kColorIdCount; ++i)
-    {
-      int colorId = i + kInitialColor;
-      Colour color = getColor(static_cast<ColorId>(colorId));
-      component->setColour(colorId, color);
-    }
-  }
-
-  void Skin::applyComponentColors(Component *component, SectionOverride sectionOverride, bool topLevel) const
-  {
-    if (topLevel)
-    {
-      applyComponentColors(component);
-      return;
-    }
-
-    for (int i = kInitialColor; i < kFinalColor; ++i)
-      component->removeColour(i);
-
-    for (const auto &color : colorOverrides_[sectionOverride])
-      component->setColour(color.first, color.second);
-  }
-
-  void Skin::applyComponentValues(BaseSection *section) const
-  {
-    std::map<ValueId, float> values;
-    for (int i = 0; i < kValueIdCount; ++i)
-      values[(ValueId)i] = values_[i];
-
-    section->setSkinValues(values);
-  }
-
-  void Skin::applyComponentValues(BaseSection *section, SectionOverride sectionOverride, bool topLevel) const
-  {
-    if (topLevel)
-      applyComponentValues(section);
-    else
-      section->setSkinValues(valueOverrides_[sectionOverride]);
-  }*/
 
   bool Skin::overridesColor(int section, ColorId colorId) const
   {
@@ -342,7 +300,7 @@ namespace Interface
       data[kValueNames[i]] = values_[i];
 
     json overrides;
-    for (int override_index = 0; override_index < kSectionOverrideCount; ++override_index)
+    for (int override_index = 0; override_index < kSectionsCount; ++override_index)
     {
       json override_section;
       for (const auto &color : colorOverrides_[override_index])
@@ -391,7 +349,7 @@ namespace Interface
     if (data.count("overrides"))
     {
       json overrides = data["overrides"];
-      for (int overrideIndex = 0; overrideIndex < kSectionOverrideCount; ++overrideIndex)
+      for (int overrideIndex = 0; overrideIndex < kSectionsCount; ++overrideIndex)
       {
         std::string_view name = kOverrideNames[overrideIndex];
         colorOverrides_[overrideIndex].clear();

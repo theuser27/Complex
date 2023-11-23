@@ -28,7 +28,9 @@ namespace Interface
 			kLineVertex,
 			kFillVertex,
 			kBarHorizontalVertex,
-			kBarVerticalVertex
+			kBarVerticalVertex,
+
+			kVertexShaderCount
 		};
 
 		enum FragmentShader
@@ -49,16 +51,16 @@ namespace Interface
 			kHorizontalSliderFragment,
 			kVerticalSliderFragment,
 			kPinSliderFragment,
+			kPlusFragment,
 			kDotSliderFragment,
 			kLinearModulationFragment,
 			kModulationKnobFragment,
 			kLineFragment,
 			kFillFragment,
-			kBarFragment
-		};
+			kBarFragment,
 
-		static constexpr auto kVertexShaderCount = magic_enum::enum_count<VertexShader>();
-		static constexpr auto kFragmentShaderCount = magic_enum::enum_count<FragmentShader>();
+			kFragmentShaderCount
+		};
 
 		Shaders(OpenGLContext &openGlContext) : openGlContext_(openGlContext) { }
 

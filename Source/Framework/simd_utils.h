@@ -71,7 +71,7 @@ namespace utils
 	{ return simd_int::notEqual(left, right).sum() == 0; }
 
 	// 0s for loading values from one, 1s for loading values from two
-	template<commonConcepts::SimdValue SIMD>
+	template<CommonConcepts::SimdValue SIMD>
 	strict_inline SIMD vector_call maskLoad(SIMD zeroValue, SIMD oneValue, simd_mask mask) noexcept
 	{
 		SIMD oldValues = zeroValue & ~mask;
@@ -134,9 +134,9 @@ namespace utils
 
 	strict_inline simd_float modOnce(simd_float value, simd_float mod) noexcept
 	{
-		simd_mask less_mask = simd_float::lessThanOrEqual(value, mod);
+		simd_mask lessMask = simd_float::lessThanOrEqual(value, mod);
 		simd_float lower = value - mod;
-		return maskLoad(lower, value, less_mask);
+		return maskLoad(lower, value, lessMask);
 	}
 
 	template<size_t shift>
@@ -373,8 +373,8 @@ namespace utils
 	strict_inline simd_mask vector_call unsignSimd(simd_int &value, bool returnFullMask = false) noexcept
 	{
 		static const simd_mask signMask = kSignMask;
-		simd_mask mask = value & signMask;
-		value ^= mask;
+		simd_mask mask = simd_mask::equal(value & signMask, signMask);
+		value = maskLoad(value, ~value - 1, mask);
 		return (returnFullMask) ? simd_mask::equal(mask, signMask) : mask;
 	}
 

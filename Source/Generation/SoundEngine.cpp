@@ -30,14 +30,15 @@ namespace Generation
 		// needs to be double the max FFT, otherwise we get out of bounds errors
 		FFTBuffer.setSize(kNumTotalChannels, kMaxFFTBufferLength * 2, false, true);
 		outBuffer.reserve(kNumTotalChannels, kMaxFFTBufferLength * 2);
-		windows = Window::getInstance();
 
 		effectsState_ = makeSubProcessor<EffectsState>();
 		subProcessors_.emplace_back(effectsState_);
 
-		processorParameters_.data.reserve(pluginParameterList.size());
-		createProcessorParameters(pluginParameterList.data(), pluginParameterList.size());
+		createProcessorParameters<BaseProcessors::SoundEngine::type>();
 	}
+
+	u32 SoundEngine::getProcessingDelay() const noexcept 
+	{ return FFTNumSamples_ + processorTree_->getSamplesPerBlock(); }
 
 	void SoundEngine::ResetBuffers() noexcept
 	{
@@ -99,22 +100,22 @@ namespace Generation
 		isPerforming_ = true;
 	}
 
-	void SoundEngine::UpdateParameters(UpdateFlag flag, float sampleRate) noexcept
+	void SoundEngine::UpdateParameters(Framework::UpdateFlag flag, float sampleRate) noexcept
 	{
 		updateParameters(flag, true);
 
 		switch (flag)
 		{
-		case UpdateFlag::Realtime:
+		case Framework::UpdateFlag::Realtime:
 			overlap_ = processorParameters_[2]->getInternalValue<float>(sampleRate);
-			windowType_ = static_cast<Framework::WindowTypes>(processorParameters_[3]->getInternalValue<u32>(sampleRate));
+			windowType_ = Framework::WindowTypes::make_enum(processorParameters_[3]->getInternalValue<u32>(sampleRate)).value();
 			alpha_ = processorParameters_[4]->getInternalValue<float>(sampleRate);
 
 			// getting the next overlapOffset
 			nextOverlapOffset_ = getOverlapOffset();
 
 			break;
-		case UpdateFlag::BeforeProcess:
+		case Framework::UpdateFlag::BeforeProcess:
 			mix_ = processorParameters_[0]->getInternalValue<float>(sampleRate);
 			FFTOrder_ = processorParameters_[1]->getInternalValue<u32>(sampleRate);
 			outGain_ = (float)utils::dbToAmplitude(processorParameters_[5]->getInternalValue<float>(sampleRate));
@@ -130,7 +131,7 @@ namespace Generation
 	perf_inline void SoundEngine::DoFFT() noexcept
 	{
 		// windowing
-		windows->applyWindow(FFTBuffer, FFTBuffer.getNumChannels(), usedInputChannels_.data(), FFTNumSamples_, windowType_, alpha_);
+		windows.applyWindow(FFTBuffer, FFTBuffer.getNumChannels(), usedInputChannels_.data(), FFTNumSamples_, windowType_, alpha_);
 
 		// in-place FFT
 		// FFT-ed only if the input is used
@@ -141,12 +142,12 @@ namespace Generation
 
 	perf_inline void SoundEngine::ProcessFFT(float sampleRate) noexcept
 	{
-		effectsState_->setEffectiveFFTSize(FFTNumSamples_ / 2);
+		effectsState_->setBinCount(FFTNumSamples_ / 2);
 		effectsState_->setSampleRate(sampleRate);
 
 		effectsState_->writeInputData(FFTBuffer);
-		effectsState_->processChains();
-		effectsState_->sumChains();
+		effectsState_->processLanes();
+		effectsState_->sumLanes();
 		effectsState_->writeOutputData(FFTBuffer);
 	}
 
@@ -341,13 +342,17 @@ namespace Generation
 		// copying input in the main circular buffer
 		CopyBuffers(buffer, numInputs, numSamples);
 
+		std::chrono::time_point<std::chrono::steady_clock> start{};
 		while (true)
 		{
+			if (start == decltype(start){})
+				start = std::chrono::steady_clock::now();
+
 			IsReadyToPerform(numSamples);
 			if (!isPerforming_)
 				break;
 			
-			UpdateParameters(UpdateFlag::Realtime, sampleRate);
+			UpdateParameters(Framework::UpdateFlag::Realtime, sampleRate);
 			DoFFT();
 			ProcessFFT(sampleRate);
 			DoIFFT();
@@ -357,5 +362,7 @@ namespace Generation
 		MixOut(numSamples);
 		// copying output to buffer
 		FillOutput(buffer, numOutputs, numSamples);
+
+		setProcessingTime(std::chrono::steady_clock::now() - start);
 	}
 }

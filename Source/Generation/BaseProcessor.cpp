@@ -25,7 +25,7 @@ namespace Generation
 		processorParameters_.data.reserve(other.processorParameters_.data.size());
 		for (auto &parameterPair : other.processorParameters_.data)
 			processorParameters_.data.emplace_back(parameterPair.first,
-				std::make_shared<Framework::ParameterValue>(*parameterPair.second, processorId_));
+				std::make_unique<Framework::ParameterValue>(*parameterPair.second, processorId_));
 
 		subProcessors_.reserve(other.subProcessors_.size());
 		for (auto &subProcessor : other.subProcessors_)
@@ -42,7 +42,7 @@ namespace Generation
 		processorParameters_.data.reserve(other.processorParameters_.data.size());
 		for (auto &parameterPair : other.processorParameters_.data)
 			processorParameters_.data.emplace_back(parameterPair.first,
-				std::make_shared<Framework::ParameterValue>(*parameterPair.second, processorId_));
+				std::make_unique<Framework::ParameterValue>(*parameterPair.second, processorId_));
 
 		subProcessors_ = std::move(other.subProcessors_);
 		for (auto &subProcessor : subProcessors_)
@@ -61,7 +61,7 @@ namespace Generation
 			processorParameters_.data.reserve(other.processorParameters_.data.size());
 			for (size_t i = 0; i < other.processorParameters_.data.size(); i++)
 				processorParameters_.data.emplace_back(other.processorParameters_.data[i].first,
-					std::make_shared<Framework::ParameterValue>(*other.processorParameters_[i], processorId_));
+					std::make_unique<Framework::ParameterValue>(*other.processorParameters_[i], processorId_));
 
 			subProcessors_.reserve(other.subProcessors_.size());
 			for (auto &subProcessor : other.subProcessors_)
@@ -81,7 +81,7 @@ namespace Generation
 			processorParameters_.data.reserve(other.processorParameters_.data.size());
 			for (size_t i = 0; i < other.processorParameters_.data.size(); i++)
 				processorParameters_.data.emplace_back(other.processorParameters_.data[i].first,
-					std::make_shared<Framework::ParameterValue>(*other.processorParameters_[i], processorId_));
+					std::make_unique<Framework::ParameterValue>(*other.processorParameters_[i], processorId_));
 
 			subProcessors_ = std::move(other.subProcessors_);
 			for (auto &subProcessor : subProcessors_)
@@ -92,17 +92,9 @@ namespace Generation
 		return *this;
 	}
 
-	void BaseProcessor::createProcessorParameters(const Framework::ParameterDetails *details, size_t size) noexcept
+	void BaseProcessor::updateParameters(Framework::UpdateFlag flag, float sampleRate, bool updateSubModuleParameters)
 	{
-		using namespace Framework;
-		for (size_t i = 0; i < size; i++)
-			processorParameters_.data.emplace_back(details[i].id,
-				std::make_shared<ParameterValue>(Parameters::getDetails(details[i].id), processorId_));
-	}
-
-	void BaseProcessor::updateParameters(UpdateFlag flag, float sampleRate, bool updateSubModuleParameters)
-	{
-		if (flag == UpdateFlag::NoUpdates)
+		if (flag == Framework::UpdateFlag::NoUpdates)
 			return;
 
 		for (size_t i = 0; i < processorParameters_.data.size(); i++)

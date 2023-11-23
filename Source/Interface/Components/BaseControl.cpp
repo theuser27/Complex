@@ -36,37 +36,47 @@ namespace Interface
 	{
 		hasParameter_ = true;
 
-		setName(parameter.getParameterDetails().id.data());
+		setName(utils::toJuceString(parameter.getParameterDetails().id));
 		auto replacedLink = setParameterLink(parameter.getParameterLink());
 
 		Framework::ParameterValue *replacedParameter = nullptr;
 		if (replacedLink)
 			replacedParameter = replacedLink->parameter;
 
+		setParameterDetails(parameter.getParameterDetails());
+		
 		if (getValueFromParameter)
 			setValueFromParameter();
 		else
 			setValueToParameter();
-
-		setParameterDetails(parameter.getParameterDetails());
 
 		return replacedParameter;
 	}
 
 	void BaseControl::setValueFromHost() noexcept
 	{
-		if (parameterLink_ && parameterLink_->hostControl)
-			setValueSafe(parameterLink_->hostControl->getValue());
+		if (!parameterLink_ || !parameterLink_->hostControl)
+			return;
+
+		double value = parameterLink_->hostControl->getValue();
+		if (value == getValueSafe())
+			return;
+
+		setValueSafe(value);
+		valueChanged();
 	}
 
 	void BaseControl::setValueFromParameter() noexcept
 	{
-		if (parameterLink_ && parameterLink_->parameter)
-		{
-			auto value = parameterLink_->parameter->getNormalisedValue();
-			setValueSafe(value);
-			setValueInternal(value, NotificationType::dontSendNotification);
-		}
+		if (!parameterLink_ || !parameterLink_->parameter)
+			return;
+
+		double value = parameterLink_->parameter->getNormalisedValue();
+		if (value == getValueSafe())
+			return;
+
+		setValueSafe(value);
+		valueChanged();
 	}
 
 	void BaseControl::setValueToHost() const noexcept
@@ -82,19 +92,6 @@ namespace Interface
 				parent_->getInterfaceLink()->getPlugin().getSampleRate(), (float)getValueSafe());
 	}
 
-	bool BaseControl::updateValue()
-	{
-		if (!hasParameter())
-			return false;
-
-		auto newValue = getValueSafe();
-		bool needsUpdate = getValueInternal() != newValue;
-		if (needsUpdate)
-			setValueInternal(newValue, NotificationType::sendNotificationSync);
-
-		return needsUpdate;
-	}
-
 	void BaseControl::beginChange(double oldValue) noexcept
 	{
 		valueBeforeChange_ = oldValue;
@@ -105,16 +102,29 @@ namespace Interface
 	{
 		hasBegunChange_ = false;
 		parent_->getInterfaceLink()->getPlugin().pushUndo(
-			new Framework::ParameterUpdate(this, valueBeforeChange_, getValueInternal()));
+			new Framework::ParameterUpdate(this, valueBeforeChange_, getValueSafe()));
+	}
+
+	void BaseControl::resized()
+	{
+		setColours();
+		setComponentsBounds();
+		setExtraElementsPositions(drawBounds_.isEmpty() ? getLocalBounds() : drawBounds_);
+		repositionExtraElements();
+	}
+
+	void BaseControl::moved()
+	{
+		repositionExtraElements();
 	}
 
 	void BaseControl::setOverallBounds(Point<int> position)
 	{
 		auto scaledAddedHitbox = BorderSize{ 
-			parent_->scaleValueRoundInt((float)addedHitBox_.getTop()),
-			parent_->scaleValueRoundInt((float)addedHitBox_.getLeft()),
-			parent_->scaleValueRoundInt((float)addedHitBox_.getBottom()),
-			parent_->scaleValueRoundInt((float)addedHitBox_.getRight()) };
+			parent_->scaleValueRoundInt((float)addedHitbox_.getTop()),
+			parent_->scaleValueRoundInt((float)addedHitbox_.getLeft()),
+			parent_->scaleValueRoundInt((float)addedHitbox_.getBottom()),
+			parent_->scaleValueRoundInt((float)addedHitbox_.getRight()) };
 
 		Rectangle bounds{ drawBounds_.getWidth() + scaledAddedHitbox.getLeftAndRight(),
 			drawBounds_.getHeight() + scaledAddedHitbox.getTopAndBottom() };
@@ -126,7 +136,13 @@ namespace Interface
 			relativeBound.second.setPosition(relativeBound.second.getPosition() + 
 				Point{ scaledAddedHitbox.getLeft(), scaledAddedHitbox.getTop() });
 
-		setBoundsInternal(bounds);
+		setBounds(bounds);
+	}
+
+	void BaseControl::repositionExtraElements()
+	{
+		for (auto &extraElement : extraElements_.data)
+			extraElement.first->setBounds(parent_->getLocalArea(this, extraElement.second));
 	}
 
 	void BaseControl::addLabel()
@@ -135,7 +151,7 @@ namespace Interface
 			return;
 		
 		label_ = makeOpenGlComponent<PlainTextComponent>("Control Label",
-			(hasParameter()) ? details_.displayName.data() : getName());
+			(hasParameter()) ? utils::toJuceString(details_.displayName) : getName());
 		label_->setFontType(PlainTextComponent::kText);
 		label_->setTextHeight(Fonts::kInterVDefaultHeight);
 		extraElements_.add(label_.get(), {});

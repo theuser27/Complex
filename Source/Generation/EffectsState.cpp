@@ -8,6 +8,7 @@
 	==============================================================================
 */
 
+#include "Framework/spectral_support_functions.h"
 #include "EffectsState.h"
 #include "Framework/simd_utils.h"
 
@@ -20,8 +21,7 @@ namespace Generation
 		dataBuffer_.reserve(kNumTotalChannels, kMaxFFTBufferLength);
 		insertSubProcessor(0, makeSubProcessor<EffectModule>(dynamicsEffect::getClassType()));
 
-		processorParameters_.data.reserve(Framework::effectLaneParameterList.size());
-		createProcessorParameters(Framework::effectLaneParameterList.data(), Framework::effectLaneParameterList.size());
+		createProcessorParameters<Framework::BaseProcessors::EffectsLane::type>();
 	}
 
 	bool EffectsLane::insertSubProcessor(size_t index, BaseProcessor *newSubProcessor) noexcept
@@ -80,9 +80,9 @@ namespace Generation
 			return false;
 
 		// TODO: remedy the way lanes are being processed by threads
-		lanes_.emplace_back(static_cast<EffectsLane *>(newSubProcessor));
+		lanes_.emplace_back(utils::as<EffectsLane *>(newSubProcessor));
 		subProcessors_.emplace_back(newSubProcessor);
-		laneThreads_.emplace_back(std::bind_front(&EffectsState::processIndividualChains, std::ref(*this)), lanes_.size() - 1);
+		laneThreads_.emplace_back(std::bind_front(&EffectsState::processIndividualLanes, std::ref(*this)), lanes_.size() - 1);
 
 		for (auto *listener : listeners_)
 			listener->insertedSubProcessor(index, newSubProcessor);
@@ -114,7 +114,7 @@ namespace Generation
 			if (!usedInputs_[i / kComplexSimdRatio])
 				continue;
 
-			for (u32 j = 0; j < effectiveFFTSize_; j++)
+			for (u32 j = 0; j < binCount_; j++)
 			{
 				// skipping every second sample (complex signal) and every second pair (matrix takes 2 pairs)
 				auto matrix = utils::getValueMatrix<kComplexSimdRatio>(channelPointers + i, j * 2 * kComplexSimdRatio);
@@ -126,12 +126,11 @@ namespace Generation
 		}
 	}
 
-	void EffectsState::processChains() const noexcept
+	void EffectsState::processLanes() noexcept
 	{
-		// the reason for sequential consistency for the triggers is because we don't want
-		// the waiting and trigger stage to be rearranged/out-of-order executed
-		// (release/acquire barriers can cross each other but not seq_cst/acquire)
+		auto start = std::chrono::steady_clock::now();
 
+		// sequential consistency just in case
 		// triggers the chains to run again
 		for (auto &lane : lanes_)
 			lane->isFinished_.store(false, std::memory_order_seq_cst);
@@ -139,9 +138,11 @@ namespace Generation
 		// waiting for chains to finish
 		for (auto &lane : lanes_)
 			while (lane->isFinished_.load(std::memory_order_acquire) == false) { utils::longWait(5); }
+
+		setProcessingTime(std::chrono::steady_clock::now() - start);
 	}
 
-	void EffectsState::processIndividualChains(std::stop_token stoken, size_t chainIndex) const noexcept
+	void EffectsState::processIndividualLanes(std::stop_token stoken, size_t chainIndex) const noexcept
 	{
 		using namespace Framework;
 
@@ -164,7 +165,7 @@ namespace Generation
 
 			// Chain On/Off
 			// if this chain is turned off, we set it as finished and skip everything
-			if (!thisLane->getParameterUnchecked((u32)EffectsLaneParameters::LaneEnabled)->getInternalValue<u32>(getSampleRate()))
+			if (!thisLane->getParameter(BaseProcessors::EffectsLane::LaneEnabled::self())->getInternalValue<u32>(getSampleRate()))
 			{
 				thisLane->isFinished_.store(true, std::memory_order_release);
 				continue;
@@ -173,10 +174,12 @@ namespace Generation
 			thisLane->currentEffectIndex_.store(0, std::memory_order_release);
 			auto &laneDataSource = thisLane->laneDataSource_;
 
+			auto start = std::chrono::steady_clock::now();
+
 			// Chain Input 
 			// if this chain's input is another's output and that chain can be used,
 			// we wait until it is finished and then copy its data
-			if (auto inputIndex = thisLane->getParameterUnchecked((u32)EffectsLaneParameters::Input)
+			if (auto inputIndex = thisLane->getParameter(BaseProcessors::EffectsLane::Input::self())
 				->getInternalValue<u32>(getSampleRate()); inputIndex & kLaneInputMask)
 			{
 				inputIndex ^= kLaneInputMask;
@@ -193,7 +196,7 @@ namespace Generation
 			for (auto &effectModule : thisLane->subProcessors_)
 			{
 				// this is safe because by design only EffectModules are contained in a lane
-				utils::as<EffectModule *>(effectModule)->processEffect(laneDataSource, effectiveFFTSize_, getSampleRate());
+				utils::as<EffectModule *>(effectModule)->processEffect(laneDataSource, binCount_, getSampleRate());
 
 				// TODO: fit links between modules here
 
@@ -201,13 +204,15 @@ namespace Generation
 				thisLane->currentEffectIndex_.fetch_add(1, std::memory_order_acq_rel);
 			}
 
+			thisLane->setProcessingTime(std::chrono::steady_clock::now() - start);
+
 			// to let other threads know that the data is in its final state
 			// and to prevent the thread of instantly running again
 			thisLane->isFinished_.store(true, std::memory_order_release);
 		}
 	}
 
-	void EffectsState::sumChains() noexcept
+	void EffectsState::sumLanes() noexcept
 	{
 		using namespace Framework;
 
@@ -218,25 +223,12 @@ namespace Generation
 		// (instead of magnitude-phase pairs) and if not, gets converted
 		for (auto &lane : lanes_)
 		{
-			if (!lane->getParameterUnchecked((u32)EffectsLaneParameters::LaneEnabled)->getInternalValue<u32>(getSampleRate()))
+			if (!lane->getParameter(BaseProcessors::EffectsLane::LaneEnabled::self())->getInternalValue<u32>(getSampleRate()))
 				continue;
 
 			if (lane->laneDataSource_.isPolar)
-			{
-				auto &buffer = lane->laneDataSource_.sourceBuffer;
-				auto &conversionhBuffer = lane->laneDataSource_.conversionBuffer;
-				for (u32 j = 0; j < buffer.getSimdChannels(); j++)
-				{
-					for (u32 k = 0; k < buffer.getSize(); k += 2)
-					{
-						simd_float one = buffer.readSimdValueAt(j * kComplexSimdRatio, k);
-						simd_float two = buffer.readSimdValueAt(j * kComplexSimdRatio, k + 1);
-						utils::complexPolarToCart(one, two);
-						conversionhBuffer.writeSimdValueAt(one, j * kComplexSimdRatio, k);
-						conversionhBuffer.writeSimdValueAt(two, j * kComplexSimdRatio, k + 1);
-					}
-				}
-			}
+				utils::convertBuffer<utils::complexPolarToCart>(
+					lane->laneDataSource_.sourceBuffer, lane->laneDataSource_.conversionBuffer);
 		}
 
 		// multipliers for scaling the multiple chains going into the same output
@@ -245,10 +237,10 @@ namespace Generation
 		// for every chain we add its scaled output to the main sourceBuffer_ at the designated output channels
 		for (auto &lane : lanes_)
 		{
-			if (!lane->getParameterUnchecked((u32)EffectsLaneParameters::LaneEnabled)->getInternalValue<u32>(getSampleRate()))
+			if (!lane->getParameter(BaseProcessors::EffectsLane::LaneEnabled::self())->getInternalValue<u32>(getSampleRate()))
 				continue;
 
-			auto laneOutput = lane->getParameterUnchecked((u32)EffectsLaneParameters::Output)->getInternalValue<u32>(getSampleRate());
+			auto laneOutput = lane->getParameter(BaseProcessors::EffectsLane::Output::self())->getInternalValue<u32>(getSampleRate());
 			if (laneOutput == kDefaultOutput)
 				continue;
 
@@ -258,11 +250,11 @@ namespace Generation
 			{
 				auto source = SimdBufferView(lane->laneDataSource_.conversionBuffer);
 				SimdBuffer<std::complex<float>, simd_float>::applyToThisNoMask(dataBuffer_,
-					source, kComplexSimdRatio, effectiveFFTSize_, utils::MathOperations::Add, laneOutput * kComplexSimdRatio, 0);
+					source, kComplexSimdRatio, binCount_, utils::MathOperations::Add, laneOutput * kComplexSimdRatio, 0);
 			}
 			else
 				SimdBuffer<std::complex<float>, simd_float>::applyToThisNoMask(dataBuffer_,
-					lane->laneDataSource_.sourceBuffer, kComplexSimdRatio, effectiveFFTSize_, utils::MathOperations::Add,
+					lane->laneDataSource_.sourceBuffer, kComplexSimdRatio, binCount_, utils::MathOperations::Add,
 					laneOutput * kComplexSimdRatio, 0);
 		}
 
@@ -274,7 +266,7 @@ namespace Generation
 				continue;
 
 			simd_float multiplier = 1.0f / multipliers[i];
-			for (u32 j = 0; j < effectiveFFTSize_; j++)
+			for (u32 j = 0; j < binCount_; j++)
 				dataBuffer_.multiply(multiplier, i * kComplexSimdRatio, j);
 		}
 	}
@@ -288,7 +280,7 @@ namespace Generation
 			if (!usedOutputs_[i / kComplexSimdRatio])
 				continue;
 
-			for (u32 j = 0; j < effectiveFFTSize_; j++)
+			for (u32 j = 0; j < binCount_; j++)
 			{
 				for (u32 k = 0; k < kComplexSimdRatio; k++)
 					matrix.rows_[k] = dataBuffer_.readSimdValueAt(i, j * 2 + k);

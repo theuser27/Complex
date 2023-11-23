@@ -247,7 +247,7 @@ namespace Interface
 		 * 2 - 3: scaled width and height for quad (acts like a uniform but idk why isn't one)
 		 * 4 - 5: coordinates inside the quad (ndc for most situations, normalised for OpenGLCorners)
 		 * 6 - 7: shader values (doubles as left channel shader values)
-		 * 6 - 9: right channel shader values (necessary for the modulation meters/indicators)
+		 * 8 - 9: right channel shader values (necessary for the modulation meters/indicators)
 		 */
 		std::unique_ptr<float[]> data_;
 		std::unique_ptr<int[]> indices_;
@@ -275,7 +275,7 @@ namespace Interface
 		JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(OpenGlMultiQuad)
 	};
 
-	class OpenGlQuad : public OpenGlMultiQuad
+	class OpenGlQuad final : public OpenGlMultiQuad
 	{
 	public:
 		OpenGlQuad(Shaders::FragmentShader shader, String name = typeid(OpenGlQuad).name()) :
@@ -283,13 +283,14 @@ namespace Interface
 		{ setQuad(0, -1.0f, -1.0f, 2.0f, 2.0f); }
 	};
 
-	class OpenGlScrollQuad : public OpenGlQuad
+	class OpenGlScrollQuad final : public OpenGlMultiQuad
 	{
 	public:
 		static constexpr float kHoverChange = 0.2f;
 
-		OpenGlScrollQuad() : OpenGlQuad(Shaders::kRoundedRectangleFragment, typeid(OpenGlScrollQuad).name())
+		OpenGlScrollQuad() : OpenGlMultiQuad(1, Shaders::kRoundedRectangleFragment, typeid(OpenGlScrollQuad).name())
 		{
+			setQuad(0, -1.0f, -1.0f, 2.0f, 2.0f);
 			animator_.setHoverIncrement(kHoverChange);
 		}
 
@@ -312,7 +313,7 @@ namespace Interface
 			double endRatio = (range.getEnd() - totalRange.getStart()) / totalRange.getLength();
 			setQuadVertical(0, 1.0f - 2.0f * (float)endRatio, 2.0f * (float)(endRatio - startRatio));
 
-			OpenGlQuad::render(openGl, animate);
+			OpenGlMultiQuad::render(openGl, animate);
 		}
 
 		void setShrinkLeft(bool shrinkLeft) { shrinkLeft_ = shrinkLeft; }
@@ -325,7 +326,7 @@ namespace Interface
 		float hoverAmount_ = -1.0f;
 	};
 
-	class OpenGlScrollBar : public ScrollBar
+	class OpenGlScrollBar final : public ScrollBar
 	{
 	public:
 		OpenGlScrollBar() : ScrollBar(true)
@@ -377,7 +378,7 @@ namespace Interface
 		gl_ptr<OpenGlScrollQuad> bar_;
 	};
 
-	class OpenGlCorners : public OpenGlMultiQuad
+	class OpenGlCorners final : public OpenGlMultiQuad
 	{
 	public:
 		OpenGlCorners() : OpenGlMultiQuad(4, Shaders::kRoundedCornerFragment, typeid(OpenGlCorners).name())

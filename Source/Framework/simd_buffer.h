@@ -17,12 +17,12 @@
 
 namespace Framework
 {
-	template<typename T, commonConcepts::SimdValue SIMD>
+	template<typename T, CommonConcepts::SimdValue SIMD>
 	class SimdBufferView;
 
 	// T - base type
 	// SIMD - simd type
-	template<typename T, commonConcepts::SimdValue SIMD>
+	template<typename T, CommonConcepts::SimdValue SIMD>
 		/*requires commonConcepts::Addable<SIMD> && commonConcepts::Multipliable<SIMD> &&
 			commonConcepts::OperatorParen<SIMD> && commonConcepts::OperatorBracket<SIMD>*/
 	class SimdBuffer 
@@ -253,15 +253,16 @@ namespace Framework
 		static constexpr auto getAbsoluteIndices(u32 channel, u32 channelSize, u32 index) noexcept
 		{ return std::pair<u32, u32>{ (channel / getRelativeSize()) *channelSize + index, channel % getRelativeSize() }; }
 
-		template<typename T, commonConcepts::SimdValue SIMD>
+		template<typename T, CommonConcepts::SimdValue SIMD>
 		friend class SimdBufferView;
 	};
 
-	template<typename T, commonConcepts::SimdValue SIMD>
+	template<typename T, CommonConcepts::SimdValue SIMD>
 	class SimdBufferView
 	{
 	public:
 		SimdBufferView() = default;
+		SimdBufferView(const SimdBufferView &) = default;
 		SimdBufferView(const SimdBuffer<T, SIMD> &buffer, u32 channels = 0, u32 beginChannel = 0) noexcept
 		{
 			COMPLEX_ASSERT(beginChannel + channels <= buffer.getChannels());
@@ -308,11 +309,11 @@ namespace Framework
 		u32 channels_ = 0;
 		u32 size_ = 0;
 
-		template<typename T, commonConcepts::SimdValue SIMD>
+		template<typename T, CommonConcepts::SimdValue SIMD>
 		friend class SimdBuffer;
 	};
 
-	template<typename T, commonConcepts::SimdValue SIMD>
+	template<typename T, CommonConcepts::SimdValue SIMD>
 	SimdBuffer<T, SIMD>::SimdBuffer(const SimdBuffer &other, bool doDataCopy) noexcept
 	{
 		COMPLEX_ASSERT(other.getChannels() > 0 && other.getSize() > 0);
@@ -326,7 +327,7 @@ namespace Framework
 	// specified by starting channels/indices
 	// result is shifted by shiftMask and filtered with mergeMask
 	// note: starting channels need to be congruent to kNumChannels
-	template<typename T, commonConcepts::SimdValue SIMD>
+	template<typename T, CommonConcepts::SimdValue SIMD>
 	void SimdBuffer<T, SIMD>::applyToThis(SimdBuffer &thisBuffer, SimdBufferView<T, SIMD> &otherBuffer, u32 numChannels,
 		u32 numSamples, utils::MathOperations operation, simd_mask mergeMask, u32 thisStartChannel, u32 otherStartChannel, 
 		u32 thisStartIndex, u32 otherStartIndex) noexcept
@@ -380,7 +381,7 @@ namespace Framework
 		}
 	}
 
-	template<typename T, commonConcepts::SimdValue SIMD>
+	template<typename T, CommonConcepts::SimdValue SIMD>
 	void SimdBuffer<T, SIMD>::applyToThisNoMask(SimdBuffer &thisBuffer, SimdBufferView<T, SIMD> &otherBuffer,
 		u32 numChannels, u32 numSamples, utils::MathOperations operation,
 		u32 thisStartChannel, u32 otherStartChannel, u32 thisStartIndex, u32 otherStartIndex) noexcept

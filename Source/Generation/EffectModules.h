@@ -12,16 +12,11 @@
 
 #include <algorithm>
 #include "Framework/common.h"
-#include "Framework/spectral_support_functions.h"
 #include "Framework/simd_buffer.h"
 #include "Framework/parameters.h"
 #include "Framework/parameter_value.h"
 #include "BaseProcessor.h"
-
-namespace Interface
-{
-	class EffectModuleSection;
-}
+#include "Plugin/ProcessorTree.h"
 
 namespace Generation
 {
@@ -44,27 +39,58 @@ namespace Generation
 
 		baseEffect(Plugin::ProcessorTree *globalModulesState, u64 parentModuleId, std::string_view effectType) :
 			BaseProcessor(globalModulesState, parentModuleId, effectType)
-		{ createProcessorParameters(Framework::baseEffectParameterList.data(), Framework::baseEffectParameterList.size()); }
+		{ createProcessorParameters<Framework::BaseProcessors::BaseEffect::type>(); }
 
-		baseEffect(const baseEffect &other, u64 parentModuleId) noexcept : BaseProcessor(other, parentModuleId) { }
+		baseEffect(const baseEffect &other, u64 parentModuleId) noexcept :
+			BaseProcessor(other, parentModuleId) { }
 		baseEffect &operator=(const baseEffect &other) noexcept
-		{ BaseProcessor::operator=(other); return *this; }
+		{
+			if (this != &other)
+			{
+				
+				BaseProcessor::operator=(other);
+			}
+			return *this;
+		}
 
-		baseEffect(baseEffect &&other, u64 parentModuleId) noexcept : BaseProcessor(std::move(other), parentModuleId) { }
+		baseEffect(baseEffect &&other, u64 parentModuleId) noexcept :
+			BaseProcessor(std::move(other), parentModuleId) { }
 		baseEffect &operator=(baseEffect &&other) noexcept
-		{ BaseProcessor::operator=(std::move(other)); return *this; }
+		{
+			if (this != &other)
+			{
+
+				BaseProcessor::operator=(std::move(other));
+			}
+			return *this;
+		}
 
 		virtual void run([[maybe_unused]] Framework::SimdBufferView<std::complex<float>, simd_float> &source,
 			[[maybe_unused]] Framework::SimdBuffer<std::complex<float>, simd_float> &destination,
 			[[maybe_unused]] u32 binCount, [[maybe_unused]] float sampleRate) noexcept { }
 
 		virtual bool needsPolarData() const noexcept { return false; }
-		auto getEffectAlgorithm() const
-		{ return processorParameters_[(u32)Framework::BaseEffectParameters::Algorithm]->getInternalValue<u32>(); }
-		auto *getEffectParameter(size_t effectIndex) const
-		{ return processorParameters_[effectIndex + magic_enum::enum_count<Framework::BaseEffectParameters>()].get(); }
+		template<nested_enum::NestedEnum E>
+		E getEffectAlgorithm() const
+		{ return E::make_enum(getParameter(Framework::BaseProcessors::BaseEffect::Algorithm::self())->getInternalValue<u32>()).value(); }
 
-		void updateParameterDetails(std::span<const Framework::ParameterDetails> newDetails);
+		/*template<commonConcepts::Enum E>
+		void updateParameterDetails()
+		{
+			using namespace Framework;
+			constexpr auto enumValues = magic_enum::enum_values<E>();
+			auto updateParameters = [&]()
+			{
+				for (size_t i = 0; i < enumValues.size(); i++)
+				{
+					ParameterDetails details = Parameters::getDetails<E>(enumValues[i]);
+					processorParameters_[i + magic_enum::enum_count<BaseEffectParameters>()]->setParameterDetails(details);
+					processorParameters_.updateKey(i + magic_enum::enum_count<BaseEffectParameters>(), 
+						Parameters::getEnumString(enumValues[i]));
+				}
+			};
+			getProcessorTree()->executeOutsideProcessing(updateParameters);
+		}*/
 
 	protected:
 		[[nodiscard]] BaseProcessor *createCopy([[maybe_unused]] std::optional<u64> parentModuleId) const noexcept override
@@ -74,13 +100,18 @@ namespace Generation
 
 		enum class BoundRepresentation : u32 { Normalised, Frequency, BinIndex };
 
-		void setEffectModeStrings(Framework::EffectTypes type) const
+		// helper to set the create
+		template<nested_enum::NestedEnum Type>
+		void fillAndSetParameters()
 		{
-			auto strings = Framework::Parameters::getEffectModesStrings(type);
-			auto modeIndex = (u32)Framework::BaseEffectParameters::Algorithm;
-			auto details = Framework::baseEffectParameterList[modeIndex];
-			details.stringLookup = strings;
-			processorParameters_[modeIndex]->setParameterDetails(details);
+			using namespace Framework;
+
+			auto *parameter = getParameter(BaseProcessors::BaseEffect::Algorithm::self());
+			auto details = parameter->getParameterDetails();
+			details.stringLookup = Parameters::getEffectModesStrings(Type::self());
+			parameter->setParameterDetails(details);
+			
+			utils::applyOne([&]<typename T>(T &&) { createProcessorParameters<typename std::remove_cvref_t<T>::type>(); }, Type::template enum_subtypes<nested_enum::InnerNodes>());
 		}
 
 		// first - low shifted boundary, second - high shifted boundary
@@ -108,12 +139,13 @@ namespace Generation
 		}
 
 		// returns starting point and distance to end of processed/unprocessed range
-		static std::pair<u32, u32> vector_call getRange(simd_int lowIndices, simd_int highIndices,
+		static std::pair<u32, u32> vector_call minimiseRange(simd_int lowIndices, simd_int highIndices,
 			u32 binCount, bool isProcessedRange);
 
-		void copyUnprocessedData(Framework::SimdBufferView<std::complex<float>, simd_float> &source,
+		static void copyUnprocessedData(const Framework::SimdBufferView<std::complex<float>, simd_float> &source,
 			Framework::SimdBuffer<std::complex<float>, simd_float> &destination, const simd_int &lowBoundIndices,
-			const simd_int &highBoundIndices, u32 effectiveFFTSize) const noexcept;
+			const simd_int &highBoundIndices, u32 effectiveFFTSize) noexcept;
+
 
 		//// Parameters
 		//
@@ -169,27 +201,39 @@ namespace Generation
 		void runNormal(Framework::SimdBufferView<std::complex<float>, simd_float> &source,
 			Framework::SimdBuffer<std::complex<float>, simd_float> &destination, u32 binCount, float sampleRate) const noexcept;
 
-		simd_float vector_call getDistancesFromCutoffs(simd_int positionIndices,
-			simd_int cutoffIndices, simd_int lowBoundIndices, u32 FFTSize, float sampleRate) const noexcept;
+		static simd_float vector_call getDistancesFromCutoffs(simd_int positionIndices,
+			simd_int cutoffIndices, simd_int lowBoundIndices, u32 FFTSize, float sampleRate);
 
-		//// Parameters
+		//// Modes
 		// 
-		// 5. gain (stereo) - range[-100.0 db, 100.0 db]; lowers the loudness of the cutoff/around the cutoff point for negative/positive values 
-		//	  at min/max values the bins around/outside the cutoff are zeroed 
-		//	  *parameter values are interpreted linearly, so the control needs to have an exponential slope
+		// Normal - normal filtering
+		// 5. gain (stereo) - range[-$ db, +$ db] (symmetric loudness);
+		//    lowers the loudness at/around the cutoff point for negative/positive values
+		//    *parameter values are interpreted linearly, so the control needs to have an exponential slope
 		// 
 		// 6. cutoff (stereo) - range[0.0f, 1.0f]; controls where the filtering starts
-		//	  at 0.0f/1.0f it's at the low/high boundary
+		//    at 0.0f/1.0f it's at the low/high boundary
 		//    *parameter values are interpreted linearly, so the control needs to have an exponential slope
 		// 
 		// 7. slope (stereo) - range[-1.0f, 1.0f]; controls the slope transition
-		//	  at 0.0f it stretches from the cutoff to the frequency boundaries
-		//	  at 1.0f only the center bin is left unaffected
-
-
-		//// Modes
-		// Normal - normal filtering
+		//    at 0.0f it stretches from the cutoff to the frequency boundaries
+		//    at 1.0f only the center bin is left unaffected
+		// 
+		// 
+		// Threshold - frequency gating
+		// 5. threshold (stereo) - range[0%, 100%]; threshold is relative to the loudest bin in the spectrum
+		// 
+		// 6. gain (stereo) - range[-$ db, +$ db] (symmetric loudness);
+		//    positive/negative values lower the loudness of the bins below/above the threshold
+		// 
+		// 7. tilt (stereo) - range[-100%, +100%]; tilt relative to the loudest bin in the spectrum
+		//    at min/max values the left/right-most part of the masked spectrum will have no threshold
+		// 
+		// 8. delta - instead of the absolute loudness it uses the averaged loudness change from the 2 neighbouring bins
+		// 
+		// 
 		// Regular - triangles, squares, saws, pointy, sweep and custom, razor comb peak
+		// 
 		// TODO: write a constexpr generator for all of the weird mask types (triangle, saw, square, etc)
 	};
 
@@ -207,7 +251,7 @@ namespace Generation
 		dynamicsEffect(Plugin::ProcessorTree *globalModulesState, u64 parentModuleId);
 
 		void run(Framework::SimdBufferView<std::complex<float>, simd_float> &source,
-			Framework::SimdBuffer<std::complex<float>, simd_float> &destination, u32 effectiveFFTSize, float sampleRate) noexcept override;
+			Framework::SimdBuffer<std::complex<float>, simd_float> &destination, u32 binCount, float sampleRate) noexcept override;
 
 	private:
 		void runContrast(Framework::SimdBufferView<std::complex<float>, simd_float> &source,
@@ -216,7 +260,7 @@ namespace Generation
 		void runClip(Framework::SimdBufferView<std::complex<float>, simd_float> &source,
 			Framework::SimdBuffer<std::complex<float>, simd_float> &destination, u32 binCount, float sampleRate) const noexcept;
 
-		simd_float vector_call matchPower(simd_float target, simd_float current) const
+		static simd_float vector_call matchPower(simd_float target, simd_float current) noexcept
 		{
 			simd_float result = 1.0f;
 			result = utils::maskLoad(result, simd_float(0.0f), simd_float::greaterThanOrEqual(0.0f, target));
@@ -237,6 +281,10 @@ namespace Generation
 		static constexpr float kContrastMaxPositiveValue = 4.0f;
 		static constexpr float kContrastMaxNegativeValue = -0.5f;
 		//
+		// 
+		//// Compressor
+		//
+		// Depth, Threshold, Ratio
 		//
 
 		// specops noise filter/focus, thinner
@@ -323,9 +371,10 @@ namespace Generation
 		destroyEffect(Plugin::ProcessorTree *globalModulesState, u64 parentModuleId);
 
 		// resize, specops effects category
+		// randomising bin positions
+		// bin sorting - by amplitude, phase
+		// TODO: freezer and glitcher classes
 	};
-
-	// TODO: freezer and glitcher classes
 
 
 	static constexpr std::array effectsTypes = { utilityEffect::getClassType(), filterEffect::getClassType(),
@@ -360,7 +409,7 @@ namespace Generation
 		[[nodiscard]] BaseProcessor *createCopy(std::optional<u64> parentModuleId) const noexcept override
 		{ return makeSubProcessor<EffectModule>(*this, parentModuleId.value_or(parentProcessorId_)); }
 
-		auto *getEffect() const noexcept { return static_cast<baseEffect *>(subProcessors_[0]); }
+		baseEffect *getEffect() const noexcept { return utils::as<baseEffect *>(subProcessors_[0]); }
 	private:
 		baseEffect *createEffect(std::string_view type) const noexcept;
 

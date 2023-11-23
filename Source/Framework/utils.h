@@ -122,10 +122,7 @@ namespace utils
 	strict_inline double frequencyToMidiCents(double frequency) noexcept
 	{ return kCentsPerNote * frequencyToMidiNote(frequency); }
 
-	inline constexpr double kLowestDb = -kNormalisedToDbMultiplier;
-	inline constexpr double kHighestDb = kNormalisedToDbMultiplier;
-	inline constexpr double kLowestAmplitude = dbToAmplitudeConstexpr(kLowestDb);
-	inline constexpr double kHighestAmplitude = dbToAmplitudeConstexpr(kHighestDb);
+
 
 	template<std::integral T>
 	strict_inline bool isPowerOfTwo(T value) noexcept
@@ -286,8 +283,8 @@ namespace utils
 		mutable std::atomic<bool> guard = false;
 	};
 
-	template<commonConcepts::Pointer T>
-	strict_inline T as(commonConcepts::Pointer auto pointer)
+	template<CommonConcepts::Pointer T>
+	strict_inline T as(CommonConcepts::Pointer auto pointer)
 	{
 	#if COMPLEX_DEBUG
 		auto *castPointer = dynamic_cast<T>(pointer);
@@ -297,6 +294,8 @@ namespace utils
 		return static_cast<T>(pointer);
 	#endif
 	}
+
+	strict_inline String toJuceString(std::string_view view) { return String{ view.data(), view.size() }; }
 
 	// for debugging purposes
 	strict_inline void printBuffer([[maybe_unused]] const float *begin, u32 numSamples)

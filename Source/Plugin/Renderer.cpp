@@ -62,7 +62,7 @@ namespace Interface
 		shaders_ = nullptr;
 	}
 
-	void Renderer::startUI(Component &dummyComponent)
+	void Renderer::startUI([[maybe_unused]] Component &dummyComponent)
 	{
 		skinInstance_ = std::make_unique<Skin>();
 		skinInstance_->copyValuesToLookAndFeel(DefaultLookAndFeel::instance());

@@ -21,7 +21,7 @@ namespace Interface
 
 		void resized() override;
 
-		void setContent(const std::string &text, Rectangle<int> bounds, 
+		void setContent(String text, Rectangle<int> bounds, 
 			BubbleComponent::BubblePlacement placement, Skin::SectionOverride sectionOverride = Skin::kPopupBrowser);
 
 	private:
@@ -51,7 +51,7 @@ namespace Interface
 
 		void mouseMove(const MouseEvent &e) override;
 		void mouseDrag(const MouseEvent &e) override;
-		void mouseExit(const MouseEvent &e) override;
+		void mouseExit(const MouseEvent &) override;
 		void mouseUp(const MouseEvent &e) override;
 		void mouseDoubleClick(const MouseEvent &e) override;
 		void paintBackground(Graphics &) override { }
@@ -76,7 +76,7 @@ namespace Interface
 
 		void setSelected(int selection) { selected_ = selection; }
 		int getSelected() const { return selected_; }
-		void mouseWheelMove(const MouseEvent &e, const MouseWheelDetails &wheel) override;
+		void mouseWheelMove(const MouseEvent &, const MouseWheelDetails &wheel) override;
 		void resetScrollPosition();
 		void scrollBarMoved([[maybe_unused]] ScrollBar *scroll_bar, double range_start) override 
 		{ view_position_ = (float)range_start; }

@@ -18,8 +18,7 @@ namespace Interface
 	class EmptySlider : public PinSlider
 	{
 	public:
-		EmptySlider(Framework::ParameterValue *parameter, String name = {}) :
-			PinSlider(parameter, std::move(name))
+		EmptySlider(Framework::ParameterValue *parameter) : PinSlider(parameter)
 		{
 			setShouldShowPopup(true);
 			components_.clear();
@@ -75,7 +74,7 @@ namespace Interface
 		PinBoundsBox::resized();
 	}
 
-	void SpectralMaskComponent::sliderValueChanged(Slider *slider)
+	void SpectralMaskComponent::sliderValueChanged(BaseSlider *slider)
 	{
 		if (shiftBounds_.get() == slider)
 		{
@@ -97,7 +96,7 @@ namespace Interface
 		addAndMakeVisible(draggableBox_);
 
 		effectTypeSelector_ = std::make_unique<TextSelector>(
-			effectModule->getParameterUnchecked((u32)EffectModuleParameters::ModuleType), 
+			effectModule->getParameter(BaseProcessors::EffectModule::ModuleType::self()),
 			Fonts::instance()->getInterVFont().withStyle(Font::bold));
 		addControl(effectTypeSelector_.get());
 
@@ -107,13 +106,13 @@ namespace Interface
 		addOpenGlComponent(effectTypeIcon_);
 
 		mixNumberBox_ = std::make_unique<NumberBox>(
-			effectModule->getParameterUnchecked((u32)EffectModuleParameters::ModuleMix));
+			effectModule->getParameter(BaseProcessors::EffectModule::ModuleMix::self()));
 		mixNumberBox_->setMaxTotalCharacters(5);
 		mixNumberBox_->setMaxDecimalCharacters(2);
 		addControl(mixNumberBox_.get());
 
-		moduleActivator_ = std::make_unique<BaseButton>(
-			effectModule->getParameterUnchecked((u32)EffectModuleParameters::ModuleEnabled));
+		moduleActivator_ = std::make_unique<PowerButton>(
+			effectModule->getParameter(BaseProcessors::EffectModule::ModuleEnabled::self()));
 		addControl(moduleActivator_.get());
 		setActivator(moduleActivator_.get());
 
@@ -122,14 +121,14 @@ namespace Interface
 		cachedEffects_[effectIndex] = baseEffect;
 
 		effectAlgoSelector_ = std::make_unique<TextSelector>(
-			baseEffect->getParameterUnchecked((u32)BaseEffectParameters::Algorithm),
+			baseEffect->getParameter(BaseProcessors::BaseEffect::Algorithm::self()),
 			Fonts::instance()->getInterVFont());
 		addControl(effectAlgoSelector_.get());
 
 		maskComponent_ = std::make_unique<SpectralMaskComponent>(
-			baseEffect->getParameterUnchecked((u32)BaseEffectParameters::LowBound),
-			baseEffect->getParameterUnchecked((u32)BaseEffectParameters::HighBound),
-			baseEffect->getParameterUnchecked((u32)BaseEffectParameters::ShiftBounds));
+			baseEffect->getParameter(BaseProcessors::BaseEffect::LowBound::self()),
+			baseEffect->getParameter(BaseProcessors::BaseEffect::HighBound::self()),
+			baseEffect->getParameter(BaseProcessors::BaseEffect::ShiftBounds::self()));
 		maskComponent_->setListener(this);
 		addSubSection(maskComponent_.get());
 
@@ -180,17 +179,17 @@ namespace Interface
 		effectTypeIcon_->setSize(effectTypeSelectorIconDimensions, effectTypeSelectorIconDimensions);
 
 		auto currentPoint = Point{ draggableBox_.getRight(), centerVertically(yOffset, effectSelectorsHeight, topMenuHeight) };
-		auto effectTypeSelectorBounds = effectTypeSelector_->getOverallBoundsForHeight(effectSelectorsHeight);
+		auto effectTypeSelectorBounds = effectTypeSelector_->getBoundsForSizes(effectSelectorsHeight);
 		effectTypeSelector_->setOverallBounds(currentPoint);
 
 		currentPoint.x += effectTypeSelectorBounds.getWidth() + scaleValueRoundInt(kDelimiterWidth) +
 			2 * scaleValueRoundInt(kDelimiterToTextSelectorMargin);
-		std::ignore = effectAlgoSelector_->getOverallBoundsForHeight(effectSelectorsHeight);
+		std::ignore = effectAlgoSelector_->getBoundsForSizes(effectSelectorsHeight);
 		effectAlgoSelector_->setOverallBounds(currentPoint);
 
 		// right hand side
 		int mixNumberBoxHeight = scaleValueRoundInt(NumberBox::kDefaultNumberBoxHeight);
-		auto mixNumberBoxBounds = mixNumberBox_->getOverallBoundsForHeight(mixNumberBoxHeight);
+		auto mixNumberBoxBounds = mixNumberBox_->getBoundsForSizes(mixNumberBoxHeight);
 		mixNumberBox_->setOverallBounds({ moduleActivator_->getX() - mixNumberBoxBounds.getRight() - scaleValueRoundInt(kNumberBoxToPowerButtonMargin),
 			centerVertically(yOffset, mixNumberBoxHeight, topMenuHeight) });
 	}
@@ -277,7 +276,7 @@ namespace Interface
 		paintUIBackground(g);
 	}
 
-	void EffectModuleSection::sliderValueChanged(Slider *slider)
+	void EffectModuleSection::sliderValueChanged(BaseSlider *slider)
 	{
 		if (slider == effectTypeSelector_.get() && effectModule_)
 		{
@@ -294,12 +293,25 @@ namespace Interface
 		}
 	}
 
+	void EffectModuleSection::automationMappingChanged([[maybe_unused]] BaseSlider *slider)
+	{
+		auto controlIter = std::ranges::find_if(effectControls_, [&](auto &&control) { return control.get() == slider; });
+		if (effectControls_.end() == controlIter)
+			return;
+
+		auto index = controlIter - effectControls_.begin();
+		auto parameterIter = parameterMappings.find(index);
+		if (parameterMappings.data.end() == parameterIter)
+			parameterMappings.add(index, (*controlIter)->getParameterLink()->hostControl);
+		else
+			parameterMappings.erase(parameterIter);
+	}
+
 	void EffectModuleSection::changeEffect()
 	{
 		using namespace Framework;
 
-		auto effectIndex = (u32)Framework::scaleValue(effectTypeSelector_->getValue(),
-			effectModuleParameterList[(u32)EffectModuleParameters::ModuleType]);
+		auto effectIndex = (u32)effectTypeSelector_->getValueSafeScaled();
 
 		// getting the desired effect if it's cached
 		// if not, create and cache it
@@ -311,12 +323,10 @@ namespace Interface
 			cachedEffects_[effectIndex] = newEffect;
 		}
 
-		auto replacedEffect = effectModule_->getEffect();
-
 		auto replace = [newEffect, this]() { effectModule_->updateSubProcessor(0, newEffect); };
 		effectModule_->getProcessorTree()->executeOutsideProcessing(replace);
 
-		// resetting the UI
+		// resetting UI
 		setEffectType(newEffect->getProcessorType());
 		effectTypeSelector_->resized();
 		effectTypeIcon_->setColor(getColour(Skin::kWidgetPrimary1));
@@ -324,44 +334,32 @@ namespace Interface
 		moduleActivator_->resized();
 		maskComponent_->resized();
 
-		// replacing the mapped out parameters, if there are any
-		auto parametersBridgesToRelink = std::min(replacedEffect->getNumParameters(), newEffect->getNumParameters());
-		for (size_t i = 0; i < parametersBridgesToRelink; i++)
+		// replacing mapped out parameters, if there are any
+		auto [parametersStart, parametersCount] = Parameters::getIndexAndCountForEffect(BaseProcessors::BaseEffect::make_enum(effectIndex).value(),
+			newEffect->getParameter(BaseProcessors::BaseEffect::Algorithm::self())->getInternalValue<u32>()).value();
+
+		for (auto &[mappingIndex, mappedParameter] : parameterMappings.data)
 		{
-			auto controlVariant = replacedEffect->getParameterUnchecked(i)->changeControl(std::variant<BaseControl *,
-				ParameterBridge *>(std::in_place_index<1>, nullptr));
-			// we don't check has_variant() because we always receive something from changeControl
-			if (auto *bridge = std::get<1>(controlVariant))
-				bridge->resetParameterLink(newEffect->getParameterUnchecked(i)->getParameterLink());
+			if (auto *link = mappedParameter->getParameterLink(); link && link->parameter)
+				link->parameter->changeControl({ (ParameterBridge *)nullptr });
+
+			if (mappingIndex >= parametersCount)
+			{
+				String name = "Module P";
+				name += mappingIndex;
+				mappedParameter->setCustomName(name);
+				continue;
+			}
+			
+			mappedParameter->resetParameterLink(newEffect->getParameterUnchecked(parametersStart + mappingIndex)->getParameterLink(), false);
 		}
 		
-		// replacing the parameters for the algo and mask sliders
-		bool getValueFromParameter = true;
-		for (size_t i = 0; i < magic_enum::enum_count<BaseEffectParameters>(); i++)
+		// replacing the parameters for algorithm and mask sliders
+		for (BaseProcessors::BaseEffect::type value : BaseProcessors::BaseEffect::enum_values<nested_enum::OuterNodes>())
 		{
-			auto parameter = getEffectParameter(i);
-			parameter->changeLinkedParameter(*newEffect->getParameterUnchecked(i), getValueFromParameter);
-			parameter->refresh();
-			getValueFromParameter = false;
-		}
-	}
-
-	BaseControl *EffectModuleSection::getEffectParameter(size_t index) noexcept
-	{
-		using namespace Framework;
-
-		switch (index)
-		{
-		case (u32)BaseEffectParameters::Algorithm:
-			return effectAlgoSelector_.get();
-		case (u32)BaseEffectParameters::LowBound:
-			return maskComponent_->getControl(baseEffectParameterList[(u32)BaseEffectParameters::LowBound].id);
-		case (u32)BaseEffectParameters::HighBound:
-			return maskComponent_->getControl(baseEffectParameterList[(u32)BaseEffectParameters::HighBound].id);
-		case (u32)BaseEffectParameters::ShiftBounds:
-			return maskComponent_->getControl(baseEffectParameterList[(u32)BaseEffectParameters::ShiftBounds].id);
-		default:
-			return effectControls_[index - magic_enum::enum_count<BaseEffectParameters>()].get();
+			auto *control = getEffectControl(value);
+			control->changeLinkedParameter(*newEffect->getParameter(value), value == BaseProcessors::BaseEffect::Algorithm);
+			control->resized();
 		}
 	}
 
@@ -372,29 +370,29 @@ namespace Interface
 		{
 			using namespace Framework;
 
-			effectSliders.reserve(FilterEffectParameters::size);
 			auto *baseEffect = section->getEffect();
 
 			auto initNormal = [&]()
 			{
-				for (size_t i = 0; i < (u32)magic_enum::enum_count<FilterEffectParameters::Normal>(); ++i)
-				{
-					effectSliders.emplace_back(std::make_unique<RotarySlider>(baseEffect->getEffectParameter(i)));
-
-					section->addControl(utils::as<BaseSlider *>(effectSliders[i].get()));
-				}
+				effectSliders.reserve(BaseProcessors::BaseEffect::Filter::Normal::enum_count(nested_enum::OuterNodes));
+				effectSliders.emplace_back(std::make_unique<RotarySlider>
+					(baseEffect->getParameter(BaseProcessors::BaseEffect::Filter::Normal::Gain::self())));
+				effectSliders.emplace_back(std::make_unique<RotarySlider>
+					(baseEffect->getParameter(BaseProcessors::BaseEffect::Filter::Normal::Cutoff::self())));
+				effectSliders.emplace_back(std::make_unique<RotarySlider>
+					(baseEffect->getParameter(BaseProcessors::BaseEffect::Filter::Normal::Slope::self())));
 			};
 
 			auto initRegular = [&]() { };
 
 
-			switch ((u32)section->getEffectParameter((u32)BaseEffectParameters::Algorithm)->getValueSafeScaled())
+			switch (section->getAlgorithm<BaseProcessors::BaseEffect::Filter::type>())
 			{
-			case (u32)FilterModes::Normal:
+			case BaseProcessors::BaseEffect::Filter::Normal:
 				initNormal();
 				break;
 			default:
-			case (u32)FilterModes::Regular:
+			case BaseProcessors::BaseEffect::Filter::Regular:
 				initRegular();
 				break;
 			}
@@ -416,18 +414,18 @@ namespace Interface
 				int rotaryInterval = (int)std::round((float)bounds.getWidth() / 3.0f);
 
 				// gain rotary
-				auto *gainSlider = section->getEffectParameter((u32)FilterEffectParameters::Normal::Gain);
-				std::ignore = gainSlider->getOverallBoundsForHeight(knobsHeight);
+				auto *gainSlider = section->getEffectControl(BaseProcessors::BaseEffect::Filter::Normal::Gain::self());
+				std::ignore = gainSlider->getBoundsForSizes(knobsHeight);
 				gainSlider->setOverallBounds({ bounds.getX(), bounds.getY() });
 
 				// cutoff rotary
-				auto *cutoffSlider = section->getEffectParameter((u32)FilterEffectParameters::Normal::Cutoff);
-				std::ignore = cutoffSlider->getOverallBoundsForHeight(knobsHeight);
+				auto *cutoffSlider = section->getEffectControl(BaseProcessors::BaseEffect::Filter::Normal::Cutoff::self());
+				std::ignore = cutoffSlider->getBoundsForSizes(knobsHeight);
 				cutoffSlider->setOverallBounds({ bounds.getX() + rotaryInterval, bounds.getY() });
 
 				// slope rotary
-				auto *slopeSlider = section->getEffectParameter((u32)FilterEffectParameters::Normal::Slope);
-				std::ignore = slopeSlider->getOverallBoundsForHeight(knobsHeight);
+				auto *slopeSlider = section->getEffectControl(BaseProcessors::BaseEffect::Filter::Normal::Slope::self());
+				std::ignore = slopeSlider->getBoundsForSizes(knobsHeight);
 				slopeSlider->setOverallBounds({ bounds.getX() + 2 * rotaryInterval, bounds.getY() });
 			};
 
@@ -436,13 +434,13 @@ namespace Interface
 
 			};
 
-			switch ((u32)section->getEffectParameter((u32)BaseEffectParameters::Algorithm)->getValueSafeScaled())
+			switch (section->getAlgorithm<BaseProcessors::BaseEffect::Filter::type>())
 			{
-			case (u32)FilterModes::Normal:
+			case BaseProcessors::BaseEffect::Filter::Normal:
 				arrangeNormal();
 				break;
 			default:
-			case (u32)FilterModes::Regular:
+			case BaseProcessors::BaseEffect::Filter::Regular:
 				arrangeRegular();
 				break;
 			}
@@ -452,43 +450,31 @@ namespace Interface
 		{
 			using namespace Framework;
 
-			effectSliders.reserve(DynamicsEffectParameters::size);
 			auto *baseEffect = section->getEffect();
 
 			auto initContrast = [&]()
 			{
-				for (size_t i = 0; i < (u32)magic_enum::enum_count<DynamicsEffectParameters::Contrast>(); i++)
-				{
-					effectSliders.emplace_back(std::make_unique<RotarySlider>(baseEffect->getEffectParameter(i)));
-					section->addControl(effectSliders.back().get());
-				}
+				effectSliders.emplace_back(std::make_unique<RotarySlider>
+					(baseEffect->getParameter(BaseProcessors::BaseEffect::Dynamics::Contrast::Depth::self())));
 			};
 
 			auto initClip = [&]()
 			{
-				for (size_t i = 0; i < (u32)magic_enum::enum_count<DynamicsEffectParameters::Clip>(); i++)
-				{
-					effectSliders.emplace_back(std::make_unique<RotarySlider>(baseEffect->getEffectParameter(i)));
-					section->addControl(effectSliders.back().get());
-				}
+				effectSliders.emplace_back(std::make_unique<RotarySlider>
+					(baseEffect->getParameter(BaseProcessors::BaseEffect::Dynamics::Clip::Threshold::self())));
 			};
 			
-			auto initCompressor = [&]()
-			{
+			auto initCompressor = [&]() { };
 
-			};
-
-			auto algorithmIndex = (u32)section->getEffectParameter((u32)BaseEffectParameters::Algorithm)->getValueSafeScaled();
-			baseEffect->updateParameterDetails(dynamicsEffectParameterList[algorithmIndex]);
-			switch (algorithmIndex)
+			switch (section->getAlgorithm<BaseProcessors::BaseEffect::Dynamics::type>())
 			{
-			case (u32)DynamicsModes::Contrast:
+			case BaseProcessors::BaseEffect::Dynamics::Contrast:
 				initContrast();
 				break;
-			case (u32)DynamicsModes::Clip:
+			case BaseProcessors::BaseEffect::Dynamics::Clip:
 				initClip();
 				break;
-			case (u32)DynamicsModes::Compressor:
+			case BaseProcessors::BaseEffect::Dynamics::Compressor:
 				initCompressor();
 				break;
 			default:
@@ -509,8 +495,8 @@ namespace Interface
 				int knobsHeight = section->scaleValueRoundInt(RotarySlider::kDefaultWidthHeight);
 
 				// depth rotary and label
-				auto *depthSlider = section->getEffectParameter((u32)DynamicsEffectParameters::Contrast::Depth);
-				std::ignore = depthSlider->getOverallBoundsForHeight(knobsHeight);
+				auto *depthSlider = section->getEffectControl(BaseProcessors::BaseEffect::Dynamics::Contrast::Depth::self());
+				std::ignore = depthSlider->getBoundsForSizes(knobsHeight);
 				depthSlider->setOverallBounds({ bounds.getX() + knobEdgeOffset, bounds.getY() + knobTopOffset });
 			};
 
@@ -523,25 +509,22 @@ namespace Interface
 				int knobsHeight = section->scaleValueRoundInt(RotarySlider::kDefaultWidthHeight);
 
 				// depth rotary and label
-				auto *thresholdSlider = section->getEffectParameter((u32)DynamicsEffectParameters::Clip::Threshold);
-				std::ignore = thresholdSlider->getOverallBoundsForHeight(knobsHeight);
+				auto *thresholdSlider = section->getEffectControl(BaseProcessors::BaseEffect::Dynamics::Clip::Threshold::self());
+				std::ignore = thresholdSlider->getBoundsForSizes(knobsHeight);
 				thresholdSlider->setOverallBounds({ bounds.getX() + knobEdgeOffset, bounds.getY() + knobTopOffset });
 			};
 
-			auto arrangeCompressor = [&]()
-			{
+			auto arrangeCompressor = [&]() { };
 
-			};
-
-			switch ((u32)section->getEffectParameter((u32)BaseEffectParameters::Algorithm)->getValueSafeScaled())
+			switch (section->getAlgorithm<BaseProcessors::BaseEffect::Dynamics::type>())
 			{
-			case (u32)DynamicsModes::Contrast:
+			case BaseProcessors::BaseEffect::Dynamics::Contrast:
 				arrangeContrast();
 				break;
-			case (u32)DynamicsModes::Clip:
+			case BaseProcessors::BaseEffect::Dynamics::Clip:
 				arrangeClip();
 				break;
-			case (u32)DynamicsModes::Compressor:
+			case BaseProcessors::BaseEffect::Dynamics::Compressor:
 				arrangeCompressor();
 				break;
 			default:

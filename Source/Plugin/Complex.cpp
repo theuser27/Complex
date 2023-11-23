@@ -56,13 +56,6 @@ namespace Plugin
 		// check for power matching
 	}
 
-	void ComplexPlugin::updateGUIParameters() const noexcept
-	{
-		for (auto &bridge : parameterBridges_)
-			if (auto *link = bridge->parameterLinkPointer_.load(std::memory_order_acquire); link && link->UIControl)
-				link->UIControl->updateValue();
-	}
-
 	void ComplexPlugin::initialiseModuleTree() noexcept
 	{
 		// TODO: make the module structure here instead of doing it in the constructors
@@ -74,7 +67,8 @@ namespace Plugin
 		// TODO
 	}
 
-	Generation::BaseProcessor *ComplexPlugin::deserialiseProcessor(ProcessorTree *processorTree, std::string_view processorType)
+	Generation::BaseProcessor *ComplexPlugin::deserialiseProcessor(
+		[[maybe_unused]] ProcessorTree *processorTree, [[maybe_unused]] std::string_view processorType)
 	{
 		return nullptr;
 	}

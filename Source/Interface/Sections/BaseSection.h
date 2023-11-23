@@ -21,8 +21,8 @@ namespace Interface
 {
 	class ModulationButton;
 
-	class BaseSection : public Component, public Slider::Listener, public Button::Listener,
-		public BaseSlider::SliderListener, public BaseButton::Listener, public TextSelector::TextSelectorListener
+	class BaseSection : public Component, public BaseSlider::Listener, public BaseButton::Listener, 
+		public TextSelector::TextSelectorListener
 	{
 	public:
 		static constexpr int kDefaultActivatorSize = 12;
@@ -60,22 +60,22 @@ namespace Interface
 		static constexpr float kDefaultWidgetLineWidth = 4.0f;
 		static constexpr float kDefaultWidgetFillCenter = 0.0f;
 
-		class OffOverlayQuad : public OpenGlQuad
+		class OffOverlayQuad : public OpenGlMultiQuad
 		{
 		public:
-			OffOverlayQuad() : OpenGlQuad(Shaders::kColorFragment) { }
+			OffOverlayQuad() : OpenGlMultiQuad(1, Shaders::kColorFragment, typeid(OffOverlayQuad).name()) 
+			{ setQuad(0, -1.0f, -1.0f, 2.0f, 2.0f); }
 
 			void paintBackground(Graphics &) override { }
 		};
 
 		BaseSection(std::string_view name);
-		~BaseSection() override = default;
 
 		void resized() override;
 		void paint(Graphics &) override { }
 
-		void sliderValueChanged([[maybe_unused]] Slider *movedSlider) override { }
-		void buttonClicked([[maybe_unused]] Button *clickedButton) override { }
+		void sliderValueChanged([[maybe_unused]] BaseSlider *movedSlider) override { }
+		void buttonClicked([[maybe_unused]] BaseButton *clickedButton) override { }
 		void guiChanged([[maybe_unused]] BaseSlider *slider) override { }
 		void guiChanged(BaseButton *button) override;
 		void resizeForText(TextSelector *textSelector, int requestedWidthChange) override;
@@ -112,7 +112,7 @@ namespace Interface
 
 		void showPopupSelector(const Component *source, Point<int> position, PopupItems options,
 			std::function<void(int)> callback, std::function<void()> cancel = {}) const;
-		void showPopupDisplay(Component *source, const std::string &text,
+		void showPopupDisplay(Component *source, String text,
 			BubbleComponent::BubblePlacement placement, bool primary);
 		void hidePopupDisplay(bool primary);
 
@@ -120,7 +120,7 @@ namespace Interface
 		bool isActive() const { return active_; }
 
 		virtual void updateAllValues();
-		BaseButton *activator() const { return activator_; }
+		PowerButton *activator() const { return activator_; }
 
 		virtual void reset();
 		virtual void loadFile([[maybe_unused]] const File &file) { }
@@ -137,8 +137,6 @@ namespace Interface
 		float getPadding() const noexcept { return getValue(Skin::kPadding); }
 		float getKnobSectionHeight() const noexcept { return getValue(Skin::kKnobSectionHeight); }
 		float getSliderWidth() const noexcept { return getValue(Skin::kSliderWidth); }
-		float getSliderOverlap() const noexcept;
-		float getSliderOverlapWithSpace() const noexcept { return getSliderOverlap() - std::truncf(getWidgetMargin()); }
 		float getTextComponentHeight() const noexcept { return getValue(Skin::kTextComponentHeight); }
 		float getStandardKnobSize() const noexcept { return getValue(Skin::kKnobArcSize); }
 		float getTotalKnobHeight() const noexcept { return getStandardKnobSize(); }
@@ -151,7 +149,7 @@ namespace Interface
 		auto getSectionOverride() const noexcept { return skinOverride_; }
 		auto *getParent() const noexcept { return parent_; }
 
-		auto *getControl(std::string_view name) noexcept { return controls_.at(name); }
+		auto *getControl(nested_enum::NestedEnum auto enumValue) { return controls_.at(enumValue.enum_string(false)); }
 
 		void setSkinOverride(Skin::SectionOverride skinOverride) noexcept { skinOverride_ = skinOverride; }
 		void setParent(const BaseSection *parent) noexcept { parent_ = parent; }
@@ -163,7 +161,7 @@ namespace Interface
 		}
 
 		// helper functions
-		Renderer *getInterfaceLink() const { return renderer_; }
+		Renderer *getInterfaceLink() const noexcept { return renderer_; }
 		float getValue(Skin::ValueId valueId) const { return renderer_->getSkin()->getValue(this, valueId); }
 		Colour getColour(Skin::ColorId colorId) const { return renderer_->getSkin()->getColor(this, colorId); }
 		float scaleValue(float value) const noexcept { return scaling_ * value; }
@@ -176,7 +174,7 @@ namespace Interface
 		{ return yPosition + (containerHeight - elementHeight) / 2; }
 
 	protected:
-		void setActivator(BaseButton *activator);
+		void setActivator(PowerButton *activator);
 		void createOffOverlay();
 		void createBackground();
 
@@ -196,7 +194,7 @@ namespace Interface
 		std::map<std::string_view, BaseControl *> controls_{};
 		std::map<std::string_view, ModulationButton *> modulationButtons_{};
 
-		BaseButton *activator_ = nullptr;
+		PowerButton *activator_ = nullptr;
 
 		Renderer *renderer_ = nullptr;
 		const BaseSection *parent_ = nullptr;

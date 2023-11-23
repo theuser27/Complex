@@ -32,7 +32,7 @@ namespace Interface
 			kPowerButton,
 			kRadioButton,
 			kActionButton,
-			kLightenButton,
+			kOptionsButton,
 			kShapeButton
 		};
 
@@ -45,11 +45,8 @@ namespace Interface
 			if (style_ == kRadioButton)
 				background_.setFragmentShader(Shaders::kRoundedRectangleFragment);
 
-			background_.setParent(parent_);
 			background_.init(openGl);
-			text_.setParent(parent_);
 			text_.init(openGl);
-			shape_.setParent(parent_);
 			shape_.init(openGl);
 
 			setColors();
@@ -58,7 +55,7 @@ namespace Interface
 		void renderTextButton(OpenGlWrapper &openGl, bool animate);
 		void renderRadioButton(OpenGlWrapper &openGl, bool animate);
 		void renderActionButton(OpenGlWrapper &openGl, bool animate);
-		void renderLightenButton(OpenGlWrapper &openGl, bool animate);
+		void renderOptionsButton(OpenGlWrapper &openGl, bool animate);
 		void renderShapeButton(OpenGlWrapper &openGl, bool animate);
 
 		void render(OpenGlWrapper &openGl, bool animate) override
@@ -71,8 +68,8 @@ namespace Interface
 				renderRadioButton(openGl, animate);
 			else if (style_ == kActionButton)
 				renderActionButton(openGl, animate);
-			else if (style_ == kLightenButton)
-				renderLightenButton(openGl, animate);
+			else if (style_ == kOptionsButton)
+				renderOptionsButton(openGl, animate);
 			else if (style_ == kShapeButton || style_ == kPowerButton)
 				renderShapeButton(openGl, animate);
 		}
@@ -84,8 +81,14 @@ namespace Interface
 			shape_.destroy();
 		}
 
+		void setParent(BaseSection *parent) noexcept override
+		{
+			parent_ = parent;
+			background_.setParent(parent_);
+			text_.setParent(parent_);
+			shape_.setParent(parent_);
+		}
 		void setColors();
-		void setText() noexcept;
 		void setJustification(Justification justification) noexcept { text_.setJustification(justification); }
 		void setShape(std::pair<Path, Path> strokeFillShapes) { shape_.setShapes(std::move(strokeFillShapes)); }
 		void setDown(bool down) noexcept { down_ = down; }
@@ -119,10 +122,11 @@ namespace Interface
 		JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(ButtonComponent)
 	};
 
-	class BaseButton : public ToggleButton, public BaseControl
+	class BaseButton : public BaseControl
 	{
 	public:
 		static constexpr int kLabelOffset = 8;
+		static constexpr float kHoverIncrement = 0.1f;
 
 		enum MenuId
 		{
@@ -135,67 +139,49 @@ namespace Interface
 		{
 		public:
 			virtual ~Listener() = default;
+			virtual void buttonClicked(BaseButton *) = 0;
 			virtual void guiChanged([[maybe_unused]] BaseButton *button) { }
 		};
 
-		BaseButton(Framework::ParameterValue *parameter, String name = {});
-		~BaseButton() override = default;
+		BaseButton(Framework::ParameterValue *parameter);
 
-		// Inherited via ToggleButton
-		void parentHierarchyChanged() override
-		{
-			parent_ = findParentComponentOfClass<BaseSection>();
-			ToggleButton::parentHierarchyChanged();
-		}
-		void resized() override;
+		void parentHierarchyChanged() override { parent_ = findParentComponentOfClass<BaseSection>(); }
+		//void resized() override;
+		void setExtraElementsPositions([[maybe_unused]] Rectangle<int> anchorBounds) override { }
 		void enablementChanged() override
 		{
-			ToggleButton::enablementChanged();
-			buttonComponent_->setColors();
+			updateState(isMouseOver(true), isMouseButtonDown());
+			setColours();
 		}
-		void clicked() override;
 
 		void mouseDown(const MouseEvent &e) override;
 		void mouseUp(const MouseEvent &e) override;
-		void mouseEnter(const MouseEvent &e) override
+		void mouseEnter(const MouseEvent &) override
 		{
-			ToggleButton::mouseEnter(e);
-			buttonComponent_->getAnimator().setIsHovered(true);
+			updateState(false, true);
+			for (auto &component : components_)
+				component->getAnimator().setIsHovered(true);
 		}
-		void mouseExit(const MouseEvent &e) override
+		void mouseExit(const MouseEvent &) override
 		{
-			ToggleButton::mouseExit(e);
-			buttonComponent_->getAnimator().setIsHovered(false);
-		}
-
-		// Inherited via BaseControl
-		double getValueInternal() const noexcept override { return getToggleState(); }
-		void setValueInternal(double value, NotificationType notification) noexcept override 
-		{ setToggleState(std::round(value) == 1.0f, notification); }
-		void setBoundsInternal(Rectangle<int> bounds) override { setBounds(bounds); }
-		[[nodiscard]] Rectangle<int> getOverallBoundsForHeight(int height) override;
-		void positionExtraElements(Rectangle<int> anchorBounds) override;
-		void refresh() override { resized(); }
-
-		auto getGlComponent() noexcept { return buttonComponent_; }
-
-		void setText(const String &newText)
-		{
-			setButtonText(newText);
-			buttonComponent_->setText();
+			updateState(false, false);
+			for (auto &component : components_)
+				component->getAnimator().setIsHovered(false);
 		}
 
-		void setShape(std::pair<Path, Path> strokeFillShapes) { buttonComponent_->setShape(std::move(strokeFillShapes)); }
-		void setAccentedButton(bool isAccented) noexcept { buttonComponent_->setAccentedButton(isAccented); }
-		void setJustification(Justification justification) noexcept { buttonComponent_->setJustification(justification); }
+		bool getToggleState() const noexcept { return std::round(getValueSafe()) == 1.0; }
+		void setToggleState(bool shouldBeOn, NotificationType notification);
+		void valueChanged() override;
 
-		void setPowerButton() noexcept { buttonComponent_->setStyle(ButtonComponent::kPowerButton); setShape(Paths::powerButtonIcon()); }
-		void setRadioButton() noexcept { buttonComponent_->setStyle(ButtonComponent::kRadioButton); addLabel(); }
-		void setNoBackground() noexcept { buttonComponent_->setStyle(ButtonComponent::kJustText); }
-		void setTextButton() noexcept { buttonComponent_->setStyle(ButtonComponent::kTextButton); }
-		void setLightenButton() noexcept { buttonComponent_->setStyle(ButtonComponent::kLightenButton); }
-		void setUiButton() noexcept { buttonComponent_->setStyle(ButtonComponent::kActionButton); }
-		void setShapeButton() noexcept { buttonComponent_->setStyle(ButtonComponent::kShapeButton); }
+		bool isHeldDown() const noexcept { return isHeldDown_; }
+		bool isHoveredOver() const noexcept { return isHoveredOver_; }
+
+		//void setAccentedButton(bool isAccented) noexcept { buttonComponent_->setAccentedButton(isAccented); }
+		//void setJustification(Justification justification) noexcept { buttonComponent_->setJustification(justification); }
+
+		//void setNoBackground() noexcept { buttonComponent_->setStyle(ButtonComponent::kJustText); }
+		//void setTextButton() noexcept { buttonComponent_->setStyle(ButtonComponent::kTextButton); }
+		//void setActionButton() noexcept { buttonComponent_->setStyle(ButtonComponent::kActionButton); }
 
 		std::span<const std::string_view> getStringLookup() const { return details_.stringLookup; }
 		void setStringLookup(std::span<const std::string_view> lookup) { details_.stringLookup = lookup; }
@@ -207,13 +193,92 @@ namespace Interface
 		void removeListener(BaseSection *listener) override;
 
 	protected:
-		void clicked(const ModifierKeys &modifiers) override;
+		void updateState(bool isHeldDown, bool isHoveredOver) noexcept
+		{
+			if (isEnabled() && isVisible() && !isCurrentlyBlockedByAnotherModalComponent())
+			{
+				isHeldDown_ = isHeldDown;
+				isHoveredOver_ = isHoveredOver;
+			}
+		}
 
-		gl_ptr<ButtonComponent> buttonComponent_;
+		//gl_ptr<ButtonComponent> buttonComponent_;
 
 		std::vector<Listener *> buttonListeners_{};
 
+		bool isHeldDown_ = false;
+		bool isHoveredOver_ = false;
+
 		JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(BaseButton)
+	};
+
+	class PowerButton final : public BaseButton
+	{
+	public:
+		static constexpr int kAddedMargin = 4;
+
+		PowerButton(Framework::ParameterValue *parameter);
+
+		void setColours() override;
+		Rectangle<int> getBoundsForSizes(int height, int width = 0) override;
+		void redoImage() override;
+		void setComponentsBounds() override;
+
+	private:
+		gl_ptr<PlainShapeComponent> shapeComponent_ = nullptr;
+
+		Colour onNormalColor_{};
+
+		Colour activeColour_{};
+		Colour hoverColour_{};
+	};
+
+	class RadioButton final : public BaseButton
+	{
+	public:
+		static constexpr int kAddedMargin = 4;
+
+		RadioButton(Framework::ParameterValue *parameter);
+
+		void setColours() override;
+		Rectangle<int> getBoundsForSizes(int height, int width = 0) override;
+		void setExtraElementsPositions(Rectangle<int> anchorBounds) override;
+		void redoImage() override;
+		void setComponentsBounds() override;
+
+		void setRounding(float rounding) noexcept { backgroundComponent_->setRounding(rounding); }
+
+	private:
+		gl_ptr<OpenGlQuad> backgroundComponent_ = nullptr;
+
+		Colour onNormalColor_{};
+		Colour offNormalColor_{};
+		Colour backgroundColor_{};
+	};
+
+	class OptionsButton final : public BaseButton
+	{
+	public:
+		static constexpr float kPlusRelativeSize = 6;
+		static constexpr float kBorderRounding = 8.0f;
+
+		OptionsButton(Framework::ParameterValue *parameter, String name = {});
+
+		void setColours() override;
+		Rectangle<int> getBoundsForSizes(int height, int width) override;
+		void redoImage() override;
+		void setComponentsBounds() override;
+
+		void setText(String text) { text_ = std::move(text); }
+
+	protected:
+		gl_ptr<OpenGlQuad> plusComponent_ = nullptr;
+		gl_ptr<OpenGlQuad> borderComponent_ = nullptr;
+		gl_ptr<PlainTextComponent> textComponent_ = nullptr;
+
+		String text_{};
+
+		Colour borderColour_{};
 	};
 
 }

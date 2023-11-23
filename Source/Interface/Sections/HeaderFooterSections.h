@@ -31,7 +31,7 @@ namespace Interface
 
 		void paintBackground(Graphics &g) override;
 		void resized() override;
-		void sliderValueChanged(Slider *movedSlider) override;
+		void sliderValueChanged(BaseSlider *movedSlider) override;
 		void resizeForText([[maybe_unused]] TextSelector *textSelector, 
 			[[maybe_unused]] int requestedWidthChange) override { }
 

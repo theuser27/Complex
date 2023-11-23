@@ -26,7 +26,7 @@ namespace Interface
 		void paint(Graphics &g) override;
 		void resized() override;
 
-		void sliderValueChanged(Slider *slider) override;
+		void sliderValueChanged(BaseSlider *slider) override;
 
 		void paintHighlightBox(Graphics &g, float lowBoundValue, 
 			float highBoundValue, Colour colour, float shiftValue = 0.0f) const;

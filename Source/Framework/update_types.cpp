@@ -135,7 +135,6 @@ namespace Framework
 		if (!firstTime_)
 		{
 			baseParameter_->setValueSafe(newValue_);
-			baseParameter_->updateValue();
 			baseParameter_->setValueToHost();
 		}
 		
@@ -146,7 +145,6 @@ namespace Framework
 	bool ParameterUpdate::undo()
 	{
 		baseParameter_->setValueSafe(oldValue_);
-		baseParameter_->updateValue();
 		baseParameter_->setValueToHost();
 		return true;
 	}

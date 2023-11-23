@@ -30,7 +30,9 @@ namespace Interface
       kEffectsLane,
       kPopupBrowser,
       kFilterModule,
-      kDynamicsModule
+      kDynamicsModule,
+
+      kSectionsCount
     };
 
     enum ValueId
@@ -82,7 +84,9 @@ namespace Interface
       kKnobShadowOffset,
 
       kModulationButtonWidth,
-      kModulationFontSize
+      kModulationFontSize,
+
+      kValueIdCount
     };
 
     enum ColorId
@@ -165,16 +169,9 @@ namespace Interface
       kFinalColor
     };
 
-    static constexpr auto kSectionOverrideCount = magic_enum::enum_count<SectionOverride>();
-    static constexpr auto kValueIdCount = magic_enum::enum_count<ValueId>();
   	static constexpr auto kColorIdCount = kFinalColor - kInitialColor;
 
     Skin();
-
-    /*void applyComponentColors(Component *component) const;
-    void applyComponentColors(Component *component, SectionOverride sectionOverride, bool topLevel = false) const;
-    void applyComponentValues(BaseSection *section) const;
-    void applyComponentValues(BaseSection *section, SectionOverride sectionOverride, bool topLevel = false) const;*/
 
     void setColor(ColorId colorId, const Colour &color) { colors_[colorId - kInitialColor] = color; }
     Colour getColor(ColorId colorId) const { return colors_[colorId - kInitialColor]; }
@@ -216,7 +213,7 @@ namespace Interface
   protected:
     std::array<Colour, kColorIdCount> colors_{};
     std::array<float, kValueIdCount> values_{};
-    std::array<std::map<ColorId, Colour>, kSectionOverrideCount> colorOverrides_{};
-    std::array<std::map<ValueId, float>, kSectionOverrideCount> valueOverrides_{};
+    std::array<std::map<ColorId, Colour>, kSectionsCount> colorOverrides_{};
+    std::array<std::map<ValueId, float>, kSectionsCount> valueOverrides_{};
   };
 }

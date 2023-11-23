@@ -1,7 +1,7 @@
 /*
   ==============================================================================
 
-    string_utils.h
+    constexpr_utils.h
     Created: 8 Jul 2023 3:24:13am
     Author:  theuser27
 
@@ -11,14 +11,168 @@
 #pragma once
 
 #include <span>
+#include <functional>
+#include <algorithm>
+#include <numeric>
 #include <Third Party/constexpr-to-string/to_string.hpp>
 #include <Third Party/fixed_string/fixed_string.hpp>
 
+namespace CommonConcepts
+{
+  template<typename Derived, typename Base>
+  concept DerivedOrIs = std::derived_from<Derived, Base> || std::same_as<Derived, Base>;
+
+  template<typename T>
+  concept Enum = std::is_enum_v<T>;
+}
+
 namespace utils
 {
+  // whether a type is complete or not
+  // taken from https://stackoverflow.com/a/37193089
+  template <class T, class = void>
+  struct is_complete_type : std::false_type { };
+
+  template <class T>
+  struct is_complete_type<T, decltype(void(sizeof(T)))> : std::true_type { };
+
+  template <class T>
+  inline constexpr auto is_complete_type_v = is_complete_type<T>::value;
+
+  // calls a function on every tuple element individually
+  template <class Callable, class TupleLike>
+  constexpr decltype(auto) applyOne(Callable &&callable, TupleLike &&tuple)
+  {
+    return []<size_t ... Indices>(Callable &&callable, TupleLike &&tuple, std::index_sequence<Indices...>) -> decltype(auto)
+    {
+      if constexpr (std::is_same_v<std::invoke_result_t<Callable, std::tuple_element_t<0, std::remove_cvref_t<TupleLike>>>, void>)
+        (std::invoke(std::forward<Callable>(callable), std::get<Indices>(std::forward<TupleLike>(tuple))), ...);
+      else
+        return std::array{ std::invoke(std::forward<Callable>(callable), std::get<Indices>(std::forward<TupleLike>(tuple)))... };
+    }(std::forward<Callable>(callable), std::forward<TupleLike>(tuple),
+      std::make_index_sequence<std::tuple_size_v<std::remove_reference_t<TupleLike>>>{});
+  }
+
+  // calls a function on every tuple element individually
+  // callable must be a functor
+  template <auto TupleLike, class Callable>
+  constexpr decltype(auto) applyOne(Callable &&callable)
+  {
+    return[]<size_t ... Indices>(Callable && callable, std::index_sequence<Indices...>) -> decltype(auto)
+    {
+      return std::array{ callable.template operator()<std::get<Indices>(TupleLike)>()... };
+    }(std::forward<Callable>(callable), std::make_index_sequence<std::tuple_size_v<decltype(TupleLike)>>{});
+  }
+  
+  // the following 2 functions are based on those here with the same names
+  // https://github.com/GuillaumeDua/GCL_CPP/blob/6521a51f9bb6492fe90c95ec94aad3bf7c2d1e85/includes/gcl/cx/typeinfo.hpp#L19
+  template <typename T>
+  constexpr auto type_name()
+  {
+    std::string_view name;
+  #if defined(__GNUC__) or defined (__clang__)
+    name = __PRETTY_FUNCTION__;
+    std::string_view typeBit = "T = ";
+    name.remove_prefix(name.find(typeBit) + typeBit.length());
+    name.remove_suffix(name.length() - name.rfind(']'));
+  #elif defined(_MSC_VER)
+    name = __FUNCSIG__;
+    name.remove_prefix(name.find('<') + 1);
+    std::string_view enumBit = "enum ";
+    if (auto enumPos = name.find(enumBit); enumPos != std::string_view::npos)
+      name.remove_prefix(enumPos + enumBit.length());
+    name.remove_suffix(name.length() - name.rfind(">(void)"));
+  #else
+    #error Unsupported Compiler
+  #endif
+
+    return name;
+  }
+
+  template<auto Value>
+  constexpr auto value_name()
+  {
+    std::string_view name;
+  #if defined(__GNUC__) or defined (__clang__)
+    name = __PRETTY_FUNCTION__;
+    std::string_view valueBit = "Value = ";
+    name.remove_prefix(name.find(valueBit) + valueBit.length());
+    name.remove_suffix(name.length() - name.rfind(']'));
+  #elif defined(_MSC_VER)
+    name = __FUNCSIG__;
+    name.remove_prefix(name.find('<') + 1);
+    std::string_view enumBit = "enum ";
+    if (auto enum_token_pos = name.find(enumBit); enum_token_pos != std::string_view::npos)
+      name.remove_prefix(enum_token_pos + enumBit.length());
+    name.remove_suffix(name.length() - name.rfind(">(void)"));
+  #else
+    #error Unsupported Compiler
+  #endif
+    return name;
+  }
+
+  template<class Tuple>
+  constexpr auto tupleToArray(Tuple &&tuple)
+  {
+    constexpr auto getArray = [](auto&& ... x) { return std::array{ std::forward<decltype(x)>(x) ... }; };
+    return std::apply(getArray, std::forward<Tuple>(tuple));
+  }
+
+  template<class Tuple>
+  constexpr auto tupleOfArraysToArray(Tuple &&tuple)
+  {
+    constexpr auto function = []<auto Self, typename T, size_t N, typename ... Args>(std::array<T, N> first, Args ... args)
+    {
+      if constexpr (sizeof...(Args) == 0)
+        return first;
+      else
+      {
+        auto next = Self.template operator()<Self>(args...);
+        std::array<T, N + next.size()> newArray;
+
+        for (size_t i = 0; i < first.size(); i++)
+          newArray[i] = first[i];
+
+        for (size_t i = 0; i < next.size(); i++)
+          newArray[first.size() + i] = next[i];
+
+        return newArray;
+      }
+    };
+
+    return[&]<size_t ... Indices>(Tuple &&tuple, std::index_sequence<Indices...>)
+    {
+      return function.template operator()<function>(std::get<Indices>(tuple)...);
+    }(std::forward<Tuple>(tuple), std::make_index_sequence<std::tuple_size_v<Tuple>>{});
+  }
+
+  template <size_t N>
+  struct static_str
+  {
+
+    using char_type = std::string_view::value_type;
+
+    constexpr static_str(const char_type(&array)[N + 1]) noexcept
+    {
+      std::copy(std::begin(array), std::end(array), data_.begin());
+    }
+
+    constexpr const char_type *data() const noexcept { return data_.data(); }
+    constexpr size_t size() const noexcept { return N; }
+
+    constexpr operator std::string_view() const noexcept { return { data(), size() }; }
+
+    std::array<char_type, N + 1> data_;
+  };
+
+  template <size_t N>
+  static_str(const char(&)[N])->static_str<N - 1>;
+
   template<size_t N, size_t totalStringSize>
   struct ConstexprStringArray
   {
+    // an array of indices where string_views begin and
+    // a giant array of all the null-terminated string data
     struct DataHolder
     {
       constexpr DataHolder() = default;
@@ -112,7 +266,7 @@ namespace utils
 
       return numberStrings;
     }
-  };
+  }
 
   template<size_t end, size_t start = 0, typename T>
   constexpr auto getArrayDataSize(T array)
@@ -276,5 +430,149 @@ namespace utils
     return stringArray;
   }
 
+  template<size_t Size, typename Elem = char>
+  class string_multi_view
+  {
+  public:
+    constexpr string_multi_view() = default;
+    constexpr string_multi_view(std::array<std::basic_string_view<Elem>, Size> array)
+    {
+      views_ = std::move(array);
+      currentSize_ = Size;
+    }
 
+    constexpr void addView(std::basic_string_view<Elem> view)
+    {
+      if (!std::is_constant_evaluated())
+        COMPLEX_ASSERT(currentSize_ < Size);
+      views_[currentSize_++] = view;
+    }
+
+    constexpr auto getViews() const noexcept { return views_; }
+
+  private:
+    std::array<std::basic_string_view<Elem>, Size> views_{};
+    size_t currentSize_ = 0;
+  };
+
+  template<size_t Size, typename Elem = char>
+  constexpr string_multi_view<Size, Elem> to_multi_view(const std::basic_string_view<Elem>(&array)[Size])
+  {
+    return []<std::size_t... I>(const std::basic_string_view<Elem>(&array)[Size], std::index_sequence<I...>)
+      ->std::array<std::basic_string_view<Elem>, Size>
+    {
+      return { { array[I]... } };
+    }(array, std::make_index_sequence<Size>{});
+  }
+
+  template <typename Elem, size_t SizeOne, size_t SizeTwo>
+  constexpr bool operator==(const string_multi_view<SizeOne, Elem> &left,
+    const string_multi_view<SizeTwo, Elem> &right) noexcept
+  {
+    auto leftArray = left.getViews();
+    auto rightArray = right.getViews();
+
+    {
+      size_t leftTotalSize = 0, rightTotalSize = 0;
+      for (auto &view : leftArray)
+        leftTotalSize += view.size();
+
+      for (auto &view : rightArray)
+        rightTotalSize += view.size();
+
+      if (leftTotalSize != rightTotalSize)
+        return false;
+    }
+
+    using traits = typename decltype(leftArray)::value_type::traits_type;
+    size_t leftViewIndex = 0, rightViewIndex = 0;
+    size_t leftIndex = 0, rightIndex = 0;
+
+    while (true)
+    {
+      size_t sizeToCompare = std::min(leftArray[leftViewIndex].size() - leftIndex,
+        rightArray[rightViewIndex].size() - rightIndex);
+
+      int comparisonValue = traits::compare(leftArray[leftViewIndex].data() + leftIndex,
+        rightArray[rightViewIndex].data() + rightIndex, sizeToCompare);
+
+      if (comparisonValue != 0)
+        return false;
+
+      leftIndex += sizeToCompare;
+      rightIndex += sizeToCompare;
+
+      int64_t sizeDifference = (leftArray[leftViewIndex].size() - leftIndex) -
+        (rightArray[rightViewIndex].size() - rightIndex);
+
+      if (sizeDifference >= 0)
+      {
+        if (rightViewIndex == rightArray.size() - 1)
+          break;
+        ++rightViewIndex;
+        rightIndex = 0;
+      }
+
+      if (sizeDifference <= 0)
+      {
+        if (leftViewIndex == leftArray.size() - 1)
+          break;
+        ++leftViewIndex;
+        leftIndex = 0;
+      }
+    }
+
+    return true;
+  }
+
+  constexpr int getDigit(char character)
+  {
+    if (character >= '0' && character <= '9')
+      return character - '0';
+
+    if (character >= 'A' && character <= 'Z')
+      return character - 'A' + 10;
+
+    if (character >= 'a' && character <= 'z')
+      return character - 'a' + 10;
+
+    return 0;
+  }
+
+  constexpr std::string_view trimWhiteSpace(std::string_view view)
+  {
+    auto begin = view.find_first_not_of(' ');
+    if (begin == std::string::npos)
+      return {};
+
+    auto end = view.find_last_not_of(' ');
+    auto range = end - begin + 1;
+
+    return view.substr(begin, range);
+  }
+
+  template<std::integral Int = int64_t>
+  constexpr Int getIntFromString(std::string_view view)
+  {
+    auto trimmedView = trimWhiteSpace(view);
+
+    bool isNegative = false;
+    if (trimmedView.starts_with('-'))
+    {
+      trimmedView.remove_prefix(1);
+      isNegative = true;
+    }
+
+    Int number = 0, decimal = 1;
+    for (size_t i = trimmedView.size(); i-- > 0; )
+    {
+      if (trimmedView[i] == ' ' || trimmedView[i] == '\'')
+        continue;
+
+      number += (Int)getDigit(trimmedView[i]) * decimal;
+      decimal *= 10;
+    }
+
+    return (isNegative) ? -number : number;
+  }
 }

@@ -15,10 +15,12 @@
 #include "Framework/utils.h"
 #include "Framework/circular_buffer.h"
 #include "Framework/windows.h"
-#include "Framework/spectral_support_functions.h"
-#include "Plugin/ProcessorTree.h"
 #include "EffectsState.h"
 
+namespace Plugin
+{
+	class ProcessorTree;
+}
 
 namespace Generation
 {
@@ -359,7 +361,7 @@ namespace Generation
 		} outBuffer;
 		//
 		// windows pointer for accessing windowing types
-		Framework::Window *windows;
+		Framework::Window windows{};
 		//
 		// pointer to an array of fourier transforms
 		std::vector<std::unique_ptr<Framework::FFT>> transforms;
@@ -391,11 +393,11 @@ namespace Generation
 	public:
 		// initialising pointers and FFT plans
 		void ResetBuffers() noexcept;
-		void UpdateParameters(UpdateFlag flag, float sampleRate) noexcept;
+		void UpdateParameters(Framework::UpdateFlag flag, float sampleRate) noexcept;
 		void MainProcess(AudioBuffer<float> &buffer, u32 numSamples,
 			float sampleRate, u32 numInputs, u32 numOutputs) noexcept;
 
-		u32 getProcessingDelay() const noexcept { return FFTNumSamples_ + processorTree_->getSamplesPerBlock(); }
+		u32 getProcessingDelay() const noexcept;
 		auto &getEffectsState() const noexcept { return *effectsState_; }
 
 		void setMix(float mix) noexcept { mix_ = mix; }

@@ -30,17 +30,26 @@ namespace Framework
 		ParameterBridge &operator=(ParameterBridge &&) = delete;
 
 		ParameterBridge(Plugin::ComplexPlugin *plugin,
-			u32 parameterIndex = u32(-1), ParameterLink *link = nullptr) noexcept;
+			u32 parameterIndex = (u32)-1, ParameterLink *link = nullptr) noexcept;
 
-		// DON'T CALL ON AUDIO THREAD
-		// because of the stupid way juce::String works
-		// every time the name is changed a separate string needs to be allocated
-		void resetParameterLink(ParameterLink *link) noexcept;
+		auto *getParameterLink() const noexcept { return parameterLinkPointer_.load(std::memory_order_acquire); }
+		void resetParameterLink(ParameterLink *link, bool getValueFromParameter = true) noexcept;
 
 		void setValueFromUI(float newValue) noexcept
 		{
 			value_.store(newValue, std::memory_order_release);
 			sendValueChangedMessageToListeners(newValue);
+		}
+
+		void setCustomName(const String &name)
+		{
+			utils::ScopedSpinLock guard{ name_.first };
+
+			auto index = name_.second.indexOfChar(0, ' ');
+			index = (index < 0) ? name_.second.length() : index;
+			name_.second = String(name_.second.begin(), index);
+
+			name_.second += name;
 		}
 
 		bool isMappedToParameter() const noexcept { return parameterLinkPointer_.load(std::memory_order_acquire); }

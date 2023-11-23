@@ -17,7 +17,7 @@
 
 namespace Interface
 {
-	BaseSlider::BaseSlider(Framework::ParameterValue *parameter, String name, SliderStyle style) : Slider(style, NoTextBox)
+	BaseSlider::BaseSlider(Framework::ParameterValue *parameter)
 	{
 		quadComponent_ = makeOpenGlComponent<OpenGlQuad>(Shaders::kRotarySliderFragment, "Slider Quad");
 		quadComponent_->setTargetComponent(this);
@@ -32,28 +32,35 @@ namespace Interface
 		quadComponent_->setActive(true);
 		imageComponent_->setActive(true);
 
+		// enabled otherwise text entry gets focus and caret appears
 		setWantsKeyboardFocus(true);
 
 		if (!parameter)
-		{
-			BaseControl::setName(std::move(name));
 			return;
-		}
 		
-		changeLinkedParameter(*parameter);
+		hasParameter_ = true;
+		
+		setName(utils::toJuceString(parameter->getParameterDetails().id));
+		setParameterLink(parameter->getParameterLink());
+		setParameterDetails(parameter->getParameterDetails());
+		setValueSafe(parameterLink_->parameter->getNormalisedValue());
 
-		setDoubleClickReturnValue(true, details_.defaultNormalisedValue);
-		setVelocityBasedMode(false);
-		setVelocityModeParameters(1.0, 0, 0.0, false, ModifierKeys::ctrlAltCommandModifiers);
-		setSliderSnapsToMousePosition(false);
-		setScrollWheelEnabled(false);
-		setDefaultRange();
+		setResetValue(details_.defaultNormalisedValue, resetValueOnDoubleClick_, resetValueModifiers_);
+		if (details_.scale == Framework::ParameterScale::Indexed)
+			valueInterval_ = 1.0 / (details_.maxValue - details_.minValue);
+		else
+			valueInterval_ = 0.0;
+
 		setRepaintsOnMouseActivity(false);
 	}
 
 	void BaseSlider::mouseDown(const MouseEvent &e)
 	{
-		updateValue();
+		useDragEvents_ = false;
+		mouseDragStartPosition_ = e.position;
+
+		if (!isEnabled())
+			return;
 
 		if (e.mods.isAltDown() && canInputValue_)
 		{
@@ -69,25 +76,44 @@ namespace Interface
 			return;
 		}
 
+		if (!resetValueOnDoubleClick_ && e.mods.withoutMouseButtons() == resetValueModifiers_)
+		{
+			resetValue();
+			showPopup(true);
+			return;
+		}
+
+		showPopup(true);
+
 		if (parameterLink_ && parameterLink_->hostControl)
 			parameterLink_->hostControl->beginChangeGesture();
 
-		beginChange(getValue());
-		// mouseDown calls mouseDrag internally
-		Slider::mouseDown(e);
+		valueOnMouseDown_ = getValue();
+		beginChange(valueOnMouseDown_);
+
+		useDragEvents_ = true;
+		mouseDrag(e);
 
 		quadComponent_->getAnimator().setIsClicked(true);
 		imageComponent_->getAnimator().setIsClicked(true);
 
-		for (SliderListener *listener : sliderListeners_)
+		for (Listener *listener : sliderListeners_)
 			listener->mouseDown(this);
-
-		showPopup(true);
 	}
 
 	void BaseSlider::mouseDrag(const MouseEvent &e)
 	{
-		Slider::mouseDrag(e);
+		if (!useDragEvents_ || e.mouseWasClicked())
+			return;
+
+		auto mouseDiff = (isHorizontal()) ? 
+			e.position.x - mouseDragStartPosition_.x : mouseDragStartPosition_.y - e.position.y;
+
+		double newPos = valueOnMouseDown_ + mouseDiff * (1.0 / immediateSensitivity_);
+		newPos = (type_ == SliderType::CanLoopAround) ? newPos - std::floor(newPos) : std::clamp(newPos, 0.0, 1.0);
+
+		setValue(snapValue(newPos, Slider::DragMode::absoluteDrag), sendNotificationSync);
+
 		setValueSafe(getValue());
 		setValueToHost();
 
@@ -97,33 +123,26 @@ namespace Interface
 
 	void BaseSlider::mouseUp(const MouseEvent &e)
 	{
-		if (e.mods.isPopupMenu() || e.mods.isAltDown())
+		if (!useDragEvents_ || e.mods.isPopupMenu() || e.mods.isAltDown())
 			return;
 
-		Slider::mouseUp(e);
+		endChange();
+		if (parameterLink_ && parameterLink_->hostControl)
+			parameterLink_->hostControl->endChangeGesture();
 
 		quadComponent_->getAnimator().setIsClicked(false);
 		imageComponent_->getAnimator().setIsClicked(false);
 
-		setValueSafe(getValue());
-		setValueToHost();
-		endChange();
-
-		for (SliderListener *listener : sliderListeners_)
+		for (Listener *listener : sliderListeners_)
 			listener->mouseUp(this);
-
-		if (parameterLink_ && parameterLink_->hostControl)
-			parameterLink_->hostControl->endChangeGesture();
 	}
 
-	void BaseSlider::mouseEnter(const MouseEvent &e)
+	void BaseSlider::mouseEnter(const MouseEvent &)
 	{
-		Slider::mouseEnter(e);
-
 		quadComponent_->getAnimator().setIsHovered(true);
 		imageComponent_->getAnimator().setIsHovered(true);
 
-		for (SliderListener *listener : sliderListeners_)
+		for (Listener *listener : sliderListeners_)
 			listener->hoverStarted(this);
 
 		if (showPopupOnHover_)
@@ -133,14 +152,12 @@ namespace Interface
 			redoImage();
 	}
 
-	void BaseSlider::mouseExit(const MouseEvent &e)
+	void BaseSlider::mouseExit(const MouseEvent &)
 	{
-		Slider::mouseExit(e);
-
 		quadComponent_->getAnimator().setIsHovered(false);
 		imageComponent_->getAnimator().setIsHovered(false);
 
-		for (SliderListener *listener : sliderListeners_)
+		for (Listener *listener : sliderListeners_)
 			listener->hoverEnded(this);
 
 		hidePopup(true);
@@ -150,49 +167,128 @@ namespace Interface
 
 	void BaseSlider::mouseDoubleClick(const MouseEvent &e)
 	{
-		Slider::mouseDoubleClick(e);
-		setValueSafe(getValue());
-		setValueToHost();
-		if (!e.mods.isPopupMenu())
-		{
-			for (SliderListener *listener : sliderListeners_)
-				listener->doubleClick(this);
-		}
+		if (!isEnabled() || !resetValueOnDoubleClick_ || e.mods.isPopupMenu())
+			return;
+		
+		resetValue();
+
+		for (Listener *listener : sliderListeners_)
+			listener->doubleClick(this);
+		
 		showPopup(true);
 	}
 
 	void BaseSlider::mouseWheelMove(const MouseEvent &e, const MouseWheelDetails &wheel)
 	{
-		if (!isScrollWheelEnabled())
+		if (!isEnabled() || !canUseScrollWheel_)
 			return;
+
+		// sometimes duplicate wheel events seem to be sent, so since we're going to
+		// bump the value by a minimum of the interval, avoid doing this twice..
+		if (e.eventTime == lastMouseWheelTime_)
+			return;
+		
+		lastMouseWheelTime_ = e.eventTime;
+
+		if (e.mods.isAnyMouseButtonDown())
+			return;
+		
+		auto value = getValue();
+		auto mouseWheelDelta = (std::abs(wheel.deltaX) > std::abs(wheel.deltaY)) ? -wheel.deltaX : wheel.deltaY;
+		auto valueDelta = value + 0.15 * mouseWheelDelta * (wheel.isReversed ? -1.0 : 1.0);
+		valueDelta = (type_ & CanLoopAround) ? valueDelta - std::floor(valueDelta) : std::clamp(valueDelta, 0.0, 1.0);
+		valueDelta -= value;
+		if (valueDelta == 0.0)
+			return;
+		
+		auto newValue = value + std::max(valueInterval_, std::abs(valueDelta)) * (valueDelta < 0.0 ? -1.0 : 1.0);
 
 		bool isMapped = parameterLink_ && parameterLink_->hostControl;
 		if (isMapped)
 			parameterLink_->hostControl->beginChangeGesture();
 
 		if (!hasBegunChange_)
-			beginChange(getValue());
+			beginChange(value);
 
-		Slider::mouseWheelMove(e, wheel);
-		setValueSafe(getValue());
+		setValue(snapValue(newValue, Slider::DragMode::notDragging), sendNotificationSync);
 		setValueToHost();
 
 		if (isMapped)
 			parameterLink_->hostControl->endChangeGesture();
 	}
 
-	String BaseSlider::getRawTextFromValue(double value)
+	void BaseSlider::setValue(double newValue, NotificationType notification)
+	{
+		newValue = std::clamp(newValue, 0.0, 1.0);
+		if (newValue == getValueSafe())
+			return;
+		
+		setValueSafe(newValue);				
+
+		if (notification != NotificationType::dontSendNotification)
+		{
+			valueChanged();
+
+			for (auto *listener : sliderListeners_)
+				listener->sliderValueChanged(this);
+		}
+	}
+
+	Framework::ParameterValue *BaseSlider::changeLinkedParameter(Framework::ParameterValue &parameter, bool getValueFromParameter)
+	{
+		auto *replacedParameter = BaseControl::changeLinkedParameter(parameter, getValueFromParameter);
+
+		setResetValue(details_.defaultNormalisedValue, resetValueOnDoubleClick_, resetValueModifiers_);
+		if (details_.scale == Framework::ParameterScale::Indexed)
+			valueInterval_ = 1.0 / (details_.maxValue - details_.minValue);
+		else
+			valueInterval_ = 0.0;
+
+		return replacedParameter;
+	}
+
+	void BaseSlider::updateValueFromTextEntry()
+	{
+		if (!textEntry_ || textEntry_->getText().isEmpty())
+			return;
+
+		auto value = getSliderValueFromText(textEntry_->getText());
+		setValueSafe(value);
+		setValue(value, NotificationType::sendNotificationSync);
+		if (auto hostControl = parameterLink_->hostControl)
+			hostControl->setValueFromUI((float)value);
+	}
+	
+	String BaseSlider::getRawTextFromValue(double value) const
 	{
 		if (!hasParameter())
-			return Slider::getTextFromValue(value);
+		{
+			if (maxDecimalCharacters_ > 0)
+				return String(value, maxDecimalCharacters_);
+
+			return String(std::round(value));
+		}
 
 		return String(Framework::scaleValue(value, details_, getSampleRate(), true));
 	}
 
-	String BaseSlider::getSliderTextFromValue(double value, bool retrieveSampleRate)
+	double BaseSlider::getRawValueFromText(const String &text) const
+	{
+		auto t = text.trimStart();
+
+		if (!details_.displayUnits.empty() && t.endsWith(details_.displayUnits.data()))
+			t = t.substring(0, t.length() - (int)details_.displayUnits.length());
+
+		while (t.startsWithChar('+'))
+			t = t.substring(1).trimStart();
+
+		return t.initialSectionContainingOnly("0123456789.,-").getDoubleValue();
+	}
+
+	String BaseSlider::getSliderTextFromValue(double value, bool retrieveSampleRate) const
 	{
 		if (!hasParameter())
-			return Slider::getTextFromValue(value);
+			return getRawTextFromValue(value);
 
 		float sampleRate = (retrieveSampleRate) ? getSampleRate() : (float)kDefaultSampleRate;
 		double scaledValue = Framework::scaleValue(value, details_, sampleRate, true);
@@ -200,29 +296,13 @@ namespace Interface
 		{
 			size_t lookup = (size_t)(std::clamp(scaledValue, (double)details_.minValue, 
 				(double)details_.maxValue) - details_.minValue);
-			return popupPrefix_ + details_.stringLookup[lookup].data();
+			return popupPrefix_ + utils::toJuceString(details_.stringLookup[lookup]);
 		}
 		
 		return popupPrefix_ + formatValue(scaledValue);
 	}
 
-	void BaseSlider::resized()
-	{
-		Slider::resized();
-		setColors();
-		setComponentsBounds();
-		positionExtraElements(drawBounds_.isEmpty() ? getLocalBounds() : drawBounds_);
-
-		moved();
-	}
-
-	void BaseSlider::moved()
-	{
-		for (auto &extraElement : extraElements_.data)
-			extraElement.first->setBounds(parent_->getLocalArea(this, extraElement.second));
-	}
-
-	double BaseSlider::getValueFromText(const String &text)
+	double BaseSlider::getSliderValueFromText(const String &text) const
 	{
 		String cleaned = text.removeCharacters(" ").toLowerCase();
 		if (text.endsWithChar('%') && details_.displayUnits != "%")
@@ -230,87 +310,22 @@ namespace Interface
 		if (!details_.stringLookup.empty())
 		{
 			for (int i = 0; i <= (int)(details_.maxValue - details_.minValue); ++i)
-				if (cleaned == String(details_.stringLookup[i].data()).toLowerCase())
+				if (cleaned == utils::toJuceString(details_.stringLookup[i].data()).toLowerCase())
 					return Framework::unscaleValue(details_.minValue + (float)i, details_, true);
 		}
-		return Framework::unscaleValue(Slider::getValueFromText(text), details_, true);
+		return Framework::unscaleValue(getRawValueFromText(text), details_, true);
 	}
 
-	double BaseSlider::snapValue(double attemptedValue, DragMode dragMode)
+	double BaseSlider::snapValue(double attemptedValue, Slider::DragMode dragMode)
 	{
 		static constexpr double percent = 0.025;
-		if (!snapToValue_ || sensitiveMode_ || dragMode != DragMode::absoluteDrag)
+		if (!shouldSnapToValue_ || sensitiveMode_ || dragMode != Slider::DragMode::absoluteDrag)
 			return attemptedValue;
 
-		double range = getMaximum() - getMinimum();
-		double radius = percent * range;
-		if (attemptedValue - snapValue_ <= radius && attemptedValue - snapValue_ >= -radius)
+		if (attemptedValue - snapValue_ <= percent && attemptedValue - snapValue_ >= -percent)
 			return snapValue_;
 		return attemptedValue;
 	}
-
-	void BaseSlider::parentHierarchyChanged()
-	{
-		parent_ = findParentComponentOfClass<BaseSection>();
-		Slider::parentHierarchyChanged();
-	}
-
-	void BaseSlider::showTextEntry()
-	{
-		textEntry_->setVisible(true);
-		textEntry_->redoImage();
-		textEntry_->setText(getRawTextFromValue(getValue()));
-		textEntry_->selectAll();
-		if (textEntry_->isShowing())
-			textEntry_->grabKeyboardFocus();
-	}
-
-	void BaseSlider::setDefaultRange()
-	{
-		if (!hasParameter())
-			return;
-
-		if (details_.scale == Framework::ParameterScale::Indexed)
-			setRange(0.0, 1.0, 1.0 / (details_.maxValue - details_.minValue));
-		else
-			setRange(0.0, 1.0);
-	}
-
-	float BaseSlider::getNumericTextMaxWidth(const Font &usedFont) const
-	{
-		int integerPlaces = std::max(maxTotalCharacters_ - maxDecimalCharacters_, 0);
-		// for the separating '.' between integer and decimal parts
-		if (maxDecimalCharacters_)
-			integerPlaces--;
-
-		String maxStringLength;
-		if (shouldUsePlusMinusPrefix_)
-			maxStringLength += '+';
-
-		// figured out that 8s take up the most space in DDin
-		for (int i = 0; i < integerPlaces; i++)
-			maxStringLength += '8';
-
-		if (maxDecimalCharacters_)
-		{
-			maxStringLength += '.';
-
-			for (int i = 0; i < maxDecimalCharacters_; i++)
-				maxStringLength += '8';
-		}
-
-		maxStringLength += details_.displayUnits.data();
-
-		return usedFont.getStringWidthFloat(maxStringLength);
-	}
-
-	void BaseSlider::showPopup(bool primary)
-	{
-		if (shouldShowPopup_)
-			parent_->showPopupDisplay(this, getTextFromValue(getValue()).toStdString(), popupPlacement_, primary);
-	}
-
-	void BaseSlider::hidePopup(bool primary) { parent_->hidePopupDisplay(primary); }
 
 	String BaseSlider::formatValue(double value) const noexcept
 	{
@@ -359,92 +374,43 @@ namespace Interface
 		return format + details_.displayUnits.data();
 	}
 
-	void BaseSlider::handlePopupResult(int result)
+	float BaseSlider::getNumericTextMaxWidth(const Font &usedFont) const
 	{
-		COMPLEX_ASSERT(parent_ && "This slider isn't owned by a component??");
+		int integerPlaces = std::max(maxTotalCharacters_ - maxDecimalCharacters_, 0);
+		// for the separating '.' between integer and decimal parts
+		if (maxDecimalCharacters_)
+			integerPlaces--;
 
-		auto &plugin = parent_->getInterfaceLink()->getPlugin();
+		String maxStringLength;
+		if (shouldUsePlusMinusPrefix_)
+			maxStringLength += '+';
 
-		//if (result == kArmMidiLearn)
-		//  synth->armMidiLearn(getName().toStdString());
-		//else if (result == kClearMidiLearn)
-		//  synth->clearMidiLearn(getName().toStdString());
-		if (result == kDefaultValue)
+		// figured out that 8s take up the most space in DDin
+		for (int i = 0; i < integerPlaces; i++)
+			maxStringLength += '8';
+
+		if (maxDecimalCharacters_)
 		{
-			if (parameterLink_ && parameterLink_->hostControl)
-				parameterLink_->hostControl->beginChangeGesture();
+			maxStringLength += '.';
 
-			beginChange(getValue());
+			for (int i = 0; i < maxDecimalCharacters_; i++)
+				maxStringLength += '8';
+		}
 
-			setValueSafe(getDoubleClickReturnValue());
-			setValue(getDoubleClickReturnValue());
-			setValueToHost();
-			endChange();
+		maxStringLength += details_.displayUnits.data();
 
-			if (parameterLink_ && parameterLink_->hostControl)
-				parameterLink_->hostControl->endChangeGesture();
-		}
-		else if (result == kManualEntry)
-			showTextEntry();
-		//else if (result == kClearModulations)
-		//{
-		//  for (vital::ModulationConnection *connection : connections)
-		//  {
-		//    std::string source = connection->source_name;
-		//    interfaceEngineLink_->disconnectModulation(connection);
-		//  }
-		//  notifyModulationsChanged();
-		//}
-		else if (result == kClearMapping)
-		{
-			if (parameterLink_ && parameterLink_->hostControl)
-			{
-				parameterLink_->hostControl->resetParameterLink(nullptr);
-				parameterLink_->hostControl = nullptr;
-			}
-		}
-		else if (result == kMapFirstSlot)
-		{
-			auto &parameters = getMappedParameters();
-
-			for (auto &parameter : parameters)
-			{
-				if (!parameter->isMappedToParameter())
-				{
-					parameter->resetParameterLink(getParameterLink());
-					break;
-				}
-			}
-		}
-		else if (result == kMappingList)
-		{
-			if (parameterLink_)
-			{
-				int connection_index = result - kMappingList;
-				plugin.getParameterBridges()[connection_index]->resetParameterLink(parameterLink_);
-				notifyModulationsChanged();
-			}
-		}
+		return usedFont.getStringWidthFloat(maxStringLength);
 	}
 
-	std::vector<Framework::ParameterBridge *> &BaseSlider::getMappedParameters() const noexcept
+	void BaseSlider::setValueInterval()
 	{
-		COMPLEX_ASSERT(parent_ && "This slider isn't owned by a component??");
-		return parent_->getInterfaceLink()->getPlugin().getParameterBridges();
-	}
+		if (!hasParameter())
+			return;
 
-
-
-	void BaseSlider::addListener(BaseSection *listener) 
-	{
-		sliderListeners_.push_back(listener);
-		Slider::addListener(listener);
-	}
-
-	void BaseSlider::removeListener(BaseSection *listener)
-	{
-		std::erase(sliderListeners_, listener);
-		Slider::removeListener(listener);
+		if (details_.scale == Framework::ParameterScale::Indexed)
+			valueInterval_ = 1.0 / (details_.maxValue - details_.minValue);
+		else
+			valueInterval_ = 0.0;
 	}
 
 	void BaseSlider::addTextEntry()
@@ -478,12 +444,100 @@ namespace Interface
 		}
 	}
 
+	void BaseSlider::showTextEntry()
+	{
+		textEntry_->setVisible(true);
+		textEntry_->redoImage();
+		textEntry_->setText(getRawTextFromValue(getValue()));
+		textEntry_->selectAll();
+		if (textEntry_->isShowing())
+			textEntry_->grabKeyboardFocus();
+	}
+
+	void BaseSlider::showPopup(bool primary)
+	{
+		if (shouldShowPopup_)
+			parent_->showPopupDisplay(this, getSliderTextFromValue(getValue()), popupPlacement_, primary);
+	}
+
+	void BaseSlider::hidePopup(bool primary) { parent_->hidePopupDisplay(primary); }
+
+	void BaseSlider::handlePopupResult(int result)
+	{
+		COMPLEX_ASSERT(parent_ && "This slider isn't owned by a component??");
+
+		auto &plugin = parent_->getInterfaceLink()->getPlugin();
+
+		//if (result == kArmMidiLearn)
+		//  synth->armMidiLearn(getName().toStdString());
+		//else if (result == kClearMidiLearn)
+		//  synth->clearMidiLearn(getName().toStdString());
+		if (result == kDefaultValue)
+		{
+			if (parameterLink_ && parameterLink_->hostControl)
+				parameterLink_->hostControl->beginChangeGesture();
+
+			beginChange(getValue());
+
+			resetValue();
+
+			endChange();
+
+			if (parameterLink_ && parameterLink_->hostControl)
+				parameterLink_->hostControl->endChangeGesture();
+		}
+		else if (result == kManualEntry)
+			showTextEntry();
+		//else if (result == kClearModulations)
+		//{
+		//  for (vital::ModulationConnection *connection : connections)
+		//  {
+		//    std::string source = connection->source_name;
+		//    interfaceEngineLink_->disconnectModulation(connection);
+		//  }
+		//  notifyModulationsChanged();
+		//}
+		else if (result == kClearMapping)
+		{
+			if (!parameterLink_ || !parameterLink_->hostControl)
+				return;
+			
+			parameterLink_->hostControl->resetParameterLink(nullptr);
+			parameterLink_->hostControl = nullptr;
+			for (auto &listener : sliderListeners_)
+				listener->automationMappingChanged(this);
+		}
+		else if (result == kMapFirstSlot)
+		{
+			auto &parameters = getMappedParameters();
+
+			for (auto &parameter : parameters)
+			{
+				if (!parameter->isMappedToParameter())
+				{
+					parameter->resetParameterLink(getParameterLink());
+					for (auto &listener : sliderListeners_)
+						listener->automationMappingChanged(this);
+					break;
+				}
+			}
+		}
+		else if (result == kMappingList)
+		{
+			if (parameterLink_)
+			{
+				int connection_index = result - kMappingList;
+				plugin.getParameterBridges()[connection_index]->resetParameterLink(parameterLink_);
+				notifyModulationsChanged();
+			}
+		}
+	}
+
 	PopupItems BaseSlider::createPopupMenu() const noexcept
 	{
-		PopupItems options{ BaseControl::getName().toStdString() };
+		PopupItems options{ getName().toStdString() };
 
-		if (isDoubleClickReturnEnabled())
-			options.addItem(kDefaultValue, "Set to Default Value");
+		options.addItem(kDefaultValue, "Set to Default Value");
 
 		//if (hasParameterAssignment_)
 		//  options.addItem(kArmMidiLearn, "Learn MIDI Assignment");
@@ -524,15 +578,61 @@ namespace Interface
 		return options;
 	}
 
+	void BaseSlider::addListener(BaseSection *listener)
+	{
+		sliderListeners_.push_back(listener);
+	}
+
+	void BaseSlider::removeListener(BaseSection *listener)
+	{
+		std::erase(sliderListeners_, listener);
+	}
+	
+	void BaseSlider::parentHierarchyChanged()
+	{
+		parent_ = findParentComponentOfClass<BaseSection>();
+	}
+	
 	float BaseSlider::getSampleRate() const noexcept
 	{
 		COMPLEX_ASSERT(parent_ && "This slider isn't owned by a component??");
 		return parent_->getInterfaceLink()->getPlugin().getSampleRate();
 	}
 
-	//=================================Specialisations=================================
+	std::vector<Framework::ParameterBridge *> &BaseSlider::getMappedParameters() const noexcept
+	{
+		COMPLEX_ASSERT(parent_ && "This slider isn't owned by a component??");
+		return parent_->getInterfaceLink()->getPlugin().getParameterBridges();
+	}
 
-	RotarySlider::RotarySlider(Framework::ParameterValue *parameter, String name) : BaseSlider(parameter, std::move(name))
+	void BaseSlider::resetValue() noexcept
+	{
+		bool isMapped = parameterLink_ && parameterLink_->hostControl;
+		if (isMapped)
+			parameterLink_->hostControl->beginChangeGesture();
+
+		if (!hasBegunChange_)
+			beginChange(getValue());
+
+		setValue(resetValue_, sendNotificationSync);
+		setValueToHost();
+
+		if (isMapped)
+			parameterLink_->hostControl->endChangeGesture();
+	}
+
+	//////////////////////////////////////////////////////////////////////////
+	//   _____                 _       _ _           _   _                  //
+	//  / ____|               (_)     | (_)         | | (_)                 //
+	// | (___  _ __   ___  ___ _  __ _| |_ ___  __ _| |_ _  ___  _ __  ___  //
+	//  \___ \| '_ \ / _ \/ __| |/ _` | | / __|/ _` | __| |/ _ \| '_ \/ __| //
+	//  ____) | |_) |  __/ (__| | (_| | | \__ \ (_| | |_| | (_) | | | \__ \ //
+	// |_____/| .__/ \___|\___|_|\__,_|_|_|___/\__,_|\__|_|\___/|_| |_|___/ //
+	//        | |                                                           //
+	//        |_|                                                           //
+	//////////////////////////////////////////////////////////////////////////
+
+	RotarySlider::RotarySlider(Framework::ParameterValue *parameter) : BaseSlider(parameter)
 	{
 		addLabel();
 		setLabelPlacement(BubbleComponent::right);
@@ -554,10 +654,9 @@ namespace Interface
 				quadComponent_->render(openGl, animate);
 			});
 
-		components_.push_back(quadComponent_);
-		components_.push_back(textEntry_->getImageComponent());
+		components_.emplace_back(quadComponent_);
+		components_.emplace_back(textEntry_->getImageComponent());
 
-		setRotaryParameters(2.0f * kPi - kRotaryAngle, 2.0f * kPi + kRotaryAngle, true);
 		// yes i know this is dumb but it works for now
 		setBipolar(details_.minValue == -details_.maxValue);
 		setShouldShowPopup(true);
@@ -571,7 +670,7 @@ namespace Interface
 		if (sensitiveMode_)
 			multiply *= kSlowDragMultiplier;
 
-		setMouseDragSensitivity((int)(kDefaultRotaryDragLength / (sensitivity_ * multiply)));
+		setImmediateSensitivity((int)(kDefaultRotaryDragLength / (sensitivity_ * multiply)));
 
 		BaseSlider::mouseDrag(e);
 	}
@@ -686,7 +785,7 @@ namespace Interface
 		BaseSlider::showTextEntry();
 	}
 
-	void RotarySlider::positionExtraElements(Rectangle<int> anchorBounds)
+	void RotarySlider::setExtraElementsPositions(Rectangle<int> anchorBounds)
 	{
 		static constexpr int kVerticalOffset = 2;
 
@@ -726,12 +825,12 @@ namespace Interface
 		}
 	}
 
-	Rectangle<int> RotarySlider::getOverallBoundsForHeight(int height)
+	Rectangle<int> RotarySlider::getBoundsForSizes(int height, int)
 	{
 		auto widthHeight = parent_->scaleValueRoundInt((float)height);
 		drawBounds_ = { widthHeight, widthHeight };
 
-		positionExtraElements(drawBounds_);
+		setExtraElementsPositions(drawBounds_);
 		if (modifier_)
 			return getUnionOfAllElements();
 
@@ -766,7 +865,7 @@ namespace Interface
 		quadComponent_->setColor(selectedColor_);
 		quadComponent_->setAltColor(unselectedColor_);
 		quadComponent_->setThumbColor(thumbColor_);
-		quadComponent_->setStartPos(isBipolar_ ? 0.0f : -1.0f);
+		quadComponent_->setStartPos(isBipolar() ? 0.0f : -1.0f);
 
 		int total_width = isHorizontal() ? drawBounds_.getHeight() : drawBounds_.getWidth();
 		int extra = total_width % 2;
@@ -804,17 +903,17 @@ namespace Interface
 		BaseSlider::showTextEntry();
 	}
 
-	PinSlider::PinSlider(Framework::ParameterValue *parameter, String name) :
-		BaseSlider(parameter, std::move(name), SliderStyle::LinearHorizontal)
+	PinSlider::PinSlider(Framework::ParameterValue *parameter) :
+		BaseSlider(parameter)
 	{
 		quadComponent_->setFragmentShader(Shaders::kPinSliderFragment);
 		imageComponent_->setAlwaysOnTop(true);
 		addTextEntry();
 		setShouldShowPopup(true);
 
-		components_.push_back(quadComponent_);
-		components_.push_back(imageComponent_);
-		components_.push_back(textEntry_->getImageComponent());
+		components_.emplace_back(quadComponent_);
+		components_.emplace_back(imageComponent_);
+		components_.emplace_back(textEntry_->getImageComponent());
 	}
 
 	void PinSlider::mouseDown(const MouseEvent &e)
@@ -828,7 +927,7 @@ namespace Interface
 		}
 
 		auto mouseEvent = e.getEventRelativeTo(parent_);
-		lastDragPosition_ = mouseEvent.position.x;
+		lastDragPosition_ = mouseEvent.position.toDouble();
 		runningTotal_ = getValue();
 
 		BaseSlider::mouseDown(mouseEvent);
@@ -844,10 +943,10 @@ namespace Interface
 
 		auto mouseEvent = e.getEventRelativeTo(parent_);
 
-		auto normalisedDiff = ((double)mouseEvent.position.x - lastDragPosition_) / totalRange_;
+		auto normalisedDiff = ((double)mouseEvent.position.x - lastDragPosition_.x) / totalRange_;
 		runningTotal_ += multiply * normalisedDiff;
-		setValue(std::clamp(runningTotal_, 0.0, 1.0));
-		lastDragPosition_ = mouseEvent.position.x;
+		setValue(std::clamp(runningTotal_, 0.0, 1.0), NotificationType::sendNotificationSync);
+		lastDragPosition_ = mouseEvent.position.toDouble();
 
 		setValueSafe(getValue());
 		setValueToHost();
@@ -925,15 +1024,15 @@ namespace Interface
 		redoImage();
 	}
 
-	Rectangle<int> PinSlider::getOverallBoundsForHeight(int height)
+	Rectangle<int> PinSlider::getBoundsForSizes(int height, int)
 	{
-		auto width = parent_->scaleValueRoundInt(kDefaultPinSliderWidth);
-		drawBounds_ = { width, height };
+		auto scaledWidth = parent_->scaleValueRoundInt(kDefaultPinSliderWidth);
+		drawBounds_ = { scaledWidth, height };
 		return drawBounds_;
 	}
 
 	TextSelector::TextSelector(Framework::ParameterValue *parameter, 
-		std::optional<Font> usedFont, String name) : BaseSlider(parameter, std::move(name))
+		std::optional<Font> usedFont) : BaseSlider(parameter)
 	{
 		setLabelPlacement(BubbleComponent::BubblePlacement::left);
 
@@ -948,8 +1047,8 @@ namespace Interface
 				quadComponent_->render(openGl, animate);
 			});
 
-		components_.push_back(quadComponent_);
-		components_.push_back(imageComponent_);
+		components_.emplace_back(quadComponent_);
+		components_.emplace_back(imageComponent_);
 
 		if (usedFont)
 			usedFont_ = std::move(usedFont.value());
@@ -959,8 +1058,6 @@ namespace Interface
 
 	void TextSelector::mouseDown(const juce::MouseEvent &e)
 	{
-		updateValue();
-
 		if (e.mods.isAltDown())
 			return;
 
@@ -978,7 +1075,7 @@ namespace Interface
 
 		PopupItems options;
 		for (int i = 0; i <= (int)details_.maxValue; ++i)
-			options.addItem(i, details_.stringLookup[i].data());
+			options.addItem(i, std::string{ details_.stringLookup[i] });
 
 		parent_->showPopupSelector(this, Point{ 0, 0 }, std::move(options),
 			[this](int value)
@@ -988,8 +1085,7 @@ namespace Interface
 
 				beginChange(getValue());
 				auto unscaledValue = unscaleValue(value, details_, getSampleRate());
-				setValueSafe(unscaledValue);
-				setValue(unscaledValue);
+				setValue(unscaledValue, NotificationType::sendNotificationSync);
 				setValueToHost();
 				endChange();
 
@@ -1007,7 +1103,7 @@ namespace Interface
 	void TextSelector::mouseWheelMove(const MouseEvent &e, const MouseWheelDetails &wheel)
 	{
 		MouseWheelDetails newWheel = wheel;
-		newWheel.isReversed = true;
+		newWheel.isReversed = !wheel.isReversed;
 		BaseSlider::mouseWheelMove(e, newWheel);
 	}
 
@@ -1066,7 +1162,7 @@ namespace Interface
 		redoImage();
 	}
 
-	void TextSelector::positionExtraElements(Rectangle<int> anchorBounds)
+	void TextSelector::setExtraElementsPositions(Rectangle<int> anchorBounds)
 	{
 		if (!label_ && !extraIcon_)
 			return;
@@ -1118,7 +1214,7 @@ namespace Interface
 		}
 	}
 
-	[[nodiscard]] Rectangle<int> TextSelector::getOverallBoundsForHeight(int height)
+	Rectangle<int> TextSelector::getBoundsForSizes(int height, int)
 	{
 		if (drawBounds_.getHeight() != height || isDirty_)
 		{
@@ -1148,7 +1244,7 @@ namespace Interface
 			isDirty_ = false;
 		}
 
-		positionExtraElements(drawBounds_);
+		setExtraElementsPositions(drawBounds_);
 		return getUnionOfAllElements();
 	}
 
@@ -1177,8 +1273,8 @@ namespace Interface
 			textSelectorListener_->resizeForText(this, sizeChange);
 	}
 
-	NumberBox::NumberBox(Framework::ParameterValue *parameter, String name) :
-		BaseSlider(parameter, std::move(name))
+	NumberBox::NumberBox(Framework::ParameterValue *parameter) :
+		BaseSlider(parameter)
 	{
 		addLabel();
 		setLabelPlacement(BubbleComponent::BubblePlacement::left);
@@ -1201,9 +1297,9 @@ namespace Interface
 		changeTextEntryFont(Fonts::instance()->getDDinFont());
 		textEntry_->setInterceptsMouseClicks(false, false);
 
-		components_.push_back(quadComponent_);
-		components_.push_back(imageComponent_);
-		components_.push_back(textEntry_->getImageComponent());
+		components_.emplace_back(quadComponent_);
+		components_.emplace_back(imageComponent_);
+		components_.emplace_back(textEntry_->getImageComponent());
 	}
 
 	void NumberBox::mouseDrag(const MouseEvent& e)
@@ -1217,7 +1313,7 @@ namespace Interface
 
 		auto sensitivity = (double)std::max(getWidth(), getHeight()) / (sensitivity_ * multiply);
 
-		setMouseDragSensitivity((int)sensitivity);
+		setImmediateSensitivity((int)sensitivity);
 
 		BaseSlider::mouseDrag(e);
 	}
@@ -1292,7 +1388,7 @@ namespace Interface
 	{
 		updateValueFromTextEntry();
 
-		for (SliderListener *listener : sliderListeners_)
+		for (Listener *listener : sliderListeners_)
 			listener->menuFinished(this);
 
 		textEditorEscapeKeyPressed(editor);
@@ -1349,7 +1445,7 @@ namespace Interface
 		BaseSlider::showTextEntry();
 	}
 
-	void NumberBox::positionExtraElements(Rectangle<int> anchorBounds)
+	void NumberBox::setExtraElementsPositions(Rectangle<int> anchorBounds)
 	{
 		if (!label_)
 			return;
@@ -1376,7 +1472,7 @@ namespace Interface
 			Rectangle{ labelX, anchorBounds.getY(), labelTextWidth, anchorBounds.getHeight() };
 	}
 
-	[[nodiscard]] Rectangle<int> NumberBox::getOverallBoundsForHeight(int height)
+	Rectangle<int> NumberBox::getBoundsForSizes(int height, int)
 	{
 		if (drawBounds_.getHeight() != height)
 		{
@@ -1400,7 +1496,7 @@ namespace Interface
 			drawBounds_ = { (int)std::ceil(totalDrawWidth), height };
 		}
 
-		positionExtraElements(drawBounds_);
+		setExtraElementsPositions(drawBounds_);
 		return getUnionOfAllElements();
 	}
 

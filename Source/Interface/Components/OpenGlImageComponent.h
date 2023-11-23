@@ -223,11 +223,12 @@ namespace Interface
 
     String getText() const { return text_; }
     int getTotalWidth() const { return font_.getStringWidth(text_); }
+    int getTotalHeight() const { return (int)std::ceil(font_.getHeight()); }
     void updateState();
 
     void setText(String text) noexcept { isDirty_ = isDirty_ || text_ != text; text_ = std::move(text); redrawImage(); }
     void setTextHeight(float textSize) noexcept { isDirty_ = isDirty_ || textSize_ != textSize; textSize_ = textSize; }
-    void setFontType(FontType type) noexcept { isDirty_ = isDirty_ || fontType_ != type; fontType_ = type; }
+    void setFontType(FontType type) noexcept { isDirty_ = (isDirty_ || fontType_ != type); fontType_ = type; }
     void setJustification(Justification justification) noexcept
   	{ isDirty_ = isDirty_ || justification_ != justification; justification_ = justification; }
 

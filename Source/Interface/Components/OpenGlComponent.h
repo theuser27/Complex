@@ -10,6 +10,8 @@
 
 #pragma once
 
+#include "Third Party/clog/small_function.hpp"
+#include "Framework/constexpr_utils.h"
 #include "../LookAndFeel/Shaders.h"
 #include "../LookAndFeel/Skin.h"
 
@@ -169,9 +171,9 @@ namespace Interface
 		void setSkinOverride(Skin::SectionOverride skinOverride) noexcept { skinOverride_ = skinOverride; }
 		void setBackgroundColor(const Colour &color) noexcept { backgroundColor_ = color; }
 		void setRefreshFrequency(RefreshFrequency frequency) noexcept { refreshFrequency_ = frequency; }
-		void setCustomRenderFunction(std::function<void(OpenGlWrapper &, bool)> function) noexcept
+		void setCustomRenderFunction(clg::small_function<void(OpenGlWrapper &, bool)> function) noexcept
 		{ customRenderFunction_ = std::move(function); }
-		void setParent(BaseSection *parent) noexcept { parent_ = parent; }
+		virtual void setParent(BaseSection *parent) noexcept { parent_ = parent; }
 
 	private:
 		void pushForDeletion();
@@ -180,7 +182,7 @@ namespace Interface
 		bool setViewPort(const OpenGlWrapper &openGl) const;
 
 		Animator animator_{};
-		std::function<void(OpenGlWrapper &, bool)> customRenderFunction_{};
+		clg::small_function<void(OpenGlWrapper &, bool)> customRenderFunction_{};
 		RefreshFrequency refreshFrequency_ = RefreshFrequency::ResizedAndEvent;
 		std::unique_ptr<OpenGlCorners> corners_;
 		bool onlyBottomCorners_ = false;
@@ -190,13 +192,13 @@ namespace Interface
 
 		BaseSection *parent_ = nullptr;
 
-		template<commonConcepts::DerivedOrIs<OpenGlComponent> T>
+		template<CommonConcepts::DerivedOrIs<OpenGlComponent> T>
 		friend class gl_ptr;
 
 		JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(OpenGlComponent)
 	};
 
-	template<commonConcepts::DerivedOrIs<OpenGlComponent> T>
+	template<CommonConcepts::DerivedOrIs<OpenGlComponent> T>
 	class gl_ptr
 	{
 	public:
@@ -232,7 +234,7 @@ namespace Interface
 		}
 
 		// aliasing constructors through upcasting
-		template<commonConcepts::DerivedOrIs<OpenGlComponent> U>
+		template<CommonConcepts::DerivedOrIs<OpenGlComponent> U>
 		gl_ptr(const gl_ptr<U> &other) noexcept : component_(other.component_), 
 			controlBlock_(reinterpret_cast<control_block *>(other.controlBlock_))
 		{
@@ -240,7 +242,7 @@ namespace Interface
 				controlBlock_->refCount.fetch_add(1, std::memory_order_relaxed);
 		}
 
-		template<commonConcepts::DerivedOrIs<OpenGlComponent> U>
+		template<CommonConcepts::DerivedOrIs<OpenGlComponent> U>
 		gl_ptr(gl_ptr<U> &&other) noexcept : component_(other.component_),
 			controlBlock_(reinterpret_cast<control_block *>(other.controlBlock_))
 		{
@@ -259,7 +261,7 @@ namespace Interface
 			COMPLEX_ASSERT(component_ && "How do we have a control block to a non-existing object??");
 			COMPLEX_ASSERT(controlBlock_->refCount.load() == 0 && "We have somehow underflowed");
 
-			// we're already synchronised through refCount.fetch_sub so we only care about atomicity here
+			// we're already synchronised through refCount.fetch_sub, so we only care about atomicity here
 			if (!controlBlock_->isInitialised.load(std::memory_order_relaxed))
 				delete component_;
 			else
@@ -269,7 +271,7 @@ namespace Interface
 		}
 
 		// explicit upcasting
-		template<commonConcepts::DerivedOrIs<OpenGlComponent> U = OpenGlComponent>
+		template<CommonConcepts::DerivedOrIs<OpenGlComponent> U = OpenGlComponent>
 		gl_ptr<U> upcast() requires std::derived_from<T, U>
 		{
 			using control_block_u = typename gl_ptr<U>::control_block;
@@ -324,13 +326,15 @@ namespace Interface
 		T *component_ = nullptr;
 		control_block *controlBlock_ = nullptr;
 
-		template <commonConcepts::DerivedOrIs<OpenGlComponent> U>
+		template <CommonConcepts::DerivedOrIs<OpenGlComponent> U>
 		friend class gl_ptr;
 	};
 
-	template <commonConcepts::DerivedOrIs<OpenGlComponent> T, commonConcepts::DerivedOrIs<OpenGlComponent> U>
-	bool operator==(const gl_ptr<T> &left, const gl_ptr<U> &right) noexcept
+	template <CommonConcepts::DerivedOrIs<OpenGlComponent> T, CommonConcepts::DerivedOrIs<OpenGlComponent> U>
+	inline bool operator==(const gl_ptr<T> &left, const gl_ptr<U> &right) noexcept
 	{ return left.get() == right.get(); }
+
+	// TODO: maybe optimise it to allocate space for both the object and control block at once
 
 	template<std::derived_from<OpenGlComponent> T, typename ... Args>
 	inline gl_ptr<T> makeOpenGlComponent(Args&& ... args) { return gl_ptr<T>{ new T(std::forward<Args>(args)...) }; }

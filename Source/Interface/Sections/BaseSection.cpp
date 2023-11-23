@@ -14,7 +14,7 @@
 
 namespace Interface
 {
-	BaseSection::BaseSection(std::string_view name) : Component(name.data())
+	BaseSection::BaseSection(std::string_view name) : Component(utils::toJuceString(name))
 	{
 		setWantsKeyboardFocus(true);
 	}
@@ -81,11 +81,11 @@ namespace Interface
 				std::move(callback), std::move(cancel));
 	}
 
-	void BaseSection::showPopupDisplay(Component *source, const std::string &text,
+	void BaseSection::showPopupDisplay(Component *source, String text,
 		BubbleComponent::BubblePlacement placement, bool primary)
 	{
 		if (auto *parent = findParentComponentOfClass<MainInterface>())
-			parent->popupDisplay(source, text, placement, primary, getSectionOverride());
+			parent->popupDisplay(source, std::move(text), placement, primary, getSectionOverride());
 	}
 
 	void BaseSection::hidePopupDisplay(bool primary)
@@ -260,7 +260,7 @@ namespace Interface
 	void BaseSection::guiChanged(BaseButton *button)
 	{
 		if (button == activator_)
-			setActive(activator_->getToggleStateValue().getValue());
+			setActive(activator_->getToggleState());
 	}
 
 	void BaseSection::resizeForText(TextSelector *textSelector, int requestedWidthChange)
@@ -291,17 +291,18 @@ namespace Interface
 
 	void BaseSection::addControl(BaseControl *control)
 	{
-		// TODO: have custom implementations for slider and button 
-		// and have BaseControl inherit from Component
-
-		controls_[control->getParameterDetails().id] = control;
+		// juce String is a copy-on-write type so the internal data is constant across all instances of the same string
+		// this means that so long as the control's name isn't changed the string_view will be safe to access 
+		if (control->getParameterDetails().id.empty())
+		{
+			COMPLEX_ASSERT(!control->getName().isEmpty() && control->getName() != "" && "Every control must have a name");
+			controls_[control->getName().toRawUTF8()] = control;
+		}
+		else
+			controls_[Framework::Parameters::getEnumString(control->getParameterDetails().id)] = control;
 		control->addListener(this);
 
-		if (auto slider = dynamic_cast<BaseSlider *>(control))
-			addAndMakeVisible(slider);
-		else if (auto button = dynamic_cast<BaseButton *>(control))
-			addAndMakeVisible(button);
-		else COMPLEX_ASSERT_FALSE("bruh");
+		addAndMakeVisible(control);
 
 		addOpenGlComponent(control->getLabelComponent());		
 		for (const auto &component : control->getComponents())
@@ -314,14 +315,10 @@ namespace Interface
 			removeOpenGlComponent(component.get());
 		removeOpenGlComponent(control->getLabelComponent().get());
 
-		if (auto slider = dynamic_cast<BaseSlider *>(control))
-			removeChildComponent(slider);
-		else if (auto button = dynamic_cast<BaseButton *>(control))
-			removeChildComponent(button);
-		else COMPLEX_ASSERT_FALSE("bruh");
+		removeChildComponent(control);
 
 		control->removeListener(this);
-		controls_.erase(control->getParameterDetails().id);
+		controls_.erase(Framework::Parameters::getEnumString(control->getParameterDetails().id));
 	}
 
 	void BaseSection::addOpenGlComponent(gl_ptr<OpenGlComponent> openGlComponent, bool toBeginning)
@@ -332,12 +329,13 @@ namespace Interface
 		COMPLEX_ASSERT(std::ranges::find(openGlComponents_, openGlComponent) == openGlComponents_.end() 
 			&& "We're adding a component that is already a child of this section");
 
-		openGlComponent->setParent(this);
+		auto *rawPointer = openGlComponent.get();
+		rawPointer->setParent(this);
 		if (toBeginning)
-			openGlComponents_.insert(openGlComponents_.begin(), openGlComponent);
+			openGlComponents_.insert(openGlComponents_.begin(), std::move(openGlComponent));
 		else
-			openGlComponents_.push_back(openGlComponent);
-		addAndMakeVisible(openGlComponent.get());
+			openGlComponents_.emplace_back(std::move(openGlComponent));
+		addAndMakeVisible(rawPointer);
 	}
 
 	void BaseSection::removeOpenGlComponent(OpenGlComponent *openGlComponent)
@@ -352,12 +350,11 @@ namespace Interface
 		}
 	}
 
-	void BaseSection::setActivator(BaseButton *activator)
+	void BaseSection::setActivator(PowerButton *activator)
 	{
 		createOffOverlay();
 
 		activator_ = activator;
-		activator->setPowerButton();
 		activator->addListener(this);
 		setActive(activator->getToggleState());
 	}
@@ -381,14 +378,6 @@ namespace Interface
 		background_->setParent(this);
 		addAndMakeVisible(background_.get());
 		background_->setBounds({ 0, 0, getWidth(), getHeight() });
-	}
-
-	float BaseSection::getSliderOverlap() const noexcept
-	{
-		int total_width = getSliderWidth();
-		int extra = total_width % 2;
-		int slider_width = (int)(std::floor(LinearSlider::kLinearWidthPercent * total_width * 0.5f) * 2.0f) + extra;
-		return (total_width - slider_width) / 2;
 	}
 
 	float BaseSection::getDisplayScale() const

@@ -28,9 +28,8 @@ namespace Plugin
 
 		strict_inline u32 getProcessingDelay() const noexcept { return soundEngine_->getProcessingDelay(); }
 		
-		strict_inline void updateParameters(UpdateFlag flag, float sampleRate) noexcept
+		strict_inline void updateParameters(Framework::UpdateFlag flag, float sampleRate) noexcept
 		{ soundEngine_->UpdateParameters(flag, sampleRate); }
-		void updateGUIParameters() const noexcept;
 		void initialiseModuleTree() noexcept;
 
 		virtual void parameterChangeMidi(u64 parentModuleId, std::string_view parameterName, float value);

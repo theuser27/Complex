@@ -1029,17 +1029,3 @@ namespace simd_values
 
 using namespace simd_values;
 
-namespace common
-{
-	namespace commonConcepts
-	{
-		template<typename T>
-		concept SimdInt = std::same_as<T, simd_int>;
-
-		template<typename T>
-		concept SimdFloat = std::same_as<T, simd_float>;
-
-		template<typename T>
-		concept SimdValue = SimdInt<T> || SimdFloat<T>;
-	}
-}

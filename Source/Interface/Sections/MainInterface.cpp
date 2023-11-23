@@ -114,11 +114,11 @@ namespace Interface
 		dualPopupSelector_->setVisible(true);
 	}
 
-	void MainInterface::popupDisplay(Component *source, const std::string &text,
+	void MainInterface::popupDisplay(Component *source, String text,
 		BubbleComponent::BubblePlacement placement, bool primary, Skin::SectionOverride sectionOverride)
 	{
 		PopupDisplay *display = primary ? popupDisplay1_.get() : popupDisplay2_.get();
-		display->setContent(text, getLocalArea(source, source->getLocalBounds()), placement, sectionOverride);
+		display->setContent(std::move(text), getLocalArea(source, source->getLocalBounds()), placement, sectionOverride);
 		display->setVisible(true);
 	}
 

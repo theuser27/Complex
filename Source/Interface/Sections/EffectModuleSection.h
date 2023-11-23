@@ -19,7 +19,7 @@ namespace Interface
 {
 	class EmptySlider;
 
-	class SpectralMaskComponent : public PinBoundsBox
+	class SpectralMaskComponent final : public PinBoundsBox
 	{
 	public:
 		class SpectralMaskListener
@@ -36,7 +36,7 @@ namespace Interface
 
 		void paint(Graphics &g) override;
 		void resized() override;
-		void sliderValueChanged(Slider *slider) override;
+		void sliderValueChanged(BaseSlider *slider) override;
 
 		void setListener(SpectralMaskListener *listener) noexcept { listener_ = listener; }
 
@@ -48,7 +48,7 @@ namespace Interface
 		bool isExpanded_ = false;
 	};
 
-	class EffectModuleSection : public ProcessorSection, public SpectralMaskComponent::SpectralMaskListener,
+	class EffectModuleSection final : public ProcessorSection, public SpectralMaskComponent::SpectralMaskListener,
 		public Generation::BaseProcessor::Listener
 	{
 	public:
@@ -79,18 +79,17 @@ namespace Interface
 		void resized() override;
 
 		void paintBackground(Graphics &g) override;
-		void renderOpenGlComponents(OpenGlWrapper &openGl, bool animate = false) override
-		{ BaseSection::renderOpenGlComponents(openGl, animate); }
 
 		void resizeForText(TextSelector *textSelector, int requestedWidthChange) override;
 		void expansionChange(bool isExpanded) override;
-		void sliderValueChanged(Slider *slider) override;
+		void sliderValueChanged(BaseSlider *slider) override;
+		void automationMappingChanged(BaseSlider *slider) override;
 
 		Rectangle<int> getPowerButtonBounds() const noexcept override
 		{
 			auto widthHeight = (int)std::round(scaleValue(kDefaultActivatorSize));
-			return { getWidth() - (int)std::round(scaleValue(kPowerButtonPadding)) - widthHeight,
-				getYMaskOffset() + centerVertically(0, widthHeight, (int)std::round(scaleValue(kTopMenuHeight))),
+			return { getWidth() - scaleValueRoundInt(kPowerButtonPadding) - widthHeight,
+				getYMaskOffset() + centerVertically(0, widthHeight, scaleValueRoundInt(kTopMenuHeight)),
 				widthHeight, widthHeight };
 		}
 
@@ -105,6 +104,8 @@ namespace Interface
 			effectControls_ = decltype(effectControls_){};
 
 			initialiseParametersFunction_(effectControls_, this);
+			for (auto &control : effectControls_)
+				addControl(control.get());
 		}
 
 		// sets positions and dimensions of the module header
@@ -125,7 +126,39 @@ namespace Interface
 
 		auto &getDraggableComponent() noexcept { return draggableBox_; }
 		auto *getEffect() noexcept { return effectModule_->getEffect(); }
-		BaseControl *getEffectParameter(size_t index) noexcept;
+		template<nested_enum::NestedEnum E>
+		E getAlgorithm() { return E::make_enum(effectAlgoSelector_->getValueSafeScaled()).value(); }
+		
+		BaseControl *getEffectControl(nested_enum::NestedEnum auto enumValue) noexcept
+		{
+			using namespace Framework;
+
+			if constexpr (std::is_same_v<decltype(enumValue), BaseProcessors::BaseEffect::type>)
+			{
+				switch (enumValue)
+				{
+				case BaseProcessors::BaseEffect::Algorithm:
+					return effectAlgoSelector_.get();
+				default:
+					COMPLEX_ASSERT_FALSE("Parameter could not be found");
+				case BaseProcessors::BaseEffect::LowBound:
+				case BaseProcessors::BaseEffect::HighBound:
+				case BaseProcessors::BaseEffect::ShiftBounds:
+					return maskComponent_->getControl(enumValue);
+				}
+			}
+			else
+			{
+				auto enumId = enumValue.enum_id();
+				for (auto &control : effectControls_)
+					if (control->getParameterDetails().id == enumId)
+						return control.get();
+				
+				COMPLEX_ASSERT_FALSE("Parameter could not be found");
+				return nullptr;
+			}
+		}
+
 		Rectangle<int> getUIBounds() const noexcept
 		{ return getLocalBounds().withTop(getYMaskOffset() + scaleValueRoundInt(kTopMenuHeight) + 1); }
 
@@ -135,8 +168,8 @@ namespace Interface
 
 		int getYMaskOffset() const noexcept
 		{
-			auto offset = kSpectralMaskMargin + ((isMaskExpanded_) ? 
-				kSpectralMaskExpandedHeight : kSpectralMaskContractedHeight);
+			auto offset = scaleValueRoundInt(kSpectralMaskMargin) + ((isMaskExpanded_) ? 
+				scaleValueRoundInt(kSpectralMaskExpandedHeight) : scaleValueRoundInt(kSpectralMaskContractedHeight));
 			return scaleValueRoundInt((float)offset);
 		}
 
@@ -144,14 +177,15 @@ namespace Interface
 		gl_ptr<PlainShapeComponent> effectTypeIcon_ = nullptr;
 		std::unique_ptr<TextSelector> effectTypeSelector_ = nullptr;
 		std::unique_ptr<NumberBox> mixNumberBox_ = nullptr;
-		std::unique_ptr<BaseButton> moduleActivator_ = nullptr;
+		std::unique_ptr<PowerButton> moduleActivator_ = nullptr;
 
 		std::unique_ptr<TextSelector> effectAlgoSelector_ = nullptr;
 		std::unique_ptr<SpectralMaskComponent> maskComponent_ = nullptr;
 
 		Generation::EffectModule *effectModule_ = nullptr;
-		std::array<Generation::baseEffect *, magic_enum::enum_count<Framework::EffectTypes>()> cachedEffects_{};
+		std::array<Generation::baseEffect *, Framework::BaseProcessors::BaseEffect::enum_count(nested_enum::InnerNodes)> cachedEffects_{};
 		std::vector<std::unique_ptr<BaseControl>> effectControls_{};
+		Framework::VectorMap<size_t, Framework::ParameterBridge *> parameterMappings{};
 
 		bool isMaskExpanded_ = false;
 
