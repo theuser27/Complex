@@ -42,7 +42,12 @@ namespace Interface
 	protected:
 		std::unique_ptr<PinSlider> lowBound_ = nullptr;
 		std::unique_ptr<PinSlider> highBound_ = nullptr;
+		//gl_ptr<OpenGlQuad> highlight_ = nullptr;
 		gl_ptr<OpenGlImageComponent> highlight_ = nullptr;
 		gl_ptr<OpenGlCorners> roundedCorners_ = nullptr;
+
+		Colour primaryColour_{};
+		Colour secondaryColour_{};
+		Colour ternaryColour_{};
 	};
 }

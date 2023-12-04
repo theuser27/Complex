@@ -180,8 +180,11 @@ namespace Interface
 
 	void BaseSlider::mouseWheelMove(const MouseEvent &e, const MouseWheelDetails &wheel)
 	{
-		if (!isEnabled() || !canUseScrollWheel_)
+		if (!isEnabled() || (!canUseScrollWheel_ && !e.mods.isCtrlDown() && !e.mods.isCommandDown()))
+		{
+			BaseControl::mouseWheelMove(e, wheel);
 			return;
+		}
 
 		// sometimes duplicate wheel events seem to be sent, so since we're going to
 		// bump the value by a minimum of the interval, avoid doing this twice..
@@ -215,6 +218,8 @@ namespace Interface
 
 		if (isMapped)
 			parameterLink_->hostControl->endChangeGesture();
+
+		showPopup(true);
 	}
 
 	void BaseSlider::setValue(double newValue, NotificationType notification)

@@ -128,13 +128,10 @@ namespace Interface
 
 		Rectangle bounds{ drawBounds_.getWidth() + scaledAddedHitbox.getLeftAndRight(),
 			drawBounds_.getHeight() + scaledAddedHitbox.getTopAndBottom() };
-		bounds.setPosition(position - drawBounds_.getPosition() - Point{ scaledAddedHitbox.getLeft(), scaledAddedHitbox.getTop() });
+		bounds.setPosition(position - Point{ scaledAddedHitbox.getLeft(), scaledAddedHitbox.getTop() });
 
 		// offsetting the drawBounds and subsequently the extra elements bounds if origin position was changed
-		drawBounds_.setPosition(drawBounds_.getPosition() + Point{ scaledAddedHitbox.getLeft(), scaledAddedHitbox.getTop() });
-		for (auto &relativeBound : extraElements_.data)
-			relativeBound.second.setPosition(relativeBound.second.getPosition() + 
-				Point{ scaledAddedHitbox.getLeft(), scaledAddedHitbox.getTop() });
+		drawBounds_.setPosition(Point{ scaledAddedHitbox.getLeft(), scaledAddedHitbox.getTop() });
 
 		setBounds(bounds);
 	}

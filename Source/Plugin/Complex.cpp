@@ -10,6 +10,7 @@
 
 #include "Complex.h"
 #include "Interface/Components/BaseControl.h"
+#include "Renderer.h"
 
 namespace Plugin
 {
@@ -65,6 +66,14 @@ namespace Plugin
 		[[maybe_unused]] std::string_view parameterName, [[maybe_unused]] float value)
 	{
 		// TODO
+	}
+
+	Interface::Renderer &ComplexPlugin::getRenderer()
+	{
+		if (!rendererInstance_)
+			rendererInstance_ = std::make_unique<Interface::Renderer>(*this);
+		
+		return *rendererInstance_;
 	}
 
 	Generation::BaseProcessor *ComplexPlugin::deserialiseProcessor(

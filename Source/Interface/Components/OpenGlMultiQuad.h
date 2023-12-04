@@ -115,6 +115,11 @@ namespace Interface
 			if (reset)
 				currentAlphaMult_ = alpha;
 		}
+		void setStaticValues(float value, size_t valueIndex = 0) noexcept
+		{
+			COMPLEX_ASSERT(valueIndex < 4);
+			values_[valueIndex] = value;
+		}
 
 		void setDrawWhenNotVisible(bool draw) noexcept { drawWhenNotVisible_ = draw; }
 		void setCustomDrawBounds(Rectangle<int> bounds) noexcept { customDrawBounds_ = bounds; }
@@ -240,6 +245,7 @@ namespace Interface
 		float currentThickness_ = 1.0f;
 		float thickness_ = 1.0f;
 		float rounding_ = 5.0f;
+		float values_[4]{};
 
 		/*
 		 * data_ array indices per quad
@@ -264,6 +270,7 @@ namespace Interface
 		std::unique_ptr<OpenGLShaderProgram::Uniform> thumbAmountUniform_;
 		std::unique_ptr<OpenGLShaderProgram::Uniform> startPositionUniform_;
 		std::unique_ptr<OpenGLShaderProgram::Uniform> alphaMultUniform_;
+		std::unique_ptr<OpenGLShaderProgram::Uniform> valuesUniform_;
 		std::unique_ptr<OpenGLShaderProgram::Attribute> position_;
 		std::unique_ptr<OpenGLShaderProgram::Attribute> dimensions_;
 		std::unique_ptr<OpenGLShaderProgram::Attribute> coordinates_;
@@ -294,27 +301,7 @@ namespace Interface
 			animator_.setHoverIncrement(kHoverChange);
 		}
 
-		void render(OpenGlWrapper &openGl, bool animate) override
-		{
-			float lastHover = hoverAmount_;
-			hoverAmount_ = animator_.getValue(Animator::Hover);
-
-			if (lastHover != hoverAmount_)
-			{
-				if (shrinkLeft_)
-					setQuadHorizontal(0, -1.0f, 1.0f + hoverAmount_);
-				else
-					setQuadHorizontal(0, 0.0f - hoverAmount_, 1.0f + hoverAmount_);
-			}
-
-			Range<double> range = scrollBar_->getCurrentRange();
-			Range<double> totalRange = scrollBar_->getRangeLimit();
-			double startRatio = (range.getStart() - totalRange.getStart()) / totalRange.getLength();
-			double endRatio = (range.getEnd() - totalRange.getStart()) / totalRange.getLength();
-			setQuadVertical(0, 1.0f - 2.0f * (float)endRatio, 2.0f * (float)(endRatio - startRatio));
-
-			OpenGlMultiQuad::render(openGl, animate);
-		}
+		void render(OpenGlWrapper &openGl, bool animate) override;
 
 		void setShrinkLeft(bool shrinkLeft) { shrinkLeft_ = shrinkLeft; }
 		void setScrollBar(ScrollBar *scrollBar) { scrollBar_ = scrollBar; }
@@ -370,11 +357,21 @@ namespace Interface
 			bar_->setColor(color_);
 		}
 
+		void mouseWheelMove(const MouseEvent &e, const MouseWheelDetails &wheel) override
+		{
+			if (viewport_)
+				viewport_->mouseWheelMove(e, wheel);
+			else
+				Component::mouseWheelMove(e, wheel);
+		}
+
 		void setColor(Colour color) { color_ = color; bar_->setColor(color); }
 		void setShrinkLeft(bool shrink_left) { bar_->setShrinkLeft(shrink_left); }
+		void setViewport(Viewport *viewport) { viewport_ = viewport; }
 
 	private:
 		Colour color_;
+		Viewport *viewport_ = nullptr;
 		gl_ptr<OpenGlScrollQuad> bar_;
 	};
 

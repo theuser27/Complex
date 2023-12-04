@@ -11,43 +11,20 @@
 #pragma once
 
 #include "JuceHeader.h"
-#include "Framework/load_save.h"
-#include "../Sections/MainInterface.h"
 
 namespace Interface
 {
+  class MainInterface;
+
   class BorderBoundsConstrainer : public ComponentBoundsConstrainer
   {
   public:
     BorderBoundsConstrainer() = default;
 
     void checkBounds(Rectangle<int> &bounds, const Rectangle<int> &previous, const Rectangle<int> &limits,
-      bool isStretchingTop, bool isStretchingLeft, bool isStretchingBottom, bool isStretchingRight) override
-    {
+      bool isStretchingTop, bool isStretchingLeft, bool isStretchingBottom, bool isStretchingRight) override;
 
-
-      ComponentBoundsConstrainer::checkBounds(bounds, previous, limits,
-        isStretchingTop, isStretchingLeft, isStretchingBottom, isStretchingRight);
-
-      Rectangle<int> displayArea = Desktop::getInstance().getDisplays().getTotalBounds(true);
-      if (gui_)
-        if (auto *peer = gui_->getPeer())
-          peer->getFrameSize().subtractFrom(displayArea);
-      
-      // TODO: make resizing snap horizontally to the width of individual lanes 
-    }
-
-    void resizeEnd() override
-    {
-      if (!gui_)
-        return;
-
-      auto [unscaledWidth, unscaledHeight] = unscaleDimensions(gui_->getWidth(), gui_->getHeight(), gui_->getScaling());
-    	Framework::LoadSave::saveWindowSize(unscaledWidth, unscaledHeight);
-
-      if (resizableBorder_)
-        resizableBorder_->setBounds(gui_->getParentComponent()->getLocalBounds());
-    }
+    void resizeEnd() override;
 
     void setGui(MainInterface *gui) noexcept { gui_ = gui; }
     void setResizableBorder(ResizableBorderComponent *border) noexcept { resizableBorder_ = border; }

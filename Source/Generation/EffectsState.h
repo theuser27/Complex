@@ -52,7 +52,7 @@ namespace Generation
 
 		[[nodiscard]] BaseProcessor *createSubProcessor([[maybe_unused]] std::string_view type) const noexcept override
 		{
-			COMPLEX_ASSERT(Framework::BaseProcessors::BaseEffect::enum_value(type).has_value() &&
+			COMPLEX_ASSERT(Framework::BaseProcessors::BaseEffect::enum_value_by_id(type).has_value() &&
 				"You're trying to create a subProcessor for EffectsLane, that isn't EffectModule");
 			return makeSubProcessor<EffectModule>(type);
 		}

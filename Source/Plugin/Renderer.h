@@ -26,7 +26,7 @@ namespace Interface
   public:
     static constexpr double kMinOpenGlVersion = 1.4;
 
-    Renderer(Plugin::ComplexPlugin &plugin, AudioProcessorEditor &topLevelComponent);
+    Renderer(Plugin::ComplexPlugin &plugin);
     ~Renderer() override;
 
     void newOpenGLContextCreated() override;
@@ -35,7 +35,7 @@ namespace Interface
 
     void timerCallback() override { openGlContext_.triggerRepaint(); }
 
-    void startUI(Component &dummyComponent);
+    void startUI();
     void stopUI();
 
     void updateFullGui();
@@ -57,6 +57,8 @@ namespace Interface
     { openCleanupQueue_.emplace(openGlComponent); }
     MainInterface *getGui() noexcept;
     Skin *getSkin() noexcept;
+
+    void setEditor(AudioProcessorEditor *editor) noexcept { topLevelComponent_ = editor; }
 
   private:
     void doCleanupWork()
@@ -80,7 +82,7 @@ namespace Interface
     OpenGlWrapper openGl_{ openGlContext_ };
 
     Plugin::ComplexPlugin &plugin_;
-    AudioProcessorEditor &topLevelComponent_;
+    AudioProcessorEditor *topLevelComponent_;
     std::unique_ptr<MainInterface> gui_;
 
     friend class MainInterface;

@@ -15,6 +15,11 @@
 #include "Generation/SoundEngine.h"
 #include "ProcessorTree.h"
 
+namespace Interface
+{
+	class Renderer;
+}
+
 namespace Plugin
 {
 	class ComplexPlugin : public ProcessorTree
@@ -38,6 +43,8 @@ namespace Plugin
 		strict_inline auto &getParameterModulators() noexcept { return parameterModulators_; }
 		strict_inline auto &getSoundEngine() noexcept { return *soundEngine_; }
 
+		Interface::Renderer &getRenderer();
+
 	protected:
 		Generation::BaseProcessor *deserialiseProcessor(ProcessorTree *processorTree, std::string_view processorType);
 
@@ -46,5 +53,7 @@ namespace Plugin
 
 		std::vector<Framework::ParameterBridge *> parameterBridges_{};
 		std::vector<Framework::ParameterModulator *> parameterModulators_{};
+
+		std::unique_ptr<Interface::Renderer> rendererInstance_;
 	};
 }

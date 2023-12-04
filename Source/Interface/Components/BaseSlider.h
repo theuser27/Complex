@@ -82,6 +82,9 @@ namespace Interface
 
 		// ========================================================== Value related
 		auto getValue() const noexcept { return getValueSafe(); }
+		template<CommonConcepts::ParameterRepresentation T>
+		T getInternalValue(float sampleRate = kDefaultSampleRate, bool isNormalised = false) const noexcept 
+		{ return parameterLink_->parameter->getInternalValue<T>(sampleRate, isNormalised); }
 		void setValue(double newValue, NotificationType notification = sendNotificationSync);
 		void valueChanged() override
 		{

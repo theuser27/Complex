@@ -27,7 +27,7 @@ namespace Plugin
 		static constexpr float expandThreshold = 0.75f;
 
 		ProcessorTree() = default;
-		virtual ~ProcessorTree() = default;
+		virtual ~ProcessorTree();
 
 	public:
 		ProcessorTree(const ProcessorTree &) = delete;
@@ -82,6 +82,8 @@ namespace Plugin
 			return function();
 		}
 
+		bool isBeingDestroyed() const noexcept { return isBeingDestroyed_; }
+
 	protected:
 		// all plugin undo steps are stored here
 		UndoManager undoManager_{ 0, 100 };
@@ -94,6 +96,7 @@ namespace Plugin
 		// if any updates are supposed to happen to the processing tree/undoManager
 		// the thread needs to acquire this lock after checking that the updateFlag is set to AfterProcess
 		mutable std::atomic<bool> waitLock_ = false;
+		bool isBeingDestroyed_ = false;
 
 		// the reason for these being atomics is because idk which thread they might be updated on
 		std::atomic<u32> samplesPerBlock_{};

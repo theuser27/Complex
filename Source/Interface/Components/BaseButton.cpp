@@ -563,16 +563,18 @@ namespace Interface
 	}
 
 
-	OptionsButton::OptionsButton(Framework::ParameterValue *parameter, String name) : BaseButton(parameter)
+	OptionsButton::OptionsButton(Framework::ParameterValue *parameter, String name, String displayText) : BaseButton(parameter)
 	{
 		if (!parameter)
 			setName(name);
+
+		setText(std::move(displayText));
 
 		borderComponent_ = makeOpenGlComponent<OpenGlQuad>(Shaders::kRoundedRectangleBorderFragment, "Options Button Border");
 		borderComponent_->setTargetComponent(this);
 		plusComponent_ = makeOpenGlComponent<OpenGlQuad>(Shaders::kPlusFragment, "Options Button Plus Icon");
 		plusComponent_->setTargetComponent(this);
-		textComponent_ = makeOpenGlComponent<PlainTextComponent>("Options Button Text", "Add Modules");
+		textComponent_ = makeOpenGlComponent<PlainTextComponent>("Options Button Text", text_);
 		textComponent_->setTargetComponent(this);
 
 		components_.emplace_back(borderComponent_);
@@ -596,19 +598,23 @@ namespace Interface
 		borderComponent_->setRounding(parent_->scaleValue(kBorderRounding));
 		borderComponent_->setColor(borderColour_);
 		plusComponent_->setThickness(parent_->scaleValue(1.0f / (float)kPlusRelativeSize), true);
-		textComponent_->setText(text_);
+		plusComponent_->setColor(getColour(Skin::kNormalText));
 		textComponent_->setFontType(PlainTextComponent::kText);
-		textComponent_->setJustification(Justification::centredRight);
+		textComponent_->setJustification(Justification::centredLeft);
+		textComponent_->setText(text_);
 	}
 
 	void OptionsButton::setComponentsBounds()
 	{
-		borderComponent_->setBounds(drawBounds_);
+		borderComponent_->setCustomDrawBounds(drawBounds_);
 		int plusSize = parent_->scaleValueRoundInt(kPlusRelativeSize);
 		int halfHeight = drawBounds_.getHeight() / 2;
-		plusComponent_->setBounds(Rectangle{ plusSize, plusSize } + 
-			drawBounds_.getPosition() + Point{ halfHeight, halfHeight + 1 });
-		textComponent_->setBounds({ plusComponent_->getRight() + halfHeight, 0, getWidth() - plusComponent_->getRight() - halfHeight, getHeight() });
+		Rectangle plusBounds{ drawBounds_.getX() + halfHeight, drawBounds_.getY() + halfHeight - plusSize / 2, plusSize, plusSize };
+		plusComponent_->setCustomDrawBounds(plusBounds);
+		Rectangle textBounds{ plusBounds.getRight() + halfHeight, 0, getWidth() - plusBounds.getRight() - halfHeight, getHeight() };
+		textComponent_->setCustomDrawBounds(textBounds);
+
+		redoImage();
 	}
 
 }

@@ -105,7 +105,11 @@ void ComplexAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, [[ma
 bool ComplexAudioProcessor::hasEditor() const { return true; }
 
 juce::AudioProcessorEditor* ComplexAudioProcessor::createEditor()
-{ return new ComplexAudioProcessorEditor (*this); }
+{
+	auto *editor = new ComplexAudioProcessorEditor(*this);
+	rendererInstance_->setEditor(editor);
+	return editor;
+}
 
 //==============================================================================
 void ComplexAudioProcessor::getStateInformation ([[maybe_unused]] juce::MemoryBlock& destData)

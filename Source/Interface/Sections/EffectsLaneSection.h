@@ -31,14 +31,7 @@ namespace Interface
 		class EffectsContainer : public BaseSection
 		{
 		public:
-			EffectsContainer() : BaseSection(typeid(EffectsContainer).name())
-			{
-				setSkinOverride(Skin::kEffectsLane);
-
-				addModulesButton_ = std::make_unique<OptionsButton>(nullptr, "Add Modules Button");
-				addModulesButton_->removeLabel();
-				addControl(addModulesButton_.get());
-			}
+			EffectsContainer();
 
 			void buttonClicked(BaseButton *clickedButton) override;
 			void handlePopupResult(int selection) const;
@@ -51,19 +44,9 @@ namespace Interface
 			friend class EffectsLaneSection;
 		};
 
-		EffectsViewport() : Viewport(typeid(EffectsViewport).name())
-		{
-			container_.setAlwaysOnTop(true);
-			setViewedComponent(&container_);
-			addAndMakeVisible(&container_);
-		}
+		EffectsViewport();
 
-		void mouseWheelMove(const MouseEvent &e, const MouseWheelDetails &wheel) override
-		{
-			// TODO: if the user is holding ctrl (+ shift) and scrolling,
-			// redirect the scroll to the slider underneath if there is one
-			Viewport::mouseWheelMove(e, wheel);
-		}
+		void mouseWheelMove(const MouseEvent &e, const MouseWheelDetails &wheel) override;
 
 		void addListener(Listener *listener) { listeners_.push_back(listener); }
 		void visibleAreaChanged(const Rectangle<int> &visible_area) override
@@ -82,7 +65,7 @@ namespace Interface
 		friend class EffectsLaneSection;
 	};
 
-	class EffectsLaneSection : public ProcessorSection, public ScrollBar::Listener, EffectsViewport::Listener,
+	class EffectsLaneSection final : public ProcessorSection, public ScrollBar::Listener, EffectsViewport::Listener,
 		public Generation::BaseProcessor::Listener
 	{
 	public:
@@ -117,6 +100,8 @@ namespace Interface
 
 		void resized() override;
 
+		void mouseWheelMove(const MouseEvent &e, const MouseWheelDetails &wheel) override;
+
 		Rectangle<int> getPowerButtonBounds() const noexcept override
 		{
 			auto widthHeight = (int)std::round(scaleValue(kDefaultActivatorSize));
@@ -149,6 +134,7 @@ namespace Interface
 		void insertModule(size_t index, std::string_view newModuleType = {});
 		void insertModule(size_t index, EffectModuleSection *movedModule);
 		EffectModuleSection *deleteModule(size_t index, bool createUpdate = true);
+		EffectModuleSection *deleteModule(const EffectModuleSection *instance, bool createUpdate = true);
 		void moveModule(size_t oldIndex, size_t newIndex);
 
 		void setEffectPositions();
@@ -170,8 +156,8 @@ namespace Interface
 	private:
 		EffectsViewport viewport_{};
 
-		gl_ptr<OpenGlQuad> outerRectangle;
-		gl_ptr<OpenGlQuad> innerRectangle;
+		gl_ptr<OpenGlQuad> outerRectangle_;
+		gl_ptr<OpenGlQuad> innerRectangle_;
 		gl_ptr<PlainTextComponent> laneTitle_;
 		OpenGlScrollBar scrollBar_{};
 		std::vector<EffectModuleSection *> effectModules_{};

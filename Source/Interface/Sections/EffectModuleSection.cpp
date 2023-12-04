@@ -12,6 +12,7 @@
 #include "Generation/EffectModules.h"
 #include "Interface/LookAndFeel/Paths.h"
 #include "EffectModuleSection.h"
+#include "EffectsLaneSection.h"
 
 namespace Interface
 {
@@ -42,6 +43,19 @@ namespace Interface
 		Framework::ParameterValue *highBound, Framework::ParameterValue *shiftBounds) : PinBoundsBox("Spectral Mask", lowBound, highBound)
 	{
 		using namespace Framework;
+
+		/*highlight_->setCustomRenderFunction([this](OpenGlWrapper &openGl, bool animate)
+			{
+				simd_float shiftValues = shiftBounds_->getInternalValue<simd_float>(kDefaultSampleRate);
+				simd_float lowValues = simd_float::clamp(lowBound_->getInternalValue<simd_float>(kDefaultSampleRate, true) + shiftValues, 0.0f, 1.0f);
+				simd_float highValues = simd_float::clamp(highBound_->getInternalValue<simd_float>(kDefaultSampleRate, true) + shiftValues, 0.0f, 1.0f);
+				highlight_->setStaticValues(lowValues[0], 0);
+				highlight_->setStaticValues(lowValues[2], 1);
+				highlight_->setStaticValues(highValues[0], 2);
+				highlight_->setStaticValues(highValues[2], 3);
+
+				highlight_->render(openGl, animate);
+			});*/
 
 		setInterceptsMouseClicks(true, true);
 
@@ -79,18 +93,25 @@ namespace Interface
 		if (shiftBounds_.get() == slider)
 		{
 			highlight_->redrawImage();
+			//simd_float shiftValues = shiftBounds_->getInternalValue<simd_float>(kDefaultSampleRate);
+			//simd_float lowValues = simd_float::clamp(lowBound_->getInternalValue<simd_float>(kDefaultSampleRate, true) + shiftValues, 0.0f, 1.0f);
+			//simd_float highValues = simd_float::clamp(highBound_->getInternalValue<simd_float>(kDefaultSampleRate, true) + shiftValues, 0.0f, 1.0f);
+			//highlight_->setStaticValues(lowValues[0], 0);
+			//highlight_->setStaticValues(lowValues[2], 1);
+			//highlight_->setStaticValues(highValues[0], 2);
+			//highlight_->setStaticValues(highValues[2], 3);
 			return;
 		}
 
 		PinBoundsBox::sliderValueChanged(slider);
 	}
 
-	EffectModuleSection::EffectModuleSection(Generation::EffectModule *effectModule) :
-		ProcessorSection(typeid(EffectModuleSection).name(), effectModule), effectModule_(effectModule)
+	EffectModuleSection::EffectModuleSection(Generation::EffectModule *effectModule, EffectsLaneSection *laneSection) :
+		ProcessorSection(typeid(EffectModuleSection).name(), effectModule), laneSection_(laneSection), effectModule_(effectModule)
 	{
 		using namespace Framework;
 
-		setInterceptsMouseClicks(false, true);
+		setInterceptsMouseClicks(true, true);
 
 		draggableBox_.setDraggedComponent(this);
 		addAndMakeVisible(draggableBox_);
@@ -147,7 +168,7 @@ namespace Interface
 	{
 		auto copiedModule = utils::as<Generation::EffectModule *>(effectModule_
 			->getProcessorTree()->copyProcessor(effectModule_));
-		return std::make_unique<EffectModuleSection>(copiedModule);
+		return std::make_unique<EffectModuleSection>(copiedModule, laneSection_);
 	}
 
 	void EffectModuleSection::resized()
@@ -157,6 +178,23 @@ namespace Interface
 		arrangeHeader();
 		arrangeUI();
 		repaintBackground();
+	}
+
+	void EffectModuleSection::mouseDown(const MouseEvent &e)
+	{
+		if (!e.mods.isPopupMenu())
+			return;
+
+		int topMenuHeight = scaleValueRoundInt(kTopMenuHeight);
+		int yOffset = getYMaskOffset();
+		Rectangle dropdownHitbox{ 0, yOffset, getWidth(), topMenuHeight };
+
+		if (!dropdownHitbox.contains(e.getPosition()) && !e.mods.isPopupMenu())
+			return;
+
+		PopupItems options = createPopupMenu();
+		parent_->showPopupSelector(this, e.getPosition(), std::move(options),
+			[this](int selection) { handlePopupResult(selection); });
 	}
 
 	void EffectModuleSection::arrangeHeader()
@@ -305,6 +343,33 @@ namespace Interface
 			parameterMappings.add(index, (*controlIter)->getParameterLink()->hostControl);
 		else
 			parameterMappings.erase(parameterIter);
+	}
+
+	void EffectModuleSection::handlePopupResult(int result) const noexcept
+	{
+		if (result == kDeleteInstance)
+		{
+			laneSection_->deleteModule(this, true);
+		}
+		else if (result == kCopyInstance)
+		{
+			// TODO: copy right click option on EffectModuleSection
+		}
+		else if (result == kInitInstance)
+		{
+			// TODO: initialisation right click option on EffectModuleSection
+		}
+	}
+
+	PopupItems EffectModuleSection::createPopupMenu() const noexcept
+	{
+		PopupItems options{ getName().toStdString() };
+
+		options.addItem(kDeleteInstance, "Delete");
+		options.addItem(kCopyInstance, "Copy (TODO)");
+		options.addItem(kInitInstance, "Re-initialise");
+
+		return options;
 	}
 
 	void EffectModuleSection::changeEffect()

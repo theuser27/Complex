@@ -85,6 +85,8 @@
       </GROUP>
       <GROUP id="{F4BA8DFF-28C8-EF00-62C9-202FF4771AD8}" name="Interface">
         <GROUP id="{4D931D97-4A4F-8153-12B4-A9C0FA52764F}" name="LookAndFeel">
+          <FILE id="R1Bxgg" name="BorderBoundsConstrainer.cpp" compile="1" resource="0"
+                file="Source/Interface/LookAndFeel/BorderBoundsConstrainer.cpp"/>
           <FILE id="cTL9sp" name="BorderBoundsConstrainer.h" compile="0" resource="0"
                 file="Source/Interface/LookAndFeel/BorderBoundsConstrainer.h"/>
           <FILE id="jW8pVp" name="DefaultLookAndFeel.cpp" compile="1" resource="0"

@@ -131,6 +131,14 @@ namespace Interface
   {
     texture_.release();
 
+    // preparing the image for next time if openGl reinitialises this object
+    if (ownedImage_)
+    {
+      mutex_.lock();
+      setImage(ownedImage_.get());
+      mutex_.unlock();
+    }
+
     imageShader_ = nullptr;
     imageColor_ = nullptr;
     imagePosition_ = nullptr;

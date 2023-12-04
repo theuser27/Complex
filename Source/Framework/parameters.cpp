@@ -157,7 +157,7 @@ namespace Framework
 		template<nested_enum::NestedEnum E>
 		constexpr size_t addMultipleParametersToMap(auto &map, const auto &parameterList, size_t mapIndex)
 		{
-			constexpr auto enumStrings = utils::tupleOfArraysToArray(E::template enum_strings_recursive<nested_enum::OuterNodes, true, false>());
+			constexpr auto enumStrings = E::template enum_strings_recursive<nested_enum::OuterNodes, true, false>();
 
 			for (size_t i = 0; i < enumStrings.size(); i++)
 				map.data[i + mapIndex] = std::pair{ std::pair{ parameterList[i].id, enumStrings[i] }, parameterList[i] };

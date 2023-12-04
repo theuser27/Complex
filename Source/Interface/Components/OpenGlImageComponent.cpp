@@ -13,15 +13,26 @@
 
 namespace Interface
 {
+  OpenGlImageComponent::OpenGlImageComponent(String name) : OpenGlComponent(std::move(name))
+  {
+    image_.setTopLeft(-1.0f, 1.0f);
+    image_.setTopRight(1.0f, 1.0f);
+    image_.setBottomLeft(-1.0f, -1.0f);
+    image_.setBottomRight(1.0f, -1.0f);
+    image_.setColor(Colours::white);
+
+    setInterceptsMouseClicks(false, false);
+  }
+
   void OpenGlImageComponent::redrawImage(bool clearOnRedraw)
   {
     if (!active_)
       return;
 
     Component *component = targetComponent_ ? targetComponent_ : this;
-
-    int width = component->getWidth();
-    int height = component->getHeight();
+    auto bounds = (!customDrawBounds_.isEmpty()) ? customDrawBounds_ : component->getLocalBounds();
+    int width = bounds.getWidth();
+    int height = bounds.getHeight();
     if (width <= 0 || height <= 0)
       return;
 
@@ -52,8 +63,9 @@ namespace Interface
 
   void OpenGlImageComponent::render(OpenGlWrapper &openGl, bool animate)
   {
-    Component *targetComponent = targetComponent_ ? targetComponent_ : this;
-    if (!active_ || !setViewPort(targetComponent, openGl) || !targetComponent->isVisible())
+    Component *component = targetComponent_ ? targetComponent_ : this;
+    auto bounds = (!customDrawBounds_.isEmpty()) ? customDrawBounds_ : component->getLocalBounds();
+    if (!active_ || !component->isVisible() || !setViewPort(component, bounds, openGl))
       return;
 
     image_.render(openGl, animate);

@@ -300,8 +300,11 @@ namespace Interface
 
 		void deinitialise()
 		{
-			component_->destroy();
-			controlBlock_->isInitialised.store(false, std::memory_order_release);
+			if (controlBlock_->isInitialised.load(std::memory_order_acquire))
+			{
+				component_->destroy();
+				controlBlock_->isInitialised.store(false, std::memory_order_release);
+			}
 		}
 
 		T *get() const noexcept { return component_; }

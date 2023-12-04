@@ -52,6 +52,7 @@ namespace Interface
 			kVerticalSliderFragment,
 			kPinSliderFragment,
 			kPlusFragment,
+			kHighlightFragment,
 			kDotSliderFragment,
 			kLinearModulationFragment,
 			kModulationKnobFragment,

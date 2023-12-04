@@ -31,6 +31,7 @@ namespace Framework
 			std::atomic<bool> temp{};
 			return utils::ScopedSpinLock{ temp };
 		};
+		bool isDone_ = false;
 	};
 	
 	class AddProcessorUpdate : public WaitingUpdate
@@ -41,7 +42,11 @@ namespace Framework
 			newSubProcessorType_(newSubProcessorType), destinationProcessorId_(destinationProcessorId),
 			destinationSubProcessorIndex_(destinationSubProcessorIndex) { }
 
-		~AddProcessorUpdate() override { if (addedProcessor_) processorTree_->deleteProcessor(addedProcessor_->getProcessorId()); }
+		~AddProcessorUpdate() override
+		{
+			if (!processorTree_->isBeingDestroyed() && addedProcessor_ && !isDone_)
+				processorTree_->deleteProcessor(addedProcessor_->getProcessorId());
+		}
 
 		bool perform() override;
 		bool undo() override;
@@ -64,7 +69,11 @@ namespace Framework
 			processorCopy(processorCopy), destinationProcessorId_(destinationProcessorId),
 			destinationSubProcessorIndex_(destinationSubProcessorIndex) { }
 
-		~CopyProcessorUpdate() override { processorTree_->deleteProcessor(processorCopy.getProcessorId()); }
+		~CopyProcessorUpdate() override
+		{
+			if (!processorTree_->isBeingDestroyed() && !isDone_)
+				processorTree_->deleteProcessor(processorCopy.getProcessorId());
+		}
 
 		bool perform() override;
 		bool undo() override;
@@ -107,7 +116,11 @@ namespace Framework
 			newSubProcessorType_(newSubProcessorType), destinationProcessorId_(destinationProcessorId),
 			destinationSubProcessorIndex_(destinationSubProcessorIndex) { }
 
-		~UpdateProcessorUpdate() override { if (savedProcessor_) processorTree_->deleteProcessor(savedProcessor_->getProcessorId()); }
+		~UpdateProcessorUpdate() override
+		{
+			if (!processorTree_->isBeingDestroyed() && savedProcessor_)
+				processorTree_->deleteProcessor(savedProcessor_->getProcessorId());
+		}
 
 		bool perform() override;
 		bool undo() override;
@@ -129,7 +142,11 @@ namespace Framework
 			size_t destinationSubProcessorIndex) noexcept : processorTree_(processorTree),
 			destinationProcessorId_(destinationProcessorId), destinationSubProcessorIndex_(destinationSubProcessorIndex) { }
 
-		~DeleteProcessorUpdate() override { if (deletedProcessor_) processorTree_->deleteProcessor(deletedProcessor_->getProcessorId()); }
+		~DeleteProcessorUpdate() override
+		{
+			if (!processorTree_->isBeingDestroyed() && deletedProcessor_ && isDone_)
+				processorTree_->deleteProcessor(deletedProcessor_->getProcessorId());
+		}
 
 		bool perform() override;
 		bool undo() override;

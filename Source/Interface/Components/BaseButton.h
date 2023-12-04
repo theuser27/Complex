@@ -259,10 +259,10 @@ namespace Interface
 	class OptionsButton final : public BaseButton
 	{
 	public:
-		static constexpr float kPlusRelativeSize = 6;
+		static constexpr float kPlusRelativeSize = 7;
 		static constexpr float kBorderRounding = 8.0f;
 
-		OptionsButton(Framework::ParameterValue *parameter, String name = {});
+		OptionsButton(Framework::ParameterValue *parameter, String name = {}, String displayText = {});
 
 		void setColours() override;
 		Rectangle<int> getBoundsForSizes(int height, int width) override;

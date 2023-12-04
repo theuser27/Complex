@@ -72,6 +72,7 @@ namespace Interface
 		thumbAmountUniform_ = getUniform(*shader_, "thumb_amount");
 		startPositionUniform_ = getUniform(*shader_, "start_pos");
 		alphaMultUniform_ = getUniform(*shader_, "alpha_mult");
+		valuesUniform_ = getUniform(*shader_, "static_values");
 	}
 
 	void OpenGlMultiQuad::destroy()
@@ -91,6 +92,7 @@ namespace Interface
 		thumbAmountUniform_ = nullptr;
 		startPositionUniform_ = nullptr;
 		alphaMultUniform_ = nullptr;
+		valuesUniform_ = nullptr;
 		glDeleteBuffers(1, &vertexBuffer_);
 		glDeleteBuffers(1, &indicesBuffer_);
 
@@ -184,6 +186,9 @@ namespace Interface
 		if (maxArcUniform_)
 			maxArcUniform_->set(maxArc_);
 
+		if (valuesUniform_)
+			valuesUniform_->set(values_[0], values_[1], values_[2], values_[3]);
+
 		glBindBuffer(GL_ARRAY_BUFFER, vertexBuffer_);
 		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, indicesBuffer_);
 
@@ -223,5 +228,28 @@ namespace Interface
 		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
 		glDisable(GL_BLEND);
 		glDisable(GL_SCISSOR_TEST);
+	}
+	
+	void OpenGlScrollQuad::render(OpenGlWrapper &openGl, bool animate)
+	{
+		float lastHover = hoverAmount_;
+		animator_.tick();
+		hoverAmount_ = animator_.getValue(Animator::Hover);
+
+		if (lastHover != hoverAmount_)
+		{
+			if (shrinkLeft_)
+				setQuadHorizontal(0, -1.0f, 1.0f + hoverAmount_);
+			else
+				setQuadHorizontal(0, 0.0f - hoverAmount_, 1.0f + hoverAmount_);
+		}
+
+		Range<double> range = scrollBar_->getCurrentRange();
+		Range<double> totalRange = scrollBar_->getRangeLimit();
+		double startRatio = (range.getStart() - totalRange.getStart()) / totalRange.getLength();
+		double endRatio = (range.getEnd() - totalRange.getStart()) / totalRange.getLength();
+		setQuadVertical(0, 1.0f - 2.0f * (float)endRatio, 2.0f * (float)(endRatio - startRatio));
+
+		OpenGlMultiQuad::render(openGl, animate);
 	}
 }

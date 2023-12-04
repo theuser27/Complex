@@ -48,10 +48,21 @@ namespace Interface
 		bool isExpanded_ = false;
 	};
 
+	class EffectsLaneSection;
+
 	class EffectModuleSection final : public ProcessorSection, public SpectralMaskComponent::SpectralMaskListener,
 		public Generation::BaseProcessor::Listener
 	{
 	public:
+		enum MenuId
+		{
+			kCancel = 0,
+			kDeleteInstance,
+			kCopyInstance,
+			kInitInstance
+		};
+
+
 		static constexpr int kSpectralMaskContractedHeight = 20;
 		static constexpr int kSpectralMaskExpandedHeight = 92;
 		static constexpr int kSpectralMaskMargin = 2;
@@ -72,11 +83,13 @@ namespace Interface
 		static constexpr int kMainBodyHeight = 144;
 		static constexpr int kMinHeight = kSpectralMaskContractedHeight + kSpectralMaskMargin + kMainBodyHeight;
 
-		EffectModuleSection(Generation::EffectModule *effectModule);
+		EffectModuleSection(Generation::EffectModule *effectModule, EffectsLaneSection *laneSection);
 		~EffectModuleSection() override;
 		std::unique_ptr<EffectModuleSection> createCopy() const;
 
 		void resized() override;
+
+		void mouseDown(const MouseEvent &e) override;
 
 		void paintBackground(Graphics &g) override;
 
@@ -162,7 +175,10 @@ namespace Interface
 		Rectangle<int> getUIBounds() const noexcept
 		{ return getLocalBounds().withTop(getYMaskOffset() + scaleValueRoundInt(kTopMenuHeight) + 1); }
 
+		void handlePopupResult(int result) const noexcept;
 	protected:
+		PopupItems createPopupMenu() const noexcept;
+
 		void changeEffect();
 		void setEffectType(std::string_view type);
 
@@ -182,6 +198,7 @@ namespace Interface
 		std::unique_ptr<TextSelector> effectAlgoSelector_ = nullptr;
 		std::unique_ptr<SpectralMaskComponent> maskComponent_ = nullptr;
 
+		EffectsLaneSection *laneSection_ = nullptr;
 		Generation::EffectModule *effectModule_ = nullptr;
 		std::array<Generation::baseEffect *, Framework::BaseProcessors::BaseEffect::enum_count(nested_enum::InnerNodes)> cachedEffects_{};
 		std::vector<std::unique_ptr<BaseControl>> effectControls_{};

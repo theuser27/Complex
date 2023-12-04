@@ -9,18 +9,19 @@
 #include "PluginProcessor.h"
 #include "PluginEditor.h"
 #include "Interface/LookAndFeel/DefaultLookAndFeel.h"
+#include "Framework/load_save.h"
+#include "Interface/Sections/MainInterface.h"
 
 //==============================================================================
 ComplexAudioProcessorEditor::ComplexAudioProcessorEditor (ComplexAudioProcessor& p)
-	: AudioProcessorEditor (&p), audioProcessor_(p), renderer_(p, *this)
+	: AudioProcessorEditor (p), renderer_(p.getRenderer())
 {
 	using namespace Interface;
 	using namespace Framework;
 
 	setLookAndFeel(DefaultLookAndFeel::instance());
-	addAndMakeVisible(dummyComponent_);
 
-	renderer_.startUI(dummyComponent_);
+	renderer_.startUI();
 	auto *gui = renderer_.getGui();
 	addAndMakeVisible(gui);
 
@@ -50,12 +51,11 @@ ComplexAudioProcessorEditor::~ComplexAudioProcessorEditor()
 	Framework::LoadSave::saveWindowSize((int)std::round(unscaledWidth), (int)std::round(unscaledHeight));
 
 	renderer_.stopUI();
+	removeChildComponent(renderer_.getGui());
 }
 
 void ComplexAudioProcessorEditor::resized()
 {
-	AudioProcessorEditor::resized();
-	dummyComponent_.setSize(1, 1);
 	renderer_.getGui()->setBounds(getLocalBounds());
 }
 

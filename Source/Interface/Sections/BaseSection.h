@@ -152,7 +152,7 @@ namespace Interface
 		auto *getControl(nested_enum::NestedEnum auto enumValue) { return controls_.at(enumValue.enum_string(false)); }
 
 		void setSkinOverride(Skin::SectionOverride skinOverride) noexcept { skinOverride_ = skinOverride; }
-		void setParent(const BaseSection *parent) noexcept { parent_ = parent; }
+		void setParent(BaseSection *parent) noexcept { parent_ = parent; }
 		void setRenderer(Renderer *renderer) noexcept
 		{
 			renderer_ = renderer;
@@ -197,7 +197,7 @@ namespace Interface
 		PowerButton *activator_ = nullptr;
 
 		Renderer *renderer_ = nullptr;
-		const BaseSection *parent_ = nullptr;
+		BaseSection *parent_ = nullptr;
 
 		Skin::SectionOverride skinOverride_ = Skin::kNone;
 		float scaling_ = 1.0f;

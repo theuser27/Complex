@@ -27,6 +27,8 @@ namespace Framework
 		auto g = wait();
 		destinationPointer->insertSubProcessor(destinationSubProcessorIndex_, addedProcessor_);
 
+		isDone_ = true;
+
 		return true;
 	}
 
@@ -36,6 +38,8 @@ namespace Framework
 
 		auto g = wait();
 		addedProcessor_ = destinationPointer->deleteSubProcessor(destinationSubProcessorIndex_);
+
+		isDone_ = false;
 
 		return true;
 	}
@@ -47,6 +51,8 @@ namespace Framework
 		auto g = wait();
 		destinationPointer->insertSubProcessor(destinationSubProcessorIndex_, &processorCopy);
 
+		isDone_ = true;
+
 		return true;
 	}
 
@@ -56,6 +62,8 @@ namespace Framework
 
 		auto g = wait();
 		destinationPointer->deleteSubProcessor(destinationSubProcessorIndex_);
+
+		isDone_ = false;
 
 		return true;
 	}
@@ -115,6 +123,8 @@ namespace Framework
 		auto g = wait();
 		deletedProcessor_ = destinationPointer->deleteSubProcessor(destinationSubProcessorIndex_);
 
+		isDone_ = true;
+
 		return true;
 	}
 
@@ -124,6 +134,8 @@ namespace Framework
 
 		auto g = wait();
 		destinationPointer->insertSubProcessor(destinationSubProcessorIndex_, deletedProcessor_);
+
+		isDone_ = false;
 
 		return true;
 	}

@@ -74,24 +74,6 @@ namespace Generation
 		E getEffectAlgorithm() const
 		{ return E::make_enum(getParameter(Framework::BaseProcessors::BaseEffect::Algorithm::self())->getInternalValue<u32>()).value(); }
 
-		/*template<commonConcepts::Enum E>
-		void updateParameterDetails()
-		{
-			using namespace Framework;
-			constexpr auto enumValues = magic_enum::enum_values<E>();
-			auto updateParameters = [&]()
-			{
-				for (size_t i = 0; i < enumValues.size(); i++)
-				{
-					ParameterDetails details = Parameters::getDetails<E>(enumValues[i]);
-					processorParameters_[i + magic_enum::enum_count<BaseEffectParameters>()]->setParameterDetails(details);
-					processorParameters_.updateKey(i + magic_enum::enum_count<BaseEffectParameters>(), 
-						Parameters::getEnumString(enumValues[i]));
-				}
-			};
-			getProcessorTree()->executeOutsideProcessing(updateParameters);
-		}*/
-
 	protected:
 		[[nodiscard]] BaseProcessor *createCopy([[maybe_unused]] std::optional<u64> parentModuleId) const noexcept override
 		{ COMPLEX_ASSERT_FALSE("This type cannot be copied directly, you need a derived type"); return nullptr; }
@@ -233,6 +215,7 @@ namespace Generation
 		// 
 		// 
 		// Regular - triangles, squares, saws, pointy, sweep and custom, razor comb peak
+		// Regular key tracked - regular filtering based on fundamental frequency (like dtblkfx autoharm)
 		// 
 		// TODO: write a constexpr generator for all of the weird mask types (triangle, saw, square, etc)
 	};

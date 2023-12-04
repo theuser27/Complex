@@ -24,16 +24,7 @@ namespace Interface
   class OpenGlImageComponent : public OpenGlComponent
   {
   public:
-    OpenGlImageComponent(String name = "") : OpenGlComponent(std::move(name))
-    {
-      image_.setTopLeft(-1.0f, 1.0f);
-      image_.setTopRight(1.0f, 1.0f);
-      image_.setBottomLeft(-1.0f, -1.0f);
-      image_.setBottomRight(1.0f, -1.0f);
-      image_.setColor(Colours::white);
-
-      setInterceptsMouseClicks(false, false);
-    }
+    OpenGlImageComponent(String name = "");
 
     void paintBackground([[maybe_unused]] Graphics &g) override { }
     
@@ -46,11 +37,19 @@ namespace Interface
         target->paint(g);
     }
 
-    void init(OpenGlWrapper &openGl) override { image_.init(openGl); }
+    void init(OpenGlWrapper &openGl) override
+    {
+      image_.init(openGl);
+      image_.lock();
+      if (drawImage_)
+        image_.setImage(drawImage_.get());
+      image_.unlock();
+    }
     void render(OpenGlWrapper &openGl, bool animate) override;
     void destroy() override { image_.destroy(); }
 
     void setTargetComponent(Component *targetComponent) { targetComponent_ = targetComponent; }
+    void setCustomDrawBounds(Rectangle<int> customDrawBounds) { customDrawBounds_ = customDrawBounds; }
     void setScissor(bool scissor) { image_.setScissor(scissor); }
     void setUseAlpha(bool useAlpha) { image_.setUseAlpha(useAlpha); }
     void setColor(Colour color) { image_.setColor(color); }
@@ -61,6 +60,7 @@ namespace Interface
 
   protected:
     Component *targetComponent_ = nullptr;
+    Rectangle<int> customDrawBounds_{};
     bool active_ = true;
     bool staticImage_ = false;
     bool paintEntireComponent_ = true;

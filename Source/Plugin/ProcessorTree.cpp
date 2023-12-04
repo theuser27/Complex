@@ -13,6 +13,12 @@
 
 namespace Plugin
 {
+	ProcessorTree::~ProcessorTree()
+	{
+		isBeingDestroyed_ = true;
+		//undoManager_.~UndoManager();
+	}
+
 	u64 ProcessorTree::getId(Generation::BaseProcessor *newModulePointer, bool isRootModule) noexcept
 	{
 		if (isRootModule)

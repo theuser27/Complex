@@ -19,8 +19,24 @@ namespace Interface
 
 		setInterceptsMouseClicks(false, true);
 
+		//highlight_ = makeOpenGlComponent<OpenGlQuad>(Shaders::kHighlightFragment, "highlight");
 		highlight_ = makeOpenGlComponent<OpenGlImageComponent>("highlight");
 		addOpenGlComponent(highlight_);
+		/*highlight_->setCustomRenderFunction([this](OpenGlWrapper &openGl, bool animate)
+			{
+				simd_float lowValues = lowBound_->getInternalValue<simd_float>(kDefaultSampleRate, true);
+				simd_float highValues = highBound_->getInternalValue<simd_float>(kDefaultSampleRate, true);
+				highlight_->setStaticValues(lowValues[0], 0);
+				highlight_->setStaticValues(lowValues[2], 1);
+				highlight_->setStaticValues(highValues[0], 2);
+				highlight_->setStaticValues(highValues[2], 3);
+
+				highlight_->setColor(primaryColour_);
+				highlight_->setAltColor(secondaryColour_);
+				highlight_->setModColor(ternaryColour_);
+
+				highlight_->render(openGl, animate);
+			});*/
 		highlight_->setTargetComponent(this);
 		highlight_->paintEntireComponent(false);
 		highlight_->setInterceptsMouseClicks(false, false);
@@ -52,6 +68,14 @@ namespace Interface
 
 	void PinBoundsBox::resized()
 	{
+		primaryColour_ = getColour(Skin::kWidgetPrimary1).withAlpha(0.15f);
+		secondaryColour_ = getColour(Skin::kModulationMeterLeft).withAlpha(0.15f);
+		ternaryColour_ = getColour(Skin::kModulationMeterRight).withAlpha(0.15f);
+
+		//highlight_->setColor(primaryColour_);
+		//highlight_->setAltColor(secondaryColour_);
+		//highlight_->setModColor(ternaryColour_);
+		
 		highlight_->setBounds(0, 0, getWidth(), getHeight());
 
 		positionSliders();
@@ -80,6 +104,12 @@ namespace Interface
 		highBound_->setOverallBounds({ highBoundPosition - highBoundWidth / 2, 0 });
 		highBound_->setTotalRange(width);
 
+		//simd_float lowValues = lowBound_->getInternalValue<simd_float>(kDefaultSampleRate, true);
+		//simd_float highValues = highBound_->getInternalValue<simd_float>(kDefaultSampleRate, true);
+		//highlight_->setStaticValues(lowValues[0], 0);
+		//highlight_->setStaticValues(lowValues[2], 1);
+		//highlight_->setStaticValues(highValues[0], 2);
+		//highlight_->setStaticValues(highValues[2], 3);
 		highlight_->redrawImage();
 	}
 

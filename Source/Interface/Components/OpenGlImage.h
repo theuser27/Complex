@@ -77,7 +77,7 @@ namespace Interface
     OpenGLTexture texture_;
     bool additive_ = false;
     bool useAlpha_ = false;
-    bool scissor_ = false;
+    bool scissor_ = true;
 
     OpenGLShaderProgram *imageShader_ = nullptr;
     std::unique_ptr<OpenGLShaderProgram::Uniform> imageColor_;

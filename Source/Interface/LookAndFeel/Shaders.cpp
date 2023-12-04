@@ -22,9 +22,14 @@ namespace
 		#define LOWP
 	#endif
 
-#define CONSTRAIN_AXIS_FUNCTION \
-		"float constrainAxis(float normAxis, float constraint, float offset) {\n" \
+	#define CONSTRAIN_AXIS_FUNCTION																								\
+		"float constrainAxis(float normAxis, float constraint, float offset) {\n"		\
 		"    return clamp(ceil(-abs(normAxis + offset) + constraint), 0.0, 1.0);\n" \
+		"}\n"
+
+	#define CONSTRAIN_AXIS_VEC2_FUNCTION																					\
+		"vec2 constrainAxis(vec2 normAxis, vec2 constraint, vec2 offset) {\n"				\
+		"    return clamp(ceil(-abs(normAxis + offset) + constraint), 0.0, 1.0);\n"	\
 		"}\n"
 
 	const char *kImageVertexShader =
@@ -422,11 +427,10 @@ namespace
 		"    gl_FragColor.a = color.a * alpha;\n"
 		"}\n";
 
-	// thumb_amount is plus thickness (width / dimensions)
+	// plus thickness is (width / dimensions)
 	const char *kPlusFragmentShader =
 		"uniform " MEDIUMP " vec4 color;\n"
 		"uniform " MEDIUMP " float thickness;\n"
-		"varying " MEDIUMP " vec2 dimensions_out;\n"
 		"varying " MEDIUMP " vec2 coordinates_out;\n"
 		CONSTRAIN_AXIS_FUNCTION
 		"\n"
@@ -440,6 +444,25 @@ namespace
 		"    float alpha = (1.0 - xAlpha1 - xAlpha2) + (1.0 - yAlpha1 - yAlpha2);\n"
 		"    gl_FragColor = color;\n"
 		"    gl_FragColor.a = color.a * alpha;\n"
+		"}\n";
+
+	const char *kHighlightFragmentShader =
+		"uniform " MEDIUMP " vec4 color;\n"
+		"uniform " MEDIUMP " vec4 alt_color;\n"
+		"uniform " MEDIUMP " vec4 mod_color;\n"
+		"uniform " MEDIUMP " vec4 static_values;\n"
+		"varying " MEDIUMP " vec2 coordinates_out;\n"
+		"\n"
+		"void main() {\n"
+		"    vec2 coordinates_out_norm = (coordinates_out * 0.5) + 0.5;\n"
+		"    float normLeftBound = static_values.x;\n"
+		"    float normRightBound = static_values.z;\n"
+		"    float areBoundsSwitched = sign(normLeftBound - normRightBound) * 0.5 + 0.5;\n"
+		"    float pinXAlpha1 = clamp(ceil(-abs(coordinates_out_norm.x) + normLeftBound), 0.0, 1.0);\n"
+		"    float pinXAlpha2 = clamp(ceil(-abs(-coordinates_out_norm.x + 1.0) + 1.0 - normRightBound), 0.0, 1.0);\n"
+		"    float alpha = (areBoundsSwitched + 1.0 - pinXAlpha1 - pinXAlpha2);\n"
+		"    gl_FragColor = color;\n"
+		"    gl_FragColor.a *= alpha;\n"
 		"}\n";
 
 	// modulation knob when hovered over a control
@@ -723,6 +746,8 @@ namespace Interface
 			return kPinSliderFragmentShader;
 		case kPlusFragment:
 			return kPlusFragmentShader;
+		case kHighlightFragment:
+			return kHighlightFragmentShader;
 		case kDotSliderFragment:
 			return kDotSliderFragmentShader;
 		case kLinearModulationFragment:

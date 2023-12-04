@@ -16,8 +16,13 @@
 
 namespace Interface
 {
-	Renderer::Renderer(Plugin::ComplexPlugin &plugin, AudioProcessorEditor &topLevelComponent) : 
-		plugin_(plugin), topLevelComponent_(topLevelComponent) { }
+	Renderer::Renderer(Plugin::ComplexPlugin &plugin) : plugin_(plugin)
+	{
+		skinInstance_ = std::make_unique<Skin>();
+		skinInstance_->copyValuesToLookAndFeel(DefaultLookAndFeel::instance());
+
+		gui_ = std::make_unique<MainInterface>(this);
+	}
 
 	Renderer::~Renderer() = default;
 
@@ -62,13 +67,8 @@ namespace Interface
 		shaders_ = nullptr;
 	}
 
-	void Renderer::startUI([[maybe_unused]] Component &dummyComponent)
+	void Renderer::startUI()
 	{
-		skinInstance_ = std::make_unique<Skin>();
-		skinInstance_->copyValuesToLookAndFeel(DefaultLookAndFeel::instance());
-
-		gui_ = std::make_unique<MainInterface>(this);
-
 		openGlContext_.setContinuousRepainting(false);
 		openGlContext_.setOpenGLVersionRequired(OpenGLContext::openGL3_2);
 		openGlContext_.setSwapInterval(1);
@@ -87,7 +87,9 @@ namespace Interface
 
 		openGlContext_.detach();
 		openGlContext_.setRenderer(nullptr);
-		gui_ = nullptr;
+
+		topLevelComponent_ = nullptr;
+		//gui_ = nullptr;
 	}
 
 	void Renderer::updateFullGui()
@@ -98,12 +100,13 @@ namespace Interface
 		gui_->updateAllValues();
 		gui_->reset();
 
-		topLevelComponent_.getAudioProcessor()->updateHostDisplay();
+		if (topLevelComponent_)
+			topLevelComponent_->getAudioProcessor()->updateHostDisplay();
 	}
 
 	void Renderer::setGuiScale(double scale)
 	{
-		if (gui_ == nullptr)
+		if (gui_ == nullptr || topLevelComponent_ == nullptr)
 			return;
 
 		auto windowWidth = gui_->getWidth();
@@ -112,7 +115,7 @@ namespace Interface
 
 		Framework::LoadSave::saveWindowScale(scale);
 		gui_->setScaling((float)scale);
-		topLevelComponent_.setSize((int)std::round(windowWidth * clampedScale),
+		topLevelComponent_->setSize((int)std::round(windowWidth * clampedScale),
 			(int)std::round(windowHeight * clampedScale));
 	}
 
