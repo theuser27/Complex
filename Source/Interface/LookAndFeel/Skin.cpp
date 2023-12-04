@@ -160,7 +160,15 @@ namespace Interface
 
     // temporary solution to ensure there's a skin file
     // if this throws put Complex.skin at Users\(user)\AppData\Roaming\Complex
-    try
+    if (defaultSkin.exists())
+    {
+      if (!loadFromFile(defaultSkin))
+        loadDefaultSkin();
+    }
+    else
+      loadDefaultSkin();
+
+    /*try
     {
       if (!defaultSkin.exists())
         throw std::exception("skin file doesn't exist");
@@ -171,7 +179,7 @@ namespace Interface
     catch (const std::exception &e)
     {
       std::cerr << e.what() << '\n';
-    }
+    }*/
 
     copyValuesToLookAndFeel(DefaultLookAndFeel::instance());
   }
@@ -417,4 +425,19 @@ namespace Interface
   bool Skin::loadFromFile(const File &source)
   { return stringToState(source.loadFileAsString()); }
 
+  void Skin::loadDefaultSkin()
+  {
+    MemoryInputStream skin((const void *)BinaryData::Complex_skin, BinaryData::Complex_skinSize, false);
+    std::string skin_string = skin.readEntireStreamAsString().toStdString();
+
+    try
+    {
+      json data = json::parse(skin_string, nullptr, false);
+      jsonToState(data);
+    }
+    catch (const json::exception &)
+    {
+      COMPLEX_ASSERT_FALSE("Couldn't parse default skin");
+    }
+  }
 }

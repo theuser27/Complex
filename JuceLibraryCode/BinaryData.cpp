@@ -4718,6 +4718,154 @@ static const unsigned char temp_binary_data_2[] =
 
 const char* InterMedium_ttf = (const char*) temp_binary_data_2;
 
+//================== Complex.skin ==================
+static const unsigned char temp_binary_data_3[] =
+"{\r\n"
+"\t\"Background\": \"ff141414\",\r\n"
+"\t\"Body\": \"ff262626\",\r\n"
+"\t\"Background Element\": \"ff4c4c4c\",\r\n"
+"\t\"Heading Text\": \"ff00ffff\",\r\n"
+"\t\"Normal Text\": \"ffa8a8a8\",\r\n"
+"\t\"Border\": \"8ffffff\",\r\n"
+"\t\"Body Rounding Top\": 4.0,\r\n"
+"\t\"Body Rounding Bottom\": 4.0,\r\n"
+"\r\n"
+"\t\"Widget Primary 1\": \"ff00ffff\",\r\n"
+"\t\"Widget Primary 2\": \"ffaa88ff\",\r\n"
+"\t\"Widget Primary Disabled\": \"ff4c4f52\",\r\n"
+"\t\"Widget Secondary 1\": \"669f88ff\",\r\n"
+"\t\"Widget Secondary 2\": \"669f88ff\",\r\n"
+"\t\"Widget Secondary Disabled\": \"22666666\",\r\n"
+"\t\"Widget Accent 1\": \"ff00ffff\",\r\n"
+"\t\"Widget Accent 2\": \"19aa88ff\",\r\n"
+"\t\"Widget Background 1\": \"ff2b2b2b\",\r\n"
+"\t\"Widget Background 2\": \"ff373737\",\r\n"
+"\t\"Widget Center Line\": \"ffffffff\",\r\n"
+"\t\"Widget Fill Boost\": 1.600000023841858,\r\n"
+"\t\"Widget Fill Center\": 0.0,\r\n"
+"\t\"Widget Fill Fade\": 0.30000001192092896,\r\n"
+"\t\"Widget Line Boost\": 1.0,\r\n"
+"\t\"Widget Line Width\": 2.0,\r\n"
+"\t\"Widget Margin\": 5.5,\r\n"
+"\t\"Widget Rounded Corner\": 4.0,\r\n"
+"\r\n"
+"\t\"Icon Button Off\": \"ff848789\",\r\n"
+"\t\"Icon Button Off Hover\": \"ffaaacad\",\r\n"
+"\t\"Icon Button Off Pressed\": \"ff848789\",\r\n"
+"\t\"Icon Button On\": \"ff00ffff\",\r\n"
+"\t\"Icon Button On Hover\": \"ffbda3ff\",\r\n"
+"\t\"Icon Button On Pressed\": \"ff906de9\",\r\n"
+"\t\"Icon Selector Icon\": \"ff848789\",\r\n"
+"\r\n"
+"\t\"Knob Arc Size\": 34.0,\r\n"
+"\t\"Knob Arc Thickness\": 2.0,\r\n"
+"\t\"Knob Body Size\": 22.0,\r\n"
+"\t\"Knob Handle Length\": 0.21,\r\n"
+"\t\"Knob Mod Amount Arc Size\": 40.0,\r\n"
+"\t\"Knob Mod Amount Arc Thickness\": 0.5,\r\n"
+"\t\"Knob Mod Meter Arc Size\": 39.0,\r\n"
+"\t\"Knob Mod Meter Arc Thickness\": 3.0,\r\n"
+"\t\"Knob Offset\": -7.0,\r\n"
+"\t\"Knob Section Height\": 71.0,\r\n"
+"\t\"Knob Shadow Offset\": 4.0,\r\n"
+"\t\"Knob Shadow Width\": 8.0,\r\n"
+"\r\n"
+"\t\"Label Background\": \"00000000\",\r\n"
+"\t\"Label Background Height\": 18.0,\r\n"
+"\t\"Label Height\": 11.0,\r\n"
+"\t\"Label Offset\": 0.0,\r\n"
+"\t\"Label Rounding\": 9.0,\r\n"
+"\r\n"
+"\t\"Linear Slider\": \"ff848789\",\r\n"
+"\t\"Linear Slider Disabled\": \"ff848686\",\r\n"
+"\t\"Linear Slider Thumb\": \"ffffffff\",\r\n"
+"\t\"Linear Slider Thumb Disabled\": \"ffffffff\",\r\n"
+"\t\"Linear Slider Unselected\": \"ff262a2e\",\r\n"
+"\r\n"
+"\t\"Modulation Button Dragging\": \"ffea1616\",\r\n"
+"\t\"Modulation Button Selected\": \"ff4c4f52\",\r\n"
+"\t\"Modulation Button Unselected\": \"ff2c3033\",\r\n"
+"\t\"Modulation Meter\": \"ff1de9b6\",\r\n"
+"\t\"Modulation Meter Control\": \"ff64ffda\",\r\n"
+"\t\"Modulation Meter Left\": \"ff1de952\",\r\n"
+"\t\"Modulation Meter Right\": \"ff1dc2e9\",\r\n"
+"\t\"Modulation Button Width\": 68.0,\r\n"
+"\t\"Modulation Font Size\": 11.0,\r\n"
+"\r\n"
+"\t\"Overlay Screen\": \"22000000\",\r\n"
+"\t\"Lighten Screen\": \"22ffffff\",\r\n"
+"\t\"Padding\": 4.0,\r\n"
+"\t\"Large Padding\": 10.0,\r\n"
+"\r\n"
+"\t\"Popup Border\": \"ff000000\",\r\n"
+"\t\"Popup Selector Background\": \"ff2c3033\",\r\n"
+"\r\n"
+"\t\"Rotary Arc\": \"ffaa88ff\",\r\n"
+"\t\"Rotary Arc Disabled\": \"ff848789\",\r\n"
+"\t\"Rotary Arc Unselected\": \"ff343434\",\r\n"
+"\t\"Rotary Arc Unselected Disabled\": \"ff343434\",\r\n"
+"\t\"Rotary Body\": \"ff2e2e2e\",\r\n"
+"\t\"Rotary Body Border\": \"ff4c4f52\",\r\n"
+"\t\"Rotary Hand\": \"ffababab\",\r\n"
+"\t\"Rotary Option Width\": 20.0,\r\n"
+"\t\"Rotary Option X Offset\": 24.0,\r\n"
+"\t\"Rotary Option Y Offset\": 4.0,\r\n"
+"\r\n"
+"\t\"Shadow\": \"66000000\",\r\n"
+"\t\"Slider Width\": 24.0,\r\n"
+"\t\"Text Button Height\": 20.0,\r\n"
+"\t\"Button Font Size\": 11.0,\r\n"
+"\r\n"
+"\t\"Text Component Background\": \"ff2c3033\",\r\n"
+"\t\"Text Component Font Size\": 15.0,\r\n"
+"\t\"Text Component Height\": 43.0,\r\n"
+"\t\"Text Component Label Offset\": 0.0,\r\n"
+"\t\"Text Component Offset\": -8.0,\r\n"
+"\t\"Text Component Text\": \"ffffffff\",\r\n"
+"\t\"Text Editor Background\": \"ff2c3033\",\r\n"
+"\t\"Text Editor Border\": \"ffffff\",\r\n"
+"\t\"Text Editor Caret\": \"ffaaacad\",\r\n"
+"\t\"Text Editor Selection\": \"1faaabab\",\r\n"
+"\r\n"
+"\t\"Action Button Primary\": \"ffaa88ff\",\r\n"
+"\t\"Action Button Primary Hover\": \"ffba9fff\",\r\n"
+"\t\"Action Button Primary Press\": \"ff906de9\",\r\n"
+"\t\"Action Button Secondary\": \"ff848789\",\r\n"
+"\t\"Action Button Secondary Hover\": \"ff939699\",\r\n"
+"\t\"Action Button Secondary Press\": \"ff606265\",\r\n"
+"\t\"Action Button Text\": \"ff111111\",\r\n"
+"\r\n"
+"\t\"overrides\": {\r\n"
+"\t\t\"All\": null,\r\n"
+"\t\t\"Effects Lane\": {\r\n"
+"\t\t\t\"Widget Primary 1\": \"ffa8a8a8\"\r\n"
+"\t\t},\r\n"
+"\t\t\"Dynamics Module\": {\r\n"
+"\t\t\t\"Background\": \"ff151515\",\r\n"
+"\t\t\t\"Body\": \"ff1f1f1f\",\r\n"
+"\t\t\t\"Background Element\": \"ff313131\",\r\n"
+"\t\t\t\"Widget Primary 1\": \"ffc67dff\",\r\n"
+"\t\t\t\"Widget Secondary 1\": \"ff4c4c4c\",\r\n"
+"\t\t\t\"Widget Accent 1\": \"ffc67dff\",\r\n"
+"\t\t\t\"Widget Background 1\": \"ff353535\"\r\n"
+"\t\t},\r\n"
+"\t\t\"Filter Module\": {\r\n"
+"\t\t\t\"Background\": \"ff151515\",\r\n"
+"\t\t\t\"Body\": \"ff1f1f1f\",\r\n"
+"\t\t\t\"Background Element\": \"ff313131\",\r\n"
+"\t\t\t\"Widget Primary 1\": \"ff7bf087\",\r\n"
+"\t\t\t\"Widget Secondary 1\": \"ff4c4c4c\",\r\n"
+"\t\t\t\"Widget Accent 1\": \"ff7bf087\",\r\n"
+"\t\t\t\"Widget Background 1\": \"ff353535\"\r\n"
+"\t\t}\r\n"
+"\r\n"
+"\t},\r\n"
+"\r\n"
+"\t\"Plugin Version\": 65542\r\n"
+"}";
+
+const char* Complex_skin = (const char*) temp_binary_data_3;
+
 
 const char* getNamedResource (const char* resourceNameUTF8, int& numBytes);
 const char* getNamedResource (const char* resourceNameUTF8, int& numBytes)
@@ -4733,6 +4881,7 @@ const char* getNamedResource (const char* resourceNameUTF8, int& numBytes)
         case 0x0c9e94a3:  numBytes = 295; return Icon_Filter_svg;
         case 0xe39541f1:  numBytes = 52204; return DDINBold_ttf;
         case 0x247953f8:  numBytes = 367772; return InterMedium_ttf;
+        case 0xf7e7fbcc:  numBytes = 4169; return Complex_skin;
         default: break;
     }
 
@@ -4744,14 +4893,16 @@ const char* namedResourceList[] =
 {
     "Icon_Filter_svg",
     "DDINBold_ttf",
-    "InterMedium_ttf"
+    "InterMedium_ttf",
+    "Complex_skin"
 };
 
 const char* originalFilenames[] =
 {
     "Icon_Filter.svg",
     "D-DIN-Bold.ttf",
-    "Inter-Medium.ttf"
+    "Inter-Medium.ttf",
+    "Complex.skin"
 };
 
 const char* getNamedResourceOriginalFilename (const char* resourceNameUTF8);

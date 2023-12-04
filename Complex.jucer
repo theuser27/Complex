@@ -13,6 +13,9 @@
       <FILE id="lerx3Z" name="Inter-Medium.ttf" compile="0" resource="1"
             file="Fonts/Inter-Medium.ttf"/>
     </GROUP>
+    <GROUP id="{0BDE1775-1F5D-13A2-4B89-418A3C672CA2}" name="Skin">
+      <FILE id="udXFB1" name="Complex.skin" compile="0" resource="1" file="Complex.skin"/>
+    </GROUP>
     <GROUP id="{EA56D449-367C-4F87-53C4-8DB58E6C0431}" name="Source">
       <GROUP id="{32A822E4-0A2D-7496-308D-972ADD4D4F30}" name="Framework">
         <FILE id="xWYami" name="circular_buffer.h" compile="0" resource="0"
