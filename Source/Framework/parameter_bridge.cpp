@@ -84,13 +84,28 @@ namespace Framework
 			->updateHostDisplay(AudioProcessor::ChangeDetails{}.withParameterInfoChanged(true));
 	}
 
+	void ParameterBridge::updateUIParameter() noexcept
+	{
+		// for wasValueChanged_ we only require atomicity, therefore memory_order_relaxed suffices
+		// for parameterLinkPointer_ it's fine to use relaxed because this method is only called from the message thread
+		//	which is the only one that touches the UI and we only want to get the linked UI parameter
+		if (wasValueChanged_.load(std::memory_order_relaxed))
+		{
+			parameterLinkPointer_.load(std::memory_order_relaxed)->UIControl->valueChanged();
+			wasValueChanged_.store(false, std::memory_order_relaxed);
+		}
+	}
+
 	void ParameterBridge::setValue(float newValue)
 	{
 		// we store the new value and if the bridge is linked, we notify the UI
 		value_.store(newValue, std::memory_order_release);
-		if (auto pointer = parameterLinkPointer_.load(std::memory_order_acquire); 
+		if (auto pointer = parameterLinkPointer_.load(std::memory_order_acquire);
 			pointer && pointer->UIControl)
-				pointer->UIControl->setValueFromHost();
+		{
+			bool wasValueChanged = pointer->UIControl->setValueFromHost();
+			wasValueChanged_.store(wasValueChanged, std::memory_order_relaxed);
+		}
 	}
 
 	float ParameterBridge::getDefaultValue() const

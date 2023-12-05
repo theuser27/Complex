@@ -36,7 +36,7 @@ namespace Interface
 		virtual Framework::ParameterValue *changeLinkedParameter(Framework::ParameterValue &parameter,
 			bool getValueFromParameter = true);
 
-		void setValueFromHost() noexcept;
+		bool setValueFromHost() noexcept;
 		void setValueFromParameter() noexcept;
 		void setValueToHost() const noexcept;
 		void setValueToParameter() const noexcept;

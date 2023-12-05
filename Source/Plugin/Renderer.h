@@ -33,7 +33,7 @@ namespace Interface
     void renderOpenGL() override;
     void openGLContextClosing() override;
 
-    void timerCallback() override { openGlContext_.triggerRepaint(); }
+    void timerCallback() override;
 
     void startUI();
     void stopUI();

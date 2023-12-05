@@ -53,17 +53,17 @@ namespace Interface
 		return replacedParameter;
 	}
 
-	void BaseControl::setValueFromHost() noexcept
+	bool BaseControl::setValueFromHost() noexcept
 	{
 		if (!parameterLink_ || !parameterLink_->hostControl)
-			return;
+			return false;
 
 		double value = parameterLink_->hostControl->getValue();
 		if (value == getValueSafe())
-			return;
+			return false;
 
 		setValueSafe(value);
-		valueChanged();
+		return true;
 	}
 
 	void BaseControl::setValueFromParameter() noexcept

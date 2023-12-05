@@ -41,6 +41,8 @@ namespace Framework
 			sendValueChangedMessageToListeners(newValue);
 		}
 
+		void updateUIParameter() noexcept;
+
 		void setCustomName(const String &name)
 		{
 			utils::ScopedSpinLock guard{ name_.first };
@@ -72,6 +74,7 @@ namespace Framework
 	private:
 		std::pair<std::atomic<bool>, String> name_{};
 		std::atomic<float> value_ = kDefaultParameterValue;
+		std::atomic<bool> wasValueChanged_ = false;
 		std::atomic<ParameterLink *> parameterLinkPointer_ = nullptr;
 
 		Plugin::ComplexPlugin *plugin_ = nullptr;

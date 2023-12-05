@@ -67,6 +67,14 @@ namespace Interface
 		shaders_ = nullptr;
 	}
 
+	void Renderer::timerCallback()
+	{
+		for (auto *bridge : plugin_.getParameterBridges())
+			bridge->updateUIParameter();
+
+		openGlContext_.triggerRepaint();
+	}
+
 	void Renderer::startUI()
 	{
 		openGlContext_.setContinuousRepainting(false);
