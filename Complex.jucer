@@ -3,7 +3,7 @@
 <JUCERPROJECT id="MQJhEl" name="Complex" projectType="audioplug" addUsingNamespaceToJuceHeader="1"
               jucerFormatVersion="1" cppLanguageStandard="20" pluginFormats="buildStandalone,buildVST3"
               displaySplashScreen="1" pluginCode="Cmpx" pluginManufacturerCode="Lirn"
-              pluginManufacturer="Lirion" version="0.7.0.2" pluginDesc="Multi-lane Spectral Effects Suite">
+              pluginManufacturer="Lirion" version="0.7.0.3" pluginDesc="Multi-lane Spectral Effects Suite">
   <MAINGROUP id="zNsp6a" name="Complex">
     <GROUP id="{65E7BD15-F97F-DFD8-8405-B6E4F140ACA3}" name="Icons">
       <FILE id="W5loec" name="Icon_Filter.svg" compile="0" resource="1" file="Icons/Icon_Filter.svg"/>
