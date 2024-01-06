@@ -11,9 +11,9 @@ namespace BinaryData
 
 //================== Icon_Filter.svg ==================
 static const unsigned char temp_binary_data_0[] =
-"<svg width=\"13\" height=\"9\" viewBox=\"0 0 13 9\" fill=\"none\" xmlns=\"http://www.w3.org/2000/svg\">\n"
-"<path d=\"M12.5 8.50079L10.3662 2.81071C9.912 1.59946 8.48121 1.08295 7.35804 1.72476L7.17593 1.82883C6.40533 2.26917 5.53316 2.50079 4.64562 2.50079H0.5\" stroke=\"black\" stroke-linecap=\"round\"/>\n"
-"</svg>\n";
+"<svg width=\"13\" height=\"9\" viewBox=\"0 0 13 9\" fill=\"none\" xmlns=\"http://www.w3.org/2000/svg\">\r\n"
+"<path d=\"M12.5 8.50079L10.3662 2.81071C9.912 1.59946 8.48121 1.08295 7.35804 1.72476L7.17593 1.82883C6.40533 2.26917 5.53316 2.50079 4.64562 2.50079H0.5\" stroke=\"black\" stroke-linecap=\"round\"/>\r\n"
+"</svg>\r\n";
 
 const char* Icon_Filter_svg = (const char*) temp_binary_data_0;
 
@@ -4857,8 +4857,16 @@ static const unsigned char temp_binary_data_3[] =
 "\t\t\t\"Widget Secondary 1\": \"ff4c4c4c\",\r\n"
 "\t\t\t\"Widget Accent 1\": \"ff7bf087\",\r\n"
 "\t\t\t\"Widget Background 1\": \"ff353535\"\r\n"
+"\t\t},\r\n"
+"\t\t\"Phase Module\": {\r\n"
+"\t\t\t\"Background\": \"ff151515\",\r\n"
+"\t\t\t\"Body\": \"ff1f1f1f\",\r\n"
+"\t\t\t\"Background Element\": \"ff313131\",\r\n"
+"\t\t\t\"Widget Primary 1\": \"ff59c4f2\",\r\n"
+"\t\t\t\"Widget Secondary 1\": \"ff4c4c4c\",\r\n"
+"\t\t\t\"Widget Accent 1\": \"ff59c4f2\",\r\n"
+"\t\t\t\"Widget Background 1\": \"ff353535\"\r\n"
 "\t\t}\r\n"
-"\r\n"
 "\t},\r\n"
 "\r\n"
 "\t\"Plugin Version\": 65542\r\n"
@@ -4878,10 +4886,10 @@ const char* getNamedResource (const char* resourceNameUTF8, int& numBytes)
 
     switch (hash)
     {
-        case 0x0c9e94a3:  numBytes = 295; return Icon_Filter_svg;
+        case 0x0c9e94a3:  numBytes = 298; return Icon_Filter_svg;
         case 0xe39541f1:  numBytes = 52204; return DDINBold_ttf;
         case 0x247953f8:  numBytes = 367772; return InterMedium_ttf;
-        case 0xf7e7fbcc:  numBytes = 4169; return Complex_skin;
+        case 0xf7e7fbcc:  numBytes = 4433; return Complex_skin;
         default: break;
     }
 

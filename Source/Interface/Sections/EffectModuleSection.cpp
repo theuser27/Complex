@@ -16,7 +16,7 @@
 
 namespace Interface
 {
-	class EmptySlider : public PinSlider
+	class EmptySlider final : public PinSlider
 	{
 	public:
 		EmptySlider(Framework::ParameterValue *parameter) : PinSlider(parameter)
@@ -84,7 +84,7 @@ namespace Interface
 	void SpectralMaskComponent::resized()
 	{
 		shiftBounds_->setBounds(getLocalBounds());
-		shiftBounds_->setTotalRange(getWidth());
+		shiftBounds_->setTotalRange(getWidth() * 2);
 		PinBoundsBox::resized();
 	}
 
@@ -596,6 +596,76 @@ namespace Interface
 				break;
 			}
 		}
+
+		void initPhaseParameters(std::vector<std::unique_ptr<BaseControl>> &effectSliders, EffectModuleSection *section)
+		{
+			using namespace Framework;
+
+			auto *baseEffect = section->getEffect();
+
+			auto initShift = [&]()
+			{
+				effectSliders.reserve(BaseProcessors::BaseEffect::Phase::Shift::enum_count(nested_enum::OuterNodes));
+				effectSliders.emplace_back(std::make_unique<RotarySlider>
+					(baseEffect->getParameter(BaseProcessors::BaseEffect::Phase::Shift::PhaseShift::self())));
+				effectSliders.emplace_back(std::make_unique<RotarySlider>
+					(baseEffect->getParameter(BaseProcessors::BaseEffect::Phase::Shift::Interval::self())));
+				effectSliders.emplace_back(std::make_unique<RotarySlider>
+					(baseEffect->getParameter(BaseProcessors::BaseEffect::Phase::Shift::Offset::self())));
+			};
+
+			switch (section->getAlgorithm<BaseProcessors::BaseEffect::Phase::type>())
+			{
+			case BaseProcessors::BaseEffect::Phase::Shift:
+				initShift();
+				break;
+			default:
+			case BaseProcessors::BaseEffect::Phase::Transform:
+				break;
+			}
+		}
+
+		void arrangePhaseUI(EffectModuleSection *section, Rectangle<int> bounds)
+		{
+			using namespace Framework;
+
+			auto arrangeNormal = [&]()
+			{
+				int knobEdgeOffset = section->scaleValueRoundInt(32);
+				int knobTopOffset = section->scaleValueRoundInt(32);
+
+				int knobsHeight = section->scaleValueRoundInt(RotarySlider::kDefaultWidthHeight);
+
+				bounds = bounds.withTrimmedLeft(knobEdgeOffset).withTrimmedRight(knobEdgeOffset)
+					.withTrimmedTop(knobTopOffset).withHeight(knobsHeight);
+				int rotaryInterval = (int)std::round((float)bounds.getWidth() / 3.0f);
+
+				// gain rotary
+				auto *gainSlider = section->getEffectControl(BaseProcessors::BaseEffect::Phase::Shift::PhaseShift::self());
+				std::ignore = gainSlider->getBoundsForSizes(knobsHeight);
+				gainSlider->setOverallBounds({ bounds.getX(), bounds.getY() });
+
+				// cutoff rotary
+				auto *cutoffSlider = section->getEffectControl(BaseProcessors::BaseEffect::Phase::Shift::Interval::self());
+				std::ignore = cutoffSlider->getBoundsForSizes(knobsHeight);
+				cutoffSlider->setOverallBounds({ bounds.getX() + rotaryInterval, bounds.getY() });
+
+				// slope rotary
+				auto *slopeSlider = section->getEffectControl(BaseProcessors::BaseEffect::Phase::Shift::Offset::self());
+				std::ignore = slopeSlider->getBoundsForSizes(knobsHeight);
+				slopeSlider->setOverallBounds({ bounds.getX() + 2 * rotaryInterval, bounds.getY() });
+			};
+
+			switch (section->getAlgorithm<BaseProcessors::BaseEffect::Phase::type>())
+			{
+			case BaseProcessors::BaseEffect::Phase::Shift:
+				arrangeNormal();
+				break;
+			default:
+			case BaseProcessors::BaseEffect::Phase::Transform:
+				break;
+			}
+		}
 	}
 
 	void EffectModuleSection::setEffectType(std::string_view type)
@@ -628,7 +698,12 @@ namespace Interface
 		}
 		else if (type == phaseEffect::getClassType())
 		{
-			
+			initialiseParametersFunction_ = initPhaseParameters;
+			arrangeUIFunction_ = arrangePhaseUI;
+
+			setSkinOverride(Skin::kPhaseModule);
+			maskComponent_->setSkinOverride(Skin::kPhaseModule);
+			effectTypeIcon_->setShapes(Paths::contrastIcon());
 		}
 		else if (type == pitchEffect::getClassType())
 		{

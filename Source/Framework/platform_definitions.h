@@ -1,11 +1,11 @@
 /*
-  ==============================================================================
+	==============================================================================
 
-    platform_definitions.h
-    Created: 28 Jun 2023 11:32:37pm
-    Author:  theuser27
+		platform_definitions.h
+		Created: 28 Jun 2023 11:32:37pm
+		Author:  theuser27
 
-  ==============================================================================
+	==============================================================================
 */
 
 #pragma once
@@ -31,14 +31,15 @@
 	
 #elif defined (_MSC_VER)
 	#define COMPLEX_MSVC 1
+
+	#ifdef NDEBUG
+		#define COMPLEX_DEBUG 0
+	#else
+		#define COMPLEX_DEBUG 1
+	#endif
+
 	#if defined (_M_X64)
 		#define COMPLEX_X64 1
-
-		#ifdef _DEBUG
-			#define COMPLEX_DEBUG 1
-		#else
-			#define COMPLEX_DEBUG 0
-		#endif
 
 		// MSVC doesn't define these macros for some reason
 		// if your computer doesn't support FMA you can change the value to 0
@@ -66,9 +67,13 @@
 #if defined (COMPLEX_MSVC)
 	// strict_inline is used when something absolutely needs to be inlined
 	#define strict_inline __forceinline
-	// perf_inline is used for inlining to increase performance (can be changed for tests)
+	// perf_inline is used for inlining to increase performance (can be changed for A/B testing)
 	#define perf_inline __forceinline
 	#define vector_call __vectorcall
+
+	#if defined (COMPLEX_X64)
+		#define COMPLEX_INTEL_SVML
+	#endif
 #else
 	// strict_inline is used when something absolutely needs to be inlined
 	#define strict_inline inline __attribute__((always_inline))

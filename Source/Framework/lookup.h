@@ -18,7 +18,6 @@ namespace Framework
 	template<size_t resolution>
 	class Lookup
 	{
-	private:
 		// extra data points needed to perform cspline lookup at edges
 		// when the requested values are exactly at 0.0f or 1.0f
 		static constexpr size_t kExtraValues = 3;
@@ -36,13 +35,15 @@ namespace Framework
 		// gets catmull-rom spline interpolated y-values at their corresponding x-values
 		simd_float cubicLookup(simd_float xValues) const noexcept
 		{
-			//COMPLEX_ASSERT(simd_float::greaterThanOrEqual(xValues, simd_float(0.0f)) && xValues <= simd_float(1.0f));
+			COMPLEX_ASSERT(simd_float::lessThan(xValues, 0.0f).anyMask() == 0 &&
+				simd_float::greaterThan(xValues, 1.0f).anyMask() == 0);
+
 			simd_float boost = (xValues * scale_) + 1.0f;
 			simd_int indices = simd_int::clamp(utils::toInt(boost), simd_int(1), simd_int(resolution));
 			simd_float t = boost - utils::toFloat(indices);
 
 			Matrix interpolationMatrix = utils::getCatmullInterpolationMatrix(t);
-			Matrix valueMatrix = utils::getValueMatrix<kSimdRatio>(lookup_.data(), indices - simd_int(1));
+			Matrix valueMatrix = utils::getValueMatrix<kSimdRatio>(lookup_, indices - simd_int(1));
 			valueMatrix.transpose();
 
 			return interpolationMatrix.multiplyAndSumRows(valueMatrix);
@@ -51,13 +52,15 @@ namespace Framework
 		// gets linearly interpolated y-values at their corresponding x-values
 		simd_float linearLookup(simd_float xValues) const noexcept
 		{
-			//COMPLEX_ASSERT(xValues >= simd_float(0.0f) && xValues <= simd_float(1.0f));
+			COMPLEX_ASSERT(simd_float::lessThan(xValues, 0.0f).anyMask() == 0 && 
+				simd_float::greaterThan(xValues, 1.0f).anyMask() == 0);
+
 			simd_float boost = (xValues * scale_) + 1.0f;
 			simd_int indices = simd_int::clamp(utils::toInt(boost), simd_int(1), simd_int(resolution));
 			simd_float t = boost - utils::toFloat(indices);
 
 			Matrix interpolationMatrix = utils::getLinearInterpolationMatrix(t);
-			Matrix valueMatrix = utils::getValueMatrix<kSimdRatio>(lookup_.data(), indices - simd_int(1));
+			Matrix valueMatrix = utils::getValueMatrix<kSimdRatio>(lookup_, indices - simd_int(1));
 			valueMatrix.transpose();
 
 			return interpolationMatrix.multiplyAndSumRows(valueMatrix);
@@ -72,17 +75,15 @@ namespace Framework
 			size_t index = std::clamp((size_t)boost, (size_t)1, resolution);
 			float t = boost - (float)index;
 			utils::pow(t, simd_float(exponents));
-			float half_t = t * 0.5f;
-			float half_t2 = t * half_t;
-			float half_t3 = t * half_t2;
-			float half_three_t3 = half_t3 * 3.0f;
-			//simd_float mutipliers(std::to_array<float>({ half_t2 * 2.0f - half_t3 - half_t,
-			//	half_three_t3 - 5.0f * half_t2 + 1.0f, 4.0f * half_t2 + half_t - half_three_t3, half_t3 - half_t2 }));
+			float halfT = t * 0.5f;
+			float halfT2 = t * halfT;
+			float halfT3 = t * halfT2;
+			float threeHalfT3 = halfT3 * 3.0f;
 
-			return (half_t2 * 2.0f - half_t3 - half_t) * lookup_[index - 1] +
-				(half_three_t3 - 5.0f * half_t2 + 1.0f) * lookup_[index] +
-				(4.0f * half_t2 + half_t - half_three_t3) * lookup_[index + 1] +
-				(half_t3 - half_t2) * lookup_[index + 2];
+			return (halfT2 * 2.0f - halfT3 - halfT) * lookup_[index - 1] +
+				(threeHalfT3 - 5.0f * halfT2 + 1.0f) * lookup_[index] +
+				(4.0f * halfT2 + halfT - threeHalfT3) * lookup_[index + 1] +
+				(halfT3 - halfT2) * lookup_[index + 2];
 		}
 
 		// gets linearly interpolated y-value at the corresponding x-value
@@ -96,7 +97,7 @@ namespace Framework
 		}
 
 	private:
-		std::array<float, resolution + kExtraValues> lookup_{};
+		float lookup_[resolution + kExtraValues]{};
 		float scale_;
 	};
 }

@@ -125,7 +125,7 @@ namespace Interface
 		}
 		// override to set the colours of the entry box
 		virtual void showTextEntry();
-		void textEditorTextChanged([[maybe_unused]] TextEditor &editor) override { textEntry_->redoImage(); }
+		//void textEditorTextChanged([[maybe_unused]] TextEditor &editor) override { textEntry_->redoImage(); }
 		void textEditorReturnKeyPressed([[maybe_unused]] TextEditor &editor) override
 		{
 			updateValueFromTextEntry();

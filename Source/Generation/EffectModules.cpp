@@ -41,7 +41,7 @@ namespace Generation
 	phaseEffect::phaseEffect(Plugin::ProcessorTree *globalModulesState, u64 parentModuleId) :
 		baseEffect(globalModulesState, parentModuleId, getClassType())
 	{
-
+		fillAndSetParameters<Framework::BaseProcessors::BaseEffect::Phase::type>();
 	}
 
 	pitchEffect::pitchEffect(Plugin::ProcessorTree *globalModulesState, u64 parentModuleId) :
@@ -165,14 +165,14 @@ namespace Generation
 		return { 0, binCount };
 	}
 
-	void baseEffect::copyUnprocessedData(const Framework::SimdBufferView<std::complex<float>, simd_float> &source,
-		Framework::SimdBuffer<std::complex<float>, simd_float> &destination, const simd_int &lowBoundIndices,
-		const simd_int &highBoundIndices, u32 effectiveFFTSize) noexcept
+	void baseEffect::copyUnprocessedData(Framework::SimdBufferView<std::complex<float>, simd_float> source,
+		Framework::SimdBuffer<std::complex<float>, simd_float> &destination, simd_int lowBoundIndices,
+		simd_int highBoundIndices, u32 binCount) noexcept
 	{
-		auto [index, numBins] = minimiseRange(lowBoundIndices, highBoundIndices, effectiveFFTSize, false);
+		auto [index, numBins] = minimiseRange(lowBoundIndices, highBoundIndices, binCount, false);
 
 		// this is not possible, so we'll take it to mean that we have stereo bounds
-		if (index == 0 && numBins == effectiveFFTSize)
+		if (index == 0 && numBins == binCount)
 		{
 			for (; index < numBins; index++)
 			{
@@ -186,7 +186,7 @@ namespace Generation
 			for (u32 i = 0; i < numBins; i++)
 			{
 				destination.writeSimdValueAt(source.readSimdValueAt(0, index), 0, index);
-				index = (index + 1) & (effectiveFFTSize - 1);
+				index = (index + 1) & (binCount - 1);
 			}
 		}
 	}
@@ -240,6 +240,25 @@ namespace Generation
 	//             |___/																			 //
 	/////////////////////////////////////////////////////////////
 
+	//// Layout
+	// 
+	// Simd values are laid out:
+	// 
+	//        [left real     , left imaginary, right real     , right imaginary] or 
+	//        [left magnitude, left phase    , right magnitude, right phase    ],
+	// 
+	// depending on the module's preferred way of handling data. (see @needsPolarData)
+	// 
+	// This is with the exception of dc and nyquist bins, which are combined in a single "bin" 
+	// because of their lack of imaginary component/phase. 
+	// This is done so that the buffers have a size of a power-of-2 for fast index calculation with wrap-around.
+
+	//// Guidelines
+	// 
+	// 1. When dealing with dc or nyquist it's best to have a small section after your main algorithm to process them.
+	//    Other attempts at reasoning with them are either impossible, very time consuming and/or of questionable efficiency.
+	// 2. Whenever in doubt, look at other algorithm implementations for ideas
+
 	perf_inline void filterEffect::runNormal(Framework::SimdBufferView<std::complex<float>, simd_float> &source,
 		Framework::SimdBuffer<std::complex<float>, simd_float> &destination, u32 binCount, float sampleRate) const noexcept
 	{
@@ -249,7 +268,7 @@ namespace Generation
 		simd_float lowBoundNorm = getParameter(BaseProcessors::BaseEffect::LowBound::self())->getInternalValue<simd_float>(sampleRate, true);
 		simd_float highBoundNorm = getParameter(BaseProcessors::BaseEffect::HighBound::self())->getInternalValue<simd_float>(sampleRate, true);
 		simd_float boundShift = getParameter(BaseProcessors::BaseEffect::ShiftBounds::self())->getInternalValue<simd_float>(sampleRate);
-		simd_float boundsDistance = modOnce(simd_float(1.0f) + highBoundNorm - lowBoundNorm, 1.0f);
+		simd_float boundsDistance = modOnceUnsigned(simd_float(1.0f) + highBoundNorm - lowBoundNorm, 1.0f);
 
 		// getting the boundaries in terms of bin position
 		auto [lowBoundIndices, highBoundIndices] = [&]()
@@ -263,7 +282,7 @@ namespace Generation
 
 		// cutoff is described as exponential normalised value of the sample rate
 		// it is dependent on the values of the low/high bounds
-		simd_float cutoffNorm = modOnce(lowBoundNorm + boundShift + boundsDistance * 
+		simd_float cutoffNorm = modOnceUnsigned(lowBoundNorm + boundShift + boundsDistance * 
 			getParameter(BaseProcessors::BaseEffect::Filter::Normal::Cutoff::self())->getInternalValue<simd_float>(sampleRate), 1.0f);
 		simd_int cutoffIndices = toInt(normalisedToBin(cutoffNorm, binCount * 2, sampleRate));
 
@@ -315,6 +334,17 @@ namespace Generation
 		default:
 			break;
 		}
+	}
+
+	simd_float vector_call dynamicsEffect::matchPower(simd_float target, simd_float current) noexcept
+	{
+		simd_float result = 1.0f;
+		result = result & simd_float::lessThan(0.0f, target);
+		result = utils::maskLoad(result, simd_float::sqrt(target / current), simd_float::greaterThan(current, 0.0f));
+
+		result = utils::maskLoad(result, simd_float(1.0f), simd_float::greaterThan(result, 1e30f));
+		result = result & simd_float::lessThanOrEqual(1e-37f, result);
+		return result;
 	}
 
 	perf_inline void dynamicsEffect::runContrast(Framework::SimdBufferView<std::complex<float>, simd_float> &source,
@@ -485,6 +515,169 @@ namespace Generation
 		}
 	}
 
+	void phaseEffect::runShift(Framework::SimdBufferView<std::complex<float>, simd_float> &source,
+		Framework::SimdBuffer<std::complex<float>, simd_float> &destination, u32 binCount, float sampleRate) const noexcept
+	{
+		using namespace utils;
+		using namespace Framework;
+
+		static const simd_mask phaseMask = std::array{ 0U, kFullMask, 0U, kFullMask };
+		static const simd_mask phaseLeftMask = std::array{ 0U, kFullMask, 0U, 0U };
+		static const simd_mask phaseRightMask = std::array{ 0U, 0U, 0U, kFullMask };
+
+		auto [lowBoundIndices, highBoundIndices] = [&]()
+		{
+			auto shiftedBoundsIndices = getShiftedBounds(BoundRepresentation::BinIndex, sampleRate, binCount * 2);
+			return std::pair{ toInt(shiftedBoundsIndices.first), toInt(shiftedBoundsIndices.second) };
+		}();
+
+		// minimising the bins to iterate on
+		auto [index, numBins] = minimiseRange(lowBoundIndices, highBoundIndices, binCount, true);
+
+		simd_float shift = (getParameter(BaseProcessors::BaseEffect::Phase::Shift::PhaseShift::self())
+			->getInternalValue<simd_float>(sampleRate, true) * 2.0f - 1.0f) * kPi;
+		simd_float interval = getParameter(BaseProcessors::BaseEffect::Phase::Shift::Interval::self())->getInternalValue<simd_float>(sampleRate);
+		
+		destination.clear();
+		// if interval between bins is 0 this means every bin is affected,
+		// otherwise the interval specifies how many octaves up the next affected bin is
+		if (completelyEqual(interval, 0.0f))
+		{
+			simd_int offsetBin = toInt(normalisedToBin(getParameter(BaseProcessors::BaseEffect::Phase::Shift::Offset::self())
+				->getInternalValue<simd_float>(sampleRate, true), 2 * binCount, sampleRate));
+			for (u32 i = 0; i < numBins; ++i)
+			{
+				u32 currentIndex = (index + i) & (binCount - 1);
+				simd_mask offsetMask = simd_int::greaterThanOrEqualSigned(currentIndex, offsetBin);
+				simd_float currentValue = source.readSimdValueAt(0, currentIndex);
+				destination.writeSimdValueAt(maskLoad(currentValue, modOnceSigned(currentValue + shift, kPi),
+					phaseMask & offsetMask), 0, currentIndex);
+			}
+		}
+		else
+		{
+			// overwrite old data
+			for (u32 i = 0; i < numBins; ++i)
+			{
+				u32 currentIndex = (index + i) & (binCount - 1);
+				destination.writeSimdValueAt(source.readSimdValueAt(0, currentIndex), 0, currentIndex);
+			}
+
+			// offset is skewed towards an exp-like curve so we need to linearise it
+			simd_float offsetNorm = getParameter(BaseProcessors::BaseEffect::Phase::Shift::Offset::self())
+				->getInternalValue<simd_float>(sampleRate) * 2.0f / sampleRate;
+			simd_float binStep = 1.0f / (float)binCount;
+			simd_float logBase = log2(interval + 1.0f);
+			jassert(simd_float::lessThanOrEqual(logBase, 0.0f).anyMask() == 0);
+
+			// if offset is 0 we need to give it a starting value based on interval
+			// and shift dc component's amplitude
+			{
+				simd_mask zeroMask = simd_float::lessThan(offsetNorm, binStep);
+				simd_float dcNyquistBins = source.readSimdValueAt(0, 0);
+				simd_float modifiedShift = (-simd_float::abs(shift / kPi) + 0.5f) * 2.0f;
+				destination.writeSimdValueAt(maskLoad(dcNyquistBins, dcNyquistBins * modifiedShift, ~phaseMask), 0, 0);
+
+				simd_float startOffset = interval * binStep;
+				jassert(simd_float::lessThanOrEqual(startOffset, 0.0f).anyMask() == 0);
+				
+				// this is derived below, the next 2 lines get the next bin after dc in case any channels started there
+				simd_float multiple = simd_float::ceil(log2(binStep / startOffset) / logBase);
+				startOffset *= exp2(logBase * multiple);
+				offsetNorm = maskLoad(offsetNorm, startOffset, zeroMask);
+			}
+			
+			simd_float lastOffsetNorm = offsetNorm;
+			// if inteval < 1, then it's possible for the next while loop to make any progress, 
+			// so we make sure that interval * offsetNorm will yield a number at least as big as a single bin step
+			{
+				simd_float increment = interval * offsetNorm;
+				simd_float nextBin = (simd_float::round(offsetNorm * (float)binCount) + 1.0f) / (float)binCount;
+				while (simd_float::greaterThan(binStep, increment).anyMask())
+				{
+					// normal algorithm
+					simd_int indices = toInt(simd_float::round(offsetNorm * (float)binCount));
+					simd_mask indexMask = simd_int::lessThanSigned(indices, binCount);
+
+					if (indexMask.anyMask() == 0)
+						break;
+
+					lastOffsetNorm = maskLoad(lastOffsetNorm, offsetNorm, indexMask);
+					u32 indexOne = indices[0];
+					u32 indexTwo = indices[2];
+
+					destination.writeMaskedSimdValueAt(modOnceSigned(source.readSimdValueAt(0, indexOne) + shift, kPi),
+						indexMask & phaseLeftMask, 0, indexOne);
+
+					destination.writeMaskedSimdValueAt(modOnceSigned(source.readSimdValueAt(0, indexTwo) + shift, kPi),
+						indexMask & phaseRightMask, 0, indexTwo);
+
+					// offsetNorm[n+1] = offsetNorm[n] + interval * offsetNorm[n]
+					// offsetNorm[n+1] = offsetNorm[n] * (1 + interval)^1
+					// offsetNorm[n+2] = offsetNorm[n] * (1 + interval)^2
+					// offsetNorm[n+m] = offsetNorm[n] * (1 + interval)^m
+					// log(offsetNorm[n+m] / offsetNorm[n]) = m * log(1 + interval)
+					// log(offsetNorm[n+m] / offsetNorm[n]) / log(1 + interval) = m
+					// we need to do ceil to get the first whole number of intervals
+					simd_float multiple = simd_float::ceil(log2(nextBin / offsetNorm) / logBase);
+
+					// pow(base, exponent) = exp2(log2(base) * exponent)
+					offsetNorm *= exp2(logBase * multiple);
+					increment = interval * offsetNorm;
+					nextBin += binStep;
+				}
+			}
+			
+			while (true)
+			{
+				simd_int indices = toInt(simd_float::round(offsetNorm * (float)binCount));
+				simd_mask indexMask = simd_int::lessThanSigned(indices, binCount);
+
+				if (indexMask.anyMask() == 0)
+					break;
+
+				lastOffsetNorm = maskLoad(lastOffsetNorm, offsetNorm, indexMask);
+				u32 indexOne = indices[0];
+				u32 indexTwo = indices[2];
+
+				destination.writeMaskedSimdValueAt(modOnceSigned(source.readSimdValueAt(0, indexOne) + shift, kPi),
+					indexMask & phaseLeftMask, 0, indexOne);
+
+				destination.writeMaskedSimdValueAt(modOnceSigned(source.readSimdValueAt(0, indexTwo) + shift, kPi),
+					indexMask & phaseRightMask, 0, indexTwo);
+
+				offsetNorm = simd_float::mulAdd(offsetNorm, interval, offsetNorm);
+			}
+
+			// shifting nyquist component's amplitude in case it was encountered 
+			/*{
+				offsetNorm = lastOffsetNorm;
+				offsetNorm = simd_float::mulAdd(offsetNorm, interval, offsetNorm);
+				simd_int indices = toInt(normalisedToBin(offsetNorm, 2 * binCount, sampleRate));
+				simd_mask nyquistMask = simd_int::equal(indices, binCount);
+				simd_float dcNyquistBins = destination.readSimdValueAt(0, 0);
+				destination.writeSimdValueAt(maskLoad(dcNyquistBins, dcNyquistBins * shift / kPi, phaseMask & nyquistMask), 0, 0);
+			}*/
+		}
+
+		copyUnprocessedData(source, destination, lowBoundIndices, highBoundIndices, binCount);
+	}
+
+	void phaseEffect::run(Framework::SimdBufferView<std::complex<float>, simd_float> &source,
+		Framework::SimdBuffer<std::complex<float>, simd_float> &destination, u32 binCount, float sampleRate) noexcept
+	{
+		using namespace Framework;
+		switch (getEffectAlgorithm<BaseProcessors::BaseEffect::Phase::type>())
+		{
+		case BaseProcessors::BaseEffect::Phase::Shift:
+			runShift(source, destination, binCount, sampleRate);
+			break;
+		default:
+			baseEffect::run(source, destination, binCount, sampleRate);
+			break;
+		}
+	}
+
 	EffectModule::EffectModule(Plugin::ProcessorTree *moduleTree, u64 parentModuleId, std::string_view effectType) noexcept :
 		BaseProcessor(moduleTree, parentModuleId, getClassType())
 	{
@@ -542,15 +735,20 @@ namespace Generation
 
 		auto *effect = utils::as<baseEffect *>(subProcessors_[0]);
 
-		if (source.isPolar != effect->needsPolarData())
+		if (auto neededType = effect->neededDataType(); neededType != ComplexDataSource::Both && source.dataType != neededType)
 		{
-			if (!source.isPolar)
+			if (neededType == ComplexDataSource::Polar)
+			{
 				utils::convertBuffer<utils::complexCartToPolar>(source.sourceBuffer, source.conversionBuffer);
+				source.dataType = ComplexDataSource::Polar;
+			}
 			else
+			{
 				utils::convertBuffer<utils::complexPolarToCart>(source.sourceBuffer, source.conversionBuffer);
+				source.dataType = ComplexDataSource::Cartesian;
+			}
 			
 			source.sourceBuffer = source.conversionBuffer;
-			source.isPolar = !source.isPolar;
 		}
 
 		auto start = std::chrono::steady_clock::now();

@@ -42,7 +42,7 @@ namespace simd_values
 	static constexpr u32 kFullMask = UINT32_MAX;
 	static constexpr u32 kNoChangeMask = UINT32_MAX;
 	static constexpr u32 kNotSignMask = (u32)INT32_MAX;
-	static constexpr u32 kSignMask = kNotSignMask + 1U;
+	static constexpr u32 kSignMask = ~kNotSignMask;
 
 	struct alignas(COMPLEX_SIMD_ALIGNMENT) simd_int
 	{
@@ -53,6 +53,7 @@ namespace simd_values
 	#if COMPLEX_SSE4_1
 		static constexpr size_t kSize = 4;
 		typedef __m128i simd_type;
+		typedef __m128i mask_simd_type;
 	#elif COMPLEX_NEON
 		static constexpr size_t kSize = 4;
 		typedef uint32x4_t simd_type;
@@ -173,18 +174,9 @@ namespace simd_values
 		#endif
 		}
 
-		static strict_inline simd_type vector_call greaterThanUnsigned(simd_type one, simd_type two) {
-		#if COMPLEX_SSE4_1
-			return _mm_cmpgt_epi32(_mm_xor_si128(one, init(kSignMask)), _mm_xor_si128(two, init(kSignMask)));
-		#elif COMPLEX_NEON
-			return vcgtq_u32(one, two);
-		#endif
-		}
-
 		static strict_inline simd_type vector_call max(simd_type one, simd_type two) {
 		#if COMPLEX_SSE4_1
-			simd_type greater_than_mask = greaterThanUnsigned(one, two);
-			return _mm_or_si128(_mm_and_si128(greater_than_mask, one), _mm_andnot_si128(greater_than_mask, two));
+			return _mm_max_epi32(one, two);
 		#elif COMPLEX_NEON
 			return vmaxq_u32(one, two);
 		#endif
@@ -192,8 +184,7 @@ namespace simd_values
 
 		static strict_inline simd_type vector_call min(simd_type one, simd_type two) {
 		#if COMPLEX_SSE4_1
-			simd_type less_than_mask = _mm_cmpgt_epi32(two, one);
-			return _mm_or_si128(_mm_and_si128(less_than_mask, one), _mm_andnot_si128(less_than_mask, two));
+			return _mm_min_epi32(one, two);
 		#elif COMPLEX_NEON
 			return vminq_u32(one, two);
 		#endif
@@ -243,20 +234,17 @@ namespace simd_values
 		static strict_inline simd_int vector_call notEqual(simd_int one, simd_int two)
 		{ return ~equal(one, two); }
 
-		static strict_inline simd_int vector_call greaterThanUnsigned(simd_int one, simd_int two)
-		{	return greaterThanUnsigned(one.value, two.value); }
-
-		static strict_inline simd_int vector_call lessThanUnsigned(simd_int one, simd_int two)
-		{	return greaterThanUnsigned(two.value, one.value); }
-		
 		static strict_inline simd_int vector_call greaterThanSigned(simd_int one, simd_int two)
 		{	return greaterThanSigned(one.value, two.value); }
 
-		static strict_inline simd_int vector_call lessThanOrEqualToSigned(simd_int one, simd_int two)
+		static strict_inline simd_int vector_call lessThanSigned(simd_int one, simd_int two)
 		{	return greaterThanSigned(two.value, one.value); }
 
 		static strict_inline simd_int vector_call greaterThanOrEqualSigned(simd_int one, simd_int two)
 		{	return greaterThanSigned(one, two) | equal(one, two); }
+
+		static strict_inline simd_int vector_call lessThanOrEqualSigned(simd_int one, simd_int two)
+		{	return greaterThanOrEqualSigned(two.value, one.value); }
 
 
 		//////////////////
@@ -730,40 +718,6 @@ namespace simd_values
 		#endif
 		}
 
-		static strict_inline void vector_call transpose(std::array<simd_float, kSize> &rows)
-		{
-		#if COMPLEX_SSE4_1
-			simd_type low0 = _mm_unpacklo_ps(rows[0].value, rows[1].value);
-			simd_type low1 = _mm_unpacklo_ps(rows[2].value, rows[3].value);
-			simd_type high0 = _mm_unpackhi_ps(rows[0].value, rows[1].value);
-			simd_type high1 = _mm_unpackhi_ps(rows[2].value, rows[3].value);
-			rows[0].value = _mm_movelh_ps(low0, low1);
-			rows[1].value = _mm_movehl_ps(low1, low0);
-			rows[2].value = _mm_movelh_ps(high0, high1);
-			rows[3].value = _mm_movehl_ps(high1, high0);
-		#elif COMPLEX_NEON
-			simd_type swap_low = vtrnq_f32(rows[0].value, rows[1].value);
-			simd_type swap_high = vtrnq_f32(rows[2].value, rows[3].value);
-			rows[0].value = vextq_f32(vextq_f32(swap_low.val[0], swap_low.val[0], 2), swap_high.val[0], 2);
-			rows[1].value = vextq_f32(vextq_f32(swap_low.val[1], swap_low.val[1], 2), swap_high.val[1], 2);
-			rows[2].value = vextq_f32(swap_low.val[0], vextq_f32(swap_high.val[0], swap_high.val[0], 2), 2);
-			rows[3].value = vextq_f32(swap_low.val[1], vextq_f32(swap_high.val[1], swap_high.val[1], 2), 2);
-		#endif
-		}
-
-		static strict_inline void vector_call complexTranspose(std::array<simd_float, kSize> &rows)
-		{
-			// TODO: implement complexTranspose for NEON
-		#if COMPLEX_SSE4_1
-			auto low = _mm_movelh_ps(rows[0].value, rows[1].value);
-			auto high = _mm_movehl_ps(rows[1].value, rows[0].value);
-			rows[0].value = low;
-			rows[1].value = high;
-		#elif COMPLEX_NEON
-			static_assert(false, "ARM NEON complexTranspose not supported yet");
-		#endif
-		}
-
 		static strict_inline simd_type vector_call reverse(simd_type value)
 		{
 			// TODO: reverse intrinsic for neon
@@ -856,10 +810,10 @@ namespace simd_values
 			: value(std::bit_cast<simd_type>(scalars)) { }
 
 		template<typename T> requires requires (T x) { (sizeof(float) * kSize) % sizeof(x) == 0; }
-		strict_inline simd_float(const std::array<T, (sizeof(float) *kSize) / sizeof(T)> &scalars) noexcept
+		strict_inline simd_float(const std::array<T, (sizeof(float) * kSize) / sizeof(T)> &scalars) noexcept
 			: value(std::bit_cast<simd_type>(scalars)) { }
 
-		strict_inline float vector_call access(size_t index) const noexcept 
+		strict_inline float vector_call access(size_t index) const noexcept
 		{ return std::bit_cast<std::array<float, kSize>>(value)[index]; }
 
 		strict_inline void vector_call set(size_t index, float newValue) noexcept
@@ -874,7 +828,7 @@ namespace simd_values
 
 		template<typename T> requires requires (T x) { (sizeof(float) * kSize) % sizeof(x) == 0; }
 		strict_inline auto vector_call getArrayOfValues() const noexcept
-		{ return std::bit_cast<std::array<T, ((sizeof(float) *kSize) / sizeof(T))>>(value); }
+		{ return std::bit_cast<std::array<T, ((sizeof(float) * kSize) / sizeof(T))>>(value); }
 
 		///////////////
 		// Operators //

@@ -207,10 +207,10 @@ namespace nested_enum
       if (character >= '0' && character <= '9')
         return (int8_t)(character - '0');
 
-      if (character >= 'A' && character <= 'Z')
+      if (character >= 'A' && character <= 'F')
         return (int8_t)(character - 'A' + 10);
 
-      if (character >= 'a' && character <= 'z')
+      if (character >= 'a' && character <= 'f')
         return (int8_t)(character - 'a' + 10);
 
       return 0;
@@ -240,13 +240,12 @@ namespace nested_enum
         isNegative = true;
       }
 
-      Int number = 0, decimal = 1;
-      for (size_t i = trimmedView.size(); i-- > 0; )
+      Int number = 0;
+      for (size_t i = 0; i < trimmedView.size(); ++i)
       {
         if (trimmedView[i] == '\'')
           continue;
-        number += static_cast<Int>(get_digit(trimmedView[i])) * decimal;
-        decimal *= 10;
+        number = number * 10 + static_cast<Int>(get_digit(trimmedView[i]));
       }
 
       if (isNegative)
@@ -436,32 +435,42 @@ namespace nested_enum
       }
     }
 
-    template<class Tuple>
-    constexpr auto tuple_of_arrays_to_array(Tuple &&tuple)
+    template<class T>
+    struct is_array :std::is_array<T> { };
+    template<class T, std::size_t N>
+    struct is_array<std::array<T, N>> :std::true_type { };
+
+    template<class TupleOrArray>
+    constexpr auto tuple_of_arrays_to_array(TupleOrArray &&tupleOrArray)
     {
-      constexpr auto function = []<auto Self, typename T, size_t N, typename ... Args>(std::array<T, N> first, Args ... args)
+      if constexpr (is_array<TupleOrArray>::value)
+        return tupleOrArray;
+      else
       {
-        if constexpr (sizeof...(Args) == 0)
-          return first;
-        else
+        constexpr auto function = []<auto Self, typename T, size_t N, typename ... Args>(std::array<T, N> first, Args ... args)
         {
-          auto next = Self.template operator() < Self > (args...);
-          std::array<T, N + next.size()> newArray;
+          if constexpr (sizeof...(Args) == 0)
+            return first;
+          else
+          {
+            auto next = Self.template operator() < Self > (args...);
+            std::array<T, N + next.size()> newArray;
 
-          for (size_t i = 0; i < first.size(); i++)
-            newArray[i] = first[i];
+            for (size_t i = 0; i < first.size(); i++)
+              newArray[i] = first[i];
 
-          for (size_t i = 0; i < next.size(); i++)
-            newArray[first.size() + i] = next[i];
+            for (size_t i = 0; i < next.size(); i++)
+              newArray[first.size() + i] = next[i];
 
-          return newArray;
-        }
-      };
+            return newArray;
+          }
+        };
 
-      return[&]<size_t ... Indices>(Tuple && tupleToExpand, std::index_sequence<Indices...>)
-      {
-        return function.template operator() < function > (std::get<Indices>(tupleToExpand)...);
-      }(std::forward<Tuple>(tuple), std::make_index_sequence<std::tuple_size_v<Tuple>>{});
+        return[&]<size_t ... Indices>(TupleOrArray &&tupleToExpand, std::index_sequence<Indices...>)
+        {
+          return function.template operator() < function > (std::get<Indices>(tupleToExpand)...);
+        }(std::forward<TupleOrArray>(tupleOrArray), std::make_index_sequence<std::tuple_size_v<TupleOrArray>>{});
+      }
     }
 
     template<typename T, typename E>

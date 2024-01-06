@@ -211,6 +211,15 @@ namespace Framework
 			data_.write(value, indices.first);
 		}
 
+		void writeMaskedSimdValueAt(SIMD value, simd_mask mask, u32 channel, u32 index)
+		{
+			COMPLEX_ASSERT(channel < getChannels());
+			COMPLEX_ASSERT(index < getSize());
+
+			auto indices = getAbsoluteIndices(channel, size_, index);
+			data_.write(utils::maskLoad(data_.read(indices.first), value, mask), indices.first);
+		}
+
 		// writes a single value to the buffer
 		void writeValueAt(T value, u32 channel, u32 index) noexcept
 		{

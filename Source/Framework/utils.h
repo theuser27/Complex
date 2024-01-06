@@ -65,7 +65,7 @@ namespace utils
 	{ return 20.0 * log10(amplitude); }
 
 	strict_inline double dbToAmplitude(double decibels) noexcept
-	{ return pow(10.0, decibels / 20.0); }
+	{ return std::pow(10.0, decibels / 20.0); }
 
 	constexpr strict_inline double amplitudeToDbConstexpr(double amplitude) noexcept
 	{ return 20.0 * gcem::log10(amplitude); }
@@ -108,7 +108,7 @@ namespace utils
 	}
 
 	strict_inline double centsToRatio(double cents) noexcept
-	{ return pow(2.0, cents / (double)kCentsPerOctave); }
+	{ return std::pow(2.0, cents / (double)kCentsPerOctave); }
 
 	strict_inline double midiCentsToFrequency(double cents) noexcept
 	{ return kMidi0Frequency * centsToRatio(cents); }
@@ -117,7 +117,7 @@ namespace utils
 	{ return midiCentsToFrequency(note * kCentsPerNote); }
 
 	strict_inline double frequencyToMidiNote(double frequency) noexcept
-	{ return (double)kNotesPerOctave * log(frequency / kMidi0Frequency) * kInvLogOf2; }
+	{ return (double)kNotesPerOctave * std::log(frequency / kMidi0Frequency) * kInvLogOf2; }
 
 	strict_inline double frequencyToMidiCents(double frequency) noexcept
 	{ return kCentsPerNote * frequencyToMidiNote(frequency); }

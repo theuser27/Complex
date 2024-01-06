@@ -102,7 +102,7 @@ namespace Generation
 
 	void SoundEngine::UpdateParameters(Framework::UpdateFlag flag, float sampleRate) noexcept
 	{
-		updateParameters(flag, true);
+		updateParameters(flag, sampleRate, true);
 
 		switch (flag)
 		{
@@ -142,6 +142,9 @@ namespace Generation
 
 	perf_inline void SoundEngine::ProcessFFT(float sampleRate) noexcept
 	{
+		COMPLEX_ASSERT(FFTNumSamples_ / 2 > 0);
+		COMPLEX_ASSERT(sampleRate > 0.0f);
+
 		effectsState_->setBinCount(FFTNumSamples_ / 2);
 		effectsState_->setSampleRate(sampleRate);
 

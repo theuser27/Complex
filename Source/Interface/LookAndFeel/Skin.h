@@ -31,6 +31,7 @@ namespace Interface
 			kPopupBrowser,
 			kFilterModule,
 			kDynamicsModule,
+			kPhaseModule,
 
 			kSectionsCount
 		};

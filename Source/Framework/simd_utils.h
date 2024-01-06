@@ -23,16 +23,16 @@ namespace utils
 
 	strict_inline Framework::Matrix vector_call getCatmullInterpolationMatrix(simd_float t) noexcept
 	{
-		simd_float half_t = t * 0.5f;
-		simd_float half_t2 = t * half_t;
-		simd_float half_t3 = t * half_t2;
-		simd_float half_three_t3 = half_t3 * 3.0f;
+		simd_float halfT = t * 0.5f;
+		simd_float halfT2 = t * halfT;
+		simd_float halfT3 = t * halfT2;
+		simd_float threeHalfT3 = halfT3 * 3.0f;
 
 		return Framework::Matrix({ 
-			simd_float::mulAdd(-half_t3, half_t2, 2.0f) - half_t,
-			simd_float::mulSub(half_three_t3, half_t2, 5.0f) + 1.0f,
-			simd_float::mulAdd(half_t, half_t2, 4.0f) - half_three_t3,
-			half_t3 - half_t2 });
+			simd_float::mulAdd(-halfT3, halfT2, 2.0f) - halfT,
+			simd_float::mulSub(threeHalfT3, halfT2, 5.0f) + 1.0f,
+			simd_float::mulAdd(halfT, halfT2, 4.0f) - threeHalfT3,
+			halfT3 - halfT2 });
 	}
 
 	strict_inline simd_float vector_call toSimdFloatFromUnaligned(const float *unaligned) noexcept
@@ -49,8 +49,9 @@ namespace utils
 	{
 		static_assert(size <= kSimdRatio, "Size of matrix cannot be larger than size of simd package");
 		std::array<simd_float, size> values;
-		for (u32 i = 0; i < values.size(); i++)
-			values[i] = toSimdFloatFromUnaligned(buffer + indices[i]);
+		auto indicesArray = indices.getArrayOfValues();
+		for (u32 i = 0; i < size; i++)
+			values[i] = toSimdFloatFromUnaligned(buffer + indicesArray[i]);
 		return Framework::Matrix(values);
 	}
 
@@ -59,8 +60,9 @@ namespace utils
 	{
 		static_assert(size <= kSimdRatio, "Size of matrix cannot be larger than size of simd package");
 		std::array<simd_float, size> values;
-		for (u32 i = 0; i < values.size(); i++)
-			values[i] = toSimdFloatFromUnaligned(buffers[i] + indices[i]);
+		auto indicesArray = indices.getArrayOfValues();
+		for (u32 i = 0; i < size; i++)
+			values[i] = toSimdFloatFromUnaligned(buffers[i] + indicesArray[i]);
 		return Framework::Matrix(values);
 	}
 
@@ -70,7 +72,6 @@ namespace utils
 	strict_inline bool vector_call completelyEqual(simd_int left, simd_int right) noexcept
 	{ return simd_int::notEqual(left, right).sum() == 0; }
 
-	// 0s for loading values from one, 1s for loading values from two
 	template<CommonConcepts::SimdValue SIMD>
 	strict_inline SIMD vector_call maskLoad(SIMD zeroValue, SIMD oneValue, simd_mask mask) noexcept
 	{
@@ -93,6 +94,9 @@ namespace utils
 			dest[i] = b1[i] + b2[i];
 	}
 
+	strict_inline simd_float vector_call toFloat(simd_float value) noexcept { return value; }
+	strict_inline simd_int vector_call toInt(simd_int value) noexcept { return value; }
+
 	strict_inline simd_float vector_call toFloat(simd_int integers) noexcept
 	{
 	#if COMPLEX_SSE4_1
@@ -110,6 +114,9 @@ namespace utils
 		return vreinterpretq_u32_s32(vcvtq_s32_f32(floats.value));
 	#endif
 	}
+
+	strict_inline simd_float vector_call reinterpretToFloat(simd_float value) noexcept { return value; }
+	strict_inline simd_int vector_call reinterpretToInt(simd_int value) noexcept { return value; }
 
 	strict_inline simd_float vector_call reinterpretToFloat(simd_int value) noexcept
 	{
@@ -132,11 +139,58 @@ namespace utils
 	strict_inline simd_float vector_call getDecimalPlaces(simd_float value) noexcept
 	{ return value - simd_float::floor(value); }
 
-	strict_inline simd_float modOnce(simd_float value, simd_float mod) noexcept
+	strict_inline simd_mask vector_call getSign(simd_int value) noexcept
 	{
-		simd_mask lessMask = simd_float::lessThanOrEqual(value, mod);
+		static const simd_mask signMask = kSignMask;
+		return value & signMask;
+	}
+
+	strict_inline simd_mask vector_call getSign(simd_float value) noexcept
+	{
+		static const simd_mask signMask = kSignMask;
+		return reinterpretToInt(value) & signMask;
+	}
+
+	// conditionally unsigns ints if they are negative and returns full mask where values are negative
+	strict_inline simd_mask vector_call unsignSimd(simd_int &value, bool returnFullMask = false) noexcept
+	{
+		static const simd_mask signMask = kSignMask;
+		simd_mask mask = simd_mask::equal(value & signMask, signMask);
+		value = maskLoad(value, ~value - 1, mask);
+		return (returnFullMask) ? simd_mask::equal(mask, signMask) : mask;
+	}
+
+	// conditionally unsigns floats if they are negative and returns full mask where values are negative
+	strict_inline simd_mask vector_call unsignSimd(simd_float &value, bool returnFullMask = false) noexcept
+	{
+		static const simd_mask signMask = kSignMask;
+		simd_mask mask = reinterpretToInt(value) & signMask;
+		value ^= mask;
+		return (returnFullMask) ? simd_mask::equal(mask, signMask) : mask;
+	}
+	
+	strict_inline simd_float modOnceUnsigned(simd_float value, simd_float mod) noexcept
+	{
+		simd_mask lessMask = simd_float::lessThan(value, mod);
 		simd_float lower = value - mod;
 		return maskLoad(lower, value, lessMask);
+	}
+
+	strict_inline simd_float modOnceSigned(simd_float value, simd_float mod) noexcept
+	{
+		simd_mask signMask = unsignSimd(value);
+		simd_mask lessMask = simd_float::lessThan(value, mod);
+		simd_float lower = value - mod * 2.0f;
+		return maskLoad(lower, value, lessMask) ^ signMask;
+	}
+
+	strict_inline simd_float reciprocal(simd_float value) noexcept
+	{
+	#if COMPLEX_SSE4_1
+		return _mm_rcp_ps(value.value);
+	#elif COMPLEX_NEON
+		return vrecpeq_f32(values.value);
+	#endif
 	}
 
 	template<size_t shift>
@@ -357,35 +411,7 @@ namespace utils
 		return numerator / denominator;
 	}
 
-	strict_inline simd_mask vector_call getSign(simd_int value) noexcept
-	{
-		static const simd_mask signMask = kSignMask;
-		return value & signMask;
-	}
 
-	strict_inline simd_mask vector_call getSign(simd_float value) noexcept
-	{
-		static const simd_mask signMask = kSignMask;
-		return reinterpretToInt(value) & signMask;
-	}
-
-	// conditionally unsigns ints if they are negative and returns full mask where values are negative
-	strict_inline simd_mask vector_call unsignSimd(simd_int &value, bool returnFullMask = false) noexcept
-	{
-		static const simd_mask signMask = kSignMask;
-		simd_mask mask = simd_mask::equal(value & signMask, signMask);
-		value = maskLoad(value, ~value - 1, mask);
-		return (returnFullMask) ? simd_mask::equal(mask, signMask) : mask;
-	}
-
-	// conditionally unsigns floats if they are negative and returns full mask where values are negative
-	strict_inline simd_mask vector_call unsignSimd(simd_float &value, bool returnFullMask = false) noexcept
-	{
-		static const simd_mask signMask = kSignMask;
-		simd_mask mask = reinterpretToInt(value) & signMask;
-		value ^= mask;
-		return (returnFullMask) ? simd_mask::equal(mask, signMask) : mask;
-	}
 
 	strict_inline simd_float vector_call getStereoDifference(simd_float value) noexcept
 	{
@@ -417,15 +443,6 @@ namespace utils
 	}
 
 	strict_inline bool vector_call areAllElementsSame(simd_float value) noexcept
-	{
-		simd_int intValue = reinterpretToInt(value);
-	#if COMPLEX_SSE4_1
-		simd_mask mask = intValue ^ simd_int(_mm_shuffle_epi32(intValue.value, _MM_SHUFFLE(2, 3, 0, 1)));
-		mask |= intValue ^ simd_int(_mm_shuffle_epi32(intValue.value, _MM_SHUFFLE(0, 1, 2, 3)));
-		return mask.sum() == 0;
-	#elif COMPLEX_NEON
-		static_assert(false, "ARM NEON areAllElementsSame not implemented yet");
-	#endif
-	}
+	{ return areAllElementsSame(reinterpretToInt(value)); }
 
 }

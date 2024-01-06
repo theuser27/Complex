@@ -24,7 +24,7 @@ namespace Plugin
 
 namespace Generation
 {
-	class SoundEngine : public BaseProcessor
+	class SoundEngine final : public BaseProcessor
 	{
 	public:
 		DEFINE_CLASS_TYPE("{6B31ED46-FBF0-4219-A645-7B774F903026}")

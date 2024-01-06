@@ -16,16 +16,17 @@
 #include "Framework/parameters.h"
 #include "Framework/parameter_value.h"
 #include "BaseProcessor.h"
-#include "Plugin/ProcessorTree.h"
 
 namespace Generation
 {
 	struct ComplexDataSource
 	{
+		enum DataSourceType : u8 { Cartesian, Polar, Both };
+
 		// scratch buffer for conversion between cartesian and polar data
 		Framework::SimdBuffer<std::complex<float>, simd_float> conversionBuffer{ kNumChannels, kMaxFFTBufferLength };
 		// is the data in sourceBuffer polar or cartesian
-		bool isPolar = false;
+		DataSourceType dataType = Cartesian;
 		Framework::SimdBufferView<std::complex<float>, simd_float> sourceBuffer;
 	};
 
@@ -69,7 +70,7 @@ namespace Generation
 			[[maybe_unused]] Framework::SimdBuffer<std::complex<float>, simd_float> &destination,
 			[[maybe_unused]] u32 binCount, [[maybe_unused]] float sampleRate) noexcept { }
 
-		virtual bool needsPolarData() const noexcept { return false; }
+		virtual ComplexDataSource::DataSourceType neededDataType() const noexcept { return ComplexDataSource::Cartesian; }
 		template<nested_enum::NestedEnum E>
 		E getEffectAlgorithm() const
 		{ return E::make_enum(getParameter(Framework::BaseProcessors::BaseEffect::Algorithm::self())->getInternalValue<u32>()).value(); }
@@ -93,7 +94,8 @@ namespace Generation
 			details.stringLookup = Parameters::getEffectModesStrings(Type::self());
 			parameter->setParameterDetails(details);
 			
-			utils::applyOne([&]<typename T>(T &&) { createProcessorParameters<typename std::remove_cvref_t<T>::type>(); }, Type::template enum_subtypes<nested_enum::InnerNodes>());
+			utils::applyOne([&]<typename T>(T &&) { createProcessorParameters<typename std::remove_cvref_t<T>::type>(); }, 
+				Type::template enum_subtypes<nested_enum::InnerNodes>());
 		}
 
 		// first - low shifted boundary, second - high shifted boundary
@@ -124,9 +126,9 @@ namespace Generation
 		static std::pair<u32, u32> vector_call minimiseRange(simd_int lowIndices, simd_int highIndices,
 			u32 binCount, bool isProcessedRange);
 
-		static void copyUnprocessedData(const Framework::SimdBufferView<std::complex<float>, simd_float> &source,
-			Framework::SimdBuffer<std::complex<float>, simd_float> &destination, const simd_int &lowBoundIndices,
-			const simd_int &highBoundIndices, u32 effectiveFFTSize) noexcept;
+		static void copyUnprocessedData(Framework::SimdBufferView<std::complex<float>, simd_float> source,
+			Framework::SimdBuffer<std::complex<float>, simd_float> &destination, simd_int lowBoundIndices,
+			simd_int highBoundIndices, u32 binCount) noexcept;
 
 
 		//// Parameters
@@ -243,16 +245,7 @@ namespace Generation
 		void runClip(Framework::SimdBufferView<std::complex<float>, simd_float> &source,
 			Framework::SimdBuffer<std::complex<float>, simd_float> &destination, u32 binCount, float sampleRate) const noexcept;
 
-		static simd_float vector_call matchPower(simd_float target, simd_float current) noexcept
-		{
-			simd_float result = 1.0f;
-			result = utils::maskLoad(result, simd_float(0.0f), simd_float::greaterThanOrEqual(0.0f, target));
-			result = utils::maskLoad(result, simd_float::sqrt(target / current), simd_float::greaterThan(current, 0.0f));
-
-			result = utils::maskLoad(result, simd_float(1.0f), simd_float::greaterThan(result, 1e30f));
-			result = utils::maskLoad(result, simd_float(0.0f), simd_float::greaterThan(1e-37f, result));
-			return result;
-		}
+		static simd_float vector_call matchPower(simd_float target, simd_float current) noexcept;
 
 
 		//// Dtblkfx Contrast
@@ -286,6 +279,15 @@ namespace Generation
 		phaseEffect(phaseEffect &&) = delete;
 
 		phaseEffect(Plugin::ProcessorTree *globalModulesState, u64 parentModuleId);
+
+		void run(Framework::SimdBufferView<std::complex<float>, simd_float> &source,
+			Framework::SimdBuffer<std::complex<float>, simd_float> &destination, u32 binCount, float sampleRate) noexcept override;
+
+		ComplexDataSource::DataSourceType neededDataType() const noexcept override { return ComplexDataSource::Polar; }
+
+	private:
+		void runShift(Framework::SimdBufferView<std::complex<float>, simd_float> &source,
+			Framework::SimdBuffer<std::complex<float>, simd_float> &destination, u32 binCount, float sampleRate) const noexcept;
 
 		// phase zeroer, (constrained) phase randomiser (smear), channel phase shifter (pha-979), etc
 		// phase filter - filtering based on phase

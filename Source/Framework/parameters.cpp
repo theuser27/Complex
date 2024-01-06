@@ -141,28 +141,36 @@ namespace Framework
 		{ "DYNAMICS_CLIPPING_FX_THRESHOLD", "Threshold", 0.0f, 1.0f, 0.0f, 0.0f, ParameterScale::Linear, "%", {}, true }
 	};
 
+	static constexpr std::array<ParameterDetails, BaseProcessors::BaseEffect::Phase::enum_count_recursive(nested_enum::OuterNodes)> phaseEffectParameterList =
+	{
+		ParameterDetails
+		{ "PHASE_SHIFT_FX_PHASE_SHIFT", "Shift", -180.0f, 180.0f, 0.0f, 0.5f, ParameterScale::Linear, "", {}, true },
+		{ "PHASE_SHIFT_FX_INTERVAL", "Interval", 0.0f, 10.0f, 1.0f, gcem::pow(1.0f / 10.0f, 1.0f / 3.0f), ParameterScale::Cubic, "", {}, true },
+		{ "PHASE_SHIFT_FX_OFFSET", "Offset", 0.0f, 1.0f, 0.0f, 0.0f, ParameterScale::Frequency, "", {}, true }
+	};
+
 	namespace
 	{
 		template<nested_enum::NestedEnum E>
-		constexpr size_t addParametersToMap(auto &map, const auto &parameterList, size_t mapIndex)
+		constexpr void addParametersToMap(auto &map, const auto &parameterList, size_t &mapIndex)
 		{
 			constexpr auto enumStrings = E::template enum_strings<nested_enum::OuterNodes>(false);
 
 			for (size_t i = 0; i < enumStrings.size(); i++)
 				map.data[i + mapIndex] = std::pair{ std::pair{ parameterList[i].id, enumStrings[i] }, parameterList[i] };
 
-			return mapIndex + enumStrings.size();
+			mapIndex += enumStrings.size();
 		}
 
 		template<nested_enum::NestedEnum E>
-		constexpr size_t addMultipleParametersToMap(auto &map, const auto &parameterList, size_t mapIndex)
+		constexpr void addMultipleParametersToMap(auto &map, const auto &parameterList, size_t &mapIndex)
 		{
 			constexpr auto enumStrings = E::template enum_strings_recursive<nested_enum::OuterNodes, true, false>();
 
 			for (size_t i = 0; i < enumStrings.size(); i++)
 				map.data[i + mapIndex] = std::pair{ std::pair{ parameterList[i].id, enumStrings[i] }, parameterList[i] };
 
-			return mapIndex + enumStrings.size();
+			mapIndex += enumStrings.size();
 		}
 
 		consteval auto getParameterLookup()
@@ -170,18 +178,19 @@ namespace Framework
 			constexpr size_t totalSize = pluginParameterList.size() +
 				effectLaneParameterList.size() + effectModuleParameterList.size() +
 				baseEffectParameterList.size() + filterEffectParameterList.size() +
-				dynamicsEffectParameterList.size();
+				dynamicsEffectParameterList.size() + phaseEffectParameterList.size();
 
 			ConstexprMap<Parameters::key, Parameters::value, totalSize> map{};
 			size_t index = 0;
 
-			index = addParametersToMap<BaseProcessors::SoundEngine::type>(map, pluginParameterList, index);
-			index = addParametersToMap<BaseProcessors::EffectsLane::type>(map, effectLaneParameterList, index);
-			index = addParametersToMap<BaseProcessors::EffectModule::type>(map, effectModuleParameterList, index);
-			index = addParametersToMap<BaseProcessors::BaseEffect::type>(map, baseEffectParameterList, index);
+			addParametersToMap<BaseProcessors::SoundEngine::type>(map, pluginParameterList, index);
+			addParametersToMap<BaseProcessors::EffectsLane::type>(map, effectLaneParameterList, index);
+			addParametersToMap<BaseProcessors::EffectModule::type>(map, effectModuleParameterList, index);
+			addParametersToMap<BaseProcessors::BaseEffect::type>(map, baseEffectParameterList, index);
 
-			index = addMultipleParametersToMap<BaseProcessors::BaseEffect::Filter::type>(map, filterEffectParameterList, index);
-			index = addMultipleParametersToMap<BaseProcessors::BaseEffect::Dynamics::type>(map, dynamicsEffectParameterList, index);
+			addMultipleParametersToMap<BaseProcessors::BaseEffect::Filter::type>(map, filterEffectParameterList, index);
+			addMultipleParametersToMap<BaseProcessors::BaseEffect::Dynamics::type>(map, dynamicsEffectParameterList, index);
+			addMultipleParametersToMap<BaseProcessors::BaseEffect::Phase::type>(map, phaseEffectParameterList, index);
 
 			return map;
 		}
@@ -207,7 +216,7 @@ namespace Framework
 		return lookup.find_if(functor)->first.second;
 	}
 
-	std::span<const std::string_view> Parameters::getEffectModesStrings(BaseProcessors::BaseEffect::type type)
+	std::span<const std::string_view> Parameters::getEffectModesStrings(const BaseProcessors::BaseEffect::type &type)
 	{
 		static constexpr std::array<std::string_view, kMaxEffectModes> kFilterModeNames =
 			utils::toDifferentSizeArray<kMaxEffectModes>(BaseProcessors::BaseEffect::Filter::enum_strings<nested_enum::AllNodes>(true), std::string_view("Empty"));
@@ -215,12 +224,17 @@ namespace Framework
 		static constexpr std::array<std::string_view, kMaxEffectModes> kDynamicsModeNames =
 			utils::toDifferentSizeArray<kMaxEffectModes>(BaseProcessors::BaseEffect::Dynamics::enum_strings<nested_enum::AllNodes>(true), std::string_view("Empty"));
 
+		static constexpr std::array<std::string_view, kMaxEffectModes> kPhaseModeNames =
+			utils::toDifferentSizeArray<kMaxEffectModes>(BaseProcessors::BaseEffect::Phase::enum_strings<nested_enum::AllNodes>(true), std::string_view("Empty"));
+
 		switch (type)
 		{
 		case BaseProcessors::BaseEffect::Filter:
 			return kFilterModeNames;
 		case BaseProcessors::BaseEffect::Dynamics:
 			return kDynamicsModeNames;
+		case BaseProcessors::BaseEffect::Phase:
+			return kPhaseModeNames;
 		default:
 			return kGenericEffectModeNames.getSpan();
 		}

@@ -14,40 +14,34 @@
 
 namespace
 {
-	template<typename T>
-	const T *findComponentOfClass(const Component *component)
+	struct BoundsDetails
 	{
-		const T *target = dynamic_cast<const T *>(component);
-		if (!target)
-			target = component->findParentComponentOfClass<T>();
-		return target;
-	}
+		int topLevelheight{};
+		Rectangle<int> totalBounds{};
+		Rectangle<int> visibleBounds{};
+	};
 
-	Rectangle<int> getGlobalBounds(const Component *component, Rectangle<int> bounds)
+	BoundsDetails getBoundsDetails(const Component *component, Rectangle<int> bounds)
 	{
+		if (dynamic_cast<const Interface::MainInterface *>(component) != nullptr)
+			return { component->getHeight(), bounds, bounds };
+
+		Rectangle totalBounds = bounds + component->getPosition();
+		Rectangle visibleBounds = bounds;
+
 		Component *parent = component->getParentComponent();
-		while (parent && dynamic_cast<const Interface::MainInterface *>(component) == nullptr)
+		while (dynamic_cast<Interface::MainInterface *>(parent) == nullptr)
 		{
-			bounds = bounds + component->getPosition();
-			component = parent;
-			parent = component->getParentComponent();
-		}
-
-		return bounds;
-	}
-
-	Rectangle<int> getGlobalVisibleBounds(const Component *component, Rectangle<int> visibleBounds)
-	{
-		Component *parent = component->getParentComponent();
-		while (parent && dynamic_cast<Interface::MainInterface *>(parent) == nullptr)
-		{
+			totalBounds = totalBounds + parent->getPosition();
 			visibleBounds = visibleBounds + component->getPosition();
 			parent->getLocalBounds().intersectRectangle(visibleBounds);
 			component = parent;
 			parent = component->getParentComponent();
+			if (!parent)
+				return {};
 		}
 
-		return visibleBounds + component->getPosition();
+		return { parent->getHeight(), totalBounds, visibleBounds + component->getPosition() };
 	}
 }
 
@@ -58,12 +52,9 @@ namespace Interface
 	bool OpenGlComponent::setViewPort(const Component *component, Rectangle<int> bounds, 
 		[[maybe_unused]] const OpenGlWrapper &openGl)
 	{
-		Rectangle<int> visibleBounds = getGlobalVisibleBounds(component, bounds);
+		auto [topLevelHeight, globalBounds, visibleBounds] = getBoundsDetails(component, bounds);
 		if (visibleBounds.getWidth() <= 0 || visibleBounds.getHeight() <= 0)
 			return false;
-
-		int topLevelHeight = findComponentOfClass<MainInterface>(component)->getHeight();
-		Rectangle<int> globalBounds = getGlobalBounds(component, bounds);
 
 		glViewport(globalBounds.getX(), topLevelHeight - globalBounds.getBottom(), 
 			globalBounds.getWidth(), globalBounds.getHeight());
@@ -89,11 +80,9 @@ namespace Interface
 		if (component == nullptr)
 			return;
 
-		Rectangle<int> visibleBounds = getGlobalVisibleBounds(component, bounds);
+		auto [topLevelHeight, globalBounds, visibleBounds] = getBoundsDetails(component, bounds);
 		if (visibleBounds.getWidth() <= 0 || visibleBounds.getHeight() <= 0)
 			return;
-
-		int topLevelHeight = findComponentOfClass<MainInterface>(component)->getHeight();
 
 		glScissor(visibleBounds.getX(), topLevelHeight - visibleBounds.getBottom(),
 			visibleBounds.getWidth(), visibleBounds.getHeight());

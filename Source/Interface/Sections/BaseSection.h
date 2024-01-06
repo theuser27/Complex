@@ -99,12 +99,6 @@ namespace Interface
 		void paintKnobShadows(Graphics &g);
 		void setScaling(float scale);
 		float getComponentShadowWidth() const noexcept { return scaling_ * 2.0f; }
-
-		Rectangle<int> getDividedAreaBuffered(Rectangle<int> full_area, int num_sections, int section, int buffer);
-		Rectangle<int> getDividedAreaUnbuffered(Rectangle<int> full_area, int num_sections, int section, int buffer);
-		Rectangle<int> getLabelBackgroundBounds(Rectangle<int> bounds, bool text_component = false);
-		Rectangle<int> getLabelBackgroundBounds(Component *component, bool text_component = false)
-		{ return getLabelBackgroundBounds(component->getBounds(), text_component); }
 		
 		// main opengl render loop
 		virtual void renderOpenGlComponents(OpenGlWrapper &openGl, bool animate = false);

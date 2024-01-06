@@ -53,6 +53,7 @@ namespace Interface
 	{
 		container_.setAlwaysOnTop(true);
 		setViewedComponent(&container_, false);
+		setSingleStepSizes(12, 12);
 		addAndMakeVisible(&container_);
 	}
 

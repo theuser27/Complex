@@ -186,11 +186,15 @@ namespace Generation
 				while (lanes_[inputIndex]->isFinished_.load(std::memory_order_acquire) == false)
 				{ utils::wait(); }
 
-				laneDataSource.sourceBuffer = SimdBufferView(lanes_[inputIndex]->dataBuffer_, kNumChannels, 0);
+				laneDataSource.sourceBuffer = lanes_[inputIndex]->laneDataSource_.sourceBuffer;
+				laneDataSource.dataType = lanes_[inputIndex]->laneDataSource_.dataType;
 			}
 			// input is not from a chain, we can begin processing
-			else 
+			else
+			{
 				laneDataSource.sourceBuffer = SimdBufferView(dataBuffer_, kNumChannels, inputIndex * kNumChannels);
+				laneDataSource.dataType = ComplexDataSource::Cartesian;
+			}
 
 			// main processing loop
 			for (auto &effectModule : thisLane->subProcessors_)
@@ -226,9 +230,13 @@ namespace Generation
 			if (!lane->getParameter(BaseProcessors::EffectsLane::LaneEnabled::self())->getInternalValue<u32>(getSampleRate()))
 				continue;
 
-			if (lane->laneDataSource_.isPolar)
+			if (lane->laneDataSource_.dataType == ComplexDataSource::Polar)
+			{
 				utils::convertBuffer<utils::complexPolarToCart>(
 					lane->laneDataSource_.sourceBuffer, lane->laneDataSource_.conversionBuffer);
+				lane->laneDataSource_.sourceBuffer = lane->laneDataSource_.conversionBuffer;
+				lane->laneDataSource_.dataType = ComplexDataSource::Cartesian;
+			}
 		}
 
 		// multipliers for scaling the multiple chains going into the same output
@@ -246,16 +254,9 @@ namespace Generation
 
 			multipliers[laneOutput]++;
 
-			if (lane->laneDataSource_.isPolar)
-			{
-				auto source = SimdBufferView(lane->laneDataSource_.conversionBuffer);
-				SimdBuffer<std::complex<float>, simd_float>::applyToThisNoMask(dataBuffer_,
-					source, kComplexSimdRatio, binCount_, utils::MathOperations::Add, laneOutput * kComplexSimdRatio, 0);
-			}
-			else
-				SimdBuffer<std::complex<float>, simd_float>::applyToThisNoMask(dataBuffer_,
-					lane->laneDataSource_.sourceBuffer, kComplexSimdRatio, binCount_, utils::MathOperations::Add,
-					laneOutput * kComplexSimdRatio, 0);
+			SimdBuffer<std::complex<float>, simd_float>::applyToThisNoMask(dataBuffer_,
+				lane->laneDataSource_.sourceBuffer, kComplexSimdRatio, binCount_, utils::MathOperations::Add,
+				laneOutput * kComplexSimdRatio, 0);
 		}
 
 		// scaling all outputs

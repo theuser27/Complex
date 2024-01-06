@@ -77,17 +77,7 @@ namespace Framework
 		ParameterValue(ParameterValue &&other, u64 parentModuleId) noexcept : 
 			ParameterValue(other, parentModuleId) { }
 
-		void initialise(std::optional<float> value = {})
-		{
-			utils::ScopedSpinLock lock(waitLock_);
-
-			normalisedValue_ = value.value_or(details_.defaultNormalisedValue);
-			modulations_ = 0.0f;
-			normalisedInternalValue_ = value.value_or(details_.defaultNormalisedValue);
-			internalValue_ = (!value.has_value()) ? details_.defaultValue :
-				(float)scaleValue(value.value(), details_);
-			isDirty_ = false;
-		}
+		void initialise(std::optional<float> value = {});
 		
 		// prefer calling this only once if possible
 		template<CommonConcepts::ParameterRepresentation T>
@@ -159,62 +149,15 @@ namespace Framework
 		}
 
 		auto changeControl(std::variant<Interface::BaseControl *, ParameterBridge *> control) noexcept
-		{
-			utils::ScopedSpinLock lock(waitLock_);
-			
-			if (std::holds_alternative<Interface::BaseControl *>(control))
-			{
-				auto variant = decltype(control){ std::in_place_index<0>, parameterLink_.UIControl };
-				parameterLink_.UIControl = std::get<0>(control);
-				return variant;
-			}
-			else
-			{
-				auto variant = decltype(control){ std::in_place_index<1>, parameterLink_.hostControl };
-				parameterLink_.hostControl = std::get<1>(control);
-				return variant;
-			}
-		}
+			-> std::variant<Interface::BaseControl *, ParameterBridge *>;
 
-		void addModulator(std::weak_ptr<ParameterModulator> modulator, i64 index = -1)
-		{
-			COMPLEX_ASSERT(!modulator.expired() && "You're trying to add an empty modulator to parameter");
+		void addModulator(std::weak_ptr<ParameterModulator> modulator, i64 index = -1);
 
-			utils::ScopedSpinLock lock(waitLock_);
+		auto updateModulator(std::weak_ptr<ParameterModulator> modulator, size_t index) noexcept
+			-> std::weak_ptr<ParameterModulator>;
 
-			if (index < 0) parameterLink_.modulators.emplace_back(std::move(modulator));
-			else parameterLink_.modulators.emplace(parameterLink_.modulators.begin() + index, std::move(modulator));
-
-			isDirty_ = true;
-		}
-
-		auto updateModulator(std::weak_ptr<ParameterModulator> modulator, size_t index)
-		{
-			COMPLEX_ASSERT(!modulator.expired() && "You're updating with an empty modulator");
-
-			utils::ScopedSpinLock lock(waitLock_);
-
-			auto replacedModulator = parameterLink_.modulators[index];
-			parameterLink_.modulators[index] = std::move(modulator);
-			
-			isDirty_ = true;
-
-			return replacedModulator;
-		}
-
-		auto deleteModulator(size_t index)
-		{
-			COMPLEX_ASSERT(index < parameterLink_.modulators.size() && "You're have given an index that's too large");
-
-			utils::ScopedSpinLock lock(waitLock_);
-
-			auto deletedModulator = parameterLink_.modulators[index];
-			parameterLink_.modulators.erase(parameterLink_.modulators.begin() + (std::ptrdiff_t)index);
-
-			isDirty_ = true;
-
-			return deletedModulator;
-		}
+		auto deleteModulator(size_t index) noexcept
+			-> std::weak_ptr<ParameterModulator>;
 
 		void updateValues(float sampleRate, std::optional<float> value = {}) noexcept;
 

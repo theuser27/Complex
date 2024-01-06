@@ -61,41 +61,46 @@ namespace Framework
 		(DEFER)
 	)
 
-    NESTED_ENUM_FROM(BaseProcessors, SoundEngine, (IDS, MasterMix, "MASTER_MIX", BlockSize, "BLOCK_SIZE", Overlap, "OVERLAP", WindowType, "WINDOW_TYPE", WindowAlpha, "WINDOW_ALPHA", OutGain, "OUT_GAIN"))
-    NESTED_ENUM_FROM(BaseProcessors, EffectsLane, (IDS, LaneEnabled, "LANE_ENABLED", Input, "INPUT", Output, "OUTPUT", GainMatching, "GAIN_MATCHING"))
-    NESTED_ENUM_FROM(BaseProcessors, EffectModule, (IDS, ModuleEnabled, "MODULE_ENABLED", ModuleType, "MODULE_TYPE", ModuleMix, "MODULE_MIX"))
-    // it is important that the effect types be first rather than the parameters
+		NESTED_ENUM_FROM(BaseProcessors, SoundEngine, (IDS, MasterMix, "MASTER_MIX", BlockSize, "BLOCK_SIZE", Overlap, "OVERLAP", WindowType, "WINDOW_TYPE", WindowAlpha, "WINDOW_ALPHA", OutGain, "OUT_GAIN"))
+		NESTED_ENUM_FROM(BaseProcessors, EffectsLane, (IDS, LaneEnabled, "LANE_ENABLED", Input, "INPUT", Output, "OUTPUT", GainMatching, "GAIN_MATCHING"))
+		NESTED_ENUM_FROM(BaseProcessors, EffectModule, (IDS, ModuleEnabled, "MODULE_ENABLED", ModuleType, "MODULE_TYPE", ModuleMix, "MODULE_MIX"))
+		// it is important that the effect types be first rather than the parameters
 		// in multiple places indices are used to address these effects and having them not begin at 0 causes a lot of headaches
 		NESTED_ENUM_FROM(BaseProcessors, BaseEffect, (IDS,
-        Utility, "{A8129602-D351-46D5-B85B-D5764C071575}", Filter, "{809BD1B8-AA18-467E-8DD2-E396F70D6253}",
-        Dynamics, "{D5DADD9A-5B0F-45C6-ADF5-B6A6415AF2D7}", Phase, "{5670932B-8B6F-4475-9926-000F6C36C5AD}",
-        Pitch, "{71133386-9421-4B23-91F9-C826DFC506B8}", Stretch, "{D700C4AA-EC95-4703-9837-7AD5BDF5C810}",
-        Warp, "{5FC3802A-B916-4D36-A853-78A29A5F5687}", Destroy, "{EA1DD088-A73A-4FD4-BB27-38EC0BF91850}",
+				Utility, "{A8129602-D351-46D5-B85B-D5764C071575}", Filter, "{809BD1B8-AA18-467E-8DD2-E396F70D6253}",
+				Dynamics, "{D5DADD9A-5B0F-45C6-ADF5-B6A6415AF2D7}", Phase, "{5670932B-8B6F-4475-9926-000F6C36C5AD}",
+				Pitch, "{71133386-9421-4B23-91F9-C826DFC506B8}", Stretch, "{D700C4AA-EC95-4703-9837-7AD5BDF5C810}",
+				Warp, "{5FC3802A-B916-4D36-A853-78A29A5F5687}", Destroy, "{EA1DD088-A73A-4FD4-BB27-38EC0BF91850}",
 
 				Algorithm, "FX_ALGORITHM", LowBound, "FX_LOW_BOUND", HighBound, "FX_HIGH_BOUND", ShiftBounds, "FX_SHIFT_BOUNDS"),
-            (ENUM, Utility),
-            (DEFER),
-            (DEFER),
-            (ENUM, Phase),
-            (ENUM, Pitch),
-            (ENUM, Stretch),
-            (ENUM, Warp),
-            (ENUM, Destroy)
-    )
+
+						(ENUM, Utility),
+						(DEFER),
+						(DEFER),
+						(DEFER),
+						(ENUM, Pitch),
+						(ENUM, Stretch),
+						(ENUM, Warp),
+						(ENUM, Destroy)
+		)
 
 			// Normal - Lowpass/Highpass/Bandpass/Notch
 			// Regular - Harmonic/Bin based filters (like dtblkfx peaks)
-      NESTED_ENUM_FROM(BaseProcessors::BaseEffect, Filter, (, Normal, Regular), (DEFER), (DEFER))
-        NESTED_ENUM_FROM(BaseProcessors::BaseEffect::Filter, Normal, (IDS, Gain, "FILTER_NORMAL_FX_GAIN", Cutoff, "FILTER_NORMAL_FX_CUTOFF", Slope, "FILTER_NORMAL_FX_SLOPE"))
-        NESTED_ENUM_FROM(BaseProcessors::BaseEffect::Filter, Regular, (IDS, Gain, "FILTER_REGULAR_FX_GAIN", Cutoff, "FILTER_REGULAR_FX_CUTOFF", Phase, "FILTER_REGULAR_FX_PHASE", Stretch, "FILTER_REGULAR_FX_STRETCH"))
-            
+			NESTED_ENUM_FROM(BaseProcessors::BaseEffect, Filter, (, Normal, Regular), (DEFER), (DEFER))
+				NESTED_ENUM_FROM(BaseProcessors::BaseEffect::Filter, Normal, (IDS, Gain, "FILTER_NORMAL_FX_GAIN", Cutoff, "FILTER_NORMAL_FX_CUTOFF", Slope, "FILTER_NORMAL_FX_SLOPE"))
+				NESTED_ENUM_FROM(BaseProcessors::BaseEffect::Filter, Regular, (IDS, Gain, "FILTER_REGULAR_FX_GAIN", Cutoff, "FILTER_REGULAR_FX_CUTOFF", Phase, "FILTER_REGULAR_FX_PHASE", Stretch, "FILTER_REGULAR_FX_STRETCH"))
+						
 			// Contrast - dtblkfx contrast
 			// Clip - dtblkfx clip
 			// Compressor - specops spectral compander/compressor
-      NESTED_ENUM_FROM(BaseProcessors::BaseEffect, Dynamics, (, Contrast, Clip, Compressor), (DEFER), (DEFER), (DEFER))
-        NESTED_ENUM_FROM(BaseProcessors::BaseEffect::Dynamics, Contrast, (IDS, Depth, "DYNAMICS_CONTRAST_FX_DEPTH"))
-        NESTED_ENUM_FROM(BaseProcessors::BaseEffect::Dynamics, Clip, (IDS, Threshold, "DYNAMICS_CLIPPING_FX_THRESHOLD"))
-        NESTED_ENUM_FROM(BaseProcessors::BaseEffect::Dynamics, Compressor)
+			NESTED_ENUM_FROM(BaseProcessors::BaseEffect, Dynamics, (, Contrast, Clip, Compressor), (DEFER), (DEFER), (DEFER))
+				NESTED_ENUM_FROM(BaseProcessors::BaseEffect::Dynamics, Contrast, (IDS, Depth, "DYNAMICS_CONTRAST_FX_DEPTH"))
+				NESTED_ENUM_FROM(BaseProcessors::BaseEffect::Dynamics, Clip, (IDS, Threshold, "DYNAMICS_CLIPPING_FX_THRESHOLD"))
+				NESTED_ENUM_FROM(BaseProcessors::BaseEffect::Dynamics, Compressor)
+
+			NESTED_ENUM_FROM(BaseProcessors::BaseEffect, Phase, (, Shift, Transform), (DEFER), (DEFER))
+				NESTED_ENUM_FROM(BaseProcessors::BaseEffect::Phase, Shift, (IDS, PhaseShift, "PHASE_SHIFT_FX_PHASE_SHIFT", Interval, "PHASE_SHIFT_FX_INTERVAL", Offset, "PHASE_SHIFT_FX_OFFSET"))
+				NESTED_ENUM_FROM(BaseProcessors::BaseEffect::Phase, Transform)
 	
 
 	namespace Parameters
@@ -113,7 +118,7 @@ namespace Framework
 		
 		std::string_view getEnumString(std::string_view id);
 
-		std::span<const std::string_view> getEffectModesStrings(BaseProcessors::BaseEffect::type type);
+		std::span<const std::string_view> getEffectModesStrings(const BaseProcessors::BaseEffect::type &type);
 
 		constexpr std::optional<std::pair<size_t, size_t>> getIndexAndCountForEffect(BaseProcessors::BaseEffect::type type, size_t algorithmIndex)
 		{
@@ -138,6 +143,7 @@ namespace Framework
 			{
 			case BaseProcessors::BaseEffect::Filter: return getIndexAndCount.template operator()<BaseProcessors::BaseEffect::Filter::type>(algorithmIndex);
 			case BaseProcessors::BaseEffect::Dynamics: return getIndexAndCount.template operator()<BaseProcessors::BaseEffect::Dynamics::type>(algorithmIndex);
+			case BaseProcessors::BaseEffect::Phase: return getIndexAndCount.template operator()<BaseProcessors::BaseEffect::Phase::type>(algorithmIndex);
 			default: return {};
 			}
 		}

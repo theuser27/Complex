@@ -146,7 +146,6 @@ namespace Interface
       addListener(this);
     }
 
-    void colourChanged() override { redoImage(); }
     void textEditorTextChanged(TextEditor &) override { redoImage(); }
     void textEditorFocusLost(TextEditor &) override { redoImage(); }
 

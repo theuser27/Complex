@@ -21,7 +21,8 @@ namespace
     "Effects Lane",
   	"Popup Browser",
     "Filter Module",
-    "Dynamics Module"
+    "Dynamics Module",
+    "Phase Module"
   };
 
   inline constexpr std::array<std::string_view, Interface::Skin::kValueIdCount> kValueNames = {

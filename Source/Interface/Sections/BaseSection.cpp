@@ -392,28 +392,6 @@ namespace Interface
 		return displayScale * globalWidth / (float)getWidth();
 	}
 
-	Rectangle<int> BaseSection::getDividedAreaUnbuffered(Rectangle<int> full_area, int num_sections, int section, int buffer)
-	{
-		float component_width = (full_area.getWidth() - (num_sections + 1) * buffer) / (1.0f * num_sections);
-		int x = full_area.getX() + std::round(section * (component_width + buffer) + buffer);
-		int right = full_area.getX() + std::round((section + 1.0f) * (component_width + buffer));
-		return Rectangle<int>(x, full_area.getY(), right - x, full_area.getHeight());
-	}
-
-	Rectangle<int> BaseSection::getDividedAreaBuffered(Rectangle<int> full_area, int num_sections, int section, int buffer)
-	{
-		Rectangle<int> area = getDividedAreaUnbuffered(full_area, num_sections, section, buffer);
-		return area.expanded(buffer, 0);
-	}
-
-	Rectangle<int> BaseSection::getLabelBackgroundBounds(Rectangle<int> bounds, bool text_component)
-	{
-		int background_height = getValue(Skin::kLabelBackgroundHeight);
-		int label_offset = text_component ? getValue(Skin::kTextComponentLabelOffset) : getValue(Skin::kLabelOffset);
-		int background_y = bounds.getBottom() - background_height + label_offset;
-		return Rectangle<int>(bounds.getX(), background_y, bounds.getWidth(), background_height);
-	}
-
 	void BaseSection::setActive(bool active)
 	{
 		if (active_ == active)
@@ -427,7 +405,8 @@ namespace Interface
 			if (auto *slider = dynamic_cast<BaseSlider *>(control.second))
 				slider->setActive(active);
 
-		repaintBackground();
+		if (background_)
+			repaintBackground();
 	}
 
 	void BaseSection::updateAllValues()

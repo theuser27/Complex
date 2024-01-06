@@ -452,9 +452,9 @@ namespace Interface
 	void BaseSlider::showTextEntry()
 	{
 		textEntry_->setVisible(true);
-		textEntry_->redoImage();
 		textEntry_->setText(getRawTextFromValue(getValue()));
 		textEntry_->selectAll();
+		//textEntry_->redoImage();
 		if (textEntry_->isShowing())
 			textEntry_->grabKeyboardFocus();
 	}
@@ -1404,7 +1404,8 @@ namespace Interface
 		isEditing_ = false;
 		textEntry_->giveAwayKeyboardFocus();
 		textEntry_->setColour(TextEditor::textColourId, selectedColor_);
-		textEntry_->setText(getSliderTextFromValue(getValue()));
+		textEntry_->setText(getSliderTextFromValue(getValue()), false);
+		textEntry_->redoImage();
 	}
 
 	void NumberBox::redoImage()
@@ -1412,11 +1413,11 @@ namespace Interface
 		if (!isEditing_)
 		{
 			textEntry_->applyColourToAllText(selectedColor_);
-			textEntry_->setText(getSliderTextFromValue(getValue()));
+			textEntry_->setText(getSliderTextFromValue(getValue()), false);
+			textEntry_->redoImage();
 		}
 
 		imageComponent_->redrawImage();
-		textEntry_->redoImage();
 		quadComponent_->setRounding(findValue(Skin::kWidgetRoundedCorner));
 	}
 
