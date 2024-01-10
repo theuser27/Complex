@@ -10,7 +10,8 @@
 
 #pragma once
 
-//#include "utils.h"
+#include <cmath>
+#include "constants.h"
 #include "matrix.h"
 
 namespace utils
@@ -277,10 +278,10 @@ namespace utils
 	}
 
 	strict_inline simd_float vector_call exp(simd_float exponent) noexcept
-	{ return exp2(exponent * kExpConversionMult); }
+	{ return exp2(exponent * kInvLogOf2); }
 
 	strict_inline simd_float vector_call log(simd_float value) noexcept
-	{ return log2(value) * kLogConversionMult; }
+	{ return log2(value) * kLogOf2; }
 
 	strict_inline simd_float vector_call pow(simd_float base, simd_float exponent) noexcept
 	{ return exp2(log2(base) * exponent); }
@@ -381,10 +382,10 @@ namespace utils
 	}
 
 	strict_inline float exp(float exponent) noexcept
-	{ return exp2(exponent * kExpConversionMult); }
+	{ return exp2(exponent * kInvLogOf2); }
 
 	strict_inline float log(float value) noexcept
-	{ return log2(value) * kLogConversionMult; }
+	{ return log2(value) * kLogOf2; }
 
 	strict_inline float pow(float base, float exponent) noexcept
 	{ return exp2(log2(base) * exponent); }

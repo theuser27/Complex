@@ -10,6 +10,8 @@
 
 #pragma once
 
+#include <AppConfig.h>
+#include <juce_data_structures/juce_data_structures.h>
 #include "../Generation/BaseProcessor.h"
 
 namespace Framework
@@ -86,7 +88,7 @@ namespace Plugin
 
 	protected:
 		// all plugin undo steps are stored here
-		UndoManager undoManager_{ 0, 100 };
+		juce::UndoManager undoManager_{ 0, 100 };
 		// the processor tree is stored in a flattened map
 		Framework::VectorMap<u64, std::unique_ptr<Generation::BaseProcessor>> allProcessors_{ 64 };
 		// used to give out non-repeating ids for all PluginModules

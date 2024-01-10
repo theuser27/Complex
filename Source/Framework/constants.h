@@ -18,6 +18,8 @@ namespace common
 	// general constants; don't change
 	inline constexpr float kPi = std::numbers::pi_v<float>;
 	inline constexpr float k2Pi = kPi * 2.0f;
+	inline constexpr float kLogOf2 = std::numbers::ln2_v<float>;
+	inline constexpr float kInvLogOf2 = 1.0f / kLogOf2;
 	inline constexpr float kEpsilon = 1e-10f;
 	inline constexpr double kDefaultSampleRate = 44100;
 	inline constexpr u32 kSimdRatio = simd_float::kSize;
@@ -30,8 +32,6 @@ namespace common
 	inline constexpr u32 kCentsPerOctave = kNotesPerOctave * kCentsPerNote;
 	inline constexpr float kAmplitudeToDbConversionMult = 6.02059991329f;
 	inline constexpr float kDbToAmplitudeConversionMult = 1.0f / kAmplitudeToDbConversionMult;
-	inline constexpr float kExpConversionMult = 1.44269504089f;
-	inline constexpr float kLogConversionMult = 0.69314718056f;
 
 	// channel constants
 	inline constexpr u32 kNumInputsOutputs = 1;																				// (can be changed)   in/out sources
@@ -75,3 +75,39 @@ namespace common
 }
 
 using namespace common;
+
+namespace CommonConcepts
+{
+	template<typename T>
+	concept SimdInt = std::same_as<T, simd_int>;
+
+	template<typename T>
+	concept SimdFloat = std::same_as<T, simd_float>;
+
+	template<typename T>
+	concept SimdValue = SimdInt<T> || SimdFloat<T>;
+
+	template<typename T>
+	concept Pointer = std::is_pointer_v<T>;
+
+	template<typename T>
+	concept Addable = requires (T x) { x + x; x += x; };
+
+	template<typename T>
+	concept Multipliable = requires (T x) { x *x; x *= x; };
+
+	template<typename T>
+	concept OperatorParen = requires (T x) { x.operator(); };
+
+	template<typename T>
+	concept OperatorBracket = requires (T x) { x.operator[]; };
+
+	template<typename T>
+	concept ParameterRepresentation = std::same_as<T, float> || std::same_as<T, u32> || SimdValue<T>;
+}
+
+namespace Framework
+{
+	// used for updating parameters
+	enum class UpdateFlag : u32 { NoUpdates = 0, Realtime = 1, BeforeProcess = 2, AfterProcess = 3 };
+}

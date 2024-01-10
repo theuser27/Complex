@@ -40,7 +40,7 @@ namespace Interface
 		
 		hasParameter_ = true;
 		
-		setName(utils::toJuceString(parameter->getParameterDetails().id));
+		setName(toJuceString(parameter->getParameterDetails().id));
 		setParameterLink(parameter->getParameterLink());
 		setParameterDetails(parameter->getParameterDetails());
 		setValueSafe(parameterLink_->parameter->getNormalisedValue());
@@ -301,7 +301,7 @@ namespace Interface
 		{
 			size_t lookup = (size_t)(std::clamp(scaledValue, (double)details_.minValue, 
 				(double)details_.maxValue) - details_.minValue);
-			return popupPrefix_ + utils::toJuceString(details_.stringLookup[lookup]);
+			return popupPrefix_ + toJuceString(details_.stringLookup[lookup]);
 		}
 		
 		return popupPrefix_ + formatValue(scaledValue);
@@ -315,7 +315,7 @@ namespace Interface
 		if (!details_.stringLookup.empty())
 		{
 			for (int i = 0; i <= (int)(details_.maxValue - details_.minValue); ++i)
-				if (cleaned == utils::toJuceString(details_.stringLookup[i].data()).toLowerCase())
+				if (cleaned == toJuceString(details_.stringLookup[i].data()).toLowerCase())
 					return Framework::unscaleValue(details_.minValue + (float)i, details_, true);
 		}
 		return Framework::unscaleValue(getRawValueFromText(text), details_, true);

@@ -9,6 +9,7 @@
 */
 
 #include "Shaders.h"
+#include "Framework/platform_definitions.h"
 
 namespace
 {
@@ -631,28 +632,29 @@ namespace
 		"    gl_Position.w = 1.0;\n"
 		"}\n";
 
-	inline String translateFragmentShader(const String &code)
+	inline juce::String translateFragmentShader(const juce::String &code)
 	{
 	#if OPENGL_ES
 		return String("#version 300 es\n") + "out mediump vec4 fragColor;\n" +
 			code.replace("varying", "in").replace("texture2D", "texture").replace("gl_FragColor", "fragColor");
 	#else
-		return OpenGLHelpers::translateFragmentShaderToV3(code);
+		return juce::OpenGLHelpers::translateFragmentShaderToV3(code);
 	#endif
 	}
 
-	inline String translateVertexShader(const String &code)
+	inline juce::String translateVertexShader(const juce::String &code)
 	{
 	#if OPENGL_ES
 		return String("#version 300 es\n") + code.replace("attribute", "in").replace("varying", "out");
 	#else
-		return OpenGLHelpers::translateVertexShaderToV3(code);
+		return juce::OpenGLHelpers::translateVertexShaderToV3(code);
 	#endif
 	}
 }
 
 namespace Interface
 {
+	using namespace juce;
 	using namespace juce::gl;
 
 	OpenGLShaderProgram *Shaders::getShaderProgram(VertexShader vertex_shader, 

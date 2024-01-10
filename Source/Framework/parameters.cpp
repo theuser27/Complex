@@ -9,6 +9,7 @@
 */
 
 #include "parameters.h"
+#include "windows.h"
 #include "vector_map.h"
 #include "utils.h"
 #include "simd_utils.h"
@@ -130,7 +131,11 @@ namespace Framework
 		{ "FILTER_REGULAR_FX_GAIN", "Gain", -120.0f, 120.0f, 0.0f, 0.5f, ParameterScale::SymmetricLoudness, "", {}, true },
 		{ "FILTER_REGULAR_FX_CUTOFF", "Cutoff", 0.0f, 1.0f, 0.5f, 0.5f, ParameterScale::Linear, "", {}, true },
 		{ "FILTER_REGULAR_FX_PHASE", "Phase", -1.0f, 1.0f, 0.25f, 0.75f, ParameterScale::SymmetricQuadratic, "", {}, true },
-		{ "FILTER_REGULAR_FX_STRETCH", "Stretch", 0.0f, 1.0f, 0.5f, 0.5f, ParameterScale::Linear, "", {}, true }
+		{ "FILTER_REGULAR_FX_STRETCH", "Stretch", 0.0f, 1.0f, 0.5f, 0.5f, ParameterScale::Linear, "", {}, true },
+		
+		{ "FILTER_PHASE_FX_GAIN", "Gain", -120.0f, 120.0f, 0.0f, 0.5f, ParameterScale::SymmetricLoudness, "", {}, true },
+		{ "FILTER_PHASE_FX_LOW_PHASE_BOUND", "Low Phase Bound", -180.0f, 180.0f, 0.0f, 0.5f, ParameterScale::Linear, "", {}, true },
+		{ "FILTER_PHASE_FX_HIGH_PHASE_BOUND", "High Phase Bound", -180.0f, 180.0f, 0.0f, 0.5f, ParameterScale::Linear, "", {}, true }
 	};
 
 	static constexpr std::array<ParameterDetails, BaseProcessors::BaseEffect::Dynamics::enum_count_recursive(nested_enum::OuterNodes)> dynamicsEffectParameterList =

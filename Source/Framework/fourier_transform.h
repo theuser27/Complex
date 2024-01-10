@@ -10,12 +10,12 @@
 
 #pragma once
 
-#include "JuceHeader.h"
+#include <memory>
 
 namespace Framework
 {
-	#if INTEL_IPP
-		#include "ipps.h"
+#if INTEL_IPP
+	#include "ipps.h"
 
 	class FFT
 	{
@@ -63,11 +63,10 @@ namespace Framework
 		Ipp8u *spec_;
 		Ipp8u *specBuffer_;
 		Ipp8u *buffer_;
-
-		JUCE_LEAK_DETECTOR(FFT)
 	};
 
 #elif JUCE_MODULE_AVAILABLE_juce_dsp
+	#include "JuceHeader.h"
 
 	class FFT
 	{

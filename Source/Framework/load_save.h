@@ -11,7 +11,8 @@
 #pragma once
 
 #include "Third Party/json/json.hpp"
-#include "Framework/common.h"
+#include <AppConfig.h>
+#include <juce_core/juce_core.h>
 
 using json = nlohmann::json;
 
@@ -20,12 +21,12 @@ namespace Framework
   class LoadSave
   {
   public:
-    static File getConfigFile();
+    static juce::File getConfigFile();
     static json getConfigJson();
     static void saveConfigJson(json configState);
 
-    static File getDefaultSkin();
-    static String getVersion();
+    static juce::File getDefaultSkin();
+    static juce::String getVersion();
 
   	// returns absolute window dimensions
   	static std::pair<int, int> getWindowSize();

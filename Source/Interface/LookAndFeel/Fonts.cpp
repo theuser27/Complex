@@ -8,11 +8,14 @@
 	==============================================================================
 */
 
+#include "BinaryData.h"
 #include "Fonts.h"
-#include "Framework/common.h"
+#include "Framework/platform_definitions.h"
 
 namespace Interface
 {
+	using namespace juce;
+
 	float Fonts::getAscentFromHeight(const Font &font, float height) const noexcept
 	{
 		if (font.getTypefaceName() == DDinFont_.getTypefaceName())

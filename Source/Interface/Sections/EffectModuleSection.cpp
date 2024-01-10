@@ -166,7 +166,7 @@ namespace Interface
 
 	std::unique_ptr<EffectModuleSection> EffectModuleSection::createCopy() const
 	{
-		auto copiedModule = utils::as<Generation::EffectModule *>(effectModule_
+		auto copiedModule = utils::as<Generation::EffectModule>(effectModule_
 			->getProcessorTree()->copyProcessor(effectModule_));
 		return std::make_unique<EffectModuleSection>(copiedModule, laneSection_);
 	}
@@ -383,7 +383,7 @@ namespace Interface
 		Generation::baseEffect *newEffect = cachedEffects_[effectIndex];
 		if (!newEffect)
 		{
-			newEffect = utils::as<Generation::baseEffect *>(effectModule_
+			newEffect = utils::as<Generation::baseEffect>(effectModule_
 				->createSubProcessor(Generation::effectsTypes[effectIndex]));
 			cachedEffects_[effectIndex] = newEffect;
 		}

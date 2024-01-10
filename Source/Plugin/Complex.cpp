@@ -82,7 +82,7 @@ namespace Plugin
 		return nullptr;
 	}
 
-	void ComplexPlugin::Process(AudioBuffer<float> &buffer, u32 numSamples, float sampleRate, u32 numInputs, u32 numOutputs)
+	void ComplexPlugin::Process(juce::AudioBuffer<float> &buffer, u32 numSamples, float sampleRate, u32 numInputs, u32 numOutputs)
 	{
 		utils::ScopedSpinLock lock(waitLock_);
 		soundEngine_->MainProcess(buffer, numSamples, sampleRate, numInputs, numOutputs);

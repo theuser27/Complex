@@ -17,6 +17,8 @@
 
 namespace Interface
 {
+	strict_inline juce::String toJuceString(std::string_view view) { return juce::String{ view.data(), view.size() }; }
+
 	class BaseSection;
 
 	class BaseControl : public Component

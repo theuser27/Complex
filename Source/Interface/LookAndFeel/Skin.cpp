@@ -155,6 +155,8 @@ namespace
 
 namespace Interface
 {
+  using namespace juce;
+
   Skin::Skin()
   {
     File defaultSkin = Framework::LoadSave::getDefaultSkin();

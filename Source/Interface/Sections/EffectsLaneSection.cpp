@@ -206,7 +206,7 @@ namespace Interface
 
 	void EffectsLaneSection::insertedSubProcessor(size_t index, Generation::BaseProcessor *newSubProcessor)
 	{
-		auto newModule = std::make_unique<EffectModuleSection>(utils::as<Generation::EffectModule *>(newSubProcessor), this);
+		auto newModule = std::make_unique<EffectModuleSection>(utils::as<Generation::EffectModule>(newSubProcessor), this);
 		effectModules_.insert(effectModules_.begin() + (std::ptrdiff_t)index, newModule.get());
 		viewport_.container_.addSubSection(newModule.get());
 		parentState_->registerModule(std::move(newModule));

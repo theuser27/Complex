@@ -10,7 +10,9 @@
 
 #pragma once
 
-#include "common.h"
+#include <string_view>
+#include <optional>
+#include "constants.h"
 #include "nested_enum.h"
 #include "constexpr_utils.h"
 
@@ -86,10 +88,11 @@ namespace Framework
 
 			// Normal - Lowpass/Highpass/Bandpass/Notch
 			// Regular - Harmonic/Bin based filters (like dtblkfx peaks)
-			NESTED_ENUM_FROM(BaseProcessors::BaseEffect, Filter, (, Normal, Regular), (DEFER), (DEFER))
+			NESTED_ENUM_FROM(BaseProcessors::BaseEffect, Filter, (, Normal, Regular, Phase), (DEFER), (DEFER), (DEFER))
 				NESTED_ENUM_FROM(BaseProcessors::BaseEffect::Filter, Normal, (IDS, Gain, "FILTER_NORMAL_FX_GAIN", Cutoff, "FILTER_NORMAL_FX_CUTOFF", Slope, "FILTER_NORMAL_FX_SLOPE"))
 				NESTED_ENUM_FROM(BaseProcessors::BaseEffect::Filter, Regular, (IDS, Gain, "FILTER_REGULAR_FX_GAIN", Cutoff, "FILTER_REGULAR_FX_CUTOFF", Phase, "FILTER_REGULAR_FX_PHASE", Stretch, "FILTER_REGULAR_FX_STRETCH"))
-						
+				NESTED_ENUM_FROM(BaseProcessors::BaseEffect::Filter, Phase, (IDS, Gain, "FILTER_PHASE_FX_GAIN", LowPhaseBound, "FILTER_PHASE_FX_LOW_PHASE_BOUND", HighPhaseBound, "FILTER_PHASE_FX_HIGH_PHASE_BOUND"))
+
 			// Contrast - dtblkfx contrast
 			// Clip - dtblkfx clip
 			// Compressor - specops spectral compander/compressor

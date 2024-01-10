@@ -10,7 +10,7 @@
 
 #pragma once
 
-#include "common.h"
+#include <complex>
 #include "simd_utils.h"
 #include "simd_buffer.h"
 
@@ -241,8 +241,8 @@ namespace utils
 	{
 		// https://www.desmos.com/calculator/oxzturzmjn
 		// max error ~= 0.01 degrees
-		static const simd_float a = 0.35515f;
-		static const simd_float b = -0.0817f;
+		static const simd_float a = 0.35496f;
+		static const simd_float b = -0.0815f;
 
 		simd_float yxDiv = imaginary / real;
 		simd_float yxDivSqr = yxDiv * yxDiv;
@@ -314,6 +314,18 @@ namespace utils
 	#if COMPLEX_SSE4_1
 		simd_float real = _mm_shuffle_ps(value.value, value.value, _MM_SHUFFLE(2, 2, 0, 0));
 		simd_float imaginary = _mm_shuffle_ps(value.value, value.value, _MM_SHUFFLE(3, 3, 1, 1));
+	#elif COMPLEX_NEON
+		static_assert(false, "ARM NEON complexPhase not implemented yet");
+	#endif
+
+		return atan2(imaginary, real);
+	}
+
+	strict_inline simd_float vector_call complexPhase(simd_float one, simd_float two)
+	{
+	#if COMPLEX_SSE4_1
+		simd_float real = _mm_shuffle_ps(one.value, two.value, _MM_SHUFFLE(2, 0, 2, 0));
+		simd_float imaginary = _mm_shuffle_ps(one.value, two.value, _MM_SHUFFLE(3, 1, 3, 1));
 	#elif COMPLEX_NEON
 		static_assert(false, "ARM NEON complexPhase not implemented yet");
 	#endif

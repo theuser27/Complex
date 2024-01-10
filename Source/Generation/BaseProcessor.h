@@ -10,7 +10,9 @@
 
 #pragma once
 
-#include "Framework/common.h"
+#include <complex>
+#include <chrono>
+#include "Framework/constants.h"
 #include "Framework/vector_map.h"
 #include "Framework/simd_buffer.h"
 #include "Framework/parameter_value.h"
@@ -120,7 +122,8 @@ namespace Generation
 			else
 			{
 				// copy constructor
-				if constexpr (std::is_base_of_v<BaseProcessor, std::remove_cvref_t<decltype(utils::getNthElement<0>(args...))>>)
+				if constexpr (std::is_base_of_v<BaseProcessor, 
+					std::remove_cvref_t<decltype(utils::getNthElement<0>(std::forward<Args>(args)...))>>)
 				{
 					return new T(std::forward<Args>(args)...);
 				}

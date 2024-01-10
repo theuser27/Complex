@@ -11,12 +11,17 @@
 #pragma once
 
 #include "Third Party/clog/small_function.hpp"
+#include <AppConfig.h>
+#include <juce_gui_basics/juce_gui_basics.h>
+#include "Framework/constants.h"
 #include "Framework/constexpr_utils.h"
 #include "../LookAndFeel/Shaders.h"
 #include "../LookAndFeel/Skin.h"
 
 namespace Interface
 {
+	using namespace juce;
+
 	class BaseSection;
 	class OpenGlCorners;
 

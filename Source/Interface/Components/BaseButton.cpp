@@ -237,7 +237,7 @@ namespace Interface
 
 		hasParameter_ = true;
 
-		setName(utils::toJuceString(parameter->getParameterDetails().id));
+		setName(toJuceString(parameter->getParameterDetails().id));
 		setParameterLink(parameter->getParameterLink());
 		setParameterDetails(parameter->getParameterDetails());
 		setValueSafe(parameterLink_->parameter->getNormalisedValue());
@@ -363,7 +363,7 @@ namespace Interface
 	String BaseButton::getTextFromValue(bool value) const noexcept
 	{
 		if (!details_.stringLookup.empty())
-			return utils::toJuceString(details_.stringLookup[(size_t)value]);
+			return toJuceString(details_.stringLookup[(size_t)value]);
 
 		return (value) ? "On" : "Off";
 	}

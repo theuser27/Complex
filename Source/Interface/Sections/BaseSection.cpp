@@ -14,7 +14,7 @@
 
 namespace Interface
 {
-	BaseSection::BaseSection(std::string_view name) : Component(utils::toJuceString(name))
+	BaseSection::BaseSection(std::string_view name) : Component(toJuceString(name))
 	{
 		setWantsKeyboardFocus(true);
 	}

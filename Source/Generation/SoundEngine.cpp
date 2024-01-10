@@ -45,7 +45,7 @@ namespace Generation
 		// TODO: when samples per block changes, reset all working buffers to start from the beginning
 	}
 
-	perf_inline void SoundEngine::CopyBuffers(AudioBuffer<float> &buffer, u32 numInputs, u32 numSamples) noexcept
+	perf_inline void SoundEngine::CopyBuffers(juce::AudioBuffer<float> &buffer, u32 numInputs, u32 numSamples) noexcept
 	{
 		// assume that we don't get blocks bigger than our buffer size
 		inputBuffer.writeToBufferEnd(buffer, numInputs, numSamples);
@@ -131,7 +131,7 @@ namespace Generation
 	perf_inline void SoundEngine::DoFFT() noexcept
 	{
 		// windowing
-		windows.applyWindow(FFTBuffer, FFTBuffer.getNumChannels(), usedInputChannels_.data(), FFTNumSamples_, windowType_, alpha_);
+		windows.applyWindow(FFTBuffer.getArrayOfWritePointers(), FFTBuffer.getNumChannels(), usedInputChannels_.data(), FFTNumSamples_, windowType_, alpha_);
 
 		// in-place FFT
 		// FFT-ed only if the input is used
@@ -322,7 +322,7 @@ namespace Generation
 		inputBuffer.advanceLastOutputBlock(numSamples);
 	}
 
-	perf_inline void SoundEngine::FillOutput(AudioBuffer<float> &buffer, u32 numOutputs, u32 numSamples) noexcept
+	perf_inline void SoundEngine::FillOutput(juce::AudioBuffer<float> &buffer, u32 numOutputs, u32 numSamples) noexcept
 	{
 		// if we don't have enough samples we simply output silence
 		if (!hasEnoughSamples_)
@@ -339,7 +339,7 @@ namespace Generation
 		prevFFTNumSamples_ = FFTNumSamples_;
 	}
 
-	void SoundEngine::MainProcess(AudioBuffer<float> &buffer, u32 numSamples, 
+	void SoundEngine::MainProcess(juce::AudioBuffer<float> &buffer, u32 numSamples,
 		float sampleRate, u32 numInputs, u32 numOutputs) noexcept
 	{
 		// copying input in the main circular buffer

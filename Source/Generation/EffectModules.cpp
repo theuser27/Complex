@@ -321,8 +321,46 @@ namespace Generation
 		copyUnprocessedData(source, destination, lowBoundIndices, highBoundIndices, binCount);
 	}
 
+	void filterEffect::runPhase(Framework::SimdBufferView<std::complex<float>, simd_float> source,
+		Framework::SimdBuffer<std::complex<float>, simd_float> &destination, u32 binCount, float sampleRate) const noexcept
+	{
+		using namespace utils;
+		using namespace Framework;
+
+		// getting the boundaries in terms of bin position
+		auto [lowBoundIndices, highBoundIndices] = [&]()
+		{
+			auto [low, high] = getShiftedBounds(BoundRepresentation::BinIndex, sampleRate, binCount * 2);
+			return std::pair{ toInt(low), toInt(high) };
+		}();
+
+		// minimising the bins to iterate on
+		auto [index, numBins] = minimiseRange(lowBoundIndices, highBoundIndices, binCount, true);
+
+		// if scalars are negative/positive, attenuate phases in/outside the range
+		// (gains is gain reduction in db and NOT a gain multiplier)
+		simd_float gains = getParameter(BaseProcessors::BaseEffect::Filter::Phase::Gain::self())->getInternalValue<simd_float>(sampleRate);
+		simd_mask gainMask = unsignSimd(gains, true);
+
+		simd_float lowPhaseBound = getParameter(BaseProcessors::BaseEffect::Filter::Phase::LowPhaseBound::self())
+			->getInternalValue<simd_float>(sampleRate);
+		simd_float highPhaseBound = getParameter(BaseProcessors::BaseEffect::Filter::Phase::HighPhaseBound::self())
+			->getInternalValue<simd_float>(sampleRate);
+
+		for (u32 i = 0; i < numBins; i += 2)
+		{
+			u32 oneIndex = (index + i) & (binCount - 1);
+			u32 twoIndex = (index + i + 1) & (binCount - 1);
+			simd_float one = source.readSimdValueAt(0, oneIndex);
+			simd_float two = source.readSimdValueAt(0, twoIndex);
+
+			simd_float phases = complexPhase(one, two);
+
+		}
+	}
+
 	void filterEffect::run(Framework::SimdBufferView<std::complex<float>, simd_float> &source,
-		Framework::SimdBuffer<std::complex<float>, simd_float> &destination, u32 binCount, float sampleRate) noexcept
+	                       Framework::SimdBuffer<std::complex<float>, simd_float> &destination, u32 binCount, float sampleRate) noexcept
 	{
 		using namespace Framework;
 		switch (getEffectAlgorithm<BaseProcessors::BaseEffect::Filter::type>())
@@ -733,7 +771,7 @@ namespace Generation
 		if (!getParameter(BaseProcessors::EffectModule::ModuleEnabled::self())->getInternalValue<u32>(sampleRate))
 			return;
 
-		auto *effect = utils::as<baseEffect *>(subProcessors_[0]);
+		auto *effect = utils::as<baseEffect>(subProcessors_[0]);
 
 		if (auto neededType = effect->neededDataType(); neededType != ComplexDataSource::Both && source.dataType != neededType)
 		{

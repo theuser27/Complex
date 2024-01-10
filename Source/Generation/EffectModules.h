@@ -11,7 +11,7 @@
 #pragma once
 
 #include <algorithm>
-#include "Framework/common.h"
+#include "Framework/constants.h"
 #include "Framework/simd_buffer.h"
 #include "Framework/parameters.h"
 #include "Framework/parameter_value.h"
@@ -183,6 +183,9 @@ namespace Generation
 
 	private:
 		void runNormal(Framework::SimdBufferView<std::complex<float>, simd_float> &source,
+			Framework::SimdBuffer<std::complex<float>, simd_float> &destination, u32 binCount, float sampleRate) const noexcept;
+
+		void runPhase(Framework::SimdBufferView<std::complex<float>, simd_float> source,
 			Framework::SimdBuffer<std::complex<float>, simd_float> &destination, u32 binCount, float sampleRate) const noexcept;
 
 		static simd_float vector_call getDistancesFromCutoffs(simd_int positionIndices,
@@ -394,7 +397,7 @@ namespace Generation
 		[[nodiscard]] BaseProcessor *createCopy(std::optional<u64> parentModuleId) const noexcept override
 		{ return makeSubProcessor<EffectModule>(*this, parentModuleId.value_or(parentProcessorId_)); }
 
-		baseEffect *getEffect() const noexcept { return utils::as<baseEffect *>(subProcessors_[0]); }
+		baseEffect *getEffect() const noexcept { return utils::as<baseEffect>(subProcessors_[0]); }
 	private:
 		baseEffect *createEffect(std::string_view type) const noexcept;
 

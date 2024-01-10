@@ -10,7 +10,9 @@
 
 #pragma once
 
-#include "Framework/common.h"
+#include <AppConfig.h>
+#include <juce_data_structures/juce_data_structures.h>
+
 #include "Generation/BaseProcessor.h"
 #include "Plugin/ProcessorTree.h"
 

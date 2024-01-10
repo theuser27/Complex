@@ -36,7 +36,7 @@ namespace Interface
 	{
 		hasParameter_ = true;
 
-		setName(utils::toJuceString(parameter.getParameterDetails().id));
+		setName(toJuceString(parameter.getParameterDetails().id));
 		auto replacedLink = setParameterLink(parameter.getParameterLink());
 
 		Framework::ParameterValue *replacedParameter = nullptr;
@@ -148,7 +148,7 @@ namespace Interface
 			return;
 		
 		label_ = makeOpenGlComponent<PlainTextComponent>("Control Label",
-			(hasParameter()) ? utils::toJuceString(details_.displayName) : getName());
+			(hasParameter()) ? toJuceString(details_.displayName) : getName());
 		label_->setFontType(PlainTextComponent::kText);
 		label_->setTextHeight(Fonts::kInterVDefaultHeight);
 		extraElements_.add(label_.get(), {});

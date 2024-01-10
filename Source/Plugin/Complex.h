@@ -10,7 +10,6 @@
 
 #pragma once
 
-#include "Framework/common.h"
 #include "Framework/parameter_bridge.h"
 #include "Generation/SoundEngine.h"
 #include "ProcessorTree.h"
@@ -29,7 +28,7 @@ namespace Plugin
 
 		void Initialise(float sampleRate, u32 samplesPerBlock);
 		void CheckGlobalParameters();
-		void Process(AudioBuffer<float> &buffer, u32 numSamples, float sampleRate, u32 numInputs, u32 numOutputs);
+		void Process(juce::AudioBuffer<float> &buffer, u32 numSamples, float sampleRate, u32 numInputs, u32 numOutputs);
 
 		strict_inline u32 getProcessingDelay() const noexcept { return soundEngine_->getProcessingDelay(); }
 		

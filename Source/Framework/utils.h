@@ -12,13 +12,17 @@
 
 #include <concepts>
 #include <span>
-#include "common.h"
+#include <atomic>
+#include <numbers>
+#include <string_view>
+#include <cmath>
+
+#include <Third Party/gcem/gcem.hpp>
+#include "platform_definitions.h"
+#include "constants.h"
 
 namespace utils
 {
-	static constexpr double kLogOf2 = std::numbers::ln2_v<double>;
-	static constexpr double kInvLogOf2 = 1.0f / kLogOf2;
-
 	enum class MathOperations { Assign, Add, Multiply, FadeInAdd, FadeOutAdd, Interpolate };
 
 	// get you the N-th element of a parameter pack
@@ -117,7 +121,7 @@ namespace utils
 	{ return midiCentsToFrequency(note * kCentsPerNote); }
 
 	strict_inline double frequencyToMidiNote(double frequency) noexcept
-	{ return (double)kNotesPerOctave * std::log(frequency / kMidi0Frequency) * kInvLogOf2; }
+	{ return (double)kNotesPerOctave * std::log(frequency / kMidi0Frequency) * (double)kInvLogOf2; }
 
 	strict_inline double frequencyToMidiCents(double frequency) noexcept
 	{ return kCentsPerNote * frequencyToMidiNote(frequency); }
@@ -129,7 +133,7 @@ namespace utils
 	{ return (value & (value - 1)) == 0; }
 
 	strict_inline float nextPowerOfTwo(float value) noexcept
-	{ return roundf(powf(2.0f, ceilf(logf(value) * (float)kInvLogOf2))); }
+	{ return roundf(powf(2.0f, ceilf(logf(value) * kInvLogOf2))); }
 
 	constexpr strict_inline bool isSilent(const float *buffer, i32 length) noexcept
 	{
@@ -283,27 +287,15 @@ namespace utils
 		mutable std::atomic<bool> guard = false;
 	};
 
-	template<CommonConcepts::Pointer T>
-	strict_inline T as(CommonConcepts::Pointer auto pointer)
+	template<typename T, typename U>
+	strict_inline T *as(U *pointer)
 	{
 	#if COMPLEX_DEBUG
-		auto *castPointer = dynamic_cast<T>(pointer);
+		auto *castPointer = dynamic_cast<T *>(pointer);
 		COMPLEX_ASSERT(castPointer && "Unsuccessful cast");
 		return castPointer;
 	#else
-		return static_cast<T>(pointer);
+		return static_cast<T *>(pointer);
 	#endif
-	}
-
-	strict_inline String toJuceString(std::string_view view) { return String{ view.data(), view.size() }; }
-
-	// for debugging purposes
-	strict_inline void printBuffer([[maybe_unused]] const float *begin, u32 numSamples)
-	{
-		for (u32 i = 0; i < numSamples; i++)
-		{
-			DBG(begin[i]);
-		}
-		DBG("\n");
 	}
 }

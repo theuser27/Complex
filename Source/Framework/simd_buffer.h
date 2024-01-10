@@ -10,10 +10,9 @@
 
 #pragma once
 
-#include "common.h"
 #include "memory_block.h"
-#include "utils.h"
 #include "simd_utils.h"
+#include "utils.h"
 
 namespace Framework
 {

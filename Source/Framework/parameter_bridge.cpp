@@ -25,7 +25,7 @@ namespace Framework
 		if (parameterIndex == (u32)(-1) && link)
 		{
 			parameterLinkPointer_.store(link, std::memory_order_release);
-			name_.second += utils::toJuceString(link->parameter->getParameterDetails().displayName);
+			name_.second += Interface::toJuceString(link->parameter->getParameterDetails().displayName);
 			link->hostControl = this;
 			value_ = link->parameter->getNormalisedValue();
 		}
@@ -35,7 +35,7 @@ namespace Framework
 			name_.second += (int)parameterIndex;
 			name_.second += " > ";
 			parameterLinkPointer_.store(link, std::memory_order_release);
-			name_.second += utils::toJuceString(link->parameter->getParameterDetails().displayName);
+			name_.second += Interface::toJuceString(link->parameter->getParameterDetails().displayName);
 			link->hostControl = this;
 			value_ = link->parameter->getNormalisedValue();
 		}
@@ -74,13 +74,13 @@ namespace Framework
 			newString.preallocateBytes(64);
 			newString.append(name_.second, index);
 			newString += " > ";
-			newString += utils::toJuceString(link->parameter->getParameterDetails().displayName);
+			newString += Interface::toJuceString(link->parameter->getParameterDetails().displayName);
 			name_.second = std::move(newString);
 		}
 
 		guard.~ScopedSpinLock();
 
-		utils::as<ComplexAudioProcessor *>(plugin_)
+		utils::as<ComplexAudioProcessor>(plugin_)
 			->updateHostDisplay(AudioProcessor::ChangeDetails{}.withParameterInfoChanged(true));
 	}
 

@@ -80,7 +80,7 @@ namespace Generation
 			return false;
 
 		// TODO: remedy the way lanes are being processed by threads
-		lanes_.emplace_back(utils::as<EffectsLane *>(newSubProcessor));
+		lanes_.emplace_back(utils::as<EffectsLane>(newSubProcessor));
 		subProcessors_.emplace_back(newSubProcessor);
 		laneThreads_.emplace_back(std::bind_front(&EffectsState::processIndividualLanes, std::ref(*this)), lanes_.size() - 1);
 
@@ -105,7 +105,7 @@ namespace Generation
 		return deletedModule;
 	}
 
-	void EffectsState::writeInputData(const AudioBuffer<float> &inputBuffer) noexcept
+	void EffectsState::writeInputData(const juce::AudioBuffer<float> &inputBuffer) noexcept
 	{
 		auto channelPointers = inputBuffer.getArrayOfReadPointers();
 		for (u32 i = 0; i < (u32)inputBuffer.getNumChannels(); i += kComplexSimdRatio)
@@ -200,7 +200,7 @@ namespace Generation
 			for (auto &effectModule : thisLane->subProcessors_)
 			{
 				// this is safe because by design only EffectModules are contained in a lane
-				utils::as<EffectModule *>(effectModule)->processEffect(laneDataSource, binCount_, getSampleRate());
+				utils::as<EffectModule>(effectModule)->processEffect(laneDataSource, binCount_, getSampleRate());
 
 				// TODO: fit links between modules here
 
@@ -272,7 +272,7 @@ namespace Generation
 		}
 	}
 
-	void EffectsState::writeOutputData(AudioBuffer<float> &outputBuffer) const noexcept
+	void EffectsState::writeOutputData(juce::AudioBuffer<float> &outputBuffer) const noexcept
 	{
 		Framework::Matrix matrix;
 

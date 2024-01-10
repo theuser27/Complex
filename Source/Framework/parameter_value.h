@@ -12,7 +12,6 @@
 
 #include <variant>
 
-#include "common.h"
 #include "utils.h"
 #include "simd_utils.h"
 #include "parameters.h"

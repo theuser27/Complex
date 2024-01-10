@@ -10,7 +10,6 @@
 
 #pragma once
 
-#include "Framework/common.h"
 #include "Framework/parameter_value.h"
 #include "Framework/parameter_bridge.h"
 #include "OpenGlImageComponent.h"

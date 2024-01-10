@@ -81,7 +81,7 @@ namespace Framework
 	float Window::getLanczosWindow(float position, float alpha) noexcept 
 	{ return utils::pow((lanczosWindowLookup.linearLookup(position)), alpha); }
 
-	void Window::applyDefaultWindows(AudioBuffer<float>&buffer, u32 numChannels, 
+	void Window::applyDefaultWindows(float *const *buffers, u32 numChannels,
 		const bool *channelsToCopy, u32 numSamples, WindowTypes type, float alpha) noexcept
 	{
 		if (type == WindowTypes::Lerp || type == WindowTypes::Rectangle)
@@ -139,8 +139,8 @@ namespace Framework
 				if (!channelsToCopy[j])
 					continue;
 
-				*buffer.getWritePointer(j, 0) *= window;
-				*buffer.getWritePointer(j, centerSample) *= centerWindow;
+				buffers[j][0] *= window;
+				buffers[j][centerSample] *= centerWindow;
 			}
 			position += increment;
 		}
@@ -179,8 +179,8 @@ namespace Framework
 				if (!channelsToCopy[j])
 					continue;
 
-				*buffer.getWritePointer(j, i) *= window;
-				*buffer.getWritePointer(j, numSamples - i) *= window;
+				buffers[j][i] *= window;
+				buffers[j][numSamples - i] *= window;
 			}
 			position += increment;
 		}
