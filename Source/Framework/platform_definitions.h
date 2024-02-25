@@ -76,3 +76,23 @@
 	#define perf_inline inline __attribute__((always_inline))
 	#define vector_call
 #endif
+
+// using rust naming because yes
+typedef uint8_t u8;
+typedef uint16_t u16;
+typedef uint32_t u32;
+typedef uint64_t u64;
+
+typedef int8_t i8;
+typedef int16_t i16;
+typedef int32_t i32;
+typedef int64_t i64;
+
+#if DEBUG
+	#include <cassert>
+	#define COMPLEX_ASSERT(x) assert(x)
+	#define COMPLEX_ASSERT_FALSE(x) assert(false && (x))
+#else
+	#define COMPLEX_ASSERT(x) ((void)0)
+	#define COMPLEX_ASSERT_FALSE(x) ((void)0)
+#endif

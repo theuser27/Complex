@@ -10,17 +10,14 @@
 
 #pragma once
 
-#include "JuceHeader.h"
-
 #include "BaseSection.h"
-#include "HeaderFooterSections.h"
-#include "EffectsStateSection.h"
 
 namespace Interface
 {
 	class AboutSection;
 	class DeleteSection;
 	class ExtraModSection;
+	class HeaderFooterSections;
 	class EffectsStateSection;
 	class MasterControlsInterface;
 	class ModulationInterface;
@@ -31,7 +28,7 @@ namespace Interface
 	class SinglePopupSelector;
 	class DualPopupSelector;
 
-	class MainInterface : public BaseSection, public juce::DragAndDropContainer
+	class MainInterface final : public BaseSection, public juce::DragAndDropContainer
 	{
 	public:
 		static constexpr int kMainVisualiserHeight = 112;
@@ -41,34 +38,36 @@ namespace Interface
 		static constexpr int kLaneToLaneMargin = 4;
 		static constexpr int kLaneToBottomSettingsMargin = 20;
 
-		static constexpr int kMinWidth = EffectsStateSection::kMinWidth + 2 * kHorizontalWindowEdgeMargin;
-		static constexpr int kMinHeight = HeaderFooterSections::kHeaderHeight + kMainVisualiserHeight + 
-			kVerticalGlobalMargin + EffectsStateSection::kMinHeight + kLaneToBottomSettingsMargin + HeaderFooterSections::kFooterHeight;
+		static constexpr int kMinWidth = kEffectsStateMinWidth + 2 * kHorizontalWindowEdgeMargin;
+		static constexpr int kMinHeight = kHeaderHeight + kMainVisualiserHeight +
+			kVerticalGlobalMargin + kEffectsStateMinHeight + kLaneToBottomSettingsMargin + kFooterHeight;
 
 		MainInterface(Renderer *renderer);
+		~MainInterface() override;
 
 		void reloadSkin(const Skin &skin);
 
 		void resized() override;
+		void parentHierarchyChanged() override { }
 		void reset() override;
 
-		void renderOpenGlComponents(OpenGlWrapper &openGl, bool animate) override 
-		{ BaseSection::renderOpenGlComponents(openGl, animate); }
+		void renderOpenGlComponents(OpenGlWrapper &openGl, bool animate) override;
 
 		//void effectsMoved() override;
 
 		void notifyChange();
 		void notifyFresh();
 		//bool loadAudioAsSource(int index, const String &name, InputStream *audio_stream);
-		void popupSelector(const Component *source, Point<int> position, PopupItems options,
-			std::function<void(int)> callback, std::function<void()> cancel);
-		void dualPopupSelector(Component *source, Point<int> position, int width,
+		void popupSelector(const BaseComponent *source, Point<int> position, PopupItems options,
+			Skin::SectionOverride skinOverride, std::function<void(int)> callback, std::function<void()> cancel);
+		void dualPopupSelector(BaseComponent *source, Point<int> position, int width,
 			const PopupItems &options, std::function<void(int)> callback);
-		void popupDisplay(Component *source, String text,
+		void popupDisplay(BaseComponent *source, String text,
 			BubbleComponent::BubblePlacement placement, bool primary, 
 			Skin::SectionOverride sectionOverride = Skin::kPopupBrowser);
 		void hideDisplay(bool primary);
 
+		auto &getRenderLock() noexcept { return renderLock_; }
 	private:
 		std::unique_ptr<HeaderFooterSections> headerFooter_;
 		std::unique_ptr<EffectsStateSection> effectsStateSection_;
@@ -76,6 +75,8 @@ namespace Interface
 		std::unique_ptr<DualPopupSelector> dualPopupSelector_;
 		std::unique_ptr<PopupDisplay> popupDisplay1_;
 		std::unique_ptr<PopupDisplay> popupDisplay2_;
+
+		std::atomic<bool> renderLock_ = false;
 
 		JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(MainInterface)
 	};

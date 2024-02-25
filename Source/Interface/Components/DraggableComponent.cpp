@@ -36,7 +36,7 @@ namespace Interface
 	void DraggableComponent::mouseMove(const MouseEvent &e)
 	{
 		setMouseCursor(MouseCursor(MouseCursor::StandardCursorType::DraggingHandCursor));
-		Component::mouseMove(e);
+		BaseComponent::mouseMove(e);
 	}
 
 	void DraggableComponent::mouseDown(const MouseEvent &e)
@@ -57,7 +57,7 @@ namespace Interface
 	void DraggableComponent::mouseExit(const MouseEvent &e)
 	{
 		setMouseCursor(MouseCursor(MouseCursor::StandardCursorType::NormalCursor));
-		Component::mouseExit(e);
+		BaseComponent::mouseExit(e);
 	}
 
 }

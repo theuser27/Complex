@@ -108,5 +108,11 @@ namespace Interface
     glDisable(GL_BLEND);
     glDisable(GL_SCISSOR_TEST);
   }
-  
+
+  Overlay::Overlay(std::string_view name) : BaseSection(name)
+  {
+    background_ = makeOpenGlComponent<OverlayBackgroundRenderer>();
+    setSkinOverride(Skin::kOverlay);
+    addOpenGlComponent(background_);
+  }
 }

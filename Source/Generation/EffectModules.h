@@ -14,9 +14,7 @@
 #include "Framework/common.h"
 #include "Framework/simd_buffer.h"
 #include "Framework/parameters.h"
-#include "Framework/parameter_value.h"
 #include "BaseProcessor.h"
-#include "Plugin/ProcessorTree.h"
 
 namespace Generation
 {
@@ -72,7 +70,7 @@ namespace Generation
 		virtual bool needsPolarData() const noexcept { return false; }
 		template<nested_enum::NestedEnum E>
 		E getEffectAlgorithm() const
-		{ return E::make_enum(getParameter(Framework::BaseProcessors::BaseEffect::Algorithm::self())->getInternalValue<u32>()).value(); }
+		{ return E::make_enum(getParameter(Framework::BaseProcessors::BaseEffect::Algorithm::value())->getInternalValue<u32>()).value(); }
 
 	protected:
 		[[nodiscard]] BaseProcessor *createCopy([[maybe_unused]] std::optional<u64> parentModuleId) const noexcept override
@@ -88,9 +86,9 @@ namespace Generation
 		{
 			using namespace Framework;
 
-			auto *parameter = getParameter(BaseProcessors::BaseEffect::Algorithm::self());
+			auto *parameter = getParameter(BaseProcessors::BaseEffect::Algorithm::value());
 			auto details = parameter->getParameterDetails();
-			details.stringLookup = Parameters::getEffectModesStrings(Type::self());
+			details.stringLookup = Parameters::getEffectModesStrings(Type::value());
 			parameter->setParameterDetails(details);
 			
 			utils::applyOne([&]<typename T>(T &&) { createProcessorParameters<typename std::remove_cvref_t<T>::type>(); }, Type::template enum_subtypes<nested_enum::InnerNodes>());

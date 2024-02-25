@@ -10,88 +10,42 @@
 
 #pragma once
 
-#include "Third Party/clog/small_function.hpp"
 #include "Framework/constexpr_utils.h"
+#include "../LookAndFeel/BaseComponent.h"
 #include "../LookAndFeel/Shaders.h"
 #include "../LookAndFeel/Skin.h"
 
 namespace Interface
 {
-	class BaseSection;
-	class OpenGlCorners;
+	using namespace juce;
 
-	// Event - on manual calling
-	// Resized - on component resizing
-	// Realtime - every frame
-	enum class RefreshFrequency : u32
-	{
-		Event = 1,
-		Resized = 2,
-		Realtime = 4,
+	class OpenGlContainer;
 
-		ResizedAndEvent = Event | Resized,
-		RealtimeAndEvent = Event | Realtime,
-		RealtimeAndResized = Resized | Realtime,
-
-		All = Event | Resized | Realtime
-	};
+	// NoWork - skip rendering on component
+	// Dirty - render and update flag to NoWork
+	// Realtime - render every frame
+	enum class RenderFlag : u32 { NoWork = 0, Dirty = 1, Realtime = 2 };
 
 	class Animator
 	{
 	public:
 		enum EventType { Hover, Click };
 
-		void tick(bool isAnimating = true) noexcept
-		{
-			if (isAnimating)
-			{
-				if (isHovered_)
-					hoverValue_ = std::min(1.0f, hoverValue_ + hoverIncrement_);
-				else
-					hoverValue_ = std::max(0.0f, hoverValue_ - hoverIncrement_);
-
-				if (isClicked_)
-					clickValue_ = std::min(1.0f, clickValue_ + clickIncrement_);
-				else
-					clickValue_ = std::max(0.0f, clickValue_ - clickIncrement_);
-			}
-			else
-			{
-				hoverValue_ = isHovered_;
-				clickValue_ = isClicked_;
-			}
-		}
-
-		float getValue(EventType type, float min = 0.0f, float max = 1.0f) const noexcept
-		{
-			float value;
-			switch (type)
-			{
-			case Hover:
-				value = hoverValue_;
-				break;
-			case Click:
-				value = clickValue_;
-				break;
-			default:
-				value = 1.0f;
-				break;
-			}
-
-			value *= max - min;
-			return value + min;
-		}
+		void tick(bool isAnimating = true) noexcept;
+		float getValue(EventType type, float min = 0.0f, float max = 1.0f) const noexcept;
 
 		void setHoverIncrement(float increment) noexcept
-		{ COMPLEX_ASSERT(increment > 0.0f); hoverIncrement_ = increment; }
+		{ COMPLEX_ASSERT(increment > 0.0f); utils::ScopedSpinLock g(guard_); hoverIncrement_ = increment; }
 
 		void setClickIncrement(float increment) noexcept
-		{ COMPLEX_ASSERT(increment > 0.0f); clickIncrement_ = increment; }
+		{ COMPLEX_ASSERT(increment > 0.0f); utils::ScopedSpinLock g(guard_); clickIncrement_ = increment; }
 
-		void setIsHovered(bool isHovered) noexcept { isHovered_ = isHovered; }
-		void setIsClicked(bool isClicked) noexcept { isClicked_ = isClicked; }
+		void setIsHovered(bool isHovered) noexcept { utils::ScopedSpinLock g(guard_); isHovered_ = isHovered; }
+		void setIsClicked(bool isClicked) noexcept { utils::ScopedSpinLock g(guard_); isClicked_ = isClicked; }
 
 	private:
+		mutable std::atomic<bool> guard_ = false;
+
 		float hoverValue_ = 0.0f;
 		float clickValue_ = 0.0f;
 
@@ -103,77 +57,51 @@ namespace Interface
 	};
 
 
-	class OpenGlComponent : public Component
+	class OpenGlComponent : public BaseComponent
 	{
 	public:
-		static bool setViewPort(const Component *component, Rectangle<int> bounds, const OpenGlWrapper &openGl);
-		static bool setViewPort(const Component *component, const OpenGlWrapper &openGl);
-		static void setScissor(const Component *component, const OpenGlWrapper &openGl);
-		static void setScissorBounds(const Component *component, Rectangle<int> bounds, const OpenGlWrapper &openGl);
+		static bool setViewPort(const BaseComponent *component, Rectangle<int> bounds, const OpenGlWrapper &openGl);
+		static bool setViewPort(const BaseComponent *component, const OpenGlWrapper &openGl);
+		static void setScissor(const BaseComponent *component, const OpenGlWrapper &openGl);
+		static void setScissorBounds(const BaseComponent *component, Rectangle<int> bounds, const OpenGlWrapper &openGl);
 
 		static std::unique_ptr<OpenGLShaderProgram::Uniform> getUniform(const OpenGLShaderProgram &program, const char *name)
 		{
-			if (juce::gl::glGetUniformLocation(program.getProgramID(), name) >= 0)
+			if (gl::glGetUniformLocation(program.getProgramID(), name) >= 0)
 				return std::make_unique<OpenGLShaderProgram::Uniform>(program, name);
 			return nullptr;
 		}
 
 		static std::unique_ptr<OpenGLShaderProgram::Attribute> getAttribute(const OpenGLShaderProgram &program, const char *name)
 		{
-			if (juce::gl::glGetAttribLocation(program.getProgramID(), name) >= 0)
+			if (gl::glGetAttribLocation(program.getProgramID(), name) >= 0)
 				return std::make_unique<OpenGLShaderProgram::Attribute>(program, name);
 			return nullptr;
 		}
 
-		static String translateFragmentShader(const String &code)
-		{
-		#if OPENGL_ES
-			return String("#version 300 es\n") + "out mediump vec4 fragColor;\n" +
-				code.replace("varying", "in").replace("texture2D", "texture").replace("gl_FragColor", "fragColor");
-		#else
-			return OpenGLHelpers::translateFragmentShaderToV3(code);
-		#endif
-		}
-
-		static String translateVertexShader(const String &code)
-		{
-		#if OPENGL_ES
-			return String("#version 300 es\n") + code.replace("attribute", "in").replace("varying", "out");
-		#else
-			return OpenGLHelpers::translateVertexShaderToV3(code);
-		#endif
-		}
+		static String translateFragmentShader(const String &code);
+		static String translateVertexShader(const String &code);
 
 		OpenGlComponent(String name = typeid(OpenGlComponent).name());
 		~OpenGlComponent() override;
 
-		void resized() override;
+		void setBounds(int x, int y, int width, int height) final { BaseComponent::setBounds(x, y, width, height); }
+		using BaseComponent::setBounds;
 		void paint(Graphics &) override { }
-		virtual void paintBackground(Graphics &g);
-		virtual void refresh([[maybe_unused]] RefreshFrequency refreshFrequency) { }
 
-		virtual void init(OpenGlWrapper &openGl);
+		virtual void init(OpenGlWrapper &openGl) = 0;
 		virtual void render(OpenGlWrapper &openGl, bool animate) = 0;
-		virtual void destroy();
+		virtual void destroy() = 0;
 
-		void renderCorners(OpenGlWrapper &openGl, bool animate, Colour color, float rounding);
-		void renderCorners(OpenGlWrapper &openGl, bool animate);
-		void addRoundedCorners();
-		void addBottomRoundedCorners();
-		void repaintBackground();
-
-		Colour getBodyColor() const noexcept { return bodyColor_; }
 		Animator &getAnimator() noexcept { return animator_; }
-		RefreshFrequency getRefreshFrequency() const noexcept { return refreshFrequency_; }
+		RenderFlag getRefreshFrequency() const noexcept { return renderFlag_; }
 		float getValue(Skin::ValueId valueId) const;
 		Colour getColour(Skin::ColorId colourId) const;
 
-		void setSkinOverride(Skin::SectionOverride skinOverride) noexcept { skinOverride_ = skinOverride; }
-		void setBackgroundColor(const Colour &color) noexcept { backgroundColor_ = color; }
-		void setRefreshFrequency(RefreshFrequency frequency) noexcept { refreshFrequency_ = frequency; }
-		void setCustomRenderFunction(clg::small_function<void(OpenGlWrapper &, bool)> function) noexcept
-		{ customRenderFunction_ = std::move(function); }
-		virtual void setParent(BaseSection *parent) noexcept { parent_ = parent; }
+		void setRefreshFrequency(RenderFlag frequency) noexcept { renderFlag_ = frequency; }
+		void setRenderFunction(std::function<void(OpenGlWrapper &, bool)> function) noexcept
+		{ renderFunction_ = std::move(function); }
+		void setContainer(OpenGlContainer *container) noexcept { container_ = container; }
 
 	private:
 		void pushForDeletion();
@@ -182,31 +110,27 @@ namespace Interface
 		bool setViewPort(const OpenGlWrapper &openGl) const;
 
 		Animator animator_{};
-		clg::small_function<void(OpenGlWrapper &, bool)> customRenderFunction_{};
-		RefreshFrequency refreshFrequency_ = RefreshFrequency::ResizedAndEvent;
-		std::unique_ptr<OpenGlCorners> corners_;
-		bool onlyBottomCorners_ = false;
-		Colour backgroundColor_ = Colours::transparentBlack;
-		Colour bodyColor_;
-		Skin::SectionOverride skinOverride_ = Skin::kNone;
+		shared_value<std::function<void(OpenGlWrapper &, bool)>> renderFunction_{};
+		shared_value<RenderFlag> renderFlag_ = RenderFlag::Dirty;
+		std::atomic<std::thread::id> waitLock_ = {};
 
-		BaseSection *parent_ = nullptr;
+		shared_value<OpenGlContainer *> container_ = nullptr;
 
-		template<CommonConcepts::DerivedOrIs<OpenGlComponent> T>
+		template<typename T>
 		friend class gl_ptr;
 
 		JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(OpenGlComponent)
 	};
 
-	template<CommonConcepts::DerivedOrIs<OpenGlComponent> T>
+	template<typename T>
 	class gl_ptr
 	{
 	public:
 		gl_ptr() noexcept = default;
 		gl_ptr(nullptr_t) noexcept { }
 
-		explicit gl_ptr(T *component) : component_(component), 
-			controlBlock_(new control_block{}) { }
+		explicit gl_ptr(T *component) requires CommonConcepts::DerivedOrIs<T, OpenGlComponent> : 
+			component_(component), controlBlock_(new control_block{}) { }
 
 		gl_ptr(const gl_ptr &other) noexcept : component_(other.component_), 
 			controlBlock_(other.controlBlock_)
@@ -234,15 +158,15 @@ namespace Interface
 		}
 
 		// aliasing constructors through upcasting
-		template<CommonConcepts::DerivedOrIs<OpenGlComponent> U>
-		gl_ptr(const gl_ptr<U> &other) noexcept : component_(other.component_), 
+		template<CommonConcepts::DerivedOrIs<T> U>
+		gl_ptr(const gl_ptr<U> &other) noexcept : component_(other.component_),
 			controlBlock_(reinterpret_cast<control_block *>(other.controlBlock_))
 		{
 			if (controlBlock_)
 				controlBlock_->refCount.fetch_add(1, std::memory_order_relaxed);
 		}
 
-		template<CommonConcepts::DerivedOrIs<OpenGlComponent> U>
+		template<CommonConcepts::DerivedOrIs<T> U>
 		gl_ptr(gl_ptr<U> &&other) noexcept : component_(other.component_),
 			controlBlock_(reinterpret_cast<control_block *>(other.controlBlock_))
 		{
@@ -271,8 +195,8 @@ namespace Interface
 		}
 
 		// explicit upcasting
-		template<CommonConcepts::DerivedOrIs<OpenGlComponent> U = OpenGlComponent>
-		gl_ptr<U> upcast() requires std::derived_from<T, U>
+		template<typename U>
+		gl_ptr<U> upcast() noexcept requires CommonConcepts::DerivedOrIs<T, U>
 		{
 			using control_block_u = typename gl_ptr<U>::control_block;
 
@@ -288,12 +212,13 @@ namespace Interface
 		{
 			if (!controlBlock_->isInitialised.load(std::memory_order_acquire))
 			{
-				component_->init(openGl);
 				controlBlock_->isInitialised.store(true, std::memory_order_release);
+				component_->init(openGl);
 			}
 
-			if (component_->customRenderFunction_)
-				component_->customRenderFunction_(openGl, animate);
+			auto customRenderFunction = component_->renderFunction_.get();
+			if (customRenderFunction)
+				customRenderFunction(openGl, animate);
 			else
 				component_->render(openGl, animate);
 		}
@@ -302,8 +227,8 @@ namespace Interface
 		{
 			if (controlBlock_->isInitialised.load(std::memory_order_acquire))
 			{
-				component_->destroy();
 				controlBlock_->isInitialised.store(false, std::memory_order_release);
+				component_->destroy();
 			}
 		}
 
@@ -329,11 +254,11 @@ namespace Interface
 		T *component_ = nullptr;
 		control_block *controlBlock_ = nullptr;
 
-		template <CommonConcepts::DerivedOrIs<OpenGlComponent> U>
+		template <typename U>
 		friend class gl_ptr;
 	};
 
-	template <CommonConcepts::DerivedOrIs<OpenGlComponent> T, CommonConcepts::DerivedOrIs<OpenGlComponent> U>
+	template <typename T, typename U>
 	inline bool operator==(const gl_ptr<T> &left, const gl_ptr<U> &right) noexcept
 	{ return left.get() == right.get(); }
 

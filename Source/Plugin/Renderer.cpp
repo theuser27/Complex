@@ -8,9 +8,11 @@
 	==============================================================================
 */
 
-#include "Renderer.h"
-
 #include "Framework/load_save.h"
+#include "Framework/parameter_bridge.h"
+#include "Plugin/Complex.h"
+#include "Interface/Components/OpenGlComponent.h"
+#include "Renderer.h"
 #include "Interface/Sections/MainInterface.h"
 #include "Interface/LookAndFeel/DefaultLookAndFeel.h"
 
@@ -38,7 +40,7 @@ namespace Interface
 			return;
 		}
 
-		shaders_ = std::make_unique<Shaders>(openGl_.context);
+		shaders_ = std::make_unique<Shaders>(openGlContext_);
 		openGl_.shaders = shaders_.get();
 	}
 
@@ -46,12 +48,6 @@ namespace Interface
 	{
 		if (unsupported_)
 			return;
-
-		// this MUST be true otherwise we have data races between the GL and JUCE Message threads
-		// if this fails then either:
-		// 1. continuous repainting is on
-		// 2. component painting is off, so there's no way MessageManager could be locked
-		COMPLEX_ASSERT(MessageManager::existsAndIsLockedByCurrentThread());
 
 		doCleanupWork();
 
@@ -79,9 +75,8 @@ namespace Interface
 	{
 		openGlContext_.setContinuousRepainting(false);
 		openGlContext_.setOpenGLVersionRequired(OpenGLContext::openGL3_2);
-		openGlContext_.setSwapInterval(1);
 		openGlContext_.setRenderer(this);
-		openGlContext_.setComponentPaintingEnabled(true);
+		openGlContext_.setComponentPaintingEnabled(false);
 		// attaching the context to an empty component so that we can activate it
 		// and also take advantage of componentRendering to lock the message manager
 		openGlContext_.attachTo(*gui_);
@@ -154,5 +149,18 @@ namespace Interface
 
 	MainInterface *Renderer::getGui() noexcept { return gui_.get(); }
 	Skin *Renderer::getSkin() noexcept { return skinInstance_.get(); }
+	
+	void Renderer::pushOpenGlComponentToDelete(OpenGlComponent *openGlComponent) noexcept 
+	{ openCleanupQueue_.emplace(openGlComponent); }
 
+	void Renderer::doCleanupWork()
+	{
+		while (!openCleanupQueue_.empty())
+		{
+			auto *openGlComponent = openCleanupQueue_.front();
+			openGlComponent->destroy();
+			delete openGlComponent;
+			openCleanupQueue_.pop();
+		}
+	}
 }

@@ -10,6 +10,8 @@
 
 #pragma once
 
+#include "AppConfig.h"
+#include <juce_audio_processors/juce_audio_processors.h>
 #include "parameter_value.h"
 
 namespace Plugin
@@ -19,7 +21,7 @@ namespace Plugin
 
 namespace Framework
 {
-	class ParameterBridge : public AudioProcessorParameter
+	class ParameterBridge final : public juce::AudioProcessorParameter
 	{
 		static constexpr float kDefaultParameterValue = 0.5f;
 	public:
@@ -43,13 +45,13 @@ namespace Framework
 
 		void updateUIParameter() noexcept;
 
-		void setCustomName(const String &name)
+		void setCustomName(const juce::String &name)
 		{
 			utils::ScopedSpinLock guard{ name_.first };
 
 			auto index = name_.second.indexOfChar(0, ' ');
 			index = (index < 0) ? name_.second.length() : index;
-			name_.second = String(name_.second.begin(), index);
+			name_.second = juce::String(name_.second.begin(), index);
 
 			name_.second += name;
 		}
@@ -61,10 +63,10 @@ namespace Framework
 		void setValue(float newValue) override;
 		float getDefaultValue() const override;
 
-		String getName(int maximumStringLength) const override;
-		String getLabel() const override;
-		String getText(float value, int maximumStringLength) const override;
-		float getValueForText(const String &text) const override;
+		juce::String getName(int maximumStringLength) const override;
+		juce::String getLabel() const override;
+		juce::String getText(float value, int maximumStringLength) const override;
+		float getValueForText(const juce::String &text) const override;
 
 		bool isAutomatable() const override { return true; }
 		int getNumSteps() const override;
@@ -72,7 +74,7 @@ namespace Framework
 		bool isBoolean() const override;
 
 	private:
-		std::pair<std::atomic<bool>, String> name_{};
+		std::pair<std::atomic<bool>, juce::String> name_{};
 		std::atomic<float> value_ = kDefaultParameterValue;
 		std::atomic<bool> wasValueChanged_ = false;
 		std::atomic<ParameterLink *> parameterLinkPointer_ = nullptr;

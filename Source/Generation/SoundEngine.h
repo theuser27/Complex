@@ -11,11 +11,15 @@
 #pragma once
 
 #include "Framework/common.h"
-#include "Framework/fourier_transform.h"
 #include "Framework/utils.h"
 #include "Framework/circular_buffer.h"
 #include "Framework/windows.h"
-#include "EffectsState.h"
+#include "BaseProcessor.h"
+
+namespace Framework
+{
+	class FFT;
+}
 
 namespace Plugin
 {
@@ -24,13 +28,15 @@ namespace Plugin
 
 namespace Generation
 {
-	class SoundEngine : public BaseProcessor
+	class EffectsState;
+
+	class SoundEngine final : public BaseProcessor
 	{
 	public:
 		DEFINE_CLASS_TYPE("{6B31ED46-FBF0-4219-A645-7B774F903026}")
 
 		SoundEngine(Plugin::ProcessorTree *processorTree) noexcept;
-		~SoundEngine() noexcept override = default;
+		~SoundEngine() noexcept override;
 
 		SoundEngine(const SoundEngine &) = delete;
 		SoundEngine(SoundEngine &&) = delete;
@@ -104,7 +110,7 @@ namespace Generation
 				return (getSize() + getEnd() - currentBufferStart) % getSize();
 			}
 
-			strict_inline void readBuffer(AudioBuffer<float> &reader, u32 numChannels,
+			strict_inline void readBuffer(juce::AudioBuffer<float> &reader, u32 numChannels,
 				const bool* channelsToCopy, u32 numSamples, BeginPoint beginPoint = BeginPoint::BlockBegin, 
 				i32 inputBufferOffset = 0, u32 readerBeginIndex = 0, bool advanceBlock = true) noexcept
 			{
@@ -134,7 +140,7 @@ namespace Generation
 					this->advanceBlock(currentBufferBegin, (i32)numSamples);
 			}
 
-			strict_inline void writeToBufferEnd(const AudioBuffer<float> &writer,
+			strict_inline void writeToBufferEnd(const juce::AudioBuffer<float> &writer,
 				u32 numChannels, u32 numSamples, u32 writerIndex = 0) noexcept
 			{
 				buffer_.writeToBufferEnd(writer, numChannels, numSamples, writerIndex);
@@ -193,7 +199,7 @@ namespace Generation
 		//
 		// FFT-ed data buffer, size is double the max FFT block
 		// even indices - freqs; odd indices - phases
-		AudioBuffer<float> FFTBuffer;
+		juce::AudioBuffer<float> FFTBuffer;
 		//
 		// if an input isn't used there's no need to process it at all
 		std::array<bool, kNumTotalChannels> usedInputChannels_{};
@@ -227,7 +233,7 @@ namespace Generation
 				buffer_.reserve(newNumChannels, newSize, fitToSize);
 			}
 
-			perf_inline void readOutput(AudioBuffer<float> &output, u32 numOutputs, 
+			perf_inline void readOutput(juce::AudioBuffer<float> &output, u32 numOutputs, 
 				const bool* channelsToCopy, u32 numSamples, float outGain) noexcept
 			{
 				COMPLEX_ASSERT(numOutputs <= kNumTotalChannels);
@@ -248,7 +254,7 @@ namespace Generation
 					
 			}
 
-			perf_inline void addOverlapBuffer(const AudioBuffer<float> &other, u32 numChannels,
+			perf_inline void addOverlapBuffer(const juce::AudioBuffer<float> &other, u32 numChannels,
 				const bool* channelsToOvelap, u32 numSamples, i32 beginOutputOffset, Framework::WindowTypes windowType) noexcept
 			{
 				u32 bufferSize = getSize();
@@ -372,14 +378,14 @@ namespace Generation
 		//=========================================================================================
 		// Methods
 		//
-		void CopyBuffers(AudioBuffer<float> &buffer, u32 numInputs, u32 numSamples) noexcept;
+		void CopyBuffers(juce::AudioBuffer<float> &buffer, u32 numInputs, u32 numSamples) noexcept;
 		void IsReadyToPerform(u32 numSamples) noexcept;
 		void DoFFT() noexcept;		
 		void ProcessFFT(float sampleRate) noexcept;
 		void DoIFFT() noexcept;
 		void ScaleDown() noexcept;
 		void MixOut(u32 numSamples) noexcept;
-		void FillOutput(AudioBuffer<float> &buffer, u32 numOutputs, u32 numSamples) noexcept;
+		void FillOutput(juce::AudioBuffer<float> &buffer, u32 numOutputs, u32 numSamples) noexcept;
 
 		// Inherited via BaseProcessor
 		BaseProcessor *createCopy([[maybe_unused]] std::optional<u64> parentModuleId) const noexcept override
@@ -394,7 +400,7 @@ namespace Generation
 		// initialising pointers and FFT plans
 		void ResetBuffers() noexcept;
 		void UpdateParameters(Framework::UpdateFlag flag, float sampleRate) noexcept;
-		void MainProcess(AudioBuffer<float> &buffer, u32 numSamples,
+		void MainProcess(juce::AudioBuffer<float> &buffer, u32 numSamples,
 			float sampleRate, u32 numInputs, u32 numOutputs) noexcept;
 
 		u32 getProcessingDelay() const noexcept;

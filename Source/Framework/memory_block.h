@@ -11,7 +11,8 @@
 #pragma once
 
 #include <cstdlib>
-#include "common.h"
+#include <memory>
+#include "platform_definitions.h"
 
 namespace Framework
 {

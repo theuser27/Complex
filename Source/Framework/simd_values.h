@@ -25,18 +25,6 @@
 	#error Either SSE4.1 or ARM NEON is needed for this program to work
 #endif
 
-
-// using rust naming because yes
-typedef uint8_t u8;
-typedef uint16_t u16;
-typedef uint32_t u32;
-typedef uint64_t u64;
-
-typedef int8_t i8;
-typedef int16_t i16;
-typedef int32_t i32;
-typedef int64_t i64;
-
 namespace simd_values
 {
 	static constexpr u32 kFullMask = UINT32_MAX;

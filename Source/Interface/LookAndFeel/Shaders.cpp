@@ -9,6 +9,7 @@
 */
 
 #include "Shaders.h"
+#include "Framework/platform_definitions.h"
 
 namespace
 {
@@ -240,7 +241,7 @@ namespace
 		"varying " MEDIUMP " vec2 coordinates_out;\n"
 		"uniform " MEDIUMP " float rounding;\n"
 		"uniform " MEDIUMP " float thickness;\n"
-		"uniform " MEDIUMP " float alpha_mult;\n"
+		"uniform " MEDIUMP " float overall_alpha;\n"
 		"void main() {\n"
 		"    vec2 center_offset = abs(coordinates_out) * dimensions_out - dimensions_out;\n"
 		"    float delta_center = length(max(center_offset + vec2(rounding, rounding), vec2(0.0, 0.0)));\n"
@@ -250,7 +251,7 @@ namespace
 		"    float inside_border_delta = (rounding - delta_center_inside) * 0.5;\n"
 		"    float alpha = clamp(border_delta + 0.5, 0.0, 1.0) * clamp(-inside_border_delta + 0.5, 0.0, 1.0);\n"
 		"    gl_FragColor = color;\n"
-		"    gl_FragColor.a = color.a * alpha_mult * alpha;\n"
+		"    gl_FragColor.a = color.a * overall_alpha * alpha;\n"
 		"}\n";
 
 	// overall knob design
@@ -301,7 +302,7 @@ namespace
 		"uniform " MEDIUMP " vec4 color;\n"
 		"uniform " MEDIUMP " vec4 alt_color;\n"
 		"uniform " MEDIUMP " vec4 mod_color;\n"
-		"uniform " MEDIUMP " float alpha_mult;\n"
+		"uniform " MEDIUMP " float overall_alpha;\n"
 		"uniform " MEDIUMP " float start_pos;\n"
 		"const " MEDIUMP " float kPi = 3.14159265359;\n"
 		"\n"
@@ -324,7 +325,7 @@ namespace
 		"    " MEDIUMP " vec4 color_center = alpha_center * mod_color;\n"
 		"    " MEDIUMP " vec4 out_color = color * (1.0 - alpha_stereo) + alt_color * alpha_stereo;\n"
 		"    out_color = out_color * (1.0 - alpha_center) + color_center * alpha_center;\n"
-		"    out_color.a = max(alpha, alpha_stereo) * alpha_mult * dist_amp;\n"
+		"    out_color.a = max(alpha, alpha_stereo) * overall_alpha * dist_amp;\n"
 		"    gl_FragColor = out_color;\n"
 		"}\n";
 
@@ -474,7 +475,7 @@ namespace
 		"uniform " MEDIUMP " vec4 thumb_color;\n"
 		"varying " MEDIUMP " vec2 dimensions_out;\n"
 		"uniform " MEDIUMP " float thickness;\n"
-		"uniform " MEDIUMP " float alpha_mult;\n"
+		"uniform " MEDIUMP " float overall_alpha;\n"
 		"varying " MEDIUMP " vec4 shader_values_out;\n"
 		"varying " MEDIUMP " vec2 coordinates_out;\n"
 		"void main() {\n"
@@ -495,7 +496,7 @@ namespace
 		"    float mod_alpha2 = clamp(full_radius * 0.35 - delta_center, 0.0, 1.0) * mod_color.a;\n"
 		"    gl_FragColor = gl_FragColor * (1.0 - mod_alpha1) + background_color * mod_alpha1;\n"
 		"    gl_FragColor = gl_FragColor * (1.0 - mod_alpha2) + mod_color * mod_alpha2;\n"
-		"    gl_FragColor.a = gl_FragColor.a * alpha_mult;\n"
+		"    gl_FragColor.a = gl_FragColor.a * overall_alpha;\n"
 		"}\n";
 
 	// coordinates_out are ndc (the same values as the position varying
@@ -631,22 +632,22 @@ namespace
 		"    gl_Position.w = 1.0;\n"
 		"}\n";
 
-	inline String translateFragmentShader(const String &code)
+	inline juce::String translateFragmentShader(const juce::String &code)
 	{
 	#if OPENGL_ES
 		return String("#version 300 es\n") + "out mediump vec4 fragColor;\n" +
 			code.replace("varying", "in").replace("texture2D", "texture").replace("gl_FragColor", "fragColor");
 	#else
-		return OpenGLHelpers::translateFragmentShaderToV3(code);
+		return juce::OpenGLHelpers::translateFragmentShaderToV3(code);
 	#endif
 	}
 
-	inline String translateVertexShader(const String &code)
+	inline juce::String translateVertexShader(const juce::String &code)
 	{
 	#if OPENGL_ES
 		return String("#version 300 es\n") + code.replace("attribute", "in").replace("varying", "out");
 	#else
-		return OpenGLHelpers::translateVertexShaderToV3(code);
+		return juce::OpenGLHelpers::translateVertexShaderToV3(code);
 	#endif
 	}
 }
@@ -655,15 +656,15 @@ namespace Interface
 {
 	using namespace juce::gl;
 
-	OpenGLShaderProgram *Shaders::getShaderProgram(VertexShader vertex_shader, 
+	juce::OpenGLShaderProgram *Shaders::getShaderProgram(VertexShader vertex_shader,
 		FragmentShader fragment_shader, const GLchar **varyings)
 	{
 		int shaderProgramIndex = vertex_shader * (int)kFragmentShaderCount + fragment_shader;
 		if (shaderPrograms_.contains(shaderProgramIndex))
 			return shaderPrograms_.at(shaderProgramIndex).get();
 
-		shaderPrograms_[shaderProgramIndex] = std::make_unique<OpenGLShaderProgram>(openGlContext_);
-		OpenGLShaderProgram *result = shaderPrograms_[shaderProgramIndex].get();
+		shaderPrograms_[shaderProgramIndex] = std::make_unique<juce::OpenGLShaderProgram>(openGlContext_);
+		juce::OpenGLShaderProgram *result = shaderPrograms_[shaderProgramIndex].get();
 		GLuint program_id = result->getProgramID();
 		glAttachShader(program_id, getVertexShaderId(vertex_shader));
 		glAttachShader(program_id, getFragmentShaderId(fragment_shader));
@@ -760,25 +761,25 @@ namespace Interface
 		}
 	}
 
-	bool Shaders::checkShaderCorrect(GLuint shader_id) const
+	bool Shaders::checkShaderCorrect(GLuint shaderId) const
 	{
 		GLint status = GL_FALSE;
-		glGetShaderiv(shader_id, GL_COMPILE_STATUS, &status);
+		glGetShaderiv(shaderId, GL_COMPILE_STATUS, &status);
 
 		if (status != GL_FALSE)
 			return true;
 
 		GLchar info[16384];
 		GLsizei info_length = 0;
-		glGetShaderInfoLog(shader_id, sizeof(info), &info_length, info);
-		DBG(String(info, (size_t)info_length));
+		glGetShaderInfoLog(shaderId, sizeof(info), &info_length, info);
+		DBG(juce::String(info, (size_t)info_length));
 		return false;
 	}
 
 	GLuint Shaders::createVertexShader(VertexShader shader) const
 	{
 		GLuint shader_id = glCreateShader(GL_VERTEX_SHADER);
-		String code_string = translateVertexShader(getVertexShader(shader));
+		juce::String code_string = translateVertexShader(getVertexShader(shader));
 		const GLchar *code = code_string.toRawUTF8();
 		glShaderSource(shader_id, 1, &code, nullptr);
 		glCompileShader(shader_id);
@@ -790,7 +791,7 @@ namespace Interface
 	GLuint Shaders::createFragmentShader(FragmentShader shader) const
 	{
 		GLuint shader_id = glCreateShader(GL_FRAGMENT_SHADER);
-		String code_string = translateFragmentShader(getFragmentShader(shader));
+		juce::String code_string = translateFragmentShader(getFragmentShader(shader));
 		const GLchar *code = code_string.toRawUTF8();
 		glShaderSource(shader_id, 1, &code, nullptr);
 		glCompileShader(shader_id);

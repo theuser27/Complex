@@ -14,10 +14,15 @@
 
 namespace Interface
 {
-	class PopupDisplay : public BaseSection
+	class OpenGlQuad;
+	class PlainTextComponent;
+	class OpenGlImageComponent;
+
+	class PopupDisplay final : public BaseSection
 	{
 	public:
 		PopupDisplay();
+		~PopupDisplay() override;
 
 		void resized() override;
 
@@ -30,17 +35,14 @@ namespace Interface
 		gl_ptr<PlainTextComponent> text_;
 	};
 
-	class PopupList : public BaseSection, ScrollBar::Listener
+	class PopupList final : public BaseSection, OpenGlScrollBarListener
 	{
 	public:
 		class Listener
 		{
 		public:
 			virtual ~Listener() = default;
-
 			virtual void newSelection(PopupList *list, int id, int index) = 0;
-			virtual void doubleClickedSelected([[maybe_unused]] PopupList *list, 
-				[[maybe_unused]] int id, [[maybe_unused]] int index) { }
 		};
 
 		static constexpr float kRowHeight = 16.0f;
@@ -48,12 +50,12 @@ namespace Interface
 		static constexpr float kScrollBarWidth = 15.0f;
 
 		PopupList();
+		~PopupList() override;
 
 		void mouseMove(const MouseEvent &e) override;
 		void mouseDrag(const MouseEvent &e) override;
 		void mouseExit(const MouseEvent &) override;
 		void mouseUp(const MouseEvent &e) override;
-		void mouseDoubleClick(const MouseEvent &e) override;
 		void paintBackground(Graphics &) override { }
 		void paintBackgroundShadow(Graphics &) override { }
 		void resized() override;
@@ -65,21 +67,14 @@ namespace Interface
 		int getTextPadding() const noexcept { return getRowHeight() / 4; }
 		int getBrowseWidth() const;
 		int getBrowseHeight() const noexcept { return getRowHeight() * selections_.size(); }
-		Font getFont() const
-		{
-			auto fontsInstance = Fonts::instance();
-			Font usedFont = fontsInstance->getInterVFont();
-			fontsInstance->setFontFromAscent(usedFont, (float)getRowHeight() * 0.5f);
-			return usedFont;
-		}
+		Font getFont() const;
 		int getSelection(const MouseEvent &e);
 
 		void setSelected(int selection) { selected_ = selection; }
 		int getSelected() const { return selected_; }
 		void mouseWheelMove(const MouseEvent &, const MouseWheelDetails &wheel) override;
-		void resetScrollPosition();
-		void scrollBarMoved([[maybe_unused]] ScrollBar *scroll_bar, double range_start) override 
-		{ view_position_ = (float)range_start; }
+		void scrollBarMoved(OpenGlScrollBar *, double rangeStart) override 
+		{ view_position_ = (float)rangeStart; }
 		void setScrollBarRange();
 		int getScrollableRange();
 
@@ -90,31 +85,31 @@ namespace Interface
 	private:
 		int getViewPosition() const
 		{
-			int view_height = getHeight();
-			return std::clamp((int)view_position_, 0, selections_.size() * getRowHeight() - view_height);
+			int view_height = getHeightSafe();
+			return std::clamp((int)view_position_.get(), 0, selections_.size() * getRowHeight() - view_height);
 		}
-		void redoImage();
 		void moveQuadToRow(OpenGlQuad &quad, int row);
 
 		std::vector<Listener *> listeners_;
 		PopupItems selections_;
-		int selected_ = -1;
-		int hovered_ = -1;
-		bool show_selected_ = false;
+		shared_value<int> selected_ = -1;
+		shared_value<int> hovered_ = -1;
+		shared_value<bool> show_selected_ = false;
+		shared_value<float> view_position_ = 0.0f;
 
-		float view_position_ = 0.0f;
 		std::unique_ptr<OpenGlScrollBar> scroll_bar_;
-		gl_ptr<OpenGlImage> rows_;
+		gl_ptr<OpenGlImageComponent> rows_;
 		gl_ptr<OpenGlQuad> highlight_;
 		gl_ptr<OpenGlQuad> hover_;
 
 		JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(PopupList)
 	};
 
-	class SinglePopupSelector : public BaseSection, public PopupList::Listener
+	class SinglePopupSelector final : public BaseSection, public PopupList::Listener
 	{
 	public:
 		SinglePopupSelector();
+		~SinglePopupSelector() override;
 
 		void paintBackground(Graphics &) override { }
 		void paintBackgroundShadow(Graphics &) override { }
@@ -152,6 +147,7 @@ namespace Interface
 		void setCancelCallback(std::function<void()> cancel) { cancel_ = std::move(cancel); }
 
 		void showSelections(PopupItems selections) { popup_list_->setSelections(std::move(selections)); }
+		void setPopupSkinOverride(Skin::SectionOverride skinOverride) { popup_list_->setSkinOverride(skinOverride); }
 
 	private:
 		gl_ptr<OpenGlQuad> body_;
@@ -164,10 +160,11 @@ namespace Interface
 		JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(SinglePopupSelector)
 	};
 
-	class DualPopupSelector : public BaseSection, public PopupList::Listener
+	class DualPopupSelector final : public BaseSection, public PopupList::Listener
 	{
 	public:
 		DualPopupSelector();
+		~DualPopupSelector() override;
 
 		void paintBackground(Graphics &) override { }
 		void paintBackgroundShadow(Graphics &) override { }
@@ -181,8 +178,6 @@ namespace Interface
 		void setPosition(Point<int> position, int width, Rectangle<int> bounds);
 
 		void newSelection(PopupList *list, int id, int index) override;
-		void doubleClickedSelected([[maybe_unused]] PopupList *list, 
-			[[maybe_unused]] int id, [[maybe_unused]] int index) override { setVisible(false); }
 
 		void focusLost(FocusChangeType) override { setVisible(false); }
 

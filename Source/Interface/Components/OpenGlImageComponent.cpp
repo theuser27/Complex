@@ -1,132 +1,260 @@
 /*
-  ==============================================================================
+	==============================================================================
 
-    OpenGlImageComponent.cpp
-    Created: 14 Dec 2022 2:07:44am
-    Author:  theuser27
+		OpenGlImageComponent.cpp
+		Created: 14 Dec 2022 2:07:44am
+		Author:  theuser27
 
-  ==============================================================================
+	==============================================================================
 */
 
+#include "Interface/LookAndFeel/Fonts.h"
 #include "OpenGlImageComponent.h"
 #include "../Sections/BaseSection.h"
 
 namespace Interface
 {
-  OpenGlImageComponent::OpenGlImageComponent(String name) : OpenGlComponent(std::move(name))
-  {
-    image_.setTopLeft(-1.0f, 1.0f);
-    image_.setTopRight(1.0f, 1.0f);
-    image_.setBottomLeft(-1.0f, -1.0f);
-    image_.setBottomRight(1.0f, -1.0f);
-    image_.setColor(Colours::white);
+	using namespace juce::gl;
 
-    setInterceptsMouseClicks(false, false);
-  }
+	static constexpr int kNumPositions = 16;
+	static constexpr int kNumTriangleIndices = 6;
 
-  void OpenGlImageComponent::redrawImage(bool clearOnRedraw)
-  {
-    if (!active_)
-      return;
+	OpenGlImageComponent::OpenGlImageComponent(String name) : OpenGlComponent(std::move(name))
+	{
+		positionVertices_ = std::make_unique<float[]>(kNumPositions);
+		float position_vertices[kNumPositions] =
+		{
+			-1.0f,  1.0f, 0.0f, 1.0f,
+			-1.0f, -1.0f, 0.0f, 0.0f,
+			 1.0f, -1.0f, 1.0f, 0.0f,
+			 1.0f,  1.0f, 1.0f, 1.0f
+		};
+		memcpy(positionVertices_.get(), position_vertices, kNumPositions * sizeof(float));
 
-    Component *component = targetComponent_ ? targetComponent_ : this;
-    auto bounds = (!customDrawBounds_.isEmpty()) ? customDrawBounds_ : component->getLocalBounds();
-    int width = bounds.getWidth();
-    int height = bounds.getHeight();
-    if (width <= 0 || height <= 0)
-      return;
+		positionTriangles_ = std::make_unique<int[]>(kNumTriangleIndices);
+		int position_triangles[kNumTriangleIndices] =
+		{
+			0, 1, 2,
+			2, 3, 0
+		};
+		memcpy(positionTriangles_.get(), position_triangles, kNumTriangleIndices * sizeof(int));
 
-    bool newImage = drawImage_ == nullptr || drawImage_->getWidth() != width || drawImage_->getHeight() != height;
-    if (!newImage && (staticImage_ /* || !isDirty_*/))
-      return;
+		setInterceptsMouseClicks(false, false);
+	}
 
-    if (newImage)
-      drawImage_ = std::make_unique<Image>(Image::ARGB, width, height, false);
+	void OpenGlImageComponent::redrawImage(bool forceRedraw)
+	{
+		if (!active_)
+			return;
 
-    if (clearOnRedraw)
-      drawImage_->clear(Rectangle{ 0, 0, width, height });
+		BaseComponent *component = targetComponent_ ? targetComponent_ : this;
+		Rectangle<int> customDrawBounds = customDrawBounds_.get();
+		auto bounds = (!customDrawBounds.isEmpty()) ? customDrawBounds : component->getLocalBounds();
+		int width = bounds.getWidth();
+		int height = bounds.getHeight();
+		if (width <= 0 || height <= 0)
+			return;
 
-    Graphics g(*drawImage_);
-    paintToImage(g, component);
+		auto *drawImage = drawImage_.lock();
+		bool newImage = drawImage == nullptr || drawImage->getWidth() != width || drawImage->getHeight() != height;
+		if (!newImage && !forceRedraw)
+			return;
 
-    image_.lock();
-    image_.setImage(drawImage_.get());
+		if (newImage)
+		{
+			drawImage_.unlock();
+			drawImage_ = std::make_unique<Image>(Image::ARGB, width, height, false);
+			drawImage = drawImage_.lock();
+		}
 
-    image_.setTopLeft(-1.0f, 1.0f);
-    image_.setTopRight(1.0f, 1.0f);
-    image_.setBottomLeft(-1.0f, -1.0f);
-    image_.setBottomRight(1.0f, -1.0f);
-    image_.unlock();
+		if (clearOnRedraw_)
+			drawImage->clear(Rectangle{ 0, 0, width, height });
 
-    isDirty_ = false;
-  }
+		Graphics g(*drawImage);
+		if (paintFunction_)
+			paintFunction_(g);
+		else
+			paintToImage(g, component);
 
-  void OpenGlImageComponent::render(OpenGlWrapper &openGl, bool animate)
-  {
-    Component *component = targetComponent_ ? targetComponent_ : this;
-    auto bounds = (!customDrawBounds_.isEmpty()) ? customDrawBounds_ : component->getLocalBounds();
-    if (!active_ || !component->isVisible() || !setViewPort(component, bounds, openGl))
-      return;
+		drawImage_.unlock();
+		shouldReloadImage_ = true;
+	}
 
-    image_.render(openGl, animate);
-  }
+	void OpenGlImageComponent::init(OpenGlWrapper &openGl)
+	{
+		glGenBuffers(1, &vertexBuffer_);
+		glBindBuffer(GL_ARRAY_BUFFER, vertexBuffer_);
 
-  void OpenGlBackground::paintToImage(Graphics &g, [[maybe_unused]] Component *target)
-  {
-    std::visit([&](auto &&componentToRedraw)
-      {
-        Rectangle<int> bounds = targetComponent_->getLocalArea(componentToRedraw, 
-          componentToRedraw->getLocalBounds());
-        g.reduceClipRegion(bounds);
-        g.setOrigin(bounds.getTopLeft());
-        componentToRedraw->paintBackground(g);
-      }, componentToRedraw_);
-  }
+		GLsizeiptr vertSize = static_cast<GLsizeiptr>(kNumPositions * sizeof(float));
+		glBufferData(GL_ARRAY_BUFFER, vertSize, positionVertices_.get(), GL_STATIC_DRAW);
 
-  void PlainTextComponent::paintToImage(Graphics &g, Component *target)
-  {
-    updateState();
+		glGenBuffers(1, &triangleBuffer_);
+		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, triangleBuffer_);
 
-    g.setFont(font_);
-    g.setColour(textColour_);
+		GLsizeiptr triSize = static_cast<GLsizeiptr>(kNumTriangleIndices * sizeof(float));
+		glBufferData(GL_ELEMENT_ARRAY_BUFFER, triSize, positionTriangles_.get(), GL_STATIC_DRAW);
 
-    g.drawText(text_, 0, 0, target->getWidth(), target->getHeight(), justification_, true);
-  }
+		imageShader_ = openGl.shaders->getShaderProgram(Shaders::kImageVertex, Shaders::kTintedImageFragment);
 
-  void PlainTextComponent::updateState()
-  {
-    Font font;
-    if (fontType_ == kTitle)
-    {
-      textColour_ = getColour(Skin::kHeadingText);
-      font = Fonts::instance()->getInterVFont().boldened();
-    }
-    else if (fontType_ == kText)
-    {
-      textColour_ = getColour(Skin::kNormalText);
-      font = Fonts::instance()->getInterVFont();
-    }
-    else
-    {
-      textColour_ = getColour(Skin::kWidgetPrimary1);
-      font = Fonts::instance()->getDDinFont();
-    }
+		imageShader_->use();
+		imageColor_ = getUniform(*imageShader_, "color");
+		imagePosition_ = getAttribute(*imageShader_, "position");
+		textureCoordinates_ = getAttribute(*imageShader_, "tex_coord_in");
+	}
 
-    Fonts::instance()->setFontFromHeight(font, parent_->scaleValue(textSize_));
-    font_ = std::move(font);
-  }
+	void OpenGlImageComponent::render(OpenGlWrapper &openGl, bool)
+	{
+		BaseComponent *component = targetComponent_ ? targetComponent_ : this;
+		Rectangle<int> customDrawBounds = customDrawBounds_.get();
+		auto bounds = (!customDrawBounds.isEmpty()) ? customDrawBounds : component->getLocalBoundsSafe();
+		if (!active_ || !component->isVisibleSafe() || !setViewPort(component, bounds, openGl))
+			return;
 
-  void PlainShapeComponent::paintToImage(Graphics &g, Component *target)
-  {
-    Rectangle<float> bounds = target->getLocalBounds().toFloat();
+		if (shouldReloadImage_)
+		{
+			auto *drawImage = drawImage_.lock();
+			texture_.loadImage(*drawImage);
+			shouldReloadImage_ = false;
+			drawImage_.unlock();
+		}
 
-    g.setColour(Colours::white);
-    auto transform = strokeShape_.getTransformToScaleToFit(bounds, true, justification_);
-    if (!strokeShape_.isEmpty())
-      g.strokePath(strokeShape_, PathStrokeType{ 1.0f, PathStrokeType::JointStyle::beveled, PathStrokeType::EndCapStyle::butt },
-        transform);
-    if (!fillShape_.isEmpty())
-      g.fillPath(fillShape_, transform);
-  }
+		glEnable(GL_BLEND);
+		if (scissor_)
+			glEnable(GL_SCISSOR_TEST);
+		else
+			glDisable(GL_SCISSOR_TEST);
+
+		if (additive_)
+			glBlendFunc(GL_ONE, GL_ONE);
+		else if (useAlpha_)
+			glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+		else
+			glBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
+
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+
+		glBindBuffer(GL_ARRAY_BUFFER, vertexBuffer_);
+
+		if (hasNewVertices_)
+		{
+			GLsizeiptr vertSize = static_cast<GLsizeiptr>(kNumPositions * sizeof(float));
+			glBufferData(GL_ARRAY_BUFFER, vertSize, positionVertices_.get(), GL_STATIC_DRAW);
+			hasNewVertices_ = false;
+		}
+
+		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, triangleBuffer_);
+		texture_.bind();
+		glActiveTexture(GL_TEXTURE0);
+
+		imageShader_->use();
+
+		Colour colour = color_.get();
+		imageColor_->set(colour.getFloatRed(), colour.getFloatGreen(), colour.getFloatBlue(), colour.getFloatAlpha());
+
+		glVertexAttribPointer(imagePosition_->attributeID, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), nullptr);
+		glEnableVertexAttribArray(imagePosition_->attributeID);
+
+		glVertexAttribPointer(textureCoordinates_->attributeID, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (GLvoid *)(2 * sizeof(float)));
+		glEnableVertexAttribArray(textureCoordinates_->attributeID);
+
+		glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, nullptr);
+
+		glDisableVertexAttribArray(imagePosition_->attributeID);
+		glDisableVertexAttribArray(textureCoordinates_->attributeID);
+		texture_.unbind();
+
+		glBindBuffer(GL_ARRAY_BUFFER, 0);
+		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+
+		glDisable(GL_BLEND);
+		glDisable(GL_SCISSOR_TEST);
+	}
+
+	void OpenGlImageComponent::destroy()
+	{
+		texture_.release();
+
+		// preparing the image for next time if openGl reinitialises this object
+		shouldReloadImage_ = true;
+
+		imageShader_ = nullptr;
+		imageColor_ = nullptr;
+		imagePosition_ = nullptr;
+		textureCoordinates_ = nullptr;
+
+		glDeleteBuffers(1, &vertexBuffer_);
+		glDeleteBuffers(1, &triangleBuffer_);
+	}
+
+	void OpenGlBackground::paintToImage(Graphics &g, [[maybe_unused]] BaseComponent *target)
+	{
+		Rectangle<int> bounds = targetComponent_.get()->getLocalArea(
+			componentToRedraw_, componentToRedraw_->getLocalBounds());
+		g.reduceClipRegion(bounds);
+		g.setOrigin(bounds.getTopLeft());
+
+		auto &internalContext = g.getInternalContext();
+		internalContext.setFill(Colours::transparentBlack);
+		internalContext.fillRect(bounds, true);
+
+		componentToRedraw_->paintBackground(g);
+	}
+
+	PlainTextComponent::PlainTextComponent(String name, String text):
+		OpenGlImageComponent(std::move(name)), text_(std::move(text)), 
+		font_(Fonts::instance()->getInterVFont()) { }
+
+	void PlainTextComponent::resized()
+	{
+		OpenGlImageComponent::resized();
+		redrawImage();
+	}
+
+	void PlainTextComponent::paintToImage(Graphics &g, BaseComponent *target)
+	{
+		updateState();
+
+		g.setFont(font_);
+		g.setColour(textColour_);
+
+		g.drawText(text_, 0, 0, target->getWidth(), target->getHeight(), justification_, true);
+	}
+
+	void PlainTextComponent::updateState()
+	{
+		Font font;
+		if (fontType_ == kTitle)
+		{
+			textColour_ = getColour(Skin::kHeadingText);
+			font = Fonts::instance()->getInterVFont().boldened();
+		}
+		else if (fontType_ == kText)
+		{
+			textColour_ = getColour(Skin::kNormalText);
+			font = Fonts::instance()->getInterVFont();
+		}
+		else
+		{
+			textColour_ = getColour(Skin::kWidgetPrimary1);
+			font = Fonts::instance()->getDDinFont();
+		}
+
+		Fonts::instance()->setFontFromHeight(font, container_.get()->scaleValue(textSize_));
+		font_ = std::move(font);
+	}
+
+	void PlainShapeComponent::paintToImage(Graphics &g, BaseComponent *target)
+	{
+		Rectangle<float> bounds = target->getLocalBounds().toFloat();
+
+		g.setColour(Colours::white);
+		auto transform = strokeShape_.getTransformToScaleToFit(bounds, true, justification_);
+		if (!strokeShape_.isEmpty())
+			g.strokePath(strokeShape_, PathStrokeType{ 1.0f, PathStrokeType::JointStyle::beveled, PathStrokeType::EndCapStyle::butt },
+				transform);
+		if (!fillShape_.isEmpty())
+			g.fillPath(fillShape_, transform);
+	}
 
 }

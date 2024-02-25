@@ -12,8 +12,11 @@
 #include "Framework/spectral_support_functions.h"
 #include "../LookAndFeel/Skin.h"
 #include "../LookAndFeel/Shaders.h"
+#include "OpenGlMultiQuad.h"
 #include "Spectrogram.h"
 #include "../Sections/BaseSection.h"
+#include "Plugin/Complex.h"
+#include "Plugin/Renderer.h"
 
 namespace Interface
 {
@@ -29,8 +32,9 @@ namespace Interface
       right_amps_[i] = kDefaultAmp;
     }*/
 
-    addRoundedCorners();
   }
+
+  Spectrogram::~Spectrogram() = default;
 
   void Spectrogram::updateAmplitudes()
   {
@@ -133,7 +137,7 @@ namespace Interface
 
   void Spectrogram::render(OpenGlWrapper &open_gl, bool animate)
   {
-    nyquistFreq_ = parent_->getInterfaceLink()->getPlugin().getSampleRate() / 2.0f;
+    nyquistFreq_ = container_.get()->getRenderer()->getPlugin().getSampleRate() / 2.0f;
 
     setLineWidth(2.0f);
     setFillCenter(-1.0f);
@@ -144,11 +148,24 @@ namespace Interface
     setColor(color);
     Colour fill_color = getColour(Skin::kWidgetPrimary2);
     float fill_fade = 0.0f;
-    if (parent_)
-      fill_fade = parent_->getValue(Skin::kWidgetFillFade);
+    if (auto container = container_.get())
+      fill_fade = container->getValue(Skin::kWidgetFillFade);
     setFillColors(fill_color.withMultipliedAlpha(1.0f - fill_fade), fill_color);
     setLineValues(open_gl);
-    renderCorners(open_gl, animate);
+    //renderCorners(open_gl, animate, getColour());
+  }
+
+  void Spectrogram::renderCorners(OpenGlWrapper &openGl, bool animate, Colour color, float rounding)
+  {
+    /*if (corners_)
+    {
+      if (onlyBottomCorners_)
+        corners_->setBottomCorners(getLocalBounds(), rounding);
+      else
+        corners_->setCorners(getLocalBounds(), rounding);
+      corners_->setColor(color);
+      corners_->render(openGl, animate);
+    }*/
   }
 
   void Spectrogram::paint(Graphics &g)

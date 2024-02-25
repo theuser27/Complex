@@ -2,8 +2,8 @@
 
 <JUCERPROJECT id="MQJhEl" name="Complex" projectType="audioplug" addUsingNamespaceToJuceHeader="1"
               jucerFormatVersion="1" cppLanguageStandard="20" pluginFormats="buildStandalone,buildVST3"
-              displaySplashScreen="1" pluginCode="Cmpx" pluginManufacturerCode="Lirn"
-              pluginManufacturer="Lirion" version="0.7.0.2" pluginDesc="Multi-lane Spectral Effects Suite">
+              displaySplashScreen="1" pluginManufacturer="theuser27" version="0.7.0.2"
+              pluginDesc="Multi-lane Spectral Effects Suite">
   <MAINGROUP id="zNsp6a" name="Complex">
     <GROUP id="{65E7BD15-F97F-DFD8-8405-B6E4F140ACA3}" name="Icons">
       <FILE id="W5loec" name="Icon_Filter.svg" compile="0" resource="1" file="Icons/Icon_Filter.svg"/>
@@ -24,6 +24,8 @@
         <FILE id="QZdRAA" name="constants.h" compile="0" resource="0" file="Source/Framework/constants.h"/>
         <FILE id="JuQs8V" name="constexpr_utils.h" compile="0" resource="0"
               file="Source/Framework/constexpr_utils.h"/>
+        <FILE id="zKZqvN" name="fourier_transform.cpp" compile="1" resource="0"
+              file="Source/Framework/fourier_transform.cpp"/>
         <FILE id="tzFNy3" name="fourier_transform.h" compile="0" resource="0"
               file="Source/Framework/fourier_transform.h"/>
         <FILE id="qmhZRh" name="load_save.cpp" compile="1" resource="0" file="Source/Framework/load_save.cpp"/>
@@ -88,6 +90,9 @@
       </GROUP>
       <GROUP id="{F4BA8DFF-28C8-EF00-62C9-202FF4771AD8}" name="Interface">
         <GROUP id="{4D931D97-4A4F-8153-12B4-A9C0FA52764F}" name="LookAndFeel">
+          <FILE id="pn9c8x" name="BaseComponent.cpp" compile="1" resource="0"
+                file="Source/Interface/LookAndFeel/BaseComponent.cpp"/>
+          <FILE id="f7QtT0" name="BaseComponent.h" compile="0" resource="0" file="Source/Interface/LookAndFeel/BaseComponent.h"/>
           <FILE id="R1Bxgg" name="BorderBoundsConstrainer.cpp" compile="1" resource="0"
                 file="Source/Interface/LookAndFeel/BorderBoundsConstrainer.cpp"/>
           <FILE id="cTL9sp" name="BorderBoundsConstrainer.h" compile="0" resource="0"
@@ -98,6 +103,7 @@
                 file="Source/Interface/LookAndFeel/DefaultLookAndFeel.h"/>
           <FILE id="uaULql" name="Fonts.cpp" compile="1" resource="0" file="Source/Interface/LookAndFeel/Fonts.cpp"/>
           <FILE id="Ytfo18" name="Fonts.h" compile="0" resource="0" file="Source/Interface/LookAndFeel/Fonts.h"/>
+          <FILE id="Zv8h5H" name="Miscellaneous.h" compile="0" resource="0" file="Source/Interface/LookAndFeel/Miscellaneous.h"/>
           <FILE id="pwerL9" name="Paths.h" compile="0" resource="0" file="Source/Interface/LookAndFeel/Paths.h"/>
           <FILE id="rMhvta" name="Shaders.cpp" compile="1" resource="0" file="Source/Interface/LookAndFeel/Shaders.cpp"/>
           <FILE id="ViCOIr" name="Shaders.h" compile="0" resource="0" file="Source/Interface/LookAndFeel/Shaders.h"/>
@@ -152,8 +158,10 @@
                 file="Source/Interface/Components/OpenGlComponent.cpp"/>
           <FILE id="tzoee2" name="OpenGlComponent.h" compile="0" resource="0"
                 file="Source/Interface/Components/OpenGlComponent.h"/>
-          <FILE id="kbifvP" name="OpenGlImage.cpp" compile="1" resource="0" file="Source/Interface/Components/OpenGlImage.cpp"/>
-          <FILE id="mxU5Ou" name="OpenGlImage.h" compile="0" resource="0" file="Source/Interface/Components/OpenGlImage.h"/>
+          <FILE id="RPnVnB" name="OpenGlContainer.cpp" compile="1" resource="0"
+                file="Source/Interface/Components/OpenGlContainer.cpp"/>
+          <FILE id="Vw8Scd" name="OpenGlContainer.h" compile="0" resource="0"
+                file="Source/Interface/Components/OpenGlContainer.h"/>
           <FILE id="veY3U8" name="OpenGlImageComponent.cpp" compile="1" resource="0"
                 file="Source/Interface/Components/OpenGlImageComponent.cpp"/>
           <FILE id="mudn2r" name="OpenGlImageComponent.h" compile="0" resource="0"
@@ -166,6 +174,18 @@
                 file="Source/Interface/Components/OpenGlMultiQuad.cpp"/>
           <FILE id="zSHZOx" name="OpenGlMultiQuad.h" compile="0" resource="0"
                 file="Source/Interface/Components/OpenGlMultiQuad.h"/>
+          <FILE id="yL3Mhr" name="OpenGlScrollBar.cpp" compile="1" resource="0"
+                file="Source/Interface/Components/OpenGlScrollBar.cpp"/>
+          <FILE id="GdNzvP" name="OpenGlScrollBar.h" compile="0" resource="0"
+                file="Source/Interface/Components/OpenGlScrollBar.h"/>
+          <FILE id="CKOxhZ" name="OpenGlTextEditor.cpp" compile="1" resource="0"
+                file="Source/Interface/Components/OpenGlTextEditor.cpp"/>
+          <FILE id="wXu3rN" name="OpenGlTextEditor.h" compile="0" resource="0"
+                file="Source/Interface/Components/OpenGlTextEditor.h"/>
+          <FILE id="DwsfXB" name="OpenGlViewport.cpp" compile="1" resource="0"
+                file="Source/Interface/Components/OpenGlViewport.cpp"/>
+          <FILE id="Yrk17Q" name="OpenGlViewport.h" compile="0" resource="0"
+                file="Source/Interface/Components/OpenGlViewport.h"/>
           <FILE id="uJxcL0" name="Overlay.cpp" compile="1" resource="0" file="Source/Interface/Components/Overlay.cpp"/>
           <FILE id="bwhbWS" name="Overlay.h" compile="0" resource="0" file="Source/Interface/Components/Overlay.h"/>
           <FILE id="IjUl71" name="PinBoundsBox.cpp" compile="1" resource="0"
@@ -291,7 +311,9 @@
         <CONFIGURATION isDebug="0" name="Release" headerPath="../../Source" fastMath="1"
                        enablePluginBinaryCopyStep="1" vst3BinaryLocation="C:\Program Files\Common Files\VST3\DEV"
                        winArchitecture="x64"/>
-        <CONFIGURATION isDebug="1" fastMath="1" headerPath="../../Source" name="RelWithDebugInfo"/>
+        <CONFIGURATION isDebug="1" fastMath="1" headerPath="../../Source" name="RelWithDebugInfo"
+                       enablePluginBinaryCopyStep="1" vst3BinaryLocation="C:\Program Files\Common Files\VST3\DEV"
+                       optimisation="3"/>
       </CONFIGURATIONS>
       <MODULEPATHS>
         <MODULEPATH id="juce_audio_basics" path="E:\JUCE dev\JUCE 7.0\JUCE\modules"/>

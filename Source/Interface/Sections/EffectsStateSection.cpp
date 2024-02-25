@@ -8,7 +8,11 @@
 	==============================================================================
 */
 
+#include "Plugin/ProcessorTree.h"
 #include "Framework/update_types.h"
+#include "Generation/EffectsState.h"
+#include "EffectModuleSection.h"
+#include "EffectsLaneSection.h"
 #include "EffectsStateSection.h"
 
 namespace Interface
@@ -21,6 +25,8 @@ namespace Interface
 		addSubSection(lanes_[0].get());
 	}
 
+	EffectsStateSection::~EffectsStateSection() = default;
+
 
 	void EffectsStateSection::resized()
 	{
@@ -30,7 +36,7 @@ namespace Interface
 		int laneSelectorMargin = (int)std::round(scaleValue(kLaneSelectorToLanesMargin));
 		int lanesX = 0;
 		int lanesY = laneSelectorHeight + laneSelectorMargin;
-		int lanesWidth = (int)std::round(scaleValue(EffectsLaneSection::kWidth));
+		int lanesWidth = (int)std::round(scaleValue(kEffectsLaneWidth));
 		int lanesHeight = getHeight() - lanesY;
 		int laneToLaneMargin = (int)std::round(scaleValue(kLaneToLaneMargin));
 

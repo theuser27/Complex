@@ -12,9 +12,7 @@
 
 #include <variant>
 
-#include "../LookAndFeel/Fonts.h"
 #include "OpenGlComponent.h"
-#include "OpenGlImage.h"
 
 namespace Interface
 {
@@ -26,10 +24,8 @@ namespace Interface
   public:
     OpenGlImageComponent(String name = "");
 
-    void paintBackground([[maybe_unused]] Graphics &g) override { }
-    
-    void redrawImage(bool clearOnRedraw = true);
-    virtual void paintToImage(Graphics &g, Component *target)
+    void redrawImage(bool forceRedraw = true);
+    virtual void paintToImage(Graphics &g, BaseComponent *target)
     {
       if (paintEntireComponent_)
         target->paintEntireComponent(g, false);
@@ -37,170 +33,69 @@ namespace Interface
         target->paint(g);
     }
 
-    void init(OpenGlWrapper &openGl) override
-    {
-      image_.init(openGl);
-      image_.lock();
-      if (drawImage_)
-        image_.setImage(drawImage_.get());
-      image_.unlock();
-    }
+    void init(OpenGlWrapper &openGl) override;
     void render(OpenGlWrapper &openGl, bool animate) override;
-    void destroy() override { image_.destroy(); }
+    void destroy() override;
 
-    void setTargetComponent(Component *targetComponent) { targetComponent_ = targetComponent; }
+    void setTargetComponent(BaseComponent *targetComponent) { targetComponent_ = targetComponent; }
     void setCustomDrawBounds(Rectangle<int> customDrawBounds) { customDrawBounds_ = customDrawBounds; }
-    void setScissor(bool scissor) { image_.setScissor(scissor); }
-    void setUseAlpha(bool useAlpha) { image_.setUseAlpha(useAlpha); }
-    void setColor(Colour color) { image_.setColor(color); }
+    void setAdditive(bool additive) { additive_ = additive; }
+    void setScissor(bool scissor) { scissor_ = scissor; }
+    void setUseAlpha(bool useAlpha) { useAlpha_ = useAlpha; }
+    void setColor(Colour color) { color_ = color; }
     void setActive(bool active) { active_ = active; }
-    void setStatic(bool staticImage) { staticImage_ = staticImage; }
+
+    void setPaintFunction(std::function<void(Graphics &)> paintFunction) { paintFunction_ = std::move(paintFunction); }
+    void setShouldClearOnRedraw(bool clearOnRedraw) { clearOnRedraw_ = clearOnRedraw; }
     void paintEntireComponent(bool paintEntireComponent) { paintEntireComponent_ = paintEntireComponent; }
-    bool isActive() const { return active_; }
 
   protected:
-    Component *targetComponent_ = nullptr;
-    Rectangle<int> customDrawBounds_{};
-    bool active_ = true;
-    bool staticImage_ = false;
+    shared_value<Colour> color_ = Colours::white;
+    shared_value<bool> additive_ = false;
+    shared_value<bool> useAlpha_ = false;
+    shared_value<bool> scissor_ = true;
+    shared_value<bool> active_ = true;
+
+    shared_value<bool> hasNewVertices_ = true;
+    shared_value<bool> shouldReloadImage_ = false;
+    shared_value<BaseComponent *> targetComponent_ = nullptr;
+    shared_value<Rectangle<int>> customDrawBounds_{};
+
+    shared_value<std::unique_ptr<Image>> drawImage_;
+    OpenGLTexture texture_;
+    OpenGLShaderProgram *imageShader_ = nullptr;
+    std::unique_ptr<OpenGLShaderProgram::Uniform> imageColor_;
+    std::unique_ptr<OpenGLShaderProgram::Attribute> imagePosition_;
+    std::unique_ptr<OpenGLShaderProgram::Attribute> textureCoordinates_;
+
+    std::unique_ptr<float[]> positionVertices_;
+    std::unique_ptr<int[]> positionTriangles_;
+    GLuint vertexBuffer_{};
+    GLuint triangleBuffer_{};
+
+    std::function<void(Graphics &)> paintFunction_{};
     bool paintEntireComponent_ = true;
-    bool isDirty_ = true;
-    std::unique_ptr<Image> drawImage_;
-    OpenGlImage image_;
+    bool clearOnRedraw_ = true;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(OpenGlImageComponent)
   };
 
-  class OpenGlBackground : public OpenGlImageComponent
+  class OpenGlBackground final : public OpenGlImageComponent
   {
   public:
-    OpenGlBackground() : OpenGlImageComponent(typeid(OpenGlBackground).name()) { }
+    OpenGlBackground() : OpenGlImageComponent(typeid(OpenGlBackground).name()) { setShouldClearOnRedraw(false); }
 
-    void paintToImage(Graphics &g, Component *target) override;
-    void setComponentToRedraw(std::variant<BaseSection *, OpenGlComponent *> componentToRedraw)
+    void paintToImage(Graphics &g, BaseComponent *target) override;
+    void setComponentToRedraw(BaseSection *componentToRedraw)
     { componentToRedraw_ = componentToRedraw; }
 
   protected:
-    std::variant<BaseSection *, OpenGlComponent *> componentToRedraw_;
+    BaseSection *componentToRedraw_;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(OpenGlBackground)
   };
 
-  template <typename ComponentType>
-    requires std::derived_from<ComponentType, Component>
-  class OpenGlAutoImageComponent : public ComponentType
-  {
-  public:
-    using ComponentType::ComponentType;
-
-    void mouseDown(const MouseEvent &e) override
-    {
-      ComponentType::mouseDown(e);
-      redoImage();
-    }
-
-    void mouseUp(const MouseEvent &e) override
-    {
-      ComponentType::mouseUp(e);
-      redoImage();
-    }
-
-    void mouseDoubleClick(const MouseEvent &e) override
-    {
-      ComponentType::mouseDoubleClick(e);
-      redoImage();
-    }
-
-    void mouseEnter(const MouseEvent &e) override
-    {
-      ComponentType::mouseEnter(e);
-      redoImage();
-    }
-
-    void mouseExit(const MouseEvent &e) override
-    {
-      ComponentType::mouseExit(e);
-      redoImage();
-    }
-
-    void mouseWheelMove(const MouseEvent &e, const MouseWheelDetails &wheel) override
-    {
-      ComponentType::mouseWheelMove(e, wheel);
-      redoImage();
-    }
-
-    gl_ptr<OpenGlImageComponent> getImageComponent() { return imageComponent_; }
-    void redoImage() { imageComponent_->redrawImage(); }
-
-  protected:
-    gl_ptr<OpenGlImageComponent> imageComponent_;
-  };
-
-  class OpenGlTextEditor : public OpenGlAutoImageComponent<TextEditor>, public TextEditor::Listener
-  {
-  public:
-    OpenGlTextEditor(String name) : OpenGlAutoImageComponent(std::move(name))
-    {
-      imageComponent_ = makeOpenGlComponent<OpenGlImageComponent>("Text Editor Image");
-      imageComponent_->setTargetComponent(this);
-      addListener(this);
-    }
-
-    void colourChanged() override { redoImage(); }
-    void textEditorTextChanged(TextEditor &) override { redoImage(); }
-    void textEditorFocusLost(TextEditor &) override { redoImage(); }
-
-    void mouseDrag(const MouseEvent &e) override
-    {
-      TextEditor::mouseDrag(e);
-      redoImage();
-    }
-
-    void applyFont()
-    {
-      applyFontToAllText(usedFont_);
-      redoImage();
-    }
-
-    void visibilityChanged() override
-    {
-      TextEditor::visibilityChanged();
-
-      if (isVisible() && !isMultiLine())
-        applyFont();
-    }
-
-    bool keyPressed(const KeyPress &key) override
-    {
-      bool result = TextEditor::keyPressed(key);
-      redoImage();
-      return result;
-    }
-
-    void resized() override
-    {
-      TextEditor::resized();
-      if (isMultiLine())
-      {
-        auto indent = (int)imageComponent_->getValue(Skin::kLabelBackgroundRounding);
-        setIndents(indent, indent);
-        return;
-      }
-
-      if (isVisible())
-        applyFont();
-    }
-
-    auto getUsedFont() const { return usedFont_; }
-  	void setUsedFont(Font font) { usedFont_ = std::move(font); }
-
-  private:
-    Font usedFont_{ Fonts::instance()->getInterVFont() };
-
-    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(OpenGlTextEditor)
-  };
-
-  class PlainTextComponent : public OpenGlImageComponent
+  class PlainTextComponent final : public OpenGlImageComponent
   {
   public:
     enum FontType
@@ -210,44 +105,37 @@ namespace Interface
       kValues
     };
 
-    PlainTextComponent(String name, String text = {}) :
-  		OpenGlImageComponent(std::move(name)), text_(std::move(text)) { }
+    PlainTextComponent(String name, String text = {});
 
-    void resized() override
-    {
-      OpenGlImageComponent::resized();
-      redrawImage();
-    }
-
-    void paintToImage(Graphics &g, Component *target) override;
+    void resized() override;
+    void paintToImage(Graphics &g, BaseComponent *target) override;
 
     String getText() const { return text_; }
     int getTotalWidth() const { return font_.getStringWidth(text_); }
     int getTotalHeight() const { return (int)std::ceil(font_.getHeight()); }
     void updateState();
 
-    void setText(String text) noexcept { isDirty_ = isDirty_ || text_ != text; text_ = std::move(text); redrawImage(); }
-    void setTextHeight(float textSize) noexcept { isDirty_ = isDirty_ || textSize_ != textSize; textSize_ = textSize; }
-    void setFontType(FontType type) noexcept { isDirty_ = (isDirty_ || fontType_ != type); fontType_ = type; }
-    void setJustification(Justification justification) noexcept
-  	{ isDirty_ = isDirty_ || justification_ != justification; justification_ = justification; }
+    void setText(String text) noexcept { text_ = std::move(text); redrawImage(); }
+    void setTextHeight(float textSize) noexcept { textSize_ = textSize; }
+    void setFontType(FontType type) noexcept { fontType_ = type; }
+    void setJustification(Justification justification) noexcept { justification_ = justification; }
 
   private:
     String text_;
     float textSize_ = 11.0f;
     Colour textColour_ = Colours::white;
-    Font font_{ Fonts::instance()->getInterVFont() };
+    Font font_;
     FontType fontType_ = kText;
     Justification justification_ = Justification::centred;
   };
 
-  class PlainShapeComponent : public OpenGlImageComponent
+  class PlainShapeComponent final : public OpenGlImageComponent
   {
   public:
     PlainShapeComponent(String name) : OpenGlImageComponent(std::move(name)) { }
 
     void resized() override { redrawImage(); }
-    void paintToImage(Graphics &g, Component *target) override;
+    void paintToImage(Graphics &g, BaseComponent *target) override;
 
     void setShapes(std::pair<Path, Path> strokeFillShapes)
     {

@@ -14,7 +14,7 @@
 
 namespace Interface
 {
-  class OverlayBackgroundRenderer : public OpenGlComponent
+  class OverlayBackgroundRenderer final : public OpenGlComponent
   {
   public:
     static constexpr int kNumVertices = 4;
@@ -28,7 +28,6 @@ namespace Interface
     void init(OpenGlWrapper &openGl) override;
     void render(OpenGlWrapper &openGl, bool animate) override;
     void destroy() override;
-    void paint(Graphics &) override {}
 
     void setColor(const Colour &color) { color_ = color; }
     void setAdditiveBlending(bool additiveBlending) { additiveBlending_ = additiveBlending; }
@@ -51,16 +50,11 @@ namespace Interface
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(OverlayBackgroundRenderer)
   };
 
-  class Overlay : public BaseSection
+  class Overlay final : public BaseSection
   {
   public:
 
-    Overlay(std::string_view name) : BaseSection(name)
-    {
-      background_ = makeOpenGlComponent<OverlayBackgroundRenderer>();
-      setSkinOverride(Skin::kOverlay);
-      addOpenGlComponent(background_);
-    }
+    Overlay(std::string_view name);
 
     void resized() override
     {

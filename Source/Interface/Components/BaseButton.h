@@ -10,17 +10,15 @@
 
 #pragma once
 
-#include "Framework/parameter_value.h"
-#include "OpenGlImageComponent.h"
-#include "OpenGlMultiQuad.h"
-#include "Interface/LookAndFeel/Paths.h"
 #include "BaseControl.h"
 
 namespace Interface
 {
 	class BaseButton;
+	class PlainShapeComponent;
+	class OpenGlQuad;
 
-	class ButtonComponent : public OpenGlComponent
+	/*class ButtonComponent : public OpenGlComponent
 	{
 	public:
 		static constexpr float kHoverIncrement = 0.1f;
@@ -81,12 +79,12 @@ namespace Interface
 			shape_.destroy();
 		}
 
-		void setParent(BaseSection *parent) noexcept override
+		void setParentSection(BaseSection *parent) noexcept override
 		{
-			parent_ = parent;
-			background_.setParent(parent_);
-			text_.setParent(parent_);
-			shape_.setParent(parent_);
+			parentSection_ = parent;
+			background_.setParentSection(parentSection_);
+			text_.setParentSection(parentSection_);
+			shape_.setParentSection(parentSection_);
 		}
 		void setColors();
 		void setJustification(Justification justification) noexcept { text_.setJustification(justification); }
@@ -120,7 +118,9 @@ namespace Interface
 		Colour bodyColor_{};
 
 		JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(ButtonComponent)
-	};
+	};*/
+
+	class ButtonListener;
 
 	class BaseButton : public BaseControl
 	{
@@ -135,17 +135,9 @@ namespace Interface
 			kClearMidiLearn
 		};
 
-		class Listener
-		{
-		public:
-			virtual ~Listener() = default;
-			virtual void buttonClicked(BaseButton *) = 0;
-			virtual void guiChanged([[maybe_unused]] BaseButton *button) { }
-		};
-
 		BaseButton(Framework::ParameterValue *parameter);
+		~BaseButton() override;
 
-		void parentHierarchyChanged() override { parent_ = findParentComponentOfClass<BaseSection>(); }
 		//void resized() override;
 		void setExtraElementsPositions([[maybe_unused]] Rectangle<int> anchorBounds) override { }
 		void enablementChanged() override
@@ -156,18 +148,8 @@ namespace Interface
 
 		void mouseDown(const MouseEvent &e) override;
 		void mouseUp(const MouseEvent &e) override;
-		void mouseEnter(const MouseEvent &) override
-		{
-			updateState(false, true);
-			for (auto &component : components_)
-				component->getAnimator().setIsHovered(true);
-		}
-		void mouseExit(const MouseEvent &) override
-		{
-			updateState(false, false);
-			for (auto &component : components_)
-				component->getAnimator().setIsHovered(false);
-		}
+		void mouseEnter(const MouseEvent &e) override;
+		void mouseExit(const MouseEvent &e) override;
 
 		bool getToggleState() const noexcept { return std::round(getValueSafe()) == 1.0; }
 		void setToggleState(bool shouldBeOn, NotificationType notification);
@@ -175,13 +157,6 @@ namespace Interface
 
 		bool isHeldDown() const noexcept { return isHeldDown_; }
 		bool isHoveredOver() const noexcept { return isHoveredOver_; }
-
-		//void setAccentedButton(bool isAccented) noexcept { buttonComponent_->setAccentedButton(isAccented); }
-		//void setJustification(Justification justification) noexcept { buttonComponent_->setJustification(justification); }
-
-		//void setNoBackground() noexcept { buttonComponent_->setStyle(ButtonComponent::kJustText); }
-		//void setTextButton() noexcept { buttonComponent_->setStyle(ButtonComponent::kTextButton); }
-		//void setActionButton() noexcept { buttonComponent_->setStyle(ButtonComponent::kActionButton); }
 
 		std::span<const std::string_view> getStringLookup() const { return details_.stringLookup; }
 		void setStringLookup(std::span<const std::string_view> lookup) { details_.stringLookup = lookup; }
@@ -193,21 +168,12 @@ namespace Interface
 		void removeListener(BaseSection *listener) override;
 
 	protected:
-		void updateState(bool isHeldDown, bool isHoveredOver) noexcept
-		{
-			if (isEnabled() && isVisible() && !isCurrentlyBlockedByAnotherModalComponent())
-			{
-				isHeldDown_ = isHeldDown;
-				isHoveredOver_ = isHoveredOver;
-			}
-		}
+		void updateState(bool isHeldDown, bool isHoveredOver) noexcept;
 
-		//gl_ptr<ButtonComponent> buttonComponent_;
+		std::vector<ButtonListener *> buttonListeners_{};
 
-		std::vector<Listener *> buttonListeners_{};
-
-		bool isHeldDown_ = false;
-		bool isHoveredOver_ = false;
+		shared_value<bool> isHeldDown_ = false;
+		shared_value<bool> isHoveredOver_ = false;
 
 		JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(BaseButton)
 	};
@@ -218,9 +184,10 @@ namespace Interface
 		static constexpr int kAddedMargin = 4;
 
 		PowerButton(Framework::ParameterValue *parameter);
+		~PowerButton() override;
 
 		void setColours() override;
-		Rectangle<int> getBoundsForSizes(int height, int width = 0) override;
+		Rectangle<int> setBoundsForSizes(int height, int width = 0) override;
 		void redoImage() override;
 		void setComponentsBounds() override;
 
@@ -229,8 +196,8 @@ namespace Interface
 
 		Colour onNormalColor_{};
 
-		Colour activeColour_{};
-		Colour hoverColour_{};
+		shared_value<Colour> activeColour_{};
+		shared_value<Colour> hoverColour_{};
 	};
 
 	class RadioButton final : public BaseButton
@@ -239,21 +206,22 @@ namespace Interface
 		static constexpr int kAddedMargin = 4;
 
 		RadioButton(Framework::ParameterValue *parameter);
+		~RadioButton() override;
 
 		void setColours() override;
-		Rectangle<int> getBoundsForSizes(int height, int width = 0) override;
+		Rectangle<int> setBoundsForSizes(int height, int width = 0) override;
 		void setExtraElementsPositions(Rectangle<int> anchorBounds) override;
 		void redoImage() override;
 		void setComponentsBounds() override;
 
-		void setRounding(float rounding) noexcept { backgroundComponent_->setRounding(rounding); }
+		void setRounding(float rounding) noexcept;
 
 	private:
 		gl_ptr<OpenGlQuad> backgroundComponent_ = nullptr;
 
-		Colour onNormalColor_{};
-		Colour offNormalColor_{};
-		Colour backgroundColor_{};
+		shared_value<Colour> onNormalColor_{};
+		shared_value<Colour> offNormalColor_{};
+		shared_value<Colour> backgroundColor_{};
 	};
 
 	class OptionsButton final : public BaseButton
@@ -263,9 +231,10 @@ namespace Interface
 		static constexpr float kBorderRounding = 8.0f;
 
 		OptionsButton(Framework::ParameterValue *parameter, String name = {}, String displayText = {});
+		~OptionsButton() override;
 
 		void setColours() override;
-		Rectangle<int> getBoundsForSizes(int height, int width) override;
+		Rectangle<int> setBoundsForSizes(int height, int width) override;
 		void redoImage() override;
 		void setComponentsBounds() override;
 

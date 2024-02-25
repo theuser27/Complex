@@ -10,6 +10,8 @@
 
 #pragma once
 
+#include "AppConfig.h"
+#include <juce_data_structures/juce_data_structures.h>
 #include "../Generation/BaseProcessor.h"
 
 namespace Framework
@@ -43,15 +45,7 @@ namespace Plugin
 		// remember to use a scoped lock before calling these 2 methods
 		Generation::BaseProcessor *getProcessor(u64 moduleId) const noexcept;
 		// finds a parameter from a specified module with a specified name
-		Framework::ParameterValue *getProcessorParameter(u64 parentModuleId, std::string_view parameter) const noexcept;
-		Framework::ParameterValue *getProcessorParameter(u64 parentModuleId, nested_enum::NestedEnum auto parameterEnum) const noexcept
-		{
-			auto *processorPointer = getProcessor(parentModuleId);
-			if (!processorPointer)
-				return nullptr;
-
-			return processorPointer->getParameter(parameterEnum);
-		}
+		Framework::ParameterValue *getProcessorParameter(u64 parentModuleId, std::string_view parameterName) const noexcept;
 
 		Framework::UpdateFlag getUpdateFlag() const noexcept { return updateFlag_.load(std::memory_order_acquire); }
 		// only the audio thread changes the updateFlag
@@ -86,7 +80,7 @@ namespace Plugin
 
 	protected:
 		// all plugin undo steps are stored here
-		UndoManager undoManager_{ 0, 100 };
+		juce::UndoManager undoManager_{ 0, 100 };
 		// the processor tree is stored in a flattened map
 		Framework::VectorMap<u64, std::unique_ptr<Generation::BaseProcessor>> allProcessors_{ 64 };
 		// used to give out non-repeating ids for all PluginModules

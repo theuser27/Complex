@@ -8,6 +8,7 @@
   ==============================================================================
 */
 
+#include "JuceHeader.h"
 #include "Skin.h"
 #include "DefaultLookAndFeel.h"
 #include "../Sections/BaseSection.h"
@@ -221,7 +222,7 @@ namespace Interface
       lookAndFeel->setColour(i, getColor(static_cast<ColorId>(i)));
   }
 
-  Colour Skin::getColor(int section, ColorId colorId) const
+  Colour Skin::getColor(SectionOverride section, ColorId colorId) const
   {
     if (section == kNone)
       return getColor(colorId);
@@ -232,22 +233,22 @@ namespace Interface
     return Colours::black;
   }
 
-  Colour Skin::getColor(const BaseSection *section, ColorId colorId) const
+  Colour Skin::getColor(const OpenGlContainer *section, ColorId colorId) const
   {
-    SectionOverride sectionOverride = section->getSectionOverride();
-    while (sectionOverride != kNone)
+    SectionOverride sectionOverride;
+    do
     {
+      sectionOverride = section->getSectionOverride();
       if (colorOverrides_[sectionOverride].contains(colorId))
         return colorOverrides_[sectionOverride].at(colorId);
 
-      section = section->getParent();
-      sectionOverride = section->getSectionOverride();
-    }
+      section = dynamic_cast<OpenGlContainer *>(section->getParentSafe());
+    } while (sectionOverride != kNone && section != nullptr);
 
     return getColor(colorId);
   }
 
-  float Skin::getValue(int section, ValueId valueId) const
+  float Skin::getValue(SectionOverride section, ValueId valueId) const
   {
     if (valueOverrides_[section].contains(valueId))
       return valueOverrides_[section].at(valueId);
@@ -255,17 +256,17 @@ namespace Interface
     return getValue(valueId);
   }
 
-  float Skin::getValue(const BaseSection *section, ValueId valueId) const
+  float Skin::getValue(const OpenGlContainer *section, ValueId valueId) const
   {
-    SectionOverride sectionOverride = section->getSectionOverride();
-    while (sectionOverride != kNone)
+    SectionOverride sectionOverride;
+    do
     {
+      sectionOverride = section->getSectionOverride();
       if (valueOverrides_[sectionOverride].contains(valueId))
         return valueOverrides_[sectionOverride].at(valueId);
 
-      section = section->getParent();
-      sectionOverride = section->getSectionOverride();
-    }
+      section = dynamic_cast<OpenGlContainer *>(section->getParentSafe());
+    } while (sectionOverride != kNone && section != nullptr);
 
     return getValue(valueId);
   }

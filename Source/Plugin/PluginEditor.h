@@ -16,7 +16,7 @@
 //==============================================================================
 /**
 */
-class ComplexAudioProcessorEditor : public juce::AudioProcessorEditor
+class ComplexAudioProcessorEditor final : public juce::AudioProcessorEditor
 {
 public:
 	ComplexAudioProcessorEditor (ComplexAudioProcessor&);

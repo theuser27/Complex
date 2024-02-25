@@ -8,7 +8,12 @@
 	==============================================================================
 */
 
+#include "Framework/windows.h"
+#include "Generation/SoundEngine.h"
 #include "HeaderFooterSections.h"
+#include "../LookAndFeel/Fonts.h"
+#include "../Components/OpenGlMultiQuad.h"
+#include "../Components/BaseSlider.h"
 
 namespace Interface
 {
@@ -26,14 +31,14 @@ namespace Interface
 		addOpenGlComponent(bottomBarColour_);*/
 		
 		mixNumberBox_ = std::make_unique<NumberBox>(
-			soundEngine.getParameter(BaseProcessors::SoundEngine::MasterMix::self()));
+			soundEngine.getParameter(BaseProcessors::SoundEngine::MasterMix::name()));
 		mixNumberBox_->setMaxTotalCharacters(5);
 		mixNumberBox_->setMaxDecimalCharacters(2);
 		mixNumberBox_->setCanUseScrollWheel(true);
 		addControl(mixNumberBox_.get());
 
 		gainNumberBox_ = std::make_unique<NumberBox>(
-			soundEngine.getParameter(BaseProcessors::SoundEngine::OutGain::self()));
+			soundEngine.getParameter(BaseProcessors::SoundEngine::OutGain::name()));
 		gainNumberBox_->setMaxTotalCharacters(5);
 		gainNumberBox_->setMaxDecimalCharacters(2);
 		gainNumberBox_->setShouldUsePlusMinusPrefix(true);
@@ -41,7 +46,7 @@ namespace Interface
 		addControl(gainNumberBox_.get());
 
 		blockSizeNumberBox_ = std::make_unique<NumberBox>(
-			soundEngine.getParameter(BaseProcessors::SoundEngine::BlockSize::self()));
+			soundEngine.getParameter(BaseProcessors::SoundEngine::BlockSize::name()));
 		blockSizeNumberBox_->setMaxTotalCharacters(5);
 		blockSizeNumberBox_->setMaxDecimalCharacters(0);
 		blockSizeNumberBox_->setAlternativeMode(true);
@@ -49,7 +54,7 @@ namespace Interface
 		addControl(blockSizeNumberBox_.get());
 
 		overlapNumberBox_ = std::make_unique<NumberBox>(
-			soundEngine.getParameter(BaseProcessors::SoundEngine::Overlap::self() ));
+			soundEngine.getParameter(BaseProcessors::SoundEngine::Overlap::name()));
 		overlapNumberBox_->setMaxTotalCharacters(4);
 		overlapNumberBox_->setMaxDecimalCharacters(2);
 		overlapNumberBox_->setAlternativeMode(true);
@@ -57,7 +62,7 @@ namespace Interface
 		addControl(overlapNumberBox_.get());
 
 		windowTypeSelector_ = std::make_unique<TextSelector>(
-			soundEngine.getParameter(BaseProcessors::SoundEngine::WindowType::self()),
+			soundEngine.getParameter(BaseProcessors::SoundEngine::WindowType::name()),
 			Fonts::instance()->getDDinFont());
 		windowTypeSelector_->setCanUseScrollWheel(true);
 		windowTypeSelector_->addLabel();
@@ -65,7 +70,7 @@ namespace Interface
 		addControl(windowTypeSelector_.get());
 
 		windowAlphaNumberBox_ = std::make_unique<NumberBox>(
-			soundEngine.getParameter(BaseProcessors::SoundEngine::WindowAlpha::self()));
+			soundEngine.getParameter(BaseProcessors::SoundEngine::WindowAlpha::name()));
 		windowAlphaNumberBox_->setMaxTotalCharacters(4);
 		windowAlphaNumberBox_->setMaxDecimalCharacters(2);
 		windowAlphaNumberBox_->setAlternativeMode(true);
@@ -73,6 +78,8 @@ namespace Interface
 		windowAlphaNumberBox_->removeLabel();
 		addControl(windowAlphaNumberBox_.get());
 	}
+
+	HeaderFooterSections::~HeaderFooterSections() = default;
 
 	void HeaderFooterSections::paintBackground(Graphics &g)
 	{
@@ -150,13 +157,13 @@ namespace Interface
 		auto currentPoint = Point{ getWidth() - scaleValueRoundInt(kHeaderHorizontalEdgePadding),
 			centerVertically(0, numberBoxHeight, scaleValueRoundInt(kHeaderHeight)) };
 
-		auto mixNumberBoxBounds = mixNumberBox_->getBoundsForSizes(numberBoxHeight);
-		mixNumberBox_->setOverallBounds(currentPoint - Point{ mixNumberBoxBounds.getRight(), 0 });
+		auto mixNumberBoxBounds = mixNumberBox_->setBoundsForSizes(numberBoxHeight);
+		mixNumberBox_->setPosition(currentPoint - Point{ mixNumberBoxBounds.getRight(), 0 });
 		
 		currentPoint.x -= mixNumberBoxBounds.getWidth() + headerNumberBoxMargin;
 
-		auto gainNumberBoxBounds = gainNumberBox_->getBoundsForSizes(numberBoxHeight);
-		gainNumberBox_->setOverallBounds(currentPoint - Point{ gainNumberBoxBounds.getRight(), 0 });
+		auto gainNumberBoxBounds = gainNumberBox_->setBoundsForSizes(numberBoxHeight);
+		gainNumberBox_->setPosition(currentPoint - Point{ gainNumberBoxBounds.getRight(), 0 });
 	}
 
 	void HeaderFooterSections::arrangeFooter()
@@ -170,10 +177,10 @@ namespace Interface
 		auto yOffset = footerHeight - (footerHeight - numberBoxHeight) / 2;
 		auto currentPoint = Point{ footerHorizontalEdgePadding, bounds.getBottom() - yOffset };
 
-		auto blockSizeNumberBoxBounds = blockSizeNumberBox_->getBoundsForSizes(numberBoxHeight);
-		auto overlapNumberBoxBounds = overlapNumberBox_->getBoundsForSizes(numberBoxHeight);
-		auto windowTypeSelectorBounds = windowTypeSelector_->getBoundsForSizes(textSelectorHeight);
-		auto windowAlphaBounds = windowAlphaNumberBox_->getBoundsForSizes(numberBoxHeight);
+		auto blockSizeNumberBoxBounds = blockSizeNumberBox_->setBoundsForSizes(numberBoxHeight);
+		auto overlapNumberBoxBounds = overlapNumberBox_->setBoundsForSizes(numberBoxHeight);
+		auto windowTypeSelectorBounds = windowTypeSelector_->setBoundsForSizes(textSelectorHeight);
+		auto windowAlphaBounds = windowAlphaNumberBox_->setBoundsForSizes(numberBoxHeight);
 
 		auto totalElementsLength = blockSizeNumberBoxBounds.getWidth() +
 			overlapNumberBoxBounds.getWidth() + windowTypeSelectorBounds.getWidth();
@@ -187,19 +194,19 @@ namespace Interface
 
 		auto elementOffset = (bounds.getWidth() - 2 * footerHorizontalEdgePadding - totalElementsLength) / 2;
 
-		blockSizeNumberBox_->setOverallBounds(currentPoint + Point{ -blockSizeNumberBoxBounds.getX(), 0 });
+		blockSizeNumberBox_->setPosition(currentPoint + Point{ -blockSizeNumberBoxBounds.getX(), 0 });
 		currentPoint.x += blockSizeNumberBoxBounds.getWidth() + elementOffset;
 
-		overlapNumberBox_->setOverallBounds(currentPoint + Point{ -overlapNumberBoxBounds.getX(), 0 });
+		overlapNumberBox_->setPosition(currentPoint + Point{ -overlapNumberBoxBounds.getX(), 0 });
 		currentPoint.x += overlapNumberBoxBounds.getWidth() + elementOffset;
 
-		windowTypeSelector_->setOverallBounds(currentPoint + Point{ -windowTypeSelectorBounds.getX(), 0 });
+		windowTypeSelector_->setPosition(currentPoint + Point{ -windowTypeSelectorBounds.getX(), 0 });
 		currentPoint.x += windowTypeSelectorBounds.getWidth() + elementOffset;
 
 		if (!showAlpha_)
 			return;
 
-		windowAlphaNumberBox_->setOverallBounds({ bounds.getRight() - footerHorizontalEdgePadding - 
+		windowAlphaNumberBox_->setPosition(Point{ bounds.getRight() - footerHorizontalEdgePadding -
 			windowAlphaBounds.getWidth(), bounds.getBottom() - yOffset });
 	}
 }

@@ -28,7 +28,7 @@ namespace Interface
 		static constexpr float kDbSlopePerOctave = 3.0f;
 
 		Spectrogram();
-		~Spectrogram() override = default;
+		~Spectrogram() override;
 
 		void render(OpenGlWrapper &open_gl, bool animate) override;
 		void paint(Graphics &g) override;
@@ -47,6 +47,7 @@ namespace Interface
 			simd_float> *scratchBuffer) noexcept { scratchBuffer_ = scratchBuffer; }
 		void setIsDataPolar(bool isDataPolar) noexcept { isDataPolar_ = isDataPolar; }
 
+		void renderCorners(OpenGlWrapper &openGl, bool animate, Colour color, float rounding);
 
 	private:
 		void updateAmplitudes();

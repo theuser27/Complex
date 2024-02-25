@@ -8,6 +8,7 @@
 	==============================================================================
 */
 
+#include "Generation/SoundEngine.h"
 #include "Complex.h"
 #include "Interface/Components/BaseControl.h"
 #include "Renderer.h"
@@ -57,6 +58,11 @@ namespace Plugin
 		// check for power matching
 	}
 
+	u32 ComplexPlugin::getProcessingDelay() const noexcept { return soundEngine_->getProcessingDelay(); }
+
+	void ComplexPlugin::updateParameters(Framework::UpdateFlag flag, float sampleRate) noexcept
+	{ soundEngine_->UpdateParameters(flag, sampleRate); }
+
 	void ComplexPlugin::initialiseModuleTree() noexcept
 	{
 		// TODO: make the module structure here instead of doing it in the constructors
@@ -82,7 +88,7 @@ namespace Plugin
 		return nullptr;
 	}
 
-	void ComplexPlugin::Process(AudioBuffer<float> &buffer, u32 numSamples, float sampleRate, u32 numInputs, u32 numOutputs)
+	void ComplexPlugin::Process(juce::AudioBuffer<float> &buffer, u32 numSamples, float sampleRate, u32 numInputs, u32 numOutputs)
 	{
 		utils::ScopedSpinLock lock(waitLock_);
 		soundEngine_->MainProcess(buffer, numSamples, sampleRate, numInputs, numOutputs);

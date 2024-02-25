@@ -11,16 +11,20 @@
 #pragma once
 
 #include "../Sections/BaseSection.h"
-#include "BaseSlider.h"
 
 namespace Interface
 {
+	class OpenGlQuad;
+	class OpenGlCorners;
+	class PinSlider;
+
 	class PinBoundsBox : public BaseSection
 	{
 	public:
 		static constexpr int kAdditionalPinWidth = 20;
 
 		PinBoundsBox(std::string_view name, Framework::ParameterValue *lowBound, Framework::ParameterValue *highBound);
+		~PinBoundsBox() override;
 
 		void paintBackground(Graphics &g) override;
 		void paint(Graphics &g) override;
@@ -32,12 +36,11 @@ namespace Interface
 			float highBoundValue, Colour colour, float shiftValue = 0.0f) const;
 		void positionSliders();
 
-		void setRounding(float rounding) noexcept { roundedCorners_->setCorners(getLocalBounds(), rounding); }
-		void setTopRounding(float topRounding) noexcept { roundedCorners_->setTopCorners(getLocalBounds(), topRounding); }
-		void setBottomRounding(float bottomRounding) noexcept { roundedCorners_->setTopCorners(getLocalBounds(), bottomRounding); }
-		void setRounding(float topRounding, float bottomRounding) noexcept
-		{ roundedCorners_->setCorners(getLocalBounds(), topRounding, bottomRounding); }
-		void setRoundedCornerColour(Colour colour) noexcept { roundedCorners_->setColor(colour); }
+		void setRounding(float rounding) noexcept;
+		void setTopRounding(float topRounding) noexcept;
+		void setBottomRounding(float bottomRounding) noexcept;
+		void setRounding(float topRounding, float bottomRounding) noexcept;
+		void setRoundedCornerColour(Colour colour) noexcept;
 
 	protected:
 		std::unique_ptr<PinSlider> lowBound_ = nullptr;

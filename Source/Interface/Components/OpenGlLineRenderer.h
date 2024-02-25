@@ -14,7 +14,9 @@
 
 namespace Interface
 {
-  class OpenGlLineRenderer : public OpenGlComponent
+	class OpenGlCorners;
+
+	class OpenGlLineRenderer : public OpenGlComponent
   {
   public:
     static constexpr int kLineFloatsPerVertex = 3;
@@ -25,7 +27,7 @@ namespace Interface
     static constexpr int kFillFloatsPerPoint = kFillVerticesPerPoint * kFillFloatsPerVertex;
 
     OpenGlLineRenderer(int num_points, bool loop = false);
-    ~OpenGlLineRenderer() override = default;
+    ~OpenGlLineRenderer() override;
 
     void init(OpenGlWrapper &open_gl) override;
     void render(OpenGlWrapper &open_gl, bool animate) override;
@@ -96,7 +98,9 @@ namespace Interface
     void drawLines(OpenGlWrapper &open_gl, bool left);
 
 
-  private:
+  protected:
+    gl_ptr<OpenGlCorners> corners_;
+
     Colour color_;
     Colour fill_color_from_;
     Colour fill_color_to_;

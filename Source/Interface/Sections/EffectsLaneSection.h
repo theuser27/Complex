@@ -10,62 +10,43 @@
 
 #pragma once
 
-#include "Generation/EffectsState.h"
-#include "EffectModuleSection.h"
+
+#include "../Components/OpenGlScrollBar.h"
+#include "../Components/OpenGlViewport.h"
+#include "BaseSection.h"
+
+namespace Generation
+{
+	class EffectsLane;
+}
 
 namespace Interface
 {
+	class PlainTextComponent;
+	class OptionsButton;
+	class RadioButton;
 	class EffectsStateSection;
+	class EffectModuleSection;
 	class EffectsLaneSection;
 
-	class EffectsViewport : public Viewport
+	class EffectsContainer final : public BaseSection
 	{
 	public:
-		class Listener
-		{
-		public:
-			virtual ~Listener() = default;
-			virtual void effectsScrolled(int position) = 0;
-		};
+		EffectsContainer();
+		~EffectsContainer() override;
 
-		class EffectsContainer : public BaseSection
-		{
-		public:
-			EffectsContainer();
-
-			void buttonClicked(BaseButton *clickedButton) override;
-			void handlePopupResult(int selection) const;
-			void setLane(EffectsLaneSection *lane) noexcept { lane_ = lane; }
-		private:
-			EffectsLaneSection *lane_ = nullptr;
-
-			std::unique_ptr<OptionsButton> addModulesButton_ = nullptr;
-
-			friend class EffectsLaneSection;
-		};
-
-		EffectsViewport();
-
-		void mouseWheelMove(const MouseEvent &e, const MouseWheelDetails &wheel) override;
-
-		void addListener(Listener *listener) { listeners_.push_back(listener); }
-		void visibleAreaChanged(const Rectangle<int> &visible_area) override
-		{
-			for (Listener *listener : listeners_)
-				listener->effectsScrolled(visible_area.getY());
-
-			Viewport::visibleAreaChanged(visible_area);
-		}
-
+		void buttonClicked(BaseButton *clickedButton) override;
+		void handlePopupResult(int selection) const;
+		void setLane(EffectsLaneSection *lane) noexcept { lane_ = lane; }
 	private:
-		EffectsContainer container_{};
+		EffectsLaneSection *lane_ = nullptr;
 
-		std::vector<Listener *> listeners_;
+		std::unique_ptr<OptionsButton> addModulesButton_ = nullptr;
 
 		friend class EffectsLaneSection;
 	};
 
-	class EffectsLaneSection final : public ProcessorSection, public ScrollBar::Listener, EffectsViewport::Listener,
+	class EffectsLaneSection final : public ProcessorSection, public OpenGlScrollBarListener, OpenGlViewportListener,
 		public Generation::BaseProcessor::Listener
 	{
 	public:
@@ -84,18 +65,12 @@ namespace Interface
 		static constexpr int kInsideRouding = 4;
 		static constexpr int kOutlineThickness = 1;
 
-		static constexpr int kWidth = EffectModuleSection::kWidth + 2 * kModulesHorizontalVerticalPadding + 2 * kOutlineThickness;
-		static constexpr int kMinHeight = kTopBarHeight + kModulesHorizontalVerticalPadding + EffectModuleSection::kMinHeight +
-			kBetweenModulePadding + kAddModuleButtonHeight + kModulesHorizontalVerticalPadding + kBottomBarHeight;
-
-		class Listener
-		{
-		public:
-			virtual ~Listener() = default;
-			virtual void laneTurnedOnOff(EffectsLaneSection *lane, bool isOn) = 0;
-		};
+		//static constexpr int kWidth = EffectModuleSection::kWidth + 2 * kModulesHorizontalVerticalPadding + 2 * kOutlineThickness;
+		//static constexpr int kMinHeight = kTopBarHeight + kModulesHorizontalVerticalPadding + EffectModuleSection::kMinHeight +
+		//	kBetweenModulePadding + kAddModuleButtonHeight + kModulesHorizontalVerticalPadding + kBottomBarHeight;
 
 		EffectsLaneSection(Generation::EffectsLane *effectsLane, EffectsStateSection *state, String name = {});
+		~EffectsLaneSection() override;
 		std::unique_ptr<EffectsLaneSection> createCopy();
 
 		void resized() override;
@@ -110,17 +85,17 @@ namespace Interface
 				widthHeight, widthHeight };
 		}
 
-		void scrollBarMoved([[maybe_unused]] ScrollBar *scrollBar, double rangeStart) override
+		void scrollBarMoved([[maybe_unused]] OpenGlScrollBar *scrollBar, double rangeStart) override
 		{ viewport_.setViewPosition(Point{ 0, (int)rangeStart }); }
 
-		void effectsScrolled(int position) override
+		void visibleAreaChanged(int, int newY, int, int) override
 		{
 			setScrollBarRange();
-			scrollBar_.setCurrentRange(position, viewport_.getHeight());
+			scrollBar_.setCurrentRange(newY, viewport_.getHeight());
 		}
 		void setScrollBarRange()
 		{
-			scrollBar_.setRangeLimits(0.0, viewport_.container_.getHeight());
+			scrollBar_.setRangeLimits(0.0, container_.getHeight());
 			scrollBar_.setCurrentRange(scrollBar_.getCurrentRangeStart(), 
 				viewport_.getHeight(), dontSendNotification);
 		}
@@ -150,16 +125,17 @@ namespace Interface
 		// needs a point local to the EffectsLaneSection
 		size_t getIndexFromScreenPosition(Point<int> point) const noexcept;
 
-		void setLaneName(String newName) { laneTitle_->setText(std::move(newName)); }
-		void addListener(Listener *listener) { laneListeners_.push_back(listener); }
+		void setLaneName(String newName);
+		void addListener(EffectsLaneListener *listener) { laneListeners_.push_back(listener); }
 
 	private:
-		EffectsViewport viewport_{};
+		OpenGlViewport viewport_{};
+		EffectsContainer container_{};
 
 		gl_ptr<OpenGlQuad> outerRectangle_;
 		gl_ptr<OpenGlQuad> innerRectangle_;
 		gl_ptr<PlainTextComponent> laneTitle_;
-		OpenGlScrollBar scrollBar_{};
+		OpenGlScrollBar scrollBar_{ true };
 		std::vector<EffectModuleSection *> effectModules_{};
 
 		std::unique_ptr<PowerButton> laneActivator_ = nullptr;
@@ -170,6 +146,6 @@ namespace Interface
 		Generation::EffectsLane *effectsLane_ = nullptr;
 		EffectsStateSection *parentState_ = nullptr;
 
-		std::vector<Listener *> laneListeners_{};
+		std::vector<EffectsLaneListener *> laneListeners_{};
 	};
 }

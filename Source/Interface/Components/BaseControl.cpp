@@ -9,12 +9,17 @@
 */
 
 #include "Framework/update_types.h"
-#include "BaseControl.h"
 #include "Framework/parameter_bridge.h"
+#include "Plugin/Complex.h"
+#include "Plugin/Renderer.h"
+#include "../LookAndFeel/Fonts.h"
+#include "OpenGlImageComponent.h"
+#include "BaseControl.h"
 #include "../Sections/MainInterface.h"
 
 namespace Interface
 {
+	BaseControl::BaseControl() = default;
 	BaseControl::~BaseControl() { setParameterLink(nullptr); }
 
 	Framework::ParameterLink *BaseControl::setParameterLink(Framework::ParameterLink *parameterLink) noexcept
@@ -36,7 +41,7 @@ namespace Interface
 	{
 		hasParameter_ = true;
 
-		setName(utils::toJuceString(parameter.getParameterDetails().id));
+		setName(toJuceString(parameter.getParameterDetails().name));
 		auto replacedLink = setParameterLink(parameter.getParameterLink());
 
 		Framework::ParameterValue *replacedParameter = nullptr;
@@ -89,7 +94,7 @@ namespace Interface
 	{
 		if (parameterLink_ && parameterLink_->parameter)
 			parameterLink_->parameter->updateValues(
-				parent_->getInterfaceLink()->getPlugin().getSampleRate(), (float)getValueSafe());
+				getRenderer()->getPlugin().getSampleRate(), (float)getValueSafe());
 	}
 
 	void BaseControl::beginChange(double oldValue) noexcept
@@ -101,7 +106,7 @@ namespace Interface
 	void BaseControl::endChange()
 	{
 		hasBegunChange_ = false;
-		parent_->getInterfaceLink()->getPlugin().pushUndo(
+		getRenderer()->getPlugin().pushUndo(
 			new Framework::ParameterUpdate(this, valueBeforeChange_, getValueSafe()));
 	}
 
@@ -118,28 +123,89 @@ namespace Interface
 		repositionExtraElements();
 	}
 
-	void BaseControl::setOverallBounds(Point<int> position)
+	void BaseControl::parentHierarchyChanged()
 	{
-		auto scaledAddedHitbox = BorderSize{ 
-			parent_->scaleValueRoundInt((float)addedHitbox_.getTop()),
-			parent_->scaleValueRoundInt((float)addedHitbox_.getLeft()),
-			parent_->scaleValueRoundInt((float)addedHitbox_.getBottom()),
-			parent_->scaleValueRoundInt((float)addedHitbox_.getRight()) };
+		BaseComponent::parentHierarchyChanged();
+		parent_ = findParentComponentOfClass<BaseSection>();
+	}
+
+	void BaseControl::setPosition(Point<int> position)
+	{
+		auto scaledAddedHitbox = BorderSize
+		{
+			scaleValueRoundInt((float)addedHitbox_.getTop()),
+			scaleValueRoundInt((float)addedHitbox_.getLeft()),
+			scaleValueRoundInt((float)addedHitbox_.getBottom()),
+			scaleValueRoundInt((float)addedHitbox_.getRight()) 
+		};
+
+		COMPLEX_ASSERT(!drawBounds_.isEmpty() && "You need to call getBoundsForSizes with \
+			specific dimensions so that size can be calculated and stored");
 
 		Rectangle bounds{ drawBounds_.getWidth() + scaledAddedHitbox.getLeftAndRight(),
 			drawBounds_.getHeight() + scaledAddedHitbox.getTopAndBottom() };
 		bounds.setPosition(position - Point{ scaledAddedHitbox.getLeft(), scaledAddedHitbox.getTop() });
 
 		// offsetting the drawBounds and subsequently the extra elements bounds if origin position was changed
-		drawBounds_.setPosition(Point{ scaledAddedHitbox.getLeft(), scaledAddedHitbox.getTop() });
-
+		drawBounds_.setPosition({ scaledAddedHitbox.getLeft(), scaledAddedHitbox.getTop() });
+		isDrawBoundsSet_ = true;
 		setBounds(bounds);
+	}
+
+	void BaseControl::setBounds(int x, int y, int width, int height)
+	{
+		if (isDrawBoundsSet_)
+		{
+			OpenGlContainer::setBounds(x, y, width, height);
+			isDrawBoundsSet_ = false;
+			return;
+		}
+
+		// if for some reason we didn't use the getBoundsForSizes -> setBounds(Point<int>) path 
+		// for setting bounds of this particular control, we set drawBounds to the specified size
+		// and expand the overall size to accommodate an added hitbox if necessary
+		
+		
+		auto hitbox = BorderSize
+		{
+			scaleValueRoundInt((float)addedHitbox_.getTop()),
+			scaleValueRoundInt((float)addedHitbox_.getLeft()),
+			scaleValueRoundInt((float)addedHitbox_.getBottom()),
+			scaleValueRoundInt((float)addedHitbox_.getRight())
+		};
+		drawBounds_ = Rectangle{ hitbox.getLeft(), hitbox.getTop(), width, height };
+		
+		OpenGlContainer::setBounds(x - hitbox.getLeft(), y - hitbox.getTop(), 
+			width + hitbox.getLeftAndRight(), height + hitbox.getTopAndBottom());
 	}
 
 	void BaseControl::repositionExtraElements()
 	{
 		for (auto &extraElement : extraElements_.data)
-			extraElement.first->setBounds(parent_->getLocalArea(this, extraElement.second));
+			extraElement.first->setBounds(extraElement.first->getParentComponent()->getLocalArea(this, extraElement.second));
+	}
+
+	void BaseControl::renderOpenGlComponents(OpenGlWrapper &openGl, bool animate)
+	{
+		utils::ScopedSpinLock g(isRendering_);
+
+		for (auto &openGlComponent : openGlComponents_)
+		{
+			if (openGlComponent->isVisibleSafe() && !openGlComponent->isAlwaysOnTopSafe())
+			{
+				openGlComponent.doWorkOnComponent(openGl, animate);
+				COMPLEX_ASSERT(juce::gl::glGetError() == juce::gl::GL_NO_ERROR);
+			}
+		}
+
+		for (auto &openGlComponent : openGlComponents_)
+		{
+			if (openGlComponent->isVisibleSafe() && openGlComponent->isAlwaysOnTopSafe())
+			{
+				openGlComponent.doWorkOnComponent(openGl, animate);
+				COMPLEX_ASSERT(juce::gl::glGetError() == juce::gl::GL_NO_ERROR);
+			}
+		}
 	}
 
 	void BaseControl::addLabel()
@@ -148,10 +214,11 @@ namespace Interface
 			return;
 		
 		label_ = makeOpenGlComponent<PlainTextComponent>("Control Label",
-			(hasParameter()) ? utils::toJuceString(details_.displayName) : getName());
+			(hasParameter()) ? toJuceString(details_.displayName) : getName());
 		label_->setFontType(PlainTextComponent::kText);
 		label_->setTextHeight(Fonts::kInterVDefaultHeight);
-		extraElements_.add(label_.get(), {});
+		addOpenGlComponent(label_);
+		addUnclippedChild(label_.get());
 	}
 
 	void BaseControl::removeLabel()
@@ -159,18 +226,8 @@ namespace Interface
 		if (!label_)
 			return;
 
-		extraElements_.erase(label_.get());
+		removeUnclippedChild(label_.get());
+		removeOpenGlComponent(label_.get());
 		label_ = nullptr;
 	}
-
-	float BaseControl::findValue(Skin::ValueId valueId) const
-	{
-		if (parent_)
-			return parent_->getValue(valueId);
-		return 0.0f;
-	}
-
-	Colour BaseControl::getColour(Skin::ColorId colourId) const noexcept
-	{ return parent_->getColour(colourId); }
-
 }

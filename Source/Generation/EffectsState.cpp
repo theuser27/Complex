@@ -105,7 +105,7 @@ namespace Generation
 		return deletedModule;
 	}
 
-	void EffectsState::writeInputData(const AudioBuffer<float> &inputBuffer) noexcept
+	void EffectsState::writeInputData(const juce::AudioBuffer<float> &inputBuffer) noexcept
 	{
 		auto channelPointers = inputBuffer.getArrayOfReadPointers();
 		for (u32 i = 0; i < (u32)inputBuffer.getNumChannels(); i += kComplexSimdRatio)
@@ -165,7 +165,7 @@ namespace Generation
 
 			// Chain On/Off
 			// if this chain is turned off, we set it as finished and skip everything
-			if (!thisLane->getParameter(BaseProcessors::EffectsLane::LaneEnabled::self())->getInternalValue<u32>(getSampleRate()))
+			if (!thisLane->getParameter(BaseProcessors::EffectsLane::LaneEnabled::name())->getInternalValue<u32>(getSampleRate()))
 			{
 				thisLane->isFinished_.store(true, std::memory_order_release);
 				continue;
@@ -179,7 +179,7 @@ namespace Generation
 			// Chain Input 
 			// if this chain's input is another's output and that chain can be used,
 			// we wait until it is finished and then copy its data
-			if (auto inputIndex = thisLane->getParameter(BaseProcessors::EffectsLane::Input::self())
+			if (auto inputIndex = thisLane->getParameter(BaseProcessors::EffectsLane::Input::name())
 				->getInternalValue<u32>(getSampleRate()); inputIndex & kLaneInputMask)
 			{
 				inputIndex ^= kLaneInputMask;
@@ -223,7 +223,7 @@ namespace Generation
 		// (instead of magnitude-phase pairs) and if not, gets converted
 		for (auto &lane : lanes_)
 		{
-			if (!lane->getParameter(BaseProcessors::EffectsLane::LaneEnabled::self())->getInternalValue<u32>(getSampleRate()))
+			if (!lane->getParameter(BaseProcessors::EffectsLane::LaneEnabled::name())->getInternalValue<u32>(getSampleRate()))
 				continue;
 
 			if (lane->laneDataSource_.isPolar)
@@ -237,10 +237,10 @@ namespace Generation
 		// for every chain we add its scaled output to the main sourceBuffer_ at the designated output channels
 		for (auto &lane : lanes_)
 		{
-			if (!lane->getParameter(BaseProcessors::EffectsLane::LaneEnabled::self())->getInternalValue<u32>(getSampleRate()))
+			if (!lane->getParameter(BaseProcessors::EffectsLane::LaneEnabled::name())->getInternalValue<u32>(getSampleRate()))
 				continue;
 
-			auto laneOutput = lane->getParameter(BaseProcessors::EffectsLane::Output::self())->getInternalValue<u32>(getSampleRate());
+			auto laneOutput = lane->getParameter(BaseProcessors::EffectsLane::Output::name())->getInternalValue<u32>(getSampleRate());
 			if (laneOutput == kDefaultOutput)
 				continue;
 
@@ -271,7 +271,7 @@ namespace Generation
 		}
 	}
 
-	void EffectsState::writeOutputData(AudioBuffer<float> &outputBuffer) const noexcept
+	void EffectsState::writeOutputData(juce::AudioBuffer<float> &outputBuffer) const noexcept
 	{
 		Framework::Matrix matrix;
 

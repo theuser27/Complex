@@ -10,11 +10,12 @@
 
 #pragma once
 
-#include "JuceHeader.h"
+#include "AppConfig.h"
+#include <juce_gui_basics/juce_gui_basics.h>
 
 namespace Interface
 {
-  class DefaultLookAndFeel : public juce::LookAndFeel_V4 {
+  class DefaultLookAndFeel final : public juce::LookAndFeel_V4 {
   public:
     static constexpr int kPopupMenuBorder = 4;
 
@@ -22,34 +23,34 @@ namespace Interface
 
     int getPopupMenuBorderSize() override { return kPopupMenuBorder; }
 
-    void drawTextEditorOutline([[maybe_unused]] Graphics &g, [[maybe_unused]] int width, 
-      [[maybe_unused]] int height, [[maybe_unused]] TextEditor &textEditor) override { }
-    void fillTextEditorBackground([[maybe_unused]] Graphics &g, [[maybe_unused]] int width, 
-      [[maybe_unused]] int height, [[maybe_unused]] TextEditor &textEditor) override { }
-    void drawPopupMenuBackground(Graphics &g, int width, int height) override;
+    void drawTextEditorOutline([[maybe_unused]] juce::Graphics &g, [[maybe_unused]] int width, 
+      [[maybe_unused]] int height, [[maybe_unused]] juce::TextEditor &textEditor) override { }
+    void fillTextEditorBackground([[maybe_unused]] juce::Graphics &g, [[maybe_unused]] int width,
+      [[maybe_unused]] int height, [[maybe_unused]] juce::TextEditor &textEditor) override { }
+    void drawPopupMenuBackground(juce::Graphics &g, int width, int height) override;
 
-    void drawScrollbar(Graphics &g, ScrollBar& scrollBar, int x, int y, int width, int height,
+    void drawScrollbar(juce::Graphics &g, juce::ScrollBar& scrollBar, int x, int y, int width, int height,
       bool vertical, int thumbPosition, int thumbSize,
       bool mouseOver, bool mouseDown) override;
 
-    void drawComboBox(Graphics &g, int width, int height, bool buttonDown,
-      int buttonX, int buttonY, int buttonW, int buttonH, ComboBox& box) override;
+    void drawComboBox(juce::Graphics &g, int width, int height, bool buttonDown,
+      int buttonX, int buttonY, int buttonW, int buttonH, juce::ComboBox& box) override;
 
-    void drawTickBox(Graphics &g, Component &component,
+    void drawTickBox(juce::Graphics &g, juce::Component &component,
       float x, float y, float w, float h, bool ticked,
       bool enabled, bool mouseOver, bool buttonDown) override;
 
-    void drawCallOutBoxBackground(CallOutBox &callOutBox, Graphics &g, const Path &path, Image &) override;
+    void drawCallOutBoxBackground(juce::CallOutBox &callOutBox, juce::Graphics &g, const juce::Path &path, juce::Image &) override;
 
-    void drawButtonBackground(Graphics &g, Button &button, const Colour &backgroundColor,
+    void drawButtonBackground(juce::Graphics &g, juce::Button &button, const juce::Colour &backgroundColor,
       bool hover, bool down) override;
 
-    int getSliderPopupPlacement(Slider &slider) override;
+    int getSliderPopupPlacement(juce::Slider &slider) override;
 
-    Font getPopupMenuFont() override;
-    Font getSliderPopupFont(Slider &slider) override;
+    juce::Font getPopupMenuFont() override;
+    juce::Font getSliderPopupFont(juce::Slider &slider) override;
 
-  	Slider::SliderLayout getSliderLayout(Slider &slider) override
+    juce::Slider::SliderLayout getSliderLayout(juce::Slider &slider) override
     { return { slider.getLocalBounds(), { 0, 0, 0, 0 } }; }
 
     int getMenuWindowFlags() override { return 0; }

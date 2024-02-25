@@ -81,7 +81,12 @@ namespace Framework
 	float Window::getLanczosWindow(float position, float alpha) noexcept 
 	{ return utils::pow((lanczosWindowLookup.linearLookup(position)), alpha); }
 
-	void Window::applyDefaultWindows(AudioBuffer<float>&buffer, u32 numChannels, 
+	void Window::applyWindow(juce::AudioBuffer<float>&buffer, u32 numChannels, const bool *channelsToProcess, u32 numSamples, WindowTypes type, float alpha)
+	{
+		applyDefaultWindows(buffer, numChannels, channelsToProcess, numSamples, type, alpha);
+	}
+
+	void Window::applyDefaultWindows(juce::AudioBuffer<float>&buffer, u32 numChannels, 
 		const bool *channelsToCopy, u32 numSamples, WindowTypes type, float alpha) noexcept
 	{
 		if (type == WindowTypes::Lerp || type == WindowTypes::Rectangle)
@@ -184,6 +189,13 @@ namespace Framework
 			}
 			position += increment;
 		}
+	}
+
+	void Window::applyCustomWindows(juce::AudioBuffer<float> &buffer, u32 numChannels, const bool *channelsToCopy, u32 numSamples, WindowTypes type, float alpha)
+	{
+		// TODO: see into how to generate custom windows based on spectral properties
+		// redirecting to the default types for now
+		applyDefaultWindows(buffer, numChannels, channelsToCopy, numSamples, type, alpha);
 	}
 
 }

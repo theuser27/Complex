@@ -35,7 +35,7 @@ namespace Framework
 
 	struct ParameterDetails
 	{
-		std::string_view id{};                                // internal plugin name
+		std::string_view name{};                              // internal plugin name
 		std::string_view displayName{};                       // name displayed to the user
 		float minValue = 0.0f;                                // minimum scaled value
 		float maxValue = 1.0f;                                // maximum scaled value
@@ -102,9 +102,9 @@ namespace Framework
 	{
 		// 1 - ParameterDetails::id, 2 - enum reflected string
 		// the rationalle for using a pair of keys is that it's much more convenient to address parameters through 
-		// their corresponding enum values inside the program, but unfortunately their reflected strings are unstable
-		// (they rely on compiler specific trickery to work, see type_name in constexpr_utils.h) and change at any time
-		// so when it comes to long term save backwards compatibility it's much more stable to use a specified id
+		// their corresponding enum values inside the program, but parameter names and semantic meaning are unstable 
+		// and change at any time so when it comes to long term save backwards compatibility 
+		// it's much more stable to use a specified id
 		using key = std::pair<std::string_view, std::string_view>;
 		using value = ParameterDetails;
 

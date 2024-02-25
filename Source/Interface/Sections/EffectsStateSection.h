@@ -12,11 +12,18 @@
 
 #include "../Components/DraggableComponent.h"
 #include "../Components/LaneSelector.h"
-#include "EffectsLaneSection.h"
+
+namespace Generation
+{
+	class EffectsState;
+}
 
 namespace Interface
 {
-	class EffectsStateSection : public ProcessorSection, public DraggableComponent::Listener
+	class EffectModuleSection;
+	class EffectsLaneSection;
+
+	class EffectsStateSection final : public ProcessorSection, public DraggableComponent::Listener
 	{
 	public:
 		static constexpr int kLaneSelectorHeight = 38;
@@ -24,10 +31,11 @@ namespace Interface
 		static constexpr int kLaneSelectorToLanesMargin = 8;
 		static constexpr int kLaneToLaneMargin = 4;
 
-		static constexpr int kMinWidth = EffectsLaneSection::kWidth;
-		static constexpr int kMinHeight = kLaneSelectorHeight + kLaneSelectorToLanesMargin + EffectsLaneSection::kMinHeight;
+		//static constexpr int kMinWidth = EffectsLaneSection::kWidth;
+		//static constexpr int kMinHeight = kLaneSelectorHeight + kLaneSelectorToLanesMargin + EffectsLaneSection::kMinHeight;
 
 		EffectsStateSection(Generation::EffectsState &state);
+		~EffectsStateSection() override;
 
 		void mouseWheelMove(const MouseEvent &e, const MouseWheelDetails &wheel) override;
 
@@ -44,8 +52,8 @@ namespace Interface
 		std::unique_ptr<EffectModuleSection> unregisterModule(EffectModuleSection *effectModuleSection);
 
 	private:
-		std::array<std::unique_ptr<EffectsLaneSection>, kMaxNumLanes> lanes_{};
-		std::vector<std::unique_ptr<EffectModuleSection>> effectModules_{};
+		std::array<std::unique_ptr<EffectsLaneSection>, kMaxNumLanes> lanes_;
+		std::vector<std::unique_ptr<EffectModuleSection>> effectModules_;
 
 		LaneSelector laneSelector_{};
 		u32 laneViewStartIndex_ = 0;

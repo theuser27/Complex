@@ -250,8 +250,8 @@ namespace Framework
 		// internal function for calculating SIMD and internal positions of an element
 		// first - index to the **SIMD** element 
 		// second - channel index of T value inside the SIMD element
-		static constexpr auto getAbsoluteIndices(u32 channel, u32 channelSize, u32 index) noexcept
-		{ return std::pair<u32, u32>{ (channel / getRelativeSize()) *channelSize + index, channel % getRelativeSize() }; }
+		static constexpr std::pair<u32, u32> getAbsoluteIndices(u32 channel, u32 channelSize, u32 index) noexcept
+		{ return { (channel / getRelativeSize()) *channelSize + index, channel % getRelativeSize() }; }
 
 		template<typename T, CommonConcepts::SimdValue SIMD>
 		friend class SimdBufferView;

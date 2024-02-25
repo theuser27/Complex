@@ -8,6 +8,10 @@
 	==============================================================================
 */
 
+#include "Framework/parameter_value.h"
+#include "OpenGlImageComponent.h"
+#include "OpenGlMultiQuad.h"
+#include "BaseSlider.h"
 #include "PinBoundsBox.h"
 
 namespace Interface
@@ -54,6 +58,8 @@ namespace Interface
 		roundedCorners_->setInterceptsMouseClicks(false, false);
 	}
 
+	PinBoundsBox::~PinBoundsBox() = default;
+
 	void PinBoundsBox::paintBackground(Graphics &g)
 	{
 		g.setColour(getColour(Skin::kBody));
@@ -96,12 +102,12 @@ namespace Interface
 		auto lowBoundPosition = (int)std::round((float)lowBound_->getValue() * width);
 		auto highBoundPosition = (int)std::round((float)highBound_->getValue() * width);
 
-		auto lowBoundWidth = lowBound_->getBoundsForSizes(getHeight()).getWidth();
-		lowBound_->setOverallBounds({ lowBoundPosition - lowBoundWidth / 2, 0 });
+		auto lowBoundWidth = lowBound_->setBoundsForSizes(getHeight()).getWidth();
+		lowBound_->setPosition(Point{ lowBoundPosition - lowBoundWidth / 2, 0 });
 		lowBound_->setTotalRange(width);
 
-		auto highBoundWidth = highBound_->getBoundsForSizes(getHeight()).getWidth();
-		highBound_->setOverallBounds({ highBoundPosition - highBoundWidth / 2, 0 });
+		auto highBoundWidth = highBound_->setBoundsForSizes(getHeight()).getWidth();
+		highBound_->setPosition(Point{ highBoundPosition - highBoundWidth / 2, 0 });
 		highBound_->setTotalRange(width);
 
 		//simd_float lowValues = lowBound_->getInternalValue<simd_float>(kDefaultSampleRate, true);
@@ -113,8 +119,14 @@ namespace Interface
 		highlight_->redrawImage();
 	}
 
+	void PinBoundsBox::setRounding(float rounding) noexcept { roundedCorners_->setCorners(getLocalBounds(), rounding); }
+	void PinBoundsBox::setTopRounding(float topRounding) noexcept { roundedCorners_->setTopCorners(getLocalBounds(), topRounding); }
+	void PinBoundsBox::setBottomRounding(float bottomRounding) noexcept { roundedCorners_->setTopCorners(getLocalBounds(), bottomRounding); }
+	void PinBoundsBox::setRounding(float topRounding, float bottomRounding) noexcept { roundedCorners_->setCorners(getLocalBounds(), topRounding, bottomRounding); }
+	void PinBoundsBox::setRoundedCornerColour(Colour colour) noexcept { roundedCorners_->setColor(colour); }
+
 	void PinBoundsBox::paintHighlightBox(Graphics &g, float lowBoundValue, 
-		float highBoundValue, Colour colour, float shiftValue) const
+	                                     float highBoundValue, Colour colour, float shiftValue) const
 	{
 		g.setColour(colour);
 

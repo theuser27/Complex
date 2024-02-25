@@ -8,13 +8,21 @@
 	==============================================================================
 */
 
+#include "Plugin/ProcessorTree.h"
 #include "Framework/update_types.h"
+#include "Generation/EffectsState.h"
+#include "../LookAndFeel/Fonts.h"
+#include "../Components/OpenGlImageComponent.h"
+#include "../Components/OpenGlMultiQuad.h"
+#include "../Components/BaseButton.h"
+#include "../Components/BaseSlider.h"
 #include "EffectsLaneSection.h"
 #include "EffectsStateSection.h"
+#include "EffectModuleSection.h"
 
 namespace Interface
 {
-	EffectsViewport::EffectsContainer::EffectsContainer() : BaseSection(typeid(EffectsContainer).name())
+	EffectsContainer::EffectsContainer() : BaseSection(typeid(EffectsContainer).name())
 	{
 		setSkinOverride(Skin::kEffectsLane);
 
@@ -23,7 +31,9 @@ namespace Interface
 		addControl(addModulesButton_.get());
 	}
 
-	void EffectsViewport::EffectsContainer::buttonClicked(BaseButton *clickedButton)
+	EffectsContainer::~EffectsContainer() = default;
+
+	void EffectsContainer::buttonClicked(BaseButton *clickedButton)
 	{
 		if (addModulesButton_.get() != clickedButton)
 			return;
@@ -38,7 +48,7 @@ namespace Interface
 			std::move(popupItems), [this](int selection) { handlePopupResult(selection); });
 	}
 
-	void EffectsViewport::EffectsContainer::handlePopupResult(int selection) const
+	void EffectsContainer::handlePopupResult(int selection) const
 	{
 		COMPLEX_ASSERT(lane_);
 
@@ -47,18 +57,6 @@ namespace Interface
 			return;
 
 		lane_->insertModule(lane_->getNumModules(), enumValue.value().enum_id());
-	}
-
-	EffectsViewport::EffectsViewport() : Viewport(typeid(EffectsViewport).name())
-	{
-		container_.setAlwaysOnTop(true);
-		setViewedComponent(&container_, false);
-		addAndMakeVisible(&container_);
-	}
-
-	void EffectsViewport::mouseWheelMove(const MouseEvent &e, const MouseWheelDetails &wheel)
-	{
-		useMouseWheelMoveIfNeeded(e, wheel);
 	}
 
 	EffectsLaneSection::EffectsLaneSection(Generation::EffectsLane *effectsLane, EffectsStateSection *parentState, String name) :
@@ -82,17 +80,17 @@ namespace Interface
 		//scrollBar_.setShrinkLeft(true);
 
 		laneActivator_ = std::make_unique<PowerButton>(
-			effectsLane->getParameter(BaseProcessors::EffectsLane::LaneEnabled::self()));
+			effectsLane->getParameter(BaseProcessors::EffectsLane::LaneEnabled::name()));
 		laneActivator_->addListener(this);
 		setActivator(laneActivator_.get());
 		addControl(laneActivator_.get());
 
 		gainMatchingButton_ = std::make_unique<RadioButton>(
-			effectsLane->getParameter(BaseProcessors::EffectsLane::GainMatching::self()));
+			effectsLane->getParameter(BaseProcessors::EffectsLane::GainMatching::name()));
 		addControl(gainMatchingButton_.get());
 
 		inputSelector_ = std::make_unique<TextSelector>(
-			effectsLane->getParameter(BaseProcessors::EffectsLane::Input::self()),
+			effectsLane->getParameter(BaseProcessors::EffectsLane::Input::name()),
 			Fonts::instance()->getInterVFont());
 		inputSelector_->setPopupPrefix("From: ");
 		inputSelector_->setCanUseScrollWheel(true);
@@ -100,7 +98,7 @@ namespace Interface
 		addControl(inputSelector_.get());
 
 		outputSelector_ = std::make_unique<TextSelector>(
-			effectsLane->getParameter(BaseProcessors::EffectsLane::Output::self()),
+			effectsLane->getParameter(BaseProcessors::EffectsLane::Output::name()),
 			Fonts::instance()->getInterVFont());
 		outputSelector_->setPopupPrefix("To: ");
 		outputSelector_->setCanUseScrollWheel(true);
@@ -110,22 +108,29 @@ namespace Interface
 		addAndMakeVisible(viewport_);
 		viewport_.addListener(this);
 		viewport_.setScrollBarsShown(false, false, true, false);
+		viewport_.setSingleStepSizes(12, 12);
 		scrollBar_.setViewport(&viewport_);
 
 		auto effectModuleSection = std::make_unique<EffectModuleSection>(effectsLane_->getEffectModule(0), this);
 		effectModules_.emplace_back(effectModuleSection.get());
-		viewport_.container_.addSubSection(effectModuleSection.get());
+		container_.addSubSection(effectModuleSection.get());
 		parentState_->registerModule(std::move(effectModuleSection));
 
 		// the show argument is false because we need the container to be a child of the viewport
 		// that is because every time we set its bounds juce::Viewport resets its position to (0,0)??
 		// hence why we nest the container inside the viewport, whose position is where it's supposed to be
-		viewport_.container_.setLane(this);
-		addSubSection(&viewport_.container_, false);
+		container_.setLane(this);
+		container_.setAlwaysOnTop(true);
+		addSubSection(&container_, false);
+
+		viewport_.setViewedComponent(&container_, false);
+		viewport_.addAndMakeVisible(&container_);
 
 		setOpaque(false);
 		setSkinOverride(Skin::kEffectsLane);
 	}
+
+	EffectsLaneSection::~EffectsLaneSection() = default;
 
 	std::unique_ptr<EffectsLaneSection> EffectsLaneSection::createCopy()
 	{
@@ -155,8 +160,8 @@ namespace Interface
 		int rightEdgePadding = scaleValueRoundInt(kRightEdgePadding);
 		int textSelectorHeight = scaleValueRoundInt(TextSelector::kDefaultTextSelectorHeight);
 
-		int inputSelectorWidth = inputSelector_->getBoundsForSizes(textSelectorHeight).getWidth();
-		inputSelector_->setOverallBounds({ laneActivator_->getX() - rightEdgePadding - inputSelectorWidth,
+		int inputSelectorWidth = inputSelector_->setBoundsForSizes(textSelectorHeight).getWidth();
+		inputSelector_->setPosition(Point{ laneActivator_->getX() - rightEdgePadding - inputSelectorWidth,
 			(topBarHeight - textSelectorHeight) / 2 });
 
 		laneTitle_->setTextHeight(Fonts::kInterVDefaultHeight);
@@ -167,11 +172,11 @@ namespace Interface
 
 		int gainMatchDimensions = scaleValueRoundInt(kGainMatchButtonDimensions);
 		gainMatchingButton_->setRounding(scaleValue(kGainMatchButtonDimensions / 5.0f));
-		gainMatchingButton_->getBoundsForSizes(gainMatchDimensions, gainMatchDimensions);
-		gainMatchingButton_->setOverallBounds({ leftEdgePadding, getHeight() - (bottomBarHeight + gainMatchDimensions) / 2 });
+		gainMatchingButton_->setBoundsForSizes(gainMatchDimensions, gainMatchDimensions);
+		gainMatchingButton_->setPosition(Point{ leftEdgePadding, getHeight() - (bottomBarHeight + gainMatchDimensions) / 2 });
 
-		int outputSelectorWidth = outputSelector_->getBoundsForSizes(textSelectorHeight).getWidth();
-		outputSelector_->setOverallBounds({ getWidth() - rightEdgePadding - outputSelectorWidth,
+		int outputSelectorWidth = outputSelector_->setBoundsForSizes(textSelectorHeight).getWidth();
+		outputSelector_->setPosition(Point{ getWidth() - rightEdgePadding - outputSelectorWidth,
 			getHeight() - (bottomBarHeight + textSelectorHeight) / 2 });
 
 		int viewportX = scaleValueRoundInt(kModulesHorizontalVerticalPadding + kOutlineThickness);
@@ -207,7 +212,7 @@ namespace Interface
 	{
 		auto newModule = std::make_unique<EffectModuleSection>(utils::as<Generation::EffectModule *>(newSubProcessor), this);
 		effectModules_.insert(effectModules_.begin() + (std::ptrdiff_t)index, newModule.get());
-		viewport_.container_.addSubSection(newModule.get());
+		container_.addSubSection(newModule.get());
 		parentState_->registerModule(std::move(newModule));
 		setEffectPositions();
 	}
@@ -216,7 +221,7 @@ namespace Interface
 	{
 		auto deletedModule = parentState_->unregisterModule(effectModules_[index]);
 		effectModules_.erase(effectModules_.begin() + (std::ptrdiff_t)index);
-		viewport_.container_.removeSubSection(deletedModule.get());
+		container_.removeSubSection(deletedModule.get());
 		setEffectPositions();
 	}
 
@@ -234,7 +239,7 @@ namespace Interface
 		COMPLEX_ASSERT(movedModule && "A module was not provided to insert");
 
 		effectModules_.insert(effectModules_.begin() + (std::ptrdiff_t)index, movedModule);
-		viewport_.container_.addSubSection(movedModule);
+		container_.addSubSection(movedModule);
 	}
 
 	EffectModuleSection *EffectsLaneSection::deleteModule(size_t index, bool createUpdate)
@@ -248,7 +253,7 @@ namespace Interface
 
 		auto *removedModule = effectModules_[index];
 		effectModules_.erase(effectModules_.begin() + (std::ptrdiff_t)index);
-		viewport_.container_.removeSubSection(removedModule);
+		container_.removeSubSection(removedModule);
 		return removedModule;
 	}
 
@@ -273,9 +278,9 @@ namespace Interface
 			return;
 
 		int paddingBetweenModules = scaleValueRoundInt(kBetweenModulePadding);
-		int effectWidth = scaleValueRoundInt(EffectModuleSection::kWidth);
+		int effectWidth = scaleValueRoundInt(kEffectModuleWidth);
 		// TODO: change this when you get to the expandable spectral mask
-		int effectHeight = EffectModuleSection::kMinHeight;
+		int effectHeight = kEffectModuleMinHeight;
 		int outerPadding = scaleValueRoundInt(kModulesHorizontalVerticalPadding);
 		int y = outerPadding;
 
@@ -288,12 +293,12 @@ namespace Interface
 		}
 
 		int addModuleButtonHeight = scaleValueRoundInt(kAddModuleButtonHeight);
-		std::ignore = viewport_.container_.addModulesButton_->getBoundsForSizes(addModuleButtonHeight, effectWidth);
-		viewport_.container_.addModulesButton_->setOverallBounds({ 0, y });
+		std::ignore = container_.addModulesButton_->setBoundsForSizes(addModuleButtonHeight, effectWidth);
+		container_.addModulesButton_->setPosition(Point{ 0, y });
 		//viewport_.container_.addModulesButton_->setBounds(0, y, effectWidth, addModuleButtonHeight);
 		y += addModuleButtonHeight + outerPadding;
 
-		viewport_.container_.setBounds(0, 0, viewport_.getWidth(), y);
+		container_.setBounds(0, 0, viewport_.getWidth(), y);
 		viewport_.setViewPosition(position);
 
 		setScrollBarRange();
@@ -301,7 +306,7 @@ namespace Interface
 
 	size_t EffectsLaneSection::getIndexFromScreenPosition(Point<int> point) const noexcept
 	{
-		int yPoint = viewport_.container_.getLocalPoint(this, point).y;
+		int yPoint = container_.getLocalPoint(this, point).y;
 		size_t index = 0;
 		for (; index < effectModules_.size(); index++)
 		{
@@ -311,4 +316,6 @@ namespace Interface
 
 		return index;
 	}
+
+	void EffectsLaneSection::setLaneName(String newName) { laneTitle_->setText(std::move(newName)); }
 }

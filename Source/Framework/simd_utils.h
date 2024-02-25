@@ -10,7 +10,6 @@
 
 #pragma once
 
-//#include "utils.h"
 #include "matrix.h"
 
 namespace utils

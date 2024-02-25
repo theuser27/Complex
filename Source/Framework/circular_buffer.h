@@ -11,8 +11,8 @@
 #pragma once
 
 #include <memory>
-
-#include "common.h"
+#include "AppConfig.h"
+#include <juce_audio_basics/juce_audio_basics.h>
 #include "utils.h"
 
 namespace Framework
@@ -35,7 +35,7 @@ namespace Framework
 			if ((newNumChannels <= channels_) && (newSize <= size_) && !fitToSize)
 				return;
 
-			AudioBuffer<float> newData(newNumChannels, newSize);
+			juce::AudioBuffer<float> newData(newNumChannels, newSize);
 			newData.clear();
 
 			if (channels_ * size_)
@@ -77,7 +77,7 @@ namespace Framework
 		// applies on operation on the samples of otherBuffer and thisBuffer 
 		// and writes the results to the respective channels of thisBuffer
 		// while anticipating wrapping around in both buffers 
-		static void applyToBuffer(AudioBuffer<float>& thisBuffer, const AudioBuffer<float>& otherBuffer,
+		static void applyToBuffer(juce::AudioBuffer<float>& thisBuffer, const juce::AudioBuffer<float>& otherBuffer,
 			u32 numChannels, u32 numSamples, u32 thisStartIndex, u32 otherStartIndex,
 			const bool* channelsToApplyTo = nullptr, utils::MathOperations operation = utils::MathOperations::Assign) noexcept
 		{
@@ -115,8 +115,8 @@ namespace Framework
 			float increment = 1.0f / (float)numSamples;
 
 			u32(*indexFunction)(u32, u32);
-			if (isPowerOfTwo(static_cast<u32>(thisBuffer.getNumSamples())) &&
-				isPowerOfTwo(static_cast<u32>(otherBuffer.getNumSamples())))
+			if (utils::isPowerOfTwo(static_cast<u32>(thisBuffer.getNumSamples())) &&
+				utils::isPowerOfTwo(static_cast<u32>(otherBuffer.getNumSamples())))
 			{
 				indexFunction = [](u32 value, u32 size) { return value & size; };
 				thisBufferSize = thisBuffer.getNumSamples() - 1;
@@ -154,7 +154,7 @@ namespace Framework
 		//	readee's starting index = readerIndex + end_ and 
 		//	reader's starting index = readeeIndex
 		// - Can decide whether to advance the block or not
-		void readBuffer(AudioBuffer<float> &reader, u32 numChannels,u32 numSamples, 
+		void readBuffer(juce::AudioBuffer<float> &reader, u32 numChannels,u32 numSamples, 
 			u32 readeeIndex = 0, u32 readerIndex = 0, const bool* channelsToRead = nullptr) const noexcept
 		{
 			applyToBuffer(reader, data_, numChannels, numSamples, readerIndex, readeeIndex, channelsToRead);
@@ -164,14 +164,14 @@ namespace Framework
 		//	which can be offset forwards or backwards with writeeOffset
 		// - Adjusts end_ according to the new block written
 		// - Returns the new endpoint
-		u32 writeToBufferEnd(const AudioBuffer<float> &writer, u32 numChannels, u32 numSamples,
+		u32 writeToBufferEnd(const juce::AudioBuffer<float> &writer, u32 numChannels, u32 numSamples,
 			u32 writerIndex = 0, const bool *channelsToWrite = nullptr) noexcept
 		{
 			applyToBuffer(data_, writer, numChannels, numSamples, end_, writerIndex, channelsToWrite);
 			return advanceEnd(numSamples);
 		}
 
-		void writeToBuffer(const AudioBuffer<float>& writer, u32 numChannels, u32 numSamples,
+		void writeToBuffer(const juce::AudioBuffer<float>& writer, u32 numChannels, u32 numSamples,
 			u32 writeeIndex, u32 writerIndex = 0, const bool* channelsToWrite = nullptr) noexcept
 		{
 			applyToBuffer(data_, writer, numChannels, numSamples, writeeIndex, writerIndex, channelsToWrite);
@@ -184,7 +184,7 @@ namespace Framework
 			data_.setSample(channel, index, data_.getSample(channel, index) + value); 
 		}
 
-		void addBuffer(const AudioBuffer<float> &other, u32 numChannels, u32 numSamples,
+		void addBuffer(const juce::AudioBuffer<float> &other, u32 numChannels, u32 numSamples,
 			const bool *channelsToAdd = nullptr, u32 thisStartIndex = 0, u32 otherStartIndex = 0) noexcept
 		{
 			applyToBuffer(data_, other, numChannels, numSamples, thisStartIndex, 
@@ -198,7 +198,7 @@ namespace Framework
 			data_.setSample(channel, index, data_.getSample(channel, index) * value);
 		}
 
-		void multiplyBuffer(const AudioBuffer<float> &other, u32 numChannels, u32 numSamples,
+		void multiplyBuffer(const juce::AudioBuffer<float> &other, u32 numChannels, u32 numSamples,
 			const bool *channelsToAdd = nullptr, u32 thisStartIndex = 0, u32 otherStartIndex = 0) noexcept
 		{
 			applyToBuffer(data_, other, numChannels, numSamples, thisStartIndex, 
@@ -222,6 +222,6 @@ namespace Framework
 		u32 size_ = 0;
 		u32 end_ = 0;
 
-		AudioBuffer<float> data_;
+		juce::AudioBuffer<float> data_;
 	};
 }

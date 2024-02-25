@@ -10,9 +10,24 @@
 
 #pragma once
 
-#include "Framework/common.h"
-#include "Generation/BaseProcessor.h"
-#include "Plugin/ProcessorTree.h"
+#include "AppConfig.h"
+#include <juce_data_structures/juce_data_structures.h>
+#include "utils.h"
+
+namespace Plugin
+{
+	class ProcessorTree;
+}
+
+namespace Generation
+{
+	class BaseProcessor;
+}
+
+namespace Interface
+{
+	class BaseControl;
+}
 
 namespace Framework
 {
@@ -34,7 +49,7 @@ namespace Framework
 		bool isDone_ = false;
 	};
 	
-	class AddProcessorUpdate : public WaitingUpdate
+	class AddProcessorUpdate final : public WaitingUpdate
 	{
 	public:
 		AddProcessorUpdate(Plugin::ProcessorTree *processorTree, u64 destinationProcessorId, 
@@ -42,11 +57,7 @@ namespace Framework
 			newSubProcessorType_(newSubProcessorType), destinationProcessorId_(destinationProcessorId),
 			destinationSubProcessorIndex_(destinationSubProcessorIndex) { }
 
-		~AddProcessorUpdate() override
-		{
-			if (!processorTree_->isBeingDestroyed() && addedProcessor_ && !isDone_)
-				processorTree_->deleteProcessor(addedProcessor_->getProcessorId());
-		}
+		~AddProcessorUpdate() override;
 
 		bool perform() override;
 		bool undo() override;
@@ -61,7 +72,7 @@ namespace Framework
 		size_t destinationSubProcessorIndex_;
 	};
 
-	class CopyProcessorUpdate : public WaitingUpdate
+	class CopyProcessorUpdate final : public WaitingUpdate
 	{
 	public:
 		CopyProcessorUpdate(Plugin::ProcessorTree *processorTree, Generation::BaseProcessor &processorCopy, 
@@ -69,11 +80,7 @@ namespace Framework
 			processorCopy(processorCopy), destinationProcessorId_(destinationProcessorId),
 			destinationSubProcessorIndex_(destinationSubProcessorIndex) { }
 
-		~CopyProcessorUpdate() override
-		{
-			if (!processorTree_->isBeingDestroyed() && !isDone_)
-				processorTree_->deleteProcessor(processorCopy.getProcessorId());
-		}
+		~CopyProcessorUpdate() override;
 
 		bool perform() override;
 		bool undo() override;
@@ -87,7 +94,7 @@ namespace Framework
 		size_t destinationSubProcessorIndex_;
 	};
 
-	class MoveProcessorUpdate : public WaitingUpdate
+	class MoveProcessorUpdate final : public WaitingUpdate
 	{
 	public:
 		MoveProcessorUpdate(Plugin::ProcessorTree *processorTree, u64 destinationProcessorId,
@@ -108,7 +115,7 @@ namespace Framework
 		size_t sourceSubProcessorIndex_;
 	};
 
-	class UpdateProcessorUpdate : public WaitingUpdate
+	class UpdateProcessorUpdate final : public WaitingUpdate
 	{
 	public:
 		UpdateProcessorUpdate(Plugin::ProcessorTree *processorTree, u64 destinationProcessorId,
@@ -116,11 +123,7 @@ namespace Framework
 			newSubProcessorType_(newSubProcessorType), destinationProcessorId_(destinationProcessorId),
 			destinationSubProcessorIndex_(destinationSubProcessorIndex) { }
 
-		~UpdateProcessorUpdate() override
-		{
-			if (!processorTree_->isBeingDestroyed() && savedProcessor_)
-				processorTree_->deleteProcessor(savedProcessor_->getProcessorId());
-		}
+		~UpdateProcessorUpdate() override;
 
 		bool perform() override;
 		bool undo() override;
@@ -135,18 +138,14 @@ namespace Framework
 		size_t destinationSubProcessorIndex_;
 	};
 
-	class DeleteProcessorUpdate : public WaitingUpdate
+	class DeleteProcessorUpdate final : public WaitingUpdate
 	{
 	public:
 		DeleteProcessorUpdate(Plugin::ProcessorTree *processorTree, u64 destinationProcessorId,
 			size_t destinationSubProcessorIndex) noexcept : processorTree_(processorTree),
 			destinationProcessorId_(destinationProcessorId), destinationSubProcessorIndex_(destinationSubProcessorIndex) { }
 
-		~DeleteProcessorUpdate() override
-		{
-			if (!processorTree_->isBeingDestroyed() && deletedProcessor_ && isDone_)
-				processorTree_->deleteProcessor(deletedProcessor_->getProcessorId());
-		}
+		~DeleteProcessorUpdate() override;
 
 		bool perform() override;
 		bool undo() override;
@@ -160,7 +159,7 @@ namespace Framework
 		size_t destinationSubProcessorIndex_;
 	};
 
-	class ParameterUpdate : public WaitingUpdate
+	class ParameterUpdate final : public WaitingUpdate
 	{
 	public:
 		ParameterUpdate(Interface::BaseControl *parameterUI, double oldValue, double newValue) :

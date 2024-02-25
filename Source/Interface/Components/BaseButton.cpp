@@ -8,12 +8,17 @@
 	==============================================================================
 */
 
+#include "Framework/parameter_bridge.h"
+#include "../LookAndFeel/Miscellaneous.h"
+#include "../LookAndFeel/Paths.h"
+#include "OpenGlImageComponent.h"
+#include "OpenGlMultiQuad.h"
 #include "BaseButton.h"
 #include "../Sections/MainInterface.h"
 
 namespace Interface
 {
-	ButtonComponent::ButtonComponent(BaseButton *button) : button_(button)
+	/*ButtonComponent::ButtonComponent(BaseButton *button) : button_(button)
 	{
 		animator_.setHoverIncrement(kHoverIncrement);
 
@@ -228,7 +233,7 @@ namespace Interface
 			offHoverColor_ = onNormalColor_;
 			offDownColor_ = onDownColor_;
 		}
-	}
+	}*/
 
 	BaseButton::BaseButton(Framework::ParameterValue *parameter)
 	{
@@ -237,13 +242,15 @@ namespace Interface
 
 		hasParameter_ = true;
 
-		setName(utils::toJuceString(parameter->getParameterDetails().id));
+		setName(toJuceString(parameter->getParameterDetails().name));
 		setParameterLink(parameter->getParameterLink());
 		setParameterDetails(parameter->getParameterDetails());
 		setValueSafe(parameterLink_->parameter->getNormalisedValue());
 
 		setRepaintsOnMouseActivity(false);
 	}
+
+	BaseButton::~BaseButton() = default;
 
 	/*void BaseButton::resized()
 	{
@@ -293,7 +300,7 @@ namespace Interface
 
 		updateState(true, true);
 
-		for (auto &component : components_)
+		for (auto &component : openGlComponents_)
 			component->getAnimator().setIsClicked(true);
 	}
 
@@ -310,7 +317,7 @@ namespace Interface
 		{
 			if (wasDown)
 			{
-				for (auto &component : components_)
+				for (auto &component : openGlComponents_)
 					component->getAnimator().setIsClicked(false);
 			}
 			return;
@@ -332,8 +339,22 @@ namespace Interface
 		for (auto *listener : buttonListeners_)
 			listener->buttonClicked(this);
 
-		for (auto &component : components_)
+		for (auto &component : openGlComponents_)
 			component->getAnimator().setIsClicked(false);
+	}
+
+	void BaseButton::mouseEnter(const MouseEvent &)
+	{
+		updateState(false, true);
+		for (auto &component : openGlComponents_)
+			component->getAnimator().setIsHovered(true);
+	}
+
+	void BaseButton::mouseExit(const MouseEvent &)
+	{
+		updateState(false, false);
+		for (auto &component : openGlComponents_)
+			component->getAnimator().setIsHovered(false);
 	}
 
 	void BaseButton::setToggleState(bool shouldBeOn, NotificationType notification)
@@ -354,7 +375,7 @@ namespace Interface
 
 	void BaseButton::valueChanged()
 	{
-		for (Listener *listener : buttonListeners_)
+		for (auto *listener : buttonListeners_)
 			listener->guiChanged(this);
 
 		redoImage();
@@ -363,7 +384,7 @@ namespace Interface
 	String BaseButton::getTextFromValue(bool value) const noexcept
 	{
 		if (!details_.stringLookup.empty())
-			return utils::toJuceString(details_.stringLookup[(size_t)value]);
+			return toJuceString(details_.stringLookup[(size_t)value]);
 
 		return (value) ? "On" : "Off";
 	}
@@ -392,13 +413,21 @@ namespace Interface
 		std::erase(buttonListeners_, listener);
 	}
 
+	void BaseButton::updateState(bool isHeldDown, bool isHoveredOver) noexcept
+	{
+		if (isEnabled() && isVisible() && !isCurrentlyBlockedByAnotherModalComponent())
+		{
+			isHeldDown_ = isHeldDown;
+			isHoveredOver_ = isHoveredOver;
+		}
+	}
+
 	PowerButton::PowerButton(Framework::ParameterValue* parameter) : BaseButton(parameter)
 	{
 		shapeComponent_ = makeOpenGlComponent<PlainShapeComponent>("Power Button Shape");
 		shapeComponent_->getAnimator().setHoverIncrement(kHoverIncrement);
 		shapeComponent_->setShapes(Paths::powerButtonIcon());
-		shapeComponent_->setTargetComponent(this);
-		shapeComponent_->setCustomRenderFunction([this](OpenGlWrapper &openGl, bool animate)
+		shapeComponent_->setRenderFunction([this](OpenGlWrapper &openGl, bool animate)
 			{
 				Colour finalColour = activeColour_;
 
@@ -412,17 +441,19 @@ namespace Interface
 				shapeComponent_->render(openGl, animate);
 			});
 
-		components_.emplace_back(shapeComponent_);
+		addOpenGlComponent(shapeComponent_);
 
 		setAddedHitbox(BorderSize{ kAddedMargin });
 	}
+
+	PowerButton::~PowerButton() = default;
 
 	void PowerButton::setColours()
 	{
 		onNormalColor_ = getColour(Skin::kWidgetAccent1);
 	}
 
-	Rectangle<int> PowerButton::getBoundsForSizes(int height, int)
+	Rectangle<int> PowerButton::setBoundsForSizes(int height, int)
 	{
 		if (drawBounds_.getHeight() != height)
 		{
@@ -465,7 +496,7 @@ namespace Interface
 		backgroundComponent_ = makeOpenGlComponent<OpenGlQuad>(Shaders::kRoundedRectangleFragment, "Radio Button Background");
 		backgroundComponent_->getAnimator().setHoverIncrement(kHoverIncrement);
 		backgroundComponent_->setTargetComponent(this);
-		backgroundComponent_->setCustomRenderFunction([this](OpenGlWrapper &openGl, bool animate)
+		backgroundComponent_->setRenderFunction([this](OpenGlWrapper &openGl, bool animate)
 			{
 				static constexpr float kPowerRadius = 0.8f;
 				static constexpr float kPowerHoverRadius = 1.0f;
@@ -483,7 +514,7 @@ namespace Interface
 				}
 				else if (hoverAmount != 0.0f)
 				{
-					backgroundComponent_->setColor(backgroundColor_.withMultipliedAlpha(hoverAmount));
+					backgroundComponent_->setColor(backgroundColor_.get().withMultipliedAlpha(hoverAmount));
 					backgroundComponent_->render(openGl, animate);
 				}
 
@@ -496,11 +527,13 @@ namespace Interface
 				backgroundComponent_->render(openGl, animate);
 			});
 
-		components_.emplace_back(backgroundComponent_);
+		addOpenGlComponent(backgroundComponent_);
 
 		addLabel();
 		setAddedHitbox(BorderSize{ kAddedMargin });
 	}
+
+	RadioButton::~RadioButton() = default;
 
 	void RadioButton::setColours()
 	{
@@ -509,13 +542,16 @@ namespace Interface
 		backgroundColor_ = getColour(Skin::kBackground);
 	}
 
-	Rectangle<int> RadioButton::getBoundsForSizes(int height, int)
+	Rectangle<int> RadioButton::setBoundsForSizes(int height, int)
 	{
 		if (drawBounds_.getHeight() != height)
 		{
 			drawBounds_ = { height, height };
 		}
 		
+		setExtraElementsPositions(drawBounds_);
+		if (label_)
+			return drawBounds_.getUnion(label_->getBounds());
 		return drawBounds_;
 	}
 
@@ -530,21 +566,21 @@ namespace Interface
 		switch (labelPlacement_)
 		{
 		case BubbleComponent::right:
-			labelX += anchorBounds.getWidth() + parent_->scaleValueRoundInt(kLabelOffset);
+			labelX += anchorBounds.getWidth() + scaleValueRoundInt(kLabelOffset);
 			label_->setJustification(Justification::centredLeft);
 			break;
 		default:
 		case BubbleComponent::above:
 		case BubbleComponent::below:
 		case BubbleComponent::left:
-			labelX -= parent_->scaleValueRoundInt(kLabelOffset) + labelTextWidth;
+			labelX -= scaleValueRoundInt(kLabelOffset) + labelTextWidth;
 			label_->setJustification(Justification::centredRight);
 			break;
 		}
 
-		extraElements_.find(label_.get())->second = Rectangle{ labelX, 
+		label_->setBounds(labelX, 
 			anchorBounds.getY() - (label_->getTotalHeight() - anchorBounds.getHeight()) / 2, 
-			labelTextWidth, label_->getTotalHeight() };
+			labelTextWidth, label_->getTotalHeight());
 	}
 
 	void RadioButton::redoImage()
@@ -562,6 +598,8 @@ namespace Interface
 		redoImage();
 	}
 
+	void RadioButton::setRounding(float rounding) noexcept { backgroundComponent_->setRounding(rounding); }
+
 
 	OptionsButton::OptionsButton(Framework::ParameterValue *parameter, String name, String displayText) : BaseButton(parameter)
 	{
@@ -577,17 +615,19 @@ namespace Interface
 		textComponent_ = makeOpenGlComponent<PlainTextComponent>("Options Button Text", text_);
 		textComponent_->setTargetComponent(this);
 
-		components_.emplace_back(borderComponent_);
-		components_.emplace_back(plusComponent_);
-		components_.emplace_back(textComponent_);
+		addOpenGlComponent(borderComponent_);
+		addOpenGlComponent(plusComponent_);
+		addOpenGlComponent(textComponent_);
 	}
+
+	OptionsButton::~OptionsButton() = default;
 
 	void OptionsButton::setColours()
 	{
 		borderColour_ = getColour(Skin::kBody);
 	}
 
-	Rectangle<int> OptionsButton::getBoundsForSizes(int height, int width)
+	Rectangle<int> OptionsButton::setBoundsForSizes(int height, int width)
 	{
 		drawBounds_ = { width, height };
 		return drawBounds_;
@@ -595,9 +635,9 @@ namespace Interface
 
 	void OptionsButton::redoImage()
 	{
-		borderComponent_->setRounding(parent_->scaleValue(kBorderRounding));
+		borderComponent_->setRounding(scaleValue(kBorderRounding));
 		borderComponent_->setColor(borderColour_);
-		plusComponent_->setThickness(parent_->scaleValue(1.0f / (float)kPlusRelativeSize), true);
+		plusComponent_->setThickness(scaleValue(1.0f / (float)kPlusRelativeSize));
 		plusComponent_->setColor(getColour(Skin::kNormalText));
 		textComponent_->setFontType(PlainTextComponent::kText);
 		textComponent_->setJustification(Justification::centredLeft);
@@ -607,7 +647,7 @@ namespace Interface
 	void OptionsButton::setComponentsBounds()
 	{
 		borderComponent_->setCustomDrawBounds(drawBounds_);
-		int plusSize = parent_->scaleValueRoundInt(kPlusRelativeSize);
+		int plusSize = scaleValueRoundInt(kPlusRelativeSize);
 		int halfHeight = drawBounds_.getHeight() / 2;
 		Rectangle plusBounds{ drawBounds_.getX() + halfHeight, drawBounds_.getY() + halfHeight - plusSize / 2, plusSize, plusSize };
 		plusComponent_->setCustomDrawBounds(plusBounds);

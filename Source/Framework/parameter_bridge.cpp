@@ -10,6 +10,7 @@
 
 #include "parameter_bridge.h"
 #include "Interface/Components/BaseControl.h"
+#include "Interface/LookAndFeel/Miscellaneous.h"
 #include "Plugin/PluginProcessor.h"
 
 namespace Framework
@@ -25,7 +26,7 @@ namespace Framework
 		if (parameterIndex == (u32)(-1) && link)
 		{
 			parameterLinkPointer_.store(link, std::memory_order_release);
-			name_.second += utils::toJuceString(link->parameter->getParameterDetails().displayName);
+			name_.second += toJuceString(link->parameter->getParameterDetails().displayName);
 			link->hostControl = this;
 			value_ = link->parameter->getNormalisedValue();
 		}
@@ -35,7 +36,7 @@ namespace Framework
 			name_.second += (int)parameterIndex;
 			name_.second += " > ";
 			parameterLinkPointer_.store(link, std::memory_order_release);
-			name_.second += utils::toJuceString(link->parameter->getParameterDetails().displayName);
+			name_.second += toJuceString(link->parameter->getParameterDetails().displayName);
 			link->hostControl = this;
 			value_ = link->parameter->getNormalisedValue();
 		}
@@ -74,7 +75,7 @@ namespace Framework
 			newString.preallocateBytes(64);
 			newString.append(name_.second, index);
 			newString += " > ";
-			newString += utils::toJuceString(link->parameter->getParameterDetails().displayName);
+			newString += toJuceString(link->parameter->getParameterDetails().displayName);
 			name_.second = std::move(newString);
 		}
 

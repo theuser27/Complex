@@ -30,10 +30,10 @@ namespace
     return value;
   }
 
-  strict_inline float inverseMagnitudeOfPoint(Point<float> point)
+  strict_inline float inverseMagnitudeOfPoint(juce::Point<float> point)
   { return inverseSqrt(point.x * point.x + point.y * point.y); }
 
-  strict_inline Point<float> normalize(Point<float> point)
+  strict_inline juce::Point<float> normalize(juce::Point<float> point)
   { return point * inverseMagnitudeOfPoint(point); }
 }
 
@@ -43,7 +43,6 @@ namespace Interface
 
   OpenGlLineRenderer::OpenGlLineRenderer(int num_points, bool loop) : num_points_(num_points), loop_(loop)
   {
-    addRoundedCorners();
     num_padding_ = 1;
     if (loop)
       num_padding_ = 2;
@@ -55,6 +54,8 @@ namespace Interface
 
     line_width_ = kDefaultLineWidth;
 
+    corners_ = makeOpenGlComponent<OpenGlCorners>();
+    
     x_ = std::make_unique<float[]>(num_points_);
     y_ = std::make_unique<float[]>(num_points_);
     boost_left_ = std::make_unique<float[]>(num_points_);
@@ -79,10 +80,10 @@ namespace Interface
       setXAt(i, 2.0f * i / (num_points_ - 1.0f) - 1.0f);
   }
 
+  OpenGlLineRenderer::~OpenGlLineRenderer() = default;
+
   void OpenGlLineRenderer::init(OpenGlWrapper &open_gl)
   {
-    OpenGlComponent::init(open_gl);
-
     glGenVertexArrays(1, &vertex_array_object_);
     glBindVertexArray(vertex_array_object_);
 
@@ -124,8 +125,6 @@ namespace Interface
 
   void OpenGlLineRenderer::destroy()
   {
-    OpenGlComponent::destroy();
-
     shader_ = nullptr;
     position_ = nullptr;
     color_uniform_ = nullptr;

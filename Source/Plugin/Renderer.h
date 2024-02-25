@@ -10,10 +10,17 @@
 
 #pragma once
 
-#include "JuceHeader.h"
-#include "Complex.h"
 #include "Interface/LookAndFeel/Shaders.h"
-#include "Interface/Components/OpenGlComponent.h"
+
+namespace juce
+{
+	class AudioProcessorEditor;
+}
+
+namespace Plugin
+{
+  class ComplexPlugin;
+}
 
 namespace Interface
 {
@@ -21,7 +28,7 @@ namespace Interface
   class MainInterface;
   class Skin;
 
-  class Renderer : public OpenGLRenderer, Timer
+  class Renderer final : public juce::OpenGLRenderer, juce::Timer
   {
   public:
     static constexpr double kMinOpenGlVersion = 1.4;
@@ -53,24 +60,14 @@ namespace Interface
     //void disconnectModulation(vital::ModulationConnection *connection);
 
     auto &getPlugin() noexcept { return plugin_; }
-    void pushOpenGlComponentToDelete(OpenGlComponent *openGlComponent) noexcept 
-    { openCleanupQueue_.emplace(openGlComponent); }
     MainInterface *getGui() noexcept;
     Skin *getSkin() noexcept;
 
-    void setEditor(AudioProcessorEditor *editor) noexcept { topLevelComponent_ = editor; }
+    void setEditor(juce::AudioProcessorEditor *editor) noexcept { topLevelComponent_ = editor; }
+    void pushOpenGlComponentToDelete(OpenGlComponent *openGlComponent) noexcept;
 
   private:
-    void doCleanupWork()
-    {
-      while (!openCleanupQueue_.empty())
-      {
-        auto *openGlComponent = openCleanupQueue_.front();
-        openGlComponent->destroy();
-        delete openGlComponent;
-        openCleanupQueue_.pop();
-      }
-    }
+    void doCleanupWork();
 
     bool unsupported_ = false;
     bool animate_ = true;
@@ -78,11 +75,11 @@ namespace Interface
     std::unique_ptr<Shaders> shaders_;
     std::queue<OpenGlComponent *> openCleanupQueue_{};
     std::unique_ptr<Skin> skinInstance_;
-    OpenGLContext openGlContext_;
+    juce::OpenGLContext openGlContext_;
     OpenGlWrapper openGl_{ openGlContext_ };
 
     Plugin::ComplexPlugin &plugin_;
-    AudioProcessorEditor *topLevelComponent_;
+    juce::AudioProcessorEditor *topLevelComponent_;
     std::unique_ptr<MainInterface> gui_;
 
     friend class MainInterface;

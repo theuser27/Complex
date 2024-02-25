@@ -11,6 +11,8 @@
 #pragma once
 
 #include <thread>
+#include "AppConfig.h"
+#include <juce_audio_basics/juce_audio_basics.h>
 #include "EffectModules.h"
 
 namespace Generation
@@ -122,10 +124,10 @@ namespace Generation
 			return makeSubProcessor<EffectsLane>();
 		}
 
-		void writeInputData(const AudioBuffer<float> &inputBuffer) noexcept;
+		void writeInputData(const juce::AudioBuffer<float> &inputBuffer) noexcept;
 		void processLanes() noexcept;
 		void sumLanes() noexcept;
-		void writeOutputData(AudioBuffer<float> &outputBuffer) const noexcept;
+		void writeOutputData(juce::AudioBuffer<float> &outputBuffer) const noexcept;
 
 		auto getUsedInputChannels() noexcept
 		{

@@ -10,24 +10,31 @@
 
 #pragma once
 
-#include "Generation/SoundEngine.h"
 #include "BaseSection.h"
+
+namespace Generation
+{
+	class SoundEngine;
+}
 
 namespace Interface
 {
-	class HeaderFooterSections : public BaseSection
+	class OpenGlQuad;
+	class NumberBox;
+	class TextSelector;
+
+	class HeaderFooterSections final : public BaseSection
 	{
 	public:
-		static constexpr int kHeaderHeight = 40;
 		static constexpr int kHeaderHorizontalEdgePadding = 10;
 		static constexpr int kHeaderNumberBoxMargin = 12;
 
-		static constexpr int kFooterHeight = 24;
 		static constexpr int kFooterHorizontalEdgePadding = 16;
 
 		static constexpr int kLabelToControlMargin = 4;
 
 		HeaderFooterSections(Generation::SoundEngine &soundEngine);
+		~HeaderFooterSections() override;
 
 		void paintBackground(Graphics &g) override;
 		void resized() override;

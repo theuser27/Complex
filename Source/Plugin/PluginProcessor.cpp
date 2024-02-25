@@ -6,6 +6,8 @@
 	==============================================================================
 */
 
+#include "Framework/parameter_bridge.h"
+#include "Generation/SoundEngine.h"
 #include "PluginProcessor.h"
 #include "PluginEditor.h"
 
@@ -17,12 +19,12 @@ ComplexAudioProcessor::ComplexAudioProcessor()
 {
 	using namespace Framework;
 
-	constexpr auto pluginParametersEnum = BaseProcessors::SoundEngine::enum_values<nested_enum::OuterNodes>();
-	parameterBridges_.reserve(kMaxParameterMappings + pluginParametersEnum.size());
+	constexpr auto pluginParameterStrings = BaseProcessors::SoundEngine::enum_strings<nested_enum::OuterNodes>(false);
+	parameterBridges_.reserve(kMaxParameterMappings + pluginParameterStrings.size());
 
-	for (BaseProcessors::SoundEngine::type parameterDetails : pluginParametersEnum)
+	for (std::string_view parameterName : pluginParameterStrings)
 	{
-		if (auto parameter = getProcessorParameter(soundEngine_->getProcessorId(), parameterDetails))
+		if (auto *parameter = getProcessorParameter(soundEngine_->getProcessorId(), parameterName))
 		{
 			auto *bridge = new ParameterBridge(this, (u32)(-1), parameter->getParameterLink());
 			parameterBridges_.push_back(bridge);

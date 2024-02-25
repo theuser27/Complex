@@ -79,8 +79,8 @@ namespace Generation
 	{
 		using namespace utils;
 		using namespace Framework;
-		simd_float lowBound = getParameter(BaseProcessors::BaseEffect::LowBound::self())->getInternalValue<simd_float>(sampleRate, true);
-		simd_float highBound = getParameter(BaseProcessors::BaseEffect::HighBound::self())->getInternalValue<simd_float>(sampleRate, true);
+		simd_float lowBound = getParameter(BaseProcessors::BaseEffect::LowBound::name())->getInternalValue<simd_float>(sampleRate, true);
+		simd_float highBound = getParameter(BaseProcessors::BaseEffect::HighBound::name())->getInternalValue<simd_float>(sampleRate, true);
 		// TODO: do dynamic min frequency based on FFTOrder
 		// TODO: get shifted bounds as normalised value/frequency/FFT bin
 		float nyquistFreq = sampleRate * 0.5f;
@@ -89,7 +89,7 @@ namespace Generation
 		if (isLinearShift)
 		{
 			// TODO: linear shift
-			simd_float boundShift = getParameter(BaseProcessors::BaseEffect::ShiftBounds::self())
+			simd_float boundShift = getParameter(BaseProcessors::BaseEffect::ShiftBounds::name())
 				->getInternalValue<simd_float>(sampleRate) * nyquistFreq;
 			lowBound = simd_float::clamp(exp2(lowBound * maxOctave) * kMinFrequency + boundShift, kMinFrequency, nyquistFreq);
 			highBound = simd_float::clamp(exp2(highBound * maxOctave) * kMinFrequency + boundShift, kMinFrequency, nyquistFreq);
@@ -99,7 +99,7 @@ namespace Generation
 		}
 		else
 		{
-			simd_float boundShift = getParameter(BaseProcessors::BaseEffect::ShiftBounds::self())
+			simd_float boundShift = getParameter(BaseProcessors::BaseEffect::ShiftBounds::name())
 				->getInternalValue<simd_float>(sampleRate);
 			lowBound = simd_float::clamp(lowBound + boundShift, 0.0f, 1.0f);
 			highBound = simd_float::clamp(highBound + boundShift, 0.0f, 1.0f);
@@ -246,9 +246,9 @@ namespace Generation
 		using namespace utils;
 		using namespace Framework;
 
-		simd_float lowBoundNorm = getParameter(BaseProcessors::BaseEffect::LowBound::self())->getInternalValue<simd_float>(sampleRate, true);
-		simd_float highBoundNorm = getParameter(BaseProcessors::BaseEffect::HighBound::self())->getInternalValue<simd_float>(sampleRate, true);
-		simd_float boundShift = getParameter(BaseProcessors::BaseEffect::ShiftBounds::self())->getInternalValue<simd_float>(sampleRate);
+		simd_float lowBoundNorm = getParameter(BaseProcessors::BaseEffect::LowBound::name())->getInternalValue<simd_float>(sampleRate, true);
+		simd_float highBoundNorm = getParameter(BaseProcessors::BaseEffect::HighBound::name())->getInternalValue<simd_float>(sampleRate, true);
+		simd_float boundShift = getParameter(BaseProcessors::BaseEffect::ShiftBounds::name())->getInternalValue<simd_float>(sampleRate);
 		simd_float boundsDistance = modOnce(simd_float(1.0f) + highBoundNorm - lowBoundNorm, 1.0f);
 
 		// getting the boundaries in terms of bin position
@@ -264,18 +264,18 @@ namespace Generation
 		// cutoff is described as exponential normalised value of the sample rate
 		// it is dependent on the values of the low/high bounds
 		simd_float cutoffNorm = modOnce(lowBoundNorm + boundShift + boundsDistance * 
-			getParameter(BaseProcessors::BaseEffect::Filter::Normal::Cutoff::self())->getInternalValue<simd_float>(sampleRate), 1.0f);
+			getParameter(BaseProcessors::BaseEffect::Filter::Normal::Cutoff::name())->getInternalValue<simd_float>(sampleRate), 1.0f);
 		simd_int cutoffIndices = toInt(normalisedToBin(cutoffNorm, binCount * 2, sampleRate));
 
 		// if mask scalars are negative/positive -> brickwall/linear slope
 		// slopes are logarithmic
-		simd_float slopes = getParameter(BaseProcessors::BaseEffect::Filter::Normal::Slope::self())->getInternalValue<simd_float>(sampleRate) / 2.0f;
+		simd_float slopes = getParameter(BaseProcessors::BaseEffect::Filter::Normal::Slope::name())->getInternalValue<simd_float>(sampleRate) / 2.0f;
 		simd_mask slopeMask = unsignSimd(slopes, true);
 		simd_mask slopeZeroMask = simd_float::equal(slopes, 0.0f);
 
 		// if scalars are negative/positive, attenuate at/around cutoff
 		// (gains is gain reduction in db and NOT a gain multiplier)
-		simd_float gains = getParameter(BaseProcessors::BaseEffect::Filter::Normal::Gain::self())->getInternalValue<simd_float>(sampleRate);
+		simd_float gains = getParameter(BaseProcessors::BaseEffect::Filter::Normal::Gain::name())->getInternalValue<simd_float>(sampleRate);
 		simd_mask gainMask = unsignSimd(gains, true);
 
 		for (u32 i = 0; i < numBins; i++)
@@ -334,7 +334,7 @@ namespace Generation
 		auto [index, numBins] = minimiseRange(lowBoundIndices, highBoundIndices, binCount, true);
 
 		// calculating contrast
-		simd_float depthParameter = getParameter(BaseProcessors::BaseEffect::Dynamics::Contrast::Depth::self())
+		simd_float depthParameter = getParameter(BaseProcessors::BaseEffect::Dynamics::Contrast::Depth::name())
 			->getInternalValue<simd_float>(sampleRate);
 		simd_float contrast = depthParameter * depthParameter;
 		contrast = maskLoad(
@@ -418,7 +418,7 @@ namespace Generation
 		}
 
 		// calculating clipping
-		simd_float thresholdParameter = getParameter(BaseProcessors::BaseEffect::Dynamics::Clip::Threshold::self())
+		simd_float thresholdParameter = getParameter(BaseProcessors::BaseEffect::Dynamics::Clip::Threshold::name())
 			->getInternalValue<simd_float>(sampleRate);
 		simd_float threshold = exp(lerp(log(simd_float::max(powerMinMax.first, 1e-36f)),
 		                                log(simd_float::max(powerMinMax.second, 1e-36f)),
@@ -496,7 +496,7 @@ namespace Generation
 		createProcessorParameters<BaseProcessors::EffectModule::type>();
 
 		auto scaledValue = (double)(std::ranges::find(effectsTypes, effectType) - effectsTypes.begin());
-		auto *parameter = getParameter(BaseProcessors::EffectModule::ModuleType::self());
+		auto *parameter = getParameter(BaseProcessors::EffectModule::ModuleType::name());
 		parameter->updateValues(getProcessorTree()->getSampleRate(), (float)unscaleValue(scaledValue, parameter->getParameterDetails()));
 	}
 
@@ -537,7 +537,7 @@ namespace Generation
 	{
 		using namespace Framework;
 
-		if (!getParameter(BaseProcessors::EffectModule::ModuleEnabled::self())->getInternalValue<u32>(sampleRate))
+		if (!getParameter(BaseProcessors::EffectModule::ModuleEnabled::name())->getInternalValue<u32>(sampleRate))
 			return;
 
 		auto *effect = utils::as<baseEffect *>(subProcessors_[0]);
@@ -558,7 +558,7 @@ namespace Generation
 		setProcessingTime(std::chrono::steady_clock::now() - start);
 
 		// if the mix is 100% for all channels, we can skip mixing entirely
-		simd_float wetMix = getParameter(BaseProcessors::EffectModule::ModuleMix::self())->getInternalValue<simd_float>(sampleRate);
+		simd_float wetMix = getParameter(BaseProcessors::EffectModule::ModuleMix::name())->getInternalValue<simd_float>(sampleRate);
 		if (!utils::completelyEqual(wetMix, 1.0f))
 		{
 			simd_float dryMix = simd_float(1.0f) - wetMix;

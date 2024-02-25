@@ -8,12 +8,13 @@
   ==============================================================================
 */
 
+#include "JuceHeader.h"
+#include "Interface/LookAndFeel/Miscellaneous.h"
 #include "load_save.h"
-#include "Interface/Sections/MainInterface.h"
 
 namespace Framework
 {
-  File LoadSave::getConfigFile()
+	File LoadSave::getConfigFile()
   {
   #if defined(JUCE_DATA_STRUCTURES_H_INCLUDED)
     PropertiesFile::Options config_options;
@@ -37,18 +38,18 @@ namespace Framework
   {
     File config_file = getConfigFile();
     if (!config_file.exists())
-      return json();
+      return {};
 
     try
     {
       json parsed = json::parse(config_file.loadFileAsString().toStdString(), nullptr, false);
       if (parsed.is_discarded())
-        return json();
+        return {};
       return parsed;
     }
     catch (const json::exception &)
     {
-      return json();
+      return {};
     }
   }
 
@@ -100,14 +101,14 @@ namespace Framework
     int height;
 
     if (!data.count("windowWidth"))
-      width = kDefaultWindowWidth;
+      width = Interface::kMinWidth;
     else
-      width = std::max<int>(Interface::MainInterface::kMinWidth, data["windowWidth"]);
+      width = std::max<int>(Interface::kMinWidth, data["windowWidth"]);
 
     if (!data.count("windowHeight"))
-      height = kDefaultWindowHeight;
+      height = Interface::kMinHeight;
     else
-      height = std::max<int>(Interface::MainInterface::kMinHeight, data["windowHeight"]);
+      height = std::max<int>(Interface::kMinHeight, data["windowHeight"]);
     
     return { width, height };
   }

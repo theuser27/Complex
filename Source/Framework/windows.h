@@ -10,10 +10,15 @@
 
 #pragma once
 
-#include "common.h"
+#include "AppConfig.h"
+#include <juce_audio_basics/juce_audio_basics.h>
+#include "nested_enum.h"
+#include "platform_definitions.h"
 
 namespace Framework
 {
+	NESTED_ENUM((WindowTypes, u32), (, Lerp, Hann, Hamming, Triangle, Sine, Rectangle, Exp, HannExp, Lanczos))
+
 	class Window
 	{
 	public:
@@ -29,21 +34,13 @@ namespace Framework
 		static float getHannExponentialWindow(float position, float alpha) noexcept;
 		static float getLanczosWindow(float position, float alpha) noexcept;
 
-		void applyWindow(AudioBuffer<float> &buffer, u32 numChannels, 
-			const bool* channelsToProcess, u32 numSamples, WindowTypes type, float alpha)
-		{
-			applyDefaultWindows(buffer, numChannels, channelsToProcess, numSamples, type, alpha);
-		}
+		void applyWindow(juce::AudioBuffer<float> &buffer, u32 numChannels,
+			const bool *channelsToProcess, u32 numSamples, WindowTypes type, float alpha);
 
-		static void applyDefaultWindows(AudioBuffer<float> &buffer, u32 numChannels,
+		static void applyDefaultWindows(juce::AudioBuffer<float> &buffer, u32 numChannels,
 			const bool *channelsToCopy, u32 numSamples, WindowTypes type, float alpha) noexcept;
 
-		void applyCustomWindows(AudioBuffer<float> &buffer, u32 numChannels, 
-			const bool* channelsToCopy, u32 numSamples, WindowTypes type, float alpha)
-		{
-			// TODO: see into how to generate custom windows based on spectral properties
-			// redirecting to the default types for now
-			applyDefaultWindows(buffer, numChannels, channelsToCopy, numSamples, type, alpha);
-		}
+		void applyCustomWindows(juce::AudioBuffer<float> &buffer, u32 numChannels,
+			const bool *channelsToCopy, u32 numSamples, WindowTypes type, float alpha);
 	};
 }

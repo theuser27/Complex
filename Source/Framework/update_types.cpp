@@ -9,11 +9,18 @@
 */
 
 #include "update_types.h"
+#include "Plugin/ProcessorTree.h"
 #include "Framework/parameter_value.h"
 #include "Interface/Components/BaseControl.h"
 
 namespace Framework
 {
+	AddProcessorUpdate::~AddProcessorUpdate()
+	{
+		if (!processorTree_->isBeingDestroyed() && addedProcessor_ && !isDone_)
+			processorTree_->deleteProcessor(addedProcessor_->getProcessorId());
+	}
+
 	bool AddProcessorUpdate::perform()
 	{
 		COMPLEX_ASSERT(!newSubProcessorType_.empty() && "A type of subProcessor to add was not provided");
@@ -42,6 +49,12 @@ namespace Framework
 		isDone_ = false;
 
 		return true;
+	}
+
+	CopyProcessorUpdate::~CopyProcessorUpdate()
+	{
+		if (!processorTree_->isBeingDestroyed() && !isDone_)
+			processorTree_->deleteProcessor(processorCopy.getProcessorId());
 	}
 
 	bool CopyProcessorUpdate::perform()
@@ -92,6 +105,12 @@ namespace Framework
 		return true;
 	}
 
+	UpdateProcessorUpdate::~UpdateProcessorUpdate()
+	{
+		if (!processorTree_->isBeingDestroyed() && savedProcessor_)
+			processorTree_->deleteProcessor(savedProcessor_->getProcessorId());
+	}
+
 	bool UpdateProcessorUpdate::perform()
 	{
 		auto destinationPointer = processorTree_->getProcessor(destinationProcessorId_);
@@ -114,6 +133,12 @@ namespace Framework
 		savedProcessor_ = destinationPointer->updateSubProcessor(destinationSubProcessorIndex_, savedProcessor_);
 
 		return true;
+	}
+
+	DeleteProcessorUpdate::~DeleteProcessorUpdate()
+	{
+		if (!processorTree_->isBeingDestroyed() && deletedProcessor_ && isDone_)
+			processorTree_->deleteProcessor(deletedProcessor_->getProcessorId());
 	}
 
 	bool DeleteProcessorUpdate::perform()

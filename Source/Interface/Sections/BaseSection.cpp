@@ -8,16 +8,32 @@
 	==============================================================================
 */
 
+#include "Generation/BaseProcessor.h"
+#include "../Components/OpenGlImageComponent.h"
+#include "../Components/OpenGlMultiQuad.h"
 #include "BaseSection.h"
-
+#include "../Components/BaseButton.h"
+#include "../Components/BaseSlider.h"
+#include "Plugin/Renderer.h"
 #include "MainInterface.h"
 
 namespace Interface
 {
-	BaseSection::BaseSection(std::string_view name) : Component(utils::toJuceString(name))
+	class OffOverlayQuad final : public OpenGlMultiQuad
+	{
+	public:
+		OffOverlayQuad() : OpenGlMultiQuad(1, Shaders::kColorFragment, typeid(OffOverlayQuad).name())
+		{
+			setQuad(0, -1.0f, -1.0f, 2.0f, 2.0f);
+		}
+	};
+
+	BaseSection::BaseSection(std::string_view name) : OpenGlContainer(toJuceString(name))
 	{
 		setWantsKeyboardFocus(true);
 	}
+
+	BaseSection::~BaseSection() = default;
 
 	void BaseSection::resized()
 	{
@@ -32,12 +48,6 @@ namespace Interface
 			background_->setBounds(getLocalBounds());
 	}
 
-	void BaseSection::paintBackground(Graphics &g)
-	{
-		paintKnobShadows(g);
-		paintOpenGlChildrenBackgrounds(g);
-	}
-
 	void BaseSection::repaintBackground()
 	{
 		if (!background_)
@@ -47,41 +57,15 @@ namespace Interface
 		background_->redrawImage();
 	}
 
-	void BaseSection::paintOpenGlBackground(Graphics &g, OpenGlComponent *openGlComponent)
-	{
-		Graphics::ScopedSaveState s(g);
-
-		Rectangle<int> bounds = getLocalArea(openGlComponent, openGlComponent->getLocalBounds());
-		g.reduceClipRegion(bounds);
-		g.setOrigin(bounds.getTopLeft());
-		openGlComponent->paintBackground(g);
-	}
-
-	void BaseSection::repaintOpenGlBackground(OpenGlComponent *openGlComponent)
-	{
-		if (!background_)
-			createBackground();
-
-		background_->setComponentToRedraw(openGlComponent);
-		background_->redrawImage(false);
-	}
-
-	void BaseSection::paintOpenGlChildrenBackgrounds(Graphics &g)
-	{
-		for (auto &openGlComponent : openGlComponents_)
-			if (openGlComponent->isVisible())
-				paintOpenGlBackground(g, openGlComponent.get());
-	}
-
-	void BaseSection::showPopupSelector(const Component *source, Point<int> position, 
+	void BaseSection::showPopupSelector(const BaseComponent *source, Point<int> position,
 		PopupItems options, std::function<void(int)> callback, std::function<void()> cancel) const
 	{
 		if (auto *parent = findParentComponentOfClass<MainInterface>())
-			parent->popupSelector(source, position, std::move(options), 
+			parent->popupSelector(source, position, std::move(options), getSectionOverride(),
 				std::move(callback), std::move(cancel));
 	}
 
-	void BaseSection::showPopupDisplay(Component *source, String text,
+	void BaseSection::showPopupDisplay(BaseComponent *source, String text,
 		BubbleComponent::BubblePlacement placement, bool primary)
 	{
 		if (auto *parent = findParentComponentOfClass<MainInterface>())
@@ -188,61 +172,55 @@ namespace Interface
 		g.fillRect(right - corner_size, bottom - corner_size, corner_and_shadow, corner_and_shadow);
 	}
 
-	void BaseSection::setScaling(float scale)
-	{
-		scaling_ = scale;
-
-		for (auto &subSection : subSections_)
-			subSection->setScaling(scale);
-	}
-
 	void BaseSection::reset()
 	{
 		for (auto &subSection : subSections_)
 			subSection->reset();
 	}
 
-	void BaseSection::paintKnobShadows(Graphics &g)
-	{
-		for (auto &control : controls_)
-			if (auto slider = dynamic_cast<BaseSlider *>(control.second); 
-				slider && slider->isVisible() && slider->getWidth() && slider->getHeight())
-				slider->drawShadow(g);
-	}
-
 	void BaseSection::renderOpenGlComponents(OpenGlWrapper &openGl, bool animate)
 	{
+		utils::ScopedSpinLock g(isRendering_);
+		
 		if (background_)
 		{
 			background_.doWorkOnComponent(openGl, animate);
 			COMPLEX_ASSERT(juce::gl::glGetError() == juce::gl::GL_NO_ERROR);
 		}
 		
-		for (auto &subSection : subSections_)
-			if (subSection->isVisible() && !subSection->isAlwaysOnTop())
+		for (auto *subSection : subSections_)
+			if (subSection->isVisibleSafe() && !subSection->isAlwaysOnTopSafe())
 				subSection->renderOpenGlComponents(openGl, animate);
 
 		for (auto &openGlComponent : openGlComponents_)
 		{
-			if (openGlComponent->isVisible() && !openGlComponent->isAlwaysOnTop())
+			if (openGlComponent->isVisibleSafe() && !openGlComponent->isAlwaysOnTopSafe())
 			{
 				openGlComponent.doWorkOnComponent(openGl, animate);
 				COMPLEX_ASSERT(juce::gl::glGetError() == juce::gl::GL_NO_ERROR);
 			}
 		}
 
-		for (auto &subSection : subSections_)
-			if (subSection->isVisible() && subSection->isAlwaysOnTop())
+		for (auto &[controlName, control] : controls_)
+			if (control->isVisibleSafe() && !control->isAlwaysOnTopSafe())
+				control->renderOpenGlComponents(openGl, animate);
+
+		for (auto *subSection : subSections_)
+			if (subSection->isVisibleSafe() && subSection->isAlwaysOnTopSafe())
 				subSection->renderOpenGlComponents(openGl, animate);
 
 		for (auto &openGlComponent : openGlComponents_)
 		{
-			if (openGlComponent->isVisible() && openGlComponent->isAlwaysOnTop())
+			if (openGlComponent->isVisibleSafe() && openGlComponent->isAlwaysOnTopSafe())
 			{
 				openGlComponent.doWorkOnComponent(openGl, animate);
 				COMPLEX_ASSERT(juce::gl::glGetError() == juce::gl::GL_NO_ERROR);
 			}
 		}
+
+		for (auto &[controlName, control] : controls_)
+			if (control->isVisibleSafe() && control->isAlwaysOnTopSafe())
+				control->renderOpenGlComponents(openGl, animate);
 	}
 
 	void BaseSection::destroyAllOpenGlComponents()
@@ -252,6 +230,9 @@ namespace Interface
 
 		for (auto &openGlComponent : openGlComponents_)
 			openGlComponent.deinitialise();
+
+		for (auto &[controlName, control] : controls_)
+			control->destroyAllOpenGlComponents();
 
 		for (auto &subSection : subSections_)
 			subSection->destroyAllOpenGlComponents();
@@ -271,7 +252,7 @@ namespace Interface
 
 	void BaseSection::addSubSection(BaseSection *section, bool show)
 	{
-		section->setParent(this);
+		section->setParentSafe(this);
 		section->setRenderer(renderer_);
 
 		if (show)
@@ -280,74 +261,76 @@ namespace Interface
 		subSections_.push_back(section);
 	}
 
-	void BaseSection::removeSubSection(BaseSection *section)
+	void BaseSection::removeSubSection(BaseSection *section, bool removeChild)
 	{
 		auto location = std::ranges::find(subSections_.begin(), subSections_.end(), section);
 		if (location != subSections_.end())
 			subSections_.erase(location);
 
-		removeChildComponent(section);
+		if (removeChild)
+			removeChildComponent(section);
 	}
 
 	void BaseSection::addControl(BaseControl *control)
 	{
 		// juce String is a copy-on-write type so the internal data is constant across all instances of the same string
 		// this means that so long as the control's name isn't changed the string_view will be safe to access 
-		if (control->getParameterDetails().id.empty())
+		if (control->getParameterDetails().name.empty())
 		{
 			COMPLEX_ASSERT(!control->getName().isEmpty() && control->getName() != "" && "Every control must have a name");
 			controls_[control->getName().toRawUTF8()] = control;
 		}
 		else
-			controls_[Framework::Parameters::getEnumString(control->getParameterDetails().id)] = control;
+			controls_[control->getParameterDetails().name] = control;
+		
+		control->setParentSafe(this);
 		control->addListener(this);
+		control->setSkinOverride(skinOverride_);
+		control->setRenderer(renderer_);
+		control->setScaling(scaling_);
 
 		addAndMakeVisible(control);
-
-		addOpenGlComponent(control->getLabelComponent());		
-		for (const auto &component : control->getComponents())
-			addOpenGlComponent(component);
 	}
 
-	void BaseSection::removeControl(BaseControl *control)
+	void BaseSection::removeControl(BaseControl *control, bool removeChild)
 	{
-		for (const auto &component : control->getComponents())
-			removeOpenGlComponent(component.get());
-		removeOpenGlComponent(control->getLabelComponent().get());
-
 		removeChildComponent(control);
-
+		if (removeChild)
+			control->setParentSafe(nullptr);
 		control->removeListener(this);
-		controls_.erase(Framework::Parameters::getEnumString(control->getParameterDetails().id));
-	}
 
-	void BaseSection::addOpenGlComponent(gl_ptr<OpenGlComponent> openGlComponent, bool toBeginning)
-	{
-		if (!openGlComponent)
-			return;
-
-		COMPLEX_ASSERT(std::ranges::find(openGlComponents_, openGlComponent) == openGlComponents_.end() 
-			&& "We're adding a component that is already a child of this section");
-
-		auto *rawPointer = openGlComponent.get();
-		rawPointer->setParent(this);
-		if (toBeginning)
-			openGlComponents_.insert(openGlComponents_.begin(), std::move(openGlComponent));
+		if (control->getParameterDetails().name.empty())
+			controls_.erase(control->getName().toRawUTF8());
 		else
-			openGlComponents_.emplace_back(std::move(openGlComponent));
-		addAndMakeVisible(rawPointer);
+			controls_.erase(control->getParameterDetails().name);
 	}
 
-	void BaseSection::removeOpenGlComponent(OpenGlComponent *openGlComponent)
+	void BaseSection::setSkinOverride(Skin::SectionOverride skinOverride) noexcept
 	{
-		if (openGlComponent == nullptr)
-			return;
+		skinOverride_ = skinOverride;
+		for (auto &control : controls_)
+			control.second->setSkinOverride(skinOverride);
+	}
 
-		if (std::erase_if(openGlComponents_, [&](auto &&value) { return value.get() == openGlComponent; }))
-		{
-			removeChildComponent(openGlComponent);
-			//openGlComponent->setParent(nullptr);
-		}
+	void BaseSection::setRenderer(Renderer *renderer) noexcept
+	{
+		renderer_ = renderer;
+		for (auto &subSection : subSections_)
+			subSection->setRenderer(renderer_);
+
+		for (auto &control : controls_)
+			control.second->setRenderer(renderer);
+	}
+
+	void BaseSection::setScaling(float scale) noexcept
+	{
+		scaling_ = scale;
+
+		for (auto &subSection : subSections_)
+			subSection->setScaling(scale);
+
+		for (auto &control : controls_)
+			control.second->setScaling(scale);
 	}
 
 	void BaseSection::setActivator(PowerButton *activator)
@@ -365,7 +348,7 @@ namespace Interface
 			return;
 
 		offOverlayQuad_ = makeOpenGlComponent<OffOverlayQuad>();
-		addOpenGlComponent(offOverlayQuad_, true);
+		addOpenGlComponent(offOverlayQuad_);
 		offOverlayQuad_->setVisible(false);
 		offOverlayQuad_->setAlwaysOnTop(true);
 		offOverlayQuad_->setInterceptsMouseClicks(false, false);
@@ -373,45 +356,14 @@ namespace Interface
 
 	void BaseSection::createBackground()
 	{
+		utils::ScopedSpinLock g(isRendering_);
+
 		background_ = makeOpenGlComponent<OpenGlBackground>();
 		background_->setTargetComponent(this);
-		background_->setParent(this);
+		background_->setContainer(this);
+		background_->setParentSafe(this);
 		addAndMakeVisible(background_.get());
 		background_->setBounds({ 0, 0, getWidth(), getHeight() });
-	}
-
-	float BaseSection::getDisplayScale() const
-	{
-		if (getWidth() <= 0)
-			return 1.0f;
-
-		Component *topLevelComponent = getTopLevelComponent();
-		float globalWidth = (float)topLevelComponent->getLocalArea(this, getLocalBounds()).getWidth();
-		float displayScale = (float)Desktop::getInstance().getDisplays()
-			.getDisplayForRect(topLevelComponent->getScreenBounds())->scale;
-		return displayScale * globalWidth / (float)getWidth();
-	}
-
-	Rectangle<int> BaseSection::getDividedAreaUnbuffered(Rectangle<int> full_area, int num_sections, int section, int buffer)
-	{
-		float component_width = (full_area.getWidth() - (num_sections + 1) * buffer) / (1.0f * num_sections);
-		int x = full_area.getX() + std::round(section * (component_width + buffer) + buffer);
-		int right = full_area.getX() + std::round((section + 1.0f) * (component_width + buffer));
-		return Rectangle<int>(x, full_area.getY(), right - x, full_area.getHeight());
-	}
-
-	Rectangle<int> BaseSection::getDividedAreaBuffered(Rectangle<int> full_area, int num_sections, int section, int buffer)
-	{
-		Rectangle<int> area = getDividedAreaUnbuffered(full_area, num_sections, section, buffer);
-		return area.expanded(buffer, 0);
-	}
-
-	Rectangle<int> BaseSection::getLabelBackgroundBounds(Rectangle<int> bounds, bool text_component)
-	{
-		int background_height = getValue(Skin::kLabelBackgroundHeight);
-		int label_offset = text_component ? getValue(Skin::kTextComponentLabelOffset) : getValue(Skin::kLabelOffset);
-		int background_y = bounds.getBottom() - background_height + label_offset;
-		return Rectangle<int>(bounds.getX(), background_y, bounds.getWidth(), background_height);
 	}
 
 	void BaseSection::setActive(bool active)
@@ -427,7 +379,8 @@ namespace Interface
 			if (auto *slider = dynamic_cast<BaseSlider *>(control.second))
 				slider->setActive(active);
 
-		repaintBackground();
+		if (background_)
+			repaintBackground();
 	}
 
 	void BaseSection::updateAllValues()
@@ -437,6 +390,12 @@ namespace Interface
 
 		for (auto &subSection : subSections_)
 			subSection->updateAllValues();
+	}
+
+	std::optional<u64> ProcessorSection::getProcessorId() const noexcept
+	{
+		return (processor_) ?
+			processor_->getProcessorId() : std::optional<u64>{ std::nullopt };
 	}
 
 }

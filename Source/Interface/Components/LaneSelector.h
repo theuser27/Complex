@@ -11,22 +11,12 @@
 #pragma once
 
 #include "../Sections/BaseSection.h"
-#include "../Sections/EffectsLaneSection.h"
 
 namespace Interface
 {
-	class LaneSelector : public BaseSection, public EffectsLaneSection::Listener
+	class LaneSelector final : public BaseSection, public EffectsLaneListener
 	{
 	public:
-		class Listener
-		{
-			virtual ~Listener() = default;
-			virtual void addNewLane() = 0;
-			virtual void cloneLane(EffectsLaneSection *lane) = 0;
-			virtual void removeLane(EffectsLaneSection *lane) = 0;
-			virtual void selectorChangedStartIndex(u32 newStartIndex) = 0;
-		};
-
 		LaneSelector() : BaseSection(typeid(LaneSelector).name()) { }
 
 		void resized() override;

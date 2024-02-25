@@ -11,12 +11,20 @@
 #pragma once
 
 #include <Third Party/json/json.hpp>
+#include "AppConfig.h"
+#include <juce_graphics/juce_graphics.h>
 #include "Framework/common.h"
+
+namespace juce
+{
+	class LookAndFeel;
+}
 
 using json = nlohmann::json;
 
 namespace Interface
 {
+	class OpenGlContainer;
 	class MainInterface;
 	class BaseSection;
 
@@ -32,7 +40,8 @@ namespace Interface
 			kFilterModule,
 			kDynamicsModule,
 
-			kSectionsCount
+			kSectionsCount,
+			kUseParentOverride = kSectionsCount
 		};
 
 		enum ValueId
@@ -175,17 +184,17 @@ namespace Interface
 
 		void clearSkin();
 
-		void setColor(ColorId colorId, const Colour &color) { colors_[colorId - kInitialColor] = color; }
-		Colour getColor(ColorId colorId) const { return colors_[colorId - kInitialColor]; }
-		Colour getColor(int section, ColorId colorId) const;
-		Colour getColor(const BaseSection *section, ColorId colorId) const;
+		void setColor(ColorId colorId, const juce::Colour &color) { colors_[colorId - kInitialColor] = color; }
+		juce::Colour getColor(ColorId colorId) const { return colors_[colorId - kInitialColor]; }
+		juce::Colour getColor(SectionOverride section, ColorId colorId) const;
+		juce::Colour getColor(const OpenGlContainer *section, ColorId colorId) const;
 
 		void setValue(ValueId valueId, float value) { values_[valueId] = value; }
 		float getValue(ValueId valueId) const { return values_[valueId]; }
-		float getValue(int section, ValueId valueId) const;
-		float getValue(const BaseSection *section, ValueId valueId) const;
+		float getValue(SectionOverride section, ValueId valueId) const;
+		float getValue(const OpenGlContainer *section, ValueId valueId) const;
 
-		void addOverrideColor(int section, ColorId colorId, Colour color);
+		void addOverrideColor(int section, ColorId colorId, juce::Colour color);
 		void removeOverrideColor(int section, ColorId colorId);
 		bool overridesColor(int section, ColorId colorId) const;
 
@@ -193,16 +202,16 @@ namespace Interface
 		void removeOverrideValue(int section, ValueId valueId);
 		bool overridesValue(int section, ValueId valueId) const;
 
-		void copyValuesToLookAndFeel(LookAndFeel *lookAndFeel) const;
+		void copyValuesToLookAndFeel(juce::LookAndFeel *lookAndFeel) const;
 
 		json stateToJson();
-		String stateToString();
-		void saveToFile(File destination);
+		juce::String stateToString();
+		void saveToFile(juce::File destination);
 
 		json updateJson(json data);
 		void jsonToState(json skin_var);
-		bool stringToState(String skin_string);
-		bool loadFromFile(const File &source);
+		bool stringToState(juce::String skin_string);
+		bool loadFromFile(const juce::File &source);
 		void loadDefaultSkin();
 
 		static bool shouldScaleValue(ValueId valueId) noexcept
@@ -213,9 +222,9 @@ namespace Interface
 		}
 
 	protected:
-		std::array<Colour, kColorIdCount> colors_{};
+		std::array<juce::Colour, kColorIdCount> colors_{};
 		std::array<float, kValueIdCount> values_{};
-		std::array<std::map<ColorId, Colour>, kSectionsCount> colorOverrides_{};
+		std::array<std::map<ColorId, juce::Colour>, kSectionsCount> colorOverrides_{};
 		std::array<std::map<ValueId, float>, kSectionsCount> valueOverrides_{};
 	};
 }

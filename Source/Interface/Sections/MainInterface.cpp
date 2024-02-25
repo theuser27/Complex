@@ -8,10 +8,14 @@
 	==============================================================================
 */
 
-#include "MainInterface.h"
-
+#include "Generation/SoundEngine.h"
+#include "Plugin/Complex.h"
+#include "Plugin/Renderer.h"
 #include "../LookAndFeel/DefaultLookAndFeel.h"
 #include "Popups.h"
+#include "MainInterface.h"
+#include "HeaderFooterSections.h"
+#include "EffectsStateSection.h"
 
 namespace Interface
 {
@@ -58,6 +62,8 @@ namespace Interface
 		setOpaque(false);
 	}
 
+	MainInterface::~MainInterface() = default;
+
 	void MainInterface::reloadSkin(const Skin &skin)
 	{
 		skin.copyValuesToLookAndFeel(DefaultLookAndFeel::instance());
@@ -75,11 +81,11 @@ namespace Interface
 		headerFooter_->setBounds(0, 0, width, height);
 
 		int effectsStateXStart = scaleValueRoundInt(kHorizontalWindowEdgeMargin);
-		int effectsStateYStart = scaleValueRoundInt(HeaderFooterSections::kHeaderHeight +
+		int effectsStateYStart = scaleValueRoundInt(kHeaderHeight +
 			kMainVisualiserHeight + kVerticalGlobalMargin);
-		int effectsStateWidth = scaleValueRoundInt(EffectsStateSection::kMinWidth);
+		int effectsStateWidth = scaleValueRoundInt(kEffectsStateMinWidth);
 		int effectsStateHeight = getHeight() - effectsStateYStart - 
-			scaleValueRoundInt(kLaneToBottomSettingsMargin + HeaderFooterSections::kFooterHeight);
+			scaleValueRoundInt(kLaneToBottomSettingsMargin + kFooterHeight);
 		Rectangle bounds{ effectsStateXStart, effectsStateYStart, effectsStateWidth, effectsStateHeight };
 
 		effectsStateSection_->setBounds(bounds);
@@ -93,9 +99,16 @@ namespace Interface
 			effects_interface_->redoBackgroundImage();*/
 	}
 
-	void MainInterface::popupSelector(const Component *source, Point<int> position, PopupItems options,
-		std::function<void(int)> callback, std::function<void()> cancel)
+	void MainInterface::renderOpenGlComponents(OpenGlWrapper &openGl, bool animate)
 	{
+		utils::ScopedBlock g(renderLock_);
+		BaseSection::renderOpenGlComponents(openGl, animate);
+	}
+
+	void MainInterface::popupSelector(const BaseComponent *source, Point<int> position, PopupItems options,
+	                                  Skin::SectionOverride skinOverride, std::function<void(int)> callback, std::function<void()> cancel)
+	{
+		popupSelector_->setPopupSkinOverride(skinOverride);
 		popupSelector_->setCallback(std::move(callback));
 		popupSelector_->setCancelCallback(std::move(cancel));
 		popupSelector_->showSelections(std::move(options));
@@ -104,7 +117,7 @@ namespace Interface
 		popupSelector_->setVisible(true);
 	}
 
-	void MainInterface::dualPopupSelector(Component *source, Point<int> position, int width,
+	void MainInterface::dualPopupSelector(BaseComponent *source, Point<int> position, int width,
 		const PopupItems &options, std::function<void(int)> callback)
 	{
 		dualPopupSelector_->setCallback(std::move(callback));
@@ -114,7 +127,7 @@ namespace Interface
 		dualPopupSelector_->setVisible(true);
 	}
 
-	void MainInterface::popupDisplay(Component *source, String text,
+	void MainInterface::popupDisplay(BaseComponent *source, String text,
 		BubbleComponent::BubblePlacement placement, bool primary, Skin::SectionOverride sectionOverride)
 	{
 		PopupDisplay *display = primary ? popupDisplay1_.get() : popupDisplay2_.get();

@@ -10,7 +10,8 @@
 
 #pragma once
 
-#include "JuceHeader.h"
+#include "AppConfig.h"
+#include <juce_graphics/juce_graphics.h>
 
 namespace Interface
 {
@@ -23,15 +24,15 @@ namespace Interface
 		static constexpr float kDDinDefaultKerning = 0.5f;
 		static constexpr float kInterVDefaultKerning = 0.5f;
 
-		Font &getDDinFont() { return DDinFont_; }
-		Font &getInterVFont() { return InterVFont_; }
+		juce::Font &getDDinFont() { return DDinFont_; }
+		juce::Font &getInterVFont() { return InterVFont_; }
 
-		float getAscentFromHeight(const Font &font, float height) const noexcept;
-		float getHeightFromAscent(const Font &font, float ascent) const noexcept;
-		float getDefaultFontHeight(const Font &font) const noexcept;
+		float getAscentFromHeight(const juce::Font &font, float height) const noexcept;
+		float getHeightFromAscent(const juce::Font &font, float ascent) const noexcept;
+		float getDefaultFontHeight(const juce::Font &font) const noexcept;
 
-		void setFontFromHeight(Font &font, float height) const;
-		void setFontFromAscent(Font &font, float ascent) const
+		void setFontFromHeight(juce::Font &font, float height) const;
+		void setFontFromAscent(juce::Font &font, float ascent) const
 		{ setFontFromHeight(font, getHeightFromAscent(font, ascent)); }
 
 		static Fonts *instance()
@@ -43,7 +44,7 @@ namespace Interface
 	private:
 		Fonts();
 
-		Font DDinFont_;
-		Font InterVFont_;
+		juce::Font DDinFont_;
+		juce::Font InterVFont_;
 	};
 }

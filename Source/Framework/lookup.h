@@ -10,6 +10,7 @@
 
 #pragma once
 
+#include <algorithm>
 #include "common.h"
 #include "simd_utils.h"
 

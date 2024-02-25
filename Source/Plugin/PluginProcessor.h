@@ -12,7 +12,7 @@
 #include "Complex.h"
 
 //==============================================================================
-class ComplexAudioProcessor  : public juce::AudioProcessor, public Plugin::ComplexPlugin
+class ComplexAudioProcessor final : public juce::AudioProcessor, public Plugin::ComplexPlugin
 {
 public:
 	//==============================================================================

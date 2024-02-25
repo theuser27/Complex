@@ -8,6 +8,8 @@
 	==============================================================================
 */
 
+#include "Framework/fourier_transform.h"
+#include "EffectsState.h"
 #include "SoundEngine.h"
 #include "../Plugin/ProcessorTree.h"
 
@@ -37,6 +39,8 @@ namespace Generation
 		createProcessorParameters<BaseProcessors::SoundEngine::type>();
 	}
 
+	SoundEngine::~SoundEngine() noexcept = default;
+
 	u32 SoundEngine::getProcessingDelay() const noexcept 
 	{ return FFTNumSamples_ + processorTree_->getSamplesPerBlock(); }
 
@@ -45,7 +49,7 @@ namespace Generation
 		// TODO: when samples per block changes, reset all working buffers to start from the beginning
 	}
 
-	perf_inline void SoundEngine::CopyBuffers(AudioBuffer<float> &buffer, u32 numInputs, u32 numSamples) noexcept
+	perf_inline void SoundEngine::CopyBuffers(juce::AudioBuffer<float> &buffer, u32 numInputs, u32 numSamples) noexcept
 	{
 		// assume that we don't get blocks bigger than our buffer size
 		inputBuffer.writeToBufferEnd(buffer, numInputs, numSamples);
@@ -102,23 +106,25 @@ namespace Generation
 
 	void SoundEngine::UpdateParameters(Framework::UpdateFlag flag, float sampleRate) noexcept
 	{
+		using namespace Framework;
+
 		updateParameters(flag, true);
 
 		switch (flag)
 		{
-		case Framework::UpdateFlag::Realtime:
-			overlap_ = processorParameters_[2]->getInternalValue<float>(sampleRate);
-			windowType_ = Framework::WindowTypes::make_enum(processorParameters_[3]->getInternalValue<u32>(sampleRate)).value();
-			alpha_ = processorParameters_[4]->getInternalValue<float>(sampleRate);
+		case UpdateFlag::Realtime:
+			overlap_ = getParameter(BaseProcessors::SoundEngine::Overlap::name())->getInternalValue<float>(sampleRate);
+			windowType_ = WindowTypes::make_enum(getParameter(BaseProcessors::SoundEngine::WindowType::name())->getInternalValue<u32>(sampleRate)).value();
+			alpha_ = getParameter(BaseProcessors::SoundEngine::WindowAlpha::name())->getInternalValue<float>(sampleRate);
 
 			// getting the next overlapOffset
 			nextOverlapOffset_ = getOverlapOffset();
 
 			break;
-		case Framework::UpdateFlag::BeforeProcess:
-			mix_ = processorParameters_[0]->getInternalValue<float>(sampleRate);
-			FFTOrder_ = processorParameters_[1]->getInternalValue<u32>(sampleRate);
-			outGain_ = (float)utils::dbToAmplitude(processorParameters_[5]->getInternalValue<float>(sampleRate));
+		case UpdateFlag::BeforeProcess:
+			mix_ = getParameter(BaseProcessors::SoundEngine::MasterMix::name())->getInternalValue<float>(sampleRate);
+			FFTOrder_ = getParameter(BaseProcessors::SoundEngine::BlockSize::name())->getInternalValue<u32>(sampleRate);
+			outGain_ = (float)utils::dbToAmplitude(getParameter(BaseProcessors::SoundEngine::OutGain::name())->getInternalValue<float>(sampleRate));
 
 			break;
 		default:
@@ -319,7 +325,7 @@ namespace Generation
 		inputBuffer.advanceLastOutputBlock(numSamples);
 	}
 
-	perf_inline void SoundEngine::FillOutput(AudioBuffer<float> &buffer, u32 numOutputs, u32 numSamples) noexcept
+	perf_inline void SoundEngine::FillOutput(juce::AudioBuffer<float> &buffer, u32 numOutputs, u32 numSamples) noexcept
 	{
 		// if we don't have enough samples we simply output silence
 		if (!hasEnoughSamples_)
@@ -336,7 +342,7 @@ namespace Generation
 		prevFFTNumSamples_ = FFTNumSamples_;
 	}
 
-	void SoundEngine::MainProcess(AudioBuffer<float> &buffer, u32 numSamples, 
+	void SoundEngine::MainProcess(juce::AudioBuffer<float> &buffer, u32 numSamples,
 		float sampleRate, u32 numInputs, u32 numOutputs) noexcept
 	{
 		// copying input in the main circular buffer

@@ -10,16 +10,23 @@
 
 #pragma once
 
-#include "Framework/common.h"
-#include "Framework/parameter_value.h"
-#include "Framework/parameter_bridge.h"
-#include "OpenGlImageComponent.h"
-#include "OpenGlMultiQuad.h"
+#include "../LookAndFeel/Miscellaneous.h"
 #include "BaseControl.h"
+
+namespace Framework
+{
+	class ParameterBridge;
+}
 
 namespace Interface
 {
-	class BaseSlider : public BaseControl, public TextEditor::Listener
+	class SliderListener;
+	class TextSelectorListener;
+	class OpenGlQuad;
+	class OpenGlImageComponent;
+	class PlainShapeComponent;
+
+	class BaseSlider : public BaseControl, public OpenGlTextEditorListener
 	{
 	public:
 		static constexpr int kDefaultMaxTotalCharacters = 5;
@@ -49,27 +56,8 @@ namespace Interface
 			kClearMapping
 		};
 
-		class Listener
-		{
-		public:
-			virtual ~Listener() = default;
-			virtual void sliderValueChanged(BaseSlider *slider) = 0;
-			virtual void hoverStarted([[maybe_unused]] BaseSlider *slider) { }
-			virtual void hoverEnded([[maybe_unused]] BaseSlider *slider) { }
-			virtual void mouseDown([[maybe_unused]] BaseSlider *slider) { }
-			virtual void mouseUp([[maybe_unused]] BaseSlider *slider) { }
-			virtual void automationMappingChanged([[maybe_unused]] BaseSlider *slider) { }
-			virtual void beginModulationEdit([[maybe_unused]] BaseSlider *slider) { }
-			virtual void endModulationEdit([[maybe_unused]] BaseSlider *slider) { }
-			virtual void menuFinished([[maybe_unused]] BaseSlider *slider) { }
-			virtual void doubleClick([[maybe_unused]] BaseSlider *slider) { }
-			virtual void modulationsChanged([[maybe_unused]] String name) { }
-			virtual void modulationAmountChanged([[maybe_unused]] BaseSlider *slider) { }
-			virtual void modulationRemoved([[maybe_unused]] BaseSlider *slider) { }
-			virtual void guiChanged([[maybe_unused]] BaseSlider *slider) { }
-		};
-
 		BaseSlider(Framework::ParameterValue *parameter);
+		~BaseSlider() override;
 		
 		// ========================================================== Mouse related
 		void mouseDown(const MouseEvent &e) override;
@@ -118,22 +106,10 @@ namespace Interface
 		// ===================================================== Text Entry related
 		void addTextEntry();
 		void removeTextEntry();
-		void changeTextEntryFont(Font font)
-		{
-			if (textEntry_)
-				textEntry_->setUsedFont(std::move(font));
-		}
+		void changeTextEntryFont(Font font);
 		// override to set the colours of the entry box
 		virtual void showTextEntry();
-		void textEditorTextChanged([[maybe_unused]] TextEditor &editor) override { textEntry_->redoImage(); }
-		void textEditorReturnKeyPressed([[maybe_unused]] TextEditor &editor) override
-		{
-			updateValueFromTextEntry();
-			textEntry_->setVisible(false);
-
-			for (Listener *listener : sliderListeners_)
-				listener->menuFinished(this);
-		}
+		void textEditorReturnKeyPressed([[maybe_unused]] OpenGlTextEditor &editor) override;
 
 		// ========================================================== Popup related
 		void showPopup(bool primary);
@@ -144,7 +120,7 @@ namespace Interface
 	public:
 
 		// ======================================================== Drawing related
-		bool isVertical() const noexcept { return !(type_ & SliderType::IsHorizontalDrag); }
+		bool isVertical() const noexcept { return !isHorizontal(); }
 		bool isHorizontal() const noexcept { return type_ & SliderType::IsHorizontalDrag; }
 		bool isBipolar() const noexcept { return type_ & SliderType::Bipolar; }
 		bool hasModulationArea() const noexcept { return modulationArea_.getWidth(); }
@@ -208,42 +184,26 @@ namespace Interface
 		void setPopupPrefix(String prefix) noexcept { popupPrefix_ = std::move(prefix); }
 
 		// ========================================================== Miscellaneous
-		void parentHierarchyChanged() override;
+		using BaseControl::getValue;
 		void modifierKeysChanged(const ModifierKeys &) override { }
 		void addListener(BaseSection *listener) override;
 		void removeListener(BaseSection *listener) override;
 	protected:
-		void notifyModulationAmountChanged()
-		{
-			for (Listener *listener : sliderListeners_)
-				listener->modulationAmountChanged(this);
-		}
-		void notifyModulationRemoved()
-		{
-			for (Listener *listener : sliderListeners_)
-				listener->modulationRemoved(this);
-		}
-		void notifyModulationsChanged()
-		{
-			for (Listener *listener : sliderListeners_)
-				listener->modulationsChanged(BaseControl::getName());
-		}
-		void notifyGuis() noexcept
-		{
-			for (Listener *listener : sliderListeners_)
-				listener->guiChanged(this);
-		}
+		void notifyModulationAmountChanged();
+		void notifyModulationRemoved();
+		void notifyModulationsChanged();
+		void notifyGuis() noexcept;
 		float getSampleRate() const noexcept;
 		std::vector<Framework::ParameterBridge *> &getMappedParameters() const noexcept;
 		void resetValue() noexcept;
 		void setImmediateSensitivity(double immediateSensitivity) noexcept { immediateSensitivity_ = immediateSensitivity; }
 
 		// ============================================================== Variables
-		Colour thumbColor_;
-		Colour selectedColor_;
-		Colour unselectedColor_;
-		Colour backgroundColor_;
-		Colour modColor_;
+		shared_value<Colour> thumbColor_;
+		shared_value<Colour> selectedColor_;
+		shared_value<Colour> unselectedColor_;
+		shared_value<Colour> backgroundColor_;
+		shared_value<Colour> modColor_;
 
 		SliderType type_{};
 		bool shouldShowPopup_ = false;
@@ -269,7 +229,7 @@ namespace Interface
 		gl_ptr<OpenGlImageComponent> imageComponent_ = nullptr;
 		std::unique_ptr<OpenGlTextEditor> textEntry_ = nullptr;
 
-		std::vector<Listener *> sliderListeners_{};
+		std::vector<SliderListener *> sliderListeners_{};
 
 		// ============================================================== Internals
 	private:
@@ -300,15 +260,16 @@ namespace Interface
 		static constexpr int kLabelVerticalPadding = 3;
 
 		RotarySlider(Framework::ParameterValue *parameter);
+		~RotarySlider() override;
 
 		void mouseDrag(const MouseEvent &e) override;
 
 		void redoImage() override;
 		void setComponentsBounds() override;
-		void drawShadow(Graphics &g) override;
+		void drawShadow(Graphics &g) const;
 		void showTextEntry() override;
 		void setExtraElementsPositions(Rectangle<int> anchorBounds) override;
-		Rectangle<int> getBoundsForSizes(int height, int width = 0) override;
+		Rectangle<int> setBoundsForSizes(int height, int width = 0) override;
 
 		Colour getUnselectedColor() const override
 		{
@@ -320,11 +281,12 @@ namespace Interface
 
 		float getKnobSizeScale() const noexcept { return knobSizeScale_; }
 		void setKnobSizeScale(float scale) noexcept { knobSizeScale_ = scale; }
-		void setMaxArc(float arc) { quadComponent_->setMaxArc(arc); }
+		void setMaxArc(float arc) noexcept;
 
 		void setModifier(TextSelector *modifier) noexcept;
 
 	protected:
+		shared_value<float> knobArcThickness_{};
 		float knobSizeScale_ = 1.0f;
 		TextSelector *modifier_ = nullptr;
 	};
@@ -335,12 +297,7 @@ namespace Interface
 		static constexpr float kLinearWidthPercent = 0.26f;
 		static constexpr float kLinearModulationPercent = 0.1f;
 
-		LinearSlider(Framework::ParameterValue *parameter) : BaseSlider(parameter)
-		{
-			quadComponent_->setFragmentShader(Shaders::kHorizontalSliderFragment);
-
-			components_.emplace_back(quadComponent_);
-		}
+		LinearSlider(Framework::ParameterValue *parameter);
 
 		void mouseDown(const MouseEvent &e) override
 		{
@@ -372,7 +329,7 @@ namespace Interface
 		Rectangle<int> getModulationMeterBounds() const override
 		{
 			Rectangle<int> mod_bounds = getModulationArea();
-			int buffer = (int)findValue(Skin::kWidgetMargin);
+			int buffer = (int)getValue(Skin::kWidgetMargin);
 
 			if (isHorizontal())
 			{
@@ -404,10 +361,7 @@ namespace Interface
 	class ImageSlider final : public BaseSlider
 	{
 	public:
-		ImageSlider(Framework::ParameterValue *parameter) : BaseSlider(parameter)
-		{
-			components_.push_back(imageComponent_);
-		}
+		ImageSlider(Framework::ParameterValue *parameter);
 
 		void mouseDown(const MouseEvent &e) override
 		{
@@ -432,9 +386,7 @@ namespace Interface
 			BaseSlider::mouseDrag(e);
 		}
 
-		void paint(Graphics &g) override;
-		void redoImage() override { imageComponent_->redrawImage(); }
-
+		void redoImage() override;
 	};
 
 	class PinSlider : public BaseSlider
@@ -447,11 +399,10 @@ namespace Interface
 		void mouseDown(const MouseEvent &e) override;
 		void mouseDrag(const MouseEvent &e) override;
 
-		void paint(Graphics &g) override;
 		void redoImage() override;
 		void setComponentsBounds() override;
 		void setExtraElementsPositions([[maybe_unused]] Rectangle<int> anchorBounds) override { }
-		Rectangle<int> getBoundsForSizes(int height, int width = 0) override;
+		Rectangle<int> setBoundsForSizes(int height, int width = 0) override;
 
 		Colour getThumbColor() const override { return getSelectedColor(); }
 
@@ -473,20 +424,12 @@ namespace Interface
 		static constexpr float kHeightToArrowWidthRatio = 5.0f / 16.0f;
 		static constexpr float kArrowWidthHeightRatio = 0.5f;
 
-		class TextSelectorListener
-		{
-		public:
-			virtual ~TextSelectorListener() = default;
-			virtual void resizeForText(TextSelector *textSelector, int requestedWidthChange) = 0;
-		};
-
 		TextSelector(Framework::ParameterValue *parameter, std::optional<Font> usedFont = {});
 
 		void mouseDown(const MouseEvent &e) override;
 		void mouseUp(const MouseEvent &e) override;
 		void mouseWheelMove(const MouseEvent &e, const MouseWheelDetails &wheel) override;
 
-		void paint(Graphics &g) override;
 		void valueChanged() override
 		{
 			resizeForText();
@@ -495,7 +438,7 @@ namespace Interface
 		void redoImage() override;
 		void setComponentsBounds() override;
 		void setExtraElementsPositions(Rectangle<int> anchorBounds) override;
-		Rectangle<int> getBoundsForSizes(int height, int width = 0) override;
+		Rectangle<int> setBoundsForSizes(int height, int width = 0) override;
 
 		void addListener(BaseSection *listener) override;
 		void removeListener(BaseSection *listener) override;
@@ -513,14 +456,7 @@ namespace Interface
 		void setUsedFont(Font usedFont) noexcept { usedFont_ = std::move(usedFont); isDirty_ = true; }
 		void setDrawArrow(bool drawArrow) noexcept { drawArrow_ = drawArrow; isDirty_ = true; }
 
-		void setExtraIcon(PlainShapeComponent *icon) noexcept
-		{
-			if (icon)
-				extraElements_.add(icon, {});
-			else
-				extraElements_.erase(extraIcon_);
-			extraIcon_ = icon;
-		}
+		void setExtraIcon(PlainShapeComponent *icon) noexcept;
 		void setTextSelectorListener(TextSelectorListener *listener) noexcept { textSelectorListener_ = listener; }
 
 	protected:
@@ -548,12 +484,11 @@ namespace Interface
 		NumberBox(Framework::ParameterValue *parameter);
 
 		void mouseDrag(const MouseEvent &e) override;
-		void paint(Graphics &g) override;
 		void setVisible(bool shouldBeVisible) override;
 
-		void textEditorReturnKeyPressed(TextEditor &editor) override;
-		void textEditorEscapeKeyPressed(TextEditor &editor) override;
-		void textEditorFocusLost(TextEditor &editor) override { textEditorEscapeKeyPressed(editor); }
+		void textEditorReturnKeyPressed(OpenGlTextEditor &editor) override;
+		void textEditorEscapeKeyPressed(OpenGlTextEditor &editor) override;
+		void textEditorFocusLost(OpenGlTextEditor &editor) override { textEditorEscapeKeyPressed(editor); }
 
 		void redoImage() override;
 		void setComponentsBounds() override;
@@ -563,14 +498,9 @@ namespace Interface
 		Colour getBackgroundColor() const override { return (drawBackground_) ? 
 			getColour(Skin::kWidgetBackground1) : getColour(Skin::kWidgetBackground2); }
 
-		Rectangle<int> getBoundsForSizes(int height, int width = 0) override;
+		Rectangle<int> setBoundsForSizes(int height, int width = 0) override;
 
-		void setAlternativeMode(bool isAlternativeMode) noexcept
-		{
-			quadComponent_->setActive(isAlternativeMode);
-			imageComponent_->setActive(!isAlternativeMode);
-			drawBackground_ = !isAlternativeMode;
-		}
+		void setAlternativeMode(bool isAlternativeMode) noexcept;
 
 	protected:
 		bool drawBackground_ = true;
@@ -580,12 +510,7 @@ namespace Interface
 	class ModulationSlider final : public BaseSlider
 	{
 	public:
-		ModulationSlider(Framework::ParameterValue *parameter) : BaseSlider(parameter)
-		{
-			quadComponent_->setFragmentShader(Shaders::kModulationKnobFragment);
-
-			components_.emplace_back(quadComponent_);
-		}
+		ModulationSlider(Framework::ParameterValue *parameter);
 
 		void mouseDown(const MouseEvent &e) override
 		{
@@ -611,11 +536,7 @@ namespace Interface
 		}
 
 		void redoImage() override;
-		void setComponentsBounds() override
-		{
-			float radius = 1.0f - 1.0f / (float)drawBounds_.getWidth();
-			quadComponent_->setQuad(0, -radius, -radius, 2.0f * radius, 2.0f * radius);
-		}
+		void setComponentsBounds() override;
 
 
 		Colour getSelectedColor() const override
@@ -628,8 +549,7 @@ namespace Interface
 		Colour getUnselectedColor() const override { return getColour(Skin::kWidgetBackground1); }
 		Colour getThumbColor() const override { return getColour(Skin::kRotaryArc); }
 
-		void setAlpha(float alpha, bool reset = false) { quadComponent_->setAlpha(alpha, reset); }
-		void setDrawWhenNotVisible(bool draw) { quadComponent_->setDrawWhenNotVisible(draw); }
+		void setDrawWhenNotVisible(bool draw) noexcept;
 	};
 
 }

@@ -11,9 +11,14 @@
 #pragma once
 
 #include "Framework/common.h"
-#include "Framework/parameter_bridge.h"
-#include "Generation/SoundEngine.h"
+#include "AppConfig.h"
+#include <juce_audio_basics/juce_audio_basics.h>
 #include "ProcessorTree.h"
+
+namespace Generation
+{
+	class SoundEngine;
+}
 
 namespace Interface
 {
@@ -29,12 +34,11 @@ namespace Plugin
 
 		void Initialise(float sampleRate, u32 samplesPerBlock);
 		void CheckGlobalParameters();
-		void Process(AudioBuffer<float> &buffer, u32 numSamples, float sampleRate, u32 numInputs, u32 numOutputs);
+		void Process(juce::AudioBuffer<float> &buffer, u32 numSamples, float sampleRate, u32 numInputs, u32 numOutputs);
 
-		strict_inline u32 getProcessingDelay() const noexcept { return soundEngine_->getProcessingDelay(); }
+		u32 getProcessingDelay() const noexcept;
 		
-		strict_inline void updateParameters(Framework::UpdateFlag flag, float sampleRate) noexcept
-		{ soundEngine_->UpdateParameters(flag, sampleRate); }
+		void updateParameters(Framework::UpdateFlag flag, float sampleRate) noexcept;
 		void initialiseModuleTree() noexcept;
 
 		virtual void parameterChangeMidi(u64 parentModuleId, std::string_view parameterName, float value);

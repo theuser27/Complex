@@ -10,19 +10,23 @@
 
 #pragma once
 
-#include "Generation/BaseProcessor.h"
+#include "../LookAndFeel/Miscellaneous.h"
+#include "../Components/OpenGlContainer.h"
 
-#include "../LookAndFeel/Skin.h"
-#include "../Components/BaseButton.h"
-#include "../Components/BaseSlider.h"
-#include "Plugin/Renderer.h"
+namespace Generation
+{
+	class BaseProcessor;
+}
 
 namespace Interface
 {
-	class ModulationButton;
+	class BaseControl;
+	class Renderer;
+	class PowerButton;
+	class OpenGlBackground;
+	class OffOverlayQuad;
 
-	class BaseSection : public Component, public BaseSlider::Listener, public BaseButton::Listener, 
-		public TextSelector::TextSelectorListener
+	class BaseSection : public OpenGlContainer, public SliderListener, public ButtonListener, public TextSelectorListener
 	{
 	public:
 		static constexpr int kDefaultActivatorSize = 12;
@@ -60,17 +64,11 @@ namespace Interface
 		static constexpr float kDefaultWidgetLineWidth = 4.0f;
 		static constexpr float kDefaultWidgetFillCenter = 0.0f;
 
-		class OffOverlayQuad : public OpenGlMultiQuad
-		{
-		public:
-			OffOverlayQuad() : OpenGlMultiQuad(1, Shaders::kColorFragment, typeid(OffOverlayQuad).name()) 
-			{ setQuad(0, -1.0f, -1.0f, 2.0f, 2.0f); }
-
-			void paintBackground(Graphics &) override { }
-		};
-
 		BaseSection(std::string_view name);
+		~BaseSection() override;
 
+		void setBounds(int x, int y, int width, int height) final { BaseComponent::setBounds(x, y, width, height); }
+		using OpenGlContainer::setBounds;
 		void resized() override;
 		void paint(Graphics &) override { }
 
@@ -81,11 +79,8 @@ namespace Interface
 		void resizeForText(TextSelector *textSelector, int requestedWidthChange) override;
 
 		// paint anything that doesn't move/is static
-		virtual void paintBackground(Graphics &g);
+		virtual void paintBackground(Graphics &) { }
 		virtual void repaintBackground();
-		void paintOpenGlBackground(Graphics &g, OpenGlComponent *openGlComponent);
-		void repaintOpenGlBackground(OpenGlComponent *openGlComponent);
-		void paintOpenGlChildrenBackgrounds(Graphics &g);
 
 		Path getRoundedPath(Rectangle<float> bounds, float topRounding = 0.0f, float bottomRounding = 0.0f) const;
 		void paintBody(Graphics &g, Rectangle<int> bounds, float topRounding = 0.0f, float bottomRounding = 0.0f) const;
@@ -96,42 +91,30 @@ namespace Interface
 		void paintTabShadow(Graphics &g, Rectangle<int> bounds);
 		void paintTabShadow(Graphics &g) { paintTabShadow(g, getLocalBounds()); }
 		virtual void paintBackgroundShadow(Graphics &) { }
-		void paintKnobShadows(Graphics &g);
-		void setScaling(float scale);
 		float getComponentShadowWidth() const noexcept { return scaling_ * 2.0f; }
-
-		Rectangle<int> getDividedAreaBuffered(Rectangle<int> full_area, int num_sections, int section, int buffer);
-		Rectangle<int> getDividedAreaUnbuffered(Rectangle<int> full_area, int num_sections, int section, int buffer);
-		Rectangle<int> getLabelBackgroundBounds(Rectangle<int> bounds, bool text_component = false);
-		Rectangle<int> getLabelBackgroundBounds(Component *component, bool text_component = false)
-		{ return getLabelBackgroundBounds(component->getBounds(), text_component); }
 		
 		// main opengl render loop
-		virtual void renderOpenGlComponents(OpenGlWrapper &openGl, bool animate = false);
-		void destroyAllOpenGlComponents();
+		void renderOpenGlComponents(OpenGlWrapper &openGl, bool animate = false) override;
+		void destroyAllOpenGlComponents() final;
 
-		void showPopupSelector(const Component *source, Point<int> position, PopupItems options,
+		void showPopupSelector(const BaseComponent *source, Point<int> position, PopupItems options,
 			std::function<void(int)> callback, std::function<void()> cancel = {}) const;
-		void showPopupDisplay(Component *source, String text,
+		void showPopupDisplay(BaseComponent *source, String text,
 			BubbleComponent::BubblePlacement placement, bool primary);
 		void hidePopupDisplay(bool primary);
 
 		virtual void setActive(bool active);
-		bool isActive() const { return active_; }
+		bool isActive() const noexcept { return active_; }
 
 		virtual void updateAllValues();
 		PowerButton *activator() const { return activator_; }
 
 		virtual void reset();
-		virtual void loadFile([[maybe_unused]] const File &file) { }
-		virtual File getCurrentFile() { return {}; }
 
 		virtual void addSubSection(BaseSection *section, bool show = true);
-		virtual void removeSubSection(BaseSection *section);
+		virtual void removeSubSection(BaseSection *section, bool removeChild = false);
 		void addControl(BaseControl *control);
-		void removeControl(BaseControl *control);
-		void addOpenGlComponent(gl_ptr<OpenGlComponent> openGlComponent, bool toBeginning = false);
-		void removeOpenGlComponent(OpenGlComponent *openGlComponent);
+		void removeControl(BaseControl *control, bool removeChild = false);
 
 		float getScaling() const noexcept { return scaling_; }
 		float getPadding() const noexcept { return getValue(Skin::kPadding); }
@@ -146,32 +129,12 @@ namespace Interface
 		float getWidgetMargin() const noexcept { return getValue(Skin::kWidgetMargin); }
 		float getWidgetRounding() const noexcept { return getValue(Skin::kWidgetMargin); }
 		int getPopupWidth() const noexcept { return scaleValueRoundInt(kDefaultPopupMenuWidth); }
-		auto getSectionOverride() const noexcept { return skinOverride_; }
-		auto *getParent() const noexcept { return parent_; }
 
-		auto *getControl(nested_enum::NestedEnum auto enumValue) { return controls_.at(enumValue.enum_string(false)); }
+		[[nodiscard]] auto *getControl(std::string_view enumName) { return controls_.at(enumName); }
 
-		void setSkinOverride(Skin::SectionOverride skinOverride) noexcept { skinOverride_ = skinOverride; }
-		void setParent(BaseSection *parent) noexcept { parent_ = parent; }
-		void setRenderer(Renderer *renderer) noexcept
-		{
-			renderer_ = renderer;
-			for (auto &subSection : subSections_)
-				subSection->setRenderer(renderer_);
-		}
-
-		// helper functions
-		Renderer *getInterfaceLink() const noexcept { return renderer_; }
-		float getValue(Skin::ValueId valueId) const { return renderer_->getSkin()->getValue(this, valueId); }
-		Colour getColour(Skin::ColorId colorId) const { return renderer_->getSkin()->getColor(this, colorId); }
-		float scaleValue(float value) const noexcept { return scaling_ * value; }
-		int scaleValueRoundInt(float value) const noexcept { return (int)std::round(scaling_ * value); }
-		// returns the xPosition of the horizontally centered element
-		static int centerHorizontally(int xPosition, int elementWidth, int containerWidth) noexcept
-		{ return xPosition + (containerWidth - elementWidth) / 2; }
-		// returns the yPosition of the vertically centered element
-		static int centerVertically(int yPosition, int elementHeight, int containerHeight) noexcept
-		{ return yPosition + (containerHeight - elementHeight) / 2; }
+		void setSkinOverride(Skin::SectionOverride skinOverride) noexcept final;
+		void setRenderer(Renderer *renderer) noexcept final;
+		void setScaling(float scale) noexcept final;
 
 	protected:
 		void setActivator(PowerButton *activator);
@@ -184,23 +147,14 @@ namespace Interface
 				(int)std::round(scaleValue(kDefaultActivatorSize)) };
 		}
 
-		float getDisplayScale() const;
-
 		std::vector<BaseSection *> subSections_{};
-		std::vector<gl_ptr<OpenGlComponent>> openGlComponents_{};
 		gl_ptr<OpenGlBackground> background_ = nullptr;
 		gl_ptr<OffOverlayQuad> offOverlayQuad_ = nullptr;
 
 		std::map<std::string_view, BaseControl *> controls_{};
-		std::map<std::string_view, ModulationButton *> modulationButtons_{};
 
 		PowerButton *activator_ = nullptr;
 
-		Renderer *renderer_ = nullptr;
-		BaseSection *parent_ = nullptr;
-
-		Skin::SectionOverride skinOverride_ = Skin::kNone;
-		float scaling_ = 1.0f;
 		bool active_ = true;
 	};
 
@@ -210,8 +164,7 @@ namespace Interface
 		ProcessorSection(std::string_view name, Generation::BaseProcessor *processor) :
 			BaseSection(name), processor_(processor) { }
 
-		[[nodiscard]] std::optional<u64> getProcessorId() const noexcept { return (processor_) ? 
-			processor_->getProcessorId() : std::optional<u64>{ std::nullopt }; }
+		[[nodiscard]] std::optional<u64> getProcessorId() const noexcept;
 		[[nodiscard]] auto getProcessor() const noexcept { return processor_; }
 	protected:
 		Generation::BaseProcessor *processor_ = nullptr;

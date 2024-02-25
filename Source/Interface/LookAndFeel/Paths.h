@@ -10,35 +10,39 @@
 
 #pragma once
 
-#include "JuceHeader.h"
+#include "AppConfig.h"
+#include <juce_graphics/juce_graphics.h>
+#include <juce_gui_basics/juce_gui_basics.h>
+
+#include "BinaryData.h"
 #include "Framework/constants.h"
 
 namespace Interface
 {
   class Paths
   {
-    static Path fromSvgData(const void *data, size_t data_size)
+    static juce::Path fromSvgData(const void *data, size_t data_size)
     {
-      std::unique_ptr drawable = Drawable::createFromImageData(data, data_size);
+      std::unique_ptr drawable = juce::Drawable::createFromImageData(data, data_size);
       return drawable->getOutlineAsPath();
     }
 
   public:
     Paths() = delete;
 
-    static std::pair<Path, Path> filterIcon()
+    static std::pair<juce::Path, juce::Path> filterIcon()
     {
       return { fromSvgData(BinaryData::Icon_Filter_svg, BinaryData::Icon_Filter_svgSize), {} };
     }
     
-    static std::pair<Path, Path> contrastIcon()
+    static std::pair<juce::Path, juce::Path> contrastIcon()
     {
       float width = 14.0f;
       float height = 14.0f;
       float rounding = 6.0f;
 
-      Path strokePath;
-      Path fillPath;
+      juce::Path strokePath;
+      juce::Path fillPath;
 
       strokePath.startNewSubPath(width - rounding, 0.0f);
       strokePath.quadraticTo(width, 0.0f, width, rounding);
@@ -61,13 +65,13 @@ namespace Interface
       return { strokePath, fillPath };
     }
 
-    static std::pair<Path, Path> powerButtonIcon()
+    static std::pair<juce::Path, juce::Path> powerButtonIcon()
     {
-      static Path strokePath = []()
+      static juce::Path strokePath = []()
       {
         static constexpr float kAngle = 0.8f * k2Pi;
         static constexpr float kAngleStart = kPi - kAngle * 0.5f;
-        Path path;
+        juce::Path path;
 
         path.startNewSubPath(5.5f, 0.0f);
         path.lineTo(5.5f, 5.0f);
@@ -81,17 +85,17 @@ namespace Interface
       return { strokePath, {} };
     }
 
-    static Path downTriangle()
+    static juce::Path downTriangle()
     {
-      Path path;
+      juce::Path path;
 
       path.startNewSubPath(0.33f, 0.4f);
       path.lineTo(0.66f, 0.4f);
       path.lineTo(0.5f, 0.6f);
       path.closeSubPath();
 
-      path.addLineSegment(Line{ 0.0f, 0.0f, 0.0f, 0.0f }, 0.2f);
-      path.addLineSegment(Line{ 1.0f, 1.0f, 1.0f, 1.0f }, 0.2f);
+      path.addLineSegment(juce::Line{ 0.0f, 0.0f, 0.0f, 0.0f }, 0.2f);
+      path.addLineSegment(juce::Line{ 1.0f, 1.0f, 1.0f, 1.0f }, 0.2f);
       return path;
     }
 

@@ -12,17 +12,22 @@
 
 #include "Framework/vector_map.h"
 #include "Framework/parameter_value.h"
-#include "Interface/LookAndFeel/Skin.h"
-#include "Interface/Components/OpenGlImageComponent.h"
+#include "OpenGlContainer.h"
+
+namespace Framework
+{
+	struct ParameterLink;
+}
 
 namespace Interface
 {
+	class PlainTextComponent;
 	class BaseSection;
 
-	class BaseControl : public Component
+	class BaseControl : public OpenGlContainer
 	{
 	public:
-		BaseControl() = default;
+		BaseControl();
 		~BaseControl() override;
 
 		// ====================================================== Parameter related
@@ -58,14 +63,19 @@ namespace Interface
 		// ========================================================= Layout related
 		void resized() override;
 		void moved() override;
+		void parentHierarchyChanged() override;
+
 		auto getDrawBounds() const noexcept { return drawBounds_; }
-		auto getComponents() noexcept { return std::span{ components_ }; }
 		auto getAddedHitbox() const noexcept { return addedHitbox_; }
+		
 		// returns tight bounds around all contained elements (drawn components, label, etc.)
 		// by the end of this method drawBounds need to have been set to encompass the drawn components
-		virtual Rectangle<int> getBoundsForSizes(int height, int width = 0) = 0;
-		// sets the normal bounds based on drawBounds + position + added hitbox
-		void setOverallBounds(Point<int> position);
+		virtual Rectangle<int> setBoundsForSizes(int height, int width = 0) = 0;
+		// sets the bounds based on drawBounds + position + added hitbox
+		// call after initialising drawBounds with setBoundsForSizes
+		void setPosition(Point<int> position);
+		void setBounds(int x, int y, int width, int height) final;
+		using OpenGlContainer::setBounds;
 		// sets extra outer size
 		void setAddedHitbox(BorderSize<int> addedHitBox) noexcept { addedHitbox_ = addedHitBox; }
 		// positions extra external elements (label, combined control, etc.) relative to drawBounds
@@ -73,27 +83,26 @@ namespace Interface
 		void repositionExtraElements();
 
 		// ====================================================== Rendering related
+		void renderOpenGlComponents(OpenGlWrapper &openGl, bool animate) final;
 		void paint(Graphics &) override { }
 		// redraws components when an action occurs
 		virtual void redoImage() = 0;
-		// sets positions of all drawable components relating to the control
+		// sets positions of all drawable components relative to drawBounds
+		// drawBounds is guaranteed to be a valid area
 		virtual void setComponentsBounds() = 0;
 		// refreshes colours from Skin
 		virtual void setColours() = 0;
-		virtual void drawShadow(Graphics &) { }
 
 		// ========================================================== Label related
 		void addLabel();
 		void removeLabel();
-		auto getLabelComponent() noexcept { return label_; }
 		
 		// ========================================================== Miscellaneous
-		float findValue(Skin::ValueId valueId) const;
-		Colour getColour(Skin::ColorId colourId) const noexcept;
-		auto *getParentSection() noexcept { return parent_; }
-
+		using OpenGlContainer::getValue;
 		bool isActive() const noexcept { return isActive_; }
 
+		void setRenderer(Renderer *renderer) noexcept override final { renderer_ = renderer; }
+		void setScaling(float scale) noexcept override final { scaling_ = scale; }
 		void setLabelPlacement(BubbleComponent::BubblePlacement placement) { labelPlacement_ = placement; }
 		void setShouldRepaintOnHover(bool shouldRepaintOnHover) noexcept { shouldRepaintOnHover_ = shouldRepaintOnHover; }
 
@@ -119,14 +128,14 @@ namespace Interface
 
 		// drawBounds is a space inside getLocalBounds() where components are being drawn
 		Rectangle<int> drawBounds_{};
+		bool isDrawBoundsSet_ = false;
 		// this determines how much to extend the bounds relative to drawBounds so that the hitbox is larger
 		BorderSize<int> addedHitbox_{};
-		std::vector<gl_ptr<OpenGlComponent>> components_{};
 
 		// extra stuff like label or modifying control (i.e. textSelector changing behaviour of a knob)
 		// and their bounds relative to the drawBounds
-		Framework::VectorMap<Component *, Rectangle<int>> extraElements_{};
-		gl_ptr<PlainTextComponent> label_ = nullptr;
+		Framework::VectorMap<BaseComponent *, Rectangle<int>> extraElements_{};
+		gl_ptr<PlainTextComponent> label_;
 		BubbleComponent::BubblePlacement labelPlacement_ = BubbleComponent::right;
 
 		bool shouldRepaintOnHover_ = true;
@@ -134,25 +143,5 @@ namespace Interface
 		BaseSection *parent_ = nullptr;
 	};
 
-	struct PopupItems
-	{
-		std::vector<PopupItems> items{};
-		std::string name{};
-		int id = 0;
-		bool selected = false;
-		bool isActive = false;
 
-		PopupItems() = default;
-		PopupItems(std::string name) : name(std::move(name)) { }
-
-		PopupItems(int id, std::string name, bool selected = false, bool active = false) :
-			name(std::move(name)), id(id), selected(selected), isActive(active) { }
-
-		void addItem(int subId, std::string subName, bool subSelected = false, bool active = false)
-		{ items.emplace_back(subId, std::move(subName), subSelected, active); }
-
-		void addItem(const PopupItems &item) { items.push_back(item); }
-		void addItem(PopupItems &&item) { items.emplace_back(std::move(item)); }
-		int size() const noexcept { return (int)items.size(); }
-	};
 }

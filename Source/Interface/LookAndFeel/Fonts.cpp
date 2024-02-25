@@ -9,11 +9,13 @@
 */
 
 #include "Fonts.h"
-#include "Framework/common.h"
+
+#include "BinaryData.h"
+#include "Framework/platform_definitions.h"
 
 namespace Interface
 {
-	float Fonts::getAscentFromHeight(const Font &font, float height) const noexcept
+	float Fonts::getAscentFromHeight(const juce::Font &font, float height) const noexcept
 	{
 		if (font.getTypefaceName() == DDinFont_.getTypefaceName())
 			return height * 8.0f / kDDinDefaultHeight;
@@ -24,7 +26,7 @@ namespace Interface
 		return 1.0f;
 	}
 
-	float Fonts::getHeightFromAscent(const Font &font, float ascent) const noexcept
+	float Fonts::getHeightFromAscent(const juce::Font &font, float ascent) const noexcept
 	{
 		if (font.getTypefaceName() == DDinFont_.getTypefaceName())
 			return ascent * kDDinDefaultHeight / 8.0f;
@@ -35,7 +37,7 @@ namespace Interface
 		return 1.0f;
 	}
 
-	float Fonts::getDefaultFontHeight(const Font &font) const noexcept
+	float Fonts::getDefaultFontHeight(const juce::Font &font) const noexcept
 	{
 		if (font.getTypefaceName() == DDinFont_.getTypefaceName())
 			return kDDinDefaultHeight;
@@ -46,7 +48,7 @@ namespace Interface
 		return 11.0f;
 	}
 
-	void Fonts::setFontFromHeight(Font &font, float height) const
+	void Fonts::setFontFromHeight(juce::Font &font, float height) const
 	{
 		font.setHeight(height);
 
@@ -58,9 +60,9 @@ namespace Interface
 	}
 
 	Fonts::Fonts() :
-		DDinFont_(Typeface::createSystemTypefaceFor(
+		DDinFont_(juce::Typeface::createSystemTypefaceFor(
 			BinaryData::DDINBold_ttf, BinaryData::DDINBold_ttfSize)),
-		InterVFont_(Typeface::createSystemTypefaceFor(
+		InterVFont_(juce::Typeface::createSystemTypefaceFor(
 			BinaryData::InterMedium_ttf, BinaryData::InterMedium_ttfSize))
 	{
 		DDinFont_.setHeight(kDDinDefaultHeight);

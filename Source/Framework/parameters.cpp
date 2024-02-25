@@ -12,6 +12,7 @@
 #include "vector_map.h"
 #include "utils.h"
 #include "simd_utils.h"
+#include "windows.h"
 
 namespace Framework
 {
@@ -77,68 +78,68 @@ namespace Framework
 	static constexpr std::array<ParameterDetails, BaseProcessors::SoundEngine::enum_count(nested_enum::OuterNodes)> pluginParameterList =
 	{
 		ParameterDetails
-		{ "MASTER_MIX", "Mix", 0.0f, 1.0f, 1.0f, 1.0f, ParameterScale::Linear, "%", {}, false, true, UpdateFlag::BeforeProcess },
-		{ "BLOCK_SIZE", "Block Size", kMinFFTOrder, kMaxFFTOrder, kDefaultFFTOrder,
+		{ BaseProcessors::SoundEngine::MasterMix::name(), "Mix", 0.0f, 1.0f, 1.0f, 1.0f, ParameterScale::Linear, "%", {}, false, true, UpdateFlag::BeforeProcess },
+		{ BaseProcessors::SoundEngine::BlockSize::name(), "Block Size", kMinFFTOrder, kMaxFFTOrder, kDefaultFFTOrder,
 											(float)(kDefaultFFTOrder - kMinFFTOrder) / (float)(kMaxFFTOrder - kMinFFTOrder), ParameterScale::Indexed, "",
 											kFFTSizeNames, false, true, UpdateFlag::BeforeProcess },
-		{ "OVERLAP", "Overlap", 0.0f, kMaxWindowOverlap, kDefaultWindowOverlap, kDefaultWindowOverlap, ParameterScale::Clamp, "%" },
-		{ "WINDOW_TYPE", "Window", 0.0f, (float)WindowTypes::enum_count() - 1.0f, 1.0f,
+		{ BaseProcessors::SoundEngine::Overlap::name(), "Overlap", 0.0f, kMaxWindowOverlap, kDefaultWindowOverlap, kDefaultWindowOverlap, ParameterScale::Clamp, "%" },
+		{ BaseProcessors::SoundEngine::WindowType::name(), "Window", 0.0f, (float)WindowTypes::enum_count() - 1.0f, 1.0f,
 											1.0f / (float)WindowTypes::enum_count(), ParameterScale::Indexed, {},
 											kWindowNames, false, false, UpdateFlag::BeforeProcess },
-		{ "WINDOW_ALPHA", "Alpha", 0.0f, 1.0f, 0.0f, 0.0f, ParameterScale::Linear, "%", {}, false, false, UpdateFlag::BeforeProcess },
-		{ "OUT_GAIN", "Gain" , -30.0f, 30.0f, 0.0f, 0.5f, ParameterScale::Linear, " dB", {}, false, true, UpdateFlag::BeforeProcess }
+		{ BaseProcessors::SoundEngine::WindowAlpha::name(), "Alpha", 0.0f, 1.0f, 0.0f, 0.0f, ParameterScale::Linear, "%", {}, false, false, UpdateFlag::BeforeProcess },
+		{ BaseProcessors::SoundEngine::OutGain::name(), "Gain" , -30.0f, 30.0f, 0.0f, 0.5f, ParameterScale::Linear, " dB", {}, false, true, UpdateFlag::BeforeProcess }
 	};
 
 	static constexpr std::array<ParameterDetails, BaseProcessors::EffectsLane::enum_count(nested_enum::OuterNodes)> effectLaneParameterList =
 	{
 		ParameterDetails
-		{ "LANE_ENABLED", "Lane Enabled", 0.0f, 1.0f, 1.0f, 1.0f, ParameterScale::Toggle, "", kOffOnNames },
-		{ "INPUT", "Input", 0.0f, kNumInputsOutputs + kMaxNumLanes - 1.0f, 0.0f, 0.0f, ParameterScale::Indexed, "",
+		{ BaseProcessors::EffectsLane::LaneEnabled::name(), "Lane Enabled", 0.0f, 1.0f, 1.0f, 1.0f, ParameterScale::Toggle, "", kOffOnNames },
+		{ BaseProcessors::EffectsLane::Input::name(), "Input", 0.0f, kNumInputsOutputs + kMaxNumLanes - 1.0f, 0.0f, 0.0f, ParameterScale::Indexed, "",
 											kInputNames.getSpan(), false, true, UpdateFlag::BeforeProcess },
-		{ "OUTPUT", "Output", 0.0f, kNumInputsOutputs - 1.0f, 0.0f, 0.0f, ParameterScale::Indexed, "",
+		{ BaseProcessors::EffectsLane::Output::name(), "Output", 0.0f, kNumInputsOutputs - 1.0f, 0.0f, 0.0f, ParameterScale::Indexed, "",
 											kOutputNames, false, true, UpdateFlag::BeforeProcess },
-		{ "GAIN_MATCHING", "Gain Matching", 0.0f, 1.0f, 1.0f, 1.0f, ParameterScale::Toggle, "",
+		{ BaseProcessors::EffectsLane::GainMatching::name(), "Gain Matching", 0.0f, 1.0f, 1.0f, 1.0f, ParameterScale::Toggle, "",
 											kOffOnNames, false, true, UpdateFlag::BeforeProcess }
 	};
 
 	static constexpr std::array<ParameterDetails, BaseProcessors::EffectModule::enum_count(nested_enum::OuterNodes)> effectModuleParameterList =
 	{
 		ParameterDetails
-		{ "MODULE_ENABLED", "Module Enabled", 0.0f, 1.0f, 1.0f, 1.0f, ParameterScale::Toggle, "", kOffOnNames },
-		{ "MODULE_TYPE", "Module Type", 0.0f, (float)BaseProcessors::BaseEffect::enum_count(nested_enum::InnerNodes) - 1.0f, 1.0f,
+		{ BaseProcessors::EffectModule::ModuleEnabled::name(), "Module Enabled", 0.0f, 1.0f, 1.0f, 1.0f, ParameterScale::Toggle, "", kOffOnNames },
+		{ BaseProcessors::EffectModule::ModuleType::name(), "Module Type", 0.0f, (float)BaseProcessors::BaseEffect::enum_count(nested_enum::InnerNodes) - 1.0f, 1.0f,
 											1.0f / (float)BaseProcessors::BaseEffect::enum_count(nested_enum::InnerNodes), ParameterScale::Indexed, "",
 											kEffectModuleNames, false, true, UpdateFlag::AfterProcess },
-		{ "MODULE_MIX", "Mix", 0.0f, 1.0f, 1.0f, 1.0f, ParameterScale::Linear, "%", {}, true },
+		{ BaseProcessors::EffectModule::ModuleMix::name(), "Mix", 0.0f, 1.0f, 1.0f, 1.0f, ParameterScale::Linear, "%", {}, true },
 	};
 
 	static constexpr std::array<ParameterDetails, BaseProcessors::BaseEffect::enum_count(nested_enum::OuterNodes)> baseEffectParameterList =
 	{
 		ParameterDetails
-		{ "FX_ALGORITHM", "Algorithm", 0.0f, kMaxEffectModes - 1, 0.0f, 0.0f, ParameterScale::Indexed, "", kGenericEffectModeNames.getSpan() },
-		{ "FX_LOW_BOUND", "Low Bound", 0.0f, 1.0f, 0.0f, 0.0f, ParameterScale::Frequency, " hz", {}, true },
-		{ "FX_HIGH_BOUND", "High Bound", 0.0f, 1.0f, 1.0f, 1.0f, ParameterScale::Frequency, " hz", {}, true },
-		{ "FX_SHIFT_BOUNDS", "Shift Bounds", -1.0f, 1.0f, 0.0f, 0.5f, ParameterScale::Linear, "%", {}, true }
+		{ BaseProcessors::BaseEffect::Algorithm::name(), "Algorithm", 0.0f, kMaxEffectModes - 1, 0.0f, 0.0f, ParameterScale::Indexed, "", kGenericEffectModeNames.getSpan() },
+		{ BaseProcessors::BaseEffect::LowBound::name(), "Low Bound", 0.0f, 1.0f, 0.0f, 0.0f, ParameterScale::Frequency, " hz", {}, true },
+		{ BaseProcessors::BaseEffect::HighBound::name(), "High Bound", 0.0f, 1.0f, 1.0f, 1.0f, ParameterScale::Frequency, " hz", {}, true },
+		{ BaseProcessors::BaseEffect::ShiftBounds::name(), "Shift Bounds", -1.0f, 1.0f, 0.0f, 0.5f, ParameterScale::Linear, "%", {}, true }
 	};
 
 	static constexpr std::array<ParameterDetails, BaseProcessors::BaseEffect::Filter::enum_count_recursive(nested_enum::OuterNodes)> filterEffectParameterList =
 	{
 		ParameterDetails
-		{ "FILTER_NORMAL_FX_GAIN", "Gain", -120.0f, 120.0f, 0.0f, 0.5f, ParameterScale::SymmetricLoudness, " db", {}, true },
-		{ "FILTER_NORMAL_FX_CUTOFF", "Cutoff", 0.0f, 1.0f, 0.5f, 0.5f, ParameterScale::Frequency, " hz", {}, true },
-		{ "FILTER_NORMAL_FX_SLOPE", "Slope", -1.0f, 1.0f, 0.25f, 0.75f, ParameterScale::SymmetricQuadratic, "%", {}, true },
+		{ BaseProcessors::BaseEffect::Filter::Normal::Gain::name(), "Gain", -120.0f, 120.0f, 0.0f, 0.5f, ParameterScale::SymmetricLoudness, " db", { }, true },
+		{ BaseProcessors::BaseEffect::Filter::Normal::Cutoff::name(), "Cutoff", 0.0f, 1.0f, 0.5f, 0.5f, ParameterScale::Frequency, " hz", {}, true },
+		{ BaseProcessors::BaseEffect::Filter::Normal::Slope::name(), "Slope", -1.0f, 1.0f, 0.25f, 0.75f, ParameterScale::SymmetricQuadratic, "%", {}, true },
 
-		{ "FILTER_REGULAR_FX_GAIN", "Gain", -120.0f, 120.0f, 0.0f, 0.5f, ParameterScale::SymmetricLoudness, "", {}, true },
-		{ "FILTER_REGULAR_FX_CUTOFF", "Cutoff", 0.0f, 1.0f, 0.5f, 0.5f, ParameterScale::Linear, "", {}, true },
-		{ "FILTER_REGULAR_FX_PHASE", "Phase", -1.0f, 1.0f, 0.25f, 0.75f, ParameterScale::SymmetricQuadratic, "", {}, true },
-		{ "FILTER_REGULAR_FX_STRETCH", "Stretch", 0.0f, 1.0f, 0.5f, 0.5f, ParameterScale::Linear, "", {}, true }
+		{ BaseProcessors::BaseEffect::Filter::Regular::Gain::name(), "Gain", -120.0f, 120.0f, 0.0f, 0.5f, ParameterScale::SymmetricLoudness, "", {}, true },
+		{ BaseProcessors::BaseEffect::Filter::Regular::Cutoff::name(), "Cutoff", 0.0f, 1.0f, 0.5f, 0.5f, ParameterScale::Linear, "", {}, true },
+		{ BaseProcessors::BaseEffect::Filter::Regular::Phase::name(), "Phase", -1.0f, 1.0f, 0.25f, 0.75f, ParameterScale::SymmetricQuadratic, "", {}, true },
+		{ BaseProcessors::BaseEffect::Filter::Regular::Stretch::name(), "Stretch", 0.0f, 1.0f, 0.5f, 0.5f, ParameterScale::Linear, "", {}, true }
 	};
 
 	static constexpr std::array<ParameterDetails, BaseProcessors::BaseEffect::Dynamics::enum_count_recursive(nested_enum::OuterNodes)> dynamicsEffectParameterList =
 	{
 		ParameterDetails
-		{ "DYNAMICS_CONTRAST_FX_DEPTH", "Depth", -1.0f, 1.0f, 0.0f, 0.5f, ParameterScale::Linear, "%", {}, true },
+		{ BaseProcessors::BaseEffect::Dynamics::Contrast::Depth::name(), "Depth", -1.0f, 1.0f, 0.0f, 0.5f, ParameterScale::Linear, "%", { }, true },
 
-		{ "DYNAMICS_CLIPPING_FX_THRESHOLD", "Threshold", 0.0f, 1.0f, 0.0f, 0.0f, ParameterScale::Linear, "%", {}, true }
+		{ BaseProcessors::BaseEffect::Dynamics::Clip::Threshold::name(), "Threshold", 0.0f, 1.0f, 0.0f, 0.0f, ParameterScale::Linear, "%", {}, true }
 	};
 
 	namespace
@@ -149,7 +150,7 @@ namespace Framework
 			constexpr auto enumStrings = E::template enum_strings<nested_enum::OuterNodes>(false);
 
 			for (size_t i = 0; i < enumStrings.size(); i++)
-				map.data[i + mapIndex] = std::pair{ std::pair{ parameterList[i].id, enumStrings[i] }, parameterList[i] };
+				map.data[i + mapIndex] = std::pair{ std::pair{ parameterList[i].name, enumStrings[i] }, parameterList[i] };
 
 			return mapIndex + enumStrings.size();
 		}
@@ -160,7 +161,7 @@ namespace Framework
 			constexpr auto enumStrings = E::template enum_strings_recursive<nested_enum::OuterNodes, true, false>();
 
 			for (size_t i = 0; i < enumStrings.size(); i++)
-				map.data[i + mapIndex] = std::pair{ std::pair{ parameterList[i].id, enumStrings[i] }, parameterList[i] };
+				map.data[i + mapIndex] = std::pair{ std::pair{ parameterList[i].name, enumStrings[i] }, parameterList[i] };
 
 			return mapIndex + enumStrings.size();
 		}

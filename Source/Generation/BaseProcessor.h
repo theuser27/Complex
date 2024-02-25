@@ -10,6 +10,7 @@
 
 #pragma once
 
+#include <chrono>
 #include "Framework/common.h"
 #include "Framework/vector_map.h"
 #include "Framework/simd_buffer.h"
@@ -73,9 +74,9 @@ namespace Generation
 		virtual BaseProcessor *updateSubProcessor([[maybe_unused]] size_t index,
 			[[maybe_unused]] BaseProcessor *newSubProcessor) noexcept { return nullptr; }
 		
-		[[nodiscard]] auto *getParameter(std::string_view parameterId) const noexcept
+		[[nodiscard]] auto *getParameter(std::string_view parameterName) const noexcept
 		{
-			const auto parameterIter = processorParameters_.find(Framework::Parameters::getEnumString(parameterId));
+			const auto parameterIter = processorParameters_.find(parameterName);
 			COMPLEX_ASSERT(parameterIter != processorParameters_.data.end() && "Parameter was not found");
 			return parameterIter->second.get();
 		}

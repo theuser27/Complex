@@ -16,7 +16,7 @@ namespace Interface
 {
 	class EffectModuleSection;
 
-	class DraggableComponent : public Component
+	class DraggableComponent final : public BaseComponent
 	{
 	public:
 		class Listener

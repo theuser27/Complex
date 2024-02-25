@@ -14,13 +14,13 @@
 
 namespace Interface
 {
-  void BorderBoundsConstrainer::checkBounds(Rectangle<int> &bounds, const Rectangle<int> &previous, 
-    const Rectangle<int> &limits, bool isStretchingTop, bool isStretchingLeft, bool isStretchingBottom, bool isStretchingRight)
+  void BorderBoundsConstrainer::checkBounds(juce::Rectangle<int> &bounds, const juce::Rectangle<int> &previous,
+    const juce::Rectangle<int> &limits, bool isStretchingTop, bool isStretchingLeft, bool isStretchingBottom, bool isStretchingRight)
   {
     ComponentBoundsConstrainer::checkBounds(bounds, previous, limits,
       isStretchingTop, isStretchingLeft, isStretchingBottom, isStretchingRight);
 
-    Rectangle<int> displayArea = Desktop::getInstance().getDisplays().getTotalBounds(true);
+    juce::Rectangle<int> displayArea = juce::Desktop::getInstance().getDisplays().getTotalBounds(true);
     if (gui_)
       if (auto *peer = gui_->getPeer())
         peer->getFrameSize().subtractFrom(displayArea);

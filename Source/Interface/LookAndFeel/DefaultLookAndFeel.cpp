@@ -18,27 +18,27 @@ namespace Interface
 {
   DefaultLookAndFeel::DefaultLookAndFeel()
   {
-  	setColour(PopupMenu::backgroundColourId, Colour(0xff111111));
-    setColour(PopupMenu::textColourId, Colour(0xffcccccc));
-    setColour(PopupMenu::headerTextColourId, Colour(0xffffffff));
-    setColour(PopupMenu::highlightedBackgroundColourId, Colour(0xff8458b7));
-    setColour(PopupMenu::highlightedTextColourId, Colour(0xffffffff));
+  	setColour(juce::PopupMenu::backgroundColourId, juce::Colour(0xff111111));
+    setColour(juce::PopupMenu::textColourId, juce::Colour(0xffcccccc));
+    setColour(juce::PopupMenu::headerTextColourId, juce::Colour(0xffffffff));
+    setColour(juce::PopupMenu::highlightedBackgroundColourId, juce::Colour(0xff8458b7));
+    setColour(juce::PopupMenu::highlightedTextColourId, juce::Colour(0xffffffff));
 
-    setColour(BubbleComponent::backgroundColourId, Colour(0xff111111));
-    setColour(BubbleComponent::outlineColourId, Colour(0xff333333));
+    setColour(juce::BubbleComponent::backgroundColourId, juce::Colour(0xff111111));
+    setColour(juce::BubbleComponent::outlineColourId, juce::Colour(0xff333333));
 
-    setColour(TooltipWindow::textColourId, Colour(0xffdddddd));
+    setColour(juce::TooltipWindow::textColourId, juce::Colour(0xffdddddd));
   }
 
-  void DefaultLookAndFeel::drawPopupMenuBackground(Graphics &g, int width, int height)
+  void DefaultLookAndFeel::drawPopupMenuBackground(juce::Graphics &g, int width, int height)
   {
-    g.setColour(findColour(PopupMenu::backgroundColourId));
+    g.setColour(findColour(juce::PopupMenu::backgroundColourId));
     g.fillRoundedRectangle(0.0f, 0.0f, (float)width, (float)height, kPopupMenuBorder);
-    g.setColour(findColour(BubbleComponent::outlineColourId));
+    g.setColour(findColour(juce::BubbleComponent::outlineColourId));
     g.drawRoundedRectangle(0.5f, 0.5f, (float)width - 1.0f, (float)height - 1.0f, kPopupMenuBorder, 1.0f);
   }
 
-  void DefaultLookAndFeel::drawScrollbar(Graphics &g, ScrollBar &scrollBar, int, int, int width, 
+  void DefaultLookAndFeel::drawScrollbar(juce::Graphics &g, juce::ScrollBar &scrollBar, int, int, int width,
     int height, bool, int thumbPosition, int thumbSize, bool mouseOver, bool mouseDown)
   {
     if (thumbSize >= height)
@@ -60,20 +60,20 @@ namespace Interface
         (float)thumbSize, (float)drawWidth / 2.0f);
   }
 
-  void DefaultLookAndFeel::drawComboBox(Graphics &g, int, int height, const bool,
-    int, int, int, int, ComboBox &box)
+  void DefaultLookAndFeel::drawComboBox(juce::Graphics &g, int, int height, const bool,
+    int, int, int, int, juce::ComboBox &box)
   {
     static constexpr float kRoundness = 4.0f;
-    g.setColour(findColour(BubbleComponent::backgroundColourId));
+    g.setColour(findColour(juce::BubbleComponent::backgroundColourId));
     g.fillRoundedRectangle(box.getLocalBounds().toFloat(), kRoundness);
-    Path path = Paths::downTriangle();
+    juce::Path path = Paths::downTriangle();
 
     g.setColour(box.findColour(Skin::kTextComponentText, true));
-    Rectangle<int> arrow_bounds = box.getLocalBounds().removeFromRight(height);
+    juce::Rectangle<int> arrow_bounds = box.getLocalBounds().removeFromRight(height);
     g.fillPath(path, path.getTransformToScaleToFit(arrow_bounds.toFloat(), true));
   }
 
-  void DefaultLookAndFeel::drawTickBox(Graphics &g, Component &component, float x, float y, 
+  void DefaultLookAndFeel::drawTickBox(juce::Graphics &g, juce::Component &component, float x, float y,
     float w, float h, bool ticked, bool, bool, bool)
   {
     static constexpr float kBorderPercent = 0.15f;
@@ -86,23 +86,24 @@ namespace Interface
     g.fillRect(x + border_width, y + border_width, w - 2 * border_width, h - 2 * border_width);
   }
 
-  void DefaultLookAndFeel::drawCallOutBoxBackground(CallOutBox &callOutBox, Graphics &g, const Path &path, Image &)
+  void DefaultLookAndFeel::drawCallOutBoxBackground(juce::CallOutBox &callOutBox, 
+    juce::Graphics &g, const juce::Path &path, juce::Image &)
   {
     g.setColour(callOutBox.findColour(Skin::kBody, true));
     g.fillPath(path);
 
     g.setColour(callOutBox.findColour(Skin::kPopupBorder, true));
-    g.strokePath(path, PathStrokeType(1.0f));
+    g.strokePath(path, juce::PathStrokeType(1.0f));
   }
 
-  void DefaultLookAndFeel::drawButtonBackground(Graphics &g, Button &button, 
-    const Colour &, bool, bool)
+  void DefaultLookAndFeel::drawButtonBackground(juce::Graphics &g, juce::Button &button,
+    const juce::Colour &, bool, bool)
   {
     g.setColour(button.findColour(Skin::kPopupSelectorBackground, true));
     g.fillRoundedRectangle(button.getLocalBounds().toFloat(), 5.0f);
   }
 
-  int DefaultLookAndFeel::getSliderPopupPlacement(Slider &slider)
+  int DefaultLookAndFeel::getSliderPopupPlacement(juce::Slider &slider)
   {
     if (auto *pSlider = dynamic_cast<BaseSlider *>(&slider); pSlider)
       return pSlider->getPopupPlacement();
@@ -110,10 +111,10 @@ namespace Interface
     return LookAndFeel_V3::getSliderPopupPlacement(slider);
   }
 
-  Font DefaultLookAndFeel::getPopupMenuFont()
+  juce::Font DefaultLookAndFeel::getPopupMenuFont()
   { return Fonts::instance()->getInterVFont().withPointHeight(14.0f); }
 
-  Font DefaultLookAndFeel::getSliderPopupFont(Slider &)
+  juce::Font DefaultLookAndFeel::getSliderPopupFont(juce::Slider &)
   { return Fonts::instance()->getInterVFont().withPointHeight(14.0f); }
 
 }

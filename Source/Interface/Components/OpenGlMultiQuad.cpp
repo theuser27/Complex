@@ -17,7 +17,8 @@ namespace Interface
 	OpenGlMultiQuad::OpenGlMultiQuad(int maxQuads, Shaders::FragmentShader shader, String name) :
 		OpenGlComponent(std::move(name)), fragmentShader_(shader), maxQuads_(maxQuads), numQuads_(maxQuads)
 	{
-		static const int triangles[] = {
+		static const int triangles[] =
+		{
 			0, 1, 2,
 			2, 3, 0
 		};
@@ -46,8 +47,10 @@ namespace Interface
 		glGenBuffers(1, &vertexBuffer_);
 		glBindBuffer(GL_ARRAY_BUFFER, vertexBuffer_);
 
+		auto data = data_.lock();
 		GLsizeiptr vertSize = (GLsizeiptr)(maxQuads_ * kNumFloatsPerQuad * sizeof(float));
-		glBufferData(GL_ARRAY_BUFFER, vertSize, data_.get(), GL_STATIC_DRAW);
+		glBufferData(GL_ARRAY_BUFFER, vertSize, data, GL_STATIC_DRAW);
+		data_.unlock();
 
 		glGenBuffers(1, &indicesBuffer_);
 		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, indicesBuffer_);
@@ -71,7 +74,7 @@ namespace Interface
 		maxArcUniform_ = getUniform(*shader_, "max_arc");
 		thumbAmountUniform_ = getUniform(*shader_, "thumb_amount");
 		startPositionUniform_ = getUniform(*shader_, "start_pos");
-		alphaMultUniform_ = getUniform(*shader_, "alpha_mult");
+		overallAlphaUniform_ = getUniform(*shader_, "overall_alpha");
 		valuesUniform_ = getUniform(*shader_, "static_values");
 	}
 
@@ -91,7 +94,7 @@ namespace Interface
 		maxArcUniform_ = nullptr;
 		thumbAmountUniform_ = nullptr;
 		startPositionUniform_ = nullptr;
-		alphaMultUniform_ = nullptr;
+		overallAlphaUniform_ = nullptr;
 		valuesUniform_ = nullptr;
 		glDeleteBuffers(1, &vertexBuffer_);
 		glDeleteBuffers(1, &indicesBuffer_);
@@ -102,19 +105,17 @@ namespace Interface
 
 	void OpenGlMultiQuad::render(OpenGlWrapper &openGl, bool)
 	{
-		Component *component = targetComponent_ ? targetComponent_ : this;
-		auto bounds = (!customDrawBounds_.isEmpty()) ? customDrawBounds_ : component->getLocalBounds();
+		BaseComponent *component = targetComponent_ ? targetComponent_ : this;
+		auto customDrawBounds = customDrawBounds_.get();
+		auto bounds = (!customDrawBounds.isEmpty()) ? customDrawBounds : component->getLocalBounds();
 		if (!active_ || (!drawWhenNotVisible_ && !component->isVisible()) || !setViewPort(component, bounds, openGl))
 			return;
 
 		if (scissorComponent_)
 			setScissor(scissorComponent_, openGl);
 
-		if (currentAlphaMult_ == 0.0f && alphaMult_ == 0.0f)
+		if (overallAlpha_ == 0.0f)
 			return;
-
-		if (shader_ == nullptr)
-			init(openGl);
 
 		// setup
 		glEnable(GL_BLEND);
@@ -126,49 +127,56 @@ namespace Interface
 
 		if (dirty_)
 		{
-			dirty_ = false;
-
 			for (u32 i = 0; i < numQuads_; ++i)
 				setDimensions(i, getQuadWidth(i), getQuadHeight(i), (float)bounds.getWidth(), (float)bounds.getHeight());
 
 			glBindBuffer(GL_ARRAY_BUFFER, vertexBuffer_);
 
+			auto data = data_.lock();
 			GLsizeiptr vertSize = static_cast<GLsizeiptr>(kNumFloatsPerQuad * maxQuads_ * sizeof(float));
-			glBufferData(GL_ARRAY_BUFFER, vertSize, data_.get(), GL_STATIC_DRAW);
+			glBufferData(GL_ARRAY_BUFFER, vertSize, data, GL_STATIC_DRAW);
 			glBindBuffer(GL_ARRAY_BUFFER, 0);
+			data_.unlock();
+
+			dirty_ = false;
 		}
 
 		shader_->use();
 
-		if (alphaMult_ > currentAlphaMult_)
-			currentAlphaMult_ = std::min(alphaMult_, currentAlphaMult_ + kAlphaInc);
-		else
-			currentAlphaMult_ = std::max(alphaMult_, currentAlphaMult_ - kAlphaInc);
+		if (overallAlphaUniform_)
+			overallAlphaUniform_->set(overallAlpha_);
 
-		float alphaColorMult = 1.0f;
-		if (alphaMultUniform_)
-			alphaMultUniform_->set(currentAlphaMult_);
-		else
-			alphaColorMult = currentAlphaMult_;
-
-		colorUniform_->set(color_.getFloatRed(), color_.getFloatGreen(),
-			color_.getFloatBlue(), alphaColorMult * color_.getFloatAlpha());
+		auto colour = color_.get();
+		colorUniform_->set(colour.getFloatRed(), colour.getFloatGreen(),
+			colour.getFloatBlue(), colour.getFloatAlpha());
 
 		if (altColorUniform_)
-			altColorUniform_->set(altColor_.getFloatRed(), altColor_.getFloatGreen(),
-				altColor_.getFloatBlue(), altColor_.getFloatAlpha());
+		{
+			auto altColour = altColor_.get();
+			altColorUniform_->set(altColour.getFloatRed(), altColour.getFloatGreen(),
+				altColour.getFloatBlue(), altColour.getFloatAlpha());
+		}
 
 		if (modColorUniform_)
-			modColorUniform_->set(modColor_.getFloatRed(), modColor_.getFloatGreen(),
-				modColor_.getFloatBlue(), modColor_.getFloatAlpha());
+		{
+			auto modColour = modColor_.get();
+			modColorUniform_->set(modColour.getFloatRed(), modColour.getFloatGreen(),
+				modColour.getFloatBlue(), modColour.getFloatAlpha());
+		}
 
 		if (backgroundColorUniform_)
-			backgroundColorUniform_->set(backgroundColor_.getFloatRed(), backgroundColor_.getFloatGreen(),
-				backgroundColor_.getFloatBlue(), backgroundColor_.getFloatAlpha());
+		{
+			auto backgroundColour = backgroundColor_.get();
+			backgroundColorUniform_->set(backgroundColour.getFloatRed(), backgroundColour.getFloatGreen(),
+				backgroundColour.getFloatBlue(), backgroundColour.getFloatAlpha());
+		}
 
 		if (thumbColorUniform_)
-			thumbColorUniform_->set(thumbColor_.getFloatRed(), thumbColor_.getFloatGreen(),
-				thumbColor_.getFloatBlue(), thumbColor_.getFloatAlpha());
+		{
+			auto thumbColour = thumbColor_.get();
+			thumbColorUniform_->set(thumbColour.getFloatRed(), thumbColour.getFloatGreen(),
+				thumbColour.getFloatBlue(), thumbColour.getFloatAlpha());
+		}
 
 		if (thumbAmountUniform_)
 			thumbAmountUniform_->set(thumbAmount_);
@@ -177,17 +185,18 @@ namespace Interface
 			startPositionUniform_->set(startPosition_);
 
 		if (thicknessUniform_)
-		{
-			currentThickness_ = currentThickness_ + kThicknessDecay * (thickness_ - currentThickness_);
-			thicknessUniform_->set(currentThickness_);
-		}
+			thicknessUniform_->set(thickness_);
+
 		if (roundingUniform_)
 			roundingUniform_->set(rounding_);
 		if (maxArcUniform_)
 			maxArcUniform_->set(maxArc_);
 
 		if (valuesUniform_)
-			valuesUniform_->set(values_[0], values_[1], values_[2], values_[3]);
+		{
+			auto values = values_.get();
+			valuesUniform_->set(values[0], values[1], values[2], values[3]);
+		}
 
 		glBindBuffer(GL_ARRAY_BUFFER, vertexBuffer_);
 		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, indicesBuffer_);
@@ -228,28 +237,5 @@ namespace Interface
 		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
 		glDisable(GL_BLEND);
 		glDisable(GL_SCISSOR_TEST);
-	}
-	
-	void OpenGlScrollQuad::render(OpenGlWrapper &openGl, bool animate)
-	{
-		float lastHover = hoverAmount_;
-		animator_.tick();
-		hoverAmount_ = animator_.getValue(Animator::Hover);
-
-		if (lastHover != hoverAmount_)
-		{
-			if (shrinkLeft_)
-				setQuadHorizontal(0, -1.0f, 1.0f + hoverAmount_);
-			else
-				setQuadHorizontal(0, 0.0f - hoverAmount_, 1.0f + hoverAmount_);
-		}
-
-		Range<double> range = scrollBar_->getCurrentRange();
-		Range<double> totalRange = scrollBar_->getRangeLimit();
-		double startRatio = (range.getStart() - totalRange.getStart()) / totalRange.getLength();
-		double endRatio = (range.getEnd() - totalRange.getStart()) / totalRange.getLength();
-		setQuadVertical(0, 1.0f - 2.0f * (float)endRatio, 2.0f * (float)(endRatio - startRatio));
-
-		OpenGlMultiQuad::render(openGl, animate);
 	}
 }

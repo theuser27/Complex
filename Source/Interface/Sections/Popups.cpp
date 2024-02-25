@@ -8,6 +8,9 @@
 	==============================================================================
 */
 
+#include "../LookAndFeel/Fonts.h"
+#include "../Components/OpenGlImageComponent.h"
+#include "../Components/OpenGlScrollBar.h"
 #include "Popups.h"
 
 namespace Interface
@@ -28,6 +31,8 @@ namespace Interface
 		setSkinOverride(Skin::kPopupBrowser);
 	}
 
+	PopupDisplay::~PopupDisplay() = default;
+
 	void PopupDisplay::resized()
 	{
 		Rectangle<int> bounds = getLocalBounds();
@@ -39,7 +44,7 @@ namespace Interface
 
 		border_->setBounds(bounds);
 		border_->setRounding(rounding);
-		border_->setThickness(1.0f, true);
+		border_->setThickness(1.0f);
 		border_->setColor(getColour(Skin::kBorder));
 
 		text_->setBounds(bounds);
@@ -53,9 +58,10 @@ namespace Interface
 
 		setSkinOverride(sectionOverride);
 
-		float height = std::round(scaleValue(kHeight));
-		Font font = Fonts::instance()->getDDinFont().withPointHeight(height * 0.5f);
-		int padding = (int)height / 4;
+		float floatHeight = std::round(scaleValue(kHeight));
+		int height = (int)floatHeight;
+		Font font = Fonts::instance()->getDDinFont().withPointHeight(floatHeight * 0.5f);
+		int padding = height / 4;
 		int buffer = padding * 2 + 2;
 		int width = font.getStringWidth(text) + buffer;
 
@@ -71,31 +77,47 @@ namespace Interface
 		else if (placement == BubbleComponent::right)
 			setBounds(bounds.getRight(), middle_y - height / 2, width, height);
 
-		text_->setTextHeight(height * 0.5f);
+		text_->setTextHeight(floatHeight * 0.5f);
 		text_->setText(std::move(text));
 	}
 
 	PopupList::PopupList() : BaseSection("Popup List")
 	{
-		rows_ = makeOpenGlComponent<OpenGlImage>("Popup List Items");
+		rows_ = makeOpenGlComponent<OpenGlImageComponent>("Popup List Items");
 		rows_->setColor(Colours::white);
-		rows_->setCustomRenderFunction([this](OpenGlWrapper &openGl, bool animate)
+		rows_->setTargetComponent(this);
+		rows_->setPaintFunction([this](Graphics &g)
 			{
-				OpenGlComponent::setViewPort(this, getLocalBounds(), openGl);
+				int rowHeight = getRowHeight();
+				Colour textColor = getColour(Skin::kTextComponentText);
+				Colour lighten = getColour(Skin::kLightenScreen);
+				int padding = getTextPadding();
+				int width = getWidth() - 2 * padding;
 
-				rows_->setTopLeft(-1.0f, 1.0f);
-				rows_->setTopRight(1.0f, 1.0f);
-				rows_->setBottomLeft(-1.0f, -1.0f);
-				rows_->setBottomRight(1.0f, -1.0f);
+				g.setColour(textColor);
+				g.setFont(getFont());
 
-				rows_->render(openGl, animate);
+				for (int i = 0; i < selections_.size(); ++i)
+				{
+					if (selections_.items[i].id < 0)
+					{
+						g.setColour(lighten);
+						g.drawRect(padding, (int)std::truncf((float)rowHeight * ((float)i + 0.5f)), width, 1);
+					}
+					else
+					{
+						g.setColour(textColor);
+						g.drawText(selections_.items[i].name, padding, rowHeight * i,
+							width, rowHeight, Justification::centredLeft, true);
+					}
+				}
 			});
 		addOpenGlComponent(rows_);
 		
 		highlight_ = makeOpenGlComponent<OpenGlQuad>(Shaders::kColorFragment);
 		highlight_->setTargetComponent(this);
 		highlight_->setAdditive(true);
-		highlight_->setCustomRenderFunction([this](OpenGlWrapper &openGl, bool animate)
+		highlight_->setRenderFunction([this](OpenGlWrapper &openGl, bool animate)
 			{
 				if (selected_ >= 0 && show_selected_)
 				{
@@ -109,7 +131,7 @@ namespace Interface
 		hover_ = makeOpenGlComponent<OpenGlQuad>(Shaders::kColorFragment);
 		hover_->setTargetComponent(this);
 		hover_->setAdditive(true);
-		hover_->setCustomRenderFunction([this](OpenGlWrapper &openGl, bool animate)
+		hover_->setRenderFunction([this](OpenGlWrapper &openGl, bool animate)
 			{
 				if (hovered_ < 0)
 					return;
@@ -123,11 +145,13 @@ namespace Interface
 			});
 		addOpenGlComponent(hover_);
 
-		scroll_bar_ = std::make_unique<OpenGlScrollBar>();
+		scroll_bar_ = std::make_unique<OpenGlScrollBar>(true);
 		addAndMakeVisible(scroll_bar_.get());
 		addOpenGlComponent(scroll_bar_->getGlComponent());
 		scroll_bar_->addListener(this);
 	}
+
+	PopupList::~PopupList() = default;
 
 	void PopupList::resized()
 	{
@@ -145,14 +169,16 @@ namespace Interface
 		else
 			scroll_bar_->setVisible(false);
 
-		redoImage();
+		rows_->setCustomDrawBounds({ 0, 0, getWidth(),
+			std::max(getRowHeight() * selections_.size(), getHeight()) });
+		rows_->redrawImage();
 	}
 
 	void PopupList::setSelections(PopupItems selections)
 	{
 		selections_ = std::move(selections);
-		selected_ = std::min(selected_, (int)selections_.size() - 1);
-		hovered_ = std::min(hovered_, (int)selections_.size() - 1);
+		selected_ = std::min(selected_.get(), (int)selections_.size() - 1);
+		hovered_ = std::min(hovered_.get(), (int)selections_.size() - 1);
 
 		for (int i = 0; i < selections_.size(); ++i)
 			if (selections_.items[i].selected)
@@ -171,10 +197,10 @@ namespace Interface
 
 	int PopupList::getBrowseWidth() const
 	{
-		static constexpr int kMinWidth = 150;
+		static constexpr int kPopupMinWidth = 150;
 
 		Font font = getFont();
-		int max_width = scaleValueRoundInt(kMinWidth);
+		int max_width = scaleValueRoundInt(kPopupMinWidth);
 		int buffer = getTextPadding() * 2 + 2;
 		for (int i = 0; i < selections_.size(); ++i)
 			max_width = std::max(max_width, font.getStringWidth(selections_.items[i].name) + buffer);
@@ -201,6 +227,14 @@ namespace Interface
 	void PopupList::mouseExit(const MouseEvent &)
 	{ hovered_ = -1; }
 
+	Font PopupList::getFont() const
+	{
+		auto fontsInstance = Fonts::instance();
+		Font usedFont = fontsInstance->getInterVFont();
+		fontsInstance->setFontFromAscent(usedFont, (float)getRowHeight() * 0.5f);
+		return usedFont;
+	}
+
 	int PopupList::getSelection(const MouseEvent &e)
 	{
 		float click_y_position = e.position.y;
@@ -219,16 +253,6 @@ namespace Interface
 		select(getSelection(e));
 	}
 
-	void PopupList::mouseDoubleClick(const MouseEvent &e)
-	{
-		int selection = getSelection(e);
-		if (selection != selected_ || selection < 0)
-			return;
-
-		for (Listener *listener : listeners_)
-			listener->doubleClickedSelected(this, selections_.items[selection].id, selection);
-	}
-
 	void PopupList::select(int selection)
 	{
 		if (selection < 0 || selection >= selections_.size())
@@ -243,66 +267,24 @@ namespace Interface
 			listener->newSelection(this, selections_.items[selection].id, selection);
 	}
 
-	void PopupList::redoImage()
-	{
-		if (getWidth() <= 0 || getHeight() <= 0)
-			return;
-
-		int rowHeight = getRowHeight();
-		int imageWidth = getWidth();
-		int imageHeight = std::max(rowHeight * selections_.size(), getHeight());
-		Image rowsImage(Image::ARGB, imageWidth, imageHeight, true);
-		Graphics g(rowsImage);
-
-		Colour textColor = getColour(Skin::kTextComponentText);
-		Colour lighten = getColour(Skin::kLightenScreen);
-		int padding = getTextPadding();
-		int width = getWidth() - 2 * padding;
-
-		g.setColour(textColor);
-		g.setFont(getFont());
-
-		for (int i = 0; i < selections_.size(); ++i)
-		{
-			if (selections_.items[i].id < 0)
-			{
-				g.setColour(lighten);
-				g.drawRect(padding, (int)std::truncf((float)rowHeight * ((float)i + 0.5f)), width, 1);
-			}
-			else
-			{
-				g.setColour(textColor);
-				g.drawText(selections_.items[i].name, padding, rowHeight * i,
-					width, rowHeight, Justification::centredLeft, true);
-			}
-		}
-		rows_->setOwnImage(std::move(rowsImage));
-	}
-
 	void PopupList::moveQuadToRow(OpenGlQuad &quad, int row)
 	{
 		int row_height = getRowHeight();
-		float view_height = getHeight();
+		float view_height = (float)getHeightSafe();
 		float open_gl_row_height = 2.0f * row_height / view_height;
-		float offset = row * open_gl_row_height - 2.0f * getViewPosition() / view_height;
+		float offset = row * open_gl_row_height - 2.0f * (float)getViewPosition() / view_height;
 
 		float y = 1.0f - offset;
 		quad.setQuad(0, -1.0f, y - open_gl_row_height, 2.0f, open_gl_row_height);
 	}
 
-	void PopupList::resetScrollPosition()
-	{
-		view_position_ = 0;
-		setScrollBarRange();
-	}
-
 	void PopupList::mouseWheelMove(const MouseEvent &, const MouseWheelDetails &wheel)
 	{
-		view_position_ -= wheel.deltaY * kScrollSensitivity;
-		view_position_ = std::max(0.0f, view_position_);
-		float scaled_height = getHeight();
+		view_position_ = view_position_.get() - wheel.deltaY * kScrollSensitivity;
+		view_position_ = std::max(0.0f, view_position_.get());
+		float scaled_height = (float)getHeight();
 		int scrollable_range = getScrollableRange();
-		view_position_ = std::min(view_position_, 1.0f * scrollable_range - scaled_height);
+		view_position_ = std::min(view_position_.get(), 1.0f * scrollable_range - scaled_height);
 		setScrollBarRange();
 	}
 
@@ -341,6 +323,8 @@ namespace Interface
 		setSkinOverride(Skin::kPopupBrowser);
 	}
 
+	SinglePopupSelector::~SinglePopupSelector() = default;
+
 	void SinglePopupSelector::resized()
 	{
 		BaseSection::resized();
@@ -355,7 +339,7 @@ namespace Interface
 
 		border_->setBounds(bounds);
 		border_->setRounding(getValue(Skin::kBodyRoundingTop));
-		border_->setThickness(1.0f, true);
+		border_->setThickness(1.0f);
 		border_->setColor(getColour(Skin::kBorder));
 	}
 
@@ -400,6 +384,8 @@ namespace Interface
 		setSkinOverride(Skin::kPopupBrowser);
 	}
 
+	DualPopupSelector::~DualPopupSelector() = default;
+
 	void DualPopupSelector::resized()
 	{
 		BaseSection::resized();
@@ -417,7 +403,7 @@ namespace Interface
 
 		border_->setBounds(bounds);
 		border_->setRounding(getValue(Skin::kBodyRoundingTop));
-		border_->setThickness(1.0f, true);
+		border_->setThickness(1.0f);
 
 		divider_->setBounds(getWidth() / 2 - 1, 1, 1, getHeight() - 2);
 

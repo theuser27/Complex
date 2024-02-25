@@ -14,18 +14,7 @@
 #include <numbers>
 #include <complex>
 
-#if DEBUG
-	#include <cassert>
-	#define COMPLEX_ASSERT(x) assert(x)
-	#define COMPLEX_ASSERT_FALSE(x) assert(false && (x))
-#else
-	#define COMPLEX_ASSERT(x) ((void)0)
-	#define COMPLEX_ASSERT_FALSE(x) ((void)0)
-#endif
-
-#include <Third Party/gcem/gcem.hpp>
 #include "nested_enum.h"
-#include "JuceHeader.h"
 #include "constants.h"
 
 namespace CommonConcepts
@@ -62,6 +51,4 @@ namespace Framework
 {
 	// used for updating parameters
 	enum class UpdateFlag : u32 { NoUpdates = 0, Realtime = 1, BeforeProcess = 2, AfterProcess = 3 };
-
-	NESTED_ENUM((WindowTypes, u32), (, Lerp, Hann, Hamming, Triangle, Sine, Rectangle, Exp, HannExp, Lanczos))
 }

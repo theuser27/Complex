@@ -60,13 +60,13 @@ namespace Plugin
 			moduleIter->second.get() : nullptr;
 	}
 
-	Framework::ParameterValue *ProcessorTree::getProcessorParameter(u64 parentModuleId, std::string_view parameter) const noexcept
+	Framework::ParameterValue *ProcessorTree::getProcessorParameter(u64 parentModuleId, std::string_view parameterName) const noexcept
 	{
 		auto *processorPointer = getProcessor(parentModuleId);
 		if (!processorPointer)
 			return {};
 
-		return processorPointer->getParameter(parameter);
+		return processorPointer->getParameter(parameterName);
 	}
 	
 	void ProcessorTree::pushUndo(Framework::WaitingUpdate *action, bool isNewTransaction)

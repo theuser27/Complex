@@ -6,6 +6,7 @@
 #pragma once
 
 #include <functional>
+#include <utility>
 
 namespace clg 
 {
@@ -242,9 +243,6 @@ namespace clg
         );
 
       static const vtable_t vtable{detail::type_identity<fn_t>{}};
-
-      printf("size of data %zi\n", sizeof(data_));
-      printf("size of function %zi\n", sizeof(fn_t));
 
       ::new (std::addressof(data_)) fn_t(std::forward<FnT>(fn));
 
