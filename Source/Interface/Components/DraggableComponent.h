@@ -10,7 +10,7 @@
 
 #pragma once
 
-#include "../Sections/BaseSection.h"
+#include "../LookAndFeel/BaseComponent.h"
 
 namespace Interface
 {
@@ -23,20 +23,20 @@ namespace Interface
 		{
 		public:
 			virtual ~Listener() = default;
-			virtual void prepareToMove(EffectModuleSection *component, const MouseEvent &e, bool isCopying) = 0;
-			virtual void draggingComponent(EffectModuleSection *component, const MouseEvent &e) = 0;
-			virtual void releaseComponent(EffectModuleSection *component, const MouseEvent &e) = 0;
+			virtual void prepareToMove(EffectModuleSection *component, const juce::MouseEvent &e, bool isCopying) = 0;
+			virtual void draggingComponent(EffectModuleSection *component, const juce::MouseEvent &e) = 0;
+			virtual void releaseComponent(EffectModuleSection *component, const juce::MouseEvent &e) = 0;
 		};
 
 		DraggableComponent() noexcept { setInterceptsMouseClicks(true, false); }
 
-		void paint(Graphics &g) override;
+		void paint(juce::Graphics &g) override;
 
-		void mouseMove(const MouseEvent &e) override;
-		void mouseDown(const MouseEvent &e) override;
-		void mouseDrag(const MouseEvent &e) override;
-		void mouseUp(const MouseEvent &e) override;
-		void mouseExit(const MouseEvent &e) override;
+		void mouseMove(const juce::MouseEvent &e) override;
+		void mouseDown(const juce::MouseEvent &e) override;
+		void mouseDrag(const juce::MouseEvent &e) override;
+		void mouseUp(const juce::MouseEvent &e) override;
+		void mouseExit(const juce::MouseEvent &e) override;
 
 		auto *getDraggedComponent() const noexcept { return draggedComponent_; }
 		void setDraggedComponent(EffectModuleSection *draggedComponent) noexcept { draggedComponent_ = draggedComponent; }

@@ -155,12 +155,12 @@ namespace Interface
 		Framework::WaitingUpdate *update;
 		if (isCopyingModule_)
 		{
-			update = new Framework::CopyProcessorUpdate(state_.getProcessorTree(), *currentlyMovedModule_->getProcessor(),
+			update = new Framework::CopyProcessorUpdate(*state_.getProcessorTree(), *currentlyMovedModule_->getProcessor(),
 				lanes_[dragEndIndices_.first]->getProcessorId().value(), dragEndIndices_.second);
 		}
 		else
 		{
-			update = new Framework::MoveProcessorUpdate(state_.getProcessorTree(), lanes_[dragEndIndices_.first]->getProcessorId().value(),
+			update = new Framework::MoveProcessorUpdate(*state_.getProcessorTree(), lanes_[dragEndIndices_.first]->getProcessorId().value(),
 				dragEndIndices_.second, lanes_[dragStartIndices_.first]->getProcessorId().value(), dragStartIndices_.second);
 		}
 

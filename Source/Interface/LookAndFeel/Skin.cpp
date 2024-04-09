@@ -8,11 +8,14 @@
   ==============================================================================
 */
 
-#include "JuceHeader.h"
 #include "Skin.h"
+#include "Third Party/json/json.hpp"
+#include "JuceHeader.h"
 #include "DefaultLookAndFeel.h"
 #include "../Sections/BaseSection.h"
 #include "Framework/load_save.h"
+
+using json = nlohmann::json;
 
 namespace
 {
@@ -22,7 +25,8 @@ namespace
     "Effects Lane",
   	"Popup Browser",
     "Filter Module",
-    "Dynamics Module"
+    "Dynamics Module",
+    "Phase Module"
   };
 
   inline constexpr std::array<std::string_view, Interface::Skin::kValueIdCount> kValueNames = {
@@ -155,6 +159,20 @@ namespace
 
 namespace Interface
 {
+  namespace
+  {
+    json updateJson(json data)
+    {
+      int version = 0;
+      if (data.count("Plugin Version"))
+        version = data["Plugin Version"];
+
+      // if skin versions upgrades are ever needed, insert them here
+
+      return data;
+    }
+  }
+
   Skin::Skin()
   {
     File defaultSkin = Framework::LoadSave::getDefaultSkin();
@@ -188,17 +206,20 @@ namespace Interface
   void Skin::clearSkin()
   {
     for (int i = 0; i < kSectionsCount; ++i)
-      colorOverrides_[i].clear();
+      colorOverrides_[i].data.clear();
     for (int i = 0; i < kSectionsCount; ++i)
-      valueOverrides_[i].clear();
+      valueOverrides_[i].data.clear();
   }
+
+  void Skin::setColor(ColorId colorId, const Colour &color) noexcept { colors_[colorId - kInitialColor] = color.getARGB(); }
+  u32 Skin::getColor(ColorId colorId) const { return colors_[colorId - kInitialColor]; }
 
   bool Skin::overridesColor(int section, ColorId colorId) const
   {
     if (section == kNone)
       return true;
 
-    return colorOverrides_[section].contains(colorId);
+    return colorOverrides_[section].find(colorId) != colorOverrides_[section].data.end();
   }
 
   bool Skin::overridesValue(int section, ValueId valueId) const
@@ -206,41 +227,41 @@ namespace Interface
     if (section == kNone)
       return true;
 
-    return valueOverrides_[section].contains(valueId);
+    return valueOverrides_[section].find(valueId) != valueOverrides_[section].data.end();
   }
 
   void Skin::copyValuesToLookAndFeel(LookAndFeel *lookAndFeel) const
   {
-    lookAndFeel->setColour(PopupMenu::backgroundColourId, getColor(Skin::kPopupBackground));
-    lookAndFeel->setColour(PopupMenu::textColourId, getColor(Skin::kNormalText));
-    lookAndFeel->setColour(TooltipWindow::textColourId, getColor(Skin::kNormalText));
+    lookAndFeel->setColour(PopupMenu::backgroundColourId, Colour{ getColor(Skin::kPopupBackground) });
+    lookAndFeel->setColour(PopupMenu::textColourId, Colour{ getColor(Skin::kNormalText) });
+    lookAndFeel->setColour(TooltipWindow::textColourId, Colour{ getColor(Skin::kNormalText) });
 
-    lookAndFeel->setColour(BubbleComponent::backgroundColourId, getColor(Skin::kPopupBackground));
-    lookAndFeel->setColour(BubbleComponent::outlineColourId, getColor(Skin::kPopupBorder));
+    lookAndFeel->setColour(BubbleComponent::backgroundColourId, Colour{ getColor(Skin::kPopupBackground) });
+    lookAndFeel->setColour(BubbleComponent::outlineColourId, Colour{ getColor(Skin::kPopupBorder) });
 
     for (int i = kInitialColor; i < kFinalColor; ++i)
-      lookAndFeel->setColour(i, getColor(static_cast<ColorId>(i)));
+      lookAndFeel->setColour(i, Colour{ getColor((ColorId)i) });
   }
 
-  Colour Skin::getColor(SectionOverride section, ColorId colorId) const
+  u32 Skin::getColor(SectionOverride section, ColorId colorId) const
   {
     if (section == kNone)
       return getColor(colorId);
 
-    if (colorOverrides_[section].contains(colorId))
-      return colorOverrides_[section].at(colorId);
+    if (auto iter = colorOverrides_[section].find(colorId); iter != colorOverrides_[section].data.end())
+      return iter->second;
 
-    return Colours::black;
+    return Colours::black.getARGB();
   }
 
-  Colour Skin::getColor(const OpenGlContainer *section, ColorId colorId) const
+  u32 Skin::getColor(const OpenGlContainer *section, ColorId colorId) const
   {
     SectionOverride sectionOverride;
     do
     {
       sectionOverride = section->getSectionOverride();
-      if (colorOverrides_[sectionOverride].contains(colorId))
-        return colorOverrides_[sectionOverride].at(colorId);
+      if (auto iter = colorOverrides_[sectionOverride].find(colorId); iter != colorOverrides_[sectionOverride].data.end())
+        return iter->second;
 
       section = dynamic_cast<OpenGlContainer *>(section->getParentSafe());
     } while (sectionOverride != kNone && section != nullptr);
@@ -250,8 +271,8 @@ namespace Interface
 
   float Skin::getValue(SectionOverride section, ValueId valueId) const
   {
-    if (valueOverrides_[section].contains(valueId))
-      return valueOverrides_[section].at(valueId);
+    if (auto iter = valueOverrides_[section].find(valueId); iter != valueOverrides_[section].data.end())
+      return iter->second;
 
     return getValue(valueId);
   }
@@ -262,8 +283,8 @@ namespace Interface
     do
     {
       sectionOverride = section->getSectionOverride();
-      if (valueOverrides_[sectionOverride].contains(valueId))
-        return valueOverrides_[sectionOverride].at(valueId);
+      if (auto iter = valueOverrides_[sectionOverride].find(valueId); iter != valueOverrides_[sectionOverride].data.end())
+        return iter->second;
 
       section = dynamic_cast<OpenGlContainer *>(section->getParentSafe());
     } while (sectionOverride != kNone && section != nullptr);
@@ -271,12 +292,12 @@ namespace Interface
     return getValue(valueId);
   }
 
-  void Skin::addOverrideColor(int section, ColorId colorId, Colour color)
+  void Skin::addOverrideColor(int section, ColorId colorId, const juce::Colour &color)
   {
     if (section == kNone)
       setColor(colorId, color);
     else
-      colorOverrides_[section][colorId] = color;
+      colorOverrides_[section][colorId] = color.getARGB();
   }
 
   void Skin::removeOverrideColor(int section, ColorId colorId)
@@ -299,11 +320,11 @@ namespace Interface
       valueOverrides_[section].erase(valueId);
   }
 
-  json Skin::stateToJson()
+  std::string Skin::stateToString()
   {
     json data;
     for (int i = 0; i < kColorIdCount; ++i)
-      data[kColorNames[i]] = colors_[i].toString().toStdString();
+      data[kColorNames[i]] = Colour{ colors_[i] }.toString().toStdString();
 
     for (int i = 0; i < kValueIdCount; ++i)
       data[kValueNames[i]] = values_[i];
@@ -312,17 +333,11 @@ namespace Interface
     for (int override_index = 0; override_index < kSectionsCount; ++override_index)
     {
       json override_section;
-      for (const auto &color : colorOverrides_[override_index])
-      {
-        int index = color.first - Skin::kInitialColor;
-        override_section[kColorNames[index]] = color.second.toString().toStdString();
-      }
+      for (const auto &[key, value] : colorOverrides_[override_index].data)
+        override_section[kColorNames[key - kInitialColor]] = Colour{ value }.toString().toStdString();
 
-      for (const auto &value : valueOverrides_[override_index])
-      {
-        int index = value.first;
-        override_section[kValueNames[index]] = value.second;
-      }
+      for (const auto &[key, value] : valueOverrides_[override_index].data)
+        override_section[kValueNames[key]] = value;
 
       overrides[kOverrideNames[override_index]] = override_section;
     }
@@ -330,28 +345,16 @@ namespace Interface
     data["overrides"] = overrides;
     data["Plugin Version"] = ProjectInfo::versionNumber;
 
-    return data;
+    return data.dump();
   }
 
-  String Skin::stateToString()
-  { return stateToJson().dump(); }
-
-  void Skin::saveToFile(File destination)
+  void Skin::saveToFile(const File &destination)
   { destination.replaceWithText(stateToString()); }
 
-  json Skin::updateJson(json data)
+  void Skin::jsonToState(std::any jsonData)
   {
-    int version = 0;
-    if (data.count("Plugin Version"))
-      version = data["Plugin Version"];
+    json data = std::any_cast<json>(std::move(jsonData));
 
-    // if skin versions upgrades are ever needed, insert them here
-
-    return data;
-  }
-
-  void Skin::jsonToState(json data)
-  {
     clearSkin();
     data = updateJson(data);
 
@@ -361,8 +364,8 @@ namespace Interface
       for (int overrideIndex = 0; overrideIndex < kSectionsCount; ++overrideIndex)
       {
         std::string_view name = kOverrideNames[overrideIndex];
-        colorOverrides_[overrideIndex].clear();
-        valueOverrides_[overrideIndex].clear();
+        colorOverrides_[overrideIndex].data.clear();
+        valueOverrides_[overrideIndex].data.clear();
 
         if (overrides.count(name) == 0)
           continue;
@@ -375,7 +378,7 @@ namespace Interface
             ColorId colorId = static_cast<Skin::ColorId>(i + Skin::kInitialColor);
 
             std::string colorString = overrideSection[kColorNames[i]];
-            colorOverrides_[overrideIndex][colorId] = Colour::fromString(colorString);
+            colorOverrides_[overrideIndex].add(colorId, Colour::fromString(colorString).getARGB());
           }
         }
 
@@ -385,7 +388,7 @@ namespace Interface
           {
             Skin::ValueId valueId = static_cast<Skin::ValueId>(i);
             float value = overrideSection[kValueNames[i]];
-            valueOverrides_[overrideIndex][valueId] = value;
+            valueOverrides_[overrideIndex].add(valueId, value);
           }
         }
       }
@@ -396,7 +399,7 @@ namespace Interface
       if (data.count(kColorNames[i]))
       {
         std::string colorString = data[kColorNames[i]];
-        colors_[i] = Colour::fromString(colorString);
+        colors_[i] = Colour::fromString(colorString).getARGB();
       }
     }
 
@@ -409,12 +412,12 @@ namespace Interface
     }
   }
 
-  bool Skin::stringToState(String skin_string)
+  bool Skin::stringToState(const String &skinString)
   {
     try
     {
-      json data = json::parse(skin_string.toStdString(), nullptr, false);
-      jsonToState(data);
+      json data = json::parse(skinString.toStdString(), nullptr, false);
+      jsonToState(std::move(data));
     }
     catch (const json::exception &)
     {
@@ -434,7 +437,7 @@ namespace Interface
     try
     {
       json data = json::parse(skin_string, nullptr, false);
-      jsonToState(data);
+      jsonToState(std::move(data));
     }
     catch (const json::exception &)
     {

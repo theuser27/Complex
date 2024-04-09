@@ -56,7 +56,7 @@ ComplexAudioProcessorEditor::~ComplexAudioProcessorEditor()
 
 void ComplexAudioProcessorEditor::resized()
 {
-	utils::ScopedBlock g(renderer_.getGui()->getRenderLock());
+	utils::ScopedLock g{ renderer_.getGui()->getRenderLock(), utils::WaitMechanism::WaitNotify };
 	renderer_.getGui()->setBounds(getLocalBounds());
 }
 

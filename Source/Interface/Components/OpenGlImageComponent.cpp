@@ -97,9 +97,9 @@ namespace Interface
 		imageShader_ = openGl.shaders->getShaderProgram(Shaders::kImageVertex, Shaders::kTintedImageFragment);
 
 		imageShader_->use();
-		imageColor_ = getUniform(*imageShader_, "color");
-		imagePosition_ = getAttribute(*imageShader_, "position");
-		textureCoordinates_ = getAttribute(*imageShader_, "tex_coord_in");
+		imageColor_ = getUniform(*imageShader_, "color").value();
+		imagePosition_ = getAttribute(*imageShader_, "position").value();
+		textureCoordinates_ = getAttribute(*imageShader_, "tex_coord_in").value();
 	}
 
 	void OpenGlImageComponent::render(OpenGlWrapper &openGl, bool)
@@ -150,18 +150,18 @@ namespace Interface
 		imageShader_->use();
 
 		Colour colour = color_.get();
-		imageColor_->set(colour.getFloatRed(), colour.getFloatGreen(), colour.getFloatBlue(), colour.getFloatAlpha());
+		imageColor_.set(colour.getFloatRed(), colour.getFloatGreen(), colour.getFloatBlue(), colour.getFloatAlpha());
 
-		glVertexAttribPointer(imagePosition_->attributeID, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), nullptr);
-		glEnableVertexAttribArray(imagePosition_->attributeID);
+		glVertexAttribPointer(imagePosition_.attributeID, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), nullptr);
+		glEnableVertexAttribArray(imagePosition_.attributeID);
 
-		glVertexAttribPointer(textureCoordinates_->attributeID, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (GLvoid *)(2 * sizeof(float)));
-		glEnableVertexAttribArray(textureCoordinates_->attributeID);
+		glVertexAttribPointer(textureCoordinates_.attributeID, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (GLvoid *)(2 * sizeof(float)));
+		glEnableVertexAttribArray(textureCoordinates_.attributeID);
 
 		glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, nullptr);
 
-		glDisableVertexAttribArray(imagePosition_->attributeID);
-		glDisableVertexAttribArray(textureCoordinates_->attributeID);
+		glDisableVertexAttribArray(imagePosition_.attributeID);
+		glDisableVertexAttribArray(textureCoordinates_.attributeID);
 		texture_.unbind();
 
 		glBindBuffer(GL_ARRAY_BUFFER, 0);
@@ -179,9 +179,9 @@ namespace Interface
 		shouldReloadImage_ = true;
 
 		imageShader_ = nullptr;
-		imageColor_ = nullptr;
-		imagePosition_ = nullptr;
-		textureCoordinates_ = nullptr;
+		imageColor_.uniformID = (GLuint)-1;
+		imagePosition_.attributeID = (GLuint)-1;
+		textureCoordinates_.attributeID = (GLuint)-1;
 
 		glDeleteBuffers(1, &vertexBuffer_);
 		glDeleteBuffers(1, &triangleBuffer_);
@@ -250,11 +250,11 @@ namespace Interface
 
 		g.setColour(Colours::white);
 		auto transform = strokeShape_.getTransformToScaleToFit(bounds, true, justification_);
+		if (!fillShape_.isEmpty())
+			g.fillPath(fillShape_, transform);
 		if (!strokeShape_.isEmpty())
 			g.strokePath(strokeShape_, PathStrokeType{ 1.0f, PathStrokeType::JointStyle::beveled, PathStrokeType::EndCapStyle::butt },
 				transform);
-		if (!fillShape_.isEmpty())
-			g.fillPath(fillShape_, transform);
 	}
 
 }

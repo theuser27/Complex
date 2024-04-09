@@ -10,12 +10,32 @@
 
 #pragma once
 
-#include "common.h"
+#include <span>
+#include "simd_values.h"
+#include "constants.h"
 #include "nested_enum.h"
-#include "constexpr_utils.h"
+
+namespace Generation
+{
+	class SoundEngine;
+	class EffectsState;
+	class EffectsLane;
+	class EffectModule;
+	class utilityEffect;
+	class filterEffect;
+	class dynamicsEffect;
+	class phaseEffect;
+	class pitchEffect;
+	class stretchEffect;
+	class warpEffect;
+	class destroyEffect;
+}
 
 namespace Framework
 {
+	// used for updating parameters
+	enum class UpdateFlag : u32 { NoUpdates = 0, Realtime = 1, BeforeProcess = 2, AfterProcess = 3 };
+
 	// symmetric types apply the flipped curve to negative values
 	// all x values are normalised
 	enum class ParameterScale : u32
@@ -35,14 +55,14 @@ namespace Framework
 
 	struct ParameterDetails
 	{
-		std::string_view name{};                              // internal plugin name
+		std::string_view pluginName{};												// internal plugin name
 		std::string_view displayName{};                       // name displayed to the user
 		float minValue = 0.0f;                                // minimum scaled value
 		float maxValue = 1.0f;                                // maximum scaled value
 		float defaultValue = 0.0f;                            // default scaled value
 		float defaultNormalisedValue = 0.0f;                  // default normalised value
 		ParameterScale scale = ParameterScale::Linear;        // value skew factor
-		std::string_view displayUnits{};                      // "%", "db", etc.
+		std::string_view displayUnits{};                      // "%", " db", etc.
 		std::span<const std::string_view> stringLookup{};     // if scale is Indexed, you can use a text lookup
 		bool isStereo = false;                                // if parameter allows stereo modulation
 		bool isModulatable = true;                            // if parameter allows modulation at all
@@ -52,50 +72,65 @@ namespace Framework
 	};
 	
 
-	NESTED_ENUM(BaseProcessors, (IDS, SoundEngine, "{6B31ED46-FBF0-4219-A645-7B774F903026}", EffectsState, "{39B6A6C9-D33F-4AF0-BBDB-6C1F1960184F}", 
-	EffectsLane, "{F260616E-CF7D-4099-A880-9C52CED263C1}", EffectModule, "{763F9D86-D535-4D63-B486-F863F88CC259}", BaseEffect, {}), 
+	NESTED_ENUM(BaseProcessors, ((SoundEngine, ID_TYPE, "{6B31ED46-FBF0-4219-A645-7B774F903026}", Generation::SoundEngine),
+	                             (EffectsState, ID_TYPE, "{39B6A6C9-D33F-4AF0-BBDB-6C1F1960184F}", Generation::EffectsState),
+	                             (EffectsLane, ID_TYPE, "{F260616E-CF7D-4099-A880-9C52CED263C1}", Generation::EffectsLane),
+	                             (EffectModule, ID_TYPE, "{763F9D86-D535-4D63-B486-F863F88CC259}", Generation::EffectModule),
+	                             BaseEffect),
 		(DEFER),
-		(),
+		(ENUM, EffectsState),
 		(DEFER),
 		(DEFER),
 		(DEFER)
 	)
 
-    NESTED_ENUM_FROM(BaseProcessors, SoundEngine, (IDS, MasterMix, "MASTER_MIX", BlockSize, "BLOCK_SIZE", Overlap, "OVERLAP", WindowType, "WINDOW_TYPE", WindowAlpha, "WINDOW_ALPHA", OutGain, "OUT_GAIN"))
-    NESTED_ENUM_FROM(BaseProcessors, EffectsLane, (IDS, LaneEnabled, "LANE_ENABLED", Input, "INPUT", Output, "OUTPUT", GainMatching, "GAIN_MATCHING"))
-    NESTED_ENUM_FROM(BaseProcessors, EffectModule, (IDS, ModuleEnabled, "MODULE_ENABLED", ModuleType, "MODULE_TYPE", ModuleMix, "MODULE_MIX"))
+    NESTED_ENUM_FROM(BaseProcessors, (SoundEngine, u64), ((MasterMix, ID, "MASTER_MIX"), (BlockSize, ID, "BLOCK_SIZE"), (Overlap, ID, "OVERLAP"), 
+		                                                      (WindowType, ID, "WINDOW_TYPE"), (WindowAlpha, ID, "WINDOW_ALPHA"), (OutGain, ID, "OUT_GAIN")))
+    NESTED_ENUM_FROM(BaseProcessors, (EffectsLane, u64), ((LaneEnabled, ID, "LANE_ENABLED"), (Input, ID, "INPUT"), (Output, ID, "OUTPUT"), (GainMatching, ID, "GAIN_MATCHING")))
+    NESTED_ENUM_FROM(BaseProcessors, (EffectModule, u64), ((ModuleEnabled, ID, "MODULE_ENABLED"), (ModuleType, ID, "MODULE_TYPE"), (ModuleMix, ID, "MODULE_MIX")))
     // it is important that the effect types be first rather than the parameters
 		// in multiple places indices are used to address these effects and having them not begin at 0 causes a lot of headaches
-		NESTED_ENUM_FROM(BaseProcessors, BaseEffect, (IDS,
-        Utility, "{A8129602-D351-46D5-B85B-D5764C071575}", Filter, "{809BD1B8-AA18-467E-8DD2-E396F70D6253}",
-        Dynamics, "{D5DADD9A-5B0F-45C6-ADF5-B6A6415AF2D7}", Phase, "{5670932B-8B6F-4475-9926-000F6C36C5AD}",
-        Pitch, "{71133386-9421-4B23-91F9-C826DFC506B8}", Stretch, "{D700C4AA-EC95-4703-9837-7AD5BDF5C810}",
-        Warp, "{5FC3802A-B916-4D36-A853-78A29A5F5687}", Destroy, "{EA1DD088-A73A-4FD4-BB27-38EC0BF91850}",
+		NESTED_ENUM_FROM(BaseProcessors, BaseEffect, ((Utility, ID_TYPE, "{A8129602-D351-46D5-B85B-D5764C071575}", Generation::utilityEffect), 
+		                                              (Filter, ID_TYPE, "{809BD1B8-AA18-467E-8DD2-E396F70D6253}", Generation::filterEffect),
+		                                              (Dynamics, ID_TYPE, "{D5DADD9A-5B0F-45C6-ADF5-B6A6415AF2D7}", Generation::dynamicsEffect), 
+		                                              (Phase, ID_TYPE, "{5670932B-8B6F-4475-9926-000F6C36C5AD}", Generation::phaseEffect),
+		                                              (Pitch, ID_TYPE, "{71133386-9421-4B23-91F9-C826DFC506B8}", Generation::pitchEffect), 
+		                                              (Stretch, ID_TYPE, "{D700C4AA-EC95-4703-9837-7AD5BDF5C810}", Generation::stretchEffect),
+		                                              (Warp, ID_TYPE, "{5FC3802A-B916-4D36-A853-78A29A5F5687}", Generation::warpEffect),
+		                                              (Destroy, ID_TYPE, "{EA1DD088-A73A-4FD4-BB27-38EC0BF91850}", Generation::destroyEffect),
 
-				Algorithm, "FX_ALGORITHM", LowBound, "FX_LOW_BOUND", HighBound, "FX_HIGH_BOUND", ShiftBounds, "FX_SHIFT_BOUNDS"),
-            (ENUM, Utility),
+		                                              (Algorithm, ID, "FX_ALGORITHM"), (LowBound, ID, "FX_LOW_BOUND"), (HighBound, ID, "FX_HIGH_BOUND"), 
+		                                              (ShiftBounds, ID, "FX_SHIFT_BOUNDS")),
+            (ENUM, (Utility, u64)),
             (DEFER),
             (DEFER),
-            (ENUM, Phase),
-            (ENUM, Pitch),
-            (ENUM, Stretch),
-            (ENUM, Warp),
-            (ENUM, Destroy)
+            (DEFER),
+            (ENUM, (Pitch, u64)),
+            (ENUM, (Stretch, u64)),
+            (ENUM, (Warp, u64)),
+            (ENUM, (Destroy, u64))
     )
 
 			// Normal - Lowpass/Highpass/Bandpass/Notch
 			// Regular - Harmonic/Bin based filters (like dtblkfx peaks)
-      NESTED_ENUM_FROM(BaseProcessors::BaseEffect, Filter, (, Normal, Regular), (DEFER), (DEFER))
-        NESTED_ENUM_FROM(BaseProcessors::BaseEffect::Filter, Normal, (IDS, Gain, "FILTER_NORMAL_FX_GAIN", Cutoff, "FILTER_NORMAL_FX_CUTOFF", Slope, "FILTER_NORMAL_FX_SLOPE"))
-        NESTED_ENUM_FROM(BaseProcessors::BaseEffect::Filter, Regular, (IDS, Gain, "FILTER_REGULAR_FX_GAIN", Cutoff, "FILTER_REGULAR_FX_CUTOFF", Phase, "FILTER_REGULAR_FX_PHASE", Stretch, "FILTER_REGULAR_FX_STRETCH"))
+      NESTED_ENUM_FROM(BaseProcessors::BaseEffect, (Filter, u64), (Normal, Regular, Phase), (DEFER), (DEFER), (DEFER))
+        NESTED_ENUM_FROM(BaseProcessors::BaseEffect::Filter, Normal, ((Gain, ID, "FILTER_NORMAL_FX_GAIN"), (Cutoff, ID, "FILTER_NORMAL_FX_CUTOFF"), (Slope, ID, "FILTER_NORMAL_FX_SLOPE")))
+        NESTED_ENUM_FROM(BaseProcessors::BaseEffect::Filter, Regular, ((Gain, ID, "FILTER_REGULAR_FX_GAIN"), (Cutoff, ID, "FILTER_REGULAR_FX_CUTOFF"), 
+				                                                               (Phase, ID, "FILTER_REGULAR_FX_PHASE"), (Stretch, ID, "FILTER_REGULAR_FX_STRETCH")))
+				NESTED_ENUM_FROM(BaseProcessors::BaseEffect::Filter, Phase, ((Gain, ID, "FILTER_PHASE_FX_GAIN"), (LowPhaseBound, ID, "FILTER_PHASE_FX_LOW_PHASE_BOUND"), 
+				                                                             (HighPhaseBound, ID, "FILTER_PHASE_FX_HIGH_PHASE_BOUND")))
             
 			// Contrast - dtblkfx contrast
 			// Clip - dtblkfx clip
 			// Compressor - specops spectral compander/compressor
-      NESTED_ENUM_FROM(BaseProcessors::BaseEffect, Dynamics, (, Contrast, Clip, Compressor), (DEFER), (DEFER), (DEFER))
-        NESTED_ENUM_FROM(BaseProcessors::BaseEffect::Dynamics, Contrast, (IDS, Depth, "DYNAMICS_CONTRAST_FX_DEPTH"))
-        NESTED_ENUM_FROM(BaseProcessors::BaseEffect::Dynamics, Clip, (IDS, Threshold, "DYNAMICS_CLIPPING_FX_THRESHOLD"))
+      NESTED_ENUM_FROM(BaseProcessors::BaseEffect, (Dynamics, u64), (Contrast, Clip, Compressor), (DEFER), (DEFER), (DEFER))
+        NESTED_ENUM_FROM(BaseProcessors::BaseEffect::Dynamics, Contrast, ((Depth, ID, "DYNAMICS_CONTRAST_FX_DEPTH")))
+        NESTED_ENUM_FROM(BaseProcessors::BaseEffect::Dynamics, Clip, ((Threshold, ID, "DYNAMICS_CLIPPING_FX_THRESHOLD")))
         NESTED_ENUM_FROM(BaseProcessors::BaseEffect::Dynamics, Compressor)
+
+			NESTED_ENUM_FROM(BaseProcessors::BaseEffect, (Phase, u64), (Shift, Transform), (DEFER), (DEFER))
+				NESTED_ENUM_FROM(BaseProcessors::BaseEffect::Phase, Shift, ((PhaseShift, ID, "PHASE_SHIFT_FX_PHASE_SHIFT"), (Interval, ID, "PHASE_SHIFT_FX_INTERVAL"), (Offset, ID, "PHASE_SHIFT_FX_OFFSET")))
+				NESTED_ENUM_FROM(BaseProcessors::BaseEffect::Phase, Transform)
 	
 
 	namespace Parameters
@@ -108,39 +143,15 @@ namespace Framework
 		using key = std::pair<std::string_view, std::string_view>;
 		using value = ParameterDetails;
 
-		const ParameterDetails &getDetailsId(std::string_view id);
+		std::optional<ParameterDetails> getDetailsId(std::string_view id);
 		const ParameterDetails &getDetailsEnum(std::string_view enumString);
 		
-		std::string_view getEnumString(std::string_view id);
+		std::string_view getEnumName(std::string_view id);
+		std::string_view getIdString(std::string_view enumString);
 
 		std::span<const std::string_view> getEffectModesStrings(BaseProcessors::BaseEffect::type type);
 
-		constexpr std::optional<std::pair<size_t, size_t>> getIndexAndCountForEffect(BaseProcessors::BaseEffect::type type, size_t algorithmIndex)
-		{
-			auto getIndexAndCount = []<nested_enum::NestedEnum Type>(size_t index) -> std::optional<std::pair<size_t, size_t>>
-			{
-				constexpr auto typeCounts = utils::applyOne(
-					[]<typename T>(T &&)
-					{
-						using type = typename std::remove_cvref_t<T>::type;
-						return type::enum_count(nested_enum::AllNodes);
-					},
-					Type::template enum_subtypes<nested_enum::AllNodes>());
-
-				if (typeCounts.size() <= index)
-					return {};
-
-				size_t totalIndex = std::accumulate(typeCounts.begin(), typeCounts.begin() + index, (size_t)0);
-				return { std::pair{ totalIndex, typeCounts[index] } };
-			};
-
-			switch (type)
-			{
-			case BaseProcessors::BaseEffect::Filter: return getIndexAndCount.template operator()<BaseProcessors::BaseEffect::Filter::type>(algorithmIndex);
-			case BaseProcessors::BaseEffect::Dynamics: return getIndexAndCount.template operator()<BaseProcessors::BaseEffect::Dynamics::type>(algorithmIndex);
-			default: return {};
-			}
-		}
+		std::optional<std::pair<size_t, size_t>> getIndexAndCountForEffect(BaseProcessors::BaseEffect::type type, size_t algorithmIndex);
 	}
 
 	// with skewOnly == true a normalised value between [0,1] or [-0.5, 0.5] is returned,

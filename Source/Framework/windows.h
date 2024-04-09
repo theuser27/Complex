@@ -17,7 +17,7 @@
 
 namespace Framework
 {
-	NESTED_ENUM((WindowTypes, u32), (, Lerp, Hann, Hamming, Triangle, Sine, Rectangle, Exp, HannExp, Lanczos))
+	NESTED_ENUM((WindowTypes, u32), (Lerp, Hann, Hamming, Triangle, Sine, Rectangle, Exp, HannExp, Lanczos))
 
 	class Window
 	{

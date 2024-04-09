@@ -10,9 +10,9 @@
 
 #pragma once
 
-#include "../LookAndFeel/Shaders.h"
 #include "../LookAndFeel/BaseComponent.h"
-#include "OpenGlComponent.h"
+#include "Framework/open_gl_primitives.h"
+#include "Interface/LookAndFeel/Skin.h"
 
 namespace Interface
 {
@@ -22,6 +22,7 @@ namespace Interface
 	{
 	public:
 		OpenGlContainer(juce::String name = {});
+		~OpenGlContainer() override;
 
 		virtual void renderOpenGlComponents(OpenGlWrapper &openGl, bool animate = false) = 0;
 		virtual void destroyAllOpenGlComponents();
@@ -32,8 +33,8 @@ namespace Interface
 		Renderer *getRenderer() const noexcept { return renderer_; }
 		float getValue(Skin::ValueId valueId) const noexcept;
 		float getValue(Skin::SectionOverride skinOverride, Skin::ValueId valueId) const noexcept;
-		Colour getColour(Skin::ColorId colorId) const noexcept;
-		Colour getColour(Skin::SectionOverride skinOverride, Skin::ColorId colorId) const noexcept;
+		juce::Colour getColour(Skin::ColorId colorId) const noexcept;
+		juce::Colour getColour(Skin::SectionOverride skinOverride, Skin::ColorId colorId) const noexcept;
 		auto getSectionOverride() const noexcept { return skinOverride_; }
 		float scaleValue(float value) const noexcept { return scaling_ * value; }
 		int scaleValueRoundInt(float value) const noexcept { return (int)std::round(scaling_ * value); }
@@ -48,7 +49,7 @@ namespace Interface
 		virtual void setRenderer(Renderer *renderer) noexcept = 0;
 		virtual void setScaling(float scale) noexcept = 0;
 	protected:
-		std::vector<gl_ptr<OpenGlComponent>> openGlComponents_{};
+		std::vector<gl_ptr<OpenGlComponent>> openGlComponents_;
 
 		Renderer *renderer_ = nullptr;
 		shared_value<Skin::SectionOverride> skinOverride_ = Skin::kNone;

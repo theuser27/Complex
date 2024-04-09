@@ -10,7 +10,6 @@
 
 #pragma once
 
-#include "Framework/common.h"
 #include "Framework/utils.h"
 #include "Framework/circular_buffer.h"
 #include "Framework/windows.h"
@@ -33,9 +32,7 @@ namespace Generation
 	class SoundEngine final : public BaseProcessor
 	{
 	public:
-		DEFINE_CLASS_TYPE("{6B31ED46-FBF0-4219-A645-7B774F903026}")
-
-		SoundEngine(Plugin::ProcessorTree *processorTree) noexcept;
+		SoundEngine(Plugin::ProcessorTree *processorTree, u64 parentProcessorId) noexcept;
 		~SoundEngine() noexcept override;
 
 		SoundEngine(const SoundEngine &) = delete;
@@ -282,7 +279,7 @@ namespace Generation
 					else
 					{
 						// fading edges and overlapping
-						u32 fadeSamples = 1 << (utils::log2(overlappedSamples) - 2);
+						u32 fadeSamples = overlappedSamples / 4;
 
 						// fade in overlap
 						Framework::CircularBuffer::applyToBuffer(buffer_.getData(), other, numChannels, fadeSamples,
@@ -411,6 +408,7 @@ namespace Generation
 		void setOverlap(float overlap) noexcept { overlap_ = overlap; }
 		void setWindowType(Framework::WindowTypes type) noexcept { windowType_ = type; }
 
+		void deserialiseFromJson(std::any jsonData);
 	private:
 		//=========================================================================================
 		// Parameters

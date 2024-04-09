@@ -70,7 +70,7 @@ namespace Interface
 		void setBounds(int x, int y, int width, int height) final { BaseComponent::setBounds(x, y, width, height); }
 		using OpenGlContainer::setBounds;
 		void resized() override;
-		void paint(Graphics &) override { }
+		void paint(juce::Graphics &) override { }
 
 		void sliderValueChanged([[maybe_unused]] BaseSlider *movedSlider) override { }
 		void buttonClicked([[maybe_unused]] BaseButton *clickedButton) override { }
@@ -79,28 +79,28 @@ namespace Interface
 		void resizeForText(TextSelector *textSelector, int requestedWidthChange) override;
 
 		// paint anything that doesn't move/is static
-		virtual void paintBackground(Graphics &) { }
+		virtual void paintBackground(juce::Graphics &) { }
 		virtual void repaintBackground();
 
-		Path getRoundedPath(Rectangle<float> bounds, float topRounding = 0.0f, float bottomRounding = 0.0f) const;
-		void paintBody(Graphics &g, Rectangle<int> bounds, float topRounding = 0.0f, float bottomRounding = 0.0f) const;
-		void paintBorder(Graphics &g, Rectangle<int> bounds, float topRounding = 0.0f, float bottomRounding = 0.0f) const;
-		void paintBody(Graphics &g) const { paintBody(g, getLocalBounds()); }
-		void paintBorder(Graphics &g) const { paintBorder(g, getLocalBounds()); }
+		juce::Path getRoundedPath(juce::Rectangle<float> bounds, float topRounding = 0.0f, float bottomRounding = 0.0f) const;
+		void paintBody(juce::Graphics &g, juce::Rectangle<int> bounds, float topRounding = 0.0f, float bottomRounding = 0.0f) const;
+		void paintBorder(juce::Graphics &g, juce::Rectangle<int> bounds, float topRounding = 0.0f, float bottomRounding = 0.0f) const;
+		void paintBody(juce::Graphics &g) const { paintBody(g, getLocalBounds()); }
+		void paintBorder(juce::Graphics &g) const { paintBorder(g, getLocalBounds()); }
 
-		void paintTabShadow(Graphics &g, Rectangle<int> bounds);
-		void paintTabShadow(Graphics &g) { paintTabShadow(g, getLocalBounds()); }
-		virtual void paintBackgroundShadow(Graphics &) { }
+		void paintTabShadow(juce::Graphics &g, juce::Rectangle<int> bounds);
+		void paintTabShadow(juce::Graphics &g) { paintTabShadow(g, getLocalBounds()); }
+		virtual void paintBackgroundShadow(juce::Graphics &) { }
 		float getComponentShadowWidth() const noexcept { return scaling_ * 2.0f; }
 		
 		// main opengl render loop
 		void renderOpenGlComponents(OpenGlWrapper &openGl, bool animate = false) override;
 		void destroyAllOpenGlComponents() final;
 
-		void showPopupSelector(const BaseComponent *source, Point<int> position, PopupItems options,
+		void showPopupSelector(const BaseComponent *source, juce::Point<int> position, PopupItems options,
 			std::function<void(int)> callback, std::function<void()> cancel = {}) const;
-		void showPopupDisplay(BaseComponent *source, String text,
-			BubbleComponent::BubblePlacement placement, bool primary);
+		void showPopupDisplay(BaseComponent *source, juce::String text,
+			juce::BubbleComponent::BubblePlacement placement, bool primary);
 		void hidePopupDisplay(bool primary);
 
 		virtual void setActive(bool active);
@@ -141,7 +141,7 @@ namespace Interface
 		void createOffOverlay();
 		void createBackground();
 
-		virtual Rectangle<int> getPowerButtonBounds() const noexcept
+		virtual juce::Rectangle<int> getPowerButtonBounds() const noexcept
 		{
 			return { 0, 0, (int)std::round(scaleValue(kDefaultActivatorSize)),
 				(int)std::round(scaleValue(kDefaultActivatorSize)) };

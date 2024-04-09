@@ -11,11 +11,12 @@
 #pragma once
 
 #include "Framework/vector_map.h"
-#include "Framework/parameter_value.h"
+#include "Framework/parameters.h"
 #include "OpenGlContainer.h"
 
 namespace Framework
 {
+	class ParameterValue;
 	struct ParameterLink;
 }
 
@@ -70,21 +71,21 @@ namespace Interface
 		
 		// returns tight bounds around all contained elements (drawn components, label, etc.)
 		// by the end of this method drawBounds need to have been set to encompass the drawn components
-		virtual Rectangle<int> setBoundsForSizes(int height, int width = 0) = 0;
+		virtual juce::Rectangle<int> setBoundsForSizes(int height, int width = 0) = 0;
 		// sets the bounds based on drawBounds + position + added hitbox
 		// call after initialising drawBounds with setBoundsForSizes
-		void setPosition(Point<int> position);
+		void setPosition(juce::Point<int> position);
 		void setBounds(int x, int y, int width, int height) final;
 		using OpenGlContainer::setBounds;
 		// sets extra outer size
-		void setAddedHitbox(BorderSize<int> addedHitBox) noexcept { addedHitbox_ = addedHitBox; }
+		void setAddedHitbox(juce::BorderSize<int> addedHitBox) noexcept { addedHitbox_ = addedHitBox; }
 		// positions extra external elements (label, combined control, etc.) relative to drawBounds
-		virtual void setExtraElementsPositions(Rectangle<int> anchorBounds) = 0;
+		virtual void setExtraElementsPositions(juce::Rectangle<int> anchorBounds) = 0;
 		void repositionExtraElements();
 
 		// ====================================================== Rendering related
 		void renderOpenGlComponents(OpenGlWrapper &openGl, bool animate) final;
-		void paint(Graphics &) override { }
+		void paint(juce::Graphics &) override { }
 		// redraws components when an action occurs
 		virtual void redoImage() = 0;
 		// sets positions of all drawable components relative to drawBounds
@@ -103,11 +104,11 @@ namespace Interface
 
 		void setRenderer(Renderer *renderer) noexcept override final { renderer_ = renderer; }
 		void setScaling(float scale) noexcept override final { scaling_ = scale; }
-		void setLabelPlacement(BubbleComponent::BubblePlacement placement) { labelPlacement_ = placement; }
+		void setLabelPlacement(juce::BubbleComponent::BubblePlacement placement) { labelPlacement_ = placement; }
 		void setShouldRepaintOnHover(bool shouldRepaintOnHover) noexcept { shouldRepaintOnHover_ = shouldRepaintOnHover; }
 
 	protected:
-		Rectangle<int> getUnionOfAllElements() const noexcept
+		juce::Rectangle<int> getUnionOfAllElements() const noexcept
 		{
 			auto bounds = drawBounds_;
 			for (size_t i = 0; i < extraElements_.data.size(); i++)
@@ -127,16 +128,16 @@ namespace Interface
 		Framework::ParameterDetails details_{};
 
 		// drawBounds is a space inside getLocalBounds() where components are being drawn
-		Rectangle<int> drawBounds_{};
+		juce::Rectangle<int> drawBounds_{};
 		bool isDrawBoundsSet_ = false;
 		// this determines how much to extend the bounds relative to drawBounds so that the hitbox is larger
-		BorderSize<int> addedHitbox_{};
+		juce::BorderSize<int> addedHitbox_{};
 
 		// extra stuff like label or modifying control (i.e. textSelector changing behaviour of a knob)
 		// and their bounds relative to the drawBounds
-		Framework::VectorMap<BaseComponent *, Rectangle<int>> extraElements_{};
+		Framework::VectorMap<BaseComponent *, juce::Rectangle<int>> extraElements_{};
 		gl_ptr<PlainTextComponent> label_;
-		BubbleComponent::BubblePlacement labelPlacement_ = BubbleComponent::right;
+		juce::BubbleComponent::BubblePlacement labelPlacement_ = juce::BubbleComponent::right;
 
 		bool shouldRepaintOnHover_ = true;
 

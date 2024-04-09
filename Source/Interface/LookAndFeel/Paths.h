@@ -19,23 +19,30 @@
 
 namespace Interface
 {
-  class Paths
+  namespace Paths
   {
-    static juce::Path fromSvgData(const void *data, size_t data_size)
+    inline juce::Path fromSvgData(const void *data, size_t data_size)
     {
       std::unique_ptr drawable = juce::Drawable::createFromImageData(data, data_size);
       return drawable->getOutlineAsPath();
     }
 
-  public:
-    Paths() = delete;
-
-    static std::pair<juce::Path, juce::Path> filterIcon()
+    inline std::pair<juce::Path, juce::Path> filterIcon()
     {
       return { fromSvgData(BinaryData::Icon_Filter_svg, BinaryData::Icon_Filter_svgSize), {} };
     }
+
+    inline std::pair<juce::Path, juce::Path> dynamicsIcon()
+    {
+      return { fromSvgData(BinaryData::Icon_Dynamics_svg, BinaryData::Icon_Dynamics_svgSize), {} };
+    }
+
+    inline std::pair<juce::Path, juce::Path> phaseIcon()
+    {
+      return { fromSvgData(BinaryData::Icon_Phase_svg, BinaryData::Icon_Phase_svgSize), {} };
+    }
     
-    static std::pair<juce::Path, juce::Path> contrastIcon()
+    inline std::pair<juce::Path, juce::Path> contrastIcon()
     {
       float width = 14.0f;
       float height = 14.0f;
@@ -65,7 +72,7 @@ namespace Interface
       return { strokePath, fillPath };
     }
 
-    static std::pair<juce::Path, juce::Path> powerButtonIcon()
+    inline std::pair<juce::Path, juce::Path> powerButtonIcon()
     {
       static juce::Path strokePath = []()
       {
@@ -85,7 +92,7 @@ namespace Interface
       return { strokePath, {} };
     }
 
-    static juce::Path downTriangle()
+    inline juce::Path downTriangle()
     {
       juce::Path path;
 

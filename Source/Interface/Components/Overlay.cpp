@@ -9,11 +9,48 @@
 */
 
 #include "Overlay.h"
+#include "OpenGlComponent.h"
 
 
 namespace Interface
 {
   using namespace juce::gl;
+
+  class OverlayBackgroundRenderer final : public OpenGlComponent
+  {
+  public:
+    static constexpr int kNumVertices = 4;
+    static constexpr int kNumFloatsPerVertex = 2;
+    static constexpr int kTotalFloats = kNumVertices * kNumFloatsPerVertex;
+    static constexpr int kIndices = 6;
+
+    OverlayBackgroundRenderer();
+    ~OverlayBackgroundRenderer() override = default;
+
+    void init(OpenGlWrapper &openGl) override;
+    void render(OpenGlWrapper &openGl, bool animate) override;
+    void destroy() override;
+
+    void setColor(const juce::Colour &color) { color_ = color; }
+    void setAdditiveBlending(bool additiveBlending) { additiveBlending_ = additiveBlending; }
+
+  protected:
+    void drawOverlay(OpenGlWrapper &openGl);
+
+    OpenGlShaderProgram *shader_ = nullptr;
+    OpenGlUniform colorUniform_{};
+    OpenGlAttribute position_{};
+
+    juce::Colour color_ = juce::Colours::black;
+    bool additiveBlending_ = false;
+
+    float data_[kTotalFloats];
+    int indices_[kIndices];
+    GLuint dataBuffer_ = 0;
+    GLuint indicesBuffer_ = 0;
+
+    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(OverlayBackgroundRenderer)
+  };
 
   OverlayBackgroundRenderer::OverlayBackgroundRenderer()
   {
@@ -52,8 +89,8 @@ namespace Interface
 
     shader_ = openGl.shaders->getShaderProgram(Shaders::kPassthroughVertex, Shaders::kColorFragment);
     shader_->use();
-    colorUniform_ = getUniform(*shader_, "color");
-    position_ = getAttribute(*shader_, "position");
+    colorUniform_ = getUniform(*shader_, "color").value();
+    position_ = getAttribute(*shader_, "position").value();
   }
 
   void OverlayBackgroundRenderer::render(OpenGlWrapper &openGl, [[maybe_unused]] bool animate)
@@ -64,8 +101,8 @@ namespace Interface
   void OverlayBackgroundRenderer::destroy()
   {
     shader_ = nullptr;
-    position_ = nullptr;
-    colorUniform_ = nullptr;
+    position_.attributeID = (GLuint)-1;
+    colorUniform_.uniformID = (GLuint)-1;
     glDeleteBuffers(1, &dataBuffer_);
     glDeleteBuffers(1, &indicesBuffer_);
 
@@ -89,19 +126,19 @@ namespace Interface
       glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
     shader_->use();
-    colorUniform_->set(color_.getFloatRed(), color_.getFloatGreen(),
+    colorUniform_.set(color_.getFloatRed(), color_.getFloatGreen(),
       color_.getFloatBlue(), color_.getFloatAlpha());
 
     glBindBuffer(GL_ARRAY_BUFFER, dataBuffer_);
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, indicesBuffer_);
 
-    glVertexAttribPointer(position_->attributeID, kNumFloatsPerVertex, GL_FLOAT,
+    glVertexAttribPointer(position_.attributeID, kNumFloatsPerVertex, GL_FLOAT,
       GL_FALSE, kNumFloatsPerVertex * sizeof(float), nullptr);
-    glEnableVertexAttribArray(position_->attributeID);
+    glEnableVertexAttribArray(position_.attributeID);
 
     glDrawElements(GL_TRIANGLES, kIndices, GL_UNSIGNED_INT, nullptr);
 
-    glDisableVertexAttribArray(position_->attributeID);
+    glDisableVertexAttribArray(position_.attributeID);
     glBindBuffer(GL_ARRAY_BUFFER, 0);
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
 
@@ -114,5 +151,11 @@ namespace Interface
     background_ = makeOpenGlComponent<OverlayBackgroundRenderer>();
     setSkinOverride(Skin::kOverlay);
     addOpenGlComponent(background_);
+  }
+
+  void Overlay::resized()
+  {
+	  background_->setColor(getColour(Skin::kOverlayScreen));
+	  background_->setBounds(getLocalBounds());
   }
 }

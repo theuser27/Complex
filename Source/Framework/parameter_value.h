@@ -11,11 +11,16 @@
 #pragma once
 
 #include <variant>
-
-#include "common.h"
+#include <any>
 #include "utils.h"
+#include "sync_primitives.h"
 #include "simd_utils.h"
 #include "parameters.h"
+
+namespace Plugin
+{
+	class ProcessorTree;
+}
 
 namespace Interface
 {
@@ -24,6 +29,39 @@ namespace Interface
 
 namespace Framework
 {
+	template<typename T>
+	concept ParameterRepresentation = std::same_as<T, float> || std::same_as<T, u32> || SimdValue<T>;
+
+	struct atomic_simd_float
+	{
+		atomic_simd_float(simd_float value) : value(value) { }
+
+		simd_float load() const noexcept
+		{
+			utils::ScopedLock g{ guard, utils::WaitMechanism::Spin, false };
+			simd_float currentValue = value;
+			return currentValue;
+		}
+
+		void store(simd_float newValue) noexcept
+		{
+			utils::ScopedLock g{ guard, utils::WaitMechanism::Spin, false };
+			value = newValue;
+		}
+
+		simd_float add(const simd_float &other) noexcept
+		{
+			utils::ScopedLock g{ guard, utils::WaitMechanism::Spin, false };
+			value += other;
+			simd_float result = value;
+			return result;
+		}
+
+	private:
+		simd_float value = 0.0f;
+		mutable std::atomic<bool> guard = false;
+	};
+
 	class ParameterBridge;
 	class ParameterValue;
 
@@ -37,8 +75,8 @@ namespace Framework
 		virtual simd_float getDeltaValue() { return currentValue_.load() - previousValue_.load(); }
 
 	protected:
-		utils::atomic_simd_float currentValue_{ 0.0f };
-		utils::atomic_simd_float previousValue_{ 0.0f };
+		atomic_simd_float currentValue_{ 0.0f };
+		atomic_simd_float previousValue_{ 0.0f };
 	};
 
 	struct ParameterLink
@@ -54,32 +92,29 @@ namespace Framework
 
 	class ParameterValue
 	{
+		ParameterValue() = default;
 	public:
-		ParameterValue() = delete;
 		ParameterValue(const ParameterValue &) = delete;
 		ParameterValue(ParameterValue &&) = delete;
 		ParameterValue &operator=(const ParameterValue &) = delete;
 		ParameterValue &operator=(ParameterValue &&) = delete;
 
-		ParameterValue(ParameterDetails details, u64 parentModuleId) noexcept :
-			details_(details), parentProcessorId_(parentModuleId) { initialise(); }
+		ParameterValue(ParameterDetails details, u64) noexcept :
+			details_(std::move(details)) { initialise(); }
 
-		ParameterValue(const ParameterValue &other, u64 parentModuleId) noexcept : 
-			details_(other.details_), parentProcessorId_(parentModuleId)
+		ParameterValue(const ParameterValue &other, u64) noexcept : 
+			details_(other.details_)
 		{
-			utils::ScopedSpinLock g(other.waitLock_);
+			utils::ScopedLock g{ other.waitLock_, utils::WaitMechanism::Spin };
 			normalisedValue_ = other.normalisedValue_;
 			modulations_ = other.modulations_;
 			normalisedInternalValue_ = other.normalisedInternalValue_;
 			internalValue_ = other.internalValue_;
 		}
 
-		ParameterValue(ParameterValue &&other, u64 parentModuleId) noexcept : 
-			ParameterValue(other, parentModuleId) { }
-
 		void initialise(std::optional<float> value = {})
 		{
-			utils::ScopedSpinLock lock(waitLock_);
+			utils::ScopedLock g{ waitLock_, utils::WaitMechanism::Spin };
 
 			normalisedValue_ = value.value_or(details_.defaultNormalisedValue);
 			modulations_ = 0.0f;
@@ -90,10 +125,10 @@ namespace Framework
 		}
 		
 		// prefer calling this only once if possible
-		template<CommonConcepts::ParameterRepresentation T>
+		template<ParameterRepresentation T>
 		T getInternalValue(float sampleRate = kDefaultSampleRate, bool isNormalised = false) const noexcept
 		{
-			utils::ScopedSpinLock lock(waitLock_);
+			utils::ScopedLock g{ waitLock_, utils::WaitMechanism::Spin };
 			
 			T result;
 
@@ -160,7 +195,7 @@ namespace Framework
 
 		auto changeControl(std::variant<Interface::BaseControl *, ParameterBridge *> control) noexcept
 		{
-			utils::ScopedSpinLock lock(waitLock_);
+			utils::ScopedLock g{ waitLock_, utils::WaitMechanism::Spin };
 			
 			if (std::holds_alternative<Interface::BaseControl *>(control))
 			{
@@ -180,7 +215,7 @@ namespace Framework
 		{
 			COMPLEX_ASSERT(!modulator.expired() && "You're trying to add an empty modulator to parameter");
 
-			utils::ScopedSpinLock lock(waitLock_);
+			utils::ScopedLock g{ waitLock_, utils::WaitMechanism::Spin };
 
 			if (index < 0) parameterLink_.modulators.emplace_back(std::move(modulator));
 			else parameterLink_.modulators.emplace(parameterLink_.modulators.begin() + index, std::move(modulator));
@@ -192,7 +227,7 @@ namespace Framework
 		{
 			COMPLEX_ASSERT(!modulator.expired() && "You're updating with an empty modulator");
 
-			utils::ScopedSpinLock lock(waitLock_);
+			utils::ScopedLock g{ waitLock_, utils::WaitMechanism::Spin };
 
 			auto replacedModulator = parameterLink_.modulators[index];
 			parameterLink_.modulators[index] = std::move(modulator);
@@ -206,7 +241,7 @@ namespace Framework
 		{
 			COMPLEX_ASSERT(index < parameterLink_.modulators.size() && "You're have given an index that's too large");
 
-			utils::ScopedSpinLock lock(waitLock_);
+			utils::ScopedLock g{ waitLock_, utils::WaitMechanism::Spin };
 
 			auto deletedModulator = parameterLink_.modulators[index];
 			parameterLink_.modulators.erase(parameterLink_.modulators.begin() + (std::ptrdiff_t)index);
@@ -220,25 +255,52 @@ namespace Framework
 
 		float getNormalisedValue() const noexcept
 		{
-			utils::ScopedSpinLock guard(waitLock_);
+			utils::ScopedLock g{ waitLock_, utils::WaitMechanism::Spin };
 			return normalisedValue_;
 		}
 		ParameterDetails getParameterDetails() const noexcept
 		{
-			utils::ScopedSpinLock guard(waitLock_);
+			utils::ScopedLock g{ waitLock_, utils::WaitMechanism::Spin };
 			return details_;
 		}
 		auto *getParameterLink() noexcept { return &parameterLink_; }
-		u64 getParentProcessorId() const noexcept { return parentProcessorId_; }
 
 		void setParameterDetails(const ParameterDetails &details) noexcept
 		{
-			utils::ScopedSpinLock guard(waitLock_);
+			utils::ScopedLock g{ waitLock_, utils::WaitMechanism::Spin };
 			details_ = details;
 			isDirty_ = true;
 		}
 
+		void setRuntimeDisplayName(std::string name) noexcept
+		{
+			utils::ScopedLock g{ waitLock_, utils::WaitMechanism::Spin };
+			runtimeStrings_.displayName = std::move(name);
+			details_.displayName = runtimeStrings_.displayName;
+		}
+
+		void setRuntimeDisplayUnits(std::string units) noexcept
+		{
+			utils::ScopedLock g{ waitLock_, utils::WaitMechanism::Spin };
+			runtimeStrings_.displayUnits = std::move(units);
+			details_.displayUnits = runtimeStrings_.displayUnits;
+		}
+
+		void setRuntimeStringLookup(const std::vector<std::string> &lookup) noexcept;
+
+		std::any serialiseToJson() const;
+		static std::unique_ptr<ParameterValue> deserialiseFromJson(Plugin::ProcessorTree *processorTree, 
+			std::any jsonData, std::string_view processorId);
+
 	private:
+		struct RuntimeStrings
+		{
+			std::string displayName{};
+			std::string displayUnits{};
+			std::string stringLookupData{};
+			std::vector<std::string_view> stringLookup{};
+		};
+
 		// normalised, received from gui changes or from host when mapped out
 		float normalisedValue_ = 0.0f;
 		// value of all internal modulations
@@ -251,7 +313,7 @@ namespace Framework
 		ParameterLink parameterLink_{ nullptr, nullptr, {}, this };
 
 		ParameterDetails details_;
-		const u64 parentProcessorId_;
+		RuntimeStrings runtimeStrings_{};
 
 		mutable std::atomic<bool> waitLock_ = false;
 		bool isDirty_ = false;

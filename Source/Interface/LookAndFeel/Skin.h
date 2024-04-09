@@ -10,17 +10,19 @@
 
 #pragma once
 
-#include <Third Party/json/json.hpp>
-#include "AppConfig.h"
-#include <juce_graphics/juce_graphics.h>
-#include "Framework/common.h"
+#include <array>
+#include <any>
+#include <string>
+#include "Framework/platform_definitions.h"
+#include "Framework/vector_map.h"
 
 namespace juce
 {
+	class File;
+	class String;
+	class Colour;
 	class LookAndFeel;
 }
-
-using json = nlohmann::json;
 
 namespace Interface
 {
@@ -39,6 +41,7 @@ namespace Interface
 			kPopupBrowser,
 			kFilterModule,
 			kDynamicsModule,
+			kPhaseModule,
 
 			kSectionsCount,
 			kUseParentOverride = kSectionsCount
@@ -184,17 +187,17 @@ namespace Interface
 
 		void clearSkin();
 
-		void setColor(ColorId colorId, const juce::Colour &color) { colors_[colorId - kInitialColor] = color; }
-		juce::Colour getColor(ColorId colorId) const { return colors_[colorId - kInitialColor]; }
-		juce::Colour getColor(SectionOverride section, ColorId colorId) const;
-		juce::Colour getColor(const OpenGlContainer *section, ColorId colorId) const;
+		void setColor(ColorId colorId, const juce::Colour &color) noexcept;
+		u32 getColor(ColorId colorId) const;
+		u32 getColor(SectionOverride section, ColorId colorId) const;
+		u32 getColor(const OpenGlContainer *section, ColorId colorId) const;
 
 		void setValue(ValueId valueId, float value) { values_[valueId] = value; }
 		float getValue(ValueId valueId) const { return values_[valueId]; }
 		float getValue(SectionOverride section, ValueId valueId) const;
 		float getValue(const OpenGlContainer *section, ValueId valueId) const;
 
-		void addOverrideColor(int section, ColorId colorId, juce::Colour color);
+		void addOverrideColor(int section, ColorId colorId, const juce::Colour &color);
 		void removeOverrideColor(int section, ColorId colorId);
 		bool overridesColor(int section, ColorId colorId) const;
 
@@ -204,13 +207,11 @@ namespace Interface
 
 		void copyValuesToLookAndFeel(juce::LookAndFeel *lookAndFeel) const;
 
-		json stateToJson();
-		juce::String stateToString();
-		void saveToFile(juce::File destination);
+		std::string stateToString();
+		void saveToFile(const juce::File &destination);
 
-		json updateJson(json data);
-		void jsonToState(json skin_var);
-		bool stringToState(juce::String skin_string);
+		void jsonToState(std::any jsonData);
+		bool stringToState(const juce::String &skin_string);
 		bool loadFromFile(const juce::File &source);
 		void loadDefaultSkin();
 
@@ -222,9 +223,9 @@ namespace Interface
 		}
 
 	protected:
-		std::array<juce::Colour, kColorIdCount> colors_{};
+		std::array<u32, kColorIdCount> colors_{};
 		std::array<float, kValueIdCount> values_{};
-		std::array<std::map<ColorId, juce::Colour>, kSectionsCount> colorOverrides_{};
-		std::array<std::map<ValueId, float>, kSectionsCount> valueOverrides_{};
+		std::array<Framework::VectorMap<ColorId, u32>, kSectionsCount> colorOverrides_{};
+		std::array<Framework::VectorMap<ValueId, float>, kSectionsCount> valueOverrides_{};
 	};
 }

@@ -9,6 +9,7 @@
 */
 
 #include "Framework/parameter_bridge.h"
+#include "Framework/parameter_value.h"
 #include "../LookAndFeel/Miscellaneous.h"
 #include "../LookAndFeel/Paths.h"
 #include "OpenGlImageComponent.h"
@@ -237,17 +238,18 @@ namespace Interface
 
 	BaseButton::BaseButton(Framework::ParameterValue *parameter)
 	{
+		setRepaintsOnMouseActivity(false);
+		
 		if (!parameter)
 			return;
 
 		hasParameter_ = true;
 
-		setName(toJuceString(parameter->getParameterDetails().name));
+		auto name = parameter->getParameterDetails().pluginName;
+		setName({ name.data(), name.size() });
 		setParameterLink(parameter->getParameterLink());
 		setParameterDetails(parameter->getParameterDetails());
 		setValueSafe(parameterLink_->parameter->getNormalisedValue());
-
-		setRepaintsOnMouseActivity(false);
 	}
 
 	BaseButton::~BaseButton() = default;
@@ -384,7 +386,10 @@ namespace Interface
 	String BaseButton::getTextFromValue(bool value) const noexcept
 	{
 		if (!details_.stringLookup.empty())
-			return toJuceString(details_.stringLookup[(size_t)value]);
+		{
+			auto string = details_.stringLookup[(size_t)value];
+			return { string.data(), string.size() };
+		}
 
 		return (value) ? "On" : "Off";
 	}
@@ -637,8 +642,10 @@ namespace Interface
 	{
 		borderComponent_->setRounding(scaleValue(kBorderRounding));
 		borderComponent_->setColor(borderColour_);
+
 		plusComponent_->setThickness(scaleValue(1.0f / (float)kPlusRelativeSize));
 		plusComponent_->setColor(getColour(Skin::kNormalText));
+
 		textComponent_->setFontType(PlainTextComponent::kText);
 		textComponent_->setJustification(Justification::centredLeft);
 		textComponent_->setText(text_);
@@ -657,4 +664,89 @@ namespace Interface
 		redoImage();
 	}
 
+	ActionButton::ActionButton(String name, String displayText) :
+		BaseButton(nullptr), text_(std::move(displayText))
+	{
+		setName(name);
+
+		fillComponent_ = makeOpenGlComponent<OpenGlQuad>(Shaders::kRoundedRectangleFragment, "Action Button Fill");
+		textComponent_ = makeOpenGlComponent<PlainTextComponent>("Action Button Text", text_);
+
+		addOpenGlComponent(fillComponent_);
+		addOpenGlComponent(textComponent_);
+	}
+
+	ActionButton::~ActionButton() = default;
+
+	void ActionButton::mouseDown(const MouseEvent &e)
+	{
+		if (e.mods.isPopupMenu())
+			return;
+		
+		updateState(true, true);
+
+		for (auto &component : openGlComponents_)
+			component->getAnimator().setIsClicked(true);
+	}
+
+	void ActionButton::mouseUp(const MouseEvent &e)
+	{
+		if (e.mods.isPopupMenu())
+			return;
+
+		bool wasDown = isHeldDown();
+		bool isOver = isMouseOver(true);
+		updateState(false, isOver);
+
+		if (!wasDown || !isOver)
+		{
+			if (wasDown)
+			{
+				for (auto &component : openGlComponents_)
+					component->getAnimator().setIsClicked(false);
+			}
+			return;
+		}
+
+		setToggleState(!getToggleState(), NotificationType::sendNotificationSync);
+
+		action_();
+
+		for (auto *listener : buttonListeners_)
+			listener->buttonClicked(this);
+
+		for (auto &component : openGlComponents_)
+			component->getAnimator().setIsClicked(false);
+	}
+
+	void ActionButton::setColours()
+	{
+		fillColour_ = getColour(Skin::kActionButtonPrimary);
+		textColour_ = getColour(Skin::kActionButtonText);
+	}
+
+	Rectangle<int> ActionButton::setBoundsForSizes(int height, int width)
+	{
+		drawBounds_ = { width, height };
+		return drawBounds_;
+	}
+
+	void ActionButton::redoImage()
+	{
+		fillComponent_->setRounding(scaleValue(kBorderRounding));
+		fillComponent_->setColor(fillColour_);
+
+		textComponent_->setFontType(PlainTextComponent::kText);
+		textComponent_->setTextColour(textColour_);
+		textComponent_->setJustification(Justification::centred);
+		textComponent_->setText(text_);
+	}
+
+	void ActionButton::setComponentsBounds()
+	{
+		fillComponent_->setCustomDrawBounds(drawBounds_);
+		textComponent_->setCustomDrawBounds(drawBounds_);
+
+		redoImage();
+	}
 }

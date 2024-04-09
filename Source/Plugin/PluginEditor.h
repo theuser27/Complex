@@ -8,7 +8,8 @@
 
 #pragma once
 
-#include <JuceHeader.h>
+#include "AppConfig.h"
+#include <juce_audio_processors/juce_audio_processors.h>
 #include "PluginProcessor.h"
 #include "Renderer.h"
 #include "Interface/LookAndFeel/BorderBoundsConstrainer.h"
@@ -23,7 +24,7 @@ public:
 	~ComplexAudioProcessorEditor() override;
 
 	//==============================================================================
-	void paint (Graphics &) override { }
+	void paint (juce::Graphics &) override { }
 	void resized() override;
 	void setScaleFactor(float newScale) override;
 

@@ -18,177 +18,268 @@
 #include "Plugin/Complex.h"
 #include "Plugin/Renderer.h"
 
+namespace
+{
+  strict_inline void vector_call complexMagnitude(simd_float &one, simd_float &two)
+  {
+  #if COMPLEX_SSE4_1
+    simd_float real = _mm_shuffle_ps(one.value, two.value, _MM_SHUFFLE(2, 0, 2, 0));
+    simd_float imaginary = _mm_shuffle_ps(one.value, two.value, _MM_SHUFFLE(3, 1, 3, 1));
+  #elif COMPLEX_NEON
+    static_assert(false, "not implemented yet");
+  #endif
+    auto magnitude = simd_float::sqrt(simd_float::mulAdd(real * real, imaginary, imaginary));
+    simd_float zeroes = 0.0f;
+  #if COMPLEX_SSE4_1
+    one.value = _mm_unpacklo_ps(magnitude.value, zeroes.value);
+    two.value = _mm_unpackhi_ps(magnitude.value, zeroes.value);
+  #elif COMPLEX_NEON
+    static_assert(false, "not implemented yet");
+  #endif
+  }
+
+  strict_inline simd_mask vector_call copyFromEven(simd_mask value)
+  {
+  #if COMPLEX_SSE4_1
+    return _mm_shuffle_epi32(value.value, _MM_SHUFFLE(2, 2, 0, 0));
+  #elif COMPLEX_NEON
+    static_assert(false, "not implemented yet");
+  #endif
+  }
+
+  strict_inline simd_float vector_call midSide(simd_float value)
+  {
+    simd_float half = value * 0.5f;
+  #if COMPLEX_SSE4_1
+    auto one = _mm_unpacklo_ps(value.value, half.value);
+    auto two = _mm_unpackhi_ps(value.value, half.value);
+    auto addSub = _mm_addsub_ps(one, two);
+    auto result = _mm_shuffle_ps(addSub, addSub, _MM_SHUFFLE(2, 0, 3, 1));
+  #elif COMPLEX_NEON
+    static_assert(false, "not implemented yet");
+  #endif
+    return simd_float::abs(result);
+  }
+}
+
 namespace Interface
 {
-  Spectrogram::Spectrogram() : OpenGlLineRenderer(kNumChannels * kResolution)
+  Spectrogram::Spectrogram(String name) : OpenGlComponent(std::move(name))
   {
-    static constexpr float kDefaultAmp = 0.000001f;
-
-    setFill(true);
-
-    /*for (int i = 0; i < kAudioSize; ++i)
+    amplitudeRenderers_.reserve(kNumChannels);
+    for (size_t i = 0; i < kNumChannels; ++i)
     {
-      left_amps_[i] = kDefaultAmp;
-      right_amps_[i] = kDefaultAmp;
-    }*/
-
+      amplitudeRenderers_.emplace_back(std::make_unique<OpenGlLineRenderer>(kResolution));
+      amplitudeRenderers_[i]->setFill(true);
+    }
   }
 
   Spectrogram::~Spectrogram() = default;
 
-  void Spectrogram::updateAmplitudes()
+  void Spectrogram::resized()
   {
-    /*
-    static constexpr float kMinAmp = 0.000001f;
-    static constexpr float kStartScaleAmp = 0.001f;
-    static constexpr float kMinDecay = 0.06f;
+    Colour colour = getColour(Skin::kWidgetPrimary1);
+    Colour fillColour = getColour(Skin::kWidgetPrimary2);
 
-    if (bufferView_.isEmpty())
-      return;
+    float fillFade = 0.0f;
+    if (auto container = container_.get())
+      fillFade = container->getValue(Skin::kWidgetFillFade);
 
-    COMPLEX_ASSERT(scratchBuffer_ != nullptr && "Scratch buffer was not set for this Spectrogram");
-    COMPLEX_ASSERT(scratchBuffer_->getSimdChannels() == bufferView_.getSimdChannels() 
-      && "Scratch buffer doesn't match the # channels in memory");
-
-    float sample_hz = nyquistFreq_ / effectiveFFTSize;
-    float start_octave = log2f(min_frequency_ / sample_hz);
-    float end_octave = log2f(max_frequency_ / sample_hz);
-    float num_octaves = end_octave - start_octave;
-    float last_bin = 0.0f;
-
-    for (u32 i = 0; i < bufferView_.getChannels(); i += bufferView_.getRelativeSize())
+    for (auto &amplitudeRenderer : amplitudeRenderers_)
     {
-      if (isDataPolar_)
-      {
-        COMPLEX_ASSERT(false);
-      }
-      else
-      {
-        for (u32 j = 0; j < effectiveFFTSize; j += kComplexSimdRatio)
-        {
-          simd_float amplitudes = utils::complexMagnitude(bufferView_.readSimdValueAt(i, j), bufferView_.readSimdValueAt(i, j + 1), true);
-          u32 writeIndex = j / kComplexSimdRatio;
-          scratchBuffer_->writeSimdValueAt(amplitudes, i, writeIndex);
+      amplitudeRenderer->setLineWidth(1.8f);
+      amplitudeRenderer->setFillCenter(-1.0f);
+      amplitudeRenderer->setColour(colour);
+      colour = colour.withMultipliedAlpha(0.5f);
+      amplitudeRenderer->setFillColours(fillColour.withMultipliedAlpha(1.0f - fillFade), fillColour);
+    }
 
-          if (displayPhases)
-          {
-            simd_float phases = utils::complexPhase(bufferView_.readSimdValueAt(i, j), bufferView_.readSimdValueAt(i, j + 1));
-            scratchBuffer_->writeSimdValueAt(phases, j, writeIndex + effectiveFFTSize / 2);
-          }
-        }
-
-        for (int i = 0; i < kResolution; ++i)
-        {
-          float t = i / (kResolution - 1.0f);
-          float octave = num_octaves * t + start_octave;
-          float bin = powf(2.0f, octave);
-
-          int bin_index = last_bin;
-          float bin_t = last_bin - bin_index;
-          //auto values = 
-
-          float prev_amplitude = std::abs(frequency_data[bin_index]);
-          float next_amplitude = std::abs(frequency_data[bin_index + 1]);
-          float amplitude = std::lerp(prev_amplitude, next_amplitude, bin_t);
-          if (bin - last_bin > 1.0f)
-          {
-            for (int j = last_bin + 1; j < bin; ++j)
-              amplitude = std::max(amplitude, std::abs(frequency_data[j]));
-          }
-          last_bin = bin;
-
-          amplitude = std::max(kMinAmp, 2.0f * amplitude / kAudioSize);
-          float db = utils::amplitudeToDb(std::max(amplitude, amps[i]) / kStartScaleAmp);
-          db += octave * kDbSlopePerOctave;
-          float decay = std::max(kMinDecay, std::min(1.0f, kDecayMult * db));
-          amps[i] = std::max(kMinAmp, std::lerp(amps[i], amplitude, decay));
-        }
-      }
-
-
-    }    
-
-    bufferView_->readSamples(transform_buffer_, kAudioSize, offset, index);
-    std::complex<float> *frequency_data = (std::complex<float>*)transform_buffer_;
-
-    
-    */
+    corners_.setBounds(getLocalBounds());
+    corners_.setCorners(getLocalBounds(), getValue(Skin::kWidgetRoundedCorner));
   }
 
-  void Spectrogram::setLineValues(OpenGlWrapper &openGl)
+  bool Spectrogram::updateAmplitudes(bool shouldDisplayPhases, float minFrequency, float maxFrequency, float dbSlope)
   {
-    /*float *amps = index == 0 ? left_amps_ : right_amps_;
-    float height = getHeight();
-    float width = getWidth();
-    float range_mult = 1.0f / (max_db_ - min_db_);
-    float num_octaves = log2f(max_frequency_ / min_frequency_);
+    static constexpr float kMinAmp = 0.000001f;
+    static constexpr float kMinDecay = 0.12f;
+
+    static const simd_mask oddMask = std::array{ 0U, kFullMask, 0U, kFullMask };
+
+    auto bufferView = bufferView_.lock();
+    if (bufferView.isEmpty())
+    {
+      bufferView_.unlock();
+      return false;
+    }
+
+    bool isDataPolar = isDataPolar_;
+
+    COMPLEX_ASSERT(scratchBuffer_.getSimdChannels() == bufferView.getSimdChannels()
+      && "Scratch buffer doesn't match the number of channels in memory");
+
+    float sampleHz = nyquistFreq_ / (float)binCount_;
+    float startOctave = std::log2(minFrequency / sampleHz);
+    float endOctave = std::log2(maxFrequency / sampleHz);
+    float numOctaves = endOctave - startOctave;
+    float maxBin = (float)binCount_ - 1.0f;
+    float decayMultiplier = decayMultiplier_ * std::min((float)binCount_ / 2048.0f, 1.0f);
+    bool isInterpolating = binCount_ > 1024;
+    
+    if (isDataPolar)
+    {
+      utils::ScopedLock g{ bufferView.getLock(), false, utils::WaitMechanism::Sleep };
+      scratchBuffer_.copy(bufferView, 0, 0, binCount_);
+    }
+    else if (shouldDisplayPhases)
+      utils::convertBufferLock<utils::complexCartToPolar>(bufferView, scratchBuffer_, binCount_, utils::WaitMechanism::Sleep);
+    else
+      utils::convertBufferLock<complexMagnitude>(bufferView, scratchBuffer_, binCount_, utils::WaitMechanism::Sleep);
+
+    bufferView_.unlock();
+
+    for (u32 i = 0; i < scratchBuffer_.getChannels(); i += scratchBuffer_.getRelativeSize())
+    {
+      float rangeBegin = std::exp2(startOctave);
+      for (u32 j = 0; j < kResolution; ++j)
+      {
+        float t = (float)j / (kResolution - 1.0f);
+        float octave = numOctaves * t + startOctave;
+        float rangeEnd = std::min(std::exp2(octave), maxBin);
+
+        int beginIndex = (int)rangeBegin;
+        int endIndex = (int)rangeEnd;
+        simd_float current = scratchBuffer_.readSimdValueAt(i, beginIndex);
+
+        if (endIndex - beginIndex > 1)
+        {
+          // the point covers a range of bins, we need to find the loudest one
+          for (int k = beginIndex + 1; k <= endIndex; ++k)
+          {
+            simd_float next = scratchBuffer_.readSimdValueAt(i, k);
+            simd_mask mask = copyFromEven(simd_float::greaterThan(next, current));
+            current = utils::maskLoad(current, next, mask);
+          }
+        }
+        else
+        {
+          // the point is still on the same bin as in the previous iteration
+          // or is entering the next one
+
+          if (isInterpolating)
+          {
+            simd_float next = scratchBuffer_.readSimdValueAt(i, beginIndex + 1);
+            current = utils::lerp(current, next, rangeBegin - (float)beginIndex);
+          }
+          else
+          {
+            if (endIndex - beginIndex != 1 && j > 0)
+            {
+              // if this is not the first iteration we can just copy the value from the previous one
+              resultBuffer_.writeSimdValueAt(resultBuffer_.readSimdValueAt(i, j - 1), i, j);
+              rangeBegin = rangeEnd;
+              continue;
+            }
+
+            // the point is entering the next bin, calculate its value
+            current = scratchBuffer_.readSimdValueAt(i, endIndex);
+          }
+
+        }
+        rangeBegin = rangeEnd;
+
+        simd_float magnitude = simd_float::max(kMinAmp, current / ((float)binCount_ * 2.0f));
+        magnitude *= (float)utils::dbToAmplitude(t * numOctaves * dbSlope);
+        simd_float oldValue = resultBuffer_.readSimdValueAt(i, j);
+        simd_float db = utils::amplitudeToDb(simd_float::max(magnitude, oldValue));
+        simd_float decay = simd_float::clamp(db * decayMultiplier, kMinDecay, 1.0f);
+        magnitude = simd_float::max(kMinAmp, utils::lerp(oldValue, magnitude, decay));
+
+        simd_float result = utils::maskLoad(magnitude, current, oddMask);
+        resultBuffer_.writeSimdValueAt(result, i, j);
+      }
+    }
+
+    return true;
+  }
+
+  void Spectrogram::init(OpenGlWrapper &openGl)
+  {
+    for (auto &amplitudeRenderer : amplitudeRenderers_)
+      amplitudeRenderer->init(openGl);
+
+    corners_.init(openGl);
+  }
+
+  void Spectrogram::render(OpenGlWrapper &openGl, bool animate)
+  {
+    auto &plugin = container_.get()->getRenderer()->getPlugin();
+    nyquistFreq_ = plugin.getSampleRate() * 0.5f;
+    binCount_ = plugin.getFFTSize() / 2;
+
+    bool shouldDisplayPhases = shouldDisplayPhases_;
+    float minFrequency = minFrequency_;
+    float maxFrequency = maxFrequency_;
+    float minDb = minDb_;
+    float maxDb = maxDb_;
+    float dbSlope = dbSlope_;
+    
+    if (!updateAmplitudes(shouldDisplayPhases, minFrequency, maxFrequency, dbSlope))
+      return;
+
+    float height = (float)getHeightSafe();
+    float width = (float)getWidthSafe();
+    float rangeMult = 1.0f / (maxDb - minDb);
 
     for (int i = 0; i < kResolution; ++i)
     {
-      float t = i / (kResolution - 1.0f);
-      float db = utils::amplitudeToDb(amps[i]);
-      db += t * num_octaves * kDbSlopePerOctave;
-      float y = (db - min_db_) * range_mult;
-      setXAt(i, t * width);
-      setYAt(i, height - y * height);
+      float t = (float)i / (kResolution - 1.0f);
+      simd_float db = utils::amplitudeToDb(midSide(resultBuffer_.readSimdValueAt(0, i)));
+      simd_float y = (db - minDb) * rangeMult;
+
+      for (size_t j = 0; j < amplitudeRenderers_.size(); ++j)
+      {
+        amplitudeRenderers_[j]->setXAt(i, t * width);
+        amplitudeRenderers_[j]->setYAt(i, height - y[j * 2] * height);
+      }
     }
-    OpenGlLineRenderer::render(openGl, true);*/
+
+    for (auto &amplitudeRenderer : amplitudeRenderers_)
+      amplitudeRenderer->render(openGl, this, getLocalBounds());
+
+    corners_.render(openGl, animate);
   }
 
-  void Spectrogram::render(OpenGlWrapper &open_gl, bool animate)
+  void Spectrogram::destroy()
   {
-    nyquistFreq_ = container_.get()->getRenderer()->getPlugin().getSampleRate() / 2.0f;
+    for (auto &amplitudeRenderer : amplitudeRenderers_)
+      amplitudeRenderer->destroy();
 
-    setLineWidth(2.0f);
-    setFillCenter(-1.0f);
-
-    updateAmplitudes();
-
-    Colour color = getColour(Skin::kWidgetPrimary1);
-    setColor(color);
-    Colour fill_color = getColour(Skin::kWidgetPrimary2);
-    float fill_fade = 0.0f;
-    if (auto container = container_.get())
-      fill_fade = container->getValue(Skin::kWidgetFillFade);
-    setFillColors(fill_color.withMultipliedAlpha(1.0f - fill_fade), fill_color);
-    setLineValues(open_gl);
-    //renderCorners(open_gl, animate, getColour());
-  }
-
-  void Spectrogram::renderCorners(OpenGlWrapper &openGl, bool animate, Colour color, float rounding)
-  {
-    /*if (corners_)
-    {
-      if (onlyBottomCorners_)
-        corners_->setBottomCorners(getLocalBounds(), rounding);
-      else
-        corners_->setCorners(getLocalBounds(), rounding);
-      corners_->setColor(color);
-      corners_->render(openGl, animate);
-    }*/
+    corners_.destroy();
   }
 
   void Spectrogram::paint(Graphics &g)
   {
     static constexpr int kLineSpacing = 10;
 
-    OpenGlLineRenderer::paint(g);
-    if (!paint_background_lines_)
+    if (!shouldPaintBackgroundLines_)
       return;
 
+    float minFrequency = minFrequency_;
+    float maxFrequency = maxFrequency_;
+
     int height = getHeight();
-    float max_octave = log2f(max_frequency_ / min_frequency_);
+    float max_octave = log2f(maxFrequency / minFrequency);
     g.setColour(getColour(Skin::kLightenScreen).withMultipliedAlpha(0.5f));
     float frequency = 0.0f;
     float increment = 1.0f;
 
     int x = 0;
-    while (frequency < max_frequency_)
+    while (frequency < maxFrequency)
     {
       for (int i = 0; i < kLineSpacing; ++i)
       {
         frequency += increment;
-        float t = log2f(frequency / min_frequency_) / max_octave;
+        float t = log2f(frequency / minFrequency) / max_octave;
         x = (int)std::round(t * (float)getWidth());
         g.fillRect(x, 0, 1, height);
       }

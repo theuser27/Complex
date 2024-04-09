@@ -9,6 +9,7 @@
 */
 
 #include "Framework/update_types.h"
+#include "Framework/parameter_value.h"
 #include "Framework/parameter_bridge.h"
 #include "Plugin/Complex.h"
 #include "Plugin/Renderer.h"
@@ -41,7 +42,8 @@ namespace Interface
 	{
 		hasParameter_ = true;
 
-		setName(toJuceString(parameter.getParameterDetails().name));
+		auto name = parameter.getParameterDetails().pluginName;
+		setName({ name.data(), name.size() });
 		auto replacedLink = setParameterLink(parameter.getParameterLink());
 
 		Framework::ParameterValue *replacedParameter = nullptr;
@@ -187,7 +189,7 @@ namespace Interface
 
 	void BaseControl::renderOpenGlComponents(OpenGlWrapper &openGl, bool animate)
 	{
-		utils::ScopedSpinLock g(isRendering_);
+		utils::ScopedLock g{ isRendering_, utils::WaitMechanism::SpinNotify };
 
 		for (auto &openGlComponent : openGlComponents_)
 		{
@@ -214,7 +216,7 @@ namespace Interface
 			return;
 		
 		label_ = makeOpenGlComponent<PlainTextComponent>("Control Label",
-			(hasParameter()) ? toJuceString(details_.displayName) : getName());
+			(hasParameter()) ? String{ details_.displayName.data(), details_.displayName.size() } : getName());
 		label_->setFontType(PlainTextComponent::kText);
 		label_->setTextHeight(Fonts::kInterVDefaultHeight);
 		addOpenGlComponent(label_);

@@ -25,8 +25,8 @@ namespace Framework
 			for (size_t i = 0; i < kSimdRatio; i++)
 				rows_[i] = row;
 		}
-		Matrix(const std::array<simd_float, kSimdRatio> rows) noexcept : rows_(rows) { }
-		Matrix(const std::array<simd_float, kComplexSimdRatio> rows) noexcept : isComplex(true)
+		Matrix(const std::array<simd_float, kSimdRatio> &rows) noexcept : rows_(rows) { }
+		Matrix(const std::array<simd_float, kComplexSimdRatio> &rows) noexcept : isComplex(true)
 		{
 			for (size_t i = 0; i < kComplexSimdRatio; i++)
 				rows_[i] = rows[i];

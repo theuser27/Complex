@@ -14,197 +14,238 @@
 
 namespace
 {
-  constexpr float kLoopWidth = 2.001f;
-  constexpr float kDefaultLineWidth = 7.0f;
-
   strict_inline float inverseSqrt(float value)
   {
-    static constexpr float kThreeHalves = 1.5f;
-
     float x2 = value * 0.5f;
     int i = std::bit_cast<int>(value);
     i = 0x5f3759DF - (i >> 1);
     value = std::bit_cast<float>(i);
-    value = value * (kThreeHalves - (x2 * value * value));
-    value = value * (kThreeHalves - (x2 * value * value));
+    value = value * (1.5f - (x2 * value * value));
+    value = value * (1.5f - (x2 * value * value));
     return value;
   }
 
-  strict_inline float inverseMagnitudeOfPoint(juce::Point<float> point)
-  { return inverseSqrt(point.x * point.x + point.y * point.y); }
-
-  strict_inline juce::Point<float> normalize(juce::Point<float> point)
-  { return point * inverseMagnitudeOfPoint(point); }
+  strict_inline juce::Point<float> normalise(juce::Point<float> point)
+  { return point * inverseSqrt(point.x * point.x + point.y * point.y); }
 }
 
 namespace Interface
 {
   using namespace juce::gl;
 
-  OpenGlLineRenderer::OpenGlLineRenderer(int num_points, bool loop) : num_points_(num_points), loop_(loop)
-  {
-    num_padding_ = 1;
-    if (loop)
-      num_padding_ = 2;
-
-    num_line_vertices_ = kLineVerticesPerPoint * (num_points_ + 2 * num_padding_);
-    num_fill_vertices_ = kFillVerticesPerPoint * (num_points_ + 2 * num_padding_);
-    num_line_floats_ = kLineFloatsPerVertex * num_line_vertices_;
-    num_fill_floats_ = kFillFloatsPerVertex * num_fill_vertices_;
-
-    line_width_ = kDefaultLineWidth;
-
-    corners_ = makeOpenGlComponent<OpenGlCorners>();
-    
-    x_ = std::make_unique<float[]>(num_points_);
-    y_ = std::make_unique<float[]>(num_points_);
-    boost_left_ = std::make_unique<float[]>(num_points_);
-    boost_right_ = std::make_unique<float[]>(num_points_);
-
-    line_data_ = std::make_unique<float[]>(num_line_floats_);
-    fill_data_ = std::make_unique<float[]>(num_fill_floats_);
-    indices_data_ = std::make_unique<int[]>(num_line_vertices_);
-    vertex_array_object_ = 0;
-    line_buffer_ = 0;
-    fill_buffer_ = 0;
-    indices_buffer_ = 0;
-    last_negative_boost_ = false;
-
-    for (int i = 0; i < num_line_vertices_; ++i)
-      indices_data_[i] = i;
-
-    for (int i = 0; i < num_line_floats_; i += 2 * kLineFloatsPerVertex)
-      line_data_[i + 2] = 1.0f;
-
-    for (int i = 0; i < num_points_; ++i)
-      setXAt(i, 2.0f * i / (num_points_ - 1.0f) - 1.0f);
-  }
+  OpenGlLineRenderer::OpenGlLineRenderer(int pointCount) { setPointCount(pointCount); }
 
   OpenGlLineRenderer::~OpenGlLineRenderer() = default;
 
-  void OpenGlLineRenderer::init(OpenGlWrapper &open_gl)
+  void OpenGlLineRenderer::init(OpenGlWrapper &openGl)
   {
-    glGenVertexArrays(1, &vertex_array_object_);
-    glBindVertexArray(vertex_array_object_);
+    glGenBuffers(1, &lineBuffer_);
+    glBindBuffer(GL_ARRAY_BUFFER, lineBuffer_);
+    GLsizeiptr line_vert_size = static_cast<GLsizeiptr>(lineFloatsCount_ * sizeof(float));
+    glBufferData(GL_ARRAY_BUFFER, line_vert_size, lineData_.get(), GL_STATIC_DRAW);
 
-    glGenBuffers(1, &line_buffer_);
-    glBindBuffer(GL_ARRAY_BUFFER, line_buffer_);
+    glGenBuffers(1, &fillBuffer_);
+    glBindBuffer(GL_ARRAY_BUFFER, fillBuffer_);
+    GLsizeiptr fill_vert_size = static_cast<GLsizeiptr>(fillFloatsCount_ * sizeof(float));
+    glBufferData(GL_ARRAY_BUFFER, fill_vert_size, fillData_.get(), GL_STATIC_DRAW);
 
-    GLsizeiptr line_vert_size = static_cast<GLsizeiptr>(num_line_floats_ * sizeof(float));
-    glBufferData(GL_ARRAY_BUFFER, line_vert_size, line_data_.get(), GL_STATIC_DRAW);
+    glGenBuffers(1, &indicesBuffer_);
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, indicesBuffer_);
+    GLsizeiptr line_size = static_cast<GLsizeiptr>(lineVerticesCount_ * sizeof(int));
+    glBufferData(GL_ELEMENT_ARRAY_BUFFER, line_size, indicesData_.get(), GL_STATIC_DRAW);
 
-    glGenBuffers(1, &fill_buffer_);
-    glBindBuffer(GL_ARRAY_BUFFER, fill_buffer_);
+    shouldUpdateBufferSizes_ = false;
 
-    GLsizeiptr fill_vert_size = static_cast<GLsizeiptr>(num_fill_floats_ * sizeof(float));
-    glBufferData(GL_ARRAY_BUFFER, fill_vert_size, fill_data_.get(), GL_STATIC_DRAW);
+    lineShader_ = openGl.shaders->getShaderProgram(Shaders::kLineVertex, Shaders::kLineFragment);
+    lineShader_->use();
+    lineColourUniform_ = OpenGlComponent::getUniform(*lineShader_, "color").value();
+    lineScaleUniform_ = OpenGlComponent::getUniform(*lineShader_, "scale").value();
+    lineWidthUniform_ = OpenGlComponent::getUniform(*lineShader_, "line_width").value();
+    linePosition_ = OpenGlComponent::getAttribute(*lineShader_, "position").value();
 
-    glGenBuffers(1, &indices_buffer_);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, indices_buffer_);
-
-    GLsizeiptr line_size = static_cast<GLsizeiptr>(num_line_vertices_ * sizeof(int));
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, line_size, indices_data_.get(), GL_STATIC_DRAW);
-
-    shader_ = open_gl.shaders->getShaderProgram(Shaders::kLineVertex, Shaders::kLineFragment);
-    shader_->use();
-    color_uniform_ = getUniform(*shader_, "color");
-    scale_uniform_ = getUniform(*shader_, "scale");
-    boost_uniform_ = getUniform(*shader_, "boost");
-    line_width_uniform_ = getUniform(*shader_, "line_width");
-    position_ = getAttribute(*shader_, "position");
-
-    fill_shader_ = open_gl.shaders->getShaderProgram(Shaders::kFillVertex, Shaders::kFillFragment);
-    fill_shader_->use();
-    fill_color_from_uniform_ = getUniform(*fill_shader_, "color_from");
-    fill_color_to_uniform_ = getUniform(*fill_shader_, "color_to");
-    fill_center_uniform_ = getUniform(*fill_shader_, "center_position");
-    fill_boost_amount_uniform_ = getUniform(*fill_shader_, "boost_amount");
-    fill_scale_uniform_ = getUniform(*fill_shader_, "scale");
-    fill_position_ = getAttribute(*fill_shader_, "position");
+    fillShader_ = openGl.shaders->getShaderProgram(Shaders::kFillVertex, Shaders::kFillFragment);
+    fillShader_->use();
+    fillColourFromUniform_ = OpenGlComponent::getUniform(*fillShader_, "color_from").value();
+    fillColourToUniform_ = OpenGlComponent::getUniform(*fillShader_, "color_to").value();
+    fillCenterUniform_ = OpenGlComponent::getUniform(*fillShader_, "center_position").value();
+    fillBoostAmountUniform_ = OpenGlComponent::getUniform(*fillShader_, "boost_amount").value();
+    fillScaleUniform_ = OpenGlComponent::getUniform(*fillShader_, "scale").value();
+    fillPosition_ = OpenGlComponent::getAttribute(*fillShader_, "position").value();
   }
 
   void OpenGlLineRenderer::destroy()
   {
-    shader_ = nullptr;
-    position_ = nullptr;
-    color_uniform_ = nullptr;
-    scale_uniform_ = nullptr;
-    boost_uniform_ = nullptr;
-    line_width_uniform_ = nullptr;
+    lineShader_ = nullptr;
+    linePosition_.attributeID = (GLuint)-1;
+    lineColourUniform_.uniformID = -1;
+    lineScaleUniform_.uniformID = -1;
+    lineWidthUniform_.uniformID = -1;
 
-    fill_shader_ = nullptr;
-    fill_color_from_uniform_ = nullptr;
-    fill_color_to_uniform_ = nullptr;
-    fill_center_uniform_ = nullptr;
-    fill_boost_amount_uniform_ = nullptr;
-    fill_scale_uniform_ = nullptr;
-    fill_position_ = nullptr;
+    fillShader_ = nullptr;
+    fillColourFromUniform_.uniformID = -1;
+    fillColourToUniform_.uniformID = -1;
+    fillCenterUniform_.uniformID = -1;
+    fillBoostAmountUniform_.uniformID = -1;
+    fillScaleUniform_.uniformID = -1;
+    fillPosition_.attributeID = (GLuint)-1;
 
-    glDeleteBuffers(1, &line_buffer_);
-    glDeleteBuffers(1, &fill_buffer_);
-    glDeleteBuffers(1, &indices_buffer_);
+    glDeleteBuffers(1, &lineBuffer_);
+    glDeleteBuffers(1, &fillBuffer_);
+    glDeleteBuffers(1, &indicesBuffer_);
 
-    vertex_array_object_ = 0;
-    line_buffer_ = 0;
-    fill_buffer_ = 0;
-    indices_buffer_ = 0;
+    lineBuffer_ = 0;
+    fillBuffer_ = 0;
+    indicesBuffer_ = 0;
   }
 
-  void OpenGlLineRenderer::render(OpenGlWrapper &open_gl, bool animate)
-  { drawLines(open_gl, animate); }
-
-  void OpenGlLineRenderer::boostLeftRange(float start, float end, int buffer_vertices, float min)
-  { boostRange(boost_left_.get(), start, end, buffer_vertices, min); }
-
-  void OpenGlLineRenderer::boostRightRange(float start, float end, int buffer_vertices, float min)
-  { boostRange(boost_right_.get(), start, end, buffer_vertices, min); }
-
-  void OpenGlLineRenderer::boostRange(float *boosts, float start, float end, int buffer_vertices, float min)
+  void OpenGlLineRenderer::setPointCount(int pointCount)
   {
-    any_boost_value_ = true;
-    dirty_ = true;
+    if (pointCount == pointCount_)
+      return;
+    
+    utils::ScopedLock g{ buffersLock_, utils::WaitMechanism::WaitNotify };
+    
+    pointCount_ = pointCount;
+    lineVerticesCount_ = kLineVerticesPerPoint * (pointCount_ + 2);
+    fillVerticesCount_ = kFillVerticesPerPoint * (pointCount_ + 2);
+    lineFloatsCount_ = kLineFloatsPerVertex * lineVerticesCount_;
+    fillFloatsCount_ = kFillFloatsPerVertex * fillVerticesCount_;
 
-    int active_points = num_points_ - 2 * buffer_vertices;
-    int start_index = std::max((int)std::ceil(start * (active_points - 1)), 0);
-    float end_position = end * (active_points - 1);
+    x_ = std::make_unique<float[]>(pointCount_);
+    y_ = std::make_unique<float[]>(pointCount_);
+    boosts_ = std::make_unique<float[]>(pointCount_);
+
+    lineData_ = std::make_unique<float[]>(lineFloatsCount_);
+    fillData_ = std::make_unique<float[]>(fillFloatsCount_);
+    indicesData_ = std::make_unique<int[]>(lineVerticesCount_);
+
+    for (int i = 0; i < lineVerticesCount_; ++i)
+      indicesData_[i] = i;
+
+    for (int i = 0; i < lineFloatsCount_; i += 2 * kLineFloatsPerVertex)
+      lineData_[i + 2] = 1.0f;
+
+    shouldUpdateBufferSizes_ = true;
+  }
+
+  void OpenGlLineRenderer::render(const OpenGlWrapper &openGl, OpenGlComponent *target, Rectangle<int> bounds)
+  {
+    utils::ScopedLock g{ buffersLock_, utils::WaitMechanism::WaitNotify };
+
+    if (!OpenGlComponent::setViewPort(target, bounds, openGl))
+      return;
+
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    glEnable(GL_BLEND);
+    glEnable(GL_SCISSOR_TEST);
+
+    if (dirty_)
+    {
+      setLineVertices(target);
+      setFillVertices(target);
+
+      if (shouldUpdateBufferSizes_)
+      {
+        glBindBuffer(GL_ARRAY_BUFFER, lineBuffer_);
+        GLsizeiptr line_vert_size = static_cast<GLsizeiptr>(lineFloatsCount_ * sizeof(float));
+        glBufferData(GL_ARRAY_BUFFER, line_vert_size, lineData_.get(), GL_STATIC_DRAW);
+
+        glBindBuffer(GL_ARRAY_BUFFER, fillBuffer_);
+        GLsizeiptr fill_vert_size = static_cast<GLsizeiptr>(fillFloatsCount_ * sizeof(float));
+        glBufferData(GL_ARRAY_BUFFER, fill_vert_size, fillData_.get(), GL_STATIC_DRAW);
+
+        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, indicesBuffer_);
+        GLsizeiptr line_size = static_cast<GLsizeiptr>(lineVerticesCount_ * sizeof(int));
+        glBufferData(GL_ELEMENT_ARRAY_BUFFER, line_size, indicesData_.get(), GL_STATIC_DRAW);
+
+        shouldUpdateBufferSizes_ = false;
+      }
+      else
+      {
+        glBindBuffer(GL_ARRAY_BUFFER, lineBuffer_);
+        GLsizeiptr line_vert_size = static_cast<GLsizeiptr>(lineFloatsCount_ * sizeof(float));
+        glBufferSubData(GL_ARRAY_BUFFER, 0, line_vert_size, lineData_.get());
+
+        glBindBuffer(GL_ARRAY_BUFFER, fillBuffer_);
+        GLsizeiptr fill_vert_size = static_cast<GLsizeiptr>(fillFloatsCount_ * sizeof(float));
+        glBufferSubData(GL_ARRAY_BUFFER, 0, fill_vert_size, fillData_.get());
+      }
+
+      glBindBuffer(GL_ARRAY_BUFFER, 0);
+      dirty_ = false;
+    }
+
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, indicesBuffer_);
+
+    float x_shrink = 1.0f;
+    float y_shrink = 1.0f;
+    if (fit_)
+    {
+      x_shrink = 1.0f - 0.33f * lineWidth_ / (float)target->getWidthSafe();
+      y_shrink = 1.0f - 0.33f * lineWidth_ / (float)target->getHeightSafe();
+    }
+
+    if (fill_)
+    {
+      glBindBuffer(GL_ARRAY_BUFFER, fillBuffer_);
+      fillShader_->use();
+
+      Colour fillColourFrom = fillColorFrom_.get();
+      fillColourFromUniform_.set(fillColourFrom.getFloatRed(), fillColourFrom.getFloatGreen(),
+        fillColourFrom.getFloatBlue(), fillColourFrom.getFloatAlpha());
+      Colour fillColourTo = fillColorTo_.get();
+      fillColourToUniform_.set(fillColourTo.getFloatRed(), fillColourTo.getFloatGreen(),
+        fillColourTo.getFloatBlue(), fillColourTo.getFloatAlpha());
+
+      fillCenterUniform_.set(fillCenter_);
+      fillBoostAmountUniform_.set(fillBoostAmount_);
+      fillScaleUniform_.set(x_shrink, y_shrink);
+
+      glVertexAttribPointer(fillPosition_.attributeID, kFillFloatsPerVertex, GL_FLOAT,
+        GL_FALSE, kFillFloatsPerVertex * sizeof(float), nullptr);
+      glEnableVertexAttribArray(fillPosition_.attributeID);
+      glDrawElements(GL_TRIANGLE_STRIP, fillVerticesCount_, GL_UNSIGNED_INT, nullptr);
+    }
+
+    glBindBuffer(GL_ARRAY_BUFFER, lineBuffer_);
+    lineShader_->use();
+    glVertexAttribPointer(linePosition_.attributeID, kLineFloatsPerVertex, GL_FLOAT,
+      GL_FALSE, kLineFloatsPerVertex * sizeof(float), nullptr);
+    glEnableVertexAttribArray(linePosition_.attributeID);
+
+    Colour colour = colour_.get();
+    lineColourUniform_.set(colour.getFloatRed(), colour.getFloatGreen(), colour.getFloatBlue(), colour.getFloatAlpha());
+
+    lineScaleUniform_.set(x_shrink, y_shrink);
+    lineWidthUniform_.set(lineWidth_);
+
+    glDrawElements(GL_TRIANGLE_STRIP, lineVerticesCount_, GL_UNSIGNED_INT, nullptr);
+
+    glDisableVertexAttribArray(linePosition_.attributeID);
+    glBindBuffer(GL_ARRAY_BUFFER, 0);
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+    glDisable(GL_BLEND);
+    glDisable(GL_SCISSOR_TEST);
+  }
+
+  void OpenGlLineRenderer::boostRange(float start, float end, int buffer_vertices, float min)
+  {
+    dirty_ = true;
+    float *boosts = boosts_.get();
+
+    int active_points = pointCount_ - 2 * buffer_vertices;
+    int start_index = std::max((int)std::ceil(start * (float)(active_points - 1)), 0);
+    float end_position = end * (float)(active_points - 1);
     int end_index = std::max((int)std::ceil(end_position), 0);
-    float progress = end_position - (int)end_position;
+    float progress = end_position - std::trunc(end_position);
 
     start_index %= active_points;
     end_index %= active_points;
-    int num_points = end_index - start_index;
-    int direction = 1;
-    if (enable_backward_boost_)
-    {
-      if ((num_points < 0 && num_points > -num_points_ / 2) || (num_points == 0 && last_negative_boost_))
-      {
-        num_points = -num_points;
-        direction = -1;
-      }
-      else if (num_points > num_points_ / 2)
-      {
-        num_points -= active_points;
-        num_points = -num_points;
-        direction = -1;
-      }
-    }
 
-    last_negative_boost_ = direction < 0;
-    if (last_negative_boost_)
-    {
-      start_index = std::max((int)std::floor(start * (float)(active_points - 1)), 0);
-      end_index = std::max((int)std::floor(end_position), 0);
-      start_index %= active_points;
-      end_index %= active_points;
-
-      num_points = start_index - end_index;
-      progress = 1.0f - progress;
-    }
-
-    float delta = (1.0f - min) / num_points;
+    float delta = (1.0f - min) / (float)(end_index - start_index);
     float val = min;
 
-    for (int i = start_index; i != end_index; i = (i + active_points + direction) % active_points)
+    for (int i = start_index; i != end_index; i = (i + active_points + 1) % active_points)
     {
       val += delta;
       val = std::min(1.0f, val);
@@ -216,137 +257,111 @@ namespace Interface
     boosts[end_index + buffer_vertices] = std::max(end_value, progress * progress);
   }
 
-  void OpenGlLineRenderer::boostRange(simd_float start, simd_float end,
-    int buffer_vertices, simd_float min)
+  void OpenGlLineRenderer::decayBoosts(float mult)
   {
-    boostLeftRange(start[0], end[0], buffer_vertices, min[0]);
-    boostRightRange(start[1], end[1], buffer_vertices, min[1]);
-  }
+    bool anyBoost = false;
+    float *boosts = boosts_.get();
 
-  void OpenGlLineRenderer::decayBoosts(simd_float mult)
-  {
-    bool any_boost = false;
-    for (int i = 0; i < num_points_; ++i)
+    for (int i = 0; i < pointCount_; ++i)
     {
-      boost_left_[i] *= mult[0];
-      boost_right_[i] *= mult[1];
-      any_boost = any_boost || boost_left_[i] || boost_right_[i];
+      boosts[i] *= mult;
+      anyBoost = anyBoost || boosts[i] != 0.0f;
     }
 
-    any_boost_value_ = any_boost;
+    dirty_ = dirty_ || anyBoost;
   }
 
-  void OpenGlLineRenderer::setFillVertices(bool left)
+  void OpenGlLineRenderer::setFillVertices(const OpenGlComponent *target)
   {
-    float *boosts = left ? boost_left_.get() : boost_right_.get();
-    float x_adjust = 2.0f / getWidth();
-    float y_adjust = 2.0f / getHeight();
+    float *boosts = boosts_.get();
 
-    for (int i = 0; i < num_points_; ++i)
+    float x_adjust = 2.0f / (float)target->getWidthSafe();
+    float y_adjust = 2.0f / (float)target->getHeightSafe();
+
+    for (int i = 0; i < pointCount_; ++i)
     {
-      int index_top = (i + num_padding_) * kFillFloatsPerPoint;
+      int index_top = (i + 1) * kFillFloatsPerPoint;
       int index_bottom = index_top + kFillFloatsPerVertex;
       float x = x_adjust * x_[i] - 1.0f;
       float y = 1.0f - y_adjust * y_[i];
-      fill_data_[index_top] = x;
-      fill_data_[index_top + 1] = y;
-      fill_data_[index_top + 2] = boosts[i];
-      fill_data_[index_bottom] = x;
-      fill_data_[index_bottom + 1] = fill_center_;
-      fill_data_[index_bottom + 2] = boosts[i];
+      fillData_[index_top] = x;
+      fillData_[index_top + 1] = y;
+      fillData_[index_top + 2] = boosts[i];
+      fillData_[index_bottom] = x;
+      fillData_[index_bottom + 1] = fillCenter_;
+      fillData_[index_bottom + 2] = boosts[i];
     }
 
-    int padding_copy_size = num_padding_ * kFillFloatsPerPoint * sizeof(float);
-    int begin_copy_source = num_padding_ * kFillFloatsPerPoint;
-    int end_copy_source = num_points_ * kFillFloatsPerPoint;
-    if (loop_ && num_points_ >= 2)
-    {
-      memcpy(fill_data_.get(), fill_data_.get() + end_copy_source, padding_copy_size);
-      int begin_copy_dest = (num_padding_ + num_points_) * kFillFloatsPerPoint;
-      memcpy(fill_data_.get() + begin_copy_dest, fill_data_.get() + begin_copy_source, padding_copy_size);
+    int padding_copy_size = kFillFloatsPerPoint * sizeof(float);
+    int begin_copy_source = kFillFloatsPerPoint;
+    int end_copy_source = pointCount_ * kFillFloatsPerPoint;
 
-      for (int i = 0; i < num_padding_; ++i)
-      {
-        fill_data_[i * kFillFloatsPerPoint] -= kLoopWidth;
-        fill_data_[i * kFillFloatsPerPoint + kFillFloatsPerVertex] -= kLoopWidth;
-        fill_data_[begin_copy_dest + i * kFillFloatsPerPoint] += kLoopWidth;
-        fill_data_[begin_copy_dest + i * kFillFloatsPerPoint + kFillFloatsPerVertex] += kLoopWidth;
-      }
-    }
-    else
-    {
-      int end_copy_dest = (num_padding_ + num_points_) * kFillFloatsPerPoint;
-      memcpy(fill_data_.get() + end_copy_dest, fill_data_.get() + end_copy_source, padding_copy_size);
-      memcpy(fill_data_.get(), fill_data_.get() + begin_copy_source, padding_copy_size);
-    }
+    int end_copy_dest = (pointCount_ + 1) * kFillFloatsPerPoint;
+    memcpy(fillData_.get() + end_copy_dest, fillData_.get() + end_copy_source, padding_copy_size);
+    memcpy(fillData_.get(), fillData_.get() + begin_copy_source, padding_copy_size);
   }
 
-  void OpenGlLineRenderer::setLineVertices(bool left)
+  void OpenGlLineRenderer::setLineVertices(const OpenGlComponent *target)
   {
-    float *boosts = left ? boost_left_.get() : boost_right_.get();
+    float *boosts = boosts_.get();
 
     Point<float> prev_normalized_delta;
-    for (int i = 0; i < num_points_ - 1; ++i)
+    for (int i = 0; i < pointCount_ - 1; ++i)
     {
       if (x_[i] != x_[i + 1] || y_[i] != y_[i + 1])
       {
-        prev_normalized_delta = normalize(Point<float>(x_[i + 1] - x_[i], y_[i + 1] - y_[i]));
+        prev_normalized_delta = normalise(Point<float>(x_[i + 1] - x_[i], y_[i + 1] - y_[i]));
         break;
       }
     }
 
     // rotation of +90 degrees
     Point<float> prev_delta_normal(-prev_normalized_delta.y, prev_normalized_delta.x);
-    float line_radius = line_width_ / 2.0f + 0.5f;
+    float line_radius = lineWidth_ * 0.5f + 0.5f;
     float prev_magnitude = line_radius;
 
-    float x_adjust = 2.0f / getWidth();
-    float y_adjust = 2.0f / getHeight();
+    float x_adjust = 2.0f / (float)target->getWidthSafe();
+    float y_adjust = 2.0f / (float)target->getHeightSafe();
 
-    for (int i = 0; i < num_points_; ++i)
+    for (int i = 0; i < pointCount_; ++i)
     {
-      float radius = line_radius * (1.0f + boost_amount_ * boosts[i]);
-      Point<float> point(x_[i], y_[i]);
-      int next_index = i + 1;
-      int clamped_next_index = std::min(next_index, num_points_ - 1);
-
-      Point<float> next_point(x_[clamped_next_index], y_[clamped_next_index]);
-      Point<float> delta = next_point - point;
-      if (point == next_point)
-      {
+      float radius = line_radius * (1.0f + boostAmount_ * boosts[i]);
+      Point<float> point{ x_[i], y_[i] };
+      
+      int clamped_next_index = std::min(i + 1, pointCount_ - 1);
+      Point<float> delta{ x_[clamped_next_index] - point.x, y_[clamped_next_index] - point.y };
+      if (delta.isOrigin())
         delta = prev_normalized_delta;
-        next_point = point + delta;
-      }
 
-      float inverse_magnitude = inverseMagnitudeOfPoint(delta);
-      float magnitude = 1.0f / std::max(0.00001f, inverse_magnitude);
-      Point<float> normalized_delta(delta.x * inverse_magnitude, delta.y * inverse_magnitude);
-      Point<float> delta_normal = Point<float>(-normalized_delta.y, normalized_delta.x);
+      float magnitude = std::sqrt(delta.getDistanceSquaredFromOrigin());
+      float clamped_magnitude = std::min(100'000.0f, magnitude);
+      Point<float> normalized_delta{ delta.x / magnitude, delta.y / magnitude };
+      Point<float> delta_normal{ -normalized_delta.y, normalized_delta.x };
 
       Point<float> angle_bisect_delta = normalized_delta - prev_normalized_delta;
       Point<float> bisect_line;
-      bool straight = angle_bisect_delta.x < 0.001f && angle_bisect_delta.x > -0.001f &&
-        angle_bisect_delta.y < 0.001f && angle_bisect_delta.y > -0.001f;
+      bool straight = std::abs(angle_bisect_delta.x) < 0.001f && std::abs(angle_bisect_delta.y) < 0.001f;
       if (straight)
         bisect_line = delta_normal;
       else
-        bisect_line = normalize(angle_bisect_delta);
+        bisect_line = normalise(angle_bisect_delta);
+
+      float max_inner_radius = std::max(radius, 0.5f * (clamped_magnitude + prev_magnitude));
+      prev_magnitude = clamped_magnitude;
+
+      float bisect_delta_cos = bisect_line.getDotProduct(delta_normal);
+      float inner_mult = std::min(10.0f, 1.0f / std::fabs(bisect_delta_cos));
+      Point<float> inner_point = point + bisect_line * std::min(inner_mult * radius, max_inner_radius);
+      Point<float> outer_point = point - bisect_line * radius;
 
       float x1, x2, x3, x4, x5, x6;
       float y1, y2, y3, y4, y5, y6;
 
-      float max_inner_radius = std::max(radius, 0.5f * (magnitude + prev_magnitude));
-      prev_magnitude = magnitude;
-
-      float bisect_normal_dot_product = bisect_line.getDotProduct(delta_normal);
-      float inner_mult = 1.0f / std::max(0.1f, std::fabs(bisect_normal_dot_product));
-      Point<float> inner_point = point + std::min(inner_mult * radius, max_inner_radius) * bisect_line;
-      Point<float> outer_point = point - bisect_line * radius;
-
-      if (bisect_normal_dot_product < 0.0f)
+      Point<float> outer_point_start = outer_point;
+      Point<float> outer_point_end = outer_point;
+      
+      if (bisect_delta_cos < 0.0f)
       {
-        Point<float> outer_point_start = outer_point;
-        Point<float> outer_point_end = outer_point;
         if (!straight)
         {
           outer_point_start = point + prev_delta_normal * radius;
@@ -363,8 +378,6 @@ namespace Interface
       }
       else
       {
-        Point<float> outer_point_start = outer_point;
-        Point<float> outer_point_end = outer_point;
         if (!straight)
         {
           outer_point_start = point - prev_delta_normal * radius;
@@ -380,151 +393,51 @@ namespace Interface
         y1 = y3 = y5 = inner_point.y;
       }
 
-      int first = (i + num_padding_) * kLineFloatsPerPoint;
+      int first = (i + 1) * kLineFloatsPerPoint;
       int second = first + kLineFloatsPerVertex;
       int third = second + kLineFloatsPerVertex;
       int fourth = third + kLineFloatsPerVertex;
       int fifth = fourth + kLineFloatsPerVertex;
       int sixth = fifth + kLineFloatsPerVertex;
 
-      line_data_[first] = x_adjust * x1 - 1.0f;
-      line_data_[first + 1] = 1.0f - y_adjust * y1;
+      lineData_[first] = x_adjust * x1 - 1.0f;
+      lineData_[first + 1] = 1.0f - y_adjust * y1;
 
-      line_data_[second] = x_adjust * x2 - 1.0f;
-      line_data_[second + 1] = 1.0f - y_adjust * y2;
+      lineData_[second] = x_adjust * x2 - 1.0f;
+      lineData_[second + 1] = 1.0f - y_adjust * y2;
 
-      line_data_[third] = x_adjust * x3 - 1.0f;
-      line_data_[third + 1] = 1.0f - y_adjust * y3;
+      lineData_[third] = x_adjust * x3 - 1.0f;
+      lineData_[third + 1] = 1.0f - y_adjust * y3;
 
-      line_data_[fourth] = x_adjust * x4 - 1.0f;
-      line_data_[fourth + 1] = 1.0f - y_adjust * y4;
+      lineData_[fourth] = x_adjust * x4 - 1.0f;
+      lineData_[fourth + 1] = 1.0f - y_adjust * y4;
 
-      line_data_[fifth] = x_adjust * x5 - 1.0f;
-      line_data_[fifth + 1] = 1.0f - y_adjust * y5;
+      lineData_[fifth] = x_adjust * x5 - 1.0f;
+      lineData_[fifth + 1] = 1.0f - y_adjust * y5;
 
-      line_data_[sixth] = x_adjust * x6 - 1.0f;
-      line_data_[sixth + 1] = 1.0f - y_adjust * y6;
+      lineData_[sixth] = x_adjust * x6 - 1.0f;
+      lineData_[sixth + 1] = 1.0f - y_adjust * y6;
 
       prev_delta_normal = delta_normal;
       prev_normalized_delta = normalized_delta;
     }
 
-    int begin_copy_dest = (num_padding_ + num_points_) * kLineFloatsPerPoint;
-    if (loop_ && num_points_ >= 2)
+    Point<float> start{ getXAt(0), getYAt(0) };
+    Point<float> end{ getXAt(pointCount_ - 1), getYAt(pointCount_ - 1) };
+
+    Point<float> delta_start_offset = line_radius * normalise({ start.x - getXAt(1), start.y - getYAt(1) });
+    Point<float> delta_end_offset = line_radius * normalise({ end.x - getXAt(pointCount_ - 2), end.y - getYAt(pointCount_ - 2) });
+    for (int i = 0; i < kLineVerticesPerPoint; ++i)
     {
-      int padding_copy_size = num_padding_ * kLineFloatsPerPoint * sizeof(float);
-      int begin_copy_source = num_padding_ * kLineFloatsPerPoint;
-      int end_copy_source = num_points_ * kLineFloatsPerPoint;
+      lineData_[i * kLineFloatsPerVertex] = (start.x + delta_start_offset.x) * x_adjust - 1.0f;
+      lineData_[i * kLineFloatsPerVertex + 1] = 1.0f - (start.y + delta_start_offset.y) * y_adjust;
+      lineData_[i * kLineFloatsPerVertex + 2] = boosts[0];
 
-      memcpy(line_data_.get(), line_data_.get() + end_copy_source, padding_copy_size);
-      memcpy(line_data_.get() + begin_copy_dest, line_data_.get() + begin_copy_source, padding_copy_size);
-
-      for (int i = 0; i < num_padding_ * kLineVerticesPerPoint; ++i)
-      {
-        line_data_[i * kLineFloatsPerVertex] -= kLoopWidth;
-        line_data_[begin_copy_dest + i * kLineFloatsPerVertex] += kLoopWidth;
-      }
+      int copy_index_start = (pointCount_ + 1) * kLineFloatsPerPoint + i * kLineFloatsPerVertex;
+      lineData_[copy_index_start] = (end.x + delta_end_offset.x) * x_adjust - 1.0f;
+      lineData_[copy_index_start + 1] = 1.0f - (end.y + delta_end_offset.y) * y_adjust;
+      lineData_[copy_index_start + 2] = boosts[pointCount_ - 1];
     }
-    else
-    {
-      Point<float> delta_start(getXAt(0) - getXAt(1), getYAt(0) - getYAt(1));
-      Point<float> delta_start_offset = normalize(delta_start) * line_radius;
-      Point<float> delta_end(getXAt(num_points_ - 1) - getXAt(num_points_ - 2), getYAt(num_points_ - 1) - getYAt(num_points_ - 2));
-      Point<float> delta_end_offset = normalize(delta_end) * line_radius;
-      for (int i = 0; i < kLineVerticesPerPoint; ++i)
-      {
-        line_data_[i * kLineFloatsPerVertex] = (getXAt(0) + delta_start_offset.x) * x_adjust - 1.0f;
-        line_data_[i * kLineFloatsPerVertex + 1] = 1.0f - (getYAt(0) + delta_start_offset.y) * y_adjust;
-        line_data_[i * kLineFloatsPerVertex + 2] = boosts[0];
-
-        int copy_index_start = begin_copy_dest + i * kLineFloatsPerVertex;
-        line_data_[copy_index_start] = (getXAt(num_points_ - 1) + delta_end_offset.x) * x_adjust - 1.0f;
-        line_data_[copy_index_start + 1] = 1.0f - (getYAt(num_points_ - 1) + delta_end_offset.y) * y_adjust;
-        line_data_[copy_index_start + 2] = boosts[num_points_ - 1];
-      }
-    }
-  }
-
-  void OpenGlLineRenderer::drawLines(OpenGlWrapper &open_gl, bool left)
-  {
-    if (!setViewPort(open_gl))
-      return;
-
-    if (fill_shader_ == nullptr)
-      init(open_gl);
-
-    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-    glEnable(GL_BLEND);
-    glEnable(GL_SCISSOR_TEST);
-
-    glBindVertexArray(vertex_array_object_);
-
-    if (dirty_ || last_drawn_left_ != left)
-    {
-      dirty_ = false;
-      last_drawn_left_ = left;
-      setLineVertices(left);
-      setFillVertices(left);
-
-      glBindBuffer(GL_ARRAY_BUFFER, line_buffer_);
-
-      GLsizeiptr line_vert_size = static_cast<GLsizeiptr>(num_line_floats_ * sizeof(float));
-      glBufferData(GL_ARRAY_BUFFER, line_vert_size, line_data_.get(), GL_STATIC_DRAW);
-
-      glBindBuffer(GL_ARRAY_BUFFER, fill_buffer_);
-
-      GLsizeiptr fill_vert_size = static_cast<GLsizeiptr>(num_fill_floats_ * sizeof(float));
-      glBufferData(GL_ARRAY_BUFFER, fill_vert_size, fill_data_.get(), GL_STATIC_DRAW);
-
-      glBindBuffer(GL_ARRAY_BUFFER, 0);
-    }
-
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, indices_buffer_);
-
-    float x_shrink = 1.0f;
-    float y_shrink = 1.0f;
-    if (fit_)
-    {
-      x_shrink = 1.0f - 0.33f * line_width_ / getWidth();
-      y_shrink = 1.0f - 0.33f * line_width_ / getHeight();
-    }
-
-    if (fill_)
-    {
-      glBindBuffer(GL_ARRAY_BUFFER, fill_buffer_);
-      fill_shader_->use();
-      fill_color_from_uniform_->set(fill_color_from_.getFloatRed(), fill_color_from_.getFloatGreen(),
-        fill_color_from_.getFloatBlue(), fill_color_from_.getFloatAlpha());
-      fill_color_to_uniform_->set(fill_color_to_.getFloatRed(), fill_color_to_.getFloatGreen(),
-        fill_color_to_.getFloatBlue(), fill_color_to_.getFloatAlpha());
-      fill_center_uniform_->set(fill_center_);
-      fill_boost_amount_uniform_->set(fill_boost_amount_);
-      fill_scale_uniform_->set(x_shrink, y_shrink);
-
-      glVertexAttribPointer(fill_position_->attributeID, kFillFloatsPerVertex, GL_FLOAT,
-        GL_FALSE, kFillFloatsPerVertex * sizeof(float), nullptr);
-      glEnableVertexAttribArray(fill_position_->attributeID);
-      glDrawElements(GL_TRIANGLE_STRIP, num_fill_vertices_, GL_UNSIGNED_INT, nullptr);
-    }
-
-    glBindBuffer(GL_ARRAY_BUFFER, line_buffer_);
-    shader_->use();
-    glVertexAttribPointer(position_->attributeID, kLineFloatsPerVertex, GL_FLOAT,
-      GL_FALSE, kLineFloatsPerVertex * sizeof(float), nullptr);
-    glEnableVertexAttribArray(position_->attributeID);
-    color_uniform_->set(color_.getFloatRed(), color_.getFloatGreen(), color_.getFloatBlue(), color_.getFloatAlpha());
-
-    scale_uniform_->set(x_shrink, y_shrink);
-    boost_uniform_->set(boost_);
-    line_width_uniform_->set(line_width_);
-
-    glDrawElements(GL_TRIANGLE_STRIP, num_line_vertices_, GL_UNSIGNED_INT, nullptr);
-
-    glDisableVertexAttribArray(position_->attributeID);
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
-    glDisable(GL_BLEND);
-    glDisable(GL_SCISSOR_TEST);
   }
 
 }

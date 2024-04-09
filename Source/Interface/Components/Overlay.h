@@ -14,41 +14,7 @@
 
 namespace Interface
 {
-  class OverlayBackgroundRenderer final : public OpenGlComponent
-  {
-  public:
-    static constexpr int kNumVertices = 4;
-    static constexpr int kNumFloatsPerVertex = 2;
-    static constexpr int kTotalFloats = kNumVertices * kNumFloatsPerVertex;
-    static constexpr int kIndices = 6;
-
-    OverlayBackgroundRenderer();
-    ~OverlayBackgroundRenderer() override = default;
-
-    void init(OpenGlWrapper &openGl) override;
-    void render(OpenGlWrapper &openGl, bool animate) override;
-    void destroy() override;
-
-    void setColor(const Colour &color) { color_ = color; }
-    void setAdditiveBlending(bool additiveBlending) { additiveBlending_ = additiveBlending; }
-
-  protected:
-    void drawOverlay(OpenGlWrapper &openGl);
-
-    OpenGLShaderProgram *shader_ = nullptr;
-    std::unique_ptr<OpenGLShaderProgram::Uniform> colorUniform_ = nullptr;
-    std::unique_ptr<OpenGLShaderProgram::Attribute> position_ = nullptr;
-
-    Colour color_ = Colours::black;
-    bool additiveBlending_ = false;
-
-    float data_[kTotalFloats];
-    int indices_[kIndices];
-    GLuint dataBuffer_ = 0;
-    GLuint indicesBuffer_ = 0;
-
-    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(OverlayBackgroundRenderer)
-  };
+  class OverlayBackgroundRenderer;
 
   class Overlay final : public BaseSection
   {
@@ -56,11 +22,7 @@ namespace Interface
 
     Overlay(std::string_view name);
 
-    void resized() override
-    {
-      background_->setColor(getColour(Skin::kOverlayScreen));
-      background_->setBounds(getLocalBounds());
-    }
+    void resized() override;
 
   protected:
     gl_ptr<OverlayBackgroundRenderer> background_;

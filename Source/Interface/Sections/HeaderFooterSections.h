@@ -21,7 +21,9 @@ namespace Interface
 {
 	class OpenGlQuad;
 	class NumberBox;
+	class ActionButton;
 	class TextSelector;
+	class Spectrogram;
 
 	class HeaderFooterSections final : public BaseSection
 	{
@@ -36,7 +38,7 @@ namespace Interface
 		HeaderFooterSections(Generation::SoundEngine &soundEngine);
 		~HeaderFooterSections() override;
 
-		void paintBackground(Graphics &g) override;
+		void paintBackground(juce::Graphics &g) override;
 		void resized() override;
 		void sliderValueChanged(BaseSlider *movedSlider) override;
 		void resizeForText([[maybe_unused]] TextSelector *textSelector, 
@@ -46,12 +48,15 @@ namespace Interface
 		void arrangeFooter();
 
 	private:
+		gl_ptr<Spectrogram> spectrogram_;
+
 		std::unique_ptr<NumberBox> mixNumberBox_;
 		std::unique_ptr<NumberBox> gainNumberBox_;
 		std::unique_ptr<NumberBox> blockSizeNumberBox_;
 		std::unique_ptr<NumberBox> overlapNumberBox_;
 		std::unique_ptr<TextSelector> windowTypeSelector_;
 		std::unique_ptr<NumberBox> windowAlphaNumberBox_;
+		std::unique_ptr<ActionButton> saveButton_;
 
 		gl_ptr<OpenGlQuad> backgroundColour_;
 		gl_ptr<OpenGlQuad> bottomBarColour_;

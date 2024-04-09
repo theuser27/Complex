@@ -9,6 +9,7 @@
 */
 
 #include "parameter_bridge.h"
+#include "parameter_value.h"
 #include "Interface/Components/BaseControl.h"
 #include "Interface/LookAndFeel/Miscellaneous.h"
 #include "Plugin/PluginProcessor.h"
@@ -16,34 +17,35 @@
 namespace Framework
 {
 	ParameterBridge::ParameterBridge(Plugin::ComplexPlugin *plugin,
-		u32 parameterIndex, ParameterLink *link) noexcept
+		u64 parameterIndex, ParameterLink *link) noexcept
 	{
 		plugin_ = plugin;
+		parameterIndex_ = parameterIndex;
 
 		// should be enough i think
 		name_.second.preallocateBytes(64);
-		// case when the parameter mapping remains permanent for the entirety of the plugin lifetime
-		if (parameterIndex == (u32)(-1) && link)
+		// main plugin parameters
+		if (parameterIndex == UINT64_MAX && link)
 		{
 			parameterLinkPointer_.store(link, std::memory_order_release);
-			name_.second += toJuceString(link->parameter->getParameterDetails().displayName);
+			auto name = link->parameter->getParameterDetails().displayName;
+			name_.second += { name.data(), name.size() };
 			link->hostControl = this;
 			value_ = link->parameter->getNormalisedValue();
+			return;
 		}
-		else if (link)
+
+		name_.second += 'P';
+		name_.second += parameterIndex;
+
+		if (link)
 		{
-			name_.second += 'P';
-			name_.second += (int)parameterIndex;
 			name_.second += " > ";
 			parameterLinkPointer_.store(link, std::memory_order_release);
-			name_.second += toJuceString(link->parameter->getParameterDetails().displayName);
+			auto name = link->parameter->getParameterDetails().displayName;
+			name_.second += { name.data(), name.size() };
 			link->hostControl = this;
 			value_ = link->parameter->getNormalisedValue();
-		}
-		else
-		{
-			name_.second += 'P';
-			name_.second += (int)parameterIndex;
 		}
 	}
 
@@ -53,12 +55,10 @@ namespace Framework
 			return;
 
 		parameterLinkPointer_.store(link, std::memory_order_release);
-		utils::ScopedSpinLock guard{ name_.first };
+		utils::ScopedLock guard{ name_.first, utils::WaitMechanism::Spin };
 
-		auto index = name_.second.indexOfChar(0, ' ');
-		index = (index < 0) ? name_.second.length() : index;
 		if (!link)
-			name_.second = String(name_.second.begin(), index);
+			name_.second = std::format("P{}", parameterIndex_);
 		else
 		{
 			link->parameter->changeControl(this);
@@ -71,18 +71,20 @@ namespace Framework
 			else
 				link->UIControl->setValueFromHost();
 
-			String newString{};
+			auto name = link->parameter->getParameterDetails().displayName;
+			juce::String newString{};
 			newString.preallocateBytes(64);
-			newString.append(name_.second, index);
+			newString += 'P';
+			newString += parameterIndex_;
 			newString += " > ";
-			newString += toJuceString(link->parameter->getParameterDetails().displayName);
+			newString += { name.data(), name.size() };
 			name_.second = std::move(newString);
 		}
 
-		guard.~ScopedSpinLock();
+		guard.~ScopedLock();
 
-		utils::as<ComplexAudioProcessor *>(plugin_)
-			->updateHostDisplay(AudioProcessor::ChangeDetails{}.withParameterInfoChanged(true));
+		utils::as<ComplexAudioProcessor>(plugin_)
+			->updateHostDisplay(juce::AudioProcessor::ChangeDetails{}.withParameterInfoChanged(true));
 	}
 
 	void ParameterBridge::updateUIParameter() noexcept
@@ -95,6 +97,17 @@ namespace Framework
 			parameterLinkPointer_.load(std::memory_order_relaxed)->UIControl->valueChanged();
 			wasValueChanged_.store(false, std::memory_order_relaxed);
 		}
+	}
+
+	void ParameterBridge::setCustomName(const juce::String &name)
+	{
+		utils::ScopedLock guard{ name_.first, utils::WaitMechanism::Spin };
+
+		auto index = name_.second.indexOfChar(0, ' ');
+		index = (index < 0) ? name_.second.length() : index;
+		name_.second = juce::String(name_.second.begin(), index);
+
+		name_.second += name;
 	}
 
 	void ParameterBridge::setValue(float newValue)
@@ -116,10 +129,10 @@ namespace Framework
 		return kDefaultParameterValue;
 	}
 
-	String ParameterBridge::getName(int maximumStringLength) const
+	juce::String ParameterBridge::getName(int maximumStringLength) const
 	{
 		// this is hacky i know but there's no way to declare the atomic mutable inside the pair
-		utils::ScopedSpinLock guard{ const_cast<std::atomic<bool>&>(name_.first) };
+		utils::ScopedLock guard{ const_cast<std::atomic<bool>&>(name_.first), utils::WaitMechanism::Spin };
 
 		if (parameterLinkPointer_.load(std::memory_order_acquire))
 			return name_.second.substring(0, maximumStringLength);
@@ -128,14 +141,14 @@ namespace Framework
 		return name_.second.substring(0, (index > maximumStringLength) ? maximumStringLength : index);
 	}
 
-	String ParameterBridge::getLabel() const
+	juce::String ParameterBridge::getLabel() const
 	{
 		if (auto pointer = parameterLinkPointer_.load(std::memory_order_acquire))
 			return pointer->parameter->getParameterDetails().displayUnits.data();
 		return "";
 	}
 
-	String ParameterBridge::getText(float value, int maximumStringLength) const
+	juce::String ParameterBridge::getText(float value, int maximumStringLength) const
 	{
 		auto pointer = parameterLinkPointer_.load(std::memory_order_acquire);
 		if (!pointer)
@@ -155,7 +168,7 @@ namespace Framework
 		return { internalValue, maximumStringLength };
 	}
 
-	float ParameterBridge::getValueForText(const String &text) const
+	float ParameterBridge::getValueForText(const juce::String &text) const
 	{
 		if (auto pointer = parameterLinkPointer_.load(std::memory_order_acquire))
 			return (float)unscaleValue(text.getFloatValue(), pointer->parameter->getParameterDetails(), true);

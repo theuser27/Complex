@@ -81,21 +81,21 @@ namespace Interface
 	void OpenGlMultiQuad::destroy()
 	{
 		shader_ = nullptr;
-		position_ = nullptr;
-		dimensions_ = nullptr;
-		coordinates_ = nullptr;
-		shader_values_ = nullptr;
-		colorUniform_ = nullptr;
-		altColorUniform_ = nullptr;
-		modColorUniform_ = nullptr;
-		thumbColorUniform_ = nullptr;
-		thicknessUniform_ = nullptr;
-		roundingUniform_ = nullptr;
-		maxArcUniform_ = nullptr;
-		thumbAmountUniform_ = nullptr;
-		startPositionUniform_ = nullptr;
-		overallAlphaUniform_ = nullptr;
-		valuesUniform_ = nullptr;
+		position_ = {};
+		dimensions_ = {};
+		coordinates_ = {};
+		shader_values_ = {};
+		colorUniform_ = {};
+		altColorUniform_ = {};
+		modColorUniform_ = {};
+		thumbColorUniform_ = {};
+		thicknessUniform_ = {};
+		roundingUniform_ = {};
+		maxArcUniform_ = {};
+		thumbAmountUniform_ = {};
+		startPositionUniform_ = {};
+		overallAlphaUniform_ = {};
+		valuesUniform_ = {};
 		glDeleteBuffers(1, &vertexBuffer_);
 		glDeleteBuffers(1, &indicesBuffer_);
 

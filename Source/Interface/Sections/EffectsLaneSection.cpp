@@ -40,7 +40,7 @@ namespace Interface
 
 		PopupItems popupItems{ "Choose Module to add" };
 
-		constexpr auto moduleOptions = Framework::BaseProcessors::BaseEffect::enum_strings<nested_enum::InnerNodes>(true);
+		constexpr auto moduleOptions = Framework::BaseProcessors::BaseEffect::enum_names<nested_enum::InnerNodes>(true);
 		for (size_t i = 0; i < moduleOptions.size(); ++i)
 			popupItems.addItem((int)i, std::string{ moduleOptions[i] });
 
@@ -210,7 +210,7 @@ namespace Interface
 
 	void EffectsLaneSection::insertedSubProcessor(size_t index, Generation::BaseProcessor *newSubProcessor)
 	{
-		auto newModule = std::make_unique<EffectModuleSection>(utils::as<Generation::EffectModule *>(newSubProcessor), this);
+		auto newModule = std::make_unique<EffectModuleSection>(utils::as<Generation::EffectModule>(newSubProcessor), this);
 		effectModules_.insert(effectModules_.begin() + (std::ptrdiff_t)index, newModule.get());
 		container_.addSubSection(newModule.get());
 		parentState_->registerModule(std::move(newModule));
@@ -231,7 +231,7 @@ namespace Interface
 			&& "An invalid module type was provided to insert");
 
 		effectsLane_->getProcessorTree()->pushUndo(new Framework::AddProcessorUpdate(
-			effectsLane_->getProcessorTree(), effectsLane_->getProcessorId(), index, newModuleType));
+			*effectsLane_->getProcessorTree(), effectsLane_->getProcessorId(), index, newModuleType));
 	}
 
 	void EffectsLaneSection::insertModule(size_t index, EffectModuleSection *movedModule)
@@ -247,7 +247,7 @@ namespace Interface
 		if (createUpdate)
 		{
 			effectsLane_->getProcessorTree()->pushUndo(new Framework::DeleteProcessorUpdate(
-				effectsLane_->getProcessorTree(), effectsLane_->getProcessorId(), index));
+				*effectsLane_->getProcessorTree(), effectsLane_->getProcessorId(), index));
 			return nullptr;
 		}
 

@@ -9,6 +9,7 @@
 */
 
 #include "BaseProcessor.h"
+#include "Framework/parameter_value.h"
 #include "../Plugin/ProcessorTree.h"
 
 namespace Generation
@@ -16,6 +17,7 @@ namespace Generation
 	BaseProcessor::BaseProcessor(Plugin::ProcessorTree *processorTree, u64 parentProcessorId,
 		std::string_view processorType) noexcept : processorTree_(processorTree), processorId_(processorTree_->getId(this)),
 		 processorType_(processorType) { parentProcessorId_ = parentProcessorId; }
+	BaseProcessor::~BaseProcessor() noexcept = default;
 
 	BaseProcessor::BaseProcessor(const BaseProcessor &other, u64 parentProcessorId) noexcept :
 		processorTree_(other.processorTree_), processorId_(processorTree_->getId(this)), processorType_(other.processorType_)
@@ -92,6 +94,24 @@ namespace Generation
 		return *this;
 	}
 
+	void BaseProcessor::initialise() noexcept
+	{
+		for (auto &processorParameter : processorParameters_.data)
+			processorParameter.second->initialise();
+	}
+
+	Framework::ParameterValue * BaseProcessor::getParameter(std::string_view parameterName) const noexcept
+	{
+		const auto parameterIter = processorParameters_.find(parameterName);
+		COMPLEX_ASSERT(parameterIter != processorParameters_.data.end() && "Parameter was not found");
+		return parameterIter->second.get();
+	}
+
+	Framework::ParameterValue * BaseProcessor::getParameterUnchecked(size_t index) const noexcept 
+	{ return processorParameters_[index].get(); }
+
+	size_t BaseProcessor::getParameterCount() const noexcept { return processorParameters_.data.size(); }
+
 	void BaseProcessor::updateParameters(Framework::UpdateFlag flag, float sampleRate, bool updateSubModuleParameters)
 	{
 		if (flag == Framework::UpdateFlag::NoUpdates)
@@ -104,5 +124,14 @@ namespace Generation
 		if (updateSubModuleParameters)
 			for (auto &subModule : subProcessors_)
 				subModule->updateParameters(flag, sampleRate);
+	}
+
+	void BaseProcessor::createProcessorParameters(std::span<const std::string_view> parameterNames)
+	{
+		using namespace Framework;
+
+		for (size_t i = 0; i < parameterNames.size(); i++)
+			processorParameters_.data.emplace_back(parameterNames[i],
+				std::make_unique<ParameterValue>(Parameters::getDetailsEnum(parameterNames[i]), processorId_));
 	}
 }

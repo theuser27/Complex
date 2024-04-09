@@ -16,7 +16,7 @@ namespace Interface
 	{
 	}
 
-	void LaneSelector::paintBackground([[maybe_unused]] Graphics &g)
+	void LaneSelector::paintBackground([[maybe_unused]] juce::Graphics &g)
 	{
 	}
 

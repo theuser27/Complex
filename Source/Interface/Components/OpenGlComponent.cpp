@@ -11,6 +11,7 @@
 #include "AppConfig.h"
 #include <juce_opengl/juce_opengl.h>
 
+#include "Framework/sync_primitives.h"
 #include "OpenGlComponent.h"
 #include "Plugin/Renderer.h"
 #include "../Sections/MainInterface.h"
@@ -96,6 +97,20 @@ namespace Interface
 			visibleBounds.getWidth(), visibleBounds.getHeight());
 	}
 
+	std::optional<OpenGlUniform> OpenGlComponent::getUniform(const OpenGlShaderProgram &program, const char *name)
+	{
+		if (glGetUniformLocation(program.getProgramID(), name) >= 0)
+			return std::make_optional<OpenGlUniform>(program, name);
+		return {};
+	}
+
+	std::optional<OpenGlAttribute> OpenGlComponent::getAttribute(const OpenGlShaderProgram &program, const char *name)
+	{
+		if (glGetAttribLocation(program.getProgramID(), name) >= 0)
+			return std::make_optional<OpenGlAttribute>(program, name);
+		return {};
+	}
+
 	String OpenGlComponent::translateFragmentShader(const String &code) {
 	#if OPENGL_ES
 		return String("#version 300 es\n") + "out mediump vec4 fragColor;\n" +
@@ -137,7 +152,7 @@ namespace Interface
 
 	void Animator::tick(bool isAnimating) noexcept
 	{
-		utils::ScopedSpinLock g(guard_);
+		utils::ScopedLock g{ guard_, utils::WaitMechanism::Spin };
 
 		if (isAnimating)
 		{
@@ -160,7 +175,7 @@ namespace Interface
 
 	float Animator::getValue(EventType type, float min, float max) const noexcept
 	{
-		utils::ScopedSpinLock g(guard_);
+		utils::ScopedLock g{ guard_, utils::WaitMechanism::Spin };
 
 		float value;
 		switch (type)

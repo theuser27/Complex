@@ -16,6 +16,9 @@
 
 namespace Framework
 {
+	template <typename T, u64 alignment = alignof(T)>
+	class MemoryBlockView;
+	
 	// used for allocating raw memory and using it for whatever purpose
 	template <typename T, u64 alignment = alignof(T)>
 	class MemoryBlock
@@ -56,6 +59,12 @@ namespace Framework
 			std::memcpy(data_.get(), other.data_.get(), other.absoluteSize_);
 			absoluteSize_ = other.absoluteSize_;
 		}
+		void copy(const MemoryBlock &other, u64 destination, u64 source, u64 size)
+		{
+			COMPLEX_ASSERT(absoluteSize_ < destination + size);
+			std::memcpy(data_.get() + destination, other.data_.get() + source, size * sizeof(T));
+		}
+		void copy(const MemoryBlockView<T, alignment> &other, u64 destination, u64 source, u64 size);
 
 		void allocate(u64 newNumElements, bool initialiseToZero = false)
 		{
@@ -140,9 +149,7 @@ namespace Framework
 		}
 
 		bool operator== (const T* otherPointer) const noexcept { return otherPointer == data_.get(); }
-		bool operator!= (const T* otherPointer) const noexcept { return otherPointer != data_.get(); }
-
-		bool isEmpty() const noexcept { return data_.use_count(); }
+		friend bool operator==(const MemoryBlock &lhs, const MemoryBlock &rhs) noexcept { return lhs.data_.get() == rhs.data_.get(); }
 
 		u64 getAbsoluteSize() const noexcept { return absoluteSize_; }
 		std::shared_ptr<T[]> getData() noexcept { return data_; }
@@ -150,7 +157,7 @@ namespace Framework
 	private:
 		// size in bytes
 		u64 absoluteSize_ = 0;
-		std::shared_ptr<T[]> data_{ nullptr };
+		std::shared_ptr<T[]> data_ = nullptr;
 
 		static void deleter(T *memory) noexcept
 		{
@@ -165,7 +172,7 @@ namespace Framework
 		friend class MemoryBlockView;
 	};
 
-	template <typename T, u64 alignment = alignof(T)>
+	template <typename T, u64 alignment>
 	class MemoryBlockView
 	{
 	public:
@@ -205,9 +212,16 @@ namespace Framework
 		T read(u64 index) const noexcept { return block_.read(index); }
 		const T& operator[](u64 index) const noexcept { return block_[index]; }
 
-		bool isEmpty() const noexcept { return block_.isEmpty(); }
+		friend bool operator==(const MemoryBlockView &lhs, const MemoryBlock<T, alignment> &rhs) noexcept { return lhs.block_ == rhs; }
 
 	private:
 		MemoryBlock<T, alignment> block_{};
+
+		template<typename T, u64 alignment>
+		friend class MemoryBlock;
 	};
+
+	template <typename T, u64 alignment>
+	void MemoryBlock<T, alignment>::copy(const MemoryBlockView<T, alignment> &other, u64 destination, u64 source, u64 size)
+	{ copy(other.block_, destination, source, size); }
 }

@@ -10,9 +10,14 @@
 
 #pragma once
 
-#include "AppConfig.h"
-#include <juce_core/juce_core.h>
+#include <string>
+#include <vector>
 #include "Framework/platform_definitions.h"
+
+namespace juce
+{
+	class String;
+}
 
 namespace Interface
 {
@@ -82,7 +87,7 @@ namespace Interface
 		virtual void endModulationEdit([[maybe_unused]] BaseSlider *slider) { }
 		virtual void menuFinished([[maybe_unused]] BaseSlider *slider) { }
 		virtual void doubleClick([[maybe_unused]] BaseSlider *slider) { }
-		virtual void modulationsChanged([[maybe_unused]] juce::String name) { }
+		virtual void modulationsChanged([[maybe_unused]] const juce::String &name) { }
 		virtual void modulationAmountChanged([[maybe_unused]] BaseSlider *slider) { }
 		virtual void modulationRemoved([[maybe_unused]] BaseSlider *slider) { }
 		virtual void guiChanged([[maybe_unused]] BaseSlider *slider) { }
@@ -182,5 +187,3 @@ namespace Interface
 	};
 
 }
-
-strict_inline juce::String toJuceString(std::string_view view) { return juce::String{ view.data(), view.size() }; }

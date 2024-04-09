@@ -9,16 +9,36 @@
 namespace BinaryData
 {
 
-//================== Icon_Filter.svg ==================
+//================== Icon_Dynamics.svg ==================
 static const unsigned char temp_binary_data_0[] =
+"<svg width=\"12\" height=\"11\" viewBox=\"0 0 12 11\" fill=\"none\" xmlns=\"http://www.w3.org/2000/svg\">\n"
+"<path d=\"M1 10L3.37563 3.665C3.7606 2.6384 4.67496 1.90358 5.76035 1.74852L11 1\" stroke=\"black\" stroke-miterlimit=\"16\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/>\n"
+"</svg>\n";
+
+const char* Icon_Dynamics_svg = (const char*) temp_binary_data_0;
+
+//================== Icon_Filter.svg ==================
+static const unsigned char temp_binary_data_1[] =
 "<svg width=\"13\" height=\"9\" viewBox=\"0 0 13 9\" fill=\"none\" xmlns=\"http://www.w3.org/2000/svg\">\n"
 "<path d=\"M12.5 8.50079L10.3662 2.81071C9.912 1.59946 8.48121 1.08295 7.35804 1.72476L7.17593 1.82883C6.40533 2.26917 5.53316 2.50079 4.64562 2.50079H0.5\" stroke=\"black\" stroke-linecap=\"round\"/>\n"
 "</svg>\n";
 
-const char* Icon_Filter_svg = (const char*) temp_binary_data_0;
+const char* Icon_Filter_svg = (const char*) temp_binary_data_1;
+
+//================== Icon_Phase.svg ==================
+static const unsigned char temp_binary_data_2[] =
+"<svg width=\"12\" height=\"10\" viewBox=\"0 0 12 10\" fill=\"none\" xmlns=\"http://www.w3.org/2000/svg\">\n"
+"<path fill-rule=\"evenodd\" clip-rule=\"evenodd\" d=\"M8.00007 2C8.00007 0.895431 8.8955 0 10.0001 0C11.1046 0 12.0001 0.895431 12.0001 2C12.0001 3.10457 11.1046 4 10.0001 4C8.8955 4 8.00007 3.10457 8.00007 2ZM10.0001 3C9.44778 3 9.00007 2.55228 9.00"
+"007 2C9.00007 1.44772 9.44778 1 10.0001 1C10.5524 1 11.0001 1.44772 11.0001 2C11.0001 2.55228 10.5524 3 10.0001 3Z\" fill=\"black\"/>\n"
+"<path d=\"M5.9944 6.44118C5.6728 4.32368 4.44818 3.03125 3.00007 3.03125C1.55196 3.03125 0.327335 4.32368 0.00573786 6.44118C-0.035726 6.71419 0.151981 6.96912 0.424992 7.01059C0.698004 7.05205 0.952937 6.86434 0.994401 6.59133C1.27727 4.72883 2.2504"
+"1 4.03125 3.00007 4.03125C3.74973 4.03125 4.72287 4.72883 5.00574 6.59133C5.32734 8.70883 6.55196 10.0013 8.00007 10.0013C9.44818 10.0013 10.6728 8.70883 10.9944 6.59133C11.0359 6.31832 10.8482 6.06339 10.5751 6.02192C10.3021 5.98046 10.0472 6.16817 "
+"10.0057 6.44118C9.72287 8.30367 8.74973 9.00125 8.00007 9.00125C7.25041 9.00125 6.27727 8.30367 5.9944 6.44118Z\" fill=\"black\"/>\n"
+"</svg>\n";
+
+const char* Icon_Phase_svg = (const char*) temp_binary_data_2;
 
 //================== D-DIN-Bold.ttf ==================
-static const unsigned char temp_binary_data_1[] =
+static const unsigned char temp_binary_data_3[] =
 { 0,1,0,0,0,18,1,0,0,4,0,32,70,70,84,77,117,182,207,0,0,0,203,208,0,0,0,28,71,68,69,70,7,165,6,170,0,0,184,176,0,0,0,88,71,80,79,83,174,10,228,20,0,0,186,208,0,0,17,0,71,83,85,66,200,177,209,104,0,0,185,8,0,0,1,198,79,83,47,50,103,89,62,156,0,0,1,168,0,
 0,0,96,99,109,97,112,164,210,124,22,0,0,5,244,0,0,2,2,99,118,116,32,11,242,20,72,0,0,19,40,0,0,0,232,102,112,103,109,115,29,4,112,0,0,7,248,0,0,7,224,103,97,115,112,0,7,0,27,0,0,184,164,0,0,0,12,103,108,121,102,158,60,137,4,0,0,22,8,0,0,104,56,104,101,
 97,100,19,26,64,113,0,0,1,44,0,0,0,54,104,104,101,97,7,180,4,153,0,0,1,100,0,0,0,36,104,109,116,120,208,161,35,158,0,0,2,8,0,0,3,236,108,111,99,97,156,249,184,66,0,0,20,16,0,0,1,248,109,97,120,112,3,192,1,215,0,0,1,136,0,0,0,32,110,97,109,101,125,7,200,
@@ -619,10 +639,10 @@ static const unsigned char temp_binary_data_1[] =
 0,25,0,147,0,152,0,33,0,154,0,159,0,39,0,162,0,167,0,45,0,170,0,177,0,51,0,179,0,184,0,59,0,187,0,191,0,65,0,193,0,194,0,70,0,197,0,201,0,72,0,2,0,1,0,208,0,213,0,0,0,6,0,0,0,26,0,0,0,32,0,0,0,38,0,0,0,44,0,0,0,50,0,0,0,56,0,1,0,0,2,8,0,1,0,0,2,8,0,1,
 0,0,2,8,0,1,0,0,2,8,0,1,0,0,2,8,0,1,0,0,2,8,0,0,0,1,0,0,0,0,204,61,162,207,0,0,0,0,211,87,234,201,0,0,0,0,214,33,65,103,0,0 };
 
-const char* DDINBold_ttf = (const char*) temp_binary_data_1;
+const char* DDINBold_ttf = (const char*) temp_binary_data_3;
 
 //================== Inter-Medium.ttf ==================
-static const unsigned char temp_binary_data_2[] =
+static const unsigned char temp_binary_data_4[] =
 { 0,1,0,0,0,17,1,0,0,4,0,16,71,68,69,70,242,232,240,140,0,0,1,28,0,0,5,12,71,80,79,83,148,39,83,232,0,0,6,40,0,0,237,18,71,83,85,66,169,73,148,2,0,0,243,60,0,0,80,70,79,83,47,50,31,112,165,124,0,1,67,132,0,0,0,96,99,109,97,112,170,166,244,24,0,1,67,228,
 0,0,102,140,99,118,116,32,144,238,69,72,0,5,140,92,0,0,1,44,102,112,103,109,98,47,11,131,0,5,141,136,0,0,14,12,103,97,115,112,0,0,0,16,0,5,140,84,0,0,0,8,103,108,121,102,89,244,62,190,0,1,170,112,0,3,36,72,104,101,97,100,44,187,34,86,0,4,206,184,0,0,
 0,54,104,104,101,97,22,95,25,63,0,4,206,240,0,0,0,36,104,109,116,120,227,250,31,181,0,4,207,20,0,0,39,226,108,111,99,97,13,122,161,96,0,4,246,248,0,0,39,232,109,97,120,112,11,253,15,145,0,5,30,224,0,0,0,32,110,97,109,101,210,100,242,249,0,5,31,0,0,0,
@@ -4716,10 +4736,10 @@ static const unsigned char temp_binary_data_2[] =
 40,1,136,81,88,184,8,0,136,88,185,0,3,0,0,68,89,27,177,39,1,136,81,88,186,8,128,0,1,4,64,136,99,84,88,185,0,3,0,0,68,89,89,89,89,89,64,20,138,6,122,6,106,6,94,4,82,4,74,2,58,6,44,5,38,1,9,14,42,184,1,255,133,176,4,141,177,2,0,68,179,5,100,6,0,68,68,0,
 0,0,0,0 };
 
-const char* InterMedium_ttf = (const char*) temp_binary_data_2;
+const char* InterMedium_ttf = (const char*) temp_binary_data_4;
 
 //================== Complex.skin ==================
-static const unsigned char temp_binary_data_3[] =
+static const unsigned char temp_binary_data_5[] =
 "{\r\n"
 "\t\"Background\": \"ff141414\",\r\n"
 "\t\"Body\": \"ff262626\",\r\n"
@@ -4857,6 +4877,15 @@ static const unsigned char temp_binary_data_3[] =
 "\t\t\t\"Widget Secondary 1\": \"ff4c4c4c\",\r\n"
 "\t\t\t\"Widget Accent 1\": \"ff7bf087\",\r\n"
 "\t\t\t\"Widget Background 1\": \"ff353535\"\r\n"
+"\t\t},\r\n"
+"\t\t\"Phase Module\": {\r\n"
+"\t\t\t\"Background\": \"ff151515\",\r\n"
+"\t\t\t\"Body\": \"ff1f1f1f\",\r\n"
+"\t\t\t\"Background Element\": \"ff313131\",\r\n"
+"\t\t\t\"Widget Primary 1\": \"ff59c4f2\",\r\n"
+"\t\t\t\"Widget Secondary 1\": \"ff4c4c4c\",\r\n"
+"\t\t\t\"Widget Accent 1\": \"ff59c4f2\",\r\n"
+"\t\t\t\"Widget Background 1\": \"ff353535\"\r\n"
 "\t\t}\r\n"
 "\r\n"
 "\t},\r\n"
@@ -4864,7 +4893,7 @@ static const unsigned char temp_binary_data_3[] =
 "\t\"Plugin Version\": 65542\r\n"
 "}";
 
-const char* Complex_skin = (const char*) temp_binary_data_3;
+const char* Complex_skin = (const char*) temp_binary_data_5;
 
 
 const char* getNamedResource (const char* resourceNameUTF8, int& numBytes);
@@ -4878,10 +4907,12 @@ const char* getNamedResource (const char* resourceNameUTF8, int& numBytes)
 
     switch (hash)
     {
+        case 0xef6cf9bf:  numBytes = 271; return Icon_Dynamics_svg;
         case 0x0c9e94a3:  numBytes = 295; return Icon_Filter_svg;
+        case 0xfa89615a:  numBytes = 1106; return Icon_Phase_svg;
         case 0xe39541f1:  numBytes = 52204; return DDINBold_ttf;
         case 0x247953f8:  numBytes = 367772; return InterMedium_ttf;
-        case 0xf7e7fbcc:  numBytes = 4169; return Complex_skin;
+        case 0xf7e7fbcc:  numBytes = 4435; return Complex_skin;
         default: break;
     }
 
@@ -4891,7 +4922,9 @@ const char* getNamedResource (const char* resourceNameUTF8, int& numBytes)
 
 const char* namedResourceList[] =
 {
+    "Icon_Dynamics_svg",
     "Icon_Filter_svg",
+    "Icon_Phase_svg",
     "DDINBold_ttf",
     "InterMedium_ttf",
     "Complex_skin"
@@ -4899,7 +4932,9 @@ const char* namedResourceList[] =
 
 const char* originalFilenames[] =
 {
+    "Icon_Dynamics.svg",
     "Icon_Filter.svg",
+    "Icon_Phase.svg",
     "D-DIN-Bold.ttf",
     "Inter-Medium.ttf",
     "Complex.skin"

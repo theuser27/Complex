@@ -8,6 +8,9 @@
 	==============================================================================
 */
 
+#include "AppConfig.h"
+#include <juce_audio_basics/juce_audio_basics.h>
+#include "Framework/parameter_value.h"
 #include "Generation/SoundEngine.h"
 #include "Complex.h"
 #include "Interface/Components/BaseControl.h"
@@ -19,7 +22,7 @@ namespace Plugin
 	{
 		// the object self-registers in the processor tree (this) to be a unique_ptr
 		// don't worry this is not a memory leak
-		soundEngine_ = new Generation::SoundEngine(this);
+		soundEngine_ = new Generation::SoundEngine(this, processorTreeId);
 	}
 
 	void ComplexPlugin::Initialise(float sampleRate, u32 samplesPerBlock)
@@ -74,6 +77,11 @@ namespace Plugin
 		// TODO
 	}
 
+	u32 ComplexPlugin::getFFTSize() noexcept
+	{
+		return 1 << soundEngine_->getParameter(Framework::BaseProcessors::SoundEngine::BlockSize::name())->getInternalValue<u32>();
+	}
+
 	Interface::Renderer &ComplexPlugin::getRenderer()
 	{
 		if (!rendererInstance_)
@@ -82,15 +90,9 @@ namespace Plugin
 		return *rendererInstance_;
 	}
 
-	Generation::BaseProcessor *ComplexPlugin::deserialiseProcessor(
-		[[maybe_unused]] ProcessorTree *processorTree, [[maybe_unused]] std::string_view processorType)
-	{
-		return nullptr;
-	}
-
 	void ComplexPlugin::Process(juce::AudioBuffer<float> &buffer, u32 numSamples, float sampleRate, u32 numInputs, u32 numOutputs)
 	{
-		utils::ScopedSpinLock lock(waitLock_);
+		utils::ScopedLock g{ processingLock_, utils::WaitMechanism::Spin };
 		soundEngine_->MainProcess(buffer, numSamples, sampleRate, numInputs, numOutputs);
 	}
 

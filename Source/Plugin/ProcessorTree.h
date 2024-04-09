@@ -10,12 +10,23 @@
 
 #pragma once
 
-#include "AppConfig.h"
-#include <juce_data_structures/juce_data_structures.h>
+#include "Framework/sync_primitives.h"
 #include "../Generation/BaseProcessor.h"
+
+namespace juce
+{
+	class UndoManager;
+}
+
+namespace Plugin
+{
+	class ProcessorTree;
+}
 
 namespace Framework
 {
+	class ParameterModulator;
+	class ParameterBridge;
 	class WaitingUpdate;
 }
 
@@ -28,24 +39,33 @@ namespace Plugin
 		static constexpr size_t expandAmount = 2;
 		static constexpr float expandThreshold = 0.75f;
 
-		ProcessorTree() = default;
+		ProcessorTree();
 		virtual ~ProcessorTree();
 
 	public:
+		// 0 is reserved to mean "uninitialised" and
+		// 1 is reserved for the processorTree itself
+		static constexpr u64 processorTreeId = 1;
+
 		ProcessorTree(const ProcessorTree &) = delete;
 		ProcessorTree(ProcessorTree &&) = delete;
 		ProcessorTree &operator=(const ProcessorTree &other) = delete;
 		ProcessorTree &operator=(ProcessorTree &&other) = delete;
 
+		// return type is nlohmann::json but the header is too big to just put here
+		[[nodiscard]] std::any serialiseToJson() const;
+		void deserialiseFromJson(std::any jsonData);
+		
 		// do not call this function manually, it's always called when you instantiate a BaseProcessor derived type
 		// may block and allocate if expandThreshold has been reached
-		u64 getId(Generation::BaseProcessor *newModulePointer, bool isRootModule = false) noexcept;
-		std::unique_ptr<Generation::BaseProcessor> deleteProcessor(u64 moduleId) noexcept;
+		u64 getId(Generation::BaseProcessor *newProcessor) noexcept;
+		std::unique_ptr<Generation::BaseProcessor> deleteProcessor(u64 processorId) noexcept;
 
 		// remember to use a scoped lock before calling these 2 methods
-		Generation::BaseProcessor *getProcessor(u64 moduleId) const noexcept;
+		Generation::BaseProcessor *getProcessor(u64 processorId) const noexcept;
 		// finds a parameter from a specified module with a specified name
-		Framework::ParameterValue *getProcessorParameter(u64 parentModuleId, std::string_view parameterName) const noexcept;
+		Framework::ParameterValue *getProcessorParameter(u64 parentProcessorId, std::string_view parameterName) const noexcept;
+		Generation::BaseProcessor *copyProcessor(Generation::BaseProcessor *processor);
 
 		Framework::UpdateFlag getUpdateFlag() const noexcept { return updateFlag_.load(std::memory_order_acquire); }
 		// only the audio thread changes the updateFlag
@@ -56,41 +76,43 @@ namespace Plugin
 		auto getSampleRate() const noexcept { return sampleRate_.load(std::memory_order_acquire); }
 		auto getSamplesPerBlock() const noexcept { return samplesPerBlock_.load(std::memory_order_acquire); }
 
-		auto copyProcessor(Generation::BaseProcessor *processor)
-		{
-			auto copyProcessor = [processor]() { return processor->createCopy({}); };
-			return executeOutsideProcessing(copyProcessor);
-		}
+		strict_inline auto &getParameterBridges() noexcept { return parameterBridges_; }
+		strict_inline auto &getParameterModulators() noexcept { return parameterModulators_; }
 
 		void pushUndo(Framework::WaitingUpdate *action, bool isNewTransaction = true);
-		void undo() { undoManager_.undo(); }
-		void redo() { undoManager_.redo(); }
+		void undo();
+		void redo();
 
 		// quick and dirty spinlock to ensure lambdas are executed outside of an audio callback
 		auto executeOutsideProcessing(auto &function)
 		{
 			// check if we're in the middle of an audio callback
-			while (getUpdateFlag() != Framework::UpdateFlag::AfterProcess) { utils::wait(); }
+			while (updateFlag_.load(std::memory_order_relaxed) != 
+				Framework::UpdateFlag::AfterProcess) { utils::millisleep(); }
 
-			utils::ScopedSpinLock g(waitLock_);
+			utils::ScopedLock g{ processingLock_, utils::WaitMechanism::Spin };
 			return function();
 		}
 
-		bool isBeingDestroyed() const noexcept { return isBeingDestroyed_; }
+		bool isBeingDestroyed() const noexcept { return isBeingDestroyed_.load(std::memory_order_acquire); }
 
 	protected:
 		// all plugin undo steps are stored here
-		juce::UndoManager undoManager_{ 0, 100 };
+		std::unique_ptr<juce::UndoManager> undoManager_;
 		// the processor tree is stored in a flattened map
 		Framework::VectorMap<u64, std::unique_ptr<Generation::BaseProcessor>> allProcessors_{ 64 };
+		// outward facing parameters, which can be mapped to in-plugin parameters
+		std::vector<Framework::ParameterBridge *> parameterBridges_{};
+		// modulators inside the plugin
+		std::vector<Framework::ParameterModulator *> parameterModulators_{};
 		// used to give out non-repeating ids for all PluginModules
-		std::atomic<u64> processorIdCounter_ = 0;
+		std::atomic<u64> processorIdCounter_ = processorTreeId + 1;
 		// used for checking whether it's ok to update parameters/plugin structure
 		std::atomic<Framework::UpdateFlag> updateFlag_ = Framework::UpdateFlag::AfterProcess;
 		// if any updates are supposed to happen to the processing tree/undoManager
 		// the thread needs to acquire this lock after checking that the updateFlag is set to AfterProcess
-		mutable std::atomic<bool> waitLock_ = false;
-		bool isBeingDestroyed_ = false;
+		mutable std::atomic<bool> processingLock_ = false;
+		std::atomic<bool> isBeingDestroyed_ = false;
 
 		// the reason for these being atomics is because idk which thread they might be updated on
 		std::atomic<u32> samplesPerBlock_{};

@@ -20,7 +20,7 @@ namespace Interface
 		LaneSelector() : BaseSection(typeid(LaneSelector).name()) { }
 
 		void resized() override;
-		void paintBackground(Graphics &g) override;
+		void paintBackground(juce::Graphics &g) override;
 
 		void laneTurnedOnOff(EffectsLaneSection *lane, bool isOn) override;
 

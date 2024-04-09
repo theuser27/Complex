@@ -57,13 +57,12 @@ namespace Interface
 
 		void notifyChange();
 		void notifyFresh();
-		//bool loadAudioAsSource(int index, const String &name, InputStream *audio_stream);
-		void popupSelector(const BaseComponent *source, Point<int> position, PopupItems options,
+		void popupSelector(const BaseComponent *source, juce::Point<int> position, PopupItems options,
 			Skin::SectionOverride skinOverride, std::function<void(int)> callback, std::function<void()> cancel);
-		void dualPopupSelector(BaseComponent *source, Point<int> position, int width,
+		void dualPopupSelector(BaseComponent *source, juce::Point<int> position, int width,
 			const PopupItems &options, std::function<void(int)> callback);
-		void popupDisplay(BaseComponent *source, String text,
-			BubbleComponent::BubblePlacement placement, bool primary, 
+		void popupDisplay(BaseComponent *source, juce::String text,
+			juce::BubbleComponent::BubblePlacement placement, bool primary, 
 			Skin::SectionOverride sectionOverride = Skin::kPopupBrowser);
 		void hideDisplay(bool primary);
 

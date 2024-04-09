@@ -8,6 +8,8 @@
 	==============================================================================
 */
 
+#include <AppConfig.h>
+#include <juce_audio_basics/juce_audio_basics.h>
 #include "Framework/spectral_support_functions.h"
 #include "EffectsState.h"
 #include "Framework/simd_utils.h"
@@ -15,19 +17,19 @@
 namespace Generation
 {
 	EffectsLane::EffectsLane(Plugin::ProcessorTree *moduleTree, u64 parentModuleId) noexcept :
-		BaseProcessor(moduleTree, parentModuleId, getClassType())
+		BaseProcessor(moduleTree, parentModuleId, Framework::BaseProcessors::EffectsLane::id().value())
 	{
-		subProcessors_.reserve(kInitialNumEffects);
+		subProcessors_.reserve(kInitialEffectCount);
 		dataBuffer_.reserve(kNumTotalChannels, kMaxFFTBufferLength);
-		insertSubProcessor(0, makeSubProcessor<EffectModule>(dynamicsEffect::getClassType()));
+		insertSubProcessor(0, makeSubProcessor<EffectModule>(Framework::BaseProcessors::BaseEffect::Dynamics::id().value()));
 
-		createProcessorParameters<Framework::BaseProcessors::EffectsLane::type>();
+		createProcessorParameters(Framework::BaseProcessors::EffectsLane::enum_names<nested_enum::OuterNodes>());
 	}
 
 	bool EffectsLane::insertSubProcessor(size_t index, BaseProcessor *newSubProcessor) noexcept
 	{
 		COMPLEX_ASSERT(newSubProcessor && "A valid BaseProcessor needs to be passed in");
-		COMPLEX_ASSERT(newSubProcessor->getProcessorType() == EffectModule::getClassType()
+		COMPLEX_ASSERT(newSubProcessor->getProcessorType() == Framework::BaseProcessors::EffectModule::id().value()
 			&& "You're trying to move a non-EffectModule into EffectChain");
 
 		effectModules_.insert(effectModules_.begin() + (std::ptrdiff_t)index, static_cast<EffectModule *>(newSubProcessor));
@@ -54,17 +56,16 @@ namespace Generation
 	}
 
 	EffectsState::EffectsState(Plugin::ProcessorTree *moduleTree, u64 parentModuleId) noexcept :
-		BaseProcessor(moduleTree, parentModuleId, getClassType())
+		BaseProcessor(moduleTree, parentModuleId, Framework::BaseProcessors::EffectsState::id().value())
 	{
-		waitIterations_ = 12;
-
-		static_assert(kMaxNumLanes >= 1, "Why would you have 0 lanes??");
+		static_assert(kMaxNumLanes > 0, "No lanes?");
 
 		lanes_.reserve(kMaxNumLanes);
 		subProcessors_.reserve(kMaxNumLanes);
 		// size is half the max because a single SIMD package stores both real and imaginary parts
 		dataBuffer_.reserve(kNumTotalChannels, kMaxFFTBufferLength);
-		laneThreads_.reserve(kMaxNumLanes);
+		outputBuffer_.reserve(kNumTotalChannels, kMaxFFTBufferLength);
+		workerThreads_.reserve(kMaxNumLanes);
 
 		insertSubProcessor(0, makeSubProcessor<EffectsLane>());
 	}
@@ -72,17 +73,15 @@ namespace Generation
 	bool EffectsState::insertSubProcessor([[maybe_unused]] size_t index, BaseProcessor *newSubProcessor) noexcept
 	{
 		COMPLEX_ASSERT(newSubProcessor && "A valid BaseProcessor needs to be passed in");
-		COMPLEX_ASSERT(newSubProcessor->getProcessorType() == EffectsLane::getClassType() &&
+		COMPLEX_ASSERT(newSubProcessor->getProcessorType() == Framework::BaseProcessors::EffectsLane::id().value() &&
 			"You're trying to insert a non-EffectChain into EffectsState");
 
 		// have we reached the max chain capacity?
 		if (lanes_.size() >= kMaxNumLanes)
 			return false;
 
-		// TODO: remedy the way lanes are being processed by threads
-		lanes_.emplace_back(utils::as<EffectsLane *>(newSubProcessor));
+		lanes_.emplace_back(utils::as<EffectsLane>(newSubProcessor));
 		subProcessors_.emplace_back(newSubProcessor);
-		laneThreads_.emplace_back(std::bind_front(&EffectsState::processIndividualLanes, std::ref(*this)), lanes_.size() - 1);
 
 		for (auto *listener : listeners_)
 			listener->insertedSubProcessor(index, newSubProcessor);
@@ -94,7 +93,6 @@ namespace Generation
 	{
 		COMPLEX_ASSERT(index < subProcessors_.size());
 
-		laneThreads_[index].~jthread();
 		BaseProcessor *deletedModule = lanes_[index];
 		lanes_.erase(lanes_.begin() + index);
 		subProcessors_.erase(subProcessors_.begin() + index);
@@ -108,6 +106,9 @@ namespace Generation
 	void EffectsState::writeInputData(const juce::AudioBuffer<float> &inputBuffer) noexcept
 	{
 		auto channelPointers = inputBuffer.getArrayOfReadPointers();
+		COMPLEX_ASSERT(dataBuffer_.getLock().load() >= 0);
+		utils::ScopedLock g{ dataBuffer_.getLock(), true, utils::WaitMechanism::Spin };
+
 		for (u32 i = 0; i < (u32)inputBuffer.getNumChannels(); i += kComplexSimdRatio)
 		{
 			// if the input is not used we skip it
@@ -133,108 +134,149 @@ namespace Generation
 		// sequential consistency just in case
 		// triggers the chains to run again
 		for (auto &lane : lanes_)
-			lane->isFinished_.store(false, std::memory_order_seq_cst);
+			lane->status_.store(EffectsLane::LaneStatus::Ready, std::memory_order_seq_cst);
+
+		distributeWork();
 
 		// waiting for chains to finish
 		for (auto &lane : lanes_)
-			while (lane->isFinished_.load(std::memory_order_acquire) == false) { utils::longWait(5); }
+			while (lane->status_.load(std::memory_order_acquire) != EffectsLane::LaneStatus::Finished) { utils::longPause(5); }
 
 		setProcessingTime(std::chrono::steady_clock::now() - start);
 	}
 
-	void EffectsState::processIndividualLanes(std::stop_token stoken, size_t chainIndex) const noexcept
-	{
-		using namespace Framework;
-
-		while (true)
+	EffectsState::Thread::Thread(EffectsState &state) : thread([this, &state]()
 		{
 			while (true)
 			{
-				// if chain has been deleted or program is shutting down we need to close thread
-				if (stoken.stop_requested())
+				if (shouldStop.load(std::memory_order_acquire))
 					return;
 
-				// so long as the flag is set we don't execute anything
-				if (lanes_[chainIndex]->isFinished_.load(std::memory_order_acquire) == false)
-					break;
-
-				utils::longWait(waitIterations_);
+				state.distributeWork();
 			}
+		}) { }
 
-			auto thisLane = lanes_[chainIndex];
+	void EffectsState::checkUsage()
+	{
+		// TODO: decide on a heuristic when to add worker threads
+		//workerThreads_.emplace_back(*this);
+	}
 
-			// Chain On/Off
-			// if this chain is turned off, we set it as finished and skip everything
-			if (!thisLane->getParameter(BaseProcessors::EffectsLane::LaneEnabled::name())->getInternalValue<u32>(getSampleRate()))
+	void EffectsState::distributeWork() const noexcept
+	{
+		for (size_t i = 0; i < lanes_.size(); ++i)
+		{
+			if (lanes_[i]->status_.load(std::memory_order_acquire) == EffectsLane::LaneStatus::Ready)
 			{
-				thisLane->isFinished_.store(true, std::memory_order_release);
-				continue;
+				auto expected = EffectsLane::LaneStatus::Ready;
+				if (lanes_[i]->status_.compare_exchange_strong(expected, EffectsLane::LaneStatus::Running,
+					std::memory_order_acq_rel, std::memory_order_relaxed))
+					processIndividualLanes(i);
 			}
-
-			thisLane->currentEffectIndex_.store(0, std::memory_order_release);
-			auto &laneDataSource = thisLane->laneDataSource_;
-
-			auto start = std::chrono::steady_clock::now();
-
-			// Chain Input 
-			// if this chain's input is another's output and that chain can be used,
-			// we wait until it is finished and then copy its data
-			if (auto inputIndex = thisLane->getParameter(BaseProcessors::EffectsLane::Input::name())
-				->getInternalValue<u32>(getSampleRate()); inputIndex & kLaneInputMask)
-			{
-				inputIndex ^= kLaneInputMask;
-				while (lanes_[inputIndex]->isFinished_.load(std::memory_order_acquire) == false)
-				{ utils::wait(); }
-
-				laneDataSource.sourceBuffer = SimdBufferView(lanes_[inputIndex]->dataBuffer_, kNumChannels, 0);
-			}
-			// input is not from a chain, we can begin processing
-			else 
-				laneDataSource.sourceBuffer = SimdBufferView(dataBuffer_, kNumChannels, inputIndex * kNumChannels);
-
-			// main processing loop
-			for (auto &effectModule : thisLane->subProcessors_)
-			{
-				// this is safe because by design only EffectModules are contained in a lane
-				utils::as<EffectModule *>(effectModule)->processEffect(laneDataSource, binCount_, getSampleRate());
-
-				// TODO: fit links between modules here
-
-				// incrementing where we are currently
-				thisLane->currentEffectIndex_.fetch_add(1, std::memory_order_acq_rel);
-			}
-
-			thisLane->setProcessingTime(std::chrono::steady_clock::now() - start);
-
-			// to let other threads know that the data is in its final state
-			// and to prevent the thread of instantly running again
-			thisLane->isFinished_.store(true, std::memory_order_release);
 		}
 	}
 
-	void EffectsState::sumLanes() noexcept
+	void EffectsState::processIndividualLanes(size_t laneIndex) const noexcept
 	{
 		using namespace Framework;
 
-		dataBuffer_.clear();
+		auto thisLane = lanes_[laneIndex];
+
+		// Lane On/Off
+		// if this lane is turned off, we set it as finished and skip everything
+		if (!thisLane->getParameter(BaseProcessors::EffectsLane::LaneEnabled::name())->getInternalValue<u32>(getSampleRate()))
+		{
+			thisLane->status_.store(EffectsLane::LaneStatus::Finished, std::memory_order_release);
+			return;
+		}
+
+		thisLane->currentEffectIndex_.store(0, std::memory_order_release);
+		auto &laneDataSource = thisLane->laneDataSource_;
+
+		auto start = std::chrono::steady_clock::now();
+
+		// Lane Input 
+		// if this lane's input is another's output and that lane can be used,
+		// we wait until it is finished and then copy its data
+		if (auto inputIndex = thisLane->getParameter(BaseProcessors::EffectsLane::Input::name())
+			->getInternalValue<u32>(getSampleRate()); inputIndex & kLaneInputMask)
+		{
+			inputIndex ^= kLaneInputMask;
+			while (true)
+			{
+				auto otherLaneStatus = lanes_[inputIndex]->status_.load(std::memory_order_acquire);
+				if (otherLaneStatus == EffectsLane::LaneStatus::Finished)
+					break;
+
+				utils::longPause(40);
+			}
+
+			// getting shared access to the lane's output
+			utils::lockAtomic(lanes_[inputIndex]->laneDataSource_.sourceBuffer.getLock(), false, utils::WaitMechanism::Spin);
+			laneDataSource.sourceBuffer = lanes_[inputIndex]->laneDataSource_.sourceBuffer;
+			laneDataSource.dataType = lanes_[inputIndex]->laneDataSource_.dataType;
+		}
+		// input is not from a lane, we can begin processing
+		else
+		{
+			// getting shared access to the state's transformed data
+			COMPLEX_ASSERT(dataBuffer_.getLock().load() >= 0);
+			utils::lockAtomic(dataBuffer_.getLock(), false, utils::WaitMechanism::Spin);
+			laneDataSource.sourceBuffer = SimdBufferView{ dataBuffer_, inputIndex * kNumChannels, kNumChannels };
+			laneDataSource.dataType = ComplexDataSource::Cartesian;
+		}
+
+		// main processing loop
+		for (auto effectModule : thisLane->subProcessors_)
+		{
+			// this is safe because by design only EffectModules are contained in a lane
+			utils::as<EffectModule>(effectModule)->processEffect(laneDataSource, binCount_, getSampleRate());
+
+			// incrementing where we are currently
+			thisLane->currentEffectIndex_.fetch_add(1, std::memory_order_acq_rel);
+		}
+
+		thisLane->setProcessingTime(std::chrono::steady_clock::now() - start);
+
+		if (laneDataSource.sourceBuffer != laneDataSource.conversionBuffer)
+			laneDataSource.sourceBuffer.getLock().fetch_sub(1, std::memory_order_release);
+
+		COMPLEX_ASSERT(dataBuffer_.getLock().load() >= 0);
+
+		// to let other threads know that the data is in its final state
+		thisLane->status_.store(EffectsLane::LaneStatus::Finished, std::memory_order_release);
+	}
+
+	void EffectsState::sumLanesAndWriteOutput(juce::AudioBuffer<float> &outputBuffer) noexcept
+	{
+		using namespace Framework;
 
 		// TODO: redo when you get to multiple outputs
 		// checks whether all of the chains are real-imaginary pairs
 		// (instead of magnitude-phase pairs) and if not, gets converted
 		for (auto &lane : lanes_)
 		{
-			if (!lane->getParameter(BaseProcessors::EffectsLane::LaneEnabled::name())->getInternalValue<u32>(getSampleRate()))
+			if (!lane->getParameter(BaseProcessors::EffectsLane::LaneEnabled::name())->getInternalValue<u32>())
 				continue;
 
-			if (lane->laneDataSource_.isPolar)
+			utils::ScopedLock g1{ lane->laneDataSource_.sourceBuffer.getLock(), false, utils::WaitMechanism::Spin };
+
+			if (lane->laneDataSource_.dataType == ComplexDataSource::Polar)
+			{
 				utils::convertBuffer<utils::complexPolarToCart>(
-					lane->laneDataSource_.sourceBuffer, lane->laneDataSource_.conversionBuffer);
+					lane->laneDataSource_.sourceBuffer, lane->laneDataSource_.conversionBuffer, binCount_);
+				lane->laneDataSource_.sourceBuffer = lane->laneDataSource_.conversionBuffer;
+				lane->laneDataSource_.dataType = ComplexDataSource::Cartesian;
+			}
 		}
+
+		utils::ScopedLock g{ outputBuffer_.getLock(), true, utils::WaitMechanism::Spin };
+		outputBuffer_.clear();
 
 		// multipliers for scaling the multiple chains going into the same output
 		std::array<float, kNumInputsOutputs> multipliers{};
 
-		// for every chain we add its scaled output to the main sourceBuffer_ at the designated output channels
+		// for every lane we add its scaled output to the main sourceBuffer_ at the designated output channels
 		for (auto &lane : lanes_)
 		{
 			if (!lane->getParameter(BaseProcessors::EffectsLane::LaneEnabled::name())->getInternalValue<u32>(getSampleRate()))
@@ -246,16 +288,11 @@ namespace Generation
 
 			multipliers[laneOutput]++;
 
-			if (lane->laneDataSource_.isPolar)
-			{
-				auto source = SimdBufferView(lane->laneDataSource_.conversionBuffer);
-				SimdBuffer<std::complex<float>, simd_float>::applyToThisNoMask(dataBuffer_,
-					source, kComplexSimdRatio, binCount_, utils::MathOperations::Add, laneOutput * kComplexSimdRatio, 0);
-			}
-			else
-				SimdBuffer<std::complex<float>, simd_float>::applyToThisNoMask(dataBuffer_,
-					lane->laneDataSource_.sourceBuffer, kComplexSimdRatio, binCount_, utils::MathOperations::Add,
-					laneOutput * kComplexSimdRatio, 0);
+			utils::ScopedLock g1{ lane->laneDataSource_.sourceBuffer.getLock(), false, utils::WaitMechanism::Spin };
+
+			SimdBuffer<std::complex<float>, simd_float>::applyToThisNoMask(outputBuffer_,
+				lane->laneDataSource_.sourceBuffer, kComplexSimdRatio, binCount_, utils::MathOperations::Add,
+				laneOutput * kComplexSimdRatio, 0);
 		}
 
 		// scaling all outputs
@@ -267,13 +304,10 @@ namespace Generation
 
 			simd_float multiplier = 1.0f / multipliers[i];
 			for (u32 j = 0; j < binCount_; j++)
-				dataBuffer_.multiply(multiplier, i * kComplexSimdRatio, j);
+				outputBuffer_.multiply(multiplier, i * kComplexSimdRatio, j);
 		}
-	}
 
-	void EffectsState::writeOutputData(juce::AudioBuffer<float> &outputBuffer) const noexcept
-	{
-		Framework::Matrix matrix;
+		Matrix matrix;
 
 		for (u32 i = 0; i < (u32)outputBuffer.getNumChannels(); i += kComplexSimdRatio)
 		{
@@ -283,11 +317,11 @@ namespace Generation
 			for (u32 j = 0; j < binCount_; j++)
 			{
 				for (u32 k = 0; k < kComplexSimdRatio; k++)
-					matrix.rows_[k] = dataBuffer_.readSimdValueAt(i, j * 2 + k);
+					matrix.rows_[k] = outputBuffer_.readSimdValueAt(i, j * 2 + k);
 
 				matrix.complexTranspose();
 				for (u32 k = 0; k < kComplexSimdRatio; k++)
-					std::memcpy(outputBuffer.getWritePointer((int)(i + k), (int)j * 2 * kComplexSimdRatio), 
+					std::memcpy(outputBuffer.getWritePointer((int)(i + k), (int)j * 2 * kComplexSimdRatio),
 						&matrix.rows_[k], size_t(2) * kComplexSimdRatio * sizeof(float));
 			}
 		}

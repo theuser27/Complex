@@ -5,12 +5,25 @@
 
 #pragma once
 
-#include <functional>
+#include <stdexcept>
+#include <cstddef>
 #include <utility>
 
 namespace clg 
 {
-  template <typename Signature, size_t MaxSize = 64>
+  class bad_function_call final : public std::exception
+  {
+  public:
+    bad_function_call() noexcept = default;
+
+    [[nodiscard]] const char *what() const noexcept override
+    {
+      // return pointer to message string
+      return "bad function call";
+    }
+  };
+
+  template <typename Signature, size_t MaxSize = 32>
   class small_function;
 
   namespace detail 
@@ -94,7 +107,7 @@ namespace clg
 
       static auto empty_invoke(const void*, Args&&...) -> R
       {
-        throw std::bad_function_call();
+        throw bad_function_call();
       }
 
       Copier copier{};

@@ -10,21 +10,18 @@
 
 #pragma once
 
-#include "common.h"
 #include "memory_block.h"
 #include "utils.h"
 #include "simd_utils.h"
 
 namespace Framework
 {
-	template<typename T, CommonConcepts::SimdValue SIMD>
+	template<typename T, SimdValue SIMD>
 	class SimdBufferView;
 
 	// T - base type
 	// SIMD - simd type
-	template<typename T, CommonConcepts::SimdValue SIMD>
-		/*requires commonConcepts::Addable<SIMD> && commonConcepts::Multipliable<SIMD> &&
-			commonConcepts::OperatorParen<SIMD> && commonConcepts::OperatorBracket<SIMD>*/
+	template<typename T, SimdValue SIMD>
 	class SimdBuffer 
 	{
 	public:
@@ -45,6 +42,10 @@ namespace Framework
 			channels_ = other.channels_;
 			size_ = other.size_;
 		}
+		void copy(const SimdBuffer &other, u64 destination, u64 source, u64 size)
+		{ data_.copy(other.data_, destination, source, size); }
+		void copy(const SimdBufferView<T, SIMD> &other);
+		void copy(const SimdBufferView<T, SIMD> &other, u64 destination, u64 source, u64 size);
 
 		void swap(SimdBuffer &other) noexcept
 		{
@@ -100,12 +101,12 @@ namespace Framework
 		// specified by starting channels/indices
 		// result is shifted by shiftMask and filtered with mergeMask
 		// note: starting channels need to be congruent to kNumChannels
-		static void applyToThis(SimdBuffer &thisBuffer, SimdBufferView<T, SIMD> &otherBuffer, u32 numChannels,
+		static void applyToThis(SimdBuffer &thisBuffer, const SimdBufferView<T, SIMD> &otherBuffer, u32 numChannels,
 			u32 numSamples, utils::MathOperations operation = utils::MathOperations::Assign, simd_mask mergeMask = kNoChangeMask,
 			u32 thisStartChannel = 0, u32 otherStartChannel = 0, u32 thisStartIndex = 0, u32 otherStartIndex = 0) noexcept;
 
 		// same thing without the mask
-		static void applyToThisNoMask(SimdBuffer &thisBuffer, SimdBufferView<T, SIMD> &otherBuffer,
+		static void applyToThisNoMask(SimdBuffer &thisBuffer, const SimdBufferView<T, SIMD> &otherBuffer,
 			u32 numChannels, u32 numSamples, utils::MathOperations operation = utils::MathOperations::Assign,
 			u32 thisStartChannel = 0, u32 otherStartChannel = 0, u32 thisStartIndex = 0, u32 otherStartIndex = 0) noexcept;
 
@@ -185,8 +186,7 @@ namespace Framework
 			COMPLEX_ASSERT(channel < getChannels());
 			COMPLEX_ASSERT(index < getSize());
 
-			auto indices = getAbsoluteIndices(channel, size_, index);
-			return data_.read(indices.first);
+			return data_.read(getSimdIndex(channel, size_, index));
 		}
 
 		// returns a single value from the buffer
@@ -196,7 +196,7 @@ namespace Framework
 			COMPLEX_ASSERT(index < getSize());
 
 			auto indices = getAbsoluteIndices(channel, size_, index);
-			auto scalars = data_.read(indices.first).getArrayOfValues<T>();
+			auto scalars = data_.read(indices.first).template getArrayOfValues<T>();
 
 			return scalars[indices.second];
 		}
@@ -207,8 +207,16 @@ namespace Framework
 			COMPLEX_ASSERT(channel < getChannels());
 			COMPLEX_ASSERT(index < getSize());
 
+			data_.write(value, getSimdIndex(channel, size_, index));
+		}
+
+		void writeMaskedSimdValueAt(SIMD value, simd_mask mask, u32 channel, u32 index)
+		{
+			COMPLEX_ASSERT(channel < getChannels());
+			COMPLEX_ASSERT(index < getSize());
+
 			auto indices = getAbsoluteIndices(channel, size_, index);
-			data_.write(value, indices.first);
+			data_.write(utils::maskLoad(data_.read(indices.first), value, mask), indices.first);
 		}
 
 		// writes a single value to the buffer
@@ -219,16 +227,19 @@ namespace Framework
 
 			auto indices = getAbsoluteIndices(channel, size_, index);
 			auto data = data_.getData();
-			auto scalars = data_.read(indices.first).getArrayOfValues<T>();
+			auto scalars = data_.read(indices.first).template getArrayOfValues<T>();
 			scalars[indices.second] = value;
 			data_.write(SIMD(scalars), indices.first);
 		}
 
+		bool isEmpty() const noexcept { return channels_ == 0 || size_ == 0; }
 		u32 getSize() const noexcept {	return size_; }
 		u32 getChannels() const noexcept { return channels_; }
 		u32 getSimdChannels() const noexcept { return getTotalSimdChannels(channels_); }
 
 		MemoryBlock<SIMD> &getData() noexcept { return data_; }
+		const MemoryBlock<SIMD> &getData() const noexcept { return data_; }
+		auto &getLock() const noexcept { return dataLock_; }
 
 		// can get raw pointer if the context already has a shared_ptr
 		static SIMD* getDataPointer(std::shared_ptr<SIMD[]>& dataPtr, u32 channel, u32 index, u32 size) noexcept
@@ -244,6 +255,8 @@ namespace Framework
 		u32 channels_ = 0;
 		u32 size_ = 0;
 
+		mutable std::atomic<i32> dataLock_ = 0;
+
 		static u32 getTotalSimdChannels(u32 numChannels)
 		{	return (u32)std::ceil((double)numChannels / (double)getRelativeSize()); }
 
@@ -251,19 +264,22 @@ namespace Framework
 		// first - index to the **SIMD** element 
 		// second - channel index of T value inside the SIMD element
 		static constexpr std::pair<u32, u32> getAbsoluteIndices(u32 channel, u32 channelSize, u32 index) noexcept
-		{ return { (channel / getRelativeSize()) *channelSize + index, channel % getRelativeSize() }; }
+		{ return { (channel / getRelativeSize()) * channelSize + index, channel % getRelativeSize() }; }
 
-		template<typename T, CommonConcepts::SimdValue SIMD>
+		static constexpr u32 getSimdIndex(u32 channel, u32 channelSize, u32 index) noexcept
+		{ return (channel / getRelativeSize()) * channelSize + index; }
+
+		template<typename T, SimdValue SIMD>
 		friend class SimdBufferView;
 	};
 
-	template<typename T, CommonConcepts::SimdValue SIMD>
+	template<typename T, SimdValue SIMD>
 	class SimdBufferView
 	{
 	public:
 		SimdBufferView() = default;
 		SimdBufferView(const SimdBufferView &) = default;
-		SimdBufferView(const SimdBuffer<T, SIMD> &buffer, u32 channels = 0, u32 beginChannel = 0) noexcept
+		SimdBufferView(const SimdBuffer<T, SIMD> &buffer, u32 beginChannel = 0, u32 channels = 0) noexcept
 		{
 			COMPLEX_ASSERT(beginChannel + channels <= buffer.getChannels());
 
@@ -271,6 +287,7 @@ namespace Framework
 			beginChannel_ = beginChannel;
 			channels_ = (channels) ? channels : buffer.getChannels() - beginChannel;
 			size_ = buffer.getSize();
+			dataLock_ = &buffer.dataLock_;
 		}
 
 		SIMD readSimdValueAt(u32 channel, u32 index) const noexcept
@@ -278,8 +295,7 @@ namespace Framework
 			COMPLEX_ASSERT(channel < getChannels());
 			COMPLEX_ASSERT(index < getSize());
 
-			auto indices = SimdBuffer<T, SIMD>::getAbsoluteIndices(channel, size_, index);
-			return dataView_.read(indices.first);
+			return dataView_.read(SimdBuffer<T, SIMD>::getSimdIndex(channel, size_, index));
 		}
 
 		T readValueAt(u32 channel, u32 index) const noexcept
@@ -293,6 +309,10 @@ namespace Framework
 			return scalars[indices.second];
 		}
 
+		auto &getLock() const noexcept { return *dataLock_; }
+
+		bool isEmpty() const noexcept { return channels_ == 0 || size_ == 0; }
+
 		u32 getSize() const noexcept { return size_; }
 		u32 getChannels() const noexcept { return channels_; }
 		u32 getSimdChannels() const noexcept { return SimdBuffer<T, SIMD>::getTotalSimdChannels(channels_); }
@@ -301,19 +321,22 @@ namespace Framework
 
 		const MemoryBlockView<SIMD> &getData() const noexcept { return dataView_; }
 
-		bool isEmpty() const noexcept { return dataView_.isEmpty(); }
-
 	private:
 		MemoryBlockView<SIMD> dataView_{};
 		u32 beginChannel_ = 0;
 		u32 channels_ = 0;
 		u32 size_ = 0;
 
-		template<typename T, CommonConcepts::SimdValue SIMD>
+		std::atomic<i32> *dataLock_ = nullptr;
+
+		template<typename T, SimdValue SIMD>
 		friend class SimdBuffer;
 	};
 
-	template<typename T, CommonConcepts::SimdValue SIMD>
+	template<typename T, SimdValue SIMD>
+	bool operator==(const SimdBufferView<T, SIMD> &lhs, const SimdBuffer<T, SIMD> &rhs) noexcept { return lhs.getData() == rhs.getData(); }
+
+	template<typename T, SimdValue SIMD>
 	SimdBuffer<T, SIMD>::SimdBuffer(const SimdBuffer &other, bool doDataCopy) noexcept
 	{
 		COMPLEX_ASSERT(other.getChannels() > 0 && other.getSize() > 0);
@@ -323,12 +346,19 @@ namespace Framework
 			applyToThis(*this, other, other.getChannels(), other.getSize());
 	}
 
+	template <typename T, SimdValue SIMD>
+	void SimdBuffer<T, SIMD>::copy(const SimdBufferView<T, SIMD> &other) { data_.copy(other.dataView_); }
+
+	template <typename T, SimdValue SIMD>
+	void SimdBuffer<T, SIMD>::copy(const SimdBufferView<T, SIMD> &other, u64 destination, u64 source, u64 size)
+	{ data_.copy(other.dataView_, destination, source, size); }
+
 	// copies/does math operation on samples from "otherBuffer" to "thisBuffer"
 	// specified by starting channels/indices
 	// result is shifted by shiftMask and filtered with mergeMask
 	// note: starting channels need to be congruent to kNumChannels
-	template<typename T, CommonConcepts::SimdValue SIMD>
-	void SimdBuffer<T, SIMD>::applyToThis(SimdBuffer &thisBuffer, SimdBufferView<T, SIMD> &otherBuffer, u32 numChannels,
+	template<typename T, SimdValue SIMD>
+	void SimdBuffer<T, SIMD>::applyToThis(SimdBuffer &thisBuffer, const SimdBufferView<T, SIMD> &otherBuffer, u32 numChannels,
 		u32 numSamples, utils::MathOperations operation, simd_mask mergeMask, u32 thisStartChannel, u32 otherStartChannel, 
 		u32 thisStartIndex, u32 otherStartIndex) noexcept
 	{
@@ -381,8 +411,8 @@ namespace Framework
 		}
 	}
 
-	template<typename T, CommonConcepts::SimdValue SIMD>
-	void SimdBuffer<T, SIMD>::applyToThisNoMask(SimdBuffer &thisBuffer, SimdBufferView<T, SIMD> &otherBuffer,
+	template<typename T, SimdValue SIMD>
+	void SimdBuffer<T, SIMD>::applyToThisNoMask(SimdBuffer &thisBuffer, const SimdBufferView<T, SIMD> &otherBuffer,
 		u32 numChannels, u32 numSamples, utils::MathOperations operation,
 		u32 thisStartChannel, u32 otherStartChannel, u32 thisStartIndex, u32 otherStartIndex) noexcept
 	{

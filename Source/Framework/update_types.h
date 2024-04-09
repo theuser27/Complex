@@ -13,6 +13,8 @@
 #include "AppConfig.h"
 #include <juce_data_structures/juce_data_structures.h>
 #include "utils.h"
+#include "sync_primitives.h"
+#include "parameters.h"
 
 namespace Plugin
 {
@@ -31,20 +33,23 @@ namespace Interface
 
 namespace Framework
 {
+	class ParameterValue;
+	class PresetUpdate;
+
 	// most of the updates need to happen outside of processing, but parts of them could be unbounded in time
 	// (i.e. allocations) however those can happen regardless if we're currently processing or not
 	// so we can specify *when* we need to wait by injecting a synchronisation function into the update
 	class WaitingUpdate : public juce::UndoableAction
 	{
 	public:
-		void setWaitFunction(std::function<utils::ScopedSpinLock()> waitFunction) { waitFunction_ = std::move(waitFunction); }
+		void setWaitFunction(std::function<utils::ScopedLock()> waitFunction) { waitFunction_ = std::move(waitFunction); }
 	protected:
-		utils::ScopedSpinLock wait() const { return waitFunction_(); }
-		std::function<utils::ScopedSpinLock()> waitFunction_ = []()
+		auto wait() const { return waitFunction_(); }
+		std::function<utils::ScopedLock()> waitFunction_ = []()
 		{ 
 			COMPLEX_ASSERT_FALSE("Wait function for update hasn't been set");
 			std::atomic<bool> temp{};
-			return utils::ScopedSpinLock{ temp };
+			return utils::ScopedLock{ temp, utils::WaitMechanism::Wait };
 		};
 		bool isDone_ = false;
 	};
@@ -52,7 +57,7 @@ namespace Framework
 	class AddProcessorUpdate final : public WaitingUpdate
 	{
 	public:
-		AddProcessorUpdate(Plugin::ProcessorTree *processorTree, u64 destinationProcessorId, 
+		AddProcessorUpdate(Plugin::ProcessorTree &processorTree, u64 destinationProcessorId, 
 			size_t destinationSubProcessorIndex, std::string_view newSubProcessorType) noexcept : processorTree_(processorTree),
 			newSubProcessorType_(newSubProcessorType), destinationProcessorId_(destinationProcessorId),
 			destinationSubProcessorIndex_(destinationSubProcessorIndex) { }
@@ -63,19 +68,21 @@ namespace Framework
 		bool undo() override;
 
 	private:
-		Plugin::ProcessorTree *processorTree_;
+		Plugin::ProcessorTree &processorTree_;
 
 		std::string_view newSubProcessorType_;
 		Generation::BaseProcessor *addedProcessor_ = nullptr;
 
 		u64 destinationProcessorId_;
 		size_t destinationSubProcessorIndex_;
+
+		friend class PresetUpdate;
 	};
 
 	class CopyProcessorUpdate final : public WaitingUpdate
 	{
 	public:
-		CopyProcessorUpdate(Plugin::ProcessorTree *processorTree, Generation::BaseProcessor &processorCopy, 
+		CopyProcessorUpdate(Plugin::ProcessorTree &processorTree, Generation::BaseProcessor &processorCopy, 
 			u64 destinationProcessorId, size_t destinationSubProcessorIndex) noexcept : processorTree_(processorTree),
 			processorCopy(processorCopy), destinationProcessorId_(destinationProcessorId),
 			destinationSubProcessorIndex_(destinationSubProcessorIndex) { }
@@ -86,7 +93,7 @@ namespace Framework
 		bool undo() override;
 
 	private:
-		Plugin::ProcessorTree *processorTree_;
+		Plugin::ProcessorTree &processorTree_;
 
 		Generation::BaseProcessor &processorCopy;
 
@@ -97,7 +104,7 @@ namespace Framework
 	class MoveProcessorUpdate final : public WaitingUpdate
 	{
 	public:
-		MoveProcessorUpdate(Plugin::ProcessorTree *processorTree, u64 destinationProcessorId,
+		MoveProcessorUpdate(Plugin::ProcessorTree &processorTree, u64 destinationProcessorId,
 			size_t destinationSubProcessorIndex, u64 sourceProcessorId, size_t sourceSubProcessorIndex) noexcept :
 			processorTree_(processorTree), destinationProcessorId_(destinationProcessorId),
 			destinationSubProcessorIndex_(destinationSubProcessorIndex), sourceProcessorId_(sourceProcessorId),
@@ -107,7 +114,7 @@ namespace Framework
 		bool undo() override;
 
 	private:
-		Plugin::ProcessorTree *processorTree_;
+		Plugin::ProcessorTree &processorTree_;
 
 		u64 destinationProcessorId_;
 		size_t destinationSubProcessorIndex_;
@@ -118,7 +125,7 @@ namespace Framework
 	class UpdateProcessorUpdate final : public WaitingUpdate
 	{
 	public:
-		UpdateProcessorUpdate(Plugin::ProcessorTree *processorTree, u64 destinationProcessorId,
+		UpdateProcessorUpdate(Plugin::ProcessorTree &processorTree, u64 destinationProcessorId,
 			size_t destinationSubProcessorIndex, std::string_view newSubProcessorType) noexcept : processorTree_(processorTree),
 			newSubProcessorType_(newSubProcessorType), destinationProcessorId_(destinationProcessorId),
 			destinationSubProcessorIndex_(destinationSubProcessorIndex) { }
@@ -129,7 +136,7 @@ namespace Framework
 		bool undo() override;
 
 	private:
-		Plugin::ProcessorTree *processorTree_;
+		Plugin::ProcessorTree &processorTree_;
 
 		std::string_view newSubProcessorType_;
 		Generation::BaseProcessor *savedProcessor_ = nullptr;
@@ -141,7 +148,7 @@ namespace Framework
 	class DeleteProcessorUpdate final : public WaitingUpdate
 	{
 	public:
-		DeleteProcessorUpdate(Plugin::ProcessorTree *processorTree, u64 destinationProcessorId,
+		DeleteProcessorUpdate(Plugin::ProcessorTree &processorTree, u64 destinationProcessorId,
 			size_t destinationSubProcessorIndex) noexcept : processorTree_(processorTree),
 			destinationProcessorId_(destinationProcessorId), destinationSubProcessorIndex_(destinationSubProcessorIndex) { }
 
@@ -151,12 +158,14 @@ namespace Framework
 		bool undo() override;
 
 	private:
-		Plugin::ProcessorTree *processorTree_;
+		Plugin::ProcessorTree &processorTree_;
 
 		Generation::BaseProcessor *deletedProcessor_ = nullptr;
 
 		u64 destinationProcessorId_;
 		size_t destinationSubProcessorIndex_;
+
+		friend class PresetUpdate;
 	};
 
 	class ParameterUpdate final : public WaitingUpdate
@@ -168,19 +177,33 @@ namespace Framework
 		bool perform() override;
 		bool undo() override;
 
-		int getSizeInUnits() override { return sizeof(*this); }
+		void setDetailsChange(ParameterDetails details) noexcept { details_ = details; }
 
 	private:
 		Interface::BaseControl *baseParameter_;
+		std::optional<ParameterDetails> details_{};
 		double oldValue_;
 		double newValue_;
 		bool firstTime_ = true;
+
+		friend class PresetUpdate;
 	};
 
-	// (eventually) for any kind of changes in the modulator amounts
-	// TODO: modulator updates for the undo manager when you get to modulators
-	/*struct ModulatorUpdate : public juce::UndoableAction
+	class PresetUpdate final : public WaitingUpdate
 	{
+	public:
+		PresetUpdate(Plugin::ProcessorTree &processorTree) : processorTree_(processorTree) { }
 
-	};*/
+		bool perform() override;
+		bool undo() override;
+
+		void pushParameterChanges(ParameterValue *parameter);
+
+	private:
+		Plugin::ProcessorTree &processorTree_;
+		std::vector<ParameterUpdate> parametersChanged_{};
+		std::vector<AddProcessorUpdate> addedProcessors_{};
+		std::vector<DeleteProcessorUpdate> deletedProcessors_{};
+		bool firstTime_ = true;
+	};
 }

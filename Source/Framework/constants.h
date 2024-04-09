@@ -58,7 +58,7 @@ namespace common
 	inline constexpr u32 kMaxNumLanes = 16;																						// (can be changed)   an artificial limit is needed
 	inline constexpr u32 kMaxEffectModes = 16;																				// (can be changed)   types of effects per module; an artificial limit is needed
 	inline constexpr u32 kMaxParameterMappings = 64;																	// (can be changed)   max number of parameters that can be mapped out
-	inline constexpr u32 kInitialNumEffects = 50;																			// (can be changed)   initial number of effect slots in a chain
+	inline constexpr u32 kInitialEffectCount = 50;																		// (can be changed)   initial number of effect slots in a lane
 
 	// processing constants
 	inline constexpr double kMinFrequency = kMidi0Frequency;													// (can be changed)   lowest frequency that will be displayed

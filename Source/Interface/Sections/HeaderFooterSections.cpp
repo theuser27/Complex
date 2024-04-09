@@ -9,11 +9,17 @@
 */
 
 #include "Framework/windows.h"
+#include "Generation/EffectsState.h"
 #include "Generation/SoundEngine.h"
 #include "HeaderFooterSections.h"
 #include "../LookAndFeel/Fonts.h"
+#include "Framework/load_save.h"
 #include "../Components/OpenGlMultiQuad.h"
+#include "../Components/BaseButton.h"
 #include "../Components/BaseSlider.h"
+#include "../Components/Spectrogram.h"
+#include "Plugin/Renderer.h"
+#include "Plugin/Complex.h"
 
 namespace Interface
 {
@@ -29,6 +35,10 @@ namespace Interface
 		bottomBarColour_ = makeOpenGlComponent<OpenGlQuad>(Shaders::kColorFragment);
 		bottomBarColour_->setTargetComponent(this);
 		addOpenGlComponent(bottomBarColour_);*/
+
+		spectrogram_ = makeOpenGlComponent<Spectrogram>("Main Spectrum");
+		spectrogram_->setSpectrumData(soundEngine.getEffectsState().getOutputBuffer(kNumChannels, 0), false);
+		addOpenGlComponent(spectrogram_);
 		
 		mixNumberBox_ = std::make_unique<NumberBox>(
 			soundEngine.getParameter(BaseProcessors::SoundEngine::MasterMix::name()));
@@ -77,6 +87,13 @@ namespace Interface
 		windowAlphaNumberBox_->setCanUseScrollWheel(true);
 		windowAlphaNumberBox_->removeLabel();
 		addControl(windowAlphaNumberBox_.get());
+
+		saveButton_ = std::make_unique<ActionButton>("Save Button", "Save");
+		saveButton_->setAction([this]()
+			{
+				LoadSave::writeSave(getRenderer()->getPlugin().serialiseToJson());
+			});
+		addControl(saveButton_.get());
 	}
 
 	HeaderFooterSections::~HeaderFooterSections() = default;
@@ -119,6 +136,15 @@ namespace Interface
 		bottomBarColour_->setColor(getColour(Skin::kBody));
 		bottomBarColour_->setCustomDrawBounds(bounds.withTop(bounds.getBottom() - footerHeight));
 		bottomBarColour_->setBounds(bounds.withTop(bounds.getBottom() - footerHeight));*/
+
+		auto spectrumBounds = Rectangle
+		{
+			scaleValueRoundInt(kHorizontalWindowEdgeMargin),
+			scaleValueRoundInt(kFooterHeight + kVerticalGlobalMargin),
+			getWidth() - scaleValueRoundInt(2 * kHorizontalWindowEdgeMargin),
+			scaleValueRoundInt(kMainVisualiserHeight)
+		};
+		spectrogram_->setBounds(spectrumBounds);
 
 		arrangeHeader();
 		arrangeFooter();
@@ -164,6 +190,10 @@ namespace Interface
 
 		auto gainNumberBoxBounds = gainNumberBox_->setBoundsForSizes(numberBoxHeight);
 		gainNumberBox_->setPosition(currentPoint - Point{ gainNumberBoxBounds.getRight(), 0 });
+
+		std::ignore = saveButton_->setBoundsForSizes(numberBoxHeight, 60);
+		saveButton_->setPosition({ scaleValueRoundInt(kHeaderHorizontalEdgePadding),
+			centerVertically(0, numberBoxHeight, scaleValueRoundInt(kHeaderHeight)) });
 	}
 
 	void HeaderFooterSections::arrangeFooter()

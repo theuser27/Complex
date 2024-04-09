@@ -10,20 +10,22 @@
 
 #pragma once
 
-#include <algorithm>
-#include "Framework/common.h"
+#include "Framework/constants.h"
 #include "Framework/simd_buffer.h"
 #include "Framework/parameters.h"
+#include "Framework/parameter_value.h"
 #include "BaseProcessor.h"
 
 namespace Generation
 {
 	struct ComplexDataSource
 	{
+		enum DataSourceType : u8 { Cartesian, Polar, Both };
+
 		// scratch buffer for conversion between cartesian and polar data
 		Framework::SimdBuffer<std::complex<float>, simd_float> conversionBuffer{ kNumChannels, kMaxFFTBufferLength };
 		// is the data in sourceBuffer polar or cartesian
-		bool isPolar = false;
+		DataSourceType dataType = Cartesian;
 		Framework::SimdBufferView<std::complex<float>, simd_float> sourceBuffer;
 	};
 
@@ -35,42 +37,22 @@ namespace Generation
 		baseEffect(const baseEffect &) = delete;
 		baseEffect(baseEffect &&) = delete;
 
-		baseEffect(Plugin::ProcessorTree *globalModulesState, u64 parentModuleId, std::string_view effectType) :
-			BaseProcessor(globalModulesState, parentModuleId, effectType)
-		{ createProcessorParameters<Framework::BaseProcessors::BaseEffect::type>(); }
+		baseEffect(Plugin::ProcessorTree *processorTree, u64 parentModuleId, std::string_view effectType);
 
-		baseEffect(const baseEffect &other, u64 parentModuleId) noexcept :
-			BaseProcessor(other, parentModuleId) { }
-		baseEffect &operator=(const baseEffect &other) noexcept
-		{
-			if (this != &other)
-			{
-				
-				BaseProcessor::operator=(other);
-			}
-			return *this;
-		}
+		baseEffect(const baseEffect &other, u64 parentModuleId) noexcept : BaseProcessor(other, parentModuleId) { }
+		baseEffect &operator=(const baseEffect &other) noexcept = default;
 
-		baseEffect(baseEffect &&other, u64 parentModuleId) noexcept :
-			BaseProcessor(std::move(other), parentModuleId) { }
-		baseEffect &operator=(baseEffect &&other) noexcept
-		{
-			if (this != &other)
-			{
-
-				BaseProcessor::operator=(std::move(other));
-			}
-			return *this;
-		}
+		baseEffect(baseEffect &&other, u64 parentModuleId) noexcept : BaseProcessor(std::move(other), parentModuleId) { }
+		baseEffect &operator=(baseEffect &&other) noexcept = default;
 
 		virtual void run([[maybe_unused]] Framework::SimdBufferView<std::complex<float>, simd_float> &source,
 			[[maybe_unused]] Framework::SimdBuffer<std::complex<float>, simd_float> &destination,
 			[[maybe_unused]] u32 binCount, [[maybe_unused]] float sampleRate) noexcept { }
 
-		virtual bool needsPolarData() const noexcept { return false; }
+		virtual ComplexDataSource::DataSourceType neededDataType() const noexcept { return ComplexDataSource::Cartesian; }
 		template<nested_enum::NestedEnum E>
 		E getEffectAlgorithm() const
-		{ return E::make_enum(getParameter(Framework::BaseProcessors::BaseEffect::Algorithm::value())->getInternalValue<u32>()).value(); }
+		{ return E::make_enum(getParameter(Framework::BaseProcessors::BaseEffect::Algorithm::name())->getInternalValue<u32>()).value(); }
 
 	protected:
 		[[nodiscard]] BaseProcessor *createCopy([[maybe_unused]] std::optional<u64> parentModuleId) const noexcept override
@@ -79,20 +61,6 @@ namespace Generation
 		{ COMPLEX_ASSERT_FALSE("This type cannot have subProcessors"); return nullptr; }
 
 		enum class BoundRepresentation : u32 { Normalised, Frequency, BinIndex };
-
-		// helper to set the create
-		template<nested_enum::NestedEnum Type>
-		void fillAndSetParameters()
-		{
-			using namespace Framework;
-
-			auto *parameter = getParameter(BaseProcessors::BaseEffect::Algorithm::value());
-			auto details = parameter->getParameterDetails();
-			details.stringLookup = Parameters::getEffectModesStrings(Type::value());
-			parameter->setParameterDetails(details);
-			
-			utils::applyOne([&]<typename T>(T &&) { createProcessorParameters<typename std::remove_cvref_t<T>::type>(); }, Type::template enum_subtypes<nested_enum::InnerNodes>());
-		}
 
 		// first - low shifted boundary, second - high shifted boundary
 		[[nodiscard]] std::pair<simd_float, simd_float> getShiftedBounds(BoundRepresentation representation,
@@ -122,10 +90,12 @@ namespace Generation
 		static std::pair<u32, u32> vector_call minimiseRange(simd_int lowIndices, simd_int highIndices,
 			u32 binCount, bool isProcessedRange);
 
-		static void copyUnprocessedData(const Framework::SimdBufferView<std::complex<float>, simd_float> &source,
-			Framework::SimdBuffer<std::complex<float>, simd_float> &destination, const simd_int &lowBoundIndices,
-			const simd_int &highBoundIndices, u32 effectiveFFTSize) noexcept;
+		static void copyUnprocessedData(Framework::SimdBufferView<std::complex<float>, simd_float> source,
+			Framework::SimdBuffer<std::complex<float>, simd_float> &destination, simd_int lowBoundIndices,
+			simd_int highBoundIndices, u32 binCount) noexcept;
 
+		template<nested_enum::NestedEnum Type>
+		friend void fillAndSetParameters(baseEffect &effect);
 
 		//// Parameters
 		//
@@ -137,13 +107,11 @@ namespace Generation
 	class utilityEffect final : public baseEffect
 	{
 	public:
-		DEFINE_CLASS_TYPE("{A8129602-D351-46D5-B85B-D5764C071575}")
-
 		utilityEffect() = delete;
 		utilityEffect(const utilityEffect &) = delete;
 		utilityEffect(utilityEffect &&) = delete;
 
-		utilityEffect(Plugin::ProcessorTree *globalModulesState, u64 parentModuleId);
+		utilityEffect(Plugin::ProcessorTree *processorTree, u64 parentModuleId);
 
 		void run(Framework::SimdBufferView<std::complex<float>, simd_float> &source,
 			Framework::SimdBuffer<std::complex<float>, simd_float> &destination, u32 binCount, float sampleRate) noexcept override
@@ -166,19 +134,20 @@ namespace Generation
 	class filterEffect final : public baseEffect
 	{
 	public:
-		DEFINE_CLASS_TYPE("{809BD1B8-AA18-467E-8DD2-E396F70D6253}")
-
 		filterEffect() = delete;
 		filterEffect(const filterEffect &) = delete;
 		filterEffect(filterEffect &&) = delete;
 
-		filterEffect(Plugin::ProcessorTree *globalModulesState, u64 parentModuleId);
+		filterEffect(Plugin::ProcessorTree *processorTree, u64 parentModuleId);
 
 		void run(Framework::SimdBufferView<std::complex<float>, simd_float> &source,
 			Framework::SimdBuffer<std::complex<float>, simd_float> &destination, u32 binCount, float sampleRate) noexcept override;
 
 	private:
 		void runNormal(Framework::SimdBufferView<std::complex<float>, simd_float> &source,
+			Framework::SimdBuffer<std::complex<float>, simd_float> &destination, u32 binCount, float sampleRate) const noexcept;
+
+		void runPhase(Framework::SimdBufferView<std::complex<float>, simd_float> &source,
 			Framework::SimdBuffer<std::complex<float>, simd_float> &destination, u32 binCount, float sampleRate) const noexcept;
 
 		static simd_float vector_call getDistancesFromCutoffs(simd_int positionIndices,
@@ -211,7 +180,7 @@ namespace Generation
 		// 
 		// 8. delta - instead of the absolute loudness it uses the averaged loudness change from the 2 neighbouring bins
 		// 
-		// 
+		// Tilt filter
 		// Regular - triangles, squares, saws, pointy, sweep and custom, razor comb peak
 		// Regular key tracked - regular filtering based on fundamental frequency (like dtblkfx autoharm)
 		// 
@@ -223,13 +192,11 @@ namespace Generation
 	class dynamicsEffect final : public baseEffect
 	{
 	public:
-		DEFINE_CLASS_TYPE("{D5DADD9A-5B0F-45C6-ADF5-B6A6415AF2D7}")
-
 		dynamicsEffect() = delete;
 		dynamicsEffect(const dynamicsEffect &) = delete;
 		dynamicsEffect(dynamicsEffect &&) = delete;
 
-		dynamicsEffect(Plugin::ProcessorTree *globalModulesState, u64 parentModuleId);
+		dynamicsEffect(Plugin::ProcessorTree *processorTree, u64 parentModuleId);
 
 		void run(Framework::SimdBufferView<std::complex<float>, simd_float> &source,
 			Framework::SimdBuffer<std::complex<float>, simd_float> &destination, u32 binCount, float sampleRate) noexcept override;
@@ -241,16 +208,7 @@ namespace Generation
 		void runClip(Framework::SimdBufferView<std::complex<float>, simd_float> &source,
 			Framework::SimdBuffer<std::complex<float>, simd_float> &destination, u32 binCount, float sampleRate) const noexcept;
 
-		static simd_float vector_call matchPower(simd_float target, simd_float current) noexcept
-		{
-			simd_float result = 1.0f;
-			result = utils::maskLoad(result, simd_float(0.0f), simd_float::greaterThanOrEqual(0.0f, target));
-			result = utils::maskLoad(result, simd_float::sqrt(target / current), simd_float::greaterThan(current, 0.0f));
-
-			result = utils::maskLoad(result, simd_float(1.0f), simd_float::greaterThan(result, 1e30f));
-			result = utils::maskLoad(result, simd_float(0.0f), simd_float::greaterThan(1e-37f, result));
-			return result;
-		}
+		static simd_float vector_call matchPower(simd_float target, simd_float current) noexcept;
 
 
 		//// Dtblkfx Contrast
@@ -277,13 +235,20 @@ namespace Generation
 	class phaseEffect final : public baseEffect
 	{
 	public:
-		DEFINE_CLASS_TYPE("{5670932B-8B6F-4475-9926-000F6C36C5AD}")
-
 		phaseEffect() = delete;
 		phaseEffect(const phaseEffect &) = delete;
 		phaseEffect(phaseEffect &&) = delete;
 
-		phaseEffect(Plugin::ProcessorTree *globalModulesState, u64 parentModuleId);
+		phaseEffect(Plugin::ProcessorTree *processorTree, u64 parentModuleId);
+
+		void run(Framework::SimdBufferView<std::complex<float>, simd_float> &source,
+			Framework::SimdBuffer<std::complex<float>, simd_float> &destination, u32 binCount, float sampleRate) noexcept override;
+
+		ComplexDataSource::DataSourceType neededDataType() const noexcept override { return ComplexDataSource::Polar; }
+
+	private:
+		void runShift(Framework::SimdBufferView<std::complex<float>, simd_float> &source,
+			Framework::SimdBuffer<std::complex<float>, simd_float> &destination, u32 binCount, float sampleRate) const noexcept;
 
 		// phase zeroer, (constrained) phase randomiser (smear), channel phase shifter (pha-979), etc
 		// phase filter - filtering based on phase
@@ -295,13 +260,11 @@ namespace Generation
 	class pitchEffect final : public baseEffect
 	{
 	public:
-		DEFINE_CLASS_TYPE("{71133386-9421-4B23-91F9-C826DFC506B8}")
-
 		pitchEffect() = delete;
 		pitchEffect(const pitchEffect &) = delete;
 		pitchEffect(pitchEffect &&) = delete;
 
-		pitchEffect(Plugin::ProcessorTree *globalModulesState, u64 parentModuleId);
+		pitchEffect(Plugin::ProcessorTree *processorTree, u64 parentModuleId);
 
 		// resample, shift, const shift, harmonic shift, harmonic repitch
 	};
@@ -311,13 +274,11 @@ namespace Generation
 	class stretchEffect final : public baseEffect
 	{
 	public:
-		DEFINE_CLASS_TYPE("{D700C4AA-EC95-4703-9837-7AD5BDF5C810}")
-
 		stretchEffect() = delete;
 		stretchEffect(const stretchEffect &) = delete;
 		stretchEffect(stretchEffect &&) = delete;
 
-		stretchEffect(Plugin::ProcessorTree *globalModulesState, u64 parentModuleId);
+		stretchEffect(Plugin::ProcessorTree *processorTree, u64 parentModuleId);
 
 		// specops geometry
 	};
@@ -327,13 +288,11 @@ namespace Generation
 	class warpEffect final : public baseEffect
 	{
 	public:
-		DEFINE_CLASS_TYPE("{5FC3802A-B916-4D36-A853-78A29A5F5687}")
-
 		warpEffect() = delete;
 		warpEffect(const warpEffect &) = delete;
 		warpEffect(warpEffect &&) = delete;
 
-		warpEffect(Plugin::ProcessorTree *globalModulesState, u64 parentModuleId);
+		warpEffect(Plugin::ProcessorTree *processorTree, u64 parentModuleId);
 
 		// vocode, harmonic match, cross/warp mix
 	};
@@ -343,13 +302,11 @@ namespace Generation
 	class destroyEffect final : public baseEffect
 	{
 	public:
-		DEFINE_CLASS_TYPE("{EA1DD088-A73A-4FD4-BB27-38EC0BF91850}")
-
 		destroyEffect() = delete;
 		destroyEffect(const destroyEffect &) = delete;
 		destroyEffect(destroyEffect &&) = delete;
 
-		destroyEffect(Plugin::ProcessorTree *globalModulesState, u64 parentModuleId);
+		destroyEffect(Plugin::ProcessorTree *processorTree, u64 parentModuleId);
 
 		// resize, specops effects category
 		// randomising bin positions
@@ -358,16 +315,10 @@ namespace Generation
 	};
 
 
-	static constexpr std::array effectsTypes = { utilityEffect::getClassType(), filterEffect::getClassType(),
-		dynamicsEffect::getClassType(), phaseEffect::getClassType(), pitchEffect::getClassType(),
-		stretchEffect::getClassType(), warpEffect::getClassType(), destroyEffect::getClassType(), };
-
 	// class for the whole FX unit
 	class EffectModule final : public BaseProcessor
 	{
 	public:
-		DEFINE_CLASS_TYPE("{763F9D86-D535-4D63-B486-F863F88CC259}")
-
 		EffectModule() = delete;
 		EffectModule(const EffectModule &) = delete;
 		EffectModule(EffectModule &&) = delete;
@@ -382,7 +333,7 @@ namespace Generation
 		EffectModule &operator=(EffectModule &&other) noexcept
 		{ BaseProcessor::operator=(std::move(other)); return *this; }
 
-		void processEffect(ComplexDataSource &source, u32 effectiveFFTSize, float sampleRate);
+		void processEffect(ComplexDataSource &source, u32 binCount, float sampleRate);
 
 		// Inherited via BaseProcessor
 		BaseProcessor *updateSubProcessor(size_t index, BaseProcessor *newSubModule) noexcept override;
@@ -390,16 +341,8 @@ namespace Generation
 		[[nodiscard]] BaseProcessor *createCopy(std::optional<u64> parentModuleId) const noexcept override
 		{ return makeSubProcessor<EffectModule>(*this, parentModuleId.value_or(parentProcessorId_)); }
 
-		baseEffect *getEffect() const noexcept { return utils::as<baseEffect *>(subProcessors_[0]); }
+		baseEffect *getEffect() const noexcept { return utils::as<baseEffect>(subProcessors_[0]); }
 	private:
-		baseEffect *createEffect(std::string_view type) const noexcept;
-
 		Framework::SimdBuffer<std::complex<float>, simd_float> buffer_{ kNumChannels, kMaxFFTBufferLength };
-
-		//// Parameters
-		//  
-		// 1. module enabled
-		// 2. effect type
-		// 3. module mix
 	};
 }

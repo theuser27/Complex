@@ -9,14 +9,13 @@
 */
 
 #include "BaseComponent.h"
-#include "Framework/common.h"
 
 namespace Interface
 {
 	void BaseComponent::parentHierarchyChanged()
 	{
 		if (auto *parent = getParentComponent())
-			setParentSafe(utils::as<BaseComponent *>(parent));
+			setParentSafe(utils::as<BaseComponent>(parent));
 	}
 
 	void BaseComponent::setBounds(int x, int y, int w, int h)

@@ -10,10 +10,13 @@
 
 #pragma once
 
-#include "Framework/common.h"
-#include "AppConfig.h"
-#include <juce_audio_basics/juce_audio_basics.h>
 #include "ProcessorTree.h"
+
+namespace juce
+{
+	template<typename T>
+	class AudioBuffer;
+}
 
 namespace Generation
 {
@@ -43,20 +46,14 @@ namespace Plugin
 
 		virtual void parameterChangeMidi(u64 parentModuleId, std::string_view parameterName, float value);
 
-		strict_inline auto &getParameterBridges() noexcept { return parameterBridges_; }
-		strict_inline auto &getParameterModulators() noexcept { return parameterModulators_; }
 		strict_inline auto &getSoundEngine() noexcept { return *soundEngine_; }
+		u32 getFFTSize() noexcept;
 
 		Interface::Renderer &getRenderer();
 
 	protected:
-		Generation::BaseProcessor *deserialiseProcessor(ProcessorTree *processorTree, std::string_view processorType);
-
 		// pointer to the main processing engine
 		Generation::SoundEngine *soundEngine_;
-
-		std::vector<Framework::ParameterBridge *> parameterBridges_{};
-		std::vector<Framework::ParameterModulator *> parameterModulators_{};
 
 		std::unique_ptr<Interface::Renderer> rendererInstance_;
 	};

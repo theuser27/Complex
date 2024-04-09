@@ -10,7 +10,8 @@
 
 #pragma once
 
-#include "Interface/LookAndFeel/Shaders.h"
+#include <queue>
+#include <memory>
 
 namespace juce
 {
@@ -28,19 +29,13 @@ namespace Interface
   class MainInterface;
   class Skin;
 
-  class Renderer final : public juce::OpenGLRenderer, juce::Timer
+  class Renderer
   {
   public:
     static constexpr double kMinOpenGlVersion = 1.4;
 
     Renderer(Plugin::ComplexPlugin &plugin);
-    ~Renderer() override;
-
-    void newOpenGLContextCreated() override;
-    void renderOpenGL() override;
-    void openGLContextClosing() override;
-
-    void timerCallback() override;
+    ~Renderer() noexcept;
 
     void startUI();
     void stopUI();
@@ -64,24 +59,19 @@ namespace Interface
     Skin *getSkin() noexcept;
 
     void setEditor(juce::AudioProcessorEditor *editor) noexcept { topLevelComponent_ = editor; }
-    void pushOpenGlComponentToDelete(OpenGlComponent *openGlComponent) noexcept;
+    void pushOpenGlComponentToDelete(OpenGlComponent *openGlComponent);
 
   private:
-    void doCleanupWork();
+    class Pimpl;
 
-    bool unsupported_ = false;
-    bool animate_ = true;
-    bool enableRedoBackground_ = true;
-    std::unique_ptr<Shaders> shaders_;
-    std::queue<OpenGlComponent *> openCleanupQueue_{};
+    std::unique_ptr<Pimpl> pimpl_;
     std::unique_ptr<Skin> skinInstance_;
-    juce::OpenGLContext openGlContext_;
-    OpenGlWrapper openGl_{ openGlContext_ };
 
     Plugin::ComplexPlugin &plugin_;
     juce::AudioProcessorEditor *topLevelComponent_;
     std::unique_ptr<MainInterface> gui_;
 
     friend class MainInterface;
+    friend class Pimpl;
   };
 }

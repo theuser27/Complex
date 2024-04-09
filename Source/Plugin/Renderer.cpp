@@ -8,17 +8,115 @@
 	==============================================================================
 */
 
+#include "Renderer.h"
+
+#include "AppConfig.h"
+#include <juce_opengl/juce_opengl.h>
 #include "Framework/load_save.h"
 #include "Framework/parameter_bridge.h"
 #include "Plugin/Complex.h"
 #include "Interface/Components/OpenGlComponent.h"
-#include "Renderer.h"
 #include "Interface/Sections/MainInterface.h"
 #include "Interface/LookAndFeel/DefaultLookAndFeel.h"
 
 namespace Interface
 {
-	Renderer::Renderer(Plugin::ComplexPlugin &plugin) : plugin_(plugin)
+	class Renderer::Pimpl final : public OpenGLRenderer, Timer
+	{
+	public:
+		Pimpl(Renderer &renderer, Plugin::ComplexPlugin &plugin) : renderer_(renderer), plugin_(plugin) { }
+
+		void newOpenGLContextCreated() override
+		{
+			double versionSupported = OpenGLShaderProgram::getLanguageVersion();
+			unsupported_ = versionSupported < kMinOpenGlVersion;
+			if (unsupported_)
+			{
+				NativeMessageBox::showMessageBoxAsync(AlertWindow::WarningIcon, "Unsupported OpenGl Version",
+					String("Complex requires OpenGL version: ") + String(kMinOpenGlVersion) +
+					String("\nSupported version: ") + String(versionSupported));
+				return;
+			}
+
+			shaders_ = std::make_unique<Shaders>(openGlContext_);
+			openGl_.shaders = shaders_.get();
+		}
+
+		void renderOpenGL() override
+		{
+			if (unsupported_)
+				return;
+
+			doCleanupWork();
+
+			renderer_.gui_->renderOpenGlComponents(openGl_, animate_);
+		}
+
+		void openGLContextClosing() override
+		{
+			renderer_.gui_->destroyAllOpenGlComponents();
+			doCleanupWork();
+
+			openGl_.shaders = nullptr;
+			shaders_ = nullptr;
+		}
+
+		void timerCallback() override
+		{
+			for (auto *bridge : plugin_.getParameterBridges())
+				bridge->updateUIParameter();
+
+			openGlContext_.triggerRepaint();
+		}
+
+		void startUI()
+		{
+			openGlContext_.setContinuousRepainting(false);
+			openGlContext_.setOpenGLVersionRequired(OpenGLContext::openGL3_2);
+			openGlContext_.setRenderer(this);
+			openGlContext_.setComponentPaintingEnabled(false);
+			// attaching the context to an empty component so that we can activate it
+			// and also take advantage of componentRendering to lock the message manager
+			openGlContext_.attachTo(*renderer_.gui_);
+
+			startTimerHz(kParameterUpdateIntervalHz);
+		}
+
+		void stopUI()
+		{
+			stopTimer();
+
+			openGlContext_.detach();
+			openGlContext_.setRenderer(nullptr);
+		}
+
+		void pushOpenGlComponentToDelete(OpenGlComponent *openGlComponent) 
+		{ openCleanupQueue_.emplace(openGlComponent); }
+
+		void doCleanupWork()
+		{
+			while (!openCleanupQueue_.empty())
+			{
+				auto *openGlComponent = openCleanupQueue_.front();
+				openGlComponent->destroy();
+				delete openGlComponent;
+				openCleanupQueue_.pop();
+			}
+		}
+
+	private:
+		bool unsupported_ = false;
+		bool animate_ = true;
+
+		Renderer &renderer_;
+		Plugin::ComplexPlugin &plugin_;
+		OpenGLContext openGlContext_;
+		OpenGlWrapper openGl_{ openGlContext_ };
+		std::unique_ptr<Shaders> shaders_;
+		std::queue<OpenGlComponent *> openCleanupQueue_{};
+	};
+
+	Renderer::Renderer(Plugin::ComplexPlugin &plugin) : pimpl_(std::make_unique<Pimpl>(*this, plugin)), plugin_(plugin)
 	{
 		skinInstance_ = std::make_unique<Skin>();
 		skinInstance_->copyValuesToLookAndFeel(DefaultLookAndFeel::instance());
@@ -26,70 +124,19 @@ namespace Interface
 		gui_ = std::make_unique<MainInterface>(this);
 	}
 
-	Renderer::~Renderer() = default;
-
-	void Renderer::newOpenGLContextCreated()
+	Renderer::~Renderer() noexcept
 	{
-		double versionSupported = OpenGLShaderProgram::getLanguageVersion();
-		unsupported_ = versionSupported < kMinOpenGlVersion;
-		if (unsupported_)
-		{
-			NativeMessageBox::showMessageBoxAsync(AlertWindow::WarningIcon, "Unsupported OpenGl Version",
-				String("Complex requires OpenGL version: ") + String(kMinOpenGlVersion) +
-				String("\nSupported version: ") + String(versionSupported));
-			return;
-		}
-
-		shaders_ = std::make_unique<Shaders>(openGlContext_);
-		openGl_.shaders = shaders_.get();
-	}
-
-	void Renderer::renderOpenGL()
-	{
-		if (unsupported_)
-			return;
-
-		doCleanupWork();
-
-		gui_->renderOpenGlComponents(openGl_, animate_);
-	}
-
-	void Renderer::openGLContextClosing()
-	{
-		gui_->destroyAllOpenGlComponents();
-		doCleanupWork();
-
-		openGl_.shaders = nullptr;
-		shaders_ = nullptr;
-	}
-
-	void Renderer::timerCallback()
-	{
-		for (auto *bridge : plugin_.getParameterBridges())
-			bridge->updateUIParameter();
-
-		openGlContext_.triggerRepaint();
+		pimpl_.reset();
 	}
 
 	void Renderer::startUI()
 	{
-		openGlContext_.setContinuousRepainting(false);
-		openGlContext_.setOpenGLVersionRequired(OpenGLContext::openGL3_2);
-		openGlContext_.setRenderer(this);
-		openGlContext_.setComponentPaintingEnabled(false);
-		// attaching the context to an empty component so that we can activate it
-		// and also take advantage of componentRendering to lock the message manager
-		openGlContext_.attachTo(*gui_);
-
-		startTimerHz(kParameterUpdateIntervalHz);
+		pimpl_->startUI();
 	}
 
 	void Renderer::stopUI()
 	{
-		stopTimer();
-
-		openGlContext_.detach();
-		openGlContext_.setRenderer(nullptr);
+		pimpl_->stopUI();
 
 		topLevelComponent_ = nullptr;
 		//gui_ = nullptr;
@@ -102,9 +149,6 @@ namespace Interface
 
 		gui_->updateAllValues();
 		gui_->reset();
-
-		if (topLevelComponent_)
-			topLevelComponent_->getAudioProcessor()->updateHostDisplay();
 	}
 
 	void Renderer::setGuiScale(double scale)
@@ -150,17 +194,6 @@ namespace Interface
 	MainInterface *Renderer::getGui() noexcept { return gui_.get(); }
 	Skin *Renderer::getSkin() noexcept { return skinInstance_.get(); }
 	
-	void Renderer::pushOpenGlComponentToDelete(OpenGlComponent *openGlComponent) noexcept 
-	{ openCleanupQueue_.emplace(openGlComponent); }
-
-	void Renderer::doCleanupWork()
-	{
-		while (!openCleanupQueue_.empty())
-		{
-			auto *openGlComponent = openCleanupQueue_.front();
-			openGlComponent->destroy();
-			delete openGlComponent;
-			openCleanupQueue_.pop();
-		}
-	}
+	void Renderer::pushOpenGlComponentToDelete(OpenGlComponent *openGlComponent)
+	{ pimpl_->pushOpenGlComponentToDelete(openGlComponent); }
 }

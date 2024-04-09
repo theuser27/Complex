@@ -10,24 +10,45 @@
 
 #pragma once
 
+#include <type_traits>
 #include <span>
-#include <functional>
-#include <algorithm>
+#include <string_view>
 #include <numeric>
 #include <Third Party/constexpr-to-string/to_string.hpp>
-#include <Third Party/fixed_string/fixed_string.hpp>
+#include "platform_definitions.h"
 
-namespace CommonConcepts
+namespace utils
 {
   template<typename Derived, typename Base>
   concept DerivedOrIs = std::derived_from<Derived, Base> || std::same_as<Derived, Base>;
 
-  template<typename T>
-  concept Enum = std::is_enum_v<T>;
-}
+  template <std::size_t N>
+  struct fixed_string
+  {
+    constexpr fixed_string(const char(&str)[N + 1]) noexcept
+    {
+      for (std::size_t i = 0; i <= N; ++i)
+        data[i] = str[i];
+    }
 
-namespace utils
-{
+    explicit constexpr fixed_string(std::string_view string) noexcept :
+      fixed_string{ string, std::make_index_sequence<N>{} } { }
+
+    [[nodiscard]] constexpr auto operator<=>(const fixed_string &) const = default;
+    [[nodiscard]] constexpr operator std::string_view() const noexcept { return { data.data(), N }; }
+    [[nodiscard]] static constexpr auto size() noexcept -> std::size_t { return N; }
+
+    std::array<char, N + 1> data{};
+
+  private:
+    template <std::size_t... Indices>
+    constexpr fixed_string(std::string_view str, std::index_sequence<Indices...>) noexcept :
+      data{ str[Indices]..., static_cast<char>('\0') } { }
+  };
+
+  template <std::size_t N>
+  fixed_string(const char(&str)[N])->fixed_string<N - 1>;
+
   // whether a type is complete or not
   // taken from https://stackoverflow.com/a/37193089
   template <class T, class = void>
@@ -41,7 +62,7 @@ namespace utils
 
   // calls a function on every tuple element individually
   template <class Callable, class TupleLike>
-  constexpr decltype(auto) applyOne(Callable &&callable, TupleLike &&tuple)
+  constexpr decltype(auto) applyToEach(Callable &&callable, TupleLike &&tuple)
   {
     return []<size_t ... Indices>(Callable &&callable, TupleLike &&tuple, std::index_sequence<Indices...>) -> decltype(auto)
     {
@@ -56,7 +77,7 @@ namespace utils
   // calls a function on every tuple element individually
   // callable must be a functor
   template <auto TupleLike, class Callable>
-  constexpr decltype(auto) applyOne(Callable &&callable)
+  constexpr decltype(auto) applyToEach(Callable &&callable)
   {
     return[]<size_t ... Indices>(Callable && callable, std::index_sequence<Indices...>) -> decltype(auto)
     {
@@ -408,7 +429,7 @@ namespace utils
     return stringArray;
   }
 
-  template<fixstr::fixed_string delimiter, size_t totalSize, size_t totalIndices, typename... Args>
+  template<fixed_string delimiter, size_t totalSize, size_t totalIndices, typename... Args>
   constexpr auto appendStringViewsArrays(Args ... args)
   {
     // + totalIndices for the null terminators
@@ -423,7 +444,7 @@ namespace utils
     for (size_t i = 0; i < totalIndices; i++)
     {
       dataHolder.stringIndices[i] = characterIndex;
-      concatenateStringArrays(dataHolder.strings.data(), characterIndex, delimiter.c_str(), i, args...);
+      concatenateStringArrays(dataHolder.strings.data(), characterIndex, delimiter, i, args...);
     }
 
     StringArray stringArray{ std::move(dataHolder) };

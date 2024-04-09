@@ -8,7 +8,8 @@
 
 #pragma once
 
-#include <JuceHeader.h>
+#include "AppConfig.h"
+#include <juce_audio_processors/juce_audio_processors.h>
 #include "Complex.h"
 
 //==============================================================================
@@ -17,7 +18,7 @@ class ComplexAudioProcessor final : public juce::AudioProcessor, public Plugin::
 public:
 	//==============================================================================
 	ComplexAudioProcessor();
-	~ComplexAudioProcessor() override = default;
+	~ComplexAudioProcessor() override;
 
 	//==============================================================================
 	void prepareToPlay (double sampleRate, int samplesPerBlock) override;

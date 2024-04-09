@@ -10,6 +10,16 @@
 
 #pragma once
 
+#if defined (_WIN32) || defined (_WIN64)
+	#define COMPLEX_WINDOWS 1
+#elif defined (LINUX) || defined (__linux__)
+	#define COMPLEX_LINUX 1
+#elif defined (__APPLE_CPP__) || defined (__APPLE_CC__)
+	#define COMPLEX_MAC 1
+#else
+	#error Unsupported Platform
+#endif
+
 #if defined (__GNUC__)
 	#if defined (__clang__)
 		#define COMLPEX_CLANG 1
@@ -69,6 +79,10 @@
 	// perf_inline is used for inlining to increase performance (can be changed for tests)
 	#define perf_inline __forceinline
 	#define vector_call __vectorcall
+
+	#if defined (COMPLEX_X64)
+		#define COMPLEX_INTEL_SVML
+	#endif
 #else
 	// strict_inline is used when something absolutely needs to be inlined
 	#define strict_inline inline __attribute__((always_inline))
@@ -76,6 +90,17 @@
 	#define perf_inline inline __attribute__((always_inline))
 	#define vector_call
 #endif
+
+#if DEBUG
+	#include <cassert>
+	#define COMPLEX_ASSERT(x) assert(x)
+	#define COMPLEX_ASSERT_FALSE(x) assert(false && (x))
+#else
+	#define COMPLEX_ASSERT(x) ((void)0)
+	#define COMPLEX_ASSERT_FALSE(x) ((void)0)
+#endif
+
+#include <cstdint>
 
 // using rust naming because yes
 typedef uint8_t u8;
@@ -87,12 +112,3 @@ typedef int8_t i8;
 typedef int16_t i16;
 typedef int32_t i32;
 typedef int64_t i64;
-
-#if DEBUG
-	#include <cassert>
-	#define COMPLEX_ASSERT(x) assert(x)
-	#define COMPLEX_ASSERT_FALSE(x) assert(false && (x))
-#else
-	#define COMPLEX_ASSERT(x) ((void)0)
-	#define COMPLEX_ASSERT_FALSE(x) ((void)0)
-#endif

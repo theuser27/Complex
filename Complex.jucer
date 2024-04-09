@@ -6,7 +6,10 @@
               pluginDesc="Multi-lane Spectral Effects Suite">
   <MAINGROUP id="zNsp6a" name="Complex">
     <GROUP id="{65E7BD15-F97F-DFD8-8405-B6E4F140ACA3}" name="Icons">
+      <FILE id="inGlB5" name="Icon_Dynamics.svg" compile="0" resource="1"
+            file="Icons/Icon_Dynamics.svg"/>
       <FILE id="W5loec" name="Icon_Filter.svg" compile="0" resource="1" file="Icons/Icon_Filter.svg"/>
+      <FILE id="VSP3jA" name="Icon_Phase.svg" compile="0" resource="1" file="Icons/Icon_Phase.svg"/>
     </GROUP>
     <GROUP id="{7DCBD02E-5965-7719-7CD3-51C632FE14C8}" name="Fonts">
       <FILE id="P00tpO" name="D-DIN-Bold.ttf" compile="0" resource="1" file="Fonts/D-DIN-Bold.ttf"/>
@@ -20,7 +23,6 @@
       <GROUP id="{32A822E4-0A2D-7496-308D-972ADD4D4F30}" name="Framework">
         <FILE id="xWYami" name="circular_buffer.h" compile="0" resource="0"
               file="Source/Framework/circular_buffer.h"/>
-        <FILE id="Xl7rEP" name="common.h" compile="0" resource="0" file="Source/Framework/common.h"/>
         <FILE id="QZdRAA" name="constants.h" compile="0" resource="0" file="Source/Framework/constants.h"/>
         <FILE id="JuQs8V" name="constexpr_utils.h" compile="0" resource="0"
               file="Source/Framework/constexpr_utils.h"/>
@@ -34,6 +36,10 @@
         <FILE id="sHvuc0" name="matrix.h" compile="0" resource="0" file="Source/Framework/matrix.h"/>
         <FILE id="xFpIpz" name="memory_block.h" compile="0" resource="0" file="Source/Framework/memory_block.h"/>
         <FILE id="GEoS25" name="nested_enum.h" compile="0" resource="0" file="Source/Framework/nested_enum.h"/>
+        <FILE id="rNgDsh" name="open_gl_primitives.cpp" compile="1" resource="0"
+              file="Source/Framework/open_gl_primitives.cpp"/>
+        <FILE id="Ab2tGJ" name="open_gl_primitives.h" compile="0" resource="0"
+              file="Source/Framework/open_gl_primitives.h"/>
         <FILE id="nzaVCq" name="parameter_bridge.cpp" compile="1" resource="0"
               file="Source/Framework/parameter_bridge.cpp"/>
         <FILE id="VbaYQ5" name="parameter_bridge.h" compile="0" resource="0"
@@ -51,6 +57,10 @@
         <FILE id="ZaoMau" name="simd_values.h" compile="0" resource="0" file="Source/Framework/simd_values.h"/>
         <FILE id="rAmG5N" name="spectral_support_functions.h" compile="0" resource="0"
               file="Source/Framework/spectral_support_functions.h"/>
+        <FILE id="TqAOZG" name="sync_primitives.cpp" compile="1" resource="0"
+              file="Source/Framework/sync_primitives.cpp"/>
+        <FILE id="yJ1cnp" name="sync_primitives.h" compile="0" resource="0"
+              file="Source/Framework/sync_primitives.h"/>
         <FILE id="JwyCA1" name="update_types.cpp" compile="1" resource="0"
               file="Source/Framework/update_types.cpp"/>
         <FILE id="ZPzEka" name="update_types.h" compile="0" resource="0" file="Source/Framework/update_types.h"/>
@@ -207,10 +217,6 @@
         <GROUP id="{E0346729-DF17-00E3-E470-B12865A33BEA}" name="constexpr-to-string">
           <FILE id="O3V7oS" name="f_to_string.hpp" compile="0" resource="0" file="Source/Third Party/constexpr-to-string/f_to_string.hpp"/>
           <FILE id="fhbbBB" name="to_string.hpp" compile="0" resource="0" file="Source/Third Party/constexpr-to-string/to_string.hpp"/>
-        </GROUP>
-        <GROUP id="{C3E5979F-2D2C-018F-ACF8-1B68463DE9FA}" name="fixed_string">
-          <FILE id="wuijLK" name="fixed_string.hpp" compile="0" resource="0"
-                file="Source/Third Party/fixed_string/fixed_string.hpp"/>
         </GROUP>
         <GROUP id="{9CE29610-22F5-31DC-35FA-6609FA4E005B}" name="gcem">
           <GROUP id="{F25871F1-D828-D2D4-201A-2D9AADD27ABE}" name="gcem_incl">

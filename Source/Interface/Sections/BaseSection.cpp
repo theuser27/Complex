@@ -28,7 +28,7 @@ namespace Interface
 		}
 	};
 
-	BaseSection::BaseSection(std::string_view name) : OpenGlContainer(toJuceString(name))
+	BaseSection::BaseSection(std::string_view name) : OpenGlContainer({ name.data(), name.size() })
 	{
 		setWantsKeyboardFocus(true);
 	}
@@ -180,7 +180,7 @@ namespace Interface
 
 	void BaseSection::renderOpenGlComponents(OpenGlWrapper &openGl, bool animate)
 	{
-		utils::ScopedSpinLock g(isRendering_);
+		utils::ScopedLock g{ isRendering_, utils::WaitMechanism::SpinNotify };
 		
 		if (background_)
 		{
@@ -225,6 +225,8 @@ namespace Interface
 
 	void BaseSection::destroyAllOpenGlComponents()
 	{
+		utils::ScopedLock g{ isRendering_, utils::WaitMechanism::WaitNotify };
+		
 		if (background_)
 			background_.deinitialise();
 
@@ -252,6 +254,8 @@ namespace Interface
 
 	void BaseSection::addSubSection(BaseSection *section, bool show)
 	{
+		utils::ScopedLock g{ isRendering_, utils::WaitMechanism::WaitNotify };
+
 		section->setParentSafe(this);
 		section->setRenderer(renderer_);
 
@@ -263,6 +267,8 @@ namespace Interface
 
 	void BaseSection::removeSubSection(BaseSection *section, bool removeChild)
 	{
+		utils::ScopedLock g{ isRendering_, utils::WaitMechanism::WaitNotify };
+		
 		auto location = std::ranges::find(subSections_.begin(), subSections_.end(), section);
 		if (location != subSections_.end())
 			subSections_.erase(location);
@@ -273,15 +279,17 @@ namespace Interface
 
 	void BaseSection::addControl(BaseControl *control)
 	{
+		utils::ScopedLock g{ isRendering_, utils::WaitMechanism::WaitNotify };
+		
 		// juce String is a copy-on-write type so the internal data is constant across all instances of the same string
 		// this means that so long as the control's name isn't changed the string_view will be safe to access 
-		if (control->getParameterDetails().name.empty())
+		if (control->getParameterDetails().pluginName.empty())
 		{
 			COMPLEX_ASSERT(!control->getName().isEmpty() && control->getName() != "" && "Every control must have a name");
 			controls_[control->getName().toRawUTF8()] = control;
 		}
 		else
-			controls_[control->getParameterDetails().name] = control;
+			controls_[control->getParameterDetails().pluginName] = control;
 		
 		control->setParentSafe(this);
 		control->addListener(this);
@@ -294,15 +302,17 @@ namespace Interface
 
 	void BaseSection::removeControl(BaseControl *control, bool removeChild)
 	{
+		utils::ScopedLock g{ isRendering_, utils::WaitMechanism::WaitNotify };
+		
 		removeChildComponent(control);
 		if (removeChild)
 			control->setParentSafe(nullptr);
 		control->removeListener(this);
 
-		if (control->getParameterDetails().name.empty())
+		if (control->getParameterDetails().pluginName.empty())
 			controls_.erase(control->getName().toRawUTF8());
 		else
-			controls_.erase(control->getParameterDetails().name);
+			controls_.erase(control->getParameterDetails().pluginName);
 	}
 
 	void BaseSection::setSkinOverride(Skin::SectionOverride skinOverride) noexcept
@@ -356,7 +366,7 @@ namespace Interface
 
 	void BaseSection::createBackground()
 	{
-		utils::ScopedSpinLock g(isRendering_);
+		utils::ScopedLock g{ isRendering_, utils::WaitMechanism::WaitNotify };
 
 		background_ = makeOpenGlComponent<OpenGlBackground>();
 		background_->setTargetComponent(this);

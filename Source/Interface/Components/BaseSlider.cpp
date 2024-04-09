@@ -8,7 +8,9 @@
 	==============================================================================
 */
 
+#include "Third Party/gcem/gcem.hpp"
 #include "Framework/update_types.h"
+#include "Framework/parameter_value.h"
 #include "Framework/parameter_bridge.h"
 #include "Plugin/Complex.h"
 #include "../LookAndFeel/Miscellaneous.h"
@@ -40,7 +42,8 @@ namespace Interface
 		
 		hasParameter_ = true;
 		
-		setName(toJuceString(parameter->getParameterDetails().name));
+		auto name = parameter->getParameterDetails().pluginName;
+		setName({ name.data(), name.size() });
 		setParameterLink(parameter->getParameterLink());
 		setParameterDetails(parameter->getParameterDetails());
 		setValueSafe(parameterLink_->parameter->getNormalisedValue());
@@ -304,7 +307,9 @@ namespace Interface
 		{
 			size_t lookup = (size_t)(std::clamp(scaledValue, (double)details_.minValue, 
 				(double)details_.maxValue) - details_.minValue);
-			return popupPrefix_ + toJuceString(details_.stringLookup[lookup]);
+
+			auto string = details_.stringLookup[lookup];
+			return popupPrefix_ + String{ string.data(), string.size() };
 		}
 		
 		return popupPrefix_ + formatValue(scaledValue);
@@ -318,7 +323,7 @@ namespace Interface
 		if (!details_.stringLookup.empty())
 		{
 			for (int i = 0; i <= (int)(details_.maxValue - details_.minValue); ++i)
-				if (cleaned == toJuceString(details_.stringLookup[i].data()).toLowerCase())
+				if (cleaned == String{ details_.stringLookup[i].data(), details_.stringLookup[i].size() }.toLowerCase())
 					return Framework::unscaleValue(details_.minValue + (float)i, details_, true);
 		}
 		return Framework::unscaleValue(getRawValueFromText(text), details_, true);

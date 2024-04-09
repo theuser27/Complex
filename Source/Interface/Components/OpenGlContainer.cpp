@@ -8,13 +8,15 @@
 	==============================================================================
 */
 
+#include "Framework/sync_primitives.h"
 #include "OpenGlContainer.h"
-#include "../LookAndFeel/Skin.h"
 #include "Plugin/Renderer.h"
+#include "OpenGlComponent.h"
 
 namespace Interface
 {
 	OpenGlContainer::OpenGlContainer(juce::String name) : BaseComponent(std::move(name)) { }
+	OpenGlContainer::~OpenGlContainer() = default;
 
 	void OpenGlContainer::destroyAllOpenGlComponents()
 	{
@@ -24,7 +26,7 @@ namespace Interface
 
 	void OpenGlContainer::addOpenGlComponent(gl_ptr<OpenGlComponent> openGlComponent, bool toBeginning)
 	{
-		utils::ScopedSpinLock g(isRendering_);
+		utils::ScopedLock g{ isRendering_, utils::WaitMechanism::WaitNotify };
 		
 		if (!openGlComponent)
 			return;
@@ -44,7 +46,7 @@ namespace Interface
 
 	void OpenGlContainer::removeOpenGlComponent(OpenGlComponent *openGlComponent, bool removeChild)
 	{
-		utils::ScopedSpinLock g(isRendering_);
+		utils::ScopedLock g{ isRendering_, utils::WaitMechanism::WaitNotify };
 		
 		if (openGlComponent == nullptr)
 			return;
@@ -60,7 +62,7 @@ namespace Interface
 	float OpenGlContainer::getValue(Skin::ValueId valueId) const noexcept { return renderer_->getSkin()->getValue(this, valueId); }
 	float OpenGlContainer::getValue(Skin::SectionOverride skinOverride, Skin::ValueId valueId) const noexcept 
 	{ return renderer_->getSkin()->getValue(skinOverride, valueId); }
-	Colour OpenGlContainer::getColour(Skin::ColorId colorId) const noexcept { return renderer_->getSkin()->getColor(this, colorId); }
-	Colour OpenGlContainer::getColour(Skin::SectionOverride skinOverride, Skin::ColorId colorId) const noexcept 
-	{ return renderer_->getSkin()->getColor(skinOverride, colorId); }
+	juce::Colour OpenGlContainer::getColour(Skin::ColorId colorId) const noexcept { return juce::Colour{ renderer_->getSkin()->getColor(this, colorId) }; }
+	juce::Colour OpenGlContainer::getColour(Skin::SectionOverride skinOverride, Skin::ColorId colorId) const noexcept 
+	{ return juce::Colour{ renderer_->getSkin()->getColor(skinOverride, colorId) }; }
 }

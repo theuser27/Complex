@@ -246,8 +246,35 @@ namespace Interface
 		gl_ptr<PlainTextComponent> textComponent_ = nullptr;
 
 		String text_{};
-
 		Colour borderColour_{};
+	};
+
+	class ActionButton final : public BaseButton
+	{
+	public:
+		static constexpr float kBorderRounding = 8.0f;
+
+		ActionButton(String name = {}, String displayText = {});
+		~ActionButton() override;
+
+		void mouseDown(const MouseEvent &e) override;
+		void mouseUp(const MouseEvent &e) override;
+		void setColours() override;
+		Rectangle<int> setBoundsForSizes(int height, int width) override;
+		void redoImage() override;
+		void setComponentsBounds() override;
+
+		void setText(String text) { text_ = std::move(text); }
+		void setAction(std::function<void()> action) { action_ = std::move(action); }
+	protected:
+		gl_ptr<OpenGlQuad> fillComponent_ = nullptr;
+		gl_ptr<PlainTextComponent> textComponent_ = nullptr;
+
+		std::function<void()> action_{};
+
+		String text_{};
+		Colour fillColour_{};
+		Colour textColour_{};
 	};
 
 }

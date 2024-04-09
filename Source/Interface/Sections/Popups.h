@@ -26,8 +26,9 @@ namespace Interface
 
 		void resized() override;
 
-		void setContent(String text, Rectangle<int> bounds, 
-			BubbleComponent::BubblePlacement placement, Skin::SectionOverride sectionOverride = Skin::kPopupBrowser);
+		void setContent(juce::String text, juce::Rectangle<int> bounds, 
+			juce::BubbleComponent::BubblePlacement placement, 
+			Skin::SectionOverride sectionOverride = Skin::kPopupBrowser);
 
 	private:
 		gl_ptr<OpenGlQuad> body_;
@@ -52,12 +53,12 @@ namespace Interface
 		PopupList();
 		~PopupList() override;
 
-		void mouseMove(const MouseEvent &e) override;
-		void mouseDrag(const MouseEvent &e) override;
-		void mouseExit(const MouseEvent &) override;
-		void mouseUp(const MouseEvent &e) override;
-		void paintBackground(Graphics &) override { }
-		void paintBackgroundShadow(Graphics &) override { }
+		void mouseMove(const juce::MouseEvent &e) override;
+		void mouseDrag(const juce::MouseEvent &e) override;
+		void mouseExit(const juce::MouseEvent &) override;
+		void mouseUp(const juce::MouseEvent &e) override;
+		void paintBackground(juce::Graphics &) override { }
+		void paintBackgroundShadow(juce::Graphics &) override { }
 		void resized() override;
 
 		void setSelections(PopupItems selections);
@@ -67,12 +68,12 @@ namespace Interface
 		int getTextPadding() const noexcept { return getRowHeight() / 4; }
 		int getBrowseWidth() const;
 		int getBrowseHeight() const noexcept { return getRowHeight() * selections_.size(); }
-		Font getFont() const;
-		int getSelection(const MouseEvent &e);
+		juce::Font getFont() const;
+		int getSelection(const juce::MouseEvent &e);
 
 		void setSelected(int selection) { selected_ = selection; }
 		int getSelected() const { return selected_; }
-		void mouseWheelMove(const MouseEvent &, const MouseWheelDetails &wheel) override;
+		void mouseWheelMove(const juce::MouseEvent &, const juce::MouseWheelDetails &wheel) override;
 		void scrollBarMoved(OpenGlScrollBar *, double rangeStart) override 
 		{ view_position_ = (float)rangeStart; }
 		void setScrollBarRange();
@@ -111,8 +112,8 @@ namespace Interface
 		SinglePopupSelector();
 		~SinglePopupSelector() override;
 
-		void paintBackground(Graphics &) override { }
-		void paintBackgroundShadow(Graphics &) override { }
+		void paintBackground(juce::Graphics &) override { }
+		void paintBackgroundShadow(juce::Graphics &) override { }
 		void resized() override;
 
 		void visibilityChanged() override
@@ -121,7 +122,7 @@ namespace Interface
 				grabKeyboardFocus();
 		}
 
-		void setPosition(Point<int> position, Rectangle<int> bounds);
+		void setPosition(juce::Point<int> position, juce::Rectangle<int> bounds);
 
 		void newSelection([[maybe_unused]] PopupList *list, int id, 
 			[[maybe_unused]] int index) override
@@ -166,8 +167,8 @@ namespace Interface
 		DualPopupSelector();
 		~DualPopupSelector() override;
 
-		void paintBackground(Graphics &) override { }
-		void paintBackgroundShadow(Graphics &) override { }
+		void paintBackground(juce::Graphics &) override { }
+		void paintBackgroundShadow(juce::Graphics &) override { }
 		void resized() override;
 		void visibilityChanged() override
 		{
@@ -175,7 +176,7 @@ namespace Interface
 				grabKeyboardFocus();
 		}
 
-		void setPosition(Point<int> position, int width, Rectangle<int> bounds);
+		void setPosition(juce::Point<int> position, int width, juce::Rectangle<int> bounds);
 
 		void newSelection(PopupList *list, int id, int index) override;
 

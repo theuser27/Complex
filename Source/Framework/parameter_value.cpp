@@ -16,7 +16,7 @@ namespace Framework
 {
 	void ParameterValue::updateValues(float sampleRate, std::optional<float> value) noexcept
 	{
-		utils::ScopedSpinLock lock(waitLock_);
+		utils::ScopedLock g{ waitLock_, utils::WaitMechanism::Spin };
 
 		if (value.has_value())
 		{
@@ -72,5 +72,30 @@ namespace Framework
 		}
 
 		isDirty_ = false;
+	}
+
+	void ParameterValue::setRuntimeStringLookup(const std::vector<std::string> &lookup) noexcept
+	{
+		std::string lookupData{};
+		std::vector<std::string_view> lookupVector{};
+		
+		std::size_t size = 0;
+		for (auto &string : lookup)
+			size += string.size();
+		lookupData.append(size + lookup.size(), '\0');
+
+		std::size_t index = 0;
+		for (auto &string : lookup)
+		{
+			lookupData.replace(index, string.size(), string);
+			lookupVector.emplace_back(&lookupData[index], string.size());
+			index += string.size() + 1;
+		}
+
+		utils::ScopedLock g{ waitLock_, utils::WaitMechanism::Spin };
+
+		runtimeStrings_.stringLookupData = std::move(lookupData);
+		runtimeStrings_.stringLookup = std::move(lookupVector);
+		details_.stringLookup = runtimeStrings_.stringLookup;
 	}
 }

@@ -6,6 +6,7 @@
 	==============================================================================
 */
 
+#include "Framework/parameter_value.h"
 #include "Framework/parameter_bridge.h"
 #include "Generation/SoundEngine.h"
 #include "PluginProcessor.h"
@@ -19,14 +20,17 @@ ComplexAudioProcessor::ComplexAudioProcessor()
 {
 	using namespace Framework;
 
-	constexpr auto pluginParameterStrings = BaseProcessors::SoundEngine::enum_strings<nested_enum::OuterNodes>(false);
+	static_assert(kMaxParameterMappings >= 64, "If you want to lower the number of available parameter mappings, \
+		this might break compatibility with save files inside projects. Comment out this assert if you're aware of the risk.");
+
+	constexpr auto pluginParameterStrings = BaseProcessors::SoundEngine::enum_names<nested_enum::OuterNodes>(false);
 	parameterBridges_.reserve(kMaxParameterMappings + pluginParameterStrings.size());
 
 	for (std::string_view parameterName : pluginParameterStrings)
 	{
 		if (auto *parameter = getProcessorParameter(soundEngine_->getProcessorId(), parameterName))
 		{
-			auto *bridge = new ParameterBridge(this, (u32)(-1), parameter->getParameterLink());
+			auto *bridge = new ParameterBridge(this, UINT64_MAX, parameter->getParameterLink());
 			parameterBridges_.push_back(bridge);
 			addParameter(bridge);
 		}
@@ -38,6 +42,13 @@ ComplexAudioProcessor::ComplexAudioProcessor()
 		parameterBridges_.push_back(bridge);
 		addParameter(bridge);
 	}
+
+	utils::loadLibraries();
+}
+
+ComplexAudioProcessor::~ComplexAudioProcessor()
+{
+	utils::unloadLibraries();
 }
 
 //==============================================================================
@@ -114,18 +125,7 @@ juce::AudioProcessorEditor* ComplexAudioProcessor::createEditor()
 }
 
 //==============================================================================
-void ComplexAudioProcessor::getStateInformation ([[maybe_unused]] juce::MemoryBlock& destData)
-{
-	// You should use this method to store your parameters in the memory block.
-	// You could do that either as raw data, or use the XML or ValueTree classes
-	// as intermediaries to make it easy to save and load complex data.
-}
 
-void ComplexAudioProcessor::setStateInformation ([[maybe_unused]] const void* data, [[maybe_unused]] int sizeInBytes)
-{
-	// You should use this method to restore your parameters from this memory block,
-	// whose contents will have been created by the getStateInformation() call.
-}
 
 //==============================================================================
 // This creates new instances of the plugin..

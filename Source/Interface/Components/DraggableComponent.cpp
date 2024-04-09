@@ -13,7 +13,7 @@
 
 namespace Interface
 {
-	void DraggableComponent::paint(Graphics &g)
+	void DraggableComponent::paint(juce::Graphics &g)
 	{
 		static constexpr float kDotDiameter = 2.0f;
 		static constexpr float kDotsOffset = 6.0f;
@@ -24,7 +24,7 @@ namespace Interface
 		auto centeredX = BaseSection::centerHorizontally(0, dotsDiameter + dotsOffset, getWidth());
 		auto centeredY = BaseSection::centerVertically(0, dotsDiameter + dotsOffset, getHeight());
 
-		auto centreRectangle = Rectangle{ centeredX, centeredY, dotsOffset, dotsOffset }.toFloat();
+		auto centreRectangle = juce::Rectangle{ centeredX, centeredY, dotsOffset, dotsOffset }.toFloat();
 
 		g.setColour(getDraggedComponent()->getColour(Skin::kWidgetSecondary1));
 		g.fillEllipse(centreRectangle.getX(), centreRectangle.getY(), kDotDiameter, kDotDiameter);
@@ -33,30 +33,30 @@ namespace Interface
 		g.fillEllipse(centreRectangle.getRight(), centreRectangle.getBottom(), kDotDiameter, kDotDiameter);
 	}
 
-	void DraggableComponent::mouseMove(const MouseEvent &e)
+	void DraggableComponent::mouseMove(const juce::MouseEvent &e)
 	{
-		setMouseCursor(MouseCursor(MouseCursor::StandardCursorType::DraggingHandCursor));
+		setMouseCursor(juce::MouseCursor(juce::MouseCursor::StandardCursorType::DraggingHandCursor));
 		BaseComponent::mouseMove(e);
 	}
 
-	void DraggableComponent::mouseDown(const MouseEvent &e)
+	void DraggableComponent::mouseDown(const juce::MouseEvent &e)
 	{
 		listener_->prepareToMove(draggedComponent_, e, e.mods.isCommandDown());
 	}
 
-	void DraggableComponent::mouseDrag(const MouseEvent &e)
+	void DraggableComponent::mouseDrag(const juce::MouseEvent &e)
 	{
 		listener_->draggingComponent(draggedComponent_, e);
 	}
 
-	void DraggableComponent::mouseUp(const MouseEvent &e)
+	void DraggableComponent::mouseUp(const juce::MouseEvent &e)
 	{
 		listener_->releaseComponent(draggedComponent_, e);
 	}
 
-	void DraggableComponent::mouseExit(const MouseEvent &e)
+	void DraggableComponent::mouseExit(const juce::MouseEvent &e)
 	{
-		setMouseCursor(MouseCursor(MouseCursor::StandardCursorType::NormalCursor));
+		setMouseCursor(juce::MouseCursor(juce::MouseCursor::StandardCursorType::NormalCursor));
 		BaseComponent::mouseExit(e);
 	}
 

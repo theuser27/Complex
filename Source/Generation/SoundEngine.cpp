@@ -15,9 +15,8 @@
 
 namespace Generation
 {
-	// as the topmost processor its parentProcessorId is its own
-	SoundEngine::SoundEngine(Plugin::ProcessorTree *processorTree) noexcept :
-		BaseProcessor(processorTree, processorTree->getId(this, true), getClassType())
+	SoundEngine::SoundEngine(Plugin::ProcessorTree *processorTree, u64 parentProcessorId) noexcept :
+		BaseProcessor(processorTree, parentProcessorId, Framework::BaseProcessors::SoundEngine::id().value())
 	{
 		using namespace Framework;
 
@@ -36,7 +35,7 @@ namespace Generation
 		effectsState_ = makeSubProcessor<EffectsState>();
 		subProcessors_.emplace_back(effectsState_);
 
-		createProcessorParameters<BaseProcessors::SoundEngine::type>();
+		createProcessorParameters(BaseProcessors::SoundEngine::enum_names<nested_enum::OuterNodes>());
 	}
 
 	SoundEngine::~SoundEngine() noexcept = default;
@@ -108,7 +107,7 @@ namespace Generation
 	{
 		using namespace Framework;
 
-		updateParameters(flag, true);
+		updateParameters(flag, sampleRate, true);
 
 		switch (flag)
 		{
@@ -153,8 +152,7 @@ namespace Generation
 
 		effectsState_->writeInputData(FFTBuffer);
 		effectsState_->processLanes();
-		effectsState_->sumLanes();
-		effectsState_->writeOutputData(FFTBuffer);
+		effectsState_->sumLanesAndWriteOutput(FFTBuffer);
 	}
 
 	perf_inline void SoundEngine::DoIFFT() noexcept

@@ -135,6 +135,15 @@
 			"Widget Secondary 1": "ff4c4c4c",
 			"Widget Accent 1": "ff7bf087",
 			"Widget Background 1": "ff353535"
+		},
+		"Phase Module": {
+			"Background": "ff151515",
+			"Body": "ff1f1f1f",
+			"Background Element": "ff313131",
+			"Widget Primary 1": "ff59c4f2",
+			"Widget Secondary 1": "ff4c4c4c",
+			"Widget Accent 1": "ff59c4f2",
+			"Widget Background 1": "ff353535"
 		}
 
 	},

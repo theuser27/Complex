@@ -11,12 +11,9 @@
 #pragma once
 
 #include <cmath>
-#include <atomic>
 #include <concepts>
 #include <numbers>
-#include <span>
 #include <type_traits>
-#include <Third Party/gcem/gcem.hpp>
 #include "constants.h"
 
 namespace utils
@@ -71,12 +68,6 @@ namespace utils
 
 	strict_inline double dbToAmplitude(double decibels) noexcept
 	{ return pow(10.0, decibels / 20.0); }
-
-	constexpr strict_inline double amplitudeToDbConstexpr(double amplitude) noexcept
-	{ return 20.0 * gcem::log10(amplitude); }
-
-	constexpr strict_inline double dbToAmplitudeConstexpr(double decibels) noexcept
-	{ return gcem::pow(10.0, decibels / 20.0); }
 
 	strict_inline double normalisedToDb(double normalised, double maxDb) noexcept
 	{ return std::pow(maxDb + 1.0, normalised) - 1.0; }
@@ -186,170 +177,15 @@ namespace utils
 		return (T(3) * sqr) - (T(2) * sqr * value);
 	}
 
-	strict_inline void wait() noexcept
+	template<typename T, typename U>
+	strict_inline T *as(U *pointer)
 	{
-	#if COMPLEX_SSE4_1
-		_mm_pause();
-	#elif COMPLEX_NEON
-		__yield();
-	#endif
-	}
-
-	strict_inline void longWait(size_t iterations) noexcept
-	{
-		for (size_t i = 0; i < iterations; i++)
-		{
-		#if COMPLEX_SSE4_1
-			_mm_pause();
-			_mm_pause();
-			_mm_pause();
-			_mm_pause();
-			_mm_pause();
-		#elif COMPLEX_NEON
-			__yield();
-			__yield();
-			__yield();
-			__yield();
-			__yield();
-		#endif
-		}
-	}
-
-	class ScopedBlock
-	{
-	public:
-		ScopedBlock(std::atomic<bool> &atomic, bool expected = false) noexcept : atomic_(atomic), expected_(expected)
-		{
-			while (!atomic.compare_exchange_strong(expected, !expected, std::memory_order_acq_rel, std::memory_order_relaxed))
-			{
-				atomic.wait(expected, std::memory_order_relaxed);
-				expected = expected_;
-			}
-		}
-
-		ScopedBlock(ScopedBlock &&other) noexcept : atomic_(other.atomic_), expected_(other.expected_) { }
-		ScopedBlock &operator=(ScopedBlock &&other) noexcept
-		{
-			std::swap(atomic_, other.atomic_);
-			std::swap(expected_, other.expected_);
-			return *this;
-		}
-
-		~ScopedBlock() noexcept
-		{
-			atomic_.get().store(expected_, std::memory_order_release);
-			atomic_.get().notify_all();
-		}
-
-		ScopedBlock(const ScopedBlock &) = delete;
-		ScopedBlock operator=(const ScopedBlock &) = delete;
-
-	private:
-		std::reference_wrapper<std::atomic<bool>> atomic_;
-		bool expected_;
-	};
-
-	strict_inline void spinAndLock(std::atomic<bool> &atomic, bool expectedState) noexcept
-	{
-		bool expected = expectedState;
-		while (!atomic.compare_exchange_weak(expected, !expectedState, std::memory_order_acq_rel))
-		{
-			expected = expectedState;
-			// taking advantage of the MESI protocol where we only want shared access to read until the value is changed,
-			// instead of read/write with exclusive access thereby slowing down other threads trying to read as well
-			while (atomic.load(std::memory_order_relaxed) != expected) { wait(); }
-		}
-	}
-
-	template<typename T>
-	strict_inline void spinAndLock(std::atomic<T> &atomic, T expectedState, T desiredState) noexcept
-	{
-		T expected = expectedState;
-		while (!atomic.compare_exchange_weak(expected, desiredState, std::memory_order_acq_rel))
-		{
-			expected = expectedState;
-			// see the comment for spinAndLock with atomic<bool>
-			while (atomic.load(std::memory_order_relaxed) != expected) { wait(); }
-		}
-	}
-
-	// a very quick and dirty lock_guard implementation
-	class ScopedSpinLock
-	{
-	public:
-		// spins if the atomic is held by a different thread
-		ScopedSpinLock(std::atomic<bool> &atomic, bool expected = false, bool notify = false) noexcept : 
-			atomic_(atomic), expected_(expected), notify_(notify)
-		{ spinAndLock(atomic_, expected); }
-
-		ScopedSpinLock(ScopedSpinLock &&other) noexcept : atomic_(other.atomic_), expected_(other.expected_), notify_(other.notify_) { }
-		ScopedSpinLock &operator=(ScopedSpinLock &&other) noexcept
-		{
-			std::swap(atomic_, other.atomic_);
-			std::swap(expected_, other.expected_);
-			std::swap(notify_, other.notify_);
-			return *this;
-		}
-
-		~ScopedSpinLock() noexcept
-		{
-			atomic_.get().store(expected_, std::memory_order_release);
-			if (notify_)
-				atomic_.get().notify_all();
-		}
-
-		ScopedSpinLock(const ScopedSpinLock &) = delete;
-		ScopedSpinLock operator=(const ScopedSpinLock &) = delete;
-
-	private:
-		std::reference_wrapper<std::atomic<bool>> atomic_;
-		bool expected_;
-		bool notify_;
-	};
-
-	struct atomic_simd_float
-	{
-		atomic_simd_float(simd_float value) : value(value) {}
-
-		simd_float load() const noexcept
-		{
-			ScopedSpinLock lock(guard);
-			simd_float currentValue = value;
-			return currentValue;
-		}
-
-		void store(simd_float newValue) noexcept
-		{
-			ScopedSpinLock lock(guard);
-			value = newValue;
-		}
-
-		simd_float add(const simd_float &other) noexcept
-		{
-			ScopedSpinLock lock(guard);
-			value += other;
-			simd_float result = value;
-			return result;
-		}
-
-	private:
-		simd_float value = 0.0f;
-		mutable std::atomic<bool> guard = false;
-	};
-
-	template<typename T>
-	strict_inline T as(auto pointer)
-	{
-		static_assert((std::is_pointer_v<T> && std::is_pointer_v<decltype(pointer)>) || 
-			(std::is_lvalue_reference_v<T> && std::is_lvalue_reference_v<decltype(pointer)>), 
-			"Types are neither pointers, nor lvalue refs");
-
 	#if COMPLEX_DEBUG
-		auto *castPointer = dynamic_cast<T>(pointer);
+		auto *castPointer = dynamic_cast<T *>(pointer);
 		COMPLEX_ASSERT(castPointer && "Unsuccessful cast");
 		return castPointer;
 	#else
-		return static_cast<T>(pointer);
+		return static_cast<T *>(pointer);
 	#endif
 	}
 }

@@ -60,20 +60,17 @@ namespace Interface
 		~BaseSlider() override;
 		
 		// ========================================================== Mouse related
-		void mouseDown(const MouseEvent &e) override;
-		void mouseDrag(const MouseEvent &e) override;
-		void mouseEnter(const MouseEvent &e) override;
-		void mouseExit(const MouseEvent &e) override;
-		void mouseUp(const MouseEvent &e) override;
-		void mouseDoubleClick(const MouseEvent &e) override;
-		void mouseWheelMove(const MouseEvent &e, const MouseWheelDetails &wheel) override;
+		void mouseDown(const juce::MouseEvent &e) override;
+		void mouseDrag(const juce::MouseEvent &e) override;
+		void mouseEnter(const juce::MouseEvent &e) override;
+		void mouseExit(const juce::MouseEvent &e) override;
+		void mouseUp(const juce::MouseEvent &e) override;
+		void mouseDoubleClick(const juce::MouseEvent &e) override;
+		void mouseWheelMove(const juce::MouseEvent &e, const juce::MouseWheelDetails &wheel) override;
 
 		// ========================================================== Value related
 		auto getValue() const noexcept { return getValueSafe(); }
-		template<CommonConcepts::ParameterRepresentation T>
-		T getInternalValue(float sampleRate = kDefaultSampleRate, bool isNormalised = false) const noexcept 
-		{ return parameterLink_->parameter->getInternalValue<T>(sampleRate, isNormalised); }
-		void setValue(double newValue, NotificationType notification = sendNotificationSync);
+		void setValue(double newValue, juce::NotificationType notification = juce::sendNotificationSync);
 		void valueChanged() override
 		{
 			redoImage();
@@ -82,21 +79,21 @@ namespace Interface
 		Framework::ParameterValue *changeLinkedParameter(Framework::ParameterValue &parameter,
 			bool getValueFromParameter = true) override;
 		void updateValueFromTextEntry();
-		String getRawTextFromValue(double value) const;
-		double getRawValueFromText(const String &text) const;
-		String getSliderTextFromValue(double value, bool retrieveSampleRate = true) const;
-		double getSliderValueFromText(const String &text) const;
-		double snapValue(double attemptedValue, Slider::DragMode dragMode);
+		juce::String getRawTextFromValue(double value) const;
+		double getRawValueFromText(const juce::String &text) const;
+		juce::String getSliderTextFromValue(double value, bool retrieveSampleRate = true) const;
+		double getSliderValueFromText(const juce::String &text) const;
+		double snapValue(double attemptedValue, juce::Slider::DragMode dragMode);
 		void snapToValue(bool shouldSnap, float snapValue = 0.0f)
 		{
 			shouldSnapToValue_ = shouldSnap;
 			snapValue_ = snapValue;
 		}
-		String formatValue(double value) const noexcept;
-		float getNumericTextMaxWidth(const Font &usedFont) const;
+		juce::String formatValue(double value) const noexcept;
+		float getNumericTextMaxWidth(const juce::Font &usedFont) const;
 		void setValueInterval();
 		void setResetValue(double resetValue, bool resetWithDoubleClick = true, 
-			ModifierKeys mods = ModifierKeys::ctrlAltCommandModifiers) noexcept
+			juce::ModifierKeys mods = juce::ModifierKeys::ctrlAltCommandModifiers) noexcept
 		{
 			resetValueOnDoubleClick_ = resetWithDoubleClick;
 			resetValue_ = resetValue;
@@ -106,7 +103,7 @@ namespace Interface
 		// ===================================================== Text Entry related
 		void addTextEntry();
 		void removeTextEntry();
-		void changeTextEntryFont(Font font);
+		void changeTextEntryFont(juce::Font font);
 		// override to set the colours of the entry box
 		virtual void showTextEntry();
 		void textEditorReturnKeyPressed([[maybe_unused]] OpenGlTextEditor &editor) override;
@@ -129,12 +126,12 @@ namespace Interface
 		auto getModulationPlacement() const noexcept { return modulationControlPlacement_; }
 		auto getModulationArea() const noexcept { return (modulationArea_.getWidth()) ? modulationArea_ : getLocalBounds(); }
 
-		virtual Colour getSelectedColor() const { return getColour(Skin::kWidgetPrimary1); }
-		virtual Colour getUnselectedColor() const { return Colours::transparentBlack; }
-		virtual Colour getThumbColor() const { return Colours::white; }
-		virtual Colour getBackgroundColor() const { return getColour(Skin::kWidgetBackground1); }
-		virtual Colour getModColor() const { return getColour(Skin::kModulationMeterControl); }
-		virtual Rectangle<int> getModulationMeterBounds() const { return getLocalBounds(); }
+		virtual juce::Colour getSelectedColor() const { return getColour(Skin::kWidgetPrimary1); }
+		virtual juce::Colour getUnselectedColor() const { return juce::Colours::transparentBlack; }
+		virtual juce::Colour getThumbColor() const { return juce::Colours::white; }
+		virtual juce::Colour getBackgroundColor() const { return getColour(Skin::kWidgetBackground1); }
+		virtual juce::Colour getModColor() const { return getColour(Skin::kModulationMeterControl); }
+		virtual juce::Rectangle<int> getModulationMeterBounds() const { return getLocalBounds(); }
 
 		void setBipolar(bool bipolar = true)
 		{
@@ -174,18 +171,18 @@ namespace Interface
 		void setCanUseScrollWheel(bool canUseScrollWheel) noexcept { canUseScrollWheel_ = canUseScrollWheel; }
 
 		void setSensitivity(double sensitivity) noexcept { sensitivity_ = sensitivity; }
-		void setPopupPlacement(BubbleComponent::BubblePlacement placement) { popupPlacement_ = placement; }
-		void setModulationPlacement(BubbleComponent::BubblePlacement placement) { modulationControlPlacement_ = placement; }
-		void setModulationArea(Rectangle<int> area) noexcept { modulationArea_ = area; }
+		void setPopupPlacement(juce::BubbleComponent::BubblePlacement placement) { popupPlacement_ = placement; }
+		void setModulationPlacement(juce::BubbleComponent::BubblePlacement placement) { modulationControlPlacement_ = placement; }
+		void setModulationArea(juce::Rectangle<int> area) noexcept { modulationArea_ = area; }
 		void setMaxTotalCharacters(int totalCharacters) noexcept
 		{ COMPLEX_ASSERT(totalCharacters > 0); maxTotalCharacters_ = totalCharacters; }
 		void setMaxDecimalCharacters(int decimalCharacters) noexcept
 		{ COMPLEX_ASSERT(decimalCharacters >= 0); maxDecimalCharacters_ = decimalCharacters; }
-		void setPopupPrefix(String prefix) noexcept { popupPrefix_ = std::move(prefix); }
+		void setPopupPrefix(juce::String prefix) noexcept { popupPrefix_ = std::move(prefix); }
 
 		// ========================================================== Miscellaneous
 		using BaseControl::getValue;
-		void modifierKeysChanged(const ModifierKeys &) override { }
+		void modifierKeysChanged(const juce::ModifierKeys &) override { }
 		void addListener(BaseSection *listener) override;
 		void removeListener(BaseSection *listener) override;
 	protected:
@@ -199,11 +196,11 @@ namespace Interface
 		void setImmediateSensitivity(double immediateSensitivity) noexcept { immediateSensitivity_ = immediateSensitivity; }
 
 		// ============================================================== Variables
-		shared_value<Colour> thumbColor_;
-		shared_value<Colour> selectedColor_;
-		shared_value<Colour> unselectedColor_;
-		shared_value<Colour> backgroundColor_;
-		shared_value<Colour> modColor_;
+		shared_value<juce::Colour> thumbColor_;
+		shared_value<juce::Colour> selectedColor_;
+		shared_value<juce::Colour> unselectedColor_;
+		shared_value<juce::Colour> backgroundColor_;
+		shared_value<juce::Colour> modColor_;
 
 		SliderType type_{};
 		bool shouldShowPopup_ = false;
@@ -219,11 +216,11 @@ namespace Interface
 		int maxTotalCharacters_ = kDefaultMaxTotalCharacters;
 		int maxDecimalCharacters_ = kDefaultMaxDecimalCharacters;
 
-		BubbleComponent::BubblePlacement popupPlacement_ = BubbleComponent::below;
-		String popupPrefix_{};
+		juce::BubbleComponent::BubblePlacement popupPlacement_ = juce::BubbleComponent::below;
+		juce::String popupPrefix_{};
 
-		Rectangle<int> modulationArea_{};
-		BubbleComponent::BubblePlacement modulationControlPlacement_ = BubbleComponent::below;
+		juce::Rectangle<int> modulationArea_{};
+		juce::BubbleComponent::BubblePlacement modulationControlPlacement_ = juce::BubbleComponent::below;
 
 		gl_ptr<OpenGlQuad> quadComponent_ = nullptr;
 		gl_ptr<OpenGlImageComponent> imageComponent_ = nullptr;
@@ -236,10 +233,10 @@ namespace Interface
 		double immediateSensitivity_ = 250.0;
 		double valueInterval_ = 0.0;
 		double valueOnMouseDown_ = 0.0;
-		Point<float> mouseDragStartPosition_{};
-		Time lastMouseWheelTime_;
+		juce::Point<float> mouseDragStartPosition_{};
+		juce::Time lastMouseWheelTime_;
 		double resetValue_ = 0.0;
-		ModifierKeys resetValueModifiers_;
+		juce::ModifierKeys resetValueModifiers_;
 		bool resetValueOnDoubleClick_ = true;
 		bool useDragEvents_ = false;
 
@@ -262,22 +259,22 @@ namespace Interface
 		RotarySlider(Framework::ParameterValue *parameter);
 		~RotarySlider() override;
 
-		void mouseDrag(const MouseEvent &e) override;
+		void mouseDrag(const juce::MouseEvent &e) override;
 
 		void redoImage() override;
 		void setComponentsBounds() override;
-		void drawShadow(Graphics &g) const;
+		void drawShadow(juce::Graphics &g) const;
 		void showTextEntry() override;
-		void setExtraElementsPositions(Rectangle<int> anchorBounds) override;
-		Rectangle<int> setBoundsForSizes(int height, int width = 0) override;
+		void setExtraElementsPositions(juce::Rectangle<int> anchorBounds) override;
+		juce::Rectangle<int> setBoundsForSizes(int height, int width = 0) override;
 
-		Colour getUnselectedColor() const override
+		juce::Colour getUnselectedColor() const override
 		{
 			if (isActive())
 				return getColour(Skin::kRotaryArcUnselected);
 			return getColour(Skin::kRotaryArcUnselectedDisabled);
 		}
-		Colour getThumbColor() const override { return getColour(Skin::kRotaryHand); }
+		juce::Colour getThumbColor() const override { return getColour(Skin::kRotaryHand); }
 
 		float getKnobSizeScale() const noexcept { return knobSizeScale_; }
 		void setKnobSizeScale(float scale) noexcept { knobSizeScale_ = scale; }
@@ -299,7 +296,7 @@ namespace Interface
 
 		LinearSlider(Framework::ParameterValue *parameter);
 
-		void mouseDown(const MouseEvent &e) override
+		void mouseDown(const juce::MouseEvent &e) override
 		{
 			if (!e.mods.isAltDown() && !e.mods.isPopupMenu())
 			{
@@ -309,7 +306,7 @@ namespace Interface
 			BaseSlider::mouseDown(e);
 		}
 
-		void mouseDrag(const MouseEvent &e) override
+		void mouseDrag(const juce::MouseEvent &e) override
 		{
 			float multiply = 1.0f;
 
@@ -326,9 +323,9 @@ namespace Interface
 		void setComponentsBounds() override;
 		void showTextEntry() override;
 
-		Rectangle<int> getModulationMeterBounds() const override
+		juce::Rectangle<int> getModulationMeterBounds() const override
 		{
-			Rectangle<int> mod_bounds = getModulationArea();
+			juce::Rectangle<int> mod_bounds = getModulationArea();
 			int buffer = (int)getValue(Skin::kWidgetMargin);
 
 			if (isHorizontal())
@@ -340,14 +337,14 @@ namespace Interface
 				mod_bounds.getWidth(), mod_bounds.getHeight() - 2 * buffer };
 		}
 
-		Colour getSelectedColor() const override
+		juce::Colour getSelectedColor() const override
 		{
 			if (isActive_)
 				return getColour(Skin::kLinearSlider);
 			return getColour(Skin::kLinearSliderDisabled);
 		}
-		Colour getUnselectedColor() const override { return getColour(Skin::kLinearSliderUnselected); }
-		Colour getThumbColor() const override
+		juce::Colour getUnselectedColor() const override { return getColour(Skin::kLinearSliderUnselected); }
+		juce::Colour getThumbColor() const override
 		{
 			if (isActive_)
 				return getColour(Skin::kLinearSliderThumb);
@@ -363,7 +360,7 @@ namespace Interface
 	public:
 		ImageSlider(Framework::ParameterValue *parameter);
 
-		void mouseDown(const MouseEvent &e) override
+		void mouseDown(const juce::MouseEvent &e) override
 		{
 			if (!e.mods.isAltDown() && !e.mods.isPopupMenu())
 			{
@@ -373,7 +370,7 @@ namespace Interface
 			BaseSlider::mouseDown(e);
 		}
 
-		void mouseDrag(const MouseEvent &e) override
+		void mouseDrag(const juce::MouseEvent &e) override
 		{
 			float multiply = 1.0f;
 
@@ -396,21 +393,21 @@ namespace Interface
 
 		PinSlider(Framework::ParameterValue *parameter);
 
-		void mouseDown(const MouseEvent &e) override;
-		void mouseDrag(const MouseEvent &e) override;
+		void mouseDown(const juce::MouseEvent &e) override;
+		void mouseDrag(const juce::MouseEvent &e) override;
 
 		void redoImage() override;
 		void setComponentsBounds() override;
-		void setExtraElementsPositions([[maybe_unused]] Rectangle<int> anchorBounds) override { }
-		Rectangle<int> setBoundsForSizes(int height, int width = 0) override;
+		void setExtraElementsPositions([[maybe_unused]] juce::Rectangle<int> anchorBounds) override { }
+		juce::Rectangle<int> setBoundsForSizes(int height, int width = 0) override;
 
-		Colour getThumbColor() const override { return getSelectedColor(); }
+		juce::Colour getThumbColor() const override { return getSelectedColor(); }
 
 		void setTotalRange(double totalRange) noexcept { totalRange_ = totalRange; }
 
 	private:
 		double totalRange_ = 0.0;
-		Point<double> lastDragPosition_{ 0.0, 0.0 };
+		juce::Point<double> lastDragPosition_{ 0.0, 0.0 };
 		double runningTotal_ = 0.0;
 	};
 
@@ -424,11 +421,11 @@ namespace Interface
 		static constexpr float kHeightToArrowWidthRatio = 5.0f / 16.0f;
 		static constexpr float kArrowWidthHeightRatio = 0.5f;
 
-		TextSelector(Framework::ParameterValue *parameter, std::optional<Font> usedFont = {});
+		TextSelector(Framework::ParameterValue *parameter, std::optional<juce::Font> usedFont = {});
 
-		void mouseDown(const MouseEvent &e) override;
-		void mouseUp(const MouseEvent &e) override;
-		void mouseWheelMove(const MouseEvent &e, const MouseWheelDetails &wheel) override;
+		void mouseDown(const juce::MouseEvent &e) override;
+		void mouseUp(const juce::MouseEvent &e) override;
+		void mouseWheelMove(const juce::MouseEvent &e, const juce::MouseWheelDetails &wheel) override;
 
 		void valueChanged() override
 		{
@@ -437,13 +434,13 @@ namespace Interface
 		}
 		void redoImage() override;
 		void setComponentsBounds() override;
-		void setExtraElementsPositions(Rectangle<int> anchorBounds) override;
-		Rectangle<int> setBoundsForSizes(int height, int width = 0) override;
+		void setExtraElementsPositions(juce::Rectangle<int> anchorBounds) override;
+		juce::Rectangle<int> setBoundsForSizes(int height, int width = 0) override;
 
 		void addListener(BaseSection *listener) override;
 		void removeListener(BaseSection *listener) override;
 
-		Colour getBackgroundColor() const override { return getColour(Skin::kWidgetBackground2); }
+		juce::Colour getBackgroundColor() const override { return getColour(Skin::kWidgetBackground2); }
 
 		// if the stringLookup changes we need to resize and redraw to fit the new text
 		void setParameterDetails(const Framework::ParameterDetails &details) override
@@ -453,7 +450,7 @@ namespace Interface
 			redoImage();
 		}
 
-		void setUsedFont(Font usedFont) noexcept { usedFont_ = std::move(usedFont); isDirty_ = true; }
+		void setUsedFont(juce::Font usedFont) noexcept { usedFont_ = std::move(usedFont); isDirty_ = true; }
 		void setDrawArrow(bool drawArrow) noexcept { drawArrow_ = drawArrow; isDirty_ = true; }
 
 		void setExtraIcon(PlainShapeComponent *icon) noexcept;
@@ -462,7 +459,7 @@ namespace Interface
 	protected:
 		void resizeForText() noexcept;
 
-		Font usedFont_{};
+		juce::Font usedFont_{};
 		int textWidth_{};
 		bool drawArrow_ = true;
 		bool isDirty_ = false;
@@ -483,7 +480,7 @@ namespace Interface
 
 		NumberBox(Framework::ParameterValue *parameter);
 
-		void mouseDrag(const MouseEvent &e) override;
+		void mouseDrag(const juce::MouseEvent &e) override;
 		void setVisible(bool shouldBeVisible) override;
 
 		void textEditorReturnKeyPressed(OpenGlTextEditor &editor) override;
@@ -493,12 +490,12 @@ namespace Interface
 		void redoImage() override;
 		void setComponentsBounds() override;
 		void showTextEntry() override;
-		void setExtraElementsPositions(Rectangle<int> anchorBounds) override;
+		void setExtraElementsPositions(juce::Rectangle<int> anchorBounds) override;
 
-		Colour getBackgroundColor() const override { return (drawBackground_) ? 
+		juce::Colour getBackgroundColor() const override { return (drawBackground_) ? 
 			getColour(Skin::kWidgetBackground1) : getColour(Skin::kWidgetBackground2); }
 
-		Rectangle<int> setBoundsForSizes(int height, int width = 0) override;
+		juce::Rectangle<int> setBoundsForSizes(int height, int width = 0) override;
 
 		void setAlternativeMode(bool isAlternativeMode) noexcept;
 
@@ -512,7 +509,7 @@ namespace Interface
 	public:
 		ModulationSlider(Framework::ParameterValue *parameter);
 
-		void mouseDown(const MouseEvent &e) override
+		void mouseDown(const juce::MouseEvent &e) override
 		{
 			if (!e.mods.isAltDown() && !e.mods.isPopupMenu())
 			{
@@ -522,7 +519,7 @@ namespace Interface
 			BaseSlider::mouseDown(e);
 		}
 
-		void mouseDrag(const MouseEvent &e) override
+		void mouseDrag(const juce::MouseEvent &e) override
 		{
 			float multiply = 1.0f;
 
@@ -539,15 +536,15 @@ namespace Interface
 		void setComponentsBounds() override;
 
 
-		Colour getSelectedColor() const override
+		juce::Colour getSelectedColor() const override
 		{
-			Colour background = getColour(Skin::kWidgetBackground1);
+			juce::Colour background = getColour(Skin::kWidgetBackground1);
 			if (isActive_)
 				return getColour(Skin::kRotaryArc).interpolatedWith(background, 0.5f);
 			return getColour(Skin::kRotaryArcDisabled).interpolatedWith(background, 0.5f);
 		}
-		Colour getUnselectedColor() const override { return getColour(Skin::kWidgetBackground1); }
-		Colour getThumbColor() const override { return getColour(Skin::kRotaryArc); }
+		juce::Colour getUnselectedColor() const override { return getColour(Skin::kWidgetBackground1); }
+		juce::Colour getThumbColor() const override { return getColour(Skin::kRotaryArc); }
 
 		void setDrawWhenNotVisible(bool draw) noexcept;
 	};

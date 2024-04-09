@@ -13,6 +13,7 @@
 #include "AppConfig.h"
 #include <juce_gui_basics/juce_gui_basics.h>
 #include "Framework/utils.h"
+#include "Framework/sync_primitives.h"
 
 namespace Interface
 {
@@ -31,12 +32,12 @@ namespace Interface
 		{
 			T load() const noexcept
 			{
-				utils::ScopedSpinLock g(guard);
+				utils::ScopedLock g{ guard, utils::WaitMechanism::Spin };
 				return value;
 			}
 			void store(T newValue) noexcept
 			{
-				utils::ScopedSpinLock g(guard);
+				utils::ScopedLock g{ guard, utils::WaitMechanism::Spin };
 				value = std::move(newValue);
 			}
 
@@ -48,15 +49,15 @@ namespace Interface
 		using holder = std::conditional_t<sizeof(T) <= sizeof(std::uintptr_t), atomic_holder, guard_holder>;  // NOLINT(bugprone-sizeof-expression)
 	public:
 		shared_value() = default;
-		shared_value(const shared_value &other) noexcept { value_.store(other.value_.load()); }
-		shared_value(T value) noexcept { value_.store(std::move(value)); }
-		shared_value &operator=(const shared_value &other) noexcept { return shared_value::operator=(other.value_.load()); }
-		shared_value &operator=(T newValue) noexcept { value_.store(std::move(newValue)); return *this; }
+		shared_value(const shared_value &other) noexcept { value.store(other.value.load()); }
+		shared_value(T newValue) noexcept { value.store(std::move(newValue)); }
+		shared_value &operator=(const shared_value &other) noexcept { return shared_value::operator=(other.value.load()); }
+		shared_value &operator=(T newValue) noexcept { value.store(std::move(newValue)); return *this; }
 		operator T() const noexcept { return get(); }
 
-		[[nodiscard]] T get() const noexcept { return value_.load(); }
+		[[nodiscard]] T get() const noexcept { return value.load(); }
 	private:
-		holder value_{};
+		holder value{};
 	};
 
 	template<typename T>
@@ -64,44 +65,44 @@ namespace Interface
 	{
 	public:
 		shared_value() = default;
-		explicit shared_value(std::unique_ptr<T> &&value) noexcept : value_(std::move(value)) { }
-		shared_value(shared_value &&value) noexcept
+		explicit shared_value(std::unique_ptr<T> &&value) noexcept : value(std::move(value)) { }
+		shared_value(shared_value &&other) noexcept
 		{
-			utils::ScopedSpinLock g(value.guard, false, true);
-			value_ = std::move(value.value_);
+			utils::ScopedLock g{ other.guard, utils::WaitMechanism::Spin, false };
+			value = std::move(value.value);
 		}
 		shared_value &operator=(shared_value &&other) noexcept
 		{
-			utils::ScopedSpinLock g(other.guard, false, true);
-			return shared_value::operator=(std::move(other.value_));
+			utils::ScopedLock g{ other.guard, utils::WaitMechanism::Spin, false };
+			return shared_value::operator=(std::move(other.value));
 		}
 		shared_value &operator=(std::unique_ptr<T> &&newValue) noexcept
 		{
-			utils::ScopedSpinLock g(guard, false, true);
-			value_ = std::move(newValue);
+			utils::ScopedLock g{ guard, utils::WaitMechanism::Spin, false };
+			value = std::move(newValue);
 			return *this;
 		}
 
 		[[nodiscard]] std::add_pointer_t<std::remove_all_extents_t<T>> lock() noexcept
 		{
-			utils::spinAndLock(guard, false);
-			return value_.get();
+			utils::lockAtomic(guard, utils::WaitMechanism::Spin, false);
+			return value.get();
 		}
 
 		[[nodiscard]] std::add_pointer_t<std::remove_all_extents_t<const T>> lock() const noexcept
 		{
-			utils::spinAndLock(guard, false);
-			return value_.get();
+			utils::lockAtomic(guard, utils::WaitMechanism::Spin, false);
+			return value.get();
 		}
 
 		void unlock() const noexcept
 		{
 			guard.store(false, std::memory_order_release);
-			guard.notify_all();
+			guard.notify_one();
 		}
 	private:
 		mutable std::atomic<bool> guard = false;
-		std::unique_ptr<T> value_{};
+		std::unique_ptr<T> value{};
 	};
 
 	template<typename T>
@@ -109,44 +110,89 @@ namespace Interface
 	{
 	public:
 		shared_value() = default;
-		explicit shared_value(std::vector<T> &&value) noexcept { value_ = std::move(value); }
+		explicit shared_value(std::vector<T> &&value) noexcept { value = std::move(value); }
 		shared_value(shared_value &&value) noexcept
 		{
-			utils::ScopedSpinLock g(value.guard, false, true);
-			value_ = std::move(value.value_);
+			utils::ScopedLock g{ value.guard, utils::WaitMechanism::Spin };
+			value = std::move(value.value);
 		}
 		shared_value &operator=(shared_value &&other) noexcept
 		{
-			utils::ScopedSpinLock g(other.guard, false, true);
-			return shared_value::operator=(std::move(other.value_));
+			utils::ScopedLock g{ value.guard, utils::WaitMechanism::Spin };
+			return shared_value::operator=(std::move(other.value));
 		}
 		shared_value &operator=(std::vector<T> &&newValue) noexcept
 		{
-			utils::ScopedSpinLock g(guard, false, true);
-			value_ = std::move(newValue);
+			utils::ScopedLock g{ value.guard, utils::WaitMechanism::Spin };
+			value = std::move(newValue);
 			return *this;
 		}
 
 		[[nodiscard]] std::vector<T> &lock() noexcept
 		{
-			utils::spinAndLock(guard, false);
-			return value_;
+			utils::lockAtomic(guard, utils::WaitMechanism::Spin, false);
+			return value;
 		}
 
 		[[nodiscard]] const std::vector<T> &lock() const noexcept
 		{
-			utils::spinAndLock(guard, false);
-			return value_;
+			utils::lockAtomic(guard, utils::WaitMechanism::Spin, false);
+			return value;
 		}
 
 		void unlock() const noexcept
 		{
 			guard.store(false, std::memory_order_release);
-			guard.notify_all();
+			guard.notify_one();
 		}
 	private:
 		mutable std::atomic<bool> guard = false;
-		std::vector<T> value_{};
+		std::vector<T> value{};
+	};
+
+	template<typename T>
+	class shared_value_block
+	{
+	public:
+		shared_value_block() = default;
+		explicit shared_value_block(std::vector<T> &&value) noexcept { value = std::move(value); }
+		shared_value_block(shared_value_block &&other) noexcept
+		{
+			utils::ScopedLock g{ other.guard, utils::WaitMechanism::Sleep };
+			value = std::move(other.value);
+		}
+		shared_value_block &operator=(shared_value_block &&other) noexcept
+		{
+			utils::ScopedLock g{ other.guard, utils::WaitMechanism::Sleep };
+			return shared_value_block::operator=(std::move(other.value));
+		}
+		shared_value_block &operator=(T &&newValue) noexcept
+		{
+			utils::ScopedLock g{ guard, utils::WaitMechanism::WaitNotify };
+			value = std::move(newValue);
+			return *this;
+		}
+
+		[[nodiscard]] T &lock() noexcept
+		{
+			utils::lockAtomic(guard, utils::WaitMechanism::WaitNotify, false);
+			return value;
+		}
+
+		[[nodiscard]] const T &lock() const noexcept
+		{
+			utils::lockAtomic(guard, utils::WaitMechanism::WaitNotify, false);
+			return value;
+		}
+
+		void unlock() const noexcept
+		{
+			guard.store(false, std::memory_order_release);
+			guard.notify_one();
+		}
+	private:
+		mutable std::atomic<bool> guard = false;
+		T value{};
 	};
 
 	class BaseComponent : public juce::Component

@@ -10,9 +10,20 @@
 
 #pragma once
 
-#include "Generation/EffectModules.h"
+#include "Generation/BaseProcessor.h"
 #include "BaseSection.h"
 #include "../Components/DraggableComponent.h"
+
+namespace Framework
+{
+	class ParameterBridge;
+}
+
+namespace Generation
+{
+	class baseEffect;
+	class EffectModule;
+}
 
 namespace Interface
 {
@@ -33,7 +44,6 @@ namespace Interface
 			kCopyInstance,
 			kInitInstance
 		};
-
 
 		static constexpr int kSpectralMaskContractedHeight = 20;
 		static constexpr int kSpectralMaskExpandedHeight = 92;
@@ -61,16 +71,16 @@ namespace Interface
 
 		void resized() override;
 
-		void mouseDown(const MouseEvent &e) override;
+		void mouseDown(const juce::MouseEvent &e) override;
 
-		void paintBackground(Graphics &g) override;
+		void paintBackground(juce::Graphics &g) override;
 
 		void resizeForText(TextSelector *textSelector, int requestedWidthChange) override;
 		void expansionChange(bool isExpanded) override;
 		void sliderValueChanged(BaseSlider *slider) override;
 		void automationMappingChanged(BaseSlider *slider) override;
 
-		Rectangle<int> getPowerButtonBounds() const noexcept override
+		juce::Rectangle<int> getPowerButtonBounds() const noexcept override
 		{
 			auto widthHeight = (int)std::round(scaleValue(kDefaultActivatorSize));
 			return { getWidth() - scaleValueRoundInt(kPowerButtonPadding) - widthHeight,
@@ -91,19 +101,19 @@ namespace Interface
 			arrangeUIFunction_(this, getUIBounds());
 		}
 		// paints static/background elements of the specific module
-		void paintUIBackground(Graphics &g)
+		void paintUIBackground(juce::Graphics &g)
 		{
 			if (paintBackgroundFunction_)
 				paintBackgroundFunction_(g, this);
 		}
 
 		auto &getDraggableComponent() noexcept { return draggableBox_; }
-		auto *getEffect() noexcept { return effectModule_->getEffect(); }
+		Generation::baseEffect *getEffect() noexcept;
 		u64 getAlgorithm() const noexcept;
 		
 		BaseControl *getEffectControl(std::string_view name);
 
-		Rectangle<int> getUIBounds() const noexcept
+		juce::Rectangle<int> getUIBounds() const noexcept
 		{ return getLocalBounds().withTop(getYMaskOffset() + scaleValueRoundInt(kTopMenuHeight) + 1); }
 
 		void handlePopupResult(int result) const noexcept;
@@ -139,7 +149,7 @@ namespace Interface
 
 		void (*initialiseParametersFunction_)(std::vector<std::unique_ptr<BaseControl>> &effectSliders,
 			EffectModuleSection *section) = nullptr;
-		void (*arrangeUIFunction_)(EffectModuleSection *section, Rectangle<int> bounds) = nullptr;
-		void (*paintBackgroundFunction_)(Graphics &g, EffectModuleSection *section) = nullptr;
+		void (*arrangeUIFunction_)(EffectModuleSection *section, juce::Rectangle<int> bounds) = nullptr;
+		void (*paintBackgroundFunction_)(juce::Graphics &g, EffectModuleSection *section) = nullptr;
 	};	
 }

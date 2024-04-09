@@ -67,7 +67,7 @@ namespace Interface
 	void MainInterface::reloadSkin(const Skin &skin)
 	{
 		skin.copyValuesToLookAndFeel(DefaultLookAndFeel::instance());
-		Rectangle<int> bounds = getBounds();
+		juce::Rectangle<int> bounds = getBounds();
 		// triggering repainting like a boss
 		setBounds(0, 0, bounds.getWidth() / 4, bounds.getHeight() / 4);
 		setBounds(bounds);
@@ -86,7 +86,7 @@ namespace Interface
 		int effectsStateWidth = scaleValueRoundInt(kEffectsStateMinWidth);
 		int effectsStateHeight = getHeight() - effectsStateYStart - 
 			scaleValueRoundInt(kLaneToBottomSettingsMargin + kFooterHeight);
-		Rectangle bounds{ effectsStateXStart, effectsStateYStart, effectsStateWidth, effectsStateHeight };
+		juce::Rectangle bounds{ effectsStateXStart, effectsStateYStart, effectsStateWidth, effectsStateHeight };
 
 		effectsStateSection_->setBounds(bounds);
 	}
@@ -101,34 +101,34 @@ namespace Interface
 
 	void MainInterface::renderOpenGlComponents(OpenGlWrapper &openGl, bool animate)
 	{
-		utils::ScopedBlock g(renderLock_);
+		utils::ScopedLock g{ renderLock_, utils::WaitMechanism::WaitNotify };
 		BaseSection::renderOpenGlComponents(openGl, animate);
 	}
 
-	void MainInterface::popupSelector(const BaseComponent *source, Point<int> position, PopupItems options,
-	                                  Skin::SectionOverride skinOverride, std::function<void(int)> callback, std::function<void()> cancel)
+	void MainInterface::popupSelector(const BaseComponent *source, juce::Point<int> position, PopupItems options, 
+		Skin::SectionOverride skinOverride, std::function<void(int)> callback, std::function<void()> cancel)
 	{
 		popupSelector_->setPopupSkinOverride(skinOverride);
 		popupSelector_->setCallback(std::move(callback));
 		popupSelector_->setCancelCallback(std::move(cancel));
 		popupSelector_->showSelections(std::move(options));
-		Rectangle bounds{ 0, 0, getWidth(), getHeight() };
+		juce::Rectangle bounds{ 0, 0, getWidth(), getHeight() };
 		popupSelector_->setPosition(getLocalPoint(source, position), bounds);
 		popupSelector_->setVisible(true);
 	}
 
-	void MainInterface::dualPopupSelector(BaseComponent *source, Point<int> position, int width,
+	void MainInterface::dualPopupSelector(BaseComponent *source, juce::Point<int> position, int width,
 		const PopupItems &options, std::function<void(int)> callback)
 	{
 		dualPopupSelector_->setCallback(std::move(callback));
 		dualPopupSelector_->showSelections(options);
-		Rectangle bounds{ 0, 0, getWidth(), getHeight() };
+		juce::Rectangle bounds{ 0, 0, getWidth(), getHeight() };
 		dualPopupSelector_->setPosition(getLocalPoint(source, position), width, bounds);
 		dualPopupSelector_->setVisible(true);
 	}
 
-	void MainInterface::popupDisplay(BaseComponent *source, String text,
-		BubbleComponent::BubblePlacement placement, bool primary, Skin::SectionOverride sectionOverride)
+	void MainInterface::popupDisplay(BaseComponent *source, juce::String text,
+		juce::BubbleComponent::BubblePlacement placement, bool primary, Skin::SectionOverride sectionOverride)
 	{
 		PopupDisplay *display = primary ? popupDisplay1_.get() : popupDisplay2_.get();
 		display->setContent(std::move(text), getLocalArea(source, source->getLocalBounds()), placement, sectionOverride);

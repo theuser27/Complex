@@ -17,15 +17,15 @@ namespace Framework
 {
 	AddProcessorUpdate::~AddProcessorUpdate()
 	{
-		if (!processorTree_->isBeingDestroyed() && addedProcessor_ && !isDone_)
-			processorTree_->deleteProcessor(addedProcessor_->getProcessorId());
+		if (!processorTree_.isBeingDestroyed() && addedProcessor_ && !isDone_)
+			processorTree_.deleteProcessor(addedProcessor_->getProcessorId());
 	}
 
 	bool AddProcessorUpdate::perform()
 	{
 		COMPLEX_ASSERT(!newSubProcessorType_.empty() && "A type of subProcessor to add was not provided");
 
-		auto destinationPointer = processorTree_->getProcessor(destinationProcessorId_);
+		auto destinationPointer = processorTree_.getProcessor(destinationProcessorId_);
 
 		// if we've already undone once and we're redoing, we need to pass the already created module
 		if (!addedProcessor_)
@@ -41,7 +41,7 @@ namespace Framework
 
 	bool AddProcessorUpdate::undo()
 	{
-		auto destinationPointer = processorTree_->getProcessor(destinationProcessorId_);
+		auto destinationPointer = processorTree_.getProcessor(destinationProcessorId_);
 
 		auto g = wait();
 		addedProcessor_ = destinationPointer->deleteSubProcessor(destinationSubProcessorIndex_);
@@ -53,13 +53,13 @@ namespace Framework
 
 	CopyProcessorUpdate::~CopyProcessorUpdate()
 	{
-		if (!processorTree_->isBeingDestroyed() && !isDone_)
-			processorTree_->deleteProcessor(processorCopy.getProcessorId());
+		if (!processorTree_.isBeingDestroyed() && !isDone_)
+			processorTree_.deleteProcessor(processorCopy.getProcessorId());
 	}
 
 	bool CopyProcessorUpdate::perform()
 	{
-		auto destinationPointer = processorTree_->getProcessor(destinationProcessorId_);
+		auto destinationPointer = processorTree_.getProcessor(destinationProcessorId_);
 
 		auto g = wait();
 		destinationPointer->insertSubProcessor(destinationSubProcessorIndex_, &processorCopy);
@@ -71,7 +71,7 @@ namespace Framework
 
 	bool CopyProcessorUpdate::undo()
 	{
-		auto destinationPointer = processorTree_->getProcessor(destinationProcessorId_);
+		auto destinationPointer = processorTree_.getProcessor(destinationProcessorId_);
 
 		auto g = wait();
 		destinationPointer->deleteSubProcessor(destinationSubProcessorIndex_);
@@ -83,8 +83,8 @@ namespace Framework
 
 	bool MoveProcessorUpdate::perform()
 	{
-		auto destinationPointer = processorTree_->getProcessor(destinationProcessorId_);
-		auto sourcePointer = processorTree_->getProcessor(sourceProcessorId_);
+		auto destinationPointer = processorTree_.getProcessor(destinationProcessorId_);
+		auto sourcePointer = processorTree_.getProcessor(sourceProcessorId_);
 
 		auto g = wait();
 		auto movedProcessor = sourcePointer->deleteSubProcessor(sourceSubProcessorIndex_);
@@ -95,8 +95,8 @@ namespace Framework
 
 	bool MoveProcessorUpdate::undo()
 	{
-		auto destinationPointer = processorTree_->getProcessor(destinationProcessorId_);
-		auto sourcePointer = processorTree_->getProcessor(sourceProcessorId_);
+		auto destinationPointer = processorTree_.getProcessor(destinationProcessorId_);
+		auto sourcePointer = processorTree_.getProcessor(sourceProcessorId_);
 
 		auto g = wait();
 		auto movedProcessor = destinationPointer->deleteSubProcessor(destinationSubProcessorIndex_);
@@ -107,13 +107,13 @@ namespace Framework
 
 	UpdateProcessorUpdate::~UpdateProcessorUpdate()
 	{
-		if (!processorTree_->isBeingDestroyed() && savedProcessor_)
-			processorTree_->deleteProcessor(savedProcessor_->getProcessorId());
+		if (!processorTree_.isBeingDestroyed() && savedProcessor_)
+			processorTree_.deleteProcessor(savedProcessor_->getProcessorId());
 	}
 
 	bool UpdateProcessorUpdate::perform()
 	{
-		auto destinationPointer = processorTree_->getProcessor(destinationProcessorId_);
+		auto destinationPointer = processorTree_.getProcessor(destinationProcessorId_);
 
 		// if we've already undone once and we're redoing, we need to pass the already created module
 		if (!savedProcessor_)
@@ -127,7 +127,7 @@ namespace Framework
 
 	bool UpdateProcessorUpdate::undo()
 	{
-		auto destinationPointer = processorTree_->getProcessor(destinationProcessorId_);
+		auto destinationPointer = processorTree_.getProcessor(destinationProcessorId_);
 
 		auto g = wait();
 		savedProcessor_ = destinationPointer->updateSubProcessor(destinationSubProcessorIndex_, savedProcessor_);
@@ -137,13 +137,13 @@ namespace Framework
 
 	DeleteProcessorUpdate::~DeleteProcessorUpdate()
 	{
-		if (!processorTree_->isBeingDestroyed() && deletedProcessor_ && isDone_)
-			processorTree_->deleteProcessor(deletedProcessor_->getProcessorId());
+		if (!processorTree_.isBeingDestroyed() && deletedProcessor_ && isDone_)
+			processorTree_.deleteProcessor(deletedProcessor_->getProcessorId());
 	}
 
 	bool DeleteProcessorUpdate::perform()
 	{
-		auto destinationPointer = processorTree_->getProcessor(destinationProcessorId_);
+		auto destinationPointer = processorTree_.getProcessor(destinationProcessorId_);
 
 		auto g = wait();
 		deletedProcessor_ = destinationPointer->deleteSubProcessor(destinationSubProcessorIndex_);
@@ -155,7 +155,7 @@ namespace Framework
 
 	bool DeleteProcessorUpdate::undo()
 	{
-		auto destinationPointer = processorTree_->getProcessor(destinationProcessorId_);
+		auto destinationPointer = processorTree_.getProcessor(destinationProcessorId_);
 
 		auto g = wait();
 		destinationPointer->insertSubProcessor(destinationSubProcessorIndex_, deletedProcessor_);
@@ -171,6 +171,13 @@ namespace Framework
 		// on the other hand, if this is being called on a redo, we need to change the value appropriately
 		if (!firstTime_)
 		{
+			if (details_.has_value())
+			{
+				auto details = baseParameter_->getParameterDetails();
+				// TODO: currently  no BaseControl implements setParameterDetails correctly
+				baseParameter_->setParameterDetails(details_.value());
+				details_ = details;
+			}
 			baseParameter_->setValueSafe(newValue_);
 			baseParameter_->setValueToHost();
 		}
@@ -181,9 +188,25 @@ namespace Framework
 
 	bool ParameterUpdate::undo()
 	{
+		if (details_.has_value())
+		{
+			auto details = baseParameter_->getParameterDetails();
+			baseParameter_->setParameterDetails(details_.value());
+			details_ = details;
+		}
+		
 		baseParameter_->setValueSafe(oldValue_);
 		baseParameter_->setValueToHost();
 		return true;
 	}
 
+	bool PresetUpdate::perform()
+	{
+		return true;
+	}
+
+	bool PresetUpdate::undo()
+	{
+		return true;
+	}
 }

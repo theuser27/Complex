@@ -10,8 +10,14 @@
 
 #pragma once
 
-#include "AppConfig.h"
-#include <juce_opengl/juce_opengl.h>
+#include <map>
+#include "Framework/open_gl_primitives.h"
+
+namespace juce
+{
+	class OpenGLContext;
+	class OpenGLShaderProgram;
+}
 
 namespace Interface
 {
@@ -78,8 +84,8 @@ namespace Interface
 			return fragmentShaderIds_[shader];
 		}
 
-		juce::OpenGLShaderProgram *getShaderProgram(VertexShader vertex_shader, 
-		                                            FragmentShader fragment_shader, const GLchar **varyings = nullptr);
+		OpenGlShaderProgram *getShaderProgram(VertexShader vertexShader, 
+			FragmentShader fragmentShader, const GLchar **varyings = nullptr);
 
 	private:
 		static const char *getVertexShader(VertexShader shader);
@@ -90,10 +96,10 @@ namespace Interface
 		GLuint createFragmentShader(FragmentShader shader) const;
 
 		juce::OpenGLContext &openGlContext_;
-		std::array<GLuint, kVertexShaderCount> vertexShaderIds_{};
-		std::array<GLuint, kFragmentShaderCount> fragmentShaderIds_{};
+		std::map<int, OpenGlShaderProgram> shaderPrograms_;
 
-		std::map<int, std::unique_ptr<juce::OpenGLShaderProgram>> shaderPrograms_;
+		GLuint vertexShaderIds_[kVertexShaderCount]{};
+		GLuint fragmentShaderIds_[kFragmentShaderCount]{};
 	};
 
 	struct OpenGlWrapper

@@ -11,63 +11,72 @@
 #pragma once
 
 #include "Framework/simd_buffer.h"
+#include "OpenGlMultiQuad.h"
 #include "OpenGlLineRenderer.h"
 
 namespace Interface
 {
-	class Spectrogram : public OpenGlLineRenderer
+	class Spectrogram final : public OpenGlComponent
 	{
 	public:
 		static constexpr int kResolution = 400;
-		static constexpr float kDecayMult = 0.008f;
-		static constexpr int kBits = 14;
-		static constexpr int kAudioSize = 1 << kBits;
+		static constexpr float kDecayMult = 0.07f;
 		static constexpr float kDefaultMaxDb = 0.0f;
-		static constexpr float kDefaultMinDb = -80.0f;
+		static constexpr float kDefaultMinDb = -50.0f;
+		static constexpr float kDefaultMinFrequency = 9.2f;
 		static constexpr float kDefaultMaxFrequency = 21000.0f;
 		static constexpr float kDbSlopePerOctave = 3.0f;
 
-		Spectrogram();
+		Spectrogram(String name = "Spectrogram");
 		~Spectrogram() override;
 
-		void render(OpenGlWrapper &open_gl, bool animate) override;
+		void resized() override;
 		void paint(Graphics &g) override;
+		
+		void init(OpenGlWrapper &openGl) override;
+		void render(OpenGlWrapper &openGl, bool animate) override;
+		void destroy() override;
 
-
-		void paintBackgroundLines(bool paint) noexcept { paint_background_lines_ = paint; }
+		void paintBackgroundLines(bool paint) noexcept { shouldPaintBackgroundLines_ = paint; }
 		void setShouldDisplayPhases(bool shouldDisplayPhases) noexcept { shouldDisplayPhases_ = shouldDisplayPhases; }
 
-		void setMinFrequency(float frequency) noexcept { min_frequency_ = frequency; }
-		void setMaxFrequency(float frequency) noexcept { max_frequency_ = frequency; }
-		void setMinDb(float db) noexcept { min_db_ = db; }
-		void setMaxDb(float db) noexcept { max_db_ = db; }
-		void setSpectrumMemory(Framework::SimdBufferView<std::complex<float>, 
-			simd_float> memory) noexcept { bufferView_ = std::move(memory); }
-		void setScratchBuffer(Framework::SimdBuffer<std::complex<float>, 
-			simd_float> *scratchBuffer) noexcept { scratchBuffer_ = scratchBuffer; }
-		void setIsDataPolar(bool isDataPolar) noexcept { isDataPolar_ = isDataPolar; }
-
-		void renderCorners(OpenGlWrapper &openGl, bool animate, Colour color, float rounding);
+		void setMinFrequency(float frequency) noexcept { minFrequency_ = frequency; }
+		void setMaxFrequency(float frequency) noexcept { maxFrequency_ = frequency; }
+		void setMinDb(float db) noexcept { minDb_ = db; }
+		void setMaxDb(float db) noexcept { maxDb_ = db; }
+		void setDecayMultiplier(float decay) noexcept { decayMultiplier_ = decay; }
+		void setSlope(float slope) noexcept { dbSlope_ = slope; }
+		void setSpectrumData(Framework::SimdBufferView<std::complex<float>, 
+			simd_float> data, bool isDataPolar) noexcept 
+		{
+			bufferView_ = std::move(data);
+			isDataPolar_ = isDataPolar;
+		}
 
 	private:
-		void updateAmplitudes();
-		void setLineValues(OpenGlWrapper &open_gl);
+		bool updateAmplitudes(bool shouldDisplayPhases, float minFrequency, float maxFrequency, float dbSlope);
 
-		Framework::SimdBufferView<std::complex<float>, simd_float> bufferView_{};
-		Framework::SimdBuffer<std::complex<float>, simd_float> *scratchBuffer_ = nullptr;
-		bool isDataPolar_ = false;
+		std::vector<std::unique_ptr<OpenGlLineRenderer>> amplitudeRenderers_{};
+		std::vector<std::unique_ptr<OpenGlLineRenderer>> phaseRenderers_{};
+		OpenGlCorners corners_;
 
-		float nyquistFreq_ = kDefaultSampleRate / 2.0;
-		u32 effectiveFFTSize = 1 << (kDefaultFFTOrder - 1);
-		float min_frequency_ = kMinFrequency;
-		float max_frequency_ = kDefaultMaxFrequency;
-		float min_db_ = kDefaultMinDb;
-		float max_db_ = kDefaultMaxDb;
-		bool paint_background_lines_ = true;
-		bool shouldDisplayPhases_ = false;
-		/*float transform_buffer_[2 * kAudioSize]{};
-		float left_amps_[kAudioSize]{};
-		float right_amps_[kAudioSize]{};*/
+		Framework::SimdBuffer<std::complex<float>, simd_float> scratchBuffer_{ kNumChannels, 1 << kMaxFFTOrder };
+		Framework::SimdBuffer<std::complex<float>, simd_float> resultBuffer_{ kNumChannels, kResolution };
+		
+		shared_value_block<Framework::SimdBufferView<std::complex<float>, simd_float>> bufferView_{};
+		shared_value<bool> isDataPolar_ = false;
+
+		shared_value<float> minFrequency_ = kDefaultMinFrequency;
+		shared_value<float> maxFrequency_ = kDefaultMaxFrequency;
+		shared_value<float> minDb_ = kDefaultMinDb;
+		shared_value<float> maxDb_ = kDefaultMaxDb;
+		shared_value<bool> shouldDisplayPhases_ = false;
+		shared_value<bool> shouldPaintBackgroundLines_ = true;
+		shared_value<float> decayMultiplier_ = kDecayMult;
+		shared_value<float> dbSlope_ = kDbSlopePerOctave;
+
+		float nyquistFreq_ = kDefaultSampleRate * 0.5f;
+		u32 binCount_ = 1 << (kDefaultFFTOrder - 1);
 
 		JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(Spectrogram)
 	};

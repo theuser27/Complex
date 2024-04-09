@@ -11,9 +11,13 @@
 #pragma once
 
 #include <thread>
-#include "AppConfig.h"
-#include <juce_audio_basics/juce_audio_basics.h>
 #include "EffectModules.h"
+
+namespace juce
+{
+	template <typename Type>
+	class AudioBuffer;
+}
 
 namespace Generation
 {
@@ -22,8 +26,6 @@ namespace Generation
 	class EffectsLane final : public BaseProcessor
 	{
 	public:
-		DEFINE_CLASS_TYPE("{F260616E-CF7D-4099-A880-9C52CED263C1}")
-
 		EffectsLane() = delete;
 		EffectsLane(const EffectsLane &) = delete;
 		EffectsLane(EffectsLane &&) = delete;
@@ -41,8 +43,7 @@ namespace Generation
 		void initialise() noexcept override
 		{
 			BaseProcessor::initialise();
-			isFinished_.store(true, std::memory_order_release);
-			isStopped_.store(false, std::memory_order_release);
+			status_.store(LaneStatus::Finished, std::memory_order_release);
 			currentEffectIndex_.store(0, std::memory_order_release);
 		}
 
@@ -61,8 +62,7 @@ namespace Generation
 		[[nodiscard]] BaseProcessor *createCopy(std::optional<u64> parentModuleId) const noexcept override
 		{ return makeSubProcessor<EffectsLane>(*this, parentModuleId.value_or(parentProcessorId_)); }
 
-	protected:
-
+	private:
 		ComplexDataSource laneDataSource_{};
 		std::vector<EffectModule *> effectModules_{};
 
@@ -76,12 +76,13 @@ namespace Generation
 		simd_float inputVolume_, outputVolume_;
 		std::atomic<u32> currentEffectIndex_ = 0;
 
-		// has this lane been stopped temporarily?
-		std::atomic<bool> isStopped_ = false;
-		// has this lane finished all processing?
-		std::atomic<bool> isFinished_ = true;
-		// has a thread begun work on this lane?
-		std::atomic<bool> hasBegunProcessing_ = false;
+		// Finished - finished all processing
+		// Ready - ready for a thread to begin work
+		// Running - processing is running
+		// Stopped - temporarily stopped to wait for data from another lane
+		enum class LaneStatus : u32 { Finished, Ready, Running, Stopped };
+
+		std::atomic<LaneStatus> status_ = LaneStatus::Finished;
 
 		friend class EffectsState;
 	};
@@ -89,8 +90,6 @@ namespace Generation
 	class EffectsState final : public BaseProcessor
 	{
 	public:
-		DEFINE_CLASS_TYPE("{39B6A6C9-D33F-4AF0-BBDB-6C1F1960184F}")
-
 		// data link between modules in different lanes
 		struct EffectsModuleLink
 		{
@@ -109,25 +108,27 @@ namespace Generation
 
 		~EffectsState() noexcept override
 		{
-			for (auto &thread : laneThreads_)
-				thread.~jthread();
+			for (auto &thread : workerThreads_)
+				thread.thread.join();
+
 			BaseProcessor::~BaseProcessor();
 		}
+
+		void deserialiseFromJson(std::any jsonData);
 
 		// Inherited via BaseProcessor
 		bool insertSubProcessor(size_t index, BaseProcessor *newSubProcessor) noexcept override;
 		BaseProcessor *deleteSubProcessor(size_t index) noexcept override;
 		[[nodiscard]] BaseProcessor *createSubProcessor([[maybe_unused]] std::string_view type) const noexcept override
 		{
-			COMPLEX_ASSERT(type == EffectsLane::getClassType() &&
+			COMPLEX_ASSERT(type == Framework::BaseProcessors::EffectsLane::id().value() &&
 				"You're trying to create a subProcessor for EffectsState, that isn't EffectsLane");
 			return makeSubProcessor<EffectsLane>();
 		}
 
 		void writeInputData(const juce::AudioBuffer<float> &inputBuffer) noexcept;
 		void processLanes() noexcept;
-		void sumLanes() noexcept;
-		void writeOutputData(juce::AudioBuffer<float> &outputBuffer) const noexcept;
+		void sumLanesAndWriteOutput(juce::AudioBuffer<float> &outputBuffer) noexcept;
 
 		auto getUsedInputChannels() noexcept
 		{
@@ -163,7 +164,10 @@ namespace Generation
 			return usedOutputChannels;
 		}
 
-		size_t getNumChains() const noexcept { return lanes_.size(); }
+		auto getOutputBuffer(u32 channelCount, u32 beginChannel) const noexcept
+		{ return Framework::SimdBufferView{ outputBuffer_, beginChannel, channelCount }; }
+
+		size_t getLaneCount() const noexcept { return lanes_.size(); }
 		u32 getEffectiveFFTSize() const noexcept { return binCount_; }
 		float getSampleRate() const noexcept { return sampleRate_; }
 		auto *getEffectsLane(size_t index) const noexcept { return lanes_[index]; }
@@ -172,10 +176,23 @@ namespace Generation
 		void setSampleRate(float newSampleRate) noexcept { sampleRate_ = newSampleRate; }
 
 	private:
+		struct Thread
+		{
+			Thread(EffectsState &state);
+			Thread(Thread &&other) noexcept : thread(std::move(other.thread)), 
+				shouldStop(other.shouldStop.load(std::memory_order_relaxed)) { }
+			std::thread thread{};
+			std::atomic<bool> shouldStop = false;
+		};
+		friend struct Thread;
+		
 		BaseProcessor *createCopy([[maybe_unused]] std::optional<u64> parentModuleId) const noexcept override
 		{ COMPLEX_ASSERT_FALSE("You're trying to copy EffectsState, which is not meant to be copied"); return nullptr; }
 
-		void processIndividualLanes(std::stop_token stoken, size_t chainIndex) const noexcept;
+		void checkUsage();
+		
+		void distributeWork() const noexcept;
+		void processIndividualLanes(size_t laneIndex) const noexcept;
 
 		std::vector<EffectsLane *> lanes_{};
 
@@ -187,9 +204,9 @@ namespace Generation
 		std::array<bool, kNumInputsOutputs> usedInputs_{};
 		std::array<bool, kNumInputsOutputs> usedOutputs_{};
 
-		std::vector<std::jthread> laneThreads_{};
+		Framework::SimdBuffer<std::complex<float>, simd_float> outputBuffer_{};
 
-		size_t waitIterations_ = 10;
+		std::vector<Thread> workerThreads_{};
 
 		static constexpr u32 kLaneInputMask = kSignMask;
 		static constexpr u32 kDefaultOutput = (u32)(-1);

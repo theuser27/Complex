@@ -1357,7 +1357,7 @@ namespace Interface
       i.getCharPosition(range.getStart(), anchor, lh);
 
       auto y1 = std::trunc(anchor.y);
-      int y2 = 0;
+      int y2;
 
       if (range.getEnd() >= getTotalNumChars())
       {

@@ -118,7 +118,6 @@ namespace Interface
 
 	private:
 		// TODO: finish spectrogram and expanding behaviour
-		Spectrogram spectrogram_{};
 		EmptySlider shiftBounds_;
 		SpectralMaskListener *listener_ = nullptr;
 		bool isExpanded_ = false;
@@ -185,7 +184,7 @@ namespace Interface
 
 	std::unique_ptr<EffectModuleSection> EffectModuleSection::createCopy() const
 	{
-		auto copiedModule = utils::as<Generation::EffectModule *>(effectModule_
+		auto copiedModule = utils::as<Generation::EffectModule>(effectModule_
 			->getProcessorTree()->copyProcessor(effectModule_));
 		return std::make_unique<EffectModuleSection>(copiedModule, laneSection_);
 	}
@@ -364,7 +363,7 @@ namespace Interface
 		}
 	}
 
-	void EffectModuleSection::automationMappingChanged([[maybe_unused]] BaseSlider *slider)
+	void EffectModuleSection::automationMappingChanged(BaseSlider *slider)
 	{
 		auto controlIter = std::ranges::find_if(effectControls_, [&](auto &&control) { return control.get() == slider; });
 		if (effectControls_.end() == controlIter)
@@ -378,13 +377,14 @@ namespace Interface
 			parameterMappings.erase(parameterIter);
 	}
 
+	Generation::baseEffect *EffectModuleSection::getEffect() noexcept { return effectModule_->getEffect(); }
 	u64 EffectModuleSection::getAlgorithm() const noexcept { return (u64)effectAlgoSelector_->getValueSafeScaled(); }
 
 	BaseControl *EffectModuleSection::getEffectControl(std::string_view name)
 	{
 		using namespace Framework;
 
-		static constexpr auto baseEffectIds = BaseProcessors::BaseEffect::enum_strings<nested_enum::OuterNodes>();
+		static constexpr auto baseEffectIds = BaseProcessors::BaseEffect::enum_names<nested_enum::OuterNodes>();
 		if (std::ranges::find(baseEffectIds, name) != baseEffectIds.end())
 		{
 			if (name == BaseProcessors::BaseEffect::Algorithm::name())
@@ -394,7 +394,7 @@ namespace Interface
 		}
 
 		for (auto &control : effectControls_)
-			if (control->getParameterDetails().name == name)
+			if (control->getParameterDetails().pluginName == name)
 				return control.get();
 
 		COMPLEX_ASSERT_FALSE("Parameter could not be found");
@@ -439,8 +439,8 @@ namespace Interface
 		Generation::baseEffect *newEffect = cachedEffects_[effectIndex];
 		if (!newEffect)
 		{
-			newEffect = utils::as<Generation::baseEffect *>(effectModule_
-				->createSubProcessor(Generation::effectsTypes[effectIndex]));
+			newEffect = utils::as<Generation::baseEffect>(effectModule_
+				->createSubProcessor(BaseProcessors::BaseEffect::enum_ids<nested_enum::InnerNodes>()[effectIndex].value()));
 			cachedEffects_[effectIndex] = newEffect;
 		}
 
@@ -476,7 +476,7 @@ namespace Interface
 		}
 		
 		// replacing the parameters for algorithm and mask sliders
-		for (std::string_view value : BaseProcessors::BaseEffect::enum_strings<nested_enum::OuterNodes>())
+		for (std::string_view value : BaseProcessors::BaseEffect::enum_names<nested_enum::OuterNodes>())
 		{
 			auto *control = getEffectControl(value);
 			control->changeLinkedParameter(*newEffect->getParameter(value), value == BaseProcessors::BaseEffect::Algorithm::name());
@@ -652,19 +652,89 @@ namespace Interface
 				break;
 			}
 		}
+
+		void initPhaseParameters(std::vector<std::unique_ptr<BaseControl>> &effectSliders, EffectModuleSection *section)
+		{
+			using namespace Framework;
+
+			auto *baseEffect = section->getEffect();
+
+			auto initShift = [&]()
+			{
+				effectSliders.reserve(BaseProcessors::BaseEffect::Phase::Shift::enum_count(nested_enum::OuterNodes));
+				effectSliders.emplace_back(std::make_unique<RotarySlider>
+					(baseEffect->getParameter(BaseProcessors::BaseEffect::Phase::Shift::PhaseShift::name())));
+				effectSliders.emplace_back(std::make_unique<RotarySlider>
+					(baseEffect->getParameter(BaseProcessors::BaseEffect::Phase::Shift::Interval::name())));
+				effectSliders.emplace_back(std::make_unique<RotarySlider>
+					(baseEffect->getParameter(BaseProcessors::BaseEffect::Phase::Shift::Offset::name())));
+			};
+
+			switch (section->getAlgorithm())
+			{
+			case BaseProcessors::BaseEffect::Phase::Shift:
+				initShift();
+				break;
+			default:
+			case BaseProcessors::BaseEffect::Phase::Transform:
+				break;
+			}
+		}
+
+		void arrangePhaseUI(EffectModuleSection *section, Rectangle<int> bounds)
+		{
+			using namespace Framework;
+
+			auto arrangeNormal = [&]()
+			{
+				int knobEdgeOffset = section->scaleValueRoundInt(32);
+				int knobTopOffset = section->scaleValueRoundInt(32);
+
+				int knobsHeight = section->scaleValueRoundInt(RotarySlider::kDefaultWidthHeight);
+
+				bounds = bounds.withTrimmedLeft(knobEdgeOffset).withTrimmedRight(knobEdgeOffset)
+					.withTrimmedTop(knobTopOffset).withHeight(knobsHeight);
+				int rotaryInterval = (int)std::round((float)bounds.getWidth() / 3.0f);
+
+				// gain rotary
+				auto *gainSlider = section->getEffectControl(BaseProcessors::BaseEffect::Phase::Shift::PhaseShift::name());
+				std::ignore = gainSlider->setBoundsForSizes(knobsHeight);
+				gainSlider->setPosition({ bounds.getX(), bounds.getY() });
+
+				// cutoff rotary
+				auto *cutoffSlider = section->getEffectControl(BaseProcessors::BaseEffect::Phase::Shift::Interval::name());
+				std::ignore = cutoffSlider->setBoundsForSizes(knobsHeight);
+				cutoffSlider->setPosition({ bounds.getX() + rotaryInterval, bounds.getY() });
+
+				// slope rotary
+				auto *slopeSlider = section->getEffectControl(BaseProcessors::BaseEffect::Phase::Shift::Offset::name());
+				std::ignore = slopeSlider->setBoundsForSizes(knobsHeight);
+				slopeSlider->setPosition({ bounds.getX() + 2 * rotaryInterval, bounds.getY() });
+			};
+
+			switch (section->getAlgorithm())
+			{
+			case BaseProcessors::BaseEffect::Phase::Shift:
+				arrangeNormal();
+				break;
+			default:
+			case BaseProcessors::BaseEffect::Phase::Transform:
+				break;
+			}
+		}
 	}
 
 	void EffectModuleSection::setEffectType(std::string_view type)
 	{
-		using namespace Generation;
+		using namespace Framework;
 
 		paintBackgroundFunction_ = nullptr;
 
-		if (type == utilityEffect::getClassType())
+		if (type == BaseProcessors::BaseEffect::Utility::id().value())
 		{
 			
 		}
-		else if (type == filterEffect::getClassType())
+		else if (type == BaseProcessors::BaseEffect::Filter::id().value())
 		{
 			initialiseParametersFunction_ = initFilterParameters;
 			arrangeUIFunction_ = arrangeFilterUI;
@@ -673,32 +743,37 @@ namespace Interface
 			maskComponent_->setSkinOverride(Skin::kFilterModule);
 			effectTypeIcon_->setShapes(Paths::filterIcon());
 		}
-		else if (type == dynamicsEffect::getClassType())
+		else if (type == BaseProcessors::BaseEffect::Dynamics::id().value())
 		{
 			initialiseParametersFunction_ = initDynamicsParameters;
 			arrangeUIFunction_ = arrangeDynamicsUI;
 
 			setSkinOverride(Skin::kDynamicsModule);
 			maskComponent_->setSkinOverride(Skin::kDynamicsModule);
-			effectTypeIcon_->setShapes(Paths::contrastIcon());
+			effectTypeIcon_->setShapes(Paths::dynamicsIcon());
 		}
-		else if (type == phaseEffect::getClassType())
+		else if (type == BaseProcessors::BaseEffect::Phase::id().value())
+		{
+			initialiseParametersFunction_ = initPhaseParameters;
+			arrangeUIFunction_ = arrangePhaseUI;
+
+			setSkinOverride(Skin::kPhaseModule);
+			maskComponent_->setSkinOverride(Skin::kPhaseModule);
+			effectTypeIcon_->setShapes(Paths::phaseIcon());
+		}
+		else if (type == BaseProcessors::BaseEffect::Pitch::id().value())
 		{
 			
 		}
-		else if (type == pitchEffect::getClassType())
+		else if (type == BaseProcessors::BaseEffect::Stretch::id().value())
 		{
 			
 		}
-		else if (type == stretchEffect::getClassType())
+		else if (type == BaseProcessors::BaseEffect::Warp::id().value())
 		{
 			
 		}
-		else if (type == warpEffect::getClassType())
-		{
-			
-		}
-		else if (type == destroyEffect::getClassType())
+		else if (type == BaseProcessors::BaseEffect::Destroy::id().value())
 		{
 			
 		}

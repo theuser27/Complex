@@ -10,6 +10,7 @@
 
 #pragma once
 
+#include <cmath>
 #include "matrix.h"
 
 namespace utils
@@ -70,7 +71,7 @@ namespace utils
 	{ return simd_int::notEqual(left, right).sum() == 0; }
 
 	// 0s for loading values from one, 1s for loading values from two
-	template<CommonConcepts::SimdValue SIMD>
+	template<SimdValue SIMD>
 	strict_inline SIMD vector_call maskLoad(SIMD zeroValue, SIMD oneValue, simd_mask mask) noexcept
 	{
 		SIMD oldValues = zeroValue & ~mask;
@@ -131,11 +132,58 @@ namespace utils
 	strict_inline simd_float vector_call getDecimalPlaces(simd_float value) noexcept
 	{ return value - simd_float::floor(value); }
 
-	strict_inline simd_float modOnce(simd_float value, simd_float mod) noexcept
+	strict_inline simd_mask vector_call getSign(simd_int value) noexcept
 	{
-		simd_mask lessMask = simd_float::lessThanOrEqual(value, mod);
+		static const simd_mask signMask = kSignMask;
+		return value & signMask;
+	}
+
+	strict_inline simd_mask vector_call getSign(simd_float value) noexcept
+	{
+		static const simd_mask signMask = kSignMask;
+		return reinterpretToInt(value) & signMask;
+	}
+
+	// conditionally unsigns ints if they are negative and returns full mask where values are negative
+	strict_inline simd_mask vector_call unsignSimd(simd_int &value, bool returnFullMask = false) noexcept
+	{
+		static const simd_mask signMask = kSignMask;
+		simd_mask mask = simd_mask::equal(value & signMask, signMask);
+		value = maskLoad(value, ~value - 1, mask);
+		return (returnFullMask) ? simd_mask::equal(mask, signMask) : mask;
+	}
+
+	// conditionally unsigns floats if they are negative and returns full mask where values are negative
+	strict_inline simd_mask vector_call unsignSimd(simd_float &value, bool returnFullMask = false) noexcept
+	{
+		static const simd_mask signMask = kSignMask;
+		simd_mask mask = reinterpretToInt(value) & signMask;
+		value ^= mask;
+		return (returnFullMask) ? simd_mask::equal(mask, signMask) : mask;
+	}
+
+	strict_inline simd_float modOnceUnsigned(simd_float value, simd_float mod) noexcept
+	{
+		simd_mask lessMask = simd_float::lessThan(value, mod);
 		simd_float lower = value - mod;
 		return maskLoad(lower, value, lessMask);
+	}
+
+	strict_inline simd_float modOnceSigned(simd_float value, simd_float mod) noexcept
+	{
+		simd_mask signMask = unsignSimd(value);
+		simd_mask lessMask = simd_float::lessThan(value, mod);
+		simd_float lower = value - mod * 2.0f;
+		return maskLoad(lower, value, lessMask) ^ signMask;
+	}
+
+	strict_inline simd_float reciprocal(simd_float value) noexcept
+	{
+	#if COMPLEX_SSE4_1
+		return _mm_rcp_ps(value.value);
+	#elif COMPLEX_NEON
+		return vrecpeq_f32(values.value);
+	#endif
 	}
 
 	template<size_t shift>
@@ -354,36 +402,6 @@ namespace utils
 		float numerator = exp(power * value) - 1.0f;
 		float denominator = exp(power) - 1.0f;
 		return numerator / denominator;
-	}
-
-	strict_inline simd_mask vector_call getSign(simd_int value) noexcept
-	{
-		static const simd_mask signMask = kSignMask;
-		return value & signMask;
-	}
-
-	strict_inline simd_mask vector_call getSign(simd_float value) noexcept
-	{
-		static const simd_mask signMask = kSignMask;
-		return reinterpretToInt(value) & signMask;
-	}
-
-	// conditionally unsigns ints if they are negative and returns full mask where values are negative
-	strict_inline simd_mask vector_call unsignSimd(simd_int &value, bool returnFullMask = false) noexcept
-	{
-		static const simd_mask signMask = kSignMask;
-		simd_mask mask = simd_mask::equal(value & signMask, signMask);
-		value = maskLoad(value, ~value - 1, mask);
-		return (returnFullMask) ? simd_mask::equal(mask, signMask) : mask;
-	}
-
-	// conditionally unsigns floats if they are negative and returns full mask where values are negative
-	strict_inline simd_mask vector_call unsignSimd(simd_float &value, bool returnFullMask = false) noexcept
-	{
-		static const simd_mask signMask = kSignMask;
-		simd_mask mask = reinterpretToInt(value) & signMask;
-		value ^= mask;
-		return (returnFullMask) ? simd_mask::equal(mask, signMask) : mask;
 	}
 
 	strict_inline simd_float vector_call getStereoDifference(simd_float value) noexcept

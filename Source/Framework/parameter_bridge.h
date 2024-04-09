@@ -12,7 +12,7 @@
 
 #include "AppConfig.h"
 #include <juce_audio_processors/juce_audio_processors.h>
-#include "parameter_value.h"
+#include "platform_definitions.h"
 
 namespace Plugin
 {
@@ -21,6 +21,8 @@ namespace Plugin
 
 namespace Framework
 {
+	struct ParameterLink;
+
 	class ParameterBridge final : public juce::AudioProcessorParameter
 	{
 		static constexpr float kDefaultParameterValue = 0.5f;
@@ -32,7 +34,7 @@ namespace Framework
 		ParameterBridge &operator=(ParameterBridge &&) = delete;
 
 		ParameterBridge(Plugin::ComplexPlugin *plugin,
-			u32 parameterIndex = (u32)-1, ParameterLink *link = nullptr) noexcept;
+			u64 parameterIndex = UINT64_MAX, ParameterLink *link = nullptr) noexcept;
 
 		auto *getParameterLink() const noexcept { return parameterLinkPointer_.load(std::memory_order_acquire); }
 		void resetParameterLink(ParameterLink *link, bool getValueFromParameter = true) noexcept;
@@ -45,17 +47,9 @@ namespace Framework
 
 		void updateUIParameter() noexcept;
 
-		void setCustomName(const juce::String &name)
-		{
-			utils::ScopedSpinLock guard{ name_.first };
+		void setCustomName(const juce::String &name);
 
-			auto index = name_.second.indexOfChar(0, ' ');
-			index = (index < 0) ? name_.second.length() : index;
-			name_.second = juce::String(name_.second.begin(), index);
-
-			name_.second += name;
-		}
-
+		u64 getIndex() const noexcept { return parameterIndex_; }
 		bool isMappedToParameter() const noexcept { return parameterLinkPointer_.load(std::memory_order_acquire); }
 
 		// Inherited via AudioProcessorParameter
@@ -74,6 +68,7 @@ namespace Framework
 		bool isBoolean() const override;
 
 	private:
+		u64 parameterIndex_ = UINT64_MAX;
 		std::pair<std::atomic<bool>, juce::String> name_{};
 		std::atomic<float> value_ = kDefaultParameterValue;
 		std::atomic<bool> wasValueChanged_ = false;

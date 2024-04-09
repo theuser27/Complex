@@ -9,6 +9,7 @@
 */
 
 #include "Shaders.h"
+#include <juce_opengl/juce_opengl.h>
 #include "Framework/platform_definitions.h"
 
 namespace
@@ -528,11 +529,8 @@ namespace
 		"varying " MEDIUMP " float depth_out;\n"
 		"void main() {\n"
 		"    " MEDIUMP " float dist_from_edge = min(depth_out, 1.0 - depth_out);\n"
-		"    " MEDIUMP " float mult = 1.0 + boost * max(dist_from_edge - 2.0 / line_width, 0.0);\n"
-		"    " MEDIUMP " vec4 result = mult * color;\n"
 		"    " MEDIUMP " float scale = line_width * dist_from_edge;\n"
-		"    result.a = result.a * scale / 2.0;\n"
-		"    gl_FragColor = result;\n"
+		"    gl_FragColor = vec4(color.xyz, color.a * scale * 0.5);\n"
 		"}\n";
 
 	const char *kFillFragmentShader =
@@ -548,13 +546,12 @@ namespace
 		"}\n";
 
 	const char *kLineVertexShader =
-		"attribute " MEDIUMP " vec4 position;\n"
+		"attribute " MEDIUMP " vec3 position;\n"
 		"uniform " MEDIUMP " vec2 scale;\n"
-		"out " MEDIUMP " float depth_out;\n"
+		"varying " MEDIUMP " float depth_out;\n"
 		"\n"
 		"void main() {\n"
 		"    depth_out = position.z;\n"
-		"    gl_Position = position;\n"
 		"    gl_Position.x = position.x * scale.x;\n"
 		"    gl_Position.y = position.y * scale.y;\n"
 		"    gl_Position.z = 0.0;\n"
@@ -562,17 +559,16 @@ namespace
 		"}\n";
 
 	const char *kFillVertexShader =
-		"attribute " MEDIUMP " vec4 position;\n"
+		"attribute " MEDIUMP " vec3 position;\n"
 		"uniform " MEDIUMP " vec2 scale;\n"
 		"uniform " MEDIUMP " float center_position;\n"
 		"uniform " MEDIUMP " float boost_amount;\n"
-		"out " MEDIUMP " float distance;\n"
-		"out " MEDIUMP " float boost;\n"
+		"varying " MEDIUMP " float distance;\n"
+		"varying " MEDIUMP " float boost;\n"
 		"\n"
 		"void main() {\n"
 		"    distance = (position.y - center_position) / (1.0 - center_position);\n"
 		"    boost = boost_amount * position.z;\n"
-		"    gl_Position = position;\n"
 		"    gl_Position.x = gl_Position.x * scale.x;\n"
 		"    gl_Position.y = gl_Position.y * scale.y;\n"
 		"    gl_Position.z = 0.0;\n"
@@ -656,20 +652,20 @@ namespace Interface
 {
 	using namespace juce::gl;
 
-	juce::OpenGLShaderProgram *Shaders::getShaderProgram(VertexShader vertex_shader,
-		FragmentShader fragment_shader, const GLchar **varyings)
+	OpenGlShaderProgram *Shaders::getShaderProgram(VertexShader vertexShader,
+		FragmentShader fragmentShader, const GLchar **varyings)
 	{
-		int shaderProgramIndex = vertex_shader * (int)kFragmentShaderCount + fragment_shader;
+		int shaderProgramIndex = vertexShader * (int)kFragmentShaderCount + fragmentShader;
 		if (shaderPrograms_.contains(shaderProgramIndex))
-			return shaderPrograms_.at(shaderProgramIndex).get();
+			return &shaderPrograms_.at(shaderProgramIndex);
 
-		shaderPrograms_[shaderProgramIndex] = std::make_unique<juce::OpenGLShaderProgram>(openGlContext_);
-		juce::OpenGLShaderProgram *result = shaderPrograms_[shaderProgramIndex].get();
-		GLuint program_id = result->getProgramID();
-		glAttachShader(program_id, getVertexShaderId(vertex_shader));
-		glAttachShader(program_id, getFragmentShaderId(fragment_shader));
+		auto [iterator, _] = shaderPrograms_.emplace(shaderProgramIndex, OpenGlShaderProgram(openGlContext_));
+		OpenGlShaderProgram *result = &iterator->second;
+		GLuint programId = result->getProgramID();
+		glAttachShader(programId, getVertexShaderId(vertexShader));
+		glAttachShader(programId, getFragmentShaderId(fragmentShader));
 		if (varyings)
-			glTransformFeedbackVaryings(program_id, 1, varyings, GL_INTERLEAVED_ATTRIBS);
+			glTransformFeedbackVaryings(programId, 1, varyings, GL_INTERLEAVED_ATTRIBS);
 
 		result->link();
 		return result;

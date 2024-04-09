@@ -37,14 +37,14 @@ namespace Interface
 		EffectsStateSection(Generation::EffectsState &state);
 		~EffectsStateSection() override;
 
-		void mouseWheelMove(const MouseEvent &e, const MouseWheelDetails &wheel) override;
+		void mouseWheelMove(const juce::MouseEvent &e, const juce::MouseWheelDetails &wheel) override;
 
 		void resized() override;
 
 		// Inherited via DraggableComponent::Listener
-		void prepareToMove(EffectModuleSection *effectModule, const MouseEvent &e, bool isCopying = false) override;
-		void draggingComponent(EffectModuleSection *effectModule, const MouseEvent &e) override;
-		void releaseComponent(EffectModuleSection *effectModule, const MouseEvent &e) override;
+		void prepareToMove(EffectModuleSection *effectModule, const juce::MouseEvent &e, bool isCopying = false) override;
+		void draggingComponent(EffectModuleSection *effectModule, const juce::MouseEvent &e) override;
+		void releaseComponent(EffectModuleSection *effectModule, const juce::MouseEvent &e) override;
 
 		void createLane(EffectsLaneSection *laneToCopy = nullptr);
 		void deleteLane(EffectsLaneSection *laneToDelete);
@@ -61,7 +61,7 @@ namespace Interface
 		EffectModuleSection *currentlyMovedModule_ = nullptr;
 		std::pair<size_t, size_t> dragStartIndices_{};
 		std::pair<size_t, size_t> dragEndIndices_{};
-		Point<int> movedModulePosition_{};
+		juce::Point<int> movedModulePosition_{};
 		bool isCopyingModule_ = false;
 
 		Generation::EffectsState &state_;
