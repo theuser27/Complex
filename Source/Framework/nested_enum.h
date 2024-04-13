@@ -8,10 +8,10 @@
 #include <cstdint>
 #include <cassert>
 #include <type_traits>
+#include <utility>
 #include <array>
 #include <string_view>
 #include <optional>
-#include <functional>
 #include <tuple>
 
 #ifndef NESTED_ENUM_DEFAULT_ENUM_TYPE
@@ -164,26 +164,13 @@ namespace nested_enum
       return[]<std::size_t ... Indices>(Callable &&callable, Tuple &&tuple, std::index_sequence<Indices...>) -> decltype(auto)
       {
         if constexpr (std::is_same_v<std::invoke_result_t<Callable, std::tuple_element_t<0, std::remove_cvref_t<Tuple>>>, void>)
-          (std::invoke(std::forward<Callable>(callable), std::get<Indices>(std::forward<Tuple>(tuple))), ...);
+          (callable(std::get<Indices>(std::forward<Tuple>(tuple))), ...);
         else if constexpr (attemptToReturnArray)
-          return std::array{ std::invoke(std::forward<Callable>(callable), std::get<Indices>(std::forward<Tuple>(tuple)))... };
+          return std::array{ callable(std::get<Indices>(std::forward<Tuple>(tuple)))... };
         else
-          return std::make_tuple(std::invoke(std::forward<Callable>(callable), std::get<Indices>(std::forward<Tuple>(tuple)))...);
+          return std::make_tuple(callable(std::get<Indices>(std::forward<Tuple>(tuple)))...);
       }(std::forward<Callable>(callable), std::forward<Tuple>(tuple),
         std::make_index_sequence<get_tuple_size<decltype(tuple)>()>{});
-    }
-
-    // callable must be a functor
-    template <auto TupleLike, bool attemptToReturnArray = true, class Callable>
-    constexpr decltype(auto) apply_one(Callable &&callable)
-    {
-      return[]<std::size_t ... Indices>(Callable &&callable, std::index_sequence<Indices...>) -> decltype(auto)
-      {
-        if constexpr (attemptToReturnArray)
-          return std::array{ callable.template operator()<std::get<Indices>(TupleLike)>()... };
-        else
-          return std::make_tuple(callable.template operator()<std::get<Indices>(TupleLike)>()...);
-      }(std::forward<Callable>(callable), std::make_index_sequence<get_tuple_size<decltype(TupleLike)>()>{});
     }
 
     template <auto Predicate, auto &TupleLike>
@@ -1295,7 +1282,7 @@ namespace nested_enum
   template<class E>
   concept NestedEnum = detail::DerivedOrIs<E, nested_enum<E>>;
 
-  // helper function for iterating over types, intended to be used with enum_subtypes()
+  // helper function for doing recursive iteration over types with enum_subtypes()
   // it is intended for expanding branches without needing to write them manually
   // 1st template parameter is the lambda itself and consequent template parameters are the deduced types
   // Example:
@@ -1303,7 +1290,7 @@ namespace nested_enum
   // template<nested_enum::NestedEnum T>
   // void do_thing(T value)
   // {
-  //   nested_enum::iterate_over_types<[]<auto Self, typename U, typename ... Us>(T value)
+  //   nested_enum::recurse_over_types<[]<auto Self, typename U, typename ... Us>(T value)
   //     {
   //       if constexpr (std::is_same_v<decltype(U::value()), T>)
   //         if (U::value() == value)
@@ -1319,8 +1306,10 @@ namespace nested_enum
   //     }>(SomeEnum::enum_subtypes(), value);
   // }
   //
+  // keep in mind that as of C++20 only captureless lambdas can be used as non-type template parameters
+  // any extra parameters can be passed in as a parameter pack
   template<auto Lambda, typename ... Ts, typename ... Args>
-  constexpr auto iterate_over_types(const std::tuple<std::type_identity<Ts>...> &, Args&& ... args)
+  constexpr auto recurse_over_types(const std::tuple<std::type_identity<Ts>...> &, Args&& ... args)
   {
     return Lambda.template operator()<Lambda, Ts...>(std::forward<Args>(args)...);
   }

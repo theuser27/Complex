@@ -11,11 +11,12 @@
 #include "Generation/SoundEngine.h"
 #include "PluginProcessor.h"
 #include "PluginEditor.h"
+#include "Renderer.h"
 
 //==============================================================================
-ComplexAudioProcessor::ComplexAudioProcessor()
-		 : AudioProcessor (BusesProperties().withInput("Input", juce::AudioChannelSet::stereo(), true)
-																				.withOutput("Output", juce::AudioChannelSet::stereo(), true))
+ComplexAudioProcessor::ComplexAudioProcessor() :
+	AudioProcessor (BusesProperties().withInput("Input", juce::AudioChannelSet::stereo(), true)
+																	 .withOutput("Output", juce::AudioChannelSet::stereo(), true))
 
 {
 	using namespace Framework;
@@ -102,16 +103,14 @@ void ComplexAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, [[ma
 	auto inputs = getTotalNumInputChannels();
 	auto outputs = getTotalNumOutputChannels();
 	auto numSamples = buffer.getNumSamples();
-	//DBG(numSamples);
 
-	//CheckGlobalParameters();
 	auto sampleRate = ComplexPlugin::getSampleRate();
-	updateParameters(Framework::UpdateFlag::BeforeProcess, sampleRate);
+	updateParameters(UpdateFlag::BeforeProcess, sampleRate);
 	setLatencySamples((int)getProcessingDelay());
 
 	Process(buffer, (u32)numSamples, sampleRate, (u32)inputs, (u32)outputs);
 
-	updateParameters(Framework::UpdateFlag::AfterProcess, sampleRate);
+	updateParameters(UpdateFlag::AfterProcess, sampleRate);
 }
 
 //==============================================================================

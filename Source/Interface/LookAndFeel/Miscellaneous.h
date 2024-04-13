@@ -19,6 +19,20 @@ namespace juce
 	class String;
 }
 
+namespace Generation
+{
+	class BaseProcessor;
+	class BaseProcessorListener
+	{
+	public:
+		virtual ~BaseProcessorListener() = default;
+		virtual void insertedSubProcessor([[maybe_unused]] size_t index, [[maybe_unused]] BaseProcessor *newSubProcessor) { }
+		virtual void deletedSubProcessor([[maybe_unused]] size_t index, [[maybe_unused]] BaseProcessor *deletedSubProcessor) { }
+		virtual void updatedSubProcessor([[maybe_unused]] size_t index, [[maybe_unused]] BaseProcessor *oldSubProcessor,
+			[[maybe_unused]] BaseProcessor *newSubProcessor) { }
+	};
+}
+
 namespace Interface
 {
 	class BaseSlider;

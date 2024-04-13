@@ -8,14 +8,15 @@
 	==============================================================================
 */
 
-#include "Framework/constexpr_utils.h"
-#include "Framework/spectral_support_functions.h"
 #include "EffectModules.h"
-#include "../Plugin/ProcessorTree.h"
+
+#include <algorithm>
+#include "Framework/spectral_support_functions.h"
+#include "Framework/parameter_value.h"
 
 namespace Generation
 {
-	template<nested_enum::NestedEnum Type>
+	template<typename Type>
 	void fillAndSetParameters(baseEffect &effect)
 	{
 		using namespace Framework;
@@ -25,11 +26,15 @@ namespace Generation
 		details.stringLookup = Parameters::getEffectModesStrings(Type::value());
 		parameter->setParameterDetails(details);
 
-		utils::applyToEach([&effect]<typename T>(std::type_identity<T> &&)
+		nested_enum::recurse_over_types<[]<auto Self, typename ... Ts>(baseEffect &effect)
 			{
-				effect.createProcessorParameters(T::template enum_names<nested_enum::OuterNodes>());
-			}, Type::template enum_subtypes<nested_enum::InnerNodes>());
+				(effect.createProcessorParameters(Ts::template enum_names<nested_enum::OuterNodes>()), ...);
+			}>(Type::template enum_subtypes<nested_enum::InnerNodes>(), effect);
 	}
+
+	template<nested_enum::NestedEnum E>
+	E getEffectAlgorithm(baseEffect &effect)
+	{ return E::make_enum(effect.getParameter(Framework::BaseProcessors::BaseEffect::Algorithm::name())->getInternalValue<u32>()).value(); }
 
 	///////////////////////////////////////////////
 	///////////////////////////////////////////////
@@ -188,28 +193,37 @@ namespace Generation
 		return { 0, binCount };
 	}
 
-	void baseEffect::copyUnprocessedData(Framework::SimdBufferView<std::complex<float>, simd_float> source,
-		Framework::SimdBuffer<std::complex<float>, simd_float> &destination, simd_int lowBoundIndices,
+	void baseEffect::copyUnprocessedData(Framework::SimdBufferView<Framework::complex<float>, simd_float> source,
+		Framework::SimdBuffer<Framework::complex<float>, simd_float> &destination, simd_int lowBoundIndices,
 		simd_int highBoundIndices, u32 binCount) noexcept
 	{
 		auto [index, numBins] = minimiseRange(lowBoundIndices, highBoundIndices, binCount, false);
 
+		u32 channels = std::min(source.getChannels(), destination.getChannels());
+
 		// this is not possible, so we'll take it to mean that we have stereo bounds
 		if (index == 0 && numBins == binCount)
 		{
-			for (; index < numBins; index++)
+			for (u32 i = 0; i < channels; i += source.getRelativeSize())
 			{
-				destination.writeSimdValueAt(utils::maskLoad(destination.readSimdValueAt(0, index),
-					source.readSimdValueAt(0, index), isOutsideBounds(index, lowBoundIndices, highBoundIndices)), 0, index);
+				index = 0;
+				for (; index < numBins; ++index)
+				{
+					destination.writeSimdValueAt(utils::maskLoad(destination.readSimdValueAt(i, index), source.readSimdValueAt(i, index),
+						isOutsideBounds(index, lowBoundIndices, highBoundIndices)), i, index);
+				}
 			}
 		}
 		// mono bounds
 		else
 		{
-			for (u32 i = 0; i < numBins; i++)
+			for (u32 i = 0; i < channels; i += source.getRelativeSize())
 			{
-				destination.writeSimdValueAt(source.readSimdValueAt(0, index), 0, index);
-				index = (index + 1) & (binCount - 1);
+				for (u32 j = 0; j < numBins; j++)
+				{
+					destination.writeSimdValueAt(source.readSimdValueAt(i, index), i, index);
+					index = (index + 1) & (binCount - 1);
+				}
 			}
 		}
 	}
@@ -278,12 +292,12 @@ namespace Generation
 
 	//// Guidelines
 	// 
-	// 1. When dealing with dc or nyquist it's best to have a small section after your main algorithm to process them.
-	//    Other attempts at reasoning with them are either impossible, very time consuming and/or of questionable efficiency.
+	// 1. When dealing with dc or nyquist it's best to have a small section after your main algorithm to process them separately.
+	//    Other attempts at dealing with them are either impossible, very time consuming and/or of questionable efficiency.
 	// 2. Whenever in doubt, look at other algorithm implementations for ideas
 
-	perf_inline void filterEffect::runNormal(Framework::SimdBufferView<std::complex<float>, simd_float> &source,
-		Framework::SimdBuffer<std::complex<float>, simd_float> &destination, u32 binCount, float sampleRate) const noexcept
+	perf_inline void filterEffect::runNormal(Framework::SimdBufferView<Framework::complex<float>, simd_float> &source,
+		Framework::SimdBuffer<Framework::complex<float>, simd_float> &destination, u32 binCount, float sampleRate) const noexcept
 	{
 		using namespace utils;
 		using namespace Framework;
@@ -347,8 +361,8 @@ namespace Generation
 		copyUnprocessedData(source, destination, lowBoundIndices, highBoundIndices, binCount);
 	}
 
-	void filterEffect::runPhase(Framework::SimdBufferView<std::complex<float>, simd_float> &source,
-		Framework::SimdBuffer<std::complex<float>, simd_float> &destination, u32 binCount, float sampleRate) const noexcept
+	void filterEffect::runPhase(Framework::SimdBufferView<Framework::complex<float>, simd_float> &source,
+		Framework::SimdBuffer<Framework::complex<float>, simd_float> &destination, u32 binCount, float sampleRate) const noexcept
 	{
 		using namespace utils;
 		using namespace Framework;
@@ -385,11 +399,11 @@ namespace Generation
 		}
 	}
 
-	void filterEffect::run(Framework::SimdBufferView<std::complex<float>, simd_float> &source,
-	                       Framework::SimdBuffer<std::complex<float>, simd_float> &destination, u32 binCount, float sampleRate) noexcept
+	void filterEffect::run(Framework::SimdBufferView<Framework::complex<float>, simd_float> &source,
+		Framework::SimdBuffer<Framework::complex<float>, simd_float> &destination, u32 binCount, float sampleRate) noexcept
 	{
 		using namespace Framework;
-		switch (getEffectAlgorithm<BaseProcessors::BaseEffect::Filter::type>())
+		switch (getEffectAlgorithm<BaseProcessors::BaseEffect::Filter::type>(*this))
 		{
 		case BaseProcessors::BaseEffect::Filter::Normal:
 			runNormal(source, destination, binCount, sampleRate);
@@ -411,8 +425,8 @@ namespace Generation
 		return result;
 	}
 
-	perf_inline void dynamicsEffect::runContrast(Framework::SimdBufferView<std::complex<float>, simd_float> &source,
-		Framework::SimdBuffer<std::complex<float>, simd_float> &destination, u32 binCount, float sampleRate) const noexcept
+	perf_inline void dynamicsEffect::runContrast(Framework::SimdBufferView<Framework::complex<float>, simd_float> &source,
+		Framework::SimdBuffer<Framework::complex<float>, simd_float> &destination, u32 binCount, float sampleRate) const noexcept
 	{
 		using namespace utils;
 		using namespace Framework;
@@ -478,8 +492,8 @@ namespace Generation
 		copyUnprocessedData(source, destination, lowBoundIndices, highBoundIndices, binCount);
 	}
 
-	perf_inline void dynamicsEffect::runClip(Framework::SimdBufferView<std::complex<float>, simd_float> &source,
-		Framework::SimdBuffer<std::complex<float>, simd_float> &destination, u32 binCount, float sampleRate) const noexcept
+	perf_inline void dynamicsEffect::runClip(Framework::SimdBufferView<Framework::complex<float>, simd_float> &source,
+		Framework::SimdBuffer<Framework::complex<float>, simd_float> &destination, u32 binCount, float sampleRate) const noexcept
 	{
 		using namespace utils;
 		using namespace Framework;
@@ -491,24 +505,33 @@ namespace Generation
 			return std::pair{ toInt(shiftedBoundsIndices.first), toInt(shiftedBoundsIndices.second) };
 		}();
 
-		// minimising the bins to iterate on
-		auto [index, numBins] = minimiseRange(lowBoundIndices, highBoundIndices, binCount, true);
+		COMPLEX_ASSERT(source.getSize() == destination.getSize());
+
+		auto simdChannels = std::min(source.getSimdChannels(), destination.getSimdChannels());
+		auto sourceSize = source.getSize();
+		auto sourceData = source.getData().getData().get();
+		auto destinationData = destination.getData().getData().get();
 
 		// getting the min/max power in the range selected
 		std::pair<simd_float, simd_float> powerMinMax{ 1e30f, 1e-30f };
-		for (u32 i = 0; i < numBins; i++)
+		for (u32 i = 0; i < simdChannels; ++i)
 		{
-			u32 currentIndex = (index + i) & (binCount - 1);
+			for (u32 j = 0; j < binCount; j++)
+			{
+				// while calculating the power min-max we can copy over data
+				simd_float value = sourceData[i * sourceSize + j];
+				destinationData[i * sourceSize + j] = value;
 
-			simd_float magnitudeForMin = complexMagnitude(source.readSimdValueAt(0, currentIndex), false);
-			simd_float magnitudeForMax = magnitudeForMin;
+				simd_float magnitudeForMin = complexMagnitude(value, false);
+				simd_float magnitudeForMax = magnitudeForMin;
 
-			magnitudeForMin = simd_float::min(powerMinMax.first, magnitudeForMin);
-			magnitudeForMax = simd_float::max(powerMinMax.second, magnitudeForMax);
+				magnitudeForMin = simd_float::min(powerMinMax.first, magnitudeForMin);
+				magnitudeForMax = simd_float::max(powerMinMax.second, magnitudeForMax);
 
-			simd_mask indexMask = isInsideBounds(currentIndex, lowBoundIndices, highBoundIndices);
-			powerMinMax.first = maskLoad(powerMinMax.first, magnitudeForMin, indexMask);
-			powerMinMax.second = maskLoad(powerMinMax.second, magnitudeForMax, indexMask);
+				simd_mask indexMask = isInsideBounds(j, lowBoundIndices, highBoundIndices);
+				powerMinMax.first = maskLoad(powerMinMax.first, magnitudeForMin, indexMask);
+				powerMinMax.second = maskLoad(powerMinMax.second, magnitudeForMax, indexMask);
+			}
 		}
 
 		// calculating clipping
@@ -519,42 +542,46 @@ namespace Generation
 		                                simd_float(1.0f) - thresholdParameter));
 		simd_float sqrtThreshold = simd_float::sqrt(threshold);
 
+		// minimising the bins to iterate on
+		auto [index, numBins] = minimiseRange(lowBoundIndices, highBoundIndices, binCount, true);
+
 		// doing clipping
 		simd_float inPower = 0.0f;
 		simd_float outPower = 0.0f;
-		for (u32 i = 0; i < numBins; i++)
+		for (u32 i = 0; i < simdChannels; ++i)
 		{
-			u32 currentIndex = (index + i) & (binCount - 1);
+			for (u32 j = 0; j < numBins; ++j)
+			{
+				u32 currentIndex = (index + j) & (binCount - 1);
 
-			simd_float bin = source.readSimdValueAt(0, currentIndex);
-			simd_float magnitude = complexMagnitude(bin, false);
-			simd_float multiplier = maskLoad(simd_float(1.0f), sqrtThreshold / simd_float::sqrt(magnitude),
-				simd_float::greaterThanOrEqual(magnitude, threshold));
+				simd_float bin = destinationData[i * sourceSize + currentIndex];
+				simd_float magnitude = complexMagnitude(bin, false);
+				simd_float multiplier = maskLoad(simd_float(1.0f), sqrtThreshold / simd_float::sqrt(magnitude),
+					simd_float::greaterThanOrEqual(magnitude, threshold));
 
-			// we don't mask for the writing because copyUnprocessedData will overwrite any data outside the bounds
-			destination.writeSimdValueAt(bin * multiplier, 0, currentIndex);
+				simd_mask indexMask = isInsideBounds(currentIndex, lowBoundIndices, highBoundIndices);
+				destinationData[i * sourceSize + currentIndex] = maskLoad(bin, bin * multiplier, indexMask);
 
-			simd_mask indexMask = isInsideBounds(currentIndex, lowBoundIndices, highBoundIndices);
-			inPower += maskLoad(simd_float(0.0f), magnitude, indexMask);
-			outPower += maskLoad(simd_float(0.0f), simd_float::min(magnitude, threshold), indexMask);
+				inPower += maskLoad(simd_float(0.0f), magnitude, indexMask);
+				outPower += maskLoad(simd_float(0.0f), simd_float::min(magnitude, threshold), indexMask);
+			}
+
+			// normalising 
+			simd_float outScale = matchPower(inPower, outPower);
+			for (u32 j = 0; j < numBins; j++)
+			{
+				u32 currentIndex = (index + j) & (binCount - 1);
+				destinationData[i * sourceSize + currentIndex] *= maskLoad(simd_float(1.0f), outScale, 
+					isInsideBounds(currentIndex, lowBoundIndices, highBoundIndices));
+			}
 		}
-
-		// normalising 
-		simd_float outScale = matchPower(inPower, outPower);
-		for (u32 i = 0; i < numBins; i++)
-		{
-			u32 currentIndex = (index + i) & (binCount - 1);
-			destination.multiply(outScale, 0, currentIndex);
-		}
-
-		copyUnprocessedData(source, destination, lowBoundIndices, highBoundIndices, binCount);
 	}
 
-	void dynamicsEffect::run(Framework::SimdBufferView<std::complex<float>, simd_float> &source,
-		Framework::SimdBuffer<std::complex<float>, simd_float> &destination, u32 binCount, float sampleRate) noexcept
+	void dynamicsEffect::run(Framework::SimdBufferView<Framework::complex<float>, simd_float> &source,
+		Framework::SimdBuffer<Framework::complex<float>, simd_float> &destination, u32 binCount, float sampleRate) noexcept
 	{
 		using namespace Framework;
-		switch (getEffectAlgorithm<BaseProcessors::BaseEffect::Dynamics::type>())
+		switch (getEffectAlgorithm<BaseProcessors::BaseEffect::Dynamics::type>(*this))
 		{
 		case BaseProcessors::BaseEffect::Dynamics::Contrast:
 			// based on dtblkfx contrast
@@ -579,15 +606,15 @@ namespace Generation
 		}
 	}
 
-	void phaseEffect::runShift(Framework::SimdBufferView<std::complex<float>, simd_float> &source,
-		Framework::SimdBuffer<std::complex<float>, simd_float> &destination, u32 binCount, float sampleRate) const noexcept
+	void phaseEffect::runShift(Framework::SimdBufferView<Framework::complex<float>, simd_float> &source,
+		Framework::SimdBuffer<Framework::complex<float>, simd_float> &destination, u32 binCount, float sampleRate) const noexcept
 	{
 		using namespace utils;
 		using namespace Framework;
 
-		static const simd_mask phaseMask = std::array{ 0U, kFullMask, 0U, kFullMask };
-		static const simd_mask phaseLeftMask = std::array{ 0U, kFullMask, 0U, 0U };
-		static const simd_mask phaseRightMask = std::array{ 0U, 0U, 0U, kFullMask };
+		static constexpr simd_mask phaseMask = std::array{ 0U, kFullMask, 0U, kFullMask };
+		static constexpr simd_mask phaseLeftMask = std::array{ 0U, kFullMask, 0U, 0U };
+		static constexpr simd_mask phaseRightMask = std::array{ 0U, 0U, 0U, kFullMask };
 
 		auto [lowBoundIndices, highBoundIndices] = [&]()
 		{
@@ -602,31 +629,44 @@ namespace Generation
 			->getInternalValue<simd_float>(sampleRate, true) * 2.0f - 1.0f) * kPi;
 		simd_float interval = getParameter(BaseProcessors::BaseEffect::Phase::Shift::Interval::name())->getInternalValue<simd_float>(sampleRate);
 		
-		destination.clear();
+		u32 shiftSlope = getParameter(BaseProcessors::BaseEffect::Phase::Shift::Slope::name())->getInternalValue<u32>(sampleRate);
+		simd_float (*slopeFunction)(simd_float);
+		if (shiftSlope == 0)
+			slopeFunction = [](simd_float x) { return x; };
+		else
+			slopeFunction = [](simd_float x) { return modOnceSigned(x + x, kPi); };
+
+		// overwrite old data
+		SimdBuffer<Framework::complex<float>, simd_float>::applyToThisNoMask<MathOperations::Assign>
+			(destination, source, destination.getChannels(), binCount, 0, 0, 0, 0);
+
 		// if interval between bins is 0 this means every bin is affected,
 		// otherwise the interval specifies how many octaves up the next affected bin is
 		if (completelyEqual(interval, 0.0f))
 		{
 			simd_int offsetBin = toInt(normalisedToBin(getParameter(BaseProcessors::BaseEffect::Phase::Shift::Offset::name())
 				->getInternalValue<simd_float>(sampleRate, true), 2 * binCount, sampleRate));
+
+			// find the smallest offset forward and start from there
+			u32 minOffset = horizontalMin(offsetBin)[0];
+			u32 indexChange = std::max(0U, minOffset - index);
+			numBins -= indexChange;
+			index += indexChange;
+
 			for (u32 i = 0; i < numBins; ++i)
 			{
 				u32 currentIndex = (index + i) & (binCount - 1);
 				simd_mask offsetMask = simd_int::greaterThanOrEqualSigned(currentIndex, offsetBin);
-				simd_float currentValue = source.readSimdValueAt(0, currentIndex);
+				simd_mask insideRangeMask = isInsideBounds(currentIndex, lowBoundIndices, highBoundIndices);
+				simd_float currentValue = destination.readSimdValueAt(0, currentIndex);
 				destination.writeSimdValueAt(maskLoad(currentValue, modOnceSigned(currentValue + shift, kPi),
-					phaseMask & offsetMask), 0, currentIndex);
+					phaseMask & offsetMask & insideRangeMask), 0, currentIndex);
+
+				shift = slopeFunction(shift);
 			}
 		}
 		else
 		{
-			// overwrite old data
-			for (u32 i = 0; i < numBins; ++i)
-			{
-				u32 currentIndex = (index + i) & (binCount - 1);
-				destination.writeSimdValueAt(source.readSimdValueAt(0, currentIndex), 0, currentIndex);
-			}
-
 			// offset is skewed towards an exp-like curve so we need to linearise it
 			simd_float offsetNorm = getParameter(BaseProcessors::BaseEffect::Phase::Shift::Offset::name())
 				->getInternalValue<simd_float>(sampleRate) * 2.0f / sampleRate;
@@ -638,9 +678,11 @@ namespace Generation
 			// and shift dc component's amplitude
 			{
 				simd_mask zeroMask = simd_float::lessThan(offsetNorm, binStep);
-				simd_float dcNyquistBins = source.readSimdValueAt(0, 0);
+				simd_float dcNyquistBins = destination.readSimdValueAt(0, 0);
 				simd_float modifiedShift = (-simd_float::abs(shift / kPi) + 0.5f) * 2.0f;
 				destination.writeSimdValueAt(maskLoad(dcNyquistBins, dcNyquistBins * modifiedShift, ~phaseMask), 0, 0);
+
+				shift = maskLoad(shift, slopeFunction(shift), zeroMask);
 
 				simd_float startOffset = interval * binStep;
 				COMPLEX_ASSERT(simd_float::lessThanOrEqual(startOffset, 0.0f).anyMask() == 0);
@@ -661,20 +703,22 @@ namespace Generation
 				{
 					// normal algorithm
 					simd_int indices = toInt(simd_float::round(offsetNorm * (float)binCount));
-					simd_mask indexMask = simd_int::lessThanSigned(indices, binCount);
+					simd_mask indexMask = isInsideBounds(indices, lowBoundIndices, highBoundIndices);
 
-					if (indexMask.anyMask() == 0)
+					if (simd_int::lessThanSigned(indices, binCount).anyMask() == 0)
 						break;
 
 					lastOffsetNorm = maskLoad(lastOffsetNorm, offsetNorm, indexMask);
 					u32 indexOne = indices[0];
 					u32 indexTwo = indices[2];
 
-					destination.writeMaskedSimdValueAt(modOnceSigned(source.readSimdValueAt(0, indexOne) + shift, kPi),
+					destination.writeMaskedSimdValueAt(modOnceSigned(destination.readSimdValueAt(0, indexOne) + shift, kPi),
 						indexMask & phaseLeftMask, 0, indexOne);
 
-					destination.writeMaskedSimdValueAt(modOnceSigned(source.readSimdValueAt(0, indexTwo) + shift, kPi),
+					destination.writeMaskedSimdValueAt(modOnceSigned(destination.readSimdValueAt(0, indexTwo) + shift, kPi),
 						indexMask & phaseRightMask, 0, indexTwo);
+
+					shift = maskLoad(shift, slopeFunction(shift), indexMask);
 
 					// offsetNorm[n+1] = offsetNorm[n] + interval * offsetNorm[n]
 					// offsetNorm[n+1] = offsetNorm[n] * (1 + interval)^1
@@ -695,20 +739,22 @@ namespace Generation
 			while (true)
 			{
 				simd_int indices = toInt(simd_float::round(offsetNorm * (float)binCount));
-				simd_mask indexMask = simd_int::lessThanSigned(indices, binCount);
+				simd_mask indexMask = isInsideBounds(indices, lowBoundIndices, highBoundIndices);
 
-				if (indexMask.anyMask() == 0)
+				if (simd_int::lessThanSigned(indices, binCount).anyMask() == 0)
 					break;
 
 				lastOffsetNorm = maskLoad(lastOffsetNorm, offsetNorm, indexMask);
 				u32 indexOne = indices[0];
 				u32 indexTwo = indices[2];
 
-				destination.writeMaskedSimdValueAt(modOnceSigned(source.readSimdValueAt(0, indexOne) + shift, kPi),
+				destination.writeMaskedSimdValueAt(modOnceSigned(destination.readSimdValueAt(0, indexOne) + shift, kPi),
 					indexMask & phaseLeftMask, 0, indexOne);
 
-				destination.writeMaskedSimdValueAt(modOnceSigned(source.readSimdValueAt(0, indexTwo) + shift, kPi),
+				destination.writeMaskedSimdValueAt(modOnceSigned(destination.readSimdValueAt(0, indexTwo) + shift, kPi),
 					indexMask & phaseRightMask, 0, indexTwo);
+
+				shift = maskLoad(shift, slopeFunction(shift), indexMask);
 
 				offsetNorm = simd_float::mulAdd(offsetNorm, interval, offsetNorm);
 			}
@@ -723,15 +769,13 @@ namespace Generation
 				destination.writeSimdValueAt(maskLoad(dcNyquistBins, dcNyquistBins * shift / kPi, phaseMask & nyquistMask), 0, 0);
 			}*/
 		}
-
-		copyUnprocessedData(source, destination, lowBoundIndices, highBoundIndices, binCount);
 	}
 
-	void phaseEffect::run(Framework::SimdBufferView<std::complex<float>, simd_float> &source,
-		Framework::SimdBuffer<std::complex<float>, simd_float> &destination, u32 binCount, float sampleRate) noexcept
+	void phaseEffect::run(Framework::SimdBufferView<Framework::complex<float>, simd_float> &source,
+		Framework::SimdBuffer<Framework::complex<float>, simd_float> &destination, u32 binCount, float sampleRate) noexcept
 	{
 		using namespace Framework;
-		switch (getEffectAlgorithm<BaseProcessors::BaseEffect::Phase::type>())
+		switch (getEffectAlgorithm<BaseProcessors::BaseEffect::Phase::type>(*this))
 		{
 		case BaseProcessors::BaseEffect::Phase::Shift:
 			runShift(source, destination, binCount, sampleRate);
@@ -755,7 +799,7 @@ namespace Generation
 
 		auto scaledValue = (double)(std::ranges::find(effectTypes, effectType) - effectTypes.begin());
 		auto *parameter = getParameter(BaseProcessors::EffectModule::ModuleType::name());
-		parameter->updateValues(getProcessorTree()->getSampleRate(), (float)unscaleValue(scaledValue, parameter->getParameterDetails()));
+		parameter->updateValues(kDefaultSampleRate, (float)unscaleValue(scaledValue, parameter->getParameterDetails()));
 	}
 
 	BaseProcessor *EffectModule::updateSubProcessor([[maybe_unused]] size_t index, BaseProcessor *newSubModule) noexcept
@@ -772,7 +816,7 @@ namespace Generation
 	[[nodiscard]] BaseProcessor *EffectModule::createSubProcessor(std::string_view type) const noexcept
 	{
 		// traverses all effect enums until it finds a match for the id and uses the linked type to call the appropriate constructor
-		return nested_enum::iterate_over_types<[]<auto Self, typename U, typename ... Us>(const EffectModule *effectModule, const std::string_view &type)
+		return nested_enum::recurse_over_types<[]<auto Self, typename U, typename ... Us>(const EffectModule *effectModule, const std::string_view &type)
 			{
 				if (U::id().value() == type)
 					return static_cast<baseEffect *>(effectModule->makeSubProcessor<typename U::linked_type>());
@@ -787,7 +831,7 @@ namespace Generation
 			}>(Framework::BaseProcessors::BaseEffect::enum_subtypes<nested_enum::InnerNodes>(), this, type);
 	}
 
-	void EffectModule::processEffect(ComplexDataSource &source, u32 binCount, float sampleRate)
+	void EffectModule::processEffect(Framework::ComplexDataSource &source, u32 binCount, float sampleRate)
 	{
 		using namespace Framework;
 
@@ -817,9 +861,7 @@ namespace Generation
 		// getting exclusive access to data
 		utils::lockAtomic(dataBuffer_.getLock(), true, utils::WaitMechanism::Spin);
 
-		auto start = std::chrono::steady_clock::now();
 		effect->run(source.sourceBuffer, dataBuffer_, binCount, sampleRate);
-		setProcessingTime(std::chrono::steady_clock::now() - start);
 
 		// if the mix is 100% for all channels, we can skip mixing entirely
 		simd_float wetMix = getParameter(BaseProcessors::EffectModule::ModuleMix::name())->getInternalValue<simd_float>(sampleRate);

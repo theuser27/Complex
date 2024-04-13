@@ -49,18 +49,18 @@ namespace Interface
 		void paintEntireComponent(bool paintEntireComponent) { paintEntireComponent_ = paintEntireComponent; }
 
 	protected:
-		shared_value<Colour> color_ = Colours::white;
-		shared_value<bool> additive_ = false;
-		shared_value<bool> useAlpha_ = false;
-		shared_value<bool> scissor_ = true;
-		shared_value<bool> active_ = true;
+		utils::shared_value<Colour> color_ = Colours::white;
+		utils::shared_value<bool> additive_ = false;
+		utils::shared_value<bool> useAlpha_ = false;
+		utils::shared_value<bool> scissor_ = true;
+		utils::shared_value<bool> active_ = true;
 
-		shared_value<bool> hasNewVertices_ = true;
-		shared_value<bool> shouldReloadImage_ = false;
-		shared_value<BaseComponent *> targetComponent_ = nullptr;
-		shared_value<Rectangle<int>> customDrawBounds_{};
+		utils::shared_value<bool> hasNewVertices_ = true;
+		utils::shared_value<bool> shouldReloadImage_ = false;
+		utils::shared_value<BaseComponent *> targetComponent_ = nullptr;
+		utils::shared_value<Rectangle<int>> customDrawBounds_{};
 
-		shared_value<std::unique_ptr<Image>> drawImage_;
+		utils::shared_value<std::unique_ptr<Image>> drawImage_;
 		OpenGlTexture texture_;
 		OpenGlShaderProgram *imageShader_ = nullptr;
 		OpenGlUniform imageColor_;

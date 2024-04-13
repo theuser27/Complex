@@ -38,15 +38,6 @@ namespace
   #endif
   }
 
-  strict_inline simd_mask vector_call copyFromEven(simd_mask value)
-  {
-  #if COMPLEX_SSE4_1
-    return _mm_shuffle_epi32(value.value, _MM_SHUFFLE(2, 2, 0, 0));
-  #elif COMPLEX_NEON
-    static_assert(false, "not implemented yet");
-  #endif
-  }
-
   strict_inline simd_float vector_call midSide(simd_float value)
   {
     simd_float half = value * 0.5f;
@@ -103,7 +94,7 @@ namespace Interface
     static constexpr float kMinAmp = 0.000001f;
     static constexpr float kMinDecay = 0.12f;
 
-    static const simd_mask oddMask = std::array{ 0U, kFullMask, 0U, kFullMask };
+    static constexpr simd_mask oddMask = std::array{ 0U, kFullMask, 0U, kFullMask };
 
     auto bufferView = bufferView_.lock();
     if (bufferView.isEmpty())
@@ -156,7 +147,7 @@ namespace Interface
           for (int k = beginIndex + 1; k <= endIndex; ++k)
           {
             simd_float next = scratchBuffer_.readSimdValueAt(i, k);
-            simd_mask mask = copyFromEven(simd_float::greaterThan(next, current));
+            simd_mask mask = utils::copyFromEven(simd_float::greaterThan(next, current));
             current = utils::maskLoad(current, next, mask);
           }
         }

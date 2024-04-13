@@ -12,23 +12,10 @@
 
 #include "Framework/constants.h"
 #include "Framework/simd_buffer.h"
-#include "Framework/parameters.h"
-#include "Framework/parameter_value.h"
 #include "BaseProcessor.h"
 
 namespace Generation
 {
-	struct ComplexDataSource
-	{
-		enum DataSourceType : u8 { Cartesian, Polar, Both };
-
-		// scratch buffer for conversion between cartesian and polar data
-		Framework::SimdBuffer<std::complex<float>, simd_float> conversionBuffer{ kNumChannels, kMaxFFTBufferLength };
-		// is the data in sourceBuffer polar or cartesian
-		DataSourceType dataType = Cartesian;
-		Framework::SimdBufferView<std::complex<float>, simd_float> sourceBuffer;
-	};
-
 	// base class for the actual effects
 	class baseEffect : public BaseProcessor
 	{
@@ -45,14 +32,11 @@ namespace Generation
 		baseEffect(baseEffect &&other, u64 parentModuleId) noexcept : BaseProcessor(std::move(other), parentModuleId) { }
 		baseEffect &operator=(baseEffect &&other) noexcept = default;
 
-		virtual void run([[maybe_unused]] Framework::SimdBufferView<std::complex<float>, simd_float> &source,
-			[[maybe_unused]] Framework::SimdBuffer<std::complex<float>, simd_float> &destination,
+		virtual void run([[maybe_unused]] Framework::SimdBufferView<Framework::complex<float>, simd_float> &source,
+			[[maybe_unused]] Framework::SimdBuffer<Framework::complex<float>, simd_float> &destination,
 			[[maybe_unused]] u32 binCount, [[maybe_unused]] float sampleRate) noexcept { }
 
-		virtual ComplexDataSource::DataSourceType neededDataType() const noexcept { return ComplexDataSource::Cartesian; }
-		template<nested_enum::NestedEnum E>
-		E getEffectAlgorithm() const
-		{ return E::make_enum(getParameter(Framework::BaseProcessors::BaseEffect::Algorithm::name())->getInternalValue<u32>()).value(); }
+		virtual Framework::ComplexDataSource::DataSourceType neededDataType() const noexcept { return Framework::ComplexDataSource::Cartesian; }
 
 	protected:
 		[[nodiscard]] BaseProcessor *createCopy([[maybe_unused]] std::optional<u64> parentModuleId) const noexcept override
@@ -69,32 +53,29 @@ namespace Generation
 		[[nodiscard]] static strict_inline simd_mask vector_call isOutsideBounds(
 			simd_int positionIndices, simd_int lowBoundIndices, simd_int highBoundIndices)
 		{
-			simd_mask highAboveLow = simd_int::greaterThanSigned(highBoundIndices, lowBoundIndices);
-			simd_mask positionsGreaterThanHigh = simd_int::greaterThanSigned(positionIndices, highBoundIndices);
-			simd_mask positionsLessThanLow = simd_int::greaterThanSigned(lowBoundIndices, positionIndices);
-			return (highAboveLow & (positionsGreaterThanHigh | positionsLessThanLow)) |
-				(~highAboveLow & (positionsGreaterThanHigh & positionsLessThanLow));
+			simd_mask highAboveLow = simd_int::greaterThanOrEqualSigned(highBoundIndices, lowBoundIndices);
+			simd_mask belowLowBounds = simd_int::lessThanSigned(positionIndices, lowBoundIndices);
+			simd_mask aboveHighBounds = simd_int::greaterThanSigned(positionIndices, highBoundIndices);
+
+			// 1st case example:  |   *  [    ]     | or
+			//                    |      [    ]  *  |
+			// 2nd case examples: |     ]   *  [    |
+			return (belowLowBounds | aboveHighBounds) & ((belowLowBounds & aboveHighBounds) ^ highAboveLow);
 		}
 
 		[[nodiscard]] static strict_inline simd_mask vector_call isInsideBounds(
 			simd_int positionIndices, simd_int lowBoundIndices, simd_int highBoundIndices)
-		{
-			simd_mask highAboveLow = simd_int::greaterThanSigned(highBoundIndices, lowBoundIndices);
-			simd_mask positionsLessOrThanEqualHigh = ~simd_int::greaterThanSigned(positionIndices, highBoundIndices);
-			simd_mask positionsGreaterOrThanEqualLow = ~simd_int::greaterThanSigned(lowBoundIndices, positionIndices);
-			return (highAboveLow & (positionsLessOrThanEqualHigh & positionsGreaterOrThanEqualLow)) |
-				(~highAboveLow & (positionsLessOrThanEqualHigh | positionsGreaterOrThanEqualLow));
-		}
+		{ return ~isOutsideBounds(positionIndices, lowBoundIndices, highBoundIndices); }
 
 		// returns starting point and distance to end of processed/unprocessed range
 		static std::pair<u32, u32> vector_call minimiseRange(simd_int lowIndices, simd_int highIndices,
 			u32 binCount, bool isProcessedRange);
 
-		static void copyUnprocessedData(Framework::SimdBufferView<std::complex<float>, simd_float> source,
-			Framework::SimdBuffer<std::complex<float>, simd_float> &destination, simd_int lowBoundIndices,
+		static void copyUnprocessedData(Framework::SimdBufferView<Framework::complex<float>, simd_float> source,
+			Framework::SimdBuffer<Framework::complex<float>, simd_float> &destination, simd_int lowBoundIndices,
 			simd_int highBoundIndices, u32 binCount) noexcept;
 
-		template<nested_enum::NestedEnum Type>
+		template<typename Type>
 		friend void fillAndSetParameters(baseEffect &effect);
 
 		//// Parameters
@@ -113,8 +94,8 @@ namespace Generation
 
 		utilityEffect(Plugin::ProcessorTree *processorTree, u64 parentModuleId);
 
-		void run(Framework::SimdBufferView<std::complex<float>, simd_float> &source,
-			Framework::SimdBuffer<std::complex<float>, simd_float> &destination, u32 binCount, float sampleRate) noexcept override
+		void run(Framework::SimdBufferView<Framework::complex<float>, simd_float> &source,
+			Framework::SimdBuffer<Framework::complex<float>, simd_float> &destination, u32 binCount, float sampleRate) noexcept override
 		{
 			baseEffect::run(source, destination, binCount, sampleRate);
 		}
@@ -140,15 +121,15 @@ namespace Generation
 
 		filterEffect(Plugin::ProcessorTree *processorTree, u64 parentModuleId);
 
-		void run(Framework::SimdBufferView<std::complex<float>, simd_float> &source,
-			Framework::SimdBuffer<std::complex<float>, simd_float> &destination, u32 binCount, float sampleRate) noexcept override;
+		void run(Framework::SimdBufferView<Framework::complex<float>, simd_float> &source,
+			Framework::SimdBuffer<Framework::complex<float>, simd_float> &destination, u32 binCount, float sampleRate) noexcept override;
 
 	private:
-		void runNormal(Framework::SimdBufferView<std::complex<float>, simd_float> &source,
-			Framework::SimdBuffer<std::complex<float>, simd_float> &destination, u32 binCount, float sampleRate) const noexcept;
+		void runNormal(Framework::SimdBufferView<Framework::complex<float>, simd_float> &source,
+			Framework::SimdBuffer<Framework::complex<float>, simd_float> &destination, u32 binCount, float sampleRate) const noexcept;
 
-		void runPhase(Framework::SimdBufferView<std::complex<float>, simd_float> &source,
-			Framework::SimdBuffer<std::complex<float>, simd_float> &destination, u32 binCount, float sampleRate) const noexcept;
+		void runPhase(Framework::SimdBufferView<Framework::complex<float>, simd_float> &source,
+			Framework::SimdBuffer<Framework::complex<float>, simd_float> &destination, u32 binCount, float sampleRate) const noexcept;
 
 		static simd_float vector_call getDistancesFromCutoffs(simd_int positionIndices,
 			simd_int cutoffIndices, simd_int lowBoundIndices, u32 FFTSize, float sampleRate);
@@ -198,15 +179,15 @@ namespace Generation
 
 		dynamicsEffect(Plugin::ProcessorTree *processorTree, u64 parentModuleId);
 
-		void run(Framework::SimdBufferView<std::complex<float>, simd_float> &source,
-			Framework::SimdBuffer<std::complex<float>, simd_float> &destination, u32 binCount, float sampleRate) noexcept override;
+		void run(Framework::SimdBufferView<Framework::complex<float>, simd_float> &source,
+			Framework::SimdBuffer<Framework::complex<float>, simd_float> &destination, u32 binCount, float sampleRate) noexcept override;
 
 	private:
-		void runContrast(Framework::SimdBufferView<std::complex<float>, simd_float> &source,
-			Framework::SimdBuffer<std::complex<float>, simd_float> &destination, u32 binCount, float sampleRate) const noexcept;
+		void runContrast(Framework::SimdBufferView<Framework::complex<float>, simd_float> &source,
+			Framework::SimdBuffer<Framework::complex<float>, simd_float> &destination, u32 binCount, float sampleRate) const noexcept;
 
-		void runClip(Framework::SimdBufferView<std::complex<float>, simd_float> &source,
-			Framework::SimdBuffer<std::complex<float>, simd_float> &destination, u32 binCount, float sampleRate) const noexcept;
+		void runClip(Framework::SimdBufferView<Framework::complex<float>, simd_float> &source,
+			Framework::SimdBuffer<Framework::complex<float>, simd_float> &destination, u32 binCount, float sampleRate) const noexcept;
 
 		static simd_float vector_call matchPower(simd_float target, simd_float current) noexcept;
 
@@ -241,14 +222,14 @@ namespace Generation
 
 		phaseEffect(Plugin::ProcessorTree *processorTree, u64 parentModuleId);
 
-		void run(Framework::SimdBufferView<std::complex<float>, simd_float> &source,
-			Framework::SimdBuffer<std::complex<float>, simd_float> &destination, u32 binCount, float sampleRate) noexcept override;
+		void run(Framework::SimdBufferView<Framework::complex<float>, simd_float> &source,
+			Framework::SimdBuffer<Framework::complex<float>, simd_float> &destination, u32 binCount, float sampleRate) noexcept override;
 
-		ComplexDataSource::DataSourceType neededDataType() const noexcept override { return ComplexDataSource::Polar; }
+		Framework::ComplexDataSource::DataSourceType neededDataType() const noexcept override { return Framework::ComplexDataSource::Polar; }
 
 	private:
-		void runShift(Framework::SimdBufferView<std::complex<float>, simd_float> &source,
-			Framework::SimdBuffer<std::complex<float>, simd_float> &destination, u32 binCount, float sampleRate) const noexcept;
+		void runShift(Framework::SimdBufferView<Framework::complex<float>, simd_float> &source,
+			Framework::SimdBuffer<Framework::complex<float>, simd_float> &destination, u32 binCount, float sampleRate) const noexcept;
 
 		// phase zeroer, (constrained) phase randomiser (smear), channel phase shifter (pha-979), etc
 		// phase filter - filtering based on phase
@@ -333,7 +314,7 @@ namespace Generation
 		EffectModule &operator=(EffectModule &&other) noexcept
 		{ BaseProcessor::operator=(std::move(other)); return *this; }
 
-		void processEffect(ComplexDataSource &source, u32 binCount, float sampleRate);
+		void processEffect(Framework::ComplexDataSource &source, u32 binCount, float sampleRate);
 
 		// Inherited via BaseProcessor
 		BaseProcessor *updateSubProcessor(size_t index, BaseProcessor *newSubModule) noexcept override;
@@ -343,6 +324,6 @@ namespace Generation
 
 		baseEffect *getEffect() const noexcept { return utils::as<baseEffect>(subProcessors_[0]); }
 	private:
-		Framework::SimdBuffer<std::complex<float>, simd_float> buffer_{ kNumChannels, kMaxFFTBufferLength };
+		Framework::SimdBuffer<Framework::complex<float>, simd_float> buffer_{ kNumChannels, kMaxFFTBufferLength };
 	};
 }

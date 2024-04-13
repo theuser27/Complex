@@ -8,7 +8,10 @@
 	==============================================================================
 */
 
+#include "EffectModuleSection.h"
+
 #include "Plugin/ProcessorTree.h"
+#include "Framework/parameter_value.h"
 #include "Framework/parameter_bridge.h"
 #include "Generation/EffectModules.h"
 #include "../LookAndFeel/Paths.h"
@@ -18,7 +21,6 @@
 #include "../Components/BaseSlider.h"
 #include "../Components/Spectrogram.h"
 #include "../Components/PinBoundsBox.h"
-#include "EffectModuleSection.h"
 #include "EffectsLaneSection.h"
 
 namespace Interface
@@ -664,6 +666,8 @@ namespace Interface
 				effectSliders.reserve(BaseProcessors::BaseEffect::Phase::Shift::enum_count(nested_enum::OuterNodes));
 				effectSliders.emplace_back(std::make_unique<RotarySlider>
 					(baseEffect->getParameter(BaseProcessors::BaseEffect::Phase::Shift::PhaseShift::name())));
+				effectSliders.emplace_back(std::make_unique<TextSelector>
+					(baseEffect->getParameter(BaseProcessors::BaseEffect::Phase::Shift::Slope::name())));
 				effectSliders.emplace_back(std::make_unique<RotarySlider>
 					(baseEffect->getParameter(BaseProcessors::BaseEffect::Phase::Shift::Interval::name())));
 				effectSliders.emplace_back(std::make_unique<RotarySlider>
@@ -696,20 +700,22 @@ namespace Interface
 					.withTrimmedTop(knobTopOffset).withHeight(knobsHeight);
 				int rotaryInterval = (int)std::round((float)bounds.getWidth() / 3.0f);
 
-				// gain rotary
-				auto *gainSlider = section->getEffectControl(BaseProcessors::BaseEffect::Phase::Shift::PhaseShift::name());
-				std::ignore = gainSlider->setBoundsForSizes(knobsHeight);
-				gainSlider->setPosition({ bounds.getX(), bounds.getY() });
+				auto *slopeDropdown = static_cast<TextSelector *>(section->getEffectControl(BaseProcessors::BaseEffect::Phase::Shift::Slope::name()));
 
-				// cutoff rotary
-				auto *cutoffSlider = section->getEffectControl(BaseProcessors::BaseEffect::Phase::Shift::Interval::name());
-				std::ignore = cutoffSlider->setBoundsForSizes(knobsHeight);
-				cutoffSlider->setPosition({ bounds.getX() + rotaryInterval, bounds.getY() });
+				auto *shiftSlider = static_cast<RotarySlider *>(section->getEffectControl(BaseProcessors::BaseEffect::Phase::Shift::PhaseShift::name()));
+				shiftSlider->setModifier(slopeDropdown);
+				shiftSlider->setLabelPlacement(BubbleComponent::right);
+				std::ignore = shiftSlider->setBoundsForSizes(knobsHeight);
+				shiftSlider->setPosition({ bounds.getX(), bounds.getY() });
 
-				// slope rotary
-				auto *slopeSlider = section->getEffectControl(BaseProcessors::BaseEffect::Phase::Shift::Offset::name());
-				std::ignore = slopeSlider->setBoundsForSizes(knobsHeight);
-				slopeSlider->setPosition({ bounds.getX() + 2 * rotaryInterval, bounds.getY() });
+
+				auto *intervalSlider = section->getEffectControl(BaseProcessors::BaseEffect::Phase::Shift::Interval::name());
+				std::ignore = intervalSlider->setBoundsForSizes(knobsHeight);
+				intervalSlider->setPosition({ bounds.getX() + rotaryInterval, bounds.getY() });
+
+				auto *offsetSlider = section->getEffectControl(BaseProcessors::BaseEffect::Phase::Shift::Offset::name());
+				std::ignore = offsetSlider->setBoundsForSizes(knobsHeight);
+				offsetSlider->setPosition({ bounds.getX() + 2 * rotaryInterval, bounds.getY() });
 			};
 
 			switch (section->getAlgorithm())

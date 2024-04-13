@@ -11,7 +11,9 @@
 #pragma once
 
 #include <thread>
-#include "EffectModules.h"
+#include "Framework/sync_primitives.h"
+#include "Framework/simd_buffer.h"
+#include "BaseProcessor.h"
 
 namespace juce
 {
@@ -21,6 +23,7 @@ namespace juce
 
 namespace Generation
 {
+	class EffectModule;
 	class EffectsState;
 
 	class EffectsLane final : public BaseProcessor
@@ -53,17 +56,12 @@ namespace Generation
 
 		auto *getEffectModule(size_t index) const noexcept { return effectModules_[index]; }
 
-		[[nodiscard]] BaseProcessor *createSubProcessor([[maybe_unused]] std::string_view type) const noexcept override
-		{
-			COMPLEX_ASSERT(Framework::BaseProcessors::BaseEffect::enum_value_by_id(type).has_value() &&
-				"You're trying to create a subProcessor for EffectsLane, that isn't EffectModule");
-			return makeSubProcessor<EffectModule>(type);
-		}
+		[[nodiscard]] BaseProcessor *createSubProcessor([[maybe_unused]] std::string_view type) const noexcept override;
 		[[nodiscard]] BaseProcessor *createCopy(std::optional<u64> parentModuleId) const noexcept override
 		{ return makeSubProcessor<EffectsLane>(*this, parentModuleId.value_or(parentProcessorId_)); }
 
 	private:
-		ComplexDataSource laneDataSource_{};
+		Framework::ComplexDataSource laneDataSource_{};
 		std::vector<EffectModule *> effectModules_{};
 
 		//// Parameters
@@ -73,7 +71,7 @@ namespace Generation
 		// 3. output index
 		// 4. gain match
 
-		simd_float inputVolume_, outputVolume_;
+		utils::shared_value<simd_float> volumeScale_{};
 		std::atomic<u32> currentEffectIndex_ = 0;
 
 		// Finished - finished all processing
@@ -105,64 +103,21 @@ namespace Generation
 		EffectsState &operator=(EffectsState &&other) = delete;
 
 		EffectsState(Plugin::ProcessorTree *moduleTree, u64 parentModuleId) noexcept;
-
-		~EffectsState() noexcept override
-		{
-			for (auto &thread : workerThreads_)
-				thread.thread.join();
-
-			BaseProcessor::~BaseProcessor();
-		}
+		~EffectsState() noexcept override;
 
 		void deserialiseFromJson(std::any jsonData);
 
 		// Inherited via BaseProcessor
 		bool insertSubProcessor(size_t index, BaseProcessor *newSubProcessor) noexcept override;
 		BaseProcessor *deleteSubProcessor(size_t index) noexcept override;
-		[[nodiscard]] BaseProcessor *createSubProcessor([[maybe_unused]] std::string_view type) const noexcept override
-		{
-			COMPLEX_ASSERT(type == Framework::BaseProcessors::EffectsLane::id().value() &&
-				"You're trying to create a subProcessor for EffectsState, that isn't EffectsLane");
-			return makeSubProcessor<EffectsLane>();
-		}
+		[[nodiscard]] BaseProcessor *createSubProcessor([[maybe_unused]] std::string_view type) const noexcept override;
 
 		void writeInputData(const juce::AudioBuffer<float> &inputBuffer) noexcept;
 		void processLanes() noexcept;
 		void sumLanesAndWriteOutput(juce::AudioBuffer<float> &outputBuffer) noexcept;
 
-		auto getUsedInputChannels() noexcept
-		{
-			for (auto &lane : lanes_)
-			{
-				// if the input is not another chain's output and the chain is enabled
-				if (auto laneInput = lane->processorParameters_[1]->getInternalValue<u32>(getSampleRate());
-					((laneInput & kLaneInputMask) == 0) && lane->processorParameters_[0]->getInternalValue<u32>(getSampleRate()))
-					usedInputs_[laneInput] = true;
-			}
-
-			std::array<bool, kNumTotalChannels> usedInputChannels{};
-			for (size_t i = 0; i < usedInputChannels.size(); i++)
-				usedInputChannels[i] = usedInputs_[i / kComplexSimdRatio];
-
-			return usedInputChannels;
-		}
-
-		auto getUsedOutputChannels() noexcept
-		{
-			for (auto &lane : lanes_)
-			{
-				// if the output is not defaulted and the chain is enabled
-				if (auto laneOutput = lane->processorParameters_[2]->getInternalValue<u32>(getSampleRate());
-					(laneOutput != kDefaultOutput) && lane->processorParameters_[0]->getInternalValue<u32>(getSampleRate()))
-					usedOutputs_[laneOutput] = true;
-			}
-
-			std::array<bool, kNumTotalChannels> usedOutputChannels{};
-			for (size_t i = 0; i < usedOutputChannels.size(); i++)
-				usedOutputChannels[i] = usedOutputs_[i / kComplexSimdRatio];
-
-			return usedOutputChannels;
-		}
+		std::array<bool, kNumTotalChannels> getUsedInputChannels() noexcept;
+		std::array<bool, kNumTotalChannels> getUsedOutputChannels() noexcept;
 
 		auto getOutputBuffer(u32 channelCount, u32 beginChannel) const noexcept
 		{ return Framework::SimdBufferView{ outputBuffer_, beginChannel, channelCount }; }
@@ -204,7 +159,7 @@ namespace Generation
 		std::array<bool, kNumInputsOutputs> usedInputs_{};
 		std::array<bool, kNumInputsOutputs> usedOutputs_{};
 
-		Framework::SimdBuffer<std::complex<float>, simd_float> outputBuffer_{};
+		Framework::SimdBuffer<Framework::complex<float>, simd_float> outputBuffer_{};
 
 		std::vector<Thread> workerThreads_{};
 

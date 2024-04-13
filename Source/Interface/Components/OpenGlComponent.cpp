@@ -8,11 +8,11 @@
 	==============================================================================
 */
 
+#include "OpenGlComponent.h"
+
 #include "AppConfig.h"
 #include <juce_opengl/juce_opengl.h>
-
 #include "Framework/sync_primitives.h"
-#include "OpenGlComponent.h"
 #include "Plugin/Renderer.h"
 #include "../Sections/MainInterface.h"
 
@@ -59,7 +59,7 @@ namespace Interface
 	using namespace juce::gl;
 
 	bool OpenGlComponent::setViewPort(const BaseComponent *component, Rectangle<int> bounds,
-	                                  [[maybe_unused]] const OpenGlWrapper &openGl)
+		[[maybe_unused]] const OpenGlWrapper &openGl)
 	{
 		auto [topLevelHeight, globalBounds, visibleBounds] = getBoundsDetails(component, bounds);
 		if (visibleBounds.getWidth() <= 0 || visibleBounds.getHeight() <= 0)

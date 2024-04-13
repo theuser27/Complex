@@ -396,7 +396,7 @@ namespace Generation
 	public:
 		// initialising pointers and FFT plans
 		void ResetBuffers() noexcept;
-		void UpdateParameters(Framework::UpdateFlag flag, float sampleRate) noexcept;
+		void UpdateParameters(UpdateFlag flag, float sampleRate) noexcept;
 		void MainProcess(juce::AudioBuffer<float> &buffer, u32 numSamples,
 			float sampleRate, u32 numInputs, u32 numOutputs) noexcept;
 

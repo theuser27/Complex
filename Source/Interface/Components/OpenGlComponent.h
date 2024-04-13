@@ -98,11 +98,11 @@ namespace Interface
 		bool setViewPort(const OpenGlWrapper &openGl) const;
 
 		Animator animator_{};
-		shared_value<std::function<void(OpenGlWrapper &, bool)>> renderFunction_{};
-		shared_value<RenderFlag> renderFlag_ = RenderFlag::Dirty;
+		utils::shared_value<std::function<void(OpenGlWrapper &, bool)>> renderFunction_{};
+		utils::shared_value<RenderFlag> renderFlag_ = RenderFlag::Dirty;
 		std::atomic<std::thread::id> waitLock_ = {};
 
-		shared_value<OpenGlContainer *> container_ = nullptr;
+		utils::shared_value<OpenGlContainer *> container_ = nullptr;
 
 		template<typename T>
 		friend class gl_ptr;

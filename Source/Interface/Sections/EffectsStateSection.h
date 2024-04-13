@@ -31,9 +31,6 @@ namespace Interface
 		static constexpr int kLaneSelectorToLanesMargin = 8;
 		static constexpr int kLaneToLaneMargin = 4;
 
-		//static constexpr int kMinWidth = EffectsLaneSection::kWidth;
-		//static constexpr int kMinHeight = kLaneSelectorHeight + kLaneSelectorToLanesMargin + EffectsLaneSection::kMinHeight;
-
 		EffectsStateSection(Generation::EffectsState &state);
 		~EffectsStateSection() override;
 

@@ -8,6 +8,8 @@
 	==============================================================================
 */
 
+#include "BaseControl.h"
+
 #include "Framework/update_types.h"
 #include "Framework/parameter_value.h"
 #include "Framework/parameter_bridge.h"
@@ -15,7 +17,6 @@
 #include "Plugin/Renderer.h"
 #include "../LookAndFeel/Fonts.h"
 #include "OpenGlImageComponent.h"
-#include "BaseControl.h"
 #include "../Sections/MainInterface.h"
 
 namespace Interface

@@ -41,7 +41,7 @@ namespace Plugin
 
 		u32 getProcessingDelay() const noexcept;
 		
-		void updateParameters(Framework::UpdateFlag flag, float sampleRate) noexcept;
+		void updateParameters(UpdateFlag flag, float sampleRate) noexcept;
 		void initialiseModuleTree() noexcept;
 
 		virtual void parameterChangeMidi(u64 parentModuleId, std::string_view parameterName, float value);

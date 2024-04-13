@@ -36,7 +36,7 @@ namespace Interface
 
 	private:
 		OpenGlScrollBar *scrollBar_ = nullptr;
-		shared_value<bool> shrinkLeft_ = false;
+		utils::shared_value<bool> shrinkLeft_ = false;
 		float hoverAmount_ = -1.0f;
 
 		friend class OpenGlScrollBar;
@@ -255,7 +255,7 @@ namespace Interface
 		void removeListener(OpenGlScrollBarListener *listener) { listeners.remove(listener); }
 	private:
 		//==============================================================================
-		shared_value<Range<double>> totalRange{ Range{ 0.0, 1.0} }, visibleRange{ Range{ 0.0, 1.0} };
+		utils::shared_value<Range<double>> totalRange{ Range{ 0.0, 1.0} }, visibleRange{ Range{ 0.0, 1.0} };
 		double singleStepSize = 0.1, dragStartRange = 0;
 		int thumbAreaSize = 0, thumbStart = 0, thumbSize = 0;
 		int dragStartMousePos = 0, lastMousePos = 0;

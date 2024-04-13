@@ -196,11 +196,11 @@ namespace Interface
 		void setImmediateSensitivity(double immediateSensitivity) noexcept { immediateSensitivity_ = immediateSensitivity; }
 
 		// ============================================================== Variables
-		shared_value<juce::Colour> thumbColor_;
-		shared_value<juce::Colour> selectedColor_;
-		shared_value<juce::Colour> unselectedColor_;
-		shared_value<juce::Colour> backgroundColor_;
-		shared_value<juce::Colour> modColor_;
+		utils::shared_value<juce::Colour> thumbColor_;
+		utils::shared_value<juce::Colour> selectedColor_;
+		utils::shared_value<juce::Colour> unselectedColor_;
+		utils::shared_value<juce::Colour> backgroundColor_;
+		utils::shared_value<juce::Colour> modColor_;
 
 		SliderType type_{};
 		bool shouldShowPopup_ = false;
@@ -232,8 +232,7 @@ namespace Interface
 	private:
 		double immediateSensitivity_ = 250.0;
 		double valueInterval_ = 0.0;
-		double valueOnMouseDown_ = 0.0;
-		juce::Point<float> mouseDragStartPosition_{};
+		juce::Point<float> lastMouseDragPosition_{};
 		juce::Time lastMouseWheelTime_;
 		double resetValue_ = 0.0;
 		juce::ModifierKeys resetValueModifiers_;
@@ -283,7 +282,7 @@ namespace Interface
 		void setModifier(TextSelector *modifier) noexcept;
 
 	protected:
-		shared_value<float> knobArcThickness_{};
+		utils::shared_value<float> knobArcThickness_{};
 		float knobSizeScale_ = 1.0f;
 		TextSelector *modifier_ = nullptr;
 	};
@@ -417,7 +416,9 @@ namespace Interface
 		static constexpr int kDefaultTextSelectorHeight = 16;
 		static constexpr int kLabelOffset = 8;
 
-		static constexpr float kMarginsHeightRatio = 0.25f;
+		static constexpr float kHeightFontAscentRatio = 0.5f;
+		static constexpr float kPaddingHeightRatio = 0.25f;
+		static constexpr float kBetweenElementsMarginHeightRatio = 0.25f;
 		static constexpr float kHeightToArrowWidthRatio = 5.0f / 16.0f;
 		static constexpr float kArrowWidthHeightRatio = 0.5f;
 

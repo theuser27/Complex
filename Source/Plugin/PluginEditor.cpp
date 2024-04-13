@@ -8,6 +8,7 @@
 
 #include "PluginProcessor.h"
 #include "PluginEditor.h"
+#include "Renderer.h"
 #include "Interface/LookAndFeel/DefaultLookAndFeel.h"
 #include "Framework/load_save.h"
 #include "Interface/Sections/MainInterface.h"

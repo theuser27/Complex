@@ -8,10 +8,11 @@
 	==============================================================================
 */
 
+#include "HeaderFooterSections.h"
+
 #include "Framework/windows.h"
 #include "Generation/EffectsState.h"
 #include "Generation/SoundEngine.h"
-#include "HeaderFooterSections.h"
 #include "../LookAndFeel/Fonts.h"
 #include "Framework/load_save.h"
 #include "../Components/OpenGlMultiQuad.h"

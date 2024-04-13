@@ -46,7 +46,7 @@ namespace Interface
 		void setMaxDb(float db) noexcept { maxDb_ = db; }
 		void setDecayMultiplier(float decay) noexcept { decayMultiplier_ = decay; }
 		void setSlope(float slope) noexcept { dbSlope_ = slope; }
-		void setSpectrumData(Framework::SimdBufferView<std::complex<float>, 
+		void setSpectrumData(Framework::SimdBufferView<Framework::complex<float>,
 			simd_float> data, bool isDataPolar) noexcept 
 		{
 			bufferView_ = std::move(data);
@@ -60,20 +60,20 @@ namespace Interface
 		std::vector<std::unique_ptr<OpenGlLineRenderer>> phaseRenderers_{};
 		OpenGlCorners corners_;
 
-		Framework::SimdBuffer<std::complex<float>, simd_float> scratchBuffer_{ kNumChannels, 1 << kMaxFFTOrder };
-		Framework::SimdBuffer<std::complex<float>, simd_float> resultBuffer_{ kNumChannels, kResolution };
-		
-		shared_value_block<Framework::SimdBufferView<std::complex<float>, simd_float>> bufferView_{};
-		shared_value<bool> isDataPolar_ = false;
+		Framework::SimdBuffer<Framework::complex<float>, simd_float> scratchBuffer_{ kNumChannels, 1 << kMaxFFTOrder };
+		Framework::SimdBuffer<Framework::complex<float>, simd_float> resultBuffer_{ kNumChannels, kResolution };
 
-		shared_value<float> minFrequency_ = kDefaultMinFrequency;
-		shared_value<float> maxFrequency_ = kDefaultMaxFrequency;
-		shared_value<float> minDb_ = kDefaultMinDb;
-		shared_value<float> maxDb_ = kDefaultMaxDb;
-		shared_value<bool> shouldDisplayPhases_ = false;
-		shared_value<bool> shouldPaintBackgroundLines_ = true;
-		shared_value<float> decayMultiplier_ = kDecayMult;
-		shared_value<float> dbSlope_ = kDbSlopePerOctave;
+		utils::shared_value_block<Framework::SimdBufferView<Framework::complex<float>, simd_float>> bufferView_{};
+		utils::shared_value<bool> isDataPolar_ = false;
+
+		utils::shared_value<float> minFrequency_ = kDefaultMinFrequency;
+		utils::shared_value<float> maxFrequency_ = kDefaultMaxFrequency;
+		utils::shared_value<float> minDb_ = kDefaultMinDb;
+		utils::shared_value<float> maxDb_ = kDefaultMaxDb;
+		utils::shared_value<bool> shouldDisplayPhases_ = false;
+		utils::shared_value<bool> shouldPaintBackgroundLines_ = true;
+		utils::shared_value<float> decayMultiplier_ = kDecayMult;
+		utils::shared_value<float> dbSlope_ = kDbSlopePerOctave;
 
 		float nyquistFreq_ = kDefaultSampleRate * 0.5f;
 		u32 binCount_ = 1 << (kDefaultFFTOrder - 1);

@@ -12,6 +12,8 @@
 
 #include <variant>
 #include <any>
+#include <vector>
+#include <memory>
 #include "utils.h"
 #include "sync_primitives.h"
 #include "simd_utils.h"
@@ -100,7 +102,7 @@ namespace Framework
 		ParameterValue &operator=(ParameterValue &&) = delete;
 
 		ParameterValue(ParameterDetails details, u64) noexcept :
-			details_(std::move(details)) { initialise(); }
+			details_(details) { initialise(); }
 
 		ParameterValue(const ParameterValue &other, u64) noexcept : 
 			details_(other.details_)

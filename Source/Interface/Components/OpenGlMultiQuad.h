@@ -213,29 +213,29 @@ namespace Interface
 		}
 
 	protected:
-		shared_value<BaseComponent *> targetComponent_ = nullptr;
-		shared_value<Rectangle<int>> customDrawBounds_{};
-		shared_value<BaseComponent *> scissorComponent_ = nullptr;
-		shared_value<Shaders::FragmentShader> fragmentShader_;
-		shared_value<size_t> maxQuads_;
-		shared_value<size_t> numQuads_;
+		utils::shared_value<BaseComponent *> targetComponent_ = nullptr;
+		utils::shared_value<Rectangle<int>> customDrawBounds_{};
+		utils::shared_value<BaseComponent *> scissorComponent_ = nullptr;
+		utils::shared_value<Shaders::FragmentShader> fragmentShader_;
+		utils::shared_value<size_t> maxQuads_;
+		utils::shared_value<size_t> numQuads_;
 
-		shared_value<bool> drawWhenNotVisible_ = false;
-		shared_value<bool> active_ = true;
-		shared_value<bool> dirty_ = false;
-		shared_value<Colour> color_;
-		shared_value<Colour> altColor_;
-		shared_value<Colour> modColor_;
-		shared_value<Colour> backgroundColor_;
-		shared_value<Colour> thumbColor_;
-		shared_value<float> maxArc_ = 2.0f;
-		shared_value<float> thumbAmount_ = 0.5f;
-		shared_value<float> startPosition_ = 0.0f;
-		shared_value<float> overallAlpha_ = 1.0f;
-		shared_value<bool> additiveBlending_ = false;
-		shared_value<float> thickness_ = 1.0f;
-		shared_value<float> rounding_ = 5.0f;
-		shared_value<std::array<float, 4>> values_{};
+		utils::shared_value<bool> drawWhenNotVisible_ = false;
+		utils::shared_value<bool> active_ = true;
+		utils::shared_value<bool> dirty_ = false;
+		utils::shared_value<Colour> color_;
+		utils::shared_value<Colour> altColor_;
+		utils::shared_value<Colour> modColor_;
+		utils::shared_value<Colour> backgroundColor_;
+		utils::shared_value<Colour> thumbColor_;
+		utils::shared_value<float> maxArc_ = 2.0f;
+		utils::shared_value<float> thumbAmount_ = 0.5f;
+		utils::shared_value<float> startPosition_ = 0.0f;
+		utils::shared_value<float> overallAlpha_ = 1.0f;
+		utils::shared_value<bool> additiveBlending_ = false;
+		utils::shared_value<float> thickness_ = 1.0f;
+		utils::shared_value<float> rounding_ = 5.0f;
+		utils::shared_value<std::array<float, 4>> values_{};
 
 		/*
 		 * data_ array indices per quad
@@ -245,7 +245,7 @@ namespace Interface
 		 * 6 - 7: shader values (doubles as left channel shader values)
 		 * 8 - 9: right channel shader values (necessary for the modulation meters/indicators)
 		 */
-		shared_value<std::unique_ptr<float[]>> data_;
+		utils::shared_value<std::unique_ptr<float[]>> data_;
 		std::unique_ptr<int[]> indices_;
 
 		OpenGlShaderProgram *shader_ = nullptr;

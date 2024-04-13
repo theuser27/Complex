@@ -52,8 +52,8 @@ namespace Interface
 		std::vector<gl_ptr<OpenGlComponent>> openGlComponents_;
 
 		Renderer *renderer_ = nullptr;
-		shared_value<Skin::SectionOverride> skinOverride_ = Skin::kNone;
-		shared_value<float> scaling_ = 1.0f;
+		utils::shared_value<Skin::SectionOverride> skinOverride_ = Skin::kNone;
+		utils::shared_value<float> scaling_ = 1.0f;
 
 		std::atomic<bool> isRendering_ = false;
 	};

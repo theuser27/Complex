@@ -10,7 +10,6 @@
 
 #pragma once
 
-
 #include "../Components/OpenGlScrollBar.h"
 #include "../Components/OpenGlViewport.h"
 #include "BaseSection.h"
@@ -47,7 +46,7 @@ namespace Interface
 	};
 
 	class EffectsLaneSection final : public ProcessorSection, public OpenGlScrollBarListener, OpenGlViewportListener,
-		public Generation::BaseProcessor::Listener
+		public Generation::BaseProcessorListener
 	{
 	public:
 		static constexpr int kTopBarHeight = 28;

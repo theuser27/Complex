@@ -89,4 +89,47 @@ namespace utils
 		bool expectedOrExclusive_;
 		WaitMechanism mechanism_;
 	};
+
+	template<typename T>
+	class shared_value
+	{
+		struct atomic_holder
+		{
+			T load() const noexcept { return value.load(std::memory_order_relaxed); }
+			void store(T newValue) noexcept { value.store(newValue, std::memory_order_relaxed); }
+
+			std::atomic<T> value;
+		};
+
+		struct guard_holder
+		{
+			T load() const noexcept
+			{
+				utils::ScopedLock g{ guard, utils::WaitMechanism::Spin };
+				return value;
+			}
+			void store(T newValue) noexcept
+			{
+				utils::ScopedLock g{ guard, utils::WaitMechanism::Spin };
+				value = std::move(newValue);
+			}
+
+			mutable std::atomic<bool> guard = false;
+			T value;
+		};
+
+		// if the type cannot fit into an atomic we can have an atomic_bool to guard it
+		using holder = std::conditional_t<sizeof(T) <= sizeof(std::uintptr_t), atomic_holder, guard_holder>;  // NOLINT(bugprone-sizeof-expression)
+	public:
+		shared_value() = default;
+		shared_value(const shared_value &other) noexcept { value.store(other.value.load()); }
+		shared_value(T newValue) noexcept { value.store(std::move(newValue)); }
+		shared_value &operator=(const shared_value &other) noexcept { return shared_value::operator=(other.value.load()); }
+		shared_value &operator=(T newValue) noexcept { value.store(std::move(newValue)); return *this; }
+		operator T() const noexcept { return get(); }
+
+		[[nodiscard]] T get() const noexcept { return value.load(); }
+	private:
+		holder value{};
+	};
 }

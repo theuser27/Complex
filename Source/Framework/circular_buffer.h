@@ -10,7 +10,6 @@
 
 #pragma once
 
-#include <memory>
 #include "AppConfig.h"
 #include <juce_audio_basics/juce_audio_basics.h>
 #include "utils.h"
@@ -78,22 +77,22 @@ namespace Framework
 		// and writes the results to the respective channels of thisBuffer
 		// while anticipating wrapping around in both buffers 
 		static void applyToBuffer(juce::AudioBuffer<float>& thisBuffer, const juce::AudioBuffer<float>& otherBuffer,
-			u32 numChannels, u32 numSamples, u32 thisStartIndex, u32 otherStartIndex,
+			size_t numChannels, size_t numSamples, size_t thisStartIndex, size_t otherStartIndex,
 			const bool* channelsToApplyTo = nullptr, utils::MathOperations operation = utils::MathOperations::Assign) noexcept
 		{
-			COMPLEX_ASSERT(static_cast<u32>(thisBuffer.getNumChannels()) >= numChannels);
-			COMPLEX_ASSERT(static_cast<u32>(otherBuffer.getNumChannels()) >= numChannels);
-			COMPLEX_ASSERT(static_cast<u32>(thisBuffer.getNumSamples()) >= numSamples);
-			COMPLEX_ASSERT(static_cast<u32>(otherBuffer.getNumSamples()) >= numSamples);
+			COMPLEX_ASSERT(static_cast<size_t>(thisBuffer.getNumChannels()) >= numChannels);
+			COMPLEX_ASSERT(static_cast<size_t>(otherBuffer.getNumChannels()) >= numChannels);
+			COMPLEX_ASSERT(static_cast<size_t>(thisBuffer.getNumSamples()) >= numSamples);
+			COMPLEX_ASSERT(static_cast<size_t>(otherBuffer.getNumSamples()) >= numSamples);
 
 			float(*opFunction)(float, float, float);
 			switch (operation)
 			{
 			case utils::MathOperations::Add:
-				opFunction = [](float one, float two, [[maybe_unused]] float three) { return one + two; };
+				opFunction = [](float one, float two, float) { return one + two; };
 				break;
 			case utils::MathOperations::Multiply:
-				opFunction = [](float one, float two, [[maybe_unused]] float three) { return one * two; };
+				opFunction = [](float one, float two, float) { return one * two; };
 				break;
 			case utils::MathOperations::FadeInAdd:
 				opFunction = [](float one, float two, float t) { return (1 - t) * one + t * (one + two); };
@@ -106,48 +105,62 @@ namespace Framework
 				break;
 			default:
 			case utils::MathOperations::Assign:
-				opFunction = []([[maybe_unused]] float one, float two, [[maybe_unused]] float three) { return two; };
+				opFunction = [](float, float two, float) { return two; };
 				break;
 			}
 
-			u32 thisBufferSize;
-			u32 otherBufferSize;
 			float increment = 1.0f / (float)numSamples;
+			auto thisPointers = thisBuffer.getArrayOfWritePointers();
+			auto otherPointers = otherBuffer.getArrayOfReadPointers();
 
-			u32(*indexFunction)(u32, u32);
-			if (utils::isPowerOfTwo(static_cast<u32>(thisBuffer.getNumSamples())) &&
-				utils::isPowerOfTwo(static_cast<u32>(otherBuffer.getNumSamples())))
+			auto iterate = [&]<bool UseBitAnd>()
 			{
-				indexFunction = [](u32 value, u32 size) { return value & size; };
-				thisBufferSize = thisBuffer.getNumSamples() - 1;
-				otherBufferSize = otherBuffer.getNumSamples() - 1;
-			}
-			else
-			{
-				indexFunction = [](u32 value, u32 size) { return value % size; };
-				thisBufferSize = thisBuffer.getNumSamples();
-				otherBufferSize = otherBuffer.getNumSamples();
-			}
+				size_t thisBufferSize, otherBufferSize;
 
-			auto otherDataReadPointers = otherBuffer.getArrayOfReadPointers();
-			auto thisDataReadPointers = thisBuffer.getArrayOfReadPointers();
-			auto thisDataWritePointers = thisBuffer.getArrayOfWritePointers();
-
-			for (u32 i = 0; i < numChannels; i++)
-			{
-				if (channelsToApplyTo && !channelsToApplyTo[i])
-					continue;
-
-				float t = 0.0f;
-				for (u32 k = 0; k < numSamples; k++)
+				if constexpr (UseBitAnd)
 				{
-					u32 thisIndex = indexFunction(thisStartIndex + k, thisBufferSize);
-					thisDataWritePointers[i][thisIndex] = opFunction(thisDataReadPointers[i][thisIndex],
-						otherDataReadPointers[i][indexFunction(otherStartIndex + k, otherBufferSize)], t);
-
-					t += increment;
+					thisBufferSize = thisBuffer.getNumSamples() - 1;
+					otherBufferSize = otherBuffer.getNumSamples() - 1;
 				}
-			}
+				else
+				{
+					thisBufferSize = thisBuffer.getNumSamples();
+					otherBufferSize = otherBuffer.getNumSamples();
+				}
+
+				for (size_t i = 0; i < numChannels; i++)
+				{
+					if (channelsToApplyTo && !channelsToApplyTo[i])
+						continue;
+
+					float t = 0.0f;
+					for (size_t k = 0; k < numSamples; k++)
+					{
+						size_t thisIndex, otherIndex;
+						if constexpr (UseBitAnd)
+						{
+							thisIndex = (thisStartIndex + k) & thisBufferSize;
+							otherIndex = (otherStartIndex + k) & otherBufferSize;
+						}
+						else
+						{
+							thisIndex = (thisStartIndex + k) % thisBufferSize;
+							otherIndex = (otherStartIndex + k) % otherBufferSize;
+						}
+
+						thisPointers[i][thisIndex] = opFunction(thisPointers[i][thisIndex], 
+							otherPointers[i][otherIndex], t);
+
+						t += increment;
+					}
+				}
+			};
+
+			if (utils::isPowerOfTwo(static_cast<size_t>(thisBuffer.getNumSamples())) &&
+				utils::isPowerOfTwo(static_cast<size_t>(otherBuffer.getNumSamples())))
+				iterate.template operator()<true>();
+			else
+				iterate.template operator()<false>();
 		}
 
 		// - A specified AudioBuffer reads from the current buffer's data and stores it in a reader, where

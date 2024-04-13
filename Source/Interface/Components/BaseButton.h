@@ -172,8 +172,8 @@ namespace Interface
 
 		std::vector<ButtonListener *> buttonListeners_{};
 
-		shared_value<bool> isHeldDown_ = false;
-		shared_value<bool> isHoveredOver_ = false;
+		utils::shared_value<bool> isHeldDown_ = false;
+		utils::shared_value<bool> isHoveredOver_ = false;
 
 		JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(BaseButton)
 	};
@@ -196,8 +196,8 @@ namespace Interface
 
 		Colour onNormalColor_{};
 
-		shared_value<Colour> activeColour_{};
-		shared_value<Colour> hoverColour_{};
+		utils::shared_value<Colour> activeColour_{};
+		utils::shared_value<Colour> hoverColour_{};
 	};
 
 	class RadioButton final : public BaseButton
@@ -219,9 +219,9 @@ namespace Interface
 	private:
 		gl_ptr<OpenGlQuad> backgroundComponent_ = nullptr;
 
-		shared_value<Colour> onNormalColor_{};
-		shared_value<Colour> offNormalColor_{};
-		shared_value<Colour> backgroundColor_{};
+		utils::shared_value<Colour> onNormalColor_{};
+		utils::shared_value<Colour> offNormalColor_{};
+		utils::shared_value<Colour> backgroundColor_{};
 	};
 
 	class OptionsButton final : public BaseButton

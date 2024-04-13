@@ -72,6 +72,9 @@ namespace common
 	inline constexpr float kMinWindowScaleFactor = 0.5f;
 	inline constexpr float kMaxWindowScaleFactor = 3.0f;
 	inline constexpr int kParameterUpdateIntervalHz = 60;
+
+	// used for updating parameters
+	enum class UpdateFlag : u32 { NoUpdates = 0, Realtime = 1, BeforeProcess = 2, AfterProcess = 3 };
 }
 
 using namespace common;

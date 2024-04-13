@@ -34,13 +34,13 @@ namespace Framework
 		MemoryBlock(const MemoryBlock &other) = delete;
 		MemoryBlock &operator= (const MemoryBlock &other) = delete;
 
-		MemoryBlock(MemoryBlock&& other) noexcept
+		MemoryBlock(MemoryBlock &&other) noexcept
 		{
 			data_ = std::move(other.data_);
 			absoluteSize_ = other.absoluteSize_;
 		}
 
-		MemoryBlock& operator= (MemoryBlock&& other) noexcept
+		MemoryBlock& operator= (MemoryBlock &&other) noexcept
 		{
 			if (this != &other)
 			{
@@ -114,7 +114,7 @@ namespace Framework
 			absoluteSize_ = 0;
 		}
 
-		perf_inline void swap(MemoryBlock& other) noexcept
+		perf_inline void swap(MemoryBlock &other) noexcept
 		{
 			if (&other == this)
 				return;
@@ -136,13 +136,13 @@ namespace Framework
 			data_[index] = value;
 		}
 
-		T& operator[](u64 index) noexcept
+		T &operator[](u64 index) noexcept
 		{ 
 			COMPLEX_ASSERT(index < absoluteSize_ / sizeof(T));
 			return data_[index];
 		}
 
-		const T& operator[](u64 index) const noexcept
+		const T &operator[](u64 index) const noexcept
 		{
 			COMPLEX_ASSERT(index < absoluteSize_ / sizeof(T));
 			return data_[index];
@@ -211,6 +211,8 @@ namespace Framework
 
 		T read(u64 index) const noexcept { return block_.read(index); }
 		const T& operator[](u64 index) const noexcept { return block_[index]; }
+
+		std::shared_ptr<const T[]> getData() noexcept { return block_.data_; }
 
 		friend bool operator==(const MemoryBlockView &lhs, const MemoryBlock<T, alignment> &rhs) noexcept { return lhs.block_ == rhs; }
 

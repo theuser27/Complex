@@ -70,27 +70,84 @@ namespace utils
 	strict_inline bool vector_call completelyEqual(simd_int left, simd_int right) noexcept
 	{ return simd_int::notEqual(left, right).sum() == 0; }
 
-	// 0s for loading values from one, 1s for loading values from two
+	strict_inline simd_float vector_call copyFromEven(simd_float value) noexcept
+	{
+	#if COMPLEX_SSE4_1
+		return _mm_shuffle_ps(value.value, value.value, _MM_SHUFFLE(2, 2, 0, 0));
+	#elif COMPLEX_NEON
+		static_assert(false, "not implemented yet");
+	#endif
+	}
+
+	strict_inline simd_int vector_call copyFromEven(simd_int value) noexcept
+	{
+	#if COMPLEX_SSE4_1
+		return _mm_shuffle_epi32(value.value, _MM_SHUFFLE(2, 2, 0, 0));
+	#elif COMPLEX_NEON
+		static_assert(false, "not implemented yet");
+	#endif
+	}
+
+	strict_inline simd_float vector_call copyFromOdd(simd_float value) noexcept
+	{
+	#if COMPLEX_SSE4_1
+		return _mm_shuffle_ps(value.value, value.value, _MM_SHUFFLE(3, 3, 1, 1));
+	#elif COMPLEX_NEON
+		static_assert(false, "not implemented yet");
+	#endif
+	}
+
+	strict_inline simd_int vector_call copyFromOdd(simd_int value) noexcept
+	{
+	#if COMPLEX_SSE4_1
+		return _mm_shuffle_epi32(value.value, _MM_SHUFFLE(3, 3, 1, 1));
+	#elif COMPLEX_NEON
+		static_assert(false, "not implemented yet");
+	#endif
+	}
+
+	strict_inline simd_float vector_call groupEven(simd_float value) noexcept
+	{
+	#if COMPLEX_SSE4_1
+		return _mm_shuffle_ps(value.value, value.value, _MM_SHUFFLE(3, 1, 2, 0));
+	#elif COMPLEX_NEON
+		static_assert(false, "not implemented yet");
+	#endif
+	}
+
+	strict_inline simd_float vector_call groupEvenReverse(simd_float value) noexcept
+	{
+	#if COMPLEX_SSE4_1
+		return _mm_shuffle_ps(value.value, value.value, _MM_SHUFFLE(1, 3, 0, 2));
+	#elif COMPLEX_NEON
+		static_assert(false, "not implemented yet");
+	#endif
+	}
+
+	strict_inline simd_float vector_call groupOdd(simd_float value) noexcept
+	{
+	#if COMPLEX_SSE4_1
+		return _mm_shuffle_ps(value.value, value.value, _MM_SHUFFLE(2, 0, 3, 1));
+	#elif COMPLEX_NEON
+		static_assert(false, "not implemented yet");
+	#endif
+	}
+
+	strict_inline simd_float vector_call groupOddReverse(simd_float value) noexcept
+	{
+	#if COMPLEX_SSE4_1
+		return _mm_shuffle_ps(value.value, value.value, _MM_SHUFFLE(0, 2, 1, 3));
+	#elif COMPLEX_NEON
+		static_assert(false, "not implemented yet");
+	#endif
+	}
+
 	template<SimdValue SIMD>
-	strict_inline SIMD vector_call maskLoad(SIMD zeroValue, SIMD oneValue, simd_mask mask) noexcept
+	strict_inline SIMD vector_call maskLoad(SIMD falseValue, SIMD trueValue, simd_mask mask) noexcept
 	{
-		SIMD oldValues = zeroValue & ~mask;
-		SIMD newValues = oneValue & mask;
-		return oldValues + newValues;
-	}
-
-	strict_inline void vector_call copyBuffer(simd_float *dest, 
-		const simd_float *source, int size) noexcept
-	{
-		for (int i = 0; i < size; ++i)
-			dest[i] = source[i];
-	}
-
-	strict_inline void vector_call addBuffers(simd_float *dest, 
-		const simd_float *b1, const simd_float *b2, int size) noexcept
-	{
-		for (int i = 0; i < size; ++i)
-			dest[i] = b1[i] + b2[i];
+		// https://graphics.stanford.edu/~seander/bithacks.html#MaskedMerge
+		// (falseValue & ~mask) | (trueValue & mask)
+		return falseValue ^ ((falseValue ^ trueValue) & mask);
 	}
 
 	strict_inline simd_float vector_call toFloat(simd_int integers) noexcept
@@ -134,20 +191,20 @@ namespace utils
 
 	strict_inline simd_mask vector_call getSign(simd_int value) noexcept
 	{
-		static const simd_mask signMask = kSignMask;
+		static constexpr simd_mask signMask = kSignMask;
 		return value & signMask;
 	}
 
 	strict_inline simd_mask vector_call getSign(simd_float value) noexcept
 	{
-		static const simd_mask signMask = kSignMask;
+		static constexpr simd_mask signMask = kSignMask;
 		return reinterpretToInt(value) & signMask;
 	}
 
 	// conditionally unsigns ints if they are negative and returns full mask where values are negative
 	strict_inline simd_mask vector_call unsignSimd(simd_int &value, bool returnFullMask = false) noexcept
 	{
-		static const simd_mask signMask = kSignMask;
+		static constexpr simd_mask signMask = kSignMask;
 		simd_mask mask = simd_mask::equal(value & signMask, signMask);
 		value = maskLoad(value, ~value - 1, mask);
 		return (returnFullMask) ? simd_mask::equal(mask, signMask) : mask;
@@ -156,20 +213,20 @@ namespace utils
 	// conditionally unsigns floats if they are negative and returns full mask where values are negative
 	strict_inline simd_mask vector_call unsignSimd(simd_float &value, bool returnFullMask = false) noexcept
 	{
-		static const simd_mask signMask = kSignMask;
+		static constexpr simd_mask signMask = kSignMask;
 		simd_mask mask = reinterpretToInt(value) & signMask;
 		value ^= mask;
 		return (returnFullMask) ? simd_mask::equal(mask, signMask) : mask;
 	}
 
-	strict_inline simd_float modOnceUnsigned(simd_float value, simd_float mod) noexcept
+	strict_inline simd_float vector_call modOnceUnsigned(simd_float value, simd_float mod) noexcept
 	{
 		simd_mask lessMask = simd_float::lessThan(value, mod);
 		simd_float lower = value - mod;
 		return maskLoad(lower, value, lessMask);
 	}
 
-	strict_inline simd_float modOnceSigned(simd_float value, simd_float mod) noexcept
+	strict_inline simd_float vector_call modOnceSigned(simd_float value, simd_float mod) noexcept
 	{
 		simd_mask signMask = unsignSimd(value);
 		simd_mask lessMask = simd_float::lessThan(value, mod);
@@ -177,7 +234,47 @@ namespace utils
 		return maskLoad(lower, value, lessMask) ^ signMask;
 	}
 
-	strict_inline simd_float reciprocal(simd_float value) noexcept
+
+	strict_inline simd_float vector_call horizontalAdd(simd_float one, simd_float two) noexcept
+	{
+	#if COMPLEX_SSE4_1
+		return _mm_hadd_ps(one.value, two.value);
+	#elif COMPLEX_NEON
+		static_assert(false, "implement this");
+	#endif
+	}
+
+	strict_inline simd_float vector_call horizontalSub(simd_float one, simd_float two) noexcept
+	{
+	#if COMPLEX_SSE4_1
+		return _mm_hsub_ps(one.value, two.value);
+	#elif COMPLEX_NEON
+		static_assert(false, "implement this");
+	#endif
+	}
+
+	strict_inline simd_int vector_call horizontalMin(simd_int value) noexcept
+	{
+	#if COMPLEX_SSE4_1
+		auto reversed = _mm_shuffle_epi32(value.value, _MM_SHUFFLE(0, 1, 2, 3));
+		auto one = _mm_min_epi32(value.value, reversed);
+		auto switched = _mm_shuffle_epi32(one, _MM_SHUFFLE(2, 3, 0, 1));
+		return _mm_min_epi32(one, switched);
+	#elif COMPLEX_NEON
+		static_assert(false, "implement this");
+	#endif
+	}
+
+	strict_inline simd_float vector_call horizontalMin(simd_float value) noexcept
+	{
+	#if COMPLEX_SSE4_1
+		return reinterpretToFloat(horizontalMin(reinterpretToInt(value)));
+	#elif COMPLEX_NEON
+		static_assert(false, "not yet implemented");
+	#endif
+	}
+
+	strict_inline simd_float vector_call reciprocal(simd_float value) noexcept
 	{
 	#if COMPLEX_SSE4_1
 		return _mm_rcp_ps(value.value);
@@ -254,11 +351,14 @@ namespace utils
 		static constexpr float kCoefficient4 = -1.0f / 3.0f;
 		static constexpr float kCoefficient5 = 1.0f / 31.0f;
 
+		static constexpr simd_mask mantissaMask = 0x7fffff;
+		static constexpr simd_mask exponentOffset = 0x7f << 23;
+
 		// effectively log2s only the exponent; gets it in terms an int
 		simd_int floored_log2 = shiftRight<23>(reinterpretToInt(value)) - 0x7f;
 		// 0x7fffff masks the entire mantissa
 		// then we bring the exponent to 2^0 to get the entire number between [1, 2]
-		simd_float t = (value & 0x7fffff) | (0x7f << 23);
+		simd_float t = (value & mantissaMask) | exponentOffset;
 
 		// we log2 the mantissa with the taylor series coefficients
 		simd_float interpolate = simd_float::mulAdd(kCoefficient2, t, (simd_float::mulAdd(kCoefficient3, t,
@@ -300,6 +400,7 @@ namespace utils
 
 	strict_inline simd_float vector_call normalisedToFrequency(simd_float normalised, float sampleRate) noexcept
 	{
+		// TODO: fix this data race
 		static float lastSampleRate = kDefaultSampleRate;
 		static float lastLog2 = (float)std::log2(lastSampleRate / (kMinFrequency * 2.0));
 

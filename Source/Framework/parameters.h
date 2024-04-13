@@ -33,9 +33,6 @@ namespace Generation
 
 namespace Framework
 {
-	// used for updating parameters
-	enum class UpdateFlag : u32 { NoUpdates = 0, Realtime = 1, BeforeProcess = 2, AfterProcess = 3 };
-
 	// symmetric types apply the flipped curve to negative values
 	// all x values are normalised
 	enum class ParameterScale : u32
@@ -129,7 +126,8 @@ namespace Framework
         NESTED_ENUM_FROM(BaseProcessors::BaseEffect::Dynamics, Compressor)
 
 			NESTED_ENUM_FROM(BaseProcessors::BaseEffect, (Phase, u64), (Shift, Transform), (DEFER), (DEFER))
-				NESTED_ENUM_FROM(BaseProcessors::BaseEffect::Phase, Shift, ((PhaseShift, ID, "PHASE_SHIFT_FX_PHASE_SHIFT"), (Interval, ID, "PHASE_SHIFT_FX_INTERVAL"), (Offset, ID, "PHASE_SHIFT_FX_OFFSET")))
+				NESTED_ENUM_FROM(BaseProcessors::BaseEffect::Phase, Shift, ((PhaseShift, ID, "PHASE_SHIFT_FX_PHASE_SHIFT"), (Slope, ID, "PHASE_SHIFT_FX_SLOPE"), 
+				                                                            (Interval, ID, "PHASE_SHIFT_FX_INTERVAL"), (Offset, ID, "PHASE_SHIFT_FX_OFFSET")))
 				NESTED_ENUM_FROM(BaseProcessors::BaseEffect::Phase, Transform)
 	
 

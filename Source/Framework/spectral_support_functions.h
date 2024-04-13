@@ -10,7 +10,7 @@
 
 #pragma once
 
-#include <complex>
+#include <Third Party/gcem/gcem.hpp>
 #include "sync_primitives.h"
 #include "simd_buffer.h"
 #include "simd_utils.h"
@@ -23,42 +23,6 @@ namespace utils
 	// this number of iterations produces results with max error of <= 0.01 degrees
 	inline constexpr size_t defaultCordicIterations = 12;
 
-	strict_inline simd_float vector_call groupEven(simd_float value)
-	{
-	#if COMPLEX_SSE4_1
-		return _mm_shuffle_ps(value.value, value.value, _MM_SHUFFLE(3, 1, 2, 0));
-	#elif COMPLEX_NEON
-		static_assert(false, "not implemented yet");
-	#endif
-	}
-
-	strict_inline simd_float vector_call groupEvenReverse(simd_float value)
-	{
-	#if COMPLEX_SSE4_1
-		return _mm_shuffle_ps(value.value, value.value, _MM_SHUFFLE(1, 3, 0, 2));
-	#elif COMPLEX_NEON
-		static_assert(false, "not implemented yet");
-	#endif
-	}
-
-	strict_inline simd_float vector_call groupOdd(simd_float value)
-	{
-	#if COMPLEX_SSE4_1
-		return _mm_shuffle_ps(value.value, value.value, _MM_SHUFFLE(2, 0, 3, 1));
-	#elif COMPLEX_NEON
-		static_assert(false, "not implemented yet");
-	#endif
-	}
-
-	strict_inline simd_float vector_call groupOddReverse(simd_float value)
-	{
-	#if COMPLEX_SSE4_1
-		return _mm_shuffle_ps(value.value, value.value, _MM_SHUFFLE(0, 2, 1, 3));
-	#elif COMPLEX_NEON
-		static_assert(false, "not implemented yet");
-	#endif
-	}
-
 	/**
 	 * \brief 
 	 * \tparam Iterations number of iterations the algorithm should do
@@ -68,14 +32,14 @@ namespace utils
 	template<size_t Iterations = defaultCordicIterations>
 	strict_inline std::array<simd_float, 3> vector_call cordicRotation(simd_float radians)
 	{
-		static const simd_mask kFloatExponentMask = 0x7f800000;
-		static const simd_mask kNotFloatExponentMask = ~kFloatExponentMask;
+		static constexpr simd_mask kFloatExponentMask = 0x7f800000;
+		static constexpr simd_mask kNotFloatExponentMask = ~kFloatExponentMask;
 
 		static const simd_float kFactor = []()
 		{
 			float result = 1.0f;
 			for (size_t i = 0; i < Iterations; i++)
-				result *= 1.0f / std::sqrt(1.0f + std::exp2(-2.0f * (float)i));
+				result *= 1.0f / gcem::sqrt(1.0f + std::exp2(-2.0f * (float)i));
 			return result;
 		}();
 
@@ -84,7 +48,7 @@ namespace utils
 		{
 			std::array<simd_float, Iterations + 1> angles{};
 			for (i32 i = 0; i <= (i32)Iterations; i++)
-				angles[i] = std::atan(std::exp2((float)(-i)));
+				angles[i] = gcem::atan(std::exp2((float)(-i)));
 			return angles;
 		}();
 
@@ -127,8 +91,8 @@ namespace utils
 	template<size_t Iterations = defaultCordicIterations>
 	strict_inline std::array<simd_float, 3> vector_call cordicVectoring(simd_float x, simd_float y)
 	{
-		static const simd_mask kFloatExponentMask = 0x7f800000;
-		static const simd_mask kNotFloatExponentMask = ~kFloatExponentMask;
+		static constexpr simd_mask kFloatExponentMask = 0x7f800000;
+		static constexpr simd_mask kNotFloatExponentMask = ~kFloatExponentMask;
 
 		static const simd_float kFactor = []()
 		{
@@ -174,10 +138,8 @@ namespace utils
 			signMask = getSign(y);
 		}
 
-		return { 
-			maskLoad(x, simd_float(0.0f), zeroOverZeroMask), 
-			maskLoad(angle, simd_float(0.0f), zeroOverZeroMask), 
-			kFactor };
+		return { maskLoad(x, simd_float(0.0f), zeroOverZeroMask), 
+			maskLoad(angle, simd_float(0.0f), zeroOverZeroMask), kFactor };
 	}
 
 	template<size_t Iterations = defaultCordicIterations>
@@ -227,8 +189,8 @@ namespace utils
 	{
 		// https://www.desmos.com/calculator/oxzturzmjn
 		// max error ~= 0.01 degrees
-		static const simd_float a = 0.35496f;
-		static const simd_float b = -0.0815f;
+		static constexpr simd_float a = 0.35496f;
+		static constexpr simd_float b = -0.0815f;
 
 		simd_float yxDiv = y / x;
 		simd_float yxDivSqr = yxDiv * yxDiv;
@@ -267,12 +229,12 @@ namespace utils
 	strict_inline std::pair<simd_float, simd_float> vector_call cisFast(simd_float radians)
 	{
 		// pade approximants of sine
-		static constexpr float kNum1 = 166320.0f * kPi;
-		static constexpr float kNum2 = -22260.0f * kPi * kPi * kPi;
-		static constexpr float kNum3 = 551.0f * kPi * kPi * kPi * kPi * kPi;
-		static constexpr float kDen1 = 166320.0f;
-		static constexpr float kDen2 = 5460.0f * kPi * kPi;
-		static constexpr float kDen3 = 75.0f * kPi * kPi * kPi * kPi;
+		static constexpr simd_float kNum1 = 166320.0f * kPi;
+		static constexpr simd_float kNum2 = -22260.0f * kPi * kPi * kPi;
+		static constexpr simd_float kNum3 = 551.0f * kPi * kPi * kPi * kPi * kPi;
+		static constexpr simd_float kDen1 = 166320.0f;
+		static constexpr simd_float kDen2 = 5460.0f * kPi * kPi;
+		static constexpr simd_float kDen3 = 75.0f * kPi * kPi * kPi * kPi;
 
 		// correction for angles after +/-pi, normalises to +/-1
 		radians /= kPi;
@@ -455,8 +417,8 @@ namespace utils
 	}
 
 	template<auto ConversionFunction>
-	strict_inline void convertBuffer(const Framework::SimdBufferView<std::complex<float>, simd_float> &source,
-		Framework::SimdBuffer<std::complex<float>, simd_float> &destination, size_t size)
+	strict_inline void convertBuffer(const Framework::SimdBufferView<Framework::complex<float>, simd_float> &source,
+		Framework::SimdBuffer<Framework::complex<float>, simd_float> &destination, size_t size)
 	{
 		for (u32 i = 0; i < source.getSimdChannels(); i++)
 		{
@@ -474,8 +436,8 @@ namespace utils
 	}
 
 	template<auto ConversionFunction>
-	strict_inline void convertBufferLock(const Framework::SimdBufferView<std::complex<float>, simd_float> &source,
-		Framework::SimdBuffer<std::complex<float>, simd_float> &destination, size_t size, WaitMechanism mechanism)
+	strict_inline void convertBufferLock(const Framework::SimdBufferView<Framework::complex<float>, simd_float> &source,
+		Framework::SimdBuffer<Framework::complex<float>, simd_float> &destination, size_t size, WaitMechanism mechanism)
 	{
 		// base must not be changed
 		static constexpr auto unlockPeriod = 2 << 2;

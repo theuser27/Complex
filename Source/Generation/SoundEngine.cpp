@@ -9,6 +9,7 @@
 */
 
 #include "Framework/fourier_transform.h"
+#include "Framework/parameter_value.h"
 #include "EffectsState.h"
 #include "SoundEngine.h"
 #include "../Plugin/ProcessorTree.h"
@@ -103,7 +104,7 @@ namespace Generation
 		isPerforming_ = true;
 	}
 
-	void SoundEngine::UpdateParameters(Framework::UpdateFlag flag, float sampleRate) noexcept
+	void SoundEngine::UpdateParameters(UpdateFlag flag, float sampleRate) noexcept
 	{
 		using namespace Framework;
 
@@ -346,17 +347,13 @@ namespace Generation
 		// copying input in the main circular buffer
 		CopyBuffers(buffer, numInputs, numSamples);
 
-		std::chrono::time_point<std::chrono::steady_clock> start{};
 		while (true)
 		{
-			if (start == decltype(start){})
-				start = std::chrono::steady_clock::now();
-
 			IsReadyToPerform(numSamples);
 			if (!isPerforming_)
 				break;
 			
-			UpdateParameters(Framework::UpdateFlag::Realtime, sampleRate);
+			UpdateParameters(UpdateFlag::Realtime, sampleRate);
 			DoFFT();
 			ProcessFFT(sampleRate);
 			DoIFFT();
@@ -366,7 +363,5 @@ namespace Generation
 		MixOut(numSamples);
 		// copying output to buffer
 		FillOutput(buffer, numOutputs, numSamples);
-
-		setProcessingTime(std::chrono::steady_clock::now() - start);
 	}
 }

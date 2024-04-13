@@ -88,17 +88,17 @@ namespace Interface
     void decayBoosts(float mult);
 
   private:
-    shared_value<Colour> colour_;
-    shared_value<Colour> fillColorFrom_;
-    shared_value<Colour> fillColorTo_;
+    utils::shared_value<Colour> colour_;
+    utils::shared_value<Colour> fillColorFrom_;
+    utils::shared_value<Colour> fillColorTo_;
 
-    shared_value<float> lineWidth_ = kDefaultLineWidth;
-    shared_value<bool> fill_ = false;
-    shared_value<float> fillCenter_ = 0.0f;
-    shared_value<bool> fit_ = false;
+    utils::shared_value<float> lineWidth_ = kDefaultLineWidth;
+    utils::shared_value<bool> fill_ = false;
+    utils::shared_value<float> fillCenter_ = 0.0f;
+    utils::shared_value<bool> fit_ = false;
 
-    shared_value<float> boostAmount_ = 0.0f;
-    shared_value<float> fillBoostAmount_ = 0.0f;
+    utils::shared_value<float> boostAmount_ = 0.0f;
+    utils::shared_value<float> fillBoostAmount_ = 0.0f;
 
     bool dirty_ = false;
 

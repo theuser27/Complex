@@ -8,6 +8,8 @@
 	==============================================================================
 */
 
+#include <array>
+#include <algorithm>
 #include "Third Party/gcem/gcem.hpp"
 #include "constexpr_utils.h"
 #include "parameters.h"
@@ -76,6 +78,7 @@ namespace Framework
 	}();
 
 	static constexpr std::array<std::string_view, kNumInputsOutputs> kOutputNames = { "Main Output" };
+	static constexpr auto kPhaseShiftSlopeNames = std::to_array<std::string_view>({ "Constant", "Linear" });
 
 	using SoundEngine = BaseProcessors::SoundEngine::type;
 	using EffectsLane = BaseProcessors::EffectsLane::type;
@@ -166,6 +169,7 @@ namespace Framework
 	{
 		ParameterDetails
 		{ Phase::Shift::PhaseShift::name(), "Shift", -180.0f, 180.0f, 0.0f, 0.5f, ParameterScale::Linear, "", {}, true },
+		{ Phase::Shift::Slope::name(), "Slope", 0.0f, 1.0f, 0.0f, 0.0f, ParameterScale::Indexed, "", kPhaseShiftSlopeNames },
 		{ Phase::Shift::Interval::name(), "Interval", 0.0f, 10.0f, 1.0f, gcem::pow(1.0f / 10.0f, 1.0f / 3.0f), ParameterScale::Cubic, "", {}, true },
 		{ Phase::Shift::Offset::name(), "Offset", 0.0f, 1.0f, 0.0f, 0.0f, ParameterScale::Frequency, "", {}, true }
 	};

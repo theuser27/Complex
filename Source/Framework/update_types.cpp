@@ -9,6 +9,8 @@
 */
 
 #include "update_types.h"
+
+#include "Generation/BaseProcessor.h"
 #include "Plugin/ProcessorTree.h"
 #include "Framework/parameter_value.h"
 #include "Interface/Components/BaseControl.h"

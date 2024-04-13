@@ -8,6 +8,8 @@
 	==============================================================================
 */
 
+#include "BaseSlider.h"
+
 #include "Third Party/gcem/gcem.hpp"
 #include "Framework/update_types.h"
 #include "Framework/parameter_value.h"
@@ -16,7 +18,6 @@
 #include "../LookAndFeel/Miscellaneous.h"
 #include "OpenGlMultiQuad.h"
 #include "OpenGlImageComponent.h"
-#include "BaseSlider.h"
 #include "../LookAndFeel/Paths.h"
 #include "../LookAndFeel/Fonts.h"
 #include "../Sections/BaseSection.h"
@@ -62,7 +63,7 @@ namespace Interface
 	void BaseSlider::mouseDown(const MouseEvent &e)
 	{
 		useDragEvents_ = false;
-		mouseDragStartPosition_ = e.position;
+		lastMouseDragPosition_ = e.position;
 
 		if (!isEnabled())
 			return;
@@ -93,8 +94,7 @@ namespace Interface
 		if (parameterLink_ && parameterLink_->hostControl)
 			parameterLink_->hostControl->beginChangeGesture();
 
-		valueOnMouseDown_ = getValue();
-		beginChange(valueOnMouseDown_);
+		beginChange(getValueSafe());
 
 		useDragEvents_ = true;
 		mouseDrag(e);
@@ -112,14 +112,13 @@ namespace Interface
 			return;
 
 		auto mouseDiff = (isHorizontal()) ? 
-			e.position.x - mouseDragStartPosition_.x : mouseDragStartPosition_.y - e.position.y;
+			e.position.x - lastMouseDragPosition_.x : lastMouseDragPosition_.y - e.position.y;
+		lastMouseDragPosition_ = e.position;
 
-		double newPos = valueOnMouseDown_ + mouseDiff * (1.0 / immediateSensitivity_);
+		double newPos = getValueSafe() + mouseDiff * (1.0 / immediateSensitivity_);
 		newPos = (type_ == SliderType::CanLoopAround) ? newPos - std::floor(newPos) : std::clamp(newPos, 0.0, 1.0);
 
 		setValue(snapValue(newPos, Slider::DragMode::absoluteDrag), sendNotificationSync);
-
-		setValueSafe(getValue());
 		setValueToHost();
 
 		if (!e.mods.isPopupMenu())
@@ -850,6 +849,7 @@ namespace Interface
 			label_->setBounds(labelX, verticalOffset, labelTextWidth,
 				(anchorBounds.getHeight() - 2 * verticalOffset) / 2);
 
+			// this may or may not work, look at the other case
 			if (modifier_)
 				extraElements_.find(modifier_)->second = { labelX, label_->getBottom(),
 					modifier_->getDrawBounds().getWidth(), modifier_->getDrawBounds().getHeight() };
@@ -864,8 +864,13 @@ namespace Interface
 				(anchorBounds.getHeight() - 2 * verticalOffset) / 2);
 
 			if (modifier_)
-				extraElements_.find(modifier_)->second = { labelX, label_->getBottom(),
-					modifier_->getDrawBounds().getWidth(), modifier_->getDrawBounds().getHeight() };
+			{
+				auto drawBounds = modifier_->setBoundsForSizes(scaleValueRoundInt(TextSelector::kDefaultTextSelectorHeight));
+				int leftOffset = scaleValueRoundInt((float)drawBounds.getHeight() * TextSelector::kPaddingHeightRatio);
+
+				extraElements_.find(modifier_)->second = { std::max(0, labelX - leftOffset), label_->getBottom(),
+					drawBounds.getWidth(), drawBounds.getHeight() };
+			}
 			break;
 		}
 	}
@@ -1118,9 +1123,9 @@ namespace Interface
 				}();
 
 				float height = (float)drawBounds_.getHeight();
-				float leftOffset = kMarginsHeightRatio * height + (float)drawBounds_.getX() +
+				float leftOffset = kBetweenElementsMarginHeightRatio * height + (float)drawBounds_.getX() +
 					((extraIcon_ && labelPlacement_ == BubbleComponent::left) ?
-						(float)extraIcon_->getWidth() + kMarginsHeightRatio * height : 0.0f);
+						(float)extraIcon_->getWidth() + kBetweenElementsMarginHeightRatio * height : 0.0f);
 
 				String text = getSliderTextFromValue(getValue());
 				g.setColour(selectedColor_);
@@ -1130,7 +1135,7 @@ namespace Interface
 				if (!drawArrow_)
 					return;
 
-				float arrowOffsetX = std::round(kMarginsHeightRatio * height);
+				float arrowOffsetX = std::round(kBetweenElementsMarginHeightRatio * height);
 				float arrowOffsetY = height / 2 - 1;
 				float arrowWidth = height * kHeightToArrowWidthRatio;
 
@@ -1229,7 +1234,7 @@ namespace Interface
 		case BubbleComponent::right:
 			if (extraIcon_)
 			{
-				auto addedMargin = (int)std::round(kMarginsHeightRatio * (float)drawBounds_.getHeight());
+				auto addedMargin = (int)std::round(kBetweenElementsMarginHeightRatio * (float)drawBounds_.getHeight());
 				extraElements_.find(extraIcon_)->second = Rectangle{
 					anchorBounds.getRight() - extraIcon_->getWidth() - addedMargin,
 					(anchorBounds.getHeight() - extraIcon_->getHeight()) / 2, 
@@ -1251,7 +1256,7 @@ namespace Interface
 		case BubbleComponent::left:
 			if (extraIcon_)
 			{
-				auto addedMargin = (int)std::round(kMarginsHeightRatio * (float)drawBounds_.getHeight());
+				auto addedMargin = (int)std::round(kBetweenElementsMarginHeightRatio * (float)drawBounds_.getHeight());
 				extraElements_.find(extraIcon_)->second = Rectangle{
 					anchorBounds.getX() + addedMargin,
 					(anchorBounds.getHeight() - extraIcon_->getHeight()) / 2,
@@ -1276,7 +1281,7 @@ namespace Interface
 		if (drawBounds_.getHeight() != height || isDirty_)
 		{
 			float floatHeight = (float)height;
-			Fonts::instance()->setFontFromAscent(usedFont_, floatHeight * 0.5f);
+			Fonts::instance()->setFontFromAscent(usedFont_, floatHeight * kHeightFontAscentRatio);
 
 			String text = getSliderTextFromValue(getValue(), false);
 			textWidth_ = usedFont_.getStringWidth(text);
@@ -1284,18 +1289,18 @@ namespace Interface
 
 			if (drawArrow_)
 			{
-				totalDrawWidth += floatHeight * kMarginsHeightRatio;
+				totalDrawWidth += floatHeight * kBetweenElementsMarginHeightRatio;
 				totalDrawWidth += floatHeight * kHeightToArrowWidthRatio;
 			}
 
 			if (extraIcon_)
 			{
-				totalDrawWidth += floatHeight * kMarginsHeightRatio;
+				totalDrawWidth += floatHeight * kBetweenElementsMarginHeightRatio;
 				totalDrawWidth += (float)extraIcon_->getWidth();
 			}
 
 			// there's always some padding at the beginning and end regardless whether anything is added
-			totalDrawWidth += floatHeight * 0.5f;
+			totalDrawWidth += floatHeight * kPaddingHeightRatio * 2.0f;
 
 			drawBounds_ = { (int)std::round(totalDrawWidth), height };
 			isDirty_ = false;

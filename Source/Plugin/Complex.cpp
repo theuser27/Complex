@@ -63,7 +63,7 @@ namespace Plugin
 
 	u32 ComplexPlugin::getProcessingDelay() const noexcept { return soundEngine_->getProcessingDelay(); }
 
-	void ComplexPlugin::updateParameters(Framework::UpdateFlag flag, float sampleRate) noexcept
+	void ComplexPlugin::updateParameters(UpdateFlag flag, float sampleRate) noexcept
 	{ soundEngine_->UpdateParameters(flag, sampleRate); }
 
 	void ComplexPlugin::initialiseModuleTree() noexcept

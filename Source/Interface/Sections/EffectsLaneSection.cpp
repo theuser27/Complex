@@ -8,15 +8,17 @@
 	==============================================================================
 */
 
+#include "EffectsLaneSection.h"
+
 #include "Plugin/ProcessorTree.h"
 #include "Framework/update_types.h"
+#include "Generation/EffectModules.h"
 #include "Generation/EffectsState.h"
 #include "../LookAndFeel/Fonts.h"
 #include "../Components/OpenGlImageComponent.h"
 #include "../Components/OpenGlMultiQuad.h"
 #include "../Components/BaseButton.h"
 #include "../Components/BaseSlider.h"
-#include "EffectsLaneSection.h"
 #include "EffectsStateSection.h"
 #include "EffectModuleSection.h"
 

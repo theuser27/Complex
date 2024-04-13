@@ -10,10 +10,14 @@
 
 #pragma once
 
-#include "AppConfig.h"
-#include <juce_audio_basics/juce_audio_basics.h>
 #include "nested_enum.h"
 #include "platform_definitions.h"
+
+namespace juce
+{
+	template<typename T>
+	class AudioBuffer;
+}
 
 namespace Framework
 {

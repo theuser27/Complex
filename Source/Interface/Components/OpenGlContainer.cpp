@@ -8,10 +8,11 @@
 	==============================================================================
 */
 
+#include "OpenGlComponent.h"
+
 #include "Framework/sync_primitives.h"
 #include "OpenGlContainer.h"
 #include "Plugin/Renderer.h"
-#include "OpenGlComponent.h"
 
 namespace Interface
 {

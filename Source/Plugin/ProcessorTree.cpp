@@ -8,14 +8,16 @@
   ==============================================================================
 */
 
+#include "ProcessorTree.h"
+
 #include "AppConfig.h"
 #include <juce_data_structures/juce_data_structures.h>
-#include "ProcessorTree.h"
+#include "Generation/BaseProcessor.h"
 #include "Framework/update_types.h"
 
 namespace Plugin
 {
-	ProcessorTree::ProcessorTree() : undoManager_(std::make_unique<juce::UndoManager>(0, 100)) { }
+	ProcessorTree::ProcessorTree() : undoManager_(std::make_unique<juce::UndoManager>(0, 100)), allProcessors_(64) { }
 	ProcessorTree::~ProcessorTree()
 	{
 		isBeingDestroyed_ = true;
@@ -80,8 +82,7 @@ namespace Plugin
 		std::function waitFunction = [this]()
 		{
 			// check if we're in the middle of an audio callback
-			while (updateFlag_.load(std::memory_order_acquire) != 
-				Framework::UpdateFlag::AfterProcess) { utils::millisleep(); }
+			while (updateFlag_.load(std::memory_order_acquire) != UpdateFlag::AfterProcess) { utils::millisleep(); }
 			return utils::ScopedLock{ processingLock_, utils::WaitMechanism::Spin };
 		};
 		

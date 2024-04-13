@@ -102,8 +102,8 @@ namespace Interface
 		using OpenGlContainer::getValue;
 		bool isActive() const noexcept { return isActive_; }
 
-		void setRenderer(Renderer *renderer) noexcept override final { renderer_ = renderer; }
-		void setScaling(float scale) noexcept override final { scaling_ = scale; }
+		void setRenderer(Renderer *renderer) noexcept final { renderer_ = renderer; }
+		void setScaling(float scale) noexcept final { scaling_ = scale; }
 		void setLabelPlacement(juce::BubbleComponent::BubblePlacement placement) { labelPlacement_ = placement; }
 		void setShouldRepaintOnHover(bool shouldRepaintOnHover) noexcept { shouldRepaintOnHover_ = shouldRepaintOnHover; }
 

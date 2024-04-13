@@ -11,7 +11,9 @@
 #pragma once
 
 #include <cstdint>
+#include <type_traits>
 #include <bit>
+#include <utility>
 #include <array>
 
 #include "platform_definitions.h"
@@ -234,25 +236,52 @@ namespace simd_values
 		{	return greaterThanSigned(two.value, one.value); }
 
 		static strict_inline simd_int vector_call greaterThanOrEqualSigned(simd_int one, simd_int two)
-		{	return greaterThanSigned(one, two) | equal(one, two); }
+		{	return ~lessThanSigned(one, two); }
 
 		static strict_inline simd_int vector_call lessThanOrEqualSigned(simd_int one, simd_int two)
-		{	return greaterThanOrEqualSigned(two.value, one.value); }
+		{	return ~greaterThanSigned(one, two); }
+
+		strict_inline u32 vector_call sum() const noexcept
+		{ return sum(value); }
+
+		strict_inline u32 vector_call anyMask() const noexcept
+		{ return anyMask(value); }
 
 
 		//////////////////
 		// Constructors //
 		//////////////////
 
-		strict_inline simd_int() noexcept : simd_int(0) { }
-		strict_inline simd_int(u32 initialValue) noexcept : simd_int(init(initialValue)) { }
-		strict_inline simd_int(simd_type initialValue) noexcept : value(initialValue) { }
-		strict_inline simd_int(const std::array<u32, kSize> &scalars) noexcept
-			: value(std::bit_cast<simd_type>(scalars)) { }
+	#ifdef COMPLEX_MSVC
+	private:
+		template<size_t ... N>
+		static constexpr auto getInternalValue(const auto &scalars, std::index_sequence<N...>) noexcept { return simd_type{ .m128i_u32 = { scalars[N]... } }; }
+	public:
+	#endif
 
-		template<typename T> requires requires (T x) { (sizeof(u32) * kSize) % sizeof(x) == 0; }
-		strict_inline simd_int(const std::array<T, (sizeof(u32) *kSize) / sizeof(T)> &scalars) noexcept
-			: value(std::bit_cast<simd_type>(scalars)) { }
+		constexpr strict_inline simd_int() noexcept : simd_int(0) { }
+		constexpr strict_inline simd_int(u32 initialValue) noexcept
+		{
+			if (std::is_constant_evaluated())
+			{
+				std::array<u32, kSize> values{};
+				values.fill(initialValue);
+			#ifdef COMPLEX_MSVC
+				value = getInternalValue(values, std::make_index_sequence<kSize>());
+			#elif
+				value = std::bit_cast<simd_type>(values);
+			#endif
+			}
+			else
+				value = init(initialValue);
+		}
+		constexpr strict_inline simd_int(simd_type initialValue) noexcept : value(initialValue) { }
+		constexpr strict_inline simd_int(const std::array<u32, kSize> &scalars) noexcept :
+	#ifdef COMPLEX_MSVC
+			value(getInternalValue(scalars, std::make_index_sequence<kSize>())) { }
+	#elif
+			value(std::bit_cast<simd_type>(scalars)) { }
+	#endif
 
 
 		///////////////
@@ -314,86 +343,44 @@ namespace simd_values
 		strict_inline simd_int vector_call operator~() const noexcept
 		{ return bitNot(value); }
 
-		strict_inline u32 vector_call sum() const noexcept
-		{ return sum(value); }
-
-		strict_inline u32 vector_call anyMask() const noexcept
-		{ return anyMask(value); }
-
 		strict_inline simd_int &vector_call operator+=(simd_int other) noexcept
-		{
-			value = add(value, other.value);
-			return *this;
-		}
+		{ value = add(value, other.value); return *this; }
 
 		strict_inline simd_int &vector_call operator-=(simd_int other) noexcept
-		{
-			value = sub(value, other.value);
-			return *this;
-		}
+		{ value = sub(value, other.value); return *this; }
 
 		strict_inline simd_int &vector_call operator*=(simd_int other) noexcept
-		{
-			value = mul(value, other.value);
-			return *this;
-		}
+		{ value = mul(value, other.value); return *this; }
 
 		strict_inline simd_int &vector_call operator&=(simd_int other) noexcept
-		{
-			value = bitAnd(value, other.value);
-			return *this;
-		}
+		{ value = bitAnd(value, other.value); return *this; }
 
 		strict_inline simd_int &vector_call operator|=(simd_int other) noexcept
-		{
-			value = bitOr(value, other.value);
-			return *this;
-		}
+		{ value = bitOr(value, other.value); return *this; }
 
 		strict_inline simd_int &vector_call operator^=(simd_int other) noexcept
-		{
-			value = bitXor(value, other.value);
-			return *this;
-		}
+		{ value = bitXor(value, other.value); return *this; }
 
 		strict_inline simd_int &vector_call operator+=(simd_type other) noexcept
-		{
-			value = add(value, other);
-			return *this;
-		}
+		{ value = add(value, other); return *this; }
 
 		strict_inline simd_int &vector_call operator-=(simd_type other) noexcept
-		{
-			value = sub(value, other);
-			return *this;
-		}
+		{ value = sub(value, other); return *this; }
 
 		strict_inline simd_int &vector_call operator*=(simd_type other) noexcept
-		{
-			value = mul(value, other);
-			return *this;
-		}
+		{ value = mul(value, other); return *this; }
 
 		strict_inline simd_int &vector_call operator&=(simd_type other) noexcept
-		{
-			value = bitAnd(value, other);
-			return *this;
-		}
+		{ value = bitAnd(value, other); return *this; }
 
 		strict_inline simd_int &vector_call operator|=(simd_type other) noexcept
-		{
-			value = bitOr(value, other);
-			return *this;
-		}
+		{ value = bitOr(value, other); return *this; }
 
 		strict_inline simd_int &vector_call operator^=(simd_type other) noexcept
-		{
-			value = bitXor(value, other);
-			return *this;
-		}
+		{ value = bitXor(value, other); return *this; }
 	};
 
-	typedef simd_int simd_mask;
+	using simd_mask = simd_int;
 
 
 	struct alignas(COMPLEX_SIMD_ALIGNMENT) simd_float
@@ -734,7 +721,6 @@ namespace simd_values
 
 		static strict_inline void vector_call complexTranspose(std::array<simd_float, kSize> &rows)
 		{
-			// TODO: implement complexTranspose for NEON
 		#if COMPLEX_SSE4_1
 			auto low = _mm_movelh_ps(rows[0].value, rows[1].value);
 			auto high = _mm_movehl_ps(rows[1].value, rows[0].value);
@@ -823,23 +809,51 @@ namespace simd_values
 
 		static strict_inline simd_float vector_call reverse(simd_float value)
 		{ return reverse(value.value); }
+		
+		strict_inline float vector_call sum() const noexcept
+		{ return sum(value); }
 
 
 		//////////////////////////////////
 		// Constructors and Destructors //
 		//////////////////////////////////
 
-		strict_inline simd_float() noexcept : value(init(0.0f)) { }
-		strict_inline simd_float(float initialValue) noexcept : value(init(initialValue)) { }
-		strict_inline simd_float(simd_type initialValue) noexcept : value(initialValue) { }
-		strict_inline simd_float(const std::array<float, kSize> &scalars) noexcept
-			: value(std::bit_cast<simd_type>(scalars)) { }
+	#ifdef COMPLEX_MSVC
+	private:
+		template<size_t ... N>
+		static constexpr auto getInternalValue(const auto &scalars, std::index_sequence<N...>) noexcept { return simd_type{ .m128_f32 = { scalars[N]... } }; }
+	public:
+	#endif
+		
+		constexpr strict_inline simd_float() noexcept : simd_float(0.0f) { }
+		constexpr strict_inline simd_float(float initialValue) noexcept
+		{
+			if (std::is_constant_evaluated())
+			{
+				std::array<float, kSize> values{};
+				values.fill(initialValue);
+			#ifdef COMPLEX_MSVC
+				value = getInternalValue(values, std::make_index_sequence<kSize>());
+			#elif
+				value = std::bit_cast<simd_type>(values);
+			#endif
+			}
+			else
+				value = init(initialValue);
+		}
+		constexpr strict_inline simd_float(simd_type initialValue) noexcept : value(initialValue) { }
+		constexpr strict_inline simd_float(const std::array<float, kSize> &scalars) noexcept :
+		#ifdef COMPLEX_MSVC
+			value(getInternalValue(scalars, std::make_index_sequence<kSize>())) { }
+		#elif
+			value(std::bit_cast<simd_type>(scalars)) { }
+		#endif
+		
+		template<typename T, size_t N> requires requires { sizeof(simd_type) == sizeof(T) * N; }
+		strict_inline simd_float(const std::array<T, N> &scalars) noexcept :
+			value(std::bit_cast<simd_type>(scalars)) { }
 
-		template<typename T> requires requires (T x) { (sizeof(float) * kSize) % sizeof(x) == 0; }
-		strict_inline simd_float(const std::array<T, (sizeof(float) * kSize) / sizeof(T)> &scalars) noexcept
-			: value(std::bit_cast<simd_type>(scalars)) { }
-
-		strict_inline float vector_call access(size_t index) const noexcept 
+		constexpr strict_inline float vector_call access(size_t index) const noexcept 
 		{ return std::bit_cast<std::array<float, kSize>>(value)[index]; }
 
 		strict_inline void vector_call set(size_t index, float newValue) noexcept
@@ -849,127 +863,53 @@ namespace simd_values
 			value = std::bit_cast<simd_type>(scalars);
 		}
 
-		strict_inline auto vector_call getArrayOfValues() const noexcept
+		constexpr strict_inline auto vector_call getArrayOfValues() const noexcept
 		{ return std::bit_cast<std::array<float, kSize>, simd_type>(value); }
 
 		template<typename T> requires requires (T x) { (sizeof(float) * kSize) % sizeof(x) == 0; }
-		strict_inline auto vector_call getArrayOfValues() const noexcept
+		constexpr strict_inline auto vector_call getArrayOfValues() const noexcept
 		{ return std::bit_cast<std::array<T, ((sizeof(float) * kSize) / sizeof(T))>>(value); }
 
 		///////////////
 		// Operators //
 		///////////////
 
-		strict_inline float vector_call operator[](size_t index) const noexcept
+		constexpr strict_inline float vector_call operator[](size_t index) const noexcept
 		{ return access(index); }
 
 		strict_inline simd_float& vector_call operator+=(simd_float other) noexcept
-		{
-			value = add(value, other.value);
-			return *this;
-		}
+		{ value = add(value, other.value); return *this; }
 
 		strict_inline simd_float& vector_call operator-=(simd_float other) noexcept
-		{
-			value = sub(value, other.value);
-			return *this;
-		}
+		{ value = sub(value, other.value); return *this; }
 
 		strict_inline simd_float& vector_call operator*=(simd_float other) noexcept
-		{
-			value = mul(value, other.value);
-			return *this;
-		}
-
-		strict_inline simd_float& vector_call operator/=(simd_float other) noexcept
-		{
-			value = div(value, other.value);
-			return *this;
-		}
-
-		strict_inline simd_float& vector_call operator&=(simd_mask other) noexcept
-		{
-			value = bitAnd(value, other.value);
-			return *this;
-		}
-
-		strict_inline simd_float& vector_call operator|=(simd_mask other) noexcept
-		{
-			value = bitOr(value, other.value);
-			return *this;
-		}
-
-		strict_inline simd_float& vector_call operator^=(simd_mask other) noexcept
-		{
-			value = bitXor(value, other.value);
-			return *this;
-		}
-
-		strict_inline simd_float& vector_call operator+=(simd_type other) noexcept
-		{
-			value = add(value, other);
-			return *this;
-		}
-
-		strict_inline simd_float& vector_call operator-=(simd_type other) noexcept
-		{
-			value = sub(value, other);
-			return *this;
-		}
-
-		strict_inline simd_float& vector_call operator*=(simd_type other) noexcept
-		{
-			value = mul(value, other);
-			return *this;
-		}
-
-		strict_inline simd_float& vector_call operator/=(simd_type other) noexcept
-		{
-			value = div(value, other);
-			return *this;
-		}
-
-		strict_inline simd_float& vector_call operator&=(mask_simd_type other) noexcept
-		{
-			value = bitAnd(value, other);
-			return *this;
-		}
-
-		strict_inline simd_float& vector_call operator|=(mask_simd_type other) noexcept
-		{
-			value = bitOr(value, other);
-			return *this;
-		}
-
-		strict_inline simd_float& vector_call operator^=(mask_simd_type other) noexcept
-		{
-			value = bitXor(value, other);
-			return *this;
-		}
-
-		strict_inline simd_float& vector_call operator+=(float scalar) noexcept
-		{
-			value = add(value, init(scalar));
-			return *this;
-		}
-
-		strict_inline simd_float& vector_call operator-=(float scalar) noexcept
-		{
-			value = sub(value, init(scalar));
-			return *this;
-		}
+		{ value = mul(value, other.value); return *this; }
 
 		strict_inline simd_float& vector_call operator*=(float scalar) noexcept
-		{
-			value = mulScalar(value, scalar);
-			return *this;
-		}
+		{ value = mulScalar(value, scalar); return *this; }
 
-		strict_inline simd_float& vector_call operator/=(float scalar) noexcept
-		{
-			value = div(value, init(scalar));
-			return *this;
-		}
+		strict_inline simd_float& vector_call operator/=(simd_float other) noexcept
+		{ value = div(value, other.value); return *this; }
+
+
+		strict_inline simd_float& vector_call operator&=(simd_mask other) noexcept
+		{ value = bitAnd(value, other.value); return *this; }
+
+		strict_inline simd_float& vector_call operator|=(simd_mask other) noexcept
+		{ value = bitOr(value, other.value); return *this; }
+
+		strict_inline simd_float& vector_call operator^=(simd_mask other) noexcept
+		{ value = bitXor(value, other.value); return *this; }
+		
+		strict_inline simd_float& vector_call operator&=(simd_float other) noexcept
+		{ value = bitAnd(value, toMask(other.value)); return *this; }
+
+		strict_inline simd_float& vector_call operator|=(simd_float other) noexcept
+		{ value = bitOr(value, toMask(other.value)); return *this; }
+		
+		strict_inline simd_float& vector_call operator^=(simd_float other) noexcept
+		{ value = bitXor(value, toMask(other.value)); return *this; }
 
 
 		strict_inline simd_float vector_call operator+(simd_float other) const noexcept
@@ -987,6 +927,7 @@ namespace simd_values
 		strict_inline simd_float vector_call operator/(simd_float other) const noexcept
 		{ return div(value, other.value); }
 
+
 		strict_inline simd_float vector_call operator&(simd_mask other) const noexcept
 		{ return bitAnd(value, other.value); }
 
@@ -995,15 +936,21 @@ namespace simd_values
 
 		strict_inline simd_float vector_call operator^(simd_mask other) const noexcept
 		{ return bitXor(value, other.value); }
+		
+		strict_inline simd_float vector_call operator&(simd_float other) const noexcept
+		{ return bitAnd(value, toMask(other.value)); }
+
+		strict_inline simd_float vector_call operator|(simd_float other) const noexcept
+		{ return bitOr(value, toMask(other.value)); }
+
+		strict_inline simd_float vector_call operator^(simd_float other) const noexcept
+		{ return bitXor(value, toMask(other.value)); }
 
 		strict_inline simd_float vector_call operator-() const noexcept
 		{ return neg(value); }
 
 		strict_inline simd_float vector_call operator~() const noexcept
 		{ return bitNot(value); }
-
-		strict_inline float vector_call sum() const noexcept
-		{ return sum(value); }
 	};
 
 	template<typename T>

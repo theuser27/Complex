@@ -10,21 +10,25 @@
 
 #pragma once
 
+#include <any>
+#include <memory>
+#include "Framework/constants.h"
 #include "Framework/sync_primitives.h"
-#include "../Generation/BaseProcessor.h"
+#include "Framework/vector_map.h"
 
 namespace juce
 {
 	class UndoManager;
 }
 
-namespace Plugin
+namespace Generation
 {
-	class ProcessorTree;
+	class BaseProcessor;
 }
 
 namespace Framework
 {
+	class ParameterValue;
 	class ParameterModulator;
 	class ParameterBridge;
 	class WaitingUpdate;
@@ -67,11 +71,11 @@ namespace Plugin
 		Framework::ParameterValue *getProcessorParameter(u64 parentProcessorId, std::string_view parameterName) const noexcept;
 		Generation::BaseProcessor *copyProcessor(Generation::BaseProcessor *processor);
 
-		Framework::UpdateFlag getUpdateFlag() const noexcept { return updateFlag_.load(std::memory_order_acquire); }
+		UpdateFlag getUpdateFlag() const noexcept { return updateFlag_.load(std::memory_order_acquire); }
 		// only the audio thread changes the updateFlag
 		// so we need acq_rel in order for it to see any changes made by the GUI thread
 		// because it's only done twice per run i opted for max security with seq_cst just in case
-		void setUpdateFlag(Framework::UpdateFlag newFlag) noexcept { updateFlag_.store(newFlag, std::memory_order_seq_cst); }
+		void setUpdateFlag(UpdateFlag newFlag) noexcept { updateFlag_.store(newFlag, std::memory_order_seq_cst); }
 
 		auto getSampleRate() const noexcept { return sampleRate_.load(std::memory_order_acquire); }
 		auto getSamplesPerBlock() const noexcept { return samplesPerBlock_.load(std::memory_order_acquire); }
@@ -87,8 +91,7 @@ namespace Plugin
 		auto executeOutsideProcessing(auto &function)
 		{
 			// check if we're in the middle of an audio callback
-			while (updateFlag_.load(std::memory_order_relaxed) != 
-				Framework::UpdateFlag::AfterProcess) { utils::millisleep(); }
+			while (updateFlag_.load(std::memory_order_relaxed) != UpdateFlag::AfterProcess) { utils::millisleep(); }
 
 			utils::ScopedLock g{ processingLock_, utils::WaitMechanism::Spin };
 			return function();
@@ -100,7 +103,7 @@ namespace Plugin
 		// all plugin undo steps are stored here
 		std::unique_ptr<juce::UndoManager> undoManager_;
 		// the processor tree is stored in a flattened map
-		Framework::VectorMap<u64, std::unique_ptr<Generation::BaseProcessor>> allProcessors_{ 64 };
+		Framework::VectorMap<u64, std::unique_ptr<Generation::BaseProcessor>> allProcessors_;
 		// outward facing parameters, which can be mapped to in-plugin parameters
 		std::vector<Framework::ParameterBridge *> parameterBridges_{};
 		// modulators inside the plugin
@@ -108,7 +111,7 @@ namespace Plugin
 		// used to give out non-repeating ids for all PluginModules
 		std::atomic<u64> processorIdCounter_ = processorTreeId + 1;
 		// used for checking whether it's ok to update parameters/plugin structure
-		std::atomic<Framework::UpdateFlag> updateFlag_ = Framework::UpdateFlag::AfterProcess;
+		std::atomic<UpdateFlag> updateFlag_ = UpdateFlag::AfterProcess;
 		// if any updates are supposed to happen to the processing tree/undoManager
 		// the thread needs to acquire this lock after checking that the updateFlag is set to AfterProcess
 		mutable std::atomic<bool> processingLock_ = false;

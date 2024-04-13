@@ -112,9 +112,9 @@ namespace Generation
 
 	size_t BaseProcessor::getParameterCount() const noexcept { return processorParameters_.data.size(); }
 
-	void BaseProcessor::updateParameters(Framework::UpdateFlag flag, float sampleRate, bool updateSubModuleParameters)
+	void BaseProcessor::updateParameters(UpdateFlag flag, float sampleRate, bool updateSubModuleParameters)
 	{
-		if (flag == Framework::UpdateFlag::NoUpdates)
+		if (flag == UpdateFlag::NoUpdates)
 			return;
 
 		for (size_t i = 0; i < processorParameters_.data.size(); i++)

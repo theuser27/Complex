@@ -8,11 +8,14 @@
 	==============================================================================
 */
 
+#include "EffectsState.h"
+
 #include <AppConfig.h>
 #include <juce_audio_basics/juce_audio_basics.h>
 #include "Framework/spectral_support_functions.h"
-#include "EffectsState.h"
 #include "Framework/simd_utils.h"
+#include "Framework/parameter_value.h"
+#include "EffectModules.h"
 
 namespace Generation
 {
@@ -55,6 +58,13 @@ namespace Generation
 		return deletedModule;
 	}
 
+	BaseProcessor *EffectsLane::createSubProcessor(std::string_view type) const noexcept
+	{
+		COMPLEX_ASSERT(Framework::BaseProcessors::BaseEffect::enum_value_by_id(type).has_value() &&
+			"You're trying to create a subProcessor for EffectsLane, that isn't EffectModule");
+		return makeSubProcessor<EffectModule>(type);
+	}
+
 	EffectsState::EffectsState(Plugin::ProcessorTree *moduleTree, u64 parentModuleId) noexcept :
 		BaseProcessor(moduleTree, parentModuleId, Framework::BaseProcessors::EffectsState::id().value())
 	{
@@ -68,6 +78,14 @@ namespace Generation
 		workerThreads_.reserve(kMaxNumLanes);
 
 		insertSubProcessor(0, makeSubProcessor<EffectsLane>());
+	}
+
+	EffectsState::~EffectsState() noexcept
+	{
+		for (auto &thread : workerThreads_)
+			thread.thread.join();
+
+		BaseProcessor::~BaseProcessor();
 	}
 
 	bool EffectsState::insertSubProcessor([[maybe_unused]] size_t index, BaseProcessor *newSubProcessor) noexcept
@@ -103,6 +121,47 @@ namespace Generation
 		return deletedModule;
 	}
 
+	BaseProcessor *EffectsState::createSubProcessor([[maybe_unused]] std::string_view type) const noexcept
+	{
+		COMPLEX_ASSERT(type == Framework::BaseProcessors::EffectsLane::id().value() &&
+			"You're trying to create a subProcessor for EffectsState, that isn't EffectsLane");
+		return makeSubProcessor<EffectsLane>();
+	}
+
+	std::array<bool, kNumTotalChannels> EffectsState::getUsedInputChannels() noexcept
+	{
+		for (auto &lane : lanes_)
+		{
+			// if the input is not another chain's output and the chain is enabled
+			if (auto laneInput = lane->processorParameters_[1]->getInternalValue<u32>(getSampleRate());
+				((laneInput & kLaneInputMask) == 0) && lane->processorParameters_[0]->getInternalValue<u32>(getSampleRate()))
+				usedInputs_[laneInput] = true;
+		}
+
+		std::array<bool, kNumTotalChannels> usedInputChannels{};
+		for (size_t i = 0; i < usedInputChannels.size(); i++)
+			usedInputChannels[i] = usedInputs_[i / kComplexSimdRatio];
+
+		return usedInputChannels;
+	}
+
+	std::array<bool, kNumTotalChannels> EffectsState::getUsedOutputChannels() noexcept
+	{
+		for (auto &lane : lanes_)
+		{
+			// if the output is not defaulted and the chain is enabled
+			if (auto laneOutput = lane->processorParameters_[2]->getInternalValue<u32>(getSampleRate());
+				(laneOutput != kDefaultOutput) && lane->processorParameters_[0]->getInternalValue<u32>(getSampleRate()))
+				usedOutputs_[laneOutput] = true;
+		}
+
+		std::array<bool, kNumTotalChannels> usedOutputChannels{};
+		for (size_t i = 0; i < usedOutputChannels.size(); i++)
+			usedOutputChannels[i] = usedOutputs_[i / kComplexSimdRatio];
+
+		return usedOutputChannels;
+	}
+
 	void EffectsState::writeInputData(const juce::AudioBuffer<float> &inputBuffer) noexcept
 	{
 		auto channelPointers = inputBuffer.getArrayOfReadPointers();
@@ -129,8 +188,6 @@ namespace Generation
 
 	void EffectsState::processLanes() noexcept
 	{
-		auto start = std::chrono::steady_clock::now();
-
 		// sequential consistency just in case
 		// triggers the chains to run again
 		for (auto &lane : lanes_)
@@ -141,8 +198,6 @@ namespace Generation
 		// waiting for chains to finish
 		for (auto &lane : lanes_)
 			while (lane->status_.load(std::memory_order_acquire) != EffectsLane::LaneStatus::Finished) { utils::longPause(5); }
-
-		setProcessingTime(std::chrono::steady_clock::now() - start);
 	}
 
 	EffectsState::Thread::Thread(EffectsState &state) : thread([this, &state]()
@@ -193,8 +248,6 @@ namespace Generation
 		thisLane->currentEffectIndex_.store(0, std::memory_order_release);
 		auto &laneDataSource = thisLane->laneDataSource_;
 
-		auto start = std::chrono::steady_clock::now();
-
 		// Lane Input 
 		// if this lane's input is another's output and that lane can be used,
 		// we wait until it is finished and then copy its data
@@ -226,6 +279,48 @@ namespace Generation
 			laneDataSource.dataType = ComplexDataSource::Cartesian;
 		}
 
+		simd_float inputVolume = 0.0f;
+		simd_float loudnessScale = 1.0f / (float)binCount_;
+		u32 isGainMatching = thisLane->getParameter(BaseProcessors::EffectsLane::GainMatching::name())->getInternalValue<u32>();
+
+		auto getLoudness = [](const ComplexDataSource &laneDataSource, simd_float loudnessScale, u32 binCount)
+		{
+			simd_float loudness = 0.0f;
+			// this is because we're squaring and then scaling inside the loops
+			loudnessScale *= loudnessScale;
+			auto data = laneDataSource.sourceBuffer.getData();
+			if (laneDataSource.dataType == ComplexDataSource::Cartesian)
+			{
+				for (u32 i = 0; i < binCount; i += kComplexSimdRatio)
+				{
+					// magnitudes are: [left channel, right channel, left channel + 1, right channel + 1]
+					simd_float values = utils::complexMagnitude({ data[i], data[i + 1] }, false) / loudnessScale;
+					// [left channel,     left channel + 1, right channel,     right channel + 1] + 
+					// [left channel + 1, left channel,     right channel + 1, right channel    ]
+					loudness += utils::groupEven(values) + utils::groupEvenReverse(values);
+				}
+			}
+			else if (laneDataSource.dataType == ComplexDataSource::Polar)
+			{
+				for (u32 i = 0; i < binCount; ++i)
+				{
+					simd_float values = data[i];
+					loudness += values * values / loudnessScale;
+				}
+
+				loudness = utils::copyFromEven(loudness);
+			}
+			return loudness;
+		};
+
+		if (isGainMatching)
+		{
+			inputVolume = getLoudness(laneDataSource, loudnessScale, binCount_);
+			inputVolume = utils::maskLoad(inputVolume, simd_float(1.0f), simd_float::equal(inputVolume, 0.0f));
+		}
+		else
+			thisLane->volumeScale_ = 1.0f;
+
 		// main processing loop
 		for (auto effectModule : thisLane->subProcessors_)
 		{
@@ -236,7 +331,19 @@ namespace Generation
 			thisLane->currentEffectIndex_.fetch_add(1, std::memory_order_acq_rel);
 		}
 
-		thisLane->setProcessingTime(std::chrono::steady_clock::now() - start);
+		if (isGainMatching)
+		{
+			simd_float outputVolume = getLoudness(laneDataSource, loudnessScale, binCount_);
+			outputVolume = utils::maskLoad(outputVolume, simd_float(1.0f), simd_float::equal(outputVolume, 0.0f));
+			simd_float scale = inputVolume / outputVolume;
+
+			// some arbitrary limits taken from dtblkfx
+			simd_float x = 1.0e30f;
+			scale = utils::maskLoad(scale, simd_float(1.0f), simd_float::greaterThan(scale, 1.0e30f));
+			scale = utils::maskLoad(scale, simd_float(0.0f), simd_float::lessThan(scale, 1.0e-30f));
+
+			thisLane->volumeScale_ = simd_float::sqrt(scale);
+		}
 
 		if (laneDataSource.sourceBuffer != laneDataSource.conversionBuffer)
 			laneDataSource.sourceBuffer.getLock().fetch_sub(1, std::memory_order_release);
@@ -290,9 +397,8 @@ namespace Generation
 
 			utils::ScopedLock g1{ lane->laneDataSource_.sourceBuffer.getLock(), false, utils::WaitMechanism::Spin };
 
-			SimdBuffer<std::complex<float>, simd_float>::applyToThisNoMask(outputBuffer_,
-				lane->laneDataSource_.sourceBuffer, kComplexSimdRatio, binCount_, utils::MathOperations::Add,
-				laneOutput * kComplexSimdRatio, 0);
+			SimdBuffer<complex<float>, simd_float>::applyToThisNoMask<utils::MathOperations::Add>(outputBuffer_,
+				lane->laneDataSource_.sourceBuffer, kComplexSimdRatio, binCount_, laneOutput * kComplexSimdRatio, 0, 0, 0, lane->volumeScale_);
 		}
 
 		// scaling all outputs

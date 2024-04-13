@@ -10,12 +10,12 @@
 
 #pragma once
 
-#include <complex>
-#include <chrono>
 #include <any>
+#include <optional>
+#include <span>
+#include "Interface/LookAndFeel/Miscellaneous.h"
 #include "Framework/vector_map.h"
 #include "Framework/simd_buffer.h"
-#include "Framework/parameters.h"
 
 namespace Framework
 {
@@ -32,16 +32,6 @@ namespace Generation
 	class BaseProcessor
 	{
 	public:
-		class Listener
-		{
-		public:
-			virtual ~Listener() = default;
-			virtual void insertedSubProcessor([[maybe_unused]] size_t index, [[maybe_unused]] BaseProcessor *newSubProcessor) { }
-			virtual void deletedSubProcessor([[maybe_unused]] size_t index, [[maybe_unused]] BaseProcessor *deletedSubProcessor) { }
-			virtual void updatedSubProcessor([[maybe_unused]] size_t index, [[maybe_unused]] BaseProcessor *oldSubProcessor, 
-				[[maybe_unused]] BaseProcessor *newSubProcessor) { }
-		};
-
 		BaseProcessor() = delete;
 		BaseProcessor(const BaseProcessor &) = delete;
 		BaseProcessor(BaseProcessor &&) = delete;
@@ -78,13 +68,12 @@ namespace Generation
 		[[nodiscard]] Framework::ParameterValue *getParameterUnchecked(size_t index) const noexcept;
 		size_t getParameterCount() const noexcept;
 
-		void updateParameters(Framework::UpdateFlag flag, float sampleRate, bool updateSubModuleParameters = true);
+		void updateParameters(UpdateFlag flag, float sampleRate, bool updateSubModuleParameters = true);
 
 		//void randomiseParameters();
 		//void setAllParametersRandomisation(bool toRandomise = true);
 		//void setParameterRandomisation(std::string_view name, bool toRandomise = true);
 
-		auto getProcessingTime() const noexcept { return processingTime_.load(std::memory_order_acquire); }
 		std::string_view getProcessorType() const noexcept { return processorType_; }
 		u64 getProcessorId() const noexcept { return processorId_; }
 		auto *getProcessorTree() const noexcept { return processorTree_; }
@@ -120,19 +109,15 @@ namespace Generation
 			}
 		}
 
-		void addListener(Listener *listener) { listeners_.push_back(listener); }
+		void addListener(BaseProcessorListener *listener) { listeners_.push_back(listener); }
 
 	protected:
 		void createProcessorParameters(std::span<const std::string_view> parameterNames);
 
-		void setProcessingTime(std::chrono::duration<double, std::micro> time) noexcept 
-		{ processingTime_.store(time, std::memory_order_release); }
-
 		// data contextual to every individual module
-		Framework::SimdBuffer<std::complex<float>, simd_float> dataBuffer_{};
+		Framework::SimdBuffer<Framework::complex<float>, simd_float> dataBuffer_{};
 		std::vector<BaseProcessor *> subProcessors_{};
 		Framework::VectorMap<std::string_view, std::unique_ptr<Framework::ParameterValue>> processorParameters_;
-		std::atomic<std::chrono::duration<double, std::micro>> processingTime_{};
 
 		// data contextual to the base BaseProcessor
 		u64 parentProcessorId_ = 0;
@@ -141,6 +126,6 @@ namespace Generation
 		const u64 processorId_ = 0;
 		const std::string_view processorType_{};
 
-		std::vector<Listener *> listeners_{};
+		std::vector<BaseProcessorListener *> listeners_{};
 	};
 }

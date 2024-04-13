@@ -10,7 +10,7 @@
 
 #pragma once
 
-#include "Generation/BaseProcessor.h"
+#include "Framework/parameters.h"
 #include "BaseSection.h"
 #include "../Components/DraggableComponent.h"
 
@@ -34,7 +34,7 @@ namespace Interface
 	class EffectsLaneSection;
 
 	class EffectModuleSection final : public ProcessorSection, public SpectralMaskListener,
-		public Generation::BaseProcessor::Listener
+		public Generation::BaseProcessorListener
 	{
 	public:
 		enum MenuId

@@ -8,10 +8,11 @@
 	==============================================================================
 */
 
+#include "Popups.h"
+
 #include "../LookAndFeel/Fonts.h"
 #include "../Components/OpenGlImageComponent.h"
 #include "../Components/OpenGlScrollBar.h"
-#include "Popups.h"
 
 namespace Interface
 {
@@ -187,9 +188,9 @@ namespace Interface
 		resized();
 	}
 
-	int PopupList::getRowFromPosition(float mouse_position)
+	int PopupList::getRowFromPosition(float mousePosition)
 	{
-		int index = std::floor((mouse_position + getViewPosition()) / getRowHeight());
+		int index = (int)std::floor((mousePosition + (float)getViewPosition()) / (float)getRowHeight());
 		if (index < selections_.size() && index >= 0 && selections_.items[index].id < 0)
 			return -1;
 		return index;
@@ -219,7 +220,7 @@ namespace Interface
 	void PopupList::mouseDrag(const MouseEvent &e)
 	{
 		int row = getRowFromPosition(e.position.y);
-		if (e.position.x < 0 || e.position.x > getWidth() || row >= selections_.size() || row < 0)
+		if (e.position.x < 0.0f || e.position.x > (float)getWidth() || row >= selections_.size() || row < 0)
 			row = -1;
 		hovered_ = row;
 	}
@@ -247,7 +248,7 @@ namespace Interface
 
 	void PopupList::mouseUp(const MouseEvent &e)
 	{
-		if (e.position.x < 0 || e.position.x > getWidth())
+		if (e.position.x < 0 || e.position.x > (float)getWidth())
 			return;
 
 		select(getSelection(e));
@@ -269,32 +270,30 @@ namespace Interface
 
 	void PopupList::moveQuadToRow(OpenGlQuad &quad, int row)
 	{
-		int row_height = getRowHeight();
-		float view_height = (float)getHeightSafe();
-		float open_gl_row_height = 2.0f * row_height / view_height;
-		float offset = row * open_gl_row_height - 2.0f * (float)getViewPosition() / view_height;
+		int rowHeight = getRowHeight();
+		float viewHeight = (float)getHeightSafe();
+		float openGlRowHeight = 2.0f * rowHeight / viewHeight;
+		float offset = (float)row * openGlRowHeight - 2.0f * (float)getViewPosition() / viewHeight;
 
 		float y = 1.0f - offset;
-		quad.setQuad(0, -1.0f, y - open_gl_row_height, 2.0f, open_gl_row_height);
+		quad.setQuad(0, -1.0f, y - openGlRowHeight, 2.0f, openGlRowHeight);
 	}
 
 	void PopupList::mouseWheelMove(const MouseEvent &, const MouseWheelDetails &wheel)
 	{
-		view_position_ = view_position_.get() - wheel.deltaY * kScrollSensitivity;
-		view_position_ = std::max(0.0f, view_position_.get());
-		float scaled_height = (float)getHeight();
-		int scrollable_range = getScrollableRange();
-		view_position_ = std::min(view_position_.get(), 1.0f * scrollable_range - scaled_height);
+		viewPosition_ = viewPosition_.get() - wheel.deltaY * kScrollSensitivity;
+		viewPosition_ = std::max(0.0f, viewPosition_.get());
+		viewPosition_ = std::min(viewPosition_.get(), 1.0f * (float)getScrollableRange() - (float)getHeight());
 		setScrollBarRange();
 	}
 
 	void PopupList::setScrollBarRange()
 	{
-		static constexpr float kScrollStepRatio = 0.05f;
+		static constexpr double kScrollStepRatio = 0.05f;
 
-		float scaled_height = getHeight();
+		float scaledHeight = (float)getHeight();
 		scroll_bar_->setRangeLimits(0.0f, getScrollableRange());
-		scroll_bar_->setCurrentRange(getViewPosition(), scaled_height, dontSendNotification);
+		scroll_bar_->setCurrentRange(getViewPosition(), scaledHeight, dontSendNotification);
 		scroll_bar_->setSingleStepSize(scroll_bar_->getHeight() * kScrollStepRatio);
 		scroll_bar_->cancelPendingUpdate();
 	}
@@ -330,7 +329,7 @@ namespace Interface
 		BaseSection::resized();
 
 		Rectangle<int> bounds = getLocalBounds();
-		int rounding = getValue(Skin::kBodyRoundingTop);
+		int rounding = (int)getValue(Skin::kBodyRoundingTop);
 		popup_list_->setBounds(1, rounding, getWidth() - 2, getHeight() - 2 * rounding);
 
 		body_->setBounds(bounds);
@@ -345,7 +344,7 @@ namespace Interface
 
 	void SinglePopupSelector::setPosition(Point<int> position, Rectangle<int> bounds)
 	{
-		int rounding = getValue(Skin::kBodyRoundingTop);
+		int rounding = (int)getValue(Skin::kBodyRoundingTop);
 		int width = popup_list_->getBrowseWidth();
 		int height = popup_list_->getBrowseHeight() + 2 * rounding;
 		int x = position.x;
@@ -391,7 +390,7 @@ namespace Interface
 		BaseSection::resized();
 
 		Rectangle<int> bounds = getLocalBounds();
-		int rounding = getValue(Skin::kBodyRoundingTop);
+		int rounding = (int)getValue(Skin::kBodyRoundingTop);
 		int height = getHeight() - 2 * rounding;
 		left_list_->setBounds(1, rounding, getWidth() / 2 - 2, height);
 		int right_x = left_list_->getRight() + 1;

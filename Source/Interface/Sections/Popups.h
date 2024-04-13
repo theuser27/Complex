@@ -53,12 +53,12 @@ namespace Interface
 		PopupList();
 		~PopupList() override;
 
+		void mouseEnter(const juce::MouseEvent &e) override { mouseMove(e); }
 		void mouseMove(const juce::MouseEvent &e) override;
 		void mouseDrag(const juce::MouseEvent &e) override;
 		void mouseExit(const juce::MouseEvent &) override;
 		void mouseUp(const juce::MouseEvent &e) override;
-		void paintBackground(juce::Graphics &) override { }
-		void paintBackgroundShadow(juce::Graphics &) override { }
+		void mouseWheelMove(const juce::MouseEvent &, const juce::MouseWheelDetails &wheel) override;
 		void resized() override;
 
 		void setSelections(PopupItems selections);
@@ -73,9 +73,8 @@ namespace Interface
 
 		void setSelected(int selection) { selected_ = selection; }
 		int getSelected() const { return selected_; }
-		void mouseWheelMove(const juce::MouseEvent &, const juce::MouseWheelDetails &wheel) override;
 		void scrollBarMoved(OpenGlScrollBar *, double rangeStart) override 
-		{ view_position_ = (float)rangeStart; }
+		{ viewPosition_ = (float)rangeStart; }
 		void setScrollBarRange();
 		int getScrollableRange();
 
@@ -87,16 +86,16 @@ namespace Interface
 		int getViewPosition() const
 		{
 			int view_height = getHeightSafe();
-			return std::clamp((int)view_position_.get(), 0, selections_.size() * getRowHeight() - view_height);
+			return std::clamp((int)viewPosition_.get(), 0, selections_.size() * getRowHeight() - view_height);
 		}
 		void moveQuadToRow(OpenGlQuad &quad, int row);
 
 		std::vector<Listener *> listeners_;
 		PopupItems selections_;
-		shared_value<int> selected_ = -1;
-		shared_value<int> hovered_ = -1;
-		shared_value<bool> show_selected_ = false;
-		shared_value<float> view_position_ = 0.0f;
+		utils::shared_value<int> selected_ = -1;
+		utils::shared_value<int> hovered_ = -1;
+		utils::shared_value<bool> show_selected_ = false;
+		utils::shared_value<float> viewPosition_ = 0.0f;
 
 		std::unique_ptr<OpenGlScrollBar> scroll_bar_;
 		gl_ptr<OpenGlImageComponent> rows_;

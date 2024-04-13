@@ -9,6 +9,8 @@
 */
 
 #include <Third Party/gcem/gcem.hpp>
+#include "AppConfig.h"
+#include <juce_audio_basics/juce_audio_basics.h>
 #include "lookup.h"
 #include "windows.h"
 
