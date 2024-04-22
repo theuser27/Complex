@@ -302,6 +302,13 @@
         <GROUP id="{4BC6B690-99FC-B123-DF07-0B3409E02007}" name="json">
           <FILE id="Vsq2ii" name="json.hpp" compile="0" resource="0" file="Source/Third Party/json/json.hpp"/>
         </GROUP>
+        <GROUP id="{EA38A858-7BED-FF11-DE80-924DF22F1060}" name="muFFT">
+          <FILE id="ZyelHW" name="fft.h" compile="0" resource="0" file="Source/Third Party/muFFT/fft.h"/>
+        </GROUP>
+        <GROUP id="{41E9F0C0-27CA-7B26-AA3E-0A13B1D71FD6}" name="pffft">
+          <FILE id="YMgTCX" name="pffft.c" compile="1" resource="0" file="Source/Third Party/pffft/pffft.c"/>
+          <FILE id="nR2NJo" name="pffft.h" compile="0" resource="0" file="Source/Third Party/pffft/pffft.h"/>
+        </GROUP>
       </GROUP>
     </GROUP>
   </MAINGROUP>
@@ -309,22 +316,20 @@
                JUCE_PLUGINHOST_VST3="1" JUCE_WEB_BROWSER="0"/>
   <EXPORTFORMATS>
     <VS2022 targetFolder="Builds/VisualStudio2022" extraDefs="INTEL_IPP=1"
-            IPP1ALibrary="Static_Library" extraCompilerFlags="/Zc:preprocessor">
+            IPP1ALibrary="Static_Library" extraCompilerFlags="/Zc:preprocessor /permissive-"
+            externalLibraries="muFFT.lib&#10;muFFT-sse.lib&#10;muFFT-sse3.lib">
       <CONFIGURATIONS>
         <CONFIGURATION isDebug="1" name="Debug" headerPath="../../Source" enablePluginBinaryCopyStep="1"
                        vst3BinaryLocation="C:\Program Files\Common Files\VST3\DEV" fastMath="1"
-                       winArchitecture="x64"/>
+                       winArchitecture="x64" libraryPath="../../Libraries/Debug/Windows"/>
         <CONFIGURATION isDebug="0" name="Release" headerPath="../../Source" fastMath="1"
                        enablePluginBinaryCopyStep="1" vst3BinaryLocation="C:\Program Files\Common Files\VST3\DEV"
-                       winArchitecture="x64"/>
+                       winArchitecture="x64" libraryPath="../../Libraries/Release/Windows"/>
         <CONFIGURATION isDebug="1" fastMath="1" headerPath="../../Source" name="RelWithDebugInfo"
                        enablePluginBinaryCopyStep="1" vst3BinaryLocation="C:\Program Files\Common Files\VST3\DEV"
-                       optimisation="3"/>
+                       optimisation="3" libraryPath="../../Libraries/Release/Windows"/>
       </CONFIGURATIONS>
       <MODULEPATHS>
-        <MODULEPATH id="juce_audio_basics" path="E:\JUCE dev\JUCE 7.0\JUCE\modules"/>
-        <MODULEPATH id="juce_audio_devices" path="E:\JUCE dev\JUCE 7.0\JUCE\modules"/>
-        <MODULEPATH id="juce_audio_formats" path="E:\JUCE dev\JUCE 7.0\JUCE\modules"/>
         <MODULEPATH id="juce_audio_plugin_client" path="E:\JUCE dev\JUCE 7.0\JUCE\modules"/>
         <MODULEPATH id="juce_audio_processors" path="E:\JUCE dev\JUCE 7.0\JUCE\modules"/>
         <MODULEPATH id="juce_core" path="E:\JUCE dev\JUCE 7.0\JUCE\modules"/>
@@ -333,7 +338,10 @@
         <MODULEPATH id="juce_graphics" path="E:\JUCE dev\JUCE 7.0\JUCE\modules"/>
         <MODULEPATH id="juce_gui_basics" path="E:\JUCE dev\JUCE 7.0\JUCE\modules"/>
         <MODULEPATH id="juce_opengl" path="../JUCE 7.0.2/JUCE/modules"/>
+        <MODULEPATH id="juce_audio_basics" path="../JUCE 7.0.5/JUCE/modules"/>
         <MODULEPATH id="juce_gui_extra" path="../JUCE 7.0.5/JUCE/modules"/>
+        <MODULEPATH id="juce_audio_formats" path="../JUCE 7.0.5/JUCE/modules"/>
+        <MODULEPATH id="juce_audio_devices" path="../JUCE 7.0.5/JUCE/modules"/>
         <MODULEPATH id="juce_audio_utils" path="../JUCE 7.0.5/JUCE/modules"/>
       </MODULEPATHS>
     </VS2022>

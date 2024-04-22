@@ -106,7 +106,7 @@ namespace Interface
   int DefaultLookAndFeel::getSliderPopupPlacement(juce::Slider &slider)
   {
     if (auto *pSlider = dynamic_cast<BaseSlider *>(&slider); pSlider)
-      return pSlider->getPopupPlacement();
+      return (std::underlying_type_t<BubblePlacement>)pSlider->getPopupPlacement();
 
     return LookAndFeel_V3::getSliderPopupPlacement(slider);
   }

@@ -62,7 +62,7 @@ namespace Interface
 		void dualPopupSelector(BaseComponent *source, juce::Point<int> position, int width,
 			const PopupItems &options, std::function<void(int)> callback);
 		void popupDisplay(BaseComponent *source, juce::String text,
-			juce::BubbleComponent::BubblePlacement placement, bool primary, 
+			BubblePlacement placement, bool primary, 
 			Skin::SectionOverride sectionOverride = Skin::kPopupBrowser);
 		void hideDisplay(bool primary);
 

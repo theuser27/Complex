@@ -10,8 +10,6 @@
 
 #include "EffectsState.h"
 
-#include <AppConfig.h>
-#include <juce_audio_basics/juce_audio_basics.h>
 #include "Framework/spectral_support_functions.h"
 #include "Framework/simd_utils.h"
 #include "Framework/parameter_value.h"
@@ -162,13 +160,13 @@ namespace Generation
 		return usedOutputChannels;
 	}
 
-	void EffectsState::writeInputData(const juce::AudioBuffer<float> &inputBuffer) noexcept
+	void EffectsState::writeInputData(const float *const *inputBuffer, size_t channels) noexcept
 	{
-		auto channelPointers = inputBuffer.getArrayOfReadPointers();
-		COMPLEX_ASSERT(dataBuffer_.getLock().load() >= 0);
+		COMPLEX_ASSERT(dataBuffer_.getLock().lock.load() >= 0);
 		utils::ScopedLock g{ dataBuffer_.getLock(), true, utils::WaitMechanism::Spin };
 
-		for (u32 i = 0; i < (u32)inputBuffer.getNumChannels(); i += kComplexSimdRatio)
+		std::array<simd_float, kComplexSimdRatio> values;
+		for (u32 i = 0; i < (u32)channels; i += kComplexSimdRatio)
 		{
 			// if the input is not used we skip it
 			if (!usedInputs_[i / kComplexSimdRatio])
@@ -176,12 +174,14 @@ namespace Generation
 
 			for (u32 j = 0; j < binCount_; j++)
 			{
-				// skipping every second sample (complex signal) and every second pair (matrix takes 2 pairs)
-				auto matrix = utils::getValueMatrix<kComplexSimdRatio>(channelPointers + i, j * 2 * kComplexSimdRatio);
+				// skipping every second sample (complex signal) and every second complex pair (simd_float can take 2 pairs)
+				for (u32 k = 0; k < values.size(); ++k)
+					values[k] = utils::toSimdFloatFromUnaligned(inputBuffer[k] + j * 2 * kComplexSimdRatio);
 
-				matrix.complexTranspose();
-				for (u32 k = 0; k < kComplexSimdRatio; k++)
-					dataBuffer_.writeSimdValueAt(matrix.rows_[k], i, j * kComplexSimdRatio + k);
+				utils::complexTranspose(values);
+
+				for (u32 k = 0; k < kComplexSimdRatio; ++k)
+					dataBuffer_.writeSimdValueAt(values[k], i, j * kComplexSimdRatio + k);
 			}
 		}
 	}
@@ -273,7 +273,7 @@ namespace Generation
 		else
 		{
 			// getting shared access to the state's transformed data
-			COMPLEX_ASSERT(dataBuffer_.getLock().load() >= 0);
+			COMPLEX_ASSERT(dataBuffer_.getLock().lock.load() >= 0);
 			utils::lockAtomic(dataBuffer_.getLock(), false, utils::WaitMechanism::Spin);
 			laneDataSource.sourceBuffer = SimdBufferView{ dataBuffer_, inputIndex * kNumChannels, kNumChannels };
 			laneDataSource.dataType = ComplexDataSource::Cartesian;
@@ -346,15 +346,15 @@ namespace Generation
 		}
 
 		if (laneDataSource.sourceBuffer != laneDataSource.conversionBuffer)
-			laneDataSource.sourceBuffer.getLock().fetch_sub(1, std::memory_order_release);
+			laneDataSource.sourceBuffer.getLock().lock.fetch_sub(1, std::memory_order_release);
 
-		COMPLEX_ASSERT(dataBuffer_.getLock().load() >= 0);
+		COMPLEX_ASSERT(dataBuffer_.getLock().lock.load() >= 0);
 
 		// to let other threads know that the data is in its final state
 		thisLane->status_.store(EffectsLane::LaneStatus::Finished, std::memory_order_release);
 	}
 
-	void EffectsState::sumLanesAndWriteOutput(juce::AudioBuffer<float> &outputBuffer) noexcept
+	void EffectsState::sumLanesAndWriteOutput(float *const *inputBuffer, size_t channels) noexcept
 	{
 		using namespace Framework;
 
@@ -413,22 +413,24 @@ namespace Generation
 				outputBuffer_.multiply(multiplier, i * kComplexSimdRatio, j);
 		}
 
-		Matrix matrix;
-
-		for (u32 i = 0; i < (u32)outputBuffer.getNumChannels(); i += kComplexSimdRatio)
+		std::array<simd_float, kComplexSimdRatio> values;
+		auto *data = outputBuffer_.getData().getData().get();
+		size_t size = outputBuffer_.getSize();
+		for (size_t i = 0; i < channels; i += kComplexSimdRatio)
 		{
 			if (!usedOutputs_[i / kComplexSimdRatio])
 				continue;
 
-			for (u32 j = 0; j < binCount_; j++)
+			for (size_t j = 0; j < binCount_; j++)
 			{
-				for (u32 k = 0; k < kComplexSimdRatio; k++)
-					matrix.rows_[k] = outputBuffer_.readSimdValueAt(i, j * 2 + k);
+				for (size_t k = 0; k < kComplexSimdRatio; ++k)
+					values[k] = data[i * size + j * 2 + k];
 
-				matrix.complexTranspose();
-				for (u32 k = 0; k < kComplexSimdRatio; k++)
-					std::memcpy(outputBuffer.getWritePointer((int)(i + k), (int)j * 2 * kComplexSimdRatio),
-						&matrix.rows_[k], size_t(2) * kComplexSimdRatio * sizeof(float));
+				utils::complexTranspose(values);
+
+				for (size_t k = 0; k < kComplexSimdRatio; k++)
+					std::memcpy(inputBuffer[i + k] + j * 2 * kComplexSimdRatio, 
+						&values[k], 2U * kComplexSimdRatio * sizeof(float));
 			}
 		}
 	}

@@ -43,6 +43,13 @@ namespace Interface
 			ShouldMoveOnValueChange = 1 << 3,
 		};
 
+		enum DragMode
+		{
+			notDragging,            /**< Dragging is not active.  */
+			absoluteDrag,           /**< The dragging corresponds directly to the value that is displayed.  */
+			velocityDrag            /**< The dragging value change is relative to the velocity of the mouse movement.  */
+		};
+
 		enum MenuId
 		{
 			kCancel = 0,
@@ -83,7 +90,7 @@ namespace Interface
 		double getRawValueFromText(const juce::String &text) const;
 		juce::String getSliderTextFromValue(double value, bool retrieveSampleRate = true) const;
 		double getSliderValueFromText(const juce::String &text) const;
-		double snapValue(double attemptedValue, juce::Slider::DragMode dragMode);
+		double snapValue(double attemptedValue, DragMode dragMode);
 		void snapToValue(bool shouldSnap, float snapValue = 0.0f)
 		{
 			shouldSnapToValue_ = shouldSnap;
@@ -122,9 +129,9 @@ namespace Interface
 		bool isBipolar() const noexcept { return type_ & SliderType::Bipolar; }
 		bool hasModulationArea() const noexcept { return modulationArea_.getWidth(); }
 
-		auto getPopupPlacement() const noexcept { return popupPlacement_; }
-		auto getModulationPlacement() const noexcept { return modulationControlPlacement_; }
-		auto getModulationArea() const noexcept { return (modulationArea_.getWidth()) ? modulationArea_ : getLocalBounds(); }
+		BubblePlacement getPopupPlacement() const noexcept { return popupPlacement_; }
+		BubblePlacement getModulationPlacement() const noexcept { return modulationControlPlacement_; }
+		juce::Rectangle<int> getModulationArea() const noexcept { return (modulationArea_.getWidth()) ? modulationArea_ : getLocalBounds(); }
 
 		virtual juce::Colour getSelectedColor() const { return getColour(Skin::kWidgetPrimary1); }
 		virtual juce::Colour getUnselectedColor() const { return juce::Colours::transparentBlack; }
@@ -171,8 +178,8 @@ namespace Interface
 		void setCanUseScrollWheel(bool canUseScrollWheel) noexcept { canUseScrollWheel_ = canUseScrollWheel; }
 
 		void setSensitivity(double sensitivity) noexcept { sensitivity_ = sensitivity; }
-		void setPopupPlacement(juce::BubbleComponent::BubblePlacement placement) { popupPlacement_ = placement; }
-		void setModulationPlacement(juce::BubbleComponent::BubblePlacement placement) { modulationControlPlacement_ = placement; }
+		void setPopupPlacement(BubblePlacement placement) { popupPlacement_ = placement; }
+		void setModulationPlacement(BubblePlacement placement) { modulationControlPlacement_ = placement; }
 		void setModulationArea(juce::Rectangle<int> area) noexcept { modulationArea_ = area; }
 		void setMaxTotalCharacters(int totalCharacters) noexcept
 		{ COMPLEX_ASSERT(totalCharacters > 0); maxTotalCharacters_ = totalCharacters; }
@@ -216,11 +223,11 @@ namespace Interface
 		int maxTotalCharacters_ = kDefaultMaxTotalCharacters;
 		int maxDecimalCharacters_ = kDefaultMaxDecimalCharacters;
 
-		juce::BubbleComponent::BubblePlacement popupPlacement_ = juce::BubbleComponent::below;
+		BubblePlacement popupPlacement_ = BubblePlacement::below;
 		juce::String popupPrefix_{};
 
 		juce::Rectangle<int> modulationArea_{};
-		juce::BubbleComponent::BubblePlacement modulationControlPlacement_ = juce::BubbleComponent::below;
+		BubblePlacement modulationControlPlacement_ = BubblePlacement::below;
 
 		gl_ptr<OpenGlQuad> quadComponent_ = nullptr;
 		gl_ptr<OpenGlImageComponent> imageComponent_ = nullptr;

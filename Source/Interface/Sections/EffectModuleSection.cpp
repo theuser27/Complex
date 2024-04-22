@@ -704,7 +704,7 @@ namespace Interface
 
 				auto *shiftSlider = static_cast<RotarySlider *>(section->getEffectControl(BaseProcessors::BaseEffect::Phase::Shift::PhaseShift::name()));
 				shiftSlider->setModifier(slopeDropdown);
-				shiftSlider->setLabelPlacement(BubbleComponent::right);
+				shiftSlider->setLabelPlacement(BubblePlacement::right);
 				std::ignore = shiftSlider->setBoundsForSizes(knobsHeight);
 				shiftSlider->setPosition({ bounds.getX(), bounds.getY() });
 

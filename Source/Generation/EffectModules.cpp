@@ -845,13 +845,13 @@ namespace Generation
 			if (neededType == ComplexDataSource::Polar)
 			{
 				utils::convertBuffer<utils::complexCartToPolar>(source.sourceBuffer, source.conversionBuffer, binCount);
-				source.sourceBuffer.getLock().fetch_sub(1, std::memory_order_relaxed);
+				source.sourceBuffer.getLock().lock.fetch_sub(1, std::memory_order_relaxed);
 				source.dataType = ComplexDataSource::Polar;
 			}
 			else
 			{
 				utils::convertBuffer<utils::complexPolarToCart>(source.sourceBuffer, source.conversionBuffer, binCount);
-				source.sourceBuffer.getLock().fetch_sub(1, std::memory_order_relaxed);
+				source.sourceBuffer.getLock().lock.fetch_sub(1, std::memory_order_relaxed);
 				source.dataType = ComplexDataSource::Cartesian;
 			}
 			
@@ -878,9 +878,9 @@ namespace Generation
 
 		// switching to being a reader and allowing other readers to participate
 		// seq_cst because the following atomic could be reordered prior to this one
-		dataBuffer_.getLock().store(1, std::memory_order_seq_cst);
+		dataBuffer_.getLock().lock.store(1, std::memory_order_seq_cst);
 		if (source.sourceBuffer != source.conversionBuffer)
-			source.sourceBuffer.getLock().fetch_sub(1, std::memory_order_relaxed);
+			source.sourceBuffer.getLock().lock.fetch_sub(1, std::memory_order_relaxed);
 
 		source.sourceBuffer = dataBuffer_;
 	}

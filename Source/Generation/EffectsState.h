@@ -15,12 +15,6 @@
 #include "Framework/simd_buffer.h"
 #include "BaseProcessor.h"
 
-namespace juce
-{
-	template <typename Type>
-	class AudioBuffer;
-}
-
 namespace Generation
 {
 	class EffectModule;
@@ -112,9 +106,9 @@ namespace Generation
 		BaseProcessor *deleteSubProcessor(size_t index) noexcept override;
 		[[nodiscard]] BaseProcessor *createSubProcessor([[maybe_unused]] std::string_view type) const noexcept override;
 
-		void writeInputData(const juce::AudioBuffer<float> &inputBuffer) noexcept;
+		void writeInputData(const float *const *inputBuffer, size_t channels) noexcept;
 		void processLanes() noexcept;
-		void sumLanesAndWriteOutput(juce::AudioBuffer<float> &outputBuffer) noexcept;
+		void sumLanesAndWriteOutput(float *const *inputBuffer, size_t channels) noexcept;
 
 		std::array<bool, kNumTotalChannels> getUsedInputChannels() noexcept;
 		std::array<bool, kNumTotalChannels> getUsedOutputChannels() noexcept;

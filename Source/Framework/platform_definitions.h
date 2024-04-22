@@ -76,7 +76,7 @@
 #if defined (COMPLEX_MSVC)
 	// strict_inline is used when something absolutely needs to be inlined
 	#define strict_inline __forceinline
-	// perf_inline is used for inlining to increase performance (can be changed for tests)
+	// perf_inline is used for inlining to increase performance (can be changed for A/B testing)
 	#define perf_inline __forceinline
 	#define vector_call __vectorcall
 
@@ -86,7 +86,7 @@
 #else
 	// strict_inline is used when something absolutely needs to be inlined
 	#define strict_inline inline __attribute__((always_inline))
-	// perf_inline is used for inlining to increase performance (can be changed for tests)
+	// perf_inline is used for inlining to increase performance (can be changed for A/B testing)
 	#define perf_inline inline __attribute__((always_inline))
 	#define vector_call
 #endif

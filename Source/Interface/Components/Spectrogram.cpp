@@ -63,6 +63,13 @@ namespace Interface
       amplitudeRenderers_.emplace_back(std::make_unique<OpenGlLineRenderer>(kResolution));
       amplitudeRenderers_[i]->setFill(true);
     }
+
+    phaseRenderers_.reserve(kNumChannels);
+    for (size_t i = 0; i < kNumChannels / 2; ++i)
+    {
+      phaseRenderers_.emplace_back(std::make_unique<OpenGlLineRenderer>(kResolution));
+      phaseRenderers_[i]->setFill(false);
+    }
   }
 
   Spectrogram::~Spectrogram() = default;
@@ -85,16 +92,25 @@ namespace Interface
       amplitudeRenderer->setFillColours(fillColour.withMultipliedAlpha(1.0f - fillFade), fillColour);
     }
 
+    colour = colour.withRotatedHue(-0.33f);
+
+    for (auto &phaseRenderer : phaseRenderers_)
+    {
+      phaseRenderer->setLineWidth(1.5f);
+      phaseRenderer->setFillCenter(-1.0f);
+      phaseRenderer->setColour(colour);
+      colour = colour.withMultipliedAlpha(0.5f);
+    }
+
     corners_.setBounds(getLocalBounds());
     corners_.setCorners(getLocalBounds(), getValue(Skin::kWidgetRoundedCorner));
   }
 
   bool Spectrogram::updateAmplitudes(bool shouldDisplayPhases, float minFrequency, float maxFrequency, float dbSlope)
   {
-    static constexpr float kMinAmp = 0.000001f;
+    static constexpr float kMinAmp = 0.00001f;
     static constexpr float kMinDecay = 0.12f;
-
-    static constexpr simd_mask oddMask = std::array{ 0U, kFullMask, 0U, kFullMask };
+    static constexpr simd_float defaultValue = { kMinAmp, 0.0f };
 
     auto bufferView = bufferView_.lock();
     if (bufferView.isEmpty())
@@ -115,18 +131,22 @@ namespace Interface
     float maxBin = (float)binCount_ - 1.0f;
     float decayMultiplier = decayMultiplier_ * std::min((float)binCount_ / 2048.0f, 1.0f);
     bool isInterpolating = binCount_ > 1024;
+    simd_float scalingFactor = { 1.0f / ((float)binCount_ * 2.0f), 1.0f };
     
-    if (isDataPolar)
     {
       utils::ScopedLock g{ bufferView.getLock(), false, utils::WaitMechanism::Sleep };
       scratchBuffer_.copy(bufferView, 0, 0, binCount_);
     }
-    else if (shouldDisplayPhases)
-      utils::convertBufferLock<utils::complexCartToPolar>(bufferView, scratchBuffer_, binCount_, utils::WaitMechanism::Sleep);
-    else
-      utils::convertBufferLock<complexMagnitude>(bufferView, scratchBuffer_, binCount_, utils::WaitMechanism::Sleep);
 
     bufferView_.unlock();
+
+    if (!isDataPolar)
+    {
+      if (shouldDisplayPhases)
+        utils::convertBufferInPlace<utils::complexCartToPolar>(scratchBuffer_, binCount_);
+      else
+        utils::convertBufferInPlace<complexMagnitude>(scratchBuffer_, binCount_);
+    }
 
     for (u32 i = 0; i < scratchBuffer_.getChannels(); i += scratchBuffer_.getRelativeSize())
     {
@@ -178,15 +198,17 @@ namespace Interface
         }
         rangeBegin = rangeEnd;
 
-        simd_float magnitude = simd_float::max(kMinAmp, current / ((float)binCount_ * 2.0f));
-        magnitude *= (float)utils::dbToAmplitude(t * numOctaves * dbSlope);
+        
+        float slope = (float)utils::dbToAmplitude(t * numOctaves * dbSlope);
+        current *= scalingFactor * simd_float{ slope, 1.0f };
         simd_float oldValue = resultBuffer_.readSimdValueAt(i, j);
-        simd_float db = utils::amplitudeToDb(simd_float::max(magnitude, oldValue));
+        simd_float db = utils::amplitudeToDb(simd_float::max(oldValue, simd_float::max(kMinAmp, utils::copyFromEven(current))));
         simd_float decay = simd_float::clamp(db * decayMultiplier, kMinDecay, 1.0f);
-        magnitude = simd_float::max(kMinAmp, utils::lerp(oldValue, magnitude, decay));
 
-        simd_float result = utils::maskLoad(magnitude, current, oddMask);
-        resultBuffer_.writeSimdValueAt(result, i, j);
+        current = utils::lerp(oldValue, current, decay);
+        current = utils::maskLoad(defaultValue, current, utils::copyFromEven(simd_float::greaterThan(current, kMinAmp)));
+
+        resultBuffer_.writeSimdValueAt(current, i, j);
       }
     }
 
@@ -197,6 +219,9 @@ namespace Interface
   {
     for (auto &amplitudeRenderer : amplitudeRenderers_)
       amplitudeRenderer->init(openGl);
+
+    for (auto &phaseRenderer : phaseRenderers_)
+      phaseRenderer->init(openGl);
 
     corners_.init(openGl);
   }
@@ -221,21 +246,46 @@ namespace Interface
     float width = (float)getWidthSafe();
     float rangeMult = 1.0f / (maxDb - minDb);
 
-    for (int i = 0; i < kResolution; ++i)
+    auto setRendererValues = [&]<bool RenderPhase>()
     {
-      float t = (float)i / (kResolution - 1.0f);
-      simd_float db = utils::amplitudeToDb(midSide(resultBuffer_.readSimdValueAt(0, i)));
-      simd_float y = (db - minDb) * rangeMult;
-
-      for (size_t j = 0; j < amplitudeRenderers_.size(); ++j)
+      for (int i = 0; i < kResolution; ++i)
       {
-        amplitudeRenderers_[j]->setXAt(i, t * width);
-        amplitudeRenderers_[j]->setYAt(i, height - y[j * 2] * height);
+        float t = (float)i / (kResolution - 1.0f);
+        simd_float result = midSide(resultBuffer_.readSimdValueAt(0, i));
+        simd_float db = utils::amplitudeToDb(result);
+        simd_float phaseY, amplitudeY = (db - minDb) * rangeMult;
+
+        if constexpr (RenderPhase)
+        {
+          phaseY = utils::modOnceSigned(result, kPi) / k2Pi + 0.5f;
+        }
+
+        float x = t * width;
+        for (size_t j = 0; j < amplitudeRenderers_.size(); ++j)
+        {
+          amplitudeRenderers_[j]->setXAt(i, x);
+          amplitudeRenderers_[j]->setYAt(i, height - amplitudeY[j * 2] * height);
+        }
+
+        if constexpr (RenderPhase)
+        {
+          phaseRenderers_[0]->setXAt(i, x);
+          phaseRenderers_[0]->setYAt(i, height - phaseY[3] * height);
+        }
       }
-    }
+    };
+
+    if (shouldDisplayPhases)
+      setRendererValues.template operator()<true>();
+    else
+      setRendererValues.template operator()<false>();
 
     for (auto &amplitudeRenderer : amplitudeRenderers_)
       amplitudeRenderer->render(openGl, this, getLocalBounds());
+
+    if (shouldDisplayPhases)
+      for (auto &phaseRenderer : phaseRenderers_)
+        phaseRenderer->render(openGl, this, getLocalBounds());
 
     corners_.render(openGl, animate);
   }
@@ -244,6 +294,9 @@ namespace Interface
   {
     for (auto &amplitudeRenderer : amplitudeRenderers_)
       amplitudeRenderer->destroy();
+
+    for (auto &phaseRenderer : phaseRenderers_)
+      phaseRenderer->destroy();
 
     corners_.destroy();
   }

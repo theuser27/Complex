@@ -77,7 +77,7 @@ namespace Interface
 			Fonts::instance()->getDDinFont());
 		windowTypeSelector_->setCanUseScrollWheel(true);
 		windowTypeSelector_->addLabel();
-		windowTypeSelector_->setLabelPlacement(BubbleComponent::BubblePlacement::left);
+		windowTypeSelector_->setLabelPlacement(BubblePlacement::left);
 		addControl(windowTypeSelector_.get());
 
 		windowAlphaNumberBox_ = std::make_unique<NumberBox>(
@@ -89,12 +89,12 @@ namespace Interface
 		windowAlphaNumberBox_->removeLabel();
 		addControl(windowAlphaNumberBox_.get());
 
-		saveButton_ = std::make_unique<ActionButton>("Save Button", "Save");
+		/*saveButton_ = std::make_unique<ActionButton>("Save Button", "Save");
 		saveButton_->setAction([this]()
 			{
 				LoadSave::writeSave(getRenderer()->getPlugin().serialiseToJson());
 			});
-		addControl(saveButton_.get());
+		addControl(saveButton_.get());*/
 	}
 
 	HeaderFooterSections::~HeaderFooterSections() = default;
@@ -192,9 +192,9 @@ namespace Interface
 		auto gainNumberBoxBounds = gainNumberBox_->setBoundsForSizes(numberBoxHeight);
 		gainNumberBox_->setPosition(currentPoint - Point{ gainNumberBoxBounds.getRight(), 0 });
 
-		std::ignore = saveButton_->setBoundsForSizes(numberBoxHeight, 60);
+		/*std::ignore = saveButton_->setBoundsForSizes(numberBoxHeight, 60);
 		saveButton_->setPosition({ scaleValueRoundInt(kHeaderHorizontalEdgePadding),
-			centerVertically(0, numberBoxHeight, scaleValueRoundInt(kHeaderHeight)) });
+			centerVertically(0, numberBoxHeight, scaleValueRoundInt(kHeaderHeight)) });*/
 	}
 
 	void HeaderFooterSections::arrangeFooter()

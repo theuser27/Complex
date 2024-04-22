@@ -11,6 +11,7 @@
 #pragma once
 
 #include <atomic>
+#include <thread>
 #include "Third Party/clog/small_function.hpp"
 #include "platform_definitions.h"
 
@@ -52,11 +53,19 @@ namespace utils
 
 	enum class WaitMechanism : u32 { Spin = 0, Wait, Sleep, SpinNotify = 4, WaitNotify, SleepNotify };
 
+	// git blame for deadlocks
+	template<typename T>
+	struct LockBlame
+	{
+		std::atomic<T> lock{};
+		std::thread::id lastLockId{};
+	};
+
 	void lockAtomic(std::atomic<bool> &atomic, WaitMechanism mechanism, bool expected) noexcept;
 	void unlockAtomic(std::atomic<bool> &atomic, WaitMechanism mechanism, bool expected) noexcept;
-	i32 lockAtomic(std::atomic<i32> &atomic, bool isExclusive, WaitMechanism mechanism, 
+	i32 lockAtomic(LockBlame<i32> &lock, bool isExclusive, WaitMechanism mechanism,
 		const clg::small_function<void()> &lambda = [](){}) noexcept;
-	void unlockAtomic(std::atomic<i32> &atomic, bool wasExclusive, WaitMechanism mechanism);
+	void unlockAtomic(LockBlame<i32> &atomic, bool wasExclusive, WaitMechanism mechanism);
 
 	class ScopedLock
 	{
@@ -65,7 +74,7 @@ namespace utils
 			boolAtomic_(&atomic), expectedOrExclusive_(expected), mechanism_(mechanism)
 		{ lockAtomic(atomic, mechanism, expected); }
 
-		ScopedLock(std::atomic<i32> &atomic, bool isExclusive, WaitMechanism mechanism,
+		ScopedLock(LockBlame<i32> &atomic, bool isExclusive, WaitMechanism mechanism,
 			const clg::small_function<void()> &lambda = [](){}) noexcept : i32Atomic_(&atomic),
 			expectedOrExclusive_(isExclusive), mechanism_(mechanism)
 		{ lockAtomic(atomic, isExclusive, mechanism, lambda); }
@@ -79,13 +88,16 @@ namespace utils
 		{
 			if (i32Atomic_)
 				unlockAtomic(*i32Atomic_, expectedOrExclusive_, mechanism_);
-			else
+			else if (boolAtomic_)
 				unlockAtomic(*boolAtomic_, mechanism_, expectedOrExclusive_);
+
+			i32Atomic_ = nullptr;
+			boolAtomic_ = nullptr;
 		}
 
 	private:
 		std::atomic<bool> *boolAtomic_ = nullptr;
-		std::atomic<i32> *i32Atomic_ = nullptr;
+		LockBlame<i32> *i32Atomic_ = nullptr;
 		bool expectedOrExclusive_;
 		WaitMechanism mechanism_;
 	};

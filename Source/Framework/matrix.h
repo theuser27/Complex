@@ -35,12 +35,9 @@ namespace Framework
 		void transpose() noexcept
 		{ simd_float::transpose(rows_); }
 
-		void complexTranspose() noexcept
-		{ simd_float::complexTranspose(rows_); }
-
 		simd_float sumRows() const noexcept
 		{ 
-			simd_float sum{ 0.0f };
+			simd_float sum = 0.0f;
 			for (auto row : rows_)
 				sum += row;
 			return sum;
@@ -52,7 +49,7 @@ namespace Framework
 		simd_float multiplyAndSumRows(const Matrix &other) const noexcept
 		{
 			simd_float summedVector = 0;
-			for (size_t i = 0; i < simd_float::kSize; i += 2)
+			for (size_t i = 0; i < kSimdRatio; i += 2)
 				summedVector += simd_float::mulAdd(rows_[i] * other.rows_[i], rows_[i + 1], other.rows_[i + 1]);
 			return summedVector;
 		}

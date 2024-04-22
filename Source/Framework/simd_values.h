@@ -27,6 +27,8 @@
 	#error Either SSE4.1 or ARM NEON is needed for this program to work
 #endif
 
+#include "constants.h"
+
 namespace simd_values
 {
 	inline constexpr u32 kFullMask = UINT32_MAX;
@@ -41,13 +43,12 @@ namespace simd_values
 		/////////////////////////////
 
 	#if COMPLEX_SSE4_1
-		static constexpr size_t kSize = 4;
 		typedef __m128i simd_type;
 	#elif COMPLEX_NEON
-		static constexpr size_t kSize = 4;
 		typedef uint32x4_t simd_type;
 	#endif 
 
+		static_assert(sizeof(simd_type) / sizeof(u32) == kSimdRatio);
 		simd_type value;
 
 
@@ -254,8 +255,10 @@ namespace simd_values
 
 	#ifdef COMPLEX_MSVC
 	private:
+		// i hate unions
 		template<size_t ... N>
-		static constexpr auto getInternalValue(const auto &scalars, std::index_sequence<N...>) noexcept { return simd_type{ .m128i_u32 = { scalars[N]... } }; }
+		static constexpr auto getInternalValue(const auto &scalars, std::index_sequence<N...>) noexcept
+		{ return simd_type{ .m128i_u32 = { scalars[N]... } }; }
 	public:
 	#endif
 
@@ -264,10 +267,10 @@ namespace simd_values
 		{
 			if (std::is_constant_evaluated())
 			{
-				std::array<u32, kSize> values{};
+				std::array<u32, kSimdRatio> values{};
 				values.fill(initialValue);
 			#ifdef COMPLEX_MSVC
-				value = getInternalValue(values, std::make_index_sequence<kSize>());
+				value = getInternalValue(values, std::make_index_sequence<kSimdRatio>());
 			#elif
 				value = std::bit_cast<simd_type>(values);
 			#endif
@@ -276,12 +279,28 @@ namespace simd_values
 				value = init(initialValue);
 		}
 		constexpr strict_inline simd_int(simd_type initialValue) noexcept : value(initialValue) { }
-		constexpr strict_inline simd_int(const std::array<u32, kSize> &scalars) noexcept :
+		constexpr strict_inline simd_int(const std::array<u32, kSimdRatio> &scalars) noexcept :
 	#ifdef COMPLEX_MSVC
-			value(getInternalValue(scalars, std::make_index_sequence<kSize>())) { }
+			value(getInternalValue(scalars, std::make_index_sequence<kSimdRatio>())) { }
 	#elif
 			value(std::bit_cast<simd_type>(scalars)) { }
 	#endif
+
+		constexpr strict_inline simd_int(u32 even, u32 odd) noexcept
+		{
+			std::array<u32, kSimdRatio> values{};
+			for (size_t i = 0; i < kSimdRatio; i += 2)
+			{
+				values[i] = even;
+				values[i + 1] = odd;
+			}
+
+		#ifdef COMPLEX_MSVC
+			value = getInternalValue(values, std::make_index_sequence<kSimdRatio>());
+		#elif
+			value = std::bit_cast<simd_type>(values);
+		#endif
+		}
 
 
 		///////////////
@@ -289,21 +308,21 @@ namespace simd_values
 		///////////////
 
 		strict_inline u32 vector_call access(size_t index) const noexcept
-		{ return std::bit_cast<std::array<u32, kSize>, simd_type>(value)[index]; }
+		{ return std::bit_cast<std::array<u32, kSimdRatio>, simd_type>(value)[index]; }
 
 		strict_inline void vector_call set(size_t index, u32 newValue) noexcept
 		{
-			auto scalars = std::bit_cast<std::array<u32, kSize>, simd_type>(value);
+			auto scalars = std::bit_cast<std::array<u32, kSimdRatio>, simd_type>(value);
 			scalars[index] = newValue;
-			value = std::bit_cast<simd_type, std::array<u32, kSize>>(scalars);
+			value = std::bit_cast<simd_type, std::array<u32, kSimdRatio>>(scalars);
 		}
 
-		strict_inline std::array<u32, kSize> getArrayOfValues() const
-		{	return std::bit_cast<std::array<u32, kSize>, simd_type>(value); }
+		strict_inline std::array<u32, kSimdRatio> getArrayOfValues() const noexcept
+		{	return std::bit_cast<std::array<u32, kSimdRatio>, simd_type>(value); }
 
-		template<typename T> requires requires (T x) { (sizeof(u32) * kSize) % sizeof(x) == 0; }
-		strict_inline auto getArrayOfValues() const
-		{	return std::bit_cast<std::array<T, ((sizeof(u32) *kSize) / sizeof(T))>>(value); }
+		template<typename T> requires requires { (sizeof(u32) * kSimdRatio) % sizeof(T) == 0; }
+		strict_inline auto getArrayOfValues() const noexcept
+		{	return std::bit_cast<std::array<T, ((sizeof(u32) * kSimdRatio) / sizeof(T))>>(value); }
 
 		strict_inline void swap(simd_int &other) noexcept
 		{
@@ -390,17 +409,14 @@ namespace simd_values
 		/////////////////////////////
 
 	#if COMPLEX_SSE4_1
-		static constexpr size_t kSize = 4;
-		static constexpr size_t kComplexSize = kSize / 2;
 		typedef __m128 simd_type;
 		typedef __m128i mask_simd_type;
 	#elif COMPLEX_NEON
-		static constexpr size_t kSize = 4;
-		static constexpr size_t kComplexSize = kSize / 2;
 		typedef float32x4_t simd_type;
 		typedef uint32x4_t mask_simd_type;
 	#endif
 
+		static_assert(sizeof(simd_type) / sizeof(float) == kSimdRatio);
 		simd_type value;
 
 
@@ -698,7 +714,7 @@ namespace simd_values
 		#endif
 		}
 
-		static strict_inline void vector_call transpose(std::array<simd_float, kSize> &rows)
+		static strict_inline void vector_call transpose(std::array<simd_float, kSimdRatio> &rows)
 		{
 		#if COMPLEX_SSE4_1
 			simd_type low0 = _mm_unpacklo_ps(rows[0].value, rows[1].value);
@@ -716,18 +732,6 @@ namespace simd_values
 			rows[1].value = vextq_f32(vextq_f32(swap_low.val[1], swap_low.val[1], 2), swap_high.val[1], 2);
 			rows[2].value = vextq_f32(swap_low.val[0], vextq_f32(swap_high.val[0], swap_high.val[0], 2), 2);
 			rows[3].value = vextq_f32(swap_low.val[1], vextq_f32(swap_high.val[1], swap_high.val[1], 2), 2);
-		#endif
-		}
-
-		static strict_inline void vector_call complexTranspose(std::array<simd_float, kSize> &rows)
-		{
-		#if COMPLEX_SSE4_1
-			auto low = _mm_movelh_ps(rows[0].value, rows[1].value);
-			auto high = _mm_movehl_ps(rows[1].value, rows[0].value);
-			rows[0].value = low;
-			rows[1].value = high;
-		#elif COMPLEX_NEON
-			static_assert(false, "not implemented yet");
 		#endif
 		}
 
@@ -820,8 +824,10 @@ namespace simd_values
 
 	#ifdef COMPLEX_MSVC
 	private:
+		// i hate unions
 		template<size_t ... N>
-		static constexpr auto getInternalValue(const auto &scalars, std::index_sequence<N...>) noexcept { return simd_type{ .m128_f32 = { scalars[N]... } }; }
+		static constexpr auto getInternalValue(const auto &scalars, std::index_sequence<N...>) noexcept
+		{ return simd_type{ .m128_f32 = { scalars[N]... } }; }
 	public:
 	#endif
 		
@@ -830,10 +836,10 @@ namespace simd_values
 		{
 			if (std::is_constant_evaluated())
 			{
-				std::array<float, kSize> values{};
+				std::array<float, kSimdRatio> values{};
 				values.fill(initialValue);
 			#ifdef COMPLEX_MSVC
-				value = getInternalValue(values, std::make_index_sequence<kSize>());
+				value = getInternalValue(values, std::make_index_sequence<kSimdRatio>());
 			#elif
 				value = std::bit_cast<simd_type>(values);
 			#endif
@@ -842,9 +848,9 @@ namespace simd_values
 				value = init(initialValue);
 		}
 		constexpr strict_inline simd_float(simd_type initialValue) noexcept : value(initialValue) { }
-		constexpr strict_inline simd_float(const std::array<float, kSize> &scalars) noexcept :
+		constexpr strict_inline simd_float(const std::array<float, kSimdRatio> &scalars) noexcept :
 		#ifdef COMPLEX_MSVC
-			value(getInternalValue(scalars, std::make_index_sequence<kSize>())) { }
+			value(getInternalValue(scalars, std::make_index_sequence<kSimdRatio>())) { }
 		#elif
 			value(std::bit_cast<simd_type>(scalars)) { }
 		#endif
@@ -854,21 +860,37 @@ namespace simd_values
 			value(std::bit_cast<simd_type>(scalars)) { }
 
 		constexpr strict_inline float vector_call access(size_t index) const noexcept 
-		{ return std::bit_cast<std::array<float, kSize>>(value)[index]; }
+		{ return std::bit_cast<std::array<float, kSimdRatio>>(value)[index]; }
+
+		constexpr strict_inline simd_float(float even, float odd) noexcept
+		{
+			std::array<float, kSimdRatio> values{};
+			for (size_t i = 0; i < kSimdRatio; i += 2)
+			{
+				values[i] = even;
+				values[i + 1] = odd;
+			}
+
+		#ifdef COMPLEX_MSVC
+			value = getInternalValue(values, std::make_index_sequence<kSimdRatio>());
+		#elif
+			value = std::bit_cast<simd_type>(values);
+		#endif
+		}
 
 		strict_inline void vector_call set(size_t index, float newValue) noexcept
 		{
-			auto scalars = std::bit_cast<std::array<float, kSize>>(value);
+			auto scalars = std::bit_cast<std::array<float, kSimdRatio>>(value);
 			scalars[index] = newValue;
 			value = std::bit_cast<simd_type>(scalars);
 		}
 
 		constexpr strict_inline auto vector_call getArrayOfValues() const noexcept
-		{ return std::bit_cast<std::array<float, kSize>, simd_type>(value); }
+		{ return std::bit_cast<std::array<float, kSimdRatio>, simd_type>(value); }
 
-		template<typename T> requires requires (T x) { (sizeof(float) * kSize) % sizeof(x) == 0; }
+		template<typename T> requires requires { (sizeof(float) * kSimdRatio) % sizeof(T) == 0; }
 		constexpr strict_inline auto vector_call getArrayOfValues() const noexcept
-		{ return std::bit_cast<std::array<T, ((sizeof(float) * kSize) / sizeof(T))>>(value); }
+		{ return std::bit_cast<std::array<T, ((sizeof(float) * kSimdRatio) / sizeof(T))>>(value); }
 
 		///////////////
 		// Operators //

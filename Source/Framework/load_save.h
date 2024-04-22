@@ -18,10 +18,8 @@ namespace Framework
 {
 	namespace LoadSave
 	{
-		juce::File getConfigFile();
-
 		juce::File getDefaultSkin();
-		juce::String getVersion();
+		std::string getVersion();
 
 		// returns absolute window dimensions
 		std::pair<int, int> getWindowSize();

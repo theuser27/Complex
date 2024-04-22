@@ -22,6 +22,8 @@ namespace utils
 
 	// this number of iterations produces results with max error of <= 0.01 degrees
 	inline constexpr size_t defaultCordicIterations = 12;
+	inline constexpr simd_mask kMagnitudeMask = { kFullMask, 0U };
+	inline constexpr simd_mask kPhaseMask = { 0U, kFullMask };
 
 	/**
 	 * \brief 
@@ -416,71 +418,71 @@ namespace utils
 		two = imaginary * magnitudesTwo;
 	}
 
+	strict_inline void vector_call complexTranspose(std::array<simd_float, kComplexSimdRatio> &rows)
+	{
+	#if COMPLEX_SSE4_1
+		auto low = _mm_movelh_ps(rows[0].value, rows[1].value);
+		auto high = _mm_movehl_ps(rows[1].value, rows[0].value);
+		rows[0].value = low;
+		rows[1].value = high;
+	#elif COMPLEX_NEON
+		static_assert(false, "not implemented yet");
+	#endif
+	}
+
 	template<auto ConversionFunction>
 	strict_inline void convertBuffer(const Framework::SimdBufferView<Framework::complex<float>, simd_float> &source,
 		Framework::SimdBuffer<Framework::complex<float>, simd_float> &destination, size_t size)
 	{
+		const simd_float *sourceData = source.getData().getData().get();
+		simd_float *destinationData = destination.getData().getData().get();
+		u32 sourceSize = source.getSize();
+		u32 destinationSize = destination.getSize();
+		
 		for (u32 i = 0; i < source.getSimdChannels(); i++)
 		{
-			for (u32 j = 0; j < size; j += 2)
+			// we skip dc and nyquist since they don't have "phase" 
+			// so we can do the next pair and then do 2 pairs at once
+			destinationData[destinationSize * i] = sourceData[sourceSize * i];
+			simd_float secondPair = sourceData[sourceSize * i + 1];
+			simd_float dummy = 0.0f;
+			ConversionFunction(secondPair, dummy);
+			destinationData[destinationSize * i + 1] = secondPair;
+
+			for (u32 j = 2; j < size; j += 2)
 			{
-				auto one = source.readSimdValueAt(i * kComplexSimdRatio, j);
-				auto two = source.readSimdValueAt(i * kComplexSimdRatio, j + 1);
+				simd_float one = sourceData[sourceSize * i + j];
+				simd_float two = sourceData[sourceSize * i + j + 1];
 				ConversionFunction(one, two);
-				destination.writeSimdValueAt(one, i * kComplexSimdRatio, j);
-				destination.writeSimdValueAt(two, i * kComplexSimdRatio, j + 1);
+				destinationData[destinationSize * i + j] = one;
+				destinationData[destinationSize * i + j + 1] = two;
 			}
-			// dc and nyquist don't have "phase" so the previously stored result is wrong
-			destination.writeSimdValueAt(source.readSimdValueAt(i * kComplexSimdRatio, 0), i * kComplexSimdRatio, 0);
 		}
 	}
 
 	template<auto ConversionFunction>
-	strict_inline void convertBufferLock(const Framework::SimdBufferView<Framework::complex<float>, simd_float> &source,
-		Framework::SimdBuffer<Framework::complex<float>, simd_float> &destination, size_t size, WaitMechanism mechanism)
+	strict_inline void convertBufferInPlace(Framework::SimdBuffer<Framework::complex<float>, simd_float> &buffer, size_t size)
 	{
-		// base must not be changed
-		static constexpr auto unlockPeriod = 2 << 2;
-		// increment is 2 because a complex number has 2 parts
-		// but the results of transforming between polar and cart representations
-		// leave extra bandwidth unused so we can afford to process twice as many
-		static constexpr auto increment = 2;
+		simd_float *data = buffer.getData().getData().get();
+		u32 bufferSize = buffer.getSize();
 
-		auto &dataLock = source.getLock();
-
-		u32 i, j;
-		clg::small_function<void()> resetIndices = [&i, &j]()
+		for (u32 i = 0; i < buffer.getSimdChannels(); i++)
 		{
-			i = 0;
-			j = 0;
-		};
+			// we skip dc and nyquist since they don't have "phase" 
+			// so we can do the next pair and then do 2 pairs at once
+			simd_float secondPair = data[bufferSize * i + 1];
+			simd_float dummy = 0.0f;
+			ConversionFunction(secondPair, dummy);
+			data[bufferSize * i + 1] = secondPair;
 
-		for (i = 0; i < source.getSimdChannels(); i++)
-		{
-			lockAtomic(dataLock, false, mechanism, resetIndices);
-			simd_float dcAndNyquist = source.readSimdValueAt(i * kComplexSimdRatio, 0);
-			size_t iteration = 0;
-
-			for (j = 0; j < size; j += increment)
+			for (u32 j = 2; j < size; j += 2)
 			{
-				iteration = (iteration + 1) & (unlockPeriod - 1);
-				if (iteration == 0)
-					lockAtomic(dataLock, false, mechanism, resetIndices);
-
-				auto one = source.readSimdValueAt(i * kComplexSimdRatio, j);
-				auto two = source.readSimdValueAt(i * kComplexSimdRatio, j + 1);
+				simd_float one = data[bufferSize * i + j];
+				simd_float two = data[bufferSize * i + j + 1];
 				ConversionFunction(one, two);
-				destination.writeSimdValueAt(one, i * kComplexSimdRatio, j);
-				destination.writeSimdValueAt(two, i * kComplexSimdRatio, j + 1);
-
-				if (iteration == unlockPeriod - 1)
-					unlockAtomic(dataLock, false, mechanism);
+				data[bufferSize * i + j] = one;
+				data[bufferSize * i + j + 1] = two;
 			}
-
-			// dc and nyquist don't have "phase" so the previously stored result is wrong
-			destination.writeSimdValueAt(dcAndNyquist, i * kComplexSimdRatio, 0);
-			if (iteration != unlockPeriod - 1)
-				unlockAtomic(dataLock, false, mechanism);
 		}
 	}
 }

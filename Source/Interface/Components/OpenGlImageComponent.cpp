@@ -8,8 +8,9 @@
 	==============================================================================
 */
 
-#include "Interface/LookAndFeel/Fonts.h"
 #include "OpenGlImageComponent.h"
+
+#include "Interface/LookAndFeel/Fonts.h"
 #include "../Sections/BaseSection.h"
 
 namespace Interface

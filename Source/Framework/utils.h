@@ -38,10 +38,10 @@ namespace utils
 	struct overloaded : Ts... { using Ts::operator()...; };
 
 	strict_inline float mod(double value, double *divisor) noexcept
-	{ return static_cast<float>(modf(value, divisor)); }
+	{ return static_cast<float>(std::modf(value, divisor)); }
 
 	strict_inline float mod(float value, float *divisor) noexcept
-	{ return modff(value, divisor); }
+	{ return std::modff(value, divisor); }
 
 	strict_inline u32 log2(u32 value) noexcept
 	{
@@ -64,10 +64,10 @@ namespace utils
 	{ return value <= kEpsilon && value >= -kEpsilon; }
 
 	strict_inline double amplitudeToDb(double amplitude) noexcept
-	{ return 20.0 * log10(amplitude); }
+	{ return 20.0 * std::log10(amplitude); }
 
 	strict_inline double dbToAmplitude(double decibels) noexcept
-	{ return pow(10.0, decibels / 20.0); }
+	{ return std::pow(10.0, decibels / 20.0); }
 
 	strict_inline double normalisedToDb(double normalised, double maxDb) noexcept
 	{ return std::pow(maxDb + 1.0, normalised) - 1.0; }
@@ -104,7 +104,7 @@ namespace utils
 	}
 
 	strict_inline double centsToRatio(double cents) noexcept
-	{ return pow(2.0, cents / (double)kCentsPerOctave); }
+	{ return std::pow(2.0, cents / (double)kCentsPerOctave); }
 
 	strict_inline double midiCentsToFrequency(double cents) noexcept
 	{ return kMidi0Frequency * centsToRatio(cents); }
@@ -113,7 +113,7 @@ namespace utils
 	{ return midiCentsToFrequency(note * kCentsPerNote); }
 
 	strict_inline double frequencyToMidiNote(double frequency) noexcept
-	{ return (double)kNotesPerOctave * log(frequency / kMidi0Frequency) * kInvLogOf2; }
+	{ return (double)kNotesPerOctave * std::log(frequency / kMidi0Frequency) * kInvLogOf2; }
 
 	strict_inline double frequencyToMidiCents(double frequency) noexcept
 	{ return kCentsPerNote * frequencyToMidiNote(frequency); }
@@ -125,7 +125,7 @@ namespace utils
 	{ return (value & (value - 1)) == 0; }
 
 	strict_inline float nextPowerOfTwo(float value) noexcept
-	{ return roundf(powf(2.0f, ceilf(logf(value) * (float)kInvLogOf2))); }
+	{ return std::roundf(std::powf(2.0f, std::ceilf(std::logf(value) * (float)kInvLogOf2))); }
 
 	constexpr strict_inline bool isSilent(const float *buffer, i32 length) noexcept
 	{
@@ -177,8 +177,8 @@ namespace utils
 		return (T(3) * sqr) - (T(2) * sqr * value);
 	}
 
-	template<typename T, typename U>
-	strict_inline T *as(U *pointer)
+	template<typename T>
+	strict_inline T *as(auto *pointer)
 	{
 	#if COMPLEX_DEBUG
 		auto *castPointer = dynamic_cast<T *>(pointer);

@@ -10,45 +10,242 @@
 
 #include "fourier_transform.h"
 
+#ifdef INTEL_IPP
+	#include "ipps.h"
+#elif 0
+	#include "Third Party/muFFT/fft.h"
+	#include "simd_values.h"
+#else
+	#include "Third Party/pffft/pffft.h"
+	#include "simd_values.h"
+#endif
+
 namespace Framework
 {
 #if INTEL_IPP
-	FFT::FFT(int bits) : size_(1 << bits)
+
+	FFT::FFT()
 	{
-		int specSize = 0;
-		int specBufferSize = 0;
-		int bufferSize = 0;
-		ippsFFTGetSize_R_32f(bits, IPP_FFT_DIV_INV_BY_N, ippAlgHintNone, &specSize, &specBufferSize, &bufferSize);
+		static constexpr int cachelLineAlignment = 64;
 
-		memory_ = new Ipp8u[specSize + specBufferSize + bufferSize];
-		spec_ = memory_;
-		specBuffer_ = &spec_[specSize];
-		buffer_ = &specBuffer_[specBufferSize];
+		// compute sizes for all specs and add padding so that the specBuffer is also 64-byte aligned just in case
+		int specSizes[kMaxFFTOrder - kMinFFTOrder + 1];
+		int specSizesPadding[kMaxFFTOrder - kMinFFTOrder + 1];
+		int specBufferSizes[kMaxFFTOrder - kMinFFTOrder + 1];
+		int specBufferSizesPadding[kMaxFFTOrder - kMinFFTOrder + 1];
+		int totalSize = 0;
+		int maxBufferSize = 0;
 
-		ippsFFTInit_R_32f(&ippSpecs_, bits, IPP_FFT_DIV_INV_BY_N, ippAlgHintNone, spec_, specBuffer_);
+		for (u32 i = 0; i < kMaxFFTOrder - kMinFFTOrder + 1; ++i)
+		{
+			int bufferSize;
+			ippsFFTGetSize_R_32f((int)(kMinFFTOrder + i), IPP_FFT_DIV_INV_BY_N, ippAlgHintNone, &specSizes[i], &specBufferSizes[i], &bufferSize);
+			maxBufferSize = (maxBufferSize > bufferSize) ? maxBufferSize : bufferSize;
+
+			specSizesPadding[i] = (cachelLineAlignment - (specSizes[i] % cachelLineAlignment)) % cachelLineAlignment;
+			totalSize += specSizes[i] + specSizesPadding[i];
+
+			specBufferSizesPadding[i] = (cachelLineAlignment - (specBufferSizes[i] % cachelLineAlignment)) % cachelLineAlignment;
+			totalSize += specBufferSizes[i] + specBufferSizesPadding[i];
+		}
+
+		totalSize += maxBufferSize;
+
+		buffer_ = ippsMalloc_8u(totalSize);
+		Ipp8u *rest = (Ipp8u *)buffer_ + maxBufferSize + (cachelLineAlignment - (maxBufferSize % cachelLineAlignment)) % cachelLineAlignment;
+
+		for (u32 i = 0; i < kMaxFFTOrder - kMinFFTOrder + 1; ++i)
+		{
+			Ipp8u *spec = rest;
+			rest += specSizes[i] + specSizesPadding[i];
+			Ipp8u *specBuffer = rest;
+			rest += specBufferSizes[i] + specBufferSizesPadding[i];
+			ippsFFTInit_R_32f(reinterpret_cast<IppsFFTSpec_R_32f **>(&ippSpecs_[i]), (int)(kMinFFTOrder + i), IPP_FFT_DIV_INV_BY_N, ippAlgHintNone, spec, specBuffer);
+		}
 	}
 
 	FFT::~FFT() noexcept
 	{
-		delete[] memory_;
+		ippsFree(buffer_);
 	}
 
-	void FFT::transformRealForward(float *inOut) const noexcept
+	float *FFT::transformRealForward(size_t order, float *input, size_t) const noexcept
 	{
-		inOut[size_] = 0.0f;
-		ippsFFTFwd_RToCCS_32f_I((Ipp32f *)inOut, ippSpecs_, buffer_);
+		COMPLEX_ASSERT(order >= kMinFFTOrder);
+		size_t size = 1ULL << order;
+
+		input[size] = 0.0f;
+		ippsFFTFwd_RToCCS_32f_I(input, (IppsFFTSpec_R_32f *)ippSpecs_[order - kMinFFTOrder], (Ipp8u *)buffer_);
 		// putting the nyquist bin together with dc bin
-		inOut[1] = inOut[size_];
-		inOut[size_] = 0.0f;
+		input[1] = input[size];
+		input[size] = 0.0f;
+
+		return input;
 	}
 
-	void FFT::transformRealInverse(float *inOut) const noexcept
+	void FFT::transformRealInverse(size_t order, float *output, size_t) const noexcept
 	{
+		COMPLEX_ASSERT(order >= kMinFFTOrder);
+		size_t size = 1ULL << order;
+
 		// separating dc and nyquist bins
-		inOut[size_] = inOut[1];
-		inOut[1] = 0.0f;
-		inOut[size_ + 1] = 0.0f;
-		ippsFFTInv_CCSToR_32f_I((Ipp32f *)inOut, ippSpecs_, buffer_);
+		output[size] = output[1];
+		output[1] = 0.0f;
+		output[size + 1] = 0.0f;
+		ippsFFTInv_CCSToR_32f_I(output, (IppsFFTSpec_R_32f *)ippSpecs_[order - kMinFFTOrder], (Ipp8u *)buffer_);
 	}
+
+#elif 0
+
+	// muFFT requires all inputs and outputs be aligned to the simd type at use
+	// so we can safely use aligned loads and stores
+	strict_inline simd_float vector_call toSimdFloat(const float *aligned) noexcept
+	{
+	#if COMPLEX_SSE4_1
+		return _mm_load_ps(aligned);
+	#elif COMPLEX_NEON
+		static_assert(false, "not yet implemented");
+	#endif
+	}
+
+	strict_inline void vector_call fromSimdFloat(float *aligned, simd_float value) noexcept
+	{
+	#if COMPLEX_SSE4_1
+		_mm_store_ps(aligned, value.value);
+	#elif COMPLEX_NEON
+		static_assert(false, "not yet implemented");
+	#endif
+	}
+
+	FFT::FFT()
+	{
+		for (size_t i = 0; i < kMaxFFTOrder - kMinFFTOrder + 1; ++i)
+		{
+			forwardPlans_[i] = mufft_create_plan_1d_r2c(1 << (kMinFFTOrder + i), MUFFT_FLAG_CPU_ANY);
+			inversePlans_[i] = mufft_create_plan_1d_c2r(1 << (kMinFFTOrder + i), MUFFT_FLAG_CPU_ANY);
+		}
+
+		scratchBuffers_ = (float *)mufft_alloc((size_t)kNumTotalChannels * kMaxFFTBufferLength * sizeof(float));
+	}
+
+	FFT::~FFT() noexcept
+	{
+		for (size_t i = 0; i < kMaxFFTOrder - kMinFFTOrder + 1; ++i)
+		{
+			mufft_free_plan_1d((mufft_plan_1d *)forwardPlans_[i]);
+			mufft_free_plan_1d((mufft_plan_1d *)inversePlans_[i]);
+		}
+
+		mufft_free(scratchBuffers_);
+	}
+
+	float *FFT::transformRealForward(size_t order, float *input, size_t channel) const noexcept
+	{
+		COMPLEX_ASSERT(order >= kMinFFTOrder);
+		COMPLEX_ASSERT(channel < kNumTotalChannels);
+		size_t size = 1ULL << order;
+
+		input[channel * kMaxFFTBufferLength + size] = 0.0f;
+		mufft_execute_plan_1d((mufft_plan_1d *)forwardPlans_[order - kMinFFTOrder], &scratchBuffers_[channel * kMaxFFTBufferLength], input);
+		// putting the nyquist bin together with dc bin
+		scratchBuffers_[channel * kMaxFFTBufferLength + 1] = scratchBuffers_[channel * kMaxFFTBufferLength + size];
+		scratchBuffers_[channel * kMaxFFTBufferLength + size] = 0.0f;
+
+		return &scratchBuffers_[channel * kMaxFFTBufferLength];
+	}
+
+	void FFT::transformRealInverse(size_t order, float *output, size_t channel) const noexcept
+	{
+		COMPLEX_ASSERT(order >= kMinFFTOrder);
+		COMPLEX_ASSERT(channel < kNumTotalChannels);
+		size_t size = 1ULL << order;
+		
+		COMPLEX_ASSERT((uintptr_t)output % sizeof(simd_float) == 0);
+		simd_float scaling = 1.0f / (float)(size * size * size * size);
+		for (size_t i = 0; i < size; i += kSimdRatio)
+			fromSimdFloat(output + i, toSimdFloat(output + i) * scaling);
+
+		// separating dc and nyquist bins and cleaning accidental writes to nyquist imaginary part
+		scratchBuffers_[channel * kMaxFFTBufferLength + size] = scratchBuffers_[channel * kMaxFFTBufferLength + 1];
+		scratchBuffers_[channel * kMaxFFTBufferLength + 1] = 0.0f;
+		scratchBuffers_[channel * kMaxFFTBufferLength + size + 1] = 0.0f;
+		mufft_execute_plan_1d((mufft_plan_1d *)inversePlans_[order - kMinFFTOrder], output, &scratchBuffers_[channel * kMaxFFTBufferLength]);
+	}
+
+#else
+
+	// pffft requires all inputs and outputs be aligned to the simd type at use
+	// so we can safely use aligned loads and stores
+	strict_inline simd_float vector_call toSimdFloat(const float *aligned) noexcept
+	{
+	#if COMPLEX_SSE4_1
+		return _mm_load_ps(aligned);
+	#elif COMPLEX_NEON
+		static_assert(false, "not yet implemented");
+	#endif
+	}
+
+	strict_inline void vector_call fromSimdFloat(float *aligned, simd_float value) noexcept
+	{
+	#if COMPLEX_SSE4_1
+		_mm_store_ps(aligned, value.value);
+	#elif COMPLEX_NEON
+		static_assert(false, "not yet implemented");
+	#endif
+	}
+
+	FFT::FFT()
+	{
+		for (size_t i = 0; i < kMaxFFTOrder - kMinFFTOrder + 1; ++i)
+		{
+			plans_[i] = pffft_new_setup(1 << (kMinFFTOrder + i), PFFFT_REAL);
+		}
+
+		scratchBuffers_ = (float *)pffft_aligned_malloc((size_t)kMaxFFTBufferLength * sizeof(float));
+	}
+
+	FFT::~FFT() noexcept
+	{
+		for (size_t i = 0; i < kMaxFFTOrder - kMinFFTOrder + 1; ++i)
+		{
+			pffft_destroy_setup((PFFFT_Setup *)plans_[i]);
+		}
+
+		pffft_aligned_free(scratchBuffers_);
+	}
+
+	float *FFT::transformRealForward(size_t order, float *input, size_t channel) const noexcept
+	{
+		COMPLEX_ASSERT(order >= kMinFFTOrder);
+		COMPLEX_ASSERT(channel < kNumTotalChannels);
+		size_t size = 1ULL << order;
+
+		input[channel * kMaxFFTBufferLength + size] = 0.0f;
+		pffft_transform_ordered((PFFFT_Setup *)plans_[order - kMinFFTOrder], input, input, scratchBuffers_, PFFFT_FORWARD);
+		// putting the nyquist bin together with dc bin
+		scratchBuffers_[channel * kMaxFFTBufferLength + 1] = scratchBuffers_[channel * kMaxFFTBufferLength + size];
+		scratchBuffers_[channel * kMaxFFTBufferLength + size] = 0.0f;
+
+		return input;
+	}
+
+	void FFT::transformRealInverse(size_t order, float *output, size_t channel) const noexcept
+	{
+		COMPLEX_ASSERT(order >= kMinFFTOrder);
+		COMPLEX_ASSERT(channel < kNumTotalChannels);
+		size_t size = 1ULL << order;
+
+		COMPLEX_ASSERT((uintptr_t)output % sizeof(simd_float) == 0);
+		simd_float scaling = 1.0f / (float)size;
+		for (size_t i = 0; i < size; i += kSimdRatio)
+			fromSimdFloat(output + i, toSimdFloat(output + i) * scaling);
+
+		// separating dc and nyquist bins and cleaning accidental writes to nyquist imaginary part
+		scratchBuffers_[channel * kMaxFFTBufferLength + size] = scratchBuffers_[channel * kMaxFFTBufferLength + 1];
+		scratchBuffers_[channel * kMaxFFTBufferLength + 1] = 0.0f;
+		scratchBuffers_[channel * kMaxFFTBufferLength + size + 1] = 0.0f;
+		pffft_transform_ordered((PFFFT_Setup *)plans_[order - kMinFFTOrder], output, output, scratchBuffers_, PFFFT_BACKWARD);
+	}
+
 #endif
 }

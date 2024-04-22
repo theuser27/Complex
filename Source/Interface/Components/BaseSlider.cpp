@@ -118,7 +118,7 @@ namespace Interface
 		double newPos = getValueSafe() + mouseDiff * (1.0 / immediateSensitivity_);
 		newPos = (type_ == SliderType::CanLoopAround) ? newPos - std::floor(newPos) : std::clamp(newPos, 0.0, 1.0);
 
-		setValue(snapValue(newPos, Slider::DragMode::absoluteDrag), sendNotificationSync);
+		setValue(snapValue(newPos, DragMode::absoluteDrag), sendNotificationSync);
 		setValueToHost();
 
 		if (!e.mods.isPopupMenu())
@@ -218,7 +218,7 @@ namespace Interface
 		if (!hasBegunChange_)
 			beginChange(value);
 
-		setValue(snapValue(newValue, Slider::DragMode::notDragging), sendNotificationSync);
+		setValue(snapValue(newValue, DragMode::notDragging), sendNotificationSync);
 		setValueToHost();
 
 		if (isMapped)
@@ -328,10 +328,10 @@ namespace Interface
 		return Framework::unscaleValue(getRawValueFromText(text), details_, true);
 	}
 
-	double BaseSlider::snapValue(double attemptedValue, Slider::DragMode dragMode)
+	double BaseSlider::snapValue(double attemptedValue, DragMode dragMode)
 	{
 		static constexpr double percent = 0.025;
-		if (!shouldSnapToValue_ || sensitiveMode_ || dragMode != Slider::DragMode::absoluteDrag)
+		if (!shouldSnapToValue_ || sensitiveMode_ || dragMode != DragMode::absoluteDrag)
 			return attemptedValue;
 
 		if (attemptedValue - snapValue_ <= percent && attemptedValue - snapValue_ >= -percent)
@@ -674,7 +674,7 @@ namespace Interface
 	RotarySlider::RotarySlider(Framework::ParameterValue *parameter) : BaseSlider(parameter)
 	{
 		addLabel();
-		setLabelPlacement(BubbleComponent::right);
+		setLabelPlacement(BubblePlacement::right);
 
 		addTextEntry();
 		changeTextEntryFont(Fonts::instance()->getDDinFont());
@@ -843,7 +843,7 @@ namespace Interface
 		auto verticalOffset = scaleValueRoundInt(kVerticalOffset);
 		switch (labelPlacement_)
 		{
-		case BubbleComponent::left:
+		case BubblePlacement::left:
 			labelX -= scaleValueRoundInt(kLabelOffset) + labelTextWidth;
 			label_->setJustification(Justification::centredRight);
 			label_->setBounds(labelX, verticalOffset, labelTextWidth,
@@ -855,9 +855,9 @@ namespace Interface
 					modifier_->getDrawBounds().getWidth(), modifier_->getDrawBounds().getHeight() };
 			break;
 		default:
-		case BubbleComponent::above:
-		case BubbleComponent::below:
-		case BubbleComponent::right:
+		case BubblePlacement::above:
+		case BubblePlacement::below:
+		case BubblePlacement::right:
 			labelX += anchorBounds.getWidth() + scaleValueRoundInt(kLabelOffset);
 			label_->setJustification(Justification::centredLeft);
 			label_->setBounds(labelX, verticalOffset, labelTextWidth,
@@ -1098,7 +1098,7 @@ namespace Interface
 	TextSelector::TextSelector(Framework::ParameterValue *parameter, 
 		std::optional<Font> usedFont) : BaseSlider(parameter)
 	{
-		setLabelPlacement(BubbleComponent::BubblePlacement::left);
+		setLabelPlacement(BubblePlacement::left);
 
 		quadComponent_->setFragmentShader(Shaders::kRoundedRectangleFragment);
 		quadComponent_->getAnimator().setHoverIncrement(0.2f);
@@ -1124,7 +1124,7 @@ namespace Interface
 
 				float height = (float)drawBounds_.getHeight();
 				float leftOffset = kBetweenElementsMarginHeightRatio * height + (float)drawBounds_.getX() +
-					((extraIcon_ && labelPlacement_ == BubbleComponent::left) ?
+					((extraIcon_ && labelPlacement_ == BubblePlacement::left) ?
 						(float)extraIcon_->getWidth() + kBetweenElementsMarginHeightRatio * height : 0.0f);
 
 				String text = getSliderTextFromValue(getValue());
@@ -1231,7 +1231,7 @@ namespace Interface
 
 		switch (labelPlacement_)
 		{
-		case BubbleComponent::right:
+		case BubblePlacement::right:
 			if (extraIcon_)
 			{
 				auto addedMargin = (int)std::round(kBetweenElementsMarginHeightRatio * (float)drawBounds_.getHeight());
@@ -1251,9 +1251,9 @@ namespace Interface
 			}
 			break;
 		default:
-		case BubbleComponent::above:
-		case BubbleComponent::below:
-		case BubbleComponent::left:
+		case BubblePlacement::above:
+		case BubblePlacement::below:
+		case BubblePlacement::left:
 			if (extraIcon_)
 			{
 				auto addedMargin = (int)std::round(kBetweenElementsMarginHeightRatio * (float)drawBounds_.getHeight());
@@ -1349,7 +1349,7 @@ namespace Interface
 	NumberBox::NumberBox(Framework::ParameterValue *parameter) : BaseSlider(parameter)
 	{
 		addLabel();
-		setLabelPlacement(BubbleComponent::BubblePlacement::left);
+		setLabelPlacement(BubblePlacement::left);
 
 		quadComponent_->setActive(false);
 		setShouldRepaintOnHover(false);
@@ -1531,14 +1531,14 @@ namespace Interface
 		auto labelX = anchorBounds.getX();
 		switch (labelPlacement_)
 		{
-		case BubbleComponent::right:
+		case BubblePlacement::right:
 			labelX += anchorBounds.getWidth() + scaleValueRoundInt(kLabelOffset);
 			label_->setJustification(Justification::centredLeft);
 			break;
 		default:
-		case BubbleComponent::above:
-		case BubbleComponent::below:
-		case BubbleComponent::left:
+		case BubblePlacement::above:
+		case BubblePlacement::below:
+		case BubblePlacement::left:
 			labelX -= scaleValueRoundInt(kLabelOffset) + labelTextWidth;
 			label_->setJustification(Justification::centredRight);
 			break;

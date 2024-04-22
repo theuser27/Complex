@@ -61,7 +61,8 @@ namespace Framework
 		}
 		void copy(const MemoryBlock &other, u64 destination, u64 source, u64 size)
 		{
-			COMPLEX_ASSERT(absoluteSize_ < destination + size);
+			COMPLEX_ASSERT(absoluteSize_ >= destination + size);
+			COMPLEX_ASSERT(other.absoluteSize_ >= source + size);
 			std::memcpy(data_.get() + destination, other.data_.get() + source, size * sizeof(T));
 		}
 		void copy(const MemoryBlockView<T, alignment> &other, u64 destination, u64 source, u64 size);
@@ -153,6 +154,7 @@ namespace Framework
 
 		u64 getAbsoluteSize() const noexcept { return absoluteSize_; }
 		std::shared_ptr<T[]> getData() noexcept { return data_; }
+		std::shared_ptr<const T[]> getData() const noexcept { return data_; }
 
 	private:
 		// size in bytes

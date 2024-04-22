@@ -100,7 +100,7 @@ namespace Interface
 		void showPopupSelector(const BaseComponent *source, juce::Point<int> position, PopupItems options,
 			std::function<void(int)> callback, std::function<void()> cancel = {}) const;
 		void showPopupDisplay(BaseComponent *source, juce::String text,
-			juce::BubbleComponent::BubblePlacement placement, bool primary);
+			BubblePlacement placement, bool primary);
 		void hidePopupDisplay(bool primary);
 
 		virtual void setActive(bool active);

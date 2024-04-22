@@ -66,7 +66,7 @@ namespace Interface
 	}
 
 	void BaseSection::showPopupDisplay(BaseComponent *source, String text,
-		BubbleComponent::BubblePlacement placement, bool primary)
+		BubblePlacement placement, bool primary)
 	{
 		if (auto *parent = findParentComponentOfClass<MainInterface>())
 			parent->popupDisplay(source, std::move(text), placement, primary, getSectionOverride());

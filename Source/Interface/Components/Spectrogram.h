@@ -70,7 +70,7 @@ namespace Interface
 		utils::shared_value<float> maxFrequency_ = kDefaultMaxFrequency;
 		utils::shared_value<float> minDb_ = kDefaultMinDb;
 		utils::shared_value<float> maxDb_ = kDefaultMaxDb;
-		utils::shared_value<bool> shouldDisplayPhases_ = false;
+		utils::shared_value<bool> shouldDisplayPhases_ = true;
 		utils::shared_value<bool> shouldPaintBackgroundLines_ = true;
 		utils::shared_value<float> decayMultiplier_ = kDecayMult;
 		utils::shared_value<float> dbSlope_ = kDbSlopePerOctave;

@@ -8,11 +8,11 @@
 	==============================================================================
 */
 
-#include <Third Party/gcem/gcem.hpp>
-#include "AppConfig.h"
-#include <juce_audio_basics/juce_audio_basics.h>
-#include "lookup.h"
 #include "windows.h"
+
+#include <Third Party/gcem/gcem.hpp>
+#include "lookup.h"
+#include "circular_buffer.h"
 
 namespace Framework
 {
@@ -83,31 +83,34 @@ namespace Framework
 	float Window::getLanczosWindow(float position, float alpha) noexcept 
 	{ return utils::pow((lanczosWindowLookup.linearLookup(position)), alpha); }
 
-	void Window::applyWindow(juce::AudioBuffer<float>&buffer, u32 numChannels, const bool *channelsToProcess, u32 numSamples, WindowTypes type, float alpha)
+	void Window::applyWindow(Buffer &buffer, size_t channels, const bool *channelsToProcess, size_t samples, WindowTypes type, float alpha)
 	{
-		applyDefaultWindows(buffer, numChannels, channelsToProcess, numSamples, type, alpha);
+		applyDefaultWindows(buffer, channels, channelsToProcess, samples, type, alpha);
 	}
 
-	void Window::applyDefaultWindows(juce::AudioBuffer<float>&buffer, u32 numChannels, 
-		const bool *channelsToCopy, u32 numSamples, WindowTypes type, float alpha) noexcept
+	void Window::applyDefaultWindows(Buffer &buffer, size_t channels, 
+		const bool *channelsToCopy, size_t samples, WindowTypes type, float alpha) noexcept
 	{
 		if (type == WindowTypes::Lerp || type == WindowTypes::Rectangle)
 			return;
 
-		float increment = 1.0f / (float)numSamples;
+		float increment = 1.0f / (float)samples;
 
 		// the windowing is periodic, therefore if we start one sample forward,
 		// omit the centre sample and we scale both explicitly
 		// we can take advantage of window symmetry and do 2 multiplications with 1 lookup
-		u32 halfLength = (numSamples - 2) / 2;
+		size_t halfLength = (samples - 2) / 2;
 
 		float window = 1.0f;
 		float position = 0.0f;
 
+		auto data = buffer.getData().getData().get();
+		auto size = buffer.getSize();
+
 		// applying window to first sample and middle
 		{
 			float centerWindow = 1.0f;
-			u32 centerSample = numSamples / 2;
+			size_t centerSample = samples / 2;
 			switch (type)
 			{
 			case WindowTypes::Hann:
@@ -141,18 +144,18 @@ namespace Framework
 			default:
 				break;
 			}
-			for (u32 j = 0; j < numChannels; j++)
+			for (size_t j = 0; j < channels; j++)
 			{
 				if (!channelsToCopy[j])
 					continue;
 
-				*buffer.getWritePointer(j, 0) *= window;
-				*buffer.getWritePointer(j, centerSample) *= centerWindow;
+				data[j * size] *= window;
+				data[j * size + centerSample] *= centerWindow;
 			}
 			position += increment;
 		}
 
-		for (u32 i = 1; i < halfLength; i++)
+		for (size_t i = 1; i < halfLength; i++)
 		{
 			switch (type)
 			{
@@ -181,23 +184,23 @@ namespace Framework
 				break;
 			}
 
-			for (u32 j = 0; j < numChannels; j++)
+			for (size_t j = 0; j < channels; j++)
 			{
 				if (!channelsToCopy[j])
 					continue;
 
-				*buffer.getWritePointer(j, i) *= window;
-				*buffer.getWritePointer(j, numSamples - i) *= window;
+				data[j * size + i] *= window;
+				data[j * size + samples - i] *= window;
 			}
 			position += increment;
 		}
 	}
 
-	void Window::applyCustomWindows(juce::AudioBuffer<float> &buffer, u32 numChannels, const bool *channelsToCopy, u32 numSamples, WindowTypes type, float alpha)
+	void Window::applyCustomWindows(Buffer &buffer, size_t channels, const bool *channelsToCopy, size_t samples, WindowTypes type, float alpha)
 	{
 		// TODO: see into how to generate custom windows based on spectral properties
 		// redirecting to the default types for now
-		applyDefaultWindows(buffer, numChannels, channelsToCopy, numSamples, type, alpha);
+		applyDefaultWindows(buffer, channels, channelsToCopy, samples, type, alpha);
 	}
 
 }

@@ -104,7 +104,7 @@ namespace Interface
 
 		void setRenderer(Renderer *renderer) noexcept final { renderer_ = renderer; }
 		void setScaling(float scale) noexcept final { scaling_ = scale; }
-		void setLabelPlacement(juce::BubbleComponent::BubblePlacement placement) { labelPlacement_ = placement; }
+		void setLabelPlacement(BubblePlacement placement) { labelPlacement_ = placement; }
 		void setShouldRepaintOnHover(bool shouldRepaintOnHover) noexcept { shouldRepaintOnHover_ = shouldRepaintOnHover; }
 
 	protected:
@@ -137,7 +137,7 @@ namespace Interface
 		// and their bounds relative to the drawBounds
 		Framework::VectorMap<BaseComponent *, juce::Rectangle<int>> extraElements_{};
 		gl_ptr<PlainTextComponent> label_;
-		juce::BubbleComponent::BubblePlacement labelPlacement_ = juce::BubbleComponent::right;
+		BubblePlacement labelPlacement_ = BubblePlacement::right;
 
 		bool shouldRepaintOnHover_ = true;
 

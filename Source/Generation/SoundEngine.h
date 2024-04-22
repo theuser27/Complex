@@ -54,11 +54,11 @@ namespace Generation
 			void reserve(u32 newNumChannels, u32 newSize, bool fitToSize = false)
 			{
 				COMPLEX_ASSERT(newNumChannels > 0 && newSize > 0);
-				if ((newNumChannels <= getNumChannels()) && (newSize <= getSize()) && !fitToSize)
+				if ((newNumChannels <= getChannels()) && (newSize <= getSize()) && !fitToSize)
 					return;
 
 				// recalculating indices based on the new size
-				if (getNumChannels() * getSize())
+				if (getChannels() * getSize())
 				{
 					blockEnd_ = std::clamp(((i32)newSize - (i32)getBlockEndToEnd()) % (i32)newSize, 0, (i32)newSize - 1);
 					blockBegin_ = std::clamp(((i32)blockEnd_ - (i32)getBlockBeginToBlockEnd()) % (i32)newSize, 0, (i32)newSize - 1);
@@ -75,14 +75,14 @@ namespace Generation
 				buffer_.reserve(newNumChannels, newSize, fitToSize);
 			}
 
-			strict_inline void advanceLastOutputBlock(i32 numSamples)
-			{ lastOutputBlock_ = (lastOutputBlock_ + numSamples) % getSize(); }
+			strict_inline void advanceLastOutputBlock(i32 samples)
+			{ lastOutputBlock_ = (lastOutputBlock_ + samples) % getSize(); }
 
 			// used for manually advancing the block to a desired position
-			strict_inline void advanceBlock(u32 newBegin, i32 numSamples)
+			strict_inline void advanceBlock(u32 newBegin, i32 samples)
 			{
 				blockBegin_ = newBegin;
-				blockEnd_ = (newBegin + numSamples) % getSize();
+				blockEnd_ = (newBegin + samples) % getSize();
 			}
 
 			// returns how many samples in the buffer can be read 
@@ -107,8 +107,8 @@ namespace Generation
 				return (getSize() + getEnd() - currentBufferStart) % getSize();
 			}
 
-			strict_inline void readBuffer(juce::AudioBuffer<float> &reader, u32 numChannels,
-				const bool* channelsToCopy, u32 numSamples, BeginPoint beginPoint = BeginPoint::BlockBegin, 
+			strict_inline void readBuffer(Framework::Buffer &reader, u32 channels,
+				const bool* channelsToCopy, u32 samples, BeginPoint beginPoint = BeginPoint::BlockBegin, 
 				i32 inputBufferOffset = 0, u32 readerBeginIndex = 0, bool advanceBlock = true) noexcept
 			{
 				u32 begin = 0;
@@ -130,21 +130,21 @@ namespace Generation
 
 				u32 currentBufferBegin = (getSize() + begin + inputBufferOffset) % getSize();
 				
-				buffer_.readBuffer(reader, numChannels, numSamples, 
+				buffer_.readBuffer(reader, channels, samples, 
 					currentBufferBegin, readerBeginIndex, channelsToCopy);
 
 				if (advanceBlock)
-					this->advanceBlock(currentBufferBegin, (i32)numSamples);
+					this->advanceBlock(currentBufferBegin, (i32)samples);
 			}
 
-			strict_inline void writeToBufferEnd(const juce::AudioBuffer<float> &writer,
-				u32 numChannels, u32 numSamples, u32 writerIndex = 0) noexcept
+			strict_inline void writeToBufferEnd(const float *const *const writer,
+				u32 channels, u32 samples) noexcept
 			{
-				buffer_.writeToBufferEnd(writer, numChannels, numSamples, writerIndex);
+				buffer_.writeToBufferEnd(writer, channels, samples);
 			}
 
 			strict_inline void outBufferRead(Framework::CircularBuffer &outBuffer,
-				u32 numChannels, const bool* channelsToCopy, u32 numSamples, u32 outBufferIndex = 0, 
+				u32 channels, const bool* channelsToCopy, u32 samples, u32 outBufferIndex = 0, 
 				i32 inputBufferOffset = 0, BeginPoint beginPoint = BeginPoint::LastOutputBlock) const noexcept
 			{
 				u32 inputBufferBegin = 0;
@@ -165,11 +165,11 @@ namespace Generation
 				}
 
 				u32 inputBufferIndex = (getSize() + inputBufferBegin + inputBufferOffset) % getSize();
-				buffer_.readBuffer(outBuffer.getData(), numChannels, numSamples, inputBufferIndex, outBufferIndex, channelsToCopy);
+				buffer_.readBuffer(outBuffer.getData(), channels, samples, inputBufferIndex, outBufferIndex, channelsToCopy);
 			}
 
 			strict_inline Framework::CircularBuffer& getBuffer() noexcept {	return buffer_; }
-			strict_inline u32 getNumChannels() const noexcept { return buffer_.getNumChannels(); }
+			strict_inline u32 getChannels() const noexcept { return buffer_.getChannels(); }
 			strict_inline u32 getSize() const noexcept { return buffer_.getSize(); }
 
 			strict_inline u32 getLastOutputBlock() const noexcept { return lastOutputBlock_; }
@@ -196,7 +196,8 @@ namespace Generation
 		//
 		// FFT-ed data buffer, size is double the max FFT block
 		// even indices - freqs; odd indices - phases
-		juce::AudioBuffer<float> FFTBuffer;
+		Framework::Buffer FFTBuffer;
+		float *FFTedBuffer[kNumTotalChannels]{};
 		//
 		// if an input isn't used there's no need to process it at all
 		std::array<bool, kNumTotalChannels> usedInputChannels_{};
@@ -230,43 +231,43 @@ namespace Generation
 				buffer_.reserve(newNumChannels, newSize, fitToSize);
 			}
 
-			perf_inline void readOutput(juce::AudioBuffer<float> &output, u32 numOutputs, 
-				const bool* channelsToCopy, u32 numSamples, float outGain) noexcept
+			perf_inline void readOutput(float *const *outputBuffer, u32 outputs,
+				const bool* channelsToCopy, u32 samples, float outGain) const noexcept
 			{
-				COMPLEX_ASSERT(numOutputs <= kNumTotalChannels);
-				buffer_.readBuffer(output, numOutputs, numSamples, getBeginOutput(), 0, channelsToCopy);
+				COMPLEX_ASSERT(outputs <= kNumTotalChannels);
+				buffer_.readBuffer(outputBuffer, outputs, samples, getBeginOutput(), channelsToCopy);
 
 				// zero out non-copied channels
-				auto writePointers = output.getArrayOfWritePointers();
-				for (u32 i = 0; i < numOutputs; i++)
+				for (u32 i = 0; i < outputs; i++)
 				{
 					if (!channelsToCopy[i])
 					{
-						std::memset(writePointers[i], 0, numSamples * sizeof(float));
+						std::memset(outputBuffer[i], 0, samples * sizeof(float));
 						continue;
 					}
 					
-					output.applyGain(i, 0, numSamples, outGain);
+					if (outGain != 1.0f)
+						for (u32 j = 0; j < samples; ++j)
+							outputBuffer[i][j] *= outGain;
 				}
-					
 			}
 
-			perf_inline void addOverlapBuffer(const juce::AudioBuffer<float> &other, u32 numChannels,
-				const bool* channelsToOvelap, u32 numSamples, i32 beginOutputOffset, Framework::WindowTypes windowType) noexcept
+			perf_inline void addOverlapBuffer(const Framework::Buffer &other, u32 channels,
+				const bool* channelsToOvelap, u32 samples, i32 beginOutputOffset, Framework::WindowTypes windowType) noexcept
 			{
 				u32 bufferSize = getSize();
 				u32 oldEnd = getEnd();
-				u32 newEnd = buffer_.setEnd((addOverlap_ + numSamples) % bufferSize);
+				u32 newEnd = buffer_.setEnd((addOverlap_ + samples) % bufferSize);
 
 				// getting how many samples are going to be overlapped
-				// we clamp the value to max numSamples in case the FFT size was changed
-				u32 overlappedSamples = std::min((bufferSize + oldEnd - addOverlap_) % bufferSize, numSamples);
+				// we clamp the value to max samples in case the FFT size was changed
+				u32 overlappedSamples = std::min((bufferSize + oldEnd - addOverlap_) % bufferSize, samples);
 
 				// writing stuff that isn't overlapped
-				if (u32 assignSamples = numSamples - overlappedSamples; assignSamples)
+				if (u32 assignSamples = samples - overlappedSamples; assignSamples)
 				{
 					buffer_.clear((bufferSize + newEnd - assignSamples) % bufferSize, assignSamples);
-					buffer_.writeToBuffer(other, numChannels, assignSamples,
+					buffer_.writeToBuffer(other, channels, assignSamples,
 						(bufferSize + newEnd - assignSamples) % bufferSize, overlappedSamples, channelsToOvelap);
 				}
 
@@ -274,26 +275,26 @@ namespace Generation
 				if (overlappedSamples)
 				{
 					if (windowType == Framework::WindowTypes::Lerp)
-						Framework::CircularBuffer::applyToBuffer(buffer_.getData(), other, numChannels, overlappedSamples,
-							addOverlap_, 0, channelsToOvelap, utils::MathOperations::Interpolate);
+						Framework::CircularBuffer::applyToBuffer<utils::MathOperations::Interpolate>(buffer_.getData(), other, channels, overlappedSamples,
+							addOverlap_, 0, channelsToOvelap);
 					else
 					{
 						// fading edges and overlapping
 						u32 fadeSamples = overlappedSamples / 4;
 
 						// fade in overlap
-						Framework::CircularBuffer::applyToBuffer(buffer_.getData(), other, numChannels, fadeSamples,
-							addOverlap_, 0, channelsToOvelap, utils::MathOperations::FadeInAdd);
+						Framework::CircularBuffer::applyToBuffer<utils::MathOperations::FadeInAdd>(buffer_.getData(), other, channels, fadeSamples,
+							addOverlap_, 0, channelsToOvelap);
 
 						// overlap
-						buffer_.addBuffer(other, numChannels, overlappedSamples - 2 * fadeSamples,
+						buffer_.addBuffer(other, channels, overlappedSamples - 2 * fadeSamples,
 							channelsToOvelap, (addOverlap_ + fadeSamples) % bufferSize, fadeSamples);
 
 
 						// fade out overlap
-						Framework::CircularBuffer::applyToBuffer(buffer_.getData(), other, numChannels, fadeSamples,
+						Framework::CircularBuffer::applyToBuffer<utils::MathOperations::FadeOutAdd>(buffer_.getData(), other, channels, fadeSamples,
 							(addOverlap_ + overlappedSamples - fadeSamples) % bufferSize,
-							overlappedSamples - fadeSamples, channelsToOvelap, utils::MathOperations::FadeOutAdd);
+							overlappedSamples - fadeSamples, channelsToOvelap);
 					}
 				}					
 
@@ -322,18 +323,18 @@ namespace Generation
 				buffer_.clear();
 			}
 
-			strict_inline void advanceBeginOutput(u32 numSamples) noexcept
-			{ beginOutput_ = (beginOutput_ + numSamples) % getSize(); }
+			strict_inline void advanceBeginOutput(u32 samples) noexcept
+			{ beginOutput_ = (beginOutput_ + samples) % getSize(); }
 
-			strict_inline void advanceToScaleOutput(u32 numSamples) noexcept
-			{ toScaleOutput_ = (toScaleOutput_ + numSamples) % getSize(); }
+			strict_inline void advanceToScaleOutput(u32 samples) noexcept
+			{ toScaleOutput_ = (toScaleOutput_ + samples) % getSize(); }
 
-			strict_inline void advanceAddOverlap(u32 numSamples) noexcept
-			{ addOverlap_ = (addOverlap_ + numSamples) % getSize(); }
+			strict_inline void advanceAddOverlap(u32 samples) noexcept
+			{ addOverlap_ = (addOverlap_ + samples) % getSize(); }
 
 
 			strict_inline Framework::CircularBuffer& getBuffer() noexcept {	return buffer_; }
-			strict_inline u32 getNumChannels() const noexcept { return buffer_.getNumChannels(); }
+			strict_inline u32 getNumChannels() const noexcept { return buffer_.getChannels(); }
 			strict_inline u32 getSize() const noexcept { return buffer_.getSize(); }
 
 			strict_inline i32 getLatencyOffset() const noexcept { return latencyOffset_; }
@@ -367,7 +368,7 @@ namespace Generation
 		Framework::Window windows{};
 		//
 		// pointer to an array of fourier transforms
-		std::vector<std::unique_ptr<Framework::FFT>> transforms;
+		std::unique_ptr<Framework::FFT> transforms;
 		//
 		//
 		EffectsState *effectsState_ = nullptr;
@@ -375,14 +376,14 @@ namespace Generation
 		//=========================================================================================
 		// Methods
 		//
-		void CopyBuffers(juce::AudioBuffer<float> &buffer, u32 numInputs, u32 numSamples) noexcept;
-		void IsReadyToPerform(u32 numSamples) noexcept;
+		void CopyBuffers(const float *const *buffer, u32 numInputs, u32 samples) noexcept;
+		void IsReadyToPerform(u32 samples) noexcept;
 		void DoFFT() noexcept;		
 		void ProcessFFT(float sampleRate) noexcept;
 		void DoIFFT() noexcept;
 		void ScaleDown() noexcept;
-		void MixOut(u32 numSamples) noexcept;
-		void FillOutput(juce::AudioBuffer<float> &buffer, u32 numOutputs, u32 numSamples) noexcept;
+		void MixOut(u32 samples) noexcept;
+		void FillOutput(float *const *buffer, u32 numOutputs, u32 samples) noexcept;
 
 		// Inherited via BaseProcessor
 		BaseProcessor *createCopy([[maybe_unused]] std::optional<u64> parentModuleId) const noexcept override
@@ -397,7 +398,7 @@ namespace Generation
 		// initialising pointers and FFT plans
 		void ResetBuffers() noexcept;
 		void UpdateParameters(UpdateFlag flag, float sampleRate) noexcept;
-		void MainProcess(juce::AudioBuffer<float> &buffer, u32 numSamples,
+		void MainProcess(float *const *buffer, u32 samples,
 			float sampleRate, u32 numInputs, u32 numOutputs) noexcept;
 
 		u32 getProcessingDelay() const noexcept;

@@ -27,8 +27,7 @@ namespace Interface
 		void resized() override;
 
 		void setContent(juce::String text, juce::Rectangle<int> bounds, 
-			juce::BubbleComponent::BubblePlacement placement, 
-			Skin::SectionOverride sectionOverride = Skin::kPopupBrowser);
+			BubblePlacement placement, Skin::SectionOverride sectionOverride = Skin::kPopupBrowser);
 
 	private:
 		gl_ptr<OpenGlQuad> body_;

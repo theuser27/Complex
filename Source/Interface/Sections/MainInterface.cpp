@@ -128,7 +128,7 @@ namespace Interface
 	}
 
 	void MainInterface::popupDisplay(BaseComponent *source, juce::String text,
-		juce::BubbleComponent::BubblePlacement placement, bool primary, Skin::SectionOverride sectionOverride)
+		BubblePlacement placement, bool primary, Skin::SectionOverride sectionOverride)
 	{
 		PopupDisplay *display = primary ? popupDisplay1_.get() : popupDisplay2_.get();
 		display->setContent(std::move(text), getLocalArea(source, source->getLocalBounds()), placement, sectionOverride);

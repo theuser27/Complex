@@ -110,7 +110,7 @@ namespace utils
 		}
 	}
 
-	i32 lockAtomic(std::atomic<i32> &atomic, bool isExclusive, WaitMechanism mechanism, const clg::small_function<void()> &lambda) noexcept
+	i32 lockAtomic(LockBlame<i32> &lock, bool isExclusive, WaitMechanism mechanism, const clg::small_function<void()> &lambda) noexcept
 	{
 		i32 state, desired;
 		if (isExclusive)
@@ -118,16 +118,22 @@ namespace utils
 			static constexpr i32 expected = 0;
 			state = expected;
 			desired = state - 1;
-			while (!atomic.compare_exchange_weak(state, desired, std::memory_order_acq_rel, std::memory_order_relaxed))
+			while (!lock.lock.compare_exchange_weak(state, desired, std::memory_order_acq_rel, std::memory_order_relaxed))
 			{
 				// protecting against spurious failures
 				if (state == expected)
 					continue;
 
+				if (state <= expected)
+				{
+					COMPLEX_ASSERT_FALSE(lock.lastLockId != std::this_thread::get_id() && 
+						"Guess who forgot to unlock this atomic");
+				}
+
 				lambda();
 
 				if (mechanism == WaitMechanism::Spin || mechanism == WaitMechanism::SpinNotify)
-					while (atomic.load(std::memory_order_relaxed) != expected) { pause(); }
+					while (lock.lock.load(std::memory_order_relaxed) != expected) { pause(); }
 				else
 				{
 					do
@@ -135,45 +141,54 @@ namespace utils
 						if (mechanism == WaitMechanism::Sleep || mechanism == WaitMechanism::SleepNotify)
 							millisleep();
 						else
-							atomic.wait(state, std::memory_order_relaxed);
-						state = atomic.load(std::memory_order_relaxed);
+							lock.lock.wait(state, std::memory_order_relaxed);
+						state = lock.lock.load(std::memory_order_relaxed);
 					} while (state != expected);
 				}
 			}
+
+			lock.lastLockId = std::this_thread::get_id();
 		}
 		else
 		{
-			state = atomic.load(std::memory_order_relaxed);
+			state = lock.lock.load(std::memory_order_relaxed);
+			bool isLambdaRun = false;
+
 			while (true)
 			{
-				if (state < 0)
+				while (state < 0)
 				{
-					lambda();
+					if (!isLambdaRun)
+					{
+						lambda();
+						isLambdaRun = true;
+					}
 
 					switch (mechanism)
 					{
 					case WaitMechanism::Spin:
 					case WaitMechanism::SpinNotify:
-						while (atomic.load(std::memory_order_relaxed) < 0) { pause(); }
+						while (lock.lock.load(std::memory_order_relaxed) < 0) { pause(); }
 						break;
 					case WaitMechanism::Wait:
 					case WaitMechanism::WaitNotify:
-						atomic.wait(state, std::memory_order_relaxed);
+						lock.lock.wait(state, std::memory_order_relaxed);
 						break;
 					case WaitMechanism::Sleep:
 					case WaitMechanism::SleepNotify:
-						while (atomic.load(std::memory_order_relaxed) < 0) { millisleep(); }
+						while (lock.lock.load(std::memory_order_relaxed) < 0) { millisleep(); }
 						break;
 					default:
 						COMPLEX_ASSERT_FALSE("Invalid wait mechanism");
 						break;
 					}
 
-					state = atomic.load(std::memory_order_relaxed);
+					state = lock.lock.load(std::memory_order_relaxed);
 				}
-				desired = state + 1;
 
-				if (atomic.compare_exchange_weak(state, desired, std::memory_order_acq_rel, std::memory_order_relaxed))
+				desired = state + 1;
+				lock.lastLockId = {};
+				if (lock.lock.compare_exchange_weak(state, desired, std::memory_order_acq_rel, std::memory_order_relaxed))
 					break;
 			}
 		}
@@ -188,14 +203,20 @@ namespace utils
 			atomic.notify_all();
 	}
 
-	void unlockAtomic(std::atomic<i32> &atomic, bool wasExclusive, WaitMechanism mechanism)
+	void unlockAtomic(LockBlame<i32> &atomic, bool wasExclusive, WaitMechanism mechanism)
 	{
 		if (wasExclusive)
-			atomic.store(0, std::memory_order_release);
+		{
+			[[maybe_unused]] auto value = atomic.lock.fetch_add(1, std::memory_order_release);
+			COMPLEX_ASSERT(value == -1);
+		}
 		else
-			atomic.fetch_sub(1, std::memory_order_release);
+		{
+			[[maybe_unused]] auto value = atomic.lock.fetch_sub(1, std::memory_order_release);
+			COMPLEX_ASSERT(value != 0);
+		}
 
 		if ((u32)mechanism & (u32)WaitMechanism::SpinNotify)
-			atomic.notify_all();
+			atomic.lock.notify_all();
 	}
 }

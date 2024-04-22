@@ -155,6 +155,14 @@ namespace utils
 
 namespace Interface
 {
+	enum class BubblePlacement : int
+	{
+		above = 1,
+		below = 2,
+		left = 4,
+		right = 8
+	};
+
 	class BaseComponent : public juce::Component
 	{
 	public:

@@ -55,33 +55,34 @@ namespace Framework
 			return;
 
 		parameterLinkPointer_.store(link, std::memory_order_release);
-		utils::ScopedLock guard{ name_.first, utils::WaitMechanism::Spin };
 
-		if (!link)
-			name_.second = std::format("P{}", parameterIndex_);
-		else
 		{
-			link->parameter->changeControl(this);
-			if (getValueFromParameter)
-			{
-				auto newValue = link->parameter->getNormalisedValue();
-				value_.store(newValue, std::memory_order_release);
-				sendValueChangedMessageToListeners(newValue);
-			}
+			utils::ScopedLock guard{ name_.first, utils::WaitMechanism::Spin };
+
+			if (!link)
+				name_.second = std::format("P{}", parameterIndex_);
 			else
-				link->UIControl->setValueFromHost();
+			{
+				link->parameter->changeControl(this);
+				if (getValueFromParameter)
+				{
+					auto newValue = link->parameter->getNormalisedValue();
+					value_.store(newValue, std::memory_order_release);
+					sendValueChangedMessageToListeners(newValue);
+				}
+				else
+					link->UIControl->setValueFromHost();
 
-			auto name = link->parameter->getParameterDetails().displayName;
-			juce::String newString{};
-			newString.preallocateBytes(64);
-			newString += 'P';
-			newString += parameterIndex_;
-			newString += " > ";
-			newString += { name.data(), name.size() };
-			name_.second = std::move(newString);
+				auto name = link->parameter->getParameterDetails().displayName;
+				juce::String newString{};
+				newString.preallocateBytes(64);
+				newString += 'P';
+				newString += parameterIndex_;
+				newString += " > ";
+				newString += { name.data(), name.size() };
+				name_.second = std::move(newString);
+			}
 		}
-
-		guard.~ScopedLock();
 
 		utils::as<ComplexAudioProcessor>(plugin_)
 			->updateHostDisplay(juce::AudioProcessor::ChangeDetails{}.withParameterInfoChanged(true));

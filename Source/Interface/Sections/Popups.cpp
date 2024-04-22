@@ -53,7 +53,7 @@ namespace Interface
 	}
 
 	void PopupDisplay::setContent(String text, Rectangle<int> bounds,
-		BubbleComponent::BubblePlacement placement, Skin::SectionOverride sectionOverride)
+		BubblePlacement placement, Skin::SectionOverride sectionOverride)
 	{
 		static constexpr int kHeight = 24;
 
@@ -69,13 +69,13 @@ namespace Interface
 		int middle_x = bounds.getX() + bounds.getWidth() / 2;
 		int middle_y = bounds.getY() + bounds.getHeight() / 2;
 
-		if (placement == BubbleComponent::above)
+		if (placement == BubblePlacement::above)
 			setBounds(middle_x - width / 2, bounds.getY() - height, width, height);
-		else if (placement == BubbleComponent::below)
+		else if (placement == BubblePlacement::below)
 			setBounds(middle_x - width / 2, bounds.getBottom(), width, height);
-		else if (placement == BubbleComponent::left)
+		else if (placement == BubblePlacement::left)
 			setBounds(bounds.getX() - width, middle_y - height / 2, width, height);
-		else if (placement == BubbleComponent::right)
+		else if (placement == BubblePlacement::right)
 			setBounds(bounds.getRight(), middle_y - height / 2, width, height);
 
 		text_->setTextHeight(floatHeight * 0.5f);

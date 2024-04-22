@@ -10,6 +10,7 @@
 
 #pragma once
 
+#include "sync_primitives.h"
 #include "memory_block.h"
 #include "utils.h"
 #include "simd_utils.h"
@@ -263,7 +264,7 @@ namespace Framework
 		u32 channels_ = 0;
 		u32 size_ = 0;
 
-		mutable std::atomic<i32> dataLock_ = 0;
+		mutable utils::LockBlame<i32> dataLock_{ 0, {} };
 
 		static u32 getTotalSimdChannels(u32 numChannels)
 		{	return (u32)std::ceil((double)numChannels / (double)getRelativeSize()); }
@@ -335,7 +336,7 @@ namespace Framework
 		u32 channels_ = 0;
 		u32 size_ = 0;
 
-		std::atomic<i32> *dataLock_ = nullptr;
+		utils::LockBlame<i32> *dataLock_ = nullptr;
 
 		template<typename T, SimdValue SIMD>
 		friend class SimdBuffer;

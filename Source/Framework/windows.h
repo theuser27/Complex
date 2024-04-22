@@ -13,14 +13,10 @@
 #include "nested_enum.h"
 #include "platform_definitions.h"
 
-namespace juce
-{
-	template<typename T>
-	class AudioBuffer;
-}
-
 namespace Framework
 {
+	class Buffer;
+
 	NESTED_ENUM((WindowTypes, u32), (Lerp, Hann, Hamming, Triangle, Sine, Rectangle, Exp, HannExp, Lanczos))
 
 	class Window
@@ -38,13 +34,13 @@ namespace Framework
 		static float getHannExponentialWindow(float position, float alpha) noexcept;
 		static float getLanczosWindow(float position, float alpha) noexcept;
 
-		void applyWindow(juce::AudioBuffer<float> &buffer, u32 numChannels,
-			const bool *channelsToProcess, u32 numSamples, WindowTypes type, float alpha);
+		void applyWindow(Framework::Buffer &buffer, size_t channels,
+			const bool *channelsToProcess, size_t samples, WindowTypes type, float alpha);
 
-		static void applyDefaultWindows(juce::AudioBuffer<float> &buffer, u32 numChannels,
-			const bool *channelsToCopy, u32 numSamples, WindowTypes type, float alpha) noexcept;
+		static void applyDefaultWindows(Framework::Buffer &buffer, size_t channels,
+			const bool *channelsToCopy, size_t samples, WindowTypes type, float alpha) noexcept;
 
-		void applyCustomWindows(juce::AudioBuffer<float> &buffer, u32 numChannels,
-			const bool *channelsToCopy, u32 numSamples, WindowTypes type, float alpha);
+		void applyCustomWindows(Framework::Buffer &buffer, size_t channels,
+			const bool *channelsToCopy, size_t samples, WindowTypes type, float alpha);
 	};
 }

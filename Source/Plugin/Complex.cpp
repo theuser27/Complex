@@ -90,7 +90,7 @@ namespace Plugin
 		return *rendererInstance_;
 	}
 
-	void ComplexPlugin::Process(juce::AudioBuffer<float> &buffer, u32 numSamples, float sampleRate, u32 numInputs, u32 numOutputs)
+	void ComplexPlugin::Process(float *const *buffer, u32 numSamples, float sampleRate, u32 numInputs, u32 numOutputs)
 	{
 		utils::ScopedLock g{ processingLock_, utils::WaitMechanism::Spin };
 		soundEngine_->MainProcess(buffer, numSamples, sampleRate, numInputs, numOutputs);

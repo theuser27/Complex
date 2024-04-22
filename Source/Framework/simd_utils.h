@@ -54,16 +54,6 @@ namespace utils
 		return Framework::Matrix(values);
 	}
 
-	template<u32 size>
-	strict_inline Framework::Matrix vector_call getValueMatrix(const float *const *buffers, simd_int indices) noexcept
-	{
-		static_assert(size <= kSimdRatio, "Size of matrix cannot be larger than size of simd package");
-		std::array<simd_float, size> values;
-		for (u32 i = 0; i < values.size(); i++)
-			values[i] = toSimdFloatFromUnaligned(buffers[i] + indices[i]);
-		return Framework::Matrix(values);
-	}
-
 	strict_inline bool vector_call completelyEqual(simd_float left, simd_float right) noexcept
 	{ return simd_float::notEqual(left, right).sum() == 0; }
 

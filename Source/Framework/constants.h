@@ -10,18 +10,17 @@
 
 #pragma once
 
-#include <numbers>
-#include "simd_values.h"
+#include "platform_definitions.h"
 
 namespace common
 {
 	// general constants; don't change
-	inline constexpr float kPi = std::numbers::pi_v<float>;
+	inline constexpr float kPi = 3.141592653589793;
 	inline constexpr float k2Pi = kPi * 2.0f;
 	inline constexpr float kEpsilon = 1e-10f;
 	inline constexpr double kDefaultSampleRate = 44100;
-	inline constexpr u32 kSimdRatio = simd_float::kSize;
-	inline constexpr u32 kComplexSimdRatio = simd_float::kComplexSize;
+	inline constexpr u32 kSimdRatio = 4;
+	inline constexpr u32 kComplexSimdRatio = kSimdRatio / 2;
 	inline constexpr u32 kMidiSize = 128;
 	inline constexpr u32 kMidiKeyCenter = 60;
 	inline constexpr double kMidi0Frequency = 8.1757989156f;

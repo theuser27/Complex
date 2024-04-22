@@ -8,8 +8,8 @@
   ==============================================================================
 */
 
-#include "OpenGlScrollbar.h"
 #include "OpenGlViewport.h"
+#include "OpenGlScrollbar.h"
 
 namespace Interface
 {

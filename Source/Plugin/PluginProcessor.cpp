@@ -15,14 +15,14 @@
 
 //==============================================================================
 ComplexAudioProcessor::ComplexAudioProcessor() :
-	AudioProcessor (BusesProperties().withInput("Input", juce::AudioChannelSet::stereo(), true)
+	AudioProcessor (BusesProperties().withInput ("Input",  juce::AudioChannelSet::stereo(), true)
 																	 .withOutput("Output", juce::AudioChannelSet::stereo(), true))
 
 {
 	using namespace Framework;
 
 	static_assert(kMaxParameterMappings >= 64, "If you want to lower the number of available parameter mappings, \
-		this might break compatibility with save files inside projects. Comment out this assert if you're aware of the risk.");
+		this might break compatibility with save files inside projects and presets. Comment out this assert if you're aware of the risk.");
 
 	constexpr auto pluginParameterStrings = BaseProcessors::SoundEngine::enum_names<nested_enum::OuterNodes>(false);
 	parameterBridges_.reserve(kMaxParameterMappings + pluginParameterStrings.size());
@@ -96,7 +96,7 @@ bool ComplexAudioProcessor::isBusesLayoutSupported (const BusesLayout& layouts) 
 	return true;
 }
 
-void ComplexAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, [[maybe_unused]] juce::MidiBuffer& midiMessages)
+void ComplexAudioProcessor::processBlock (juce::AudioBuffer<float> &buffer, [[maybe_unused]] juce::MidiBuffer& midiMessages)
 {
 	juce::ScopedNoDenormals noDenormals;
 
@@ -108,7 +108,7 @@ void ComplexAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, [[ma
 	updateParameters(UpdateFlag::BeforeProcess, sampleRate);
 	setLatencySamples((int)getProcessingDelay());
 
-	Process(buffer, (u32)numSamples, sampleRate, (u32)inputs, (u32)outputs);
+	Process(buffer.getArrayOfWritePointers(), (u32)numSamples, sampleRate, (u32)inputs, (u32)outputs);
 
 	updateParameters(UpdateFlag::AfterProcess, sampleRate);
 }

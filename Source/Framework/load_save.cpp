@@ -24,6 +24,14 @@
 
 using json = nlohmann::json;
 
+namespace Framework
+{
+	namespace LoadSave
+	{
+		File getConfigFile();
+	}
+}
+
 namespace
 {
 	class LoadingException final : public std::exception
@@ -118,7 +126,7 @@ namespace Framework
 	#endif
 		}
 
-		String getVersion()
+		std::string getVersion()
 		{
 			json data = getConfigJson();
 

@@ -10,9 +10,7 @@
 
 #pragma once
 
-#ifdef INTEL_IPP
-	#include "ipps.h"
-#endif
+#include "constants.h"
 
 namespace Framework
 {
@@ -20,27 +18,36 @@ namespace Framework
 	{
 	public:
 		// in and out buffers need to be 2 * bits
-		explicit FFT(int bits);
+		explicit FFT();
 		~FFT() noexcept;
 
 		// src buffer needs to have exactly as many samples as FFT size
-		void transformRealForward(float *inOut) const noexcept;
+		float *transformRealForward(size_t order, float *input, size_t channel) const noexcept;
 
 		// src needs to be in the CCS format
-		void transformRealInverse(float *inOut) const noexcept;
+		void transformRealInverse(size_t order, float *output, size_t channel) const noexcept;
 
 	private:
-	#if INTEL_IPP
-		int size_;
-		IppsFFTSpec_R_32f *ippSpecs_;
-		Ipp8u *memory_;
-		Ipp8u *spec_;
-		Ipp8u *specBuffer_;
-		Ipp8u *buffer_;
+	#ifdef INTEL_IPP
+		// Intel IPP
+		void *ippSpecs_[kMaxFFTOrder - kMinFFTOrder + 1];
+		void *buffer_;
 
-	// TODO: add more FFT options
-#else
-	#error No FFT algorithm could be chosen
-#endif
+	#elif 0
+		// muFFT
+		void *forwardPlans_[kMaxFFTOrder - kMinFFTOrder + 1];
+		void *inversePlans_[kMaxFFTOrder - kMinFFTOrder + 1];
+
+		float *scratchBuffers_;
+
+	#else
+		// pffft
+		void *plans_[kMaxFFTOrder - kMinFFTOrder + 1];
+
+		float *scratchBuffers_;
+
+	#endif
+
+		// TODO: add more FFT options
 	};
 }

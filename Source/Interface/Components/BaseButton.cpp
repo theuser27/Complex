@@ -570,14 +570,14 @@ namespace Interface
 		auto labelX = anchorBounds.getX();
 		switch (labelPlacement_)
 		{
-		case BubbleComponent::right:
+		case BubblePlacement::right:
 			labelX += anchorBounds.getWidth() + scaleValueRoundInt(kLabelOffset);
 			label_->setJustification(Justification::centredLeft);
 			break;
 		default:
-		case BubbleComponent::above:
-		case BubbleComponent::below:
-		case BubbleComponent::left:
+		case BubblePlacement::above:
+		case BubblePlacement::below:
+		case BubblePlacement::left:
 			labelX -= scaleValueRoundInt(kLabelOffset) + labelTextWidth;
 			label_->setJustification(Justification::centredRight);
 			break;

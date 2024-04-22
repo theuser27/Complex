@@ -12,12 +12,6 @@
 
 #include "ProcessorTree.h"
 
-namespace juce
-{
-	template<typename T>
-	class AudioBuffer;
-}
-
 namespace Generation
 {
 	class SoundEngine;
@@ -37,7 +31,7 @@ namespace Plugin
 
 		void Initialise(float sampleRate, u32 samplesPerBlock);
 		void CheckGlobalParameters();
-		void Process(juce::AudioBuffer<float> &buffer, u32 numSamples, float sampleRate, u32 numInputs, u32 numOutputs);
+		void Process(float *const *buffer, u32 numSamples, float sampleRate, u32 numInputs, u32 numOutputs);
 
 		u32 getProcessingDelay() const noexcept;
 		
@@ -46,7 +40,7 @@ namespace Plugin
 
 		virtual void parameterChangeMidi(u64 parentModuleId, std::string_view parameterName, float value);
 
-		strict_inline auto &getSoundEngine() noexcept { return *soundEngine_; }
+		auto &getSoundEngine() noexcept { return *soundEngine_; }
 		u32 getFFTSize() noexcept;
 
 		Interface::Renderer &getRenderer();
