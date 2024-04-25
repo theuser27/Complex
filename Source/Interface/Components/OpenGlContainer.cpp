@@ -60,6 +60,20 @@ namespace Interface
 		}
 	}
 
+	void OpenGlContainer::removeAllOpenGlComponents(bool removeChild)
+	{
+		utils::ScopedLock g{ isRendering_, utils::WaitMechanism::WaitNotify };
+
+		for (size_t i = openGlComponents_.size(); i > 0; --i)
+		{
+			removeChildComponent(openGlComponents_[i - 1].get());
+			if (removeChild)
+				openGlComponents_[i - 1]->setParentSafe(nullptr);
+		}
+
+		openGlComponents_.clear();
+	}
+
 	float OpenGlContainer::getValue(Skin::ValueId valueId) const noexcept { return renderer_->getSkin()->getValue(this, valueId); }
 	float OpenGlContainer::getValue(Skin::SectionOverride skinOverride, Skin::ValueId valueId) const noexcept 
 	{ return renderer_->getSkin()->getValue(skinOverride, valueId); }

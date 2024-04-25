@@ -11,6 +11,7 @@
 #include <array>
 #include <algorithm>
 #include "Third Party/gcem/gcem.hpp"
+
 #include "constexpr_utils.h"
 #include "parameters.h"
 #include "vector_map.h"

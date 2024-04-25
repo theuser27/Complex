@@ -8,7 +8,6 @@
 
 #pragma once
 
-#include "AppConfig.h"
 #include <juce_audio_processors/juce_audio_processors.h>
 #include "Interface/LookAndFeel/BorderBoundsConstrainer.h"
 

@@ -10,8 +10,8 @@
 
 #pragma once
 
-#include "AppConfig.h"
 #include <juce_data_structures/juce_data_structures.h>
+
 #include "utils.h"
 #include "sync_primitives.h"
 #include "parameters.h"

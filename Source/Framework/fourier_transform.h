@@ -33,13 +33,6 @@ namespace Framework
 		void *ippSpecs_[kMaxFFTOrder - kMinFFTOrder + 1];
 		void *buffer_;
 
-	#elif 0
-		// muFFT
-		void *forwardPlans_[kMaxFFTOrder - kMinFFTOrder + 1];
-		void *inversePlans_[kMaxFFTOrder - kMinFFTOrder + 1];
-
-		float *scratchBuffers_;
-
 	#else
 		// pffft
 		void *plans_[kMaxFFTOrder - kMinFFTOrder + 1];

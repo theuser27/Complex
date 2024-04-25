@@ -31,8 +31,7 @@ namespace Interface
 		EmptySlider(Framework::ParameterValue *parameter) : PinSlider(parameter)
 		{
 			setShouldShowPopup(true);
-			for (auto &component : openGlComponents_)
-				removeOpenGlComponent(component.get());
+			removeAllOpenGlComponents();
 		}
 
 		void mouseDown(const MouseEvent &e) override

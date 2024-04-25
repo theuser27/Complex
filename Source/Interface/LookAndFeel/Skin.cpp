@@ -9,8 +9,11 @@
 */
 
 #include "Skin.h"
+
 #include "Third Party/json/json.hpp"
-#include "JuceHeader.h"
+#include <juce_core/juce_core.h>
+#include <juce_graphics/juce_graphics.h>
+#include "BinaryData.h"
 #include "DefaultLookAndFeel.h"
 #include "../Sections/BaseSection.h"
 #include "Framework/load_save.h"
@@ -175,7 +178,7 @@ namespace Interface
 
   Skin::Skin()
   {
-    File defaultSkin = Framework::LoadSave::getDefaultSkin();
+	  juce::File defaultSkin = Framework::LoadSave::getDefaultSkin();
 
     // temporary solution to ensure there's a skin file
     // if this throws put Complex.skin at Users\(user)\AppData\Roaming\Complex
@@ -211,7 +214,7 @@ namespace Interface
       valueOverrides_[i].data.clear();
   }
 
-  void Skin::setColor(ColorId colorId, const Colour &color) noexcept { colors_[colorId - kInitialColor] = color.getARGB(); }
+  void Skin::setColor(ColorId colorId, const juce::Colour &color) noexcept { colors_[colorId - kInitialColor] = color.getARGB(); }
   u32 Skin::getColor(ColorId colorId) const { return colors_[colorId - kInitialColor]; }
 
   bool Skin::overridesColor(int section, ColorId colorId) const
@@ -230,17 +233,17 @@ namespace Interface
     return valueOverrides_[section].find(valueId) != valueOverrides_[section].data.end();
   }
 
-  void Skin::copyValuesToLookAndFeel(LookAndFeel *lookAndFeel) const
+  void Skin::copyValuesToLookAndFeel(juce::LookAndFeel *lookAndFeel) const
   {
-    lookAndFeel->setColour(PopupMenu::backgroundColourId, Colour{ getColor(Skin::kPopupBackground) });
-    lookAndFeel->setColour(PopupMenu::textColourId, Colour{ getColor(Skin::kNormalText) });
-    lookAndFeel->setColour(TooltipWindow::textColourId, Colour{ getColor(Skin::kNormalText) });
+    lookAndFeel->setColour(juce::PopupMenu::backgroundColourId, juce::Colour{ getColor(Skin::kPopupBackground) });
+    lookAndFeel->setColour(juce::PopupMenu::textColourId, juce::Colour{ getColor(Skin::kNormalText) });
+    lookAndFeel->setColour(juce::TooltipWindow::textColourId, juce::Colour{ getColor(Skin::kNormalText) });
 
-    lookAndFeel->setColour(BubbleComponent::backgroundColourId, Colour{ getColor(Skin::kPopupBackground) });
-    lookAndFeel->setColour(BubbleComponent::outlineColourId, Colour{ getColor(Skin::kPopupBorder) });
+    lookAndFeel->setColour(juce::BubbleComponent::backgroundColourId, juce::Colour{ getColor(Skin::kPopupBackground) });
+    lookAndFeel->setColour(juce::BubbleComponent::outlineColourId, juce::Colour{ getColor(Skin::kPopupBorder) });
 
     for (int i = kInitialColor; i < kFinalColor; ++i)
-      lookAndFeel->setColour(i, Colour{ getColor((ColorId)i) });
+      lookAndFeel->setColour(i, juce::Colour{ getColor((ColorId)i) });
   }
 
   u32 Skin::getColor(SectionOverride section, ColorId colorId) const
@@ -251,7 +254,7 @@ namespace Interface
     if (auto iter = colorOverrides_[section].find(colorId); iter != colorOverrides_[section].data.end())
       return iter->second;
 
-    return Colours::black.getARGB();
+    return juce::Colours::black.getARGB();
   }
 
   u32 Skin::getColor(const OpenGlContainer *section, ColorId colorId) const
@@ -324,7 +327,7 @@ namespace Interface
   {
     json data;
     for (int i = 0; i < kColorIdCount; ++i)
-      data[kColorNames[i]] = Colour{ colors_[i] }.toString().toStdString();
+      data[kColorNames[i]] = juce::Colour{ colors_[i] }.toString().toStdString();
 
     for (int i = 0; i < kValueIdCount; ++i)
       data[kValueNames[i]] = values_[i];
@@ -334,7 +337,7 @@ namespace Interface
     {
       json override_section;
       for (const auto &[key, value] : colorOverrides_[override_index].data)
-        override_section[kColorNames[key - kInitialColor]] = Colour{ value }.toString().toStdString();
+        override_section[kColorNames[key - kInitialColor]] = juce::Colour{ value }.toString().toStdString();
 
       for (const auto &[key, value] : valueOverrides_[override_index].data)
         override_section[kValueNames[key]] = value;
@@ -343,12 +346,12 @@ namespace Interface
     }
 
     data["overrides"] = overrides;
-    data["Plugin Version"] = ProjectInfo::versionNumber;
+    data["Plugin Version"] = JucePlugin_VersionCode;
 
     return data.dump();
   }
 
-  void Skin::saveToFile(const File &destination)
+  void Skin::saveToFile(const juce::File &destination)
   { destination.replaceWithText(stateToString()); }
 
   void Skin::jsonToState(std::any jsonData)
@@ -378,7 +381,7 @@ namespace Interface
             ColorId colorId = static_cast<Skin::ColorId>(i + Skin::kInitialColor);
 
             std::string colorString = overrideSection[kColorNames[i]];
-            colorOverrides_[overrideIndex].add(colorId, Colour::fromString(colorString).getARGB());
+            colorOverrides_[overrideIndex].add(colorId, juce::Colour::fromString(colorString).getARGB());
           }
         }
 
@@ -399,7 +402,7 @@ namespace Interface
       if (data.count(kColorNames[i]))
       {
         std::string colorString = data[kColorNames[i]];
-        colors_[i] = Colour::fromString(colorString).getARGB();
+        colors_[i] = juce::Colour::fromString(colorString).getARGB();
       }
     }
 
@@ -412,7 +415,7 @@ namespace Interface
     }
   }
 
-  bool Skin::stringToState(const String &skinString)
+  bool Skin::stringToState(const juce::String &skinString)
   {
     try
     {
@@ -426,12 +429,12 @@ namespace Interface
     return true;
   }
 
-  bool Skin::loadFromFile(const File &source)
+  bool Skin::loadFromFile(const juce::File &source)
   { return stringToState(source.loadFileAsString()); }
 
   void Skin::loadDefaultSkin()
   {
-    MemoryInputStream skin((const void *)BinaryData::Complex_skin, BinaryData::Complex_skinSize, false);
+    juce::MemoryInputStream skin{ BinaryData::Complex_skin, BinaryData::Complex_skinSize, false };
     std::string skin_string = skin.readEntireStreamAsString().toStdString();
 
     try

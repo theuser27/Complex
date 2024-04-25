@@ -15,6 +15,7 @@
 #include <string_view>
 #include <numeric>
 #include <Third Party/constexpr-to-string/to_string.hpp>
+
 #include "platform_definitions.h"
 
 namespace utils

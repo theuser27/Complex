@@ -14,6 +14,7 @@
 #include <concepts>
 #include <numbers>
 #include <type_traits>
+
 #include "constants.h"
 
 namespace utils

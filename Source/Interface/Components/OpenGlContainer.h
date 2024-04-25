@@ -29,6 +29,7 @@ namespace Interface
 
 		void addOpenGlComponent(gl_ptr<OpenGlComponent> openGlComponent, bool toBeginning = false);
 		void removeOpenGlComponent(OpenGlComponent *openGlComponent, bool removeChild = false);
+		void removeAllOpenGlComponents(bool removeChild = false);
 
 		Renderer *getRenderer() const noexcept { return renderer_; }
 		float getValue(Skin::ValueId valueId) const noexcept;

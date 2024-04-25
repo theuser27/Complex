@@ -10,7 +10,6 @@
 
 #pragma once
 
-#include "AppConfig.h"
 #include <juce_graphics/juce_graphics.h>
 
 namespace Interface

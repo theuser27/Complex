@@ -13,6 +13,7 @@
 #include <atomic>
 #include <thread>
 #include "Third Party/clog/small_function.hpp"
+
 #include "platform_definitions.h"
 
 namespace utils

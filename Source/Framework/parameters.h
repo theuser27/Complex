@@ -11,6 +11,7 @@
 #pragma once
 
 #include <span>
+
 #include "simd_values.h"
 #include "constants.h"
 #include "nested_enum.h"

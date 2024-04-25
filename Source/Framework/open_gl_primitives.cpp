@@ -10,6 +10,7 @@
 
 #include "open_gl_primitives.h"
 #include <juce_opengl/juce_opengl.h>
+
 #include "platform_definitions.h"
 #include "utils.h"
 

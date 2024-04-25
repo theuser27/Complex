@@ -12,8 +12,8 @@
 
 #include <atomic>
 #include <type_traits>
-#include "AppConfig.h"
 #include "juce_opengl/opengl/juce_gl.h"
+
 #include "platform_definitions.h"
 
 namespace juce

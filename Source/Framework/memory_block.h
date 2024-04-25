@@ -12,6 +12,7 @@
 
 #include <cstdlib>
 #include <memory>
+
 #include "platform_definitions.h"
 
 namespace Framework

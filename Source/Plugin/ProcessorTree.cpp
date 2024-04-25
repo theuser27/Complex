@@ -10,7 +10,6 @@
 
 #include "ProcessorTree.h"
 
-#include "AppConfig.h"
 #include <juce_data_structures/juce_data_structures.h>
 #include "Generation/BaseProcessor.h"
 #include "Framework/update_types.h"

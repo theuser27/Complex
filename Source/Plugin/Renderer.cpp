@@ -10,7 +10,6 @@
 
 #include "Renderer.h"
 
-#include "AppConfig.h"
 #include <juce_opengl/juce_opengl.h>
 #include "Framework/load_save.h"
 #include "Framework/parameter_bridge.h"

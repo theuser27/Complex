@@ -12,9 +12,6 @@
 
 #ifdef INTEL_IPP
 	#include "ipps.h"
-#elif 0
-	#include "Third Party/muFFT/fft.h"
-	#include "simd_values.h"
 #else
 	#include "Third Party/pffft/pffft.h"
 	#include "simd_values.h"
@@ -93,83 +90,6 @@ namespace Framework
 		output[1] = 0.0f;
 		output[size + 1] = 0.0f;
 		ippsFFTInv_CCSToR_32f_I(output, (IppsFFTSpec_R_32f *)ippSpecs_[order - kMinFFTOrder], (Ipp8u *)buffer_);
-	}
-
-#elif 0
-
-	// muFFT requires all inputs and outputs be aligned to the simd type at use
-	// so we can safely use aligned loads and stores
-	strict_inline simd_float vector_call toSimdFloat(const float *aligned) noexcept
-	{
-	#if COMPLEX_SSE4_1
-		return _mm_load_ps(aligned);
-	#elif COMPLEX_NEON
-		static_assert(false, "not yet implemented");
-	#endif
-	}
-
-	strict_inline void vector_call fromSimdFloat(float *aligned, simd_float value) noexcept
-	{
-	#if COMPLEX_SSE4_1
-		_mm_store_ps(aligned, value.value);
-	#elif COMPLEX_NEON
-		static_assert(false, "not yet implemented");
-	#endif
-	}
-
-	FFT::FFT()
-	{
-		for (size_t i = 0; i < kMaxFFTOrder - kMinFFTOrder + 1; ++i)
-		{
-			forwardPlans_[i] = mufft_create_plan_1d_r2c(1 << (kMinFFTOrder + i), MUFFT_FLAG_CPU_ANY);
-			inversePlans_[i] = mufft_create_plan_1d_c2r(1 << (kMinFFTOrder + i), MUFFT_FLAG_CPU_ANY);
-		}
-
-		scratchBuffers_ = (float *)mufft_alloc((size_t)kNumTotalChannels * kMaxFFTBufferLength * sizeof(float));
-	}
-
-	FFT::~FFT() noexcept
-	{
-		for (size_t i = 0; i < kMaxFFTOrder - kMinFFTOrder + 1; ++i)
-		{
-			mufft_free_plan_1d((mufft_plan_1d *)forwardPlans_[i]);
-			mufft_free_plan_1d((mufft_plan_1d *)inversePlans_[i]);
-		}
-
-		mufft_free(scratchBuffers_);
-	}
-
-	float *FFT::transformRealForward(size_t order, float *input, size_t channel) const noexcept
-	{
-		COMPLEX_ASSERT(order >= kMinFFTOrder);
-		COMPLEX_ASSERT(channel < kNumTotalChannels);
-		size_t size = 1ULL << order;
-
-		input[channel * kMaxFFTBufferLength + size] = 0.0f;
-		mufft_execute_plan_1d((mufft_plan_1d *)forwardPlans_[order - kMinFFTOrder], &scratchBuffers_[channel * kMaxFFTBufferLength], input);
-		// putting the nyquist bin together with dc bin
-		scratchBuffers_[channel * kMaxFFTBufferLength + 1] = scratchBuffers_[channel * kMaxFFTBufferLength + size];
-		scratchBuffers_[channel * kMaxFFTBufferLength + size] = 0.0f;
-
-		return &scratchBuffers_[channel * kMaxFFTBufferLength];
-	}
-
-	void FFT::transformRealInverse(size_t order, float *output, size_t channel) const noexcept
-	{
-		COMPLEX_ASSERT(order >= kMinFFTOrder);
-		COMPLEX_ASSERT(channel < kNumTotalChannels);
-		size_t size = 1ULL << order;
-		
-		COMPLEX_ASSERT((uintptr_t)output % sizeof(simd_float) == 0);
-		simd_float scaling = 1.0f / (float)(size * size * size * size);
-		for (size_t i = 0; i < size; i += kSimdRatio)
-			fromSimdFloat(output + i, toSimdFloat(output + i) * scaling);
-
-		// separating dc and nyquist bins and cleaning accidental writes to nyquist imaginary part
-		scratchBuffers_[channel * kMaxFFTBufferLength + size] = scratchBuffers_[channel * kMaxFFTBufferLength + 1];
-		scratchBuffers_[channel * kMaxFFTBufferLength + 1] = 0.0f;
-		scratchBuffers_[channel * kMaxFFTBufferLength + size + 1] = 0.0f;
-		mufft_execute_plan_1d((mufft_plan_1d *)inversePlans_[order - kMinFFTOrder], output, &scratchBuffers_[channel * kMaxFFTBufferLength]);
 	}
 
 #else

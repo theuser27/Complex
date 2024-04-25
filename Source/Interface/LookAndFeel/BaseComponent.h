@@ -10,7 +10,6 @@
 
 #pragma once
 
-#include "AppConfig.h"
 #include <juce_gui_basics/juce_gui_basics.h>
 #include "Framework/utils.h"
 #include "Framework/sync_primitives.h"

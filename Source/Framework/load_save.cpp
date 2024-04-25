@@ -11,7 +11,8 @@
 #include "load_save.h"
 
 #include "Third Party/json/json.hpp"
-#include "JuceHeader.h"
+#include <juce_core/juce_core.h>
+
 #include "Framework/parameter_value.h"
 #include "Framework/parameter_bridge.h"
 #include "Plugin/ProcessorTree.h"
@@ -28,7 +29,7 @@ namespace Framework
 {
 	namespace LoadSave
 	{
-		File getConfigFile();
+		juce::File getConfigFile();
 	}
 }
 
@@ -37,18 +38,18 @@ namespace
 	class LoadingException final : public std::exception
 	{
 	public:
-		LoadingException(String message) : message_(std::move(message)) { }
+		LoadingException(juce::String message) : message_(std::move(message)) { }
 		~LoadingException() noexcept override = default;
 
 		char const *what() const override { return message_.toRawUTF8(); }
 
 	private:
-		String message_;
+		juce::String message_;
 	};
 
 	json getConfigJson()
 	{
-		File config_file = Framework::LoadSave::getConfigFile();
+		juce::File config_file = Framework::LoadSave::getConfigFile();
 		if (!config_file.exists())
 			return {};
 
@@ -67,7 +68,7 @@ namespace
 
 	void saveConfigJson(const json &configState)
 	{
-		File config_file = Framework::LoadSave::getConfigFile();
+		juce::File config_file = Framework::LoadSave::getConfigFile();
 
 		if (!config_file.exists())
 			config_file.create();
@@ -86,10 +87,10 @@ namespace Framework
 {
 	namespace LoadSave
 	{
-		File getConfigFile()
+		juce::File getConfigFile()
 		{
 		#if defined(JUCE_DATA_STRUCTURES_H_INCLUDED)
-			PropertiesFile::Options config_options;
+			juce::PropertiesFile::Options config_options;
 			config_options.applicationName = "Complex";
 			config_options.osxLibrarySubFolder = "Application Support";
 			config_options.filenameSuffix = "config";
@@ -97,7 +98,7 @@ namespace Framework
 		#ifdef LINUX
 			config_options.folderName = "." + String(ProjectInfo::projectName).toLowerCase();
 		#else
-			config_options.folderName = String(ProjectInfo::projectName).toLowerCase();
+			config_options.folderName = juce::String(JucePlugin_Name).toLowerCase();
 		#endif
 
 			return config_options.getDefaultFile();
@@ -106,10 +107,10 @@ namespace Framework
 		#endif
 		}
 
-		File getDefaultSkin()
+		juce::File getDefaultSkin()
 		{
 	#if defined(JUCE_DATA_STRUCTURES_H_INCLUDED)
-			PropertiesFile::Options config_options;
+			juce::PropertiesFile::Options config_options;
 			config_options.applicationName = "Complex";
 			config_options.osxLibrarySubFolder = "Application Support";
 			config_options.filenameSuffix = "skin";
@@ -117,7 +118,7 @@ namespace Framework
 	#ifdef LINUX
 			config_options.folderName = "." + String(ProjectInfo::projectName).toLowerCase();
 	#else
-			config_options.folderName = String(ProjectInfo::projectName).toLowerCase();
+			config_options.folderName = juce::String(JucePlugin_Name).toLowerCase();
 	#endif
 
 			return config_options.getDefaultFile();
@@ -188,7 +189,8 @@ namespace Framework
 		void writeSave(std::any jsonData)
 		{
 			json data = std::any_cast<json>(std::move(jsonData));
-			File testSave = File::getSpecialLocation(File::userDesktopDirectory).getChildFile(File::createLegalFileName("testSave.json"));
+			juce::File testSave = juce::File::getSpecialLocation(juce::File::userDesktopDirectory)
+				.getChildFile(juce::File::createLegalFileName("testSave.json"));
 			if (!testSave.replaceWithText(data.dump()))
 			{
 				COMPLEX_ASSERT_FALSE("Couldn't save");
@@ -214,7 +216,7 @@ namespace Plugin
 			topLevelProcessorsSerialised.push_back(std::any_cast<json>(topLevelProcessor->serialiseToJson()));
 
 		json state{};
-		state["version"] = ProjectInfo::versionString;
+		state["version"] = JucePlugin_VersionString;
 		state["tree"] = topLevelProcessorsSerialised;
 		return state;
 	}
@@ -239,17 +241,17 @@ namespace Plugin
 		}
 		catch (const LoadingException &e)
 		{
-			String error = "There was an error opening the preset.\n";
+			juce::String error = "There was an error opening the preset.\n";
 			error += e.what();
-			NativeMessageBox::showMessageBoxAsync(MessageBoxIconType::NoIcon, "Error opening preset", error);
+			juce::NativeMessageBox::showMessageBoxAsync(juce::MessageBoxIconType::NoIcon, "Error opening preset", error);
 
 			// TODO: restore old state
 		}
 		catch (const std::exception &e)
 		{
-			String error = "An unknown error occured while opening preset.\n";
+			juce::String error = "An unknown error occured while opening preset.\n";
 			error += e.what();
-			NativeMessageBox::showMessageBoxAsync(MessageBoxIconType::NoIcon, "Error opening preset", error);
+			juce::NativeMessageBox::showMessageBoxAsync(juce::MessageBoxIconType::NoIcon, "Error opening preset", error);
 
 			// TODO: try to restore old state???? idk what happened
 		}
@@ -397,18 +399,18 @@ namespace Framework
 	}
 }
 
-void ComplexAudioProcessor::getStateInformation(MemoryBlock &destinationData)
+void ComplexAudioProcessor::getStateInformation(juce::MemoryBlock &destinationData)
 {
-	String dataString = std::any_cast<json>(serialiseToJson()).dump();
-	MemoryOutputStream stream;
+	juce::String dataString = std::any_cast<json>(serialiseToJson()).dump();
+	juce::MemoryOutputStream stream;
 	stream.writeString(dataString);
 	destinationData.append(stream.getData(), stream.getDataSize());
 }
 
 void ComplexAudioProcessor::setStateInformation(const void *data, int sizeInBytes)
 {
-	MemoryInputStream stream{ data, (size_t)sizeInBytes, false };
-	String dataString = stream.readEntireStreamAsString();
+	juce::MemoryInputStream stream{ data, (size_t)sizeInBytes, false };
+	juce::String dataString = stream.readEntireStreamAsString();
 	
 	json jsonData{};
 	try
@@ -417,8 +419,8 @@ void ComplexAudioProcessor::setStateInformation(const void *data, int sizeInByte
 	}
 	catch (const std::exception &)
 	{
-		NativeMessageBox::showMessageBoxAsync(MessageBoxIconType::NoIcon, "Error opening preset", 
-			"Couldn't parse preset json.\n");
+		juce::NativeMessageBox::showMessageBoxAsync(juce::MessageBoxIconType::NoIcon, 
+			"Error opening preset", "Couldn't parse preset json.\n");
 	}
 
 	suspendProcessing(true);

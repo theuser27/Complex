@@ -10,7 +10,6 @@
 
 #include "OpenGlComponent.h"
 
-#include "AppConfig.h"
 #include <juce_opengl/juce_opengl.h>
 #include "Framework/sync_primitives.h"
 #include "Plugin/Renderer.h"

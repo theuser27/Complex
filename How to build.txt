@@ -1,0 +1,31 @@
+--------------------------------CMake (Primary)
+
+You need to have CMake on your computer (on macOS the homebrew version might cause problems).
+
+Build flags to keep in mind:
+ - COMPLEX_USE_INTEL_IPP (bool) - if you have Intel IPP from oneAPI you can accelerate the FFT with it,
+   it is discovered through CMake without needing to provide a path
+
+ - COMPLEX_COPY_PLUGIN_PATH (path) - not important unless you're planning on doing development work;
+   you can specify a destination of your vst3 folder. (keep in mind that on Windows this will not work 
+   because of permissions. It's recommended to make subfolder and provide that path).
+   This will only work if JUCE_COPY_PLUGIN_AFTER_BUILD is enabled.
+
+ - JUCE_ENABLE_MODULE_SOURCE_GROUPS (bool) - only for devs, allows you to see the juce modules inside 
+   your IDE
+
+
+To build:
+You have to invoke "cmake" with the "CMakeLists.txt" directory and your build directory
+    (i.e. "cmake -S <source_dir> -B <build_dir>")
+while providing any flags you might need by prepending -D
+    (i.e. "cmake -S <source_dir> -B <build_dir>" -DCOMPLEX_USE_INTEL_IPP=1 
+           -DCOMPLEX_COPY_PLUGIN_PATH="C:\Program Files\Common Files\VST3\DEV")
+
+Alternatively you can use cmake-gui and fill in all the fields you need.
+
+--------------------------------Projucer (Secondary)
+
+This is kept as a backup but if you already have JUCE installed on your computer 
+(or you build it from JUCE/extras/Projucer with CMake) you can use that one too. 
+Though I can't promise that the build file will always be up-to-date.
