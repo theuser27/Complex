@@ -24,23 +24,16 @@
 juce_add_modules(
     INSTALL_PATH "include/JUCE-${JUCE_VERSION}/modules"
     ALIAS_NAMESPACE juce
-    juce_analytics
     juce_audio_basics
     juce_audio_devices
     juce_audio_formats
     juce_audio_plugin_client
     juce_audio_processors
     juce_audio_utils
-    juce_box2d
     juce_core
-    juce_cryptography
     juce_data_structures
-    juce_dsp
     juce_events
     juce_graphics
     juce_gui_basics
     juce_gui_extra
-    juce_opengl
-    juce_osc
-    juce_product_unlocking
-    juce_video)
+    juce_opengl)
