@@ -13,6 +13,7 @@
 #include <any>
 #include <optional>
 #include <span>
+
 #include "Interface/LookAndFeel/Miscellaneous.h"
 #include "Framework/vector_map.h"
 #include "Framework/simd_buffer.h"

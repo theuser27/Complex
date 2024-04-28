@@ -12,6 +12,7 @@
 
 #include "Framework/simd_buffer.h"
 #include "OpenGlMultiQuad.h"
+#include "OpenGlImageComponent.h"
 #include "OpenGlLineRenderer.h"
 
 namespace Interface
@@ -19,7 +20,7 @@ namespace Interface
 	class Spectrogram final : public OpenGlComponent
 	{
 	public:
-		static constexpr int kResolution = 400;
+		static constexpr int kResolution = 700;
 		static constexpr float kDecayMult = 0.07f;
 		static constexpr float kDefaultMaxDb = 0.0f;
 		static constexpr float kDefaultMinDb = -50.0f;
@@ -31,7 +32,6 @@ namespace Interface
 		~Spectrogram() override;
 
 		void resized() override;
-		void paint(Graphics &g) override;
 		
 		void init(OpenGlWrapper &openGl) override;
 		void render(OpenGlWrapper &openGl, bool animate) override;
@@ -53,12 +53,15 @@ namespace Interface
 			isDataPolar_ = isDataPolar;
 		}
 
+		void setCornerColour(Colour colour) noexcept { corners_.setColor(colour); }
 	private:
 		bool updateAmplitudes(bool shouldDisplayPhases, float minFrequency, float maxFrequency, float dbSlope);
+		void paintBackground(Graphics &g) const;
 
 		std::vector<std::unique_ptr<OpenGlLineRenderer>> amplitudeRenderers_{};
 		std::vector<std::unique_ptr<OpenGlLineRenderer>> phaseRenderers_{};
 		OpenGlCorners corners_;
+		OpenGlImageComponent background_;
 
 		Framework::SimdBuffer<Framework::complex<float>, simd_float> scratchBuffer_{ kNumChannels, 1 << kMaxFFTOrder };
 		Framework::SimdBuffer<Framework::complex<float>, simd_float> resultBuffer_{ kNumChannels, kResolution };
@@ -70,7 +73,7 @@ namespace Interface
 		utils::shared_value<float> maxFrequency_ = kDefaultMaxFrequency;
 		utils::shared_value<float> minDb_ = kDefaultMinDb;
 		utils::shared_value<float> maxDb_ = kDefaultMaxDb;
-		utils::shared_value<bool> shouldDisplayPhases_ = true;
+		utils::shared_value<bool> shouldDisplayPhases_ = false;
 		utils::shared_value<bool> shouldPaintBackgroundLines_ = true;
 		utils::shared_value<float> decayMultiplier_ = kDecayMult;
 		utils::shared_value<float> dbSlope_ = kDbSlopePerOctave;

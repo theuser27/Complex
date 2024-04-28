@@ -656,47 +656,30 @@ namespace Interface
 
 
     //==============================================================================
-    /** @internal */
     void paint(Graphics &) override;
-    /** @internal */
     void paintOverChildren(Graphics &) override;
-    /** @internal */
+    //void mouseEnter(const MouseEvent &) override;
     void mouseDown(const MouseEvent &) override;
-    /** @internal */
     void mouseUp(const MouseEvent &) override;
-    /** @internal */
     void mouseDrag(const MouseEvent &) override;
-    /** @internal */
     void mouseDoubleClick(const MouseEvent &) override;
-    /** @internal */
     void mouseWheelMove(const MouseEvent &, const MouseWheelDetails &) override;
-    /** @internal */
     bool keyPressed(const KeyPress &) override;
-    /** @internal */
     bool keyStateChanged(bool) override;
-    /** @internal */
     void focusGained(FocusChangeType) override;
-    /** @internal */
     void focusLost(FocusChangeType) override;
-    /** @internal */
     void resized() override;
-    /** @internal */
     void enablementChanged() override;
-    /** @internal */
     void lookAndFeelChanged() override;
-    /** @internal */
     void parentHierarchyChanged() override;
-    /** @internal */
     bool isTextInputActive() const override;
-    /** @internal */
     void setTemporaryUnderlining(const Array<Range<int>> &) override;
-    /** @internal */
     VirtualKeyboardType getKeyboardType() override;
 
     void applyFont()
     {
       applyFontToAllText(usedFont_);
-      redoImage();
+      redrawImage();
     }
 
     void visibilityChanged() override
@@ -711,7 +694,7 @@ namespace Interface
     void setUsedFont(Font font) { usedFont_ = std::move(font); }
 
     gl_ptr<OpenGlImageComponent> getImageComponent() { return imageComponent_; }
-    void redoImage() { imageComponent_->redrawImage(); }
+    void redrawImage() { imageComponent_->redrawImage(); }
 
   protected:
     //==============================================================================

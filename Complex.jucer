@@ -316,13 +316,13 @@
             IPP1ALibrary="Static_Library" extraCompilerFlags="/Zc:preprocessor /permissive- /wd5105">
       <CONFIGURATIONS>
         <CONFIGURATION isDebug="1" name="Debug" headerPath="../../Source" enablePluginBinaryCopyStep="1"
-                       vst3BinaryLocation="C:\Program Files\Common Files\VST3\DEV" fastMath="1"
-                       winArchitecture="x64"/>
+                       vst3BinaryLocation="C:\Program Files\Common Files\VST3\DEV\Complex.vst3\Contents\x86_64-win"
+                       fastMath="1" winArchitecture="x64"/>
         <CONFIGURATION isDebug="0" name="Release" headerPath="../../Source" fastMath="1"
-                       enablePluginBinaryCopyStep="1" vst3BinaryLocation="C:\Program Files\Common Files\VST3\DEV"
+                       enablePluginBinaryCopyStep="1" vst3BinaryLocation="C:\Program Files\Common Files\VST3\DEV\Complex.vst3\Contents\x86_64-win"
                        winArchitecture="x64"/>
         <CONFIGURATION isDebug="1" fastMath="1" headerPath="../../Source" name="RelWithDebugInfo"
-                       enablePluginBinaryCopyStep="1" vst3BinaryLocation="C:\Program Files\Common Files\VST3\DEV"
+                       enablePluginBinaryCopyStep="1" vst3BinaryLocation="C:\Program Files\Common Files\VST3\DEV\Complex.vst3\Contents\x86_64-win"
                        optimisation="3"/>
       </CONFIGURATIONS>
       <MODULEPATHS>

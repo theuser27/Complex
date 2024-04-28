@@ -265,14 +265,24 @@ namespace Interface
 		RotarySlider(Framework::ParameterValue *parameter);
 		~RotarySlider() override;
 
+		void resized() override
+		{
+			setColours();
+			setComponentsBounds();
+			repositionExtraElements();
+		}
 		void mouseDrag(const juce::MouseEvent &e) override;
 
 		void redoImage() override;
 		void setComponentsBounds() override;
 		void drawShadow(juce::Graphics &g) const;
-		void showTextEntry() override;
 		void setExtraElementsPositions(juce::Rectangle<int> anchorBounds) override;
 		juce::Rectangle<int> setBoundsForSizes(int height, int width = 0) override;
+
+		void showTextEntry() override;
+		void textEditorReturnKeyPressed([[maybe_unused]] OpenGlTextEditor &editor) override;
+		void textEditorEscapeKeyPressed(OpenGlTextEditor &editor) override;
+		void textEditorFocusLost(OpenGlTextEditor &editor) override { textEditorEscapeKeyPressed(editor); }
 
 		juce::Colour getUnselectedColor() const override
 		{

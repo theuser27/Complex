@@ -45,7 +45,7 @@ namespace Generation
 		// Data
 		//
 		// pre FFT-ed data buffer; size is as big as it can be (while still being reasonable)
-		class InputBuffer
+		class 
 		{
 		public:
 			enum BeginPoint
@@ -60,9 +60,9 @@ namespace Generation
 				// recalculating indices based on the new size
 				if (getChannels() * getSize())
 				{
-					blockEnd_ = std::clamp(((i32)newSize - (i32)getBlockEndToEnd()) % (i32)newSize, 0, (i32)newSize - 1);
-					blockBegin_ = std::clamp(((i32)blockEnd_ - (i32)getBlockBeginToBlockEnd()) % (i32)newSize, 0, (i32)newSize - 1);
-					lastOutputBlock_ = std::clamp(((i32)blockBegin_ - (i32)getLastOutputBlockToBlockBegin()) % (i32)newSize, 0, (i32)newSize - 1);
+					blockEnd_ = utils::clamp(((i32)newSize - (i32)getBlockEndToEnd()) % (i32)newSize, 0, (i32)newSize - 1);
+					blockBegin_ = utils::clamp(((i32)blockEnd_ - (i32)getBlockBeginToBlockEnd()) % (i32)newSize, 0, (i32)newSize - 1);
+					lastOutputBlock_ = utils::clamp(((i32)blockBegin_ - (i32)getLastOutputBlockToBlockBegin()) % (i32)newSize, 0, (i32)newSize - 1);
 				}
 				else
 				{
@@ -204,7 +204,7 @@ namespace Generation
 		std::array<bool, kNumTotalChannels> usedOutputChannels_{};
 		//
 		// output buffer containing dry and wet data
-		class OutputBuffer
+		class 
 		{
 		public:
 			void reserve(u32 newNumChannels, u32 newSize, bool fitToSize = false)
@@ -216,9 +216,9 @@ namespace Generation
 				// recalculating indices based on the new size
 				if (getNumChannels() * getSize())
 				{
-					addOverlap_ = std::clamp(((i32)newSize - (i32)getAddOverlapToEnd()) % (i32)newSize, i32(0), (i32)newSize - 1);
-					toScaleOutput_ = std::clamp(((i32)addOverlap_ - (i32)getToScaleOutputToAddOverlap()) % (i32)newSize, i32(0), (i32)newSize - 1);
-					beginOutput_ = std::clamp(((i32)toScaleOutput_ - (i32)getBeginOutputToToScaleOutput()) % (i32)newSize, i32(0), (i32)newSize - 1);
+					addOverlap_ = utils::clamp(((i32)newSize - (i32)getAddOverlapToEnd()) % (i32)newSize, i32(0), (i32)newSize - 1);
+					toScaleOutput_ = utils::clamp(((i32)addOverlap_ - (i32)getToScaleOutputToAddOverlap()) % (i32)newSize, i32(0), (i32)newSize - 1);
+					beginOutput_ = utils::clamp(((i32)toScaleOutput_ - (i32)getBeginOutputToToScaleOutput()) % (i32)newSize, i32(0), (i32)newSize - 1);
 				}
 				else
 				{

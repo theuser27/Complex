@@ -94,7 +94,7 @@ namespace Interface
 		void resized() override
 		{
 			shiftBounds_.setBounds(getLocalBounds());
-			shiftBounds_.setTotalRange(getWidth());
+			shiftBounds_.setTotalRange(2 * getWidth());
 			PinBoundsBox::resized();
 		}
 		void sliderValueChanged(BaseSlider *slider) override

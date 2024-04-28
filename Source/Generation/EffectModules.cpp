@@ -637,7 +637,7 @@ namespace Generation
 			slopeFunction = [](simd_float x) { return modOnceSigned(x + x, kPi); };
 
 		// overwrite old data
-		SimdBuffer<Framework::complex<float>, simd_float>::applyToThisNoMask<MathOperations::Assign>
+		SimdBuffer<complex<float>, simd_float>::applyToThisNoMask<MathOperations::Assign>
 			(destination, source, destination.getChannels(), binCount, 0, 0, 0, 0);
 
 		// if interval between bins is 0 this means every bin is affected,
@@ -649,7 +649,7 @@ namespace Generation
 
 			// find the smallest offset forward and start from there
 			u32 minOffset = horizontalMin(offsetBin)[0];
-			u32 indexChange = std::max(0U, minOffset - index);
+			i32 indexChange = clamp((i32)minOffset - (i32)index, 0, (i32)numBins);
 			numBins -= indexChange;
 			index += indexChange;
 

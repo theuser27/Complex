@@ -15,7 +15,7 @@
 namespace common
 {
 	// general constants; don't change
-	inline constexpr float kPi = 3.141592653589793;
+	inline constexpr float kPi = 3.141592653589793f;
 	inline constexpr float k2Pi = kPi * 2.0f;
 	inline constexpr float kEpsilon = 1e-10f;
 	inline constexpr double kDefaultSampleRate = 44100;

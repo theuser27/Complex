@@ -1293,7 +1293,7 @@ namespace Interface
     if (listeners.size() != 0 || onTextChange != nullptr)
     {
       postCommandMessage(TextEditorDefs::textChangeMessageId);
-      redoImage();
+      redrawImage();
     }
 
     if (textValue.getValueSource().getReferenceCount() > 1)
@@ -1834,6 +1834,14 @@ namespace Interface
   }
 
   //==============================================================================
+  /*void OpenGlTextEditor::mouseEnter(const MouseEvent &mouseEvent)
+  {
+    if (hasKeyboardFocus(false))
+      return;
+
+    setMouseCursor(MouseCursor::PointingHandCursor);
+  }*/
+
   void OpenGlTextEditor::mouseDown(const MouseEvent &e)
   {
     beginDragAutoRepeat(100);
@@ -1870,7 +1878,7 @@ namespace Interface
       }
     }
 
-    redoImage();
+    redrawImage();
   }
 
   void OpenGlTextEditor::mouseDrag(const MouseEvent &e)
@@ -1879,7 +1887,7 @@ namespace Interface
       if (!(popupMenuEnabled && e.mods.isPopupMenu()))
         moveCaretTo(getTextIndexAt(e.getPosition()), true);
 
-    redoImage();
+    redrawImage();
   }
 
   void OpenGlTextEditor::mouseUp(const MouseEvent &e)
@@ -1893,7 +1901,7 @@ namespace Interface
 
     wasFocused = true;
 
-    redoImage();
+    redrawImage();
   }
 
   void OpenGlTextEditor::mouseDoubleClick(const MouseEvent &e)
@@ -1961,7 +1969,7 @@ namespace Interface
     moveCaretTo(tokenEnd, false);
     moveCaretTo(tokenStart, true);
 
-    redoImage();
+    redrawImage();
   }
 
   void OpenGlTextEditor::mouseWheelMove(const MouseEvent &e, const MouseWheelDetails &wheel)
@@ -1969,7 +1977,7 @@ namespace Interface
     if (!viewport->useMouseWheelMoveIfNeeded(e, wheel))
       BaseComponent::mouseWheelMove(e, wheel);
 
-    redoImage();
+    redrawImage();
   }
 
   //==============================================================================
@@ -2164,7 +2172,7 @@ namespace Interface
         else
         {
           returnPressed();
-          redoImage();
+          redrawImage();
           return consumeEscAndReturnKeys;
         }
       }
@@ -2173,7 +2181,7 @@ namespace Interface
         newTransaction();
         moveCaretTo(getCaretPosition(), false);
         escapePressed();
-        redoImage();
+        redrawImage();
         return consumeEscAndReturnKeys;
       }
       else if (key.getTextCharacter() >= ' ' || (tabKeyUsed && (key.getTextCharacter() == '\t')))
@@ -2188,7 +2196,7 @@ namespace Interface
       }
     }
 
-    redoImage();
+    redrawImage();
     return true;
   }
 
@@ -2243,7 +2251,7 @@ namespace Interface
     updateCaretPosition();
 
     postCommandMessage(TextEditorDefs::focusLossMessageId);
-    redoImage();
+    redrawImage();
   }
 
   //==============================================================================

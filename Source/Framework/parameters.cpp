@@ -9,7 +9,6 @@
 */
 
 #include <array>
-#include <algorithm>
 #include "Third Party/gcem/gcem.hpp"
 
 #include "constexpr_utils.h"
@@ -322,7 +321,7 @@ namespace Framework
 				value + details.minValue / (details.maxValue - details.minValue);
 			break;
 		case ParameterScale::Clamp:
-			result = std::clamp(value, (double)details.minValue, (double)details.maxValue);
+			result = clamp(value, (double)details.minValue, (double)details.maxValue);
 			result = (!skewOnly) ? result : result / ((double)details.maxValue - (double)details.minValue);
 			break;
 		case ParameterScale::SymmetricQuadratic:

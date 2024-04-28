@@ -130,10 +130,13 @@ namespace Interface
 	OpenGlComponent::OpenGlComponent(String name) : BaseComponent(name) { }
 	OpenGlComponent::~OpenGlComponent() = default;
 
-	float OpenGlComponent::getValue(Skin::ValueId valueId) const 
+	float OpenGlComponent::getValue(Skin::ValueId valueId, bool isScaled) const 
 	{
-		if (container_)
-			return container_.get()->getValue(valueId);
+		if (auto container = container_.get())
+		{
+			auto value = container->getValue(valueId);
+			return (isScaled) ? container->scaleValue(value) : value;
+		}
 
 		return 0.0f;
 	}

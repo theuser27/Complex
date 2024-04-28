@@ -83,7 +83,7 @@ namespace Interface
 
 		Animator &getAnimator() noexcept { return animator_; }
 		RenderFlag getRefreshFrequency() const noexcept { return renderFlag_; }
-		float getValue(Skin::ValueId valueId) const;
+		float getValue(Skin::ValueId valueId, bool isScaled = true) const;
 		Colour getColour(Skin::ColorId colourId) const;
 
 		void setRefreshFrequency(RenderFlag frequency) noexcept { renderFlag_ = frequency; }

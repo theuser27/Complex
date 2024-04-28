@@ -464,11 +464,11 @@ namespace Interface
 
 	void BaseSlider::showTextEntry()
 	{
-		textEntry_->setVisible(true);
 		textEntry_->setText(getRawTextFromValue(getValue()));
 		textEntry_->selectAll();
 		if (textEntry_->isShowing())
 			textEntry_->grabKeyboardFocus();
+		textEntry_->setVisible(true);
 	}
 
 	void BaseSlider::textEditorReturnKeyPressed(OpenGlTextEditor &editor)
@@ -700,10 +700,14 @@ namespace Interface
 		addOpenGlComponent(textEntry_->getImageComponent());
 
 		addUnclippedChild(imageComponent_.get());
+		addUnclippedChild(textEntry_.get());
 
 		// yes i know this is dumb but it works for now
-		setBipolar(details_.minValue == -details_.maxValue);
-		setShouldShowPopup(true);
+		if (details_.minValue == -details_.maxValue)
+		{
+			setBipolar(true);
+			setShouldUsePlusMinusPrefix(true);
+		}
 	}
 
 	RotarySlider::~RotarySlider() = default;
@@ -735,6 +739,12 @@ namespace Interface
 		quadComponent_->setStartPos(isBipolar() ? 0.0f : -kPi);
 
 		imageComponent_->redrawImage();
+		if (!modifier_)
+		{
+			textEntry_->applyColourToAllText(selectedColor_);
+			textEntry_->setText(getSliderTextFromValue(getValue()));
+			textEntry_->redrawImage();
+		}
 	}
 
 	void RotarySlider::setComponentsBounds()
@@ -744,10 +754,10 @@ namespace Interface
 
 		float thickness = getValue(Skin::kKnobArcThickness);
 		float size = getValue(Skin::kKnobArcSize) * getKnobSizeScale() + thickness;
-		float radius_x = (size + 0.5f) / width;
-		float radius_y = (size + 0.5f) / height;
+		float radiusX = (size + 0.5f) / width;
+		float radiusY = (size + 0.5f) / height;
 
-		quadComponent_->setQuad(0, -radius_x, -radius_y, 2.0f * radius_x, 2.0f * radius_y);
+		quadComponent_->setQuad(0, -radiusX, -radiusY, 2.0f * radiusX, 2.0f * radiusY);
 		quadComponent_->setThumbAmount(getValue(Skin::kKnobHandleLength));
 		quadComponent_->setBounds(drawBounds_);
 
@@ -790,7 +800,7 @@ namespace Interface
 			}
 
 			g.setColour(body);
-			Rectangle<float> ellipse(centerX - bodyRadius, centerY - bodyRadius, 2.0f * bodyRadius, 2.0f * bodyRadius);
+			Rectangle ellipse{ centerX - bodyRadius, centerY - bodyRadius, 2.0f * bodyRadius, 2.0f * bodyRadius };
 			g.fillEllipse(ellipse);
 
 			ColourGradient borderGradient(getColour(Skin::kRotaryBodyBorder), centerX, 0.0f,
@@ -817,6 +827,11 @@ namespace Interface
 
 	void RotarySlider::showTextEntry()
 	{
+		/*textEntry_->setColour(CaretComponent::caretColourId, getColour(Skin::kTextEditorCaret));
+		textEntry_->setColour(TextEditor::textColourId, getColour(Skin::kNormalText));
+		textEntry_->setColour(TextEditor::highlightedTextColourId, getColour(Skin::kNormalText));
+		textEntry_->setColour(TextEditor::highlightColourId, getColour(Skin::kTextEditorSelection));*/
+
 		/*auto width = (float)drawBounds_.getWidth();
 		auto height = (float)drawBounds_.getHeight();
 
@@ -827,12 +842,30 @@ namespace Interface
 		textEntry_->setBounds((getWidth() - text_width) / 2, (height - text_height + 1) / 2,
 			text_width, text_height);*/
 
-		BaseSlider::showTextEntry();
+		//BaseSlider::showTextEntry();
+	}
+
+	void RotarySlider::textEditorReturnKeyPressed(OpenGlTextEditor &editor)
+	{
+		updateValueFromTextEntry();
+
+		for (auto *listener : sliderListeners_)
+			listener->menuFinished(this);
+
+		textEditorEscapeKeyPressed(editor);
+	}
+
+	void RotarySlider::textEditorEscapeKeyPressed(OpenGlTextEditor &)
+	{
+		textEntry_->giveAwayKeyboardFocus();
+		textEntry_->setColour(TextEditor::textColourId, selectedColor_);
+		textEntry_->setText(getSliderTextFromValue(getValue()), false);
+		textEntry_->redrawImage();
 	}
 
 	void RotarySlider::setExtraElementsPositions(Rectangle<int> anchorBounds)
 	{
-		static constexpr int kVerticalOffset = 2;
+		static constexpr int kVerticalPadding = 2;
 
 		if (!label_)
 			return;
@@ -840,14 +873,16 @@ namespace Interface
 		label_->updateState();
 		auto labelTextWidth = label_->getTotalWidth();
 		auto labelX = anchorBounds.getX();
-		auto verticalOffset = scaleValueRoundInt(kVerticalOffset);
+		auto verticalPadding = scaleValueRoundInt(kVerticalPadding);
 		switch (labelPlacement_)
 		{
 		case BubblePlacement::left:
 			labelX -= scaleValueRoundInt(kLabelOffset) + labelTextWidth;
 			label_->setJustification(Justification::centredRight);
-			label_->setBounds(labelX, verticalOffset, labelTextWidth,
-				(anchorBounds.getHeight() - 2 * verticalOffset) / 2);
+			label_->setBounds(labelX, verticalPadding, labelTextWidth,
+				(anchorBounds.getHeight() - 2 * verticalPadding) / 2);
+
+			textEntry_->setJustification(Justification::centredRight);
 
 			// this may or may not work, look at the other case
 			if (modifier_)
@@ -860,11 +895,14 @@ namespace Interface
 		case BubblePlacement::right:
 			labelX += anchorBounds.getWidth() + scaleValueRoundInt(kLabelOffset);
 			label_->setJustification(Justification::centredLeft);
-			label_->setBounds(labelX, verticalOffset, labelTextWidth,
-				(anchorBounds.getHeight() - 2 * verticalOffset) / 2);
+			label_->setBounds(labelX, verticalPadding, labelTextWidth,
+				(anchorBounds.getHeight() - 2 * verticalPadding) / 2);
+
+			textEntry_->setJustification(Justification::centredLeft);
 
 			if (modifier_)
 			{
+				textEntry_->setVisible(false);
 				auto drawBounds = modifier_->setBoundsForSizes(scaleValueRoundInt(TextSelector::kDefaultTextSelectorHeight));
 				int leftOffset = scaleValueRoundInt((float)drawBounds.getHeight() * TextSelector::kPaddingHeightRatio);
 
@@ -887,10 +925,13 @@ namespace Interface
 		auto labelBounds = label_->getBounds();
 		auto usedFont = textEntry_->getUsedFont();
 		Fonts::instance()->setFontFromAscent(usedFont, (float)labelBounds.getHeight() * 0.5f);
-		textEntry_->setUsedFont(usedFont);
-
+		
 		auto valueBounds = Rectangle{ labelBounds.getX(), labelBounds.getBottom(), 
 			(int)std::ceil(getNumericTextMaxWidth(usedFont)), labelBounds.getHeight() };
+
+		textEntry_->setUsedFont(std::move(usedFont));
+		textEntry_->setBounds(valueBounds);
+		textEntry_->setVisible(true);
 		
 		return drawBounds_.getUnion(labelBounds).getUnion(valueBounds);
 	}
@@ -900,9 +941,15 @@ namespace Interface
 	void RotarySlider::setModifier(TextSelector *modifier) noexcept
 	{
 		if (modifier)
+		{
 			extraElements_.add(modifier, {});
+			setShouldShowPopup(true);
+		}
 		else
+		{
 			extraElements_.erase(modifier_);
+			setShouldShowPopup(false);
+		}
 		modifier_ = modifier;
 	}
 
@@ -1062,7 +1109,7 @@ namespace Interface
 
 		auto normalisedDiff = ((double)mouseEvent.position.x - lastDragPosition_.x) / totalRange_;
 		runningTotal_ += multiply * normalisedDiff;
-		setValue(std::clamp(runningTotal_, 0.0, 1.0), NotificationType::sendNotificationSync);
+		setValue(utils::clamp(runningTotal_, 0.0, 1.0), NotificationType::sendNotificationSync);
 		lastDragPosition_ = mouseEvent.position.toDouble();
 
 		setValueSafe(getValue());
@@ -1472,7 +1519,7 @@ namespace Interface
 		textEntry_->giveAwayKeyboardFocus();
 		textEntry_->setColour(TextEditor::textColourId, selectedColor_);
 		textEntry_->setText(getSliderTextFromValue(getValue()), false);
-		textEntry_->redoImage();
+		textEntry_->redrawImage();
 	}
 
 	void NumberBox::redoImage()
@@ -1481,7 +1528,7 @@ namespace Interface
 		{
 			textEntry_->applyColourToAllText(selectedColor_);
 			textEntry_->setText(getSliderTextFromValue(getValue()));
-			textEntry_->redoImage();
+			textEntry_->redrawImage();
 		}
 
 		imageComponent_->redrawImage();

@@ -657,7 +657,14 @@ namespace simd_values
 		}
 
 		static strict_inline simd_type vector_call abs(simd_type value)
-		{ return bitAnd(value, simd_mask::init(kNotSignMask)); }
+		{
+			static constexpr simd_mask mask = kNotSignMask;
+		#if COMPLEX_SSE4_1
+			return _mm_and_ps(value, toSimd(mask.value));
+		#elif COMPLEX_NEON
+			return toSimd(vandq_u32(toMask(value), mask.value));
+		#endif
+		}
 
 		static strict_inline mask_simd_type vector_call signMask(simd_type value)
 		{ return toMask(bitAnd(value, simd_mask::init(kSignMask))); }

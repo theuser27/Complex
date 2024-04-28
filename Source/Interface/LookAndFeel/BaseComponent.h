@@ -24,30 +24,30 @@ namespace utils
 		explicit shared_value(std::unique_ptr<T> &&value) noexcept : value(std::move(value)) { }
 		shared_value(shared_value &&other) noexcept
 		{
-			utils::ScopedLock g{ other.guard, utils::WaitMechanism::Spin, false };
+			ScopedLock g{ other.guard, WaitMechanism::Spin, false };
 			value = std::move(value.value);
 		}
 		shared_value &operator=(shared_value &&other) noexcept
 		{
-			utils::ScopedLock g{ other.guard, utils::WaitMechanism::Spin, false };
+			ScopedLock g{ other.guard, WaitMechanism::Spin, false };
 			return shared_value::operator=(std::move(other.value));
 		}
 		shared_value &operator=(std::unique_ptr<T> &&newValue) noexcept
 		{
-			utils::ScopedLock g{ guard, utils::WaitMechanism::Spin, false };
+			ScopedLock g{ guard, WaitMechanism::Spin, false };
 			value = std::move(newValue);
 			return *this;
 		}
 
 		[[nodiscard]] std::add_pointer_t<std::remove_all_extents_t<T>> lock() noexcept
 		{
-			utils::lockAtomic(guard, utils::WaitMechanism::Spin, false);
+			lockAtomic(guard, WaitMechanism::Spin, false);
 			return value.get();
 		}
 
 		[[nodiscard]] std::add_pointer_t<std::remove_all_extents_t<const T>> lock() const noexcept
 		{
-			utils::lockAtomic(guard, utils::WaitMechanism::Spin, false);
+			lockAtomic(guard, WaitMechanism::Spin, false);
 			return value.get();
 		}
 
@@ -69,30 +69,30 @@ namespace utils
 		explicit shared_value(std::vector<T> &&value) noexcept { value = std::move(value); }
 		shared_value(shared_value &&value) noexcept
 		{
-			utils::ScopedLock g{ value.guard, utils::WaitMechanism::Spin };
+			ScopedLock g{ value.guard, WaitMechanism::Spin };
 			value = std::move(value.value);
 		}
 		shared_value &operator=(shared_value &&other) noexcept
 		{
-			utils::ScopedLock g{ value.guard, utils::WaitMechanism::Spin };
+			ScopedLock g{ value.guard, WaitMechanism::Spin };
 			return shared_value::operator=(std::move(other.value));
 		}
 		shared_value &operator=(std::vector<T> &&newValue) noexcept
 		{
-			utils::ScopedLock g{ value.guard, utils::WaitMechanism::Spin };
+			ScopedLock g{ value.guard, WaitMechanism::Spin };
 			value = std::move(newValue);
 			return *this;
 		}
 
 		[[nodiscard]] std::vector<T> &lock() noexcept
 		{
-			utils::lockAtomic(guard, utils::WaitMechanism::Spin, false);
+			lockAtomic(guard, WaitMechanism::Spin, false);
 			return value;
 		}
 
 		[[nodiscard]] const std::vector<T> &lock() const noexcept
 		{
-			utils::lockAtomic(guard, utils::WaitMechanism::Spin, false);
+			lockAtomic(guard, WaitMechanism::Spin, false);
 			return value;
 		}
 
@@ -114,30 +114,30 @@ namespace utils
 		explicit shared_value_block(std::vector<T> &&value) noexcept { value = std::move(value); }
 		shared_value_block(shared_value_block &&other) noexcept
 		{
-			utils::ScopedLock g{ other.guard, utils::WaitMechanism::Sleep };
+			ScopedLock g{ other.guard, WaitMechanism::Sleep };
 			value = std::move(other.value);
 		}
 		shared_value_block &operator=(shared_value_block &&other) noexcept
 		{
-			utils::ScopedLock g{ other.guard, utils::WaitMechanism::Sleep };
+			ScopedLock g{ other.guard, WaitMechanism::Sleep };
 			return shared_value_block::operator=(std::move(other.value));
 		}
 		shared_value_block &operator=(T &&newValue) noexcept
 		{
-			utils::ScopedLock g{ guard, utils::WaitMechanism::WaitNotify };
+			ScopedLock g{ guard, WaitMechanism::WaitNotify };
 			value = std::move(newValue);
 			return *this;
 		}
 
 		[[nodiscard]] T &lock() noexcept
 		{
-			utils::lockAtomic(guard, utils::WaitMechanism::WaitNotify, false);
+			lockAtomic(guard, WaitMechanism::WaitNotify, false);
 			return value;
 		}
 
 		[[nodiscard]] const T &lock() const noexcept
 		{
-			utils::lockAtomic(guard, utils::WaitMechanism::WaitNotify, false);
+			lockAtomic(guard, WaitMechanism::WaitNotify, false);
 			return value;
 		}
 

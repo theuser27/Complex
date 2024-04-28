@@ -85,7 +85,7 @@ namespace Interface
 		int getViewPosition() const
 		{
 			int view_height = getHeightSafe();
-			return std::clamp((int)viewPosition_.get(), 0, selections_.size() * getRowHeight() - view_height);
+			return utils::clamp((int)viewPosition_.get(), 0, selections_.size() * getRowHeight() - view_height);
 		}
 		void moveQuadToRow(OpenGlQuad &quad, int row);
 

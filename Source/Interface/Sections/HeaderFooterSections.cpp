@@ -141,11 +141,12 @@ namespace Interface
 		auto spectrumBounds = Rectangle
 		{
 			scaleValueRoundInt(kHorizontalWindowEdgeMargin),
-			scaleValueRoundInt(kFooterHeight + kVerticalGlobalMargin),
+			scaleValueRoundInt(kHeaderHeight),
 			getWidth() - scaleValueRoundInt(2 * kHorizontalWindowEdgeMargin),
 			scaleValueRoundInt(kMainVisualiserHeight)
 		};
 		spectrogram_->setBounds(spectrumBounds);
+		spectrogram_->setCornerColour(getColour(Skin::kBackground));
 
 		arrangeHeader();
 		arrangeFooter();

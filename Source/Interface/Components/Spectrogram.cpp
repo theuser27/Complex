@@ -8,12 +8,13 @@
   ==============================================================================
 */
 
+#include "Spectrogram.h"
+
 #include "Framework/utils.h"
 #include "Framework/spectral_support_functions.h"
 #include "../LookAndFeel/Skin.h"
 #include "../LookAndFeel/Shaders.h"
 #include "OpenGlMultiQuad.h"
-#include "Spectrogram.h"
 #include "../Sections/BaseSection.h"
 #include "Plugin/Complex.h"
 #include "Plugin/Renderer.h"
@@ -38,18 +39,24 @@ namespace
   #endif
   }
 
-  strict_inline simd_float vector_call midSide(simd_float value)
+  template<auto function>
+  strict_inline void vector_call midSide(simd_float &one, simd_float &two)
   {
-    simd_float half = value * 0.5f;
   #if COMPLEX_SSE4_1
-    auto one = _mm_unpacklo_ps(value.value, half.value);
-    auto two = _mm_unpackhi_ps(value.value, half.value);
-    auto addSub = _mm_addsub_ps(one, two);
-    auto result = _mm_shuffle_ps(addSub, addSub, _MM_SHUFFLE(2, 0, 3, 1));
+    auto lowerOne = _mm_unpacklo_ps(one.value, one.value);
+    auto upperOne = _mm_unpackhi_ps(one.value, one.value);
+    auto addSubOne = _mm_addsub_ps(lowerOne, upperOne);
+    one.value = _mm_shuffle_ps(addSubOne, addSubOne, _MM_SHUFFLE(2, 0, 3, 1));
+
+    auto lowerTwo = _mm_unpacklo_ps(two.value, two.value);
+    auto upperTwo = _mm_unpackhi_ps(two.value, two.value);
+    auto addSubTwo = _mm_addsub_ps(lowerTwo, upperTwo);
+    two.value = _mm_shuffle_ps(addSubTwo, addSubTwo, _MM_SHUFFLE(2, 0, 3, 1));
   #elif COMPLEX_NEON
     static_assert(false, "not implemented yet");
   #endif
-    return simd_float::abs(result);
+
+    function(one, two);
   }
 }
 
@@ -70,6 +77,13 @@ namespace Interface
       phaseRenderers_.emplace_back(std::make_unique<OpenGlLineRenderer>(kResolution));
       phaseRenderers_[i]->setFill(false);
     }
+
+    corners_.setInterceptsMouseClicks(false, false);
+    corners_.setTargetComponent(this);
+
+    background_.setInterceptsMouseClicks(false, false);
+    background_.setTargetComponent(this);
+    background_.setPaintFunction([this](Graphics &g) { paintBackground(g); });
   }
 
   Spectrogram::~Spectrogram() = default;
@@ -79,9 +93,7 @@ namespace Interface
     Colour colour = getColour(Skin::kWidgetPrimary1);
     Colour fillColour = getColour(Skin::kWidgetPrimary2);
 
-    float fillFade = 0.0f;
-    if (auto container = container_.get())
-      fillFade = container->getValue(Skin::kWidgetFillFade);
+    float fillFade = getValue(Skin::kWidgetFillFade);
 
     for (auto &amplitudeRenderer : amplitudeRenderers_)
     {
@@ -102,8 +114,8 @@ namespace Interface
       colour = colour.withMultipliedAlpha(0.5f);
     }
 
-    corners_.setBounds(getLocalBounds());
     corners_.setCorners(getLocalBounds(), getValue(Skin::kWidgetRoundedCorner));
+    background_.redrawImage();
   }
 
   bool Spectrogram::updateAmplitudes(bool shouldDisplayPhases, float minFrequency, float maxFrequency, float dbSlope)
@@ -130,7 +142,7 @@ namespace Interface
     float numOctaves = endOctave - startOctave;
     float maxBin = (float)binCount_ - 1.0f;
     float decayMultiplier = decayMultiplier_ * std::min((float)binCount_ / 2048.0f, 1.0f);
-    bool isInterpolating = binCount_ > 1024;
+    bool isInterpolating = binCount_ >= 1024;
     simd_float scalingFactor = { 1.0f / ((float)binCount_ * 2.0f), 1.0f };
     
     {
@@ -143,22 +155,24 @@ namespace Interface
     if (!isDataPolar)
     {
       if (shouldDisplayPhases)
-        utils::convertBufferInPlace<utils::complexCartToPolar>(scratchBuffer_, binCount_);
+        utils::convertBufferInPlace<midSide<utils::complexCartToPolar>>(scratchBuffer_, binCount_);
       else
-        utils::convertBufferInPlace<complexMagnitude>(scratchBuffer_, binCount_);
+        utils::convertBufferInPlace<midSide<complexMagnitude>>(scratchBuffer_, binCount_);
     }
 
     for (u32 i = 0; i < scratchBuffer_.getChannels(); i += scratchBuffer_.getRelativeSize())
     {
-      float rangeBegin = std::exp2(startOctave);
+      // the reason for adding 0.5 is because the dc bin is 
+      // halfway between the positive and negative frequencies
+      float rangeBegin = std::exp2(startOctave) + 0.5f;
       for (u32 j = 0; j < kResolution; ++j)
       {
         float t = (float)j / (kResolution - 1.0f);
         float octave = numOctaves * t + startOctave;
-        float rangeEnd = std::min(std::exp2(octave), maxBin);
+        float rangeEnd = std::min(std::exp2(octave) + 0.5f, maxBin);
 
-        int beginIndex = (int)rangeBegin;
-        int endIndex = (int)rangeEnd;
+        int beginIndex = (int)std::floor(rangeBegin);
+        int endIndex = (int)std::floor(rangeEnd);
         simd_float current = scratchBuffer_.readSimdValueAt(i, beginIndex);
 
         if (endIndex - beginIndex > 1)
@@ -198,7 +212,6 @@ namespace Interface
         }
         rangeBegin = rangeEnd;
 
-        
         float slope = (float)utils::dbToAmplitude(t * numOctaves * dbSlope);
         current *= scalingFactor * simd_float{ slope, 1.0f };
         simd_float oldValue = resultBuffer_.readSimdValueAt(i, j);
@@ -224,6 +237,7 @@ namespace Interface
       phaseRenderer->init(openGl);
 
     corners_.init(openGl);
+    background_.init(openGl);
   }
 
   void Spectrogram::render(OpenGlWrapper &openGl, bool animate)
@@ -231,6 +245,8 @@ namespace Interface
     auto &plugin = container_.get()->getRenderer()->getPlugin();
     nyquistFreq_ = plugin.getSampleRate() * 0.5f;
     binCount_ = plugin.getFFTSize() / 2;
+
+    background_.render(openGl, animate);
 
     bool shouldDisplayPhases = shouldDisplayPhases_;
     float minFrequency = minFrequency_;
@@ -251,7 +267,8 @@ namespace Interface
       for (int i = 0; i < kResolution; ++i)
       {
         float t = (float)i / (kResolution - 1.0f);
-        simd_float result = midSide(resultBuffer_.readSimdValueAt(0, i));
+        float x = t * width;
+        simd_float result = resultBuffer_.readSimdValueAt(0, i);
         simd_float db = utils::amplitudeToDb(result);
         simd_float phaseY, amplitudeY = (db - minDb) * rangeMult;
 
@@ -260,7 +277,6 @@ namespace Interface
           phaseY = utils::modOnceSigned(result, kPi) / k2Pi + 0.5f;
         }
 
-        float x = t * width;
         for (size_t j = 0; j < amplitudeRenderers_.size(); ++j)
         {
           amplitudeRenderers_[j]->setXAt(i, x);
@@ -299,9 +315,10 @@ namespace Interface
       phaseRenderer->destroy();
 
     corners_.destroy();
+    background_.destroy();
   }
 
-  void Spectrogram::paint(Graphics &g)
+  void Spectrogram::paintBackground(Graphics &g) const
   {
     static constexpr int kLineSpacing = 10;
 
@@ -311,25 +328,29 @@ namespace Interface
     float minFrequency = minFrequency_;
     float maxFrequency = maxFrequency_;
 
-    int height = getHeight();
-    float max_octave = log2f(maxFrequency / minFrequency);
+    float width = (float)getWidth();
+    float height = (float)getHeight();
+    float maxOctave = log2f(maxFrequency / minFrequency);
     g.setColour(getColour(Skin::kLightenScreen).withMultipliedAlpha(0.5f));
     float frequency = 0.0f;
     float increment = 1.0f;
 
-    int x = 0;
     while (frequency < maxFrequency)
     {
+      frequency = 0.0f;
       for (int i = 0; i < kLineSpacing; ++i)
       {
         frequency += increment;
-        float t = log2f(frequency / minFrequency) / max_octave;
-        x = (int)std::round(t * (float)getWidth());
-        g.fillRect(x, 0, 1, height);
+        float t = log2f(frequency / minFrequency) / maxOctave;
+        float x = std::round(t * width);
+        if (x > 0.0f && x < width)
+          g.fillRect(x, 0.0f, 1.0f, height);
       }
-      g.fillRect(x, 0, 1, height);
+
       increment *= kLineSpacing;
     }
+
+    g.drawRoundedRectangle(0, 0, width, height, getValue(Skin::kWidgetRoundedCorner), 1.8f);
   }
 
 }

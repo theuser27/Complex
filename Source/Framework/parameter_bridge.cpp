@@ -8,6 +8,8 @@
 	==============================================================================
 */
 
+#include <format>
+
 #include "parameter_bridge.h"
 #include "parameter_value.h"
 #include "Interface/Components/BaseControl.h"

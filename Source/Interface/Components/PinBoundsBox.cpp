@@ -132,8 +132,8 @@ namespace Interface
 
 		auto width = (float)getWidth();
 		auto height = (float)getHeight();
-		auto lowBoundShifted = std::clamp(lowBoundValue + shiftValue, 0.0f, 1.0f);
-		auto highBoundShifted = std::clamp(highBoundValue + shiftValue, 0.0f, 1.0f);
+		auto lowBoundShifted = utils::clamp(lowBoundValue + shiftValue, 0.0f, 1.0f);
+		auto highBoundShifted = utils::clamp(highBoundValue + shiftValue, 0.0f, 1.0f);
 
 		if (lowBoundValue < highBoundValue)
 		{

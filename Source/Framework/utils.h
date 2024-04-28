@@ -61,6 +61,10 @@ namespace utils
 	#endif
 	}
 
+	template<typename T>
+	constexpr strict_inline T clamp(T value, T min, T max) noexcept
+	{ return (value > max) ? max : (value < min) ? min : value; }
+
 	constexpr strict_inline bool closeToZero(float value) noexcept
 	{ return value <= kEpsilon && value >= -kEpsilon; }
 
