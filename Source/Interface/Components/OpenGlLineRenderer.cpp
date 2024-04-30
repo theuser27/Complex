@@ -128,7 +128,7 @@ namespace Interface
     shouldUpdateBufferSizes_ = true;
   }
 
-  void OpenGlLineRenderer::render(const OpenGlWrapper &openGl, OpenGlComponent *target, Rectangle<int> bounds)
+  void OpenGlLineRenderer::render(const OpenGlWrapper &openGl, const OpenGlComponent *target, Rectangle<int> bounds)
   {
     utils::ScopedLock g{ buffersLock_, utils::WaitMechanism::WaitNotify };
 
@@ -141,8 +141,8 @@ namespace Interface
 
     if (dirty_)
     {
-      setLineVertices(target);
-      setFillVertices(target);
+      setLineVertices((float)target->getWidthSafe(), (float)target->getHeightSafe());
+      setFillVertices((float)target->getWidthSafe(), (float)target->getHeightSafe());
 
       if (shouldUpdateBufferSizes_)
       {
@@ -271,12 +271,12 @@ namespace Interface
     dirty_ = dirty_ || anyBoost;
   }
 
-  void OpenGlLineRenderer::setFillVertices(const OpenGlComponent *target)
+  void OpenGlLineRenderer::setFillVertices(float width, float height)
   {
     float *boosts = boosts_.get();
 
-    float x_adjust = 2.0f / (float)target->getWidthSafe();
-    float y_adjust = 2.0f / (float)target->getHeightSafe();
+    float x_adjust = 2.0f / width;
+    float y_adjust = 2.0f / height;
 
     for (int i = 0; i < pointCount_; ++i)
     {
@@ -301,7 +301,7 @@ namespace Interface
     memcpy(fillData_.get(), fillData_.get() + begin_copy_source, padding_copy_size);
   }
 
-  void OpenGlLineRenderer::setLineVertices(const OpenGlComponent *target)
+  void OpenGlLineRenderer::setLineVertices(float width, float height)
   {
     float *boosts = boosts_.get();
 
@@ -316,26 +316,25 @@ namespace Interface
     }
 
     // rotation of +90 degrees
-    Point<float> prev_delta_normal(-prev_normalized_delta.y, prev_normalized_delta.x);
+    Point<float> prev_delta_normal{ -prev_normalized_delta.y, prev_normalized_delta.x };
     float line_radius = lineWidth_ * 0.5f + 0.5f;
-    float prev_magnitude = line_radius;
+    float magnitude = line_radius;
 
-    float x_adjust = 2.0f / (float)target->getWidthSafe();
-    float y_adjust = 2.0f / (float)target->getHeightSafe();
+    float x_adjust = 2.0f / width;
+    float y_adjust = 2.0f / height;
 
     for (int i = 0; i < pointCount_; ++i)
     {
       float radius = line_radius * (1.0f + boostAmount_ * boosts[i]);
       Point<float> point{ x_[i], y_[i] };
       
-      int clamped_next_index = std::min(i + 1, pointCount_ - 1);
-      Point<float> delta{ x_[clamped_next_index] - point.x, y_[clamped_next_index] - point.y };
+      int next_index = std::min(i + 1, pointCount_ - 1);
+      Point<float> delta{ x_[next_index] - point.x, y_[next_index] - point.y };
       if (delta.isOrigin())
         delta = prev_normalized_delta;
 
-      float magnitude = std::sqrt(delta.getDistanceSquaredFromOrigin());
-      float clamped_magnitude = std::min(100'000.0f, magnitude);
-      Point<float> normalized_delta{ delta.x / magnitude, delta.y / magnitude };
+      float next_magnitude = std::sqrt(delta.getDistanceSquaredFromOrigin());
+      Point<float> normalized_delta{ delta.x / next_magnitude, delta.y / next_magnitude };
       Point<float> delta_normal{ -normalized_delta.y, normalized_delta.x };
 
       Point<float> angle_bisect_delta = normalized_delta - prev_normalized_delta;
@@ -346,8 +345,9 @@ namespace Interface
       else
         bisect_line = normalise(angle_bisect_delta);
 
-      float max_inner_radius = std::max(radius, 0.5f * (clamped_magnitude + prev_magnitude));
-      prev_magnitude = clamped_magnitude;
+      next_magnitude = std::min(100'000.0f, next_magnitude);
+      float max_inner_radius = std::max(radius, 0.5f * (next_magnitude + magnitude));
+      magnitude = next_magnitude;
 
       float bisect_delta_cos = bisect_line.getDotProduct(delta_normal);
       float inner_mult = std::min(10.0f, 1.0f / std::fabs(bisect_delta_cos));

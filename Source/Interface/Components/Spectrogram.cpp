@@ -13,7 +13,6 @@
 #include "Framework/utils.h"
 #include "Framework/spectral_support_functions.h"
 #include "../LookAndFeel/Skin.h"
-#include "../LookAndFeel/Shaders.h"
 #include "OpenGlMultiQuad.h"
 #include "../Sections/BaseSection.h"
 #include "Plugin/Complex.h"
@@ -39,7 +38,7 @@ namespace
   #endif
   }
 
-  template<auto function>
+  template<auto function = [](simd_float &, simd_float &){}>
   strict_inline void vector_call midSide(simd_float &one, simd_float &two)
   {
   #if COMPLEX_SSE4_1
@@ -64,6 +63,8 @@ namespace Interface
 {
   Spectrogram::Spectrogram(String name) : OpenGlComponent(std::move(name))
   {
+    setInterceptsMouseClicks(true, false);
+
     amplitudeRenderers_.reserve(kNumChannels);
     for (size_t i = 0; i < kNumChannels; ++i)
     {
@@ -120,8 +121,8 @@ namespace Interface
 
   bool Spectrogram::updateAmplitudes(bool shouldDisplayPhases, float minFrequency, float maxFrequency, float dbSlope)
   {
+    static constexpr float log2ToLog10 = 1.0f / gcem::log10(2.0f);
     static constexpr float kMinAmp = 0.00001f;
-    static constexpr float kMinDecay = 0.12f;
     static constexpr simd_float defaultValue = { kMinAmp, 0.0f };
 
     auto bufferView = bufferView_.lock();
@@ -136,14 +137,16 @@ namespace Interface
     COMPLEX_ASSERT(scratchBuffer_.getSimdChannels() == bufferView.getSimdChannels()
       && "Scratch buffer doesn't match the number of channels in memory");
 
+    dbSlope *= log2ToLog10;
     float sampleHz = nyquistFreq_ / (float)binCount_;
-    float startOctave = std::log2(minFrequency / sampleHz);
-    float endOctave = std::log2(maxFrequency / sampleHz);
+    float startOctave = std::log10(minFrequency / sampleHz);
+    float endOctave = std::log10(maxFrequency / sampleHz);
     float numOctaves = endOctave - startOctave;
     float maxBin = (float)binCount_ - 1.0f;
-    float decayMultiplier = decayMultiplier_ * std::min((float)binCount_ / 2048.0f, 1.0f);
-    bool isInterpolating = binCount_ >= 1024;
-    simd_float scalingFactor = { 1.0f / ((float)binCount_ * 2.0f), 1.0f };
+    bool isInterpolating = shouldInterpolateLines_;
+    // yes these are magic numbers, change at own risk
+    float decay = 0.25f + std::max(0.0f, 0.05f * std::log2(2048.0f / (float)binCount_ - 1.0f));
+    simd_float scalingFactor = { 0.25f / (float)binCount_, 1.0f };
     
     {
       utils::ScopedLock g{ bufferView.getLock(), false, utils::WaitMechanism::Sleep };
@@ -158,69 +161,94 @@ namespace Interface
         utils::convertBufferInPlace<midSide<utils::complexCartToPolar>>(scratchBuffer_, binCount_);
       else
         utils::convertBufferInPlace<midSide<complexMagnitude>>(scratchBuffer_, binCount_);
+
+      for (u32 i = 0; i < scratchBuffer_.getChannels(); i += scratchBuffer_.getRelativeSize())
+      {
+        simd_float dcAndNyquist = scratchBuffer_.readSimdValueAt(i, 0);
+        simd_float zeroes = 0.0f;
+        midSide(dcAndNyquist, zeroes);
+        scratchBuffer_.writeSimdValueAt(simd_float::abs(dcAndNyquist), i, 0);
+      }
     }
 
     for (u32 i = 0; i < scratchBuffer_.getChannels(); i += scratchBuffer_.getRelativeSize())
-    {
-      // the reason for adding 0.5 is because the dc bin is 
-      // halfway between the positive and negative frequencies
-      float rangeBegin = std::exp2(startOctave) + 0.5f;
+    { 
+      float rangeBegin = std::pow(10.0f, startOctave);
       for (u32 j = 0; j < kResolution; ++j)
       {
         float t = (float)j / (kResolution - 1.0f);
         float octave = numOctaves * t + startOctave;
-        float rangeEnd = std::min(std::exp2(octave) + 0.5f, maxBin);
+        float rangeEnd = std::min(std::pow(10.0f, octave), maxBin);
 
-        int beginIndex = (int)std::floor(rangeBegin);
-        int endIndex = (int)std::floor(rangeEnd);
-        simd_float current = scratchBuffer_.readSimdValueAt(i, beginIndex);
+        simd_float current;
 
-        if (endIndex - beginIndex > 1)
+        if (isInterpolating)
         {
-          // the point covers a range of bins, we need to find the loudest one
-          for (int k = beginIndex + 1; k <= endIndex; ++k)
-          {
-            simd_float next = scratchBuffer_.readSimdValueAt(i, k);
-            simd_mask mask = utils::copyFromEven(simd_float::greaterThan(next, current));
-            current = utils::maskLoad(current, next, mask);
-          }
-        }
-        else
-        {
-          // the point is still on the same bin as in the previous iteration
-          // or is entering the next one
+          int beginIndex = (int)std::floor(rangeBegin);
+          int endIndex = (int)std::floor(rangeEnd);
+          current = scratchBuffer_.readSimdValueAt(i, beginIndex);
 
-          if (isInterpolating)
+          if (endIndex - beginIndex > 1)
           {
-            simd_float next = scratchBuffer_.readSimdValueAt(i, beginIndex + 1);
-            current = utils::lerp(current, next, rangeBegin - (float)beginIndex);
+            // the point covers a range of bins, we need to find the loudest one
+            for (int k = beginIndex + 1; k <= endIndex; ++k)
+            {
+              simd_float next = scratchBuffer_.readSimdValueAt(i, k);
+              simd_mask mask = utils::copyFromEven(simd_float::greaterThan(next, current));
+              current = utils::maskLoad(current, next, mask);
+            }
           }
           else
           {
+            simd_float temp = current;
+            simd_float next = scratchBuffer_.readSimdValueAt(i, (int)std::ceil(rangeBegin));
+            current = utils::dbToAmplitude(utils::lerp(utils::amplitudeToDb(temp), utils::amplitudeToDb(next), rangeBegin - (float)beginIndex));
+            current = utils::maskLoad(current, utils::lerp(temp, next, rangeBegin - (float)beginIndex), utils::kPhaseMask);
+          }
+
+          rangeBegin = rangeEnd;
+        }
+        else
+        {
+          // the reason for rounding instead of flooring is because the dc bin is 
+          // halfway between the positive and negative frequencies
+          int beginIndex = (int)std::round(rangeBegin);
+          int endIndex = (int)std::round(rangeEnd);
+          rangeBegin = rangeEnd;
+          current = scratchBuffer_.readSimdValueAt(i, beginIndex);
+
+          if (endIndex - beginIndex > 1)
+          {
+            // the point covers a range of bins, we need to find the loudest one
+            for (int k = beginIndex + 1; k <= endIndex; ++k)
+            {
+              simd_float next = scratchBuffer_.readSimdValueAt(i, k);
+              simd_mask mask = utils::copyFromEven(simd_float::greaterThan(next, current));
+              current = utils::maskLoad(current, next, mask);
+            }
+          }
+          else
+          {
+            // the point is still on the same bin as in the previous iteration
+            // or is entering the next one
+
             if (endIndex - beginIndex != 1 && j > 0)
             {
               // if this is not the first iteration we can just copy the value from the previous one
               resultBuffer_.writeSimdValueAt(resultBuffer_.readSimdValueAt(i, j - 1), i, j);
-              rangeBegin = rangeEnd;
               continue;
             }
 
             // the point is entering the next bin, calculate its value
             current = scratchBuffer_.readSimdValueAt(i, endIndex);
           }
-
         }
-        rangeBegin = rangeEnd;
 
         float slope = (float)utils::dbToAmplitude(t * numOctaves * dbSlope);
         current *= scalingFactor * simd_float{ slope, 1.0f };
-        simd_float oldValue = resultBuffer_.readSimdValueAt(i, j);
-        simd_float db = utils::amplitudeToDb(simd_float::max(oldValue, simd_float::max(kMinAmp, utils::copyFromEven(current))));
-        simd_float decay = simd_float::clamp(db * decayMultiplier, kMinDecay, 1.0f);
+        current = utils::lerp(resultBuffer_.readSimdValueAt(i, j), current, decay);
 
-        current = utils::lerp(oldValue, current, decay);
         current = utils::maskLoad(defaultValue, current, utils::copyFromEven(simd_float::greaterThan(current, kMinAmp)));
-
         resultBuffer_.writeSimdValueAt(current, i, j);
       }
     }
@@ -297,11 +325,11 @@ namespace Interface
       setRendererValues.template operator()<false>();
 
     for (auto &amplitudeRenderer : amplitudeRenderers_)
-      amplitudeRenderer->render(openGl, this, getLocalBounds());
+      amplitudeRenderer->render(openGl, this, getLocalBoundsSafe());
 
     if (shouldDisplayPhases)
       for (auto &phaseRenderer : phaseRenderers_)
-        phaseRenderer->render(openGl, this, getLocalBounds());
+        phaseRenderer->render(openGl, this, getLocalBoundsSafe());
 
     corners_.render(openGl, animate);
   }
@@ -330,7 +358,7 @@ namespace Interface
 
     float width = (float)getWidth();
     float height = (float)getHeight();
-    float maxOctave = log2f(maxFrequency / minFrequency);
+    float maxOctave = std::log10(maxFrequency / minFrequency);
     g.setColour(getColour(Skin::kLightenScreen).withMultipliedAlpha(0.5f));
     float frequency = 0.0f;
     float increment = 1.0f;
@@ -341,7 +369,7 @@ namespace Interface
       for (int i = 0; i < kLineSpacing; ++i)
       {
         frequency += increment;
-        float t = log2f(frequency / minFrequency) / maxOctave;
+        float t = std::log10(frequency / minFrequency) / maxOctave;
         float x = std::round(t * width);
         if (x > 0.0f && x < width)
           g.fillRect(x, 0.0f, 1.0f, height);

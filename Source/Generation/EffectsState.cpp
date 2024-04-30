@@ -237,16 +237,11 @@ namespace Generation
 
 		auto thisLane = lanes_[laneIndex];
 
-		// Lane On/Off
-		// if this lane is turned off, we set it as finished and skip everything
-		if (!thisLane->getParameter(BaseProcessors::EffectsLane::LaneEnabled::name())->getInternalValue<u32>(getSampleRate()))
-		{
-			thisLane->status_.store(EffectsLane::LaneStatus::Finished, std::memory_order_release);
-			return;
-		}
-
 		thisLane->currentEffectIndex_.store(0, std::memory_order_release);
+		thisLane->volumeScale_ = 1.0f;
 		auto &laneDataSource = thisLane->laneDataSource_;
+		bool isLaneOn = thisLane->getParameter(BaseProcessors::EffectsLane::LaneEnabled::name())
+			->getInternalValue<u32>(getSampleRate());
 
 		// Lane Input 
 		// if this lane's input is another's output and that lane can be used,
@@ -265,6 +260,18 @@ namespace Generation
 			}
 
 			// getting shared access to the lane's output
+			// if this lane is turned off, we only grab the view from the other lane's buffer
+			// since we won't be reading from it but it's necessary for the outputBuffer to know where the data is
+			if (!isLaneOn)
+			{
+				// TODO: decide if it's even worth to wait, or we can grab a reference to the other lane's SimdBufferView
+				laneDataSource.sourceBuffer = lanes_[inputIndex]->laneDataSource_.sourceBuffer;
+				laneDataSource.dataType = lanes_[inputIndex]->laneDataSource_.dataType;
+
+				thisLane->status_.store(EffectsLane::LaneStatus::Finished, std::memory_order_release);
+				return;
+			}
+
 			utils::lockAtomic(lanes_[inputIndex]->laneDataSource_.sourceBuffer.getLock(), false, utils::WaitMechanism::Spin);
 			laneDataSource.sourceBuffer = lanes_[inputIndex]->laneDataSource_.sourceBuffer;
 			laneDataSource.dataType = lanes_[inputIndex]->laneDataSource_.dataType;
@@ -272,6 +279,16 @@ namespace Generation
 		// input is not from a lane, we can begin processing
 		else
 		{
+			// if this lane is turned off, we set it as finished and grab view to the original dataBuffer's data
+			if (!isLaneOn)
+			{
+				laneDataSource.sourceBuffer = SimdBufferView{ dataBuffer_, inputIndex * kNumChannels, kNumChannels };
+				laneDataSource.dataType = ComplexDataSource::Cartesian;
+				
+				thisLane->status_.store(EffectsLane::LaneStatus::Finished, std::memory_order_release);
+				return;
+			}
+			
 			// getting shared access to the state's transformed data
 			COMPLEX_ASSERT(dataBuffer_.getLock().lock.load() >= 0);
 			utils::lockAtomic(dataBuffer_.getLock(), false, utils::WaitMechanism::Spin);
@@ -345,8 +362,9 @@ namespace Generation
 			thisLane->volumeScale_ = simd_float::sqrt(scale);
 		}
 
+		// unlocking the last module's buffer
 		if (laneDataSource.sourceBuffer != laneDataSource.conversionBuffer)
-			laneDataSource.sourceBuffer.getLock().lock.fetch_sub(1, std::memory_order_release);
+			utils::unlockAtomic(laneDataSource.sourceBuffer.getLock(), false, utils::WaitMechanism::Spin);
 
 		COMPLEX_ASSERT(dataBuffer_.getLock().lock.load() >= 0);
 
@@ -363,9 +381,6 @@ namespace Generation
 		// (instead of magnitude-phase pairs) and if not, gets converted
 		for (auto &lane : lanes_)
 		{
-			if (!lane->getParameter(BaseProcessors::EffectsLane::LaneEnabled::name())->getInternalValue<u32>())
-				continue;
-
 			utils::ScopedLock g1{ lane->laneDataSource_.sourceBuffer.getLock(), false, utils::WaitMechanism::Spin };
 
 			if (lane->laneDataSource_.dataType == ComplexDataSource::Polar)
@@ -382,35 +397,28 @@ namespace Generation
 
 		// multipliers for scaling the multiple chains going into the same output
 		std::array<float, kNumInputsOutputs> multipliers{};
+		for (u32 i = 0; i < lanes_.size(); i++)
+		{
+			auto laneOutput = lanes_[i]->getParameter(BaseProcessors::EffectsLane::Output::name())
+				->getInternalValue<u32>(getSampleRate());
+
+			if (laneOutput != kDefaultOutput)
+				multipliers[laneOutput]++;
+		}
 
 		// for every lane we add its scaled output to the main sourceBuffer_ at the designated output channels
 		for (auto &lane : lanes_)
 		{
-			if (!lane->getParameter(BaseProcessors::EffectsLane::LaneEnabled::name())->getInternalValue<u32>(getSampleRate()))
-				continue;
-
 			auto laneOutput = lane->getParameter(BaseProcessors::EffectsLane::Output::name())->getInternalValue<u32>(getSampleRate());
 			if (laneOutput == kDefaultOutput)
 				continue;
 
-			multipliers[laneOutput]++;
-
 			utils::ScopedLock g1{ lane->laneDataSource_.sourceBuffer.getLock(), false, utils::WaitMechanism::Spin };
 
+			simd_float multiplier = simd_float::max(1.0f, multipliers[laneOutput]);
 			SimdBuffer<complex<float>, simd_float>::applyToThisNoMask<utils::MathOperations::Add>(outputBuffer_,
-				lane->laneDataSource_.sourceBuffer, kComplexSimdRatio, binCount_, laneOutput * kComplexSimdRatio, 0, 0, 0, lane->volumeScale_);
-		}
-
-		// scaling all outputs
-		for (u32 i = 0; i < kNumInputsOutputs; i++)
-		{
-			// if there's only one or no chains going to this output, we don't scale
-			if (multipliers[i] == 0.0f || multipliers[i] == 1.0f)
-				continue;
-
-			simd_float multiplier = 1.0f / multipliers[i];
-			for (u32 j = 0; j < binCount_; j++)
-				outputBuffer_.multiply(multiplier, i * kComplexSimdRatio, j);
+				lane->laneDataSource_.sourceBuffer, kComplexSimdRatio, binCount_, laneOutput * kComplexSimdRatio, 0, 0, 0, 
+				lane->volumeScale_.get() / multiplier);
 		}
 
 		std::array<simd_float, kComplexSimdRatio> values;

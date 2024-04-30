@@ -32,7 +32,7 @@ namespace Interface
     ~OpenGlLineRenderer();
 
     void init(OpenGlWrapper &openGl);
-    void render(const OpenGlWrapper &openGl, OpenGlComponent *target, Rectangle<int> bounds);
+    void render(const OpenGlWrapper &openGl, const OpenGlComponent *target, Rectangle<int> bounds);
     void destroy();
 
     strict_inline int getPointCount() const noexcept { return pointCount_; }
@@ -81,8 +81,8 @@ namespace Interface
       dirty_ = true;
     }
 
-    void setFillVertices(const OpenGlComponent *target);
-    void setLineVertices(const OpenGlComponent *target);
+    void setFillVertices(float width, float height);
+    void setLineVertices(float width, float height);
 
     void boostRange(float start, float end, int buffer_vertices, float min);
     void decayBoosts(float mult);

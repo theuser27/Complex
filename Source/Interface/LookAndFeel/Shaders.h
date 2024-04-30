@@ -101,12 +101,4 @@ namespace Interface
 		GLuint vertexShaderIds_[kVertexShaderCount]{};
 		GLuint fragmentShaderIds_[kFragmentShaderCount]{};
 	};
-
-	struct OpenGlWrapper
-	{
-		OpenGlWrapper(juce::OpenGLContext &c) : context(c) { }
-
-		juce::OpenGLContext &context;
-		Shaders *shaders = nullptr;
-	};
 }

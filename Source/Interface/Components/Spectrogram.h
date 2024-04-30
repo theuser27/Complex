@@ -20,11 +20,11 @@ namespace Interface
 	class Spectrogram final : public OpenGlComponent
 	{
 	public:
-		static constexpr int kResolution = 700;
+		static constexpr int kResolution = 400;
 		static constexpr float kDecayMult = 0.07f;
 		static constexpr float kDefaultMaxDb = 0.0f;
 		static constexpr float kDefaultMinDb = -50.0f;
-		static constexpr float kDefaultMinFrequency = 9.2f;
+		static constexpr float kDefaultMinFrequency = 10.7f;
 		static constexpr float kDefaultMaxFrequency = 21000.0f;
 		static constexpr float kDbSlopePerOctave = 3.0f;
 
@@ -33,6 +33,7 @@ namespace Interface
 
 		void resized() override;
 		
+		void mouseDown(const MouseEvent &) override { shouldInterpolateLines_ = !shouldInterpolateLines_.get(); }
 		void init(OpenGlWrapper &openGl) override;
 		void render(OpenGlWrapper &openGl, bool animate) override;
 		void destroy() override;
@@ -75,6 +76,7 @@ namespace Interface
 		utils::shared_value<float> maxDb_ = kDefaultMaxDb;
 		utils::shared_value<bool> shouldDisplayPhases_ = false;
 		utils::shared_value<bool> shouldPaintBackgroundLines_ = true;
+		utils::shared_value<bool> shouldInterpolateLines_ = true;
 		utils::shared_value<float> decayMultiplier_ = kDecayMult;
 		utils::shared_value<float> dbSlope_ = kDbSlopePerOctave;
 

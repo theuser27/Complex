@@ -30,6 +30,7 @@ namespace Interface
 	class OpenGlShaderProgram;
 	class OpenGlComponent;
 	struct OpenGlWrapper;
+	class Shaders;
 
 	struct OpenGlUniform
 	{
@@ -216,6 +217,14 @@ namespace Interface
 	private:
 		const juce::OpenGLContext &context;
 		mutable GLuint programID = 0;
+	};
+
+	struct OpenGlWrapper
+	{
+		OpenGlWrapper(juce::OpenGLContext &c) : context(c) { }
+
+		juce::OpenGLContext &context;
+		Shaders *shaders = nullptr;
 	};
 
 	template<typename T>

@@ -213,7 +213,7 @@ namespace utils
 		else
 		{
 			[[maybe_unused]] auto value = atomic.lock.fetch_sub(1, std::memory_order_release);
-			COMPLEX_ASSERT(value != 0);
+			COMPLEX_ASSERT(value > 0);
 		}
 
 		if ((u32)mechanism & (u32)WaitMechanism::SpinNotify)
