@@ -8,15 +8,14 @@
   ==============================================================================
 */
 
-#include "Skin.h"
+#include "Skin.hpp"
 
 #include "Third Party/json/json.hpp"
 #include <juce_core/juce_core.h>
 #include <juce_graphics/juce_graphics.h>
 #include "BinaryData.h"
-#include "DefaultLookAndFeel.h"
-#include "../Sections/BaseSection.h"
-#include "Framework/load_save.h"
+
+#include "../Sections/BaseSection.hpp"
 
 using json = nlohmann::json;
 
@@ -26,61 +25,36 @@ namespace
     "All",
     "Overlays",
     "Effects Lane",
-  	"Popup Browser",
+    "Popup Browser",
     "Filter Module",
     "Dynamics Module",
-    "Phase Module"
+    "Phase Module",
+    "Pitch Module",
   };
 
   inline constexpr std::array<std::string_view, Interface::Skin::kValueIdCount> kValueNames = {
     "Body Rounding Top",
     "Body Rounding Bottom",
 
-  	"Widget Line Width",
+    "Widget Line Width",
     "Widget Line Boost",
     "Widget Fill Center",
     "Widget Fill Fade",
     "Widget Fill Boost",
-  	"Widget Margin",
+    "Widget Margin",
     "Widget Rounded Corner",
 
     "Label Height",
     "Label Background Height",
     "Label Rounding",
     "Label Offset",
-    "Text Component Label Offset",
-
-    "Rotary Option X Offset",
-    "Rotary Option Y Offset",
-    "Rotary Option Width",
-
-    "Padding",
-    "Large Padding",
-    "Slider Width",
-
-    "Text Component Height",
-    "Text Component Offset",
-    "Text Component Font Size",
-    "Text Button Height",
-  	"Button Font Size",
 
     "Knob Arc Size",
     "Knob Arc Thickness",
     "Knob Body Size",
     "Knob Handle Length",
-
-    "Knob Mod Amount Arc Size",
-    "Knob Mod Amount Arc Thickness",
-    "Knob Mod Meter Arc Size",
-    "Knob Mod Meter Arc Thickness",
-
-    "Knob Offset",
-    "Knob Section Height",
     "Knob Shadow Width",
     "Knob Shadow Offset",
-
-    "Modulation Button Width",
-    "Modulation Font Size"
   };
 
   inline constexpr std::array<std::string_view, Interface::Skin::kColorIdCount> kColorNames = {
@@ -106,12 +80,15 @@ namespace
     "Overlay Screen",
     "Lighten Screen",
     "Shadow",
+
+    "Popup Display Background",
+    "Popup Display Border",
     "Popup Selector Background",
-    "Popup Background",
-    "Popup Border",
+    "Popup Selector Delimiter",
 
     "Text Component Background",
-    "Text Component Text",
+    "Text Component Text 1",
+    "Text Component Text 2",
 
     "Rotary Arc",
     "Rotary Arc Disabled",
@@ -131,9 +108,6 @@ namespace
     "Modulation Meter Left",
     "Modulation Meter Right",
     "Modulation Meter Control",
-    "Modulation Button Selected",
-    "Modulation Button Dragging",
-    "Modulation Button Unselected",
 
     "Icon Button Off",
     "Icon Button Off Hover",
@@ -148,15 +122,15 @@ namespace
     "Action Button Secondary",
     "Action Button Secondary Hover",
     "Action Button Secondary Press",
-  	"Action Button Text",
+    "Action Button Text",
 
-  	"Power Button On",
+    "Power Button On",
     "Power Button Off",
 
     "Text Editor Background",
     "Text Editor Border",
     "Text Editor Caret",
-    "Text Editor Selection"
+    "Text Editor Selection",
   };
 }
 
@@ -164,6 +138,26 @@ namespace Interface
 {
   namespace
   {
+    juce::File getDefaultSkin()
+    {
+    #if defined(JUCE_DATA_STRUCTURES_H_INCLUDED)
+      juce::PropertiesFile::Options config_options;
+      config_options.applicationName = "Complex";
+      config_options.osxLibrarySubFolder = "Application Support";
+      config_options.filenameSuffix = "skin";
+
+    #ifdef LINUX
+      config_options.folderName = "." + juce::String{ juce::CharPointer_UTF8{ JucePlugin_Name } }.toLowerCase();
+    #else
+      config_options.folderName = juce::String{ juce::CharPointer_UTF8{ JucePlugin_Name } }.toLowerCase();
+    #endif
+
+      return config_options.getDefaultFile();
+    #else
+      return File();
+    #endif
+    }
+
     json updateJson(json data)
     {
       int version = 0;
@@ -178,7 +172,7 @@ namespace Interface
 
   Skin::Skin()
   {
-	  juce::File defaultSkin = Framework::LoadSave::getDefaultSkin();
+    juce::File defaultSkin = getDefaultSkin();
 
     // temporary solution to ensure there's a skin file
     // if this throws put Complex.skin at Users\(user)\AppData\Roaming\Complex
@@ -202,8 +196,6 @@ namespace Interface
     {
       std::cerr << e.what() << '\n';
     }*/
-
-    copyValuesToLookAndFeel(DefaultLookAndFeel::instance());
   }
 
   void Skin::clearSkin()
@@ -214,62 +206,58 @@ namespace Interface
       valueOverrides_[i].data.clear();
   }
 
-  void Skin::setColor(ColorId colorId, const juce::Colour &color) noexcept { colors_[colorId - kInitialColor] = color.getARGB(); }
-  u32 Skin::getColor(ColorId colorId) const { return colors_[colorId - kInitialColor]; }
-
-  bool Skin::overridesColor(int section, ColorId colorId) const
+  void Skin::setColour(ColourId colorId, const juce::Colour &color) noexcept
   {
-    if (section == kNone)
-      return true;
-
-    return colorOverrides_[section].find(colorId) != colorOverrides_[section].data.end();
+    auto index = colorId - kInitialColor;
+    COMPLEX_ASSERT(index < kColorIdCount);
+    colors_[index] = color.getARGB();
+  }
+  u32 Skin::getColour(ColourId colorId) const
+  {
+    auto index = colorId - kInitialColor;
+    COMPLEX_ASSERT(index < kColorIdCount);
+    return colors_[index];
   }
 
-  bool Skin::overridesValue(int section, ValueId valueId) const
+
+
+  u32 Skin::getColour(SectionOverride section, ColourId colorId) const
   {
     if (section == kNone)
-      return true;
-
-    return valueOverrides_[section].find(valueId) != valueOverrides_[section].data.end();
-  }
-
-  void Skin::copyValuesToLookAndFeel(juce::LookAndFeel *lookAndFeel) const
-  {
-    lookAndFeel->setColour(juce::PopupMenu::backgroundColourId, juce::Colour{ getColor(Skin::kPopupBackground) });
-    lookAndFeel->setColour(juce::PopupMenu::textColourId, juce::Colour{ getColor(Skin::kNormalText) });
-    lookAndFeel->setColour(juce::TooltipWindow::textColourId, juce::Colour{ getColor(Skin::kNormalText) });
-
-    lookAndFeel->setColour(juce::BubbleComponent::backgroundColourId, juce::Colour{ getColor(Skin::kPopupBackground) });
-    lookAndFeel->setColour(juce::BubbleComponent::outlineColourId, juce::Colour{ getColor(Skin::kPopupBorder) });
-
-    for (int i = kInitialColor; i < kFinalColor; ++i)
-      lookAndFeel->setColour(i, juce::Colour{ getColor((ColorId)i) });
-  }
-
-  u32 Skin::getColor(SectionOverride section, ColorId colorId) const
-  {
-    if (section == kNone)
-      return getColor(colorId);
+      return getColour(colorId);
 
     if (auto iter = colorOverrides_[section].find(colorId); iter != colorOverrides_[section].data.end())
       return iter->second;
 
-    return juce::Colours::black.getARGB();
+    return getColour(colorId);
   }
 
-  u32 Skin::getColor(const OpenGlContainer *section, ColorId colorId) const
+  u32 Skin::getColour(const OpenGlContainer *section, ColourId colorId) const
   {
     SectionOverride sectionOverride;
     do
     {
       sectionOverride = section->getSectionOverride();
-      if (auto iter = colorOverrides_[sectionOverride].find(colorId); iter != colorOverrides_[sectionOverride].data.end())
+      if (auto iter = colorOverrides_[sectionOverride].find(colorId); 
+        iter != colorOverrides_[sectionOverride].data.end())
         return iter->second;
 
       section = dynamic_cast<OpenGlContainer *>(section->getParentSafe());
     } while (sectionOverride != kNone && section != nullptr);
 
-    return getColor(colorId);
+    return getColour(colorId);
+  }
+
+  void Skin::setValue(ValueId valueId, float value)
+  {
+    COMPLEX_ASSERT(valueId < kValueIdCount);
+    values_[valueId] = value;
+  }
+
+  float Skin::getValue(ValueId valueId) const
+  {
+    COMPLEX_ASSERT(valueId < kValueIdCount);
+    return values_[valueId];
   }
 
   float Skin::getValue(SectionOverride section, ValueId valueId) const
@@ -295,18 +283,26 @@ namespace Interface
     return getValue(valueId);
   }
 
-  void Skin::addOverrideColor(int section, ColorId colorId, const juce::Colour &color)
+  void Skin::addColourOverride(int section, ColourId colorId, const juce::Colour &color)
   {
     if (section == kNone)
-      setColor(colorId, color);
+      setColour(colorId, color);
     else
       colorOverrides_[section][colorId] = color.getARGB();
   }
 
-  void Skin::removeOverrideColor(int section, ColorId colorId)
+  void Skin::removeColourOverride(int section, ColourId colorId)
   {
     if (section != kNone)
       colorOverrides_[section].erase(colorId);
+  }
+
+  bool Skin::overridesColour(int section, ColourId colorId) const
+  {
+    if (section == kNone)
+      return true;
+
+    return colorOverrides_[section].find(colorId) != colorOverrides_[section].data.end();
   }
 
   void Skin::addOverrideValue(int section, ValueId valueId, float value)
@@ -323,7 +319,15 @@ namespace Interface
       valueOverrides_[section].erase(valueId);
   }
 
-  std::string Skin::stateToString()
+  bool Skin::overridesValue(int section, ValueId valueId) const
+  {
+    if (section == kNone)
+      return true;
+
+    return valueOverrides_[section].find(valueId) != valueOverrides_[section].data.end();
+  }
+
+  void Skin::saveToFile(const juce::File &destination)
   {
     json data;
     for (int i = 0; i < kColorIdCount; ++i)
@@ -348,15 +352,12 @@ namespace Interface
     data["overrides"] = overrides;
     data["Plugin Version"] = JucePlugin_VersionCode;
 
-    return data.dump();
+    (void)destination.replaceWithText(data.dump());
   }
 
-  void Skin::saveToFile(const juce::File &destination)
-  { destination.replaceWithText(stateToString()); }
-
-  void Skin::jsonToState(std::any jsonData)
+  void Skin::jsonToState(void *jsonData)
   {
-    json data = std::any_cast<json>(std::move(jsonData));
+    json &data = *static_cast<json *>(jsonData);
 
     clearSkin();
     data = updateJson(data);
@@ -378,10 +379,10 @@ namespace Interface
         {
           if (overrideSection.count(kColorNames[i]))
           {
-            ColorId colorId = static_cast<Skin::ColorId>(i + Skin::kInitialColor);
+            ColourId colorId = static_cast<Skin::ColourId>(i + Skin::kInitialColor);
 
-            std::string colorString = overrideSection[kColorNames[i]];
-            colorOverrides_[overrideIndex].add(colorId, juce::Colour::fromString(colorString).getARGB());
+            std::string_view colorString = overrideSection[kColorNames[i]].get<std::string_view>();
+            colorOverrides_[overrideIndex].add(colorId, juce::Colour::fromString(colorString.data()).getARGB());
           }
         }
 
@@ -399,16 +400,16 @@ namespace Interface
 
     for (int i = 0; i < kColorIdCount; ++i)
     {
-      if (data.count(kColorNames[i]))
+      if (data.contains(kColorNames[i]))
       {
-        std::string colorString = data[kColorNames[i]];
-        colors_[i] = juce::Colour::fromString(colorString).getARGB();
+        std::string_view colorString = data[kColorNames[i]].get<std::string_view>();
+        colors_[i] = juce::Colour::fromString(colorString.data()).getARGB();
       }
     }
 
     for (size_t i = 0; i < kValueIdCount; ++i)
     {
-      if (data.count(kValueNames[i]))
+      if (data.contains(kValueNames[i]))
         values_[i] = data[kValueNames[i]];
       else
         values_[i] = 0.0f;
@@ -420,7 +421,7 @@ namespace Interface
     try
     {
       json data = json::parse(skinString.toStdString(), nullptr, false);
-      jsonToState(std::move(data));
+      jsonToState(&data);
     }
     catch (const json::exception &)
     {
@@ -440,7 +441,7 @@ namespace Interface
     try
     {
       json data = json::parse(skin_string, nullptr, false);
-      jsonToState(std::move(data));
+      jsonToState(&data);
     }
     catch (const json::exception &)
     {

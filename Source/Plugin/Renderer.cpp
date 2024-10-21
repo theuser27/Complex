@@ -1,198 +1,268 @@
 /*
-	==============================================================================
+  ==============================================================================
 
-		Renderer.cpp
-		Created: 20 Dec 2022 7:34:54pm
-		Author:  theuser27
+    Renderer.cpp
+    Created: 20 Dec 2022 7:34:54pm
+    Author:  theuser27
 
-	==============================================================================
+  ==============================================================================
 */
 
-#include "Renderer.h"
+#include "Renderer.hpp"
 
+#include <vector>
 #include <juce_opengl/juce_opengl.h>
-#include "Framework/load_save.h"
-#include "Framework/parameter_bridge.h"
-#include "Plugin/Complex.h"
-#include "Interface/Components/OpenGlComponent.h"
-#include "Interface/Sections/MainInterface.h"
-#include "Interface/LookAndFeel/DefaultLookAndFeel.h"
+
+#include "Framework/load_save.hpp"
+#include "Framework/parameter_bridge.hpp"
+#include "Plugin/Complex.hpp"
+#include "Interface/Components/OpenGlComponent.hpp"
+#include "Interface/Sections/MainInterface.hpp"
 
 namespace Interface
 {
-	class Renderer::Pimpl final : public OpenGLRenderer, Timer
-	{
-	public:
-		Pimpl(Renderer &renderer, Plugin::ComplexPlugin &plugin) : renderer_(renderer), plugin_(plugin) { }
+  class Renderer::Pimpl final : public OpenGLRenderer, Timer
+  {
+    static constexpr auto parentStackSpace = 64;
+  public:
+    Pimpl(Renderer &renderer, Plugin::ComplexPlugin &plugin) : renderer_(renderer), plugin_(plugin) 
+    {
+      openGl_.parentStack.reserve(parentStackSpace);
+    }
 
-		void newOpenGLContextCreated() override
-		{
-			double versionSupported = OpenGLShaderProgram::getLanguageVersion();
-			unsupported_ = versionSupported < kMinOpenGlVersion;
-			if (unsupported_)
-			{
-				NativeMessageBox::showMessageBoxAsync(AlertWindow::WarningIcon, "Unsupported OpenGl Version",
-					String("Complex requires OpenGL version: ") + String(kMinOpenGlVersion) +
-					String("\nSupported version: ") + String(versionSupported));
-				return;
-			}
+    void newOpenGLContextCreated() override
+    {
+      double versionSupported = OpenGLShaderProgram::getLanguageVersion();
+      unsupported_ = versionSupported < kMinOpenGlVersion;
+      if (unsupported_)
+      {
+        NativeMessageBox::showMessageBoxAsync(AlertWindow::WarningIcon, "Unsupported OpenGl Version",
+          String{ CharPointer_UTF8{ JucePlugin_Name " requires OpenGL version: " } } + String(kMinOpenGlVersion) +
+          String("\nSupported version: ") + String(versionSupported));
+        return;
+      }
 
-			shaders_ = std::make_unique<Shaders>(openGlContext_);
-			openGl_.shaders = shaders_.get();
-		}
+      shaders_ = utils::up<Shaders>::create(openGlContext_);
+      openGl_.shaders = shaders_.get();
+      uiRelated.renderer = &renderer_;
+    }
 
-		void renderOpenGL() override
-		{
-			if (unsupported_)
-				return;
+    void renderOpenGL() override
+    {
+      if (unsupported_)
+        return;
 
-			doCleanupWork();
+      doCleanupWork();
 
-			renderer_.gui_->renderOpenGlComponents(openGl_, animate_);
-		}
+      openGl_.animate = animate_;
+      utils::ScopedLock g{ renderLock_, utils::WaitMechanism::WaitNotify };
 
-		void openGLContextClosing() override
-		{
-			renderer_.gui_->destroyAllOpenGlComponents();
-			doCleanupWork();
+      renderer_.gui_->renderOpenGlComponents(openGl_);
 
-			openGl_.shaders = nullptr;
-			shaders_ = nullptr;
-		}
+      // calling swapBuffers inside the critical section in case 
+      // we're resizing because a glFinish is necessary in order to
+      // not get frame tearing/overlap with previous frames
+      // https://community.khronos.org/t/swapbuffers-and-synchronization/107667/5
+      openGl_.context.swapBuffers();
+      if (isResizing_.load(std::memory_order_acquire))
+        juce::gl::glFinish();
+    }
 
-		void timerCallback() override
-		{
-			for (auto *bridge : plugin_.getParameterBridges())
-				bridge->updateUIParameter();
+    void openGLContextClosing() override
+    {
+      renderer_.gui_->destroyAllOpenGlComponents();
+      doCleanupWork();
 
-			openGlContext_.triggerRepaint();
-		}
+      openGl_.shaders = nullptr;
+      shaders_ = nullptr;
+    }
 
-		void startUI()
-		{
-			openGlContext_.setContinuousRepainting(false);
-			openGlContext_.setOpenGLVersionRequired(OpenGLContext::openGL3_2);
-			openGlContext_.setRenderer(this);
-			openGlContext_.setComponentPaintingEnabled(false);
-			// attaching the context to an empty component so that we can activate it
-			// and also take advantage of componentRendering to lock the message manager
-			openGlContext_.attachTo(*renderer_.gui_);
+    void timerCallback() override
+    {
+      for (auto *bridge : plugin_.getParameterBridges())
+        bridge->updateUIParameter();
 
-			startTimerHz(kParameterUpdateIntervalHz);
-		}
+      openGlContext_.triggerRepaint();
+    }
 
-		void stopUI()
-		{
-			stopTimer();
+    void startUI()
+    {
+      openGlContext_.setContinuousRepainting(false);
+      openGlContext_.setOpenGLVersionRequired(OpenGLContext::openGL3_2);
+      openGlContext_.setRenderer(this);
+      openGlContext_.setComponentPaintingEnabled(false);
+      // attaching the context to an empty component so that we can activate it
+      // and also take advantage of componentRendering to lock the message manager
+      openGlContext_.attachTo(*renderer_.gui_);
 
-			openGlContext_.detach();
-			openGlContext_.setRenderer(nullptr);
-		}
+      startTimerHz(kParameterUpdateIntervalHz);
+    }
 
-		void pushOpenGlComponentToDelete(OpenGlComponent *openGlComponent) 
-		{ openCleanupQueue_.emplace(openGlComponent); }
+    void stopUI()
+    {
+      stopTimer();
 
-		void doCleanupWork()
-		{
-			while (!openCleanupQueue_.empty())
-			{
-				auto *openGlComponent = openCleanupQueue_.front();
-				openGlComponent->destroy();
-				delete openGlComponent;
-				openCleanupQueue_.pop();
-			}
-		}
+      openGlContext_.detach();
+      openGlContext_.setRenderer(nullptr);
+    }
 
-	private:
-		bool unsupported_ = false;
-		bool animate_ = true;
+    auto &getRenderLock() noexcept { return renderLock_; }
+    void setIsResizing(bool isResizing) noexcept { isResizing_.store(isResizing, std::memory_order_release); }
+    
+    void pushOpenGlResourceToDelete(OpenGlAllocatedResource type, GLsizei n, GLuint id)
+    {
+      utils::ScopedLock g{ cleanupQueueLock_, utils::WaitMechanism::Spin };
+      cleanupQueue_.emplace_back(type, n, id);
+    }
 
-		Renderer &renderer_;
-		Plugin::ComplexPlugin &plugin_;
-		OpenGLContext openGlContext_;
-		OpenGlWrapper openGl_{ openGlContext_ };
-		std::unique_ptr<Shaders> shaders_;
-		std::queue<OpenGlComponent *> openCleanupQueue_{};
-	};
+    void doCleanupWork()
+    {
+      using namespace juce::gl;
 
-	Renderer::Renderer(Plugin::ComplexPlugin &plugin) : pimpl_(std::make_unique<Pimpl>(*this, plugin)), plugin_(plugin)
-	{
-		skinInstance_ = std::make_unique<Skin>();
-		skinInstance_->copyValuesToLookAndFeel(DefaultLookAndFeel::instance());
+      utils::ScopedLock g{ cleanupQueueLock_, utils::WaitMechanism::Spin };
+      while (!cleanupQueue_.empty())
+      {
+        auto &[resourceType, n, id] = cleanupQueue_.back();
+        switch (resourceType)
+        {
+        case OpenGlAllocatedResource::Buffer:
+          glDeleteBuffers(n, &id);
+          break;
+        case OpenGlAllocatedResource::Texture:
+          glDeleteTextures(n, &id);
+          break;
+        default:
+          COMPLEX_ASSERT_FALSE("Missing resource type");
+          break;
+        }
+        cleanupQueue_.erase(cleanupQueue_.end() - 1);
+      }
+    }
 
-		gui_ = std::make_unique<MainInterface>(this);
-	}
+  private:
+    bool unsupported_ = false;
+    utils::shared_value<bool> animate_ = true;
+    std::atomic<bool> renderLock_ = false;
+    std::atomic<bool> isResizing_ = false;
 
-	Renderer::~Renderer() noexcept
-	{
-		pimpl_.reset();
-	}
+    Renderer &renderer_;
+    Plugin::ComplexPlugin &plugin_;
+    OpenGLContext openGlContext_;
+    OpenGlWrapper openGl_{ openGlContext_ };
+    utils::up<Shaders> shaders_;
+    std::vector<std::tuple<OpenGlAllocatedResource, GLsizei, GLuint>> cleanupQueue_{};
+    std::atomic<bool> cleanupQueueLock_{};
+  };
 
-	void Renderer::startUI()
-	{
-		pimpl_->startUI();
-	}
+  Renderer::Renderer(Plugin::ComplexPlugin &plugin) : 
+    skinInstance_{ utils::up<Skin>::create() }, plugin_{ plugin }
+  {
+    // if this fails, make pimplStorage_ big/aligned enough so that the implementation can fit
+    // if only there were some way of backpropagating sizeof and alignof at compile time
+    static_assert(COMPLEX_IS_ALIGNED_TO(Renderer, pimplStorage_, alignof(Pimpl)) && sizeof(Pimpl) <= sizeof(pimplStorage_));
 
-	void Renderer::stopUI()
-	{
-		pimpl_->stopUI();
+    pimpl_ = new(pimplStorage_) Pimpl{ *this, plugin };
 
-		topLevelComponent_ = nullptr;
-		//gui_ = nullptr;
-	}
+    uiRelated.renderer = this;
+    uiRelated.skin = skinInstance_.get();
+    gui_ = utils::up<MainInterface>::create();
+  }
 
-	void Renderer::updateFullGui()
-	{
-		if (gui_ == nullptr)
-			return;
+  Renderer::~Renderer() noexcept
+  {
+    pimpl_->~Pimpl();
+  }
 
-		gui_->updateAllValues();
-		gui_->reset();
-	}
+  void Renderer::startUI()
+  {
+    pimpl_->startUI();
+  }
 
-	void Renderer::setGuiScale(double scale)
-	{
-		if (gui_ == nullptr || topLevelComponent_ == nullptr)
-			return;
+  void Renderer::stopUI()
+  {
+    pimpl_->stopUI();
 
-		auto windowWidth = gui_->getWidth();
-		auto windowHeight = gui_->getHeight();
-		auto clampedScale = clampScaleFactorToFit(scale, windowWidth, windowHeight);
+    topLevelComponent_ = nullptr;
+  }
 
-		Framework::LoadSave::saveWindowScale(scale);
-		gui_->setScaling((float)scale);
-		topLevelComponent_->setSize((int)std::round(windowWidth * clampedScale),
-			(int)std::round(windowHeight * clampedScale));
-	}
+  void Renderer::reloadSkin(utils::up<Skin> skin)
+  {
+    skinInstance_ = COMPLEX_MOV(skin);
+    uiRelated.skin = skinInstance_.get();
+    juce::Rectangle<int> bounds = gui_->getBounds();
+    // TODO: trigger repaint in a more uhhh efficient manner
+    gui_->setBounds(0, 0, bounds.getWidth() / 4, bounds.getHeight() / 4);
+    gui_->setBounds(bounds);
+  }
 
-	double Renderer::clampScaleFactorToFit(double desiredScale, int windowWidth, int windowHeight) const
-	{
-		// the available display area on screen for the window - border thickness
-		Rectangle<int> displayArea = Desktop::getInstance().getDisplays().getTotalBounds(true);
-		if (auto *peer = gui_->getPeer())
-			peer->getFrameSize().subtractFrom(displayArea);
+  void Renderer::updateFullGui()
+  {
+    if (gui_ == nullptr)
+      return;
 
-		auto displayWidth = (double)displayArea.getWidth();
-		auto displayHeight = (double)displayArea.getHeight();
+    gui_->updateAllValues();
+  }
 
-		double scaledWindowWidth = desiredScale * windowWidth;
-		double scaledWindowHeight = desiredScale * windowHeight;
+  void Renderer::setGuiScale(double scale)
+  {
+    if (gui_ == nullptr || topLevelComponent_ == nullptr)
+      return;
 
-		if (scaledWindowWidth > displayWidth)
-		{
-			desiredScale *= displayWidth / scaledWindowWidth;
-			scaledWindowHeight = desiredScale * windowHeight;
-		}
+    auto windowWidth = gui_->getWidth();
+    auto windowHeight = gui_->getHeight();
+    clampScaleWidthHeight(scale, windowWidth, windowHeight);
 
-		if (scaledWindowHeight > displayHeight)
-			desiredScale *= displayHeight / scaledWindowHeight;
+    Framework::LoadSave::saveWindowScale(scale);
+    uiRelated.scale = (float)scale;
+    topLevelComponent_->setSize((int)std::round(windowWidth * scale),
+      (int)std::round(windowHeight * scale));
+  }
 
-		return desiredScale;
-	}
+  void Renderer::clampScaleWidthHeight(double &desiredScale, int &windowWidth, int &windowHeight) const
+  {
+    // the available display area on screen for the window - border thickness
+    juce::Rectangle<int> displayArea = Desktop::getInstance().getDisplays().getTotalBounds(true);
+    if (auto *peer = gui_->getPeer())
+      if (auto frame = peer->getFrameSizeIfPresent())
+        frame->subtractFrom(displayArea);
 
-	MainInterface *Renderer::getGui() noexcept { return gui_.get(); }
-	Skin *Renderer::getSkin() noexcept { return skinInstance_.get(); }
-	
-	void Renderer::pushOpenGlComponentToDelete(OpenGlComponent *openGlComponent)
-	{ pimpl_->pushOpenGlComponentToDelete(openGlComponent); }
+    desiredScale = std::floor(std::clamp(desiredScale, 
+      (double)kMinWindowScaleFactor, (double)kMaxWindowScaleFactor) * 4.0) * 0.25;
+
+    auto clampScaleToDisplay = [&](double min, double display)
+    {
+      while (min * desiredScale > display)
+      {
+        if (desiredScale == kMinWindowScaleFactor)
+          break;
+        desiredScale -= kWindowScaleIncrements;
+      }
+    };
+
+    double displayWidth = displayArea.getWidth();
+    clampScaleToDisplay(kMinWidth, displayWidth);
+
+    while (desiredScale * windowWidth > displayWidth)
+    {
+      if (windowWidth <= kMinWidth)
+      {
+        windowWidth = kMinWidth;
+        break;
+      }
+      windowWidth -= kAddedWidthPerLane;
+    }
+
+    double displayHeight = displayArea.getHeight();
+    clampScaleToDisplay(kMinHeight, displayHeight);
+
+    windowHeight = std::clamp(windowHeight, kMinHeight, (int)std::floor(displayHeight / desiredScale));
+  }
+
+  MainInterface *Renderer::getGui() noexcept { return gui_.get(); }
+  Skin *Renderer::getSkin() noexcept { return skinInstance_.get(); }
+  std::atomic<bool> &Renderer::getRenderLock() noexcept { return pimpl_->getRenderLock(); }
+  
+  void Renderer::pushOpenGlResourceToDelete(OpenGlAllocatedResource type, GLsizei n, GLuint id)
+  { pimpl_->pushOpenGlResourceToDelete(type, n, id); }
+  void Renderer::setIsResizing(bool isResizing) noexcept { pimpl_->setIsResizing(isResizing); }
 }

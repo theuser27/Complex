@@ -1,6 +1,5 @@
 cmake_minimum_required(VERSION 3.24)
-
-project("Complex" VERSION 0.7.3 LANGUAGES CXX)
+project("Complex" VERSION 0.0.9 LANGUAGES CXX C)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED true)
 set_property(GLOBAL PROPERTY USE_FOLDERS true)
@@ -62,7 +61,7 @@ option(COMPLEX_USE_INTEL_IPP "Avaliable on Windows and Linux if you have oneAPI 
 if(COMPLEX_USE_INTEL_IPP)
 	find_package(IPP)
 	if(IPP_FOUND)
-  	target_link_libraries(${TargetName} PRIVATE IPP::ipps)
+  		target_link_libraries(${TargetName} PRIVATE IPP::ipps)
 		target_compile_definitions(${TargetName} PRIVATE INTEL_IPP=1)
 	endif()
 endif()

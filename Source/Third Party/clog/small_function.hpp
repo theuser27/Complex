@@ -5,44 +5,30 @@
 
 #pragma once
 
-#include <stdexcept>
 #include <cstddef>
-#include <utility>
+#include <cstdlib>
+#include <type_traits>
 
 namespace clg 
 {
-  class bad_function_call final : public std::exception
-  {
-  public:
-    bad_function_call() noexcept = default;
-
-    [[nodiscard]] const char *what() const noexcept override
-    {
-      // return pointer to message string
-      return "bad function call";
-    }
-  };
-
   template <typename Signature, size_t MaxSize = 32>
   class small_function;
 
+  #define FWD(...) static_cast<decltype(__VA_ARGS__)&&>(__VA_ARGS__)
+  #define MOV(...) static_cast<std::remove_reference_t<decltype(__VA_ARGS__)>&&>(__VA_ARGS__)
+
   namespace detail 
   {
-    template <typename T> struct type_identity { using type = T; };
-
     //
     // Type trait to help disable the constructor/assignment taking
     // a forwarding reference when we want to do a copy/move instead
     //
     template<typename>
-    struct is_small_function : std::false_type {};
+    struct is_small_function { static constexpr bool value = false; };
 
     template<typename Signature, size_t MaxSize>
-    struct is_small_function<small_function<Signature, MaxSize>> : std::true_type {};
-
-    template <typename T>
-    inline constexpr auto is_small_function_v = is_small_function<T>::value;
-
+    struct is_small_function<small_function<Signature, MaxSize>> { static constexpr bool value = true; };
+    
     //
     // The vtable!
     //
@@ -51,69 +37,59 @@ namespace clg
     {
       using Copier = void (*)(void*, const void*);
       using Destroyer = void (*)(void*);
-      using Invoker = R (*)(const void*, Args&&...);
+      using Invoker = auto (*)(const void*, Args&&...) -> R;
       using Mover = void (*)(void*, void*);
 
-      constexpr vtable_t() noexcept
-        : copier{[](void*, const void*){}}
-        , destroyer{[](void*){}}
-        , invoker{&empty_invoke}
-        , mover{[](void*, void*){}}
+      template <typename FnT>
+      static constexpr vtable_t create() noexcept
       {
+        return vtable_t{ &copy<FnT>, &destroy<FnT>, &invoke<FnT>, &move<FnT> };
       }
 
       template <typename FnT>
-      constexpr vtable_t(detail::type_identity<FnT>) noexcept
-        : copier{&copy<FnT>}
-        , destroyer{&destroy<FnT>}
-        , invoker{&invoke<FnT>}
-        , mover{&move<FnT>}
+      static constexpr void copy(void* dest, const void* src)
       {
+        const auto& src_fn{ *static_cast<const FnT*>(src) };
+
+        ::new (dest) FnT{ src_fn };
       }
 
       template <typename FnT>
-      static auto copy(void* dest, const void* src) -> void
+      static constexpr void destroy(void* src)
       {
-        const auto& src_fn{*static_cast<const FnT*>(src)};
-
-        ::new (dest) FnT(src_fn);
-      }
-
-      template <typename FnT>
-      static auto destroy(void* src) -> void
-      {
-        auto& src_fn{*static_cast<FnT*>(src)};
+        auto& src_fn{ *static_cast<FnT*>(src) };
 
         src_fn.~FnT();
       }
 
       template <typename FnT>
-      static auto move(void* dest, void* src) -> void
+      static constexpr void move(void* dest, void* src)
       {
-        auto& src_fn{*static_cast<FnT*>(src)};
+        auto& src_fn{ *static_cast<FnT*>(src) };
 
-        ::new (dest) FnT(std::move(src_fn));
+        ::new (dest) FnT{ MOV(src_fn) };
 
         src_fn.~FnT();
       }
 
       template <typename FnT>
-      static auto invoke(const void* data, Args&&... args) -> R
+      static constexpr auto invoke(const void* data, Args&&... args) -> R
       {
-        const auto& fn{*static_cast<const FnT*>(data)};
+        const auto& fn{ *static_cast<const FnT*>(data) };
 
-        return fn(std::forward<Args>(args)...);
+        return fn(FWD(args)...);
       }
 
-      static auto empty_invoke(const void*, Args&&...) -> R
+      static constexpr auto empty_invoke(const void*, Args&&...) -> R
       {
-        throw bad_function_call();
+        // bad function call
+        std::abort();
       }
 
-      Copier copier{};
-      Destroyer destroyer{};
-      Invoker invoker{};
-      Mover mover{};
+      Copier copier = [](void*, const void*) { };
+      Destroyer destroyer = [](void*) { };
+      Invoker invoker = &empty_invoke;
+      Mover mover = [](void*, void*) { };
     };
 
     // Empty vtable which is used when small_function is empty
@@ -123,13 +99,13 @@ namespace clg
     template <std::size_t size, std::size_t alignment>
     struct aligned_storage 
     {
-      alignas(alignment) std::byte data[size];
+      alignas(alignment) unsigned char data[size];
     };
 
   } // detail
 
   template <typename R, typename... Args, size_t MaxSize>
-  class small_function<R(Args...), MaxSize>
+  class small_function<auto(Args...) -> R, MaxSize>
   {
   private:
     static constexpr std::size_t alignment = 8;
@@ -139,65 +115,49 @@ namespace clg
 
   public:
 
-    small_function() noexcept
-      : vtable_{std::addressof(detail::empty_vtable<R, Args...>)}
-    {
-    }
+    constexpr small_function() noexcept : vtable_{ &detail::empty_vtable<R, Args...> } { }
+    constexpr small_function(std::nullptr_t) noexcept : small_function{} { }
 
-    small_function(std::nullptr_t) noexcept
-      : vtable_{std::addressof(detail::empty_vtable<R, Args...>)}
-    {
-    }
+    constexpr small_function(const small_function& rhs) : vtable_{ rhs.vtable_ }
+    { vtable_->copier(&data_, &rhs.data_); }
 
-    small_function(const small_function& rhs)
-      : vtable_{rhs.vtable_}
+    constexpr small_function(small_function&& rhs) noexcept : vtable_{ rhs.vtable_ }
     {
-      vtable_->copier(std::addressof(data_), std::addressof(rhs.data_));
-    }
-
-    small_function(small_function&& rhs) noexcept
-      : vtable_{std::exchange(rhs.vtable_, std::addressof(detail::empty_vtable<R, Args...>))}
-    {
-      vtable_->mover(std::addressof(data_), std::addressof(rhs.data_));
+      rhs.vtable_ = &detail::empty_vtable<R, Args...>;
+      vtable_->mover(&data_, &rhs.data_);
     }
 
     //
     // This constructor is enabled only for function objects.
     // We make sure that is_small_function == false and that we can invoke it like R(Args...)
     //
-    template<typename FnT,
-      typename fn_t = std::decay_t<FnT>,
-      typename = std::enable_if_t<!detail::is_small_function_v<fn_t> && std::is_invocable_r_v<R, fn_t&, Args...>>>
-    small_function(FnT&& fn)
-    {
-      from_fn(std::forward<FnT>(fn));
-    }
+    template<typename FnT, typename fn_t = std::decay_t<FnT>> 
+      requires !detail::is_small_function<fn_t>::value && std::is_invocable_r_v<R, fn_t &, Args...>
+    constexpr small_function(FnT&& fn) { from_fn(FWD(fn)); }
 
-    ~small_function()
-    {
-      vtable_->destroyer(std::addressof(data_));
-    }
+    constexpr ~small_function() { vtable_->destroyer(&data_); }
 
-    auto operator=(const small_function& rhs) -> small_function&
+    constexpr auto operator=(const small_function& rhs) -> small_function&
     {
       vtable_ = rhs.vtable_;
-      vtable_->copier(std::addressof(data_), std::addressof(rhs.data_));
+      vtable_->copier(&data_, &rhs.data_);
 
       return *this;
     }
 
-    auto operator=(small_function&& rhs) noexcept -> small_function&
+    constexpr auto operator=(small_function&& rhs) noexcept -> small_function&
     {
-      vtable_ = std::exchange(rhs.vtable_, std::addressof(detail::empty_vtable<R, Args...>));
-      vtable_->mover(std::addressof(data_), std::addressof(rhs.data_));
+      vtable_ = rhs.vtable_;
+      rhs.vtable_ = &detail::empty_vtable<R, Args...>;
+      vtable_->mover(&data_, &rhs.data_);
 
       return *this;
     }
 
-    auto operator=(std::nullptr_t) -> small_function&
+    constexpr auto operator=(std::nullptr_t) -> small_function&
     {
-      vtable_->destroyer(std::addressof(data_));
-      vtable_ = std::addressof(detail::empty_vtable<R, Args...>);
+      vtable_->destroyer(&data_);
+      vtable_ = &detail::empty_vtable<R, Args...>;
 
       return *this;
     }
@@ -205,30 +165,22 @@ namespace clg
     //
     // This is the same enable_if as above
     //
-    template <typename FnT,
-      typename fn_t = std::decay_t<FnT>,
-      typename = std::enable_if_t<!detail::is_small_function_v<fn_t>&& std::is_invocable_r_v<R, fn_t&, Args...>>>
-    auto operator=(FnT&& fn) -> small_function&
+    template<typename FnT, typename fn_t = std::decay_t<FnT>>
+      requires !detail::is_small_function<fn_t>::value && std::is_invocable_r_v<R, fn_t &, Args...>
+    constexpr auto operator=(FnT&& fn) -> small_function&
     {
-      from_fn(std::forward<FnT>(fn));
+      from_fn(FWD(fn));
       return *this;
     }
 
-    template <typename FnT>
-    auto operator=(std::reference_wrapper<FnT> fn) -> small_function&
+    explicit constexpr operator bool() const noexcept
     {
-      from_fn(fn);
-      return *this;
+      return vtable_ != &detail::empty_vtable<R, Args...>;
     }
 
-    explicit operator bool() const noexcept
+    constexpr auto operator()(Args... args) const -> R
     {
-      return vtable_ != std::addressof(detail::empty_vtable<R, Args...>);
-    }
-
-    auto operator()(Args... args) const -> R
-    {
-      return vtable_->invoker(std::addressof(data_), std::forward<Args>(args)...);
+      return vtable_->invoker(&data_, FWD(args)...);
     }
 
   private:
@@ -237,33 +189,32 @@ namespace clg
     template<typename FnT>
     auto from_fn(FnT&& fn) -> void
     {
-      using fn_t = typename std::decay<FnT>::type;
+      using fn_t = std::decay_t<FnT>;
 
-      static_assert(std::is_copy_constructible<fn_t>::value,
-        "clg::small_function cannot be constructed from a non-copyable type"
-        );
+      static_assert(std::is_copy_constructible_v<fn_t>,
+        "clg::small_function cannot be constructed from a non-copyable type");
 
       static_assert(sizeof(fn_t) <= sizeof(storage_t),
-        "This object is too big to fit inside the clg::small_function"
-        );
+        "This object is too big to fit inside the clg::small_function");
 
       static_assert(alignof(storage_t) % alignof(fn_t) == 0,
-        "clg::small_function cannot be constructed from an object of this alignment"
-        );
+        "clg::small_function cannot be constructed from an object of this alignment");
 
       static_assert(alignof(storage_t) >= alignof(fn_t),
-        "clg::small_function does not support alignment higher the one defined in the class"
-        );
+        "clg::small_function does not support alignment higher the one defined in the class");
 
-      static const vtable_t vtable{detail::type_identity<fn_t>{}};
+      static constexpr auto vtable = vtable_t::template create<fn_t>();
 
-      ::new (std::addressof(data_)) fn_t(std::forward<FnT>(fn));
+      ::new (&data_) fn_t{ FWD(fn) };
 
-      vtable_ = std::addressof(vtable);
+      vtable_ = &vtable;
     }
 
     storage_t data_;
     const vtable_t* vtable_;
   };
+
+  #undef FWD
+  #undef MOV
 
 } //clg

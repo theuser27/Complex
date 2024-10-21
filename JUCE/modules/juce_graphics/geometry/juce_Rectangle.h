@@ -70,13 +70,21 @@ public:
     /** Creates a rectangle of zero size.
         The default coordinates will be (0, 0, 0, 0).
     */
-    Rectangle() = default;
+    constexpr Rectangle() = default;
 
     /** Creates a copy of another rectangle. */
-    Rectangle (const Rectangle&) = default;
+    constexpr Rectangle (const Rectangle&) = default;
 
     /** Creates a rectangle with a given position and size. */
-    Rectangle (ValueType initialX, ValueType initialY,
+    constexpr Rectangle(Point<ValueType> position,
+               ValueType width, ValueType height) noexcept
+      : pos(position),
+        w(width), h(height)
+    {
+    }
+
+    /** Creates a rectangle with a given position and size. */
+    constexpr Rectangle (ValueType initialX, ValueType initialY,
                ValueType width, ValueType height) noexcept
       : pos (initialX, initialY),
         w (width), h (height)
@@ -84,13 +92,13 @@ public:
     }
 
     /** Creates a rectangle with a given size, and a position of (0, 0). */
-    Rectangle (ValueType width, ValueType height) noexcept
+    constexpr Rectangle (ValueType width, ValueType height) noexcept
       : w (width), h (height)
     {
     }
 
     /** Creates a Rectangle from the positions of two opposite corners. */
-    Rectangle (Point<ValueType> corner1, Point<ValueType> corner2) noexcept
+    constexpr Rectangle (Point<ValueType> corner1, Point<ValueType> corner2) noexcept
       : pos (jmin (corner1.x, corner2.x),
              jmin (corner1.y, corner2.y)),
         w (corner1.x - corner2.x),
@@ -104,117 +112,117 @@ public:
         The right and bottom values must be larger than the left and top ones, or the resulting
         rectangle will have a negative size.
     */
-    static Rectangle leftTopRightBottom (ValueType left, ValueType top,
+    static constexpr Rectangle leftTopRightBottom (ValueType left, ValueType top,
                                          ValueType right, ValueType bottom) noexcept
     {
         return { left, top, right - left, bottom - top };
     }
 
     /** Creates a copy of another rectangle. */
-    Rectangle& operator= (const Rectangle&) = default;
+    constexpr Rectangle& operator= (const Rectangle&) = default;
 
     /** Destructor. */
     ~Rectangle() = default;
 
     //==============================================================================
     /** Returns true if the rectangle's width or height are zero or less */
-    bool isEmpty() const noexcept                                   { return w <= ValueType() || h <= ValueType(); }
+    constexpr bool isEmpty() const noexcept                                   { return w <= ValueType() || h <= ValueType(); }
 
     /** Returns true if the rectangle's values are all finite numbers, i.e. not NaN or infinity. */
-    inline bool isFinite() const noexcept                           { return pos.isFinite() && juce_isfinite (w) && juce_isfinite (h); }
-
-    /** Returns the x coordinate of the rectangle's left-hand-side. */
-    inline ValueType getX() const noexcept                          { return pos.x; }
-
-    /** Returns the y coordinate of the rectangle's top edge. */
-    inline ValueType getY() const noexcept                          { return pos.y; }
-
-    /** Returns the width of the rectangle. */
-    inline ValueType getWidth() const noexcept                      { return w; }
-
-    /** Returns the height of the rectangle. */
-    inline ValueType getHeight() const noexcept                     { return h; }
-
-    /** Returns the x coordinate of the rectangle's right-hand-side. */
-    inline ValueType getRight() const noexcept                      { return pos.x + w; }
+    constexpr bool isFinite() const noexcept                                  { return pos.isFinite() && juce_isfinite (w) && juce_isfinite (h); }
+                                                                              
+    /** Returns the x coordinate of the rectangle's left-hand-side. */        
+    constexpr ValueType getX() const noexcept                                 { return pos.x; }
+                                                                              
+    /** Returns the y coordinate of the rectangle's top edge. */              
+    constexpr ValueType getY() const noexcept                                 { return pos.y; }
+                                                                              
+    /** Returns the width of the rectangle. */                                
+    constexpr ValueType getWidth() const noexcept                             { return w; }
+                                                                              
+    /** Returns the height of the rectangle. */                               
+    constexpr ValueType getHeight() const noexcept                            { return h; }
+                                                                              
+    /** Returns the x coordinate of the rectangle's right-hand-side. */       
+    constexpr ValueType getRight() const noexcept                             { return pos.x + w; }
 
     /** Returns the y coordinate of the rectangle's bottom edge. */
-    inline ValueType getBottom() const noexcept                     { return pos.y + h; }
+    constexpr ValueType getBottom() const noexcept                            { return pos.y + h; }
 
     /** Returns the x coordinate of the rectangle's centre. */
-    ValueType getCentreX() const noexcept                           { return pos.x + w / (ValueType) 2; }
+    constexpr ValueType getCentreX() const noexcept                           { return pos.x + w / (ValueType) 2; }
 
     /** Returns the y coordinate of the rectangle's centre. */
-    ValueType getCentreY() const noexcept                           { return pos.y + h / (ValueType) 2; }
+    constexpr ValueType getCentreY() const noexcept                           { return pos.y + h / (ValueType) 2; }
 
     /** Returns the centre point of the rectangle. */
-    Point<ValueType> getCentre() const noexcept                     { return { pos.x + w / (ValueType) 2,
+    constexpr Point<ValueType> getCentre() const noexcept                     { return { pos.x + w / (ValueType) 2,
                                                                                pos.y + h / (ValueType) 2 }; }
 
     /** Returns the aspect ratio of the rectangle's width / height.
         If widthOverHeight is true, it returns width / height; if widthOverHeight is false,
         it returns height / width. */
-    ValueType getAspectRatio (bool widthOverHeight = true) const noexcept                           { return widthOverHeight ? w / h : h / w; }
+    constexpr ValueType getAspectRatio (bool widthOverHeight = true) const noexcept                 { return widthOverHeight ? w / h : h / w; }
 
     //==============================================================================
     /** Returns the rectangle's top-left position as a Point. */
-    inline Point<ValueType> getPosition() const noexcept                                            { return pos; }
+    constexpr Point<ValueType> getPosition() const noexcept                                         { return pos; }
 
     /** Changes the position of the rectangle's top-left corner (leaving its size unchanged). */
-    inline void setPosition (Point<ValueType> newPos) noexcept                                      { pos = newPos; }
+    constexpr void setPosition (Point<ValueType> newPos) noexcept                                   { pos = newPos; }
 
     /** Changes the position of the rectangle's top-left corner (leaving its size unchanged). */
-    inline void setPosition (ValueType newX, ValueType newY) noexcept                               { pos.setXY (newX, newY); }
+    constexpr void setPosition (ValueType newX, ValueType newY) noexcept                            { pos.setXY (newX, newY); }
 
     /** Returns the rectangle's top-left position as a Point. */
-    Point<ValueType> getTopLeft() const noexcept                                                    { return pos; }
+    constexpr Point<ValueType> getTopLeft() const noexcept                                          { return pos; }
 
     /** Returns the rectangle's top-right position as a Point. */
-    Point<ValueType> getTopRight() const noexcept                                                   { return { pos.x + w, pos.y }; }
+    constexpr Point<ValueType> getTopRight() const noexcept                                         { return { pos.x + w, pos.y }; }
 
     /** Returns the rectangle's bottom-left position as a Point. */
-    Point<ValueType> getBottomLeft() const noexcept                                                 { return { pos.x, pos.y + h }; }
+    constexpr Point<ValueType> getBottomLeft() const noexcept                                       { return { pos.x, pos.y + h }; }
 
     /** Returns the rectangle's bottom-right position as a Point. */
-    Point<ValueType> getBottomRight() const noexcept                                                { return { pos.x + w, pos.y + h }; }
+    constexpr Point<ValueType> getBottomRight() const noexcept                                      { return { pos.x + w, pos.y + h }; }
 
     /** Returns the rectangle's left and right positions as a Range. */
-    Range<ValueType> getHorizontalRange() const noexcept                                            { return Range<ValueType>::withStartAndLength (pos.x, w); }
+    constexpr Range<ValueType> getHorizontalRange() const noexcept                                  { return Range<ValueType>::withStartAndLength (pos.x, w); }
 
     /** Returns the rectangle's top and bottom positions as a Range. */
-    Range<ValueType> getVerticalRange() const noexcept                                              { return Range<ValueType>::withStartAndLength (pos.y, h); }
+    constexpr Range<ValueType> getVerticalRange() const noexcept                                    { return Range<ValueType>::withStartAndLength (pos.y, h); }
 
     /** Changes the rectangle's size, leaving the position of its top-left corner unchanged. */
-    void setSize (ValueType newWidth, ValueType newHeight) noexcept                                 { w = newWidth; h = newHeight; }
+    constexpr void setSize (ValueType newWidth, ValueType newHeight) noexcept                       { w = newWidth; h = newHeight; }
 
     /** Changes all the rectangle's coordinates. */
-    void setBounds (ValueType newX, ValueType newY,
+    constexpr void setBounds (ValueType newX, ValueType newY,
                     ValueType newWidth, ValueType newHeight) noexcept                               { pos.x = newX; pos.y = newY; w = newWidth; h = newHeight; }
 
     /** Changes the rectangle's X coordinate */
-    inline void setX (ValueType newX) noexcept                                                      { pos.x = newX; }
+    constexpr void setX (ValueType newX) noexcept                                                   { pos.x = newX; }
 
     /** Changes the rectangle's Y coordinate */
-    inline void setY (ValueType newY) noexcept                                                      { pos.y = newY; }
+    constexpr void setY (ValueType newY) noexcept                                                   { pos.y = newY; }
 
     /** Changes the rectangle's width */
-    inline void setWidth (ValueType newWidth) noexcept                                              { w = newWidth; }
+    constexpr void setWidth (ValueType newWidth) noexcept                                           { w = newWidth; }
 
     /** Changes the rectangle's height */
-    inline void setHeight (ValueType newHeight) noexcept                                            { h = newHeight; }
+    constexpr void setHeight (ValueType newHeight) noexcept                                         { h = newHeight; }
 
     /** Changes the position of the rectangle's centre (leaving its size unchanged). */
-    inline void setCentre (ValueType newCentreX, ValueType newCentreY) noexcept                     { pos.x = newCentreX - w / (ValueType) 2;
+    constexpr void setCentre (ValueType newCentreX, ValueType newCentreY) noexcept                  { pos.x = newCentreX - w / (ValueType) 2;
                                                                                                       pos.y = newCentreY - h / (ValueType) 2; }
 
     /** Changes the position of the rectangle's centre (leaving its size unchanged). */
-    inline void setCentre (Point<ValueType> newCentre) noexcept                                     { setCentre (newCentre.x, newCentre.y); }
+    constexpr void setCentre (Point<ValueType> newCentre) noexcept                                  { setCentre (newCentre.x, newCentre.y); }
 
     /** Changes the position of the rectangle's left and right edges. */
-    void setHorizontalRange (Range<ValueType> range) noexcept                                       { pos.x = range.getStart(); w = range.getLength(); }
+    constexpr void setHorizontalRange (Range<ValueType> range) noexcept                             { pos.x = range.getStart(); w = range.getLength(); }
 
     /** Changes the position of the rectangle's top and bottom edges. */
-    void setVerticalRange (Range<ValueType> range) noexcept                                         { pos.y = range.getStart(); h = range.getLength(); }
+    constexpr void setVerticalRange (Range<ValueType> range) noexcept                               { pos.y = range.getStart(); h = range.getLength(); }
 
     /** Returns a rectangle which has the same size and y-position as this one, but with a different x-position. */
     [[nodiscard]] Rectangle withX (ValueType newX) const noexcept                                  { return { newX, pos.y, w, h }; }

@@ -8,9 +8,11 @@
   ==============================================================================
 */
 
-#include "BorderBoundsConstrainer.h"
-#include "Framework/load_save.h"
-#include "../Sections/MainInterface.h"
+#include "BorderBoundsConstrainer.hpp"
+
+#include "Framework/load_save.hpp"
+#include "Plugin/Renderer.hpp"
+#include "../Sections/MainInterface.hpp"
 
 namespace Interface
 {
@@ -28,15 +30,22 @@ namespace Interface
     // TODO: make resizing snap horizontally to the width of individual lanes 
   }
 
-  void BorderBoundsConstrainer::resizeEnd()
+  void BorderBoundsConstrainer::resizeStart()
   {
-    if (!gui_)
+    if (!renderer_)
       return;
 
-    auto [unscaledWidth, unscaledHeight] = unscaleDimensions(gui_->getWidth(), gui_->getHeight(), gui_->getScaling());
+    renderer_->setIsResizing(true);
+  }
+
+  void BorderBoundsConstrainer::resizeEnd()
+  {
+    if (!gui_ || !renderer_)
+      return;
+
+    auto [unscaledWidth, unscaledHeight] = unscaleDimensions(gui_->getWidth(), gui_->getHeight(), uiRelated.scale);
     Framework::LoadSave::saveWindowSize(unscaledWidth, unscaledHeight);
 
-    if (resizableBorder_)
-      resizableBorder_->setBounds(gui_->getParentComponent()->getLocalBounds());
+    renderer_->setIsResizing(false);
   }
 }

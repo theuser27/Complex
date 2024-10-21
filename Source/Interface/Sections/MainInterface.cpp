@@ -1,144 +1,144 @@
 /*
-	==============================================================================
+  ==============================================================================
 
-		MainInterface.cpp
-		Created: 10 Oct 2022 6:02:52pm
-		Author:  theuser27
+    MainInterface.cpp
+    Created: 10 Oct 2022 6:02:52pm
+    Author:  theuser27
 
-	==============================================================================
+  ==============================================================================
 */
 
-#include "Generation/SoundEngine.h"
-#include "Plugin/Complex.h"
-#include "Plugin/Renderer.h"
-#include "../LookAndFeel/DefaultLookAndFeel.h"
-#include "Popups.h"
-#include "MainInterface.h"
-#include "HeaderFooterSections.h"
-#include "EffectsStateSection.h"
+#include "MainInterface.hpp"
+
+#include "Plugin/Complex.hpp"
+#include "Plugin/Renderer.hpp"
+#include "Popups.hpp"
+#include "HeaderFooterSections.hpp"
+#include "EffectsStateSection.hpp"
 
 namespace Interface
 {
-	MainInterface::MainInterface(Renderer *renderer) : BaseSection(typeid(MainInterface).name())
-	{
-		renderer_ = renderer;
+  MainInterface::MainInterface() : BaseSection{ "Main Interface" }
+  {
+    headerFooter_ = utils::up<HeaderFooterSections>::create(uiRelated.renderer->getPlugin().getSoundEngine());
+    addSubOpenGlContainer(headerFooter_.get());
 
-		headerFooter_ = std::make_unique<HeaderFooterSections>(renderer->getPlugin().getSoundEngine());
-		addSubSection(headerFooter_.get());
+    effectsStateSection_ = utils::up<EffectsStateSection>::create(uiRelated.renderer->getPlugin().getEffectsState());
+    addSubOpenGlContainer(effectsStateSection_.get());
 
-		effectsStateSection_ = std::make_unique<EffectsStateSection>(
-			renderer->getPlugin().getSoundEngine().getEffectsState());
-		addSubSection(effectsStateSection_.get());
+    popupSelector_ = utils::up<PopupSelector>::create();
+    addSubOpenGlContainer(popupSelector_.get());
+    popupSelector_->setVisible(false);
+    popupSelector_->setAlwaysOnTop(true);
+    popupSelector_->setWantsKeyboardFocus(true);
 
-		popupSelector_ = std::make_unique<SinglePopupSelector>();
-		addSubSection(popupSelector_.get());
-		popupSelector_->setVisible(false);
-		popupSelector_->setAlwaysOnTop(true);
-		popupSelector_->setWantsKeyboardFocus(true);
+    popupDisplay1_ = utils::up<PopupDisplay>::create();
+    addSubOpenGlContainer(popupDisplay1_.get());
+    popupDisplay1_->setVisible(false);
+    popupDisplay1_->setAlwaysOnTop(true);
+    popupDisplay1_->setWantsKeyboardFocus(false);
 
-		dualPopupSelector_ = std::make_unique<DualPopupSelector>();
-		addSubSection(dualPopupSelector_.get());
-		dualPopupSelector_->setVisible(false);
-		dualPopupSelector_->setAlwaysOnTop(true);
-		dualPopupSelector_->setWantsKeyboardFocus(true);
+    popupDisplay2_ = utils::up<PopupDisplay>::create();
+    addSubOpenGlContainer(popupDisplay2_.get());
+    popupDisplay2_->setVisible(false);
+    popupDisplay2_->setAlwaysOnTop(true);
+    popupDisplay2_->setWantsKeyboardFocus(false);
 
-		popupDisplay1_ = std::make_unique<PopupDisplay>();
-		addSubSection(popupDisplay1_.get());
-		popupDisplay1_->setVisible(false);
-		popupDisplay1_->setAlwaysOnTop(true);
-		popupDisplay1_->setWantsKeyboardFocus(false);
+    popupSelector_->toFront(true);
+    popupDisplay1_->toFront(true);
+    popupDisplay2_->toFront(true);
 
-		popupDisplay2_ = std::make_unique<PopupDisplay>();
-		addSubSection(popupDisplay2_.get());
-		popupDisplay2_->setVisible(false);
-		popupDisplay2_->setAlwaysOnTop(true);
-		popupDisplay2_->setWantsKeyboardFocus(false);
+    setOpaque(false);
+  }
 
-		popupSelector_->toFront(true);
-		dualPopupSelector_->toFront(true);
-		popupDisplay1_->toFront(true);
-		popupDisplay2_->toFront(true);
+  MainInterface::~MainInterface() = default;
 
-		setOpaque(false);
-	}
+  void MainInterface::resized()
+  {
+    backgroundColour_ = getColour(Skin::kBackground);
 
-	MainInterface::~MainInterface() = default;
+    int width = getWidth();
+    int height = getHeight();
 
-	void MainInterface::reloadSkin(const Skin &skin)
-	{
-		skin.copyValuesToLookAndFeel(DefaultLookAndFeel::instance());
-		juce::Rectangle<int> bounds = getBounds();
-		// triggering repainting like a boss
-		setBounds(0, 0, bounds.getWidth() / 4, bounds.getHeight() / 4);
-		setBounds(bounds);
-	}
+    popupSelector_->setBounds(0, 0, width, height);
+    headerFooter_->setBounds(0, 0, width, height);
 
-	void MainInterface::resized()
-	{
-		int width = getWidth();
-		int height = getHeight();
+    int effectsStateXStart = scaleValueRoundInt(kHWindowEdgeMargin);
+    int effectsStateYStart = scaleValueRoundInt(kHeaderHeight +
+      kMainVisualiserHeight + kVGlobalMargin);
+    int effectsStateWidth = scaleValueRoundInt(kEffectsStateMinWidth);
+    int effectsStateHeight = getHeight() - effectsStateYStart - 
+      scaleValueRoundInt(kLaneToBottomSettingsMargin + kFooterHeight);
+    auto bounds = juce::Rectangle{ effectsStateXStart, effectsStateYStart,
+      effectsStateWidth, effectsStateHeight };
 
-		headerFooter_->setBounds(0, 0, width, height);
+    effectsStateSection_->setBounds(bounds);
+  }
 
-		int effectsStateXStart = scaleValueRoundInt(kHorizontalWindowEdgeMargin);
-		int effectsStateYStart = scaleValueRoundInt(kHeaderHeight +
-			kMainVisualiserHeight + kVerticalGlobalMargin);
-		int effectsStateWidth = scaleValueRoundInt(kEffectsStateMinWidth);
-		int effectsStateHeight = getHeight() - effectsStateYStart - 
-			scaleValueRoundInt(kLaneToBottomSettingsMargin + kFooterHeight);
-		juce::Rectangle bounds{ effectsStateXStart, effectsStateYStart, effectsStateWidth, effectsStateHeight };
+  void MainInterface::renderOpenGlComponents(OpenGlWrapper &openGl)
+  {
+    juce::Colour backgroundColour = backgroundColour_;
+    juce::gl::glClearColor(backgroundColour.getFloatRed(), backgroundColour.getFloatGreen(), 
+      backgroundColour.getFloatBlue(), 1.0f);
+    juce::gl::glClear(juce::gl::GL_COLOR_BUFFER_BIT);
 
-		effectsStateSection_->setBounds(bounds);
-	}
+    COMPLEX_ASSERT(openGl.parentStack.empty());
 
-	void MainInterface::reset()
-	{
-		BaseSection::reset();
-		//modulationChanged();
-		/*if (effects_interface_ && effects_interface_->isVisible())
-			effects_interface_->redoBackgroundImage();*/
-	}
+    openGl.parentStack.emplace_back(this, getBoundsSafe(), true);
+    openGl.parentStack.emplace_back(ScopedBoundsEmplace::doNotAddFlag);
+    openGl.topLevelHeight = getHeightSafe();
 
-	void MainInterface::renderOpenGlComponents(OpenGlWrapper &openGl, bool animate)
-	{
-		utils::ScopedLock g{ renderLock_, utils::WaitMechanism::WaitNotify };
-		BaseSection::renderOpenGlComponents(openGl, animate);
-	}
+    BaseSection::renderOpenGlComponents(openGl);
 
-	void MainInterface::popupSelector(const BaseComponent *source, juce::Point<int> position, PopupItems options, 
-		Skin::SectionOverride skinOverride, std::function<void(int)> callback, std::function<void()> cancel)
-	{
-		popupSelector_->setPopupSkinOverride(skinOverride);
-		popupSelector_->setCallback(std::move(callback));
-		popupSelector_->setCancelCallback(std::move(cancel));
-		popupSelector_->showSelections(std::move(options));
-		juce::Rectangle bounds{ 0, 0, getWidth(), getHeight() };
-		popupSelector_->setPosition(getLocalPoint(source, position), bounds);
-		popupSelector_->setVisible(true);
-	}
+    openGl.parentStack.pop_back();
+  }
 
-	void MainInterface::dualPopupSelector(BaseComponent *source, juce::Point<int> position, int width,
-		const PopupItems &options, std::function<void(int)> callback)
-	{
-		dualPopupSelector_->setCallback(std::move(callback));
-		dualPopupSelector_->showSelections(options);
-		juce::Rectangle bounds{ 0, 0, getWidth(), getHeight() };
-		dualPopupSelector_->setPosition(getLocalPoint(source, position), width, bounds);
-		dualPopupSelector_->setVisible(true);
-	}
+  void MainInterface::popupSelector(const BaseComponent *source, juce::Point<int> position, PopupItems options, 
+    Skin::SectionOverride skinOverride, std::function<void(int)> callback, std::function<void()> cancel, int minWidth)
+  {
+    popupSelector_->setPopupSkinOverride(skinOverride);
+    popupSelector_->setComponent(source);
+    popupSelector_->setCallback(COMPLEX_MOV(callback));
+    popupSelector_->setCancelCallback(COMPLEX_MOV(cancel));
+    popupSelector_->setItems(COMPLEX_MOV(options), minWidth);
+    popupSelector_->positionList(getLocalPoint(source, position));
+    popupSelector_->setVisible(true);
+  }
 
-	void MainInterface::popupDisplay(BaseComponent *source, juce::String text,
-		BubblePlacement placement, bool primary, Skin::SectionOverride sectionOverride)
-	{
-		PopupDisplay *display = primary ? popupDisplay1_.get() : popupDisplay2_.get();
-		display->setContent(std::move(text), getLocalArea(source, source->getLocalBounds()), placement, sectionOverride);
-		display->setVisible(true);
-	}
+  void MainInterface::popupSelector(const BaseComponent *source, Placement placement, PopupItems options,
+    Skin::SectionOverride skinOverride, std::function<void(int)> callback, std::function<void()> cancel, int minWidth)
+  {
+    popupSelector_->setPopupSkinOverride(skinOverride);
+    popupSelector_->setComponent(source);
+    popupSelector_->setCallback(COMPLEX_MOV(callback));
+    popupSelector_->setCancelCallback(COMPLEX_MOV(cancel));
+    popupSelector_->setItems(COMPLEX_MOV(options), minWidth);
+    popupSelector_->positionList(getLocalArea(source, source->getLocalBounds()), placement);
+    popupSelector_->setVisible(true);
+  }
 
-	void MainInterface::hideDisplay(bool primary)
-	{
-		PopupDisplay *display = primary ? popupDisplay1_.get() : popupDisplay2_.get();
-		if (display)
-			display->setVisible(false);
-	}
+  void MainInterface::hidePopupSelector()
+  {
+    popupSelector_->setVisible(false);
+    popupSelector_->setPopupSkinOverride(Skin::kNone);
+    popupSelector_->setComponent(nullptr);
+    popupSelector_->setCallback({});
+    popupSelector_->setCancelCallback({});
+    popupSelector_->resetState();
+  }
+
+  void MainInterface::popupDisplay(BaseComponent *source, juce::String text,
+    Placement placement, bool primary, Skin::SectionOverride sectionOverride)
+  {
+    PopupDisplay *display = primary ? popupDisplay1_.get() : popupDisplay2_.get();
+    display->setContent(COMPLEX_MOV(text), getLocalArea(source, source->getLocalBounds()),
+      getBounds(), placement, sectionOverride);
+    display->setVisible(true);
+  }
+
+  void MainInterface::hideDisplay(bool primary)
+  {
+    PopupDisplay *display = primary ? popupDisplay1_.get() : popupDisplay2_.get();
+    display->setVisible(false);
+  }
 }

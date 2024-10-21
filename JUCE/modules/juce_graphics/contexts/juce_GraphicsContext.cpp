@@ -507,9 +507,9 @@ void Graphics::drawFittedText (const String& text, int x, int y, int width, int 
 }
 
 //==============================================================================
-void Graphics::fillRect (Rectangle<int> r) const
+void Graphics::fillRect (Rectangle<int> r, bool replaceExistingContents) const
 {
-    context.fillRect (r, false);
+    context.fillRect (r, replaceExistingContents);
 }
 
 void Graphics::fillRect (Rectangle<float> r) const

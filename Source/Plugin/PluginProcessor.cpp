@@ -1,55 +1,56 @@
 /*
-	==============================================================================
+  ==============================================================================
 
-		This file contains the basic framework code for a JUCE plugin processor.
+    This file contains the basic framework code for a JUCE plugin processor.
 
-	==============================================================================
+  ==============================================================================
 */
 
-#include "Framework/parameter_value.h"
-#include "Framework/parameter_bridge.h"
-#include "Generation/SoundEngine.h"
-#include "PluginProcessor.h"
-#include "PluginEditor.h"
-#include "Renderer.h"
+#include "PluginProcessor.hpp"
 
-//==============================================================================
-ComplexAudioProcessor::ComplexAudioProcessor() :
-	AudioProcessor (BusesProperties().withInput ("Input",  juce::AudioChannelSet::stereo(), true)
-																	 .withOutput("Output", juce::AudioChannelSet::stereo(), true))
+#include "Framework/parameter_value.hpp"
+#include "Framework/parameter_bridge.hpp"
+#include "Framework/load_save.hpp"
+#include "Generation/SoundEngine.hpp"
+#include "PluginEditor.hpp"
+#include "Renderer.hpp"
+
+ComplexAudioProcessor::ComplexAudioProcessor(size_t parameterMappings, u32 inSidechains, u32 outSidechains) : 
+  ComplexPlugin{ inSidechains, outSidechains }, AudioProcessor{ [&]()
+    {
+      BusesProperties buses{};
+
+      buses.addBus(true, "Input", juce::AudioChannelSet::stereo(), true);
+      buses.addBus(false, "Output", juce::AudioChannelSet::stereo(), true);
+
+      if (!juce::JUCEApplicationBase::isStandaloneApp())
+      {
+        for (size_t i = 0; i < inSidechains; ++i)
+          buses.addBus(true, juce::String{ "Sidechain In " } + juce::String{ i + 1 }, juce::AudioChannelSet::stereo(), true);
+        
+        for (size_t i = 0; i < outSidechains; ++i)
+          buses.addBus(false, juce::String{ "Sidechain Out " } + juce::String{ i + 1 }, juce::AudioChannelSet::stereo(), true);
+      }
+
+      return buses;
+    }()
+  }
 
 {
-	using namespace Framework;
+  parameterBridges_.reserve(parameterMappings);
+  for (u64 i = 0; i < parameterMappings; ++i)
+  {
+    auto *bridge = new Framework::ParameterBridge(this, i);
+    parameterBridges_.push_back(bridge);
+    addParameter(bridge);
+  }
 
-	static_assert(kMaxParameterMappings >= 64, "If you want to lower the number of available parameter mappings, \
-		this might break compatibility with save files inside projects and presets. Comment out this assert if you're aware of the risk.");
-
-	constexpr auto pluginParameterStrings = BaseProcessors::SoundEngine::enum_names<nested_enum::OuterNodes>(false);
-	parameterBridges_.reserve(kMaxParameterMappings + pluginParameterStrings.size());
-
-	for (std::string_view parameterName : pluginParameterStrings)
-	{
-		if (auto *parameter = getProcessorParameter(soundEngine_->getProcessorId(), parameterName))
-		{
-			auto *bridge = new ParameterBridge(this, UINT64_MAX, parameter->getParameterLink());
-			parameterBridges_.push_back(bridge);
-			addParameter(bridge);
-		}
-	}
-
-	for (u32 i = 0; i < kMaxParameterMappings; i++)
-	{
-		auto *bridge = new ParameterBridge(this, i);
-		parameterBridges_.push_back(bridge);
-		addParameter(bridge);
-	}
-
-	utils::loadLibraries();
+  utils::loadLibraries();
 }
 
 ComplexAudioProcessor::~ComplexAudioProcessor()
 {
-	utils::unloadLibraries();
+  utils::unloadLibraries();
 }
 
 //==============================================================================
@@ -67,50 +68,51 @@ void ComplexAudioProcessor::changeProgramName([[maybe_unused]] int index, [[mayb
 //==============================================================================
 void ComplexAudioProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
 {
-	Initialise((float)sampleRate, samplesPerBlock);
-	setLatencySamples((int)getProcessingDelay());
+  if (!isLoaded_.load(std::memory_order_acquire))
+    return;
+
+  initialise((float)sampleRate, samplesPerBlock);
+  setLatencySamples((int)getProcessingDelay());
 }
 
 void ComplexAudioProcessor::releaseResources()
 {
-	// When playback stops, you can use this as an opportunity to free up any
-	// spare memory, etc.
+  // When playback stops, you can use this as an opportunity to free up any
+  // spare memory, etc.
 }
 
 bool ComplexAudioProcessor::isBusesLayoutSupported (const BusesLayout& layouts) const
 {
-	// This is the place where you check if the layout is supported.
-	// In this template code we only support mono or stereo.
-	// Some plugin hosts, such as certain GarageBand versions, will only
-	// load plugins that support stereo bus layouts.
-	if (layouts.getMainOutputChannelSet() != juce::AudioChannelSet::mono()
-		&& layouts.getMainOutputChannelSet() != juce::AudioChannelSet::stereo())
-		return false;
+  // This is the place where you check if the layout is supported.
+  // In this template code we only support mono or stereo.
+  // Some plugin hosts, such as certain GarageBand versions, will only
+  // load plugins that support stereo bus layouts.
+  if (layouts.getMainOutputChannelSet() != juce::AudioChannelSet::mono()
+    && layouts.getMainOutputChannelSet() != juce::AudioChannelSet::stereo())
+    return false;
 
-	// This checks if the input layout matches the output layout
-#if ! JucePlugin_IsSynth
-	if (layouts.getMainOutputChannelSet() != layouts.getMainInputChannelSet())
-		return false;
-#endif
+  // This checks if the input layout matches the output layout
+  if (layouts.getMainOutputChannelSet() != layouts.getMainInputChannelSet())
+    return false;
 
-	return true;
+  return true;
 }
 
 void ComplexAudioProcessor::processBlock (juce::AudioBuffer<float> &buffer, [[maybe_unused]] juce::MidiBuffer& midiMessages)
 {
-	juce::ScopedNoDenormals noDenormals;
+  juce::ScopedNoDenormals noDenormals;
 
-	auto inputs = getTotalNumInputChannels();
-	auto outputs = getTotalNumOutputChannels();
-	auto numSamples = buffer.getNumSamples();
+  auto inputs = getTotalNumInputChannels();
+  auto outputs = getTotalNumOutputChannels();
+  auto numSamples = buffer.getNumSamples();
 
-	auto sampleRate = ComplexPlugin::getSampleRate();
-	updateParameters(UpdateFlag::BeforeProcess, sampleRate);
-	setLatencySamples((int)getProcessingDelay());
+  auto sampleRate = ComplexPlugin::getSampleRate();
+  updateParameters(UpdateFlag::BeforeProcess, sampleRate);
+  setLatencySamples((int)getProcessingDelay());
 
-	Process(buffer.getArrayOfWritePointers(), (u32)numSamples, sampleRate, (u32)inputs, (u32)outputs);
+  process(buffer.getArrayOfWritePointers(), (u32)numSamples, sampleRate, (u32)inputs, (u32)outputs);
 
-	updateParameters(UpdateFlag::AfterProcess, sampleRate);
+  updateParameters(UpdateFlag::AfterProcess, sampleRate);
 }
 
 //==============================================================================
@@ -118,14 +120,16 @@ bool ComplexAudioProcessor::hasEditor() const { return true; }
 
 juce::AudioProcessorEditor* ComplexAudioProcessor::createEditor()
 {
-	auto *editor = new ComplexAudioProcessorEditor(*this);
-	rendererInstance_->setEditor(editor);
-	return editor;
+  auto *editor = new ComplexAudioProcessorEditor(*this);
+  getRenderer().setEditor(editor);
+  return editor;
 }
 
 //==============================================================================
-
-
-//==============================================================================
 // This creates new instances of the plugin..
-juce::AudioProcessor* JUCE_CALLTYPE createPluginFilter() { return new ComplexAudioProcessor(); }
+juce::AudioProcessor* JUCE_CALLTYPE createPluginFilter()
+{
+  auto [parameterMappings, inSidechains, outSidechains] = 
+    Framework::LoadSave::getParameterMappingsAndSidechains();
+  return new ComplexAudioProcessor(parameterMappings, (u32)inSidechains, (u32)outSidechains);
+}

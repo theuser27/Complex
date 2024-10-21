@@ -8,15 +8,15 @@
   ==============================================================================
 */
 
-#include "Spectrogram.h"
+#include "Spectrogram.hpp"
 
-#include "Framework/utils.h"
-#include "Framework/spectral_support_functions.h"
-#include "../LookAndFeel/Skin.h"
-#include "OpenGlMultiQuad.h"
-#include "../Sections/BaseSection.h"
-#include "Plugin/Complex.h"
-#include "Plugin/Renderer.h"
+#include "Framework/utils.hpp"
+#include "Framework/simd_math.hpp"
+#include "Plugin/Complex.hpp"
+#include "Plugin/Renderer.hpp"
+#include "../LookAndFeel/Skin.hpp"
+#include "OpenGlQuad.hpp"
+#include "../Sections/BaseSection.hpp"
 
 namespace
 {
@@ -38,7 +38,7 @@ namespace
   #endif
   }
 
-  template<auto function = [](simd_float &, simd_float &){}>
+  template<auto function = [](simd_float &, simd_float &) { }>
   strict_inline void vector_call midSide(simd_float &one, simd_float &two)
   {
   #if COMPLEX_SSE4_1
@@ -61,19 +61,24 @@ namespace
 
 namespace Interface
 {
-  Spectrogram::Spectrogram(String name) : OpenGlComponent(std::move(name))
+  Spectrogram::Spectrogram(String name) : OpenGlComponent(COMPLEX_MOV(name))
   {
     setInterceptsMouseClicks(true, false);
 
-    amplitudeRenderers_.reserve(kNumChannels);
-    for (size_t i = 0; i < kNumChannels; ++i)
+    auto maxBinCount = uiRelated.renderer->getPlugin().getMaxBinCount();
+    scratchBuffer_.reserve(kChannelsPerInOut, maxBinCount);
+    oldBuffer_.reserve(kChannelsPerInOut, maxBinCount);
+    oldBuffer2_.reserve(kChannelsPerInOut, maxBinCount);
+
+    amplitudeRenderers_.reserve(kChannelsPerInOut);
+    for (size_t i = 0; i < kChannelsPerInOut; ++i)
     {
       amplitudeRenderers_.emplace_back(std::make_unique<OpenGlLineRenderer>(kResolution));
       amplitudeRenderers_[i]->setFill(true);
     }
 
-    phaseRenderers_.reserve(kNumChannels);
-    for (size_t i = 0; i < kNumChannels / 2; ++i)
+    phaseRenderers_.reserve(kChannelsPerInOut);
+    for (size_t i = 0; i < kChannelsPerInOut / 2; ++i)
     {
       phaseRenderers_.emplace_back(std::make_unique<OpenGlLineRenderer>(kResolution));
       phaseRenderers_[i]->setFill(false);
@@ -84,10 +89,10 @@ namespace Interface
 
     background_.setInterceptsMouseClicks(false, false);
     background_.setTargetComponent(this);
-    background_.setPaintFunction([this](Graphics &g) { paintBackground(g); });
+    background_.setPaintFunction([this](Graphics &g, juce::Rectangle<int>) { paintBackground(g); });
   }
 
-  Spectrogram::~Spectrogram() = default;
+  Spectrogram::~Spectrogram() { destroy(); }
 
   void Spectrogram::resized()
   {
@@ -119,37 +124,42 @@ namespace Interface
     background_.redrawImage();
   }
 
-  bool Spectrogram::updateAmplitudes(bool shouldDisplayPhases, float minFrequency, float maxFrequency, float dbSlope)
+  void Spectrogram::mouseDown(const MouseEvent &e)
   {
-    static constexpr float log2ToLog10 = 1.0f / gcem::log10(2.0f);
-    static constexpr float kMinAmp = 0.00001f;
-    static constexpr simd_float defaultValue = { kMinAmp, 0.0f };
+    if (e.mods.isLeftButtonDown())
+      shouldInterpolateLines_ = !shouldInterpolateLines_.get();
+  }
 
-    auto bufferView = bufferView_.lock();
+  void Spectrogram::mouseDrag(const juce::MouseEvent &)
+  {
+    //if (e.mods.isRightButtonDown())
+
+  }
+
+  bool Spectrogram::updateAmplitudes(bool shouldDisplayPhases,
+    float startDecade, float decadeCount, float decadeSlope, float)
+  {
+    using namespace utils;
+
+    auto &bufferView = bufferView_.lock();
     if (bufferView.isEmpty())
     {
       bufferView_.unlock();
       return false;
     }
 
+    auto version = bufferView.getLock().versionFlag.load(std::memory_order_relaxed);
+    // some arbitrary large number it doesn't really matter
+    const simd_float expectedPhaseDifference = (float)(((1 << 16) + version - lastBufferVersion) & ((1 << 16) - 1));
+    lastBufferVersion = version;
+
     bool isDataPolar = isDataPolar_;
 
     COMPLEX_ASSERT(scratchBuffer_.getSimdChannels() == bufferView.getSimdChannels()
       && "Scratch buffer doesn't match the number of channels in memory");
 
-    dbSlope *= log2ToLog10;
-    float sampleHz = nyquistFreq_ / (float)binCount_;
-    float startOctave = std::log10(minFrequency / sampleHz);
-    float endOctave = std::log10(maxFrequency / sampleHz);
-    float numOctaves = endOctave - startOctave;
-    float maxBin = (float)binCount_ - 1.0f;
-    bool isInterpolating = shouldInterpolateLines_;
-    // yes these are magic numbers, change at own risk
-    float decay = 0.25f + std::max(0.0f, 0.05f * std::log2(2048.0f / (float)binCount_ - 1.0f));
-    simd_float scalingFactor = { 0.25f / (float)binCount_, 1.0f };
-    
     {
-      utils::ScopedLock g{ bufferView.getLock(), false, utils::WaitMechanism::Sleep };
+      utils::ScopedLock g{ bufferView.getLock(), false, WaitMechanism::Sleep };
       scratchBuffer_.copy(bufferView, 0, 0, binCount_);
     }
 
@@ -158,106 +168,166 @@ namespace Interface
     if (!isDataPolar)
     {
       if (shouldDisplayPhases)
-        utils::convertBufferInPlace<midSide<utils::complexCartToPolar>>(scratchBuffer_, binCount_);
+        utils::convertBufferInPlace<::midSide<complexCartToPolar>>(scratchBuffer_, binCount_);
       else
-        utils::convertBufferInPlace<midSide<complexMagnitude>>(scratchBuffer_, binCount_);
+        utils::convertBufferInPlace<::midSide<::complexMagnitude>>(scratchBuffer_, binCount_);
 
-      for (u32 i = 0; i < scratchBuffer_.getChannels(); i += scratchBuffer_.getRelativeSize())
+      // handle dc and nyquist separately because the conversion functions wrote garbage there
+      for (size_t i = 0; i < scratchBuffer_.getChannels(); i += scratchBuffer_.getRelativeSize())
       {
         simd_float dcAndNyquist = scratchBuffer_.readSimdValueAt(i, 0);
         simd_float zeroes = 0.0f;
-        midSide(dcAndNyquist, zeroes);
+        ::midSide(dcAndNyquist, zeroes);
         scratchBuffer_.writeSimdValueAt(simd_float::abs(dcAndNyquist), i, 0);
       }
     }
 
-    for (u32 i = 0; i < scratchBuffer_.getChannels(); i += scratchBuffer_.getRelativeSize())
-    { 
-      float rangeBegin = std::pow(10.0f, startOctave);
-      for (u32 j = 0; j < kResolution; ++j)
+    static constexpr simd_float defaultValue = { 0.001f, 0.0f };
+    const float maxBin = (float)binCount_ - 1.0f;
+    const bool isInterpolating = shouldInterpolateLines_;
+    const simd_float scalingFactor = { 0.5f / (float)binCount_, 1.0f };
+    const float minDb = minDb_;
+    const float maxDb = maxDb_;
+    const float height = (float)getHeightSafe();
+    const float width = (float)getWidthSafe();
+    const float rangeMult = 1.0f / (maxDb - minDb);
+
+    // yes these are magic numbers, change at own risk
+    const float decay = 0.25f + std::max(0.0f, 0.05f * std::log2(2048.0f / (float)binCount_ - 1.0f));
+
+    constexpr float resolution = 1.0f / (kResolution - 1.0f);
+    const float rangeMultiplier = std::pow(10.0f, decadeCount * resolution);
+    float rangeBegin = std::pow(10.0f, startDecade);
+    float rangeEnd = rangeBegin;
+    // we're adding the starting decade because the slope needs to be agnostic towards fft size
+    const float slopeMultiplier = (float)dbToAmplitude(((decadeCount + startDecade) * decadeSlope) * resolution);
+    float slope = 1.0f;
+
+    // current/previous - current/previous bin
+    // old - current bin from previous run
+    simd_float current, previous, old;
+    u32 j, beginIndex, endIndex;
+
+    auto findLargestInRange = [&]() // finds largest entries in the range
+    {
+      simd_int indices = beginIndex;
+      // the point covers a range of bins, we need to find the loudest one
+      for (u32 k = beginIndex + 1; k <= endIndex; ++k)
       {
-        float t = (float)j / (kResolution - 1.0f);
-        float octave = numOctaves * t + startOctave;
-        float rangeEnd = std::min(std::pow(10.0f, octave), maxBin);
+        simd_float next = scratchBuffer_.readSimdValueAt(0, k);
+        simd_mask mask = copyFromEven(simd_float::greaterThan(next, current));
+        indices = merge(indices, simd_int{ k }, mask);
+        current = merge(current, next, mask);
+      }
 
-        simd_float current;
+      old = gatherComplex(oldBuffer_.get().pointer, indices);
+      //current = merge(current, modSymmetric(current - gatherComplex(oldBuffer_.getData().getData().get(), indices), kPi), kPhaseMask);
+    };
 
-        if (isInterpolating)
+    auto calculateAmplitude = [&]() // scales amplitudes and clamps
+    {
+      current *= scalingFactor * simd_float{ slope, 1.0f };
+      simd_float average = resultBuffer_.readSimdValueAt(0, j);
+      simd_float amplitude = lerp(average, current, decay);
+      simd_float phase = modSymmetric(current - expectedPhaseDifference * old, kPi);
+      average = lerp(average, current - old, 0.05f);
+      current = merge(amplitude, phase, kPhaseMask);
+
+      current = merge(defaultValue, current, copyFromEven(simd_float::greaterThan(current, defaultValue)));
+      resultBuffer_.writeSimdValueAt(merge(amplitude, average, kPhaseMask), 0, j);
+    };
+
+    for (j = 0; j < kResolution; ++j)
+    {
+      if (isInterpolating)
+      {
+        beginIndex = (u32)std::floor(rangeBegin);
+        endIndex = (u32)std::floor(rangeEnd);
+        current = scratchBuffer_.readSimdValueAt(0, beginIndex);
+
+        if (endIndex - beginIndex <= 1)
         {
-          int beginIndex = (int)std::floor(rangeBegin);
-          int endIndex = (int)std::floor(rangeEnd);
-          current = scratchBuffer_.readSimdValueAt(i, beginIndex);
+          simd_float lower = current;
+          lower = merge(lower, modSymmetric(lower - oldBuffer_.readSimdValueAt(0, beginIndex), kPi), kPhaseMask);
+          u32 nextIndex = (u32)std::ceil(rangeBegin);
+          simd_float upper = scratchBuffer_.readSimdValueAt(0, nextIndex);
+          upper = merge(upper, modSymmetric(upper - oldBuffer_.readSimdValueAt(0, nextIndex), kPi), kPhaseMask);
 
-          if (endIndex - beginIndex > 1)
+          current = dbToAmplitude(lerp(amplitudeToDb(lower), amplitudeToDb(upper), rangeBegin - (float)beginIndex));
+          current = merge(current, circularLerpSymmetric(lower, upper, rangeBegin - (float)beginIndex, kPi), kPhaseMask);
+        }
+        else
+          findLargestInRange();
+
+        calculateAmplitude();
+      }
+      else
+      {
+        // the reason for rounding instead of flooring is because the dc bin is 
+        // halfway between the positive and negative frequencies and this gives us a half bin offset
+        beginIndex = (u32)std::round(rangeBegin);
+        endIndex = (u32)std::round(rangeEnd);
+
+        if (endIndex - beginIndex <= 1)
+        {
+          // the point is still on the same bin as in the previous iteration
+          // or is entering the next one
+
+          if (endIndex - beginIndex != 1 && j > 0)
           {
-            // the point covers a range of bins, we need to find the loudest one
-            for (int k = beginIndex + 1; k <= endIndex; ++k)
-            {
-              simd_float next = scratchBuffer_.readSimdValueAt(i, k);
-              simd_mask mask = utils::copyFromEven(simd_float::greaterThan(next, current));
-              current = utils::maskLoad(current, next, mask);
-            }
+            // this is not the first iteration, we can use the value from the previous one
+            resultBuffer_.writeSimdValueAt(current, 0, j);
           }
           else
           {
-            simd_float temp = current;
-            simd_float next = scratchBuffer_.readSimdValueAt(i, (int)std::ceil(rangeBegin));
-            current = utils::dbToAmplitude(utils::lerp(utils::amplitudeToDb(temp), utils::amplitudeToDb(next), rangeBegin - (float)beginIndex));
-            current = utils::maskLoad(current, utils::lerp(temp, next, rangeBegin - (float)beginIndex), utils::kPhaseMask);
-          }
+            // the point is entering the next bin, calculate its value
+            current = scratchBuffer_.readSimdValueAt(0, endIndex);
+            old = oldBuffer_.readSimdValueAt(0, endIndex);
+            //current = merge(current, modSymmetric(current - old, kPi), kPhaseMask);
 
-          rangeBegin = rangeEnd;
+            calculateAmplitude();
+          }
         }
         else
         {
-          // the reason for rounding instead of flooring is because the dc bin is 
-          // halfway between the positive and negative frequencies
-          int beginIndex = (int)std::round(rangeBegin);
-          int endIndex = (int)std::round(rangeEnd);
-          rangeBegin = rangeEnd;
-          current = scratchBuffer_.readSimdValueAt(i, beginIndex);
-
-          if (endIndex - beginIndex > 1)
-          {
-            // the point covers a range of bins, we need to find the loudest one
-            for (int k = beginIndex + 1; k <= endIndex; ++k)
-            {
-              simd_float next = scratchBuffer_.readSimdValueAt(i, k);
-              simd_mask mask = utils::copyFromEven(simd_float::greaterThan(next, current));
-              current = utils::maskLoad(current, next, mask);
-            }
-          }
-          else
-          {
-            // the point is still on the same bin as in the previous iteration
-            // or is entering the next one
-
-            if (endIndex - beginIndex != 1 && j > 0)
-            {
-              // if this is not the first iteration we can just copy the value from the previous one
-              resultBuffer_.writeSimdValueAt(resultBuffer_.readSimdValueAt(i, j - 1), i, j);
-              continue;
-            }
-
-            // the point is entering the next bin, calculate its value
-            current = scratchBuffer_.readSimdValueAt(i, endIndex);
-          }
+          current = scratchBuffer_.readSimdValueAt(0, beginIndex);
+          findLargestInRange();
+          calculateAmplitude();
         }
+      }
 
-        float slope = (float)utils::dbToAmplitude(t * numOctaves * dbSlope);
-        current *= scalingFactor * simd_float{ slope, 1.0f };
-        current = utils::lerp(resultBuffer_.readSimdValueAt(i, j), current, decay);
+      // updating variables for next iteration
+      previous = current;
+      rangeBegin = rangeEnd;
+      rangeEnd = std::min(rangeEnd * rangeMultiplier, maxBin);
+      slope *= slopeMultiplier;
 
-        current = utils::maskLoad(defaultValue, current, utils::copyFromEven(simd_float::greaterThan(current, kMinAmp)));
-        resultBuffer_.writeSimdValueAt(current, i, j);
+      float x = (float)j * resolution * width;
+      simd_float amplitudeY = (amplitudeToDb(current) - minDb) * rangeMult;
+      for (size_t k = 0; k < amplitudeRenderers_.size(); ++k)
+      {
+        amplitudeRenderers_[k]->setXAt((int)j, x);
+        amplitudeRenderers_[k]->setYAt((int)j, height - amplitudeY[k * 2] * height);
+      }
+
+      simd_float phaseY = current / k2Pi + 0.5f;
+      for (size_t k = 0; k < phaseRenderers_.size(); ++k)
+      {
+        phaseRenderers_[k]->setXAt((int)j, x);
+        phaseRenderers_[k]->setYAt((int)j, height - phaseY[k * 2 + 1] * height);
       }
     }
+
+    oldBuffer2_.copy(oldBuffer_, 0, 0, binCount_);
+    oldBuffer_.copy(scratchBuffer_, 0, 0, binCount_);
 
     return true;
   }
 
   void Spectrogram::init(OpenGlWrapper &openGl)
   {
+    COMPLEX_ASSERT(!isInitialised_.load(std::memory_order_acquire), "Init method more than once");
+
     for (auto &amplitudeRenderer : amplitudeRenderers_)
       amplitudeRenderer->init(openGl);
 
@@ -266,84 +336,65 @@ namespace Interface
 
     corners_.init(openGl);
     background_.init(openGl);
+
+    isInitialised_.store(true, std::memory_order_release);
   }
 
-  void Spectrogram::render(OpenGlWrapper &openGl, bool animate)
+  void Spectrogram::render(OpenGlWrapper &openGl)
   {
-    auto &plugin = container_.get()->getRenderer()->getPlugin();
+    static constexpr float octaveToDecade = 1.0f / gcem::log10(2.0f);
+
+    {
+      ScopedBoundsEmplace b{ openGl.parentStack, this };
+      background_.render(openGl);
+    }
+
+    auto bounds = getLocalBoundsSafe();
+    auto &plugin = uiRelated.renderer->getPlugin();
     nyquistFreq_ = plugin.getSampleRate() * 0.5f;
     binCount_ = plugin.getFFTSize() / 2;
-
-    background_.render(openGl, animate);
+    float overlap = plugin.getOverlap();
 
     bool shouldDisplayPhases = shouldDisplayPhases_;
     float minFrequency = minFrequency_;
     float maxFrequency = maxFrequency_;
-    float minDb = minDb_;
-    float maxDb = maxDb_;
-    float dbSlope = dbSlope_;
-    
-    if (!updateAmplitudes(shouldDisplayPhases, minFrequency, maxFrequency, dbSlope))
+
+    float decadeSlope = dbSlope_ * octaveToDecade;
+    float sampleHz = nyquistFreq_ / (float)binCount_;
+    float startDecade = std::log10(minFrequency / sampleHz);
+    float decadeCount = std::log10(maxFrequency / minFrequency);
+
+    if (!updateAmplitudes(shouldDisplayPhases, startDecade, decadeCount, decadeSlope, overlap))
       return;
 
-    float height = (float)getHeightSafe();
-    float width = (float)getWidthSafe();
-    float rangeMult = 1.0f / (maxDb - minDb);
-
-    auto setRendererValues = [&]<bool RenderPhase>()
-    {
-      for (int i = 0; i < kResolution; ++i)
-      {
-        float t = (float)i / (kResolution - 1.0f);
-        float x = t * width;
-        simd_float result = resultBuffer_.readSimdValueAt(0, i);
-        simd_float db = utils::amplitudeToDb(result);
-        simd_float phaseY, amplitudeY = (db - minDb) * rangeMult;
-
-        if constexpr (RenderPhase)
-        {
-          phaseY = utils::modOnceSigned(result, kPi) / k2Pi + 0.5f;
-        }
-
-        for (size_t j = 0; j < amplitudeRenderers_.size(); ++j)
-        {
-          amplitudeRenderers_[j]->setXAt(i, x);
-          amplitudeRenderers_[j]->setYAt(i, height - amplitudeY[j * 2] * height);
-        }
-
-        if constexpr (RenderPhase)
-        {
-          phaseRenderers_[0]->setXAt(i, x);
-          phaseRenderers_[0]->setYAt(i, height - phaseY[3] * height);
-        }
-      }
-    };
-
-    if (shouldDisplayPhases)
-      setRendererValues.template operator()<true>();
-    else
-      setRendererValues.template operator()<false>();
-
     for (auto &amplitudeRenderer : amplitudeRenderers_)
-      amplitudeRenderer->render(openGl, this, getLocalBoundsSafe());
+      amplitudeRenderer->render(openGl, *this, bounds);
 
     if (shouldDisplayPhases)
       for (auto &phaseRenderer : phaseRenderers_)
-        phaseRenderer->render(openGl, this, getLocalBoundsSafe());
+        phaseRenderer->render(openGl, *this, bounds);
 
-    corners_.render(openGl, animate);
+    {
+      ScopedBoundsEmplace b{ openGl.parentStack, this };
+      corners_.render(openGl);
+    }
   }
 
   void Spectrogram::destroy()
   {
+    if (!isInitialised_.load(std::memory_order_acquire))
+      return;
+
     for (auto &amplitudeRenderer : amplitudeRenderers_)
-      amplitudeRenderer->destroy();
+      amplitudeRenderer->destroy(*uiRelated.renderer);
 
     for (auto &phaseRenderer : phaseRenderers_)
-      phaseRenderer->destroy();
+      phaseRenderer->destroy(*uiRelated.renderer);
 
     corners_.destroy();
     background_.destroy();
+
+    isInitialised_.store(false, std::memory_order_release);
   }
 
   void Spectrogram::paintBackground(Graphics &g) const

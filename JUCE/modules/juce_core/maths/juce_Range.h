@@ -77,23 +77,23 @@ public:
 
     //==============================================================================
     /** Returns the start of the range. */
-    constexpr inline ValueType getStart() const noexcept          { return start; }
+    constexpr ValueType getStart() const noexcept          { return start; }
 
     /** Returns the length of the range. */
-    constexpr inline ValueType getLength() const noexcept         { return end - start; }
+    constexpr ValueType getLength() const noexcept         { return end - start; }
 
     /** Returns the end of the range. */
-    constexpr inline ValueType getEnd() const noexcept            { return end; }
+    constexpr ValueType getEnd() const noexcept            { return end; }
 
     /** Returns true if the range has a length of zero. */
-    constexpr inline bool isEmpty() const noexcept                { return start == end; }
+    constexpr bool isEmpty() const noexcept                { return start == end; }
 
     //==============================================================================
     /** Changes the start position of the range, leaving the end position unchanged.
         If the new start position is higher than the current end of the range, the end point
         will be pushed along to equal it, leaving an empty range at the new position.
     */
-    void setStart (const ValueType newStart) noexcept
+    constexpr void setStart (const ValueType newStart) noexcept
     {
         start = newStart;
         if (end < newStart)
@@ -119,7 +119,7 @@ public:
         If the new end position is below the current start of the range, the start point
         will be pushed back to equal the new end point.
     */
-    void setEnd (const ValueType newEnd) noexcept
+    constexpr void setEnd (const ValueType newEnd) noexcept
     {
         end = newEnd;
         if (newEnd < start)
@@ -144,7 +144,7 @@ public:
     /** Changes the length of the range.
         Lengths less than zero are treated as zero.
     */
-    void setLength (const ValueType newLength) noexcept
+    constexpr void setLength (const ValueType newLength) noexcept
     {
         end = start + jmax (ValueType(), newLength);
     }
@@ -168,7 +168,7 @@ public:
 
     //==============================================================================
     /** Adds an amount to the start and end of the range. */
-    inline Range operator+= (const ValueType amountToAdd) noexcept
+    constexpr Range operator+= (const ValueType amountToAdd) noexcept
     {
         start += amountToAdd;
         end += amountToAdd;
@@ -176,7 +176,7 @@ public:
     }
 
     /** Subtracts an amount from the start and end of the range. */
-    inline Range operator-= (const ValueType amountToSubtract) noexcept
+    constexpr Range operator-= (const ValueType amountToSubtract) noexcept
     {
         start -= amountToSubtract;
         end -= amountToSubtract;
@@ -261,7 +261,7 @@ public:
         will be the new range, shifted forwards or backwards so that it doesn't extend
         beyond this one, but keeping its original length.
     */
-    Range constrainRange (Range rangeToConstrain) const noexcept
+    constexpr Range constrainRange (Range rangeToConstrain) const noexcept
     {
         const ValueType otherLen = rangeToConstrain.getLength();
         return getLength() <= otherLen
@@ -271,7 +271,7 @@ public:
 
     /** Scans an array of values for its min and max, and returns these as a Range. */
     template <typename Integral, std::enable_if_t<std::is_integral_v<Integral>, int> = 0>
-    static Range findMinAndMax (const ValueType* values, Integral numValues) noexcept
+    static constexpr Range findMinAndMax (const ValueType* values, Integral numValues) noexcept
     {
         if (numValues <= 0)
             return Range();

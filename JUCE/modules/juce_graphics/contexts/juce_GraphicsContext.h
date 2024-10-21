@@ -257,7 +257,7 @@ public:
     /** Fills a rectangle with the current colour or brush.
         @see drawRect, fillRoundedRectangle
     */
-    void fillRect (Rectangle<int> rectangle) const;
+    void fillRect (Rectangle<int> rectangle, bool replaceExistingContents = false) const;
 
     /** Fills a rectangle with the current colour or brush.
         @see drawRect, fillRoundedRectangle

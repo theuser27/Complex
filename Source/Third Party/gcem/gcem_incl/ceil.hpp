@@ -1,6 +1,6 @@
 /*################################################################################
   ##
-  ##   Copyright (C) 2016-2022 Keith O'Hara
+  ##   Copyright (C) 2016-2024 Keith O'Hara
   ##
   ##   This file is part of the GCE-Math C++ library.
   ##
@@ -45,6 +45,54 @@ noexcept
 template<typename T>
 constexpr
 T
+ceil_check_internal(const T x)
+noexcept
+{
+    return x;
+}
+
+template<>
+constexpr
+float
+ceil_check_internal<float>(const float x)
+noexcept
+{
+    return( abs(x) >= 8388608.f ? \
+            // if
+                x : \
+            // else
+                ceil_int(x, float(static_cast<int>(x))) );
+}
+
+template<>
+constexpr
+double
+ceil_check_internal<double>(const double x)
+noexcept
+{
+    return( abs(x) >= 4503599627370496. ? \
+            // if
+                x : \
+            // else
+                ceil_int(x, double(static_cast<llint_t>(x))) );
+}
+
+template<>
+constexpr
+long double
+ceil_check_internal<long double>(const long double x)
+noexcept
+{
+    return( abs(x) >= 9223372036854775808.l ? \
+            // if
+                x : \
+            // else
+                ceil_int(x, ((long double)static_cast<ullint_t>(abs(x))) * sgn(x)) );
+}
+
+template<typename T>
+constexpr
+T
 ceil_check(const T x)
 noexcept
 {
@@ -58,7 +106,7 @@ noexcept
             GCLIM<T>::min() > abs(x) ? \
                 x :
             // else
-                ceil_int(x, T(static_cast<llint_t>(x))) );
+                ceil_check_internal(x) );
 }
 
 }

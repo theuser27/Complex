@@ -1,363 +1,353 @@
 /*
-	==============================================================================
+  ==============================================================================
 
-		SoundEngine.cpp
-		Created: 12 Aug 2021 2:12:59am
-		Author:  theuser27
+    SoundEngine.cpp
+    Created: 12 Aug 2021 2:12:59am
+    Author:  theuser27
 
-	==============================================================================
+  ==============================================================================
 */
 
-#include "Framework/fourier_transform.h"
-#include "Framework/parameter_value.h"
-#include "EffectsState.h"
-#include "SoundEngine.h"
-#include "../Plugin/ProcessorTree.h"
+#include "SoundEngine.hpp"
+
+#include "Framework/fourier_transform.hpp"
+#include "Framework/parameter_value.hpp"
+#include "EffectsState.hpp"
+#include "../Plugin/ProcessorTree.hpp"
 
 namespace Generation
 {
-	SoundEngine::SoundEngine(Plugin::ProcessorTree *processorTree, u64 parentProcessorId) noexcept :
-		BaseProcessor(processorTree, parentProcessorId, Framework::BaseProcessors::SoundEngine::id().value())
-	{
-		using namespace Framework;
+  SoundEngine::SoundEngine(Plugin::ProcessorTree *processorTree) noexcept :
+    BaseProcessor{ processorTree, Framework::Processors::SoundEngine::id().value() }
+  {
+    using namespace Framework;
 
-		transforms = std::make_unique<FFT>();
+    auto [minOrder, maxOrder] = processorTree->getMinMaxFFTOrder();
+    transforms = utils::up<FFT>::create(minOrder, maxOrder);
 
-		inputBuffer.reserve(kNumTotalChannels, kMaxPreBufferLength);
-		// needs to be double the max FFT, otherwise we get out of bounds errors
-		FFTBuffer.reserve(kNumTotalChannels, kMaxFFTBufferLength * 2, true);
-		outBuffer.reserve(kNumTotalChannels, kMaxFFTBufferLength * 2);
+    // input buffer size, kind of arbitrary but it must be longer than kMaxProcessingBufferLength
+    u32 maxInputBufferLength = 1 << (maxOrder + 5);
+    // pre- and post-processing FFT buffers size (+ 2 for nyquist real/imaginary parts)
+    u32 maxProcessingBufferLength = (1 << maxOrder) + 2;
+    // output buffer size, must be longer than kMaxProcessingBufferLength
+    u32 maxOutputBufferLength = (1 << maxOrder) * 2;
 
-		effectsState_ = makeSubProcessor<EffectsState>();
-		subProcessors_.emplace_back(effectsState_);
+    u32 maxInOuts = (u32)utils::max(processorTree->getInputSidechains(), processorTree->getOutputSidechains()) + 1;
 
-		createProcessorParameters(BaseProcessors::SoundEngine::enum_names<nested_enum::OuterNodes>());
-	}
+    inputBuffer.reserve(maxInOuts * kChannelsPerInOut, maxInputBufferLength);
+    // needs to be double the max FFT, otherwise we get out of bounds errors
+    FFTBuffer_.reserve(maxInOuts * kChannelsPerInOut, maxProcessingBufferLength, true);
+    outBuffer.reserve(maxInOuts * kChannelsPerInOut, maxOutputBufferLength * 2);
+  }
 
-	SoundEngine::~SoundEngine() noexcept = default;
+  SoundEngine::~SoundEngine() noexcept = default;
 
-	u32 SoundEngine::getProcessingDelay() const noexcept 
-	{ return FFTNumSamples_ + processorTree_->getSamplesPerBlock(); }
+  u32 SoundEngine::getProcessingDelay() const noexcept 
+  { return FFTSamples_ + processorTree_->getSamplesPerBlock(); }
 
-	void SoundEngine::ResetBuffers() noexcept
-	{
-		// TODO: when samples per block changes, reset all working buffers to start from the beginning
-	}
+  void SoundEngine::resetBuffers() noexcept
+  {
+    FFTSamplesAtReset_ = FFTSamples_;
+    nextOverlapOffset_ = 0;
+    inputBuffer.reset();
+    outBuffer.reset();
+  }
 
-	perf_inline void SoundEngine::CopyBuffers(const float *const *buffer, u32 numInputs, u32 numSamples) noexcept
-	{
-		// assume that we don't get blocks bigger than our buffer size
-		inputBuffer.writeToBufferEnd(buffer, numInputs, numSamples);
+  void SoundEngine::copyBuffers(const float *const *buffer, u32 inputs, u32 samples) noexcept
+  {
+    // assume that we don't get blocks bigger than our buffer size
+    inputBuffer.writeToBufferEnd(buffer, inputs, samples);
 
-		// we update them here because we could get broken up blocks if done inside the loop
-		usedInputChannels_ = effectsState_->getUsedInputChannels();
-		usedOutputChannels_ = effectsState_->getUsedOutputChannels();
-	}
+    // we update them here because we could get broken up blocks if done inside the loop
+    usedInputChannels_ = effectsState_->getUsedInputChannels();
+    usedOutputChannels_ = effectsState_->getUsedOutputChannels();
+  }
 
-	perf_inline void SoundEngine::IsReadyToPerform(u32 numSamples) noexcept
-	{
-		// if there are scaled and/or processed samples 
-		// that haven't already been output we don't need to perform
-		u32 samplesReady = outBuffer.getBeginOutputToToScaleOutput() +
-			outBuffer.getToScaleOutputToAddOverlap();
-		if (samplesReady >= numSamples)
-		{
-			isPerforming_ = false;
-			hasEnoughSamples_ = true;
-			return;
-		}
+  void SoundEngine::isReadyToPerform(u32 numSamples) noexcept
+  {
+    isPerforming_ = false;
+    hasEnoughSamples_ = false;
 
-		// are there enough samples ready to be processed?
-		u32 availableSamples = inputBuffer.newSamplesToRead(nextOverlapOffset_);
-		if (availableSamples < FFTNumSamples_)
-		{
-			isPerforming_ = false;
-			hasEnoughSamples_ = false;
-			return;
-		}
+    // if there are scaled and/or processed samples 
+    // that haven't already been output we don't need to perform
+    u32 samplesReady = outBuffer.getBeginOutputToToScaleOutput() +
+      outBuffer.getToScaleOutputToAddOverlap();
+    if (samplesReady >= numSamples)
+    {
+      hasEnoughSamples_ = true;
+      return;
+    }
 
-		static u32 prevFFTNumSamples = 1 << kDefaultFFTOrder;
-		prevFFTNumSamples = FFTNumSamples_;
-		// how many samples we're processing currently
-		FFTNumSamples_ = getFFTNumSamples();
-		
-		i32 FFTChangeOffset = prevFFTNumSamples - FFTNumSamples_;
+    // are there enough samples ready to be processed?
+    u32 availableSamples = inputBuffer.newSamplesToRead(nextOverlapOffset_);
+    if (availableSamples < FFTSamples_)
+      return;
 
-		// clearing upper samples that could remain
-		// after changing from a higher to lower FFTSize
-		for (size_t i = 0; i < FFTBuffer.getChannels(); i++)
-		{
-			i32 samplesToClear = std::max(FFTChangeOffset, 0);
-			std::memset(FFTBuffer.getData().getData().get() + i * FFTBuffer.getSize() + FFTNumSamples_, 0, samplesToClear * sizeof(float));
-		}
+    u32 prevFFTNumSamples = FFTSamples_;
+    // how many samples we're processing currently
+    FFTSamples_ = getFFTNumSamples();
+    
+    i32 FFTChangeOffset = (i32)prevFFTNumSamples - (i32)FFTSamples_;
 
-		inputBuffer.readBuffer(FFTBuffer, (u32)FFTBuffer.getChannels(), usedInputChannels_.data(), 
-			FFTNumSamples_, inputBuffer.BlockBegin, nextOverlapOffset_ + FFTChangeOffset);
+    // clearing upper samples that could remain
+    // after changing from a higher to lower FFTSize
+    if (FFTChangeOffset > 0)
+      for (usize i = 0; i < FFTBuffer_.getChannels(); i++)
+        std::memset(FFTBuffer_.getData().get() + i * FFTBuffer_.getSize() + FFTSamples_, 0, (u32)FFTChangeOffset * sizeof(float));
 
+    inputBuffer.readBuffer(FFTBuffer_, (u32)FFTBuffer_.getChannels(), usedInputChannels_, 
+      FFTSamples_, inputBuffer.BlockBegin, (i32)nextOverlapOffset_ + FFTChangeOffset);
 
+    phaseInsideBlock_ = (u32)((i32)phaseInsideBlock_ + (i32)nextOverlapOffset_ + FFTChangeOffset) & (FFTSamples_ - 1);
 
-		isPerforming_ = true;
-	}
+    isPerforming_ = true;
+  }
 
-	void SoundEngine::UpdateParameters(UpdateFlag flag, float sampleRate) noexcept
-	{
-		using namespace Framework;
+  void SoundEngine::updateParameters(UpdateFlag flag, float sampleRate, bool updateChildrenParameters) noexcept
+  {
+    using namespace Framework;
 
-		updateParameters(flag, sampleRate, true);
+    BaseProcessor::updateParameters(flag, sampleRate, updateChildrenParameters);
 
-		switch (flag)
-		{
-		case UpdateFlag::Realtime:
-			overlap_ = getParameter(BaseProcessors::SoundEngine::Overlap::name())->getInternalValue<float>(sampleRate);
-			windowType_ = WindowTypes::make_enum(getParameter(BaseProcessors::SoundEngine::WindowType::name())->getInternalValue<u32>(sampleRate)).value();
-			alpha_ = getParameter(BaseProcessors::SoundEngine::WindowAlpha::name())->getInternalValue<float>(sampleRate);
+    switch (flag)
+    {
+    case UpdateFlag::Realtime:
+      currentOverlap_ = nextOverlap_;
+      nextOverlap_ = getParameter(Processors::SoundEngine::Overlap::id().value())->getInternalValue<float>(sampleRate);
+      windowType_ = Processors::SoundEngine::WindowType::enum_value_by_id(
+        getParameter(Processors::SoundEngine::WindowType::id().value())->getInternalValue<std::string_view>(sampleRate).first->id).value();
+      alpha_ = std::lerp(kAlphaLowerBound, kAlphaUpperBound, getParameter(Processors::SoundEngine::WindowAlpha::id().value())->getInternalValue<float>(sampleRate));
 
-			// getting the next overlapOffset
-			nextOverlapOffset_ = getOverlapOffset();
+      // getting the next overlapOffset
+      nextOverlapOffset_ = (u32)std::floor((float)FFTSamples_ * (1.0f - nextOverlap_));
 
-			break;
-		case UpdateFlag::BeforeProcess:
-			mix_ = getParameter(BaseProcessors::SoundEngine::MasterMix::name())->getInternalValue<float>(sampleRate);
-			FFTOrder_ = getParameter(BaseProcessors::SoundEngine::BlockSize::name())->getInternalValue<u32>(sampleRate);
-			outGain_ = (float)utils::dbToAmplitude(getParameter(BaseProcessors::SoundEngine::OutGain::name())->getInternalValue<float>(sampleRate));
+      break;
+    case UpdateFlag::BeforeProcess:
+      mix_ = getParameter(Processors::SoundEngine::MasterMix::id().value())->getInternalValue<float>(sampleRate);
+      FFTOrder_ = getParameter(Processors::SoundEngine::BlockSize::id().value())->getInternalValue<u32>(sampleRate);
+      outGain_ = (float)utils::dbToAmplitude(getParameter(Processors::SoundEngine::OutGain::id().value())->getInternalValue<float>(sampleRate));
 
-			break;
-		default:
-			break;
-		}
+      break;
+    default:
+      break;
+    }
 
-		processorTree_->setUpdateFlag(flag);
-	}
+    processorTree_->setUpdateFlag(flag);
+  }
 
-	perf_inline void SoundEngine::DoFFT() noexcept
-	{
-		// windowing
-		windows.applyWindow(FFTBuffer, FFTBuffer.getChannels(), usedInputChannels_.data(), FFTNumSamples_, windowType_, alpha_);
+  void SoundEngine::doFFT() noexcept
+  {
+    // windowing
+    windows.applyWindow(FFTBuffer_, FFTBuffer_.getChannels(), usedInputChannels_, FFTSamples_, windowType_, alpha_);
 
-		// in-place FFT
-		// FFT-ed only if the input is used
-		for (u32 i = 0; i < kNumTotalChannels; i++)
-			if (usedInputChannels_[i])
-				FFTedBuffer[i] = transforms->transformRealForward(FFTOrder_, 
-					FFTBuffer.getData().getData().get() + i * FFTBuffer.getSize(), i);
-	}
+    // in-place FFT
+    // FFT-ed only if the input is used
+    for (u32 i = 0; i < FFTBuffer_.getChannels(); i++)
+      if (usedInputChannels_[i])
+        transforms->transformRealForward(FFTOrder_, FFTBuffer_.getData().get() + i * FFTBuffer_.getSize(), i);
+  }
 
-	perf_inline void SoundEngine::ProcessFFT(float sampleRate) noexcept
-	{
-		effectsState_->setBinCount(FFTNumSamples_ / 2);
-		effectsState_->setSampleRate(sampleRate);
+  void SoundEngine::processFFT(float sampleRate) noexcept
+  {
+    // + 1 for nyquist
+    effectsState_->setBinCount(FFTSamples_ / 2 + 1);
+    effectsState_->setSampleRate(sampleRate);
+    effectsState_->setNormalisedPhase((float)phaseInsideBlock_ / (float)FFTSamples_);
 
-		effectsState_->writeInputData(FFTedBuffer, std::size(FFTedBuffer));
-		effectsState_->processLanes();
-		effectsState_->sumLanesAndWriteOutput(FFTedBuffer, std::size(FFTedBuffer));
-	}
+    effectsState_->writeInputData(FFTBuffer_.getData().get(), FFTBuffer_.getChannels(), FFTBuffer_.getSize());
+    effectsState_->processLanes();
+    effectsState_->sumLanesAndWriteOutput(FFTBuffer_.getData().get(), FFTBuffer_.getChannels(), FFTBuffer_.getSize());
+  }
 
-	perf_inline void SoundEngine::DoIFFT() noexcept
-	{
-		// in-place IFFT
-		for (u32 i = 0; i < kNumTotalChannels; i++)
-			if (usedOutputChannels_[i])
-				transforms->transformRealInverse(FFTOrder_, 
-					FFTBuffer.getData().getData().get() + i * FFTBuffer.getSize(), i);
+  void SoundEngine::doIFFT() noexcept
+  {
+    // in-place IFFT
+    for (u32 i = 0; i < FFTBuffer_.getChannels(); i++)
+      if (usedOutputChannels_[i])
+        transforms->transformRealInverse(FFTOrder_, FFTBuffer_.getData().get() + i * FFTBuffer_.getSize(), i);
 
-		// if the FFT size is big enough to guarantee that even with max overlap 
-		// a block >= samplesPerBlock can be finished, we don't offset
-		// otherwise, we offset 2 block sizes back
-		u32 latencyOffset = (getProcessingDelay() != FFTNumSamples_) ? 2 * processorTree_->getSamplesPerBlock() : 0;
-		outBuffer.setLatencyOffset(latencyOffset);
+    // if the FFT size is big enough to guarantee that even with max overlap 
+    // a block >= samplesPerBlock can be finished, we don't offset
+    // otherwise, we offset 2 block sizes back
+    outBuffer.setLatencyOffset(2 * (i32)processorTree_->getSamplesPerBlock());
 
-		// overlap-adding
-		outBuffer.addOverlapBuffer(FFTBuffer, outBuffer.getNumChannels(), 
-			usedOutputChannels_.data(),  FFTNumSamples_, nextOverlapOffset_, windowType_);
-	}
+    // overlap-adding
+    outBuffer.addOverlapBuffer(FFTBuffer_, outBuffer.getChannelCount(), 
+      usedOutputChannels_, FFTSamples_, (i32)nextOverlapOffset_, windowType_);
+  }
 
-	// when the overlap is more than what the window requires
-	// there will be an increase in gain, so we need to offset that
-	perf_inline void SoundEngine::ScaleDown() noexcept
-	{
-		using namespace Framework;
+  // when the overlap is more than what the window requires
+  // there will be an increase in gain, so we need to offset that
+  void SoundEngine::scaleDown(u32 start, u32 samples) noexcept
+  {
+    using namespace Framework;
+    using WindowType = Processors::SoundEngine::WindowType::type;
 
-		// TODO: use an extra overlap_ variable to store the overlap param 
-		// from previous scaleDown run in order to apply extra attenuation 
-		// when moving the overlap control (essentially becomes linear interpolation)
-		static float lastOverlap = kDefaultWindowOverlap;
+    // TODO: use an extra overlap_ variable to store the overlap param 
+    // from previous scaleDown run in order to apply extra attenuation 
+    // when moving the overlap control (essentially becomes linear interpolation)
 
-		float mult = 1.0f;
-		u32 start = outBuffer.getToScaleOutput();
-		u32 toScaleNumSamples = outBuffer.getToScaleOutputToAddOverlap();
-		for (u32 i = 0; i < kNumTotalChannels; i++)
-		{
-			if (!usedOutputChannels_[i])
-				continue;
+    float mult;
+    switch (windowType_)
+    {
+    case WindowType::Lerp: return;
+    case WindowType::Rectangle:
+      mult = 1.0f - currentOverlap_;
+      break;
+    case WindowType::Hann:
+    case WindowType::Triangle:
+      if (currentOverlap_ <= 0.5f)
+        return;
 
-			switch (windowType_)
-			{
-			case WindowTypes::Lerp:
-				break;
-			case WindowTypes::Rectangle:
-				mult = 1.0f - overlap_;
-				for (u32 j = 0; j < toScaleNumSamples; j++)
-				{
-					u32 sampleIndex = (start + j) % outBuffer.getSize();
-					outBuffer.multiply(mult, i, sampleIndex);
-				}
-				break;
-			case WindowTypes::Hann:
-			case WindowTypes::Triangle:
-				if (overlap_ <= 0.5f)
-					break;
+      mult = (1.0f - currentOverlap_) * 2.0f;
+      break;
+    case WindowType::Hamming:
+      if (currentOverlap_ <= 0.5f)
+        return;
 
-				mult = (1.0f - overlap_) * 2.0f;
-				for (u32 j = 0; j < toScaleNumSamples; j++)
-				{
-					u32 sampleIndex = (start + j) % outBuffer.getSize();
-					outBuffer.multiply(mult, i, sampleIndex);
-				}
-				break;
-			case WindowTypes::Hamming:
-				if (overlap_ <= 0.5f)
-					break;
+      // https://www.desmos.com/calculator/z21xz7r2c9
+      mult = (1.0f - currentOverlap_) * 1.84f;
+      break;
+    case WindowType::Sine:
+      if (currentOverlap_ <= 0.33333333f)
+        return;
 
-				// optimal multiplier empirically found
-				// https://www.desmos.com/calculator/z21xz7r2c9
-				mult = (1.0f - overlap_) * 1.84f;
-				for (u32 j = 0; j < toScaleNumSamples; j++)
-				{
-					u32 sampleIndex = (start + j) % outBuffer.getSize();
-					outBuffer.multiply(mult, i, sampleIndex);
-				}
-				break;
-			case WindowTypes::Sine:
-				if (overlap_ <= 0.33333333f)
-					break;
+      // https://www.desmos.com/calculator/mmjwlj0gqe
+      mult = (1.0f - currentOverlap_) * 1.57f;
+      break;
+    case WindowType::Exp:
+      if (currentOverlap_ <= 0.1235f)
+        return;
 
-				// optimal multiplier empirically found
-				// https://www.desmos.com/calculator/mmjwlj0gqe
-				mult = (1.0f - overlap_) * 1.57f;
-				for (u32 j = 0; j < toScaleNumSamples; j++)
-				{
-					u32 sampleIndex = (start + j) % outBuffer.getSize();
-					outBuffer.multiply(mult, i, sampleIndex);
-				}
-				break;
-			case WindowTypes::Exp:
-				break;
-			case WindowTypes::HannExp:
-				break;
-			case WindowTypes::Lanczos:
-				break;
-			default:
-				break;
-			}
-		}
+      // not optimal but it works somewhat ok
+      // https://www.desmos.com/calculator/ozcckbnyvl
+      mult = (1.0f - currentOverlap_) * 3.25f * std::sqrt(alpha_ * currentOverlap_);
+      break;
+    case WindowType::HannExp:
+    case WindowType::Lanczos:
+    default:
+      return;
+    }
 
-		outBuffer.advanceToScaleOutput(toScaleNumSamples);
-		lastOverlap = overlap_;
-	}
+    for (u32 i = 0; i < outBuffer.getChannelCount(); i++)
+    {
+      if (!usedOutputChannels_[i])
+        continue;
 
-	perf_inline void SoundEngine::MixOut(u32 numSamples) noexcept
-	{
-		if (!hasEnoughSamples_)
-			return;
+      // TODO: optimise this with aligned simd multiply
+      for (u32 j = 0; j < samples; j++)
+      {
+        u32 sampleIndex = (start + j) % outBuffer.getSize();
+        outBuffer.multiply(mult, i, sampleIndex);
+      }
+    }
+  }
 
-		// scale down only if we are moving
-		if (nextOverlapOffset_ > 0)
-			ScaleDown();
+  void SoundEngine::mixOut(u32 samples) noexcept
+  {
+    if (!hasEnoughSamples_)
+      return;
 
-		// only wet
-		if (getMix() == 1.0f)
-		{
-			inputBuffer.advanceLastOutputBlock(numSamples);
-			return;
-		}
-		// TODO: FIX THIS
-		static u32 prevFFTNumSamples = 1 << kDefaultFFTOrder;
-		i32 FFTChangeOffset = prevFFTNumSamples - FFTNumSamples_;
+    u32 start = outBuffer.getToScaleOutput();
+    u32 toScaleSamples = outBuffer.getToScaleOutputToAddOverlap();
+    outBuffer.advanceToScaleOutput(toScaleSamples);
+    
+    i32 FFTChangeOffset = (i32)FFTSamplesAtReset_ - (i32)FFTSamples_;
+    i32 latencyOffset = FFTChangeOffset - outBuffer.getLatencyOffset();
 
-		// only dry
-		if (getMix() == 0.0f)
-		{
-			inputBuffer.outBufferRead(outBuffer.getBuffer(), kNumTotalChannels, usedOutputChannels_.data(),
-				numSamples, outBuffer.getBeginOutput(), FFTChangeOffset - (i32)(outBuffer.getLatencyOffset()));
+    // only dry
+    if (mix_ == 0.0f)
+    {
+      inputBuffer.outBufferRead(outBuffer.getBuffer(), outBuffer.getChannelCount(), 
+        usedOutputChannels_, samples, outBuffer.getBeginOutput(), latencyOffset);
 
-			// advancing buffer indices
-			inputBuffer.advanceLastOutputBlock(numSamples);
+      // advancing buffer indices
+      inputBuffer.advanceLastOutputBlock(samples);
 
-			return;
-		}
-			
-		// mix both
-		float wetMix = getMix();
-		float dryMix = 1.0f - wetMix;
-		auto &dryBuffer = inputBuffer.getBuffer();
-		for (u32 i = 0; i < kNumTotalChannels; i++)
-		{
-			if (!usedOutputChannels_[i])
-				continue;
+      return;
+    }
 
-			u32 beginOutput = outBuffer.getBeginOutput();
-			u32 outBufferSize = outBuffer.getSize();
+    scaleDown(start, toScaleSamples);
 
-			// mixing wet
-			for (u32 j = 0; j < numSamples; j++)
-			{
-				u32 outSampleIndex = (beginOutput + j) % outBufferSize;
-				outBuffer.multiply(wetMix, i, outSampleIndex);
-			}
-			
-			i32 latencyOffset = FFTChangeOffset - (i32)outBuffer.getLatencyOffset();
-			u32 inputBufferLastBlock = inputBuffer.getLastOutputBlock();
-			u32 inputBufferSize = inputBuffer.getSize();
+    // only wet
+    if (mix_ == 1.0f)
+    {
+      inputBuffer.advanceLastOutputBlock(samples);
+      return;
+    }
+      
+    // mix both
+    auto &dryBuffer = inputBuffer.getBuffer();
 
-			// mixing dry
-			for (u32 j = 0; j < numSamples; j++)
-			{
-				u32 outSampleIndex = (beginOutput + j) % outBufferSize;
-				u32 inSampleIndex = ((u32)(inputBufferSize + inputBufferLastBlock + latencyOffset) + j) % inputBufferSize;
+    u32 outBufferSize = outBuffer.getSize();
+    u32 beginOutput = outBuffer.getBeginOutput();
+    
+    u32 inputBufferLastBlock = inputBuffer.getLastOutputBlock();
+    u32 inputBufferSize = inputBuffer.getSize();
+    u32 beginInput = (inputBufferSize + inputBufferLastBlock + latencyOffset) % inputBufferSize;
 
-				outBuffer.add(dryBuffer.read(i, inSampleIndex) * dryMix, i, outSampleIndex);
-			}
-		}
-		inputBuffer.advanceLastOutputBlock(numSamples);
-	}
+    for (u32 i = 0; i < outBuffer.getChannelCount(); i++)
+    {
+      if (!usedOutputChannels_[i])
+        continue;
 
-	perf_inline void SoundEngine::FillOutput(float *const *buffer, u32 numOutputs, u32 numSamples) noexcept
-	{
-		// if we don't have enough samples we simply output silence
-		if (!hasEnoughSamples_)
-		{
-			for (u32 i = 0; i < outBuffer.getNumChannels(); i++)
-				std::memset(buffer[i], 0, sizeof(float) * numSamples);
-			return;
-		}
+      // TODO: optimise this with simd
+      for (u32 j = 0; j < samples; j++)
+      {
+        u32 outIndex = (beginOutput + j) % outBufferSize;
+        u32 inIndex = (beginInput + j) % inputBufferSize;
 
-		outBuffer.readOutput(buffer, numOutputs, usedOutputChannels_.data(), numSamples, outGain_);
-		outBuffer.advanceBeginOutput(numSamples);
+        float value = std::lerp(dryBuffer.read(i, inIndex), outBuffer.read(i, outIndex), mix_);
+        outBuffer.write(value, i, outIndex);
+      }
+    }
+    inputBuffer.advanceLastOutputBlock(samples);
+  }
 
-		prevFFTNumSamples_ = FFTNumSamples_;
-	}
+  void SoundEngine::fillOutput(float *const *buffer, u32 outputs, u32 samples) noexcept
+  {
+    // if we don't have enough samples we simply output silence
+    if (!hasEnoughSamples_)
+    {
+      for (u32 i = 0; i < outBuffer.getChannelCount(); i++)
+        std::memset(buffer[i], 0, sizeof(float) * samples);
+      return;
+    }
 
-	void SoundEngine::MainProcess(float *const *buffer, u32 numSamples,
-		float sampleRate, u32 numInputs, u32 numOutputs) noexcept
-	{
-		// copying input in the main circular buffer
-		CopyBuffers(buffer, numInputs, numSamples);
+    outBuffer.readOutput(buffer, outputs, usedOutputChannels_, samples, outGain_);
+    outBuffer.advanceBeginOutput(samples);
+  }
 
-		while (true)
-		{
-			IsReadyToPerform(numSamples);
-			if (!isPerforming_)
-				break;
-			
-			UpdateParameters(UpdateFlag::Realtime, sampleRate);
-			DoFFT();
-			ProcessFFT(sampleRate);
-			DoIFFT();
-		}
+  void SoundEngine::insertSubProcessor(size_t, BaseProcessor &newSubProcessor) noexcept
+  {
+    COMPLEX_ASSERT(newSubProcessor.getProcessorType() == Framework::Processors::EffectsState::id().value());
 
-		// copying and scaling the dry signal to the output
-		MixOut(numSamples);
-		// copying output to buffer
-		FillOutput(buffer, numOutputs, numSamples);
-	}
+    newSubProcessor.setParentProcessorId(processorId_);
+    effectsState_ = utils::as<EffectsState>(&newSubProcessor);
+    subProcessors_.emplace_back(effectsState_);
+  }
+
+  void SoundEngine::process(float *const *buffer, u32 samples,
+    float sampleRate, u32 numInputs, u32 numOutputs) noexcept
+  {
+    // copying input in the main circular buffer
+    copyBuffers(buffer, numInputs, samples);
+
+    while (true)
+    {
+      isReadyToPerform(samples);
+      if (!isPerforming_)
+        break;
+      
+      updateParameters(UpdateFlag::Realtime, sampleRate, true);
+      doFFT();
+      processFFT(sampleRate);
+      doIFFT();
+    }
+
+    // copying and scaling the dry signal to the output
+    mixOut(samples);
+    // copying output to buffer
+    fillOutput(buffer, numOutputs, samples);
+  }
 }

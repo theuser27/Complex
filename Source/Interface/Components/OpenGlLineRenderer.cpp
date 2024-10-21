@@ -8,18 +8,20 @@
   ==============================================================================
 */
 
-#include "Framework/simd_values.h"
-#include "OpenGlLineRenderer.h"
-#include "OpenGlMultiQuad.h"
+#include "OpenGlLineRenderer.hpp"
+
+#include "Framework/simd_values.hpp"
+#include "Plugin/Renderer.hpp"
+#include "OpenGlQuad.hpp"
 
 namespace
 {
   strict_inline float inverseSqrt(float value)
   {
     float x2 = value * 0.5f;
-    int i = std::bit_cast<int>(value);
+    int i = utils::bit_cast<int>(value);
     i = 0x5f3759DF - (i >> 1);
-    value = std::bit_cast<float>(i);
+    value = utils::bit_cast<float>(i);
     value = value * (1.5f - (x2 * value * value));
     value = value * (1.5f - (x2 * value * value));
     return value;
@@ -58,40 +60,43 @@ namespace Interface
 
     lineShader_ = openGl.shaders->getShaderProgram(Shaders::kLineVertex, Shaders::kLineFragment);
     lineShader_->use();
-    lineColourUniform_ = OpenGlComponent::getUniform(*lineShader_, "color").value();
-    lineScaleUniform_ = OpenGlComponent::getUniform(*lineShader_, "scale").value();
-    lineWidthUniform_ = OpenGlComponent::getUniform(*lineShader_, "line_width").value();
-    linePosition_ = OpenGlComponent::getAttribute(*lineShader_, "position").value();
+    lineColourUniform_ = getUniform(*lineShader_, "color");
+    lineScaleUniform_ = getUniform(*lineShader_, "scale");
+    lineWidthUniform_ = getUniform(*lineShader_, "line_width");
+    linePosition_ = getAttribute(*lineShader_, "position");
 
     fillShader_ = openGl.shaders->getShaderProgram(Shaders::kFillVertex, Shaders::kFillFragment);
     fillShader_->use();
-    fillColourFromUniform_ = OpenGlComponent::getUniform(*fillShader_, "color_from").value();
-    fillColourToUniform_ = OpenGlComponent::getUniform(*fillShader_, "color_to").value();
-    fillCenterUniform_ = OpenGlComponent::getUniform(*fillShader_, "center_position").value();
-    fillBoostAmountUniform_ = OpenGlComponent::getUniform(*fillShader_, "boost_amount").value();
-    fillScaleUniform_ = OpenGlComponent::getUniform(*fillShader_, "scale").value();
-    fillPosition_ = OpenGlComponent::getAttribute(*fillShader_, "position").value();
+    fillColourFromUniform_ = getUniform(*fillShader_, "color_from");
+    fillColourToUniform_ = getUniform(*fillShader_, "color_to");
+    fillCenterUniform_ = getUniform(*fillShader_, "center_position");
+    fillBoostAmountUniform_ = getUniform(*fillShader_, "boost_amount");
+    fillScaleUniform_ = getUniform(*fillShader_, "scale");
+    fillPosition_ = getAttribute(*fillShader_, "position");
   }
 
-  void OpenGlLineRenderer::destroy()
+  void OpenGlLineRenderer::destroy(Renderer &renderer)
   {
     lineShader_ = nullptr;
-    linePosition_.attributeID = (GLuint)-1;
-    lineColourUniform_.uniformID = -1;
-    lineScaleUniform_.uniformID = -1;
-    lineWidthUniform_.uniformID = -1;
+    linePosition_ = {};
+    lineColourUniform_ = {};
+    lineScaleUniform_ = {};
+    lineWidthUniform_ = {};
 
     fillShader_ = nullptr;
-    fillColourFromUniform_.uniformID = -1;
-    fillColourToUniform_.uniformID = -1;
-    fillCenterUniform_.uniformID = -1;
-    fillBoostAmountUniform_.uniformID = -1;
-    fillScaleUniform_.uniformID = -1;
-    fillPosition_.attributeID = (GLuint)-1;
+    fillColourFromUniform_ = {};
+    fillColourToUniform_ = {};
+    fillCenterUniform_ = {};
+    fillBoostAmountUniform_ = {};
+    fillScaleUniform_ = {};
+    fillPosition_ = {};
 
-    glDeleteBuffers(1, &lineBuffer_);
-    glDeleteBuffers(1, &fillBuffer_);
-    glDeleteBuffers(1, &indicesBuffer_);
+    if (lineBuffer_)
+      renderer.pushOpenGlResourceToDelete(OpenGlAllocatedResource::Buffer, 1, lineBuffer_);
+    if (fillBuffer_)
+      renderer.pushOpenGlResourceToDelete(OpenGlAllocatedResource::Buffer, 1, fillBuffer_);
+    if (indicesBuffer_)
+      renderer.pushOpenGlResourceToDelete(OpenGlAllocatedResource::Buffer, 1, indicesBuffer_);
 
     lineBuffer_ = 0;
     fillBuffer_ = 0;
@@ -128,11 +133,11 @@ namespace Interface
     shouldUpdateBufferSizes_ = true;
   }
 
-  void OpenGlLineRenderer::render(const OpenGlWrapper &openGl, const OpenGlComponent *target, Rectangle<int> bounds)
+  void OpenGlLineRenderer::render(const OpenGlWrapper &openGl, const OpenGlComponent &target, juce::Rectangle<int> bounds)
   {
     utils::ScopedLock g{ buffersLock_, utils::WaitMechanism::WaitNotify };
 
-    if (!OpenGlComponent::setViewPort(target, bounds, openGl))
+    if (!setViewPort(target, target, bounds, bounds, openGl, nullptr))
       return;
 
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
@@ -141,8 +146,8 @@ namespace Interface
 
     if (dirty_)
     {
-      setLineVertices((float)target->getWidthSafe(), (float)target->getHeightSafe());
-      setFillVertices((float)target->getWidthSafe(), (float)target->getHeightSafe());
+      setLineVertices((float)target.getWidthSafe(), (float)target.getHeightSafe());
+      setFillVertices((float)target.getWidthSafe(), (float)target.getHeightSafe());
 
       if (shouldUpdateBufferSizes_)
       {
@@ -181,8 +186,8 @@ namespace Interface
     float y_shrink = 1.0f;
     if (fit_)
     {
-      x_shrink = 1.0f - 0.33f * lineWidth_ / (float)target->getWidthSafe();
-      y_shrink = 1.0f - 0.33f * lineWidth_ / (float)target->getHeightSafe();
+      x_shrink = 1.0f - 0.33f * lineWidth_ / (float)target.getWidthSafe();
+      y_shrink = 1.0f - 0.33f * lineWidth_ / (float)target.getHeightSafe();
     }
 
     if (fill_)
@@ -201,17 +206,17 @@ namespace Interface
       fillBoostAmountUniform_.set(fillBoostAmount_);
       fillScaleUniform_.set(x_shrink, y_shrink);
 
-      glVertexAttribPointer(fillPosition_.attributeID, kFillFloatsPerVertex, GL_FLOAT,
+      glVertexAttribPointer(fillPosition_.attributeId, kFillFloatsPerVertex, GL_FLOAT,
         GL_FALSE, kFillFloatsPerVertex * sizeof(float), nullptr);
-      glEnableVertexAttribArray(fillPosition_.attributeID);
+      glEnableVertexAttribArray(fillPosition_.attributeId);
       glDrawElements(GL_TRIANGLE_STRIP, fillVerticesCount_, GL_UNSIGNED_INT, nullptr);
     }
 
     glBindBuffer(GL_ARRAY_BUFFER, lineBuffer_);
     lineShader_->use();
-    glVertexAttribPointer(linePosition_.attributeID, kLineFloatsPerVertex, GL_FLOAT,
+    glVertexAttribPointer(linePosition_.attributeId, kLineFloatsPerVertex, GL_FLOAT,
       GL_FALSE, kLineFloatsPerVertex * sizeof(float), nullptr);
-    glEnableVertexAttribArray(linePosition_.attributeID);
+    glEnableVertexAttribArray(linePosition_.attributeId);
 
     Colour colour = colour_.get();
     lineColourUniform_.set(colour.getFloatRed(), colour.getFloatGreen(), colour.getFloatBlue(), colour.getFloatAlpha());
@@ -221,7 +226,7 @@ namespace Interface
 
     glDrawElements(GL_TRIANGLE_STRIP, lineVerticesCount_, GL_UNSIGNED_INT, nullptr);
 
-    glDisableVertexAttribArray(linePosition_.attributeID);
+    glDisableVertexAttribArray(linePosition_.attributeId);
     glBindBuffer(GL_ARRAY_BUFFER, 0);
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
     glDisable(GL_BLEND);

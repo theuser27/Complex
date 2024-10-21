@@ -2,18 +2,20 @@
 
 <JUCERPROJECT id="MQJhEl" name="Complex" projectType="audioplug" addUsingNamespaceToJuceHeader="1"
               jucerFormatVersion="1" cppLanguageStandard="20" pluginFormats="buildStandalone,buildVST3"
-              displaySplashScreen="1" pluginManufacturer="theuser27" version="0.7.0.2"
-              pluginDesc="Multi-lane Spectral Effects Suite" useAppConfig="0">
+              displaySplashScreen="1" pluginManufacturer="theuser27" version="0.0.9"
+              pluginDesc="Multi-lane Spectral Effects Suite" useAppConfig="0"
+              includeBinaryInJuceHeader="0">
   <MAINGROUP id="zNsp6a" name="Complex">
     <GROUP id="{65E7BD15-F97F-DFD8-8405-B6E4F140ACA3}" name="Icons">
+      <FILE id="rzaDZZ" name="Icon_Pitch.svg" compile="0" resource="1" file="Icons/Icon_Pitch.svg"/>
+      <FILE id="W5loec" name="Icon_Filter.svg" compile="0" resource="1" file="Icons/Icon_Filter.svg"/>
       <FILE id="inGlB5" name="Icon_Dynamics.svg" compile="0" resource="1"
             file="Icons/Icon_Dynamics.svg"/>
-      <FILE id="W5loec" name="Icon_Filter.svg" compile="0" resource="1" file="Icons/Icon_Filter.svg"/>
       <FILE id="VSP3jA" name="Icon_Phase.svg" compile="0" resource="1" file="Icons/Icon_Phase.svg"/>
     </GROUP>
     <GROUP id="{7DCBD02E-5965-7719-7CD3-51C632FE14C8}" name="Fonts">
       <FILE id="P00tpO" name="D-DIN-Bold.ttf" compile="0" resource="1" file="Fonts/D-DIN-Bold.ttf"/>
-      <FILE id="lerx3Z" name="Inter-Medium.ttf" compile="0" resource="1"
+      <FILE id="tgppxL" name="Inter-Medium.ttf" compile="0" resource="1"
             file="Fonts/Inter-Medium.ttf"/>
     </GROUP>
     <GROUP id="{0BDE1775-1F5D-13A2-4B89-418A3C672CA2}" name="Skin">
@@ -21,192 +23,177 @@
     </GROUP>
     <GROUP id="{EA56D449-367C-4F87-53C4-8DB58E6C0431}" name="Source">
       <GROUP id="{32A822E4-0A2D-7496-308D-972ADD4D4F30}" name="Framework">
-        <FILE id="xWYami" name="circular_buffer.h" compile="0" resource="0"
-              file="Source/Framework/circular_buffer.h"/>
-        <FILE id="QZdRAA" name="constants.h" compile="0" resource="0" file="Source/Framework/constants.h"/>
-        <FILE id="JuQs8V" name="constexpr_utils.h" compile="0" resource="0"
-              file="Source/Framework/constexpr_utils.h"/>
+        <FILE id="xWYami" name="circular_buffer.hpp" compile="0" resource="0"
+              file="Source/Framework/circular_buffer.hpp"/>
+        <FILE id="QZdRAA" name="constants.hpp" compile="0" resource="0" file="Source/Framework/constants.hpp"/>
         <FILE id="zKZqvN" name="fourier_transform.cpp" compile="1" resource="0"
               file="Source/Framework/fourier_transform.cpp"/>
-        <FILE id="tzFNy3" name="fourier_transform.h" compile="0" resource="0"
-              file="Source/Framework/fourier_transform.h"/>
+        <FILE id="tzFNy3" name="fourier_transform.hpp" compile="0" resource="0"
+              file="Source/Framework/fourier_transform.hpp"/>
         <FILE id="qmhZRh" name="load_save.cpp" compile="1" resource="0" file="Source/Framework/load_save.cpp"/>
-        <FILE id="JcZofO" name="load_save.h" compile="0" resource="0" file="Source/Framework/load_save.h"/>
-        <FILE id="unsKpG" name="lookup.h" compile="0" resource="0" file="Source/Framework/lookup.h"/>
-        <FILE id="sHvuc0" name="matrix.h" compile="0" resource="0" file="Source/Framework/matrix.h"/>
-        <FILE id="xFpIpz" name="memory_block.h" compile="0" resource="0" file="Source/Framework/memory_block.h"/>
-        <FILE id="GEoS25" name="nested_enum.h" compile="0" resource="0" file="Source/Framework/nested_enum.h"/>
+        <FILE id="JcZofO" name="load_save.hpp" compile="0" resource="0" file="Source/Framework/load_save.hpp"/>
+        <FILE id="unsKpG" name="lookup.hpp" compile="0" resource="0" file="Source/Framework/lookup.hpp"/>
+        <FILE id="xFpIpz" name="memory_block.hpp" compile="0" resource="0"
+              file="Source/Framework/memory_block.hpp"/>
+        <FILE id="GEoS25" name="nested_enum.hpp" compile="0" resource="0" file="Source/Framework/nested_enum.hpp"/>
         <FILE id="rNgDsh" name="open_gl_primitives.cpp" compile="1" resource="0"
               file="Source/Framework/open_gl_primitives.cpp"/>
-        <FILE id="Ab2tGJ" name="open_gl_primitives.h" compile="0" resource="0"
-              file="Source/Framework/open_gl_primitives.h"/>
+        <FILE id="Ab2tGJ" name="open_gl_primitives.hpp" compile="0" resource="0"
+              file="Source/Framework/open_gl_primitives.hpp"/>
         <FILE id="nzaVCq" name="parameter_bridge.cpp" compile="1" resource="0"
               file="Source/Framework/parameter_bridge.cpp"/>
-        <FILE id="VbaYQ5" name="parameter_bridge.h" compile="0" resource="0"
-              file="Source/Framework/parameter_bridge.h"/>
+        <FILE id="VbaYQ5" name="parameter_bridge.hpp" compile="0" resource="0"
+              file="Source/Framework/parameter_bridge.hpp"/>
         <FILE id="sWzWTh" name="parameter_value.cpp" compile="1" resource="0"
               file="Source/Framework/parameter_value.cpp"/>
-        <FILE id="QQTdZ0" name="parameter_value.h" compile="0" resource="0"
-              file="Source/Framework/parameter_value.h"/>
+        <FILE id="QQTdZ0" name="parameter_value.hpp" compile="0" resource="0"
+              file="Source/Framework/parameter_value.hpp"/>
         <FILE id="w9fnqo" name="parameters.cpp" compile="1" resource="0" file="Source/Framework/parameters.cpp"/>
-        <FILE id="DaUolN" name="parameters.h" compile="0" resource="0" file="Source/Framework/parameters.h"/>
-        <FILE id="abGidz" name="platform_definitions.h" compile="0" resource="0"
-              file="Source/Framework/platform_definitions.h"/>
-        <FILE id="wxbrKx" name="simd_buffer.h" compile="0" resource="0" file="Source/Framework/simd_buffer.h"/>
-        <FILE id="RfTiiz" name="simd_utils.h" compile="0" resource="0" file="Source/Framework/simd_utils.h"/>
-        <FILE id="ZaoMau" name="simd_values.h" compile="0" resource="0" file="Source/Framework/simd_values.h"/>
-        <FILE id="rAmG5N" name="spectral_support_functions.h" compile="0" resource="0"
-              file="Source/Framework/spectral_support_functions.h"/>
+        <FILE id="DaUolN" name="parameters.hpp" compile="0" resource="0" file="Source/Framework/parameters.hpp"/>
+        <FILE id="abGidz" name="platform_definitions.hpp" compile="0" resource="0"
+              file="Source/Framework/platform_definitions.hpp"/>
+        <FILE id="wxbrKx" name="simd_buffer.hpp" compile="0" resource="0" file="Source/Framework/simd_buffer.hpp"/>
+        <FILE id="RfTiiz" name="simd_utils.hpp" compile="0" resource="0" file="Source/Framework/simd_utils.hpp"/>
+        <FILE id="ZaoMau" name="simd_values.hpp" compile="0" resource="0" file="Source/Framework/simd_values.hpp"/>
+        <FILE id="rAmG5N" name="simd_math.hpp" compile="0" resource="0" file="Source/Framework/simd_math.hpp"/>
+        <FILE id="RC7QSZ" name="stl_utils.hpp" compile="0" resource="0" file="Source/Framework/stl_utils.hpp"/>
         <FILE id="TqAOZG" name="sync_primitives.cpp" compile="1" resource="0"
               file="Source/Framework/sync_primitives.cpp"/>
-        <FILE id="yJ1cnp" name="sync_primitives.h" compile="0" resource="0"
-              file="Source/Framework/sync_primitives.h"/>
+        <FILE id="yJ1cnp" name="sync_primitives.hpp" compile="0" resource="0"
+              file="Source/Framework/sync_primitives.hpp"/>
         <FILE id="JwyCA1" name="update_types.cpp" compile="1" resource="0"
               file="Source/Framework/update_types.cpp"/>
-        <FILE id="ZPzEka" name="update_types.h" compile="0" resource="0" file="Source/Framework/update_types.h"/>
-        <FILE id="YWf5ti" name="utils.h" compile="0" resource="0" file="Source/Framework/utils.h"/>
-        <FILE id="x0ygLa" name="vector_map.h" compile="0" resource="0" file="Source/Framework/vector_map.h"/>
+        <FILE id="ZPzEka" name="update_types.hpp" compile="0" resource="0"
+              file="Source/Framework/update_types.hpp"/>
+        <FILE id="YWf5ti" name="utils.hpp" compile="0" resource="0" file="Source/Framework/utils.hpp"/>
+        <FILE id="x0ygLa" name="vector_map.hpp" compile="0" resource="0" file="Source/Framework/vector_map.hpp"/>
         <FILE id="NwPuYS" name="windows.cpp" compile="1" resource="0" file="Source/Framework/windows.cpp"/>
-        <FILE id="M5uHmH" name="windows.h" compile="0" resource="0" file="Source/Framework/windows.h"/>
+        <FILE id="M5uHmH" name="windows.hpp" compile="0" resource="0" file="Source/Framework/windows.hpp"/>
       </GROUP>
       <GROUP id="{EF39CE43-0DBF-FB40-49CF-0CE98C567940}" name="Generation">
         <FILE id="j8RVNx" name="EffectModules.cpp" compile="1" resource="0"
               file="Source/Generation/EffectModules.cpp"/>
-        <FILE id="TTPh0W" name="EffectModules.h" compile="0" resource="0" file="Source/Generation/EffectModules.h"/>
+        <FILE id="TTPh0W" name="EffectModules.hpp" compile="0" resource="0"
+              file="Source/Generation/EffectModules.hpp"/>
         <FILE id="eP7Zqt" name="EffectsState.cpp" compile="1" resource="0"
               file="Source/Generation/EffectsState.cpp"/>
-        <FILE id="dN4rLJ" name="EffectsState.h" compile="0" resource="0" file="Source/Generation/EffectsState.h"/>
+        <FILE id="dN4rLJ" name="EffectsState.hpp" compile="0" resource="0"
+              file="Source/Generation/EffectsState.hpp"/>
         <FILE id="pRcRs5" name="BaseProcessor.cpp" compile="1" resource="0"
               file="Source/Generation/BaseProcessor.cpp"/>
-        <FILE id="uNWYIC" name="BaseProcessor.h" compile="0" resource="0" file="Source/Generation/BaseProcessor.h"/>
+        <FILE id="uNWYIC" name="BaseProcessor.hpp" compile="0" resource="0"
+              file="Source/Generation/BaseProcessor.hpp"/>
         <FILE id="rVZPoo" name="SoundEngine.cpp" compile="1" resource="0" file="Source/Generation/SoundEngine.cpp"/>
-        <FILE id="JLXBHD" name="SoundEngine.h" compile="0" resource="0" file="Source/Generation/SoundEngine.h"/>
+        <FILE id="JLXBHD" name="SoundEngine.hpp" compile="0" resource="0" file="Source/Generation/SoundEngine.hpp"/>
       </GROUP>
       <GROUP id="{BEC5E2C1-4F17-5CB7-533E-804A3018BEFB}" name="Plugin">
         <FILE id="rzki1O" name="Complex.cpp" compile="1" resource="0" file="Source/Plugin/Complex.cpp"/>
-        <FILE id="tlUbBR" name="Complex.h" compile="0" resource="0" file="Source/Plugin/Complex.h"/>
+        <FILE id="tlUbBR" name="Complex.hpp" compile="0" resource="0" file="Source/Plugin/Complex.hpp"/>
         <FILE id="PFBBZZ" name="PluginEditor.cpp" compile="1" resource="0"
               file="Source/Plugin/PluginEditor.cpp"/>
-        <FILE id="E57UuY" name="PluginEditor.h" compile="0" resource="0" file="Source/Plugin/PluginEditor.h"/>
+        <FILE id="E57UuY" name="PluginEditor.hpp" compile="0" resource="0"
+              file="Source/Plugin/PluginEditor.hpp"/>
         <FILE id="sQhUwd" name="PluginProcessor.cpp" compile="1" resource="0"
               file="Source/Plugin/PluginProcessor.cpp"/>
-        <FILE id="l2n7yR" name="PluginProcessor.h" compile="0" resource="0"
-              file="Source/Plugin/PluginProcessor.h"/>
+        <FILE id="l2n7yR" name="PluginProcessor.hpp" compile="0" resource="0"
+              file="Source/Plugin/PluginProcessor.hpp"/>
         <FILE id="zGFnUK" name="ProcessorTree.cpp" compile="1" resource="0"
               file="Source/Plugin/ProcessorTree.cpp"/>
-        <FILE id="h6BWjT" name="ProcessorTree.h" compile="0" resource="0" file="Source/Plugin/ProcessorTree.h"/>
+        <FILE id="h6BWjT" name="ProcessorTree.hpp" compile="0" resource="0"
+              file="Source/Plugin/ProcessorTree.hpp"/>
         <FILE id="PrOzjp" name="Renderer.cpp" compile="1" resource="0" file="Source/Plugin/Renderer.cpp"/>
-        <FILE id="Hbp2tZ" name="Renderer.h" compile="0" resource="0" file="Source/Plugin/Renderer.h"/>
+        <FILE id="Hbp2tZ" name="Renderer.hpp" compile="0" resource="0" file="Source/Plugin/Renderer.hpp"/>
       </GROUP>
       <GROUP id="{F4BA8DFF-28C8-EF00-62C9-202FF4771AD8}" name="Interface">
         <GROUP id="{4D931D97-4A4F-8153-12B4-A9C0FA52764F}" name="LookAndFeel">
           <FILE id="pn9c8x" name="BaseComponent.cpp" compile="1" resource="0"
                 file="Source/Interface/LookAndFeel/BaseComponent.cpp"/>
-          <FILE id="f7QtT0" name="BaseComponent.h" compile="0" resource="0" file="Source/Interface/LookAndFeel/BaseComponent.h"/>
+          <FILE id="f7QtT0" name="BaseComponent.hpp" compile="0" resource="0"
+                file="Source/Interface/LookAndFeel/BaseComponent.hpp"/>
           <FILE id="R1Bxgg" name="BorderBoundsConstrainer.cpp" compile="1" resource="0"
                 file="Source/Interface/LookAndFeel/BorderBoundsConstrainer.cpp"/>
-          <FILE id="cTL9sp" name="BorderBoundsConstrainer.h" compile="0" resource="0"
-                file="Source/Interface/LookAndFeel/BorderBoundsConstrainer.h"/>
-          <FILE id="jW8pVp" name="DefaultLookAndFeel.cpp" compile="1" resource="0"
-                file="Source/Interface/LookAndFeel/DefaultLookAndFeel.cpp"/>
-          <FILE id="i74lxl" name="DefaultLookAndFeel.h" compile="0" resource="0"
-                file="Source/Interface/LookAndFeel/DefaultLookAndFeel.h"/>
+          <FILE id="cTL9sp" name="BorderBoundsConstrainer.hpp" compile="0" resource="0"
+                file="Source/Interface/LookAndFeel/BorderBoundsConstrainer.hpp"/>
           <FILE id="uaULql" name="Fonts.cpp" compile="1" resource="0" file="Source/Interface/LookAndFeel/Fonts.cpp"/>
-          <FILE id="Ytfo18" name="Fonts.h" compile="0" resource="0" file="Source/Interface/LookAndFeel/Fonts.h"/>
-          <FILE id="Zv8h5H" name="Miscellaneous.h" compile="0" resource="0" file="Source/Interface/LookAndFeel/Miscellaneous.h"/>
-          <FILE id="pwerL9" name="Paths.h" compile="0" resource="0" file="Source/Interface/LookAndFeel/Paths.h"/>
+          <FILE id="Ytfo18" name="Fonts.hpp" compile="0" resource="0" file="Source/Interface/LookAndFeel/Fonts.hpp"/>
+          <FILE id="R3UoZO" name="Miscellaneous.cpp" compile="1" resource="0"
+                file="Source/Interface/LookAndFeel/Miscellaneous.cpp"/>
+          <FILE id="Zv8h5H" name="Miscellaneous.hpp" compile="0" resource="0"
+                file="Source/Interface/LookAndFeel/Miscellaneous.hpp"/>
           <FILE id="rMhvta" name="Shaders.cpp" compile="1" resource="0" file="Source/Interface/LookAndFeel/Shaders.cpp"/>
-          <FILE id="ViCOIr" name="Shaders.h" compile="0" resource="0" file="Source/Interface/LookAndFeel/Shaders.h"/>
+          <FILE id="ViCOIr" name="Shaders.hpp" compile="0" resource="0" file="Source/Interface/LookAndFeel/Shaders.hpp"/>
           <FILE id="Ni57uD" name="Skin.cpp" compile="1" resource="0" file="Source/Interface/LookAndFeel/Skin.cpp"/>
-          <FILE id="f3m3LO" name="Skin.h" compile="0" resource="0" file="Source/Interface/LookAndFeel/Skin.h"/>
+          <FILE id="f3m3LO" name="Skin.hpp" compile="0" resource="0" file="Source/Interface/LookAndFeel/Skin.hpp"/>
         </GROUP>
         <GROUP id="{E9C8DE45-B6CF-DC49-BDD9-B9085C174664}" name="Sections">
           <FILE id="ENQstn" name="HeaderFooterSections.cpp" compile="1" resource="0"
                 file="Source/Interface/Sections/HeaderFooterSections.cpp"/>
-          <FILE id="xtxVaz" name="HeaderFooterSections.h" compile="0" resource="0"
-                file="Source/Interface/Sections/HeaderFooterSections.h"/>
+          <FILE id="xtxVaz" name="HeaderFooterSections.hpp" compile="0" resource="0"
+                file="Source/Interface/Sections/HeaderFooterSections.hpp"/>
           <FILE id="PdwHho" name="EffectModuleSection.cpp" compile="1" resource="0"
                 file="Source/Interface/Sections/EffectModuleSection.cpp"/>
-          <FILE id="CRvCd9" name="EffectModuleSection.h" compile="0" resource="0"
-                file="Source/Interface/Sections/EffectModuleSection.h"/>
+          <FILE id="CRvCd9" name="EffectModuleSection.hpp" compile="0" resource="0"
+                file="Source/Interface/Sections/EffectModuleSection.hpp"/>
           <FILE id="IWuW1E" name="EffectsLaneSection.cpp" compile="1" resource="0"
                 file="Source/Interface/Sections/EffectsLaneSection.cpp"/>
-          <FILE id="sWmEpn" name="EffectsLaneSection.h" compile="0" resource="0"
-                file="Source/Interface/Sections/EffectsLaneSection.h"/>
+          <FILE id="sWmEpn" name="EffectsLaneSection.hpp" compile="0" resource="0"
+                file="Source/Interface/Sections/EffectsLaneSection.hpp"/>
           <FILE id="TKbHL2" name="EffectsStateSection.cpp" compile="1" resource="0"
                 file="Source/Interface/Sections/EffectsStateSection.cpp"/>
-          <FILE id="eQuSO0" name="EffectsStateSection.h" compile="0" resource="0"
-                file="Source/Interface/Sections/EffectsStateSection.h"/>
-          <FILE id="dQn10O" name="MacroSection.cpp" compile="1" resource="0"
-                file="Source/Interface/Sections/MacroSection.cpp"/>
-          <FILE id="R6UyZo" name="MacroSection.h" compile="0" resource="0" file="Source/Interface/Sections/MacroSection.h"/>
+          <FILE id="eQuSO0" name="EffectsStateSection.hpp" compile="0" resource="0"
+                file="Source/Interface/Sections/EffectsStateSection.hpp"/>
           <FILE id="uq42gn" name="MainInterface.cpp" compile="1" resource="0"
                 file="Source/Interface/Sections/MainInterface.cpp"/>
-          <FILE id="NlYc2d" name="MainInterface.h" compile="0" resource="0" file="Source/Interface/Sections/MainInterface.h"/>
+          <FILE id="NlYc2d" name="MainInterface.hpp" compile="0" resource="0"
+                file="Source/Interface/Sections/MainInterface.hpp"/>
           <FILE id="l5PuqF" name="BaseSection.cpp" compile="1" resource="0" file="Source/Interface/Sections/BaseSection.cpp"/>
-          <FILE id="h01rOS" name="BaseSection.h" compile="0" resource="0" file="Source/Interface/Sections/BaseSection.h"/>
+          <FILE id="h01rOS" name="BaseSection.hpp" compile="0" resource="0" file="Source/Interface/Sections/BaseSection.hpp"/>
           <FILE id="CZv8hH" name="Popups.cpp" compile="1" resource="0" file="Source/Interface/Sections/Popups.cpp"/>
-          <FILE id="EB8cKV" name="Popups.h" compile="0" resource="0" file="Source/Interface/Sections/Popups.h"/>
+          <FILE id="EB8cKV" name="Popups.hpp" compile="0" resource="0" file="Source/Interface/Sections/Popups.hpp"/>
         </GROUP>
         <GROUP id="{50266DCB-6FE6-2EB4-7810-AA54D2CA723F}" name="Components">
-          <FILE id="nJfXup" name="BarRenderer.cpp" compile="1" resource="0" file="Source/Interface/Components/BarRenderer.cpp"/>
-          <FILE id="sZaq5X" name="BarRenderer.h" compile="0" resource="0" file="Source/Interface/Components/BarRenderer.h"/>
           <FILE id="D6nWjT" name="BaseButton.cpp" compile="1" resource="0" file="Source/Interface/Components/BaseButton.cpp"/>
-          <FILE id="tHcNDP" name="BaseButton.h" compile="0" resource="0" file="Source/Interface/Components/BaseButton.h"/>
+          <FILE id="tHcNDP" name="BaseButton.hpp" compile="0" resource="0" file="Source/Interface/Components/BaseButton.hpp"/>
           <FILE id="iKXGhc" name="BaseControl.cpp" compile="1" resource="0" file="Source/Interface/Components/BaseControl.cpp"/>
-          <FILE id="eI5KYW" name="BaseControl.h" compile="0" resource="0" file="Source/Interface/Components/BaseControl.h"/>
+          <FILE id="eI5KYW" name="BaseControl.hpp" compile="0" resource="0" file="Source/Interface/Components/BaseControl.hpp"/>
           <FILE id="fUp6hX" name="BaseSlider.cpp" compile="1" resource="0" file="Source/Interface/Components/BaseSlider.cpp"/>
-          <FILE id="c8fHLI" name="BaseSlider.h" compile="0" resource="0" file="Source/Interface/Components/BaseSlider.h"/>
+          <FILE id="c8fHLI" name="BaseSlider.hpp" compile="0" resource="0" file="Source/Interface/Components/BaseSlider.hpp"/>
           <FILE id="Jgtfgx" name="DraggableComponent.cpp" compile="1" resource="0"
                 file="Source/Interface/Components/DraggableComponent.cpp"/>
-          <FILE id="PFwFw7" name="DraggableComponent.h" compile="0" resource="0"
-                file="Source/Interface/Components/DraggableComponent.h"/>
+          <FILE id="PFwFw7" name="DraggableComponent.hpp" compile="0" resource="0"
+                file="Source/Interface/Components/DraggableComponent.hpp"/>
           <FILE id="OFZQ0M" name="LaneSelector.cpp" compile="1" resource="0"
                 file="Source/Interface/Components/LaneSelector.cpp"/>
-          <FILE id="j1bcSK" name="LaneSelector.h" compile="0" resource="0" file="Source/Interface/Components/LaneSelector.h"/>
+          <FILE id="j1bcSK" name="LaneSelector.hpp" compile="0" resource="0"
+                file="Source/Interface/Components/LaneSelector.hpp"/>
           <FILE id="lwVbDW" name="OpenGlComponent.cpp" compile="1" resource="0"
                 file="Source/Interface/Components/OpenGlComponent.cpp"/>
-          <FILE id="tzoee2" name="OpenGlComponent.h" compile="0" resource="0"
-                file="Source/Interface/Components/OpenGlComponent.h"/>
+          <FILE id="tzoee2" name="OpenGlComponent.hpp" compile="0" resource="0"
+                file="Source/Interface/Components/OpenGlComponent.hpp"/>
           <FILE id="RPnVnB" name="OpenGlContainer.cpp" compile="1" resource="0"
                 file="Source/Interface/Components/OpenGlContainer.cpp"/>
-          <FILE id="Vw8Scd" name="OpenGlContainer.h" compile="0" resource="0"
-                file="Source/Interface/Components/OpenGlContainer.h"/>
-          <FILE id="veY3U8" name="OpenGlImageComponent.cpp" compile="1" resource="0"
-                file="Source/Interface/Components/OpenGlImageComponent.cpp"/>
-          <FILE id="mudn2r" name="OpenGlImageComponent.h" compile="0" resource="0"
-                file="Source/Interface/Components/OpenGlImageComponent.h"/>
+          <FILE id="Vw8Scd" name="OpenGlContainer.hpp" compile="0" resource="0"
+                file="Source/Interface/Components/OpenGlContainer.hpp"/>
+          <FILE id="veY3U8" name="OpenGlImage.cpp" compile="1" resource="0" file="Source/Interface/Components/OpenGlImage.cpp"/>
+          <FILE id="mudn2r" name="OpenGlImage.hpp" compile="0" resource="0" file="Source/Interface/Components/OpenGlImage.hpp"/>
           <FILE id="KQi0eG" name="OpenGlLineRenderer.cpp" compile="1" resource="0"
                 file="Source/Interface/Components/OpenGlLineRenderer.cpp"/>
-          <FILE id="zy6vlz" name="OpenGlLineRenderer.h" compile="0" resource="0"
-                file="Source/Interface/Components/OpenGlLineRenderer.h"/>
-          <FILE id="P79aeX" name="OpenGlMultiQuad.cpp" compile="1" resource="0"
-                file="Source/Interface/Components/OpenGlMultiQuad.cpp"/>
-          <FILE id="zSHZOx" name="OpenGlMultiQuad.h" compile="0" resource="0"
-                file="Source/Interface/Components/OpenGlMultiQuad.h"/>
-          <FILE id="yL3Mhr" name="OpenGlScrollBar.cpp" compile="1" resource="0"
-                file="Source/Interface/Components/OpenGlScrollBar.cpp"/>
-          <FILE id="GdNzvP" name="OpenGlScrollBar.h" compile="0" resource="0"
-                file="Source/Interface/Components/OpenGlScrollBar.h"/>
-          <FILE id="CKOxhZ" name="OpenGlTextEditor.cpp" compile="1" resource="0"
-                file="Source/Interface/Components/OpenGlTextEditor.cpp"/>
-          <FILE id="wXu3rN" name="OpenGlTextEditor.h" compile="0" resource="0"
-                file="Source/Interface/Components/OpenGlTextEditor.h"/>
-          <FILE id="DwsfXB" name="OpenGlViewport.cpp" compile="1" resource="0"
-                file="Source/Interface/Components/OpenGlViewport.cpp"/>
-          <FILE id="Yrk17Q" name="OpenGlViewport.h" compile="0" resource="0"
-                file="Source/Interface/Components/OpenGlViewport.h"/>
-          <FILE id="uJxcL0" name="Overlay.cpp" compile="1" resource="0" file="Source/Interface/Components/Overlay.cpp"/>
-          <FILE id="bwhbWS" name="Overlay.h" compile="0" resource="0" file="Source/Interface/Components/Overlay.h"/>
+          <FILE id="zy6vlz" name="OpenGlLineRenderer.hpp" compile="0" resource="0"
+                file="Source/Interface/Components/OpenGlLineRenderer.hpp"/>
+          <FILE id="P79aeX" name="OpenGlQuad.cpp" compile="1" resource="0" file="Source/Interface/Components/OpenGlQuad.cpp"/>
+          <FILE id="zSHZOx" name="OpenGlQuad.hpp" compile="0" resource="0" file="Source/Interface/Components/OpenGlQuad.hpp"/>
+          <FILE id="yL3Mhr" name="ScrollBar.cpp" compile="1" resource="0" file="Source/Interface/Components/ScrollBar.cpp"/>
+          <FILE id="GdNzvP" name="ScrollBar.hpp" compile="0" resource="0" file="Source/Interface/Components/ScrollBar.hpp"/>
+          <FILE id="CKOxhZ" name="TextEditor.cpp" compile="1" resource="0" file="Source/Interface/Components/TextEditor.cpp"/>
+          <FILE id="wXu3rN" name="TextEditor.hpp" compile="0" resource="0" file="Source/Interface/Components/TextEditor.hpp"/>
+          <FILE id="DwsfXB" name="Viewport.cpp" compile="1" resource="0" file="Source/Interface/Components/Viewport.cpp"/>
+          <FILE id="Yrk17Q" name="Viewport.hpp" compile="0" resource="0" file="Source/Interface/Components/Viewport.hpp"/>
           <FILE id="IjUl71" name="PinBoundsBox.cpp" compile="1" resource="0"
                 file="Source/Interface/Components/PinBoundsBox.cpp"/>
-          <FILE id="lTHyNW" name="PinBoundsBox.h" compile="0" resource="0" file="Source/Interface/Components/PinBoundsBox.h"/>
-          <FILE id="uqwIPe" name="PresetSelector.cpp" compile="1" resource="0"
-                file="Source/Interface/Components/PresetSelector.cpp"/>
-          <FILE id="jtGKCf" name="PresetSelector.h" compile="0" resource="0"
-                file="Source/Interface/Components/PresetSelector.h"/>
+          <FILE id="lTHyNW" name="PinBoundsBox.hpp" compile="0" resource="0"
+                file="Source/Interface/Components/PinBoundsBox.hpp"/>
           <FILE id="DWFQ8L" name="Spectrogram.cpp" compile="1" resource="0" file="Source/Interface/Components/Spectrogram.cpp"/>
-          <FILE id="wp0P1I" name="Spectrogram.h" compile="0" resource="0" file="Source/Interface/Components/Spectrogram.h"/>
+          <FILE id="wp0P1I" name="Spectrogram.hpp" compile="0" resource="0" file="Source/Interface/Components/Spectrogram.hpp"/>
         </GROUP>
       </GROUP>
       <GROUP id="{E3C7034B-FA4E-F562-AA1E-A10D545C55F4}" name="Third Party">

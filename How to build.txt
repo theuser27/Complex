@@ -18,7 +18,7 @@ Build flags to keep in mind:
 To build:
 You have to invoke "cmake" with the "CMakeLists.txt" directory and your build directory
     (i.e. "cmake -S <source_dir> -B <build_dir>")
-while providing any flags you might need by prepending -D
+while providing any flags you might need by prepending "-D"
     (i.e. "cmake -S <source_dir> -B <build_dir>" -DCOMPLEX_USE_INTEL_IPP=1 
            -DCOMPLEX_COPY_PLUGIN_PATH="C:\Program Files\Common Files\VST3\DEV")
 
@@ -29,3 +29,8 @@ Alternatively you can use cmake-gui and fill in all the fields you need.
 This is kept as a backup but if you already have JUCE installed on your computer 
 (or you build it from JUCE/extras/Projucer with CMake) you can use that one too. 
 Though I can't promise that the build file will always be up-to-date.
+
+
+--------------------------------
+After building the plugin should be in the folders under <build folder>/Complex_artefacts
+(I hate that's where builds are located but oh well)

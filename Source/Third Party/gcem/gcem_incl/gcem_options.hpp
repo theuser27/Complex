@@ -1,6 +1,6 @@
 /*################################################################################
   ##
-  ##   Copyright (C) 2016-2022 Keith O'Hara
+  ##   Copyright (C) 2016-2024 Keith O'Hara
   ##
   ##   This file is part of the GCE-Math C++ library.
   ##
@@ -29,6 +29,14 @@
     #undef abs
 #endif
 
+#ifdef min
+    #undef min
+#endif
+
+#ifdef max
+    #undef max
+#endif
+
 #ifdef round
     #undef round
 #endif
@@ -45,11 +53,11 @@
 #endif
 
 #ifndef GCEM_VERSION_MINOR
-    #define GCEM_VERSION_MINOR 14
+    #define GCEM_VERSION_MINOR 18
 #endif
 
 #ifndef GCEM_VERSION_PATCH
-    #define GCEM_VERSION_PATCH 1
+    #define GCEM_VERSION_PATCH 0
 #endif
 
 //
@@ -171,6 +179,10 @@ namespace gcem
 
 #ifndef GCEM_SQRT_MAX_ITER
     #define GCEM_SQRT_MAX_ITER 100
+#endif
+
+#ifndef GCEM_INV_SQRT_MAX_ITER
+    #define GCEM_INV_SQRT_MAX_ITER 100
 #endif
 
 #ifndef GCEM_TAN_MAX_ITER

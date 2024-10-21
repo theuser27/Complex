@@ -1,244 +1,169 @@
 /*
-	==============================================================================
+  ==============================================================================
 
-		HeaderFooterSections.cpp
-		Created: 23 May 2023 6:00:44am
-		Author:  theuser27
+    HeaderFooterSections.cpp
+    Created: 23 May 2023 6:00:44am
+    Author:  theuser27
 
-	==============================================================================
+  ==============================================================================
 */
 
-#include "HeaderFooterSections.h"
+#include "HeaderFooterSections.hpp"
 
-#include "Framework/windows.h"
-#include "Generation/EffectsState.h"
-#include "Generation/SoundEngine.h"
-#include "../LookAndFeel/Fonts.h"
-#include "Framework/load_save.h"
-#include "../Components/OpenGlMultiQuad.h"
-#include "../Components/BaseButton.h"
-#include "../Components/BaseSlider.h"
-#include "../Components/Spectrogram.h"
-#include "Plugin/Renderer.h"
-#include "Plugin/Complex.h"
+#include "Framework/windows.hpp"
+#include "Generation/EffectsState.hpp"
+#include "Generation/SoundEngine.hpp"
+#include "../LookAndFeel/Fonts.hpp"
+#include "../Components/OpenGlQuad.hpp"
+#include "../Components/BaseButton.hpp"
+#include "../Components/BaseSlider.hpp"
+#include "../Components/Spectrogram.hpp"
+#include "Plugin/Complex.hpp"
 
 namespace Interface
 {
-	HeaderFooterSections::HeaderFooterSections(Generation::SoundEngine &soundEngine) :
-		BaseSection(typeid(HeaderFooterSections).name())
-	{
-		using namespace Framework;
+  static constexpr float kDynamicWindowsStart = (float)Framework::Processors::SoundEngine::WindowType::Exp /
+    (float)Framework::Processors::SoundEngine::WindowType::enum_count();
 
-		/*backgroundColour_ = makeOpenGlComponent<OpenGlQuad>(Shaders::kColorFragment);
-		backgroundColour_->setTargetComponent(this);
-		addOpenGlComponent(backgroundColour_);
+  HeaderFooterSections::HeaderFooterSections(Generation::SoundEngine &soundEngine) :
+    BaseSection{ "Header Footer Section" }
+  {
+    using namespace Framework;
 
-		bottomBarColour_ = makeOpenGlComponent<OpenGlQuad>(Shaders::kColorFragment);
-		bottomBarColour_->setTargetComponent(this);
-		addOpenGlComponent(bottomBarColour_);*/
+    setInterceptsMouseClicks(false, true);
 
-		spectrogram_ = makeOpenGlComponent<Spectrogram>("Main Spectrum");
-		spectrogram_->setSpectrumData(soundEngine.getEffectsState().getOutputBuffer(kNumChannels, 0), false);
-		addOpenGlComponent(spectrogram_);
-		
-		mixNumberBox_ = std::make_unique<NumberBox>(
-			soundEngine.getParameter(BaseProcessors::SoundEngine::MasterMix::name()));
-		mixNumberBox_->setMaxTotalCharacters(5);
-		mixNumberBox_->setMaxDecimalCharacters(2);
-		mixNumberBox_->setCanUseScrollWheel(true);
-		addControl(mixNumberBox_.get());
+    bottomBarColour_ = utils::up<OpenGlQuad>::create(Shaders::kColorFragment);
+    bottomBarColour_->setTargetComponent(this);
+    addOpenGlComponent(bottomBarColour_.get());
 
-		gainNumberBox_ = std::make_unique<NumberBox>(
-			soundEngine.getParameter(BaseProcessors::SoundEngine::OutGain::name()));
-		gainNumberBox_->setMaxTotalCharacters(5);
-		gainNumberBox_->setMaxDecimalCharacters(2);
-		gainNumberBox_->setShouldUsePlusMinusPrefix(true);
-		gainNumberBox_->setCanUseScrollWheel(true);
-		addControl(gainNumberBox_.get());
+    spectrogram_ = utils::up<Spectrogram>::create("Main Spectrum");
+    spectrogram_->setSpectrumData(soundEngine.getEffectsState().getOutputBuffer(kChannelsPerInOut, 0), false);
+    addOpenGlComponent(spectrogram_.get());
+    
+    mixNumberBox_ = utils::up<NumberBox>::create(
+      soundEngine.getParameter(Processors::SoundEngine::MasterMix::id().value()));
+    mixNumberBox_->setMaxTotalCharacters(5);
+    mixNumberBox_->setMaxDecimalCharacters(2);
+    mixNumberBox_->setCanUseScrollWheel(true);
+    addControl(mixNumberBox_.get());
 
-		blockSizeNumberBox_ = std::make_unique<NumberBox>(
-			soundEngine.getParameter(BaseProcessors::SoundEngine::BlockSize::name()));
-		blockSizeNumberBox_->setMaxTotalCharacters(5);
-		blockSizeNumberBox_->setMaxDecimalCharacters(0);
-		blockSizeNumberBox_->setAlternativeMode(true);
-		blockSizeNumberBox_->setCanUseScrollWheel(true);
-		addControl(blockSizeNumberBox_.get());
+    gainNumberBox_ = utils::up<NumberBox>::create(
+      soundEngine.getParameter(Processors::SoundEngine::OutGain::id().value()));
+    gainNumberBox_->setMaxTotalCharacters(5);
+    gainNumberBox_->setMaxDecimalCharacters(2);
+    gainNumberBox_->setShouldUsePlusMinusPrefix(true);
+    gainNumberBox_->setCanUseScrollWheel(true);
+    addControl(gainNumberBox_.get());
 
-		overlapNumberBox_ = std::make_unique<NumberBox>(
-			soundEngine.getParameter(BaseProcessors::SoundEngine::Overlap::name()));
-		overlapNumberBox_->setMaxTotalCharacters(4);
-		overlapNumberBox_->setMaxDecimalCharacters(2);
-		overlapNumberBox_->setAlternativeMode(true);
-		overlapNumberBox_->setCanUseScrollWheel(true);
-		addControl(overlapNumberBox_.get());
+    topContainer_.addControl(mixNumberBox_.get());
+    topContainer_.addControl(gainNumberBox_.get());
+    topContainer_.setAnchor(Placement::right);
 
-		windowTypeSelector_ = std::make_unique<TextSelector>(
-			soundEngine.getParameter(BaseProcessors::SoundEngine::WindowType::name()),
-			Fonts::instance()->getDDinFont());
-		windowTypeSelector_->setCanUseScrollWheel(true);
-		windowTypeSelector_->addLabel();
-		windowTypeSelector_->setLabelPlacement(BubblePlacement::left);
-		addControl(windowTypeSelector_.get());
+    blockSizeNumberBox_ = utils::up<NumberBox>::create(
+      soundEngine.getParameter(Processors::SoundEngine::BlockSize::id().value()));
+    blockSizeNumberBox_->setMaxTotalCharacters(5);
+    blockSizeNumberBox_->setMaxDecimalCharacters(0);
+    blockSizeNumberBox_->setAlternativeMode(true);
+    blockSizeNumberBox_->setCanUseScrollWheel(true);
+    addControl(blockSizeNumberBox_.get());
 
-		windowAlphaNumberBox_ = std::make_unique<NumberBox>(
-			soundEngine.getParameter(BaseProcessors::SoundEngine::WindowAlpha::name()));
-		windowAlphaNumberBox_->setMaxTotalCharacters(4);
-		windowAlphaNumberBox_->setMaxDecimalCharacters(2);
-		windowAlphaNumberBox_->setAlternativeMode(true);
-		windowAlphaNumberBox_->setCanUseScrollWheel(true);
-		windowAlphaNumberBox_->removeLabel();
-		addControl(windowAlphaNumberBox_.get());
+    overlapNumberBox_ = utils::up<NumberBox>::create(
+      soundEngine.getParameter(Processors::SoundEngine::Overlap::id().value()));
+    overlapNumberBox_->setMaxTotalCharacters(4);
+    overlapNumberBox_->setMaxDecimalCharacters(2);
+    overlapNumberBox_->setAlternativeMode(true);
+    overlapNumberBox_->setCanUseScrollWheel(true);
+    addControl(overlapNumberBox_.get());
 
-		/*saveButton_ = std::make_unique<ActionButton>("Save Button", "Save");
-		saveButton_->setAction([this]()
-			{
-				LoadSave::writeSave(getRenderer()->getPlugin().serialiseToJson());
-			});
-		addControl(saveButton_.get());*/
-	}
+    windowTypeSelector_ = utils::up<TextSelector>::create(
+      soundEngine.getParameter(Processors::SoundEngine::WindowType::id().value()),
+      Fonts::instance()->getDDinFont());
+    windowTypeSelector_->setCanUseScrollWheel(true);
+    windowTypeSelector_->setPopupPlacement(Placement::above);
+    windowTypeSelector_->setLabelPlacement(Placement::left);
+    windowTypeSelector_->addLabel();
+    windowTypeSelector_->setTextSelectorListener(this);
+    addControl(windowTypeSelector_.get());
 
-	HeaderFooterSections::~HeaderFooterSections() = default;
+    windowAlphaNumberBox_ = utils::up<NumberBox>::create(
+      soundEngine.getParameter(Processors::SoundEngine::WindowAlpha::id().value()));
+    windowAlphaNumberBox_->setMaxTotalCharacters(4);
+    windowAlphaNumberBox_->setMaxDecimalCharacters(2);
+    windowAlphaNumberBox_->setAlternativeMode(true);
+    windowAlphaNumberBox_->setCanUseScrollWheel(true);
+    windowAlphaNumberBox_->removeLabel();
+    addControl(windowAlphaNumberBox_.get());
+    if (windowTypeSelector_->getValue() < kDynamicWindowsStart)
+      windowAlphaNumberBox_->setVisible(false);
 
-	void HeaderFooterSections::paintBackground(Graphics &g)
-	{
-		auto bounds = getLocalBounds().toFloat();
+    windowTypeSelector_->setExtraNumberBox(windowAlphaNumberBox_.get());
+    windowTypeSelector_->setExtraNumberBoxPlacement(Placement::left);
 
-		float footerHeight = scaleValue(kFooterHeight);
+    bottomContainer_.addControl(blockSizeNumberBox_.get());
+    bottomContainer_.addControl(overlapNumberBox_.get());
+    bottomContainer_.addControl(windowTypeSelector_.get());
+    bottomContainer_.setAnchor(Placement::centerHorizontal);
+  }
 
-		g.setColour(getColour(Skin::kBackground));
-		g.fillRect(bounds.withHeight(bounds.getHeight() - footerHeight));
-		g.setColour(getColour(Skin::kBody));
-		g.fillRect(bounds.withTop(bounds.getBottom() - footerHeight));
+  HeaderFooterSections::~HeaderFooterSections() = default;
 
-		if (!showAlpha_)
-			return;
+  void HeaderFooterSections::resized()
+  {
+    auto bounds = getLocalBounds();
+    int footerHeight = scaleValueRoundInt(kFooterHeight);
 
-		float numberBoxHeight = scaleValue(NumberBox::kDefaultNumberBoxHeight);
-		float dotDiameter = numberBoxHeight * 0.25f;
-		float dotMargin = numberBoxHeight * 0.125f;
-		auto dotBounds = Rectangle{ (float)windowAlphaNumberBox_->getX() - dotMargin - dotDiameter,
-			bounds.getBottom() - (footerHeight + dotDiameter) * 0.5f, dotDiameter, dotDiameter };
+    bottomBarColour_->setColor(getColour(Skin::kBody));
+    bottomBarColour_->setCustomViewportBounds(bounds.withTop(bounds.getBottom() - footerHeight));
+    bottomBarColour_->setBounds(bounds.withTop(bounds.getBottom() - footerHeight));
 
-		g.setColour(getColour(Skin::kBackgroundElement));
-		g.fillEllipse(dotBounds);
+    auto spectrumBounds = juce::Rectangle
+    {
+      scaleValueRoundInt(kHWindowEdgeMargin),
+      scaleValueRoundInt(kHeaderHeight),
+      getWidth() - scaleValueRoundInt(2 * kHWindowEdgeMargin),
+      scaleValueRoundInt(kMainVisualiserHeight)
+    };
+    spectrogram_->setBounds(spectrumBounds);
+    spectrogram_->setCornerColour(getColour(Skin::kBackground));
 
-		BaseSection::paintBackground(g);
-	}
 
-	void HeaderFooterSections::resized()
-	{
-		/*auto bounds = getLocalBounds();
-		int footerHeight = scaleValueRoundInt(kFooterHeight);
-		
-		backgroundColour_->setColor(getColour(Skin::kBackground));
-		backgroundColour_->setCustomDrawBounds(bounds.withHeight(bounds.getHeight() - footerHeight));
-		backgroundColour_->setBounds(bounds.withHeight(bounds.getHeight() - footerHeight));
+    int numberBoxHeight = scaleValueRoundInt(NumberBox::kDefaultNumberBoxHeight);
+    int headerNumberBoxMargin = scaleValueRoundInt(kHeaderNumberBoxMargin);
+    int hPadding = scaleValueRoundInt(kHeaderHorizontalEdgePadding);
+    int headerHeight = scaleValueRoundInt(kHeaderHeight);
 
-		bottomBarColour_->setColor(getColour(Skin::kBody));
-		bottomBarColour_->setCustomDrawBounds(bounds.withTop(bounds.getBottom() - footerHeight));
-		bottomBarColour_->setBounds(bounds.withTop(bounds.getBottom() - footerHeight));*/
+    topContainer_.setControlSpacing(headerNumberBoxMargin);
+    topContainer_.setParentAndBounds(this, { hPadding, utils::centerAxis(numberBoxHeight, headerHeight),
+      getWidth() - 2 * hPadding, numberBoxHeight });
+    topContainer_.setControlSizes(mixNumberBox_.get(), numberBoxHeight);
+    topContainer_.setControlSizes(gainNumberBox_.get(), numberBoxHeight);
+    topContainer_.repositionControls();
 
-		auto spectrumBounds = Rectangle
-		{
-			scaleValueRoundInt(kHorizontalWindowEdgeMargin),
-			scaleValueRoundInt(kHeaderHeight),
-			getWidth() - scaleValueRoundInt(2 * kHorizontalWindowEdgeMargin),
-			scaleValueRoundInt(kMainVisualiserHeight)
-		};
-		spectrogram_->setBounds(spectrumBounds);
-		spectrogram_->setCornerColour(getColour(Skin::kBackground));
 
-		arrangeHeader();
-		arrangeFooter();
-		repaintBackground();
-	}
+    int textSelectorHeight = scaleValueRoundInt(TextSelector::kDefaultTextSelectorHeight);
+    int footerHPadding = scaleValueRoundInt(kFooterHPadding);
 
-	void HeaderFooterSections::sliderValueChanged(BaseSlider *movedSlider)
-	{
-		static constexpr float dynamicWindowsStart = (float)Framework::WindowTypes::Exp / 
-			(float)Framework::WindowTypes::enum_count();
+    bottomContainer_.setParentAndBounds(this, { footerHPadding, bounds.getBottom() - footerHeight,
+      getWidth() - 2 * footerHPadding, footerHeight });
+    bottomContainer_.setControlSizes(blockSizeNumberBox_.get(), numberBoxHeight);
+    bottomContainer_.setControlSizes(overlapNumberBox_.get(), numberBoxHeight);
+    bottomContainer_.setControlSizes(windowTypeSelector_.get(), textSelectorHeight);
+    bottomContainer_.repositionControls();
 
-		if (movedSlider != windowTypeSelector_.get())
-			return;
+    // dumb workaround, otherwise the parameter name appears blank in the automation list
+    windowAlphaNumberBox_->setColours();
+  }
 
-		showAlpha_ = movedSlider->getValue() >= dynamicWindowsStart;
-		if (showAlpha_)
-		{
-			windowTypeSelector_->setDrawArrow(false);
-			windowAlphaNumberBox_->setVisible(true);
-		}
-		else
-		{
-			windowTypeSelector_->setDrawArrow(true);
-			windowAlphaNumberBox_->setVisible(false);
-		}
+  void HeaderFooterSections::resizeForText(TextSelector *textSelector, int, Placement)
+  {
+    if (textSelector != windowTypeSelector_.get())
+      return;
 
-		arrangeFooter();
-		repaintBackground();
-	}
+    if (windowTypeSelector_->getValue() >= kDynamicWindowsStart)
+      windowAlphaNumberBox_->setVisible(true);
+    else
+      windowAlphaNumberBox_->setVisible(false);
 
-	void HeaderFooterSections::arrangeHeader()
-	{
-		int numberBoxHeight = scaleValueRoundInt(NumberBox::kDefaultNumberBoxHeight);
-		int headerNumberBoxMargin = scaleValueRoundInt(kHeaderNumberBoxMargin);
-
-		auto currentPoint = Point{ getWidth() - scaleValueRoundInt(kHeaderHorizontalEdgePadding),
-			centerVertically(0, numberBoxHeight, scaleValueRoundInt(kHeaderHeight)) };
-
-		auto mixNumberBoxBounds = mixNumberBox_->setBoundsForSizes(numberBoxHeight);
-		mixNumberBox_->setPosition(currentPoint - Point{ mixNumberBoxBounds.getRight(), 0 });
-		
-		currentPoint.x -= mixNumberBoxBounds.getWidth() + headerNumberBoxMargin;
-
-		auto gainNumberBoxBounds = gainNumberBox_->setBoundsForSizes(numberBoxHeight);
-		gainNumberBox_->setPosition(currentPoint - Point{ gainNumberBoxBounds.getRight(), 0 });
-
-		/*std::ignore = saveButton_->setBoundsForSizes(numberBoxHeight, 60);
-		saveButton_->setPosition({ scaleValueRoundInt(kHeaderHorizontalEdgePadding),
-			centerVertically(0, numberBoxHeight, scaleValueRoundInt(kHeaderHeight)) });*/
-	}
-
-	void HeaderFooterSections::arrangeFooter()
-	{
-		int footerHeight = scaleValueRoundInt(kFooterHeight);
-		int numberBoxHeight = scaleValueRoundInt(NumberBox::kDefaultNumberBoxHeight);
-		int textSelectorHeight = scaleValueRoundInt(TextSelector::kDefaultTextSelectorHeight);
-		int footerHorizontalEdgePadding = scaleValueRoundInt(kFooterHorizontalEdgePadding);
-
-		auto bounds = getLocalBounds();
-		auto yOffset = footerHeight - (footerHeight - numberBoxHeight) / 2;
-		auto currentPoint = Point{ footerHorizontalEdgePadding, bounds.getBottom() - yOffset };
-
-		auto blockSizeNumberBoxBounds = blockSizeNumberBox_->setBoundsForSizes(numberBoxHeight);
-		auto overlapNumberBoxBounds = overlapNumberBox_->setBoundsForSizes(numberBoxHeight);
-		auto windowTypeSelectorBounds = windowTypeSelector_->setBoundsForSizes(textSelectorHeight);
-		auto windowAlphaBounds = windowAlphaNumberBox_->setBoundsForSizes(numberBoxHeight);
-
-		auto totalElementsLength = blockSizeNumberBoxBounds.getWidth() +
-			overlapNumberBoxBounds.getWidth() + windowTypeSelectorBounds.getWidth();
-
-		if (showAlpha_)
-		{
-			auto dotRadius = numberBoxHeight / 4;
-			auto dotMargin = numberBoxHeight / 8;
-			totalElementsLength += windowAlphaBounds.getWidth() + dotRadius + 2 * dotMargin;
-		}
-
-		auto elementOffset = (bounds.getWidth() - 2 * footerHorizontalEdgePadding - totalElementsLength) / 2;
-
-		blockSizeNumberBox_->setPosition(currentPoint + Point{ -blockSizeNumberBoxBounds.getX(), 0 });
-		currentPoint.x += blockSizeNumberBoxBounds.getWidth() + elementOffset;
-
-		overlapNumberBox_->setPosition(currentPoint + Point{ -overlapNumberBoxBounds.getX(), 0 });
-		currentPoint.x += overlapNumberBoxBounds.getWidth() + elementOffset;
-
-		windowTypeSelector_->setPosition(currentPoint + Point{ -windowTypeSelectorBounds.getX(), 0 });
-		currentPoint.x += windowTypeSelectorBounds.getWidth() + elementOffset;
-
-		if (!showAlpha_)
-			return;
-
-		windowAlphaNumberBox_->setPosition(Point{ bounds.getRight() - footerHorizontalEdgePadding -
-			windowAlphaBounds.getWidth(), bounds.getBottom() - yOffset });
-	}
+    windowTypeSelector_->setBounds(windowTypeSelector_->getDrawBounds());
+  }
 }

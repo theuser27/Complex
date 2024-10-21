@@ -1,199 +1,171 @@
 /*
-	==============================================================================
+  ==============================================================================
 
-		OpenGLComponent.cpp
-		Created: 5 Dec 2022 11:55:29pm
-		Author:  theuser27
+    OpenGLComponent.cpp
+    Created: 5 Dec 2022 11:55:29pm
+    Author:  theuser27
 
-	==============================================================================
+  ==============================================================================
 */
 
-#include "OpenGlComponent.h"
+#include "OpenGlComponent.hpp"
 
-#include <juce_opengl/juce_opengl.h>
-#include "Framework/sync_primitives.h"
-#include "Plugin/Renderer.h"
-#include "../Sections/MainInterface.h"
+#include <juce_opengl/opengl/juce_gl.h>
 
-namespace
-{
-	struct BoundsDetails
-	{
-		int topLevelheight{};
-		juce::Rectangle<int> globalBounds{};
-		juce::Rectangle<int> visibleBounds{};
-	};
-
-	BoundsDetails getBoundsDetails(const Interface::BaseComponent *component, juce::Rectangle<int> bounds)
-	{
-		if (dynamic_cast<const Interface::MainInterface *>(component) != nullptr)
-			return { component->getHeightSafe(), bounds, bounds };
-
-		juce::Rectangle globalBounds = bounds + component->getPositionSafe();
-		juce::Rectangle visibleBounds = bounds;
-
-		Interface::BaseComponent *parent = component->getParentSafe();
-		while (dynamic_cast<Interface::MainInterface *>(parent) == nullptr)
-		{
-			globalBounds = globalBounds + parent->getPositionSafe();
-			visibleBounds = visibleBounds + component->getPositionSafe();
-			parent->clipChildBounds(component, visibleBounds);
-			component = parent;
-			parent = component->getParentSafe();
-
-			// if at any time the message thread changes the parent hierarchy 
-			// and suddenly the current component winds up without a parent, 
-			// we abort rendering this particular object
-			// although this seems excessive it should help identify bugs more easily
-			if (!parent)
-				return {};
-		}
-
-		return { parent->getHeightSafe(), globalBounds, visibleBounds + component->getPositionSafe() };
-	}
-}
+#include "Framework/sync_primitives.hpp"
+#include "Plugin/Renderer.hpp"
+#include "../Sections/MainInterface.hpp"
 
 namespace Interface
 {
-	using namespace juce::gl;
+  using namespace juce::gl;
 
-	bool OpenGlComponent::setViewPort(const BaseComponent *component, Rectangle<int> bounds,
-		[[maybe_unused]] const OpenGlWrapper &openGl)
-	{
-		auto [topLevelHeight, globalBounds, visibleBounds] = getBoundsDetails(component, bounds);
-		if (visibleBounds.getWidth() <= 0 || visibleBounds.getHeight() <= 0)
-			return false;
+  bool setViewPort(const BaseComponent &target, const OpenGlComponent &renderSource, const juce::Rectangle<int> &viewportBounds,
+    const juce::Rectangle<int> &scissorBounds, const OpenGlWrapper &openGl, const BaseComponent *ignoreClipIncluding)
+  {
+    auto [globalBounds, visibleBounds] = [&target, &renderSource, viewportBounds, scissorBounds, &openGl, ignoreClipIncluding]()
+      -> std::pair<juce::Rectangle<int>, juce::Rectangle<int>>
+    {
+      auto findIndex = [](const std::vector<ViewportChange> &vector, const BaseComponent *target)
+      {
+        ptrdiff_t index;
+        for (index = vector.size() - 1; index >= 0; --index)
+          if (vector[index].component == target)
+            break;
+        return index;
+      };
 
-		glViewport(globalBounds.getX(), topLevelHeight - globalBounds.getBottom(), 
-			globalBounds.getWidth(), globalBounds.getHeight());
+      ptrdiff_t clippingIndex = (!ignoreClipIncluding) ? 
+        (ptrdiff_t)openGl.parentStack.size() : findIndex(openGl.parentStack, ignoreClipIncluding);
+      ptrdiff_t startingIndex = (&target == static_cast<const BaseComponent *>(&renderSource)) ?
+        (ptrdiff_t)openGl.parentStack.size() : findIndex(openGl.parentStack, &target);
 
-		glScissor(visibleBounds.getX(), topLevelHeight - visibleBounds.getBottom(),
-			visibleBounds.getWidth(), visibleBounds.getHeight());
+      COMPLEX_ASSERT(startingIndex >= 0 && "Render target is not a parent of the rendering component");
+      COMPLEX_ASSERT(clippingIndex > 0 && "Clipping target not found");
 
-		return true;
-	}
+      // if target is MainInterface
+      if (startingIndex == 0)
+        return { viewportBounds, scissorBounds };
 
-	bool OpenGlComponent::setViewPort(const BaseComponent *component, const OpenGlWrapper &openGl)
-	{ return setViewPort(component, component->getLocalBounds(), openGl); }
+      juce::Rectangle globalBounds = viewportBounds + target.getPositionSafe();
+      juce::Rectangle visibleBounds = scissorBounds + target.getPositionSafe();
 
-	bool OpenGlComponent::setViewPort(const OpenGlWrapper &openGl) const
-	{ return setViewPort(this, openGl); }
+      for (ptrdiff_t i = startingIndex - 1; i > 0; --i)
+      {
+        auto [_, bounds, isClipping] = openGl.parentStack[i];
 
-	void OpenGlComponent::setScissor(const BaseComponent *component, const OpenGlWrapper &openGl)
-	{ setScissorBounds(component, component->getLocalBounds(), openGl); }
+        if (isClipping && i < clippingIndex)
+          bounds.withZeroOrigin().intersectRectangle(visibleBounds);
 
-	void OpenGlComponent::setScissorBounds(const BaseComponent *component, Rectangle<int> bounds,
-		[[maybe_unused]] const OpenGlWrapper &openGl)
-	{
-		if (component == nullptr)
-			return;
+        globalBounds = globalBounds + bounds.getPosition();
+        visibleBounds = visibleBounds + bounds.getPosition();
+      }
 
-		auto [topLevelHeight, globalBounds, visibleBounds] = getBoundsDetails(component, bounds);
-		if (visibleBounds.getWidth() <= 0 || visibleBounds.getHeight() <= 0)
-			return;
+      return { globalBounds, visibleBounds };
+    }();
 
-		glScissor(visibleBounds.getX(), topLevelHeight - visibleBounds.getBottom(),
-			visibleBounds.getWidth(), visibleBounds.getHeight());
-	}
+    if (visibleBounds.getWidth() <= 0 || visibleBounds.getHeight() <= 0)
+      return false;
 
-	std::optional<OpenGlUniform> OpenGlComponent::getUniform(const OpenGlShaderProgram &program, const char *name)
-	{
-		if (glGetUniformLocation(program.getProgramID(), name) >= 0)
-			return std::make_optional<OpenGlUniform>(program, name);
-		return {};
-	}
+    glViewport(globalBounds.getX(), openGl.topLevelHeight - globalBounds.getBottom(),
+      globalBounds.getWidth(), globalBounds.getHeight());
 
-	std::optional<OpenGlAttribute> OpenGlComponent::getAttribute(const OpenGlShaderProgram &program, const char *name)
-	{
-		if (glGetAttribLocation(program.getProgramID(), name) >= 0)
-			return std::make_optional<OpenGlAttribute>(program, name);
-		return {};
-	}
+    glScissor(visibleBounds.getX(), openGl.topLevelHeight - visibleBounds.getBottom(),
+      visibleBounds.getWidth(), visibleBounds.getHeight());
 
-	String OpenGlComponent::translateFragmentShader(const String &code) {
-	#if OPENGL_ES
-		return String("#version 300 es\n") + "out mediump vec4 fragColor;\n" +
-			code.replace("varying", "in").replace("texture2D", "texture").replace("gl_FragColor", "fragColor");
-	#else
-		return OpenGLHelpers::translateFragmentShaderToV3(code);
-	#endif
-	}
+    return true;
+  }
 
-	String OpenGlComponent::translateVertexShader(const String &code) {
-	#if OPENGL_ES
-		return String("#version 300 es\n") + code.replace("attribute", "in").replace("varying", "out");
-	#else
-		return OpenGLHelpers::translateVertexShaderToV3(code);
-	#endif
-	}
+  OpenGlComponent::OpenGlComponent(String name) : BaseComponent(std::move(name)) { }
+  OpenGlComponent::~OpenGlComponent() = default;
 
-	OpenGlComponent::OpenGlComponent(String name) : BaseComponent(name) { }
-	OpenGlComponent::~OpenGlComponent() = default;
+  void OpenGlComponent::doWorkOnComponent(OpenGlWrapper &openGl)
+  {
+    if (!isInitialised_.load(std::memory_order_acquire))
+    {
+      init(openGl);
+      COMPLEX_ASSERT(isInitialised_.load(std::memory_order_relaxed), "Init method didn't set flag");
+    }
 
-	float OpenGlComponent::getValue(Skin::ValueId valueId, bool isScaled) const 
-	{
-		if (auto container = container_.get())
-		{
-			auto value = container->getValue(valueId);
-			return (isScaled) ? container->scaleValue(value) : value;
-		}
+    auto customRenderFunction = renderFunction_.get();
+    if (customRenderFunction)
+      customRenderFunction(openGl, *this);
+    else
+      render(openGl);
 
-		return 0.0f;
-	}
+    COMPLEX_CHECK_OPENGL_ERROR;
+  }
 
-	Colour OpenGlComponent::getColour(Skin::ColorId colourId) const
-	{
-		if (container_)
-			return container_.get()->getColour(colourId);
+  float OpenGlComponent::getValue(Skin::ValueId valueId, bool isScaled) const
+  {
+    if (auto *skin = uiRelated.skin)
+    {
+      auto value = skin->getValue(valueId);
+      return (isScaled) ? scaleValue(value) : value;
+    }
 
-		return Colours::black;
-	}
+    return 0.0f;
+  }
 
-	void OpenGlComponent::pushForDeletion()
-	{ container_.get()->getRenderer()->pushOpenGlComponentToDelete(this); }
+  Colour OpenGlComponent::getColour(Skin::ColourId colourId) const
+  {
+    if (auto *skin = uiRelated.skin)
+      return Colour{ skin->getColour(colourId) };
 
-	void Animator::tick(bool isAnimating) noexcept
-	{
-		utils::ScopedLock g{ guard_, utils::WaitMechanism::Spin };
+    return Colours::black;
+  }
 
-		if (isAnimating)
-		{
-			if (isHovered_)
-				hoverValue_ = std::min(1.0f, hoverValue_ + hoverIncrement_);
-			else
-				hoverValue_ = std::max(0.0f, hoverValue_ - hoverIncrement_);
+  void OpenGlComponent::setIgnoreClip(BaseComponent *ignoreClipIncluding) noexcept
+  {
+    COMPLEX_ASSERT(dynamic_cast<MainInterface *>(ignoreClipIncluding) == nullptr);
+    ignoreClipIncluding_ = ignoreClipIncluding;
+  }
 
-			if (isClicked_)
-				clickValue_ = std::min(1.0f, clickValue_ + clickIncrement_);
-			else
-				clickValue_ = std::max(0.0f, clickValue_ - clickIncrement_);
-		}
-		else
-		{
-			hoverValue_ = isHovered_;
-			clickValue_ = isClicked_;
-		}
-	}
+  void OpenGlComponent::pushResourcesForDeletion(OpenGlAllocatedResource type, GLsizei n, GLuint id)
+  { uiRelated.renderer->pushOpenGlResourceToDelete(type, n, id); }
 
-	float Animator::getValue(EventType type, float min, float max) const noexcept
-	{
-		utils::ScopedLock g{ guard_, utils::WaitMechanism::Spin };
+  void Animator::tick(bool isAnimating) noexcept
+  {
+    utils::ScopedLock g{ guard_, utils::WaitMechanism::Spin };
 
-		float value;
-		switch (type)
-		{
-		case Hover:
-			value = hoverValue_;
-			break;
-		case Click:
-			value = clickValue_;
-			break;
-		default:
-			value = 1.0f;
-			break;
-		}
+    if (isAnimating)
+    {
+      if (isHovered_)
+        hoverValue_ = std::min(1.0f, hoverValue_ + hoverIncrement_);
+      else
+        hoverValue_ = std::max(0.0f, hoverValue_ - hoverIncrement_);
 
-		value *= max - min;
-		return value + min;
-	}
+      if (isClicked_)
+        clickValue_ = std::min(1.0f, clickValue_ + clickIncrement_);
+      else
+        clickValue_ = std::max(0.0f, clickValue_ - clickIncrement_);
+    }
+    else
+    {
+      hoverValue_ = isHovered_;
+      clickValue_ = isClicked_;
+    }
+  }
+
+  float Animator::getValue(EventType type, float min, float max) const noexcept
+  {
+    utils::ScopedLock g{ guard_, utils::WaitMechanism::Spin };
+
+    float value;
+    switch (type)
+    {
+    case Hover:
+      value = hoverValue_;
+      break;
+    case Click:
+      value = clickValue_;
+      break;
+    default:
+      value = 1.0f;
+      break;
+    }
+
+    value *= max - min;
+    return value + min;
+  }
 }

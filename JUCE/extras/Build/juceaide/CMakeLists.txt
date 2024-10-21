@@ -29,6 +29,7 @@
 if(JUCE_BUILD_HELPER_TOOLS)
     # Build the tool for the current system
     juce_add_console_app(juceaide)
+    target_compile_features(juceaide PRIVATE cxx_std_17)
 
     target_sources(juceaide PRIVATE Main.cpp)
 
@@ -101,7 +102,7 @@ else()
         # When building with clang-cl in Clion on Windows for an x64 target, the ABI detection phase
         # of the inner build can fail unless we pass through these flags too
         set(extra_configure_flags
-            "-DCMAKE_CXX_FLAGS=${CMAKE_CXX_FLAGS}"
+            "-DCMAKE_CXX_FLAGS=${CMAKE_CXX_FLAGS} ${temp_language_version}"
             "-DCMAKE_C_FLAGS=${CMAKE_C_FLAGS}"
             "-DCMAKE_EXE_LINKER_FLAGS=${CMAKE_EXE_LINKER_FLAGS}"
             "-DCMAKE_GENERATOR_PLATFORM=${CMAKE_GENERATOR_PLATFORM}")

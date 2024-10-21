@@ -52,7 +52,7 @@ public:
 
     //==============================================================================
     /** Copies this point from another one. */
-    Point& operator= (const Point&) = default;
+    constexpr Point& operator= (const Point&) = default;
 
     constexpr inline bool operator== (Point other) const noexcept      { return x == other.x && y == other.y; }
     constexpr inline bool operator!= (Point other) const noexcept      { return x != other.x || y != other.y; }
@@ -70,10 +70,10 @@ public:
     constexpr inline ValueType getY() const noexcept                   { return y; }
 
     /** Sets the point's x coordinate. */
-    inline void setX (ValueType newX) noexcept                         { x = newX; }
+    constexpr void setX (ValueType newX) noexcept                      { x = newX; }
 
     /** Sets the point's y coordinate. */
-    inline void setY (ValueType newY) noexcept                         { y = newY; }
+    constexpr void setY (ValueType newY) noexcept                      { y = newY; }
 
     /** Returns a point which has the same Y position as this one, but a new X. */
     constexpr Point withX (ValueType newX) const noexcept              { return Point (newX, y); }
@@ -82,10 +82,10 @@ public:
     constexpr Point withY (ValueType newY) const noexcept              { return Point (x, newY); }
 
     /** Changes the point's x and y coordinates. */
-    void setXY (ValueType newX, ValueType newY) noexcept               { x = newX; y = newY; }
+    constexpr void setXY (ValueType newX, ValueType newY) noexcept     { x = newX; y = newY; }
 
     /** Adds a pair of coordinates to this value. */
-    void addXY (ValueType xToAdd, ValueType yToAdd) noexcept           { x += xToAdd; y += yToAdd; }
+    constexpr void addXY (ValueType xToAdd, ValueType yToAdd) noexcept { x += xToAdd; y += yToAdd; }
 
     //==============================================================================
     /** Returns a point with a given offset from this one. */

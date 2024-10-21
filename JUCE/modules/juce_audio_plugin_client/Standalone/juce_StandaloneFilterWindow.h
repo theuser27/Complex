@@ -169,80 +169,6 @@ public:
     void valueChanged (Value& value) override            { muteInput = (bool) value.getValue(); }
 
     //==============================================================================
-    File getLastFile() const
-    {
-        File f;
-
-        if (settings != nullptr)
-            f = File (settings->getValue ("lastStateFile"));
-
-        if (f == File())
-            f = File::getSpecialLocation (File::userDocumentsDirectory);
-
-        return f;
-    }
-
-    void setLastFile (const FileChooser& fc)
-    {
-        if (settings != nullptr)
-            settings->setValue ("lastStateFile", fc.getResult().getFullPathName());
-    }
-
-    /** Pops up a dialog letting the user save the processor's state to a file. */
-    void askUserToSaveState (const String& fileSuffix = String())
-    {
-        stateFileChooser = std::make_unique<FileChooser> (TRANS("Save current state"),
-                                                          getLastFile(),
-                                                          getFilePatterns (fileSuffix));
-        auto flags = FileBrowserComponent::saveMode
-                   | FileBrowserComponent::canSelectFiles
-                   | FileBrowserComponent::warnAboutOverwriting;
-
-        stateFileChooser->launchAsync (flags, [this] (const FileChooser& fc)
-        {
-            if (fc.getResult() == File{})
-                return;
-
-            setLastFile (fc);
-
-            MemoryBlock data;
-            processor->getStateInformation (data);
-
-            if (! fc.getResult().replaceWithData (data.getData(), data.getSize()))
-                AlertWindow::showMessageBoxAsync (AlertWindow::WarningIcon,
-                                                  TRANS("Error whilst saving"),
-                                                  TRANS("Couldn't write to the specified file!"));
-        });
-    }
-
-    /** Pops up a dialog letting the user re-load the processor's state from a file. */
-    void askUserToLoadState (const String& fileSuffix = String())
-    {
-        stateFileChooser = std::make_unique<FileChooser> (TRANS("Load a saved state"),
-                                                          getLastFile(),
-                                                          getFilePatterns (fileSuffix));
-        auto flags = FileBrowserComponent::openMode
-                   | FileBrowserComponent::canSelectFiles;
-
-        stateFileChooser->launchAsync (flags, [this] (const FileChooser& fc)
-        {
-            if (fc.getResult() == File{})
-                return;
-
-            setLastFile (fc);
-
-            MemoryBlock data;
-
-            if (fc.getResult().loadFileAsData (data))
-                processor->setStateInformation (data.getData(), (int) data.getSize());
-            else
-                AlertWindow::showMessageBoxAsync (AlertWindow::WarningIcon,
-                                                  TRANS("Error whilst loading"),
-                                                  TRANS("Couldn't read from the specified file!"));
-        });
-    }
-
-    //==============================================================================
     void startPlaying()
     {
         player.setProcessor (processor.get());
@@ -361,9 +287,10 @@ public:
         if (settings != nullptr)
         {
             MemoryBlock data;
-
-            if (data.fromBase64Encoding (settings->getValue ("filterState")) && data.getSize() > 0)
-                processor->setStateInformation (data.getData(), (int) data.getSize());
+            if (data.fromBase64Encoding(settings->getValue("filterState")))
+              processor->setStateInformation(data.getData(), (int)data.getSize());
+            else
+              processor->setStateInformation(nullptr, 0);
         }
     }
 
@@ -713,7 +640,7 @@ public:
                            #endif
                             )
         : DocumentWindow (title, backgroundColour, DocumentWindow::minimiseButton | DocumentWindow::closeButton),
-          optionsButton ("Options")
+          optionsButton ("Settings")
     {
         setConstrainer (&decoratorConstrainer);
 
@@ -795,21 +722,6 @@ public:
     AudioProcessor* getAudioProcessor() const noexcept      { return pluginHolder->processor.get(); }
     AudioDeviceManager& getDeviceManager() const noexcept   { return pluginHolder->deviceManager; }
 
-    /** Deletes and re-creates the plugin, resetting it to its default state. */
-    void resetToDefaultState()
-    {
-        pluginHolder->stopPlaying();
-        clearContentComponent();
-        pluginHolder->deletePlugin();
-
-        if (auto* props = pluginHolder->settings.get())
-            props->removeValue ("filterState");
-
-        pluginHolder->createPlugin();
-        updateContent();
-        pluginHolder->startPlaying();
-    }
-
     //==============================================================================
     void closeButtonPressed() override
     {
@@ -818,29 +730,13 @@ public:
         JUCEApplicationBase::quit();
     }
 
-    void handleMenuResult (int result)
-    {
-        switch (result)
-        {
-            case 1:  pluginHolder->showAudioSettingsDialog(); break;
-            case 2:  pluginHolder->askUserToSaveState(); break;
-            case 3:  pluginHolder->askUserToLoadState(); break;
-            case 4:  resetToDefaultState(); break;
-            default: break;
-        }
-    }
-
-    static void menuCallback (int result, StandaloneFilterWindow* button)
-    {
-        if (button != nullptr && result != 0)
-            button->handleMenuResult (result);
-    }
-
     void resized() override
     {
         DocumentWindow::resized();
         optionsButton.setBounds (8, 6, 60, getTitleBarHeight() - 8);
     }
+
+    BorderSize<int> getBorderThickness() override { return {}; }
 
     virtual StandalonePluginHolder* getPluginHolder()    { return pluginHolder.get(); }
 
@@ -863,16 +759,7 @@ private:
 
     void buttonClicked (Button*) override
     {
-        PopupMenu m;
-        m.addItem (1, TRANS("Audio/MIDI Settings..."));
-        m.addSeparator();
-        m.addItem (2, TRANS("Save current state..."));
-        m.addItem (3, TRANS("Load a saved state..."));
-        m.addSeparator();
-        m.addItem (4, TRANS("Reset to default state"));
-
-        m.showMenuAsync (PopupMenu::Options(),
-                         ModalCallbackFunction::forComponent (menuCallback, this));
+        pluginHolder->showAudioSettingsDialog();
     }
 
     //==============================================================================
