@@ -118,7 +118,7 @@
     Enables per-monitor DPI awareness on Windows 8.1 and above.
 */
 #ifndef JUCE_WIN_PER_MONITOR_DPI_AWARE
- #define JUCE_WIN_PER_MONITOR_DPI_AWARE 1
+ #define JUCE_WIN_PER_MONITOR_DPI_AWARE 0
 #endif
 
 //==============================================================================

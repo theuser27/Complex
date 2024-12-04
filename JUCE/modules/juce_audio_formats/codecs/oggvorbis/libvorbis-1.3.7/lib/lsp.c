@@ -321,9 +321,9 @@ static int Laguerre_With_Deflation(float *a,int ord,float *r){
 
       /* eval the polynomial and its first two derivatives */
       for(i=m;i>0;i--){
-	    ppp = newx*ppp + pp;
-	    pp  = newx*pp  + p;
-	    p   = newx*p   + defl[i-1];
+      ppp = newx*ppp + pp;
+      pp  = newx*pp  + p;
+      p   = newx*p   + defl[i-1];
       }
 
       /* Laguerre's method */

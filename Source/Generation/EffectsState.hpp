@@ -41,11 +41,11 @@ namespace Generation
     }
 
     // Inherited via BaseProcessor
-    void insertSubProcessor(size_t index, BaseProcessor &newSubProcessor) noexcept override;
-    BaseProcessor &deleteSubProcessor(size_t index) noexcept override;
+    void insertSubProcessor(usize index, BaseProcessor &newSubProcessor) noexcept override;
+    BaseProcessor &deleteSubProcessor(usize index) noexcept override;
     void initialiseParameters() override;
 
-    auto *getEffectModule(size_t index) const noexcept { return effectModules_[index]; }
+    auto *getEffectModule(usize index) const noexcept { return effectModules_[index]; }
     auto getEffectModuleCount() const noexcept { return effectModules_.size(); }
 
     EffectsLane *createCopy() const override { return new EffectsLane{ *this }; }
@@ -93,22 +93,18 @@ namespace Generation
     EffectsState &operator=(EffectsState &&other) = delete;
 
     EffectsState(Plugin::ProcessorTree *processorTree) noexcept;
-    ~EffectsState() noexcept override
-    {
-      for (auto &thread : workerThreads_)
-        thread.thread.join();
-    }
+    ~EffectsState() noexcept override;
 
     void deserialiseFromJson(void *jsonData);
 
     // Inherited via BaseProcessor
-    void insertSubProcessor(size_t index, BaseProcessor &newSubProcessor) noexcept override;
-    BaseProcessor &deleteSubProcessor(size_t index) noexcept override;
+    void insertSubProcessor(usize index, BaseProcessor &newSubProcessor) noexcept override;
+    BaseProcessor &deleteSubProcessor(usize index) noexcept override;
     void initialiseParameters() override;
 
-    void writeInputData(const float *inputBuffer, size_t channels, size_t samples) noexcept;
+    void writeInputData(Framework::CheckedPointer<float> inputBuffer, usize channels, usize samples) noexcept;
     void processLanes() noexcept;
-    void sumLanesAndWriteOutput(float *outputBuffer, size_t channels, size_t samples) noexcept;
+    void sumLanesAndWriteOutput(Framework::CheckedPointer<float> outputBuffer, usize channels, usize samples) noexcept;
 
     std::span<char> getUsedInputChannels() noexcept;
     std::span<char> getUsedOutputChannels() noexcept;
@@ -116,24 +112,16 @@ namespace Generation
     auto getOutputBuffer(u32 channelCount, u32 beginChannel) const noexcept
     { return Framework::SimdBufferView{ outputBuffer_, beginChannel, channelCount }; }
 
-    size_t getLaneCount() const noexcept { return lanes_.size(); }
-    u32 getBinCount() const noexcept { return binCount_; }
-    float getSampleRate() const noexcept { return sampleRate_; }
-    auto *getEffectsLane(size_t index) const noexcept { return lanes_[index]; }
+    usize getLaneCount() const noexcept { return lanes_.size(); }
+    auto *getEffectsLane(usize index) const noexcept { return lanes_[index]; }
 
-    void setBinCount(u32 newEffectiveFFTSize) noexcept { binCount_ = newEffectiveFFTSize; }
-    void setSampleRate(float newSampleRate) noexcept { sampleRate_ = newSampleRate; }
-    void setNormalisedPhase(float phase) noexcept { normalisedPhase_ = phase; }
+    // current number of FFT bins (real-imaginary pairs)
+    u32 binCount = 0;
+    float sampleRate = 0.0f;
+    float blockPhase = 0.0f;
 
   private:
-    struct Thread
-    {
-      Thread(EffectsState &state);
-      Thread(Thread &&other) noexcept : thread(std::move(other.thread)), 
-        shouldStop(other.shouldStop.load(std::memory_order_relaxed)) { }
-      std::thread thread{};
-      std::atomic<bool> shouldStop = false;
-    };
+    struct Thread;
     friend struct Thread;
     
     BaseProcessor *createCopy() const override
@@ -142,14 +130,9 @@ namespace Generation
     void checkUsage();
     
     void distributeWork() const noexcept;
-    void processIndividualLanes(size_t laneIndex) const noexcept;
+    void processIndividualLanes(usize laneIndex) const noexcept;
 
     std::vector<EffectsLane *> lanes_{};
-
-    // current number of FFT bins (real-imaginary pairs)
-    u32 binCount_ = 0;
-    float sampleRate_ = 0.0f;
-    float normalisedPhase_ = 0.0f;
 
     // if an input/output isn't used there's no need to process it at all
     std::vector<char> usedInputChannels_{};
@@ -158,6 +141,6 @@ namespace Generation
 
     Framework::SimdBuffer<Framework::complex<float>, simd_float> outputBuffer_{};
 
-    std::vector<Thread> workerThreads_{};
+    std::vector<Thread> workerThreads_;
   };
 }

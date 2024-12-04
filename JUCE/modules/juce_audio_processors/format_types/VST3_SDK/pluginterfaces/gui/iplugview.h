@@ -33,19 +33,19 @@ class IPlugFrame;
 */
 struct ViewRect
 {
-	ViewRect (int32 l = 0, int32 t = 0, int32 r = 0, int32 b = 0)
-	: left (l), top (t), right (r), bottom (b)
-	{
-	}
+  ViewRect (int32 l = 0, int32 t = 0, int32 r = 0, int32 b = 0)
+  : left (l), top (t), right (r), bottom (b)
+  {
+  }
 
-	int32 left;
-	int32 top;
-	int32 right;
-	int32 bottom;
+  int32 left;
+  int32 top;
+  int32 right;
+  int32 bottom;
 
-	//--- ---------------------------------------------------------------------
-	int32 getWidth () const { return right - left; }
-	int32 getHeight () const { return bottom - top; }
+  //--- ---------------------------------------------------------------------
+  int32 getWidth () const { return right - left; }
+  int32 getHeight () const { return bottom - top; }
 };
 
 SMTG_TYPE_SIZE_CHECK (ViewRect, 16, 16, 16, 16)
@@ -104,8 +104,8 @@ a view to be resized:
   it will get the current (old) size not the wanted one!!\n
   Here the calling sequence:\n
     - plug-in->host: IPlugFrame::resizeView (newSize)
-	- host->plug-in (optional): IPlugView::getSize () returns the currentSize (not the newSize!)
-	- host->plug-in: if newSize is different from the current size: IPlugView::onSize (newSize)
+  - host->plug-in (optional): IPlugView::getSize () returns the currentSize (not the newSize!)
+  - host->plug-in: if newSize is different from the current size: IPlugView::onSize (newSize)
     - host->plug-in (optional): IPlugView::getSize () returns the newSize
 \n
 <b>Please only resize the platform representation of the view when IPlugView::onSize () is
@@ -123,63 +123,63 @@ class IPlugView : public FUnknown
 {
 public:
 //------------------------------------------------------------------------
-	/** Is Platform UI Type supported
-	    \param type : IDString of \ref platformUIType */
-	virtual tresult PLUGIN_API isPlatformTypeSupported (FIDString type) = 0;
+  /** Is Platform UI Type supported
+      \param type : IDString of \ref platformUIType */
+  virtual tresult PLUGIN_API isPlatformTypeSupported (FIDString type) = 0;
 
-	/** The parent window of the view has been created, the (platform) representation of the view
-		should now be created as well.
-	    Note that the parent is owned by the caller and you are not allowed to alter it in any way
-		other than adding your own views.
-	    Note that in this call the plug-in could call a IPlugFrame::resizeView ()!
-	    \param parent : platform handle of the parent window or view
-	    \param type : \ref platformUIType which should be created */
-	virtual tresult PLUGIN_API attached (void* parent, FIDString type) = 0;
+  /** The parent window of the view has been created, the (platform) representation of the view
+    should now be created as well.
+      Note that the parent is owned by the caller and you are not allowed to alter it in any way
+    other than adding your own views.
+      Note that in this call the plug-in could call a IPlugFrame::resizeView ()!
+      \param parent : platform handle of the parent window or view
+      \param type : \ref platformUIType which should be created */
+  virtual tresult PLUGIN_API attached (void* parent, FIDString type) = 0;
 
-	/** The parent window of the view is about to be destroyed.
-	    You have to remove all your own views from the parent window or view. */
-	virtual tresult PLUGIN_API removed () = 0;
+  /** The parent window of the view is about to be destroyed.
+      You have to remove all your own views from the parent window or view. */
+  virtual tresult PLUGIN_API removed () = 0;
 
-	/** Handling of mouse wheel. */
-	virtual tresult PLUGIN_API onWheel (float distance) = 0;
+  /** Handling of mouse wheel. */
+  virtual tresult PLUGIN_API onWheel (float distance) = 0;
 
-	/** Handling of keyboard events : Key Down.
-	    \param key : unicode code of key
-	    \param keyCode : virtual keycode for non ascii keys - see \ref VirtualKeyCodes in keycodes.h
-	    \param modifiers : any combination of modifiers - see \ref KeyModifier in keycodes.h
-	    \return kResultTrue if the key is handled, otherwise kResultFalse. \n
-	            <b> Please note that kResultTrue must only be returned if the key has really been
-	   handled. </b> Otherwise key command handling of the host might be blocked! */
-	virtual tresult PLUGIN_API onKeyDown (char16 key, int16 keyCode, int16 modifiers) = 0;
+  /** Handling of keyboard events : Key Down.
+      \param key : unicode code of key
+      \param keyCode : virtual keycode for non ascii keys - see \ref VirtualKeyCodes in keycodes.h
+      \param modifiers : any combination of modifiers - see \ref KeyModifier in keycodes.h
+      \return kResultTrue if the key is handled, otherwise kResultFalse. \n
+              <b> Please note that kResultTrue must only be returned if the key has really been
+     handled. </b> Otherwise key command handling of the host might be blocked! */
+  virtual tresult PLUGIN_API onKeyDown (char16 key, int16 keyCode, int16 modifiers) = 0;
 
-	/** Handling of keyboard events : Key Up.
-	    \param key : unicode code of key
-	    \param keyCode : virtual keycode for non ascii keys - see \ref VirtualKeyCodes in keycodes.h
-	    \param modifiers : any combination of KeyModifier - see \ref KeyModifier in keycodes.h
-	    \return kResultTrue if the key is handled, otherwise return kResultFalse. */
-	virtual tresult PLUGIN_API onKeyUp (char16 key, int16 keyCode, int16 modifiers) = 0;
+  /** Handling of keyboard events : Key Up.
+      \param key : unicode code of key
+      \param keyCode : virtual keycode for non ascii keys - see \ref VirtualKeyCodes in keycodes.h
+      \param modifiers : any combination of KeyModifier - see \ref KeyModifier in keycodes.h
+      \return kResultTrue if the key is handled, otherwise return kResultFalse. */
+  virtual tresult PLUGIN_API onKeyUp (char16 key, int16 keyCode, int16 modifiers) = 0;
 
-	/** Returns the size of the platform representation of the view. */
-	virtual tresult PLUGIN_API getSize (ViewRect* size) = 0;
+  /** Returns the size of the platform representation of the view. */
+  virtual tresult PLUGIN_API getSize (ViewRect* size) = 0;
 
-	/** Resizes the platform representation of the view to the given rect. Note that if the plug-in
-	 *	requests a resize (IPlugFrame::resizeView ()) onSize has to be called afterward. */
-	virtual tresult PLUGIN_API onSize (ViewRect* newSize) = 0;
+  /** Resizes the platform representation of the view to the given rect. Note that if the plug-in
+   *	requests a resize (IPlugFrame::resizeView ()) onSize has to be called afterward. */
+  virtual tresult PLUGIN_API onSize (ViewRect* newSize) = 0;
 
-	/** Focus changed message. */
-	virtual tresult PLUGIN_API onFocus (TBool state) = 0;
+  /** Focus changed message. */
+  virtual tresult PLUGIN_API onFocus (TBool state) = 0;
 
-	/** Sets IPlugFrame object to allow the plug-in to inform the host about resizing. */
-	virtual tresult PLUGIN_API setFrame (IPlugFrame* frame) = 0;
+  /** Sets IPlugFrame object to allow the plug-in to inform the host about resizing. */
+  virtual tresult PLUGIN_API setFrame (IPlugFrame* frame) = 0;
 
-	/** Is view sizable by user. */
-	virtual tresult PLUGIN_API canResize () = 0;
+  /** Is view sizable by user. */
+  virtual tresult PLUGIN_API canResize () = 0;
 
-	/** On live resize this is called to check if the view can be resized to the given rect, if not
-	 *	adjust the rect to the allowed size. */
-	virtual tresult PLUGIN_API checkSizeConstraint (ViewRect* rect) = 0;
+  /** On live resize this is called to check if the view can be resized to the given rect, if not
+   *	adjust the rect to the allowed size. */
+  virtual tresult PLUGIN_API checkSizeConstraint (ViewRect* rect) = 0;
 //------------------------------------------------------------------------
-	static const FUID iid;
+  static const FUID iid;
 };
 
 DECLARE_CLASS_IID (IPlugView, 0x5BC32507, 0xD06049EA, 0xA6151B52, 0x2B755B29)
@@ -197,11 +197,11 @@ class IPlugFrame : public FUnknown
 {
 public:
 //------------------------------------------------------------------------
-	/** Called to inform the host about the resize of a given view.
-	 *	Afterwards the host has to call IPlugView::onSize (). */
-	virtual tresult PLUGIN_API resizeView (IPlugView* view, ViewRect* newSize) = 0;
+  /** Called to inform the host about the resize of a given view.
+   *	Afterwards the host has to call IPlugView::onSize (). */
+  virtual tresult PLUGIN_API resizeView (IPlugView* view, ViewRect* newSize) = 0;
 //------------------------------------------------------------------------
-	static const FUID iid;
+  static const FUID iid;
 };
 
 DECLARE_CLASS_IID (IPlugFrame, 0x367FAF01, 0xAFA94693, 0x8D4DA2A0, 0xED0882A3)
@@ -223,9 +223,9 @@ using FileDescriptor = int;
 class IEventHandler : public FUnknown
 {
 public:
-	virtual void PLUGIN_API onFDIsSet (FileDescriptor fd) = 0;
+  virtual void PLUGIN_API onFDIsSet (FileDescriptor fd) = 0;
 //------------------------------------------------------------------------
-	static const FUID iid;
+  static const FUID iid;
 };
 DECLARE_CLASS_IID (IEventHandler, 0x561E65C9, 0x13A0496F, 0x813A2C35, 0x654D7983)
 
@@ -239,9 +239,9 @@ DECLARE_CLASS_IID (IEventHandler, 0x561E65C9, 0x13A0496F, 0x813A2C35, 0x654D7983
 class ITimerHandler : public FUnknown
 {
 public:
-	virtual void PLUGIN_API onTimer () = 0;
+  virtual void PLUGIN_API onTimer () = 0;
 //------------------------------------------------------------------------
-	static const FUID iid;
+  static const FUID iid;
 };
 DECLARE_CLASS_IID (ITimerHandler, 0x10BDD94F, 0x41424774, 0x821FAD8F, 0xECA72CA9)
 
@@ -263,14 +263,14 @@ A plug-in also can register a timer which will be called repeatedly until it is 
 class IRunLoop : public FUnknown
 {
 public:
-	virtual tresult PLUGIN_API registerEventHandler (IEventHandler* handler, FileDescriptor fd) = 0;
-	virtual tresult PLUGIN_API unregisterEventHandler (IEventHandler* handler) = 0;
+  virtual tresult PLUGIN_API registerEventHandler (IEventHandler* handler, FileDescriptor fd) = 0;
+  virtual tresult PLUGIN_API unregisterEventHandler (IEventHandler* handler) = 0;
 
-	virtual tresult PLUGIN_API registerTimer (ITimerHandler* handler,
-											  TimerInterval milliseconds) = 0;
-	virtual tresult PLUGIN_API unregisterTimer (ITimerHandler* handler) = 0;
+  virtual tresult PLUGIN_API registerTimer (ITimerHandler* handler,
+                        TimerInterval milliseconds) = 0;
+  virtual tresult PLUGIN_API unregisterTimer (ITimerHandler* handler) = 0;
 //------------------------------------------------------------------------
-	static const FUID iid;
+  static const FUID iid;
 };
 DECLARE_CLASS_IID (IRunLoop, 0x18C35366, 0x97764F1A, 0x9C5B8385, 0x7A871389)
 

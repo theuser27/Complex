@@ -41,17 +41,17 @@ class IMessage : public FUnknown
 {
 public:
 //------------------------------------------------------------------------
-	/** Returns the message ID (for example "TextMessage"). */
-	virtual FIDString PLUGIN_API getMessageID () = 0;
+  /** Returns the message ID (for example "TextMessage"). */
+  virtual FIDString PLUGIN_API getMessageID () = 0;
 
-	/** Sets a message ID (for example "TextMessage"). */
-	virtual void PLUGIN_API setMessageID (FIDString id /*in*/) = 0;
+  /** Sets a message ID (for example "TextMessage"). */
+  virtual void PLUGIN_API setMessageID (FIDString id /*in*/) = 0;
 
-	/** Returns the attribute list associated to the message. */
-	virtual IAttributeList* PLUGIN_API getAttributes () = 0;
+  /** Returns the attribute list associated to the message. */
+  virtual IAttributeList* PLUGIN_API getAttributes () = 0;
 
 //------------------------------------------------------------------------
-	static const FUID iid;
+  static const FUID iid;
 };
 
 DECLARE_CLASS_IID (IMessage, 0x936F033B, 0xC6C047DB, 0xBB0882F8, 0x13C1E613)
@@ -73,17 +73,17 @@ class IConnectionPoint : public FUnknown
 {
 public:
 //------------------------------------------------------------------------
-	/** Connects this instance with another connection point. */
-	virtual tresult PLUGIN_API connect (IConnectionPoint* other) = 0;
+  /** Connects this instance with another connection point. */
+  virtual tresult PLUGIN_API connect (IConnectionPoint* other) = 0;
 
-	/** Disconnects a given connection point from this. */
-	virtual tresult PLUGIN_API disconnect (IConnectionPoint* other) = 0;
+  /** Disconnects a given connection point from this. */
+  virtual tresult PLUGIN_API disconnect (IConnectionPoint* other) = 0;
 
-	/** Called when a message has been sent from the connection point to this. */
-	virtual tresult PLUGIN_API notify (IMessage* message) = 0;
+  /** Called when a message has been sent from the connection point to this. */
+  virtual tresult PLUGIN_API notify (IMessage* message) = 0;
 
 //------------------------------------------------------------------------
-	static const FUID iid;
+  static const FUID iid;
 };
 
 DECLARE_CLASS_IID (IConnectionPoint, 0x70A4156F, 0x6E6E4026, 0x989148BF, 0xAA60D8D1)

@@ -50,10 +50,10 @@ Bus::Bus (const TChar* _name, BusType _busType, int32 _flags)
 //------------------------------------------------------------------------
 bool Bus::getInfo (BusInfo& info)
 {
-	name.copyTo16 (info.name, 0, str16BufferSize (info.name) - 1);
-	info.busType = busType;
-	info.flags = flags;
-	return true;
+  name.copyTo16 (info.name, 0, str16BufferSize (info.name) - 1);
+  info.busType = busType;
+  info.flags = flags;
+  return true;
 }
 
 //------------------------------------------------------------------------
@@ -67,8 +67,8 @@ EventBus::EventBus (const TChar* name, BusType busType, int32 flags, int32 chann
 //------------------------------------------------------------------------
 bool EventBus::getInfo (BusInfo& info)
 {
-	info.channelCount = channelCount;
-	return Bus::getInfo (info);
+  info.channelCount = channelCount;
+  return Bus::getInfo (info);
 }
 
 //------------------------------------------------------------------------
@@ -82,8 +82,8 @@ AudioBus::AudioBus (const TChar* name, BusType busType, int32 flags, SpeakerArra
 //------------------------------------------------------------------------
 bool AudioBus::getInfo (BusInfo& info)
 {
-	info.channelCount = SpeakerArr::getChannelCount (speakerArr);
-	return Bus::getInfo (info);
+  info.channelCount = SpeakerArr::getChannelCount (speakerArr);
+  return Bus::getInfo (info);
 }
 
 //------------------------------------------------------------------------

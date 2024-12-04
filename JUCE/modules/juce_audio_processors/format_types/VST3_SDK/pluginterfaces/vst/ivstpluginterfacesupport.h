@@ -38,14 +38,14 @@ It is implemented by the hostContext given when the component is initialized.
 //------------------------------------------------------------------------
 tresult PLUGIN_API MyPluginController::initialize (FUnknown* context)
 {
-	// ...
-	FUnknownPtr<IPlugInterfaceSupport> plugInterfaceSupport (context);
-	if (plugInterfaceSupport)
-	{
-		if (plugInterfaceSupport->isPlugInterfaceSupported (IMidiMapping::iid) == kResultTrue)
-			// IMidiMapping is used by the host
-	}
-	// ...
+  // ...
+  FUnknownPtr<IPlugInterfaceSupport> plugInterfaceSupport (context);
+  if (plugInterfaceSupport)
+  {
+    if (plugInterfaceSupport->isPlugInterfaceSupported (IMidiMapping::iid) == kResultTrue)
+      // IMidiMapping is used by the host
+  }
+  // ...
 }
 \endcode
 \see IPluginBase
@@ -53,9 +53,9 @@ tresult PLUGIN_API MyPluginController::initialize (FUnknown* context)
 class IPlugInterfaceSupport : public FUnknown
 {
 public:
-	/** Returns kResultTrue if the associated interface to the given _iid is supported/used by the host. */
-	virtual tresult PLUGIN_API isPlugInterfaceSupported (const TUID _iid) = 0;
-	
+  /** Returns kResultTrue if the associated interface to the given _iid is supported/used by the host. */
+  virtual tresult PLUGIN_API isPlugInterfaceSupported (const TUID _iid) = 0;
+  
  //------------------------------------------------------------------------
  static const FUID iid;
 };

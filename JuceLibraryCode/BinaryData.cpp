@@ -5813,11 +5813,18 @@ static const unsigned char temp_binary_data_6[] =
 "\t\t\t\"Widget Secondary 1\": \"ff4c4c4c\",\r\n"
 "\t\t\t\"Widget Accent 1\": \"ffff6b00\",\r\n"
 "\t\t\t\"Widget Background 1\": \"ff353535\"\r\n"
+"\t\t},\r\n"
+"\t\t\"Destroy Module\": {\r\n"
+"\t\t\t\"Background\": \"ff151515\",\r\n"
+"\t\t\t\"Body\": \"ff1f1f1f\",\r\n"
+"\t\t\t\"Background Element\": \"ff313131\",\r\n"
+"\t\t\t\"Widget Primary 1\": \"ffeb5353\",\r\n"
+"\t\t\t\"Widget Secondary 1\": \"ff4c4c4c\",\r\n"
+"\t\t\t\"Widget Accent 1\": \"ffeb5353\",\r\n"
+"\t\t\t\"Widget Background 1\": \"ff353535\"\r\n"
 "\t\t}\r\n"
 "\r\n"
-"\t},\r\n"
-"\r\n"
-"\t\"Plugin Version\": 65542\r\n"
+"\t}\r\n"
 "}";
 
 const char* Complex_skin = (const char*) temp_binary_data_6;
@@ -5840,7 +5847,7 @@ const char* getNamedResource (const char* resourceNameUTF8, int& numBytes)
         case 0xfa89615a:  numBytes = 1106; return Icon_Phase_svg;
         case 0xe39541f1:  numBytes = 52296; return DDINBold_ttf;
         case 0x247953f8:  numBytes = 454712; return InterMedium_ttf;
-        case 0xf7e7fbcc:  numBytes = 4065; return Complex_skin;
+        case 0xf7e7fbcc:  numBytes = 4304; return Complex_skin;
         default: break;
     }
 

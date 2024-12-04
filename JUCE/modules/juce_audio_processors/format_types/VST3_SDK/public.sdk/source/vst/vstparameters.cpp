@@ -47,7 +47,7 @@ namespace Vst {
 //------------------------------------------------------------------------
 Parameter::Parameter () : valueNormalized (0.), precision (4)
 {
-	info = {};
+  info = {};
 }
 
 //------------------------------------------------------------------------
@@ -62,19 +62,19 @@ Parameter::Parameter (const TChar* title, ParamID tag, const TChar* units,
                       UnitID unitID, const TChar* shortTitle)
 : precision (4)
 {
-	info = {};
+  info = {};
 
-	UString (info.title, str16BufferSize (String128)).assign (title);
-	if (units)
-		UString (info.units, str16BufferSize (String128)).assign (units);
-	if (shortTitle)
-		UString (info.shortTitle, str16BufferSize (String128)).assign (shortTitle);
+  UString (info.title, str16BufferSize (String128)).assign (title);
+  if (units)
+    UString (info.units, str16BufferSize (String128)).assign (units);
+  if (shortTitle)
+    UString (info.shortTitle, str16BufferSize (String128)).assign (shortTitle);
 
-	info.stepCount = stepCount;
-	info.defaultNormalizedValue = valueNormalized = defaultValueNormalized;
-	info.flags = flags;
-	info.id = tag;
-	info.unitId = unitID;
+  info.stepCount = stepCount;
+  info.defaultNormalizedValue = valueNormalized = defaultValueNormalized;
+  info.flags = flags;
+  info.id = tag;
+  info.unitId = unitID;
 }
 
 //------------------------------------------------------------------------
@@ -85,63 +85,63 @@ Parameter::~Parameter ()
 //------------------------------------------------------------------------
 bool Parameter::setNormalized (ParamValue normValue)
 {
-	if (normValue > 1.0)
-	{
-		normValue = 1.0;
-	}
-	else if (normValue < 0.)
-	{
-		normValue = 0.;
-	}
+  if (normValue > 1.0)
+  {
+    normValue = 1.0;
+  }
+  else if (normValue < 0.)
+  {
+    normValue = 0.;
+  }
 
-	if (normValue != valueNormalized)
-	{
-		valueNormalized = normValue;
-		changed ();
-		return true;
-	}
-	return false;
+  if (normValue != valueNormalized)
+  {
+    valueNormalized = normValue;
+    changed ();
+    return true;
+  }
+  return false;
 }
 
 //------------------------------------------------------------------------
 void Parameter::toString (ParamValue normValue, String128 string) const
 {
-	UString wrapper (string, str16BufferSize (String128));
-	if (info.stepCount == 1)
-	{
-		if (normValue > 0.5)
-		{
-			wrapper.assign (STR16 ("On"));
-		}
-		else
-		{
-			wrapper.assign (STR16 ("Off"));
-		}
-	}
-	else
-	{
-		if (!wrapper.printFloat (normValue, precision))
-			string[0] = 0;
-	}
+  UString wrapper (string, str16BufferSize (String128));
+  if (info.stepCount == 1)
+  {
+    if (normValue > 0.5)
+    {
+      wrapper.assign (STR16 ("On"));
+    }
+    else
+    {
+      wrapper.assign (STR16 ("Off"));
+    }
+  }
+  else
+  {
+    if (!wrapper.printFloat (normValue, precision))
+      string[0] = 0;
+  }
 }
 
 //------------------------------------------------------------------------
 bool Parameter::fromString (const TChar* string, ParamValue& normValue) const
 {
-	UString wrapper (const_cast<TChar*> (string), tstrlen (string));
-	return wrapper.scanFloat (normValue);
+  UString wrapper (const_cast<TChar*> (string), tstrlen (string));
+  return wrapper.scanFloat (normValue);
 }
 
 //------------------------------------------------------------------------
 ParamValue Parameter::toPlain (ParamValue normValue) const
 {
-	return normValue;
+  return normValue;
 }
 
 //------------------------------------------------------------------------
 ParamValue Parameter::toNormalized (ParamValue plainValue) const
 {
-	return plainValue;
+  return plainValue;
 }
 
 //------------------------------------------------------------------------
@@ -164,75 +164,75 @@ RangeParameter::RangeParameter (const TChar* title, ParamID tag, const TChar* un
                                 UnitID unitID, const TChar* shortTitle)
 : minPlain (minPlain), maxPlain (maxPlain)
 {
-	UString (info.title, str16BufferSize (String128)).assign (title);
-	if (units)
-		UString (info.units, str16BufferSize (String128)).assign (units);
-	if (shortTitle)
-		UString (info.shortTitle, str16BufferSize (String128)).assign (shortTitle);
+  UString (info.title, str16BufferSize (String128)).assign (title);
+  if (units)
+    UString (info.units, str16BufferSize (String128)).assign (units);
+  if (shortTitle)
+    UString (info.shortTitle, str16BufferSize (String128)).assign (shortTitle);
 
-	info.stepCount = stepCount;
-	info.defaultNormalizedValue = valueNormalized = toNormalized (defaultValuePlain);
-	info.flags = flags;
-	info.id = tag;
-	info.unitId = unitID;
+  info.stepCount = stepCount;
+  info.defaultNormalizedValue = valueNormalized = toNormalized (defaultValuePlain);
+  info.flags = flags;
+  info.id = tag;
+  info.unitId = unitID;
 }
 
 //------------------------------------------------------------------------
 void RangeParameter::toString (ParamValue _valueNormalized, String128 string) const
 {
-	if (info.stepCount > 1)
-	{
-		UString wrapper (string, str16BufferSize (String128));
-		int64 plain = static_cast<int64> (toPlain (_valueNormalized));
-		if (!wrapper.printInt (plain))
-			string[0] = 0;
-	}
-	else
-	{
-		Parameter::toString (toPlain (_valueNormalized), string);
-	}
+  if (info.stepCount > 1)
+  {
+    UString wrapper (string, str16BufferSize (String128));
+    int64 plain = static_cast<int64> (toPlain (_valueNormalized));
+    if (!wrapper.printInt (plain))
+      string[0] = 0;
+  }
+  else
+  {
+    Parameter::toString (toPlain (_valueNormalized), string);
+  }
 }
 
 //------------------------------------------------------------------------
 bool RangeParameter::fromString (const TChar* string, ParamValue& _valueNormalized) const
 {
-	UString wrapper (const_cast<TChar*> (string), tstrlen (string));
-	if (info.stepCount > 1)
-	{
-		int64 plainValue;
-		if (wrapper.scanInt (plainValue))
-		{
-			_valueNormalized = toNormalized ((ParamValue)plainValue);
-			return true;
-		}
-		return false;
-	}
-	if (wrapper.scanFloat (_valueNormalized))
-	{
-		if (_valueNormalized < getMin ())
-			_valueNormalized = getMin ();
-		else if (_valueNormalized > getMax ())
-			_valueNormalized = getMax ();
-		_valueNormalized = toNormalized (_valueNormalized);
-		return true;
-	}
-	return false;
+  UString wrapper (const_cast<TChar*> (string), tstrlen (string));
+  if (info.stepCount > 1)
+  {
+    int64 plainValue;
+    if (wrapper.scanInt (plainValue))
+    {
+      _valueNormalized = toNormalized ((ParamValue)plainValue);
+      return true;
+    }
+    return false;
+  }
+  if (wrapper.scanFloat (_valueNormalized))
+  {
+    if (_valueNormalized < getMin ())
+      _valueNormalized = getMin ();
+    else if (_valueNormalized > getMax ())
+      _valueNormalized = getMax ();
+    _valueNormalized = toNormalized (_valueNormalized);
+    return true;
+  }
+  return false;
 }
 
 //------------------------------------------------------------------------
 ParamValue RangeParameter::toPlain (ParamValue _valueNormalized) const
 {
-	if (info.stepCount > 1)
-		return FromNormalized<ParamValue> (_valueNormalized, info.stepCount) + getMin ();
-	return _valueNormalized * (getMax () - getMin ()) + getMin ();
+  if (info.stepCount > 1)
+    return FromNormalized<ParamValue> (_valueNormalized, info.stepCount) + getMin ();
+  return _valueNormalized * (getMax () - getMin ()) + getMin ();
 }
 
 //------------------------------------------------------------------------
 ParamValue RangeParameter::toNormalized (ParamValue plainValue) const
 {
-	if (info.stepCount > 1)
-		return ToNormalized <ParamValue>(plainValue - getMin (), info.stepCount);
-	return (plainValue - getMin ()) / (getMax () - getMin ());
+  if (info.stepCount > 1)
+    return ToNormalized <ParamValue>(plainValue - getMin (), info.stepCount);
+  return (plainValue - getMin ()) / (getMax () - getMin ());
 }
 
 //------------------------------------------------------------------------
@@ -246,100 +246,100 @@ StringListParameter::StringListParameter (const ParameterInfo& paramInfo) : Para
 StringListParameter::StringListParameter (const TChar* title, ParamID tag, const TChar* units,
                                           int32 flags, UnitID unitID, const TChar* shortTitle)
 {
-	UString (info.title, str16BufferSize (String128)).assign (title);
-	if (units)
-		UString (info.units, str16BufferSize (String128)).assign (units);
-	if (shortTitle)
-		UString (info.shortTitle, str16BufferSize (String128)).assign (shortTitle);
+  UString (info.title, str16BufferSize (String128)).assign (title);
+  if (units)
+    UString (info.units, str16BufferSize (String128)).assign (units);
+  if (shortTitle)
+    UString (info.shortTitle, str16BufferSize (String128)).assign (shortTitle);
 
-	info.stepCount = -1;
-	info.defaultNormalizedValue = 0;
-	info.flags = flags;
-	info.id = tag;
-	info.unitId = unitID;
+  info.stepCount = -1;
+  info.defaultNormalizedValue = 0;
+  info.flags = flags;
+  info.id = tag;
+  info.unitId = unitID;
 }
 
 //------------------------------------------------------------------------
 StringListParameter::~StringListParameter ()
 {
-	for (auto& string : strings)
-		std::free (string);
+  for (auto& string : strings)
+    std::free (string);
 }
 
 //------------------------------------------------------------------------
 void StringListParameter::appendString (const String128 string)
 {
-	int32 length = strlen16 (string);
-	TChar* buffer = (TChar*)std::malloc ((length + 1) * sizeof (TChar));
-	if (!buffer)
-		return;
+  int32 length = strlen16 (string);
+  TChar* buffer = (TChar*)std::malloc ((length + 1) * sizeof (TChar));
+  if (!buffer)
+    return;
 
-	memcpy (buffer, string, length * sizeof (TChar));
-	buffer[length] = 0;
-	strings.push_back (buffer);
-	info.stepCount++;
+  memcpy (buffer, string, length * sizeof (TChar));
+  buffer[length] = 0;
+  strings.push_back (buffer);
+  info.stepCount++;
 }
 
 //------------------------------------------------------------------------
 bool StringListParameter::replaceString (int32 index, const String128 string)
 {
-	TChar* str = strings.at (index);
-	if (!str)
-		return false;
+  TChar* str = strings.at (index);
+  if (!str)
+    return false;
 
-	int32 length = strlen16 (string);
-	TChar* buffer = (TChar*)malloc ((length + 1) * sizeof (TChar));
-	if (!buffer)
-		return false;
+  int32 length = strlen16 (string);
+  TChar* buffer = (TChar*)malloc ((length + 1) * sizeof (TChar));
+  if (!buffer)
+    return false;
 
-	memcpy (buffer, string, length * sizeof (TChar));
-	buffer[length] = 0;
-	strings[index] = buffer;
-	std::free (str);
-	return true;
+  memcpy (buffer, string, length * sizeof (TChar));
+  buffer[length] = 0;
+  strings[index] = buffer;
+  std::free (str);
+  return true;
 }
 
 //------------------------------------------------------------------------
 void StringListParameter::toString (ParamValue _valueNormalized, String128 string) const
 {
-	int32 index = (int32)toPlain (_valueNormalized);
-	if (const TChar* valueString = strings.at (index))
-	{
-		UString (string, str16BufferSize (String128)).assign (valueString);
-	}
-	else
-		string[0] = 0;
+  int32 index = (int32)toPlain (_valueNormalized);
+  if (const TChar* valueString = strings.at (index))
+  {
+    UString (string, str16BufferSize (String128)).assign (valueString);
+  }
+  else
+    string[0] = 0;
 }
 
 //------------------------------------------------------------------------
 bool StringListParameter::fromString (const TChar* string, ParamValue& _valueNormalized) const
 {
-	int32 index = 0;
-	for (auto it = strings.begin (), end = strings.end (); it != end; ++it, ++index)
-	{
-		if (strcmp16 (*it, string) == 0)
-		{
-			_valueNormalized = toNormalized ((ParamValue)index);
-			return true;
-		}
-	}
-	return false;
+  int32 index = 0;
+  for (auto it = strings.begin (), end = strings.end (); it != end; ++it, ++index)
+  {
+    if (strcmp16 (*it, string) == 0)
+    {
+      _valueNormalized = toNormalized ((ParamValue)index);
+      return true;
+    }
+  }
+  return false;
 }
 
 //------------------------------------------------------------------------
 ParamValue StringListParameter::toPlain (ParamValue _valueNormalized) const
 {
-	if (info.stepCount <= 0)
-		return 0;
-	return FromNormalized<ParamValue> (_valueNormalized, info.stepCount);
+  if (info.stepCount <= 0)
+    return 0;
+  return FromNormalized<ParamValue> (_valueNormalized, info.stepCount);
 }
 
 //------------------------------------------------------------------------
 ParamValue StringListParameter::toNormalized (ParamValue plainValue) const
 {
-	if (info.stepCount <= 0)
-		return 0;
-	return ToNormalized<ParamValue> (plainValue, info.stepCount);
+  if (info.stepCount <= 0)
+    return 0;
+  return ToNormalized<ParamValue> (plainValue, info.stepCount);
 }
 
 //------------------------------------------------------------------------
@@ -352,68 +352,68 @@ ParameterContainer::ParameterContainer () : params (nullptr)
 //------------------------------------------------------------------------
 ParameterContainer::~ParameterContainer ()
 {
-	if (params)
-		delete params;
+  if (params)
+    delete params;
 }
 
 //------------------------------------------------------------------------
 void ParameterContainer::init (int32 initialSize, int32 /*resizeDelta*/)
 {
-	if (!params)
-	{
-		params = new ParameterPtrVector;
-		if (initialSize > 0)
-			params->reserve (initialSize);
-	}
+  if (!params)
+  {
+    params = new ParameterPtrVector;
+    if (initialSize > 0)
+      params->reserve (initialSize);
+  }
 }
 
 //------------------------------------------------------------------------
 Parameter* ParameterContainer::addParameter (Parameter* p)
 {
-	if (!params)
-		init ();
-	id2index[p->getInfo ().id] = params->size ();
-	params->push_back (IPtr<Parameter> (p, false));
-	return p;
+  if (!params)
+    init ();
+  id2index[p->getInfo ().id] = params->size ();
+  params->push_back (IPtr<Parameter> (p, false));
+  return p;
 }
 
 //------------------------------------------------------------------------
 Parameter* ParameterContainer::addParameter (const ParameterInfo& info)
 {
-	if (!params)
-		init ();
-	auto* p = new Parameter (info);
-	if (addParameter (p))
-		return p;
-	p->release ();
-	return nullptr;
+  if (!params)
+    init ();
+  auto* p = new Parameter (info);
+  if (addParameter (p))
+    return p;
+  p->release ();
+  return nullptr;
 }
 
 //------------------------------------------------------------------------
 Parameter* ParameterContainer::getParameter (ParamID tag) const
 {
-	if (params)
-	{
-		auto it = id2index.find (tag);
-		if (it != id2index.end ())
-			return params->at (it->second);
-	}
-	return nullptr;
+  if (params)
+  {
+    auto it = id2index.find (tag);
+    if (it != id2index.end ())
+      return params->at (it->second);
+  }
+  return nullptr;
 }
 
 //------------------------------------------------------------------------
 bool ParameterContainer::removeParameter (ParamID tag)
 {
-	if (!params)
-		return false;
-	
-	IndexMap::const_iterator it = id2index.find (tag);
-	if (it != id2index.end ())
-	{
-		params->erase (params->begin () + it->second);
-		id2index.erase (it);
-	}
-	return false;
+  if (!params)
+    return false;
+  
+  IndexMap::const_iterator it = id2index.find (tag);
+  if (it != id2index.end ())
+  {
+    params->erase (params->begin () + it->second);
+    id2index.erase (it);
+  }
+  return false;
 }
 
 //------------------------------------------------------------------------
@@ -421,26 +421,26 @@ Parameter* ParameterContainer::addParameter (const TChar* title, const TChar* un
                                              int32 stepCount, ParamValue defaultNormalizedValue,
                                              int32 flags, int32 tag, UnitID unitID, const TChar* shortTitle)
 {
-	if (!title)
-	{
-		return nullptr;
-	}
+  if (!title)
+  {
+    return nullptr;
+  }
 
-	ParameterInfo info = {};
+  ParameterInfo info = {};
 
-	UString (info.title, str16BufferSize (String128)).assign (title);
-	if (units)
-		UString (info.units, str16BufferSize (String128)).assign (units);
-	if (shortTitle)
-		UString (info.shortTitle, str16BufferSize (String128)).assign (shortTitle);
+  UString (info.title, str16BufferSize (String128)).assign (title);
+  if (units)
+    UString (info.units, str16BufferSize (String128)).assign (units);
+  if (shortTitle)
+    UString (info.shortTitle, str16BufferSize (String128)).assign (shortTitle);
 
-	info.stepCount = stepCount;
-	info.defaultNormalizedValue = defaultNormalizedValue;
-	info.flags = flags;
-	info.id = (tag >= 0) ? tag : getParameterCount ();
-	info.unitId = unitID;
+  info.stepCount = stepCount;
+  info.defaultNormalizedValue = defaultNormalizedValue;
+  info.flags = flags;
+  info.id = (tag >= 0) ? tag : getParameterCount ();
+  info.unitId = unitID;
 
-	return addParameter (info);
+  return addParameter (info);
 }
 
 //------------------------------------------------------------------------

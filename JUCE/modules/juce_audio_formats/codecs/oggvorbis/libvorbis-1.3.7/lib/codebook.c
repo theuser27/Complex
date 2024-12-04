@@ -55,7 +55,7 @@ int vorbis_staticbook_pack(const static_codebook *c,oggpack_buffer *opb){
       char thisx=c->lengthlist[i];
       char last=c->lengthlist[i-1];
       if(thisx>last){
-	for(j=last;j<thisx;j++){
+  for(j=last;j<thisx;j++){
           oggpack_write(opb,i-count,ov_ilog(c->entries-count));
           count=i;
         }

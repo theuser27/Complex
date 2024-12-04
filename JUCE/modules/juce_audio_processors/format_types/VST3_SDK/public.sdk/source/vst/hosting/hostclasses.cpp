@@ -44,61 +44,61 @@ namespace Vst {
 //-----------------------------------------------------------------------------
 HostApplication::HostApplication ()
 {
-	FUNKNOWN_CTOR
+  FUNKNOWN_CTOR
 
-	mPlugInterfaceSupport = owned (NEW PlugInterfaceSupport);
+  mPlugInterfaceSupport = owned (NEW PlugInterfaceSupport);
 }
 
 //-----------------------------------------------------------------------------
 tresult PLUGIN_API HostApplication::getName (String128 name)
 {
-	String str ("My VST3 HostApplication");
-	str.copyTo16 (name, 0, 127);
-	return kResultTrue;
+  String str ("My VST3 HostApplication");
+  str.copyTo16 (name, 0, 127);
+  return kResultTrue;
 }
 
 //-----------------------------------------------------------------------------
 tresult PLUGIN_API HostApplication::createInstance (TUID cid, TUID _iid, void** obj)
 {
-	FUID classID (FUID::fromTUID (cid));
-	FUID interfaceID (FUID::fromTUID (_iid));
-	if (classID == IMessage::iid && interfaceID == IMessage::iid)
-	{
-		*obj = new HostMessage;
-		return kResultTrue;
-	}
-	else if (classID == IAttributeList::iid && interfaceID == IAttributeList::iid)
-	{
-		*obj = new HostAttributeList;
-		return kResultTrue;
-	}
-	*obj = nullptr;
-	return kResultFalse;
+  FUID classID (FUID::fromTUID (cid));
+  FUID interfaceID (FUID::fromTUID (_iid));
+  if (classID == IMessage::iid && interfaceID == IMessage::iid)
+  {
+    *obj = new HostMessage;
+    return kResultTrue;
+  }
+  else if (classID == IAttributeList::iid && interfaceID == IAttributeList::iid)
+  {
+    *obj = new HostAttributeList;
+    return kResultTrue;
+  }
+  *obj = nullptr;
+  return kResultFalse;
 }
 
 //-----------------------------------------------------------------------------
 tresult PLUGIN_API HostApplication::queryInterface (const char* _iid, void** obj)
 {
-	QUERY_INTERFACE (_iid, obj, FUnknown::iid, IHostApplication)
-	QUERY_INTERFACE (_iid, obj, IHostApplication::iid, IHostApplication)
+  QUERY_INTERFACE (_iid, obj, FUnknown::iid, IHostApplication)
+  QUERY_INTERFACE (_iid, obj, IHostApplication::iid, IHostApplication)
 
-	if (mPlugInterfaceSupport && mPlugInterfaceSupport->queryInterface (iid, obj) == kResultTrue)
-		return kResultOk;
+  if (mPlugInterfaceSupport && mPlugInterfaceSupport->queryInterface (iid, obj) == kResultTrue)
+    return kResultOk;
 
-	*obj = nullptr;
-	return kResultFalse;
+  *obj = nullptr;
+  return kResultFalse;
 }
 
 //-----------------------------------------------------------------------------
 uint32 PLUGIN_API HostApplication::addRef ()
 {
-	return 1;
+  return 1;
 }
 
 //-----------------------------------------------------------------------------
 uint32 PLUGIN_API HostApplication::release ()
 {
-	return 1;
+  return 1;
 }
 
 //-----------------------------------------------------------------------------
@@ -108,44 +108,44 @@ IMPLEMENT_FUNKNOWN_METHODS (HostMessage, IMessage, IMessage::iid)
 //-----------------------------------------------------------------------------
 HostMessage::HostMessage () : messageId (nullptr), attributeList (nullptr)
 {
-	FUNKNOWN_CTOR
+  FUNKNOWN_CTOR
 }
 
 //-----------------------------------------------------------------------------
 HostMessage::~HostMessage ()
 {
-	setMessageID (nullptr);
-	if (attributeList)
-		attributeList->release ();
-	FUNKNOWN_DTOR
+  setMessageID (nullptr);
+  if (attributeList)
+    attributeList->release ();
+  FUNKNOWN_DTOR
 }
 
 //-----------------------------------------------------------------------------
 const char* PLUGIN_API HostMessage::getMessageID ()
 {
-	return messageId;
+  return messageId;
 }
 
 //-----------------------------------------------------------------------------
 void PLUGIN_API HostMessage::setMessageID (const char* mid)
 {
-	if (messageId)
-		delete[] messageId;
-	messageId = nullptr;
-	if (mid)
-	{
-		size_t len = strlen (mid) + 1;
-		messageId = new char[len];
-		strcpy (messageId, mid);
-	}
+  if (messageId)
+    delete[] messageId;
+  messageId = nullptr;
+  if (mid)
+  {
+    size_t len = strlen (mid) + 1;
+    messageId = new char[len];
+    strcpy (messageId, mid);
+  }
 }
 
 //-----------------------------------------------------------------------------
 IAttributeList* PLUGIN_API HostMessage::getAttributes ()
 {
-	if (!attributeList)
-		attributeList = new HostAttributeList;
-	return attributeList;
+  if (!attributeList)
+    attributeList = new HostAttributeList;
+  return attributeList;
 }
 
 //-----------------------------------------------------------------------------
@@ -154,59 +154,59 @@ IAttributeList* PLUGIN_API HostMessage::getAttributes ()
 class HostAttribute
 {
 public:
-	enum Type
-	{
-		kInteger,
-		kFloat,
-		kString,
-		kBinary
-	};
+  enum Type
+  {
+    kInteger,
+    kFloat,
+    kString,
+    kBinary
+  };
 
-	HostAttribute (int64 value) : size (0), type (kInteger) { v.intValue = value; }
-	HostAttribute (double value) : size (0), type (kFloat) { v.floatValue = value; }
-	/** size is in code unit (count of TChar) */
-	HostAttribute (const TChar* value, uint32 sizeInCodeUnit) : size (sizeInCodeUnit), type (kString)
-	{
-		v.stringValue = new TChar[sizeInCodeUnit];
-		memcpy (v.stringValue, value, sizeInCodeUnit * sizeof (TChar));
-	}
-	HostAttribute (const void* value, uint32 sizeInBytes) : size (sizeInBytes), type (kBinary)
-	{
-		v.binaryValue = new char[sizeInBytes];
-		memcpy (v.binaryValue, value, sizeInBytes);
-	}
-	~HostAttribute ()
-	{
-		if (size)
-			delete[] v.binaryValue;
-	}
+  HostAttribute (int64 value) : size (0), type (kInteger) { v.intValue = value; }
+  HostAttribute (double value) : size (0), type (kFloat) { v.floatValue = value; }
+  /** size is in code unit (count of TChar) */
+  HostAttribute (const TChar* value, uint32 sizeInCodeUnit) : size (sizeInCodeUnit), type (kString)
+  {
+    v.stringValue = new TChar[sizeInCodeUnit];
+    memcpy (v.stringValue, value, sizeInCodeUnit * sizeof (TChar));
+  }
+  HostAttribute (const void* value, uint32 sizeInBytes) : size (sizeInBytes), type (kBinary)
+  {
+    v.binaryValue = new char[sizeInBytes];
+    memcpy (v.binaryValue, value, sizeInBytes);
+  }
+  ~HostAttribute ()
+  {
+    if (size)
+      delete[] v.binaryValue;
+  }
 
-	int64 intValue () const { return v.intValue; }
-	double floatValue () const { return v.floatValue; }
-	/** sizeInCodeUnit is in code unit (count of TChar) */
-	const TChar* stringValue (uint32& sizeInCodeUnit)
-	{
-		sizeInCodeUnit = size;
-		return v.stringValue;
-	}
-	const void* binaryValue (uint32& sizeInBytes)
-	{
-		sizeInBytes = size;
-		return v.binaryValue;
-	}
+  int64 intValue () const { return v.intValue; }
+  double floatValue () const { return v.floatValue; }
+  /** sizeInCodeUnit is in code unit (count of TChar) */
+  const TChar* stringValue (uint32& sizeInCodeUnit)
+  {
+    sizeInCodeUnit = size;
+    return v.stringValue;
+  }
+  const void* binaryValue (uint32& sizeInBytes)
+  {
+    sizeInBytes = size;
+    return v.binaryValue;
+  }
 
-	Type getType () const { return type; }
+  Type getType () const { return type; }
 
 protected:
-	union v
-	{
-		int64 intValue;
-		double floatValue;
-		TChar* stringValue;
-		char* binaryValue;
-	} v;
-	uint32 size;
-	Type type;
+  union v
+  {
+    int64 intValue;
+    double floatValue;
+    TChar* stringValue;
+    char* binaryValue;
+  } v;
+  uint32 size;
+  Type type;
 };
 
 //-----------------------------------------------------------------------------
@@ -216,114 +216,114 @@ IMPLEMENT_FUNKNOWN_METHODS (HostAttributeList, IAttributeList, IAttributeList::i
 //-----------------------------------------------------------------------------
 HostAttributeList::HostAttributeList ()
 {
-	FUNKNOWN_CTOR
+  FUNKNOWN_CTOR
 }
 
 //-----------------------------------------------------------------------------
 HostAttributeList::~HostAttributeList ()
 {
-	auto it = list.rbegin ();
-	while (it != list.rend ())
-	{
-		delete it->second;
-		it++;
-	}
-	FUNKNOWN_DTOR
+  auto it = list.rbegin ();
+  while (it != list.rend ())
+  {
+    delete it->second;
+    it++;
+  }
+  FUNKNOWN_DTOR
 }
 
 //-----------------------------------------------------------------------------
 void HostAttributeList::removeAttrID (AttrID aid)
 {
-	auto it = list.find (aid);
-	if (it != list.end ())
-	{
-		delete it->second;
-		list.erase (it);
-	}
+  auto it = list.find (aid);
+  if (it != list.end ())
+  {
+    delete it->second;
+    list.erase (it);
+  }
 }
 
 //-----------------------------------------------------------------------------
 tresult PLUGIN_API HostAttributeList::setInt (AttrID aid, int64 value)
 {
-	removeAttrID (aid);
-	list[aid] = new HostAttribute (value);
-	return kResultTrue;
+  removeAttrID (aid);
+  list[aid] = new HostAttribute (value);
+  return kResultTrue;
 }
 
 //-----------------------------------------------------------------------------
 tresult PLUGIN_API HostAttributeList::getInt (AttrID aid, int64& value)
 {
-	auto it = list.find (aid);
-	if (it != list.end () && it->second)
-	{
-		value = it->second->intValue ();
-		return kResultTrue;
-	}
-	return kResultFalse;
+  auto it = list.find (aid);
+  if (it != list.end () && it->second)
+  {
+    value = it->second->intValue ();
+    return kResultTrue;
+  }
+  return kResultFalse;
 }
 
 //-----------------------------------------------------------------------------
 tresult PLUGIN_API HostAttributeList::setFloat (AttrID aid, double value)
 {
-	removeAttrID (aid);
-	list[aid] = new HostAttribute (value);
-	return kResultTrue;
+  removeAttrID (aid);
+  list[aid] = new HostAttribute (value);
+  return kResultTrue;
 }
 
 //-----------------------------------------------------------------------------
 tresult PLUGIN_API HostAttributeList::getFloat (AttrID aid, double& value)
 {
-	auto it = list.find (aid);
-	if (it != list.end () && it->second)
-	{
-		value = it->second->floatValue ();
-		return kResultTrue;
-	}
-	return kResultFalse;
+  auto it = list.find (aid);
+  if (it != list.end () && it->second)
+  {
+    value = it->second->floatValue ();
+    return kResultTrue;
+  }
+  return kResultFalse;
 }
 
 //-----------------------------------------------------------------------------
 tresult PLUGIN_API HostAttributeList::setString (AttrID aid, const TChar* string)
 {
-	removeAttrID (aid);
-	// + 1 for the null-terminate
-	list[aid] = new HostAttribute (string, String (string).length () + 1);
-	return kResultTrue;
+  removeAttrID (aid);
+  // + 1 for the null-terminate
+  list[aid] = new HostAttribute (string, String (string).length () + 1);
+  return kResultTrue;
 }
 
 //-----------------------------------------------------------------------------
 tresult PLUGIN_API HostAttributeList::getString (AttrID aid, TChar* string, uint32 sizeInBytes)
 {
-	auto it = list.find (aid);
-	if (it != list.end () && it->second)
-	{
-		uint32 sizeInCodeUnit = 0;
-		const TChar* _string = it->second->stringValue (sizeInCodeUnit);
-		memcpy (string, _string, std::min<uint32> (sizeInCodeUnit * sizeof (TChar), sizeInBytes));
-		return kResultTrue;
-	}
-	return kResultFalse;
+  auto it = list.find (aid);
+  if (it != list.end () && it->second)
+  {
+    uint32 sizeInCodeUnit = 0;
+    const TChar* _string = it->second->stringValue (sizeInCodeUnit);
+    memcpy (string, _string, std::min<uint32> (sizeInCodeUnit * sizeof (TChar), sizeInBytes));
+    return kResultTrue;
+  }
+  return kResultFalse;
 }
 
 //-----------------------------------------------------------------------------
 tresult PLUGIN_API HostAttributeList::setBinary (AttrID aid, const void* data, uint32 sizeInBytes)
 {
-	removeAttrID (aid);
-	list[aid] = new HostAttribute (data, sizeInBytes);
-	return kResultTrue;
+  removeAttrID (aid);
+  list[aid] = new HostAttribute (data, sizeInBytes);
+  return kResultTrue;
 }
 
 //-----------------------------------------------------------------------------
 tresult PLUGIN_API HostAttributeList::getBinary (AttrID aid, const void*& data, uint32& sizeInBytes)
 {
-	auto it = list.find (aid);
-	if (it != list.end () && it->second)
-	{
-		data = it->second->binaryValue (sizeInBytes);
-		return kResultTrue;
-	}
-	sizeInBytes = 0;
-	return kResultFalse;
+  auto it = list.find (aid);
+  if (it != list.end () && it->second)
+  {
+    data = it->second->binaryValue (sizeInBytes);
+    return kResultTrue;
+  }
+  sizeInBytes = 0;
+  return kResultFalse;
 }
 }
 } // namespace

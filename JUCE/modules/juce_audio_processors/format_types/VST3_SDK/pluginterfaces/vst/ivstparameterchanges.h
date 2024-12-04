@@ -85,20 +85,20 @@ class IParamValueQueue : public FUnknown
 {
 public:
 //------------------------------------------------------------------------
-	/** Returns its associated ID. */
-	virtual ParamID PLUGIN_API getParameterId () = 0;
+  /** Returns its associated ID. */
+  virtual ParamID PLUGIN_API getParameterId () = 0;
 
-	/** Returns count of points in the queue. */
-	virtual int32 PLUGIN_API getPointCount () = 0;
+  /** Returns count of points in the queue. */
+  virtual int32 PLUGIN_API getPointCount () = 0;
 
-	/** Gets the value and offset at a given index. */
-	virtual tresult PLUGIN_API getPoint (int32 index, int32& sampleOffset /*out*/, ParamValue& value /*out*/) = 0;
+  /** Gets the value and offset at a given index. */
+  virtual tresult PLUGIN_API getPoint (int32 index, int32& sampleOffset /*out*/, ParamValue& value /*out*/) = 0;
 
-	/** Adds a new value at the end of the queue, its index is returned. */
-	virtual tresult PLUGIN_API addPoint (int32 sampleOffset, ParamValue value, int32& index /*out*/) = 0;
+  /** Adds a new value at the end of the queue, its index is returned. */
+  virtual tresult PLUGIN_API addPoint (int32 sampleOffset, ParamValue value, int32& index /*out*/) = 0;
 
 //------------------------------------------------------------------------
-	static const FUID iid;
+  static const FUID iid;
 };
 
 DECLARE_CLASS_IID (IParamValueQueue, 0x01263A18, 0xED074F6F, 0x98C9D356, 0x4686F9BA)
@@ -120,18 +120,18 @@ class IParameterChanges : public FUnknown
 {
 public:
 //------------------------------------------------------------------------
-	/** Returns count of Parameter changes in the list. */
-	virtual int32 PLUGIN_API getParameterCount () = 0;
+  /** Returns count of Parameter changes in the list. */
+  virtual int32 PLUGIN_API getParameterCount () = 0;
 
-	/** Returns the queue at a given index. */
-	virtual IParamValueQueue* PLUGIN_API getParameterData (int32 index) = 0;
+  /** Returns the queue at a given index. */
+  virtual IParamValueQueue* PLUGIN_API getParameterData (int32 index) = 0;
 
-	/** Adds a new parameter queue with a given ID at the end of the list,
-	returns it and its index in the parameter changes list. */
-	virtual IParamValueQueue* PLUGIN_API addParameterData (const Vst::ParamID& id, int32& index /*out*/) = 0;
+  /** Adds a new parameter queue with a given ID at the end of the list,
+  returns it and its index in the parameter changes list. */
+  virtual IParamValueQueue* PLUGIN_API addParameterData (const Vst::ParamID& id, int32& index /*out*/) = 0;
 
 //------------------------------------------------------------------------
-	static const FUID iid;
+  static const FUID iid;
 };
 
 DECLARE_CLASS_IID (IParameterChanges, 0xA4779663, 0x0BB64A56, 0xB44384A8, 0x466FEB9D)

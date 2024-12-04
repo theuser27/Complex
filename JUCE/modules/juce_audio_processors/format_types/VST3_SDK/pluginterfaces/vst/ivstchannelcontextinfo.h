@@ -56,102 +56,102 @@ for each change occurring to this channel (new name, new color, new indexation,.
 //------------------------------------------------------------------------
 tresult PLUGIN_API MyPlugin::setChannelContextInfos (IAttributeList* list)
 {
-	if (list)
-	{
-		// optional we can ask for the Channel Name Length
-		int64 length;
-		if (list->getInt (ChannelContext::kChannelNameLengthKey, length) == kResultTrue)
-		{
-			...
-		}
-		
-		// get the Channel Name where we, as plug-in, are instantiated
-		String128 name;
-		if (list->getString (ChannelContext::kChannelNameKey, name, sizeof (name)) == kResultTrue)
-		{
-			...
-		}
+  if (list)
+  {
+    // optional we can ask for the Channel Name Length
+    int64 length;
+    if (list->getInt (ChannelContext::kChannelNameLengthKey, length) == kResultTrue)
+    {
+      ...
+    }
+    
+    // get the Channel Name where we, as plug-in, are instantiated
+    String128 name;
+    if (list->getString (ChannelContext::kChannelNameKey, name, sizeof (name)) == kResultTrue)
+    {
+      ...
+    }
 
-		// get the Channel UID
-		if (list->getString (ChannelContext::kChannelUIDKey, name, sizeof (name)) == kResultTrue)
-		{
-			...
-		}
-		
-		// get Channel Index
-		int64 index;
-		if (list->getInt (ChannelContext::kChannelIndexKey, index) == kResultTrue)
-		{
-			...
-		}
-		
-		// get the Channel Color
-		int64 color;
-		if (list->getInt (ChannelContext::kChannelColorKey, color) == kResultTrue)
-		{
-			uint32 channelColor = (uint32)color;
-			String str;
-			str.printf ("%x%x%x%x", ChannelContext::GetAlpha (channelColor),
-			ChannelContext::GetRed (channelColor),
-			ChannelContext::GetGreen (channelColor),
-			ChannelContext::GetBlue (channelColor));
-			String128 string128;
-			Steinberg::UString (string128, 128).fromAscii (str);
-			...
-		}
+    // get the Channel UID
+    if (list->getString (ChannelContext::kChannelUIDKey, name, sizeof (name)) == kResultTrue)
+    {
+      ...
+    }
+    
+    // get Channel Index
+    int64 index;
+    if (list->getInt (ChannelContext::kChannelIndexKey, index) == kResultTrue)
+    {
+      ...
+    }
+    
+    // get the Channel Color
+    int64 color;
+    if (list->getInt (ChannelContext::kChannelColorKey, color) == kResultTrue)
+    {
+      uint32 channelColor = (uint32)color;
+      String str;
+      str.printf ("%x%x%x%x", ChannelContext::GetAlpha (channelColor),
+      ChannelContext::GetRed (channelColor),
+      ChannelContext::GetGreen (channelColor),
+      ChannelContext::GetBlue (channelColor));
+      String128 string128;
+      Steinberg::UString (string128, 128).fromAscii (str);
+      ...
+    }
 
-		// get Channel Index Namespace Order of the current used index namespace
-		if (list->getInt (ChannelContext::kChannelIndexNamespaceOrderKey, index) == kResultTrue)
-		{
-			...
-		}
-	
-		// get the channel Index Namespace Length
-		if (list->getInt (ChannelContext::kChannelIndexNamespaceLengthKey, length) == kResultTrue)
-		{
-			...
-		}
-		
-		// get the channel Index Namespace
-		String128 namespaceName;
-		if (list->getString (ChannelContext::kChannelIndexNamespaceKey, namespaceName, sizeof (namespaceName)) == kResultTrue)
-		{
-			...
-		}
+    // get Channel Index Namespace Order of the current used index namespace
+    if (list->getInt (ChannelContext::kChannelIndexNamespaceOrderKey, index) == kResultTrue)
+    {
+      ...
+    }
+  
+    // get the channel Index Namespace Length
+    if (list->getInt (ChannelContext::kChannelIndexNamespaceLengthKey, length) == kResultTrue)
+    {
+      ...
+    }
+    
+    // get the channel Index Namespace
+    String128 namespaceName;
+    if (list->getString (ChannelContext::kChannelIndexNamespaceKey, namespaceName, sizeof (namespaceName)) == kResultTrue)
+    {
+      ...
+    }
 
-		// get plug-in Channel Location
-		int64 location;
-		if (list->getInt (ChannelContext::kChannelPluginLocationKey, location) == kResultTrue)
-		{
-			String128 string128;
-			switch (location)
-			{
-				case ChannelContext::kPreVolumeFader:
-					Steinberg::UString (string128, 128).fromAscii ("PreVolFader");
-				break;
-				case ChannelContext::kPostVolumeFader:
-					Steinberg::UString (string128, 128).fromAscii ("PostVolFader");
-				break;
-				case ChannelContext::kUsedAsPanner:
-					Steinberg::UString (string128, 128).fromAscii ("UsedAsPanner");
-				break;
-				default: Steinberg::UString (string128, 128).fromAscii ("unknown!");
-				break;
-			}
-		}
-		
-		// do not forget to call addRef () if you want to keep this list
-	}
+    // get plug-in Channel Location
+    int64 location;
+    if (list->getInt (ChannelContext::kChannelPluginLocationKey, location) == kResultTrue)
+    {
+      String128 string128;
+      switch (location)
+      {
+        case ChannelContext::kPreVolumeFader:
+          Steinberg::UString (string128, 128).fromAscii ("PreVolFader");
+        break;
+        case ChannelContext::kPostVolumeFader:
+          Steinberg::UString (string128, 128).fromAscii ("PostVolFader");
+        break;
+        case ChannelContext::kUsedAsPanner:
+          Steinberg::UString (string128, 128).fromAscii ("UsedAsPanner");
+        break;
+        default: Steinberg::UString (string128, 128).fromAscii ("unknown!");
+        break;
+      }
+    }
+    
+    // do not forget to call addRef () if you want to keep this list
+  }
 }
 \endcode 
 */
 class IInfoListener : public FUnknown
 {
 public:
-	/** Receive the channel context infos from host. */
-	virtual tresult PLUGIN_API setChannelContextInfos (IAttributeList* list) = 0;
+  /** Receive the channel context infos from host. */
+  virtual tresult PLUGIN_API setChannelContextInfos (IAttributeList* list) = 0;
 
-	static const FUID iid;
+  static const FUID iid;
 };
 
 DECLARE_CLASS_IID (IInfoListener, 0x0F194781, 0x8D984ADA, 0xBBA0C1EF, 0xC011D8D0)
@@ -161,9 +161,9 @@ DECLARE_CLASS_IID (IInfoListener, 0x0F194781, 0x8D984ADA, 0xBBA0C1EF, 0xC011D8D0
 /** Values used for kChannelPluginLocationKey */
 enum ChannelPluginLocation
 {
-	kPreVolumeFader = 0,
-	kPostVolumeFader,
-	kUsedAsPanner
+  kPreVolumeFader = 0,
+  kPostVolumeFader,
+  kUsedAsPanner
 };
 
 //------------------------------------------------------------------------
@@ -210,10 +210,10 @@ const CString kChannelColorKey = "channel color";
 const CString kChannelIndexKey = "channel index";
 
 /** integer (int64) [optional]: define the order of the current used index namespace, start with 1 not 0!
-	For example:
-	index namespace is "Input"   -> order 1,
-	index namespace is "Channel" -> order 2,
-	index namespace is "Output"  -> order 3 */
+  For example:
+  index namespace is "Input"   -> order 1,
+  index namespace is "Channel" -> order 2,
+  index namespace is "Output"  -> order 3 */
 const CString kChannelIndexNamespaceOrderKey = "channel index namespace order";
 
 /** string (TChar) [optional]: name of the channel index namespace for example "Input", "Output", "Channel", ... */

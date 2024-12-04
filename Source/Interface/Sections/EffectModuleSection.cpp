@@ -744,10 +744,13 @@ namespace Interface
 
 
         auto *intervalSlider = section->getEffectControl(Processors::BaseEffect::Phase::Shift::Interval::id().value());
+        utils::as<RotarySlider>(intervalSlider)->setMaxDecimalCharacters(3);
         std::ignore = intervalSlider->setSizes(knobsHeight);
         intervalSlider->setPosition({ bounds.getX() + rotaryInterval, bounds.getY() });
 
         auto *offsetSlider = section->getEffectControl(Processors::BaseEffect::Phase::Shift::Offset::id().value());
+        utils::as<RotarySlider>(offsetSlider)->setMaxTotalCharacters(6);
+        utils::as<RotarySlider>(offsetSlider)->setMaxDecimalCharacters(4);
         std::ignore = offsetSlider->setSizes(knobsHeight);
         offsetSlider->setPosition({ bounds.getX() + 2 * rotaryInterval, bounds.getY() });
       };
@@ -770,6 +773,12 @@ namespace Interface
       auto *baseEffect = section->getEffect();
       std::vector<utils::up<BaseControl>> parameters;
 
+      auto initResample = [&]()
+      {
+        parameters.emplace_back(utils::up<RotarySlider>::create(
+          baseEffect->getParameter(Processors::BaseEffect::Pitch::Resample::Shift::id().value())));
+      };
+
       auto initConstShift = [&]()
       {
         parameters.emplace_back(utils::up<RotarySlider>::create(
@@ -778,6 +787,9 @@ namespace Interface
 
       switch (Processors::BaseEffect::Pitch::enum_value_by_id(type).value())
       {
+      case Processors::BaseEffect::Pitch::Resample:
+        initResample();
+        break;
       case Processors::BaseEffect::Pitch::ConstShift:
         initConstShift();
         break;
@@ -791,6 +803,18 @@ namespace Interface
     void arrangePitchUI(EffectModuleSection *section, juce::Rectangle<int> bounds, std::string_view type)
     {
       using namespace Framework;
+
+      auto arrangeResample = [&]()
+      {
+        int knobEdgeOffset = scaleValueRoundInt(32);
+        int knobTopOffset = scaleValueRoundInt(32);
+
+        int knobsHeight = scaleValueRoundInt(RotarySlider::kDefaultWidthHeight);
+
+        auto *shiftSlider = section->getEffectControl(Processors::BaseEffect::Pitch::Resample::Shift::id().value());
+        std::ignore = shiftSlider->setSizes(knobsHeight);
+        shiftSlider->setPosition(Point{ bounds.getX() + knobEdgeOffset, bounds.getY() + knobTopOffset });
+      };
 
       auto arrangeConstShift = [&]()
       {
@@ -806,8 +830,79 @@ namespace Interface
 
       switch (Processors::BaseEffect::Pitch::enum_value_by_id(type).value())
       {
+      case Processors::BaseEffect::Pitch::Resample:
+        arrangeResample();
+        break;
       case Processors::BaseEffect::Pitch::ConstShift:
         arrangeConstShift();
+        break;
+      default:
+        break;
+      }
+    }
+
+    std::vector<utils::up<BaseControl>> initDestroyParameters(EffectModuleSection *section, std::string_view type)
+    {
+      using namespace Framework;
+
+      auto *baseEffect = section->getEffect();
+      std::vector<utils::up<BaseControl>> parameters;
+
+      auto initReinterpret = [&]()
+      {
+        parameters.emplace_back(utils::up<RotarySlider>::create(
+          baseEffect->getParameter(Processors::BaseEffect::Destroy::Reinterpret::Attenuation::id().value())));
+        parameters.emplace_back(utils::up<TextSelector>::create(
+          baseEffect->getParameter(Processors::BaseEffect::Destroy::Reinterpret::Mapping::id().value())));
+      };
+
+      switch (Processors::BaseEffect::Destroy::enum_value_by_id(type).value())
+      {
+      case Processors::BaseEffect::Destroy::Reinterpret:
+        initReinterpret();
+        break;
+      default:
+        break;
+      }
+
+      return parameters;
+    }
+
+    void arrangeDestroyUI(EffectModuleSection *section, juce::Rectangle<int> bounds, std::string_view type)
+    {
+      using namespace Framework;
+
+      auto arrangeReinterpret = [&]()
+      {
+        int knobEdgeOffset = scaleValueRoundInt(32);
+        int knobTopOffset = scaleValueRoundInt(32);
+
+        int knobsHeight = scaleValueRoundInt(RotarySlider::kDefaultWidthHeight);
+        int dropdownHeight = scaleValueRoundInt(TextSelector::kDefaultTextSelectorHeight);
+
+        int sliderToDropdownMargin = scaleValueRoundInt(16);
+
+        bounds = bounds.withTrimmedLeft(knobEdgeOffset).withTrimmedRight(knobEdgeOffset)
+          .withTrimmedTop(knobTopOffset).withHeight(knobsHeight);
+
+        auto *attenuationSlider = utils::as<RotarySlider>(section->getEffectControl(Processors::BaseEffect::Destroy::Reinterpret::Attenuation::id().value()));
+        attenuationSlider->setLabelPlacement(Placement::right);
+        auto sliderBounds = attenuationSlider->setSizes(knobsHeight);
+        attenuationSlider->setPosition({ bounds.getX(), bounds.getY() });
+
+        auto *mappingDropdown = utils::as<TextSelector>(section->getEffectControl(Processors::BaseEffect::Destroy::Reinterpret::Mapping::id().value()));
+        mappingDropdown->setLabelPlacement(Placement::above | Placement::left);
+        mappingDropdown->addLabel();
+        auto dropdownBounds = mappingDropdown->setSizes(dropdownHeight);
+        mappingDropdown->setPosition({ 
+          bounds.getX() + sliderBounds.getRight() - dropdownBounds.getX() + sliderToDropdownMargin,
+          bounds.getY() + sliderBounds.getHeight() / 2 });
+      };
+
+      switch (Processors::BaseEffect::Destroy::enum_value_by_id(type).value())
+      {
+      case Processors::BaseEffect::Destroy::Reinterpret:
+        arrangeReinterpret();
         break;
       default:
         break;
@@ -821,9 +916,9 @@ namespace Interface
 
     auto getEffectParameterCounts = []<nested_enum::NestedEnum Type>()
     {
-      static constexpr auto typeCounts = []<typename ... Ts>(const std::tuple<std::type_identity<Ts>...> &)
+      static constexpr auto typeCounts = []<typename ... Ts>(const std::tuple<nested_enum::type_identity<Ts>...> &)
       {
-        return std::array{ std::pair{ Ts::id().value(), Ts::enum_count(nested_enum::All) }... };
+        return utils::array{ utils::pair{ Ts::id().value(), Ts::enum_count(nested_enum::All) }... };
       }(Type::template enum_subtypes_filter<Framework::kGetActiveAlgoPredicate>());
 
       return std::span{ typeCounts };
@@ -885,7 +980,13 @@ namespace Interface
     }
     else if (type == Processors::BaseEffect::Destroy::id().value())
     {
-      
+      initialiseParametersFunction_ = initDestroyParameters;
+      arrangeUIFunction_ = arrangeDestroyUI;
+      effectParameterCounts_ = getEffectParameterCounts.template operator()<Processors::BaseEffect::Destroy::type>();
+
+      setSkinOverride(Skin::kDestroyModule);
+      maskComponent_->setSkinOverride(Skin::kDestroyModule);
+      effectTypeIcon_->setShapes(Paths::destroyIcon());
     }
   }
 }

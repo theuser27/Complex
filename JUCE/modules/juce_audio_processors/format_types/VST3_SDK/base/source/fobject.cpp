@@ -50,74 +50,74 @@ const FUID FObject::iid;
 //------------------------------------------------------------------------
 struct FObjectIIDInitializer
 {
-	// the object iid is always generated so that different components
-	// only can cast to their own objects
-	// this initializer must be after the definition of FObject::iid, otherwise
-	//  the default constructor of FUID will clear the generated iid
-	FObjectIIDInitializer () 
-	{ 
-		const_cast<FUID&> (FObject::iid).generate (); 
-	}
+  // the object iid is always generated so that different components
+  // only can cast to their own objects
+  // this initializer must be after the definition of FObject::iid, otherwise
+  //  the default constructor of FUID will clear the generated iid
+  FObjectIIDInitializer () 
+  { 
+    const_cast<FUID&> (FObject::iid).generate (); 
+  }
 } gFObjectIidInitializer;
 
 //------------------------------------------------------------------------
 uint32 PLUGIN_API FObject::addRef ()  
 {                                      
-	return FUnknownPrivate::atomicAdd (refCount, 1);
+  return FUnknownPrivate::atomicAdd (refCount, 1);
 }                                             
 
 //------------------------------------------------------------------------
 uint32 PLUGIN_API FObject::release () 
 {
-	if (FUnknownPrivate::atomicAdd (refCount, -1) == 0)
-	{
-		refCount = -1000;
-		delete this;
-		return 0;
-	}                                   
-	return refCount;                 
+  if (FUnknownPrivate::atomicAdd (refCount, -1) == 0)
+  {
+    refCount = -1000;
+    delete this;
+    return 0;
+  }                                   
+  return refCount;                 
 }
 
 //------------------------------------------------------------------------
 tresult PLUGIN_API FObject::queryInterface (const TUID _iid, void** obj)
 {
-	QUERY_INTERFACE (_iid, obj, FUnknown::iid, FUnknown)             
-	QUERY_INTERFACE (_iid, obj, IDependent::iid, IDependent)             
-	QUERY_INTERFACE (_iid, obj, FObject::iid, FObject)             
-	*obj = nullptr;
-	return kNoInterface; 
+  QUERY_INTERFACE (_iid, obj, FUnknown::iid, FUnknown)             
+  QUERY_INTERFACE (_iid, obj, IDependent::iid, IDependent)             
+  QUERY_INTERFACE (_iid, obj, FObject::iid, FObject)             
+  *obj = nullptr;
+  return kNoInterface; 
 }
 
 //------------------------------------------------------------------------
 void FObject::addDependent (IDependent* dep)
 {
-	if (gUpdateHandler)
-		gUpdateHandler->addDependent (unknownCast (), dep);
+  if (gUpdateHandler)
+    gUpdateHandler->addDependent (unknownCast (), dep);
 }
 
 //------------------------------------------------------------------------
 void FObject::removeDependent (IDependent* dep)
 {
-	if (gUpdateHandler)
-		gUpdateHandler->removeDependent (unknownCast (), dep);
+  if (gUpdateHandler)
+    gUpdateHandler->removeDependent (unknownCast (), dep);
 }
 
 //------------------------------------------------------------------------
 void FObject::changed (int32 msg)
 {
-	if (gUpdateHandler)
-		gUpdateHandler->triggerUpdates (unknownCast (), msg);
-	else
-		updateDone (msg);
+  if (gUpdateHandler)
+    gUpdateHandler->triggerUpdates (unknownCast (), msg);
+  else
+    updateDone (msg);
 }
 
 //------------------------------------------------------------------------
 void FObject::deferUpdate (int32 msg)
 {
-	if (gUpdateHandler)
-		gUpdateHandler->deferUpdates (unknownCast (), msg);
-	else
-		updateDone (msg);
+  if (gUpdateHandler)
+    gUpdateHandler->deferUpdates (unknownCast (), msg);
+  else
+    updateDone (msg);
 }
 
 //------------------------------------------------------------------------
@@ -125,59 +125,59 @@ void FObject::deferUpdate (int32 msg)
 //------------------------------------------------------------------------
 namespace Singleton 
 {
-	using ObjectVector = std::vector<FObject**>;
-	ObjectVector* singletonInstances = nullptr;
-	bool singletonsTerminated = false;
-	Steinberg::Base::Thread::FLock* singletonsLock;
+  using ObjectVector = std::vector<FObject**>;
+  ObjectVector* singletonInstances = nullptr;
+  bool singletonsTerminated = false;
+  Steinberg::Base::Thread::FLock* singletonsLock;
 
-	bool isTerminated () {return singletonsTerminated;}
+  bool isTerminated () {return singletonsTerminated;}
 
-	void lockRegister ()
-	{
-		if (!singletonsLock) // assume first call not from multiple threads
-			singletonsLock = NEW Steinberg::Base::Thread::FLock;
-		singletonsLock->lock ();
-	}
-	void unlockRegister () 
-	{ 
-		singletonsLock->unlock ();
-	}
+  void lockRegister ()
+  {
+    if (!singletonsLock) // assume first call not from multiple threads
+      singletonsLock = NEW Steinberg::Base::Thread::FLock;
+    singletonsLock->lock ();
+  }
+  void unlockRegister () 
+  { 
+    singletonsLock->unlock ();
+  }
 
-	void registerInstance (FObject** o)
-	{
-		SMTG_ASSERT (singletonsTerminated == false)
-		if (singletonsTerminated == false)
-		{
-			if (singletonInstances == nullptr)
-				singletonInstances = NEW std::vector<FObject**>;
-			singletonInstances->push_back (o);
-		}
-	}
+  void registerInstance (FObject** o)
+  {
+    SMTG_ASSERT (singletonsTerminated == false)
+    if (singletonsTerminated == false)
+    {
+      if (singletonInstances == nullptr)
+        singletonInstances = NEW std::vector<FObject**>;
+      singletonInstances->push_back (o);
+    }
+  }
 
-	struct Deleter
-	{
-		~Deleter ()
-		{
-			singletonsTerminated = true;
-			if (singletonInstances)
-			{
-				for (ObjectVector::iterator it = singletonInstances->begin (),
-											end = singletonInstances->end ();
-					 it != end; ++it)
-				{
-					FObject** obj = (*it);
-					(*obj)->release ();
-					*obj = nullptr;
-					obj = nullptr;
-				}
+  struct Deleter
+  {
+    ~Deleter ()
+    {
+      singletonsTerminated = true;
+      if (singletonInstances)
+      {
+        for (ObjectVector::iterator it = singletonInstances->begin (),
+                      end = singletonInstances->end ();
+           it != end; ++it)
+        {
+          FObject** obj = (*it);
+          (*obj)->release ();
+          *obj = nullptr;
+          obj = nullptr;
+        }
 
-				delete singletonInstances;
-				singletonInstances = nullptr;
-			}
-			delete singletonsLock;
-			singletonsLock = nullptr;
-		}
-	} deleter;
+        delete singletonInstances;
+        singletonInstances = nullptr;
+      }
+      delete singletonsLock;
+      singletonsLock = nullptr;
+    }
+  } deleter;
 }
 
 //------------------------------------------------------------------------

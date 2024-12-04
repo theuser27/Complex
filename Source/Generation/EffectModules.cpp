@@ -11,7 +11,9 @@
 #include "EffectModules.hpp"
 
 #include <algorithm>
+#include <array>
 
+#include "Framework/lookup.hpp"
 #include "Framework/simd_math.hpp"
 #include "Framework/parameter_value.hpp"
 #include "Plugin/ProcessorTree.hpp"
@@ -26,7 +28,7 @@ namespace Generation
     static constexpr auto indexedData = []()
     {
       constexpr auto nameIdPairs = Type::template enum_names_and_ids_filter<kGetActiveAlgoPredicate, true>(true);
-      std::array<IndexedData, nameIdPairs.size()> data{};
+      utils::array<IndexedData, nameIdPairs.size()> data{};
       for (usize i = 0; i < data.size(); i++)
       {
         data[i].id = nameIdPairs[i].second;
@@ -48,7 +50,7 @@ namespace Generation
   E getEffectAlgorithm(BaseEffect &effect)
   {
     static constexpr auto algoId = Framework::Processors::BaseEffect::Algorithm::id().value();
-    return E::enum_value_by_id(effect.getParameter(algoId)->getInternalValue<std::string_view>().first->id).value();
+    return E::enum_value_by_id(effect.getParameter(algoId)->getInternalValue<Framework::IndexedData>().first->id).value();
   }
 
 
@@ -61,21 +63,21 @@ namespace Generation
         enum_ids_filter<Framework::kGetParameterPredicate, true>());
   }
 
-  template<typename T, usize ... Ns>
-  static constexpr auto concatenateArrays(const std::array<T, Ns> ... arrays)
+  template<template<typename, auto> class Array, typename T, usize ... Ns>
+  static constexpr auto concatenateArrays(const Array<T, Ns> &... arrays)
   {
     if constexpr (sizeof...(arrays) == 0)
     {
-      auto empty = std::array<T, 0>{};
+      auto empty = Array<T, 0>{};
       return empty;
     }
     else
     {
       constexpr usize N = (Ns + ...);
-      std::array<T, N> total;
+      Array<T, N> total;
       usize index = 0;
 
-      auto iterate = [&index, &total](const auto &current)
+      auto iterate = [&](const auto &current)
       {
         for (usize i = 0; i < current.size(); i++)
           total[index + i] = current[i];
@@ -94,8 +96,8 @@ namespace Generation
     Framework::Processors::BaseEffect::x::id().value() }																		    \
   {																																															\
     using namespace Framework;																																	\
-    static constexpr auto allParameters = []<typename ... Ts>(																	\
-      const std::tuple<std::type_identity<Ts>...> &)																						\
+    static constexpr auto allParameters = []<template<typename...> class Tuple,                 \
+      typename ... Ts>(const Tuple<nested_enum::type_identity<Ts>...> &)						            \
     {																																														\
       return concatenateArrays(																													        \
         Processors::BaseEffect::enum_ids_filter<kGetParameterPredicate, true>(),						    \
@@ -167,17 +169,17 @@ namespace Generation
   auto vector_call BaseEffect::minimiseRange(simd_int lowIndices, 
     simd_int highIndices, u32 binCount, bool isProcessedRange) -> std::tuple<u32, u32, bool>
   {
-    COMPLEX_ASSERT((binCount & (binCount - 2)) == 1, "Bin count is not power-of-2 + 1, but instead %d", binCount);
+    COMPLEX_ASSERT(utils::isPowerOfTwo(binCount - 1), "Bin count is not power-of-2 + 1, but instead %d", binCount);
 
     // 1. all the indices in the respective bounds are the same (mono)
     // 2. the indices in the respective bounds are different (stereo)
 
     // 1.
-    if (utils::areAllElementsSame(lowIndices) && utils::areAllElementsSame(highIndices))
+    if (lowIndices.allSame() && highIndices.allSame())
     {
-      auto start = lowIndices[0];
-      auto end = highIndices[0];
-      auto length = ((binCount + end - start) % binCount);
+      u32 start = lowIndices[0];
+      u32 end = highIndices[0];
+      u32 length = ((binCount + end - start) % binCount);
 
       // full/empty range if the bins overlap or span the entire range
       if (length == 0 || (start & (binCount - 2)) == (end & (binCount - 2)))
@@ -213,21 +215,47 @@ namespace Generation
     auto rawSource = source.get();
     auto rawDestination = destination.get();
 
-    // this is not possible, so we'll take it to mean that we have stereo bounds
     if (isStereo)
     {
       simd_mask isHighAboveLow = simd_int::greaterThanOrEqualSigned(highBoundIndices, lowBoundIndices);
+      // because procesing bounds can go past each other we assume they've done so
+      // and split the algorithm in 2 regions (bottom and top)
+      // if the bounds haven't passed each other then the 2nd iteration of the algorithm will just not run
+      simd_int starts[] = { (highBoundIndices + 1) & ~isHighAboveLow, (highBoundIndices + 1) & isHighAboveLow };
+      simd_int lengths[] = { lowBoundIndices - starts[0], (binCount - starts[1]) & isHighAboveLow };
+
       for (usize i = 0; i < channels; i += source.getRelativeSize())
       {
-        index = 0;
-        for (; index < unprocessedCount; ++index)
-          rawDestination[i * size + index] = utils::merge(rawDestination[i * size + index], rawSource[i * size + index],
-            isOutsideBounds(index, lowBoundIndices, highBoundIndices, isHighAboveLow));
+        auto sourceChannel = rawSource.offset(i * size);
+        auto destinationChannel = rawDestination.offset(i * size);
+
+        for (usize iteration = 0; iteration <= std::size(starts); ++iteration)
+        {
+          simd_int start = starts[iteration];
+          simd_int length = lengths[iteration];
+
+          while (true)
+          {
+            simd_mask runNotCompleteMask = simd_mask::greaterThanSigned(length, 0);
+            // if all lengths are 0 or negative then we've completed all runs
+            if (runNotCompleteMask.anyMask() == 0)
+              break;
+
+            utils::scatterComplex(destinationChannel.pointer, start, 
+              utils::gatherComplex(sourceChannel.pointer, start), runNotCompleteMask);
+
+            start += 1;
+            length -= 1;
+          }
+        }
       }
     }
     // mono bounds
     else
     {
+      if (!unprocessedCount)
+        return;
+
       for (usize i = 0; i < channels; i += source.getRelativeSize())
       {
         for (usize j = 0; j < unprocessedCount - 1; j++)
@@ -243,46 +271,6 @@ namespace Generation
 
       }
     }
-  }
-
-  strict_inline simd_float vector_call FilterEffect::getDistancesFromCutoffs(simd_int positionIndices,
-    simd_int cutoffIndices, simd_int lowBoundIndices, u32 FFTSize, float sampleRate)
-  {
-    // 1. both positionIndices and cutoffIndices are >= lowBound and < FFTSize_ or <= highBound and > 0
-    // 2. cutoffIndices/positionIndices is >= lowBound and < FFTSize_ and
-    //     positionIndices/cutoffIndices is <= highBound and > 0
-
-    using namespace utils;
-
-    simd_mask cutoffAbovePositions = simd_mask::greaterThanOrEqualSigned(cutoffIndices, positionIndices);
-
-    // preparing masks for 1.
-    simd_mask positionsAboveLowMask = simd_mask::greaterThanOrEqualSigned(positionIndices, lowBoundIndices);
-    simd_mask cutoffAboveLowMask    = simd_mask::greaterThanOrEqualSigned(cutoffIndices,   lowBoundIndices);
-    simd_mask bothAboveOrBelowLowMask = ~(positionsAboveLowMask ^ cutoffAboveLowMask);
-
-    // preparing masks for 2.
-    simd_mask positionsBelowLowBoundAndCutoffsMask = ~positionsAboveLowMask & cutoffAboveLowMask;
-    simd_mask cutoffBelowLowBoundAndPositionsMask = positionsAboveLowMask & ~cutoffAboveLowMask;
-
-    // masking for 1.
-    simd_int precedingIndices  = merge(cutoffIndices, positionIndices, bothAboveOrBelowLowMask & cutoffAbovePositions);
-    simd_int succeedingIndices = merge(positionIndices, cutoffIndices, bothAboveOrBelowLowMask & cutoffAbovePositions);
-
-    // masking for 2.
-    // first 2 are when cutoffs/positions are above/below lowBound
-    // second 2 are when positions/cutoffs are above/below lowBound
-    precedingIndices  = merge(precedingIndices,  cutoffIndices,   ~bothAboveOrBelowLowMask & positionsBelowLowBoundAndCutoffsMask);
-    succeedingIndices = merge(succeedingIndices, positionIndices, ~bothAboveOrBelowLowMask & positionsBelowLowBoundAndCutoffsMask);
-    precedingIndices  = merge(precedingIndices,  positionIndices, ~bothAboveOrBelowLowMask & cutoffBelowLowBoundAndPositionsMask );
-    succeedingIndices = merge(succeedingIndices, cutoffIndices,   ~bothAboveOrBelowLowMask & cutoffBelowLowBoundAndPositionsMask );
-
-    simd_float precedingIndicesRatios = binToNormalised(toFloat(precedingIndices), FFTSize, sampleRate);
-    simd_float succeedingIndicesRatios = binToNormalised(toFloat(succeedingIndices), FFTSize, sampleRate);
-
-    // all i have to say is, floating point error
-    simd_mask notEqual = simd_int::notEqual(precedingIndices, succeedingIndices);
-    return getDecimalPlaces(simd_float{ 1.0f } + ((succeedingIndicesRatios - precedingIndicesRatios) & notEqual));
   }
 
   simd_float vector_call DynamicsEffect::matchPower(simd_float target, simd_float current) noexcept
@@ -344,6 +332,7 @@ namespace Generation
       auto [low, high] = getShiftedBounds(BoundRepresentation::BinIndex, sampleRate, binCount);
       return std::pair{ toInt(low), toInt(high) };
     }();
+    simd_mask isHighAboveLowMask = simd_int::greaterThanOrEqualSigned(highBoundIndices, lowBoundIndices);
 
     // minimising the bins to iterate on
     auto [start, processedCount, _] = minimiseRange(lowBoundIndices, highBoundIndices, binCount, true);
@@ -364,19 +353,60 @@ namespace Generation
     // (gains is gain reduction in db and NOT a gain multiplier)
     simd_float gainsParameter = getParameter(Parameters::Gain::id().value())->getInternalValue<simd_float>(sampleRate);
     simd_mask gainType = unsignSimd<true>(gainsParameter);
-    simd_mask gainMask = (source.dataType == ComplexDataSource::Cartesian) ? simd_mask{ kFullMask } : kMagnitudeMask;
 
     // copy both un/processed data
     SimdBuffer<complex<float>, simd_float>::applyToThisNoMask<MathOperations::Assign>(
       destination, source.sourceBuffer, destination.getChannels(), binCount, 0, 0, 0, 0);
+
+    auto calculateDistancesFromCutoffs = [cutoffIndices, lowBoundIndices,
+      cutoffAboveLowMask = simd_mask::greaterThanOrEqualSigned(cutoffIndices, lowBoundIndices),
+      rLog2Nyquist = simd_float{ (float)(1.0 / std::log2(sampleRate * 0.5 / kMinFrequency)) },
+      binDivisor = simd_float{ (float)(sampleRate / (FFTSize * kMinFrequency)) }](simd_int positionIndices)
+    {
+      // 1. both positionIndices and cutoffIndices are >= lowBound and < FFTSize_ or <= highBound and > 0
+      // 2. cutoffIndices/positionIndices is >= lowBound and < FFTSize_ and
+      //     positionIndices/cutoffIndices is <= highBound and > 0
+
+      using namespace utils;
+
+      simd_mask cutoffAbovePositions = simd_mask::greaterThanOrEqualSigned(cutoffIndices, positionIndices);
+
+      // preparing masks for 1.
+      simd_mask positionsAboveLowMask = simd_mask::greaterThanOrEqualSigned(positionIndices, lowBoundIndices);
+      simd_mask bothAboveOrBelowLowMask = ~(positionsAboveLowMask ^ cutoffAboveLowMask);
+
+      // preparing masks for 2.
+      simd_mask positionsBelowLowBoundAndCutoffsMask = ~positionsAboveLowMask & cutoffAboveLowMask;
+      simd_mask cutoffBelowLowBoundAndPositionsMask = positionsAboveLowMask & ~cutoffAboveLowMask;
+
+      // masking for 1.
+      simd_int precedingIndices  = merge(cutoffIndices  , positionIndices, bothAboveOrBelowLowMask & cutoffAbovePositions);
+      simd_int succeedingIndices = merge(positionIndices, cutoffIndices  , bothAboveOrBelowLowMask & cutoffAbovePositions);
+
+      // masking for 2.
+      // first 2 are when cutoffs/positions are above/below lowBound
+      // second 2 are when positions/cutoffs are above/below lowBound
+      precedingIndices  = merge(precedingIndices , cutoffIndices  , ~bothAboveOrBelowLowMask & positionsBelowLowBoundAndCutoffsMask);
+      succeedingIndices = merge(succeedingIndices, positionIndices, ~bothAboveOrBelowLowMask & positionsBelowLowBoundAndCutoffsMask);
+      precedingIndices  = merge(precedingIndices , positionIndices, ~bothAboveOrBelowLowMask & cutoffBelowLowBoundAndPositionsMask );
+      succeedingIndices = merge(succeedingIndices, cutoffIndices  , ~bothAboveOrBelowLowMask & cutoffBelowLowBoundAndPositionsMask );
+
+      auto binToNormalised = [&](simd_int bin)
+      {
+        return (log2(toFloat(bin) * binDivisor) * rLog2Nyquist) & simd_int::notEqual(bin, 0);
+      };
+
+      auto ratio = getDecimalPlaces(simd_float{ 1.0f } + binToNormalised(succeedingIndices) - binToNormalised(precedingIndices));
+      // all i have to say is, floating point error
+      return ratio & simd_int::notEqual(precedingIndices, succeedingIndices);
+    };
 
     auto rawDestination = destination.get();
     circularLoop([&](u32 index)
       {
         // the distances are logarithmic
         // TODO: memoise cutoff distances and update only when low/high bound indices and binCount are changed
-        simd_float distancesFromCutoff = getDistancesFromCutoffs(index,
-          cutoffIndices, lowBoundIndices, FFTSize, sampleRate);
+        simd_float distancesFromCutoff = calculateDistancesFromCutoffs(index);
 
         // calculating linear slope and brickwall, both are ratio of the gain attenuation
         // the higher tha value the more it will be affected by it
@@ -387,10 +417,10 @@ namespace Generation
         simd_float gains = merge(gainsParameter * gainRatio, gainsParameter * (simd_float{ 1.0f } - gainRatio), gainType);
 
         // convert db reduction to amplitude multiplier
-        gains = dbToAmplitude(-gains & gainMask);
+        gains = dbToAmplitude(-gains);
 
         rawDestination[index] = merge(rawDestination[index] * gains, rawDestination[index], 
-          isOutsideBounds(start, lowBoundIndices, highBoundIndices));
+          isOutsideBounds(start, lowBoundIndices, highBoundIndices, isHighAboveLowMask));
       }, start, processedCount, binCount);
   }
 
@@ -441,10 +471,11 @@ namespace Generation
     {
     case Processors::BaseEffect::Filter::Normal:
       runNormal(source, destination, binCount, sampleRate);
-
       break;
     case Processors::BaseEffect::Filter::Regular:
+      break;
     default:
+      COMPLEX_ASSERT_FALSE("Invalid Algorithm");
       break;
     }
   }
@@ -463,7 +494,7 @@ namespace Generation
       auto shiftedBoundsIndices = getShiftedBounds(BoundRepresentation::BinIndex, sampleRate, binCount);
       return std::pair{ toInt(shiftedBoundsIndices.first), toInt(shiftedBoundsIndices.second) };
     }();
-    simd_mask isHighAboveLow = simd_int::greaterThanOrEqualSigned(highBoundIndices, lowBoundIndices);
+    simd_mask isHighAboveLowMask = simd_int::greaterThanOrEqualSigned(highBoundIndices, lowBoundIndices);
 
     // minimising the bins to iterate on
     auto [start, processedCount, _] = minimiseRange(lowBoundIndices, highBoundIndices, binCount, true);
@@ -486,20 +517,11 @@ namespace Generation
 
     auto rawDestination = destination.get();
     simd_float inPower = 0.0f;
-    if (source.dataType == ComplexDataSource::Cartesian)
-      circularLoop([&](u32 index)
-        {
-          inPower += complexMagnitude(rawDestination[index], false) & 
-            isInsideBounds(index, lowBoundIndices, highBoundIndices, isHighAboveLow);
-        }, start, processedCount, binCount);
-    else
-    {
-      circularLoop([&](u32 index) 
-        {
-          simd_float bin = rawDestination[index] & isInsideBounds(index, lowBoundIndices, highBoundIndices, isHighAboveLow);
-          inPower = simd_float::mulAdd(inPower, bin, bin);
-        }, start, processedCount, binCount);
-    }
+    circularLoop([&](u32 index)
+      {
+        inPower += complexMagnitude(rawDestination[index], false) &
+          isInsideBounds(index, lowBoundIndices, highBoundIndices, isHighAboveLowMask);
+      }, start, processedCount, binCount);
     
     simd_int boundDistanceCount = (modOnce(simd_int{ binCount } + highBoundIndices - lowBoundIndices, simd_int{ binCount }) + 1)
       & simd_int::notEqual(lowBoundIndices, highBoundIndices);
@@ -507,38 +529,20 @@ namespace Generation
 
     // applying gain and calculating outPower
     simd_float outPower = 0.0f;
-    if (source.dataType == ComplexDataSource::Cartesian)
-    {
-      circularLoop([&](u32 index)
-        {
-          simd_float bin = inScale * rawDestination[index];
-          simd_float magnitude = complexMagnitude(bin, true);
+    circularLoop([&](u32 index)
+      {
+        simd_float bin = inScale * rawDestination[index];
+        simd_float magnitude = complexMagnitude(bin, true);
 
-          bin &= simd_float::lessThanOrEqual(min, magnitude);
-          bin = merge(bin, bin * pow(magnitude, contrast), simd_float::greaterThan(max, magnitude));
+        bin &= simd_float::lessThanOrEqual(min, magnitude);
+        bin = merge(bin, bin * pow(magnitude, contrast), simd_float::greaterThan(max, magnitude));
 
-          outPower += complexMagnitude(bin, false);
-          rawDestination[index] = bin;
-        }, start, processedCount, binCount);
-    }
-    else
-    {
-      circularLoop([&](u32 index)
-        {
-          simd_float bin = inScale * rawDestination[index];
-
-          bin &= simd_float::lessThanOrEqual(min, bin);
-          bin = merge(bin, bin * pow(bin, contrast), simd_float::greaterThan(max, bin));
-
-          outPower += bin * bin;
-          rawDestination[index] = merge(bin, rawDestination[index], kPhaseMask);
-        }, start, processedCount, binCount);
-    }
+        outPower += complexMagnitude(bin, false);
+        rawDestination[index] = bin;
+      }, start, processedCount, binCount);
 
     // normalising 
     simd_float outScale = matchPower(inPower, outPower);
-    if (source.dataType == ComplexDataSource::Polar) 
-      outScale = merge(outScale, simd_float{ 1.0f }, kPhaseMask);
     circularLoop([&](u32 index) { rawDestination[index] *= outScale; }, start, processedCount, binCount);
   }
 
@@ -558,7 +562,7 @@ namespace Generation
       auto shiftedBoundsIndices = getShiftedBounds(BoundRepresentation::BinIndex, sampleRate, binCount);
       return std::pair{ toInt(shiftedBoundsIndices.first), toInt(shiftedBoundsIndices.second) };
     }();
-    simd_mask isHighAboveLow = simd_int::greaterThanOrEqualSigned(highBoundIndices, lowBoundIndices);
+    simd_mask isHighAboveLowMask = simd_int::greaterThanOrEqualSigned(highBoundIndices, lowBoundIndices);
 
     COMPLEX_ASSERT(source.sourceBuffer.getSize() == destination.getSize());
 
@@ -573,7 +577,7 @@ namespace Generation
       rawDestination[j] = rawSource[j];
 
       simd_float magnitude = simd_float::max(kSilenceThreshold, complexMagnitude(rawDestination[j], false));
-      simd_mask isIndexOutside = isOutsideBounds(j, lowBoundIndices, highBoundIndices, isHighAboveLow);
+      simd_mask isIndexOutside = isOutsideBounds(j, lowBoundIndices, highBoundIndices, isHighAboveLowMask);
       powerMinMax.first  = merge(simd_float::min(powerMinMax.first , magnitude), powerMinMax.first , isIndexOutside);
       powerMinMax.second = merge(simd_float::max(powerMinMax.second, magnitude), powerMinMax.second, isIndexOutside);
     }
@@ -594,7 +598,7 @@ namespace Generation
     simd_float outPower = 0.0f;
     circularLoop([&](u32 index)
       {
-        simd_mask isIndexInside = isInsideBounds(index, lowBoundIndices, highBoundIndices, isHighAboveLow);
+        simd_mask isIndexInside = isInsideBounds(index, lowBoundIndices, highBoundIndices, isHighAboveLowMask);
         simd_float magnitude = complexMagnitude(rawDestination[index], false);
 
         rawDestination[index] = merge(rawDestination[index], 
@@ -610,7 +614,7 @@ namespace Generation
     circularLoop([&](u32 index)
       {
         rawDestination[index] = merge(rawDestination[index] * outScale, rawDestination[index],
-          isOutsideBounds(index, lowBoundIndices, highBoundIndices, isHighAboveLow));
+          isOutsideBounds(index, lowBoundIndices, highBoundIndices, isHighAboveLowMask));
       }, start, processedCount, binCount);
   }
 
@@ -630,6 +634,7 @@ namespace Generation
       runClip(source, destination, binCount, sampleRate);
       break;
     default:
+      COMPLEX_ASSERT_FALSE("Invalid Algorithm");
       break;
     }
   }
@@ -641,8 +646,6 @@ namespace Generation
     using namespace Framework;
 
     using Parameters = Processors::BaseEffect::Phase::Shift::type;
-    static constexpr simd_mask kPhaseLeftMask = utils::array{ 0U, kFullMask, 0U, 0U };
-    static constexpr simd_mask kPhaseRightMask = utils::array{ 0U, 0U, 0U, kFullMask };
 
     auto [lowBoundIndices, highBoundIndices] = [&]()
     {
@@ -654,16 +657,42 @@ namespace Generation
     // minimising the bins to iterate on
     auto [start, processedCount, _] = minimiseRange(lowBoundIndices, highBoundIndices, binCount, true);
 
-    simd_float shift = (getParameter(Parameters::PhaseShift::id().value())
-      ->getInternalValue<simd_float>(sampleRate, true) * 2.0f - 1.0f) * kPi;
+    simd_float shiftIncrement = [&]()
+    {
+      auto [cos, sin] = cis(kPi * (getParameter(Parameters::PhaseShift::id().value())
+        ->getInternalValue<simd_float>(sampleRate, true) * 2.0f - 1.0f));
+      return merge(cos, sin, kPhaseMask);
+    }();
+    simd_float shift = shiftIncrement;
     simd_float interval = getParameter(Parameters::Interval::id().value())->getInternalValue<simd_float>(sampleRate);
     
-    u32 shiftSlope = getParameter(Parameters::Slope::id().value())->getInternalValue<u32>(sampleRate);
-    simd_float (*slopeFunction)(simd_float);
-    if (shiftSlope == 0)
-      slopeFunction = [](simd_float x) { return x; };
-    else
-      slopeFunction = [](simd_float x) { return modOnceSymmetric(x + x, kPi); };
+    simd_float(*slopeFunction)(simd_float, simd_float) = [&]() -> simd_float(*)(simd_float, simd_float)
+    {
+      auto [slopeId, _] = getParameter(Parameters::Slope::id().value())->getInternalValue<IndexedData>(sampleRate);
+      if (slopeId->id == Parameters::Slope::Constant::id().value())
+        return [](simd_float x, simd_float) { return x; };
+      else if (slopeId->id == Parameters::Slope::Linear::id().value())
+      {
+        // explicitly normalising because the result shoots up at some point
+        return [](simd_float x, simd_float increment)
+        {
+          auto y = complexCartMul(x, increment);
+          return y * simd_float::invSqrt(complexMagnitude(y, false));
+        };
+      }
+      else if (slopeId->id == Parameters::Slope::Exp::id().value())
+      {
+        return [](simd_float x, simd_float)
+        {
+          auto y = complexCartMul(x, x);
+          // necessary renormalisation because floating point inaccuracies cause +/- inf explosions
+          return y * simd_float::invSqrt(complexMagnitude(y, false));
+        };
+      }
+
+      COMPLEX_ASSERT_FALSE("Invalid slope chosen");
+      return [](simd_float x, simd_float) { return x; };
+    }();
 
     // overwrite old data
     SimdBuffer<complex<float>, simd_float>::applyToThisNoMask<MathOperations::Assign>(
@@ -672,7 +701,7 @@ namespace Generation
     auto rawDestination = destination.get();
 
     // if interval between bins is 0 this means every bin is affected
-    if (completelyEqual(interval, 0.0f))
+    if (interval == simd_float{ 0.0f })
     {
       simd_int offsetBin = toInt(normalisedToBin(getParameter(Parameters::Offset::id().value())
         ->getInternalValue<simd_float>(sampleRate, true), 2 * (binCount - 1), sampleRate));
@@ -688,10 +717,10 @@ namespace Generation
           simd_mask offsetMask = simd_int::greaterThanOrEqualSigned(index, offsetBin);
           simd_mask insideRangeMask = isInsideBounds(index, lowBoundIndices, highBoundIndices, isHighAboveLow);
           rawDestination[index] = merge(rawDestination[index], 
-            modOnceSymmetric(rawDestination[index] + shift, kPi),
-            kPhaseMask & offsetMask & insideRangeMask);
+            complexCartMul(rawDestination[index], shift),
+            offsetMask & insideRangeMask);
 
-          shift = slopeFunction(shift);
+          shift = slopeFunction(shift, shiftIncrement);
         }, start, processedCount, binCount);
 
       return;
@@ -710,10 +739,8 @@ namespace Generation
     // and shift dc component's amplitude
     {
       simd_mask zeroMask = simd_float::lessThan(offsetNorm, binStep);
-      simd_float modifiedShift = (-simd_float::abs(shift / kPi) + 0.5f) * 2.0f;
-      rawDestination[0] = (rawDestination[0] * modifiedShift) & kMagnitudeMask;
-
-      shift = merge(shift, slopeFunction(shift), zeroMask);
+      rawDestination[0] = merge(rawDestination[0], complexCartMul(rawDestination[0], shift) & kMagnitudeMask, zeroMask);
+      shift = merge(shift, slopeFunction(shift, shiftIncrement), zeroMask);
 
       simd_float startOffset = interval * binStep;
       COMPLEX_ASSERT(simd_float::lessThanOrEqual(startOffset, 0.0f).anyMask() == 0);
@@ -736,9 +763,9 @@ namespace Generation
 
       simd_float values = gatherComplex(rawDestination.pointer, indices & lessMask);
       scatterComplex(rawDestination.pointer, indices & lessMask,
-        modOnceSymmetric(values + shift, kPi), indexMask & kPhaseMask);
+        complexCartMul(values, shift), indexMask);
 
-      shift = merge(shift, slopeFunction(shift), indexMask);
+      shift = merge(shift, slopeFunction(shift, shiftIncrement), indexMask);
 
       return true;
     };
@@ -789,10 +816,12 @@ namespace Generation
       runShift(source, destination, binCount, sampleRate);
       break;
     default:
-      BaseEffect::run(source, destination, binCount, sampleRate);
+      COMPLEX_ASSERT_FALSE("Invalid Algorithm");
       break;
     }
   }
+
+  //Framework::Lookup<1025> kCosLookup{ [](float x) { return gcem::cos<float>(x * k2Pi); } };
 
   void PitchEffect::runResample(Framework::ComplexDataSource &source,
     Framework::SimdBuffer<Framework::complex<float>, simd_float> &destination, u32 binCount, float sampleRate) const noexcept
@@ -800,30 +829,10 @@ namespace Generation
     using namespace utils;
     using namespace Framework;
 
-    auto [lowBoundIndices, highBoundIndices] = [&]()
-    {
-      auto shiftedBoundsIndices = getShiftedBounds(BoundRepresentation::BinIndex, sampleRate, binCount);
-      return std::pair{ toInt(shiftedBoundsIndices.first), toInt(shiftedBoundsIndices.second) };
-    }();
-
-    // minimising the bins to iterate on
-    auto [start, numBins, _] = minimiseRange(lowBoundIndices, highBoundIndices, binCount, true);
-
-    simd_float shift = exp2(getParameter(Processors::BaseEffect::Pitch::Resample::Shift::id().value())
-      ->getInternalValue<simd_float>(sampleRate) / (float)kNotesPerOctave);
-
-    simd_int processedIndex = toInt(shift * (float)start);
-
-    copyUnprocessedData(source.sourceBuffer, destination, lowBoundIndices, highBoundIndices, binCount);
-  }
-
-  void PitchEffect::runConstShift(Framework::ComplexDataSource &source,
-    Framework::SimdBuffer<Framework::complex<float>, simd_float> &destination, u32 binCount, float sampleRate) const noexcept
-  {
-    using namespace utils;
-    using namespace Framework;
+    using Parameters = Processors::BaseEffect::Pitch::Resample::type;
 
     static constexpr auto kNeighbourBins = 2;
+    static constexpr float kMultiplierEpsilon = 1e-12f;
 
     auto [lowBoundIndices, highBoundIndices] = [&]()
     {
@@ -832,44 +841,190 @@ namespace Generation
     }();
     simd_mask isHighAboveLow = simd_int::greaterThanOrEqualSigned(highBoundIndices, lowBoundIndices);
 
-    // minimising the bins to iterate on
-    auto [start, processedCount, _] = minimiseRange(lowBoundIndices, highBoundIndices, binCount, true);
+    simd_float shift = exp2(getParameter(Parameters::Shift::id().value())
+      ->getInternalValue<simd_float>(sampleRate) / (float)kNotesPerOctave);
 
-    simd_int binShift;
-    simd_float phaseShift;
-    std::array<simd_float, 2 * kNeighbourBins + 1> neighbourMultipliers;
+    bool wrapAround = getParameter(Parameters::Wrap::id().value())->getInternalValue<u32>(sampleRate);
+
+    utils::array<simd_float, 2 * kNeighbourBins + 1> leakMultipliers;
+    simd_float phaseShiftIncrement = [&]()
     {
-      simd_float binFloatingPointShift = getParameter(Processors::BaseEffect::Pitch::ConstShift::Shift::id().value())
+      auto [phaseShiftCos, phaseShiftSin] = cis(shift * (source.blockPhase * 2.0f) * kPi);
+      return merge(phaseShiftCos, phaseShiftSin, kPhaseMask);
+    }();
+    simd_float phaseShift = phaseShiftIncrement;
+    simd_float fractionalIncrement = [&]()
+    {
+      auto [cos, sin] = cis((simd_float::round(shift) - shift) * k2Pi);
+      return merge(cos, sin, kPhaseMask);
+    }();
+    simd_float fractionalShift = fractionalIncrement;
+
+    auto calculateCoefficients = [&](simd_float binFractionalShift) mutable
+    {
+      auto cos = copyFromEven(fractionalShift);
+      auto sin = copyFromOdd(fractionalShift);
+      simd_float numerator = merge(sin, 1.0f - cos, kPhaseMask);
+      simd_mask numZeroMask = simd_float::lessThan(complexMagnitude(numerator, true), kMultiplierEpsilon);
+
+      for (i32 i = 0; i < leakMultipliers.size(); ++i)
+      {
+        simd_float fullDenominator = k2Pi * (binFractionalShift + (float)(i - kNeighbourBins));
+        simd_mask denZeroMask = simd_float::lessThan(simd_float::abs(fullDenominator), kMultiplierEpsilon);
+        fullDenominator = merge(fullDenominator, simd_float{ 1.0f }, denZeroMask);
+        // guarding against 0.0 / 0.0
+        leakMultipliers[i] = merge(numerator / fullDenominator, simd_float{ 1.0f, 0.0f }, numZeroMask & denZeroMask);
+      }
+    };
+
+    destination.clear();
+    copyUnprocessedData(source.sourceBuffer, destination, lowBoundIndices, highBoundIndices, binCount);
+
+    auto rawDestination = destination.get();
+    auto rawSource = source.sourceBuffer.get();
+
+    if (!wrapAround)
+    {
+      simd_float downscaledNyquist = (float)(binCount - 1) / shift;
+
+      // because procesing bounds can go past each other we assume they've done so
+      // and split the algorithm in 2 regions (bottom and top)
+      // if the bounds haven't passed each other then the 2nd iteration of the algorithm will just not run
+      // skip dc bin because that will always map to itself
+      simd_int starts[] = { simd_int::maxUnsigned(1, lowBoundIndices & isHighAboveLow), 
+                            simd_int::maxUnsigned(1, lowBoundIndices & ~isHighAboveLow) };
+      // shortening the range by however many bins get shifted out of bounds as well
+      simd_int lengths[] =
+      { 
+        (highBoundIndices + 1) - starts[0] - toInt(simd_float::max(0.0f, toFloat(highBoundIndices) - downscaledNyquist)),
+        (binCount - starts[1] - toInt(simd_float::max(0.0f, (float)(binCount - 1) - downscaledNyquist))) & ~isHighAboveLow
+      };
+
+      for (usize iteration = 0; iteration < std::size(starts); ++iteration)
+      {
+        simd_int start = starts[iteration];
+        simd_int length = lengths[iteration];
+        simd_float destinationIndices = shift * toFloat(start);
+
+        while (true)
+        {
+          simd_mask runNotCompleteMask = simd_mask::greaterThanSigned(length, 0);
+          // if all lengths are 0 or negative then we've completed all runs
+          if (runNotCompleteMask.anyMask() == 0)
+            break;
+
+          simd_float wet = complexCartMul(phaseShift, gatherComplex(rawSource.pointer, start) & runNotCompleteMask);
+          simd_int destinationIndicesInt = simd_int::minUnsigned(toInt(simd_float::round(destinationIndices)), binCount - 1);
+
+          simd_float result = gatherComplex(rawDestination.pointer, destinationIndicesInt);
+          scatterComplex(rawDestination.pointer, destinationIndicesInt, result + wet);
+
+          /*calculateCoefficients(simd_float::round(destinationIndices) - destinationIndices);
+          for (i32 j = 0; j < leakMultipliers.size(); ++j)
+          {
+            simd_int indices = destinationIndicesInt - kNeighbourBins + j;
+            simd_int clampedIndices = simd_int::clampSigned(0, binCount - 1, indices);
+            simd_mask inRangeMask = simd_int::equal(indices, clampedIndices);
+
+            simd_float result = gatherComplex(rawDestination.pointer, clampedIndices);
+            scatterComplex(rawDestination.pointer, clampedIndices,
+              merge(result, result + complexCartMul(wet, leakMultipliers[j]), inRangeMask));
+          }*/
+
+          // TODO: maybe add an internal counter to do renormalisation every N runs
+          phaseShift = complexCartMul(phaseShift, phaseShiftIncrement);
+          phaseShift = phaseShift * simd_float::invSqrt(complexMagnitude(phaseShift, false));
+          fractionalShift = complexCartMul(fractionalShift, fractionalIncrement);
+          fractionalShift = fractionalShift * simd_float::invSqrt(complexMagnitude(fractionalShift, false));
+
+          length -= 1;
+          start += 1;
+          destinationIndices += shift;
+        }
+      }
+    }
+    else
+    {
+      /*simd_float destinationIndices = shift * toFloat(lowBoundIndices);
+      simd_float lengths = toFloat(modOnce(binCount + highBoundIndices - lowBoundIndices, binCount, false));
+     
+      while (true)
+      {
+        simd_mask runCompletedMask = simd_mask::equal(getSign(lengths), kSignMask);
+        // if all lengths go negative then we've completed all runs
+        if (runCompletedMask.anyMask() == 0)
+          break;
+
+        simd_int destinationIndicesInt = toInt(destinationIndices);
+
+
+        simd_mask outsideBoundsMask = isOutsideBounds(i, lowBoundIndices, highBoundIndices, isHighAboveLow);
+        simd_float wet = rawSource[i] & (~outsideBoundsMask &);
+
+        calculateCoefficients.next();
+
+        for (i32 j = 0; j < leakMultipliers.size(); ++j)
+        {
+          simd_int indices = simd_int{ (u32)((i32)i - kNeighbourBins + j) } + binShift;
+          simd_int clampedIndices = simd_int::clampSigned(0, binCount - 1, indices);
+          simd_mask inRangeMask = simd_int::equal(indices, clampedIndices);
+
+          simd_float result = gatherComplex(rawDestination.pointer, clampedIndices);
+          scatterComplex(rawDestination.pointer, clampedIndices,
+            merge(result, result + complexCartMul(wet, leakMultipliers[j]), inRangeMask));
+        }
+
+        lengths -= shift;
+        destinationIndices = modOnce(destinationIndices + shift, binCount);
+      }*/
+    }
+  }
+
+  void PitchEffect::runConstShift(Framework::ComplexDataSource &source,
+    Framework::SimdBuffer<Framework::complex<float>, simd_float> &destination, u32 binCount, float sampleRate) const noexcept
+  {
+    using namespace utils;
+    using namespace Framework;
+
+    using Parameters = Processors::BaseEffect::Pitch::ConstShift::type;
+
+    static constexpr auto kNeighbourBins = 2;
+    static constexpr float kMultiplierEpsilon = 1e-12f;
+
+    auto [lowBoundIndices, highBoundIndices] = [&]()
+    {
+      auto shiftedBoundsIndices = getShiftedBounds(BoundRepresentation::BinIndex, sampleRate, binCount);
+      return std::pair{ toInt(shiftedBoundsIndices.first), toInt(shiftedBoundsIndices.second) };
+    }();
+    simd_mask isHighAboveLow = simd_int::greaterThanOrEqualSigned(highBoundIndices, lowBoundIndices);
+
+    simd_int binShift = utils::uninitialised;
+    utils::array<simd_float, 2 * kNeighbourBins + 1> leakMultipliers;
+    {
+      simd_float binFloatingPointShift = getParameter(Parameters::Shift::id().value())
         ->getInternalValue<simd_float>(sampleRate) * 2.0f * (float)(binCount - 1) / sampleRate;
       simd_float roundedShift = simd_float::round(binFloatingPointShift);
       binShift = toInt(roundedShift);
 
-      for (usize i = 0; i < kChannelsPerInOut; ++i)
+      auto [numerator, denominator] = [&]()
       {
-        phaseShift.set(i * 2, std::cosf(binFloatingPointShift[i * 2] * (k2Pi * source.normalisedPhase)));
-        phaseShift.set(i * 2 + 1, std::sinf(binFloatingPointShift[i * 2] * (k2Pi * source.normalisedPhase)));
-      }
+        auto [phaseShiftCos, phaseShiftSin] = cis(binFloatingPointShift * source.blockPhase * k2Pi);
+        simd_float phaseShift = merge(phaseShiftCos, phaseShiftSin, kPhaseMask);
 
-      simd_float binFractionalShift = roundedShift - binFloatingPointShift;
-      simd_float cosMultiplier, sinMultiplier;
-      for (usize i = 0; i < simd_float::size; i += 2)
-      {
-        auto cos = std::cosf(binFractionalShift[i] * k2Pi);
-        cosMultiplier.set(i, cos);
-        cosMultiplier.set(i + 1, cos);
-        auto sin = std::sinf(binFractionalShift[i] * k2Pi);
-        sinMultiplier.set(i, sin);
-        sinMultiplier.set(i + 1, sin);
-      }
+        simd_float binFractionalShift = roundedShift - binFloatingPointShift;
+        auto [cos, sin] = cis(binFractionalShift * k2Pi);
+        simd_float numerator = merge(sin, 1.0f - cos, kPhaseMask);
+        return utils::pair{ complexCartMul(numerator, phaseShift), binFractionalShift * k2Pi };
+      }();
+      simd_mask numZeroMask = simd_float::lessThan(complexMagnitude(numerator, true), kMultiplierEpsilon);
 
-      simd_float numerator = merge(sinMultiplier, simd_float{ 1.0f } - cosMultiplier, kPhaseMask);
-      simd_mask numZeroMask = simd_float::lessThan(simd_float::abs(numerator), kEpsilon);
-      for (i32 i = 0; i < neighbourMultipliers.size(); ++i)
+      for (i32 i = 0; i < leakMultipliers.size(); ++i)
       {
-        simd_float denominator = (binFractionalShift - kNeighbourBins + (float)i) * k2Pi;
-        simd_mask denZeroMask = simd_float::lessThan(simd_float::abs(denominator), kEpsilon);
-        denominator = merge(denominator, simd_float{ 1.0f }, denZeroMask);
-        neighbourMultipliers[i] = merge(numerator / denominator, simd_float{ 1.0f }, numZeroMask & denZeroMask);
+        simd_float fullDenominator = denominator + k2Pi * (float)(i - kNeighbourBins);
+        simd_mask denZeroMask = simd_float::lessThan(simd_float::abs(fullDenominator), kMultiplierEpsilon);
+        fullDenominator = merge(fullDenominator, simd_float{ 1.0f }, denZeroMask);
+        // guarding against 0.0 / 0.0
+        leakMultipliers[i] = merge(numerator / fullDenominator, simd_float{ 1.0f, 0.0f }, numZeroMask & denZeroMask);
       }
     }
 
@@ -881,27 +1036,24 @@ namespace Generation
     {
       simd_mask outsideBoundsMask = isOutsideBounds(i, lowBoundIndices, highBoundIndices, isHighAboveLow);
       rawDestination[i] += rawSource[i] & outsideBoundsMask;
-      simd_float wet = complexCartMul(rawSource[i], phaseShift) & ~outsideBoundsMask;
+      simd_float wet = rawSource[i] & ~outsideBoundsMask;
 
-      for (i32 j = 0; j < neighbourMultipliers.size(); ++j)
+      for (i32 j = 0; j < leakMultipliers.size(); ++j)
       {
         simd_int indices = simd_int{ (u32)((i32)i - kNeighbourBins + j) } + binShift;
         simd_int clampedIndices = simd_int::clampSigned(0, binCount - 1, indices);
         simd_mask inRangeMask = simd_int::equal(indices, clampedIndices);
 
-        for (usize k = 0; k < kChannelMasks.size(); ++k)
-        {
-          u32 channelIndex = clampedIndices[k * 2];
-          rawDestination[channelIndex] = merge(rawDestination[channelIndex],
-            simd_float::mulAdd(rawDestination[channelIndex], wet, neighbourMultipliers[j]),
-            inRangeMask & kChannelMasks[k]);
-        }
+        simd_float result = gatherComplex(rawDestination.pointer, clampedIndices);
+        scatterComplex(rawDestination.pointer, clampedIndices, 
+          merge(result, result + complexCartMul(wet, leakMultipliers[j]), inRangeMask));
       }
     }
   }
 
   void PitchEffect::run(Framework::ComplexDataSource &source,
-    Framework::SimdBuffer<Framework::complex<float>, simd_float> &destination, u32 binCount, float sampleRate) noexcept
+    Framework::SimdBuffer<Framework::complex<float>, simd_float> &destination, 
+    u32 binCount, float sampleRate) noexcept
   {
     using namespace Framework;
     switch (getEffectAlgorithm<Processors::BaseEffect::Pitch::type>(*this))
@@ -913,7 +1065,94 @@ namespace Generation
       runConstShift(source, destination, binCount, sampleRate);
       break;
     default:
-      BaseEffect::run(source, destination, binCount, sampleRate);
+      COMPLEX_ASSERT_FALSE("Invalid Algorithm");
+      break;
+    }
+  }
+
+  void DestroyEffect::runReinterpret(Framework::ComplexDataSource &source, 
+    Framework::SimdBuffer<Framework::complex<float>, simd_float> &destination, 
+    u32 binCount, float sampleRate) const noexcept
+  {
+    using namespace utils;
+    using namespace Framework;
+
+    using Parameters = Processors::BaseEffect::Destroy::Reinterpret::type;
+
+    auto [lowBoundIndices, highBoundIndices] = [&]()
+    {
+      auto shiftedBoundsIndices = getShiftedBounds(BoundRepresentation::BinIndex, sampleRate, binCount);
+      return std::pair{ toInt(shiftedBoundsIndices.first), toInt(shiftedBoundsIndices.second) };
+    }();
+    simd_mask isHighAboveLow = simd_int::greaterThanOrEqualSigned(highBoundIndices, lowBoundIndices);
+    auto [start, processedCount, _] = minimiseRange(lowBoundIndices, highBoundIndices, binCount, true);
+
+    simd_float attenuation = [&]()
+    {
+      auto parameter = getParameter(Parameters::Attenuation::id().value())->getInternalValue<simd_float>();
+      auto mergeMask = merge(kRealMask, kImaginaryMask, simd_float::greaterThan(parameter, 0.0f));
+      return merge(1.0f, dbToAmplitude(parameter | simd_mask{ kSignMask }), mergeMask);
+    }();
+
+    auto mappingType = Parameters::Mapping::enum_value_by_id(getParameter(
+      Parameters::Mapping::id().value())->getInternalValue<IndexedData>().first->id).value();
+
+    auto rawDestination = destination.get();
+    auto rawSource = source.sourceBuffer.get();
+
+    auto operations = [mappingType](simd_float &one, simd_float &two)
+    {
+      switch (mappingType)
+      {
+      case Parameters::Mapping::NoMapping:
+        break;
+      case Parameters::Mapping::SwitchRealImag:
+        one = switchInner(one);
+        two = switchInner(two);
+        break;
+      case Parameters::Mapping::CartToPolar:
+        complexCartToPolar(one, two);
+        break;
+      case Parameters::Mapping::PolarToCart:
+        complexPolarToCart(one, two);
+        break;
+      default:
+        COMPLEX_ASSERT_FALSE("Missing case");
+        break;
+      }
+    };
+
+    simd_float wet[2]{};
+    for (u32 i = 0; i < binCount - 1; i += 2)
+    {
+      wet[0] = rawSource[i] * attenuation;
+      wet[1] = rawSource[i + 1] * attenuation;
+
+      operations(wet[0], wet[1]);
+
+      rawDestination[i    ] = merge(wet[0], rawSource[i    ], 
+        isOutsideBounds(i    , lowBoundIndices, highBoundIndices, isHighAboveLow));
+      rawDestination[i + 1] = merge(wet[1], rawSource[i + 1], 
+        isOutsideBounds(i + 1, lowBoundIndices, highBoundIndices, isHighAboveLow));
+    }
+
+    wet[0] = rawSource[binCount - 1] * attenuation;
+    operations(wet[0], wet[1]);
+    rawDestination[binCount - 1] = wet[0];
+  }
+
+  void DestroyEffect::run(Framework::ComplexDataSource &source, 
+    Framework::SimdBuffer<Framework::complex<float>, simd_float> &destination, 
+    u32 binCount, float sampleRate) noexcept
+  {
+    using namespace Framework;
+    switch (getEffectAlgorithm<Processors::BaseEffect::Destroy::type>(*this))
+    {
+    case Processors::BaseEffect::Destroy::Reinterpret:
+      runReinterpret(source, destination, binCount, sampleRate);
+      break;
+    default:
+      COMPLEX_ASSERT_FALSE("Invalid Algorithm");
       break;
     }
   }
@@ -967,21 +1206,23 @@ namespace Generation
     return *replacedEffect;
   }
 
-  BaseEffect *EffectModule::changeEffect(std::string_view effectType)
+  BaseEffect *EffectModule::changeEffect(std::string_view effectId)
   {
-    if (subProcessors_[0]->getProcessorType() == effectType)
+    using namespace Framework;
+
+    if (subProcessors_[0]->getProcessorType() == effectId)
       return utils::as<BaseEffect>(subProcessors_[0]);
     
-    usize newEffectIndex = std::ranges::find(effectIds, effectType) - effectIds.begin();
+    usize newEffectIndex = std::ranges::find(effectIds, effectId) - effectIds.begin();
     BaseEffect *effect;
     if (effects_[newEffectIndex])
       effect = effects_[newEffectIndex];
     else
     {
-      [&]<typename ... Ts>(const std::tuple<std::type_identity<Ts>...> &)
+      [&]<typename ... Ts>(const std::tuple<nested_enum::type_identity<Ts>...> &)
       {
-        std::ignore = ((Ts::id().value() == effectType && (effect = new typename Ts::linked_type{ processorTree_ }, true)) || ...);
-      }(Framework::Processors::BaseEffect::enum_subtypes_filter<Framework::kGetActiveEffectPredicate>());
+        std::ignore = ((Ts::id().value() == effectId && (effect = new typename Ts::linked_type{ processorTree_ }, true)) || ...);
+      }(Processors::BaseEffect::enum_subtypes_filter<kGetActiveEffectPredicate>());
 
       COMPLEX_ASSERT(effect && "Unknown effect type was provided");
 
@@ -993,7 +1234,7 @@ namespace Generation
       {
         updateSubProcessor(0, *effect);
 
-        auto *parameter = getParameter(Framework::Processors::EffectModule::ModuleType::id().value());
+        auto *parameter = getParameter(Processors::EffectModule::ModuleType::id().value());
         parameter->updateNormalisedValue((float)unscaleValue((double)newEffectIndex, parameter->getParameterDetails()));
         parameter->updateValue(kDefaultSampleRate);
       });
@@ -1011,24 +1252,6 @@ namespace Generation
 
     auto *effect = as<BaseEffect>(subProcessors_[0]);
 
-    if (auto neededType = effect->neededDataType(); neededType != ComplexDataSource::Both && source.dataType != neededType)
-    {
-      if (neededType == ComplexDataSource::Polar)
-      {
-        convertBuffer<complexCartToPolar>(source.sourceBuffer, source.conversionBuffer, binCount);
-        source.sourceBuffer.getLock().lock.fetch_sub(1, std::memory_order_relaxed);
-        source.dataType = ComplexDataSource::Polar;
-      }
-      else
-      {
-        convertBuffer<complexPolarToCart>(source.sourceBuffer, source.conversionBuffer, binCount);
-        source.sourceBuffer.getLock().lock.fetch_sub(1, std::memory_order_relaxed);
-        source.dataType = ComplexDataSource::Cartesian;
-      }
-      
-      source.sourceBuffer = source.conversionBuffer;
-    }
-
     // getting exclusive access to data
     lockAtomic(dataBuffer_.getLock(), true, WaitMechanism::Spin);
 
@@ -1036,11 +1259,11 @@ namespace Generation
 
     // if the mix is 100% for all channels, we can skip mixing entirely
     simd_float wetMix = getParameter(Processors::EffectModule::ModuleMix::id().value())->getInternalValue<simd_float>(sampleRate);
-    if (!completelyEqual(wetMix, 1.0f))
+    if (wetMix != 1.0f)
     {
       auto sourceData = source.sourceBuffer.get();
       auto destinationData = dataBuffer_.get();
-      simd_float dryMix = simd_float(1.0f) - wetMix;
+      simd_float dryMix = 1.0f - wetMix;
       for (u32 i = 0; i < binCount; i++)
         destinationData[i] = simd_float::mulAdd(dryMix * sourceData[i], wetMix, destinationData[i]);
     }

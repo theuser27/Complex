@@ -1,6 +1,6 @@
 /*!
-	@file		AudioUnitSDK/AudioUnitSDK.h
-	@copyright	© 2000-2021 Apple Inc. All rights reserved.
+  @file		AudioUnitSDK/AudioUnitSDK.h
+  @copyright	© 2000-2021 Apple Inc. All rights reserved.
 */
 #ifndef AudioUnitSDK_h
 #define AudioUnitSDK_h

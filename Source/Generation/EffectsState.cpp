@@ -63,6 +63,24 @@ namespace Generation
       enum_ids_filter<Framework::kGetParameterPredicate, true>());
   }
 
+  struct EffectsState::Thread
+  {
+    Thread(EffectsState &state) : thread([this, &state]()
+      {
+        while (true)
+        {
+          if (shouldStop.load(std::memory_order_acquire))
+            return;
+
+          state.distributeWork();
+        }
+      }) { }
+    Thread(Thread &&other) noexcept : thread(std::move(other.thread)),
+      shouldStop(other.shouldStop.load(std::memory_order_relaxed)) { }
+    std::thread thread{};
+    std::atomic<bool> shouldStop = false;
+  };
+
   EffectsState::EffectsState(Plugin::ProcessorTree *processorTree) noexcept :
     BaseProcessor{ processorTree, Framework::Processors::EffectsState::id().value() }
   {
@@ -83,6 +101,12 @@ namespace Generation
     // size is half the max because a single SIMD package stores both real and imaginary parts
     dataBuffer_.reserve((inSidechains + 1) * kChannelsPerInOut, maxBinCount);
     outputBuffer_.reserve((outSidechains + 1) * kChannelsPerInOut, maxBinCount);
+  }
+
+  EffectsState::~EffectsState() noexcept
+  {
+    for (auto &thread : workerThreads_)
+      thread.thread.join();
   }
 
   void EffectsState::insertSubProcessor(usize index, BaseProcessor &newSubProcessor) noexcept
@@ -131,10 +155,10 @@ namespace Generation
       static constexpr auto kInputLaneId = Processors::EffectsLane::Input::Lane::id().value();
       static constexpr auto kLaneEnabledId = Processors::EffectsLane::LaneEnabled::id().value();
 
-      auto [laneIndexedData, index] = lane->getParameter(kInputId)->getInternalValue<std::string_view>();
       // if the input is not another lane's output and the chain is enabled
       if (lane->getParameter(kLaneEnabledId)->getInternalValue<u32>())
       {
+        auto [laneIndexedData, index] = lane->getParameter(kInputId)->getInternalValue<Framework::IndexedData>();
         usize startIndex = 0;
         if (laneIndexedData->id == kInputMainId) { }
         else if (laneIndexedData->id == kInputSidechainId)
@@ -164,9 +188,9 @@ namespace Generation
       static constexpr auto kOutputNoneId = Processors::EffectsLane::Output::None::id().value();
       static constexpr auto kLaneEnabledId = Processors::EffectsLane::LaneEnabled::id().value();
 
-      auto [laneIndexedData, index] = lane->getParameter(kOutputId)->getInternalValue<std::string_view>();
       if (lane->getParameter(kLaneEnabledId)->getInternalValue<u32>())
       {
+        auto [laneIndexedData, index] = lane->getParameter(kOutputId)->getInternalValue<Framework::IndexedData>();
         usize startIndex = 0;
         if (laneIndexedData->id == kOutputMainId) { }
         else if (laneIndexedData->id == kOutputSidechainId)
@@ -183,7 +207,7 @@ namespace Generation
     return usedOutputChannels_;
   }
 
-  void EffectsState::writeInputData(const float *inputBuffer, usize channels, usize samples) noexcept
+  void EffectsState::writeInputData(Framework::CheckedPointer<float> inputBuffer, usize channels, usize samples) noexcept
   {
     using namespace Framework;
     using namespace utils;
@@ -192,6 +216,7 @@ namespace Generation
     ScopedLock g{ dataBuffer_.getLock(), true, WaitMechanism::Spin };
 
     auto values = utils::array<simd_float, SimdBuffer<complex<float>, simd_float>::getRelativeSize()>{};
+    auto valueSources = utils::array<Framework::CheckedPointer<float>, decltype(values)::size()>{};
     auto data = dataBuffer_.get();
     usize size = outputBuffer_.getSize();
     for (usize i = 0; i < channels; i += values.size())
@@ -200,14 +225,15 @@ namespace Generation
       if (!usedInputChannels_[i])
         continue;
 
-      auto *channelBuffer = inputBuffer + i * samples;
+      for (u32 k = 0; k < valueSources.size(); ++k)
+        valueSources[k] = inputBuffer.offset(i * samples + k * samples, samples);
 
       // skipping every n-th complex pair (currently simd_float can take 2 pairs)
-      for (usize j = 0; j < binCount_ - 1; j += values.size())
+      for (usize j = 0; j < binCount - 1; j += values.size())
       {
         // skipping every second sample (complex signal)
         for (u32 k = 0; k < values.size(); ++k)
-          values[k] = toSimdFloatFromUnaligned(channelBuffer + k * samples + j * 2);
+          values[k] = toSimdFloatFromUnaligned(&valueSources[k][j * 2]);
 
         complexTranspose(values);
 
@@ -216,12 +242,12 @@ namespace Generation
       }
 
       simd_float::array_t nyquist{};
-      for (u32 k = 0; k < nyquist.size(); k += 2)
+      for (u32 k = 0; k < valueSources.size(); ++k)
       {
-        nyquist[k] = channelBuffer[k * samples + (binCount_ - 1) * 2];
-        nyquist[k + 1] = channelBuffer[k * samples + (binCount_ - 1) * 2 + 1];
+        nyquist[2 * k] = valueSources[k][(binCount - 1) * 2];
+        nyquist[2 * k + 1] = valueSources[k][(binCount - 1) * 2 + 1];
       }
-      data[i * size + binCount_ - 1] = nyquist;
+      data[i * size + binCount - 1] = toSimdFloatFromUnaligned(nyquist.data());
     }
   }
 
@@ -238,17 +264,6 @@ namespace Generation
     for (auto &lane : lanes_)
       while (lane->status_.load(std::memory_order_acquire) != EffectsLane::LaneStatus::Finished) { utils::longPause<5>(); }
   }
-
-  EffectsState::Thread::Thread(EffectsState &state) : thread([this, &state]()
-    {
-      while (true)
-      {
-        if (shouldStop.load(std::memory_order_acquire))
-          return;
-
-        state.distributeWork();
-      }
-    }) { }
 
   void EffectsState::checkUsage()
   {
@@ -280,7 +295,7 @@ namespace Generation
     thisLane->currentEffectIndex_.store(0, std::memory_order_release);
     thisLane->volumeScale_ = 1.0f;
     auto &laneDataSource = thisLane->laneDataSource_;
-    laneDataSource.normalisedPhase = normalisedPhase_;
+    laneDataSource.blockPhase = blockPhase;
     bool isLaneOn = thisLane->getParameter(Processors::EffectsLane::LaneEnabled::id().value())
       ->getInternalValue<u32>();
 
@@ -288,7 +303,7 @@ namespace Generation
     // if this lane's input is another's output and that lane can be used,
     // we wait until it is finished and then copy its data
     if (auto inputIndex = thisLane->getParameter(Processors::EffectsLane::Input::id().value())
-      ->getInternalValue<std::string_view>(); inputIndex.first->id == Processors::EffectsLane::Input::Lane::id().value())
+      ->getInternalValue<Framework::IndexedData>(); inputIndex.first->id == Processors::EffectsLane::Input::Lane::id().value())
     {
       COMPLEX_ASSERT(inputIndex.second != laneIndex && "A lane cannot use its own output as input");
       while (true)
@@ -307,7 +322,6 @@ namespace Generation
       {
         // TODO: decide if it's even worth to wait, or we can grab a reference to the other lane's SimdBufferView
         laneDataSource.sourceBuffer = lanes_[inputIndex.second]->laneDataSource_.sourceBuffer;
-        laneDataSource.dataType = lanes_[inputIndex.second]->laneDataSource_.dataType;
 
         thisLane->status_.store(EffectsLane::LaneStatus::Finished, std::memory_order_release);
         return;
@@ -315,7 +329,6 @@ namespace Generation
 
       lockAtomic(lanes_[inputIndex.second]->laneDataSource_.sourceBuffer.getLock(), false, WaitMechanism::Spin);
       laneDataSource.sourceBuffer = lanes_[inputIndex.second]->laneDataSource_.sourceBuffer;
-      laneDataSource.dataType = lanes_[inputIndex.second]->laneDataSource_.dataType;
     }
     // input is not from a lane, we can begin processing
     else
@@ -329,7 +342,6 @@ namespace Generation
         lockAtomic(dataBuffer_.getLock(), false, WaitMechanism::Spin);
       }
 
-      laneDataSource.dataType = ComplexDataSource::Cartesian;
       if (inputIndex.first->id == Processors::EffectsLane::Input::Main::id().value())
         laneDataSource.sourceBuffer = SimdBufferView{ dataBuffer_, 0, kChannelsPerInOut };
       else if (inputIndex.first->id == Processors::EffectsLane::Input::Sidechain::id().value())
@@ -345,7 +357,7 @@ namespace Generation
     }
 
     simd_float inputVolume = 0.0f;
-    simd_float loudnessScale = 1.0f / (float)binCount_;
+    simd_float loudnessScale = 1.0f / (float)binCount;
     u32 isGainMatching = thisLane->getParameter(Processors::EffectsLane::GainMatching::id().value())->getInternalValue<u32>();
 
     auto getLoudness = [](const ComplexDataSource &laneDataSource, simd_float loudnessScale, u32 binCount)
@@ -354,32 +366,22 @@ namespace Generation
       // this is because we're squaring and then scaling inside the loops
       loudnessScale *= loudnessScale;
       auto data = laneDataSource.sourceBuffer.get();
-      if (laneDataSource.dataType == ComplexDataSource::Cartesian)
+      for (u32 i = 0; i < binCount - 1; i += 2)
       {
-        for (u32 i = 0; i < binCount - 1; i += 2)
-        {
-          // magnitudes are: [left channel, right channel, left channel + 1, right channel + 1]
-          simd_float values = complexMagnitude({ data[i], data[i + 1] }, false);
-          // [left channel,     left channel + 1, right channel,     right channel + 1] + 
-          // [left channel + 1, left channel,     right channel + 1, right channel    ]
-          loudness += groupEven(values) + groupEvenReverse(values);
-        }
-
-        loudness += complexMagnitude(data[binCount - 1], false);
+        // magnitudes are: [left channel, right channel, left channel + 1, right channel + 1]
+        simd_float values = complexMagnitude({ data[i], data[i + 1] }, false);
+        // [left channel,     left channel + 1, right channel,     right channel + 1] + 
+        // [left channel + 1, left channel,     right channel + 1, right channel    ]
+        loudness += groupEven(values) + groupEvenReverse(values);
       }
-      else if (laneDataSource.dataType == ComplexDataSource::Polar)
-      {
-        for (u32 i = 0; i < binCount - 1; ++i)
-          loudness += data[i] * data[i];
 
-        loudness = copyFromEven(loudness);
-      }
+      loudness += complexMagnitude(data[binCount - 1], false);
       return loudness / loudnessScale;
     };
 
     if (isGainMatching)
     {
-      inputVolume = getLoudness(laneDataSource, loudnessScale, binCount_);
+      inputVolume = getLoudness(laneDataSource, loudnessScale, binCount);
       inputVolume = merge(inputVolume, simd_float(1.0f), simd_float::equal(inputVolume, 0.0f));
     }
     else
@@ -389,7 +391,7 @@ namespace Generation
     for (auto effectModule : thisLane->subProcessors_)
     {
       // this is safe because by design only EffectModules are contained in a lane
-      as<EffectModule>(effectModule)->processEffect(laneDataSource, binCount_, sampleRate_);
+      as<EffectModule>(effectModule)->processEffect(laneDataSource, binCount, sampleRate);
 
       // incrementing where we are currently
       thisLane->currentEffectIndex_.fetch_add(1, std::memory_order_acq_rel);
@@ -397,7 +399,7 @@ namespace Generation
 
     if (isGainMatching)
     {
-      simd_float outputVolume = getLoudness(laneDataSource, loudnessScale, binCount_);
+      simd_float outputVolume = getLoudness(laneDataSource, loudnessScale, binCount);
       outputVolume = merge(outputVolume, simd_float(1.0f), simd_float::equal(outputVolume, 0.0f));
       simd_float scale = inputVolume / outputVolume;
 
@@ -418,26 +420,12 @@ namespace Generation
     thisLane->status_.store(EffectsLane::LaneStatus::Finished, std::memory_order_release);
   }
 
-  void EffectsState::sumLanesAndWriteOutput(float *outputBuffer, usize channels, usize samples) noexcept
+  void EffectsState::sumLanesAndWriteOutput(Framework::CheckedPointer<float> outputBuffer, usize channels, usize samples) noexcept
   {
     using namespace Framework;
     using namespace utils;
 
     // TODO: redo when you get to multiple outputs
-    // checks whether all of the chains are real-imaginary pairs
-    // (instead of magnitude-phase pairs) and if not, gets converted
-    for (auto &lane : lanes_)
-    {
-      ScopedLock g1{ lane->laneDataSource_.sourceBuffer.getLock(), false, WaitMechanism::Spin };
-
-      if (lane->laneDataSource_.dataType == ComplexDataSource::Polar)
-      {
-        convertBuffer<complexPolarToCart>(
-          lane->laneDataSource_.sourceBuffer, lane->laneDataSource_.conversionBuffer, binCount_);
-        lane->laneDataSource_.sourceBuffer = lane->laneDataSource_.conversionBuffer;
-        lane->laneDataSource_.dataType = ComplexDataSource::Cartesian;
-      }
-    }
 
     ScopedLock g{ outputBuffer_.getLock(), true, WaitMechanism::Spin };
     outputBuffer_.clear();
@@ -447,7 +435,7 @@ namespace Generation
     for (u32 i = 0; i < lanes_.size(); i++)
     {
       auto [outputOption, index] = lanes_[i]->getParameter(Processors::EffectsLane::Output::id().value())
-        ->getInternalValue<std::string_view>();
+        ->getInternalValue<Framework::IndexedData>();
 
       if (outputOption->id != Processors::EffectsLane::Output::None::id().value())
         outputScaleMultipliers_[index]++;
@@ -457,7 +445,7 @@ namespace Generation
     for (auto &lane : lanes_)
     {
       auto [outputOption, index] = lane->getParameter(Processors::EffectsLane::Output::id().value())
-        ->getInternalValue<std::string_view>();
+        ->getInternalValue<Framework::IndexedData>();
       if (outputOption->id == Processors::EffectsLane::Output::None::id().value())
         continue;
 
@@ -465,11 +453,12 @@ namespace Generation
 
       simd_float multiplier = simd_float::max(1.0f, outputScaleMultipliers_[index]);
       SimdBuffer<complex<float>, simd_float>::applyToThisNoMask<MathOperations::Add>(outputBuffer_,
-        lane->laneDataSource_.sourceBuffer, kChannelsPerInOut, binCount_, index * kChannelsPerInOut, 0, 0, 0,
+        lane->laneDataSource_.sourceBuffer, kChannelsPerInOut, binCount, index * kChannelsPerInOut, 0, 0, 0,
         lane->volumeScale_.get() / multiplier);
     }
 
     auto values = utils::array<simd_float, SimdBuffer<complex<float>, simd_float>::getRelativeSize()>{};
+    auto valueDestinations = utils::array<Framework::CheckedPointer<float>, decltype(values)::size()>{};
     auto data = outputBuffer_.get();
     usize size = outputBuffer_.getSize();
     for (usize i = 0; i < channels; i += values.size())
@@ -477,10 +466,11 @@ namespace Generation
       if (!usedOutputChannels_[i])
         continue;
 
-      auto *channelBuffer = outputBuffer + i * samples;
+      for (u32 k = 0; k < valueDestinations.size(); ++k)
+        valueDestinations[k] = outputBuffer.offset(i * samples + k * samples, samples);
 
       // skipping every n-th complex pair (currently simd_float can take 2 pairs)
-      for (usize j = 0; j < binCount_ - 1; j += values.size())
+      for (usize j = 0; j < binCount - 1; j += values.size())
       {
         for (usize k = 0; k < values.size(); ++k)
           values[k] = data[i * size + j + k];
@@ -489,14 +479,14 @@ namespace Generation
 
         // skipping every second sample (complex signal)
         for (usize k = 0; k < values.size(); k++)
-          std::memcpy(channelBuffer + k * samples + j * 2, &values[k], sizeof(simd_float));
+          std::memcpy(&valueDestinations[k][j * 2], &values[k], sizeof(simd_float));
       }
 
-      auto rest = data[i * size + binCount_ - 1].getArrayOfValues();
-      for (u32 k = 0; k < values.size(); k += 2)
+      auto rest = data[i * size + binCount - 1].getArrayOfValues();
+      for (u32 k = 0; k < valueDestinations.size(); ++k)
       {
-        channelBuffer[k * samples + (binCount_ - 1) * 2] = rest[k];
-        channelBuffer[k * samples + (binCount_ - 1) * 2 + 1] = rest[k + 1];
+        valueDestinations[k][(binCount - 1) * 2] = rest[2 * k];
+        valueDestinations[k][(binCount - 1) * 2 + 1] = rest[2 * k + 1];
       }
     }
   }

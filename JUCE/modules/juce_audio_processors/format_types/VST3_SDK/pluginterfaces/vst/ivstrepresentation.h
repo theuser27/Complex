@@ -36,38 +36,38 @@ This structure is used in the function \see IXmlRepresentationController::getXml
 */
 struct RepresentationInfo
 {
-	RepresentationInfo ()
-	{
-		memset (vendor, 0, kNameSize);
-		memset (name, 0, kNameSize);
-		memset (version, 0, kNameSize);
-		memset (host, 0, kNameSize); 
-	}
-	
-	RepresentationInfo (char8* _vendor, char8* _name = nullptr, char8* _version = nullptr, char8* _host = nullptr)
-	{
-		memset (vendor, 0, kNameSize);
-		if (_vendor)
-			strcpy (vendor,	_vendor);
-		memset (name, 0, kNameSize);
-		if (_name)
-			strcpy (name, _name);
-		memset (version, 0, kNameSize);
-		if (_version)
-			strcpy (version, _version);
-		memset (host, 0, kNameSize);
-		if (_host)
-			strcpy (host, _host);
-	}
+  RepresentationInfo ()
+  {
+    memset (vendor, 0, kNameSize);
+    memset (name, 0, kNameSize);
+    memset (version, 0, kNameSize);
+    memset (host, 0, kNameSize); 
+  }
+  
+  RepresentationInfo (char8* _vendor, char8* _name = nullptr, char8* _version = nullptr, char8* _host = nullptr)
+  {
+    memset (vendor, 0, kNameSize);
+    if (_vendor)
+      strcpy (vendor,	_vendor);
+    memset (name, 0, kNameSize);
+    if (_name)
+      strcpy (name, _name);
+    memset (version, 0, kNameSize);
+    if (_version)
+      strcpy (version, _version);
+    memset (host, 0, kNameSize);
+    if (_host)
+      strcpy (host, _host);
+  }
 
-	enum
-	{
-		kNameSize = 64
-	};
-	char8 vendor[kNameSize];	///< Vendor name of the associated representation (remote) (eg. "Yamaha").
-	char8 name[kNameSize];		///< Representation (remote) Name (eg. "O2").
-	char8 version[kNameSize];	///< Version of this "Remote" (eg. "1.0").
-	char8 host[kNameSize];		///< Optional: used if the representation is for a given host only (eg. "Nuendo").
+  enum
+  {
+    kNameSize = 64
+  };
+  char8 vendor[kNameSize];	///< Vendor name of the associated representation (remote) (eg. "Yamaha").
+  char8 name[kNameSize];		///< Representation (remote) Name (eg. "O2").
+  char8 version[kNameSize];	///< Version of this "Remote" (eg. "1.0").
+  char8 host[kNameSize];		///< Optional: used if the representation is for a given host only (eg. "Nuendo").
 };
 
 
@@ -88,10 +88,10 @@ It allows to describe each parameter more precisely (what is the best matching t
 - A page is composed of cells (for example 8 cells per page).
 - A cell is composed of layers (for example a cell could have a knob, a display, and a button, which means 3 layers).
 - A layer is associated to a plug-in parameter using the ParameterID as identifier:
-	- it could be a knob with a display for title and/or value, this display uses the same parameterId, but it could an another one.
-	- switch
-	- link which allows to jump directly to a subpage (another page) 
-	- more... See Vst::LayerType
+  - it could be a knob with a display for title and/or value, this display uses the same parameterId, but it could an another one.
+  - switch
+  - link which allows to jump directly to a subpage (another page) 
+  - more... See Vst::LayerType
 .
 
 \n
@@ -104,88 +104,88 @@ Here an example of what should be passed in the stream of getXmlRepresentationSt
 <?xml version="1.0" encoding="utf-8"?>
 <!DOCTYPE vstXML PUBLIC "-//Steinberg//DTD VST Remote 1.1//EN" "http://dtd.steinberg.net/VST-Remote-1.1.dtd">
 <vstXML version="1.0">
-	<plugin classID="341FC5898AAA46A7A506BC0799E882AE" name="Chorus" vendor="Steinberg Media Technologies" />
-	<originator>My name</originator>
-	<date>2010-12-31</date>
-	<comment>This is an example for 4 Cells per Page for the Remote named ProductRemote 
-	         from company HardwareCompany.</comment>
+  <plugin classID="341FC5898AAA46A7A506BC0799E882AE" name="Chorus" vendor="Steinberg Media Technologies" />
+  <originator>My name</originator>
+  <date>2010-12-31</date>
+  <comment>This is an example for 4 Cells per Page for the Remote named ProductRemote 
+           from company HardwareCompany.</comment>
 
-	<!-- ===================================== -->
-	<representation name="ProductRemote" vendor="HardwareCompany" version="1.0">
-		<page name="Root">
-			<cell>
-				<layer type="knob" parameterID="0">
-					<titleDisplay>
-						<name>Mix dry/wet</name>
-						<name>Mix</name>
-					</titleDisplay>
-				</layer>
-			</cell>
-			<cell>
-				<layer type="display"></layer>
-			</cell>
-			<cell>
-				<layer type="knob" parameterID="3">
-					<titleDisplay>
-						<name>Delay</name>
-						<name>Dly</name>
-					</titleDisplay>
-				</layer>
-			</cell>
-			<cell>
-				<layer type="knob" parameterID="15">
-					<titleDisplay>
-						<name>Spatial</name>
-						<name>Spat</name>
-					</titleDisplay>
-				</layer>
-			</cell>
-		</page>
-		<page name="Page 2">
-			<cell>
-				<layer type="LED" ledStyle="spread" parameterID="2">
-					<titleDisplay>
-						<name>Width +</name>
-						<name>Widt</name>
-					</titleDisplay>
-				</layer>
-				<!--this is the switch for shape A/B-->
-				<layer type="switch" switchStyle="pushIncLooped" parameterID="4"></layer>
-			</cell>
-			<cell>
-				<layer type="display"></layer>
-			</cell>
-			<cell>
-				<layer type="LED" ledStyle="singleDot" parameterID="17">
-					<titleDisplay>
-						<name>Sync Note +</name>
-						<name>Note</name>
-					</titleDisplay>
-				</layer>
-				<!--this is the switch for sync to tempo on /off-->
-				<layer type="switch" switchStyle="pushIncLooped" parameterID="16"></layer>
-			</cell>
-			<cell>
-				<layer type="knob" parameterID="1">
-					<titleDisplay>
-						<name>Rate</name>
-					</titleDisplay>
-				</layer>
-			</cell>
-		</page>
-	</representation>
+  <!-- ===================================== -->
+  <representation name="ProductRemote" vendor="HardwareCompany" version="1.0">
+    <page name="Root">
+      <cell>
+        <layer type="knob" parameterID="0">
+          <titleDisplay>
+            <name>Mix dry/wet</name>
+            <name>Mix</name>
+          </titleDisplay>
+        </layer>
+      </cell>
+      <cell>
+        <layer type="display"></layer>
+      </cell>
+      <cell>
+        <layer type="knob" parameterID="3">
+          <titleDisplay>
+            <name>Delay</name>
+            <name>Dly</name>
+          </titleDisplay>
+        </layer>
+      </cell>
+      <cell>
+        <layer type="knob" parameterID="15">
+          <titleDisplay>
+            <name>Spatial</name>
+            <name>Spat</name>
+          </titleDisplay>
+        </layer>
+      </cell>
+    </page>
+    <page name="Page 2">
+      <cell>
+        <layer type="LED" ledStyle="spread" parameterID="2">
+          <titleDisplay>
+            <name>Width +</name>
+            <name>Widt</name>
+          </titleDisplay>
+        </layer>
+        <!--this is the switch for shape A/B-->
+        <layer type="switch" switchStyle="pushIncLooped" parameterID="4"></layer>
+      </cell>
+      <cell>
+        <layer type="display"></layer>
+      </cell>
+      <cell>
+        <layer type="LED" ledStyle="singleDot" parameterID="17">
+          <titleDisplay>
+            <name>Sync Note +</name>
+            <name>Note</name>
+          </titleDisplay>
+        </layer>
+        <!--this is the switch for sync to tempo on /off-->
+        <layer type="switch" switchStyle="pushIncLooped" parameterID="16"></layer>
+      </cell>
+      <cell>
+        <layer type="knob" parameterID="1">
+          <titleDisplay>
+            <name>Rate</name>
+          </titleDisplay>
+        </layer>
+      </cell>
+    </page>
+  </representation>
 </vstXML>
 \endcode
 */
 class IXmlRepresentationController : public FUnknown
 {
 public:
-	/** Retrieves a stream containing a XmlRepresentation for a wanted representation info */
-	virtual tresult PLUGIN_API getXmlRepresentationStream (RepresentationInfo& info /*in*/,
-	                                                       IBStream* stream /*out*/) = 0;
+  /** Retrieves a stream containing a XmlRepresentation for a wanted representation info */
+  virtual tresult PLUGIN_API getXmlRepresentationStream (RepresentationInfo& info /*in*/,
+                                                         IBStream* stream /*out*/) = 0;
 
 //------------------------------------------------------------------------
-	static const FUID iid;
+  static const FUID iid;
 };
 
 DECLARE_CLASS_IID (IXmlRepresentationController, 0xA81A0471, 0x48C34DC4, 0xAC30C9E1, 0x3C8393D5)
@@ -255,104 +255,104 @@ DECLARE_CLASS_IID (IXmlRepresentationController, 0xA81A0471, 0x48C34DC4, 0xAC30C
 /** Layer Types used in a VST XML Representation */ 
 namespace LayerType
 {
-	enum 
-	{
-		kKnob = 0, 		///< a knob (encoder or not)
-		kPressedKnob,  	///< a knob which is used by pressing and turning
-		kSwitchKnob,	///< knob could be pressed to simulate a switch
-		kSwitch,		///< a "on/off" button
-		kLED,			///< LED like VU-meter or display around a knob
-		kLink,			///< indicates that this layer is a folder linked to an another INode (page)
-		kDisplay,		///< only for text display (not really a control)
-		kFader,			///< a fader
-		kEndOfLayerType
-	};
+  enum 
+  {
+    kKnob = 0, 		///< a knob (encoder or not)
+    kPressedKnob,  	///< a knob which is used by pressing and turning
+    kSwitchKnob,	///< knob could be pressed to simulate a switch
+    kSwitch,		///< a "on/off" button
+    kLED,			///< LED like VU-meter or display around a knob
+    kLink,			///< indicates that this layer is a folder linked to an another INode (page)
+    kDisplay,		///< only for text display (not really a control)
+    kFader,			///< a fader
+    kEndOfLayerType
+  };
 
-	/** FIDString variant of the LayerType */
-	static const FIDString layerTypeFIDString[] = {
-		"knob"
-		,"pressedKnob"
-		,"switchKnob"
-		,"switch"
-		,"LED"
-		,"link"
-		,"display"
-		,"fader"
-		,nullptr
-	};
+  /** FIDString variant of the LayerType */
+  static const FIDString layerTypeFIDString[] = {
+    "knob"
+    ,"pressedKnob"
+    ,"switchKnob"
+    ,"switch"
+    ,"LED"
+    ,"link"
+    ,"display"
+    ,"fader"
+    ,nullptr
+  };
 };
 
 //------------------------------------------------------------------------
 /** Curve Types used in a VST XML Representation */ 
 namespace CurveType
 {
-	const CString kSegment		= "segment";	///<
-	const CString kValueList	= "valueList";	///<
+  const CString kSegment		= "segment";	///<
+  const CString kValueList	= "valueList";	///<
 };
 
 //------------------------------------------------------------------------
 /** Attributes used to defined a Layer in a VST XML Representation */ 
 namespace Attributes
 {
-	const CString kStyle		= ATTR_STYLE;			///< string attribute : See AttributesStyle for available string value
-	const CString kLEDStyle		= ATTR_LEDSTYLE;		///< string attribute : See AttributesStyle for available string value
-	const CString kSwitchStyle	= ATTR_SWITCHSTYLE;		///< string attribute : See AttributesStyle for available string value
-	const CString kKnobTurnsPerFullRange = ATTR_TURNSPERFULLRANGE;	///< float attribute
-	const CString kFunction		= ATTR_FUNCTION;		///< string attribute : See AttributesFunction for available string value
-	const CString kFlags		= ATTR_FLAGS;			///< string attribute : See AttributesFlags for available string value
+  const CString kStyle		= ATTR_STYLE;			///< string attribute : See AttributesStyle for available string value
+  const CString kLEDStyle		= ATTR_LEDSTYLE;		///< string attribute : See AttributesStyle for available string value
+  const CString kSwitchStyle	= ATTR_SWITCHSTYLE;		///< string attribute : See AttributesStyle for available string value
+  const CString kKnobTurnsPerFullRange = ATTR_TURNSPERFULLRANGE;	///< float attribute
+  const CString kFunction		= ATTR_FUNCTION;		///< string attribute : See AttributesFunction for available string value
+  const CString kFlags		= ATTR_FLAGS;			///< string attribute : See AttributesFlags for available string value
 };
 
 //------------------------------------------------------------------------
 /** Attributes Function used to defined the function of a Layer in a VST XML Representation */ 
 namespace AttributesFunction
 {
-	/// Global Style
-	const CString kPanPosCenterXFunc		= "PanPosCenterX";		///< Gravity point X-axis (L-R) (for stereo: middle between left and right)
-	const CString kPanPosCenterYFunc		= "PanPosCenterY";		///< Gravity point Y-axis (Front-Rear)
-	const CString kPanPosFrontLeftXFunc		= "PanPosFrontLeftX";	///< Left channel Position in X-axis
-	const CString kPanPosFrontLeftYFunc		= "PanPosFrontLeftY";	///< Left channel Position in Y-axis
-	const CString kPanPosFrontRightXFunc	= "PanPosFrontRightX";	///< Right channel Position in X-axis
-	const CString kPanPosFrontRightYFunc	= "PanPosFrontRightY";	///< Right channel Position in Y-axis
-	const CString kPanRotationFunc			= "PanRotation";		///< Rotation around the Center (gravity point)
-	const CString kPanLawFunc				= "PanLaw";				///< Panning Law
-	const CString kPanMirrorModeFunc		= "PanMirrorMode";		///< Panning Mirror Mode
-	const CString kPanLfeGainFunc			= "PanLfeGain";			///< Panning LFE Gain
-	const CString kGainReductionFunc		= "GainReduction";		///< Gain Reduction for compressor
-	const CString kSoloFunc					= "Solo";				///< Solo
-	const CString kMuteFunc					= "Mute";				///< Mute
-	const CString kVolumeFunc				= "Volume";				///< Volume
+  /// Global Style
+  const CString kPanPosCenterXFunc		= "PanPosCenterX";		///< Gravity point X-axis (L-R) (for stereo: middle between left and right)
+  const CString kPanPosCenterYFunc		= "PanPosCenterY";		///< Gravity point Y-axis (Front-Rear)
+  const CString kPanPosFrontLeftXFunc		= "PanPosFrontLeftX";	///< Left channel Position in X-axis
+  const CString kPanPosFrontLeftYFunc		= "PanPosFrontLeftY";	///< Left channel Position in Y-axis
+  const CString kPanPosFrontRightXFunc	= "PanPosFrontRightX";	///< Right channel Position in X-axis
+  const CString kPanPosFrontRightYFunc	= "PanPosFrontRightY";	///< Right channel Position in Y-axis
+  const CString kPanRotationFunc			= "PanRotation";		///< Rotation around the Center (gravity point)
+  const CString kPanLawFunc				= "PanLaw";				///< Panning Law
+  const CString kPanMirrorModeFunc		= "PanMirrorMode";		///< Panning Mirror Mode
+  const CString kPanLfeGainFunc			= "PanLfeGain";			///< Panning LFE Gain
+  const CString kGainReductionFunc		= "GainReduction";		///< Gain Reduction for compressor
+  const CString kSoloFunc					= "Solo";				///< Solo
+  const CString kMuteFunc					= "Mute";				///< Mute
+  const CString kVolumeFunc				= "Volume";				///< Volume
 };
 
 //------------------------------------------------------------------------
 /** Attributes Style associated a specific Layer Type in a VST XML Representation */ 
 namespace AttributesStyle
 {
-	/// Global Style
-	const CString kInverseStyle			= "inverse";	///< the associated layer should use the inverse value of parameter (1 - x).
+  /// Global Style
+  const CString kInverseStyle			= "inverse";	///< the associated layer should use the inverse value of parameter (1 - x).
 
-	/// LED Style
-	const CString kLEDWrapLeftStyle		= "wrapLeft";	///< |======>----- (the default one if not specified)
-	const CString kLEDWrapRightStyle	= "wrapRight";	///< -------<====|
-	const CString kLEDSpreadStyle		= "spread";		///< ---<==|==>---
-	const CString kLEDBoostCutStyle		= "boostCut";	///< ------|===>--
-	const CString kLEDSingleDotStyle	= "singleDot";	///< --------|----
+  /// LED Style
+  const CString kLEDWrapLeftStyle		= "wrapLeft";	///< |======>----- (the default one if not specified)
+  const CString kLEDWrapRightStyle	= "wrapRight";	///< -------<====|
+  const CString kLEDSpreadStyle		= "spread";		///< ---<==|==>---
+  const CString kLEDBoostCutStyle		= "boostCut";	///< ------|===>--
+  const CString kLEDSingleDotStyle	= "singleDot";	///< --------|----
 
-	/// Switch Style
-	const CString kSwitchPushStyle		= "push";		///< Apply only when pressed, unpressed will reset the value to min.
-	const CString kSwitchPushIncLoopedStyle	= "pushIncLooped";	///< Push will increment the value. When the max is reached it will restart with min.
-																///< The default one if not specified (with 2 states values it is a OnOff switch).
-	const CString kSwitchPushDecLoopedStyle	= "pushDecLooped";	///< Push will decrement the value. When the min is reached it will restart with max.
-	const CString kSwitchPushIncStyle	= "pushInc";	///< Increment after each press (delta depends of the curve).
-	const CString kSwitchPushDecStyle	= "pushDec";	///< Decrement after each press (delta depends of the curve).
-	const CString kSwitchLatchStyle		= "latch";		///< Each push-release will change the value between min and max. 
-														///< A timeout between push and release could be used to simulate a push style (if timeout is reached).
+  /// Switch Style
+  const CString kSwitchPushStyle		= "push";		///< Apply only when pressed, unpressed will reset the value to min.
+  const CString kSwitchPushIncLoopedStyle	= "pushIncLooped";	///< Push will increment the value. When the max is reached it will restart with min.
+                                ///< The default one if not specified (with 2 states values it is a OnOff switch).
+  const CString kSwitchPushDecLoopedStyle	= "pushDecLooped";	///< Push will decrement the value. When the min is reached it will restart with max.
+  const CString kSwitchPushIncStyle	= "pushInc";	///< Increment after each press (delta depends of the curve).
+  const CString kSwitchPushDecStyle	= "pushDec";	///< Decrement after each press (delta depends of the curve).
+  const CString kSwitchLatchStyle		= "latch";		///< Each push-release will change the value between min and max. 
+                            ///< A timeout between push and release could be used to simulate a push style (if timeout is reached).
 };
 
 //------------------------------------------------------------------------
 /** Attributes Flags defining a Layer in a VST XML Representation */ 
 namespace AttributesFlags
 {
-	const CString kHideableFlag			= "hideable";	///< the associated layer marked as hideable allows a remote to hide or make it not usable a parameter when the associated value is inactive 
+  const CString kHideableFlag			= "hideable";	///< the associated layer marked as hideable allows a remote to hide or make it not usable a parameter when the associated value is inactive 
 };
 
 //------------------------------------------------------------------------

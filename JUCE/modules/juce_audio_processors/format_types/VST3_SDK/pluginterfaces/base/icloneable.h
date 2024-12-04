@@ -29,10 +29,10 @@ class ICloneable : public FUnknown
 {
 public:
 //------------------------------------------------------------------------
-	/** Create exact copy of the object */
-	virtual FUnknown* PLUGIN_API clone () = 0;
+  /** Create exact copy of the object */
+  virtual FUnknown* PLUGIN_API clone () = 0;
 //------------------------------------------------------------------------
-	static const FUID iid;
+  static const FUID iid;
 };
 
 DECLARE_CLASS_IID (ICloneable, 0xD45406B9, 0x3A2D4443, 0x9DAD9BA9, 0x85A1454B)

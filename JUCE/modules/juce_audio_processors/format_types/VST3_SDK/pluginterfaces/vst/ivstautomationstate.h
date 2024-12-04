@@ -40,20 +40,20 @@ class IAutomationState : public FUnknown
 {
 public:
 //------------------------------------------------------------------------
-	enum AutomationStates
-	{
-		kNoAutomation = 0,		///< Not Read and not Write
-		kReadState = 1 << 0,	///< Read state
-		kWriteState = 1 << 1,	///< Write state
+  enum AutomationStates
+  {
+    kNoAutomation = 0,		///< Not Read and not Write
+    kReadState = 1 << 0,	///< Read state
+    kWriteState = 1 << 1,	///< Write state
 
-		kReadWriteState = kReadState | kWriteState, ///< Read and Write enable
-	};
+    kReadWriteState = kReadState | kWriteState, ///< Read and Write enable
+  };
 
-	/** Sets the current Automation state. */
-	virtual tresult PLUGIN_API setAutomationState (int32 state) = 0;
+  /** Sets the current Automation state. */
+  virtual tresult PLUGIN_API setAutomationState (int32 state) = 0;
 
 //------------------------------------------------------------------------
-	static const FUID iid;
+  static const FUID iid;
 };
 
 DECLARE_CLASS_IID (IAutomationState, 0xB4E8287F, 0x1BB346AA, 0x83A46667, 0x68937BAB)

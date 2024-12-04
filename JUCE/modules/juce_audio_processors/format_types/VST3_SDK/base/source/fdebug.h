@@ -39,13 +39,13 @@
 
 //-----------------------------------------------------------------------------
 /** @file base/source/fdebug.h
-	Debugging tools.
+  Debugging tools.
 
-	There are 2 levels of debugging messages:
-	- DEVELOPMENT
-	  - During development
-	- RELEASE
-	  - Program is shipping.
+  There are 2 levels of debugging messages:
+  - DEVELOPMENT
+    - During development
+  - RELEASE
+    - Program is shipping.
 */
 //-----------------------------------------------------------------------------
 #pragma once
@@ -64,13 +64,13 @@ bool AmIBeingDebugged ();
 // development / release
 //-----------------------------------------------------------------------------
 #if !defined (DEVELOPMENT) && !defined (RELEASE) 
-	#ifdef _DEBUG
-		#define DEVELOPMENT 1
-	#elif defined (NDEBUG)
-		#define RELEASE 1
-	#else
-		#error DEVELOPMENT, RELEASE, _DEBUG, or NDEBUG  must be defined!
-	#endif
+  #ifdef _DEBUG
+    #define DEVELOPMENT 1
+  #elif defined (NDEBUG)
+    #define RELEASE 1
+  #else
+    #error DEVELOPMENT, RELEASE, _DEBUG, or NDEBUG  must be defined!
+  #endif
 #endif
 
 //-----------------------------------------------------------------------------
@@ -94,8 +94,8 @@ bool AmIBeingDebugged ();
    to exist in the RELEASE build (for method calls that need to be present in a RELEASE build, use
    the VERIFY macros instead)*/
 #define SMTG_ASSERT(f) \
-	if (!(f))          \
-		FDebugBreak ("%s(%d) : Assert failed: %s\n", __FILE__, __LINE__, #f);
+  if (!(f))          \
+    FDebugBreak ("%s(%d) : Assert failed: %s\n", __FILE__, __LINE__, #f);
 
 /** Send "comment" string to the debugger for display. */
 #define SMTG_WARNING(comment) FDebugPrint ("%s(%d) : %s\n", __FILE__, __LINE__, comment);
@@ -116,18 +116,18 @@ bool AmIBeingDebugged ();
     The call of "f" is not removed in RELEASE builds, only the result verification. eg:
    SMTG_VERIFY_IS (callMethod (), kResultOK) */
 #define SMTG_VERIFY_IS(f, r) \
-	if ((f) != (r))          \
-		FDebugBreak ("%s(%d) : Assert failed: %s\n", __FILE__, __LINE__, #f);
+  if ((f) != (r))          \
+    FDebugBreak ("%s(%d) : Assert failed: %s\n", __FILE__, __LINE__, #f);
 
 /** Use VERIFY_NOT for calling methods "f" and expect the result to be anything else but "r".
      The call of "f" is not removed in RELEASE builds, only the result verification. eg:
    SMTG_VERIFY_NOT (callMethod (), kResultError) */
 #define SMTG_VERIFY_NOT(f, r) \
-	if ((f) == (r))           \
-		FDebugBreak ("%s(%d) : Assert failed: %s\n", __FILE__, __LINE__, #f);
+  if ((f) == (r))           \
+    FDebugBreak ("%s(%d) : Assert failed: %s\n", __FILE__, __LINE__, #f);
 
 /** @name Shortcut macros for sending strings to the debugger for display.
-	First parameter is always the format string (printf like).
+  First parameter is always the format string (printf like).
 */
 
 ///@{

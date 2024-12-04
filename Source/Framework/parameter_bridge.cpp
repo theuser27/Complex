@@ -35,6 +35,12 @@ namespace Framework
     }
   }
 
+  ParameterBridge::~ParameterBridge() noexcept
+  {
+    if (auto link = parameterLinkPointer_.load(std::memory_order_acquire); link && link->parameter)
+      link->parameter->changeBridge(nullptr);
+  }
+
   void ParameterBridge::resetParameterLink(ParameterLink *link, bool getValueFromParameter) noexcept
   {
     auto *oldLink = parameterLinkPointer_.load(std::memory_order_acquire);
@@ -166,10 +172,14 @@ namespace Framework
     double internalValue = scaleValue(value, details, sampleRate, true);
     if (!details.indexedData.empty())
     {
-      auto index = (size_t)std::clamp((float)std::round(internalValue), details.minValue, details.maxValue) - (size_t)details.minValue;
-      // clamping in case the value goes above the string count inside the array
-      index = std::clamp(index, (size_t)0, details.indexedData.size());
-      return { details.indexedData[index].displayName.data(), (size_t)maximumStringLength };
+      auto [indexedData, index] = getIndexedData(internalValue, details);
+      std::string string;
+      if (indexedData->count > 1)
+        string = std::format("{} {}", indexedData->displayName, index + 1);
+      else
+        string = std::format("{}", indexedData->displayName);     
+
+      return string.substr(0, (usize)maximumStringLength);
     }
 
     return { internalValue, std::min(maximumStringLength, kMaxDecimals) };

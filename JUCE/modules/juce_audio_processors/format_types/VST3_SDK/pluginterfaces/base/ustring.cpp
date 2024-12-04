@@ -52,8 +52,8 @@ using Converter = std::wstring_convert<std::codecvt_utf8_utf16<char16_t>, char16
 //------------------------------------------------------------------------
 Converter& converter ()
 {
-	static Converter instance;
-	return instance;
+  static Converter instance;
+  return instance;
 }
 
 //------------------------------------------------------------------------
@@ -68,16 +68,16 @@ Converter& converter ()
 template <class TDstChar, class TSrcChar>
 void StringCopy (TDstChar* dst, int32 dstSize, const TSrcChar* src, int32 srcSize = -1)
 {
-	int32 count = dstSize;
-	if (srcSize >= 0 && srcSize < dstSize)
-		count = srcSize;
-	for (int32 i = 0; i < count; i++)
-	{
-		dst[i] = (TDstChar)src[i];
-		if (src[i] == 0)
-			break;
-	}
-	dst[dstSize - 1] = 0;
+  int32 count = dstSize;
+  if (srcSize >= 0 && srcSize < dstSize)
+    count = srcSize;
+  for (int32 i = 0; i < count; i++)
+  {
+    dst[i] = (TDstChar)src[i];
+    if (src[i] == 0)
+      break;
+  }
+  dst[dstSize - 1] = 0;
 }
 
 //------------------------------------------------------------------------
@@ -86,16 +86,16 @@ void StringCopy (TDstChar* dst, int32 dstSize, const TSrcChar* src, int32 srcSiz
 template <class TSrcChar>
 int32 StringLength (const TSrcChar* src, int32 srcSize = -1)
 {
-	if (srcSize == 0)
-		return 0;
-	int32 length = 0;
-	while (src[length])
-	{
-		length++;
-		if (srcSize > 0 && length >= srcSize)
-			break;
-	}
-	return length;
+  if (srcSize == 0)
+    return 0;
+  int32 length = 0;
+  while (src[length])
+  {
+    length++;
+    if (srcSize > 0 && length >= srcSize)
+      break;
+  }
+  return length;
 }
 
 //------------------------------------------------------------------------
@@ -103,69 +103,69 @@ int32 StringLength (const TSrcChar* src, int32 srcSize = -1)
 //------------------------------------------------------------------------
 int32 UString::getLength () const
 {
-	return StringLength<char16> (thisBuffer, thisSize);
+  return StringLength<char16> (thisBuffer, thisSize);
 }
 
 //------------------------------------------------------------------------
 UString& UString::assign (const char16* src, int32 srcSize)
 {
-	StringCopy<char16, char16> (thisBuffer, thisSize, src, srcSize);
-	return *this;
+  StringCopy<char16, char16> (thisBuffer, thisSize, src, srcSize);
+  return *this;
 }
 
 //------------------------------------------------------------------------
 UString& UString::append (const char16* src, int32 srcSize)
 {
-	int32 length = getLength ();
-	StringCopy<char16, char16> (thisBuffer + length, thisSize - length, src, srcSize);
-	return *this;
+  int32 length = getLength ();
+  StringCopy<char16, char16> (thisBuffer + length, thisSize - length, src, srcSize);
+  return *this;
 }
 
 //------------------------------------------------------------------------
 const UString& UString::copyTo (char16* dst, int32 dstSize) const
 {
-	StringCopy<char16, char16> (dst, dstSize, thisBuffer, thisSize);
-	return *this;
+  StringCopy<char16, char16> (dst, dstSize, thisBuffer, thisSize);
+  return *this;
 }
 
 //------------------------------------------------------------------------
 UString& UString::fromAscii (const char* src, int32 srcSize)
 {
-	StringCopy<char16, char> (thisBuffer, thisSize, src, srcSize);
-	return *this;
+  StringCopy<char16, char> (thisBuffer, thisSize, src, srcSize);
+  return *this;
 }
 
 //------------------------------------------------------------------------
 const UString& UString::toAscii (char* dst, int32 dstSize) const
 {
-	StringCopy<char, char16> (dst, dstSize, thisBuffer, thisSize);
-	return *this;
+  StringCopy<char, char16> (dst, dstSize, thisBuffer, thisSize);
+  return *this;
 }
 
 //------------------------------------------------------------------------
 bool UString::scanFloat (double& value) const
 {
 #if SMTG_OS_WINDOWS
-	return swscanf ((const wchar_t*)thisBuffer, L"%lf", &value) != -1;
+  return swscanf ((const wchar_t*)thisBuffer, L"%lf", &value) != -1;
 
 #elif TARGET_API_MAC_CARBON
-	CFStringRef cfStr = CFStringCreateWithBytes (0, (const UInt8 *)thisBuffer, getLength () * 2, kCFStringEncodingUTF16, false);
-	if (cfStr)
-	{
-		value = CFStringGetDoubleValue (cfStr);
-		CFRelease (cfStr);
-		return true;
-	}
-	return false;
+  CFStringRef cfStr = CFStringCreateWithBytes (0, (const UInt8 *)thisBuffer, getLength () * 2, kCFStringEncodingUTF16, false);
+  if (cfStr)
+  {
+    value = CFStringGetDoubleValue (cfStr);
+    CFRelease (cfStr);
+    return true;
+  }
+  return false;
 
 #elif SMTG_OS_LINUX
-	auto str = converter ().to_bytes (thisBuffer);
-	return sscanf (str.data (), "%lf", &value) == 1;
+  auto str = converter ().to_bytes (thisBuffer);
+  return sscanf (str.data (), "%lf", &value) == 1;
 
 #else
 #warning Implement me
-	// implement me!
-	return false;
+  // implement me!
+  return false;
 #endif
 }
 
@@ -173,37 +173,37 @@ bool UString::scanFloat (double& value) const
 bool UString::printFloat (double value, int32 precision)
 {
 #if SMTG_OS_WINDOWS
-	return swprintf ((wchar_t*)thisBuffer, L"%.*lf", precision, value) != -1;
+  return swprintf ((wchar_t*)thisBuffer, L"%.*lf", precision, value) != -1;
 #elif SMTG_OS_MACOS
-	bool result = false;
-	CFStringRef cfStr = CFStringCreateWithFormat (0, 0, CFSTR("%.*lf"), precision, value);
-	if (cfStr)
-	{
-		memset (thisBuffer, 0, thisSize);
-		CFRange range = {0, CFStringGetLength (cfStr)};
-		CFStringGetBytes (cfStr, range, kCFStringEncodingUTF16, 0, false, (UInt8*)thisBuffer, thisSize, 0);
-		CFRelease (cfStr);
-		return true;
-	}
-	return result;
+  bool result = false;
+  CFStringRef cfStr = CFStringCreateWithFormat (0, 0, CFSTR("%.*lf"), precision, value);
+  if (cfStr)
+  {
+    memset (thisBuffer, 0, thisSize);
+    CFRange range = {0, CFStringGetLength (cfStr)};
+    CFStringGetBytes (cfStr, range, kCFStringEncodingUTF16, 0, false, (UInt8*)thisBuffer, thisSize, 0);
+    CFRelease (cfStr);
+    return true;
+  }
+  return result;
 #elif SMTG_OS_LINUX
-	auto utf8Buffer = reinterpret_cast<char*> (thisBuffer);
-	auto len = snprintf (utf8Buffer, thisSize, "%.*lf", precision, value);
-	if (len > 0)
-	{
-		auto utf16Buffer = reinterpret_cast<char16*> (thisBuffer);
-		utf16Buffer[len] = 0;
-		while (--len >= 0)
-		{
-			utf16Buffer[len] = utf8Buffer[len];
-		}
-		return true;
-	}
-	return false;
+  auto utf8Buffer = reinterpret_cast<char*> (thisBuffer);
+  auto len = snprintf (utf8Buffer, thisSize, "%.*lf", precision, value);
+  if (len > 0)
+  {
+    auto utf16Buffer = reinterpret_cast<char16*> (thisBuffer);
+    utf16Buffer[len] = 0;
+    while (--len >= 0)
+    {
+      utf16Buffer[len] = utf8Buffer[len];
+    }
+    return true;
+  }
+  return false;
 #else
 #warning Implement me
-	// implement me!
-	return false;
+  // implement me!
+  return false;
 #endif
 }
 
@@ -211,26 +211,26 @@ bool UString::printFloat (double value, int32 precision)
 bool UString::scanInt (int64& value) const
 {
 #if SMTG_OS_WINDOWS
-	return swscanf ((const wchar_t*)thisBuffer, L"%I64d", &value) != -1;
+  return swscanf ((const wchar_t*)thisBuffer, L"%I64d", &value) != -1;
 
 #elif SMTG_OS_MACOS
-	CFStringRef cfStr = CFStringCreateWithBytes (0, (const UInt8 *)thisBuffer, getLength () * 2, kCFStringEncodingUTF16, false);
-	if (cfStr)
-	{
-		value = CFStringGetIntValue (cfStr);
-		CFRelease (cfStr);
-		return true;
-	}
-	return false;
+  CFStringRef cfStr = CFStringCreateWithBytes (0, (const UInt8 *)thisBuffer, getLength () * 2, kCFStringEncodingUTF16, false);
+  if (cfStr)
+  {
+    value = CFStringGetIntValue (cfStr);
+    CFRelease (cfStr);
+    return true;
+  }
+  return false;
 
 #elif SMTG_OS_LINUX
-	auto str = converter ().to_bytes (thisBuffer);
-	return sscanf (str.data (), "%lld", &value) == 1;
+  auto str = converter ().to_bytes (thisBuffer);
+  return sscanf (str.data (), "%lld", &value) == 1;
 
 #else
 #warning Implement me
-	// implement me!
-	return false;
+  // implement me!
+  return false;
 #endif
 }
 
@@ -238,38 +238,38 @@ bool UString::scanInt (int64& value) const
 bool UString::printInt (int64 value)
 {
 #if SMTG_OS_WINDOWS
-	return swprintf ((wchar_t*)thisBuffer, L"%I64d", value) != -1;
+  return swprintf ((wchar_t*)thisBuffer, L"%I64d", value) != -1;
 
 #elif SMTG_OS_MACOS
-	CFStringRef cfStr = CFStringCreateWithFormat (0, 0, CFSTR("%lld"), value);
-	if (cfStr)
-	{
-		memset (thisBuffer, 0, thisSize);
-		CFRange range = {0, CFStringGetLength (cfStr)};
-		CFStringGetBytes (cfStr, range, kCFStringEncodingUTF16, 0, false, (UInt8*)thisBuffer, thisSize, 0);
-		CFRelease (cfStr);
-		return true;
-	}
-	return false;
+  CFStringRef cfStr = CFStringCreateWithFormat (0, 0, CFSTR("%lld"), value);
+  if (cfStr)
+  {
+    memset (thisBuffer, 0, thisSize);
+    CFRange range = {0, CFStringGetLength (cfStr)};
+    CFStringGetBytes (cfStr, range, kCFStringEncodingUTF16, 0, false, (UInt8*)thisBuffer, thisSize, 0);
+    CFRelease (cfStr);
+    return true;
+  }
+  return false;
 #elif SMTG_OS_LINUX
-	auto utf8Buffer = reinterpret_cast<char*> (thisBuffer);
-	auto len = snprintf (utf8Buffer, thisSize, "%lld", value);
-	if (len > 0)
-	{
-		auto utf16Buffer = reinterpret_cast<char16*> (thisBuffer);
-		utf16Buffer[len] = 0;
-		while (--len >= 0)
-		{
-			utf16Buffer[len] = utf8Buffer[len];
-		}
-		return true;
-	}
-	return false;
+  auto utf8Buffer = reinterpret_cast<char*> (thisBuffer);
+  auto len = snprintf (utf8Buffer, thisSize, "%lld", value);
+  if (len > 0)
+  {
+    auto utf16Buffer = reinterpret_cast<char16*> (thisBuffer);
+    utf16Buffer[len] = 0;
+    while (--len >= 0)
+    {
+      utf16Buffer[len] = utf8Buffer[len];
+    }
+    return true;
+  }
+  return false;
 
 #else
 #warning Implement me
-	// implement me!
-	return false;
+  // implement me!
+  return false;
 #endif
 }
 } // namespace Steinberg

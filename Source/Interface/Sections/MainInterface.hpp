@@ -51,6 +51,8 @@ namespace Interface
       Skin::SectionOverride sectionOverride = Skin::kPopupBrowser);
     void hideDisplay(bool primary);
 
+    void reinstantiateUI();
+
   private:
     utils::up<HeaderFooterSections> headerFooter_;
     utils::up<EffectsStateSection> effectsStateSection_;

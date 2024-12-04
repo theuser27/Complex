@@ -147,7 +147,7 @@ namespace Framework
       COMPLEX_ASSERT(numChannels <= other.getChannels());
       COMPLEX_ASSERT(numChannels <= getChannels());
 
-      if (simd_mask::notEqual(mergeMask, kNoChangeMask).sum() == 0)
+      if (simd_mask::notEqual(mergeMask, kNoChangeMask).anyMask() == 0)
         applyToThisNoMask<utils::MathOperations::Add>(*this, other, numChannels, numSamples,
           thisStartChannel, otherStartChannel, thisStartIndex, otherStartIndex);
       else
@@ -181,7 +181,7 @@ namespace Framework
       COMPLEX_ASSERT(numChannels <= other.getChannels());
       COMPLEX_ASSERT(numChannels <= getChannels());
 
-      if (simd_mask::notEqual(mergeMask, kNoChangeMask).sum() == 0)
+      if (simd_mask::notEqual(mergeMask, kNoChangeMask).anyMask() == 0)
         applyToThisNoMask<utils::MathOperations::Multiply>(*this, other, numChannels, numSamples,
           thisStartChannel, otherStartChannel, thisStartIndex, otherStartIndex);
       else
@@ -471,13 +471,9 @@ namespace Framework
 
   struct ComplexDataSource
   {
-    enum DataSourceType : u8 { Cartesian, Polar, Both };
-
-    // is the data in sourceBuffer polar or cartesian
-    DataSourceType dataType = Cartesian;
-    // this is the normalised phase currently processed block
+    // this is the phase in the currently processed block
     // see SoundEngine::phaseInsideBlock_ for more info
-    float normalisedPhase = 0.0f;
+    float blockPhase = 0.0f;
     SimdBufferView<complex<float>, simd_float> sourceBuffer;
     // scratch buffer for conversion between cartesian and polar data
     SimdBuffer<complex<float>, simd_float> conversionBuffer{};

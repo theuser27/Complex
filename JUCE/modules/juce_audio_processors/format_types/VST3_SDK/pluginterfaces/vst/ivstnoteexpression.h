@@ -45,21 +45,21 @@ Used by NoteExpressionEvent::typeId and NoteExpressionTypeID::typeId
 */
 enum NoteExpressionTypeIDs : uint32
 {
-	kVolumeTypeID = 0,		///< Volume, plain range [0 = -oo , 0.25 = 0dB, 0.5 = +6dB, 1 = +12dB]: plain = 20 * log (4 * norm)
-	kPanTypeID,				///< Panning (L-R), plain range [0 = left, 0.5 = center, 1 = right]
-	kTuningTypeID,			///< Tuning, plain range [0 = -120.0 (ten octaves down), 0.5 none, 1 = +120.0 (ten octaves up)]
-							///< plain = 240 * (norm - 0.5) and norm = plain / 240 + 0.5
-							///< oneOctave is 12.0 / 240.0; oneHalfTune = 1.0 / 240.0;
-	kVibratoTypeID,			///< Vibrato
-	kExpressionTypeID,		///< Expression
-	kBrightnessTypeID,		///< Brightness
-	kTextTypeID,			///< See NoteExpressionTextEvent
-	kPhonemeTypeID,			///< TODO:
+  kVolumeTypeID = 0,		///< Volume, plain range [0 = -oo , 0.25 = 0dB, 0.5 = +6dB, 1 = +12dB]: plain = 20 * log (4 * norm)
+  kPanTypeID,				///< Panning (L-R), plain range [0 = left, 0.5 = center, 1 = right]
+  kTuningTypeID,			///< Tuning, plain range [0 = -120.0 (ten octaves down), 0.5 none, 1 = +120.0 (ten octaves up)]
+              ///< plain = 240 * (norm - 0.5) and norm = plain / 240 + 0.5
+              ///< oneOctave is 12.0 / 240.0; oneHalfTune = 1.0 / 240.0;
+  kVibratoTypeID,			///< Vibrato
+  kExpressionTypeID,		///< Expression
+  kBrightnessTypeID,		///< Brightness
+  kTextTypeID,			///< See NoteExpressionTextEvent
+  kPhonemeTypeID,			///< TODO:
 
-	kCustomStart = 100000,	///< start of custom note expression type ids
-	kCustomEnd   = 200000,  ///< end of custom note expression type ids
-	
-	kInvalidTypeID = 0xFFFFFFFF	///< indicates an invalid note expression type
+  kCustomStart = 100000,	///< start of custom note expression type ids
+  kCustomEnd   = 200000,  ///< end of custom note expression type ids
+  
+  kInvalidTypeID = 0xFFFFFFFF	///< indicates an invalid note expression type
 };
 
 //------------------------------------------------------------------------
@@ -71,10 +71,10 @@ and a stepCount when the given NoteExpressionTypeID is limited to discrete value
 */
 struct NoteExpressionValueDescription
 {
-	NoteExpressionValue defaultValue;	///< default normalized value [0,1]
-	NoteExpressionValue minimum;		///< minimum normalized value [0,1]
-	NoteExpressionValue maximum;		///< maximum normalized value [0,1]
-	int32 stepCount;					///< number of discrete steps (0: continuous, 1: toggle, discrete value otherwise - see \ref vst3ParameterIntro)
+  NoteExpressionValue defaultValue;	///< default normalized value [0,1]
+  NoteExpressionValue minimum;		///< minimum normalized value [0,1]
+  NoteExpressionValue maximum;		///< maximum normalized value [0,1]
+  int32 stepCount;					///< number of discrete steps (0: continuous, 1: toggle, discrete value otherwise - see \ref vst3ParameterIntro)
 };
 
 #if SMTG_OS_WINDOWS && !SMTG_PLATFORM_64
@@ -91,10 +91,10 @@ The predefined types have a predefined mapping of the normalized values (see \re
 */
 struct NoteExpressionValueEvent
 {
-	NoteExpressionTypeID typeId;	///< see \ref NoteExpressionTypeID
-	int32 noteId;					///< associated note identifier to apply the change
+  NoteExpressionTypeID typeId;	///< see \ref NoteExpressionTypeID
+  int32 noteId;					///< associated note identifier to apply the change
 
-	NoteExpressionValue value;		///< normalized value [0.0, 1.0].
+  NoteExpressionValue value;		///< normalized value [0.0, 1.0].
 };
 
 //------------------------------------------------------------------------
@@ -105,13 +105,13 @@ A Expression event affects one single playing note. \sa INoteExpressionControlle
 */
 struct NoteExpressionTextEvent
 {
-	NoteExpressionTypeID typeId;	///< see \ref NoteExpressionTypeID (kTextTypeID or kPhoneticTypeID)
-	int32 noteId;					///< associated note identifier to apply the change
+  NoteExpressionTypeID typeId;	///< see \ref NoteExpressionTypeID (kTextTypeID or kPhoneticTypeID)
+  int32 noteId;					///< associated note identifier to apply the change
 
-	uint32 textLen;					///< the number of characters (TChar) between the beginning of text and the terminating
-									///< null character (without including the terminating null character itself)
+  uint32 textLen;					///< the number of characters (TChar) between the beginning of text and the terminating
+                  ///< null character (without including the terminating null character itself)
 
-	const TChar* text;				///< UTF-16, null terminated
+  const TChar* text;				///< UTF-16, null terminated
 };
 
 #if SMTG_OS_WINDOWS && !SMTG_PLATFORM_64
@@ -125,22 +125,22 @@ This structure is used by the method \ref INoteExpressionController::getNoteExpr
 */
 struct NoteExpressionTypeInfo
 {
-	NoteExpressionTypeID typeId;			///< unique identifier of this note Expression type
-	String128 title;						///< note Expression type title (e.g. "Volume")
-	String128 shortTitle;					///< note Expression type short title (e.g. "Vol")
-	String128 units;						///< note Expression type unit (e.g. "dB")
-	int32 unitId;							///< id of unit this NoteExpression belongs to (see \ref vst3Units), in order to sort the note expression, it is possible to use unitId like for parameters. -1 means no unit used.
-	NoteExpressionValueDescription valueDesc;	///< value description see \ref NoteExpressionValueDescription
-	ParamID associatedParameterId;			///< optional associated parameter ID (for mapping from note expression to global (using the parameter automation for example) and back). Only used when kAssociatedParameterIDValid is set in flags.
+  NoteExpressionTypeID typeId;			///< unique identifier of this note Expression type
+  String128 title;						///< note Expression type title (e.g. "Volume")
+  String128 shortTitle;					///< note Expression type short title (e.g. "Vol")
+  String128 units;						///< note Expression type unit (e.g. "dB")
+  int32 unitId;							///< id of unit this NoteExpression belongs to (see \ref vst3Units), in order to sort the note expression, it is possible to use unitId like for parameters. -1 means no unit used.
+  NoteExpressionValueDescription valueDesc;	///< value description see \ref NoteExpressionValueDescription
+  ParamID associatedParameterId;			///< optional associated parameter ID (for mapping from note expression to global (using the parameter automation for example) and back). Only used when kAssociatedParameterIDValid is set in flags.
 
-	int32 flags;							///< NoteExpressionTypeFlags (see below)
-	enum NoteExpressionTypeFlags
-	{
-		kIsBipolar		= 1 << 0,			///< event is bipolar (centered), otherwise unipolar
-		kIsOneShot		= 1 << 1,			///< event occurs only one time for its associated note (at begin of the noteOn)
-		kIsAbsolute		= 1 << 2,			///< This note expression will apply an absolute change to the sound (not relative (offset))
-		kAssociatedParameterIDValid	= 1 << 3,///< indicates that the associatedParameterID is valid and could be used
-	};
+  int32 flags;							///< NoteExpressionTypeFlags (see below)
+  enum NoteExpressionTypeFlags
+  {
+    kIsBipolar		= 1 << 0,			///< event is bipolar (centered), otherwise unipolar
+    kIsOneShot		= 1 << 1,			///< event occurs only one time for its associated note (at begin of the noteOn)
+    kIsAbsolute		= 1 << 2,			///< This note expression will apply an absolute change to the sound (not relative (offset))
+    kAssociatedParameterIDValid	= 1 << 3,///< indicates that the associatedParameterID is valid and could be used
+  };
 };
 
 //------------------------------------------------------------------------
@@ -165,20 +165,20 @@ to inform the host about it via \ref IComponentHandler::restartComponent (kNoteE
 class INoteExpressionController : public FUnknown
 {
 public:
-	/** Returns number of supported note change types for event bus index and channel. */
-	virtual int32 PLUGIN_API getNoteExpressionCount (int32 busIndex, int16 channel) = 0;
+  /** Returns number of supported note change types for event bus index and channel. */
+  virtual int32 PLUGIN_API getNoteExpressionCount (int32 busIndex, int16 channel) = 0;
 
-	/** Returns note change type info. */
-	virtual tresult PLUGIN_API getNoteExpressionInfo (int32 busIndex, int16 channel, int32 noteExpressionIndex, NoteExpressionTypeInfo& info /*out*/) = 0;
+  /** Returns note change type info. */
+  virtual tresult PLUGIN_API getNoteExpressionInfo (int32 busIndex, int16 channel, int32 noteExpressionIndex, NoteExpressionTypeInfo& info /*out*/) = 0;
 
-	/** Gets a user readable representation of the normalized note change value. */
-	virtual tresult PLUGIN_API getNoteExpressionStringByValue (int32 busIndex, int16 channel, NoteExpressionTypeID id, NoteExpressionValue valueNormalized /*in*/, String128 string /*out*/) = 0;
+  /** Gets a user readable representation of the normalized note change value. */
+  virtual tresult PLUGIN_API getNoteExpressionStringByValue (int32 busIndex, int16 channel, NoteExpressionTypeID id, NoteExpressionValue valueNormalized /*in*/, String128 string /*out*/) = 0;
 
-	/** Converts the user readable representation to the normalized note change value. */
-	virtual tresult PLUGIN_API getNoteExpressionValueByString (int32 busIndex, int16 channel, NoteExpressionTypeID id, const TChar* string /*in*/, NoteExpressionValue& valueNormalized /*out*/) = 0;
+  /** Converts the user readable representation to the normalized note change value. */
+  virtual tresult PLUGIN_API getNoteExpressionValueByString (int32 busIndex, int16 channel, NoteExpressionTypeID id, const TChar* string /*in*/, NoteExpressionValue& valueNormalized /*out*/) = 0;
 
-	//------------------------------------------------------------------------
-	static const FUID iid;
+  //------------------------------------------------------------------------
+  static const FUID iid;
 };
 
 DECLARE_CLASS_IID (INoteExpressionController, 0xB7F8F859, 0x41234872, 0x91169581, 0x4F3721A3)
@@ -190,10 +190,10 @@ DECLARE_CLASS_IID (INoteExpressionController, 0xB7F8F859, 0x41234872, 0x91169581
 */
 enum KeyswitchTypeIDs : uint32
 {
-	kNoteOnKeyswitchTypeID = 0,	///< press before noteOn is played
-	kOnTheFlyKeyswitchTypeID,	///< press while noteOn is played
-	kOnReleaseKeyswitchTypeID,	///< press before entering release
-	kKeyRangeTypeID				///< key should be maintained pressed for playing
+  kNoteOnKeyswitchTypeID = 0,	///< press before noteOn is played
+  kOnTheFlyKeyswitchTypeID,	///< press while noteOn is played
+  kOnReleaseKeyswitchTypeID,	///< press before entering release
+  kKeyRangeTypeID				///< key should be maintained pressed for playing
 };
 
 typedef uint32 KeyswitchTypeID;
@@ -205,18 +205,18 @@ This structure is used by the method \ref IKeyswitchController::getKeyswitchInfo
 */
 struct KeyswitchInfo
 {
-	KeyswitchTypeID typeId;		///< see KeyswitchTypeID
-	String128 title;			///< name of key switch (e.g. "Accentuation")
-	String128 shortTitle;		///< short title (e.g. "Acc")
+  KeyswitchTypeID typeId;		///< see KeyswitchTypeID
+  String128 title;			///< name of key switch (e.g. "Accentuation")
+  String128 shortTitle;		///< short title (e.g. "Acc")
 
-	int32 keyswitchMin;			///< associated main key switch min (value between [0, 127])
-	int32 keyswitchMax;			///< associated main key switch max (value between [0, 127])
-	int32 keyRemapped;			/** optional remapped key switch (default -1), the plug-in could provide one remapped
-								key for a key switch (allowing better location on the keyboard of the key switches) */
+  int32 keyswitchMin;			///< associated main key switch min (value between [0, 127])
+  int32 keyswitchMax;			///< associated main key switch max (value between [0, 127])
+  int32 keyRemapped;			/** optional remapped key switch (default -1), the plug-in could provide one remapped
+                key for a key switch (allowing better location on the keyboard of the key switches) */
 
-	int32 unitId;				///< id of unit this key switch belongs to (see \ref vst3Units), -1 means no unit used.
+  int32 unitId;				///< id of unit this key switch belongs to (see \ref vst3Units), -1 means no unit used.
 
-	int32 flags;				///< not yet used (set to 0)
+  int32 flags;				///< not yet used (set to 0)
 };
 
 //------------------------------------------------------------------------
@@ -234,14 +234,14 @@ create VST Expression Map (allowing to associated symbol to a given articulation
 class IKeyswitchController : public FUnknown
 {
 public:
-	/** Returns number of supported key switches for event bus index and channel. */
-	virtual int32 PLUGIN_API getKeyswitchCount (int32 busIndex, int16 channel) = 0;
+  /** Returns number of supported key switches for event bus index and channel. */
+  virtual int32 PLUGIN_API getKeyswitchCount (int32 busIndex, int16 channel) = 0;
 
-	/** Returns key switch info. */
-	virtual tresult PLUGIN_API getKeyswitchInfo (int32 busIndex, int16 channel, int32 keySwitchIndex, KeyswitchInfo& info /*out*/) = 0;
+  /** Returns key switch info. */
+  virtual tresult PLUGIN_API getKeyswitchInfo (int32 busIndex, int16 channel, int32 keySwitchIndex, KeyswitchInfo& info /*out*/) = 0;
 
-	//------------------------------------------------------------------------
-	static const FUID iid;
+  //------------------------------------------------------------------------
+  static const FUID iid;
 };
 
 DECLARE_CLASS_IID (IKeyswitchController, 0x1F2F76D3, 0xBFFB4B96, 0xB99527A5, 0x5EBCCEF4)

@@ -50,11 +50,11 @@ class IPlugViewContentScaleSupport : public FUnknown
 {
 public:
 //------------------------------------------------------------------------
-	typedef float ScaleFactor;
+  typedef float ScaleFactor;
 
-	virtual tresult PLUGIN_API setContentScaleFactor (ScaleFactor factor) = 0;
+  virtual tresult PLUGIN_API setContentScaleFactor (ScaleFactor factor) = 0;
 //------------------------------------------------------------------------
-	static const FUID iid;
+  static const FUID iid;
 };
 
 DECLARE_CLASS_IID (IPlugViewContentScaleSupport, 0x65ED9690, 0x8AC44525, 0x8AADEF7A, 0x72EA703F)

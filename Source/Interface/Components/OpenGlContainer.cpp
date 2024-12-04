@@ -79,7 +79,7 @@ namespace Interface
   {
     utils::ScopedLock g{ isRendering_, utils::WaitMechanism::WaitNotify };
 
-    for (size_t i = openGlComponents_.size(); i > 0; --i)
+    for (usize i = openGlComponents_.size(); i > 0; --i)
     {
       removeChildComponent(openGlComponents_[i - 1]);
       if (removeChild)
@@ -111,6 +111,20 @@ namespace Interface
 
     if (removeChild)
       removeChildComponent(container);
+  }
+
+  void OpenGlContainer::removeAllSubOpenGlContainers(bool removeChild)
+  {
+    utils::ScopedLock g{ isRendering_, utils::WaitMechanism::WaitNotify };
+
+    for (usize i = subContainers_.size(); i > 0; --i)
+    {
+      removeChildComponent(subContainers_[i - 1]);
+      if (removeChild)
+        subContainers_[i - 1]->setParentSafe(nullptr);
+    }
+
+    subContainers_.clear();
   }
 
   void OpenGlContainer::showPopupSelector(const BaseComponent *source, Point<int> position,

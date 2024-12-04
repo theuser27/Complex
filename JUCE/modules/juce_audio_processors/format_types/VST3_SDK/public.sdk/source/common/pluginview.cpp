@@ -44,8 +44,8 @@ namespace Steinberg {
 CPluginView::CPluginView (const ViewRect* _rect)
 : rect (0, 0, 0, 0)
 {
-	if (_rect)
-		rect = *_rect;
+  if (_rect)
+    rect = *_rect;
 }
 
 //------------------------------------------------------------------------
@@ -56,44 +56,44 @@ CPluginView::~CPluginView ()
 //------------------------------------------------------------------------
 tresult PLUGIN_API CPluginView::isPlatformTypeSupported (FIDString /*type*/)
 {
-	return kNotImplemented;
+  return kNotImplemented;
 }
 
 //------------------------------------------------------------------------
 tresult PLUGIN_API CPluginView::attached (void* parent, FIDString /*type*/)
 {
-	systemWindow = parent;
+  systemWindow = parent;
 
-	attachedToParent ();
-	return kResultOk;
+  attachedToParent ();
+  return kResultOk;
 }
 
 //------------------------------------------------------------------------
 tresult PLUGIN_API CPluginView::removed ()
 {
-	systemWindow = nullptr;
+  systemWindow = nullptr;
 
-	removedFromParent ();
-	return kResultOk;
+  removedFromParent ();
+  return kResultOk;
 }
 
 //------------------------------------------------------------------------
 tresult PLUGIN_API CPluginView::onSize (ViewRect* newSize)
 {
-	if (newSize)
-		rect = *newSize;
-	return kResultTrue;
+  if (newSize)
+    rect = *newSize;
+  return kResultTrue;
 }
 
 //------------------------------------------------------------------------
 tresult PLUGIN_API CPluginView::getSize (ViewRect* size)
 {
-	if (size)
-	{
-		*size = rect;
-		return kResultTrue;
-	}
-	return kInvalidArgument;
+  if (size)
+  {
+    *size = rect;
+    return kResultTrue;
+  }
+  return kInvalidArgument;
 }
 
 } // end of namespace

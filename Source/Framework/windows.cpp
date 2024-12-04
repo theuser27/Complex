@@ -55,7 +55,7 @@ namespace Framework
     {
       float adjustedPosition = position - 0.5f;
       return adjustedPosition == 0.0f ? 1.0f :
-        gcem::sin(k2Pi * adjustedPosition) / k2Pi * adjustedPosition;
+        gcem::sin(k2Pi * adjustedPosition) / (k2Pi * adjustedPosition);
     }
   }
 
@@ -82,16 +82,16 @@ namespace Framework
   }
 
   float Window::getLanczosWindow(float position, float alpha) noexcept 
-  { return utils::pow((lanczosWindowLookup.linearLookup(position)), alpha); }
+  { return utils::pow(utils::clamp(lanczosWindowLookup.linearLookup(position), 0.0f, 1.0f), alpha); }
 
-  void Window::applyWindow(Buffer &buffer, size_t channels, std::span<char> channelsToProcess, 
-    size_t samples, Processors::SoundEngine::WindowType::type type, float alpha)
+  void Window::applyWindow(Buffer &buffer, usize channels, std::span<char> channelsToProcess, 
+    usize samples, Processors::SoundEngine::WindowType::type type, float alpha)
   {
     applyDefaultWindows(buffer, channels, channelsToProcess, samples, type, alpha);
   }
 
-  void Window::applyDefaultWindows(Buffer &buffer, size_t channels, std::span<char> channelsToProcess,
-    size_t samples, Processors::SoundEngine::WindowType::type type, float alpha) noexcept
+  void Window::applyDefaultWindows(Buffer &buffer, usize channels, std::span<char> channelsToProcess,
+    usize samples, Processors::SoundEngine::WindowType::type type, float alpha) noexcept
   {
     using WindowType = Processors::SoundEngine::WindowType::type;
 
@@ -103,18 +103,18 @@ namespace Framework
     // the windowing is periodic, therefore if we start one sample forward,
     // omit the centre sample and we scale both explicitly
     // we can take advantage of window symmetry and do 2 multiplications with 1 lookup
-    size_t halfLength = (samples - 2) / 2;
+    usize halfLength = (samples - 2) / 2;
 
     float window = 1.0f;
     float position = 0.0f;
 
     float *data = buffer.getData().get();
-    size_t size = buffer.getSize();
+    usize size = buffer.getSize();
 
     // applying window to first sample and middle
     {
       float centerWindow = 1.0f;
-      size_t centerSample = samples / 2;
+      usize centerSample = samples / 2;
       switch (type)
       {
       case WindowType::Hann:
@@ -148,7 +148,7 @@ namespace Framework
       default:
         break;
       }
-      for (size_t j = 0; j < channels; j++)
+      for (usize j = 0; j < channels; j++)
       {
         if (!channelsToProcess[j])
           continue;
@@ -159,7 +159,7 @@ namespace Framework
       position += increment;
     }
 
-    for (size_t i = 1; i < halfLength; i++)
+    for (usize i = 1; i < halfLength; i++)
     {
       switch (type)
       {
@@ -188,7 +188,7 @@ namespace Framework
         break;
       }
 
-      for (size_t j = 0; j < channels; j++)
+      for (usize j = 0; j < channels; j++)
       {
         if (!channelsToProcess[j])
           continue;
@@ -200,8 +200,8 @@ namespace Framework
     }
   }
 
-  void Window::applyCustomWindows(Buffer &buffer, size_t channels, std::span<char> channelsToCopy,
-    size_t samples, Processors::SoundEngine::WindowType::type type, float alpha)
+  void Window::applyCustomWindows(Buffer &buffer, usize channels, std::span<char> channelsToCopy,
+    usize samples, Processors::SoundEngine::WindowType::type type, float alpha)
   {
     // TODO: see into how to generate custom windows based on spectral properties
     // redirecting to the default types for now

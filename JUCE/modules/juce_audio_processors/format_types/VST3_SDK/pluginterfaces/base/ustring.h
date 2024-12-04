@@ -29,49 +29,49 @@ class UString
 {
 public:
 //------------------------------------------------------------------------
-	/** Construct from UTF-16 string, size is in code unit (count of char16) */
-	UString (char16* buffer, int32 size) : thisBuffer (buffer), thisSize (size) {}
+  /** Construct from UTF-16 string, size is in code unit (count of char16) */
+  UString (char16* buffer, int32 size) : thisBuffer (buffer), thisSize (size) {}
 
-	/** returns buffer size */
-	int32 getSize () const { return thisSize; }
-	
-	/** cast to char16* */
-	operator const char16* () const { return thisBuffer; }
+  /** returns buffer size */
+  int32 getSize () const { return thisSize; }
+  
+  /** cast to char16* */
+  operator const char16* () const { return thisBuffer; }
 
-	/** Returns length of string (in code unit). Note this is not the count of character! */
-	int32 getLength () const;
+  /** Returns length of string (in code unit). Note this is not the count of character! */
+  int32 getLength () const;
 
-	/** Copy from UTF-16 buffer (srcSize is in code unit (count of char16)). */
-	UString& assign (const char16* src, int32 srcSize = -1);
+  /** Copy from UTF-16 buffer (srcSize is in code unit (count of char16)). */
+  UString& assign (const char16* src, int32 srcSize = -1);
 
-	/** Append UTF-16 buffer (srcSize is in code unit (count of char16)). */
-	UString& append (const char16* src, int32 srcSize = -1);
+  /** Append UTF-16 buffer (srcSize is in code unit (count of char16)). */
+  UString& append (const char16* src, int32 srcSize = -1);
 
-	/** Copy to UTF-16 buffer (dstSize is in code unit (count of char16)). */
-	const UString& copyTo (char16* dst, int32 dstSize) const;
+  /** Copy to UTF-16 buffer (dstSize is in code unit (count of char16)). */
+  const UString& copyTo (char16* dst, int32 dstSize) const;
 
-	/** Copy from ASCII string (srcSize is in code unit (count of char16)). */
-	UString& fromAscii (const char* src, int32 srcSize = -1);
-	UString& assign (const char* src, int32 srcSize = -1) { return fromAscii (src, srcSize); }
+  /** Copy from ASCII string (srcSize is in code unit (count of char16)). */
+  UString& fromAscii (const char* src, int32 srcSize = -1);
+  UString& assign (const char* src, int32 srcSize = -1) { return fromAscii (src, srcSize); }
 
-	/** Copy to ASCII string. */
-	const UString& toAscii (char* dst, int32 dstSize) const;
+  /** Copy to ASCII string. */
+  const UString& toAscii (char* dst, int32 dstSize) const;
 
-	/** Scan integer from string. */
-	bool scanInt (int64& value) const;
+  /** Scan integer from string. */
+  bool scanInt (int64& value) const;
 
-	/** Print integer to string. */
-	bool printInt (int64 value);
+  /** Print integer to string. */
+  bool printInt (int64 value);
 
-	/** Scan float from string. */
-	bool scanFloat (double& value) const;
+  /** Scan float from string. */
+  bool scanFloat (double& value) const;
 
-	/** Print float to string. */
-	bool printFloat (double value, int32 precision = 4);
+  /** Print float to string. */
+  bool printFloat (double value, int32 precision = 4);
 //------------------------------------------------------------------------
 protected:
-	char16* thisBuffer;
-	int32 thisSize; ///< size in code unit (not in byte!)
+  char16* thisBuffer;
+  int32 thisSize; ///< size in code unit (not in byte!)
 };
 
 //------------------------------------------------------------------------
@@ -82,26 +82,26 @@ class UStringBuffer : public UString
 {
 public:
 //------------------------------------------------------------------------
-	UStringBuffer () : UString (data, maxSize) { data[0] = 0; }
+  UStringBuffer () : UString (data, maxSize) { data[0] = 0; }
 
-	/** Construct from UTF-16 string. */
-	UStringBuffer (const char16* src, int32 srcSize = -1) : UString (data, maxSize)
-	{
-		data[0] = 0;
-		if (src)
-			assign (src, srcSize);
-	}
+  /** Construct from UTF-16 string. */
+  UStringBuffer (const char16* src, int32 srcSize = -1) : UString (data, maxSize)
+  {
+    data[0] = 0;
+    if (src)
+      assign (src, srcSize);
+  }
 
-	/** Construct from ASCII string. */
-	UStringBuffer (const char* src, int32 srcSize = -1) : UString (data, maxSize)
-	{
-		data[0] = 0;
-		if (src)
-			fromAscii (src, srcSize);
-	}
+  /** Construct from ASCII string. */
+  UStringBuffer (const char* src, int32 srcSize = -1) : UString (data, maxSize)
+  {
+    data[0] = 0;
+    if (src)
+      fromAscii (src, srcSize);
+  }
 //------------------------------------------------------------------------
 protected:
-	char16 data[maxSize];
+  char16 data[maxSize];
 };
 
 //------------------------------------------------------------------------

@@ -55,34 +55,34 @@ class Bus: public FObject
 {
 public:
 //------------------------------------------------------------------------
-	/** Constructor. */
-	Bus (const TChar* name, BusType busType, int32 flags);
+  /** Constructor. */
+  Bus (const TChar* name, BusType busType, int32 flags);
 
-	/** Returns true if the bus is active. */
-	TBool isActive () const { return active; }
+  /** Returns true if the bus is active. */
+  TBool isActive () const { return active; }
 
-	/** Activates the bus. */
-	void setActive (TBool state) { active = state; }
+  /** Activates the bus. */
+  void setActive (TBool state) { active = state; }
 
-	/** Sets a new name for this bus. */
-	void setName (String newName) { name = newName; }
+  /** Sets a new name for this bus. */
+  void setName (String newName) { name = newName; }
 
-	/** Sets a new busType for this bus. */
-	void setBusType (BusType newBusType) { busType = newBusType; }
+  /** Sets a new busType for this bus. */
+  void setBusType (BusType newBusType) { busType = newBusType; }
 
-	/** Sets a new flags for this bus. */
-	void setFlags (uint32 newFlags) { flags = newFlags; }
+  /** Sets a new flags for this bus. */
+  void setFlags (uint32 newFlags) { flags = newFlags; }
 
-	/** Gets the BusInfo of this bus. */
-	virtual bool getInfo (BusInfo&);
+  /** Gets the BusInfo of this bus. */
+  virtual bool getInfo (BusInfo&);
 
-	OBJ_METHODS (Vst::Bus, FObject)
+  OBJ_METHODS (Vst::Bus, FObject)
 //------------------------------------------------------------------------
 protected:
-	String name;				///< name
-	BusType busType;			///< kMain or kAux, see \ref BusTypes
-	int32 flags;				///< flags, see \ref BusInfo::BusFlags
-	TBool active;				///< activation state
+  String name;				///< name
+  BusType busType;			///< kMain or kAux, see \ref BusTypes
+  int32 flags;				///< flags, see \ref BusInfo::BusFlags
+  TBool active;				///< activation state
 };
 
 //------------------------------------------------------------------------
@@ -93,18 +93,18 @@ class EventBus: public Bus
 {
 public:
 //------------------------------------------------------------------------
-	/** Constructor of an EventBus. */
-	EventBus (const TChar* name, BusType busType, int32 flags, int32 channelCount);
+  /** Constructor of an EventBus. */
+  EventBus (const TChar* name, BusType busType, int32 flags, int32 channelCount);
 
-	//---from Bus-------
-	/** Gets the BusInfo associated to this Event bus. */
-	bool getInfo (BusInfo& info) SMTG_OVERRIDE;
+  //---from Bus-------
+  /** Gets the BusInfo associated to this Event bus. */
+  bool getInfo (BusInfo& info) SMTG_OVERRIDE;
 
-	OBJ_METHODS (Vst::EventBus, Vst::Bus);
+  OBJ_METHODS (Vst::EventBus, Vst::Bus);
 
 //------------------------------------------------------------------------
 protected:
-	int32 channelCount;
+  int32 channelCount;
 };
 
 //------------------------------------------------------------------------
@@ -115,23 +115,23 @@ class AudioBus: public Bus
 {
 public:
 //------------------------------------------------------------------------
-	AudioBus (const TChar* name, BusType busType, int32 flags, SpeakerArrangement arr);
+  AudioBus (const TChar* name, BusType busType, int32 flags, SpeakerArrangement arr);
 
-	/** Gets the speaker arrangement defining this Audio bus. */
-	SpeakerArrangement getArrangement () const { return speakerArr; }
+  /** Gets the speaker arrangement defining this Audio bus. */
+  SpeakerArrangement getArrangement () const { return speakerArr; }
 
-	/** Sets the speaker arrangement defining this Audio bus. */
-	void setArrangement (const SpeakerArrangement& arr) { speakerArr = arr; }
+  /** Sets the speaker arrangement defining this Audio bus. */
+  void setArrangement (const SpeakerArrangement& arr) { speakerArr = arr; }
 
-	//---from Bus---------------------
-	/** Gets the BusInfo associated to this Audio bus. */
-	bool getInfo (BusInfo& info) SMTG_OVERRIDE;
+  //---from Bus---------------------
+  /** Gets the BusInfo associated to this Audio bus. */
+  bool getInfo (BusInfo& info) SMTG_OVERRIDE;
 
-	OBJ_METHODS (Vst::AudioBus, Vst::Bus)
+  OBJ_METHODS (Vst::AudioBus, Vst::Bus)
 
 //------------------------------------------------------------------------
 protected:
-	SpeakerArrangement speakerArr;
+  SpeakerArrangement speakerArr;
 };
 
 //------------------------------------------------------------------------
@@ -142,21 +142,21 @@ class BusList: public FObject, public std::vector<IPtr<Vst::Bus> >
 {
 public:
 //------------------------------------------------------------------------
-	/** Constructor. */
-	BusList (MediaType type, BusDirection dir);
+  /** Constructor. */
+  BusList (MediaType type, BusDirection dir);
 
-	/** Returns the BusList Type. See \ref MediaType */
-	MediaType getType () const { return type; }
+  /** Returns the BusList Type. See \ref MediaType */
+  MediaType getType () const { return type; }
 
-	/** Returns the BusList direction. See \ref BusDirection */
-	BusDirection getDirection () const { return direction; }
+  /** Returns the BusList direction. See \ref BusDirection */
+  BusDirection getDirection () const { return direction; }
 
-	OBJ_METHODS (Vst::BusList, FObject);
+  OBJ_METHODS (Vst::BusList, FObject);
 
 //------------------------------------------------------------------------
 protected:
-	MediaType type;
-	BusDirection direction;
+  MediaType type;
+  BusDirection direction;
 };
 
 //------------------------------------------------------------------------

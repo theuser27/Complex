@@ -49,6 +49,7 @@ namespace Generation
   {
     FFTSamplesAtReset_ = FFTSamples_;
     nextOverlapOffset_ = 0;
+    blockPosition_ = 0;
     inputBuffer.reset();
     outBuffer.reset();
   }
@@ -63,7 +64,7 @@ namespace Generation
     usedOutputChannels_ = effectsState_->getUsedOutputChannels();
   }
 
-  void SoundEngine::isReadyToPerform(u32 numSamples) noexcept
+  void SoundEngine::isReadyToPerform(u32 samples) noexcept
   {
     isPerforming_ = false;
     hasEnoughSamples_ = false;
@@ -72,7 +73,7 @@ namespace Generation
     // that haven't already been output we don't need to perform
     u32 samplesReady = outBuffer.getBeginOutputToToScaleOutput() +
       outBuffer.getToScaleOutputToAddOverlap();
-    if (samplesReady >= numSamples)
+    if (samplesReady >= samples)
     {
       hasEnoughSamples_ = true;
       return;
@@ -85,7 +86,7 @@ namespace Generation
 
     u32 prevFFTNumSamples = FFTSamples_;
     // how many samples we're processing currently
-    FFTSamples_ = getFFTNumSamples();
+    FFTSamples_ = 1 << FFTOrder_;
     
     i32 FFTChangeOffset = (i32)prevFFTNumSamples - (i32)FFTSamples_;
 
@@ -98,7 +99,7 @@ namespace Generation
     inputBuffer.readBuffer(FFTBuffer_, (u32)FFTBuffer_.getChannels(), usedInputChannels_, 
       FFTSamples_, inputBuffer.BlockBegin, (i32)nextOverlapOffset_ + FFTChangeOffset);
 
-    phaseInsideBlock_ = (u32)((i32)phaseInsideBlock_ + (i32)nextOverlapOffset_ + FFTChangeOffset) & (FFTSamples_ - 1);
+    blockPosition_ += nextOverlapOffset_ + (u32)FFTChangeOffset;
 
     isPerforming_ = true;
   }
@@ -115,7 +116,7 @@ namespace Generation
       currentOverlap_ = nextOverlap_;
       nextOverlap_ = getParameter(Processors::SoundEngine::Overlap::id().value())->getInternalValue<float>(sampleRate);
       windowType_ = Processors::SoundEngine::WindowType::enum_value_by_id(
-        getParameter(Processors::SoundEngine::WindowType::id().value())->getInternalValue<std::string_view>(sampleRate).first->id).value();
+        getParameter(Processors::SoundEngine::WindowType::id().value())->getInternalValue<Framework::IndexedData>(sampleRate).first->id).value();
       alpha_ = std::lerp(kAlphaLowerBound, kAlphaUpperBound, getParameter(Processors::SoundEngine::WindowAlpha::id().value())->getInternalValue<float>(sampleRate));
 
       // getting the next overlapOffset
@@ -126,6 +127,13 @@ namespace Generation
       mix_ = getParameter(Processors::SoundEngine::MasterMix::id().value())->getInternalValue<float>(sampleRate);
       FFTOrder_ = getParameter(Processors::SoundEngine::BlockSize::id().value())->getInternalValue<u32>(sampleRate);
       outGain_ = (float)utils::dbToAmplitude(getParameter(Processors::SoundEngine::OutGain::id().value())->getInternalValue<float>(sampleRate));
+
+      if (!isInitialised_)
+      {
+        isInitialised_ = true;
+        FFTSamples_ = 1 << FFTOrder_;
+        FFTSamplesAtReset_ = FFTSamples_;
+      }
 
       break;
     default:
@@ -144,19 +152,20 @@ namespace Generation
     // FFT-ed only if the input is used
     for (u32 i = 0; i < FFTBuffer_.getChannels(); i++)
       if (usedInputChannels_[i])
-        transforms->transformRealForward(FFTOrder_, FFTBuffer_.getData().get() + i * FFTBuffer_.getSize(), i);
+        transforms->transformRealForward(FFTOrder_, FFTBuffer_.get() + i * FFTBuffer_.getSize(), i);
   }
 
   void SoundEngine::processFFT(float sampleRate) noexcept
   {
     // + 1 for nyquist
-    effectsState_->setBinCount(FFTSamples_ / 2 + 1);
-    effectsState_->setSampleRate(sampleRate);
-    effectsState_->setNormalisedPhase((float)phaseInsideBlock_ / (float)FFTSamples_);
+    effectsState_->binCount = FFTSamples_ / 2 + 1;
+    effectsState_->sampleRate = sampleRate;
+    double phase = (double)blockPosition_ / (double)FFTSamples_;
+    effectsState_->blockPhase = (float)phase;
 
-    effectsState_->writeInputData(FFTBuffer_.getData().get(), FFTBuffer_.getChannels(), FFTBuffer_.getSize());
+    effectsState_->writeInputData(FFTBuffer_.get(), FFTBuffer_.getChannels(), FFTBuffer_.getSize());
     effectsState_->processLanes();
-    effectsState_->sumLanesAndWriteOutput(FFTBuffer_.getData().get(), FFTBuffer_.getChannels(), FFTBuffer_.getSize());
+    effectsState_->sumLanesAndWriteOutput(FFTBuffer_.get(), FFTBuffer_.getChannels(), FFTBuffer_.getSize());
   }
 
   void SoundEngine::doIFFT() noexcept
@@ -225,7 +234,14 @@ namespace Generation
       break;
     case WindowType::HannExp:
     case WindowType::Lanczos:
+      if (currentOverlap_ <= 0.1235f)
+        return;
+
+      // TODO: add optimal scaling for these
+      mult = (1.0f - currentOverlap_) * 3.25f * std::sqrt(alpha_ * currentOverlap_);
+      break;
     default:
+      COMPLEX_ASSERT_FALSE("Missing case");
       return;
     }
 
@@ -318,7 +334,7 @@ namespace Generation
     outBuffer.advanceBeginOutput(samples);
   }
 
-  void SoundEngine::insertSubProcessor(size_t, BaseProcessor &newSubProcessor) noexcept
+  void SoundEngine::insertSubProcessor(usize, BaseProcessor &newSubProcessor) noexcept
   {
     COMPLEX_ASSERT(newSubProcessor.getProcessorType() == Framework::Processors::EffectsState::id().value());
 
@@ -330,6 +346,8 @@ namespace Generation
   void SoundEngine::process(float *const *buffer, u32 samples,
     float sampleRate, u32 numInputs, u32 numOutputs) noexcept
   {
+    COMPLEX_ASSERT(FFTSamples_ != 0, "Number of fft samples has not been set in advance");
+
     // copying input in the main circular buffer
     copyBuffers(buffer, numInputs, samples);
 

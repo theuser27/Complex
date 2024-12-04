@@ -19,12 +19,12 @@
 
 //----------------------------------------------------------------------------------------------
 #if defined __BORLANDC__ 
-	#pragma -a4 
+  #pragma -a4 
 #else
-	#if (_MSC_VER >= 800 && !defined(_M_I86)) || defined(_PUSHPOP_SUPPORTED)
-		#pragma warning(disable:4103)
-	#endif
+  #if (_MSC_VER >= 800 && !defined(_M_I86)) || defined(_PUSHPOP_SUPPORTED)
+    #pragma warning(disable:4103)
+  #endif
 
-	#pragma pack(push)
-	#pragma pack(4)
+  #pragma pack(push)
+  #pragma pack(4)
 #endif

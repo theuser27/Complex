@@ -44,11 +44,11 @@ For example, all Steinberg hosts require this interface in order to support the 
 class IParameterFinder: public FUnknown
 {
 public:
-	//------------------------------------------------------------------------
-	/** Find out which parameter in plug-in view is at given position (relative to plug-in view). */
-	virtual tresult PLUGIN_API findParameter (int32 xPos, int32 yPos, ParamID& resultTag /*out*/) = 0;
-	//------------------------------------------------------------------------
-	static const FUID iid;
+  //------------------------------------------------------------------------
+  /** Find out which parameter in plug-in view is at given position (relative to plug-in view). */
+  virtual tresult PLUGIN_API findParameter (int32 xPos, int32 yPos, ParamID& resultTag /*out*/) = 0;
+  //------------------------------------------------------------------------
+  static const FUID iid;
 };
 
 DECLARE_CLASS_IID (IParameterFinder, 0x0F618302, 0x215D4587, 0xA512073C, 0x77B9D383)

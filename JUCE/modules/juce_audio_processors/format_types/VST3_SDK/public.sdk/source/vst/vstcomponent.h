@@ -53,55 +53,55 @@ class Component : public ComponentBase, public IComponent
 {
 public:
 //------------------------------------------------------------------------
-	/** Constructor */
-	Component ();
+  /** Constructor */
+  Component ();
 
-	//---Internal Methods-------
-	/** Sets the controller Class ID associated to its component. */
-	void setControllerClass (const FUID& cid) { controllerClass = cid; }
+  //---Internal Methods-------
+  /** Sets the controller Class ID associated to its component. */
+  void setControllerClass (const FUID& cid) { controllerClass = cid; }
 
-	/** Removes all Audio Busses. */
-	tresult removeAudioBusses ();
+  /** Removes all Audio Busses. */
+  tresult removeAudioBusses ();
 
-	/** Removes all Event Busses. */
-	tresult removeEventBusses ();
+  /** Removes all Event Busses. */
+  tresult removeEventBusses ();
 
-	/** Renames a specific bus. Do not forget to inform the host about this (see \ref
-	 * IComponentHandler::restartComponent (kIoTitlesChanged)). */
-	tresult renameBus (MediaType type, BusDirection dir, int32 index, const String128 newName);
+  /** Renames a specific bus. Do not forget to inform the host about this (see \ref
+   * IComponentHandler::restartComponent (kIoTitlesChanged)). */
+  tresult renameBus (MediaType type, BusDirection dir, int32 index, const String128 newName);
 
-	//---from IComponent--------
-	tresult PLUGIN_API getControllerClassId (TUID classID) SMTG_OVERRIDE;
-	tresult PLUGIN_API setIoMode (IoMode mode) SMTG_OVERRIDE;
-	int32 PLUGIN_API getBusCount (MediaType type, BusDirection dir) SMTG_OVERRIDE;
-	tresult PLUGIN_API getBusInfo (MediaType type, BusDirection dir, int32 index, BusInfo& info) SMTG_OVERRIDE;
-	tresult PLUGIN_API getRoutingInfo (RoutingInfo& inInfo, RoutingInfo& outInfo) SMTG_OVERRIDE;
-	tresult PLUGIN_API activateBus (MediaType type, BusDirection dir, int32 index, TBool state) SMTG_OVERRIDE;
-	tresult PLUGIN_API setActive (TBool state) SMTG_OVERRIDE;
-	tresult PLUGIN_API setState (IBStream* state) SMTG_OVERRIDE;
-	tresult PLUGIN_API getState (IBStream* state) SMTG_OVERRIDE;
+  //---from IComponent--------
+  tresult PLUGIN_API getControllerClassId (TUID classID) SMTG_OVERRIDE;
+  tresult PLUGIN_API setIoMode (IoMode mode) SMTG_OVERRIDE;
+  int32 PLUGIN_API getBusCount (MediaType type, BusDirection dir) SMTG_OVERRIDE;
+  tresult PLUGIN_API getBusInfo (MediaType type, BusDirection dir, int32 index, BusInfo& info) SMTG_OVERRIDE;
+  tresult PLUGIN_API getRoutingInfo (RoutingInfo& inInfo, RoutingInfo& outInfo) SMTG_OVERRIDE;
+  tresult PLUGIN_API activateBus (MediaType type, BusDirection dir, int32 index, TBool state) SMTG_OVERRIDE;
+  tresult PLUGIN_API setActive (TBool state) SMTG_OVERRIDE;
+  tresult PLUGIN_API setState (IBStream* state) SMTG_OVERRIDE;
+  tresult PLUGIN_API getState (IBStream* state) SMTG_OVERRIDE;
 
-	//---from ComponentBase------
-	tresult PLUGIN_API initialize (FUnknown* context) SMTG_OVERRIDE;
-	tresult PLUGIN_API terminate () SMTG_OVERRIDE;
+  //---from ComponentBase------
+  tresult PLUGIN_API initialize (FUnknown* context) SMTG_OVERRIDE;
+  tresult PLUGIN_API terminate () SMTG_OVERRIDE;
 
-	//---Interface---------
-	OBJ_METHODS (Component, ComponentBase)
-	DEFINE_INTERFACES
-		DEF_INTERFACE (IComponent)
-	END_DEFINE_INTERFACES (ComponentBase)
-	REFCOUNT_METHODS (ComponentBase)
+  //---Interface---------
+  OBJ_METHODS (Component, ComponentBase)
+  DEFINE_INTERFACES
+    DEF_INTERFACE (IComponent)
+  END_DEFINE_INTERFACES (ComponentBase)
+  REFCOUNT_METHODS (ComponentBase)
 
 //------------------------------------------------------------------------
 protected:
-	FUID controllerClass;
-	BusList audioInputs;
-	BusList audioOutputs;
-	BusList eventInputs;
-	BusList eventOutputs;
+  FUID controllerClass;
+  BusList audioInputs;
+  BusList audioOutputs;
+  BusList eventInputs;
+  BusList eventOutputs;
 
-	BusList* getBusList (MediaType type, BusDirection dir);
-	tresult removeAllBusses ();
+  BusList* getBusList (MediaType type, BusDirection dir);
+  tresult removeAllBusses ();
 };
 
 //------------------------------------------------------------------------

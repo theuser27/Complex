@@ -49,76 +49,76 @@ namespace Vst {
 //-----------------------------------------------------------------------------
 PlugInterfaceSupport::PlugInterfaceSupport ()
 {
-	// add minimum set
+  // add minimum set
 
-	//---VST 3.0.0--------------------------------
-	addPlugInterfaceSupported (IComponent::iid);
-	addPlugInterfaceSupported (IAudioProcessor::iid);
-	addPlugInterfaceSupported (IEditController::iid);
-	addPlugInterfaceSupported (IConnectionPoint::iid);
+  //---VST 3.0.0--------------------------------
+  addPlugInterfaceSupported (IComponent::iid);
+  addPlugInterfaceSupported (IAudioProcessor::iid);
+  addPlugInterfaceSupported (IEditController::iid);
+  addPlugInterfaceSupported (IConnectionPoint::iid);
 
-	addPlugInterfaceSupported (IUnitInfo::iid);
-	addPlugInterfaceSupported (IUnitData::iid);
-	addPlugInterfaceSupported (IProgramListData::iid);
+  addPlugInterfaceSupported (IUnitInfo::iid);
+  addPlugInterfaceSupported (IUnitData::iid);
+  addPlugInterfaceSupported (IProgramListData::iid);
 
-	//---VST 3.0.1--------------------------------
-	addPlugInterfaceSupported (IMidiMapping::iid);
+  //---VST 3.0.1--------------------------------
+  addPlugInterfaceSupported (IMidiMapping::iid);
 
-	//---VST 3.1----------------------------------
-	addPlugInterfaceSupported (IEditController2::iid);
+  //---VST 3.1----------------------------------
+  addPlugInterfaceSupported (IEditController2::iid);
 
-	/*
-	//---VST 3.0.2--------------------------------
-	addPlugInterfaceSupported (IParameterFinder::iid);
+  /*
+  //---VST 3.0.2--------------------------------
+  addPlugInterfaceSupported (IParameterFinder::iid);
 
-	//---VST 3.1----------------------------------
-	addPlugInterfaceSupported (IAudioPresentationLatency::iid);
+  //---VST 3.1----------------------------------
+  addPlugInterfaceSupported (IAudioPresentationLatency::iid);
 
-	//---VST 3.5----------------------------------
-	addPlugInterfaceSupported (IKeyswitchController::iid);
-	addPlugInterfaceSupported (IContextMenuTarget::iid);
-	addPlugInterfaceSupported (IEditControllerHostEditing::iid);
-	addPlugInterfaceSupported (IXmlRepresentationController::iid);
-	addPlugInterfaceSupported (INoteExpressionController::iid);
+  //---VST 3.5----------------------------------
+  addPlugInterfaceSupported (IKeyswitchController::iid);
+  addPlugInterfaceSupported (IContextMenuTarget::iid);
+  addPlugInterfaceSupported (IEditControllerHostEditing::iid);
+  addPlugInterfaceSupported (IXmlRepresentationController::iid);
+  addPlugInterfaceSupported (INoteExpressionController::iid);
 
-	//---VST 3.6.5--------------------------------
-	addPlugInterfaceSupported (ChannelContext::IInfoListener::iid);
-	addPlugInterfaceSupported (IPrefetchableSupport::iid);
-	addPlugInterfaceSupported (IAutomationState::iid);
+  //---VST 3.6.5--------------------------------
+  addPlugInterfaceSupported (ChannelContext::IInfoListener::iid);
+  addPlugInterfaceSupported (IPrefetchableSupport::iid);
+  addPlugInterfaceSupported (IAutomationState::iid);
 
-	//---VST 3.6.11--------------------------------
-	addPlugInterfaceSupported (INoteExpressionPhysicalUIMapping::iid);
+  //---VST 3.6.11--------------------------------
+  addPlugInterfaceSupported (INoteExpressionPhysicalUIMapping::iid);
 
-	//---VST 3.6.12--------------------------------
-	addPlugInterfaceSupported (IMidiLearn::iid);
+  //---VST 3.6.12--------------------------------
+  addPlugInterfaceSupported (IMidiLearn::iid);
 
-	//---VST 3.7-----------------------------------
-	addPlugInterfaceSupported (IProcessContextRequirements::iid);
-	addPlugInterfaceSupported (IParameterFunctionName::iid);
-	addPlugInterfaceSupported (IProgress::iid);
-	*/
+  //---VST 3.7-----------------------------------
+  addPlugInterfaceSupported (IProcessContextRequirements::iid);
+  addPlugInterfaceSupported (IParameterFunctionName::iid);
+  addPlugInterfaceSupported (IProgress::iid);
+  */
 }
 
 //-----------------------------------------------------------------------------
 tresult PLUGIN_API PlugInterfaceSupport::isPlugInterfaceSupported (const TUID _iid)
 {
-	auto uid = FUID::fromTUID (_iid);
-	if (std::find (mFUIDArray.begin (), mFUIDArray.end (), uid) != mFUIDArray.end ())
-		return kResultTrue;
-	return kResultFalse;
+  auto uid = FUID::fromTUID (_iid);
+  if (std::find (mFUIDArray.begin (), mFUIDArray.end (), uid) != mFUIDArray.end ())
+    return kResultTrue;
+  return kResultFalse;
 }
 
 //-----------------------------------------------------------------------------
 void PlugInterfaceSupport::addPlugInterfaceSupported (const TUID _iid)
 {
-	mFUIDArray.push_back (FUID::fromTUID (_iid));
+  mFUIDArray.push_back (FUID::fromTUID (_iid));
 }
 
 //-----------------------------------------------------------------------------
 bool PlugInterfaceSupport::removePlugInterfaceSupported (const TUID _iid)
 {
-	return std::remove (mFUIDArray.begin (), mFUIDArray.end (), FUID::fromTUID (_iid)) !=
-	       mFUIDArray.end ();
+  return std::remove (mFUIDArray.begin (), mFUIDArray.end (), FUID::fromTUID (_iid)) !=
+         mFUIDArray.end ();
 }
 
 }

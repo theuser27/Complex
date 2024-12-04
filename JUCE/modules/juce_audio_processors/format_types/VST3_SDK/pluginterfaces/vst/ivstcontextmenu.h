@@ -62,74 +62,74 @@ The plug-in can use the context menu in two ways :
 class PluginContextMenuTarget : public IContextMenuTarget, public FObject
 {
 public:
-	PluginContextMenuTarget () {}
+  PluginContextMenuTarget () {}
 
-	virtual tresult PLUGIN_API executeMenuItem (int32 tag)
-	{
-		// this will be called if the user has executed one of the menu items of the plug-in.
-		// It will not be called for items of the host.
-		switch (tag)
-		{
-			case 1: break;
-			case 2: break;
-		}
-		return kResultTrue;
-	}
+  virtual tresult PLUGIN_API executeMenuItem (int32 tag)
+  {
+    // this will be called if the user has executed one of the menu items of the plug-in.
+    // It will not be called for items of the host.
+    switch (tag)
+    {
+      case 1: break;
+      case 2: break;
+    }
+    return kResultTrue;
+  }
 
-	OBJ_METHODS(PluginContextMenuTarget, FObject)
-	DEFINE_INTERFACES
-		DEF_INTERFACE (IContextMenuTarget)
-	END_DEFINE_INTERFACES (FObject)
-	REFCOUNT_METHODS(FObject)
+  OBJ_METHODS(PluginContextMenuTarget, FObject)
+  DEFINE_INTERFACES
+    DEF_INTERFACE (IContextMenuTarget)
+  END_DEFINE_INTERFACES (FObject)
+  REFCOUNT_METHODS(FObject)
 };
 
 // The following is the code to create the context menu
 void popupContextMenu (IComponentHandler* componentHandler, IPlugView* view, const ParamID* paramID, UCoord x, UCoord y)
 {
-	if (componentHandler == 0 || view == 0)
-		return;
-	FUnknownPtr<IComponentHandler3> handler (componentHandler);
-	if (handler == 0)
-		return;
-	IContextMenu* menu = handler->createContextMenu (view, paramID);
-	if (menu)
-	{
-		// here you can add your entries (optional)
-		PluginContextMenuTarget* target = new PluginContextMenuTarget ();
-		
-		IContextMenu::Item item = {0};
-		UString128 ("My Item 1").copyTo (item.name, 128);
-		item.tag = 1;
-		menu->addItem (item, target);
+  if (componentHandler == 0 || view == 0)
+    return;
+  FUnknownPtr<IComponentHandler3> handler (componentHandler);
+  if (handler == 0)
+    return;
+  IContextMenu* menu = handler->createContextMenu (view, paramID);
+  if (menu)
+  {
+    // here you can add your entries (optional)
+    PluginContextMenuTarget* target = new PluginContextMenuTarget ();
+    
+    IContextMenu::Item item = {0};
+    UString128 ("My Item 1").copyTo (item.name, 128);
+    item.tag = 1;
+    menu->addItem (item, target);
 
-		UString128 ("My Item 2").copyTo (item.name, 128);
-		item.tag = 2;
-		menu->addItem (item, target);
-		target->release ();
-		//--end of adding new entries
-		
-		// here the the context menu will be pop-up (and it waits a user interaction)
-		menu->popup (x, y);
-		menu->release ();
-	}
+    UString128 ("My Item 2").copyTo (item.name, 128);
+    item.tag = 2;
+    menu->addItem (item, target);
+    target->release ();
+    //--end of adding new entries
+    
+    // here the the context menu will be pop-up (and it waits a user interaction)
+    menu->popup (x, y);
+    menu->release ();
+  }
 }
 \endcode
 */
 class IComponentHandler3 : public FUnknown
 {
 public:
-	/** Creates a host context menu for a plug-in:
-		- If paramID is zero, the host may create a generic context menu.
-		- The IPlugView object must be valid.
-		- The return IContextMenu object needs to be released afterwards by the plug-in.
-	*/
-	virtual IContextMenu* PLUGIN_API createContextMenu (IPlugView* plugView, const ParamID* paramID) = 0;
-	//------------------------------------------------------------------------
-	static const FUID iid;
+  /** Creates a host context menu for a plug-in:
+    - If paramID is zero, the host may create a generic context menu.
+    - The IPlugView object must be valid.
+    - The return IContextMenu object needs to be released afterwards by the plug-in.
+  */
+  virtual IContextMenu* PLUGIN_API createContextMenu (IPlugView* plugView, const ParamID* paramID) = 0;
+  //------------------------------------------------------------------------
+  static const FUID iid;
 };
 
 DECLARE_CLASS_IID (IComponentHandler3, 0x69F11617, 0xD26B400D, 0xA4B6B964, 0x7B6EBBAB)
-	
+  
 //------------------------------------------------------------------------
 /** Context Menu Item Target interface: Vst::IContextMenuTarget
 \ingroup vstIHost vstIPlug vst350
@@ -146,10 +146,10 @@ this menu item.
 class IContextMenuTarget : public FUnknown
 {
 public:
-	/** Called when an menu item was executed. */
-	virtual tresult PLUGIN_API executeMenuItem (int32 tag) = 0;
-	//------------------------------------------------------------------------
-	static const FUID iid;
+  /** Called when an menu item was executed. */
+  virtual tresult PLUGIN_API executeMenuItem (int32 tag) = 0;
+  //------------------------------------------------------------------------
+  static const FUID iid;
 };
 
 DECLARE_CLASS_IID (IContextMenuTarget, 0x3CDF2E75, 0x85D34144, 0xBF86D36B, 0xD7C4894D)
@@ -158,17 +158,17 @@ DECLARE_CLASS_IID (IContextMenuTarget, 0x3CDF2E75, 0x85D34144, 0xBF86D36B, 0xD7C
 /** IContextMenuItem is an entry element of the context menu. */
 struct IContextMenuItem
 {
-	String128 name;									///< Name of the item
-	int32 tag;										///< Identifier tag of the item
-	int32 flags;									///< Flags of the item
+  String128 name;									///< Name of the item
+  int32 tag;										///< Identifier tag of the item
+  int32 flags;									///< Flags of the item
 
-	enum Flags {
-		kIsSeparator	= 1 << 0,					///< Item is a separator
-		kIsDisabled		= 1 << 1,					///< Item is disabled
-		kIsChecked		= 1 << 2,					///< Item is checked
-		kIsGroupStart	= 1 << 3 | kIsDisabled,		///< Item is a group start (like sub folder)
-		kIsGroupEnd		= 1 << 4 | kIsSeparator,	///< Item is a group end
-	};
+  enum Flags {
+    kIsSeparator	= 1 << 0,					///< Item is a separator
+    kIsDisabled		= 1 << 1,					///< Item is disabled
+    kIsChecked		= 1 << 2,					///< Item is checked
+    kIsGroupStart	= 1 << 3 | kIsDisabled,		///< Item is a group start (like sub folder)
+    kIsGroupEnd		= 1 << 4 | kIsSeparator,	///< Item is a group end
+  };
 };
 //------------------------------------------------------------------------
 /** Context Menu interface: Vst::IContextMenu
@@ -187,25 +187,25 @@ With IContextMenu the plug-in can retrieve a Item, add a Item, remove a Item and
 class IContextMenu : public FUnknown
 {
 public:
-	typedef IContextMenuItem Item;
-	
-	/** Gets the number of menu items. */
-	virtual int32 PLUGIN_API getItemCount () = 0;
+  typedef IContextMenuItem Item;
+  
+  /** Gets the number of menu items. */
+  virtual int32 PLUGIN_API getItemCount () = 0;
 
-	/** Gets a menu item and its target (target could be not assigned). */
-	virtual tresult PLUGIN_API getItem (int32 index, Item& item /*out*/, IContextMenuTarget** target /*out*/) = 0;
+  /** Gets a menu item and its target (target could be not assigned). */
+  virtual tresult PLUGIN_API getItem (int32 index, Item& item /*out*/, IContextMenuTarget** target /*out*/) = 0;
 
-	/** Adds a menu item and its target. */
-	virtual tresult PLUGIN_API addItem (const Item& item, IContextMenuTarget* target) = 0;
+  /** Adds a menu item and its target. */
+  virtual tresult PLUGIN_API addItem (const Item& item, IContextMenuTarget* target) = 0;
 
-	/** Removes a menu item. */
-	virtual tresult PLUGIN_API removeItem (const Item& item, IContextMenuTarget* target) = 0;
+  /** Removes a menu item. */
+  virtual tresult PLUGIN_API removeItem (const Item& item, IContextMenuTarget* target) = 0;
 
-	/** Pop-ups the menu. Coordinates are relative to the top-left position of the plug-ins view. */
-	virtual tresult PLUGIN_API popup (UCoord x, UCoord y) = 0;
+  /** Pop-ups the menu. Coordinates are relative to the top-left position of the plug-ins view. */
+  virtual tresult PLUGIN_API popup (UCoord x, UCoord y) = 0;
 
-	//------------------------------------------------------------------------
-	static const FUID iid;
+  //------------------------------------------------------------------------
+  static const FUID iid;
 };
 
 DECLARE_CLASS_IID (IContextMenu, 0x2E93C863, 0x0C9C4588, 0x97DBECF5, 0xAD17817D)

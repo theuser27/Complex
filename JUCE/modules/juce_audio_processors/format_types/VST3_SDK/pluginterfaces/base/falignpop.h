@@ -16,10 +16,10 @@
 
 //---------------------------------------------------------------------------------------------------
 #if SMTG_OS_MACOS
-	#pragma pack(pop)
+  #pragma pack(pop)
 #elif defined __BORLANDC__
-	#pragma -a-
+  #pragma -a-
 #elif SMTG_OS_WINDOWS
-	#pragma pack(pop)
+  #pragma pack(pop)
 #endif
 //---------------------------------------------------------------------------------------------------

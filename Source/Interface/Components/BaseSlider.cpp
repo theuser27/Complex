@@ -483,7 +483,7 @@ namespace Interface
   //        |_|                                                           //
   //////////////////////////////////////////////////////////////////////////
 
-  RotarySlider::RotarySlider(Framework::ParameterValue *parameter) : BaseSlider(parameter)
+  RotarySlider::RotarySlider(Framework::ParameterValue *parameter) : BaseSlider{ parameter }
   {
     addLabel();
     setLabelPlacement(Placement::right);
@@ -555,7 +555,7 @@ namespace Interface
     {
       textEntry_->applyColourToAllText(selectedColor_);
       textEntry_->setText(getScaledValueString(getValue()));
-      textEntry_->redrawImage();
+      //textEntry_->redrawImage();
     }
   }
 
@@ -1172,91 +1172,92 @@ namespace Interface
     if (!label_ && !extraIcon_ && !extraNumberBox_)
       return;
 
-    int labelStartX;
-    switch (labelPlacement_)
-    {
-    case Placement::right:
-      if (extraIcon_)
-      {
-        auto addedMargin = (int)std::round(kBetweenElementsMarginHeightRatio * (float)drawBounds_.getHeight());
-        extraElements_.find(extraIcon_)->second = juce::Rectangle{
-          anchorBounds.getRight() - extraIcon_->getWidth() - addedMargin,
-          (anchorBounds.getHeight() - extraIcon_->getHeight()) / 2, 
-          extraIcon_->getWidth(), extraIcon_->getHeight() };
-      }
-
+    int labelStartX = anchorBounds.getX();
+    if ((labelPlacement_ & Placement::centerHorizontal) == Placement::right)
       labelStartX = anchorBounds.getRight();
+    auto addedMargin = (int)std::round(kBetweenElementsMarginHeightRatio * (float)drawBounds_.getHeight());
 
-      if (extraNumberBox_ && extraNumberBox_->isVisible())
-      {
-        auto numberBoxBounds = extraNumberBox_->setSizes(NumberBox::kDefaultNumberBoxHeight);
-        int offset = (int)std::round((float)anchorBounds.getHeight() * kNumberBoxMarginToHeightRatio);
-        int y = anchorBounds.getY() + utils::centerAxis(anchorBounds.getHeight(), numberBoxBounds.getHeight());
-        auto drawBounds = extraNumberBox_->getDrawBounds();
-        if (extraNumberBoxPlacement_ == Placement::left)
-        {
-          extraElements_.find(extraNumberBox_)->second = { 
-            anchorBounds.getX() - numberBoxBounds.getRight() - offset,
-            y, drawBounds.getWidth(), drawBounds.getHeight() };
-        }
-        else
-        {
-          extraElements_.find(extraNumberBox_)->second = { 
-            anchorBounds.getRight() + offset, y, drawBounds.getWidth(), drawBounds.getHeight() };
-          labelStartX = offset + numberBoxBounds.getRight();
-        }
-      }
+    // position extra icon
+    if (extraIcon_)
+    {
+      int xPosition = anchorBounds.getX() + addedMargin;
+      if ((labelPlacement_ & Placement::centerHorizontal) == Placement::right)
+        xPosition = anchorBounds.getRight() - extraIcon_->getWidth() - addedMargin;
 
-      if (label_)
+      extraElements_.find(extraIcon_)->second = juce::Rectangle
       {
-        label_->updateState();
-        label_->setJustification(Justification::centredLeft);
-        label_->setBounds(labelStartX + scaleValueRoundInt(kLabelOffset),
-          anchorBounds.getY(), label_->getTotalWidth(), anchorBounds.getHeight());
-      }
-      break;
-    default:
-    case Placement::left:
-      if (extraIcon_)
-      {
-        auto addedMargin = (int)std::round(kBetweenElementsMarginHeightRatio * (float)drawBounds_.getHeight());
-        extraElements_.find(extraIcon_)->second = juce::Rectangle{
-          anchorBounds.getX() + addedMargin,
-          (anchorBounds.getHeight() - extraIcon_->getHeight()) / 2,
-          extraIcon_->getWidth(), extraIcon_->getHeight() };
-      }
+        xPosition,
+        (anchorBounds.getHeight() - extraIcon_->getHeight()) / 2,
+        extraIcon_->getWidth(),
+        extraIcon_->getHeight()
+      };
+    }
 
-      labelStartX = anchorBounds.getX();
+    // position extra number box
+    if (extraNumberBox_ && extraNumberBox_->isVisible())
+    {
+      COMPLEX_ASSERT((labelPlacement_ & Placement::centerHorizontal) != Placement::none);
 
-      if (extraNumberBox_ && extraNumberBox_->isVisible())
+      auto numberBoxBounds = extraNumberBox_->setSizes(NumberBox::kDefaultNumberBoxHeight);
+      int offset = (int)std::round((float)anchorBounds.getHeight() * kNumberBoxMarginToHeightRatio);
+      int y = anchorBounds.getY() + utils::centerAxis(anchorBounds.getHeight(), numberBoxBounds.getHeight());
+      auto drawBounds = extraNumberBox_->getDrawBounds();
+      if (extraNumberBoxPlacement_ == Placement::left)
       {
-        auto numberBoxBounds = extraNumberBox_->setSizes(NumberBox::kDefaultNumberBoxHeight);
-        int offset = (int)std::round((float)anchorBounds.getHeight() * kNumberBoxMarginToHeightRatio);
-        int y = anchorBounds.getY() + utils::centerAxis(anchorBounds.getHeight(), numberBoxBounds.getHeight());
-        auto drawBounds = extraNumberBox_->getDrawBounds();
-        if (extraNumberBoxPlacement_ == Placement::left)
-        {
-          extraElements_.find(extraNumberBox_)->second = {
-            anchorBounds.getX() - numberBoxBounds.getRight() - offset,
-            y, drawBounds.getWidth(), drawBounds.getHeight() };
+        extraElements_.find(extraNumberBox_)->second = {
+          anchorBounds.getX() - numberBoxBounds.getRight() - offset,
+          y, drawBounds.getWidth(), drawBounds.getHeight() };
+
+        if ((labelPlacement_ & Placement::centerHorizontal) == Placement::left)
           labelStartX = anchorBounds.getX() - numberBoxBounds.getRight() - offset;
-        }
-        else
+      }
+      else
+      {
+        extraElements_.find(extraNumberBox_)->second = {
+          anchorBounds.getRight() + offset, y, drawBounds.getWidth(), drawBounds.getHeight() };
+
+        if ((labelPlacement_ & Placement::centerHorizontal) == Placement::right)
+          labelStartX = offset + numberBoxBounds.getRight();
+      }
+    }
+
+    // position label
+    if (label_)
+    {
+      label_->updateState();
+      int labelTextWidth = label_->getTotalWidth();
+      int labelTextHeight = label_->getTotalHeight();
+
+      int xOffset = 0;
+      int yOffset = 0;
+      if ((labelPlacement_ & Placement::centerVertical) == Placement::none)
+      {
+        labelStartX -= scaleValueRoundInt(kLabelHMargin);
+        if ((labelPlacement_ & Placement::centerHorizontal) == Placement::left)
+          xOffset = -labelTextWidth;
+      }
+      else
+      {
+        int textInset = (int)std::round(kPaddingHeightRatio * (float)anchorBounds.getHeight());
+        labelStartX = anchorBounds.getX() + textInset;
+        if ((labelPlacement_ & Placement::centerHorizontal) == Placement::right)
         {
-          extraElements_.find(extraNumberBox_)->second = {
-            anchorBounds.getRight() + offset, y, drawBounds.getWidth(), drawBounds.getHeight() };
+          labelStartX = anchorBounds.getRight() - textInset;
+          xOffset = -labelTextWidth;
         }
+
+        int vLabelMargin = scaleValueRoundInt(kLabelVMargin);
+        yOffset = ((labelPlacement_ & Placement::centerVertical) == Placement::above) ? 
+          -labelTextHeight - vLabelMargin : anchorBounds.getHeight() + vLabelMargin;
       }
 
-      if (label_)
-      {
-        label_->updateState();
-        auto labelTextWidth = label_->getTotalWidth();
-        label_->setJustification(Justification::centredRight);
-        label_->setBounds(labelStartX - scaleValueRoundInt(kLabelOffset) - labelTextWidth,
-          anchorBounds.getY(), labelTextWidth, anchorBounds.getHeight());
-      }
-      break;
+      juce::Justification justification = Justification::centredLeft;
+      if ((labelPlacement_ & Placement::centerHorizontal) == Placement::right)
+        justification = Justification::centredRight;
+
+      label_->setJustification(justification);
+      label_->setBounds(labelStartX + xOffset, anchorBounds.getY() + yOffset,
+        labelTextWidth, anchorBounds.getHeight());
     }
   }
 
@@ -1291,11 +1292,9 @@ namespace Interface
     }
 
     setExtraElementsPositions(drawBounds_);
-    auto bounds = drawBounds_;
-    if (label_)
+    auto bounds = getUnionOfAllElements();
+    if (label_ && label_->isVisible())
       bounds = bounds.getUnion(label_->getBounds());
-    if (extraNumberBox_)
-      bounds = bounds.getUnion(extraNumberBox_->getBounds());
     return bounds;
   }
 
@@ -1321,7 +1320,7 @@ namespace Interface
   {
     // this assumes all TextSelector controls have ParameterScale::Indexed
     if (fromParameter)
-      return parameterLink_->parameter->getInternalValue<std::string_view>().first->id;
+      return parameterLink_->parameter->getInternalValue<Framework::IndexedData>().first->id;
     else
       return details_.indexedData[(usize)Framework::scaleValue(getValue(), details_)].id;
   }
@@ -1341,7 +1340,11 @@ namespace Interface
     if (textSelectorListener_)
       textSelectorListener_->resizeForText(this, widthChange, anchor_);
     else
-      setBounds(drawBounds_.withPosition(getX() - widthChange, getY()));
+    {
+      auto position = getPosition();
+      position.x -= (anchor_ == Placement::right) ? widthChange : 0;
+      setBounds(drawBounds_.withPosition(position));
+    }
   }
 
   NumberBox::NumberBox(Framework::ParameterValue *parameter) : BaseSlider(parameter)

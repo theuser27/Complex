@@ -31,13 +31,13 @@ namespace Framework
     static float getHannExponentialWindow(float position, float alpha) noexcept;
     static float getLanczosWindow(float position, float alpha) noexcept;
 
-    void applyWindow(Buffer &buffer, size_t channels, std::span<char> channelsToProcess,
-      size_t samples, Processors::SoundEngine::WindowType::type type, float alpha);
+    void applyWindow(Buffer &buffer, usize channels, std::span<char> channelsToProcess,
+      usize samples, Processors::SoundEngine::WindowType::type type, float alpha);
 
-    static void applyDefaultWindows(Buffer &buffer, size_t channels, std::span<char> channelsToProcess,
-      size_t samples, Processors::SoundEngine::WindowType::type type, float alpha) noexcept;
+    static void applyDefaultWindows(Buffer &buffer, usize channels, std::span<char> channelsToProcess,
+      usize samples, Processors::SoundEngine::WindowType::type type, float alpha) noexcept;
 
-    void applyCustomWindows(Buffer &buffer, size_t channels, std::span<char> channelsToProcess,
-      size_t samples, Processors::SoundEngine::WindowType::type type, float alpha);
+    void applyCustomWindows(Buffer &buffer, usize channels, std::span<char> channelsToProcess,
+      usize samples, Processors::SoundEngine::WindowType::type type, float alpha);
   };
 }

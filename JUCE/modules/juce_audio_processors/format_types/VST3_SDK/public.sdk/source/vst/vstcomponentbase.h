@@ -50,59 +50,59 @@ namespace Vst {
 \ingroup vstClasses 
 */
 class ComponentBase: public FObject,
-					 public IPluginBase,
-	                 public IConnectionPoint
+           public IPluginBase,
+                   public IConnectionPoint
 {
 public:
 //------------------------------------------------------------------------
-	ComponentBase ();
-	~ComponentBase () override;
+  ComponentBase ();
+  ~ComponentBase () override;
 
-	//--- Internal Methods------
-	/** Returns the hostContext (set by the host during initialize call). */
-	FUnknown* getHostContext () const { return hostContext; }
+  //--- Internal Methods------
+  /** Returns the hostContext (set by the host during initialize call). */
+  FUnknown* getHostContext () const { return hostContext; }
 
-	/** Returns the peer for the messaging communication (you can only use IConnectionPoint::notify
-	 * for communicate between peers, do not try to cast peerConnection. */
-	IConnectionPoint* getPeer () const { return peerConnection; }
+  /** Returns the peer for the messaging communication (you can only use IConnectionPoint::notify
+   * for communicate between peers, do not try to cast peerConnection. */
+  IConnectionPoint* getPeer () const { return peerConnection; }
 
-	/** Allocates a message instance (do not forget to release it). */
-	IMessage* allocateMessage () const;
+  /** Allocates a message instance (do not forget to release it). */
+  IMessage* allocateMessage () const;
 
-	/** Sends the given message to the peer. */
-	tresult sendMessage (IMessage* message) const;
+  /** Sends the given message to the peer. */
+  tresult sendMessage (IMessage* message) const;
 
-	/** Sends a simple text message to the peer (max 255 characters).
-	Text is interpreted as UTF-8.	 */
-	tresult sendTextMessage (const char8* text) const;
+  /** Sends a simple text message to the peer (max 255 characters).
+  Text is interpreted as UTF-8.	 */
+  tresult sendTextMessage (const char8* text) const;
 
-	/** Sends a message with a given ID without any other payload. */
-	tresult sendMessageID (const char8* messageID) const;
+  /** Sends a message with a given ID without any other payload. */
+  tresult sendMessageID (const char8* messageID) const;
 
-	/** Receives a simple text message from the peer (max 255 characters). Text is UTF-8 encoded. */
-	virtual tresult receiveText (const char8* text);
+  /** Receives a simple text message from the peer (max 255 characters). Text is UTF-8 encoded. */
+  virtual tresult receiveText (const char8* text);
 
-	//---from IPluginBase------
-	tresult PLUGIN_API initialize (FUnknown* context) SMTG_OVERRIDE;
-	tresult PLUGIN_API terminate () SMTG_OVERRIDE;
+  //---from IPluginBase------
+  tresult PLUGIN_API initialize (FUnknown* context) SMTG_OVERRIDE;
+  tresult PLUGIN_API terminate () SMTG_OVERRIDE;
 
-	//---from IConnectionPoint-----------
-	tresult PLUGIN_API connect (IConnectionPoint* other) SMTG_OVERRIDE;
-	tresult PLUGIN_API disconnect (IConnectionPoint* other) SMTG_OVERRIDE;
-	tresult PLUGIN_API notify (IMessage* message) SMTG_OVERRIDE;
+  //---from IConnectionPoint-----------
+  tresult PLUGIN_API connect (IConnectionPoint* other) SMTG_OVERRIDE;
+  tresult PLUGIN_API disconnect (IConnectionPoint* other) SMTG_OVERRIDE;
+  tresult PLUGIN_API notify (IMessage* message) SMTG_OVERRIDE;
 
-	//---Interface------
-	OBJ_METHODS (ComponentBase, FObject)
-	DEFINE_INTERFACES
-		DEF_INTERFACE (IPluginBase)
-		DEF_INTERFACE (IConnectionPoint)
-	END_DEFINE_INTERFACES (FObject)
-	REFCOUNT_METHODS (FObject)
+  //---Interface------
+  OBJ_METHODS (ComponentBase, FObject)
+  DEFINE_INTERFACES
+    DEF_INTERFACE (IPluginBase)
+    DEF_INTERFACE (IConnectionPoint)
+  END_DEFINE_INTERFACES (FObject)
+  REFCOUNT_METHODS (FObject)
 
 //------------------------------------------------------------------------
 protected:
-	IPtr<FUnknown> hostContext;
-	IPtr<IConnectionPoint> peerConnection;
+  IPtr<FUnknown> hostContext;
+  IPtr<IConnectionPoint> peerConnection;
 };
 
 //------------------------------------------------------------------------

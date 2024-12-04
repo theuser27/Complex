@@ -90,7 +90,7 @@ int vorbis_block_init(vorbis_dsp_state *v, vorbis_block *vb){
         vbi->packetblob[i]=&vb->opb;
       }else{
         vbi->packetblob[i]=
-	  (oggpack_buffer*) _ogg_calloc(1,sizeof(oggpack_buffer));
+    (oggpack_buffer*) _ogg_calloc(1,sizeof(oggpack_buffer));
       }
       oggpack_writeinit(vbi->packetblob[i]);
     }
@@ -326,12 +326,12 @@ void vorbis_dsp_clear(vorbis_dsp_state *v){
       }
 
       if(b->transform[0]){
-	mdct_clear((mdct_lookup*) b->transform[0][0]);
+  mdct_clear((mdct_lookup*) b->transform[0][0]);
         _ogg_free(b->transform[0][0]);
         _ogg_free(b->transform[0]);
       }
       if(b->transform[1]){
-	mdct_clear((mdct_lookup*) b->transform[1][0]);
+  mdct_clear((mdct_lookup*) b->transform[1][0]);
         _ogg_free(b->transform[1][0]);
         _ogg_free(b->transform[1]);
       }

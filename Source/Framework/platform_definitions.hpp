@@ -89,21 +89,15 @@ namespace common
   #if __SSE4_1__
     #define COMPLEX_SSE4_1 1
     #define COMPLEX_SIMD_ALIGNMENT 16
-
-    inline constexpr u32 kSimdRatio = 4;
     #if __FMA__
       #define COMPLEX_FMA 1
     #endif
   #elif defined(__ARM_NEON__) || defined(__ARM_NEON)
     #define COMPLEX_NEON 1
     #define COMPLEX_SIMD_ALIGNMENT 16
-
-    inline constexpr u32 kSimdRatio = 4;
   #else
     #error Your CPU architecture is unsupported
   #endif
-
-  inline constexpr u32 kComplexSimdRatio = kSimdRatio / 2;
 }
 
 #if COMPLEX_DEBUG

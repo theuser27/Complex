@@ -12,7 +12,7 @@
 namespace clg 
 {
   template <typename Signature, size_t MaxSize = 32>
-  class small_function;
+  class small_fn;
 
   #define FWD(...) static_cast<decltype(__VA_ARGS__)&&>(__VA_ARGS__)
   #define MOV(...) static_cast<std::remove_reference_t<decltype(__VA_ARGS__)>&&>(__VA_ARGS__)
@@ -24,10 +24,9 @@ namespace clg
     // a forwarding reference when we want to do a copy/move instead
     //
     template<typename>
-    struct is_small_function { static constexpr bool value = false; };
-
+    inline constexpr bool is_small_fn_v = false;
     template<typename Signature, size_t MaxSize>
-    struct is_small_function<small_function<Signature, MaxSize>> { static constexpr bool value = true; };
+    inline constexpr bool is_small_fn_v<small_fn<Signature, MaxSize>> = true;
     
     //
     // The vtable!
@@ -92,7 +91,7 @@ namespace clg
       Mover mover = [](void*, void*) { };
     };
 
-    // Empty vtable which is used when small_function is empty
+    // Empty vtable which is used when small_fn is empty
     template <typename R, typename... Args>
     inline constexpr vtable_t<R, Args...> empty_vtable{};
 
@@ -105,7 +104,7 @@ namespace clg
   } // detail
 
   template <typename R, typename... Args, size_t MaxSize>
-  class small_function<auto(Args...) -> R, MaxSize>
+  class small_fn<auto(Args...) -> R, MaxSize>
   {
   private:
     static constexpr std::size_t alignment = 8;
@@ -115,13 +114,13 @@ namespace clg
 
   public:
 
-    constexpr small_function() noexcept : vtable_{ &detail::empty_vtable<R, Args...> } { }
-    constexpr small_function(std::nullptr_t) noexcept : small_function{} { }
+    constexpr small_fn() noexcept : vtable_{ &detail::empty_vtable<R, Args...> } { }
+    constexpr small_fn(std::nullptr_t) noexcept : small_fn{} { }
 
-    constexpr small_function(const small_function& rhs) : vtable_{ rhs.vtable_ }
+    constexpr small_fn(const small_fn& rhs) : vtable_{ rhs.vtable_ }
     { vtable_->copier(&data_, &rhs.data_); }
 
-    constexpr small_function(small_function&& rhs) noexcept : vtable_{ rhs.vtable_ }
+    constexpr small_fn(small_fn&& rhs) noexcept : vtable_{ rhs.vtable_ }
     {
       rhs.vtable_ = &detail::empty_vtable<R, Args...>;
       vtable_->mover(&data_, &rhs.data_);
@@ -132,12 +131,12 @@ namespace clg
     // We make sure that is_small_function == false and that we can invoke it like R(Args...)
     //
     template<typename FnT, typename fn_t = std::decay_t<FnT>> 
-      requires !detail::is_small_function<fn_t>::value && std::is_invocable_r_v<R, fn_t &, Args...>
-    constexpr small_function(FnT&& fn) { from_fn(FWD(fn)); }
+      requires !detail::is_small_fn_v<fn_t> && std::is_invocable_r_v<R, fn_t &, Args...>
+    constexpr small_fn(FnT&& fn) { from_fn(FWD(fn)); }
 
-    constexpr ~small_function() { vtable_->destroyer(&data_); }
+    constexpr ~small_fn() { vtable_->destroyer(&data_); }
 
-    constexpr auto operator=(const small_function& rhs) -> small_function&
+    constexpr auto operator=(const small_fn& rhs) -> small_fn&
     {
       vtable_ = rhs.vtable_;
       vtable_->copier(&data_, &rhs.data_);
@@ -145,7 +144,7 @@ namespace clg
       return *this;
     }
 
-    constexpr auto operator=(small_function&& rhs) noexcept -> small_function&
+    constexpr auto operator=(small_fn&& rhs) noexcept -> small_fn&
     {
       vtable_ = rhs.vtable_;
       rhs.vtable_ = &detail::empty_vtable<R, Args...>;
@@ -154,7 +153,7 @@ namespace clg
       return *this;
     }
 
-    constexpr auto operator=(std::nullptr_t) -> small_function&
+    constexpr auto operator=(std::nullptr_t) -> small_fn&
     {
       vtable_->destroyer(&data_);
       vtable_ = &detail::empty_vtable<R, Args...>;
@@ -166,8 +165,8 @@ namespace clg
     // This is the same enable_if as above
     //
     template<typename FnT, typename fn_t = std::decay_t<FnT>>
-      requires !detail::is_small_function<fn_t>::value && std::is_invocable_r_v<R, fn_t &, Args...>
-    constexpr auto operator=(FnT&& fn) -> small_function&
+      requires !detail::is_small_fn_v<fn_t> && std::is_invocable_r_v<R, fn_t &, Args...>
+    constexpr auto operator=(FnT&& fn) -> small_fn&
     {
       from_fn(FWD(fn));
       return *this;
@@ -192,16 +191,16 @@ namespace clg
       using fn_t = std::decay_t<FnT>;
 
       static_assert(std::is_copy_constructible_v<fn_t>,
-        "clg::small_function cannot be constructed from a non-copyable type");
+        "clg::small_fn cannot be constructed from a non-copyable type");
 
       static_assert(sizeof(fn_t) <= sizeof(storage_t),
-        "This object is too big to fit inside the clg::small_function");
+        "This object is too big to fit inside the clg::small_fn");
 
       static_assert(alignof(storage_t) % alignof(fn_t) == 0,
-        "clg::small_function cannot be constructed from an object of this alignment");
+        "clg::small_fn cannot be constructed from an object of this alignment");
 
       static_assert(alignof(storage_t) >= alignof(fn_t),
-        "clg::small_function does not support alignment higher the one defined in the class");
+        "clg::small_fn does not support alignment higher the one defined in the class");
 
       static constexpr auto vtable = vtable_t::template create<fn_t>();
 

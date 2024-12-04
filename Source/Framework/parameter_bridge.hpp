@@ -44,6 +44,7 @@ namespace Framework
 
     ParameterBridge(Plugin::ComplexPlugin *plugin,
       u64 parameterIndex = UINT64_MAX, ParameterLink *link = nullptr) noexcept;
+    ~ParameterBridge() noexcept;
 
     auto *getParameterLink() const noexcept { return parameterLinkPointer_.load(std::memory_order_acquire); }
     void resetParameterLink(ParameterLink *link, bool getValueFromParameter = true) noexcept;

@@ -197,10 +197,9 @@ namespace Interface
 
   void Renderer::updateFullGui()
   {
-    if (gui_ == nullptr)
-      return;
-
-    gui_->updateAllValues();
+    utils::ScopedLock g{ getRenderLock(), utils::WaitMechanism::WaitNotify };
+    gui_->reinstantiateUI();
+    gui_->resized();
   }
 
   void Renderer::setGuiScale(double scale)

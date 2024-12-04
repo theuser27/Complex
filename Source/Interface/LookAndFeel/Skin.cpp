@@ -30,6 +30,7 @@ namespace
     "Dynamics Module",
     "Phase Module",
     "Pitch Module",
+    "Destroy Module",
   };
 
   inline constexpr std::array<std::string_view, Interface::Skin::kValueIdCount> kValueNames = {

@@ -407,7 +407,7 @@ namespace Generation
 
   public:
     // Inherited via BaseProcessor
-    void insertSubProcessor(size_t index, BaseProcessor &newSubProcessor) noexcept override;
+    void insertSubProcessor(usize index, BaseProcessor &newSubProcessor) noexcept override;
     BaseProcessor *createCopy() const override
     { COMPLEX_ASSERT_FALSE("You're trying to copy SoundEngine, which is not meant to be copied"); return nullptr; }
     void initialiseParameters() override
@@ -477,12 +477,9 @@ namespace Generation
     // however with overlap every consecutive block starts earlier than the FFT size,
     // which implies that the phase for those blocks is no longer aligned at 0,
     // hence the need to store the current index to calculate the phase shift that occurs
-    u32 phaseInsideBlock_ = 0;
-
-    //=========================================================================================
-    // internal methods
-    // 
-    // getting the number of FFT samples
-    u32 getFFTNumSamples() const noexcept { return 1 << FFTOrder_; }
+    u32 blockPosition_ = 0;
+    //
+    //
+    bool isInitialised_ = false;
   };
 }

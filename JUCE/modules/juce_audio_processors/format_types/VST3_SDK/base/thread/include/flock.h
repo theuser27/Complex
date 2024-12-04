@@ -51,12 +51,12 @@
 #elif SMTG_OS_WINDOWS
 struct CRITSECT							// CRITICAL_SECTION
 {
-	void* DebugInfo;					// PRTL_CRITICAL_SECTION_DEBUG DebugInfo;
-	Steinberg::int32 LockCount;			// LONG LockCount;
-	Steinberg::int32 RecursionCount;	// LONG RecursionCount;
-	void* OwningThread;					// HANDLE OwningThread
-	void* LockSemaphore;				// HANDLE LockSemaphore
-	Steinberg::int32 SpinCount;			// ULONG_PTR SpinCount
+  void* DebugInfo;					// PRTL_CRITICAL_SECTION_DEBUG DebugInfo;
+  Steinberg::int32 LockCount;			// LONG LockCount;
+  Steinberg::int32 RecursionCount;	// LONG RecursionCount;
+  void* OwningThread;					// HANDLE OwningThread
+  void* LockSemaphore;				// HANDLE LockSemaphore
+  Steinberg::int32 SpinCount;			// ULONG_PTR SpinCount
 };
 #endif
 
@@ -71,16 +71,16 @@ namespace Thread {
 struct ILock
 {
 //------------------------------------------------------------------------
-	virtual ~ILock () {}
+  virtual ~ILock () {}
 
-	/** Enables lock. */
-	virtual void lock () = 0;
+  /** Enables lock. */
+  virtual void lock () = 0;
 
-	/** Disables lock. */
-	virtual void unlock () = 0;
+  /** Disables lock. */
+  virtual void unlock () = 0;
 
-	/** Tries to disable lock. */
-	virtual bool trylock () = 0;
+  /** Tries to disable lock. */
+  virtual bool trylock () = 0;
 //------------------------------------------------------------------------
 };
 
@@ -93,26 +93,26 @@ class FLock : public ILock
 public:
 //------------------------------------------------------------------------
 
-	/** Lock constructor.
-	 *  @param name lock name
-	 */
-	FLock (const char8* name = "FLock");
+  /** Lock constructor.
+   *  @param name lock name
+   */
+  FLock (const char8* name = "FLock");
 
-	/** Lock destructor. */
-	~FLock ();
+  /** Lock destructor. */
+  ~FLock ();
 
-	//-- ILock -----------------------------------------------------------
-	void lock () SMTG_OVERRIDE;
-	void unlock () SMTG_OVERRIDE;
-	bool trylock () SMTG_OVERRIDE;
+  //-- ILock -----------------------------------------------------------
+  void lock () SMTG_OVERRIDE;
+  void unlock () SMTG_OVERRIDE;
+  bool trylock () SMTG_OVERRIDE;
 
 //------------------------------------------------------------------------
 protected:
 #if SMTG_PTHREADS
-	pthread_mutex_t mutex; ///< Mutex object
+  pthread_mutex_t mutex; ///< Mutex object
 
 #elif SMTG_OS_WINDOWS
-	CRITSECT section; ///< Critical section object
+  CRITSECT section; ///< Critical section object
 #endif
 };
 
@@ -123,7 +123,7 @@ protected:
 class FLockObject : public FObject, public FLock
 {
 public:
-	OBJ_METHODS (FLockObject, FObject)
+  OBJ_METHODS (FLockObject, FObject)
 };
 
 //------------------------------------------------------------------------
@@ -135,17 +135,17 @@ class FGuard
 public:
 //------------------------------------------------------------------------
 
-	/** FGuard constructor.
-	 *  @param _lock guard this lock
-	 */
-	FGuard (ILock& _lock) : lock (_lock) { lock.lock (); }
+  /** FGuard constructor.
+   *  @param _lock guard this lock
+   */
+  FGuard (ILock& _lock) : lock (_lock) { lock.lock (); }
 
-	/** FGuard destructor. */
-	~FGuard () { lock.unlock (); }
+  /** FGuard destructor. */
+  ~FGuard () { lock.unlock (); }
 
 //------------------------------------------------------------------------
 private:
-	ILock& lock; ///< guarded lock
+  ILock& lock; ///< guarded lock
 };
 
 //------------------------------------------------------------------------
@@ -157,25 +157,25 @@ class FConditionalGuard
 public:
 //------------------------------------------------------------------------
 
-	/** FConditionGuard constructor.
-	 *  @param _lock guard this lock
-	 */
-	FConditionalGuard (FLock* _lock) : lock (_lock)
-	{
-		if (lock)
-			lock->lock ();
-	}
+  /** FConditionGuard constructor.
+   *  @param _lock guard this lock
+   */
+  FConditionalGuard (FLock* _lock) : lock (_lock)
+  {
+    if (lock)
+      lock->lock ();
+  }
 
-	/** FConditionGuard destructor. */
-	~FConditionalGuard ()
-	{
-		if (lock)
-			lock->unlock ();
-	}
+  /** FConditionGuard destructor. */
+  ~FConditionalGuard ()
+  {
+    if (lock)
+      lock->unlock ();
+  }
 
 //------------------------------------------------------------------------
 private:
-	FLock* lock; ///< guarded lock
+  FLock* lock; ///< guarded lock
 };
 
 } // Thread

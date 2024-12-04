@@ -126,7 +126,7 @@ namespace utils
   using make_index_sequence = make_integer_sequence<usize, Size>;
 
   template<usize N, typename Fn> requires requires(Fn fn) { fn(); }
-  inline void unroll(Fn fn)
+  inline void unroll(const Fn &fn)
   {
     if constexpr (N >= 1)
     {
@@ -136,13 +136,23 @@ namespace utils
       }(make_index_sequence<N>());
     }
   }
+  template<usize N, typename Fn> requires requires(Fn fn, usize i) { fn(i); }
+  inline void unroll(const Fn &fn)
+  {
+    if constexpr (N >= 1)
+    {
+      [&] <usize ... Is>(const index_sequence<Is...> &)
+      {
+        [[maybe_unused]] auto dummy = ((fn(Is), Is) + ...);
+      }(make_index_sequence<N>());
+    }
+  }
 
   template<typename T, typename U>
-  struct pair
-  {
-    T first;
-    U second;
-  };
+  struct pair { T first; U second; };
+
+  template <class T, class U>
+  pair(T, U) -> pair<T, U>;
 
   template<typename T, usize Size>
   class array
@@ -168,8 +178,8 @@ namespace utils
 
     [[nodiscard]] constexpr iterator begin() noexcept { return (Size == 0) ? iterator() : iterator(storage); }
     [[nodiscard]] constexpr const_iterator begin() const noexcept { return (Size == 0) ? const_iterator() : const_iterator(storage); }
-    [[nodiscard]] constexpr iterator end() noexcept { return (Size == 0) ? iterator() : iterator(storage + Size - 1); }
-    [[nodiscard]] constexpr const_iterator end() const noexcept { return (Size == 0) ? const_iterator() : const_iterator(storage + Size - 1); }
+    [[nodiscard]] constexpr iterator end() noexcept { return (Size == 0) ? iterator() : iterator(storage + Size); }
+    [[nodiscard]] constexpr const_iterator end() const noexcept { return (Size == 0) ? const_iterator() : const_iterator(storage + Size); }
 
     [[nodiscard]] constexpr reference front() noexcept { ASSERT_NOT_ZERO_SIZED(front()); return storage[0]; }
     [[nodiscard]] constexpr const_reference front() const noexcept { ASSERT_NOT_ZERO_SIZED(front()); return storage[0]; }
@@ -192,15 +202,27 @@ namespace utils
 
     [[nodiscard]] static constexpr size_type size() noexcept { return Size; }
 
+    [[nodiscard]] constexpr bool operator==(const array &other) const noexcept
+    {
+      for (usize i = 0; i < size(); ++i)
+        if (storage[i] != other.storage[i])
+          return false;
+
+      return true;
+    }
+
     internal_value_type storage[(Size == 0) ? 1 : Size];
   #undef ASSERT_NOT_ZERO_SIZED
   };
 
+  template <typename First, typename ... Rest> requires (is_same_v<First, Rest> && ...)
+  array(First, Rest...) -> array<First, sizeof...(Rest) + 1>;
+
   struct ignore_t { constexpr const ignore_t &operator=(const auto &) const noexcept { return *this; } };
   inline constexpr ignore_t ignore{};
 
-  template <typename First, typename ... Rest> requires (is_same_v<First, Rest> && ...)
-  array(First, Rest...) -> array<First, sizeof...(Rest) + 1>;
+  struct uninitialised_t {};
+  inline constexpr uninitialised_t uninitialised{};
 
   template <typename T>
   concept integral = is_integral_v<T>;

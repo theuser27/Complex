@@ -17,13 +17,12 @@
 #include "parameter_value.hpp"
 #include "Plugin/ProcessorTree.hpp"
 #include "Interface/Components/BaseControl.hpp"
-#include "Framework/parameter_bridge.hpp"
 
 namespace Framework
 {
-  static constexpr auto lookup = []<typename ... Ts>(const std::tuple<std::type_identity<Ts>...> &)
+  static constexpr auto lookup = []<typename ... Ts>(const std::tuple<nested_enum::type_identity<Ts>...> &)
   {
-    return std::array<ParameterDetails, sizeof...(Ts)>{ Ts::details... };
+    return utils::array<ParameterDetails, sizeof...(Ts)>{ Ts::details... };
   }(Processors::enum_subtypes_filter_recursive<[]<typename T>() { return requires{ T::parameter_tag; }; }>());
 
   auto getParameterDetails(std::string_view id) noexcept -> std::optional<ParameterDetails> 
@@ -41,7 +40,6 @@ namespace Framework
 
     double result{};
     double sign;
-    double range;
     switch (details.scale)
     {
     case ParameterScale::Toggle:
@@ -67,11 +65,15 @@ namespace Framework
       value = value * 2.0 - 1.0;
       sign = unsignFloat(value);
       value *= value;
-      range = details.maxValue - details.minValue;
-      result = (!skewOnly) ? (value * sign * range + range) * 0.5 + details.minValue : value * 0.5 * sign;
+      result = (!skewOnly) ? (value * 0.5 * sign + 0.5) * (details.maxValue - details.minValue) + details.minValue : value * 0.5 * sign + 0.5;
       break;
     case ParameterScale::Cubic:
       result = (!skewOnly) ? value * value * value * (details.maxValue - details.minValue) + details.minValue : value * value * value;
+      break;
+    case ParameterScale::SymmetricCubic:
+      value = 2.0 * value - 1.0;
+      value *= value * value;
+      result = (!skewOnly) ? (value * 0.5 + 0.5) * (details.maxValue - details.minValue) + details.minValue : value;
       break;
     case ParameterScale::Loudness:
       result = normalisedToDb(value, (double)details.maxValue);
@@ -102,6 +104,7 @@ namespace Framework
       break;
     default:
       COMPLEX_ASSERT_FALSE("Unhandled case");
+      break;
     }
 
     if (details.displayUnits == "%" && scalePercent)
@@ -146,6 +149,10 @@ namespace Framework
       value = (value - details.minValue) / (details.maxValue - details.minValue);
       result = std::pow(value, 1.0f / 3.0f);
       break;
+    case ParameterScale::SymmetricCubic:
+      value = 2.0 * (value - details.minValue) / (details.maxValue - details.minValue) - 1.0;
+      result = std::pow(value, 1.0f / 3.0f);
+      break;
     case ParameterScale::Loudness:
       value = dbToNormalised(value, (double)details.maxValue);
       result = (value + 1.0f) * 0.5f;
@@ -167,6 +174,7 @@ namespace Framework
       break;
     default:
       COMPLEX_ASSERT_FALSE("Unhandled case");
+      break;
     }
 
     return result;
@@ -202,13 +210,18 @@ namespace Framework
     case ParameterScale::Cubic:
       result = value * value * value * (details.maxValue - details.minValue) + details.minValue;
       break;
+    case ParameterScale::SymmetricCubic:
+      value = simd_float::mulSub(1.0f, value, 2.0f);
+      value *= value * value;
+      result = simd_float::mulAdd(0.5f, value, 0.5f) * (details.maxValue - details.minValue) + details.minValue;
+      break;
     case ParameterScale::Loudness:
       result = normalisedToDb(value, details.maxValue);
       break;
     case ParameterScale::SymmetricLoudness:
       value = (value * 2.0f - 1.0f);
       sign = unsignSimd(value);
-      if (areAllElementsSame(sign))
+      if (sign.allSame())
       {
         float extremum = (sign[0]) ? -details.minValue : details.maxValue;
         result = normalisedToDb(value, extremum) | sign;
@@ -233,6 +246,7 @@ namespace Framework
       break;
     default:
       COMPLEX_ASSERT_FALSE("Unhandled case");
+      break;
     }
 
     return result;
@@ -275,49 +289,54 @@ namespace Plugin
     }
   }
 
-  void ProcessorTree::updateDynamicParameters(std::string_view reason) const noexcept
+  void ProcessorTree::updateDynamicParameters(std::string_view reason) noexcept
   {
     using namespace Framework;
 
-    for (auto [indexedData, currentParameter] : dynamicParameters_)
+    auto lambda = [&]()
     {
-      if (indexedData->dynamicUpdateUuid != reason)
-        continue;
-
-      auto *link = currentParameter->getParameterLink();
-      // if the current parameter is mapped out, we shouldn't change any of the values
-      // if some of them are not valid anymore, it's up to the consumers of said values to handle things properly
-      if (link->hostControl)
-        continue;
-
-      u64 oldCount = indexedData->count;
-      if (indexedData->dynamicUpdateUuid == Framework::kLaneCountChange)
-        indexedData->count = getLaneCount();
-      else if (indexedData->dynamicUpdateUuid == Framework::kInputSidechainCountChange)
-        indexedData->count = getInputSidechains();
-      else if (indexedData->dynamicUpdateUuid == Framework::kOutputSidechainCountChange)
-        indexedData->count = getOutputSidechains();
-      else COMPLEX_ASSERT_FALSE("Missing case");
-
-      if (indexedData->count == oldCount)
-        continue;
-
-      // changing maxValue and setting normalised value to correspond to the current scaled value
-      // for parameter and UIControl if it exists
-      auto details = currentParameter->getParameterDetails();
-      auto oldScaled = scaleValue((double)currentParameter->getNormalisedValue(), details);
-      details.maxValue += (float)indexedData->count - (float)oldCount;
-      auto newNormalised = unscaleValue(oldScaled, details);
-
-      if (link->UIControl)
+      for (auto [indexedData, currentParameter] : dynamicParameters_)
       {
-        // intentionally inhibiting dynamic dispatch because it will try to update/redraw
-        // which we intend to do with setValue
-        link->UIControl->BaseControl::setParameterDetails(details);
-        link->UIControl->setValue(newNormalised, juce::sendNotificationSync);
-      }
+        if (indexedData->dynamicUpdateUuid != reason)
+          continue;
 
-      currentParameter->setParameterDetails(details, (float)newNormalised);
-    }
+        auto *link = currentParameter->getParameterLink();
+        // if the current parameter is mapped out, we shouldn't change any of the values
+        // if some of them are not valid anymore, it's up to the consumers of said values to handle things properly
+        if (link->hostControl)
+          continue;
+
+        u64 oldCount = indexedData->count;
+        if (indexedData->dynamicUpdateUuid == Framework::kLaneCountChange)
+          indexedData->count = getLaneCount();
+        else if (indexedData->dynamicUpdateUuid == Framework::kInputSidechainCountChange)
+          indexedData->count = getInputSidechains();
+        else if (indexedData->dynamicUpdateUuid == Framework::kOutputSidechainCountChange)
+          indexedData->count = getOutputSidechains();
+        else COMPLEX_ASSERT_FALSE("Missing case");
+
+        if (indexedData->count == oldCount)
+          continue;
+
+        // changing maxValue and setting normalised value to correspond to the current scaled value
+        // for parameter and UIControl if it exists
+        auto details = currentParameter->getParameterDetails();
+        auto oldScaled = scaleValue((double)currentParameter->getNormalisedValue(), details);
+        details.maxValue += (float)indexedData->count - (float)oldCount;
+        auto newNormalised = unscaleValue(oldScaled, details);
+
+        if (link->UIControl)
+        {
+          // intentionally inhibiting dynamic dispatch because it will try to update/redraw
+          // which we intend to do with setValue
+          link->UIControl->BaseControl::setParameterDetails(details);
+          link->UIControl->setValue(newNormalised, juce::sendNotificationSync);
+        }
+
+        currentParameter->setParameterDetails(details, (float)newNormalised);
+      }
+    };
+
+    executeOutsideProcessing(lambda);
   }
 }

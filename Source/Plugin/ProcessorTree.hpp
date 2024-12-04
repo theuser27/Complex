@@ -60,7 +60,7 @@ namespace Plugin
     ProcessorTree &operator=(ProcessorTree &&other) = delete;
 
     void serialiseToJson(void *jsonData) const;
-    virtual void deserialiseFromJson(void *jsonData) = 0;
+    virtual bool deserialiseFromJson(void *newSave, void *fallbackSave) = 0;
     
     // do not call this function manually, it's always called when you instantiate a BaseProcessor derived type
     // may block and allocate if expandThreshold has been reached
@@ -81,7 +81,7 @@ namespace Plugin
       -> Framework::ParameterValue *;
     // see IndexedData::dynamicUpdateUuid
     void registerDynamicParameter(Framework::ParameterValue *parameter);
-    void updateDynamicParameters(std::string_view reason) const noexcept;
+    void updateDynamicParameters(std::string_view reason) noexcept;
 
     auto getUpdateFlag() const noexcept -> UpdateFlag { return updateFlag_.load(std::memory_order_acquire); }
     // only the audio thread changes the updateFlag

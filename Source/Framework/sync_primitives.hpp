@@ -27,7 +27,7 @@ namespace utils
   #endif
   }
 
-  template<size_t Iterations>
+  template<usize Iterations>
   strict_inline void longPause() noexcept
   {
     unroll<Iterations>([]()
@@ -75,7 +75,7 @@ namespace utils
   void lockAtomic(std::atomic<bool> &atomic, WaitMechanism mechanism, bool expected) noexcept;
   void unlockAtomic(std::atomic<bool> &atomic, WaitMechanism mechanism, bool expected) noexcept;
   i32 lockAtomic(LockBlame<i32> &lock, bool isExclusive, WaitMechanism mechanism,
-    const clg::small_function<void()> &lambda = [](){}) noexcept;
+    const clg::small_fn<void()> &lambda = [](){}) noexcept;
   void unlockAtomic(LockBlame<i32> &atomic, bool wasExclusive, WaitMechanism mechanism) noexcept;
 
   class ScopedLock
@@ -99,7 +99,7 @@ namespace utils
     { lockAtomic(atomic, mechanism, expected); }
 
     ScopedLock(LockBlame<i32> &atomic, bool isExclusive, WaitMechanism mechanism,
-      const clg::small_function<void()> &lambda = [](){}) noexcept : type_(I32Type), mechanism_(mechanism),
+      const clg::small_fn<void()> &lambda = [](){}) noexcept : type_(I32Type), mechanism_(mechanism),
       i32_{ &atomic, isExclusive }
     { lockAtomic(atomic, isExclusive, mechanism, lambda); }
 

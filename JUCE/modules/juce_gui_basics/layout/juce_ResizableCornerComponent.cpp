@@ -38,11 +38,11 @@ ResizableCornerComponent::ResizableCornerComponent (Component* componentToResize
 ResizableCornerComponent::~ResizableCornerComponent() = default;
 
 //==============================================================================
-void ResizableCornerComponent::paint (Graphics& g)
+void ResizableCornerComponent::paint (Graphics&)
 {
-    getLookAndFeel().drawCornerResizer (g, getWidth(), getHeight(),
-                                        isMouseOverOrDragging(),
-                                        isMouseButtonDown());
+    //getLookAndFeel().drawCornerResizer (g, getWidth(), getHeight(),
+    //                                    isMouseOverOrDragging(),
+    //                                    isMouseButtonDown());
 }
 
 void ResizableCornerComponent::mouseDown (const MouseEvent&)

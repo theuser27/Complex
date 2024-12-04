@@ -36,7 +36,7 @@ namespace Steinberg {
  \code
 IPtr<IPath> path (sharedPath);
 if (path)
-	path->ascend ();
+  path->ascend ();
  \endcode
  */
 template <class I>
@@ -44,97 +44,97 @@ class IPtr
 {
 public:
 //------------------------------------------------------------------------
-	inline IPtr (I* ptr, bool addRef = true);
-	inline IPtr (const IPtr&);
+  inline IPtr (I* ptr, bool addRef = true);
+  inline IPtr (const IPtr&);
 
-	template <class T>
-	inline IPtr (const IPtr<T>& other) : ptr (other.get ())
-	{
-		if (ptr)
-			ptr->addRef ();
-	}
+  template <class T>
+  inline IPtr (const IPtr<T>& other) : ptr (other.get ())
+  {
+    if (ptr)
+      ptr->addRef ();
+  }
 
-	inline IPtr ();
-	inline ~IPtr ();
+  inline IPtr ();
+  inline ~IPtr ();
 
-	inline I* operator= (I* ptr);
+  inline I* operator= (I* ptr);
 
-	inline IPtr& operator= (const IPtr& other);
+  inline IPtr& operator= (const IPtr& other);
 
-	template <class T>
-	inline IPtr& operator= (const IPtr<T>& other)
-	{
-		operator= (other.get ());
-		return *this;
-	}
+  template <class T>
+  inline IPtr& operator= (const IPtr<T>& other)
+  {
+    operator= (other.get ());
+    return *this;
+  }
 
-	inline operator I* () const { return ptr; } // act as I*
-	inline I* operator-> () const { return ptr; } // act as I*
+  inline operator I* () const { return ptr; } // act as I*
+  inline I* operator-> () const { return ptr; } // act as I*
 
-	inline I* get () const { return ptr; }
+  inline I* get () const { return ptr; }
 
 #if SMTG_CPP11_STDLIBSUPPORT
-	inline IPtr (IPtr<I>&& movePtr) SMTG_NOEXCEPT : ptr (movePtr.take ()) { }
-	
-	template <typename T>
-	inline IPtr (IPtr<T>&& movePtr) SMTG_NOEXCEPT : ptr (movePtr.take ()) {  }
+  inline IPtr (IPtr<I>&& movePtr) SMTG_NOEXCEPT : ptr (movePtr.take ()) { }
+  
+  template <typename T>
+  inline IPtr (IPtr<T>&& movePtr) SMTG_NOEXCEPT : ptr (movePtr.take ()) {  }
 
-	inline IPtr& operator= (IPtr<I>&& movePtr) SMTG_NOEXCEPT
-	{
-		if (ptr)
-			ptr->release ();
+  inline IPtr& operator= (IPtr<I>&& movePtr) SMTG_NOEXCEPT
+  {
+    if (ptr)
+      ptr->release ();
 
-		ptr = movePtr.take ();
-		return *this;
-	}
-	
-	template <typename T>
-	inline IPtr& operator= (IPtr<T>&& movePtr) 
-	{
-		if (ptr)
-			ptr->release ();
-		
-		ptr = movePtr.take ();
-		return *this;
-	}
+    ptr = movePtr.take ();
+    return *this;
+  }
+  
+  template <typename T>
+  inline IPtr& operator= (IPtr<T>&& movePtr) 
+  {
+    if (ptr)
+      ptr->release ();
+    
+    ptr = movePtr.take ();
+    return *this;
+  }
 #endif
 
-	inline void reset (I* obj = nullptr) 
-	{
-		if (ptr)
-			ptr->release();
-		ptr = obj;
-	}
+  inline void reset (I* obj = nullptr) 
+  {
+    if (ptr)
+      ptr->release();
+    ptr = obj;
+  }
 
-	I* take () SMTG_NOEXCEPT 
-	{
-		I* out = ptr; 
-		ptr = nullptr; 
-		return out;
-	}
+  I* take () SMTG_NOEXCEPT 
+  {
+    I* out = ptr; 
+    ptr = nullptr; 
+    return out;
+  }
 
-	template <typename T>
-	static IPtr<T> adopt (T* obj) SMTG_NOEXCEPT { return IPtr<T> (obj, false); }
+  template <typename T>
+  static IPtr<T> adopt (T* obj) SMTG_NOEXCEPT { return IPtr<T> (obj, false); }
 
 //------------------------------------------------------------------------
 protected:
-	I* ptr;
+  I* ptr;
 };
 
 //------------------------------------------------------------------------
 template <class I>
 inline IPtr<I>::IPtr (I* _ptr, bool addRef) : ptr (_ptr)
 {
-	if (ptr && addRef)
-		ptr->addRef ();
+  if (ptr && addRef)
+    ptr->addRef ();
 }
 
 //------------------------------------------------------------------------
 template <class I>
 inline IPtr<I>::IPtr (const IPtr<I>& other) : ptr (other.ptr)
 {
-	if (ptr)
-		ptr->addRef ();
+  if (ptr)
+    ptr->addRef ();
 }
 
 //------------------------------------------------------------------------
@@ -147,34 +147,34 @@ inline IPtr<I>::IPtr () : ptr (0)
 template <class I>
 inline IPtr<I>::~IPtr ()
 {
-	if (ptr) 
-	{
-		ptr->release ();
-		ptr = nullptr;  //TODO_CORE: how much does this cost? is this something hiding for us?
-	}
+  if (ptr) 
+  {
+    ptr->release ();
+    ptr = nullptr;  //TODO_CORE: how much does this cost? is this something hiding for us?
+  }
 }
 
 //------------------------------------------------------------------------
 template <class I>
 inline I* IPtr<I>::operator= (I* _ptr)
 {
-	if (_ptr != ptr)
-	{
-		if (ptr)
-			ptr->release ();
-		ptr = _ptr;
-		if (ptr)
-			ptr->addRef ();
-	}
-	return ptr;
+  if (_ptr != ptr)
+  {
+    if (ptr)
+      ptr->release ();
+    ptr = _ptr;
+    if (ptr)
+      ptr->addRef ();
+  }
+  return ptr;
 }
 
 //------------------------------------------------------------------------
 template <class I>
 inline IPtr<I>& IPtr<I>::operator= (const IPtr<I>& _ptr)
 {
-	operator= (_ptr.ptr);
-	return *this;
+  operator= (_ptr.ptr);
+  return *this;
 }
 
 //------------------------------------------------------------------------
@@ -210,20 +210,20 @@ class OPtr : public IPtr<I>
 {
 public:
 //------------------------------------------------------------------------
-	inline OPtr (I* p) : IPtr<I> (p, false) {}
-	inline OPtr (const IPtr<I>& p) : IPtr<I> (p) {}
-	inline OPtr (const OPtr<I>& p) : IPtr<I> (p) {}
-	inline OPtr () {}
-	inline I* operator= (I* _ptr)
-	{
-		if (_ptr != this->ptr)
-		{
-			if (this->ptr)
-				this->ptr->release ();
-			this->ptr = _ptr;
-		}
-		return this->ptr;
-	}
+  inline OPtr (I* p) : IPtr<I> (p, false) {}
+  inline OPtr (const IPtr<I>& p) : IPtr<I> (p) {}
+  inline OPtr (const OPtr<I>& p) : IPtr<I> (p) {}
+  inline OPtr () {}
+  inline I* operator= (I* _ptr)
+  {
+    if (_ptr != this->ptr)
+    {
+      if (this->ptr)
+        this->ptr->release ();
+      this->ptr = _ptr;
+    }
+    return this->ptr;
+  }
 };
 
 //------------------------------------------------------------------------
@@ -240,7 +240,7 @@ public:
 template <class I>
 IPtr<I> owned (I* p)
 {
-	return IPtr<I> (p, false);
+  return IPtr<I> (p, false);
 }
 
 /** Assigning shared object to an IPtr.
@@ -252,7 +252,7 @@ IPtr<I> owned (I* p)
 template <class I>
 IPtr<I> shared (I* p)
 {
-	return IPtr<I> (p, true);
+  return IPtr<I> (p, true);
 }
 
 #if SMTG_CPP11_STDLIBSUPPORT
@@ -271,8 +271,8 @@ struct Adopt;
 template <typename T>
 class Shared
 {
-	friend struct Detail::Adopt;
-	T* obj = nullptr;
+  friend struct Detail::Adopt;
+  T* obj = nullptr;
 };
 
 /** Strong typedef for transferring the ownership of reference counted objects. 
@@ -283,8 +283,8 @@ class Shared
 template <typename T>
 class Owned
 {
-	friend struct Detail::Adopt;
-	T* obj = nullptr;
+  friend struct Detail::Adopt;
+  T* obj = nullptr;
 };
 
 /** Strong typedef for using reference counted objects. 
@@ -295,43 +295,43 @@ class Owned
 template <typename T>
 class Used
 {
-	friend struct Detail::Adopt;
-	T* obj = nullptr;
+  friend struct Detail::Adopt;
+  T* obj = nullptr;
 };
-	
+  
 namespace Detail {
 
 struct Adopt 
 {
-	template <typename T>
-	static IPtr<T> adopt (Shared<T>& ref) 
-	{ 
-		using Steinberg::shared;
-		return shared (ref.obj); 
-	}
+  template <typename T>
+  static IPtr<T> adopt (Shared<T>& ref) 
+  { 
+    using Steinberg::shared;
+    return shared (ref.obj); 
+  }
 
-	template <typename T>
-	static IPtr<T> adopt (Owned<T>& ref) 
-	{ 
-		using Steinberg::owned;
-		IPtr<T> out = owned (ref.obj);
-		ref.obj = nullptr;
-		return out;
-	}
+  template <typename T>
+  static IPtr<T> adopt (Owned<T>& ref) 
+  { 
+    using Steinberg::owned;
+    IPtr<T> out = owned (ref.obj);
+    ref.obj = nullptr;
+    return out;
+  }
 
-	template <typename T>
-	static T* adopt (Used<T>& ref)
-	{
-		return ref.obj;
-	}
+  template <typename T>
+  static T* adopt (Used<T>& ref)
+  {
+    return ref.obj;
+  }
 
-	template <template <typename> class OwnerType, typename T>
-	static OwnerType<T> toOwnerType (T* obj) 
-	{ 
-		OwnerType<T> out;
-		out.obj = obj;
-		return out; 
-	}
+  template <template <typename> class OwnerType, typename T>
+  static OwnerType<T> toOwnerType (T* obj) 
+  { 
+    OwnerType<T> out;
+    out.obj = obj;
+    return out; 
+  }
 };
 
 } // Detail

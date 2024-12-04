@@ -87,7 +87,7 @@ namespace Interface
     inputSelector_->setPopupPrefix("From: ");
     inputSelector_->setCanUseScrollWheel(true);
     inputSelector_->removeLabel();
-    inputSelector_->setItemIgnoreFunction([&](const Framework::IndexedData &indexedData, int index)
+    inputSelector_->setItemIgnoreFunction([this](const Framework::IndexedData &indexedData, int index)
       {
         if (indexedData.dynamicUpdateUuid != Framework::kLaneCountChange)
           return true;

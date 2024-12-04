@@ -152,7 +152,7 @@ namespace Framework
     {
       processor->remapParameters({}, true, true);
       processor->setSavedSection(nullptr);
-      for (size_t i = 0; i < processor->getSubProcessorCount(); ++i)
+      for (usize i = 0; i < processor->getSubProcessorCount(); ++i)
         self(self, processor->getSubProcessor(i));
     };
     recurseParameters(recurseParameters, deletedProcessor_);
@@ -171,7 +171,7 @@ namespace Framework
     auto recurseParameters = [](const auto &self, Generation::BaseProcessor *processor) -> void
     {
       processor->remapParameters({}, true, true);
-      for (size_t i = 0; i < processor->getSubProcessorCount(); ++i)
+      for (usize i = 0; i < processor->getSubProcessorCount(); ++i)
         self(self, processor->getSubProcessor(i));
     };
     recurseParameters(recurseParameters, deletedProcessor_);

@@ -44,7 +44,7 @@
 
 bool AmIBeingDebugged ()
 {
-	return IsDebuggerPresent ();
+  return IsDebuggerPresent ();
 }
 #endif
 
@@ -55,8 +55,8 @@ bool AmIBeingDebugged ()
 //--------------------------------------------------------------------------
 bool AmIBeingDebugged ()
 {
-	// TODO: check if GDB or LLDB is attached
-	return true;
+  // TODO: check if GDB or LLDB is attached
+  return true;
 }
 #endif
 
@@ -74,30 +74,30 @@ bool AmIBeingDebugged ()
 // Returns true if the current process is being debugged (either
 // running under the debugger or has a debugger attached post facto).
 {
-	int mib[4];
-	struct kinfo_proc info;
-	size_t size;
+  int mib[4];
+  struct kinfo_proc info;
+  size_t size;
 
-	// Initialize the flags so that, if sysctl fails for some bizarre
-	// reason, we get a predictable result.
+  // Initialize the flags so that, if sysctl fails for some bizarre
+  // reason, we get a predictable result.
 
-	info.kp_proc.p_flag = 0;
+  info.kp_proc.p_flag = 0;
 
-	// Initialize mib, which tells sysctl the info we want, in this case
-	// we're looking for information about a specific process ID.
+  // Initialize mib, which tells sysctl the info we want, in this case
+  // we're looking for information about a specific process ID.
 
-	mib[0] = CTL_KERN;
-	mib[1] = KERN_PROC;
-	mib[2] = KERN_PROC_PID;
-	mib[3] = getpid ();
+  mib[0] = CTL_KERN;
+  mib[1] = KERN_PROC;
+  mib[2] = KERN_PROC_PID;
+  mib[3] = getpid ();
 
-	// Call sysctl.
+  // Call sysctl.
 
-	size = sizeof (info);
-	sysctl (mib, sizeof (mib) / sizeof (*mib), &info, &size, NULL, 0);
+  size = sizeof (info);
+  sysctl (mib, sizeof (mib) / sizeof (*mib), &info, &size, NULL, 0);
 
-	// We're being debugged if the P_TRACED flag is set.
-	return ((info.kp_proc.p_flag & P_TRACED) != 0);
+  // We're being debugged if the P_TRACED flag is set.
+  return ((info.kp_proc.p_flag & P_TRACED) != 0);
 }
 
 #endif // SMTG_OS_MACOS
@@ -144,21 +144,21 @@ static bool neverDebugger = false; // so I can switch it off in the debugger...
 //--------------------------------------------------------------------------
 static void printDebugString (const char* string)
 {
-	if (!string)
-		return;
+  if (!string)
+    return;
 
-	if (gDebugPrintLogger)
-	{
-		gDebugPrintLogger (string);
-	}
-	else
-	{
+  if (gDebugPrintLogger)
+  {
+    gDebugPrintLogger (string);
+  }
+  else
+  {
 #if SMTG_OS_MACOS || defined(__MINGW32__)
-		fprintf (stderr, "%s", string);
+    fprintf (stderr, "%s", string);
 #elif SMTG_OS_WINDOWS
-		OutputDebugStringA (string);
+    OutputDebugStringA (string);
 #endif
-	}
+  }
 }
 
 //--------------------------------------------------------------------------
@@ -166,12 +166,12 @@ static void printDebugString (const char* string)
 //--------------------------------------------------------------------------
 void FDebugPrint (const char* format, ...)
 {
-	char string[kDebugPrintfBufferSize];
-	va_list marker;
-	va_start (marker, format);
-	vsnprintf (string, kDebugPrintfBufferSize, format, marker);
+  char string[kDebugPrintfBufferSize];
+  va_list marker;
+  va_start (marker, format);
+  vsnprintf (string, kDebugPrintfBufferSize, format, marker);
 
-	printDebugString (string);
+  printDebugString (string);
 }
 
 //--------------------------------------------------------------------------
@@ -179,68 +179,68 @@ void FDebugPrint (const char* format, ...)
 //--------------------------------------------------------------------------
 void FDebugBreak (const char* format, ...)
 {
-	char string[kDebugPrintfBufferSize];
-	va_list marker;
-	va_start (marker, format);
-	vsnprintf (string, kDebugPrintfBufferSize, format, marker);
+  char string[kDebugPrintfBufferSize];
+  va_list marker;
+  va_start (marker, format);
+  vsnprintf (string, kDebugPrintfBufferSize, format, marker);
 
-	printDebugString (string);
+  printDebugString (string);
 
-	// The Pre-assertion hook is always called, even if we're not running in the debugger,
-	// so that we can log asserts without displaying them
-	if (gPreAssertionHook)
-	{
-		gPreAssertionHook (string);
-	}
+  // The Pre-assertion hook is always called, even if we're not running in the debugger,
+  // so that we can log asserts without displaying them
+  if (gPreAssertionHook)
+  {
+    gPreAssertionHook (string);
+  }
 
-	if (neverDebugger)
-		return;
-	if (AmIBeingDebugged ())
-	{
-		// do not crash if no debugger present
-		// If there  is an assertion handler defined then let this override the UI
-		// and tell us whether we want to break into the debugger
-		bool breakIntoDebugger = true;
-		if (gAssertionHandler && gAssertionHandler (string) == false)
-		{
-			breakIntoDebugger = false;
-		}
+  if (neverDebugger)
+    return;
+  if (AmIBeingDebugged ())
+  {
+    // do not crash if no debugger present
+    // If there  is an assertion handler defined then let this override the UI
+    // and tell us whether we want to break into the debugger
+    bool breakIntoDebugger = true;
+    if (gAssertionHandler && gAssertionHandler (string) == false)
+    {
+      breakIntoDebugger = false;
+    }
 
-		if (breakIntoDebugger)
-		{
+    if (breakIntoDebugger)
+    {
 #if SMTG_OS_WINDOWS	&& _MSC_VER
-			__debugbreak (); // intrinsic version of DebugBreak()
+      __debugbreak (); // intrinsic version of DebugBreak()
 #elif SMTG_OS_MACOS && __arm64__
-			raise (SIGSTOP);
+      raise (SIGSTOP);
 
 #elif __ppc64__ || __ppc__ || __arm__
-			kill (getpid (), SIGINT);
+      kill (getpid (), SIGINT);
 #elif __i386__ || __x86_64__
-			{
-				__asm__ volatile ("int3");
-			}
+      {
+        __asm__ volatile ("int3");
+      }
 #endif
-		}
-	}
+    }
+  }
 }
 
 //--------------------------------------------------------------------------
 void FPrintLastError (const char* file, int line)
 {
 #if SMTG_OS_WINDOWS
-	LPVOID lpMessageBuffer;
-	FormatMessageA (FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM, nullptr,
-	                GetLastError (), MAKELANGID (LANG_NEUTRAL, SUBLANG_DEFAULT),
-	                (LPSTR)&lpMessageBuffer, 0, nullptr);
-	FDebugPrint ("%s(%d) : %s\n", file, line, lpMessageBuffer);
-	LocalFree (lpMessageBuffer);
+  LPVOID lpMessageBuffer;
+  FormatMessageA (FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM, nullptr,
+                  GetLastError (), MAKELANGID (LANG_NEUTRAL, SUBLANG_DEFAULT),
+                  (LPSTR)&lpMessageBuffer, 0, nullptr);
+  FDebugPrint ("%s(%d) : %s\n", file, line, lpMessageBuffer);
+  LocalFree (lpMessageBuffer);
 #endif
 
 #if SMTG_OS_MACOS
 #if !__MACH__
-	extern int errno;
+  extern int errno;
 #endif
-	FDebugPrint ("%s(%d) : Errno %d\n", file, line, errno);
+  FDebugPrint ("%s(%d) : Errno %d\n", file, line, errno);
 #endif
 }
 
@@ -250,54 +250,54 @@ void FPrintLastError (const char* file, int line)
 void* operator new (size_t size, int, const char* file, int line)
 {
 #if THREAD_ALLOC_WATCH
-	mach_port_t threadID = mach_thread_self ();
-	if (watchThreadID == threadID)
-	{
-		FDebugPrint ("Watched Thread Allocation : %s (Line:%d)\n", file ? file : "Unknown", line);
-	}
+  mach_port_t threadID = mach_thread_self ();
+  if (watchThreadID == threadID)
+  {
+    FDebugPrint ("Watched Thread Allocation : %s (Line:%d)\n", file ? file : "Unknown", line);
+  }
 #endif
-	try
-	{
-		return ::operator new (size);
-	}
-	catch (std::bad_alloc exception)
-	{
-		FDebugPrint ("bad_alloc exception : %s (Line:%d)", file ? file : "Unknown", line);
-	}
-	return (void*)-1;
+  try
+  {
+    return ::operator new (size);
+  }
+  catch (std::bad_alloc exception)
+  {
+    FDebugPrint ("bad_alloc exception : %s (Line:%d)", file ? file : "Unknown", line);
+  }
+  return (void*)-1;
 }
 
 //------------------------------------------------------------------------
 void* operator new[] (size_t size, int, const char* file, int line)
 {
 #if THREAD_ALLOC_WATCH
-	mach_port_t threadID = mach_thread_self ();
-	if (watchThreadID == threadID)
-	{
-		FDebugPrint ("Watched Thread Allocation : %s (Line:%d)\n", file ? file : "Unknown", line);
-	}
+  mach_port_t threadID = mach_thread_self ();
+  if (watchThreadID == threadID)
+  {
+    FDebugPrint ("Watched Thread Allocation : %s (Line:%d)\n", file ? file : "Unknown", line);
+  }
 #endif
-	try
-	{
-		return ::operator new[] (size);
-	}
-	catch (std::bad_alloc exception)
-	{
-		FDebugPrint ("bad_alloc exception : %s (Line:%d)", file ? file : "Unknown", line);
-	}
-	return (void*)-1;
+  try
+  {
+    return ::operator new[] (size);
+  }
+  catch (std::bad_alloc exception)
+  {
+    FDebugPrint ("bad_alloc exception : %s (Line:%d)", file ? file : "Unknown", line);
+  }
+  return (void*)-1;
 }
 
 //------------------------------------------------------------------------
 void operator delete (void* p, int, const char* file, int line)
 {
-	::operator delete (p);
+  ::operator delete (p);
 }
 
 //------------------------------------------------------------------------
 void operator delete[] (void* p, int, const char* file, int line)
 {
-	::operator delete[] (p);
+  ::operator delete[] (p);
 }
 
 #endif // SMTG_OS_MACOS
@@ -309,11 +309,11 @@ static bool smtg_unit_testing_active = false; // ugly hack to unit testing ...
 //------------------------------------------------------------------------
 bool isSmtgUnitTesting ()
 {
-	return smtg_unit_testing_active;
+  return smtg_unit_testing_active;
 }
 
 //------------------------------------------------------------------------
 void setSmtgUnitTesting ()
 {
-	smtg_unit_testing_active = true;
+  smtg_unit_testing_active = true;
 }

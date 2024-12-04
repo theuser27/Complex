@@ -32,7 +32,7 @@ namespace Framework
 {
   template<typename T>
   concept ParameterRepresentation = std::is_same_v<T, float> || std::is_same_v<T, u32>
-    || SimdValue<T> || std::is_same_v<T, std::string_view>;
+    || SimdValue<T> || std::is_same_v<T, Framework::IndexedData>;
 
   struct atomic_simd_float
   {
@@ -112,6 +112,8 @@ namespace Framework
       normalisedInternalValue_ = other.normalisedInternalValue_;
       internalValue_ = other.internalValue_;
     }
+
+    ~ParameterValue() noexcept;
 
     void initialise(std::optional<float> value = {})
     {
@@ -200,23 +202,15 @@ namespace Framework
           result = utils::toInt(internalValue_)[0];
         return result;
       }
-      else if constexpr (std::is_same_v<T, std::string_view>)
+      else if constexpr (std::is_same_v<T, Framework::IndexedData>)
       {
         COMPLEX_ASSERT(details_.scale == ParameterScale::Indexed &&
           "Parameter must be indexed to support value to string conversion");
-        COMPLEX_ASSERT(details_.minValue >= 0.0f && (size_t)details_.maxValue <= details_.indexedData.size());
+        COMPLEX_ASSERT(details_.minValue >= 0.0f && (usize)details_.maxValue <= details_.indexedData.size());
         COMPLEX_ASSERT((details_.flags & ParameterDetails::Stereo) == 0 && 
           "Indexed types that support value to string conversion must not be stereo");
 
-        size_t currentIndex = utils::toInt(internalValue_)[0];
-        size_t currentOption = 0;
-        while (details_.indexedData[currentOption].count <= currentIndex)
-        {
-          currentIndex -= details_.indexedData[currentOption].count;
-          ++currentOption;
-        }
-
-        return std::pair{ &details_.indexedData[currentOption], currentIndex };
+        return getIndexedData(internalValue_[0], details_);
       }
       else
       {
@@ -255,7 +249,7 @@ namespace Framework
       isDirty_ = true;
     }
 
-    auto updateModulator(std::weak_ptr<ParameterModulator> modulator, size_t index)
+    auto updateModulator(std::weak_ptr<ParameterModulator> modulator, usize index)
       -> std::weak_ptr<ParameterModulator>
     {
       COMPLEX_ASSERT(!modulator.expired() && "You're updating with an empty modulator");
@@ -270,7 +264,7 @@ namespace Framework
       return replacedModulator;
     }
 
-    auto deleteModulator(size_t index) -> std::weak_ptr<ParameterModulator>
+    auto deleteModulator(usize index) -> std::weak_ptr<ParameterModulator>
     {
       COMPLEX_ASSERT(index < parameterLink_.modulators.size() && "You're have given an index that's too large");
 

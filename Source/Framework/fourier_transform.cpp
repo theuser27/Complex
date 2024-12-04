@@ -78,7 +78,7 @@ namespace Framework
   void FFT::transformRealForward(u32 order, float *input, u32) const noexcept
   {
     COMPLEX_ASSERT(order >= minOrder_);
-    size_t size = 1ULL << order;
+    usize size = 1ULL << order;
 
     // zeroing out nyquist from previous transforms
     input[size] = 0.0f;
@@ -88,7 +88,7 @@ namespace Framework
   void FFT::transformRealInverse(u32 order, float *output, u32) const noexcept
   {
     COMPLEX_ASSERT(order >= minOrder_);
-    size_t size = 1ULL << order;
+    usize size = 1ULL << order;
 
     // clearing out dc and nyquist imaginary parts since they shouldn't exist
     // but you don't know what might have happened during processing
@@ -124,15 +124,15 @@ namespace Framework
     auto orderCount = maxOrder_ - minOrder_ + 1;
     plans_ = new void *[orderCount];
 
-    for (size_t i = 0; i < orderCount; ++i)
+    for (usize i = 0; i < orderCount; ++i)
       plans_[i] = pffft_new_setup(1 << (minOrder_ + i), PFFFT_REAL);
 
-    scratchBuffers_ = static_cast<float *>(pffft_aligned_malloc((size_t(1) << maxOrder_) * sizeof(float)));
+    scratchBuffers_ = static_cast<float *>(pffft_aligned_malloc((usize(1) << maxOrder_) * sizeof(float)));
   }
 
   FFT::~FFT() noexcept
   {
-    for (size_t i = 0; i < maxOrder_ - minOrder_ + 1; ++i)
+    for (usize i = 0; i < maxOrder_ - minOrder_ + 1; ++i)
       pffft_destroy_setup(static_cast<PFFFT_Setup *>(plans_[i]));
 
     pffft_aligned_free(scratchBuffers_);
@@ -142,7 +142,7 @@ namespace Framework
   void FFT::transformRealForward(u32 order, float *input, u32) const noexcept
   {
     COMPLEX_ASSERT(order >= minOrder_);
-    size_t size = 1ULL << order;
+    usize size = 1ULL << order;
 
     // zeroing out nyquist from previous transforms
     input[size] = 0.0f;
@@ -152,11 +152,11 @@ namespace Framework
   void FFT::transformRealInverse(u32 order, float *output, u32) const noexcept
   {
     COMPLEX_ASSERT(order >= minOrder_);
-    size_t size = 1ULL << order;
+    usize size = 1ULL << order;
 
     COMPLEX_ASSERT((uintptr_t)output % sizeof(simd_float) == 0 && "Output buffer is not aligned");
     simd_float scaling = 1.0f / (float)size;
-    for (size_t i = 0; i < size; i += kSimdRatio)
+    for (usize i = 0; i < size; i += kSimdRatio)
       fromSimdFloat(output + i, toSimdFloat(output + i) * scaling);
 
     // separating dc and nyquist bins and cleaning accidental writes to nyquist imaginary part

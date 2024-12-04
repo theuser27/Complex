@@ -139,13 +139,7 @@ namespace Interface
   protected:
     void resetValue() noexcept;
     PopupItems createPopupMenu() const noexcept;
-    juce::Rectangle<int> getUnionOfAllElements() const noexcept
-    {
-      auto bounds = drawBounds_;
-      for (size_t i = 0; i < extraElements_.data.size(); i++)
-        bounds = bounds.getUnion(extraElements_[i]);				
-      return bounds;
-    }
+    juce::Rectangle<int> getUnionOfAllElements() const noexcept;
 
     // ============================================================== Variables
     std::atomic<double> value_ = 0.0;

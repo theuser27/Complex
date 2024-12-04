@@ -13,6 +13,8 @@
 #include <vector>
 #include <algorithm>
 
+#include "platform_definitions.hpp"
+
 namespace Framework
 {
   template<typename Key, typename Value>
@@ -21,7 +23,7 @@ namespace Framework
     std::vector<std::pair<Key, Value>> data{};
 
     constexpr VectorMap() = default;
-    VectorMap(size_t size) noexcept { data.reserve(size); }
+    VectorMap(usize size) noexcept { data.reserve(size); }
     VectorMap(const VectorMap &other) noexcept : data(other.data) {}
     VectorMap(VectorMap &&other) noexcept : data(std::move(other.data)) {}
     VectorMap &operator=(const VectorMap &other) noexcept
@@ -109,7 +111,7 @@ namespace Framework
     constexpr void erase(typename decltype(data)::iterator iterator) noexcept
     { data.erase(iterator); }
 
-    const Value &operator[](size_t index) const noexcept { return data[index].second; }
-    Value &operator[](size_t index) noexcept { return data[index].second; }
+    const Value &operator[](usize index) const noexcept { return data[index].second; }
+    Value &operator[](usize index) noexcept { return data[index].second; }
   };
 }

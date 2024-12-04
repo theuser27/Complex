@@ -16,10 +16,15 @@
 
 #include "Third Party/gcem/gcem.hpp"
 #include "Third Party/constexpr-to-string/to_string.hpp"
+#include "Third Party/clog/small_function.hpp"
 
 #include "simd_values.hpp"
 #include "constants.hpp"
 #include "utils.hpp"
+
+#define NESTED_ENUM_ARRAY_TYPE ::utils::array
+// commented out because msvc likes to have ICEs
+//#define NESTED_ENUM_PAIR_TYPE ::utils::pair
 #include "nested_enum.hpp"
 
 namespace Generation
@@ -60,6 +65,7 @@ namespace Framework
       (Quadratic         , ID, "9c3ac761-4c0e-462e-be03-8604c391e085"), // x ^ 2 * (max - min) + min
       (SymmetricQuadratic, ID, "69f8a98b-7bd0-494d-b971-3ded188485c4"), // ((x - 0.5) ^ 2 * sgn(x - 0.5) + 0.5) * 2 * (max - min) + min
       (Cubic             , ID, "cf999277-1c98-4b1b-a8ff-4161d2cd9f35"), // x ^ 3
+      (SymmetricCubic    , ID, "1124f08e-6ac1-4ac7-8cc7-81bd662e9fe7"), // x ^ 3
       (Loudness          , ID, "b64df42f-b5b7-4b76-af63-167722c26543"), // 20 * log10(x)
       (SymmetricLoudness , ID, "fb7963d1-2ba8-4061-88ab-76f9397fc6ad"), // 20 * log10(abs(x)) * sgn(x)
       (Frequency         , ID, "9ed6e3bc-f91d-46fa-bd6a-2edcb1e178a2"), // (sampleRate / 2 * minFrequency) ^ x
@@ -79,6 +85,7 @@ namespace Framework
     {
       std::string stringData{};
       std::vector<IndexedData> dataLookup{};
+      clg::small_fn<bool(const Framework::IndexedData &, int)> ignoreItemFn{};
     };
   };
 
@@ -86,7 +93,7 @@ namespace Framework
   inline constexpr auto kOutputSidechainCountChange = std::string_view{ "2a0534fd-2888-416e-b3aa-e1436f3c88e4" };
   inline constexpr auto kLaneCountChange = std::string_view{ "ae2ace66-5e7a-41f9-8d45-92f4dc894947" };
 
-  inline constexpr auto kAllChangeIds = std::array{ kInputSidechainCountChange, kOutputSidechainCountChange, kLaneCountChange };
+  inline constexpr auto kAllChangeIds = utils::array{ kInputSidechainCountChange, kOutputSidechainCountChange, kLaneCountChange };
 
   struct ParameterDetails
   {
@@ -125,17 +132,66 @@ namespace Framework
   double scaleValue(double value, const ParameterDetails &details, float sampleRate = kDefaultSampleRate,
     bool scalePercent = false, bool skewOnly = false) noexcept;
 
+  constexpr auto getIndexedData(double scaledValue, const ParameterDetails &details) noexcept 
+    -> utils::pair<const IndexedData *, usize>
+  {
+    COMPLEX_ASSERT(details.scale == ParameterScale::Indexed ||
+      details.scale == ParameterScale::IndexedNumeric || 
+      details.scale == ParameterScale::Toggle);
+    COMPLEX_ASSERT(scaledValue <= (double)details.maxValue);
+
+    scaledValue -= details.minValue;
+    usize index = 0, option = 0;
+    // if we have an ignore function we need to check all items
+    if (details.dynamicData && details.dynamicData->ignoreItemFn)
+    {
+      auto ignoreItemFn = details.dynamicData->ignoreItemFn;
+      usize currentIndex = 0, currentOption = 0, i = (usize)scaledValue;
+
+      while (i)
+      {
+        // move to next option if we've run out 
+        if (details.indexedData[currentOption].count <= currentIndex)
+        {
+          currentIndex = 0;
+          // skip options that are not present
+          while (details.indexedData[++currentOption].count == 0) { }
+        }
+
+        if (ignoreItemFn(details.indexedData[currentOption], (int)currentIndex))
+        {
+          index = currentIndex;
+          option = currentOption;
+        }
+
+        ++currentIndex;
+        --i;
+      }
+    }
+    else
+    {
+      index = (usize)scaledValue;
+      while (details.indexedData[option].count <= index)
+      {
+        index -= details.indexedData[option].count;
+        ++option;
+      }
+    }
+    
+    return utils::pair{ &details.indexedData[option], index };
+  }
+
   double unscaleValue(double value, const ParameterDetails &details,
     float sampleRate = kDefaultSampleRate, bool unscalePercent = true) noexcept;
 
   simd_float scaleValue(simd_float value, const ParameterDetails &details,
     float sampleRate = kDefaultSampleRate) noexcept;
 
-  template<size_t N>
-  constexpr auto convertNameIdToIndexedData(const std::array<std::pair<std::string_view, std::string_view>, N> &array)
+  template<template<typename, auto> class array_t, typename T, usize N>
+  constexpr auto convertNameIdToIndexedData(const array_t<T, N> &array)
   {
-    std::array<IndexedData, N> data{};
-    for (size_t i = 0; i < N; ++i)
+    array_t<IndexedData, N> data{};
+    for (usize i = 0; i < N; ++i)
       data[i] = IndexedData{ array[i].first, array[i].second };
     return data;
   }
@@ -147,7 +203,7 @@ namespace Framework
   inline constexpr auto kGetAlgoPredicate = []<typename T>() { return requires{ T::algo_tag; }; };
   inline constexpr auto kGetActiveAlgoPredicate = []<typename T>() { return requires{ T::algo_tag; requires T::algo_tag; }; };
 
-  inline constexpr auto kOffOnNames = std::array{ IndexedData{ "Off" }, IndexedData{ "On" } };
+  inline constexpr auto kOffOnNames = utils::array{ IndexedData{ "Off" }, IndexedData{ "On" } };
 
 #define DECLARE_PARAMETER(...) using parameter_tag = void; static constexpr ParameterDetails details{ id().value(), __VA_ARGS__ };
 #define DECLARE_PROCESSOR(type) using processor_tag = void; using linked_type = type;
@@ -159,17 +215,17 @@ namespace Framework
   {                                                                                                                       \
     constexpr auto integers = []<i32 ... Is>(const utils::integer_sequence<i32, Is...> &)                                 \
     {                                                                                                                     \
-      return std::array{ std::string_view{ to_string<1 << (kMinFFTOrder + Is)> }... };                                    \
+      return NESTED_ENUM_ARRAY_TYPE{ std::string_view{ to_string<1 << (kMinFFTOrder + Is)> }... };                        \
     }(utils::make_integer_sequence<i32, kMaxFFTOrder - kMinFFTOrder + 1>{});                                              \
                                                                                                                           \
-    std::array<IndexedData, integers.size()> fftSizeLookup{};                                                             \
-    for (size_t i = 0; i < integers.size(); ++i)                                                                          \
+    NESTED_ENUM_ARRAY_TYPE<IndexedData, integers.size()> fftSizeLookup{};                                                 \
+    for (usize i = 0; i < integers.size(); ++i)                                                                           \
       fftSizeLookup[i] = { integers[i] };                                                                                 \
     return fftSizeLookup;                                                                                                 \
   }();
 
 #define CREATE_INPUT_NAMES                                                                                                \
-  static constexpr auto kInputNames = std::array                                                                          \
+  static constexpr auto kInputNames = NESTED_ENUM_ARRAY_TYPE                                                              \
   {                                                                                                                       \
     IndexedData{ "Main Input", Main::id().value() },                                                                      \
     IndexedData{ "Sidechain", Sidechain::id().value(), 0, kInputSidechainCountChange },                                   \
@@ -177,7 +233,7 @@ namespace Framework
   };
 
 #define CREATE_OUTPUT_NAMES                                                                                               \
-  static constexpr auto kOutputNames = std::array                                                                         \
+  static constexpr auto kOutputNames = NESTED_ENUM_ARRAY_TYPE                                                             \
   {                                                                                                                       \
     IndexedData{ "Main Output", Main::id().value() },                                                                     \
     IndexedData{ "Sidechain", Sidechain::id().value(), 0, kOutputSidechainCountChange },                                  \
@@ -203,7 +259,7 @@ namespace Framework
         (BlockSize  , ID_CODE, "7a2f5aca-dd4c-438f-b494-7bf21f7c5c40", CREATE_FFT_SIZE_NAMES DECLARE_PARAMETER("Block Size", kMinFFTOrder, kMaxFFTOrder, 
           kDefaultFFTOrder, (float)(kDefaultFFTOrder - kMinFFTOrder) / (float)(kMaxFFTOrder - kMinFFTOrder), 
           ParameterScale::IndexedNumeric, "", kFFTSizeNames, ParameterDetails::Automatable | ParameterDetails::Extensible, UpdateFlag::BeforeProcess, 
-          [](float value, const ParameterDetails &) { return std::to_string(1 << (size_t)value); })),
+          [](float value, const ParameterDetails &) { return std::to_string(1 << (usize)value); })),
         (Overlap    , ID_CODE, "14525f80-0590-493e-a977-d13661571714", DECLARE_PARAMETER("Overlap", kMinWindowOverlap, kMaxWindowOverlap,
           kDefaultWindowOverlap, kDefaultWindowOverlap, ParameterScale::Clamp, "%", {}, ParameterDetails::Automatable)),
         (WindowType , ID_CODE, "555614bd-c3dd-4dfa-8e2e-563574f2095f", static constexpr auto kWindowNames =  convertNameIdToIndexedData(
@@ -268,7 +324,7 @@ namespace Framework
         (Pitch      , ID     , "71133386-9421-4b23-91f9-c826dfc506b8"),
         (Stretch    , ID_CODE, "d700c4aa-ec95-4703-9837-7ad5bdf5c810", DECLARE_EFFECT(Generation::StretchEffect, false)),
         (Warp       , ID_CODE, "5fc3802a-b916-4d36-a853-78a29a5f5687", DECLARE_EFFECT(Generation::WarpEffect, false)),
-        (Destroy    , ID_CODE, "ea1dd088-a73a-4fd4-bb27-38ec0bf91850", DECLARE_EFFECT(Generation::DestroyEffect, false)),
+        (Destroy    , ID     , "ea1dd088-a73a-4fd4-bb27-38ec0bf91850"),
         
         (Algorithm  , ID_CODE, "6cecfa1f-a5dc-4ce3-9ae2-b1bf20a4f3bc", DECLARE_PARAMETER("Algorithm", 0.0f, 0.0f, 0.0f, 0.0f, ParameterScale::Indexed, "", {}, 
           ParameterDetails::Automatable | ParameterDetails::Extensible)),
@@ -279,7 +335,7 @@ namespace Framework
         (ShiftBounds, ID_CODE, "5198be8d-cf98-435a-96b2-7b90d69bf846", DECLARE_PARAMETER("Shift Bounds", -1.0f, 1.0f, 0.0f, 0.5f, ParameterScale::Linear, "%", {}, 
           ParameterDetails::Modulatable | ParameterDetails::Automatable | ParameterDetails::Stereo))
       ),
-      (), (DEFER), (DEFER), (DEFER), (DEFER)
+      (), (DEFER), (DEFER), (DEFER), (DEFER), (), (), (DEFER)
     )
     
 
@@ -354,13 +410,13 @@ namespace Framework
               ParameterScale::Cubic, " oct", {}, ParameterDetails::Modulatable | ParameterDetails::Automatable | ParameterDetails::Stereo)),
             (Offset    , ID_CODE, "1808ef90-46e8-43b8-bcc1-908014abd2f6", DECLARE_PARAMETER("Offset", 0.0f, 1.0f, 0.0f, 0.0f, ParameterScale::Frequency, " hz", {}, 
               ParameterDetails::Modulatable | ParameterDetails::Automatable | ParameterDetails::Stereo)),
-            (Slope     , ID_CODE, "c4ee95da-cb8d-4969-9ee4-5ca24019d5ed", static constexpr auto kPhaseShiftSlopeNames = 
-              convertNameIdToIndexedData(enum_names_and_ids<::nested_enum::All, true>(true));
-              DECLARE_PARAMETER("Slope", 0.0f, 1.0f, 0.0f, 0.0f, ParameterScale::Indexed, "", kPhaseShiftSlopeNames, 
+            (Slope     , ID_CODE, "c4ee95da-cb8d-4969-9ee4-5ca24019d5ed",
+              static constexpr auto kPhaseShiftSlopeNames = convertNameIdToIndexedData(enum_names_and_ids<::nested_enum::All, true>(true));
+              DECLARE_PARAMETER("Slope", 0.0f, (float)(kPhaseShiftSlopeNames.size() - 1), 0.0f, 0.0f, ParameterScale::Indexed, {}, kPhaseShiftSlopeNames,
               ParameterDetails::Modulatable | ParameterDetails::Automatable | ParameterDetails::Extensible))
           ),
           (), (), (), 
-          (ENUM, Slope, ((Constant, ID, "36722e1b-a1f3-4c1f-8599-647c1a637e0b"), (Linear, ID, "f1dc8a19-d0f2-4878-9b52-4ed05706281c"))))
+          (ENUM, Slope, ((Constant, ID, "36722e1b-a1f3-4c1f-8599-647c1a637e0b"), (Linear, ID, "f1dc8a19-d0f2-4878-9b52-4ed05706281c"), (Exp, ID, "0a10a4b6-6657-42f4-80de-a5ce14d00d4a"))))
         NESTED_ENUM_FROM(Processors::BaseEffect::Phase, (Transform, u64, DECLARE_ALGO(false)))
   
       NESTED_ENUM_FROM(Processors::BaseEffect, (Pitch, u64, DECLARE_EFFECT(Generation::PitchEffect, true)),
@@ -369,11 +425,41 @@ namespace Framework
           (ConstShift, ID, "e7528343-f4d2-42e4-9f66-b87416259844")
         ), (DEFER), (DEFER))
         NESTED_ENUM_FROM(Processors::BaseEffect::Pitch, (Resample, u64, DECLARE_ALGO(false)),
-          ((Shift, ID_CODE, "38949dbf-6edc-446a-908d-955fe492077c", DECLARE_PARAMETER("Shift", -48.0f, 48.0f, 0.0f, 0.5f, 
-            ParameterScale::Linear, " st", {}, ParameterDetails::Modulatable | ParameterDetails::Automatable | ParameterDetails::Stereo))))
+          (
+            (Shift, ID_CODE, "38949dbf-6edc-446a-908d-955fe492077c", DECLARE_PARAMETER("Shift", -48.0f, 48.0f, 0.0f, 0.5f, 
+              ParameterScale::Linear, " st", {}, ParameterDetails::Modulatable | ParameterDetails::Automatable | ParameterDetails::Stereo)),
+            (Wrap, ID_CODE, "4ec6f4e7-9bb8-439e-9a5f-50a6f818d17e", DECLARE_PARAMETER("Wrap Around", 0.0f, 1.0f, 0.0f, 0.0f,
+              ParameterScale::Toggle, {}, {}, ParameterDetails::Modulatable | ParameterDetails::Automatable))
+          )
+        )
         NESTED_ENUM_FROM(Processors::BaseEffect::Pitch, (ConstShift, u64, DECLARE_ALGO(true)),
-          ((Shift, ID_CODE, "4b78cec4-c746-4a50-a9a8-3cbd010a0f34", DECLARE_PARAMETER("Shift", -2000.0f, 2000.0f, 0.0f, 0.5f, 
-            ParameterScale::Linear, " hz", {}, ParameterDetails::Modulatable | ParameterDetails::Automatable | ParameterDetails::Stereo))))
+          ((Shift, ID_CODE, "4b78cec4-c746-4a50-a9a8-3cbd010a0f34", DECLARE_PARAMETER("Shift", -20'000.0f, 20'000.0f, 0.0f, 0.5f, 
+            ParameterScale::SymmetricCubic, " hz", {}, ParameterDetails::Modulatable | ParameterDetails::Automatable | ParameterDetails::Stereo))))
+
+      NESTED_ENUM_FROM(Processors::BaseEffect, (Destroy, u64, DECLARE_EFFECT(Generation::DestroyEffect, true)),
+        (
+          (Reinterpret, ID, "eefc7c4c-be13-4cdb-af4f-0c656a1ff4a9")
+        ), (DEFER))
+        NESTED_ENUM_FROM(Processors::BaseEffect::Destroy, (Reinterpret, u64, DECLARE_ALGO(true)),
+          (
+            (Attenuation, ID_CODE, "f81e64d3-44c4-4a11-91f1-b2640d9e2839", DECLARE_PARAMETER("Real/Imag Atten", kMinusInfDb, kInfDb, 0.0f, 0.5f,
+              ParameterScale::SymmetricLoudness, " db", {}, ParameterDetails::Modulatable | ParameterDetails::Automatable | ParameterDetails::Stereo)),
+            (Mapping, ID_CODE, "0206e09a-f472-4cc7-94fd-d3f6f6cd5787",
+              static constexpr auto kMappingNames = utils::array{ IndexedData{ "No Change", NoMapping::id().value() },
+                IndexedData{ "Switch Real/Imaginary parts", SwitchRealImag::id().value() }, IndexedData{ "Cartesian to Polar", CartToPolar::id().value() },
+                IndexedData{ "Polar to Cartesian", PolarToCart::id().value() } };
+              DECLARE_PARAMETER("Mapping", 0.0f, (float)(kMappingNames.size() - 1), 0.0f, 0.0f, ParameterScale::Indexed,
+              {}, kMappingNames, ParameterDetails::Modulatable | ParameterDetails::Automatable))
+          ), (),
+          (ENUM, (Mapping, u64),
+            (
+              (NoMapping     , ID, "681c148f-dd68-4044-b69b-a64585047c22"),
+              (SwitchRealImag, ID, "50d9ec45-87c8-4945-b953-116b9f7a01cf"),
+              (CartToPolar   , ID, "7eb5abe6-a6af-4c87-82c8-ca177ba069d8"),
+              (PolarToCart   , ID, "ee041eac-78fa-47f4-9432-1e6cc294fcbe")
+            )
+          )
+        )
 
     NESTED_ENUM_FROM(Processors::EffectModule, (ModuleType, u64, static constexpr auto kEffectModuleNames = convertNameIdToIndexedData(
       Processors::BaseEffect::enum_names_and_ids_filter<kGetActiveEffectPredicate, true>(true)); static constexpr float maxValue = 

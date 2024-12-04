@@ -48,40 +48,40 @@
 #define META_CREATE_FUNC(funcName) static FUnknown* funcName ()
 
 #define CLASS_CREATE_FUNC(className)                                               \
-	namespace Meta {                                                               \
-	META_CREATE_FUNC (make##className) { return (NEW className)->unknownCast (); } \
-	}
+  namespace Meta {                                                               \
+  META_CREATE_FUNC (make##className) { return (NEW className)->unknownCast (); } \
+  }
 
 #define SINGLE_CREATE_FUNC(className)                                                     \
-	namespace Meta {                                                                      \
-	META_CREATE_FUNC (make##className) { return className::instance ()->unknownCast (); } \
-	}
+  namespace Meta {                                                                      \
+  META_CREATE_FUNC (make##className) { return className::instance ()->unknownCast (); } \
+  }
 
 #define _META_CLASS(className)                                                         \
-	namespace Meta {                                                                   \
-	static Steinberg::MetaClass meta##className ((#className), Meta::make##className); \
-	}
+  namespace Meta {                                                                   \
+  static Steinberg::MetaClass meta##className ((#className), Meta::make##className); \
+  }
 
 #define _META_CLASS_IFACE(className, Interface)                                                  \
-	namespace Meta {                                                                             \
-	static Steinberg::MetaClass meta##Interface##className ((#className), Meta::make##className, \
-	                                                        Interface##_iid);                    \
-	}
+  namespace Meta {                                                                             \
+  static Steinberg::MetaClass meta##Interface##className ((#className), Meta::make##className, \
+                                                          Interface##_iid);                    \
+  }
 
 /** TODO
  */
 #define META_CLASS(className)     \
-	CLASS_CREATE_FUNC (className) \
-	_META_CLASS (className)
+  CLASS_CREATE_FUNC (className) \
+  _META_CLASS (className)
 
 /** TODO
  */
 #define META_CLASS_IFACE(className, Interface) \
-	CLASS_CREATE_FUNC (className)              \
-	_META_CLASS_IFACE (className, Interface)
+  CLASS_CREATE_FUNC (className)              \
+  _META_CLASS_IFACE (className, Interface)
 
 /** TODO
  */
 #define META_CLASS_SINGLE(className, Interface) \
-	SINGLE_CREATE_FUNC (className)              \
-	_META_CLASS_IFACE (className, Interface)
+  SINGLE_CREATE_FUNC (className)              \
+  _META_CLASS_IFACE (className, Interface)

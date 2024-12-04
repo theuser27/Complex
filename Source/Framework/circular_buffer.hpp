@@ -73,6 +73,8 @@ namespace Framework
     usize getSize() const noexcept { return size_; }
     auto &getData() noexcept { return data_; }
     const auto &getData() const noexcept { return data_; }
+    auto get() noexcept { return data_.get(); }
+    const auto get() const noexcept { return data_.get(); }
 
   private:
     MemoryBlock<float> data_{};

@@ -132,12 +132,12 @@ namespace Framework::LoadSave
     return scale;
   }
 
-  std::tuple<size_t, size_t, size_t> getParameterMappingsAndSidechains()
+  std::tuple<usize, usize, usize> getParameterMappingsAndSidechains()
   {
     json data = getConfigJson();
-    size_t parameterMappings = 64;
-    size_t in = 0;
-    size_t out = 0;
+    usize parameterMappings = 64;
+    usize in = 0;
+    usize out = 0;
 
     if (data.contains("parameter_count"))
       parameterMappings = data["parameter_count"];
@@ -151,7 +151,7 @@ namespace Framework::LoadSave
     return { parameterMappings, in, out };
   }
 
-  void saveParameterMappings(size_t parameterMappings)
+  void saveParameterMappings(usize parameterMappings)
   {
     json data = getConfigJson();
     data["parameter_count"] = parameterMappings;
@@ -189,29 +189,27 @@ namespace Framework
 {
   bool PresetUpdate::perform()
   {
-    /*if (oldSavedState_.has_value())
+    if (!oldSavedState_.has_value())
     {
       json previousState{};
       processorTree_.serialiseToJson(&previousState);
-      oldSavedState_ = std::move(previousState);
+      oldSavedState_ = COMPLEX_MOV(previousState);
     }
 
     processorTree_.clearState();
-    auto &state = std::get()*/
+    auto &oldSavedState = std::any_cast<json &>(oldSavedState_);
+    auto &newSavedState = std::any_cast<json &>(newSavedState_);
+    processorTree_.deserialiseFromJson(&newSavedState, &oldSavedState);
 
     return true;
   }
 
   bool PresetUpdate::undo()
   {
-    if (newSavedState_.has_value())
-    {
-      json newState{};
-      processorTree_.serialiseToJson(&newState);
-      newSavedState_ = std::move(newState);
-    }
-
     processorTree_.clearState();
+    auto &oldSavedState = std::any_cast<json &>(oldSavedState_);
+    auto &newSavedState = std::any_cast<json &>(newSavedState_);
+    processorTree_.deserialiseFromJson(&oldSavedState, &newSavedState);
 
     return true;
   }
@@ -221,7 +219,10 @@ namespace Plugin
 {
   void ProcessorTree::clearState()
   {
+    dynamicParameters_.clear();
 
+    allProcessors_.data.clear();
+    processorIdCounter_.store(processorTreeId + 1, std::memory_order_release);
   }
 
   void ProcessorTree::serialiseToJson(void *jsonData) const
@@ -247,16 +248,12 @@ namespace Plugin
     data["tree"] = topLevelProcessorsSerialised;
   }
 
-  void ComplexPlugin::deserialiseFromJson(void *jsonData)
+  bool ComplexPlugin::deserialiseFromJson(void *newSave, void *fallbackSave)
   {
-    json &data = *static_cast<json *>(jsonData);
+    json &newData = *static_cast<json *>(newSave);
 
-    // TODO: save previous state (if it exists) in case of loading failure or undo
-    //auto *currentSave = new Framework::PresetUpdate{ *this };
-    try
+    auto loadState = [&](json &data)
     {
-      upgradeSave(data);
-
       json &soundEngine = data["tree"][0];
       std::string_view type = soundEngine["id"];
       if (type != Framework::Processors::SoundEngine::id().value())
@@ -271,32 +268,44 @@ namespace Plugin
           break;
         }
       }
-      
+
       soundEngine_ = new Generation::SoundEngine{ this };
       soundEngine_->setParentProcessorId(processorTreeId);
       soundEngine_->deserialiseFromJson(&soundEngine);
 
       for (auto &reason : Framework::kAllChangeIds)
         updateDynamicParameters(reason);
+    };
 
-      //pushUndo(currentSave, true);
+    bool isSuccessful = false;
+    try
+    {
+      loadState(newData);
+      isSuccessful = true;
     }
     catch (const LoadingException &e)
     {
       juce::String error = "There was an error opening the preset.\n";
       error += e.what();
       juce::NativeMessageBox::showMessageBoxAsync(juce::MessageBoxIconType::NoIcon, "Error opening preset", error);
-
-      // TODO: restore old state
     }
     catch (const std::exception &e)
     {
+      // idk what happened
       juce::String error = "An unknown error occured while opening preset.\n";
       error += e.what();
       juce::NativeMessageBox::showMessageBoxAsync(juce::MessageBoxIconType::NoIcon, "Error opening preset", error);
-
-      // TODO: try to restore old state???? idk what happened
     }
+
+    if (!isSuccessful)
+    {
+      if (fallbackSave)
+        loadState(*static_cast<json *>(fallbackSave));
+      else
+        loadDefaultPreset();
+    }
+
+    return isSuccessful;
   }
 
   void ComplexPlugin::loadDefaultPreset()
@@ -317,7 +326,7 @@ namespace Plugin
       enum_ids_filter<[]<typename T>() { return requires{ T::parameter_tag; }; }, true>();
 
     auto min = std::min(pluginParameterIds.size(), parameterBridges_.size());
-    for (size_t i = 0; i < min; ++i)
+    for (usize i = 0; i < min; ++i)
     {
       auto *parameter = getProcessorParameter(soundEngine_->getProcessorId(), pluginParameterIds[i]);
       COMPLEX_ASSERT(parameter);
@@ -333,12 +342,12 @@ namespace Plugin
     static constexpr auto processorTypes = Framework::Processors::
       enum_subtypes_filter_recursive<Framework::kGetProcessorPredicate>();
 
-    return [&]<typename ... Ts>(const std::tuple<std::type_identity<Ts>...> &)
+    return [&]<typename ... Ts>(const std::tuple<nested_enum::type_identity<Ts>...> &)
     {
       Generation::BaseProcessor *processor = nullptr;
       auto create = [&]<std::derived_from<Generation::BaseProcessor> T>()
       {
-        T *processor = new T{ this };
+        auto *processor = new T{ this };
         if (jsonData != nullptr)
           processor->deserialiseFromJson(jsonData);
         else
@@ -358,9 +367,9 @@ namespace Plugin
 
 static void handleIndexedData(Framework::ParameterDetails &details, json *indexedData)
 {
-  std::vector<std::pair<std::string_view *, size_t>> stringRelocations{};
+  std::vector<std::pair<std::string_view *, usize>> stringRelocations{};
 
-  size_t relocationIndex = 0;
+  usize relocationIndex = 0;
   auto appendAndAddRelocation = [&](std::string_view &relocate, std::string_view text)
   {
     stringRelocations.emplace_back(&relocate, relocationIndex++);
@@ -370,7 +379,7 @@ static void handleIndexedData(Framework::ParameterDetails &details, json *indexe
 
   auto doStringRelocations = [&]()
   {
-    for (size_t i = 0, textIndex = 0; i < stringRelocations.size(); ++i)
+    for (usize i = 0, textIndex = 0; i < stringRelocations.size(); ++i)
     {
       *stringRelocations[i].first = details.dynamicData->stringData.data() + textIndex;
       textIndex += stringRelocations[i].first->size() + 1;
@@ -382,7 +391,7 @@ static void handleIndexedData(Framework::ParameterDetails &details, json *indexe
     float minValue = details.minValue;
     float maxValue = details.maxValue;
     std::vector<std::string> generatedStrings{};
-    details.dynamicData->dataLookup.reserve((size_t)(maxValue - minValue) + 1);
+    details.dynamicData->dataLookup.reserve((usize)(maxValue - minValue) + 1);
     for (float i = minValue; i <= maxValue; ++i)
     {
       auto string = details.generateNumeric(i, details);
@@ -395,7 +404,7 @@ static void handleIndexedData(Framework::ParameterDetails &details, json *indexe
     return;
   }
 
-  std::vector<size_t> accountedElements{};
+  std::vector<usize> accountedElements{};
   accountedElements.reserve(details.indexedData.empty() ? indexedData->size() : details.indexedData.size());
   details.dynamicData->dataLookup.reserve(details.indexedData.empty() ? indexedData->size() : details.indexedData.size());
 
@@ -440,7 +449,7 @@ static void handleIndexedData(Framework::ParameterDetails &details, json *indexe
         name, id, details.displayName, details.id) };
     }
 
-    accountedElements.emplace_back((size_t)(iter - details.indexedData.begin()));
+    accountedElements.emplace_back((usize)(iter - details.indexedData.begin()));
     auto &element = details.dynamicData->dataLookup.emplace_back(*iter);
 
     bool isNameSame = element.displayName == name;
@@ -470,7 +479,7 @@ static void handleIndexedData(Framework::ParameterDetails &details, json *indexe
   doStringRelocations();
 
   // append elements that were not present in the save
-  for (size_t i = 0; i < details.indexedData.size(); ++i)
+  for (usize i = 0; i < details.indexedData.size(); ++i)
   {
     auto erasedCount = std::erase(accountedElements, i);
     if (erasedCount != 0)
@@ -499,7 +508,7 @@ namespace Generation
       json &subProcessorData = subProcessors.emplace_back();
       subProcessor->serialiseToJson(&subProcessorData);
     }
-    processorInfo["processors"] = std::move(subProcessors);
+    processorInfo["processors"] = COMPLEX_MOV(subProcessors);
 
     std::vector<json> parameters{};
     for (auto &[name, parameter] : processorParameters_.data)
@@ -507,7 +516,7 @@ namespace Generation
       json &parameterData = parameters.emplace_back();
       parameter->serialiseToJson(&parameterData);
     }
-    processorInfo["parameters"] = std::move(parameters);
+    processorInfo["parameters"] = COMPLEX_MOV(parameters);
   }
 
   void BaseProcessor::deserialiseFromJson(std::span<const std::string_view> parameterIds, 
@@ -542,7 +551,7 @@ namespace Generation
         throw LoadingException{ std::format("Parameter {} ({}) is not part of processor {} ({}).", 
           parameter->getParameterName(), parameterId, name, id) };
       }
-      processor->processorParameters_.data.emplace_back(parameterId, std::move(parameter));
+      processor->processorParameters_.data.emplace_back(parameterId, COMPLEX_MOV(parameter));
     }
 
     for (auto &[_, value] : data["processors"].items())
@@ -671,7 +680,7 @@ namespace Framework
         if (!element.dynamicUpdateUuid.empty())				
           elementData["dynamic_update_uuid"] = element.dynamicUpdateUuid;
       }
-      data["indexed_data"] = std::move(indexedData);
+      data["indexed_data"] = COMPLEX_MOV(indexedData);
     }
     
     // TODO: add modulators
@@ -794,25 +803,32 @@ void ComplexAudioProcessor::setStateInformation(const void *data, int sizeInByte
     return;
   }
 
-  juce::MemoryInputStream stream{ data, (size_t)sizeInBytes, false };
+  juce::MemoryInputStream stream{ data, (usize)sizeInBytes, false };
   juce::String dataString = stream.readEntireStreamAsString();
   
   json jsonData{};
   try
   {
     jsonData = json::parse(dataString.toRawUTF8());
+    upgradeSave(jsonData);
   }
-  catch (const std::exception &)
+  catch (const std::exception &e)
   {
     juce::NativeMessageBox::showMessageBoxAsync(juce::MessageBoxIconType::NoIcon, 
-      "Error opening preset", "Couldn't parse preset json.\n");
+      "Error opening preset", e.what());
   }
 
   suspendProcessing(true);
-  deserialiseFromJson(&jsonData);
+
+  if (isLoaded_.load(std::memory_order_acquire))
+    pushUndo(new Framework::PresetUpdate{ *this, COMPLEX_MOV(jsonData) });
+  else
+    deserialiseFromJson(&jsonData, nullptr);
+
+  if (rendererInstance_)
+    rendererInstance_->updateFullGui();
+
   suspendProcessing(false);
 
   isLoaded_.store(true, std::memory_order_release);
-
-  getRenderer().updateFullGui();
 }

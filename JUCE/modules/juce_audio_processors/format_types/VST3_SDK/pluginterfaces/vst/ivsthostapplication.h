@@ -36,14 +36,14 @@ class IHostApplication : public FUnknown
 {
 public:
 //------------------------------------------------------------------------
-	/** Gets host application name. */
-	virtual tresult PLUGIN_API getName (String128 name) = 0;
+  /** Gets host application name. */
+  virtual tresult PLUGIN_API getName (String128 name) = 0;
 
-	/** Creates host object (e.g. Vst::IMessage). */
-	virtual tresult PLUGIN_API createInstance (TUID cid, TUID _iid, void** obj) = 0;
+  /** Creates host object (e.g. Vst::IMessage). */
+  virtual tresult PLUGIN_API createInstance (TUID cid, TUID _iid, void** obj) = 0;
 
 //------------------------------------------------------------------------
-	static const FUID iid;
+  static const FUID iid;
 };
 
 DECLARE_CLASS_IID (IHostApplication, 0x58E595CC, 0xDB2D4969, 0x8B6AAF8C, 0x36A664E5)
@@ -52,12 +52,12 @@ DECLARE_CLASS_IID (IHostApplication, 0x58E595CC, 0xDB2D4969, 0x8B6AAF8C, 0x36A66
 /** Helper to allocate a message */
 inline IMessage* allocateMessage (IHostApplication* host)
 {
-	TUID iid;
-	IMessage::iid.toTUID (iid);
-	IMessage* m = nullptr;
-	if (host->createInstance (iid, iid, (void**)&m) == kResultOk)
-		return m;
-	return nullptr;
+  TUID iid;
+  IMessage::iid.toTUID (iid);
+  IMessage* m = nullptr;
+  if (host->createInstance (iid, iid, (void**)&m) == kResultOk)
+    return m;
+  return nullptr;
 }
 
 //------------------------------------------------------------------------
@@ -74,8 +74,8 @@ Implemented by the VST 2 Wrapper.
 class IVst3ToVst2Wrapper : public FUnknown
 {
 public:
-	//------------------------------------------------------------------------
-	static const FUID iid;
+  //------------------------------------------------------------------------
+  static const FUID iid;
 };
 
 DECLARE_CLASS_IID (IVst3ToVst2Wrapper, 0x29633AEC, 0x1D1C47E2, 0xBB85B97B, 0xD36EAC61)
@@ -94,8 +94,8 @@ Implemented by the AU Wrapper.
 class IVst3ToAUWrapper : public FUnknown
 {
 public:
-	//------------------------------------------------------------------------
-	static const FUID iid;
+  //------------------------------------------------------------------------
+  static const FUID iid;
 };
 
 DECLARE_CLASS_IID (IVst3ToAUWrapper, 0xA3B8C6C5, 0xC0954688, 0xB0916F0B, 0xB697AA44)
@@ -114,8 +114,8 @@ Implemented by the AAX Wrapper.
 class IVst3ToAAXWrapper : public FUnknown
 {
 public:
-	//------------------------------------------------------------------------
-	static const FUID iid;
+  //------------------------------------------------------------------------
+  static const FUID iid;
 };
 DECLARE_CLASS_IID (IVst3ToAAXWrapper, 0x6D319DC6, 0x60C56242, 0xB32C951B, 0x93BEF4C6)
 
@@ -139,21 +139,21 @@ class IVst3WrapperMPESupport : public FUnknown
 {
 public:
 //------------------------------------------------------------------------
-	/** enable or disable MPE processing
-	 *	@param state true to enable, false to disable MPE processing
-	 *	@return kResultTrue on success */
-	virtual tresult PLUGIN_API enableMPEInputProcessing (TBool state) = 0;
-	/** setup the MPE processing
-	 *	@param masterChannel MPE master channel (zero based)
-	 *	@param memberBeginChannel MPE member begin channel (zero based)
-	 *	@param memberEndChannel MPE member end channel (zero based)
-	 *	@return kResultTrue on success */
-	virtual tresult PLUGIN_API setMPEInputDeviceSettings (int32 masterChannel,
-	                                                      int32 memberBeginChannel,
-	                                                      int32 memberEndChannel) = 0;
+  /** enable or disable MPE processing
+   *	@param state true to enable, false to disable MPE processing
+   *	@return kResultTrue on success */
+  virtual tresult PLUGIN_API enableMPEInputProcessing (TBool state) = 0;
+  /** setup the MPE processing
+   *	@param masterChannel MPE master channel (zero based)
+   *	@param memberBeginChannel MPE member begin channel (zero based)
+   *	@param memberEndChannel MPE member end channel (zero based)
+   *	@return kResultTrue on success */
+  virtual tresult PLUGIN_API setMPEInputDeviceSettings (int32 masterChannel,
+                                                        int32 memberBeginChannel,
+                                                        int32 memberEndChannel) = 0;
 
 //------------------------------------------------------------------------
-	static const FUID iid;
+  static const FUID iid;
 };
 
 DECLARE_CLASS_IID (IVst3WrapperMPESupport, 0x44149067, 0x42CF4BF9, 0x8800B750, 0xF7359FE3)

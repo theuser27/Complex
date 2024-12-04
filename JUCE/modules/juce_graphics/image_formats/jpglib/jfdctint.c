@@ -175,9 +175,9 @@ jpeg_fdct_islow (DCTELEM * data)
 
     z1 = MULTIPLY(tmp12 + tmp13, FIX_0_541196100);
     dataptr[2] = (DCTELEM) DESCALE(z1 + MULTIPLY(tmp13, FIX_0_765366865),
-				   CONST_BITS-PASS1_BITS);
+           CONST_BITS-PASS1_BITS);
     dataptr[6] = (DCTELEM) DESCALE(z1 + MULTIPLY(tmp12, - FIX_1_847759065),
-				   CONST_BITS-PASS1_BITS);
+           CONST_BITS-PASS1_BITS);
 
     /* Odd part per figure 8 --- note paper omits factor of sqrt(2).
      * cK represents cos(K*pi/16).
@@ -240,9 +240,9 @@ jpeg_fdct_islow (DCTELEM * data)
 
     z1 = MULTIPLY(tmp12 + tmp13, FIX_0_541196100);
     dataptr[DCTSIZE*2] = (DCTELEM) DESCALE(z1 + MULTIPLY(tmp13, FIX_0_765366865),
-					   CONST_BITS+PASS1_BITS);
+             CONST_BITS+PASS1_BITS);
     dataptr[DCTSIZE*6] = (DCTELEM) DESCALE(z1 + MULTIPLY(tmp12, - FIX_1_847759065),
-					   CONST_BITS+PASS1_BITS);
+             CONST_BITS+PASS1_BITS);
 
     /* Odd part per figure 8 --- note paper omits factor of sqrt(2).
      * cK represents cos(K*pi/16).
@@ -268,13 +268,13 @@ jpeg_fdct_islow (DCTELEM * data)
     z4 += z5;
 
     dataptr[DCTSIZE*7] = (DCTELEM) DESCALE(tmp4 + z1 + z3,
-					   CONST_BITS+PASS1_BITS);
+             CONST_BITS+PASS1_BITS);
     dataptr[DCTSIZE*5] = (DCTELEM) DESCALE(tmp5 + z2 + z4,
-					   CONST_BITS+PASS1_BITS);
+             CONST_BITS+PASS1_BITS);
     dataptr[DCTSIZE*3] = (DCTELEM) DESCALE(tmp6 + z2 + z3,
-					   CONST_BITS+PASS1_BITS);
+             CONST_BITS+PASS1_BITS);
     dataptr[DCTSIZE*1] = (DCTELEM) DESCALE(tmp7 + z1 + z4,
-					   CONST_BITS+PASS1_BITS);
+             CONST_BITS+PASS1_BITS);
 
     dataptr++;			/* advance pointer to next column */
   }

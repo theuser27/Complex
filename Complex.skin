@@ -133,9 +133,16 @@
 			"Widget Secondary 1": "ff4c4c4c",
 			"Widget Accent 1": "ffff6b00",
 			"Widget Background 1": "ff353535"
+		},
+		"Destroy Module": {
+			"Background": "ff151515",
+			"Body": "ff1f1f1f",
+			"Background Element": "ff313131",
+			"Widget Primary 1": "ffeb5353",
+			"Widget Secondary 1": "ff4c4c4c",
+			"Widget Accent 1": "ffeb5353",
+			"Widget Background 1": "ff353535"
 		}
 
-	},
-
-	"Plugin Version": 65542
+	}
 }

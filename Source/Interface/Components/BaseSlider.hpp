@@ -396,7 +396,8 @@ namespace Interface
   {
   public:
     static constexpr int kDefaultTextSelectorHeight = 16;
-    static constexpr int kLabelOffset = 8;
+    static constexpr int kLabelHMargin = 8;
+    static constexpr int kLabelVMargin = 4;
 
     static constexpr float kHeightFontAscentRatio = 0.5f;
     static constexpr float kPaddingHeightRatio = 0.25f;
@@ -442,7 +443,7 @@ namespace Interface
     void setTextSelectorListener(TextSelectorListener *listener) noexcept { textSelectorListener_ = listener; }
 
     void setOptionsTitle(std::string title) { optionsTitle_ = COMPLEX_MOV(title); }
-    void setItemIgnoreFunction(clg::small_function<bool(const Framework::IndexedData &, int)> fn) noexcept 
+    void setItemIgnoreFunction(clg::small_fn<bool(const Framework::IndexedData &, int)> fn) noexcept
     { ignoreItemFunction_ = COMPLEX_MOV(fn); }
 
     std::string_view getTextValue(bool fromParameter = false);
@@ -451,7 +452,7 @@ namespace Interface
     void resizeForText() noexcept;
 
     std::string optionsTitle_{};
-    clg::small_function<bool(const Framework::IndexedData &, int)> ignoreItemFunction_{};
+    clg::small_fn<bool(const Framework::IndexedData &, int)> ignoreItemFunction_{};
     juce::Font usedFont_{};
     double lastValue_ = 0.0;
     int textWidth_{};

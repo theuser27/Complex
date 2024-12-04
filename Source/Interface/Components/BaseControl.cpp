@@ -318,6 +318,17 @@ namespace Interface
     return options;
   }
 
+  juce::Rectangle<int> BaseControl::getUnionOfAllElements() const noexcept
+  {
+    auto bounds = drawBounds_;
+    /*if (label_ && label_->isVisible())
+      bounds = bounds.getUnion(label_->getBounds());*/
+    for (usize i = 0; i < extraElements_.data.size(); i++)
+      if (extraElements_.data[i].first->isVisible())
+        bounds = bounds.getUnion(extraElements_[i]);
+    return bounds;
+  }
+
   double BaseControl::getValueFromText(const String &text) const
   {
     String trimmed = text.removeCharacters(" ").toLowerCase();

@@ -153,8 +153,6 @@ namespace Interface
     const simd_float expectedPhaseDifference = (float)(((1 << 16) + version - lastBufferVersion) & ((1 << 16) - 1));
     lastBufferVersion = version;
 
-    bool isDataPolar = isDataPolar_;
-
     COMPLEX_ASSERT(scratchBuffer_.getSimdChannels() == bufferView.getSimdChannels()
       && "Scratch buffer doesn't match the number of channels in memory");
 
@@ -165,21 +163,19 @@ namespace Interface
 
     bufferView_.unlock();
 
-    if (!isDataPolar)
-    {
-      if (shouldDisplayPhases)
-        utils::convertBufferInPlace<::midSide<complexCartToPolar>>(scratchBuffer_, binCount_);
-      else
-        utils::convertBufferInPlace<::midSide<::complexMagnitude>>(scratchBuffer_, binCount_);
+    // convert data to polar form
+    if (shouldDisplayPhases)
+      utils::convertBufferInPlace<::midSide<complexCartToPolar>>(scratchBuffer_, binCount_);
+    else
+      utils::convertBufferInPlace<::midSide<::complexMagnitude>>(scratchBuffer_, binCount_);
 
-      // handle dc and nyquist separately because the conversion functions wrote garbage there
-      for (size_t i = 0; i < scratchBuffer_.getChannels(); i += scratchBuffer_.getRelativeSize())
-      {
-        simd_float dcAndNyquist = scratchBuffer_.readSimdValueAt(i, 0);
-        simd_float zeroes = 0.0f;
-        ::midSide(dcAndNyquist, zeroes);
-        scratchBuffer_.writeSimdValueAt(simd_float::abs(dcAndNyquist), i, 0);
-      }
+    // handle dc and nyquist separately because the conversion functions wrote garbage there
+    for (size_t i = 0; i < scratchBuffer_.getChannels(); i += scratchBuffer_.getRelativeSize())
+    {
+      simd_float dcAndNyquist = scratchBuffer_.readSimdValueAt(i, 0);
+      simd_float zeroes = 0.0f;
+      ::midSide(dcAndNyquist, zeroes);
+      scratchBuffer_.writeSimdValueAt(simd_float::abs(dcAndNyquist), i, 0);
     }
 
     static constexpr simd_float defaultValue = { 0.001f, 0.0f };

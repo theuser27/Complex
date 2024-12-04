@@ -49,7 +49,7 @@ namespace Plugin
 
     Interface::Renderer &getRenderer();
 
-    void deserialiseFromJson(void *jsonData);
+    bool deserialiseFromJson(void *newSave, void *fallbackSave) override;
     void loadDefaultPreset();
     size_t getLaneCount() const final;
 

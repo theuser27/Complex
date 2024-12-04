@@ -34,11 +34,11 @@ namespace Vst {
 const int32 kDefaultFactoryFlags = PFactoryInfo::kUnicode; 
 
 #define BEGIN_FACTORY_DEF(vendor,url,email) using namespace Steinberg; \
-	SMTG_EXPORT_SYMBOL IPluginFactory* PLUGIN_API GetPluginFactory () {	\
-	if (!gPluginFactory) \
-	{ \
-		static PFactoryInfo factoryInfo (vendor, url, email, Vst::kDefaultFactoryFlags); \
-		gPluginFactory = new CPluginFactory (factoryInfo);
+  SMTG_EXPORT_SYMBOL IPluginFactory* PLUGIN_API GetPluginFactory () {	\
+  if (!gPluginFactory) \
+  { \
+    static PFactoryInfo factoryInfo (vendor, url, email, Vst::kDefaultFactoryFlags); \
+    gPluginFactory = new CPluginFactory (factoryInfo);
 
 //------------------------------------------------------------------------
 /** \defgroup vstBus VST busses
@@ -63,25 +63,25 @@ See also: IComponent::getBusInfo, IComponent::activateBus
 /** Bus media types */
 enum MediaTypes
 {
-	kAudio = 0,		///< audio
-	kEvent,			///< events
-	kNumMediaTypes
+  kAudio = 0,		///< audio
+  kEvent,			///< events
+  kNumMediaTypes
 };
 
 //------------------------------------------------------------------------
 /** Bus directions */
 enum BusDirections
 {
-	kInput = 0,		///< input bus
-	kOutput			///< output bus
+  kInput = 0,		///< input bus
+  kOutput			///< output bus
 };
 
 //------------------------------------------------------------------------
 /** Bus types */
 enum BusTypes
 {
-	kMain = 0,		///< main bus
-	kAux			///< auxiliary bus (sidechain)
+  kMain = 0,		///< main bus
+  kAux			///< auxiliary bus (sidechain)
 };
 
 //------------------------------------------------------------------------
@@ -91,27 +91,27 @@ This is the structure used with getBusInfo, informing the host about what is a s
 */
 struct BusInfo
 {
-	MediaType mediaType;	///< Media type - has to be a value of \ref MediaTypes
-	BusDirection direction; ///< input or output \ref BusDirections
-	int32 channelCount;		///< number of channels (if used then need to be recheck after \ref
-							/// IAudioProcessor::setBusArrangements is called).
-							/// For a bus of type MediaTypes::kEvent the channelCount corresponds
-							/// to the number of supported MIDI channels by this bus
-	String128 name;			///< name of the bus
-	BusType busType;		///< main or aux - has to be a value of \ref BusTypes
-	uint32 flags;			///< flags - a combination of \ref BusFlags
-	enum BusFlags
-	{
-		/** The bus should be activated by the host per default on instantiation (activateBus call is requested).
- 		 	By default a bus is inactive. */
-		kDefaultActive = 1 << 0,
-		/** The bus does not contain ordinary audio data, but data used for control changes at sample rate.
- 			The data is in the same format as the audio data [-1..1].
- 			A host has to prevent unintended routing to speakers to prevent damage.
-		 	Only valid for audio media type busses.
-		 	[released: 3.7.0] */
-		kIsControlVoltage = 1 << 1
-	};
+  MediaType mediaType;	///< Media type - has to be a value of \ref MediaTypes
+  BusDirection direction; ///< input or output \ref BusDirections
+  int32 channelCount;		///< number of channels (if used then need to be recheck after \ref
+              /// IAudioProcessor::setBusArrangements is called).
+              /// For a bus of type MediaTypes::kEvent the channelCount corresponds
+              /// to the number of supported MIDI channels by this bus
+  String128 name;			///< name of the bus
+  BusType busType;		///< main or aux - has to be a value of \ref BusTypes
+  uint32 flags;			///< flags - a combination of \ref BusFlags
+  enum BusFlags
+  {
+    /** The bus should be activated by the host per default on instantiation (activateBus call is requested).
+      By default a bus is inactive. */
+    kDefaultActive = 1 << 0,
+    /** The bus does not contain ordinary audio data, but data used for control changes at sample rate.
+      The data is in the same format as the audio data [-1..1].
+      A host has to prevent unintended routing to speakers to prevent damage.
+      Only valid for audio media type busses.
+      [released: 3.7.0] */
+    kIsControlVoltage = 1 << 1
+  };
 };
 
 /*@}*/
@@ -120,9 +120,9 @@ struct BusInfo
 /** I/O modes */
 enum IoModes
 {
-	kSimple = 0,		///< 1:1 Input / Output. Only used for Instruments. See \ref vst3IoMode
-	kAdvanced,			///< n:m Input / Output. Only used for Instruments.
-	kOfflineProcessing	///< plug-in used in an offline processing context
+  kSimple = 0,		///< 1:1 Input / Output. Only used for Instruments. See \ref vst3IoMode
+  kAdvanced,			///< n:m Input / Output. Only used for Instruments.
+  kOfflineProcessing	///< plug-in used in an offline processing context
 };
 
 //------------------------------------------------------------------------
@@ -134,9 +134,9 @@ relation of an event-input-channel to an audio-output-bus in particular is of in
 */
 struct RoutingInfo
 {
-	MediaType mediaType;	///< media type see \ref MediaTypes
-	int32 busIndex;			///< bus index
-	int32 channel;			///< channel (-1 for all channels)
+  MediaType mediaType;	///< media type see \ref MediaTypes
+  int32 busIndex;			///< bus index
+  int32 channel;			///< channel (-1 for all channels)
 };
 
 //------------------------------------------------------------------------
@@ -158,40 +158,40 @@ class IComponent : public IPluginBase
 {
 public:
 //------------------------------------------------------------------------
-	/** Called before initializing the component to get information about the controller class. */
-	virtual tresult PLUGIN_API getControllerClassId (TUID classId) = 0;
+  /** Called before initializing the component to get information about the controller class. */
+  virtual tresult PLUGIN_API getControllerClassId (TUID classId) = 0;
 
-	/** Called before 'initialize' to set the component usage (optional). See \ref IoModes */
-	virtual tresult PLUGIN_API setIoMode (IoMode mode) = 0;
+  /** Called before 'initialize' to set the component usage (optional). See \ref IoModes */
+  virtual tresult PLUGIN_API setIoMode (IoMode mode) = 0;
 
-	/** Called after the plug-in is initialized. See \ref MediaTypes, BusDirections */
-	virtual int32 PLUGIN_API getBusCount (MediaType type, BusDirection dir) = 0;
+  /** Called after the plug-in is initialized. See \ref MediaTypes, BusDirections */
+  virtual int32 PLUGIN_API getBusCount (MediaType type, BusDirection dir) = 0;
 
-	/** Called after the plug-in is initialized. See \ref MediaTypes, BusDirections */
-	virtual tresult PLUGIN_API getBusInfo (MediaType type, BusDirection dir, int32 index, BusInfo& bus /*out*/) = 0;
+  /** Called after the plug-in is initialized. See \ref MediaTypes, BusDirections */
+  virtual tresult PLUGIN_API getBusInfo (MediaType type, BusDirection dir, int32 index, BusInfo& bus /*out*/) = 0;
 
-	/** Retrieves routing information (to be implemented when more than one regular input or output bus exists).
-	    The inInfo always refers to an input bus while the returned outInfo must refer to an output bus! */
-	virtual tresult PLUGIN_API getRoutingInfo (RoutingInfo& inInfo, RoutingInfo& outInfo /*out*/) = 0;
+  /** Retrieves routing information (to be implemented when more than one regular input or output bus exists).
+      The inInfo always refers to an input bus while the returned outInfo must refer to an output bus! */
+  virtual tresult PLUGIN_API getRoutingInfo (RoutingInfo& inInfo, RoutingInfo& outInfo /*out*/) = 0;
 
-	/** Called upon (de-)activating a bus in the host application. The plug-in should only processed
-	   an activated bus, the host could provide less see \ref AudioBusBuffers in the process call
-	   (see \ref IAudioProcessor::process) if last busses are not activated. An already activated bus 
-	   does not need to be reactivated after a IAudioProcessor::setBusArrangements call. */
-	virtual tresult PLUGIN_API activateBus (MediaType type, BusDirection dir, int32 index,
-	                                        TBool state) = 0;
+  /** Called upon (de-)activating a bus in the host application. The plug-in should only processed
+     an activated bus, the host could provide less see \ref AudioBusBuffers in the process call
+     (see \ref IAudioProcessor::process) if last busses are not activated. An already activated bus 
+     does not need to be reactivated after a IAudioProcessor::setBusArrangements call. */
+  virtual tresult PLUGIN_API activateBus (MediaType type, BusDirection dir, int32 index,
+                                          TBool state) = 0;
 
-	/** Activates / deactivates the component. */
-	virtual tresult PLUGIN_API setActive (TBool state) = 0;
+  /** Activates / deactivates the component. */
+  virtual tresult PLUGIN_API setActive (TBool state) = 0;
 
-	/** Sets complete state of component. */
-	virtual tresult PLUGIN_API setState (IBStream* state) = 0;
+  /** Sets complete state of component. */
+  virtual tresult PLUGIN_API setState (IBStream* state) = 0;
 
-	/** Retrieves complete state of component. */
-	virtual tresult PLUGIN_API getState (IBStream* state) = 0;
+  /** Retrieves complete state of component. */
+  virtual tresult PLUGIN_API getState (IBStream* state) = 0;
 
 //------------------------------------------------------------------------
-	static const FUID iid;
+  static const FUID iid;
 };
 
 DECLARE_CLASS_IID (IComponent, 0xE831FF31, 0xF2D54301, 0x928EBBEE, 0x25697802)

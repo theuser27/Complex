@@ -16,6 +16,14 @@
 
 namespace Framework
 {
+  ParameterValue::~ParameterValue() noexcept
+  {
+    if (parameterLink_.hostControl)
+      parameterLink_.hostControl->resetParameterLink(nullptr);
+    if (parameterLink_.UIControl)
+      parameterLink_.UIControl->setParameterLink(nullptr);
+  }
+
   void ParameterValue::updateValue(float sampleRate)
   {
     utils::ScopedLock g{ waitLock_, utils::WaitMechanism::Spin };
@@ -49,7 +57,7 @@ namespace Framework
         newModulations += modulatorPointer->getDeltaValue();
     }
 
-    if (isDirty || !utils::completelyEqual(modulations_, newModulations))
+    if (isDirty || modulations_ != newModulations)
     {
       modulations_ = newModulations;
       isDirty = true;

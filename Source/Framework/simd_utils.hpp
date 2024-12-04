@@ -54,12 +54,66 @@ namespace utils
   }
   constexpr strict_inline simd_int vector_call reinterpretToInt(simd_int value) noexcept { return value; }
 
-  template<SimdValue SIMD>
-  strict_inline SIMD vector_call merge(SIMD falseValue, SIMD trueValue, simd_mask mask) noexcept
+  strict_inline simd_float vector_call toSimdFloatFromUnaligned(const float *unaligned) noexcept
   {
-    // https://graphics.stanford.edu/~seander/bithacks.html#MaskedMerge
-    // (falseValue & ~mask) | (trueValue & mask)
-    return falseValue ^ ((falseValue ^ trueValue) & mask);
+  #if COMPLEX_SSE4_1
+    return _mm_loadu_ps(unaligned);
+  #elif COMPLEX_NEON
+    return vld1q_f32(unaligned);
+  #endif
+  }
+
+  strict_inline void vector_call transpose(utils::array<simd_float, simd_float::size> &rows)
+  {
+  #if COMPLEX_SSE4_1
+    auto low0 = _mm_unpacklo_ps(rows[0].value, rows[1].value);
+    auto low1 = _mm_unpacklo_ps(rows[2].value, rows[3].value);
+    auto high0 = _mm_unpackhi_ps(rows[0].value, rows[1].value);
+    auto high1 = _mm_unpackhi_ps(rows[2].value, rows[3].value);
+    rows[0].value = _mm_movelh_ps(low0, low1);
+    rows[1].value = _mm_movehl_ps(low1, low0);
+    rows[2].value = _mm_movelh_ps(high0, high1);
+    rows[3].value = _mm_movehl_ps(high1, high0);
+  #elif COMPLEX_NEON
+    auto swapLow = vtrnq_f32(rows[0].value, rows[1].value);
+    auto swapHigh = vtrnq_f32(rows[2].value, rows[3].value);
+    rows[0].value = vextq_f32(vextq_f32(swapLow.val[0], swapLow.val[0], 2), swapHigh.val[0], 2);
+    rows[1].value = vextq_f32(vextq_f32(swapLow.val[1], swapLow.val[1], 2), swapHigh.val[1], 2);
+    rows[2].value = vextq_f32(swapLow.val[0], vextq_f32(swapHigh.val[0], swapHigh.val[0], 2), 2);
+    rows[3].value = vextq_f32(swapLow.val[1], vextq_f32(swapHigh.val[1], swapHigh.val[1], 2), 2);
+  #endif
+  }
+
+  strict_inline void vector_call complexTranspose(utils::array<simd_float, simd_float::complexSize> &rows)
+  {
+  #if COMPLEX_SSE4_1
+    auto low = _mm_movelh_ps(rows[0].value, rows[1].value);
+    auto high = _mm_movehl_ps(rows[1].value, rows[0].value);
+    rows[0].value = low;
+    rows[1].value = high;
+  #elif COMPLEX_NEON
+    static_assert(false, "not implemented yet");
+  #endif
+  }
+
+  strict_inline simd_float vector_call merge(simd_float falseValue, simd_float trueValue, simd_mask mask) noexcept
+  {
+  #ifdef COMPLEX_SSE4_1
+    return _mm_blendv_ps(falseValue.value, trueValue.value, reinterpretToFloat(mask).value);
+  #elif COMPLEX_NEON
+    return vbslq_f32(mask.value, reinterpretToFloat(trueValue).value, reinterpretToFloat(falseValue).value);
+  #endif
+  }
+
+  strict_inline simd_int vector_call merge(simd_int falseValue, simd_int trueValue, simd_mask mask) noexcept
+  {
+  #ifdef COMPLEX_SSE4_1
+    return reinterpretToInt(_mm_blendv_ps(reinterpretToFloat(falseValue).value, 
+      reinterpretToFloat(trueValue).value, reinterpretToFloat(mask).value));
+  #elif COMPLEX_NEON
+    return reinterpretToInt(vbslq_f32(mask.value, 
+      reinterpretToFloat(trueValue).value, reinterpretToFloat(falseValue).value));
+  #endif
   }
 
   strict_inline simd_float vector_call lerp(simd_float from, simd_float to, simd_float t) noexcept
@@ -93,82 +147,41 @@ namespace utils
     simd_float to, simd_float t, simd_float range) noexcept
   { return circularLerp(from + range, to + range, t, range * 2.0f) - range; }
 
-  struct Matrix
-  {
-    utils::array<simd_float, kSimdRatio> rows_;
+  strict_inline auto vector_call getLinearInterpolationMatrix(simd_float t) noexcept
+  { return utils::array{ simd_float{ 0.0f }, simd_float{ 1.0f } - t, t, simd_float{ 0.0f } }; }
 
-    Matrix() = default;
-    Matrix(const simd_float row) noexcept
-    {
-      for (size_t i = 0; i < kSimdRatio; i++)
-        rows_[i] = row;
-    }
-    Matrix(const utils::array<simd_float, kSimdRatio> &rows) noexcept : rows_(rows) { }
-
-    void transpose() noexcept
-    {
-      simd_float::transpose(rows_);
-    }
-
-    simd_float sumRows() const noexcept
-    {
-      simd_float sum = 0.0f;
-      for (auto &row : rows_)
-        sum += row;
-      return sum;
-    }
-
-    simd_float multiplyAndSumRows(const Matrix &other) const noexcept
-    {
-      simd_float summedVector = 0;
-      for (size_t i = 0; i < kSimdRatio; i += 2)
-        summedVector += simd_float::mulAdd(rows_[i] * other.rows_[i], rows_[i + 1], other.rows_[i + 1]);
-      return summedVector;
-    }
-  };
-
-  strict_inline Matrix vector_call getLinearInterpolationMatrix(simd_float t) noexcept
-  { return Matrix({ 0.0f, simd_float{ 1.0f } - t, t, 0.0f }); }
-
-  strict_inline Matrix vector_call getCatmullInterpolationMatrix(simd_float t) noexcept
+  strict_inline auto vector_call getCatmullInterpolationMatrix(simd_float t) noexcept
   {
     simd_float halfT = t * 0.5f;
     simd_float halfT2 = t * halfT;
     simd_float halfT3 = t * halfT2;
     simd_float halfThreeT3 = halfT3 * 3.0f;
 
-    return Matrix{ {
+    return utils::array{
       simd_float::mulAdd(-halfT3, halfT2, 2.0f) - halfT,
       simd_float::mulSub(halfThreeT3, halfT2, 5.0f) + 1.0f,
       simd_float::mulAdd(halfT, halfT3, 4.0f) - halfThreeT3,
       halfT3 - halfT2
-    } };
+    };
   }
 
-  strict_inline simd_float vector_call toSimdFloatFromUnaligned(const float *unaligned) noexcept
+  strict_inline auto vector_call getValueMatrix(const float *buffer, simd_int indices) noexcept
   {
-  #if COMPLEX_SSE4_1
-    return _mm_loadu_ps(unaligned);
-  #elif COMPLEX_NEON
-    return vld1q_f32(unaligned);
-  #endif
-  }
-
-  template<u32 Size>
-  strict_inline Matrix vector_call getValueMatrix(const float *buffer, simd_int indices) noexcept
-  {
-    static_assert(Size <= kSimdRatio, "Size of matrix cannot be larger than size of simd package");
-    utils::array<simd_float, Size> values;
+    utils::array<simd_float, simd_float::size> values;
     for (u32 i = 0; i < values.size(); i++)
       values[i] = toSimdFloatFromUnaligned(buffer + indices[i]);
-    return Matrix(values);
+    return values;
   }
 
-  strict_inline bool vector_call completelyEqual(simd_float left, simd_float right) noexcept
-  { return simd_float::notEqual(left, right).sum() == 0; }
-
-  strict_inline bool vector_call completelyEqual(simd_int left, simd_int right) noexcept
-  { return simd_int::notEqual(left, right).sum() == 0; }
+  template<auto N>
+  strict_inline simd_float multiplyAndSumRows(const utils::array<simd_float, N> &one,
+    const utils::array<simd_float, N> &two) noexcept
+  {
+    simd_float summedVector = 0;
+    for (usize i = 0; i < N; ++i)
+      summedVector = simd_float::mulAdd(summedVector, one[i], two[i]);
+    return summedVector;
+  }
 
   strict_inline simd_float vector_call copyFromEven(simd_float value) noexcept
   {
@@ -250,6 +263,23 @@ namespace utils
   #endif
   }
 
+  strict_inline simd_float vector_call switchInner(simd_float value) noexcept
+  {
+  #if COMPLEX_SSE4_1
+    return _mm_shuffle_ps(value.value, value.value, _MM_SHUFFLE(2, 3, 0, 1));
+  #elif COMPLEX_NEON
+    static_assert(false, "not implemented yet");
+  #endif
+  }
+
+  strict_inline simd_float vector_call switchOuter(simd_float value) noexcept
+  {
+  #if COMPLEX_SSE4_1
+    return _mm_shuffle_ps(value.value, value.value, _MM_SHUFFLE(1, 0, 3, 2));
+  #elif COMPLEX_NEON
+    static_assert(false, "not implemented yet");
+  #endif
+  }
 
 
   template<SimdValue SIMD>
@@ -324,24 +354,25 @@ namespace utils
   strict_inline SIMD vector_call gatherComplex(const SIMD *values, simd_int indices) noexcept
   {
     auto array = indices.getArrayOfValues();
-    return (values[array[0]] & kLeftChannelMask) | (values[array[2]] & kRightChannelMask);
-  }
-
-  template<SimdValue SIMD>
-  strict_inline void vector_call gatherComplexConsecutive(const SIMD *values, SIMD *destination, simd_int indices, size_t size) noexcept
-  {
-    auto array = indices.getArrayOfValues();
-    for (size_t i = 0; i < size; ++i)
-      destination[i] = (values[array[0] + i] & kLeftChannelMask) | (values[array[2] + i] & kRightChannelMask);
+    SIMD result = values[array[0]];
+    for (usize i = 1; i < kChannelsPerInOut; ++i)
+      result = merge(result, values[array[2 * i]], kChannelMasks[i]);
+    return result;
   }
 
   template<SimdValue SIMD>
   strict_inline void vector_call scatterComplex(SIMD *values, simd_int indices, SIMD value, simd_mask mask) noexcept
   {
     auto array = indices.getArrayOfValues();
-
-    values[array[0]] = merge(values[array[0]], value, kLeftChannelMask & mask);
-    values[array[2]] = merge(values[array[2]], value, kRightChannelMask & mask);
+    for (usize i = 0; i < kChannelsPerInOut; ++i)
+      values[array[2 * i]] = merge(values[array[2 * i]], value, kChannelMasks[i] & mask);
+  }
+  template<SimdValue SIMD>
+  strict_inline void vector_call scatterComplex(SIMD *values, simd_int indices, SIMD value) noexcept
+  {
+    auto array = indices.getArrayOfValues();
+    for (usize i = 0; i < kChannelsPerInOut; ++i)
+      values[array[2 * i]] = merge(values[array[2 * i]], value, kChannelMasks[i]);
   }
 
 
@@ -455,7 +486,7 @@ namespace utils
   #endif
   }
 
-  template<size_t shift>
+  template<usize shift>
   strict_inline simd_int vector_call shiftRight(simd_int values) noexcept
   {
   #if COMPLEX_SSE4_1
@@ -465,7 +496,7 @@ namespace utils
   #endif
   }
 
-  template<size_t shift>
+  template<usize shift>
   strict_inline simd_int vector_call shiftLeft(simd_int values) noexcept
   {
   #if COMPLEX_SSE4_1
@@ -475,11 +506,11 @@ namespace utils
   #endif
   }
 
-  template<size_t shift>
+  template<usize shift>
   strict_inline simd_float vector_call shiftRight(simd_float value) noexcept
   { return reinterpretToFloat(shiftRight<shift>(reinterpretToInt(value))); }
 
-  template<size_t shift>
+  template<usize shift>
   strict_inline simd_float vector_call shiftLeft(simd_float value) noexcept
   { return reinterpretToFloat(shiftLeft<shift>(reinterpretToInt(value))); }
 
@@ -534,8 +565,8 @@ namespace utils
     simd_float t = (value & mantissaMask) | exponentOffset;
 
     // we log2 the mantissa with the taylor series coefficients
-    simd_float interpolate = simd_float::mulAdd(kCoefficient2, t, (simd_float::mulAdd(kCoefficient3, t,
-      simd_float::mulAdd(kCoefficient4, t, kCoefficient5))));
+    simd_float interpolate = simd_float::mulAdd(kCoefficient2, t, simd_float::mulAdd(kCoefficient3, t,
+      simd_float::mulAdd(kCoefficient4, t, kCoefficient5)));
     interpolate = simd_float::mulAdd(kCoefficient0, t, simd_float::mulAdd(kCoefficient1, t, interpolate));
 
     // we add the int with the mantissa to get our final result
@@ -640,42 +671,20 @@ namespace utils
   strict_inline simd_float vector_call getStereoDifference(simd_float value) noexcept
   {
   #if COMPLEX_SSE4_1
-    return (value - simd_float(_mm_shuffle_ps(value.value, value.value, _MM_SHUFFLE(2, 3, 0, 1)))) * 0.5f;
+    return (value - simd_float{ _mm_shuffle_ps(value.value, value.value, _MM_SHUFFLE(2, 3, 0, 1)) }) * 0.5f;
   #elif COMPLEX_NEON
     static_assert(false, "not implemented yet");
   #endif
   }
 
+  // assumes value is signed
   strict_inline simd_int vector_call getStereoDifference(simd_int value) noexcept
   {
   #if COMPLEX_SSE4_1
-    return shiftRight<1>(value - simd_int(_mm_shuffle_epi32(value.value, _MM_SHUFFLE(2, 3, 0, 1))));
+    simd_int highestBit = value & kSignMask;
+    return highestBit | shiftRight<1>(value - simd_int(_mm_shuffle_epi32(value.value, _MM_SHUFFLE(2, 3, 0, 1))));
   #elif COMPLEX_NEON
     static_assert(false, "not implemented yet");
   #endif
   }
-
-  strict_inline bool vector_call areAllElementsSame(simd_int value) noexcept
-  {
-  #if COMPLEX_SSE4_1
-    simd_mask mask = value ^ simd_int(_mm_shuffle_epi32(value.value, _MM_SHUFFLE(2, 3, 0, 1)));
-    mask |= value ^ simd_int(_mm_shuffle_epi32(value.value, _MM_SHUFFLE(0, 1, 2, 3)));
-    return mask.sum() == 0;
-  #elif COMPLEX_NEON
-    static_assert(false, "not implemented yet");
-  #endif
-  }
-
-  strict_inline bool vector_call areAllElementsSame(simd_float value) noexcept
-  {
-    simd_int intValue = reinterpretToInt(value);
-  #if COMPLEX_SSE4_1
-    simd_mask mask = intValue ^ simd_int(_mm_shuffle_epi32(intValue.value, _MM_SHUFFLE(2, 3, 0, 1)));
-    mask |= intValue ^ simd_int(_mm_shuffle_epi32(intValue.value, _MM_SHUFFLE(0, 1, 2, 3)));
-    return mask.sum() == 0;
-  #elif COMPLEX_NEON
-    static_assert(false, "not implemented yet");
-  #endif
-  }
-
 }

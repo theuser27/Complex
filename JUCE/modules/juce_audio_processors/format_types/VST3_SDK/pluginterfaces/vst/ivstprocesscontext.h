@@ -30,28 +30,28 @@ namespace Vst {
 /** Frame Rate 
 A frame rate describes the number of image (frame) displayed per second.
 Some examples:
-	- 23.976 fps     is framesPerSecond: 24 and flags: kPullDownRate
-	- 24 fps         is framesPerSecond: 24 and flags: 0
-	- 25 fps         is framesPerSecond: 25 and flags: 0
-	- 29.97 drop fps is framesPerSecond: 30 and flags: kDropRate|kPullDownRate
-	- 29.97 fps      is framesPerSecond: 30 and flags: kPullDownRate
-	- 30 fps         is framesPerSecond: 30 and flags: 0
-	- 30 drop fps    is framesPerSecond: 30 and flags: kDropRate
-	- 50 fps         is framesPerSecond: 50 and flags: 0
-	- 59.94 fps	     is framesPerSecond: 60 and flags: kPullDownRate
-	- 60 fps         is framesPerSecond: 60 and flags: 0
+  - 23.976 fps     is framesPerSecond: 24 and flags: kPullDownRate
+  - 24 fps         is framesPerSecond: 24 and flags: 0
+  - 25 fps         is framesPerSecond: 25 and flags: 0
+  - 29.97 drop fps is framesPerSecond: 30 and flags: kDropRate|kPullDownRate
+  - 29.97 fps      is framesPerSecond: 30 and flags: kPullDownRate
+  - 30 fps         is framesPerSecond: 30 and flags: 0
+  - 30 drop fps    is framesPerSecond: 30 and flags: kDropRate
+  - 50 fps         is framesPerSecond: 50 and flags: 0
+  - 59.94 fps	     is framesPerSecond: 60 and flags: kPullDownRate
+  - 60 fps         is framesPerSecond: 60 and flags: 0
 */
 struct FrameRate
 {
 //------------------------------------------------------------------------
-	enum FrameRateFlags
-	{
-		kPullDownRate = 1 << 0,
-		kDropRate     = 1 << 1
-	};
+  enum FrameRateFlags
+  {
+    kPullDownRate = 1 << 0,
+    kDropRate     = 1 << 1
+  };
 
-	uint32 framesPerSecond;		///< frame rate
-	uint32 flags;				///< flags #FrameRateFlags
+  uint32 framesPerSecond;		///< frame rate
+  uint32 flags;				///< flags #FrameRateFlags
 //------------------------------------------------------------------------
 };
 
@@ -64,22 +64,22 @@ A chord is described with a key note, a root note and the
 struct Chord
 {
 //------------------------------------------------------------------------
-	uint8 keyNote;		///< key note in chord
-	uint8 rootNote;		///< lowest note in chord
+  uint8 keyNote;		///< key note in chord
+  uint8 rootNote;		///< lowest note in chord
 
-	/** Bitmask of a chord. \n
-	    1st bit set: minor second; 2nd bit set: major second, and so on. \n
-		There is \b no bit for the keynote (root of the chord) because it is inherently always present. \n
-		Examples:
-		- XXXX 0000 0100 1000 (= 0x0048) -> major chord
-		- XXXX 0000 0100 0100 (= 0x0044) -> minor chord
-		- XXXX 0010 0100 0100 (= 0x0244) -> minor chord with minor seventh */
-	int16 chordMask;
+  /** Bitmask of a chord. \n
+      1st bit set: minor second; 2nd bit set: major second, and so on. \n
+    There is \b no bit for the keynote (root of the chord) because it is inherently always present. \n
+    Examples:
+    - XXXX 0000 0100 1000 (= 0x0048) -> major chord
+    - XXXX 0000 0100 0100 (= 0x0044) -> minor chord
+    - XXXX 0010 0100 0100 (= 0x0244) -> minor chord with minor seventh */
+  int16 chordMask;
 
-	enum Masks {
-		kChordMask = 0x0FFF,	///< mask for chordMask
-		kReservedMask = 0xF000	///< reserved for future use
-	};
+  enum Masks {
+    kChordMask = 0x0FFF,	///< mask for chordMask
+    kReservedMask = 0xF000	///< reserved for future use
+  };
 //------------------------------------------------------------------------
 };
 
@@ -96,51 +96,51 @@ this problem.
 struct ProcessContext
 {
 //------------------------------------------------------------------------
-	/** Transport state & other flags */
-	enum StatesAndFlags
-	{
-		kPlaying          = 1 << 1,		///< currently playing
-		kCycleActive      = 1 << 2,		///< cycle is active
-		kRecording        = 1 << 3,		///< currently recording
+  /** Transport state & other flags */
+  enum StatesAndFlags
+  {
+    kPlaying          = 1 << 1,		///< currently playing
+    kCycleActive      = 1 << 2,		///< cycle is active
+    kRecording        = 1 << 3,		///< currently recording
 
-		kSystemTimeValid  = 1 << 8,		///< systemTime contains valid information
-		kContTimeValid    = 1 << 17,	///< continousTimeSamples contains valid information
+    kSystemTimeValid  = 1 << 8,		///< systemTime contains valid information
+    kContTimeValid    = 1 << 17,	///< continousTimeSamples contains valid information
 
-		kProjectTimeMusicValid = 1 << 9,///< projectTimeMusic contains valid information
-		kBarPositionValid = 1 << 11,	///< barPositionMusic contains valid information
-		kCycleValid       = 1 << 12,	///< cycleStartMusic and barPositionMusic contain valid information
+    kProjectTimeMusicValid = 1 << 9,///< projectTimeMusic contains valid information
+    kBarPositionValid = 1 << 11,	///< barPositionMusic contains valid information
+    kCycleValid       = 1 << 12,	///< cycleStartMusic and barPositionMusic contain valid information
 
-		kTempoValid       = 1 << 10,	///< tempo contains valid information
-		kTimeSigValid     = 1 << 13,	///< timeSigNumerator and timeSigDenominator contain valid information
-		kChordValid       = 1 << 18,	///< chord contains valid information
+    kTempoValid       = 1 << 10,	///< tempo contains valid information
+    kTimeSigValid     = 1 << 13,	///< timeSigNumerator and timeSigDenominator contain valid information
+    kChordValid       = 1 << 18,	///< chord contains valid information
 
-		kSmpteValid       = 1 << 14,	///< smpteOffset and frameRate contain valid information
-		kClockValid       = 1 << 15		///< samplesToNextClock valid
-	};
+    kSmpteValid       = 1 << 14,	///< smpteOffset and frameRate contain valid information
+    kClockValid       = 1 << 15		///< samplesToNextClock valid
+  };
 
-	uint32 state;					///< a combination of the values from \ref StatesAndFlags
+  uint32 state;					///< a combination of the values from \ref StatesAndFlags
 
-	double sampleRate;				///< current sample rate					(always valid)
-	TSamples projectTimeSamples;	///< project time in samples				(always valid)
+  double sampleRate;				///< current sample rate					(always valid)
+  TSamples projectTimeSamples;	///< project time in samples				(always valid)
 
-	int64 systemTime;				///< system time in nanoseconds					(optional)
-	TSamples continousTimeSamples;	///< project time, without loop					(optional)
+  int64 systemTime;				///< system time in nanoseconds					(optional)
+  TSamples continousTimeSamples;	///< project time, without loop					(optional)
 
-	TQuarterNotes projectTimeMusic;	///< musical position in quarter notes (1.0 equals 1 quarter note) (optional)
-	TQuarterNotes barPositionMusic;	///< last bar start position, in quarter notes	(optional)
-	TQuarterNotes cycleStartMusic;	///< cycle start in quarter notes				(optional)
-	TQuarterNotes cycleEndMusic;	///< cycle end in quarter notes					(optional)
+  TQuarterNotes projectTimeMusic;	///< musical position in quarter notes (1.0 equals 1 quarter note) (optional)
+  TQuarterNotes barPositionMusic;	///< last bar start position, in quarter notes	(optional)
+  TQuarterNotes cycleStartMusic;	///< cycle start in quarter notes				(optional)
+  TQuarterNotes cycleEndMusic;	///< cycle end in quarter notes					(optional)
 
-	double tempo;					///< tempo in BPM (Beats Per Minute)			(optional)
-	int32 timeSigNumerator;			///< time signature numerator (e.g. 3 for 3/4)	(optional)
-	int32 timeSigDenominator;		///< time signature denominator (e.g. 4 for 3/4) (optional)
+  double tempo;					///< tempo in BPM (Beats Per Minute)			(optional)
+  int32 timeSigNumerator;			///< time signature numerator (e.g. 3 for 3/4)	(optional)
+  int32 timeSigDenominator;		///< time signature denominator (e.g. 4 for 3/4) (optional)
 
-	Chord chord;					///< musical info								(optional)
+  Chord chord;					///< musical info								(optional)
 
-	int32 smpteOffsetSubframes;		///< SMPTE (sync) offset in subframes (1/80 of frame) (optional)
-	FrameRate frameRate;			///< frame rate									(optional)
+  int32 smpteOffsetSubframes;		///< SMPTE (sync) offset in subframes (1/80 of frame) (optional)
+  FrameRate frameRate;			///< frame rate									(optional)
 
-	int32 samplesToNextClock;		///< MIDI Clock Resolution (24 Per Quarter Note), can be negative (nearest) (optional)
+  int32 samplesToNextClock;		///< MIDI Clock Resolution (24 Per Quarter Note), can be negative (nearest) (optional)
 //------------------------------------------------------------------------
 };
 

@@ -204,7 +204,7 @@ namespace utils
     }
   }
 
-  i32 lockAtomic(LockBlame<i32> &lock, bool isExclusive, WaitMechanism mechanism, const clg::small_function<void()> &lambda) noexcept
+  i32 lockAtomic(LockBlame<i32> &lock, bool isExclusive, WaitMechanism mechanism, const clg::small_fn<void()> &lambda) noexcept
   {
     i32 state, desired;
     if (isExclusive)

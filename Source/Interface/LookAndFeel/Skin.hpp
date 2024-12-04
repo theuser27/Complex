@@ -41,6 +41,7 @@ namespace Interface
       kDynamicsModule,
       kPhaseModule,
       kPitchModule,
+      kDestroyModule,
 
       kSectionsCount,
       kUseParentOverride = kSectionsCount

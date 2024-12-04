@@ -55,124 +55,124 @@ ComponentBase::~ComponentBase ()
 //------------------------------------------------------------------------
 tresult PLUGIN_API ComponentBase::initialize (FUnknown* context)
 {
-	// check if already initialized
-	if (hostContext)
-		return kResultFalse;
+  // check if already initialized
+  if (hostContext)
+    return kResultFalse;
 
-	hostContext = context;
+  hostContext = context;
 
-	return kResultOk;
+  return kResultOk;
 }
 
 //------------------------------------------------------------------------
 tresult PLUGIN_API ComponentBase::terminate ()
 {
-	// release host interfaces
-	hostContext = nullptr;
+  // release host interfaces
+  hostContext = nullptr;
 
-	// in case host did not disconnect us,
-	// release peer now
-	if (peerConnection)
-	{
-		peerConnection->disconnect (this);
-		peerConnection = nullptr;
-	}
+  // in case host did not disconnect us,
+  // release peer now
+  if (peerConnection)
+  {
+    peerConnection->disconnect (this);
+    peerConnection = nullptr;
+  }
 
-	return kResultOk;
+  return kResultOk;
 }
 
 //------------------------------------------------------------------------
 tresult PLUGIN_API ComponentBase::connect (IConnectionPoint* other)
 {
-	if (!other)
-		return kInvalidArgument;
+  if (!other)
+    return kInvalidArgument;
 
-	// check if already connected
-	if (peerConnection)
-		return kResultFalse;
+  // check if already connected
+  if (peerConnection)
+    return kResultFalse;
 
-	peerConnection = other;
-	return kResultOk;
+  peerConnection = other;
+  return kResultOk;
 }
 
 //------------------------------------------------------------------------
 tresult PLUGIN_API ComponentBase::disconnect (IConnectionPoint* other)
 {
-	if (peerConnection && other == peerConnection)
-	{
-		peerConnection = nullptr;
-		return kResultOk;
-	}
-	return kResultFalse;
+  if (peerConnection && other == peerConnection)
+  {
+    peerConnection = nullptr;
+    return kResultOk;
+  }
+  return kResultFalse;
 }
 
 //------------------------------------------------------------------------
 tresult PLUGIN_API ComponentBase::notify (IMessage* message)
 {
-	if (!message)
-		return kInvalidArgument;
+  if (!message)
+    return kInvalidArgument;
 
-	if (FIDStringsEqual (message->getMessageID (), "TextMessage"))
-	{
-		TChar string[256] = {0};
-		if (message->getAttributes ()->getString ("Text", string, sizeof (string)) == kResultOk)
-		{
-			String tmp (string);
-			tmp.toMultiByte (kCP_Utf8);
-			return receiveText (tmp.text8 ());
-		}
-	}
+  if (FIDStringsEqual (message->getMessageID (), "TextMessage"))
+  {
+    TChar string[256] = {0};
+    if (message->getAttributes ()->getString ("Text", string, sizeof (string)) == kResultOk)
+    {
+      String tmp (string);
+      tmp.toMultiByte (kCP_Utf8);
+      return receiveText (tmp.text8 ());
+    }
+  }
 
-	return kResultFalse;
+  return kResultFalse;
 }
 
 //------------------------------------------------------------------------
 IMessage* ComponentBase::allocateMessage () const
 {
-	FUnknownPtr<IHostApplication> hostApp (hostContext);
-	if (hostApp)
-		return Vst::allocateMessage (hostApp);
-	return nullptr;
+  FUnknownPtr<IHostApplication> hostApp (hostContext);
+  if (hostApp)
+    return Vst::allocateMessage (hostApp);
+  return nullptr;
 }
 
 //------------------------------------------------------------------------
 tresult ComponentBase::sendMessage (IMessage* message) const
 {
-	if (message != nullptr && getPeer () != nullptr)
-		return getPeer ()->notify (message);
-	return kResultFalse;
+  if (message != nullptr && getPeer () != nullptr)
+    return getPeer ()->notify (message);
+  return kResultFalse;
 }
 
 //------------------------------------------------------------------------
 tresult ComponentBase::sendTextMessage (const char8* text) const
 {
-	if (auto msg = owned (allocateMessage ()))
-	{
-		msg->setMessageID ("TextMessage");
-		String tmp (text, kCP_Utf8);
-		if (tmp.length () >= 256)
-			tmp.remove (255);
-		msg->getAttributes ()->setString ("Text", tmp.text16 ());
-		return sendMessage (msg);
-	}
-	return kResultFalse;
+  if (auto msg = owned (allocateMessage ()))
+  {
+    msg->setMessageID ("TextMessage");
+    String tmp (text, kCP_Utf8);
+    if (tmp.length () >= 256)
+      tmp.remove (255);
+    msg->getAttributes ()->setString ("Text", tmp.text16 ());
+    return sendMessage (msg);
+  }
+  return kResultFalse;
 }
 
 //------------------------------------------------------------------------
 tresult ComponentBase::sendMessageID (const char* messageID) const
 {
-	if (auto msg = owned (allocateMessage ()))
-	{
-		msg->setMessageID (messageID);
-		return sendMessage (msg);
-	}
-	return kResultFalse;
+  if (auto msg = owned (allocateMessage ()))
+  {
+    msg->setMessageID (messageID);
+    return sendMessage (msg);
+  }
+  return kResultFalse;
 }
 
 //------------------------------------------------------------------------
 tresult ComponentBase::receiveText (const char8* /*text*/)
 {
-	return kResultOk;
+  return kResultOk;
 }
 
 //------------------------------------------------------------------------

@@ -53,155 +53,155 @@ Component::Component ()
 //------------------------------------------------------------------------
 tresult PLUGIN_API Component::initialize (FUnknown* context)
 {
-	return ComponentBase::initialize (context);
+  return ComponentBase::initialize (context);
 }
 
 //------------------------------------------------------------------------
 tresult PLUGIN_API Component::terminate ()
 {
-	// remove all busses
-	removeAllBusses ();
+  // remove all busses
+  removeAllBusses ();
 
-	return ComponentBase::terminate ();
+  return ComponentBase::terminate ();
 }
 
 //------------------------------------------------------------------------
 BusList* Component::getBusList (MediaType type, BusDirection dir)
 {
-	if (type == kAudio)
-		return dir == kInput ? &audioInputs : &audioOutputs;
-	else if (type == kEvent)
-		return dir == kInput ? &eventInputs : &eventOutputs;
-	return nullptr;
+  if (type == kAudio)
+    return dir == kInput ? &audioInputs : &audioOutputs;
+  else if (type == kEvent)
+    return dir == kInput ? &eventInputs : &eventOutputs;
+  return nullptr;
 }
 
 //------------------------------------------------------------------------
 tresult Component::removeAudioBusses ()
 {
-	audioInputs.clear ();
-	audioOutputs.clear ();
+  audioInputs.clear ();
+  audioOutputs.clear ();
 
-	return kResultOk;
+  return kResultOk;
 }
 
 //------------------------------------------------------------------------
 tresult Component::removeEventBusses ()
 {
-	eventInputs.clear ();
-	eventOutputs.clear ();
+  eventInputs.clear ();
+  eventOutputs.clear ();
 
-	return kResultOk;
+  return kResultOk;
 }
 
 //------------------------------------------------------------------------
 tresult Component::removeAllBusses ()
 {
-	removeAudioBusses ();
-	removeEventBusses ();
+  removeAudioBusses ();
+  removeEventBusses ();
 
-	return kResultOk;
+  return kResultOk;
 }
 
 //------------------------------------------------------------------------
 tresult PLUGIN_API Component::getControllerClassId (TUID classID)
 {
-	if (controllerClass.isValid ())
-	{
-		controllerClass.toTUID (classID);
-		return kResultTrue;
-	}
-	return kResultFalse;
+  if (controllerClass.isValid ())
+  {
+    controllerClass.toTUID (classID);
+    return kResultTrue;
+  }
+  return kResultFalse;
 }
 
 //------------------------------------------------------------------------
 tresult PLUGIN_API Component::setIoMode (IoMode /*mode*/)
 {
-	return kNotImplemented;
+  return kNotImplemented;
 }
 
 //------------------------------------------------------------------------
 int32 PLUGIN_API Component::getBusCount (MediaType type, BusDirection dir)
 {
-	BusList* busList = getBusList (type, dir);
-	return busList ? static_cast<int32> (busList->size ()) : 0;
+  BusList* busList = getBusList (type, dir);
+  return busList ? static_cast<int32> (busList->size ()) : 0;
 }
 
 //------------------------------------------------------------------------
 tresult PLUGIN_API Component::getBusInfo (MediaType type, BusDirection dir, int32 index,
                                           BusInfo& info)
 {
-	if (index < 0)
-		return kInvalidArgument;
-	BusList* busList = getBusList (type, dir);
-	if (busList == nullptr)
-		return kInvalidArgument;
-	if (index >= static_cast<int32> (busList->size ()))
-		return kInvalidArgument;
+  if (index < 0)
+    return kInvalidArgument;
+  BusList* busList = getBusList (type, dir);
+  if (busList == nullptr)
+    return kInvalidArgument;
+  if (index >= static_cast<int32> (busList->size ()))
+    return kInvalidArgument;
 
-	Bus* bus = busList->at (index);
-	info.mediaType = type;
-	info.direction = dir;
-	if (bus->getInfo (info))
-		return kResultTrue;
-	return kResultFalse;
+  Bus* bus = busList->at (index);
+  info.mediaType = type;
+  info.direction = dir;
+  if (bus->getInfo (info))
+    return kResultTrue;
+  return kResultFalse;
 }
 
 //------------------------------------------------------------------------
 tresult PLUGIN_API Component::getRoutingInfo (RoutingInfo& /*inInfo*/, RoutingInfo& /*outInfo*/)
 {
-	return kNotImplemented;
+  return kNotImplemented;
 }
 
 //------------------------------------------------------------------------
 tresult PLUGIN_API Component::activateBus (MediaType type, BusDirection dir, int32 index,
                                            TBool state)
 {
-	if (index < 0)
-		return kInvalidArgument;
-	BusList* busList = getBusList (type, dir);
-	if (busList == nullptr)
-		return kInvalidArgument;
-	if (index >= static_cast<int32> (busList->size ()))
-		return kInvalidArgument;
+  if (index < 0)
+    return kInvalidArgument;
+  BusList* busList = getBusList (type, dir);
+  if (busList == nullptr)
+    return kInvalidArgument;
+  if (index >= static_cast<int32> (busList->size ()))
+    return kInvalidArgument;
 
-	Bus* bus = busList->at (index);
-	bus->setActive (state);
-	return kResultTrue;
+  Bus* bus = busList->at (index);
+  bus->setActive (state);
+  return kResultTrue;
 }
 
 //------------------------------------------------------------------------
 tresult PLUGIN_API Component::setActive (TBool /*state*/)
 {
-	return kResultOk;
+  return kResultOk;
 }
 
 //------------------------------------------------------------------------
 tresult PLUGIN_API Component::setState (IBStream* /*state*/)
 {
-	return kNotImplemented;
+  return kNotImplemented;
 }
 
 //------------------------------------------------------------------------
 tresult PLUGIN_API Component::getState (IBStream* /*state*/)
 {
-	return kNotImplemented;
+  return kNotImplemented;
 }
 
 //------------------------------------------------------------------------
 tresult Component::renameBus (MediaType type, BusDirection dir, int32 index,
                               const String128 newName)
 {
-	if (index < 0)
-		return kInvalidArgument;
-	BusList* busList = getBusList (type, dir);
-	if (busList == nullptr)
-		return kInvalidArgument;
-	if (index >= static_cast<int32> (busList->size ()))
-		return kInvalidArgument;
+  if (index < 0)
+    return kInvalidArgument;
+  BusList* busList = getBusList (type, dir);
+  if (busList == nullptr)
+    return kInvalidArgument;
+  if (index >= static_cast<int32> (busList->size ()))
+    return kInvalidArgument;
 
-	Bus* bus = busList->at (index);
-	bus->setName (newName);
-	return kResultTrue;
+  Bus* bus = busList->at (index);
+  bus->setName (newName);
+  return kResultTrue;
 }
 
 //------------------------------------------------------------------------
@@ -209,8 +209,8 @@ tresult Component::renameBus (MediaType type, BusDirection dir, int32 index,
 //------------------------------------------------------------------------
 tresult getSpeakerChannelIndex (SpeakerArrangement arrangement, uint64 speaker, int32& channel)
 {
-	channel = SpeakerArr::getSpeakerIndex (speaker, arrangement);
-	return (channel < 0) == true ? kResultFalse : kResultTrue;
+  channel = SpeakerArr::getSpeakerIndex (speaker, arrangement);
+  return (channel < 0) == true ? kResultFalse : kResultTrue;
 }
 } // namespace Vst
 } // namespace Steinberg

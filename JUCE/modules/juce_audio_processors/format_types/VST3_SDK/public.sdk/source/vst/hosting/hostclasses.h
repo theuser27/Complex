@@ -51,19 +51,19 @@ namespace Vst {
 class HostApplication : public IHostApplication
 {
 public:
-	HostApplication ();
-	virtual ~HostApplication () { FUNKNOWN_DTOR }
+  HostApplication ();
+  virtual ~HostApplication () { FUNKNOWN_DTOR }
 
-	//--- IHostApplication ---------------
-	tresult PLUGIN_API getName (String128 name) SMTG_OVERRIDE;
-	tresult PLUGIN_API createInstance (TUID cid, TUID _iid, void** obj) SMTG_OVERRIDE;
+  //--- IHostApplication ---------------
+  tresult PLUGIN_API getName (String128 name) SMTG_OVERRIDE;
+  tresult PLUGIN_API createInstance (TUID cid, TUID _iid, void** obj) SMTG_OVERRIDE;
 
-	DECLARE_FUNKNOWN_METHODS
+  DECLARE_FUNKNOWN_METHODS
 
-	PlugInterfaceSupport* getPlugInterfaceSupport () const { return mPlugInterfaceSupport; }
+  PlugInterfaceSupport* getPlugInterfaceSupport () const { return mPlugInterfaceSupport; }
 
 protected:
-	IPtr<PlugInterfaceSupport> mPlugInterfaceSupport;
+  IPtr<PlugInterfaceSupport> mPlugInterfaceSupport;
 };
 
 class HostAttribute;
@@ -74,22 +74,22 @@ class HostAttribute;
 class HostAttributeList : public IAttributeList
 {
 public:
-	HostAttributeList ();
-	virtual ~HostAttributeList ();
+  HostAttributeList ();
+  virtual ~HostAttributeList ();
 
-	tresult PLUGIN_API setInt (AttrID aid, int64 value) SMTG_OVERRIDE;
-	tresult PLUGIN_API getInt (AttrID aid, int64& value) SMTG_OVERRIDE;
-	tresult PLUGIN_API setFloat (AttrID aid, double value) SMTG_OVERRIDE;
-	tresult PLUGIN_API getFloat (AttrID aid, double& value) SMTG_OVERRIDE;
-	tresult PLUGIN_API setString (AttrID aid, const TChar* string) SMTG_OVERRIDE;
-	tresult PLUGIN_API getString (AttrID aid, TChar* string, uint32 sizeInBytes) SMTG_OVERRIDE;
-	tresult PLUGIN_API setBinary (AttrID aid, const void* data, uint32 sizeInBytes) SMTG_OVERRIDE;
-	tresult PLUGIN_API getBinary (AttrID aid, const void*& data, uint32& sizeInBytes) SMTG_OVERRIDE;
+  tresult PLUGIN_API setInt (AttrID aid, int64 value) SMTG_OVERRIDE;
+  tresult PLUGIN_API getInt (AttrID aid, int64& value) SMTG_OVERRIDE;
+  tresult PLUGIN_API setFloat (AttrID aid, double value) SMTG_OVERRIDE;
+  tresult PLUGIN_API getFloat (AttrID aid, double& value) SMTG_OVERRIDE;
+  tresult PLUGIN_API setString (AttrID aid, const TChar* string) SMTG_OVERRIDE;
+  tresult PLUGIN_API getString (AttrID aid, TChar* string, uint32 sizeInBytes) SMTG_OVERRIDE;
+  tresult PLUGIN_API setBinary (AttrID aid, const void* data, uint32 sizeInBytes) SMTG_OVERRIDE;
+  tresult PLUGIN_API getBinary (AttrID aid, const void*& data, uint32& sizeInBytes) SMTG_OVERRIDE;
 
-	DECLARE_FUNKNOWN_METHODS
+  DECLARE_FUNKNOWN_METHODS
 protected:
-	void removeAttrID (AttrID aid);
-	std::map<String, HostAttribute*> list;
+  void removeAttrID (AttrID aid);
+  std::map<String, HostAttribute*> list;
 };
 
 //------------------------------------------------------------------------
@@ -99,17 +99,17 @@ protected:
 class HostMessage : public IMessage
 {
 public:
-	HostMessage ();
-	virtual ~HostMessage ();
+  HostMessage ();
+  virtual ~HostMessage ();
 
-	const char* PLUGIN_API getMessageID () SMTG_OVERRIDE;
-	void PLUGIN_API setMessageID (const char* messageID) SMTG_OVERRIDE;
-	IAttributeList* PLUGIN_API getAttributes () SMTG_OVERRIDE;
+  const char* PLUGIN_API getMessageID () SMTG_OVERRIDE;
+  void PLUGIN_API setMessageID (const char* messageID) SMTG_OVERRIDE;
+  IAttributeList* PLUGIN_API getAttributes () SMTG_OVERRIDE;
 
-	DECLARE_FUNKNOWN_METHODS
+  DECLARE_FUNKNOWN_METHODS
 protected:
-	char* messageId;
-	HostAttributeList* attributeList;
+  char* messageId;
+  HostAttributeList* attributeList;
 };
 
 //------------------------------------------------------------------------

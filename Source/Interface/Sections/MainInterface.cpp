@@ -20,33 +20,7 @@ namespace Interface
 {
   MainInterface::MainInterface() : BaseSection{ "Main Interface" }
   {
-    headerFooter_ = utils::up<HeaderFooterSections>::create(uiRelated.renderer->getPlugin().getSoundEngine());
-    addSubOpenGlContainer(headerFooter_.get());
-
-    effectsStateSection_ = utils::up<EffectsStateSection>::create(uiRelated.renderer->getPlugin().getEffectsState());
-    addSubOpenGlContainer(effectsStateSection_.get());
-
-    popupSelector_ = utils::up<PopupSelector>::create();
-    addSubOpenGlContainer(popupSelector_.get());
-    popupSelector_->setVisible(false);
-    popupSelector_->setAlwaysOnTop(true);
-    popupSelector_->setWantsKeyboardFocus(true);
-
-    popupDisplay1_ = utils::up<PopupDisplay>::create();
-    addSubOpenGlContainer(popupDisplay1_.get());
-    popupDisplay1_->setVisible(false);
-    popupDisplay1_->setAlwaysOnTop(true);
-    popupDisplay1_->setWantsKeyboardFocus(false);
-
-    popupDisplay2_ = utils::up<PopupDisplay>::create();
-    addSubOpenGlContainer(popupDisplay2_.get());
-    popupDisplay2_->setVisible(false);
-    popupDisplay2_->setAlwaysOnTop(true);
-    popupDisplay2_->setWantsKeyboardFocus(false);
-
-    popupSelector_->toFront(true);
-    popupDisplay1_->toFront(true);
-    popupDisplay2_->toFront(true);
+    reinstantiateUI();
 
     setOpaque(false);
   }
@@ -77,7 +51,7 @@ namespace Interface
 
   void MainInterface::renderOpenGlComponents(OpenGlWrapper &openGl)
   {
-    juce::Colour backgroundColour = backgroundColour_;
+    auto backgroundColour = backgroundColour_.get();
     juce::gl::glClearColor(backgroundColour.getFloatRed(), backgroundColour.getFloatGreen(), 
       backgroundColour.getFloatBlue(), 1.0f);
     juce::gl::glClear(juce::gl::GL_COLOR_BUFFER_BIT);
@@ -140,5 +114,38 @@ namespace Interface
   {
     PopupDisplay *display = primary ? popupDisplay1_.get() : popupDisplay2_.get();
     display->setVisible(false);
+  }
+
+  void MainInterface::reinstantiateUI()
+  {
+    removeAllSubOpenGlContainers(false);
+
+    headerFooter_ = utils::up<HeaderFooterSections>::create(uiRelated.renderer->getPlugin().getSoundEngine());
+    addSubOpenGlContainer(headerFooter_.get());
+
+    effectsStateSection_ = utils::up<EffectsStateSection>::create(uiRelated.renderer->getPlugin().getEffectsState());
+    addSubOpenGlContainer(effectsStateSection_.get());
+
+    popupSelector_ = utils::up<PopupSelector>::create();
+    addSubOpenGlContainer(popupSelector_.get());
+    popupSelector_->setVisible(false);
+    popupSelector_->setAlwaysOnTop(true);
+    popupSelector_->setWantsKeyboardFocus(true);
+
+    popupDisplay1_ = utils::up<PopupDisplay>::create();
+    addSubOpenGlContainer(popupDisplay1_.get());
+    popupDisplay1_->setVisible(false);
+    popupDisplay1_->setAlwaysOnTop(true);
+    popupDisplay1_->setWantsKeyboardFocus(false);
+
+    popupDisplay2_ = utils::up<PopupDisplay>::create();
+    addSubOpenGlContainer(popupDisplay2_.get());
+    popupDisplay2_->setVisible(false);
+    popupDisplay2_->setAlwaysOnTop(true);
+    popupDisplay2_->setWantsKeyboardFocus(false);
+
+    popupSelector_->toFront(true);
+    popupDisplay1_->toFront(true);
+    popupDisplay2_->toFront(true);
   }
 }

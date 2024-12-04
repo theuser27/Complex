@@ -51,22 +51,22 @@ namespace Vst {
 class PlugInterfaceSupport : public FObject, public IPlugInterfaceSupport
 {
 public:
-	PlugInterfaceSupport ();
+  PlugInterfaceSupport ();
 
-	//--- IPlugInterfaceSupport ---------
-	tresult PLUGIN_API isPlugInterfaceSupported (const TUID _iid) SMTG_OVERRIDE;
+  //--- IPlugInterfaceSupport ---------
+  tresult PLUGIN_API isPlugInterfaceSupported (const TUID _iid) SMTG_OVERRIDE;
 
-	void addPlugInterfaceSupported (const TUID _iid);
-	bool removePlugInterfaceSupported (const TUID _iid);
+  void addPlugInterfaceSupported (const TUID _iid);
+  bool removePlugInterfaceSupported (const TUID _iid);
 
-	OBJ_METHODS (PlugInterfaceSupport, FObject)
-	REFCOUNT_METHODS (FObject)
-	DEFINE_INTERFACES
-		DEF_INTERFACE (IPlugInterfaceSupport)
-	END_DEFINE_INTERFACES (FObject)
+  OBJ_METHODS (PlugInterfaceSupport, FObject)
+  REFCOUNT_METHODS (FObject)
+  DEFINE_INTERFACES
+    DEF_INTERFACE (IPlugInterfaceSupport)
+  END_DEFINE_INTERFACES (FObject)
 
 private:
-	std::vector<FUID> mFUIDArray;
+  std::vector<FUID> mFUIDArray;
 };
 
 //------------------------------------------------------------------------

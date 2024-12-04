@@ -154,6 +154,6 @@ namespace Interface
     void (*arrangeUIFunction_)(EffectModuleSection *section, 
       juce::Rectangle<int> bounds, std::string_view type) = nullptr;
     void (*paintBackgroundFunction_)(juce::Graphics &g, EffectModuleSection *section) = nullptr;
-    std::span<const std::pair<std::string_view, u64>> effectParameterCounts_{};
+    std::span<const utils::pair<std::string_view, u64>> effectParameterCounts_{};
   };	
 }

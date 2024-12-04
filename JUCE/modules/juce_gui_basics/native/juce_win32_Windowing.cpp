@@ -775,7 +775,7 @@ double Desktop::getDefaultMasterScale()
     if (! JUCEApplicationBase::isStandaloneApp() || isPerMonitorDPIAwareProcess())
         return 1.0;
 
-    return getGlobalDPI() / USER_DEFAULT_SCREEN_DPI;
+    return 1.0;
 }
 
 bool Desktop::canUseSemiTransparentWindows() noexcept

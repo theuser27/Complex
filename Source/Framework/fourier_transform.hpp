@@ -12,8 +12,6 @@
 
 #include "platform_definitions.hpp"
 
-//#undef INTEL_IPP
-
 namespace Framework
 {
   class FFT
@@ -23,10 +21,7 @@ namespace Framework
     explicit FFT(u32 minOrder, u32 maxOrder);
     ~FFT() noexcept;
 
-    // src buffer needs to have exactly as many samples as FFT size
     void transformRealForward(u32 order, float *input, u32 channel) const noexcept;
-
-    // src needs to be in the CCS format
     void transformRealInverse(u32 order, float *output, u32 channel) const noexcept;
 
   private:
@@ -41,10 +36,9 @@ namespace Framework
     float *scratchBuffers_;
 
   #endif
+    // TODO: add vDSP FFT option
 
     u32 minOrder_;
     u32 maxOrder_;
-
-    // TODO: add vDSP FFT option
   };
 }

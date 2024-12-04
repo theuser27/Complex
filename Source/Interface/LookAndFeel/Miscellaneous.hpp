@@ -276,6 +276,7 @@ namespace Interface
     Shape dynamicsIcon();
     Shape phaseIcon();
     Shape pitchIcon();
+    Shape destroyIcon();
 
     Shape powerButtonIcon();
   }

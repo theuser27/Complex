@@ -165,14 +165,14 @@ namespace Interface
     default: break;
     }
 
-    return createTexture(context, textureId, imageW, imageH, dataCopy, juce::JUCE_RGBA_FORMAT, true, texMagFilter);
+    return createTexture(context, textureId, imageW, imageH, dataCopy, GL_BGRA_EXT, true, texMagFilter);
   }
 
   std::pair<int, int> loadARGBAsTexture(juce::OpenGLContext &context, GLuint &textureId,
     const juce::PixelARGB *pixels, int desiredW, int desiredH, GLenum texMagFilter)
   {
     return createTexture(context, textureId, desiredW, desiredH, 
-      pixels, juce::JUCE_RGBA_FORMAT, false, texMagFilter);
+      pixels, GL_BGRA_EXT, false, texMagFilter);
   }
 
   std::pair<int, int> loadAlphaAsTexture(juce::OpenGLContext &context, GLuint &textureId,
@@ -189,7 +189,7 @@ namespace Interface
     flip<juce::PixelARGB>(flippedCopy, (const u8 *)pixels, 4 * desiredW, desiredW, desiredH);
 
     return createTexture(context, textureId, desiredW, desiredH, 
-      flippedCopy, juce::JUCE_RGBA_FORMAT, true, texMagFilter);
+      flippedCopy, GL_BGRA_EXT, true, texMagFilter);
   }
 
   OpenGlShaderProgram::OpenGlShaderProgram(const juce::OpenGLContext &c) noexcept : context(c) { }
@@ -232,7 +232,7 @@ namespace Interface
     #if JUCE_DEBUG && ! JUCE_DONT_ASSERT_ON_GLSL_COMPILE_ERROR
       // Your GLSL code contained compile errors!
       // Hopefully this compile log should help to explain what went wrong.
-      DBG(juce::String(infoLog.data(), (size_t)infoLogLength));
+      DBG(juce::String(infoLog.data(), (usize)infoLogLength));
       jassertfalse;
     #endif
 
@@ -269,7 +269,7 @@ namespace Interface
     #if JUCE_DEBUG && ! JUCE_DONT_ASSERT_ON_GLSL_COMPILE_ERROR
       // Your GLSL code contained link errors!
       // Hopefully this compile log should help to explain what went wrong.
-      DBG(juce::String(infoLog.data(), (size_t)infoLogLength));
+      DBG(juce::String(infoLog.data(), (usize)infoLogLength));
       jassertfalse;
     #endif
     }

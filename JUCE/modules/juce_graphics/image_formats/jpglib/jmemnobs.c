@@ -71,7 +71,7 @@ jpeg_free_large (j_common_ptr, void FAR * object, size_t)
 
 GLOBAL(long)
 jpeg_mem_available (j_common_ptr, long,
-		    long max_bytes_needed, long)
+        long max_bytes_needed, long)
 {
   return max_bytes_needed;
 }
@@ -85,7 +85,7 @@ jpeg_mem_available (j_common_ptr, long,
 
 GLOBAL(void)
 jpeg_open_backing_store (j_common_ptr cinfo, struct backing_store_struct *,
-			 long )
+       long )
 {
   ERREXIT(cinfo, JERR_NO_BACKING_STORE);
 }

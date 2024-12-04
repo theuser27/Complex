@@ -9,10 +9,10 @@
 //
 //************************************************************************************************
 /*
-	DISCLAIMER:
-	The PreSonus Plug-In Extensions are host-specific extensions of existing proprietary technologies,
-	provided to the community on an AS IS basis. They are not part of any official 3rd party SDK and
-	PreSonus is not affiliated with the owner of the underlying technology in any way.
+  DISCLAIMER:
+  The PreSonus Plug-In Extensions are host-specific extensions of existing proprietary technologies,
+  provided to the community on an AS IS basis. They are not part of any official 3rd party SDK and
+  PreSonus is not affiliated with the owner of the underlying technology in any way.
 */
 //************************************************************************************************
 
@@ -35,10 +35,10 @@ namespace Presonus {
 class IPlugInViewEmbedding: public Steinberg::FUnknown
 {
 public:
-	/** Check if view embedding is supported. */
+  /** Check if view embedding is supported. */
     virtual Steinberg::TBool PLUGIN_API isViewEmbeddingSupported () = 0;
 
-	/** Inform plug-in that its view will be embedded. */
+  /** Inform plug-in that its view will be embedded. */
     virtual Steinberg::tresult PLUGIN_API setViewIsEmbedded (Steinberg::IPlugView* view, Steinberg::TBool embedded) = 0;
 
     static const Steinberg::FUID iid;

@@ -98,8 +98,8 @@ const CString kSurround				= "Surround";		///< used for Surround only plug-in [o
 enum ComponentFlags
 {
 //------------------------------------------------------------------------
-	kDistributable			= 1 << 0,	///< Component can be run on remote computer
-	kSimpleModeSupported	= 1 << 1	///< Component supports simple IO mode (or works in simple mode anyway) see \ref vst3IoMode
+  kDistributable			= 1 << 0,	///< Component can be run on remote computer
+  kSimpleModeSupported	= 1 << 1	///< Component supports simple IO mode (or works in simple mode anyway) see \ref vst3IoMode
 //------------------------------------------------------------------------
 };
 
@@ -109,8 +109,8 @@ enum ComponentFlags
 */
 enum SymbolicSampleSizes
 {
-	kSample32,		///< 32-bit precision
-	kSample64		///< 64-bit precision
+  kSample32,		///< 32-bit precision
+  kSample64		///< 64-bit precision
 };
 
 //------------------------------------------------------------------------
@@ -120,26 +120,26 @@ VST3 defines 3 modes:
              The plug-in should always try to process as fast as possible in order to let enough time slice to other plug-ins.
 - kPrefetch: each process call could be called at a variable frequency (jitter, slower / faster than realtime),
              the plug-in should process at the same quality level than realtime, plug-in must not slow down to realtime
-			 (e.g. disk streaming)!
-			 The host should avoid to process in kPrefetch mode such sampler based plug-in.
+       (e.g. disk streaming)!
+       The host should avoid to process in kPrefetch mode such sampler based plug-in.
 - kOffline:  each process call could be faster than realtime or slower, higher quality than realtime could be used.
              plug-ins using disk streaming should be sure that they have enough time in the process call for streaming,
-			 if needed by slowing down to realtime or slower.
+       if needed by slowing down to realtime or slower.
 .
 Note about Process Modes switching:
-	- Switching between kRealtime and kPrefetch process modes are done in realtime thread without need of calling
-	 IAudioProcessor::setupProcessing, the plug-in should check in process call the member processMode of ProcessData
-	 in order to know in which mode it is processed.
-	- Switching between kRealtime (or kPrefetch) and kOffline requires that the host calls IAudioProcessor::setupProcessing
-	 in order to inform the plug-in about this mode change.
-	.
+  - Switching between kRealtime and kPrefetch process modes are done in realtime thread without need of calling
+   IAudioProcessor::setupProcessing, the plug-in should check in process call the member processMode of ProcessData
+   in order to know in which mode it is processed.
+  - Switching between kRealtime (or kPrefetch) and kOffline requires that the host calls IAudioProcessor::setupProcessing
+   in order to inform the plug-in about this mode change.
+  .
 \see ProcessSetup, ProcessData
 */
 enum ProcessModes
 {
-	kRealtime,		///< realtime processing
-	kPrefetch,		///< prefetch processing
-	kOffline		///< offline processing
+  kRealtime,		///< realtime processing
+  kPrefetch,		///< prefetch processing
+  kOffline		///< offline processing
 };
 
 //------------------------------------------------------------------------
@@ -165,10 +165,10 @@ static const uint32 kInfiniteTail = kMaxInt32u;
 struct ProcessSetup
 {
 //------------------------------------------------------------------------
-	int32 processMode;			///< \ref ProcessModes
-	int32 symbolicSampleSize;	///< \ref SymbolicSampleSizes
-	int32 maxSamplesPerBlock;	///< maximum number of samples per audio block
-	SampleRate sampleRate;		///< sample rate
+  int32 processMode;			///< \ref ProcessModes
+  int32 symbolicSampleSize;	///< \ref SymbolicSampleSizes
+  int32 maxSamplesPerBlock;	///< maximum number of samples per audio block
+  SampleRate sampleRate;		///< sample rate
 //------------------------------------------------------------------------
 };
 
@@ -190,58 +190,58 @@ This structure contains the processing buffer for each channel of an audio bus.
 */
 struct AudioBusBuffers
 {
-	AudioBusBuffers () : numChannels (0), silenceFlags (0), channelBuffers64 (nullptr) {}
+  AudioBusBuffers () : numChannels (0), silenceFlags (0), channelBuffers64 (nullptr) {}
 
 //------------------------------------------------------------------------
-	int32 numChannels;		///< number of audio channels in bus
-	uint64 silenceFlags;	///< Bitset of silence state per channel
-	union
-	{
-		Sample32** channelBuffers32;	///< sample buffers to process with 32-bit precision
-		Sample64** channelBuffers64;	///< sample buffers to process with 64-bit precision
-	};
+  int32 numChannels;		///< number of audio channels in bus
+  uint64 silenceFlags;	///< Bitset of silence state per channel
+  union
+  {
+    Sample32** channelBuffers32;	///< sample buffers to process with 32-bit precision
+    Sample64** channelBuffers64;	///< sample buffers to process with 64-bit precision
+  };
 //------------------------------------------------------------------------
 };
 
 //------------------------------------------------------------------------
 /** Any data needed in audio processing.
-	The host prepares AudioBusBuffers for each input/output bus,
-	regardless of the bus activation state. Bus buffer indices always match
-	with bus indices used in IComponent::getBusInfo of media type kAudio.
+  The host prepares AudioBusBuffers for each input/output bus,
+  regardless of the bus activation state. Bus buffer indices always match
+  with bus indices used in IComponent::getBusInfo of media type kAudio.
 \see AudioBusBuffers, IParameterChanges, IEventList, ProcessContext, IProcessContextRequirements
 */
 struct ProcessData
 {
-	ProcessData ()
-	: processMode (0)
-	, symbolicSampleSize (kSample32)
-	, numSamples (0)
-	, numInputs (0)
-	, numOutputs (0)
-	, inputs (nullptr)
-	, outputs (nullptr)
-	, inputParameterChanges (nullptr)
-	, outputParameterChanges (nullptr)
-	, inputEvents (nullptr)
-	, outputEvents (nullptr)
-	, processContext (nullptr)
-	{
-	}
+  ProcessData ()
+  : processMode (0)
+  , symbolicSampleSize (kSample32)
+  , numSamples (0)
+  , numInputs (0)
+  , numOutputs (0)
+  , inputs (nullptr)
+  , outputs (nullptr)
+  , inputParameterChanges (nullptr)
+  , outputParameterChanges (nullptr)
+  , inputEvents (nullptr)
+  , outputEvents (nullptr)
+  , processContext (nullptr)
+  {
+  }
 
 //------------------------------------------------------------------------
-	int32 processMode;			///< processing mode - value of \ref ProcessModes
-	int32 symbolicSampleSize;   ///< sample size - value of \ref SymbolicSampleSizes
-	int32 numSamples;			///< number of samples to process
-	int32 numInputs;			///< number of audio input busses
-	int32 numOutputs;			///< number of audio output busses
-	AudioBusBuffers* inputs;	///< buffers of input busses
-	AudioBusBuffers* outputs;	///< buffers of output busses
+  int32 processMode;			///< processing mode - value of \ref ProcessModes
+  int32 symbolicSampleSize;   ///< sample size - value of \ref SymbolicSampleSizes
+  int32 numSamples;			///< number of samples to process
+  int32 numInputs;			///< number of audio input busses
+  int32 numOutputs;			///< number of audio output busses
+  AudioBusBuffers* inputs;	///< buffers of input busses
+  AudioBusBuffers* outputs;	///< buffers of output busses
 
-	IParameterChanges* inputParameterChanges;	///< incoming parameter changes for this block
-	IParameterChanges* outputParameterChanges;	///< outgoing parameter changes for this block (optional)
-	IEventList* inputEvents;				///< incoming events for this block (optional)
-	IEventList* outputEvents;				///< outgoing events for this block (optional)
-	ProcessContext* processContext;			///< processing context (optional, but most welcome)
+  IParameterChanges* inputParameterChanges;	///< incoming parameter changes for this block
+  IParameterChanges* outputParameterChanges;	///< outgoing parameter changes for this block (optional)
+  IEventList* inputEvents;				///< incoming events for this block (optional)
+  IEventList* outputEvents;				///< outgoing events for this block (optional)
+  ProcessContext* processContext;			///< processing context (optional, but most welcome)
 //------------------------------------------------------------------------
 };
 
@@ -259,76 +259,76 @@ class IAudioProcessor : public FUnknown
 {
 public:
 //------------------------------------------------------------------------
-	/** Try to set (host => plug-in) a wanted arrangement for inputs and outputs.
-	   The host should always deliver the same number of input and output busses than the plug-in
-	   needs (see \ref IComponent::getBusCount). The plug-in has 3 possibilities to react on this
-	   setBusArrangements call:\n
-	   1. The plug-in accepts these arrangements, then it should modify, if needed, its busses to match 
-	     these new arrangements (later on asked by the host with IComponent::getBusInfo () or
-	     IAudioProcessor::getBusArrangement ()) and then should return kResultTrue.\n
-	   2. The plug-in does not accept or support these requested arrangements for all
-	     inputs/outputs or just for some or only one bus, but the plug-in can try to adapt its current
-	     arrangements according to the requested ones (requested arrangements for kMain busses should be
-		 handled with more priority than the ones for kAux busses), then it should modify its busses arrangements
-		 and should return kResultFalse.\n
-	   3. Same than the point 2 above the plug-in does not support these requested arrangements 
-	     but the plug-in cannot find corresponding arrangements, the plug-in could keep its current arrangement
-		 or fall back to a default arrangement by modifying its busses arrangements and should return kResultFalse.\n
-		\param inputs pointer to an array of /ref SpeakerArrangement
-		\param numIns number of /ref SpeakerArrangement in inputs array
-		\param outputs pointer to an array of /ref SpeakerArrangement
-		\param numOuts number of /ref SpeakerArrangement in outputs array 
-		Returns kResultTrue when Arrangements is supported and is the current one, else returns kResultFalse. */
-	virtual tresult PLUGIN_API setBusArrangements (SpeakerArrangement* inputs, int32 numIns,
-												   SpeakerArrangement* outputs, int32 numOuts) = 0;
+  /** Try to set (host => plug-in) a wanted arrangement for inputs and outputs.
+     The host should always deliver the same number of input and output busses than the plug-in
+     needs (see \ref IComponent::getBusCount). The plug-in has 3 possibilities to react on this
+     setBusArrangements call:\n
+     1. The plug-in accepts these arrangements, then it should modify, if needed, its busses to match 
+       these new arrangements (later on asked by the host with IComponent::getBusInfo () or
+       IAudioProcessor::getBusArrangement ()) and then should return kResultTrue.\n
+     2. The plug-in does not accept or support these requested arrangements for all
+       inputs/outputs or just for some or only one bus, but the plug-in can try to adapt its current
+       arrangements according to the requested ones (requested arrangements for kMain busses should be
+     handled with more priority than the ones for kAux busses), then it should modify its busses arrangements
+     and should return kResultFalse.\n
+     3. Same than the point 2 above the plug-in does not support these requested arrangements 
+       but the plug-in cannot find corresponding arrangements, the plug-in could keep its current arrangement
+     or fall back to a default arrangement by modifying its busses arrangements and should return kResultFalse.\n
+    \param inputs pointer to an array of /ref SpeakerArrangement
+    \param numIns number of /ref SpeakerArrangement in inputs array
+    \param outputs pointer to an array of /ref SpeakerArrangement
+    \param numOuts number of /ref SpeakerArrangement in outputs array 
+    Returns kResultTrue when Arrangements is supported and is the current one, else returns kResultFalse. */
+  virtual tresult PLUGIN_API setBusArrangements (SpeakerArrangement* inputs, int32 numIns,
+                           SpeakerArrangement* outputs, int32 numOuts) = 0;
 
-	/** Gets the bus arrangement for a given direction (input/output) and index.
-		Note: IComponent::getBusInfo () and IAudioProcessor::getBusArrangement () should be always return the same 
-		information about the busses arrangements. */
-	virtual tresult PLUGIN_API getBusArrangement (BusDirection dir, int32 index, SpeakerArrangement& arr) = 0;
+  /** Gets the bus arrangement for a given direction (input/output) and index.
+    Note: IComponent::getBusInfo () and IAudioProcessor::getBusArrangement () should be always return the same 
+    information about the busses arrangements. */
+  virtual tresult PLUGIN_API getBusArrangement (BusDirection dir, int32 index, SpeakerArrangement& arr) = 0;
 
-	/** Asks if a given sample size is supported see \ref SymbolicSampleSizes. */
-	virtual tresult PLUGIN_API canProcessSampleSize (int32 symbolicSampleSize) = 0;
+  /** Asks if a given sample size is supported see \ref SymbolicSampleSizes. */
+  virtual tresult PLUGIN_API canProcessSampleSize (int32 symbolicSampleSize) = 0;
 
-	/** Gets the current Latency in samples.
-		The returned value defines the group delay or the latency of the plug-in. For example, if the plug-in internally needs
-		to look in advance (like compressors) 512 samples then this plug-in should report 512 as latency.
-		If during the use of the plug-in this latency change, the plug-in has to inform the host by
-		using IComponentHandler::restartComponent (kLatencyChanged), this could lead to audio playback interruption
-		because the host has to recompute its internal mixer delay compensation.
-		Note that for player live recording this latency should be zero or small. */
-	virtual uint32 PLUGIN_API getLatencySamples () = 0;
+  /** Gets the current Latency in samples.
+    The returned value defines the group delay or the latency of the plug-in. For example, if the plug-in internally needs
+    to look in advance (like compressors) 512 samples then this plug-in should report 512 as latency.
+    If during the use of the plug-in this latency change, the plug-in has to inform the host by
+    using IComponentHandler::restartComponent (kLatencyChanged), this could lead to audio playback interruption
+    because the host has to recompute its internal mixer delay compensation.
+    Note that for player live recording this latency should be zero or small. */
+  virtual uint32 PLUGIN_API getLatencySamples () = 0;
 
-	/** Called in disable state (setActive not called with true) before setProcessing is called and processing will begin. */
-	virtual tresult PLUGIN_API setupProcessing (ProcessSetup& setup) = 0;
+  /** Called in disable state (setActive not called with true) before setProcessing is called and processing will begin. */
+  virtual tresult PLUGIN_API setupProcessing (ProcessSetup& setup) = 0;
 
-	/** Informs the plug-in about the processing state. This will be called before any process calls
-	   start with true and after with false.
-	   Note that setProcessing (false) may be called after setProcessing (true) without any process
-	   calls.
-	   Note this function could be called in the UI or in Processing Thread, thats why the plug-in
-	   should only light operation (no memory allocation or big setup reconfiguration), 
-	   this could be used to reset some buffers (like Delay line or Reverb).
-	   The host has to be sure that it is called only when the plug-in is enable (setActive (true)
-	   was called). */
-	virtual tresult PLUGIN_API setProcessing (TBool state) = 0;
+  /** Informs the plug-in about the processing state. This will be called before any process calls
+     start with true and after with false.
+     Note that setProcessing (false) may be called after setProcessing (true) without any process
+     calls.
+     Note this function could be called in the UI or in Processing Thread, thats why the plug-in
+     should only light operation (no memory allocation or big setup reconfiguration), 
+     this could be used to reset some buffers (like Delay line or Reverb).
+     The host has to be sure that it is called only when the plug-in is enable (setActive (true)
+     was called). */
+  virtual tresult PLUGIN_API setProcessing (TBool state) = 0;
 
-	/** The Process call, where all information (parameter changes, event, audio buffer) are passed. */
-	virtual tresult PLUGIN_API process (ProcessData& data) = 0;
+  /** The Process call, where all information (parameter changes, event, audio buffer) are passed. */
+  virtual tresult PLUGIN_API process (ProcessData& data) = 0;
 
-	/** Gets tail size in samples. For example, if the plug-in is a Reverb plug-in and it knows that
-		the maximum length of the Reverb is 2sec, then it has to return in getTailSamples() 
-		(in VST2 it was getGetTailSize ()): 2*sampleRate.
-		This information could be used by host for offline processing, process optimization and 
-		downmix (avoiding signal cut (clicks)).
-		It should return:
-		 - kNoTail when no tail
-		 - x * sampleRate when x Sec tail.
-		 - kInfiniteTail when infinite tail. */
-	virtual uint32 PLUGIN_API getTailSamples () = 0;
+  /** Gets tail size in samples. For example, if the plug-in is a Reverb plug-in and it knows that
+    the maximum length of the Reverb is 2sec, then it has to return in getTailSamples() 
+    (in VST2 it was getGetTailSize ()): 2*sampleRate.
+    This information could be used by host for offline processing, process optimization and 
+    downmix (avoiding signal cut (clicks)).
+    It should return:
+     - kNoTail when no tail
+     - x * sampleRate when x Sec tail.
+     - kInfiniteTail when infinite tail. */
+  virtual uint32 PLUGIN_API getTailSamples () = 0;
 
 //------------------------------------------------------------------------
-	static const FUID iid;
+  static const FUID iid;
 };
 
 DECLARE_CLASS_IID (IAudioProcessor, 0x42043F99, 0xB7DA453C, 0xA569E79D, 0x9AAEC33D)
@@ -366,12 +366,12 @@ of the previous plug-ins.
 class IAudioPresentationLatency : public FUnknown
 {
 public:
-	//------------------------------------------------------------------------
-	/** Informs the plug-in about the Audio Presentation Latency in samples for a given direction (kInput/kOutput) and bus index. */
-	virtual tresult PLUGIN_API setAudioPresentationLatencySamples (BusDirection dir, int32 busIndex, uint32 latencyInSamples) = 0;
+  //------------------------------------------------------------------------
+  /** Informs the plug-in about the Audio Presentation Latency in samples for a given direction (kInput/kOutput) and bus index. */
+  virtual tresult PLUGIN_API setAudioPresentationLatencySamples (BusDirection dir, int32 busIndex, uint32 latencyInSamples) = 0;
 
-	//------------------------------------------------------------------------
-	static const FUID iid;
+  //------------------------------------------------------------------------
+  static const FUID iid;
 };
 
 DECLARE_CLASS_IID (IAudioPresentationLatency, 0x309ECE78, 0xEB7D4fae, 0x8B2225D9, 0x09FD08B6)
@@ -399,23 +399,23 @@ may not be as accurate as when using this interface.
 class IProcessContextRequirements : public FUnknown
 {
 public:
-	enum Flags
-	{
-		kNeedSystemTime				= 1 <<  0, // kSystemTimeValid
-		kNeedContinousTimeSamples	= 1 <<  1, // kContTimeValid
-		kNeedProjectTimeMusic		= 1 <<  2, // kProjectTimeMusicValid
-		kNeedBarPositionMusic		= 1 <<  3, // kBarPositionValid
-		kNeedCycleMusic				= 1 <<  4, // kCycleValid
-		kNeedSamplesToNextClock		= 1 <<  5, // kClockValid
-		kNeedTempo					= 1 <<  6, // kTempoValid
-		kNeedTimeSignature			= 1 <<  7, // kTimeSigValid
-		kNeedChord					= 1 <<  8, // kChordValid
-		kNeedFrameRate				= 1 <<  9, // kSmpteValid
-		kNeedTransportState			= 1 << 10, // kPlaying, kCycleActive, kRecording
-	};
-	virtual uint32 PLUGIN_API getProcessContextRequirements () = 0;
+  enum Flags
+  {
+    kNeedSystemTime				= 1 <<  0, // kSystemTimeValid
+    kNeedContinousTimeSamples	= 1 <<  1, // kContTimeValid
+    kNeedProjectTimeMusic		= 1 <<  2, // kProjectTimeMusicValid
+    kNeedBarPositionMusic		= 1 <<  3, // kBarPositionValid
+    kNeedCycleMusic				= 1 <<  4, // kCycleValid
+    kNeedSamplesToNextClock		= 1 <<  5, // kClockValid
+    kNeedTempo					= 1 <<  6, // kTempoValid
+    kNeedTimeSignature			= 1 <<  7, // kTimeSigValid
+    kNeedChord					= 1 <<  8, // kChordValid
+    kNeedFrameRate				= 1 <<  9, // kSmpteValid
+    kNeedTransportState			= 1 << 10, // kPlaying, kCycleActive, kRecording
+  };
+  virtual uint32 PLUGIN_API getProcessContextRequirements () = 0;
 //------------------------------------------------------------------------
-	static const FUID iid;
+  static const FUID iid;
 };
 
 DECLARE_CLASS_IID (IProcessContextRequirements, 0x2A654303, 0xEF764E3D, 0x95B5FE83, 0x730EF6D0)

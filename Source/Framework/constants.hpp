@@ -47,10 +47,6 @@ namespace common
   // processing constants
   inline constexpr double kMinFrequency = kMidi0Frequency;                            // (can be changed)    lowest frequency that will be displayed
 
-  // dependent constants; don't change
-  inline constexpr u32 kChannelsPerInOut = kComplexSimdRatio;                         // an in/output needs to be contained in a single simd
-                                                                                      // effectively an alias of kComplexSimdRatio
-
   // GUI constants
   inline constexpr int kMinWindowWidth = 426;
   inline constexpr int kMinWindowHeight = 500;

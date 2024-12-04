@@ -58,28 +58,28 @@ class ITestPlugProvider : public FUnknown
 {
 public:
 //------------------------------------------------------------------------
-	/** get the component of the plug-in.
-	 *
-	 * The reference count of the component is increased in this function and you need to call
-	 * releasePlugIn when done with the component.
-	 */
-	virtual IComponent* PLUGIN_API getComponent () = 0;
-	/** get the controller of the plug-in.
-	 *
-	 * The reference count of the controller is increased in this function and you need to call
-	 * releasePlugIn when done with the controller.
-	 */
-	virtual IEditController* PLUGIN_API getController () = 0;
-	/** release the component and/or controller */
-	virtual tresult PLUGIN_API releasePlugIn (IComponent* component,
-	                                          IEditController* controller) = 0;
-	/** get the sub categories of the plug-in */
-	virtual tresult PLUGIN_API getSubCategories (IStringResult& result) const = 0;
-	/** get the component UID of the plug-in */
-	virtual tresult PLUGIN_API getComponentUID (FUID& uid) const = 0;
+  /** get the component of the plug-in.
+   *
+   * The reference count of the component is increased in this function and you need to call
+   * releasePlugIn when done with the component.
+   */
+  virtual IComponent* PLUGIN_API getComponent () = 0;
+  /** get the controller of the plug-in.
+   *
+   * The reference count of the controller is increased in this function and you need to call
+   * releasePlugIn when done with the controller.
+   */
+  virtual IEditController* PLUGIN_API getController () = 0;
+  /** release the component and/or controller */
+  virtual tresult PLUGIN_API releasePlugIn (IComponent* component,
+                                            IEditController* controller) = 0;
+  /** get the sub categories of the plug-in */
+  virtual tresult PLUGIN_API getSubCategories (IStringResult& result) const = 0;
+  /** get the component UID of the plug-in */
+  virtual tresult PLUGIN_API getComponentUID (FUID& uid) const = 0;
 
 //------------------------------------------------------------------------
-	static const FUID iid;
+  static const FUID iid;
 };
 
 DECLARE_CLASS_IID (ITestPlugProvider, 0x86BE70EE, 0x4E99430F, 0x978F1E6E, 0xD68FB5BA)
@@ -91,15 +91,15 @@ DECLARE_CLASS_IID (ITestPlugProvider, 0x86BE70EE, 0x4E99430F, 0x978F1E6E, 0xD68F
 class ITestPlugProvider2 : public ITestPlugProvider
 {
 public:
-	/** get the plugin factory.
-	 *
-	 * The reference count of the returned factory object is not increased when calling this
-	 * function.
-	 */
-	virtual IPluginFactory* PLUGIN_API getPluginFactory () = 0;
+  /** get the plugin factory.
+   *
+   * The reference count of the returned factory object is not increased when calling this
+   * function.
+   */
+  virtual IPluginFactory* PLUGIN_API getPluginFactory () = 0;
 
 //------------------------------------------------------------------------
-	static const FUID iid;
+  static const FUID iid;
 };
 
 DECLARE_CLASS_IID (ITestPlugProvider2, 0xC7C75364, 0x7B8343AC, 0xA4495B0A, 0x3E5A46C7)

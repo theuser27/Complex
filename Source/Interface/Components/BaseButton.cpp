@@ -125,7 +125,7 @@ namespace Interface
   {
     if (!details_.indexedData.empty())
     {
-      auto string = details_.indexedData[(size_t)value].displayName;
+      auto string = details_.indexedData[(usize)value].displayName;
       return { string.data(), string.size() };
     }
 

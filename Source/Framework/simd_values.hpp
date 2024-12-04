@@ -41,7 +41,6 @@ namespace simd_values
     using simd_type = uint32x4_t;
   #endif 
     static constexpr usize size = sizeof(simd_type) / sizeof(u32);
-    static_assert(size == kSimdRatio);
     using array_t = utils::array<u32, size>;
 
     simd_type value;
@@ -90,7 +89,7 @@ namespace simd_values
     static strict_inline simd_type vector_call neg(simd_type value)
     {
     #if COMPLEX_SSE4_1
-      return _mm_sub_epi32(_mm_set1_epi32(0), value);
+      return _mm_sub_epi32(_mm_setzero_si128(), value);
     #elif COMPLEX_NEON
       return vmulq_n_u32(value, -1);
     #endif
@@ -99,13 +98,9 @@ namespace simd_values
     static strict_inline simd_type vector_call mul(simd_type one, simd_type two)
     {
     #if COMPLEX_SSE4_1
-      simd_type mul0_2 = _mm_mul_epu32(one, two);
-      simd_type mul1_3 = _mm_mul_epu32(_mm_shuffle_epi32(one, _MM_SHUFFLE(2, 3, 0, 1)),
-        _mm_shuffle_epi32(two, _MM_SHUFFLE(2, 3, 0, 1)));
-      return _mm_unpacklo_epi32(_mm_shuffle_epi32(mul0_2, _MM_SHUFFLE(0, 0, 2, 0)),
-        _mm_shuffle_epi32(mul1_3, _MM_SHUFFLE(0, 0, 2, 0)));
+      return _mm_mullo_epi32(one, two);
     #elif COMPLEX_NEON
-      return vmulq_n_u32(value, -1);
+      return vmulq_u32(one, two);
     #endif
     }
 
@@ -147,22 +142,6 @@ namespace simd_values
     #endif
     }
 
-    static strict_inline simd_type vector_call greaterThanSigned(simd_type one, simd_type two) {
-    #if COMPLEX_SSE4_1
-      return _mm_cmpgt_epi32(one, two);
-    #elif COMPLEX_NEON
-      return vcgtq_s32(one, two);
-    #endif
-    }
-
-    static strict_inline simd_type vector_call greaterThanUnsigned(simd_type one, simd_type two) {
-    #if COMPLEX_SSE4_1
-      return _mm_cmpgt_epi32(_mm_xor_si128(one, init(kSignMask)), _mm_xor_si128(two, init(kSignMask)));
-    #elif COMPLEX_NEON
-      return vcgtq_u32(one, two);
-    #endif
-    }
-
     static strict_inline simd_type vector_call maxSigned(simd_type one, simd_type two)
     {
     #if COMPLEX_SSE4_1
@@ -171,8 +150,9 @@ namespace simd_values
       return vmaxq_i32(one, two);
     #endif
     }
-    
-    static strict_inline simd_type vector_call maxUnsigned(simd_type one, simd_type two) {
+
+    static strict_inline simd_type vector_call maxUnsigned(simd_type one, simd_type two)
+    {
     #if COMPLEX_SSE4_1
       return _mm_max_epu32(one, two);
     #elif COMPLEX_NEON
@@ -189,11 +169,30 @@ namespace simd_values
     #endif
     }
 
-    static strict_inline simd_type vector_call minUnsigned(simd_type one, simd_type two) {
+    static strict_inline simd_type vector_call minUnsigned(simd_type one, simd_type two)
+    {
     #if COMPLEX_SSE4_1
       return _mm_min_epu32(one, two);
     #elif COMPLEX_NEON
       return vminq_u32(one, two);
+    #endif
+    }
+
+    static strict_inline simd_type vector_call greaterThanSigned(simd_type one, simd_type two)
+    {
+    #if COMPLEX_SSE4_1
+      return _mm_cmpgt_epi32(one, two);
+    #elif COMPLEX_NEON
+      return vcgtq_s32(one, two);
+    #endif
+    }
+
+    static strict_inline simd_type vector_call greaterThanUnsigned(simd_type one, simd_type two)
+    {
+    #if COMPLEX_SSE4_1
+      return equal(maxUnsigned(one, two), one);
+    #elif COMPLEX_NEON
+      return vcgtq_u32(one, two);
     #endif
     }
 
@@ -268,6 +267,17 @@ namespace simd_values
     strict_inline u32 vector_call anyMask() const noexcept
     { return anyMask(value); }
 
+    strict_inline bool vector_call allSame() const noexcept
+    {
+    #if COMPLEX_SSE4_1
+      simd_type mask = equal(value, _mm_shuffle_epi32(value, _MM_SHUFFLE(2, 3, 0, 1)));
+      mask = bitOr(mask, equal(value, _mm_shuffle_epi32(value, _MM_SHUFFLE(0, 1, 2, 3))));
+      return anyMask(mask);
+    #elif COMPLEX_NEON
+      static_assert(false, "not implemented yet");
+    #endif
+    }
+
 
     //////////////////
     // Constructors //
@@ -276,12 +286,13 @@ namespace simd_values
   #ifdef COMPLEX_MSVC
   private:
     // i hate unions
-    template<size_t ... N>
+    template<usize ... N>
     static constexpr auto getInternalValue(const auto &scalars, utils::index_sequence<N...>) noexcept
     { return simd_type{ .m128i_u32 = { scalars[N]... } }; }
   public:
   #endif
 
+    constexpr strict_inline simd_int(utils::uninitialised_t) { }
     constexpr strict_inline simd_int() noexcept : simd_int{ 0 } { }
     constexpr strict_inline simd_int(u32 initialValue) noexcept
     {
@@ -290,7 +301,7 @@ namespace simd_values
         array_t values{};
         values.fill(initialValue);
       #ifdef COMPLEX_MSVC
-        value = getInternalValue(values, utils::make_index_sequence<kSimdRatio>());
+        value = getInternalValue(values, utils::make_index_sequence<size>());
       #elif
         value = utils::bit_cast<simd_type>(values);
       #endif
@@ -301,7 +312,7 @@ namespace simd_values
     constexpr strict_inline simd_int(simd_type initialValue) noexcept : value(initialValue) { }
     constexpr strict_inline simd_int(const array_t &scalars) noexcept :
   #ifdef COMPLEX_MSVC
-      value(getInternalValue(scalars, utils::make_index_sequence<kSimdRatio>())) { }
+      value(getInternalValue(scalars, utils::make_index_sequence<size>())) { }
   #elif
       value(utils::bit_cast<simd_type>(scalars)) { }
   #endif
@@ -309,40 +320,44 @@ namespace simd_values
     constexpr strict_inline simd_int(u32 even, u32 odd) noexcept
     {
       array_t values{};
-      for (size_t i = 0; i < kSimdRatio; i += 2)
+      for (usize i = 0; i < size; i += 2)
       {
         values[i] = even;
         values[i + 1] = odd;
       }
 
     #ifdef COMPLEX_MSVC
-      value = getInternalValue(values, utils::make_index_sequence<kSimdRatio>());
+      value = getInternalValue(values, utils::make_index_sequence<size>());
     #elif
       value = utils::bit_cast<simd_type>(values);
     #endif
     }
 
 
-    ///////////////
-    // Operators //
-    ///////////////
-
-    strict_inline u32 vector_call access(size_t index) const noexcept
-    { return utils::bit_cast<array_t>(value)[index]; }
-
-    strict_inline void vector_call set(size_t index, u32 newValue) noexcept
+    strict_inline void vector_call set(usize index, u32 newValue) noexcept
     {
       auto scalars = utils::bit_cast<array_t>(value);
       scalars[index] = newValue;
       value = utils::bit_cast<simd_type>(scalars);
     }
 
-    strict_inline array_t getArrayOfValues() const noexcept
-    {	return utils::bit_cast<utils::array<u32, kSimdRatio>>(value); }
+    constexpr strict_inline array_t getArrayOfValues() const noexcept
+    {
+    #ifdef COMPLEX_MSVC
+      if (utils::is_constant_evaluated())
+      {
+        array_t array;
+        for (usize i = 0; i < size; ++i)
+          array[i] = value.m128i_u32[i];
+        return array;
+      }
+    #endif
+      return utils::bit_cast<array_t>(value);
+    }
 
-    template<typename T> requires ((sizeof(u32) * kSimdRatio) % sizeof(T) == 0)
+    template<typename T> requires ((sizeof(u32) * size) % sizeof(T) == 0)
     strict_inline auto getArrayOfValues() const noexcept
-    {	return utils::bit_cast<utils::array<T, ((sizeof(u32) * kSimdRatio) / sizeof(T))>>(value); }
+    {	return utils::bit_cast<utils::array<T, ((sizeof(u32) * size) / sizeof(T))>>(value); }
 
     strict_inline void swap(simd_int &other) noexcept
     {
@@ -355,26 +370,47 @@ namespace simd_values
     // Operators //
     ///////////////
 
-    strict_inline u32 vector_call operator[](size_t index) const noexcept
-    { return access(index); }
+    strict_inline bool vector_call operator==(simd_int other) const noexcept
+    { return notEqual(*this, other).anyMask(); }
+
+    constexpr strict_inline u32 vector_call operator[](usize index) const noexcept
+    { return getArrayOfValues()[index]; }
 
     strict_inline simd_int vector_call operator+(simd_int other) const noexcept
     { return add(value, other.value); }
 
+    friend strict_inline simd_int vector_call operator+(u32 one, simd_int two) noexcept
+    { return add(init(one), two.value); }
+
     strict_inline simd_int vector_call operator-(simd_int other) const noexcept
     { return sub(value, other.value); }
+
+    friend strict_inline simd_int vector_call operator-(u32 one, simd_int two) noexcept
+    { return sub(init(one), two.value); }
 
     strict_inline simd_int vector_call operator*(simd_int other) const noexcept
     { return mul(value, other.value); }
 
+    friend strict_inline simd_int vector_call operator*(u32 one, simd_int two) noexcept
+    { return mul(init(one), two.value); }
+
     strict_inline simd_int vector_call operator&(simd_int other) const noexcept
     { return bitAnd(value, other.value); }
+
+    friend strict_inline simd_int vector_call operator&(u32 one, simd_int two) noexcept
+    { return bitAnd(init(one), two.value); }
 
     strict_inline simd_int vector_call operator|(simd_int other) const noexcept
     { return bitOr(value, other.value); }
 
+    friend strict_inline simd_int vector_call operator|(u32 one, simd_int two) noexcept
+    { return bitOr(init(one), two.value); }
+
     strict_inline simd_int vector_call operator^(simd_int other) const noexcept
     { return bitXor(value, other.value); }
+
+    friend strict_inline simd_int vector_call operator^(u32 one, simd_int two) noexcept
+    { return bitXor(init(one), two.value); }
 
     strict_inline simd_int vector_call operator-() const noexcept
     { return neg(value); }
@@ -421,13 +457,6 @@ namespace simd_values
 
   using simd_mask = simd_int;
 
-  inline constexpr simd_mask kLeftChannelMask = utils::array{ kFullMask, kFullMask, 0U, 0U };
-  inline constexpr simd_mask kRightChannelMask = utils::array{ 0U, 0U, kFullMask, kFullMask };
-  inline constexpr auto kChannelMasks = utils::array{ kLeftChannelMask, kRightChannelMask };
-  inline constexpr simd_mask kMagnitudeMask = { kFullMask, 0U };
-  inline constexpr simd_mask kPhaseMask = { 0U, kFullMask };
-
-
   struct alignas(COMPLEX_SIMD_ALIGNMENT) simd_float
   {
     /////////////////////////////
@@ -442,7 +471,7 @@ namespace simd_values
     using mask_simd_type = uint32x4_t;
   #endif
     static constexpr usize size = sizeof(simd_type) / sizeof(float);
-    static_assert(size == kSimdRatio);
+    static constexpr usize complexSize = size / 2;
     using array_t = utils::array<float, size>;
 
     simd_type value;
@@ -541,11 +570,7 @@ namespace simd_values
       return _mm_add_ps(add, _mm_mul_ps(mulOne, mulTwo));
     #endif
     #elif COMPLEX_NEON
-    #if defined(NEON_VFP_V3)
-      return vaddq_f32(add, vmulq_f32(mulOne, mulTwo));
-    #else
       return vmlaq_f32(add, mulOne, mulTwo);
-    #endif
     #endif
     }
 
@@ -558,11 +583,7 @@ namespace simd_values
       return _mm_sub_ps(sub, _mm_mul_ps(mulOne, mulTwo));
     #endif
     #elif COMPLEX_NEON
-    #if defined(NEON_VFP_V3)
-      return vsubq_f32(sub, vmulq_f32(mulOne, mulTwo));
-    #else
       return vmlsq_f32(sub, mulOne, mulTwo);
-    #endif
     #endif
     }
 
@@ -742,27 +763,6 @@ namespace simd_values
     #endif
     }
 
-    static strict_inline void vector_call transpose(utils::array<simd_float, kSimdRatio> &rows)
-    {
-    #if COMPLEX_SSE4_1
-      simd_type low0 = _mm_unpacklo_ps(rows[0].value, rows[1].value);
-      simd_type low1 = _mm_unpacklo_ps(rows[2].value, rows[3].value);
-      simd_type high0 = _mm_unpackhi_ps(rows[0].value, rows[1].value);
-      simd_type high1 = _mm_unpackhi_ps(rows[2].value, rows[3].value);
-      rows[0].value = _mm_movelh_ps(low0, low1);
-      rows[1].value = _mm_movehl_ps(low1, low0);
-      rows[2].value = _mm_movelh_ps(high0, high1);
-      rows[3].value = _mm_movehl_ps(high1, high0);
-    #elif COMPLEX_NEON
-      simd_type swapLow = vtrnq_f32(rows[0].value, rows[1].value);
-      simd_type swapHigh = vtrnq_f32(rows[2].value, rows[3].value);
-      rows[0].value = vextq_f32(vextq_f32(swapLow.val[0], swapLow.val[0], 2), swapHigh.val[0], 2);
-      rows[1].value = vextq_f32(vextq_f32(swapLow.val[1], swapLow.val[1], 2), swapHigh.val[1], 2);
-      rows[2].value = vextq_f32(swapLow.val[0], vextq_f32(swapHigh.val[0], swapHigh.val[0], 2), 2);
-      rows[3].value = vextq_f32(swapLow.val[1], vextq_f32(swapHigh.val[1], swapHigh.val[1], 2), 2);
-    #endif
-    }
-
 
     //////////////////
     // Method Calls //
@@ -828,6 +828,9 @@ namespace simd_values
     strict_inline float vector_call sum() const noexcept
     { return sum(value); }
 
+    strict_inline bool vector_call allSame() const noexcept
+    { return simd_int{ toMask(value) }.allSame(); }
+
 
     //////////////////////////////////
     // Constructors and Destructors //
@@ -836,12 +839,13 @@ namespace simd_values
   #ifdef COMPLEX_MSVC
   private:
     // i hate unions
-    template<size_t ... N>
+    template<usize ... N>
     static constexpr auto getInternalValue(const auto &scalars, utils::index_sequence<N...>) noexcept
     { return simd_type{ .m128_f32 = { scalars[N]... } }; }
   public:
   #endif
-    
+
+    constexpr strict_inline simd_float(utils::uninitialised_t) { }
     constexpr strict_inline simd_float() noexcept : simd_float{ 0.0f } { }
     constexpr strict_inline simd_float(float initialValue) noexcept
     {
@@ -850,7 +854,7 @@ namespace simd_values
         array_t values{};
         values.fill(initialValue);
       #ifdef COMPLEX_MSVC
-        value = getInternalValue(values, utils::make_index_sequence<kSimdRatio>());
+        value = getInternalValue(values, utils::make_index_sequence<size>());
       #elif
         value = utils::bit_cast<simd_type>(values);
       #endif
@@ -861,54 +865,54 @@ namespace simd_values
     constexpr strict_inline simd_float(simd_type initialValue) noexcept : value(initialValue) { }
     constexpr strict_inline simd_float(const array_t &scalars) noexcept :
     #ifdef COMPLEX_MSVC
-      value(getInternalValue(scalars, utils::make_index_sequence<kSimdRatio>())) { }
+      value(getInternalValue(scalars, utils::make_index_sequence<size>())) { }
     #elif
       value(utils::bit_cast<simd_type>(scalars)) { }
     #endif
     
-    template<typename T, size_t N> requires (sizeof(simd_type) == sizeof(T) * N)
+    template<typename T, usize N> requires (sizeof(simd_type) == sizeof(T) * N)
     strict_inline simd_float(const utils::array<T, N> &scalars) noexcept :
       value(utils::bit_cast<simd_type>(scalars)) { }
-
-    constexpr strict_inline float vector_call access(size_t index) const noexcept 
-    { return utils::bit_cast<array_t>(value)[index]; }
 
     constexpr strict_inline simd_float(float even, float odd) noexcept
     {
       array_t values{};
-      for (size_t i = 0; i < kSimdRatio; i += 2)
+      for (usize i = 0; i < size; i += 2)
       {
         values[i] = even;
         values[i + 1] = odd;
       }
 
     #ifdef COMPLEX_MSVC
-      value = getInternalValue(values, utils::make_index_sequence<kSimdRatio>());
+      value = getInternalValue(values, utils::make_index_sequence<size>());
     #elif
       value = utils::bit_cast<simd_type>(values);
     #endif
     }
 
-    strict_inline void vector_call set(size_t index, float newValue) noexcept
+    strict_inline void vector_call set(usize index, float newValue) noexcept
     {
       auto scalars = utils::bit_cast<array_t>(value);
       scalars[index] = newValue;
       value = utils::bit_cast<simd_type>(scalars);
     }
 
-    constexpr strict_inline array_t vector_call getArrayOfValues() const noexcept
+    strict_inline array_t vector_call getArrayOfValues() const noexcept
     { return utils::bit_cast<array_t>(value); }
 
-    template<typename T> requires ((sizeof(float) * kSimdRatio) % sizeof(T) == 0)
-    constexpr strict_inline auto vector_call getArrayOfValues() const noexcept
-    { return utils::bit_cast<utils::array<T, ((sizeof(float) * kSimdRatio) / sizeof(T))>>(value); }
+    template<typename T> requires ((sizeof(float) * size) % sizeof(T) == 0)
+    strict_inline auto vector_call getArrayOfValues() const noexcept
+    { return utils::bit_cast<utils::array<T, ((sizeof(float) * size) / sizeof(T))>>(value); }
 
     ///////////////
     // Operators //
     ///////////////
 
-    constexpr strict_inline float vector_call operator[](size_t index) const noexcept
-    { return access(index); }
+    strict_inline bool vector_call operator==(simd_float other) const noexcept
+    { return notEqual(*this, other).anyMask() == 0; }
+
+    strict_inline float vector_call operator[](usize index) const noexcept
+    { return utils::bit_cast<array_t>(value)[index]; }
 
     strict_inline simd_float& vector_call operator+=(simd_float other) noexcept
     { value = add(value, other.value); return *this; }
@@ -948,8 +952,14 @@ namespace simd_values
     strict_inline simd_float vector_call operator+(simd_float other) const noexcept
     { return add(value, other.value); }
 
+    strict_inline friend simd_float vector_call operator+(float one, simd_float two) noexcept
+    { return add(init(one), two.value); }
+
     strict_inline simd_float vector_call operator-(simd_float other) const noexcept
     { return sub(value, other.value); }
+
+    strict_inline friend simd_float vector_call operator-(float one, simd_float two) noexcept
+    { return sub(init(one), two.value); }
 
     strict_inline simd_float vector_call operator*(simd_float other) const noexcept
     { return mul(value, other.value); }
@@ -957,8 +967,14 @@ namespace simd_values
     strict_inline simd_float vector_call operator*(float scalar) const noexcept
     { return mulScalar(value, scalar); }
 
+    strict_inline friend simd_float vector_call operator*(float one, simd_float two) noexcept
+    { return mulScalar(two.value, one); }
+
     strict_inline simd_float vector_call operator/(simd_float other) const noexcept
     { return div(value, other.value); }
+
+    strict_inline friend simd_float vector_call operator/(float one, simd_float two) noexcept
+    { return div(init(one), two.value); }
 
 
     strict_inline simd_float vector_call operator&(simd_mask other) const noexcept
@@ -988,6 +1004,27 @@ namespace simd_values
 
   template<typename T>
   concept SimdValue = utils::is_same_v<T, simd_float> || utils::is_same_v<T, simd_int>;
+
+  // an in/output needs to be contained in a single simd
+  // effectively an alias of complexSize
+  inline constexpr u32 kChannelsPerInOut = simd_float::complexSize;
+
+  inline constexpr auto kChannelMasks = []()
+  {
+    utils::array<simd_mask, kChannelsPerInOut> channelMasks{};
+    for (usize i = 0; i < channelMasks.size(); ++i)
+    {
+      utils::array<u32, simd_mask::size> mask{};
+      mask[2 * i] = kFullMask;
+      mask[2 * i + 1] = kFullMask;
+      channelMasks[i] = mask;
+    }
+    return channelMasks;
+  }();
+  inline constexpr simd_mask kRealMask = { kFullMask, 0U };
+  inline constexpr simd_mask kImaginaryMask = { 0U, kFullMask };
+  inline constexpr simd_mask kMagnitudeMask = kRealMask;
+  inline constexpr simd_mask kPhaseMask = kImaginaryMask;
 }
 
 using namespace simd_values;

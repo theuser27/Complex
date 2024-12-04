@@ -1,6 +1,6 @@
 /*!
-	@file		AudioUnitSDK/AUInputElement.cpp
-	@copyright	© 2000-2021 Apple Inc. All rights reserved.
+  @file		AudioUnitSDK/AUInputElement.cpp
+  @copyright	© 2000-2021 Apple Inc. All rights reserved.
 */
 #include <AudioUnitSDK/AUBase.h>
 
@@ -8,13 +8,13 @@ namespace ausdk {
 
 constexpr bool HasGoodBufferPointers(const AudioBufferList& abl, UInt32 nBytes) noexcept
 {
-	const AudioBuffer* buf = abl.mBuffers;                // NOLINT
-	for (UInt32 i = abl.mNumberBuffers; i-- > 0; ++buf) { // NOLINT
-		if (buf->mData == nullptr || buf->mDataByteSize < nBytes) {
-			return false;
-		}
-	}
-	return true;
+  const AudioBuffer* buf = abl.mBuffers;                // NOLINT
+  for (UInt32 i = abl.mNumberBuffers; i-- > 0; ++buf) { // NOLINT
+    if (buf->mData == nullptr || buf->mDataByteSize < nBytes) {
+      return false;
+    }
+  }
+  return true;
 }
 
 
@@ -24,20 +24,20 @@ constexpr bool HasGoodBufferPointers(const AudioBufferList& abl, UInt32 nBytes) 
 //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 void AUInputElement::SetConnection(const AudioUnitConnection& conn)
 {
-	if (conn.sourceAudioUnit == nullptr) {
-		Disconnect();
-		return;
-	}
+  if (conn.sourceAudioUnit == nullptr) {
+    Disconnect();
+    return;
+  }
 
-	mInputType = EInputType::FromConnection;
-	mConnection = conn;
-	AllocateBuffer();
+  mInputType = EInputType::FromConnection;
+  mConnection = conn;
+  AllocateBuffer();
 }
 
 void AUInputElement::Disconnect()
 {
-	mInputType = EInputType::NoInput;
-	IOBuffer().Deallocate();
+  mInputType = EInputType::NoInput;
+  IOBuffer().Deallocate();
 }
 
 
@@ -47,39 +47,39 @@ void AUInputElement::Disconnect()
 //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 void AUInputElement::SetInputCallback(AURenderCallback proc, void* refCon)
 {
-	if (proc == nullptr) {
-		Disconnect();
-	} else {
-		mInputType = EInputType::FromCallback;
-		mInputProc = proc;
-		mInputProcRefCon = refCon;
-		AllocateBuffer();
-	}
+  if (proc == nullptr) {
+    Disconnect();
+  } else {
+    mInputType = EInputType::FromCallback;
+    mInputProc = proc;
+    mInputProcRefCon = refCon;
+    AllocateBuffer();
+  }
 }
 
 OSStatus AUInputElement::SetStreamFormat(const AudioStreamBasicDescription& fmt)
 {
-	const OSStatus err = AUIOElement::SetStreamFormat(fmt);
-	if (err == noErr) {
-		AllocateBuffer();
-	}
-	return err;
+  const OSStatus err = AUIOElement::SetStreamFormat(fmt);
+  if (err == noErr) {
+    AllocateBuffer();
+  }
+  return err;
 }
 
 OSStatus AUInputElement::PullInput(AudioUnitRenderActionFlags& ioActionFlags,
-	const AudioTimeStamp& inTimeStamp, AudioUnitElement inElement, UInt32 nFrames)
+  const AudioTimeStamp& inTimeStamp, AudioUnitElement inElement, UInt32 nFrames)
 {
-	if (!IsActive()) {
-		return kAudioUnitErr_NoConnection;
-	}
+  if (!IsActive()) {
+    return kAudioUnitErr_NoConnection;
+  }
 
-	auto& iob = IOBuffer();
+  auto& iob = IOBuffer();
 
-	AudioBufferList& pullBuffer = (HasConnection() || !WillAllocateBuffer())
-									  ? iob.PrepareNullBuffer(GetStreamFormat(), nFrames)
-									  : iob.PrepareBuffer(GetStreamFormat(), nFrames);
+  AudioBufferList& pullBuffer = (HasConnection() || !WillAllocateBuffer())
+                    ? iob.PrepareNullBuffer(GetStreamFormat(), nFrames)
+                    : iob.PrepareBuffer(GetStreamFormat(), nFrames);
 
-	return PullInputWithBufferList(ioActionFlags, inTimeStamp, inElement, nFrames, pullBuffer);
+  return PullInputWithBufferList(ioActionFlags, inTimeStamp, inElement, nFrames, pullBuffer);
 }
 
 } // namespace ausdk

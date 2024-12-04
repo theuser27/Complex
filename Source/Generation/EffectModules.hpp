@@ -37,9 +37,6 @@ namespace Generation
       [[maybe_unused]] Framework::SimdBuffer<Framework::complex<float>, simd_float> &destination,
       [[maybe_unused]] u32 binCount, [[maybe_unused]] float sampleRate) noexcept { }
 
-    virtual Framework::ComplexDataSource::DataSourceType neededDataType() const noexcept 
-    { return Framework::ComplexDataSource::Cartesian; }
-
   protected:
     BaseProcessor *createCopy() const noexcept override
     { COMPLEX_ASSERT_FALSE("This type cannot be copied directly, you need a derived type"); return nullptr; }
@@ -115,12 +112,6 @@ namespace Generation
   public:
     UtilityEffect(Plugin::ProcessorTree *processorTree);
 
-    UtilityEffect(const UtilityEffect &other) noexcept : BaseEffect{ other } { }
-    UtilityEffect &operator=(const UtilityEffect &other) { BaseEffect::operator=(other); return *this; }
-
-    UtilityEffect(UtilityEffect &&other) noexcept : BaseEffect{ std::move(other) } { }
-    UtilityEffect &operator=(UtilityEffect &&other) noexcept { BaseEffect::operator=(std::move(other)); return *this; }
-
     void run(Framework::ComplexDataSource &source,
       Framework::SimdBuffer<Framework::complex<float>, simd_float> &destination, 
       u32 binCount, float sampleRate) noexcept override
@@ -151,18 +142,9 @@ namespace Generation
   public:
     FilterEffect(Plugin::ProcessorTree *processorTree);
 
-    FilterEffect(const FilterEffect &other) noexcept : BaseEffect{ other } { }
-    FilterEffect &operator=(const FilterEffect &other) { BaseEffect::operator=(other); return *this; }
-
-    FilterEffect(FilterEffect &&other) noexcept : BaseEffect{ std::move(other) } { }
-    FilterEffect &operator=(FilterEffect &&other) noexcept { BaseEffect::operator=(std::move(other)); return *this; }
-
     void run(Framework::ComplexDataSource &source,
       Framework::SimdBuffer<Framework::complex<float>, simd_float> &destination, 
       u32 binCount, float sampleRate) noexcept override;
-
-    Framework::ComplexDataSource::DataSourceType neededDataType() const noexcept override 
-    { return Framework::ComplexDataSource::Both; }
 
     FilterEffect *createCopy() const noexcept override { return new FilterEffect{ *this }; }
     void initialiseParameters() override;
@@ -173,9 +155,6 @@ namespace Generation
 
     void runPhase(Framework::ComplexDataSource &source,
       Framework::SimdBuffer<Framework::complex<float>, simd_float> &destination, u32 binCount, float sampleRate) const noexcept;
-
-    static simd_float vector_call getDistancesFromCutoffs(simd_int positionIndices,
-      simd_int cutoffIndices, simd_int lowBoundIndices, u32 FFTSize, float sampleRate);
 
     //// Modes
     // 
@@ -217,12 +196,6 @@ namespace Generation
   {
   public:
     DynamicsEffect(Plugin::ProcessorTree *processorTree);
-
-    DynamicsEffect(const DynamicsEffect &other) noexcept : BaseEffect{ other } { }
-    DynamicsEffect &operator=(const DynamicsEffect &other) { BaseEffect::operator=(other); return *this; }
-
-    DynamicsEffect(DynamicsEffect &&other) noexcept : BaseEffect{ std::move(other) } { }
-    DynamicsEffect &operator=(DynamicsEffect &&other) noexcept { BaseEffect::operator=(std::move(other)); return *this; }
 
     void run(Framework::ComplexDataSource &source,
       Framework::SimdBuffer<Framework::complex<float>, simd_float> &destination, 
@@ -268,18 +241,9 @@ namespace Generation
   public:
     PhaseEffect(Plugin::ProcessorTree *processorTree);
 
-    PhaseEffect(const PhaseEffect &other) noexcept : BaseEffect{ other } { }
-    PhaseEffect &operator=(const PhaseEffect &other) { BaseEffect::operator=(other); return *this; }
-
-    PhaseEffect(PhaseEffect &&other) noexcept : BaseEffect{ std::move(other) } { }
-    PhaseEffect &operator=(PhaseEffect &&other) noexcept { BaseEffect::operator=(std::move(other)); return *this; }
-
     void run(Framework::ComplexDataSource &source,
       Framework::SimdBuffer<Framework::complex<float>, simd_float> &destination, 
       u32 binCount, float sampleRate) noexcept override;
-
-    Framework::ComplexDataSource::DataSourceType neededDataType() const noexcept override
-    { return Framework::ComplexDataSource::Polar; }
 
     PhaseEffect *createCopy() const noexcept override { return new PhaseEffect{ *this }; }
     void initialiseParameters() override;
@@ -300,12 +264,6 @@ namespace Generation
   {
   public:
     PitchEffect(Plugin::ProcessorTree *processorTree);
-
-    PitchEffect(const PitchEffect &other) noexcept : BaseEffect{ other } { }
-    PitchEffect &operator=(const PitchEffect &other) { BaseEffect::operator=(other); return *this; }
-
-    PitchEffect(PitchEffect &&other) noexcept : BaseEffect{ std::move(other) } { }
-    PitchEffect &operator=(PitchEffect &&other) noexcept { BaseEffect::operator=(std::move(other)); return *this; }
 
     void run(Framework::ComplexDataSource &source,
       Framework::SimdBuffer<Framework::complex<float>, simd_float> &destination, 
@@ -332,12 +290,6 @@ namespace Generation
   public:
     StretchEffect(Plugin::ProcessorTree *processorTree);
 
-    StretchEffect(const StretchEffect &other) noexcept : BaseEffect{ other } { }
-    StretchEffect &operator=(const StretchEffect &other) { BaseEffect::operator=(other); return *this; }
-
-    StretchEffect(StretchEffect &&other) noexcept : BaseEffect{ std::move(other) } { }
-    StretchEffect &operator=(StretchEffect &&other) noexcept { BaseEffect::operator=(std::move(other)); return *this; }
-
     StretchEffect *createCopy() const noexcept override { return new StretchEffect{ *this }; }
     void initialiseParameters() override;
 
@@ -350,12 +302,6 @@ namespace Generation
   {
   public:
     WarpEffect(Plugin::ProcessorTree *processorTree);
-
-    WarpEffect(const WarpEffect &other) noexcept : BaseEffect{ other } { }
-    WarpEffect &operator=(const WarpEffect &other) { BaseEffect::operator=(other); return *this; }
-
-    WarpEffect(WarpEffect &&other) noexcept : BaseEffect{ std::move(other) } { }
-    WarpEffect &operator=(WarpEffect &&other) noexcept { BaseEffect::operator=(std::move(other)); return *this; }
 
     WarpEffect *createCopy() const noexcept override { return new WarpEffect{ *this }; }
     void initialiseParameters() override;
@@ -370,14 +316,17 @@ namespace Generation
   public:
     DestroyEffect(Plugin::ProcessorTree *processorTree);
 
-    DestroyEffect(const DestroyEffect &other) noexcept : BaseEffect{ other } { }
-    DestroyEffect &operator=(const DestroyEffect &other) { BaseEffect::operator=(other); return *this; }
-
-    DestroyEffect(DestroyEffect &&other) noexcept : BaseEffect{ std::move(other) } { }
-    DestroyEffect &operator=(DestroyEffect &&other) noexcept { BaseEffect::operator=(std::move(other)); return *this; }
-
     DestroyEffect *createCopy() const noexcept override { return new DestroyEffect{ *this }; }
     void initialiseParameters() override;
+
+    void run(Framework::ComplexDataSource &source,
+      Framework::SimdBuffer<Framework::complex<float>, simd_float> &destination,
+      u32 binCount, float sampleRate) noexcept override;
+
+  private:
+    void runReinterpret(Framework::ComplexDataSource &source,
+      Framework::SimdBuffer<Framework::complex<float>, simd_float> &destination,
+      u32 binCount, float sampleRate) const noexcept;
 
     // resize, specops effects category
     // randomising bin positions
@@ -393,20 +342,14 @@ namespace Generation
     EffectModule(Plugin::ProcessorTree *processorTree) noexcept;
     ~EffectModule() override;
 
-    EffectModule(const EffectModule &other) noexcept : BaseProcessor{ other } { }
-    EffectModule &operator=(const EffectModule &other) { BaseProcessor::operator=(other); return *this; }
-
-    EffectModule(EffectModule &&other) noexcept : BaseProcessor{ std::move(other) } { }
-    EffectModule &operator=(EffectModule &&other) noexcept { BaseProcessor::operator=(std::move(other)); return *this; }
-
     void deserialiseFromJson(void *jsonData);
 
     void processEffect(Framework::ComplexDataSource &source, u32 binCount, float sampleRate) noexcept;
 
     // Inherited via BaseProcessor
     // this method exists only to accomodate loading from save files
-    void insertSubProcessor(size_t index, BaseProcessor &newSubProcessor) noexcept override;
-    BaseProcessor &updateSubProcessor(size_t index, BaseProcessor &newSubProcessor) noexcept override;
+    void insertSubProcessor(usize index, BaseProcessor &newSubProcessor) noexcept override;
+    BaseProcessor &updateSubProcessor(usize index, BaseProcessor &newSubProcessor) noexcept override;
     EffectModule *createCopy() const override { return new EffectModule{ *this }; }
     void initialiseParameters() override
     {
@@ -419,6 +362,6 @@ namespace Generation
   private:
     static constexpr auto effectCount = Framework::Processors::BaseEffect::enum_count_filter(Framework::kGetActiveEffectPredicate);
     Framework::SimdBuffer<Framework::complex<float>, simd_float> buffer_{};
-    std::array<BaseEffect *, effectCount> effects_{};
+    utils::array<BaseEffect *, effectCount> effects_{};
   };
 }

@@ -58,8 +58,8 @@ namespace Framework
   class AddProcessorUpdate final : public WaitingUpdate
   {
   public:
-    AddProcessorUpdate(Plugin::ProcessorTree &processorTree, u64 destinationProcessorId, size_t destinationSubProcessorIndex, 
-      clg::small_function<Generation::BaseProcessor *(Plugin::ProcessorTree &)> instantiationFunction) noexcept : processorTree_(processorTree),
+    AddProcessorUpdate(Plugin::ProcessorTree &processorTree, u64 destinationProcessorId, usize destinationSubProcessorIndex, 
+      clg::small_fn<Generation::BaseProcessor *(Plugin::ProcessorTree &)> instantiationFunction) noexcept : processorTree_(processorTree),
       instantiationFunction_(COMPLEX_MOV(instantiationFunction)), destinationProcessorId_(destinationProcessorId),
       destinationSubProcessorIndex_(destinationSubProcessorIndex) { }
 
@@ -71,18 +71,18 @@ namespace Framework
   private:
     Plugin::ProcessorTree &processorTree_;
 
-    clg::small_function<Generation::BaseProcessor *(Plugin::ProcessorTree &processorTree)> instantiationFunction_;
+    clg::small_fn<Generation::BaseProcessor *(Plugin::ProcessorTree &processorTree)> instantiationFunction_;
     Generation::BaseProcessor *addedProcessor_ = nullptr;
 
     u64 destinationProcessorId_;
-    size_t destinationSubProcessorIndex_;
+    usize destinationSubProcessorIndex_;
   };
 
   class CopyProcessorUpdate final : public WaitingUpdate
   {
   public:
     CopyProcessorUpdate(Plugin::ProcessorTree &processorTree, Generation::BaseProcessor &processorCopy, 
-      u64 destinationProcessorId, size_t destinationSubProcessorIndex) noexcept : processorTree_(processorTree),
+      u64 destinationProcessorId, usize destinationSubProcessorIndex) noexcept : processorTree_(processorTree),
       processorCopy(processorCopy), destinationProcessorId_(destinationProcessorId),
       destinationSubProcessorIndex_(destinationSubProcessorIndex) { }
 
@@ -97,14 +97,14 @@ namespace Framework
     Generation::BaseProcessor &processorCopy;
 
     u64 destinationProcessorId_;
-    size_t destinationSubProcessorIndex_;
+    usize destinationSubProcessorIndex_;
   };
 
   class MoveProcessorUpdate final : public WaitingUpdate
   {
   public:
     MoveProcessorUpdate(Plugin::ProcessorTree &processorTree, u64 destinationProcessorId,
-      size_t destinationSubProcessorIndex, u64 sourceProcessorId, size_t sourceSubProcessorIndex) noexcept :
+      usize destinationSubProcessorIndex, u64 sourceProcessorId, usize sourceSubProcessorIndex) noexcept :
       processorTree_(processorTree), destinationProcessorId_(destinationProcessorId),
       destinationSubProcessorIndex_(destinationSubProcessorIndex), sourceProcessorId_(sourceProcessorId),
       sourceSubProcessorIndex_(sourceSubProcessorIndex) { }
@@ -116,16 +116,16 @@ namespace Framework
     Plugin::ProcessorTree &processorTree_;
 
     u64 destinationProcessorId_;
-    size_t destinationSubProcessorIndex_;
+    usize destinationSubProcessorIndex_;
     u64 sourceProcessorId_;
-    size_t sourceSubProcessorIndex_;
+    usize sourceSubProcessorIndex_;
   };
 
   class UpdateProcessorUpdate final : public WaitingUpdate
   {
   public:
-    UpdateProcessorUpdate(Plugin::ProcessorTree &processorTree, u64 destinationProcessorId, size_t destinationSubProcessorIndex,
-      clg::small_function<Generation::BaseProcessor *(Plugin::ProcessorTree &)> instantiationFunction) noexcept : 
+    UpdateProcessorUpdate(Plugin::ProcessorTree &processorTree, u64 destinationProcessorId, usize destinationSubProcessorIndex,
+      clg::small_fn<Generation::BaseProcessor *(Plugin::ProcessorTree &)> instantiationFunction) noexcept :
       processorTree_(processorTree), instantiationFunction_(COMPLEX_MOV(instantiationFunction)),
       destinationProcessorId_(destinationProcessorId), destinationSubProcessorIndex_(destinationSubProcessorIndex) { }
 
@@ -137,18 +137,18 @@ namespace Framework
   private:
     Plugin::ProcessorTree &processorTree_;
 
-    clg::small_function<Generation::BaseProcessor *(Plugin::ProcessorTree &processorTree)> instantiationFunction_;
+    clg::small_fn<Generation::BaseProcessor *(Plugin::ProcessorTree &processorTree)> instantiationFunction_;
     Generation::BaseProcessor *savedProcessor_ = nullptr;
 
     u64 destinationProcessorId_;
-    size_t destinationSubProcessorIndex_;
+    usize destinationSubProcessorIndex_;
   };
 
   class DeleteProcessorUpdate final : public WaitingUpdate
   {
   public:
     DeleteProcessorUpdate(Plugin::ProcessorTree &processorTree, u64 destinationProcessorId,
-      size_t destinationSubProcessorIndex) noexcept : processorTree_(processorTree),
+      usize destinationSubProcessorIndex) noexcept : processorTree_(processorTree),
       destinationProcessorId_(destinationProcessorId), destinationSubProcessorIndex_(destinationSubProcessorIndex) { }
 
     ~DeleteProcessorUpdate() override;
@@ -162,7 +162,7 @@ namespace Framework
     Generation::BaseProcessor *deletedProcessor_ = nullptr;
 
     u64 destinationProcessorId_;
-    size_t destinationSubProcessorIndex_;
+    usize destinationSubProcessorIndex_;
   };
 
   class ParameterUpdate final : public WaitingUpdate
@@ -187,7 +187,8 @@ namespace Framework
   class PresetUpdate final : public WaitingUpdate
   {
   public:
-    PresetUpdate(Plugin::ProcessorTree &processorTree) : processorTree_(processorTree) { }
+    PresetUpdate(Plugin::ProcessorTree &processorTree, std::any newSavedState) :
+      processorTree_(processorTree), newSavedState_{ COMPLEX_MOV(newSavedState) }{ }
 
     bool perform() override;
     bool undo() override;

@@ -34,6 +34,7 @@ namespace Interface
 
     virtual void addSubOpenGlContainer(OpenGlContainer *container, bool addChild = true);
     virtual void removeSubOpenGlContainer(OpenGlContainer *container, bool removeChild = false);
+    void removeAllSubOpenGlContainers(bool removeChild = false);
 
     void showPopupSelector(const BaseComponent *source, juce::Point<int> position, PopupItems options,
       std::function<void(int)> callback, std::function<void()> cancel = {}, int minWidth = kMinPopupWidth) const;

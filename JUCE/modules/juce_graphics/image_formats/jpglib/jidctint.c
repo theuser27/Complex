@@ -146,8 +146,8 @@
 
 GLOBAL(void)
 jpeg_idct_islow (j_decompress_ptr cinfo, jpeg_component_info * compptr,
-		 JCOEFPTR coef_block,
-		 JSAMPARRAY output_buf, JDIMENSION output_col)
+     JCOEFPTR coef_block,
+     JSAMPARRAY output_buf, JDIMENSION output_col)
 {
   INT32 tmp0, tmp1, tmp2, tmp3;
   INT32 tmp10, tmp11, tmp12, tmp13;
@@ -179,9 +179,9 @@ jpeg_idct_islow (j_decompress_ptr cinfo, jpeg_component_info * compptr,
      */
 
     if (inptr[DCTSIZE*1] == 0 && inptr[DCTSIZE*2] == 0 &&
-	inptr[DCTSIZE*3] == 0 && inptr[DCTSIZE*4] == 0 &&
-	inptr[DCTSIZE*5] == 0 && inptr[DCTSIZE*6] == 0 &&
-	inptr[DCTSIZE*7] == 0) {
+  inptr[DCTSIZE*3] == 0 && inptr[DCTSIZE*4] == 0 &&
+  inptr[DCTSIZE*5] == 0 && inptr[DCTSIZE*6] == 0 &&
+  inptr[DCTSIZE*7] == 0) {
       /* AC terms all zero */
       int dcval = DEQUANTIZE(inptr[DCTSIZE*0], quantptr[DCTSIZE*0]) << PASS1_BITS;
 
@@ -286,10 +286,10 @@ jpeg_idct_islow (j_decompress_ptr cinfo, jpeg_component_info * compptr,
 
 #ifndef NO_ZERO_ROW_TEST
     if (wsptr[1] == 0 && wsptr[2] == 0 && wsptr[3] == 0 && wsptr[4] == 0 &&
-	wsptr[5] == 0 && wsptr[6] == 0 && wsptr[7] == 0) {
+  wsptr[5] == 0 && wsptr[6] == 0 && wsptr[7] == 0) {
       /* AC terms all zero */
       JSAMPLE dcval = range_limit[(int) DESCALE((INT32) wsptr[0], PASS1_BITS+3)
-				  & RANGE_MASK];
+          & RANGE_MASK];
 
       outptr[0] = dcval;
       outptr[1] = dcval;
@@ -358,29 +358,29 @@ jpeg_idct_islow (j_decompress_ptr cinfo, jpeg_component_info * compptr,
     /* Final output stage: inputs are tmp10..tmp13, tmp0..tmp3 */
 
     outptr[0] = range_limit[(int) DESCALE(tmp10 + tmp3,
-					  CONST_BITS+PASS1_BITS+3)
-			    & RANGE_MASK];
+            CONST_BITS+PASS1_BITS+3)
+          & RANGE_MASK];
     outptr[7] = range_limit[(int) DESCALE(tmp10 - tmp3,
-					  CONST_BITS+PASS1_BITS+3)
-			    & RANGE_MASK];
+            CONST_BITS+PASS1_BITS+3)
+          & RANGE_MASK];
     outptr[1] = range_limit[(int) DESCALE(tmp11 + tmp2,
-					  CONST_BITS+PASS1_BITS+3)
-			    & RANGE_MASK];
+            CONST_BITS+PASS1_BITS+3)
+          & RANGE_MASK];
     outptr[6] = range_limit[(int) DESCALE(tmp11 - tmp2,
-					  CONST_BITS+PASS1_BITS+3)
-			    & RANGE_MASK];
+            CONST_BITS+PASS1_BITS+3)
+          & RANGE_MASK];
     outptr[2] = range_limit[(int) DESCALE(tmp12 + tmp1,
-					  CONST_BITS+PASS1_BITS+3)
-			    & RANGE_MASK];
+            CONST_BITS+PASS1_BITS+3)
+          & RANGE_MASK];
     outptr[5] = range_limit[(int) DESCALE(tmp12 - tmp1,
-					  CONST_BITS+PASS1_BITS+3)
-			    & RANGE_MASK];
+            CONST_BITS+PASS1_BITS+3)
+          & RANGE_MASK];
     outptr[3] = range_limit[(int) DESCALE(tmp13 + tmp0,
-					  CONST_BITS+PASS1_BITS+3)
-			    & RANGE_MASK];
+            CONST_BITS+PASS1_BITS+3)
+          & RANGE_MASK];
     outptr[4] = range_limit[(int) DESCALE(tmp13 - tmp0,
-					  CONST_BITS+PASS1_BITS+3)
-			    & RANGE_MASK];
+            CONST_BITS+PASS1_BITS+3)
+          & RANGE_MASK];
 
     wsptr += DCTSIZE;		/* advance pointer to next row */
   }

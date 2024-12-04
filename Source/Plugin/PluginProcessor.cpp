@@ -15,7 +15,7 @@
 #include "PluginEditor.hpp"
 #include "Renderer.hpp"
 
-ComplexAudioProcessor::ComplexAudioProcessor(size_t parameterMappings, u32 inSidechains, u32 outSidechains) : 
+ComplexAudioProcessor::ComplexAudioProcessor(usize parameterMappings, u32 inSidechains, u32 outSidechains) : 
   ComplexPlugin{ inSidechains, outSidechains }, AudioProcessor{ [&]()
     {
       BusesProperties buses{};
@@ -25,10 +25,10 @@ ComplexAudioProcessor::ComplexAudioProcessor(size_t parameterMappings, u32 inSid
 
       if (!juce::JUCEApplicationBase::isStandaloneApp())
       {
-        for (size_t i = 0; i < inSidechains; ++i)
+        for (usize i = 0; i < inSidechains; ++i)
           buses.addBus(true, juce::String{ "Sidechain In " } + juce::String{ i + 1 }, juce::AudioChannelSet::stereo(), true);
         
-        for (size_t i = 0; i < outSidechains; ++i)
+        for (usize i = 0; i < outSidechains; ++i)
           buses.addBus(false, juce::String{ "Sidechain Out " } + juce::String{ i + 1 }, juce::AudioChannelSet::stereo(), true);
       }
 
@@ -40,7 +40,7 @@ ComplexAudioProcessor::ComplexAudioProcessor(size_t parameterMappings, u32 inSid
   parameterBridges_.reserve(parameterMappings);
   for (u64 i = 0; i < parameterMappings; ++i)
   {
-    auto *bridge = new Framework::ParameterBridge(this, i);
+    auto *bridge = new Framework::ParameterBridge{ this, i };
     parameterBridges_.push_back(bridge);
     addParameter(bridge);
   }
@@ -106,7 +106,7 @@ void ComplexAudioProcessor::processBlock (juce::AudioBuffer<float> &buffer, [[ma
   auto outputs = getTotalNumOutputChannels();
   auto numSamples = buffer.getNumSamples();
 
-  auto sampleRate = ComplexPlugin::getSampleRate();
+  float sampleRate = ComplexPlugin::getSampleRate();
   updateParameters(UpdateFlag::BeforeProcess, sampleRate);
   setLatencySamples((int)getProcessingDelay());
 
@@ -120,7 +120,7 @@ bool ComplexAudioProcessor::hasEditor() const { return true; }
 
 juce::AudioProcessorEditor* ComplexAudioProcessor::createEditor()
 {
-  auto *editor = new ComplexAudioProcessorEditor(*this);
+  auto *editor = new ComplexAudioProcessorEditor{ *this };
   getRenderer().setEditor(editor);
   return editor;
 }
@@ -131,5 +131,5 @@ juce::AudioProcessor* JUCE_CALLTYPE createPluginFilter()
 {
   auto [parameterMappings, inSidechains, outSidechains] = 
     Framework::LoadSave::getParameterMappingsAndSidechains();
-  return new ComplexAudioProcessor(parameterMappings, (u32)inSidechains, (u32)outSidechains);
+  return new ComplexAudioProcessor{ parameterMappings, (u32)inSidechains, (u32)outSidechains };
 }

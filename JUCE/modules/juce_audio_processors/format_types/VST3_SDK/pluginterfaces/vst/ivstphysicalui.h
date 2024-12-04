@@ -41,16 +41,16 @@ expression.
 */
 enum PhysicalUITypeIDs
 {
-	/** absolute X position when touching keys of PUIs. Range [0=left, 0.5=middle, 1=right] */
-	kPUIXMovement = 0,
-	/** absolute Y position when touching keys of PUIs. Range [0=bottom/near, 0.5=center, 1=top/far] */
-	kPUIYMovement,
-	/** pressing a key down on keys of PUIs. Range [0=No Pressure, 1=Full Pressure] */
-	kPUIPressure,
+  /** absolute X position when touching keys of PUIs. Range [0=left, 0.5=middle, 1=right] */
+  kPUIXMovement = 0,
+  /** absolute Y position when touching keys of PUIs. Range [0=bottom/near, 0.5=center, 1=top/far] */
+  kPUIYMovement,
+  /** pressing a key down on keys of PUIs. Range [0=No Pressure, 1=Full Pressure] */
+  kPUIPressure,
 
-	kPUITypeCount, ///< count of current defined PUIs
+  kPUITypeCount, ///< count of current defined PUIs
 
-	kInvalidPUITypeID = 0xFFFFFFFF ///< indicates an invalid or not initialized PUI type
+  kInvalidPUITypeID = 0xFFFFFFFF ///< indicates an invalid or not initialized PUI type
 };
 
 //------------------------------------------------------------------------
@@ -60,14 +60,14 @@ It is used in PhysicalUIMapList.
 */
 struct PhysicalUIMap
 {
-	/** This represents the physical UI. /see PhysicalUITypeIDs, this is set by the caller of
-	 * getPhysicalUIMapping */
-	PhysicalUITypeID physicalUITypeID;
+  /** This represents the physical UI. /see PhysicalUITypeIDs, this is set by the caller of
+   * getPhysicalUIMapping */
+  PhysicalUITypeID physicalUITypeID;
 
-	/** This represents the associated noteExpression TypeID to the given physicalUITypeID. This
-	 * will be filled by the plug-in in the call getPhysicalUIMapping, set it to kInvalidTypeID if
-	 * no Note Expression is associated to the given PUI. */
-	NoteExpressionTypeID noteExpressionTypeID;
+  /** This represents the associated noteExpression TypeID to the given physicalUITypeID. This
+   * will be filled by the plug-in in the call getPhysicalUIMapping, set it to kInvalidTypeID if
+   * no Note Expression is associated to the given PUI. */
+  NoteExpressionTypeID noteExpressionTypeID;
 };
 
 //------------------------------------------------------------------------
@@ -76,11 +76,11 @@ struct PhysicalUIMap
 */
 struct PhysicalUIMapList
 {
-	/** Count of entries in the map array, set by the caller of getPhysicalUIMapping. */
-	uint32 count;
+  /** Count of entries in the map array, set by the caller of getPhysicalUIMapping. */
+  uint32 count;
 
-	/** Pointer to a list of PhysicalUIMap containing count entries. */
-	PhysicalUIMap* map;
+  /** Pointer to a list of PhysicalUIMap containing count entries. */
+  PhysicalUIMap* map;
 };
 
 //------------------------------------------------------------------------
@@ -106,56 +106,56 @@ to inform the host about it via \ref IComponentHandler::restartComponent (kNoteE
 //in MyController class declaration
 class MyController : public Vst::EditController, public Vst::INoteExpressionPhysicalUIMapping
 {
-	// ...
-	//--- INoteExpressionPhysicalUIMapping ---------------------------------
-	tresult PLUGIN_API getPhysicalUIMapping (int32 busIndex, int16 channel, PhysicalUIMapList& list) SMTG_OVERRIDE;
-	// ...
+  // ...
+  //--- INoteExpressionPhysicalUIMapping ---------------------------------
+  tresult PLUGIN_API getPhysicalUIMapping (int32 busIndex, int16 channel, PhysicalUIMapList& list) SMTG_OVERRIDE;
+  // ...
 
-	OBJ_METHODS (MyController, Vst::EditController)
-	DEFINE_INTERFACES
-		// ...
-		DEF_INTERFACE (Vst::INoteExpressionPhysicalUIMapping)
-	END_DEFINE_INTERFACES (Vst::EditController)
-	//...
+  OBJ_METHODS (MyController, Vst::EditController)
+  DEFINE_INTERFACES
+    // ...
+    DEF_INTERFACE (Vst::INoteExpressionPhysicalUIMapping)
+  END_DEFINE_INTERFACES (Vst::EditController)
+  //...
 }
 
 // In mycontroller.cpp
 #include "pluginterfaces/vst/ivstnoteexpression.h"
 
 namespace Steinberg {
-	namespace Vst {
-		DEF_CLASS_IID (INoteExpressionPhysicalUIMapping)
-	}
+  namespace Vst {
+    DEF_CLASS_IID (INoteExpressionPhysicalUIMapping)
+  }
 }
 //------------------------------------------------------------------------
 tresult PLUGIN_API MyController::getPhysicalUIMapping (int32 busIndex, int16 channel, PhysicalUIMapList& list)
 {
-	if (busIndex == 0 && channel == 0)
-	{
-		for (uint32 i = 0; i < list.count; ++i)
-		{
-			NoteExpressionTypeID type = kInvalidTypeID;
-			if (kPUIXMovement == list.map[i].physicalUITypeID)
-				list.map[i].noteExpressionTypeID = kCustomStart + 1;
-			else if (kPUIYMovement == list.map[i].physicalUITypeID)
-				list.map[i].noteExpressionTypeID = kCustomStart + 2;
-		}
-		return kResultTrue;
-	}
-	return kResultFalse;
+  if (busIndex == 0 && channel == 0)
+  {
+    for (uint32 i = 0; i < list.count; ++i)
+    {
+      NoteExpressionTypeID type = kInvalidTypeID;
+      if (kPUIXMovement == list.map[i].physicalUITypeID)
+        list.map[i].noteExpressionTypeID = kCustomStart + 1;
+      else if (kPUIYMovement == list.map[i].physicalUITypeID)
+        list.map[i].noteExpressionTypeID = kCustomStart + 2;
+    }
+    return kResultTrue;
+  }
+  return kResultFalse;
 }
 \endcode
 */
 class INoteExpressionPhysicalUIMapping : public FUnknown
 {
 public:
-	/** Fills the list of mapped [physical UI (in) - note expression (out)] for a given bus index
-	 * and channel. */
-	virtual tresult PLUGIN_API getPhysicalUIMapping (int32 busIndex, int16 channel,
-	                                                 PhysicalUIMapList& list) = 0;
+  /** Fills the list of mapped [physical UI (in) - note expression (out)] for a given bus index
+   * and channel. */
+  virtual tresult PLUGIN_API getPhysicalUIMapping (int32 busIndex, int16 channel,
+                                                   PhysicalUIMapList& list) = 0;
 
 //------------------------------------------------------------------------
-	static const FUID iid;
+  static const FUID iid;
 };
 
 DECLARE_CLASS_IID (INoteExpressionPhysicalUIMapping, 0xB03078FF, 0x94D24AC8, 0x90CCD303, 0xD4133324)

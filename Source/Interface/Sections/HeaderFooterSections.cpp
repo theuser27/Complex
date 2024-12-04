@@ -37,7 +37,7 @@ namespace Interface
     addOpenGlComponent(bottomBarColour_.get());
 
     spectrogram_ = utils::up<Spectrogram>::create("Main Spectrum");
-    spectrogram_->setSpectrumData(soundEngine.getEffectsState().getOutputBuffer(kChannelsPerInOut, 0), false);
+    spectrogram_->setSpectrumData(soundEngine.getEffectsState().getOutputBuffer(kChannelsPerInOut, 0));
     addOpenGlComponent(spectrogram_.get());
     
     mixNumberBox_ = utils::up<NumberBox>::create(

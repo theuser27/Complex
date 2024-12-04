@@ -23,24 +23,49 @@ namespace Framework
   template<typename T>
   struct CheckedPointer
   {
+    constexpr CheckedPointer() = default;
+    constexpr CheckedPointer(T *data, [[maybe_unused]] usize dataSize = 0) : pointer(data)
+    #if COMPLEX_DEBUG
+      , size(dataSize)
+    #endif
+    { }
     T *pointer = nullptr;
+  private:
+
+  #if COMPLEX_DEBUG
     [[maybe_unused]] usize size = 0;
+  #endif
 
-    T &operator[](usize index) noexcept
+  public:
+    constexpr CheckedPointer offset(usize offset, [[maybe_unused]] usize explicitSize = 0) noexcept
+    {
+      COMPLEX_ASSERT(pointer);
+      COMPLEX_ASSERT(offset < size);
+      COMPLEX_ASSERT(explicitSize == 0 || explicitSize <= size - offset);
+      return CheckedPointer
+      {
+        pointer + offset 
+      #if COMPLEX_DEBUG
+        , (explicitSize) ? explicitSize : size - offset
+      #endif
+      };
+    }
+
+    constexpr T &operator[](usize index) noexcept
     {
       COMPLEX_ASSERT(pointer);
       COMPLEX_ASSERT(index < size);
       return pointer[index];
     }
 
-    const T &operator[](usize index) const noexcept
+    constexpr const T &operator[](usize index) const noexcept
     {
       COMPLEX_ASSERT(pointer);
       COMPLEX_ASSERT(index < size);
       return pointer[index];
     }
 
-    operator T *() noexcept { return pointer; }
+    constexpr operator T *() noexcept { return pointer; }
   };
 
   template <typename T>

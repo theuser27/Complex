@@ -2,7 +2,7 @@
 
 <JUCERPROJECT id="MQJhEl" name="Complex" projectType="audioplug" addUsingNamespaceToJuceHeader="1"
               jucerFormatVersion="1" cppLanguageStandard="20" pluginFormats="buildStandalone,buildVST3"
-              displaySplashScreen="1" pluginManufacturer="theuser27" version="0.0.9"
+              displaySplashScreen="1" pluginManufacturer="theuser27" version="0.1.0"
               pluginDesc="Multi-lane Spectral Effects Suite" useAppConfig="0"
               includeBinaryInJuceHeader="0">
   <MAINGROUP id="zNsp6a" name="Complex">

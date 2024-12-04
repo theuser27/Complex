@@ -59,6 +59,8 @@
 
 #include "pffft.h"
 
+#ifndef INTEL_IPP
+
 #ifdef _MSC_VER
 #  define _USE_MATH_DEFINES
 #endif
@@ -1879,3 +1881,5 @@ void pffft_transform(PFFFT_Setup *setup, const float *input, float *output, floa
 void pffft_transform_ordered(PFFFT_Setup *setup, const float *input, float *output, float *work, pffft_direction_t direction) {
   pffft_transform_internal(setup, input, output, (v4sf*)work, direction, 1);
 }
+
+#endif

@@ -99,7 +99,7 @@ namespace Interface
         one.addRoundedRectangle(juce::Rectangle{ 6.5f, 6.5f, 6.0f, 7.0f }, 1.5f);
 
         Shape result;
-        result.paths.emplace_back(std::move(one), Shape::Stroke, juce::Colour{});
+        result.paths.emplace_back(COMPLEX_MOV(one), Shape::Stroke, juce::Colour{});
         return result;
       }();
 
@@ -127,8 +127,8 @@ namespace Interface
         two.closeSubPath();
 
         Shape result;
-        result.paths.emplace_back(std::move(one), Shape::Stroke, juce::Colour{});
-        result.paths.emplace_back(std::move(two), Shape::Fill, juce::Colour{});
+        result.paths.emplace_back(COMPLEX_MOV(one), Shape::Stroke, juce::Colour{});
+        result.paths.emplace_back(COMPLEX_MOV(two), Shape::Fill, juce::Colour{});
         return result;
       }();
 
@@ -147,7 +147,7 @@ namespace Interface
 
         path.addRoundedRectangle(juce::Rectangle{ 5.5f, 3.5f, 6.0f, 7.0f }, 1.5f);
         Shape result;
-        result.paths.emplace_back(std::move(path), Shape::Stroke, juce::Colour{});
+        result.paths.emplace_back(COMPLEX_MOV(path), Shape::Stroke, juce::Colour{});
         return result;
       }();
 
@@ -188,8 +188,8 @@ namespace Interface
         two.lineTo({ fStartX + fWidth, 5.5f });
 
         Shape result;
-        result.paths.emplace_back(std::move(one), Shape::Stroke, juce::Colour{});
-        result.paths.emplace_back(std::move(two), Shape::Stroke, juce::Colour{});
+        result.paths.emplace_back(COMPLEX_MOV(one), Shape::Stroke, juce::Colour{});
+        result.paths.emplace_back(COMPLEX_MOV(two), Shape::Stroke, juce::Colour{});
         return result;
       }();
 
@@ -248,6 +248,47 @@ namespace Interface
       return shape;
     }
 
+    Shape destroyIcon()
+    {
+      static const auto shape = []()
+      {
+        static constexpr float width = 9.0f;
+        static constexpr float height = 10.0f;
+        static constexpr float centerElementWidth = width / 3.0f;
+        static constexpr float bodyX = 1.5f;
+        static constexpr float bodyY = 3.0f;
+        static constexpr float bodyWidth = width - 2.0f * bodyX;
+        static constexpr float bodyHeight = height - bodyY;
+
+        juce::Path strokePath;
+
+        // hat
+        strokePath.startNewSubPath(0.0f, 1.0f);
+        strokePath.lineTo(width, 1.0f);
+        strokePath.closeSubPath();
+        strokePath.startNewSubPath((width - centerElementWidth) * 0.5f, 0.0f);
+        strokePath.lineTo((width - centerElementWidth) * 0.5f + centerElementWidth, 0.0f);
+        strokePath.closeSubPath();
+
+        // body outline
+        strokePath.addRoundedRectangle(bodyX, bodyY, bodyWidth, bodyHeight, 2.0f, 2.0f, false, false, true, true);
+        
+        // vertical lines 
+        strokePath.startNewSubPath((width - centerElementWidth + 1.0f) * 0.5f, bodyY + 2.0f);
+        strokePath.lineTo((width - centerElementWidth + 1.0f) * 0.5f, bodyY + bodyHeight - 2.0f);
+        strokePath.closeSubPath();
+        strokePath.startNewSubPath((width + centerElementWidth + 1.0f) * 0.5f - 1.0f, bodyY + 2.0f);
+        strokePath.lineTo((width + centerElementWidth + 1.0f) * 0.5f - 1.0f, bodyY + bodyHeight - 2.0f);
+        strokePath.closeSubPath();
+
+        Shape result;
+        result.paths.emplace_back(COMPLEX_MOV(strokePath), Shape::Stroke, juce::Colour{});
+        return result;
+      }();
+
+      return shape;
+    }
+
     Shape contrastIcon()
     {
       static const auto shape = []()
@@ -278,8 +319,8 @@ namespace Interface
         fillPath.closeSubPath();
 
         Shape result;
-        result.paths.emplace_back(std::move(strokePath), Shape::Stroke, juce::Colour{});
-        result.paths.emplace_back(std::move(fillPath), Shape::Fill, juce::Colour{});
+        result.paths.emplace_back(COMPLEX_MOV(strokePath), Shape::Stroke, juce::Colour{});
+        result.paths.emplace_back(COMPLEX_MOV(fillPath), Shape::Fill, juce::Colour{});
         return result;
       }();
 
@@ -301,7 +342,7 @@ namespace Interface
         path.addArc(0.0f, 2.0f, 11.0f, 11.0f, kAngleStart, kAngle + kAngleStart, true);
 
         Shape result;
-        result.paths.emplace_back(std::move(path), Shape::Stroke, juce::Colour{});
+        result.paths.emplace_back(COMPLEX_MOV(path), Shape::Stroke, juce::Colour{});
         return result;
       }();
 

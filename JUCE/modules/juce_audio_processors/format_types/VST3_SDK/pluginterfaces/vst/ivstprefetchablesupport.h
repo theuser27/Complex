@@ -38,10 +38,10 @@ typedef uint32 PrefetchableSupport;
 /** Prefetchable Support Enum */
 enum ePrefetchableSupport
 {
-	kIsNeverPrefetchable = 0,	///< every instance of the plug does not support prefetch processing
-	kIsYetPrefetchable,			///< in the current state the plug support prefetch processing
-	kIsNotYetPrefetchable,		///< in the current state the plug does not support prefetch processing
-	kNumPrefetchableSupport
+  kIsNeverPrefetchable = 0,	///< every instance of the plug does not support prefetch processing
+  kIsYetPrefetchable,			///< in the current state the plug support prefetch processing
+  kIsNotYetPrefetchable,		///< in the current state the plug does not support prefetch processing
+  kNumPrefetchableSupport
 };
 
 //------------------------------------------------------------------------
@@ -64,15 +64,15 @@ For more info about the prefetch processing mode check the ProcessModes::kPrefet
 //------------------------------------------------------------------------
 tresult PLUGIN_API myPlug::getPrefetchableSupport (PrefetchableSupport& prefetchable)
 {
-	prefetchable = kIsNeverPrefetchable;
+  prefetchable = kIsNeverPrefetchable;
 
-	switch (myPrefetchableMode)
-	{
-		case 0: prefetchable = kIsNeverPrefetchable; break;
-		case 1: prefetchable = kIsYetPrefetchable; break;
-		case 2: prefetchable = kIsNotYetPrefetchable; break;
-	}
-	return kResultOk;
+  switch (myPrefetchableMode)
+  {
+    case 0: prefetchable = kIsNeverPrefetchable; break;
+    case 1: prefetchable = kIsYetPrefetchable; break;
+    case 2: prefetchable = kIsNotYetPrefetchable; break;
+  }
+  return kResultOk;
 }
 \endcode
 */
@@ -80,12 +80,12 @@ class IPrefetchableSupport : public FUnknown
 {
 public:
 //------------------------------------------------------------------------
-	/** retrieve the current prefetch support. Use IComponentHandler::restartComponent
-	   (kPrefetchableSupportChanged) to inform the host that this support has changed. */
-	virtual tresult PLUGIN_API getPrefetchableSupport (PrefetchableSupport& prefetchable /*out*/) = 0;
+  /** retrieve the current prefetch support. Use IComponentHandler::restartComponent
+     (kPrefetchableSupportChanged) to inform the host that this support has changed. */
+  virtual tresult PLUGIN_API getPrefetchableSupport (PrefetchableSupport& prefetchable /*out*/) = 0;
 
 //------------------------------------------------------------------------
-	static const FUID iid;
+  static const FUID iid;
 };
 
 DECLARE_CLASS_IID (IPrefetchableSupport, 0x8AE54FDA, 0xE93046B9, 0xA28555BC, 0xDC98E21E)

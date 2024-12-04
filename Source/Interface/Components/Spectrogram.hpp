@@ -48,12 +48,10 @@ namespace Interface
     void setMaxDb(float db) noexcept { maxDb_ = db; }
     void setDecayMultiplier(float decay) noexcept { decayMultiplier_ = decay; }
     void setSlope(float slope) noexcept { dbSlope_ = slope; }
-    void setSpectrumData(Framework::SimdBufferView<Framework::complex<float>,
-      simd_float> data, bool isDataPolar) noexcept 
+    void setSpectrumData(Framework::SimdBufferView<Framework::complex<float>, simd_float> data) noexcept 
     {
       lastBufferVersion = data.getLock().versionFlag;
       bufferView_ = COMPLEX_MOV(data);
-      isDataPolar_ = isDataPolar;
     }
 
     void setCornerColour(Colour colour) noexcept { corners_.setColor(colour); }
@@ -73,7 +71,6 @@ namespace Interface
     Framework::SimdBuffer<Framework::complex<float>, simd_float> resultBuffer_{ kChannelsPerInOut, kResolution };
 
     utils::shared_value_block<Framework::SimdBufferView<Framework::complex<float>, simd_float>> bufferView_{};
-    utils::shared_value<bool> isDataPolar_ = false;
     utils::shared_value<u64> lastBufferVersion = 0;
 
     utils::shared_value<float> minFrequency_ = kDefaultMinFrequency;

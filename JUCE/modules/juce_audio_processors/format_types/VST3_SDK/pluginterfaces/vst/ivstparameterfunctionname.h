@@ -29,19 +29,19 @@ namespace Vst {
 
 namespace FunctionNameType {
 //--------------------------------------------------------------------
-	const CString kCompGainReduction			= "Comp:GainReduction"; /**  */
-	const CString kCompGainReductionMax			= "Comp:GainReductionMax";
-	const CString kCompGainReductionPeakHold	= "Comp:GainReductionPeakHold";
-	const CString kCompResetGainReductionMax	= "Comp:ResetGainReductionMax";
+  const CString kCompGainReduction			= "Comp:GainReduction"; /**  */
+  const CString kCompGainReductionMax			= "Comp:GainReductionMax";
+  const CString kCompGainReductionPeakHold	= "Comp:GainReductionPeakHold";
+  const CString kCompResetGainReductionMax	= "Comp:ResetGainReductionMax";
 
     const CString kLowLatencyMode = "LowLatencyMode"; /** Useful for live situation where low
-														 latency is required:
-														 0 means LowLatency disable,
-														 1 means LowLatency enable */
+                             latency is required:
+                             0 means LowLatency disable,
+                             1 means LowLatency enable */
     const CString kDryWetMix = "DryWetMix"; /** Allowing to mix the original (Dry) Signal with the processed one (Wet):
-											0.0 means Dry Signal only,
-											0.5 means 50% Dry Signal + 50% Wet Signal,
-											1.0 means Wet Signal only */
+                      0.0 means Dry Signal only,
+                      0.5 means 50% Dry Signal + 50% Wet Signal,
+                      1.0 means Wet Signal only */
     const CString kRandomize = "Randomize"; /**	Allow to assign some randomized values to some
                                                parameters in a controlled way*/
 
@@ -70,38 +70,38 @@ The host can automatically map parameters to dedicated UI controls, such as the 
 in MyController class declaration
 class MyController : public Vst::EditController, public Vst::IParameterFunctionName
 {
-	...
-	tresult PLUGIN_API getParameterIDFromFunctionName (UnitID unitID, FIDString functionName,
-													Vst::ParamID& paramID) override;
-	...
+  ...
+  tresult PLUGIN_API getParameterIDFromFunctionName (UnitID unitID, FIDString functionName,
+                          Vst::ParamID& paramID) override;
+  ...
 
-	OBJ_METHODS (MyController, Vst::EditController)
-	DEFINE_INTERFACES
-		...
-		DEF_INTERFACE (Vst::IParameterFunctionName)
-	END_DEFINE_INTERFACES (Vst::EditController)
-	...
+  OBJ_METHODS (MyController, Vst::EditController)
+  DEFINE_INTERFACES
+    ...
+    DEF_INTERFACE (Vst::IParameterFunctionName)
+  END_DEFINE_INTERFACES (Vst::EditController)
+  ...
 }
 
 #include "ivstparameterfunctionname.h"
 namespace Steinberg {
-	namespace Vst {
-		DEF_CLASS_IID (IParameterFunctionName)
-	}
+  namespace Vst {
+    DEF_CLASS_IID (IParameterFunctionName)
+  }
 }
 
 //------------------------------------------------------------------------
 tresult PLUGIN_API MyController::getParameterIDFromFunctionName (UnitID unitID, FIDString functionName,
                                                                  Vst::ParamID& paramID)
 {
-	using namespace Vst;
+  using namespace Vst;
 
-	paramID = kNoParamId;
+  paramID = kNoParamId;
 
-	if (unitID == kRootUnitId && FIDStringsEqual (functionName, kCompGainReduction))
-		paramID = kMyGainReductionId;
+  if (unitID == kRootUnitId && FIDStringsEqual (functionName, kCompGainReduction))
+    paramID = kMyGainReductionId;
 
-	return (paramID != kNoParamId) ? kResultOk : kResultFalse;
+  return (paramID != kNoParamId) ? kResultOk : kResultFalse;
 }
 
 //--- a host implementation example: --------------------
@@ -109,27 +109,27 @@ tresult PLUGIN_API MyController::getParameterIDFromFunctionName (UnitID unitID, 
 FUnknownPtr<Vst::IParameterFunctionName> functionName (mEditController->getIEditController ());
 if (functionName)
 {
-	Vst::ParamID paramID;
-	if (functionName->getParameterIDFromFunctionName (Vst::FunctionNameType::kCompGainReduction, paramID) == kResultTrue)
-	{
-		// paramID could be cached for performance issue
-		ParamValue norm = mEditController->getIEditController ()->getParamNormalized (paramID);
-		ParamValue plain = mEditController->getIEditController ()->normalizedParamToPlain (paramID, norm);
-		// plain is something like -6 (-6dB)
-	}
+  Vst::ParamID paramID;
+  if (functionName->getParameterIDFromFunctionName (Vst::FunctionNameType::kCompGainReduction, paramID) == kResultTrue)
+  {
+    // paramID could be cached for performance issue
+    ParamValue norm = mEditController->getIEditController ()->getParamNormalized (paramID);
+    ParamValue plain = mEditController->getIEditController ()->normalizedParamToPlain (paramID, norm);
+    // plain is something like -6 (-6dB)
+  }
 }
 \endcode
 */
 class IParameterFunctionName : public FUnknown
 {
 public:
-	//------------------------------------------------------------------------
-	/** Gets for the given unitID the associated paramID to a function Name.
-		Returns kResultFalse when no found parameter (paramID is set to kNoParamId in this case). */
-	virtual tresult PLUGIN_API getParameterIDFromFunctionName (UnitID unitID, FIDString functionName, ParamID& paramID) = 0;
+  //------------------------------------------------------------------------
+  /** Gets for the given unitID the associated paramID to a function Name.
+    Returns kResultFalse when no found parameter (paramID is set to kNoParamId in this case). */
+  virtual tresult PLUGIN_API getParameterIDFromFunctionName (UnitID unitID, FIDString functionName, ParamID& paramID) = 0;
 
-	//------------------------------------------------------------------------
-	static const FUID iid;
+  //------------------------------------------------------------------------
+  static const FUID iid;
 };
 
 DECLARE_CLASS_IID (IParameterFunctionName, 0x6D21E1DC, 0x91199D4B, 0xA2A02FEF, 0x6C1AE55C)

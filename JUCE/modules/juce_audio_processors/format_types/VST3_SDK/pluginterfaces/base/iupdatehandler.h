@@ -41,25 +41,25 @@ class IUpdateHandler: public FUnknown
 {
 public:
 //------------------------------------------------------------------------
-	/** Install update notification for given object. It is essential to
-	    remove all dependencies again using 'removeDependent'! Dependencies
-		are not removed automatically when the 'object' is released! 
-	\param object : interface to object that sends change notifications 
-	\param dependent : interface through which the update is passed */
-	virtual tresult PLUGIN_API addDependent (FUnknown* object, IDependent* dependent) = 0;
-	
-	/** Remove a previously installed dependency.*/
-	virtual tresult PLUGIN_API removeDependent (FUnknown* object, IDependent* dependent) = 0;
+  /** Install update notification for given object. It is essential to
+      remove all dependencies again using 'removeDependent'! Dependencies
+    are not removed automatically when the 'object' is released! 
+  \param object : interface to object that sends change notifications 
+  \param dependent : interface through which the update is passed */
+  virtual tresult PLUGIN_API addDependent (FUnknown* object, IDependent* dependent) = 0;
+  
+  /** Remove a previously installed dependency.*/
+  virtual tresult PLUGIN_API removeDependent (FUnknown* object, IDependent* dependent) = 0;
 
-	/** Inform all dependents, that object has changed. 
-	\param object is the object that has changed
-	\param message is a value of enum IDependent::ChangeMessage, usually  IDependent::kChanged - can be
-	                 a private message as well (only known to sender and dependent)*/
-	virtual	tresult PLUGIN_API triggerUpdates (FUnknown* object, int32 message) = 0;
+  /** Inform all dependents, that object has changed. 
+  \param object is the object that has changed
+  \param message is a value of enum IDependent::ChangeMessage, usually  IDependent::kChanged - can be
+                   a private message as well (only known to sender and dependent)*/
+  virtual	tresult PLUGIN_API triggerUpdates (FUnknown* object, int32 message) = 0;
 
-	/** Same as triggerUpdates, but delivered in idle (usefull to collect updates).*/
-	virtual	tresult PLUGIN_API deferUpdates (FUnknown* object, int32 message) = 0;
-	static const FUID iid;
+  /** Same as triggerUpdates, but delivered in idle (usefull to collect updates).*/
+  virtual	tresult PLUGIN_API deferUpdates (FUnknown* object, int32 message) = 0;
+  static const FUID iid;
 };
 
 DECLARE_CLASS_IID (IUpdateHandler, 0xF5246D56, 0x86544d60, 0xB026AFB5, 0x7B697B37)
@@ -76,20 +76,20 @@ class IDependent: public FUnknown
 {
 public:
 //------------------------------------------------------------------------
-	/** Inform the dependent, that the passed FUnknown has changed. */
-	virtual void PLUGIN_API update (FUnknown* changedUnknown, int32 message) = 0;
+  /** Inform the dependent, that the passed FUnknown has changed. */
+  virtual void PLUGIN_API update (FUnknown* changedUnknown, int32 message) = 0;
 
-	enum ChangeMessage 
-	{
-		kWillChange,
-		kChanged,
-		kDestroyed,
-		kWillDestroy,
+  enum ChangeMessage 
+  {
+    kWillChange,
+    kChanged,
+    kDestroyed,
+    kWillDestroy,
 
-		kStdChangeMessageLast = kWillDestroy
-	};
-	//------------------------------------------------------------------------
-	static const FUID iid;
+    kStdChangeMessageLast = kWillDestroy
+  };
+  //------------------------------------------------------------------------
+  static const FUID iid;
 };
 
 DECLARE_CLASS_IID (IDependent, 0xF52B7AAE, 0xDE72416d, 0x8AF18ACE, 0x9DD7BD5E)

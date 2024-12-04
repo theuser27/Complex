@@ -102,7 +102,7 @@ emit_dqt (j_compress_ptr cinfo, int index)
       /* The table entries must be emitted in zigzag order. */
       unsigned int qval = qtbl->quantval[jpeg_natural_order[i]];
       if (prec)
-	emit_byte(cinfo, (int) (qval >> 8));
+  emit_byte(cinfo, (int) (qval >> 8));
       emit_byte(cinfo, (int) (qval & 0xFF));
     }
 
@@ -262,11 +262,11 @@ emit_sos (j_compress_ptr cinfo)
        * but does not seem to be specified in the standard.
        */
       if (cinfo->Ss == 0) {
-	ta = 0;			/* DC scan */
-	if (cinfo->Ah != 0 && !cinfo->arith_code)
-	  td = 0;		/* no DC table either */
+  ta = 0;			/* DC scan */
+  if (cinfo->Ah != 0 && !cinfo->arith_code)
+    td = 0;		/* no DC table either */
       } else {
-	td = 0;			/* AC scan */
+  td = 0;			/* AC scan */
       }
     }
     emit_byte(cinfo, (td << 4) + ta);
@@ -449,9 +449,9 @@ write_frame_header (j_compress_ptr cinfo)
   } else {
     is_baseline = TRUE;
     for (ci = 0, compptr = cinfo->comp_info; ci < cinfo->num_components;
-	 ci++, compptr++) {
+   ci++, compptr++) {
       if (compptr->dc_tbl_no > 1 || compptr->ac_tbl_no > 1)
-	is_baseline = FALSE;
+  is_baseline = FALSE;
     }
     if (prec && is_baseline) {
       is_baseline = FALSE;
@@ -500,17 +500,17 @@ write_scan_header (j_compress_ptr cinfo)
     for (i = 0; i < cinfo->comps_in_scan; i++) {
       compptr = cinfo->cur_comp_info[i];
       if (cinfo->progressive_mode) {
-	/* Progressive mode: only DC or only AC tables are used in one scan */
-	if (cinfo->Ss == 0) {
-	  if (cinfo->Ah == 0)	/* DC needs no table for refinement scan */
-	    emit_dht(cinfo, compptr->dc_tbl_no, FALSE);
-	} else {
-	  emit_dht(cinfo, compptr->ac_tbl_no, TRUE);
-	}
+  /* Progressive mode: only DC or only AC tables are used in one scan */
+  if (cinfo->Ss == 0) {
+    if (cinfo->Ah == 0)	/* DC needs no table for refinement scan */
+      emit_dht(cinfo, compptr->dc_tbl_no, FALSE);
+  } else {
+    emit_dht(cinfo, compptr->ac_tbl_no, TRUE);
+  }
       } else {
-	/* Sequential mode: need both DC and AC tables */
-	emit_dht(cinfo, compptr->dc_tbl_no, FALSE);
-	emit_dht(cinfo, compptr->ac_tbl_no, TRUE);
+  /* Sequential mode: need both DC and AC tables */
+  emit_dht(cinfo, compptr->dc_tbl_no, FALSE);
+  emit_dht(cinfo, compptr->ac_tbl_no, TRUE);
       }
     }
   }
@@ -560,9 +560,9 @@ write_tables_only (j_compress_ptr cinfo)
   if (! cinfo->arith_code) {
     for (i = 0; i < NUM_HUFF_TBLS; i++) {
       if (cinfo->dc_huff_tbl_ptrs[i] != NULL)
-	emit_dht(cinfo, i, FALSE);
+  emit_dht(cinfo, i, FALSE);
       if (cinfo->ac_huff_tbl_ptrs[i] != NULL)
-	emit_dht(cinfo, i, TRUE);
+  emit_dht(cinfo, i, TRUE);
     }
   }
 
@@ -582,7 +582,7 @@ jinit_marker_writer (j_compress_ptr cinfo)
   /* Create the subobject */
   marker = (my_marker_ptr)
     (*cinfo->mem->alloc_small) ((j_common_ptr) cinfo, JPOOL_IMAGE,
-				SIZEOF(my_marker_writer));
+        SIZEOF(my_marker_writer));
   cinfo->marker = (struct jpeg_marker_writer *) marker;
   /* Initialize method pointers */
   marker->pub.write_file_header = write_file_header;
