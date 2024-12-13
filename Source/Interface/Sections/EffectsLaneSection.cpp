@@ -217,7 +217,7 @@ namespace Interface
   {
     utils::up<EffectModuleSection> section = nullptr;
     if (auto &savedSection = newSubProcessor.getSavedSection(); savedSection.get())
-      section.reset(utils::as<EffectModuleSection>(savedSection.release()));
+      section = COMPLEX_MOV(savedSection);
     else
       section = utils::up<EffectModuleSection>::create(utils::as<Generation::EffectModule>(&newSubProcessor), this);
 
@@ -230,7 +230,7 @@ namespace Interface
 
   void EffectsLaneSection::deletedSubProcessor(size_t index, Generation::BaseProcessor &deletedSubProcessor)
   {
-    utils::up<EffectModuleSection> deletedSection{ effectModules_[index].release() };
+    utils::up<EffectModuleSection> deletedSection{ COMPLEX_MOV(effectModules_[index]) };
     container_.removeSubOpenGlContainer(deletedSection.get());
     deletedSubProcessor.setSavedSection(COMPLEX_MOV(deletedSection));
     effectModules_.erase(effectModules_.begin() + (ptrdiff_t)index);
@@ -269,7 +269,7 @@ namespace Interface
       return nullptr;
     }
 
-    utils::up<EffectModuleSection> removedModule{ effectModules_[i].release() };
+    utils::up<EffectModuleSection> removedModule{ COMPLEX_MOV(effectModules_[i]) };
     container_.removeSubOpenGlContainer(removedModule.get());
     effectModules_.erase(effectModules_.begin() + (std::ptrdiff_t)i);
     return removedModule;
@@ -295,7 +295,7 @@ namespace Interface
     }
 
     int addModuleButtonHeight = scaleValueRoundInt(kAddModuleButtonHeight);
-    std::ignore = container_.addModulesButton_->setSizes(addModuleButtonHeight, effectWidth);
+    utils::ignore = container_.addModulesButton_->setSizes(addModuleButtonHeight, effectWidth);
     container_.addModulesButton_->setPosition(Point{ 0, y });
     y += addModuleButtonHeight + outerPadding;
 

@@ -471,8 +471,8 @@ static bool isPerMonitorDPIAwareWindow ([[maybe_unused]] HWND nativeWindow)
    #endif
 }
 
-static bool isPerMonitorDPIAwareThread (GetThreadDPIAwarenessContextFunc getThreadDPIAwarenessContextIn = getThreadDPIAwarenessContext,
-                                        GetAwarenessFromDpiAwarenessContextFunc getAwarenessFromDPIAwarenessContextIn = getAwarenessFromDPIAwarenessContext)
+static bool isPerMonitorDPIAwareThread ([[maybe_unused]] GetThreadDPIAwarenessContextFunc getThreadDPIAwarenessContextIn = getThreadDPIAwarenessContext,
+                                        [[maybe_unused]] GetAwarenessFromDpiAwarenessContextFunc getAwarenessFromDPIAwarenessContextIn = getAwarenessFromDPIAwarenessContext)
 {
    #if ! JUCE_WIN_PER_MONITOR_DPI_AWARE
     return false;

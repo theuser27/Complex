@@ -62,15 +62,21 @@ namespace Plugin
     void serialiseToJson(void *jsonData) const;
     virtual bool deserialiseFromJson(void *newSave, void *fallbackSave) = 0;
     
-    // do not call this function manually, it's always called when you instantiate a BaseProcessor derived type
-    // may block and allocate if expandThreshold has been reached
-    auto getId(Generation::BaseProcessor *newProcessor) noexcept -> u64;
-
     auto getProcessor(u64 processorId) const noexcept -> Generation::BaseProcessor *;
+    // creates a brand new processor
+    template<utils::derived_from<Generation::BaseProcessor> T, typename ... Args>
+    auto createProcessor(Args &&... args) -> T *
+    {
+      auto processor = utils::up<T>::create(COMPLEX_FWD(args)...);
+      auto *pointer = processor.get();
+      addProcessor(COMPLEX_MOV(processor));
+      pointer->initialiseParameters();
+      return pointer;
+    }
     // creates a default processor or loads processor from save if jsonData != nullptr
     auto createProcessor(std::string_view processorType, void *jsonData = nullptr)
       -> Generation::BaseProcessor *;
-    auto copyProcessor(std::derived_from<Generation::BaseProcessor> auto *processor)
+    auto copyProcessor(utils::derived_from<Generation::BaseProcessor> auto *processor)
     {
       auto copyProcessor = [processor]() { return processor->createCopy(); };
       return executeOutsideProcessing(copyProcessor);
@@ -119,6 +125,8 @@ namespace Plugin
     void clearState();
 
   protected:
+    void addProcessor(utils::up<Generation::BaseProcessor> processor);
+
     // all plugin undo steps are stored here
     utils::up<juce::UndoManager> undoManager_;
     // the processor tree is stored in a flattened map

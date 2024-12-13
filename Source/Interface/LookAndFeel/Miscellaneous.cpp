@@ -67,8 +67,7 @@ namespace Interface
   {
     juce::Path fromSvgData(const void *data, size_t data_size)
     {
-      utils::up drawable{ juce::Drawable::createFromImageData(data, data_size).release() };
-      return drawable->getOutlineAsPath();
+      return juce::Drawable::createFromImageData(data, data_size)->getOutlineAsPath();
     }
 
     Shape pasteValueIcon()

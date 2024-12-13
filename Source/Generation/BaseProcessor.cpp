@@ -17,14 +17,12 @@
 namespace Generation
 {
   BaseProcessor::BaseProcessor(Plugin::ProcessorTree *processorTree, std::string_view processorType) noexcept :
-    processorTree_(processorTree), processorType_{ processorType } { processorId_ = processorTree_->getId(this); }
+    processorTree_{ processorTree }, processorType_{ processorType } { }
   BaseProcessor::~BaseProcessor() noexcept = default;
 
   BaseProcessor::BaseProcessor(const BaseProcessor &other) noexcept : 
     processorTree_(other.processorTree_), processorType_{ other.processorType_ }
   {
-    processorId_ = processorTree_->getId(this);
-
     processorParameters_.data.reserve(other.processorParameters_.data.size());
     for (auto &parameterPair : other.processorParameters_.data)
       processorParameters_.data.emplace_back(parameterPair.first,
@@ -43,8 +41,6 @@ namespace Generation
   BaseProcessor::BaseProcessor(BaseProcessor &&other) noexcept :
     processorTree_(other.processorTree_), processorType_{ other.processorType_ }
   {
-    processorId_ = processorTree_->getId(this);
-
     processorParameters_.data.reserve(other.processorParameters_.data.size());
     for (auto &parameterPair : other.processorParameters_.data)
       processorParameters_.data.emplace_back(parameterPair.first,

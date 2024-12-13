@@ -269,7 +269,7 @@ namespace Plugin
         }
       }
 
-      soundEngine_ = new Generation::SoundEngine{ this };
+      soundEngine_ = createProcessor<Generation::SoundEngine>(this);
       soundEngine_->setParentProcessorId(processorTreeId);
       soundEngine_->deserialiseFromJson(&soundEngine);
 
@@ -344,23 +344,22 @@ namespace Plugin
 
     return [&]<typename ... Ts>(const std::tuple<nested_enum::type_identity<Ts>...> &)
     {
-      Generation::BaseProcessor *processor = nullptr;
-      auto create = [&]<std::derived_from<Generation::BaseProcessor> T>()
-      {
-        auto *processor = new T{ this };
-        if (jsonData != nullptr)
-          processor->deserialiseFromJson(jsonData);
-        else
-          processor->initialiseParameters();
-        return processor;
-      };
-      std::ignore = ((Ts::id() == processorType && (processor = create.template operator()<typename Ts::linked_type>(), true)) || ...);
+      utils::up<Generation::BaseProcessor> processor = nullptr;
+      utils::ignore = ((Ts::id() == processorType && (processor = utils::up<typename Ts::linked_type>::create(this), true)) || ...);
       if (processor == nullptr)
       {
         throw LoadingException{ std::format("Processor with id {} does not exist", processorType) };
       }
 
-      return processor;
+      auto *pointer = processor.get();
+      addProcessor(COMPLEX_MOV(processor));
+
+      if (jsonData != nullptr)
+        pointer->deserialiseFromJson(jsonData);
+      else
+        pointer->initialiseParameters();
+
+      return pointer;
     }(processorTypes);
   }
 }
@@ -691,7 +690,7 @@ namespace Framework
   utils::up<ParameterValue> ParameterValue::deserialiseFromJson(
     Plugin::ProcessorTree *processorTree, void *jsonData)
   {
-    auto parameter = utils::up<ParameterValue>{ new ParameterValue{} };
+    auto parameter = utils::up<ParameterValue>::create(ParameterDetails{});
 
     json &data = *static_cast<json *>(jsonData);
 

@@ -149,7 +149,7 @@ namespace Interface
       removeSubOpenGlContainer(movedModuleCopy_.get());
       movedModuleCopy_->setAlwaysOnTop(false);
       auto *processor = movedModuleCopy_->getProcessor();
-      processor->setSavedSection(utils::up<ProcessorSection>{ movedModuleCopy_.release() });
+      processor->setSavedSection(COMPLEX_MOV(movedModuleCopy_));
 
       update = new Framework::CopyProcessorUpdate(*state_.getProcessorTree(), *processor,
         lanes_[newIndices.first]->getProcessorId().value(), newIndices.second);

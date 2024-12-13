@@ -1221,7 +1221,7 @@ namespace Generation
     {
       [&]<typename ... Ts>(const std::tuple<nested_enum::type_identity<Ts>...> &)
       {
-        std::ignore = ((Ts::id().value() == effectId && (effect = new typename Ts::linked_type{ processorTree_ }, true)) || ...);
+        std::ignore = ((Ts::id().value() == effectId && (effect = processorTree_->createProcessor<typename Ts::linked_type>(processorTree_), true)) || ...);
       }(Processors::BaseEffect::enum_subtypes_filter<kGetActiveEffectPredicate>());
 
       COMPLEX_ASSERT(effect && "Unknown effect type was provided");

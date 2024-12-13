@@ -311,15 +311,16 @@ namespace Interface
   {
     if (control == effectTypeSelector_.get() && effectModule_)
     {
-      if (!changeEffect())
+      if (!changeEffectOrAlgo(false))
         return;
 
       repaintBackground();
     }
     else if (control == effectAlgoSelector_.get() && effectModule_)
     {
-      initialiseParameters();
-      arrangeUI();
+      changeEffectOrAlgo(true);
+      /*initialiseParameters();
+      arrangeUI();*/
       repaintBackground();
     }
     else
@@ -398,7 +399,7 @@ namespace Interface
     if (result == kDeleteInstance)
     {
       // make sure nothing touches this after the call runs
-      std::ignore = laneSection_->deleteModule(this, true);
+      utils::ignore = laneSection_->deleteModule(this, true);
     }
     else if (result == kCopyInstance)
     {
@@ -424,39 +425,45 @@ namespace Interface
     return options;
   }
 
-  bool EffectModuleSection::changeEffect()
+  bool EffectModuleSection::changeEffectOrAlgo(bool changeAlgo)
   {
     using namespace Framework;
 
-    auto effectType = effectTypeSelector_->getTextValue(false);
-    auto effectIndex = Processors::BaseEffect::enum_value_by_id(effectType);
-    if (!effectIndex.has_value())
-      return false;
-
-    Generation::BaseEffect *newEffect = effectModule_->changeEffect(effectType);
-
-    // resetting UI
-    setEffectType(newEffect->getProcessorType());
-
-    // replacing the parameters for algorithm and mask sliders
-    for (auto &id : kCommonEffectParameters)
+    Generation::BaseEffect *newEffect;
+    if (changeAlgo)
+      newEffect = getEffect();
+    else
     {
-      auto *control = getEffectControl(id);
-      auto *newEffectParameter = newEffect->getParameter(id);
+      auto effectType = effectTypeSelector_->getTextValue(false);
+      auto effectIndex = Processors::BaseEffect::enum_value_by_id(effectType);
+      if (!effectIndex.has_value())
+        return false;
 
-      if (auto parameterBridge = control->getParameterLink()->hostControl)
-        parameterBridge->resetParameterLink(newEffectParameter->getParameterLink(), false);
+      newEffect = effectModule_->changeEffect(effectType);
 
-      control->changeLinkedParameter(*newEffectParameter,
-        id == Processors::BaseEffect::Algorithm::id().value());
-      control->resized();
+      // resetting UI
+      setEffectType(newEffect->getProcessorType());
+
+      // replacing the parameters for algorithm and mask sliders
+      for (auto &id : kCommonEffectParameters)
+      {
+        auto *control = getEffectControl(id);
+        auto *newEffectParameter = newEffect->getParameter(id);
+
+        if (auto parameterBridge = control->getParameterLink()->hostControl)
+          parameterBridge->resetParameterLink(newEffectParameter->getParameterLink(), false);
+
+        control->changeLinkedParameter(*newEffectParameter,
+          id == Processors::BaseEffect::Algorithm::id().value());
+        control->resized();
+      }
+
+      effectTypeSelector_->resized();
+      effectTypeIcon_->setColor(getColour(Skin::kWidgetPrimary1));
+      mixNumberBox_->resized();
+      moduleActivator_->resized();
+      maskComponent_->resized();
     }
-
-    effectTypeSelector_->resized();
-    effectTypeIcon_->setColor(getColour(Skin::kWidgetPrimary1));
-    mixNumberBox_->resized();
-    moduleActivator_->resized();
-    maskComponent_->resized();
 
     initialiseParameters();
 
@@ -570,17 +577,17 @@ namespace Interface
 
         // gain rotary
         auto *gainSlider = section->getEffectControl(Processors::BaseEffect::Filter::Normal::Gain::id().value());
-        std::ignore = gainSlider->setSizes(knobsHeight);
+        utils::ignore = gainSlider->setSizes(knobsHeight);
         gainSlider->setPosition(Point{ bounds.getX(), bounds.getY() });
 
         // cutoff rotary
         auto *cutoffSlider = section->getEffectControl(Processors::BaseEffect::Filter::Normal::Cutoff::id().value());
-        std::ignore = cutoffSlider->setSizes(knobsHeight);
+        utils::ignore = cutoffSlider->setSizes(knobsHeight);
         cutoffSlider->setPosition(Point{ bounds.getX() + rotaryInterval, bounds.getY() });
 
         // slope rotary
         auto *slopeSlider = section->getEffectControl(Processors::BaseEffect::Filter::Normal::Slope::id().value());
-        std::ignore = slopeSlider->setSizes(knobsHeight);
+        utils::ignore = slopeSlider->setSizes(knobsHeight);
         slopeSlider->setPosition(Point{ bounds.getX() + 2 * rotaryInterval, bounds.getY() });
       };
 
@@ -651,7 +658,7 @@ namespace Interface
 
         // depth rotary and label
         auto *depthSlider = section->getEffectControl(Processors::BaseEffect::Dynamics::Contrast::Depth::id().value());
-        std::ignore = depthSlider->setSizes(knobsHeight);
+        utils::ignore = depthSlider->setSizes(knobsHeight);
         depthSlider->setPosition(Point{ bounds.getX() + knobEdgeOffset, bounds.getY() + knobTopOffset });
       };
 
@@ -665,7 +672,7 @@ namespace Interface
 
         // depth rotary and label
         auto *thresholdSlider = section->getEffectControl(Processors::BaseEffect::Dynamics::Clip::Threshold::id().value());
-        std::ignore = thresholdSlider->setSizes(knobsHeight);
+        utils::ignore = thresholdSlider->setSizes(knobsHeight);
         thresholdSlider->setPosition(Point{ bounds.getX() + knobEdgeOffset, bounds.getY() + knobTopOffset });
       };
 
@@ -739,19 +746,19 @@ namespace Interface
         auto *shiftSlider = utils::as<RotarySlider>(section->getEffectControl(Processors::BaseEffect::Phase::Shift::PhaseShift::id().value()));
         shiftSlider->setModifier(slopeDropdown);
         shiftSlider->setLabelPlacement(Placement::right);
-        std::ignore = shiftSlider->setSizes(knobsHeight);
+        utils::ignore = shiftSlider->setSizes(knobsHeight);
         shiftSlider->setPosition({ bounds.getX(), bounds.getY() });
 
 
         auto *intervalSlider = section->getEffectControl(Processors::BaseEffect::Phase::Shift::Interval::id().value());
         utils::as<RotarySlider>(intervalSlider)->setMaxDecimalCharacters(3);
-        std::ignore = intervalSlider->setSizes(knobsHeight);
+        utils::ignore = intervalSlider->setSizes(knobsHeight);
         intervalSlider->setPosition({ bounds.getX() + rotaryInterval, bounds.getY() });
 
         auto *offsetSlider = section->getEffectControl(Processors::BaseEffect::Phase::Shift::Offset::id().value());
         utils::as<RotarySlider>(offsetSlider)->setMaxTotalCharacters(6);
         utils::as<RotarySlider>(offsetSlider)->setMaxDecimalCharacters(4);
-        std::ignore = offsetSlider->setSizes(knobsHeight);
+        utils::ignore = offsetSlider->setSizes(knobsHeight);
         offsetSlider->setPosition({ bounds.getX() + 2 * rotaryInterval, bounds.getY() });
       };
 
@@ -812,7 +819,7 @@ namespace Interface
         int knobsHeight = scaleValueRoundInt(RotarySlider::kDefaultWidthHeight);
 
         auto *shiftSlider = section->getEffectControl(Processors::BaseEffect::Pitch::Resample::Shift::id().value());
-        std::ignore = shiftSlider->setSizes(knobsHeight);
+        utils::ignore = shiftSlider->setSizes(knobsHeight);
         shiftSlider->setPosition(Point{ bounds.getX() + knobEdgeOffset, bounds.getY() + knobTopOffset });
       };
 
@@ -824,7 +831,7 @@ namespace Interface
         int knobsHeight = scaleValueRoundInt(RotarySlider::kDefaultWidthHeight);
 
         auto *shiftSlider = section->getEffectControl(Processors::BaseEffect::Pitch::ConstShift::Shift::id().value());
-        std::ignore = shiftSlider->setSizes(knobsHeight);
+        utils::ignore = shiftSlider->setSizes(knobsHeight);
         shiftSlider->setPosition(Point{ bounds.getX() + knobEdgeOffset, bounds.getY() + knobTopOffset });
       };
 

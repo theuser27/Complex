@@ -13,6 +13,7 @@
 #include "Framework/constants.hpp"
 #include "Framework/simd_buffer.hpp"
 #include "BaseProcessor.hpp"
+#include "Plugin/ProcessorTree.hpp"
 #include "Framework/parameters.hpp"
 
 namespace Generation
@@ -31,7 +32,7 @@ namespace Generation
     BaseEffect &operator=(BaseEffect &&other) noexcept = default;
 
     void initialiseParameters() override;
-    void deserialiseFromJson(void *jsonData);
+    void deserialiseFromJson(void *jsonData) override;
 
     virtual void run([[maybe_unused]] Framework::ComplexDataSource &source,
       [[maybe_unused]] Framework::SimdBuffer<Framework::complex<float>, simd_float> &destination,
@@ -119,7 +120,7 @@ namespace Generation
       BaseEffect::run(source, destination, binCount, sampleRate);
     }
 
-    UtilityEffect *createCopy() const noexcept override { return new UtilityEffect{ *this }; }
+    UtilityEffect *createCopy() const noexcept override { return processorTree_->createProcessor<UtilityEffect>(*this); }
     void initialiseParameters() override;
 
   private:
@@ -146,7 +147,7 @@ namespace Generation
       Framework::SimdBuffer<Framework::complex<float>, simd_float> &destination, 
       u32 binCount, float sampleRate) noexcept override;
 
-    FilterEffect *createCopy() const noexcept override { return new FilterEffect{ *this }; }
+    FilterEffect *createCopy() const noexcept override { return processorTree_->createProcessor<FilterEffect>(*this); }
     void initialiseParameters() override;
 
   private:
@@ -201,7 +202,7 @@ namespace Generation
       Framework::SimdBuffer<Framework::complex<float>, simd_float> &destination, 
       u32 binCount, float sampleRate) noexcept override;
 
-    DynamicsEffect *createCopy() const noexcept override { return new DynamicsEffect{ *this }; }
+    DynamicsEffect *createCopy() const noexcept override { return processorTree_->createProcessor<DynamicsEffect>(*this); }
     void initialiseParameters() override;
 
   private:
@@ -245,7 +246,7 @@ namespace Generation
       Framework::SimdBuffer<Framework::complex<float>, simd_float> &destination, 
       u32 binCount, float sampleRate) noexcept override;
 
-    PhaseEffect *createCopy() const noexcept override { return new PhaseEffect{ *this }; }
+    PhaseEffect *createCopy() const noexcept override { return processorTree_->createProcessor<PhaseEffect>(*this); }
     void initialiseParameters() override;
 
   private:
@@ -269,7 +270,7 @@ namespace Generation
       Framework::SimdBuffer<Framework::complex<float>, simd_float> &destination, 
       u32 binCount, float sampleRate) noexcept override;
 
-    PitchEffect *createCopy() const noexcept override { return new PitchEffect{ *this }; }
+    PitchEffect *createCopy() const noexcept override { return processorTree_->createProcessor<PitchEffect>(*this); }
     void initialiseParameters() override;
 
   private:
@@ -290,7 +291,7 @@ namespace Generation
   public:
     StretchEffect(Plugin::ProcessorTree *processorTree);
 
-    StretchEffect *createCopy() const noexcept override { return new StretchEffect{ *this }; }
+    StretchEffect *createCopy() const noexcept override { return processorTree_->createProcessor<StretchEffect>(*this); }
     void initialiseParameters() override;
 
     // specops geometry
@@ -303,7 +304,7 @@ namespace Generation
   public:
     WarpEffect(Plugin::ProcessorTree *processorTree);
 
-    WarpEffect *createCopy() const noexcept override { return new WarpEffect{ *this }; }
+    WarpEffect *createCopy() const noexcept override { return processorTree_->createProcessor<WarpEffect>(*this); }
     void initialiseParameters() override;
 
     // vocode, harmonic match, cross/warp mix
@@ -316,7 +317,7 @@ namespace Generation
   public:
     DestroyEffect(Plugin::ProcessorTree *processorTree);
 
-    DestroyEffect *createCopy() const noexcept override { return new DestroyEffect{ *this }; }
+    DestroyEffect *createCopy() const noexcept override { return processorTree_->createProcessor<DestroyEffect>(*this); }
     void initialiseParameters() override;
 
     void run(Framework::ComplexDataSource &source,
@@ -342,7 +343,7 @@ namespace Generation
     EffectModule(Plugin::ProcessorTree *processorTree) noexcept;
     ~EffectModule() override;
 
-    void deserialiseFromJson(void *jsonData);
+    void deserialiseFromJson(void *jsonData) override;
 
     void processEffect(Framework::ComplexDataSource &source, u32 binCount, float sampleRate) noexcept;
 
@@ -350,7 +351,7 @@ namespace Generation
     // this method exists only to accomodate loading from save files
     void insertSubProcessor(usize index, BaseProcessor &newSubProcessor) noexcept override;
     BaseProcessor &updateSubProcessor(usize index, BaseProcessor &newSubProcessor) noexcept override;
-    EffectModule *createCopy() const override { return new EffectModule{ *this }; }
+    EffectModule *createCopy() const override { return processorTree_->createProcessor<EffectModule>(*this); }
     void initialiseParameters() override
     {
       createProcessorParameters(Framework::Processors::EffectModule::

@@ -94,7 +94,7 @@ namespace Framework
 
   class ParameterValue
   {
-    ParameterValue() = default;
+    ParameterValue() = delete;
   public:
     ParameterValue(ParameterValue &&) = delete;
     ParameterValue &operator=(const ParameterValue &) = delete;

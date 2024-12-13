@@ -425,7 +425,7 @@ namespace Generation
     auto &getEffectsState() const noexcept { return *effectsState_; }
     float getOverlap() const noexcept { return currentOverlap_; }
 
-    void deserialiseFromJson(void *jsonData);
+    void deserialiseFromJson(void *jsonData) override;
   private:
     //=========================================================================================
     // Parameters

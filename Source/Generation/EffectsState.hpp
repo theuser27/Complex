@@ -14,6 +14,7 @@
 #include "Framework/sync_primitives.hpp"
 #include "Framework/simd_buffer.hpp"
 #include "BaseProcessor.hpp"
+#include "Plugin/ProcessorTree.hpp"
 
 namespace Generation
 {
@@ -31,7 +32,7 @@ namespace Generation
     EffectsLane &operator=(const EffectsLane &other) noexcept 
     { BaseProcessor::operator=(other); return *this; }
 
-    void deserialiseFromJson(void *jsonData);
+    void deserialiseFromJson(void *jsonData) override;
 
     void initialise() noexcept override
     {
@@ -48,7 +49,7 @@ namespace Generation
     auto *getEffectModule(usize index) const noexcept { return effectModules_[index]; }
     auto getEffectModuleCount() const noexcept { return effectModules_.size(); }
 
-    EffectsLane *createCopy() const override { return new EffectsLane{ *this }; }
+    EffectsLane *createCopy() const override { return processorTree_->createProcessor<EffectsLane>(*this); }
 
   private:
     Framework::ComplexDataSource laneDataSource_;
@@ -95,7 +96,7 @@ namespace Generation
     EffectsState(Plugin::ProcessorTree *processorTree) noexcept;
     ~EffectsState() noexcept override;
 
-    void deserialiseFromJson(void *jsonData);
+    void deserialiseFromJson(void *jsonData) override;
 
     // Inherited via BaseProcessor
     void insertSubProcessor(usize index, BaseProcessor &newSubProcessor) noexcept override;

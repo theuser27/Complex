@@ -197,26 +197,23 @@ namespace utils
   public:
     constexpr up() noexcept = default;
     constexpr up(std::nullptr_t) noexcept {}
-    template<typename U> requires utils::is_convertible_v<U *, T *>
-    explicit constexpr up(U *instance)
-    {
-      object_ = instance;
-    }
     constexpr up(const up &other) noexcept = delete;
     constexpr up(up &&other) noexcept
     {
       object_ = other.object_;
       other.object_ = nullptr;
     }
-    template<typename U> requires utils::is_convertible_v<U *, T *>
+    // allows up- AND downcasting, check types before doing this
+    template<typename U> requires utils::is_convertible_v<U *, T *> || utils::is_convertible_v<T *, U *>
     constexpr up(up<U> &&other) noexcept
     {
-      object_ = other.object_;
+      object_ = static_cast<T *>(other.object_);
       other.object_ = nullptr;
     }
     constexpr up &operator=(const up &other) noexcept = delete;
     constexpr up &operator=(up &&other) noexcept { up<T>{ COMPLEX_MOV(other) }.swap(*this); return *this; }
-    template<typename U> requires utils::is_convertible_v<U *, T *>
+    // allows up- AND downcasting, check types before doing this
+    template<typename U> requires utils::is_convertible_v<U *, T *> || utils::is_convertible_v<T *, U *>
     constexpr up &operator=(up<U> &&other) noexcept { up<T>{ COMPLEX_MOV(other) }.swap(*this); return *this; }
     constexpr ~up() noexcept { delete object_; }
 

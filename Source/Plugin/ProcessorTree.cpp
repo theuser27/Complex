@@ -27,37 +27,6 @@ namespace Plugin
     //undoManager_->~UndoManager();
   }
 
-  u64 ProcessorTree::getId(Generation::BaseProcessor *newProcessor) noexcept
-  {
-    if (newProcessor->processorId_.has_value())
-    {
-      // this should be taken as compiler error
-      COMPLEX_ASSERT_FALSE("We are adding a processor that already exists??");
-      std::abort();
-    }
-
-    utils::up<Generation::BaseProcessor> newModule{ newProcessor };
-    u64 newModuleId = processorIdCounter_.fetch_add(1, std::memory_order_acq_rel);
-
-    allProcessors_.add(newModuleId, COMPLEX_MOV(newModule));
-    if ((float)allProcessors_.data.size() / (float)allProcessors_.data.capacity() >= expandThreshold)
-    {
-      Framework::VectorMap<u64, utils::up<Generation::BaseProcessor>>
-        newAllParameters{ allProcessors_.data.size() * expandAmount };
-
-      auto swap = [this, &newAllParameters]() 
-      {
-        for (auto &[id, processor] : allProcessors_.data)
-          newAllParameters.add(id, utils::up<Generation::BaseProcessor>{ processor.release() });
-        
-        allProcessors_.data.swap(newAllParameters.data);
-      };
-      executeOutsideProcessing(swap);
-    }
-
-    return newModuleId;
-  }
-
   auto ProcessorTree::getProcessor(u64 processorId) const noexcept
     -> Generation::BaseProcessor *
   {
@@ -102,4 +71,26 @@ namespace Plugin
 
   void ProcessorTree::undo() { undoManager_->undo(); }
   void ProcessorTree::redo() { undoManager_->redo(); }
+
+  void ProcessorTree::addProcessor(utils::up<Generation::BaseProcessor> processor)
+  {
+    u64 newProcessorId = processorIdCounter_.fetch_add(1, std::memory_order_acq_rel);
+    processor->processorId_ = newProcessorId;
+
+    allProcessors_.add(newProcessorId, COMPLEX_MOV(processor));
+    if ((float)allProcessors_.data.size() / (float)allProcessors_.data.capacity() >= expandThreshold)
+    {
+      Framework::VectorMap<u64, utils::up<Generation::BaseProcessor>>
+        newAllParameters{ allProcessors_.data.size() * expandAmount };
+
+      auto swap = [this, &newAllParameters]()
+      {
+        for (auto &[id, processor] : allProcessors_.data)
+          newAllParameters.add(id, COMPLEX_MOV(processor));
+
+        allProcessors_.data.swap(newAllParameters.data);
+      };
+      executeOutsideProcessing(swap);
+    }
+  }
 }

@@ -224,16 +224,20 @@ namespace utils
   struct uninitialised_t {};
   inline constexpr uninitialised_t uninitialised{};
 
-  template <typename T>
+  template<typename T>
   concept integral = is_integral_v<T>;
 
-  template <typename T>
+  template<typename T>
   concept signed_integral = integral<T> && static_cast<T>(-1) < static_cast<T>(0);
 
-  template <typename T>
+  template<typename T>
   concept unsigned_integral = integral<T> && !signed_integral<T>;
 
-  template <typename T>
+  template<typename T>
   concept floating_point = is_floating_point_v<T>;
+
+  template<typename Derived, typename Base>
+  concept derived_from = is_base_of_v<Base, Derived> && 
+    is_convertible_v<const volatile Derived *, const volatile Base *>;
 
 }

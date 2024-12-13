@@ -433,7 +433,7 @@ namespace Framework
           )
         )
         NESTED_ENUM_FROM(Processors::BaseEffect::Pitch, (ConstShift, u64, DECLARE_ALGO(true)),
-          ((Shift, ID_CODE, "4b78cec4-c746-4a50-a9a8-3cbd010a0f34", DECLARE_PARAMETER("Shift", -20'000.0f, 20'000.0f, 0.0f, 0.5f, 
+          ((Shift, ID_CODE, "4b78cec4-c746-4a50-a9a8-3cbd010a0f34", DECLARE_PARAMETER("Frequency Shift", -20'000.0f, 20'000.0f, 0.0f, 0.5f, 
             ParameterScale::SymmetricCubic, " hz", {}, ParameterDetails::Modulatable | ParameterDetails::Automatable | ParameterDetails::Stereo))))
 
       NESTED_ENUM_FROM(Processors::BaseEffect, (Destroy, u64, DECLARE_EFFECT(Generation::DestroyEffect, true)),

@@ -121,7 +121,7 @@ namespace Interface
   private:
     auto createPopupMenu() const noexcept -> PopupItems;
 
-    bool changeEffect();
+    bool changeEffectOrAlgo(bool changeAlgo);
     void setEffectType(std::string_view type);
 
     auto getYMaskOffset() const noexcept -> int

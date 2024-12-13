@@ -63,8 +63,9 @@ namespace Interface
       {
         // This sets the content comp to a null pointer before deleting the old one, in case
         // anything tries to use the old one while it's in mid-deletion..
-        utils::up<Component> oldCompDeleter(contentComp.get());
+        auto component = contentComp.get();
         contentComp = nullptr;
+        delete component;
       }
       else
       {

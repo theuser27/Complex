@@ -119,6 +119,7 @@ namespace Generation
     void setSavedSection(utils::up<Interface::ProcessorSection> savedSection) noexcept;
 
     virtual void initialiseParameters() { }
+    virtual void deserialiseFromJson([[maybe_unused]] void *jsonData) { }
 
   protected:
     void createProcessorParameters(std::span<const std::string_view> parameterIds);
