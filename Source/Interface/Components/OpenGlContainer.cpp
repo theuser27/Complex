@@ -17,7 +17,7 @@
 
 namespace Interface
 {
-  OpenGlContainer::OpenGlContainer(juce::String name) : BaseComponent(std::move(name)) { }
+  OpenGlContainer::OpenGlContainer(juce::String name) : BaseComponent{ COMPLEX_MOVE(name) } { }
   OpenGlContainer::~OpenGlContainer() noexcept = default;
 
   void OpenGlContainer::renderOpenGlComponents(OpenGlWrapper &openGl)
@@ -130,15 +130,15 @@ namespace Interface
   void OpenGlContainer::showPopupSelector(const BaseComponent *source, Point<int> position,
     PopupItems options, std::function<void(int)> callback, std::function<void()> cancel, int minWidth) const
   {
-    uiRelated.renderer->getGui()->popupSelector(source, position, std::move(options), getSectionOverride(),
-      std::move(callback), std::move(cancel), minWidth);
+    uiRelated.renderer->getGui()->popupSelector(source, position, COMPLEX_MOVE(options), getSectionOverride(),
+      COMPLEX_MOVE(callback), COMPLEX_MOVE(cancel), minWidth);
   }
 
   void OpenGlContainer::showPopupSelector(const BaseComponent *source, Placement placement,
     PopupItems options, std::function<void(int)> callback, std::function<void()> cancel, int minWidth) const
   {
-    uiRelated.renderer->getGui()->popupSelector(source, placement, std::move(options), getSectionOverride(),
-      std::move(callback), std::move(cancel), minWidth);
+    uiRelated.renderer->getGui()->popupSelector(source, placement, COMPLEX_MOVE(options), getSectionOverride(),
+      COMPLEX_MOVE(callback), COMPLEX_MOVE(cancel), minWidth);
   }
 
   void OpenGlContainer::hidePopupSelector() const { uiRelated.renderer->getGui()->hidePopupSelector(); }
@@ -146,7 +146,7 @@ namespace Interface
   void OpenGlContainer::showPopupDisplay(BaseComponent *source,
     String text, Placement placement, bool primary) const
   {
-    uiRelated.renderer->getGui()->popupDisplay(source, std::move(text), placement, primary, getSectionOverride());
+    uiRelated.renderer->getGui()->popupDisplay(source, COMPLEX_MOVE(text), placement, primary, getSectionOverride());
   }
 
   void OpenGlContainer::hidePopupDisplay(bool primary) const { uiRelated.renderer->getGui()->hideDisplay(primary); }

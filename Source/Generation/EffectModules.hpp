@@ -22,7 +22,7 @@ namespace Generation
   class BaseEffect : public BaseProcessor
   {
   public:
-    BaseEffect(Plugin::ProcessorTree *processorTree, std::string_view effectType) : 
+    BaseEffect(Plugin::ProcessorTree *processorTree, utils::string_view effectType) :
       BaseProcessor{ processorTree, effectType } { }
 
     BaseEffect(const BaseEffect &other) noexcept = default;
@@ -96,7 +96,7 @@ namespace Generation
       Framework::SimdBuffer<Framework::complex<float>, simd_float> &destination, simd_int lowBoundIndices,
       simd_int highBoundIndices, u32 binCount) noexcept;
 
-    std::span<const std::string_view> parameters_{};
+    utils::span<const utils::string_view> parameters_{};
 
     template<typename Type>
     friend void fillAndSetParameters(BaseEffect &effect);
@@ -349,8 +349,8 @@ namespace Generation
 
     // Inherited via BaseProcessor
     // this method exists only to accomodate loading from save files
-    void insertSubProcessor(usize index, BaseProcessor &newSubProcessor) noexcept override;
-    BaseProcessor &updateSubProcessor(usize index, BaseProcessor &newSubProcessor) noexcept override;
+    void insertSubProcessor(usize index, BaseProcessor &newSubProcessor, bool callListeners = true) noexcept override;
+    BaseProcessor &updateSubProcessor(usize index, BaseProcessor &newSubProcessor, bool callListeners = true) noexcept override;
     EffectModule *createCopy() const override { return processorTree_->createProcessor<EffectModule>(*this); }
     void initialiseParameters() override
     {
@@ -359,7 +359,7 @@ namespace Generation
     }
 
     BaseEffect *getEffect() const noexcept { return utils::as<BaseEffect>(subProcessors_[0]); }
-    BaseEffect *changeEffect(std::string_view effectType);
+    BaseEffect *changeEffect(utils::string_view effectType);
   private:
     static constexpr auto effectCount = Framework::Processors::BaseEffect::enum_count_filter(Framework::kGetActiveEffectPredicate);
     Framework::SimdBuffer<Framework::complex<float>, simd_float> buffer_{};

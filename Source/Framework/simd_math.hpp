@@ -21,182 +21,110 @@ namespace utils
   // layout of complex cartesian and polar vectors is assumed to be
   // { real, imaginary, real, imaginary } and { magnitude, phase, magnitude, phase } respectively
 
-  // this number of iterations produces results with max error of <= 0.01 degrees
-  inline constexpr usize kDefaultCordicIterations = 12;
-  inline constexpr simd_mask kFloatMantissaMask = 0x007fffffU;
-  inline constexpr simd_mask kFloatExponentMask = 0x7f800000U;
-  inline constexpr simd_mask kNotFloatExponentMask = ~kFloatExponentMask[0];
-  inline constexpr simd_float kInvPi = 1.0f / kPi;
-  inline constexpr simd_float kInv2Pi = 1.0f / k2Pi;
-
-  // TODO: 
-  /*strict_inline void vector_call cordic2Rotation(simd_float radians)
+  // [cos, sin]
+  strict_inline utils::pair<simd_float, simd_float> vector_call cossin(simd_float radians)
   {
-    // TODO: implement later using ints
-    static constexpr simd_float kStage2Factors[] = { 0.0f, 16.0f / 63.0f, 33.0f / 56.0f, 39.0f / 52.0f };
-    static constexpr simd_float kStage3Factors[] = { 0.0f, 252.0f / 3965.0f, 445.0f / 3948.0f };
-    static constexpr simd_float kStage4Factors[] = { 0.0f, 89.0f / 3960.0f };
-    static constexpr simd_float kStage5Scale = 1.0f / 2848.118582f;
-    static constexpr u32 kStage5RotationCount = 1 << 5;
-    static constexpr simd_float kStage5RoundingTerm = kStage5RotationCount * 360.0f / 0.643746f;
+    // split pi / 2 into multiple parts to take advantage of the
+    // hidden GRS bits during subtraction for more accurate radian wrapping
+    static constexpr simd_float kHalfPiPart1 = 1.5703125f;
+    static constexpr simd_float kHalfPiPart2 = 0.0004838267953f;
 
+    // taylor coefficients of sin
+    static constexpr simd_float kSin1 = -0.16666655f;
+    static constexpr simd_float kSin2 = 0.00833216f;
+    static constexpr simd_float kSin3 = -0.00019515282f;
 
-  }*/
+    // taylor coefficients of cos
+    static constexpr simd_float kCos0 = 1.0f;
+    static constexpr simd_float kCos1 = -0.5f;
+    static constexpr simd_float kCos2 = 0.041666646f;
+    static constexpr simd_float kCos3 = -0.0013887316f;
+    static constexpr simd_float kCos4 = 0.000024433157f;
 
-  /**
-   * \brief 
-   * \tparam Iterations number of iterations the algorithm should do
-   * \param radians [-inf; inf] phases the algorithm should use to create the cis pairs
-   * \return { unscaled cos part, unscaled sin part, scaling factor }
-   */
-  template<usize Iterations = kDefaultCordicIterations>
-  strict_inline utils::array<simd_float, 3> vector_call cordicRotation(simd_float radians)
-  {
-    static constexpr simd_float kScale = []()
-    {
-      float result = 1.0f;
-      for (usize i = 0; i < Iterations; i++)
-        result *= 1.0f / gcem::sqrt(1.0f + gcem::pow(2.0f, -2.0f * (float)i));
-      return result;
-    }();
+    static constexpr simd_float k2InvPi = 2.0f / kPi;
+    static constexpr simd_float kTruncate = 12582912.0f;
 
-    // kThetaDeltas[i] = atan(2^(-i)) / kPi
-    // division by pi because we get rid of it inside radians
-    static constexpr auto kThetaDeltas = []()
-    {
-      utils::array<simd_float, Iterations + 1> angles{};
-      for (i32 i = 0; i <= (i32)Iterations; i++)
-        angles[i] = gcem::atan(gcem::pow(2.0f, (float)(-i))) / kPi;
-      return angles;
-    }();
+    simd_float normalisedInput = radians * k2InvPi;
+    simd_int truncatedInt = reinterpretToInt(normalisedInput + kTruncate);
+    simd_float truncatedFloat = reinterpretToFloat(truncatedInt) - kTruncate;
+    // checks if angle is exactly 0, +/-90 or +/-180 degrees
+    // extra xor is to guard against nefarious bits left by fast math
+    simd_mask exactMask = simd_float::equal(truncatedFloat, normalisedInput & simd_mask{ ~1U });
 
-    static constexpr simd_int kIncrement = 1 << 23;
+    simd_float position = radians - (truncatedFloat * kHalfPiPart1) - (truncatedFloat * kHalfPiPart2);
+    simd_float position2 = position * position;
 
-    // correction for angles after +/-pi, normalises to +/-1
-    radians *= kInvPi;
-    radians -= simd_float::round(radians * 0.5f) * 2.0f;
+    simd_int lowestMantissaBit = truncatedInt & 1;
+    simd_mask sinSign = shiftLeft<30>(truncatedInt & 2);
+    simd_mask cosSign = shiftLeft<30>((truncatedInt + lowestMantissaBit) & 2);
+    simd_mask hasLowestBitMask = simd_int::notEqual(lowestMantissaBit, 0);
 
-    // correction so that the algorithm works
-    simd_mask sinMask = unsignSimd(radians);
-    radians -= 0.5f;
+    simd_float cos = simd_float::mulAdd(kCos0, position2, simd_float::mulAdd(kCos1, position2,
+      simd_float::mulAdd(kCos2, position2, simd_float::mulAdd(kCos3, position2, kCos4))));
+    simd_float sin = simd_float::mulAdd(position, position, position2 *
+      simd_float::mulAdd(kSin1, position2, simd_float::mulAdd(kSin2, position2, kSin3)));
 
-    utils::pair<simd_float, simd_float> result = { 0.0f, 1.0f };
-    simd_float multiplier = 1.0f;
-    for (usize i = 0; i <= Iterations; i++)
-    {
-      simd_mask signMask = getSign(radians);
-      radians -= kThetaDeltas[i] ^ signMask;
+    cos = merge(cos, 1.0f, exactMask);
+    sin = sin & ~exactMask;
 
-      simd_float prevX = result.first;
-      simd_float prevY = result.second;
-
-      // x[i + 1] = x[i] - y[i] * 2^(-i) * "sign"
-      result.first  = -simd_float::mulSub(prevX, prevY, multiplier ^ signMask);
-      // y[i + 1] = y[i] + x[i] * 2^(-i) * "sign"
-      result.second =  simd_float::mulAdd(prevY, prevX, multiplier ^ signMask);
-      multiplier = reinterpretToFloat(reinterpretToInt(multiplier) - kIncrement);
-    }
-
-    return { result.first, result.second | sinMask, kScale };
+    return { merge(cos, sin, hasLowestBitMask) ^ cosSign,
+      merge(sin, cos, hasLowestBitMask) ^ sinSign };
   }
 
-  /**
-   * \brief 
-   * \tparam Iterations number of iterations the algorithm should do
-   * \param x only the real parts
-   * \param y only the imaginary parts
-   * \return { unscaled magnitude, phase, scaling factor }
-   */
-  template<usize Iterations = kDefaultCordicIterations>
-  strict_inline utils::array<simd_float, 3> vector_call cordicVectoring(simd_float x, simd_float y)
+  strict_inline simd_float vector_call cis(simd_float angle)
   {
-    static constexpr simd_float kScale = []()
-    {
-      float result = 1.0f;
-      for (usize i = 0; i < Iterations; i++)
-        result *= 1.0f / gcem::sqrt(1.0f + gcem::pow(2.0f, -2.0f * (float)i));
-      return result;
-    }();
+    // split pi / 2 into multiple parts to take advantage of the
+    // hidden GRS bits during subtraction for more accurate radian wrapping
+    static constexpr simd_float kHalfPiPart1 = 1.5703125f;
+    static constexpr simd_float kHalfPiPart2 = 0.0004838267953f;
 
-    // kThetaDeltas[i] = atan(2^(-i))
-    static constexpr auto kThetaDeltas = []()
-    {
-      utils::array<simd_float, Iterations + 1> angles{};
-      for (i32 i = 0; i <= (i32)Iterations; i++)
-        angles[i] = gcem::atan(gcem::pow(2.0f, (float)(-i)));
-      return angles;
-    }();
+    // modified taylor coefficients of { cos, sin }
+    static constexpr simd_float k0 = { 1.0f, 0.0f };
+    static constexpr simd_float k1 = { -0.5f, 1.0f };
+    static constexpr simd_float k2 = { 0.041666646f, -0.16666655f };
+    static constexpr simd_float k3 = { -0.0013887316f, 0.00833216f };
+    static constexpr simd_float k4 = { 0.000024433157f, -0.00019515282f };
 
-    static constexpr simd_int kIncrement = 1 << 23;
+    static constexpr simd_float k2InvPi = 2.0f / kPi;
+    static constexpr simd_float kTruncate = 12582912.0f;
+    static constexpr simd_float kExact = { 1.0f, 0.0f };
 
-    simd_mask xNegativeMask = unsignSimd(x);
-    simd_mask signMask = getSign(y);
-    simd_float angle = (simd_float{ kPi } ^ signMask) & simd_mask::equal(xNegativeMask, kSignMask);
-    simd_float multiplier = 1.0f;
-    for (usize i = 0; i <= Iterations; ++i)
-    {
-      angle += kThetaDeltas[i] ^ (signMask ^ xNegativeMask);
+    simd_float normalisedInput = angle * k2InvPi;
+    simd_int truncatedInt = reinterpretToInt(normalisedInput + kTruncate);
+    simd_float truncatedFloat = reinterpretToFloat(truncatedInt) - kTruncate;
+    // checks if angle is exactly 0, +/-90 or +/-180 degrees
+    // extra and is to guard against nefarious bits left by fast math
+    simd_mask exactMask = simd_float::equal(truncatedFloat, normalisedInput & simd_mask{ ~1U });
 
-      simd_float prevX = x;
-      simd_float prevY = y;
+    simd_float position = angle - (truncatedFloat * kHalfPiPart1) - (truncatedFloat * kHalfPiPart2);
+    simd_float position2 = position * position;
 
-      // x[i + 1] = x[i] + y[i] * 2^(-i) * "sign"
-      x =  simd_float::mulAdd(prevX, prevY, multiplier ^ signMask);
-      // y[i + 1] = y[i] - x[i] * 2^(-i) * "sign"
-      y = -simd_float::mulSub(prevY, prevX, multiplier ^ signMask);
+    simd_int lowestMantissaBit = truncatedInt & 1;
+    simd_mask signs = shiftLeft<30>((truncatedInt + (lowestMantissaBit & kRealMask)) & 2);
+    simd_mask hasLowestBitMask = simd_int::notEqual(lowestMantissaBit, 0);
 
-      multiplier = reinterpretToFloat(reinterpretToInt(multiplier) - kIncrement);
-      signMask = getSign(y);
-    }
-
-    return { x, angle & simd_mask::notEqual(0, reinterpretToInt(x & kFloatExponentMask)), kScale };
+    simd_float values = simd_float::mulAdd(k0, merge(position, position2, kRealMask),
+      simd_float::mulAdd(k1, position2, simd_float::mulAdd(k2, position2, simd_float::mulAdd(k3, position2, k4))));
+    values = merge(values, kExact, exactMask);
+    values = merge(values, switchInner(values), hasLowestBitMask) ^ signs;
+    return values;
   }
 
-  template<usize Iterations = kDefaultCordicIterations>
-  strict_inline simd_float vector_call sin(simd_float radians)
-  {
-  #ifdef COMPLEX_INTEL_SVML
-    return _mm_sin_ps(radians.value);
-  #else
-    auto result = cordicRotation<Iterations>(radians);
-    return result[1] * result[2];
-  #endif
-  }
-
-  template<usize Iterations = kDefaultCordicIterations>
-  strict_inline simd_float vector_call cos(simd_float radians)
-  {
-  #ifdef COMPLEX_INTEL_SVML
-    return _mm_cos_ps(radians.value);
-  #else
-    auto result = cordicRotation<Iterations>(radians);
-    return result[0] * result[2];
-  #endif
-  }
-
-  template<usize Iterations = kDefaultCordicIterations>
+  strict_inline simd_float vector_call sin(simd_float radians) { return cossin(radians).second; }
+  strict_inline simd_float vector_call cos(simd_float radians) { return cossin(radians).first; }
   strict_inline simd_float vector_call tan(simd_float radians)
   {
   #ifdef COMPLEX_INTEL_SVML
     return _mm_tan_ps(radians.value);
   #else
-    auto result = cordicRotation<Iterations>(radians);
-    return result[1] / result[0];
+    auto [cos, sin] = cossin(radians);
+    return sin / cos;
   #endif
   }
 
-  template<usize Iterations = kDefaultCordicIterations>
   strict_inline simd_float vector_call atan2(simd_float y, simd_float x)
   {
-  #ifdef COMPLEX_INTEL_SVML
-    return _mm_atan2_ps(y.value, x.value);
-  #else
-    return cordicVectoring<Iterations>(x, y)[1];
-  #endif
-  }
-
-  strict_inline simd_float vector_call atan2Fast(simd_float y, simd_float x)
-  {
+  #ifndef COMPLEX_INTEL_SVML
     // based on "Efficient approximations for the arctangent function"
     // max error ~= 0.008 degrees
     // https://www.desmos.com/calculator/nmhr3wmgzj
@@ -221,25 +149,16 @@ namespace utils
     angle &= ~(realEqualZeroMask & imaginaryEqualZeroMask);
 
     return angle;
-  }
-
-  // [cos, sin]
-  template<usize Iterations = kDefaultCordicIterations>
-  strict_inline utils::pair<simd_float, simd_float> vector_call cis(simd_float radians)
-  {
-  #ifdef COMPLEX_INTEL_SVML
-    simd_float cos = utils::uninitialised;
-    simd_float sin = _mm_sincos_ps(&cos.value, radians.value);
-    return { cos, sin };
   #else
-    auto result = cordicRotation<Iterations>(radians);
-    return { result[0] * result[2], result[1] * result[2] };
+    return _mm_atan2_ps(y.value, x.value);
   #endif
   }
 
   // [cos, sin]
-  strict_inline utils::pair<simd_float, simd_float> vector_call cisFastt(simd_float radians)
+  strict_inline utils::pair<simd_float, simd_float> vector_call cisFast(simd_float radians)
   {
+    // TODO: implement bhaskara's algo again
+
     // pade approximants of sine
     // max error ~= 3.00438 * 10^(-6)
     // https://www.desmos.com/calculator/oit7uxh1wm
@@ -272,124 +191,88 @@ namespace utils
   }
 
   // [magnitude, phase]
-  template<usize Iterations = kDefaultCordicIterations>
   strict_inline utils::pair<simd_float, simd_float> vector_call phasor(simd_float real, simd_float imaginary)
   {
+    auto magnitude = simd_float::sqrt(simd_float::mulAdd(real * real, imaginary, imaginary));
   #ifdef COMPLEX_INTEL_SVML
-    return { simd_float::sqrt(simd_float::mulAdd(real * real, imaginary, imaginary)), 
-             simd_float(_mm_atan2_ps(imaginary.value, real.value)) };
+    return { magnitude, simd_float{ _mm_atan2_ps(imaginary.value, real.value) } };
   #else
-    auto result = cordicVectoring<Iterations>(real, imaginary);
-    return { result[0] * result[2], result[1] };
+    return { magnitude, atan2(imaginary, real) };
   #endif
   }
 
-  // [magnitude, phase]
-  strict_inline utils::pair<simd_float, simd_float> vector_call phasorFast(simd_float real, simd_float imaginary)
-  { return { simd_float::sqrt(simd_float::mulAdd(real * real, imaginary, imaginary)), atan2Fast(imaginary, real) }; }
-
-  strict_inline simd_float vector_call complexCartAdd(simd_float one, simd_float two) {	return one + two; }
-
-  strict_inline simd_float vector_call complexCartSub(simd_float one, simd_float two) {	return one - two; }
-
   strict_inline simd_float vector_call complexCartMul(simd_float one, simd_float two)
   {
-  #if COMPLEX_SSE4_1
     // [a1c1, a1d1, a2c2, a2d2]
-    auto sums1 = simd_float::mul(_mm_shuffle_ps(one.value, one.value, _MM_SHUFFLE(2, 2, 0, 0)), two.value);
+    simd_float sums1 = copyFromEven(one) * two;
     // [b1d1, b1c1, b2d2, b2c2]
-    auto sums2 = simd_float::mul(
-      _mm_shuffle_ps(one.value, one.value, _MM_SHUFFLE(3, 3, 1, 1)), 
-      _mm_shuffle_ps(two.value, two.value, _MM_SHUFFLE(2, 3, 0, 1)));
+    simd_float sums2 = copyFromOdd(one) * switchInner(two);
+
     // [a1c1 - b1d1, a1d1 + b1c1, a2c2 - b2d2, a2d2 + b2c2]
+  #if COMPLEX_SSE4_1
     // yes it's addsub but the first op is sub
-    return _mm_addsub_ps(sums1, sums2);
+    return _mm_addsub_ps(sums1.value, sums2.value);
   #elif COMPLEX_NEON
-    static_assert(false, "not implemented yet");
+    static constexpr simd_mask kMinusPlus = { kSignMask, 0U };
+    return sums1 + (sums2 ^ kMinusPlus);
   #endif
   }
 
   strict_inline simd_float vector_call complexPolarMul(simd_float one, simd_float two)
-  {
-    auto magnitudes = one * two;
-    auto phases = one + two;
-  #if COMPLEX_SSE4_1
-    auto value = _mm_shuffle_ps(magnitudes.value, phases.value, _MM_SHUFFLE(3, 1, 2, 0));
-    return _mm_shuffle_ps(value, value, _MM_SHUFFLE(3, 1, 2, 0));
-  #elif COMPLEX_NEON
-    static_assert(false, "not implemented yet");
-  #endif
-  }
+  { return merge(one * two, one + two, kPhaseMask); }
 
   strict_inline simd_float vector_call complexMagnitude(simd_float value, bool toSqrt)
   {
     value *= value;
-  #if COMPLEX_SSE4_1
-    value += simd_float{ _mm_shuffle_ps(value.value, value.value, _MM_SHUFFLE(2, 3, 0, 1)) };
-  #elif COMPLEX_NEON
-    static_assert(false, "not implemented yet");
-  #endif
+    value += switchInner(value);
     return (toSqrt) ? simd_float::sqrt(value) : value;
   }
 
-  strict_inline simd_float vector_call complexMagnitude(const utils::array<simd_float, simd_float::complexSize> &values, bool toSqrt)
+  strict_inline simd_float vector_call complexMagnitude(
+    const utils::array<simd_float, simd_float::complexSize> &values, bool toSqrt)
   {
     simd_float one = values[0] * values[0];
     simd_float two = values[1] * values[1];
-  #if COMPLEX_SSE4_1
-    one.value = _mm_hadd_ps(one.value, two.value);
-  #elif COMPLEX_NEON
-    static_assert(false, "not implemented yet");
-  #endif
+    one = horizontalAdd(one, two);
     return (toSqrt) ? simd_float::sqrt(one) : one;
   }
 
   strict_inline simd_float vector_call complexPhase(simd_float value)
   {
-  #if COMPLEX_SSE4_1
-    simd_float real = _mm_shuffle_ps(value.value, value.value, _MM_SHUFFLE(2, 2, 0, 0));
-    simd_float imaginary = _mm_shuffle_ps(value.value, value.value, _MM_SHUFFLE(3, 3, 1, 1));
-  #elif COMPLEX_NEON
-    static_assert(false, "not implemented yet");
-  #endif
+    simd_float real = copyFromEven(value);
+    simd_float imaginary = copyFromOdd(value);
 
-    return atan2Fast(imaginary, real);
+    return atan2(imaginary, real);
   }
 
-  strict_inline simd_float vector_call complexPhase(const utils::array<simd_float, simd_float::complexSize> &values)
+  strict_inline simd_float vector_call complexPhase(
+    const utils::array<simd_float, simd_float::complexSize> &values)
   {
   #if COMPLEX_SSE4_1
-    auto real = _mm_shuffle_ps(values[0].value, values[1].value, _MM_SHUFFLE(2, 0, 2, 0));
-    auto imaginary = _mm_shuffle_ps(values[0].value, values[1].value, _MM_SHUFFLE(3, 1, 3, 1));
+    simd_float real = _mm_shuffle_ps(values[0].value, values[1].value, _MM_SHUFFLE(2, 0, 2, 0));
+    simd_float imaginary = _mm_shuffle_ps(values[0].value, values[1].value, _MM_SHUFFLE(3, 1, 3, 1));
   #elif COMPLEX_NEON
-    static_assert(false, "not implemented yet");
+    simd_float real = vuzp1q_f32(values[0].value, values[1].value);
+    simd_float imaginary = vuzp2q_f32(values[0].value, values[1].value);
   #endif
 
-    return atan2Fast(imaginary, real);
+    return atan2(imaginary, real);
   }
 
   strict_inline simd_float vector_call complexReal(simd_float value)
   {
-  #if COMPLEX_SSE4_1
-    simd_float magnitude = _mm_shuffle_ps(value.value, value.value, _MM_SHUFFLE(2, 2, 0, 0));
-    simd_float phase = _mm_shuffle_ps(value.value, value.value, _MM_SHUFFLE(3, 3, 1, 1));
-  #elif COMPLEX_NEON
-    static_assert(false, "not implemented yet");
-  #endif
+    simd_float magnitude = copyFromEven(value);
+    simd_float phase = copyFromOdd(value);
 
     return magnitude * cos(phase);
   }
 
   strict_inline simd_float vector_call complexImaginary(simd_float value)
   {
-  #if COMPLEX_SSE4_1
-    auto magnitude = _mm_shuffle_ps(value.value, value.value, _MM_SHUFFLE(2, 2, 0, 0));
-    auto phase = _mm_shuffle_ps(value.value, value.value, _MM_SHUFFLE(3, 3, 1, 1));
-  #elif COMPLEX_NEON
-    static_assert(false, "not implemented yet");
-  #endif
+    simd_float magnitude = copyFromEven(value);
+    simd_float phase = copyFromOdd(value);
 
-    return simd_float::mul(magnitude, utils::sin(phase).value);
+    return magnitude * sin(phase);
   }
 
   strict_inline void vector_call complexValueMerge(simd_float &one, simd_float &two)
@@ -399,7 +282,9 @@ namespace utils
     two.value = _mm_unpackhi_ps(one.value, two.value);
     one.value = one_;
   #elif COMPLEX_NEON
-    static_assert(false, "not implemented yet");
+    auto one_ = vzip1q_f32(one.value, two.value);
+    two.value = vzip2q_f32(one.value, two.value);
+    one.value = one_;
   #endif
   }
 
@@ -409,9 +294,10 @@ namespace utils
     simd_float real = _mm_shuffle_ps(one.value, two.value, _MM_SHUFFLE(2, 0, 2, 0));
     simd_float imaginary = _mm_shuffle_ps(one.value, two.value, _MM_SHUFFLE(3, 1, 3, 1));
   #elif COMPLEX_NEON
-    static_assert(false, "not implemented yet");
+    simd_float real = vuzp1q_f32(one.value, two.value);
+    simd_float imaginary = vuzp2q_f32(one.value, two.value);
   #endif
-    auto [magnitude, phase] = phasorFast(real, imaginary);
+    auto [magnitude, phase] = phasor(real, imaginary);
     complexValueMerge(magnitude, phase);
     one = magnitude;
     two = phase;
@@ -420,14 +306,14 @@ namespace utils
   strict_inline void vector_call complexPolarToCart(simd_float &one, simd_float &two)
   {
   #if COMPLEX_SSE4_1
-    simd_float magnitudesOne = _mm_shuffle_ps(one.value, one.value, _MM_SHUFFLE(2, 2, 0, 0));
-    simd_float magnitudesTwo = _mm_shuffle_ps(two.value, two.value, _MM_SHUFFLE(2, 2, 0, 0));
     simd_float phases = _mm_shuffle_ps(one.value, two.value, _MM_SHUFFLE(3, 1, 3, 1));
   #elif COMPLEX_NEON
-    static_assert(false, "not implemented yet");
+    simd_float phases = vuzp2q_f32(one.value, two.value);
   #endif
-    auto [real, imaginary] = cisFastt(phases);
+    auto [real, imaginary] = cossin(phases);
     complexValueMerge(real, imaginary);
+    simd_float magnitudesOne = copyFromEven(one);
+    simd_float magnitudesTwo = copyFromEven(two);
     one = real * magnitudesOne;
     two = imaginary * magnitudesTwo;
   }
@@ -443,7 +329,7 @@ namespace utils
     
     for (usize i = 0; i < source.getSimdChannels(); i++)
     {
-      // starting at 1 to skip dc and size - 1 to skip nyquist since they don't need to change
+      // size - 1 to skip nyquist since it doesn't need to get processed
       for (usize j = 0; j < size - 1; j += 2)
       {
         simd_float one = rawSource[sourceSize * i + j];
@@ -468,7 +354,7 @@ namespace utils
     for (usize i = 0; i < buffer.getSimdChannels(); i++)
     {
       auto dc = data[dataSize * i];
-      // starting at 1 to skip dc and size - 1 to skip nyquist since they don't need to change
+      // size - 1 to skip nyquist since it doesn't need to change
       for (usize j = 0; j < size - 1; j += 2)
       {
         simd_float one = data[dataSize * i + j];

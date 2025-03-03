@@ -10,6 +10,7 @@
 
 #pragma once
 
+#include "constants.hpp"
 #include "simd_values.hpp"
 
 namespace utils
@@ -89,11 +90,14 @@ namespace utils
   #if COMPLEX_SSE4_1
     auto low = _mm_movelh_ps(rows[0].value, rows[1].value);
     auto high = _mm_movehl_ps(rows[1].value, rows[0].value);
+  #elif COMPLEX_NEON
+    auto low = vreinterpretq_f32_f64(vzip1q_f64(vreinterpretq_f64_f32(rows[0].value),
+      vreinterpretq_f64_f32(rows[1].value)));
+    auto high = vreinterpretq_f32_f64(vzip2q_f64(vreinterpretq_f64_f32(rows[0].value), 
+      vreinterpretq_f64_f32(rows[1].value)));
+  #endif
     rows[0].value = low;
     rows[1].value = high;
-  #elif COMPLEX_NEON
-    static_assert(false, "not implemented yet");
-  #endif
   }
 
   strict_inline simd_float vector_call merge(simd_float falseValue, simd_float trueValue, simd_mask mask) noexcept
@@ -188,8 +192,8 @@ namespace utils
   #if COMPLEX_SSE4_1
     return _mm_shuffle_ps(value.value, value.value, _MM_SHUFFLE(2, 2, 0, 0));
   #elif COMPLEX_NEON
-    float32x2_t a00 = vdup_lane_f32(vget_low_f32(value.value), 0);
-    float32x2_t b22 = vdup_lane_f32(vget_high_f32(value.value), 0);
+    float32x2_t a00 = vdup_laneq_f32(value.value, 0);
+    float32x2_t b22 = vdup_laneq_f32(value.value, 2);
     return vcombine_f32(a00, b22);
   #endif
   }
@@ -199,8 +203,8 @@ namespace utils
   #if COMPLEX_SSE4_1
     return _mm_shuffle_epi32(value.value, _MM_SHUFFLE(2, 2, 0, 0));
   #elif COMPLEX_NEON
-    uint32x2_t a00 = vdup_lane_u32(vget_low_u32(value.value), 0);
-    uint32x2_t b22 = vdup_lane_u32(vget_high_u32(value.value), 0);
+    uint32x2_t a00 = vdup_laneq_u32(value.value, 0);
+    uint32x2_t b22 = vdup_laneq_u32(value.value, 2);
     return vcombine_u32(a00, b22);
   #endif
   }
@@ -210,9 +214,9 @@ namespace utils
   #if COMPLEX_SSE4_1
     return _mm_shuffle_ps(value.value, value.value, _MM_SHUFFLE(3, 3, 1, 1));
   #elif COMPLEX_NEON
-    float32x2_t a00 = vdup_lane_f32(vget_low_f32(value.value), 1);
-    float32x2_t b22 = vdup_lane_f32(vget_high_f32(value.value), 1);
-    return vcombine_f32(a00, b22);
+    float32x2_t a11 = vdup_laneq_f32(value.value, 1);
+    float32x2_t b33 = vdup_laneq_f32(value.value, 3);
+    return vcombine_f32(a11, b33);
   #endif
   }
 
@@ -221,9 +225,9 @@ namespace utils
   #if COMPLEX_SSE4_1
     return _mm_shuffle_epi32(value.value, _MM_SHUFFLE(3, 3, 1, 1));
   #elif COMPLEX_NEON
-    uint32x2_t a00 = vdup_lane_u32(vget_low_u32(value.value), 1);
-    uint32x2_t b22 = vdup_lane_u32(vget_high_u32(value.value), 1);
-    return vcombine_u32(a00, b22);
+    uint32x2_t a11 = vdup_laneq_u32(value.value, 1);
+    uint32x2_t b33 = vdup_laneq_u32(value.value, 3);
+    return vcombine_u32(a11, b33);
   #endif
   }
 
@@ -232,7 +236,8 @@ namespace utils
   #if COMPLEX_SSE4_1
     return _mm_shuffle_ps(value.value, value.value, _MM_SHUFFLE(3, 1, 2, 0));
   #elif COMPLEX_NEON
-    static_assert(false, "not implemented yet");
+    // 2 positions are already correct so just insert the 2 in the middle lmao
+    return vcopyq_laneq_f32(vcopyq_laneq_f32(value.value, 1, value.value, 2), 2, value.value, 1);
   #endif
   }
 
@@ -241,7 +246,14 @@ namespace utils
   #if COMPLEX_SSE4_1
     return _mm_shuffle_ps(value.value, value.value, _MM_SHUFFLE(1, 3, 0, 2));
   #elif COMPLEX_NEON
-    static_assert(false, "not implemented yet");
+    // [3,2,1,0] > [1,0,3,2]
+    //     v           |
+    // [|3,2|,1,0]     |
+    // [|1,0|,3,2] <---|
+    //    v
+    // [1,3,0,2]
+    auto switched = vextq_f32(value.value, value.value, 2);
+    return vzip2q_f32(value.value, switched);
   #endif
   }
 
@@ -250,7 +262,7 @@ namespace utils
   #if COMPLEX_SSE4_1
     return _mm_shuffle_ps(value.value, value.value, _MM_SHUFFLE(2, 0, 3, 1));
   #elif COMPLEX_NEON
-    static_assert(false, "not implemented yet");
+    return vrev64q_f32(groupEvenReverse(value).value);
   #endif
   }
 
@@ -259,7 +271,7 @@ namespace utils
   #if COMPLEX_SSE4_1
     return _mm_shuffle_ps(value.value, value.value, _MM_SHUFFLE(0, 2, 1, 3));
   #elif COMPLEX_NEON
-    static_assert(false, "not implemented yet");
+    return vrev64q_f32(groupEven(value).value);
   #endif
   }
 
@@ -268,7 +280,8 @@ namespace utils
   #if COMPLEX_SSE4_1
     return _mm_shuffle_ps(value.value, value.value, _MM_SHUFFLE(2, 3, 0, 1));
   #elif COMPLEX_NEON
-    static_assert(false, "not implemented yet");
+    value.value = vrev64q_f32(value.value);
+    return vcombine_f32(vget_high_f32(value.value), vget_low_f32(value.value));
   #endif
   }
 
@@ -277,7 +290,7 @@ namespace utils
   #if COMPLEX_SSE4_1
     return _mm_shuffle_ps(value.value, value.value, _MM_SHUFFLE(1, 0, 3, 2));
   #elif COMPLEX_NEON
-    static_assert(false, "not implemented yet");
+    return vcombine_f32(vget_high_f32(value.value), vget_low_f32(value.value));
   #endif
   }
 
@@ -377,17 +390,27 @@ namespace utils
 
 
 
-  // conditionally unsigns ints if they are negative and returns full mask where values are negative
+  // conditionally unsigns ints if they are negative and 
+  // returns a mask which can be used to xor the value restore the sign
+  // if flag is set, a full mask where values are negative
   template<bool ReturnFullMask = false>
   strict_inline simd_mask vector_call unsignSimd(simd_int &value) noexcept
   {
     static constexpr simd_mask signMask = kSignMask;
     simd_mask mask = simd_mask::equal(value & signMask, signMask);
-    value = merge(value, ~value - 1, mask);
+    auto value_ = merge(value, -value, mask);
     if constexpr (ReturnFullMask)
-      return simd_mask::equal(mask, signMask);
-    else
+    {
+      value = value_;
       return mask;
+    }
+    else
+    {
+      // xor the (certainly) positive and input to get mask to restore sign
+      mask = value ^ value_;
+      value = value_;
+      return mask;
+    }
   }
 
   // conditionally unsigns floats if they are negative and returns full mask where values are negative
@@ -443,7 +466,7 @@ namespace utils
   #if COMPLEX_SSE4_1
     return _mm_hadd_ps(one.value, two.value);
   #elif COMPLEX_NEON
-    static_assert(false, "implement this");
+    return vpaddq_f32(one.value, two.value);
   #endif
   }
 
@@ -452,7 +475,8 @@ namespace utils
   #if COMPLEX_SSE4_1
     return _mm_hsub_ps(one.value, two.value);
   #elif COMPLEX_NEON
-    static_assert(false, "implement this");
+    static constexpr simd_mask kMinusPlus = { 0U, kSignMask };
+    return vpaddq_f32((one ^ kMinusPlus).value, (two ^ kMinusPlus).value);
   #endif
   }
 
@@ -464,7 +488,7 @@ namespace utils
     auto switched = _mm_shuffle_epi32(one, _MM_SHUFFLE(2, 3, 0, 1));
     return _mm_min_epi32(one, switched);
   #elif COMPLEX_NEON
-    static_assert(false, "implement this");
+    return vreinterpretq_u32_s32(vminvq_s32(vreinterpretq_s32_u32(value.value)));
   #endif
   }
 
@@ -473,7 +497,7 @@ namespace utils
   #if COMPLEX_SSE4_1
     return reinterpretToFloat(horizontalMin(reinterpretToInt(value)));
   #elif COMPLEX_NEON
-    static_assert(false, "not yet implemented");
+    return vminvq_f32(value);
   #endif
   }
 
@@ -486,36 +510,39 @@ namespace utils
   #endif
   }
 
-  template<usize shift>
+  template<u32 Shift>
   strict_inline simd_int vector_call shiftRight(simd_int values) noexcept
   {
   #if COMPLEX_SSE4_1
-    return _mm_srli_epi32(values.value, shift);
+    return _mm_srli_epi32(values.value, Shift);
   #elif COMPLEX_NEON
     return vshrq_n_u32(values.value, shift);
   #endif
   }
 
-  template<usize shift>
+  template<u32 Shift>
   strict_inline simd_int vector_call shiftLeft(simd_int values) noexcept
   {
   #if COMPLEX_SSE4_1
-    return _mm_slli_epi32(values.value, shift);
+    return _mm_slli_epi32(values.value, Shift);
   #elif COMPLEX_NEON
     return vshlq_n_u32(values.value, shift);
   #endif
   }
 
-  template<usize shift>
+  template<u32 Shift>
   strict_inline simd_float vector_call shiftRight(simd_float value) noexcept
-  { return reinterpretToFloat(shiftRight<shift>(reinterpretToInt(value))); }
+  {
+    static constexpr auto decrement = kFloatExponentUnit * Shift;
+    return reinterpretToFloat(reinterpretToInt(value) - decrement);
+  }
 
-  template<usize shift>
+  template<u32 Shift>
   strict_inline simd_float vector_call shiftLeft(simd_float value) noexcept
-  { return reinterpretToFloat(shiftLeft<shift>(reinterpretToInt(value))); }
-
-  strict_inline simd_float vector_call pow2ToFloat(simd_int value) noexcept
-  { return reinterpretToFloat(shiftLeft<23>(value + 127)); }
+  {
+    static constexpr auto increment = kFloatExponentUnit * Shift;
+    return reinterpretToFloat(reinterpretToInt(value) + increment);
+  }
 
 
 
@@ -535,7 +562,7 @@ namespace utils
     simd_float rounded = simd_float::round(exponent);
     simd_float t = exponent - rounded;
     // clamp the lowest value otherwise get garbage results when shifting left
-    simd_float power = pow2ToFloat(simd_int::maxSigned((u32)-127, toInt(rounded)));
+    simd_float power = reinterpretToFloat(shiftLeft<23>(simd_int::maxSigned((u32)-127, toInt(rounded)) + 127));
 
     // we exp2 whatever decimal number is left with the taylor series
     // the domain we're in is [0.0f, 0.5f], we don't expect negative numbers
@@ -670,21 +697,13 @@ namespace utils
 
   strict_inline simd_float vector_call getStereoDifference(simd_float value) noexcept
   {
-  #if COMPLEX_SSE4_1
-    return (value - simd_float{ _mm_shuffle_ps(value.value, value.value, _MM_SHUFFLE(2, 3, 0, 1)) }) * 0.5f;
-  #elif COMPLEX_NEON
-    static_assert(false, "not implemented yet");
-  #endif
+    return (value - switchInner(value)) * 0.5f;
   }
 
   // assumes value is signed
   strict_inline simd_int vector_call getStereoDifference(simd_int value) noexcept
   {
-  #if COMPLEX_SSE4_1
     simd_int highestBit = value & kSignMask;
-    return highestBit | shiftRight<1>(value - simd_int(_mm_shuffle_epi32(value.value, _MM_SHUFFLE(2, 3, 0, 1))));
-  #elif COMPLEX_NEON
-    static_assert(false, "not implemented yet");
-  #endif
+    return highestBit | shiftRight<1>(value - reinterpretToInt(switchInner(reinterpretToFloat(value))));
   }
 }

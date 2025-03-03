@@ -101,7 +101,7 @@ namespace Framework
     ParameterValue &operator=(ParameterValue &&) = delete;
 
     ParameterValue(ParameterDetails details) noexcept :
-      details_(COMPLEX_MOV(details)) { initialise(); }
+      details_(COMPLEX_MOVE(details)) { initialise(); }
 
     ParameterValue(const ParameterValue &other) noexcept : 
       details_(other.details_)
@@ -243,8 +243,8 @@ namespace Framework
 
       utils::ScopedLock g{ waitLock_, utils::WaitMechanism::Spin };
 
-      if (index < 0) parameterLink_.modulators.emplace_back(COMPLEX_MOV(modulator));
-      else parameterLink_.modulators.emplace(parameterLink_.modulators.begin() + index, COMPLEX_MOV(modulator));
+      if (index < 0) parameterLink_.modulators.emplace_back(COMPLEX_MOVE(modulator));
+      else parameterLink_.modulators.emplace(parameterLink_.modulators.begin() + index, COMPLEX_MOVE(modulator));
 
       isDirty_ = true;
     }
@@ -257,7 +257,7 @@ namespace Framework
       utils::ScopedLock g{ waitLock_, utils::WaitMechanism::Spin };
 
       std::weak_ptr replacedModulator = parameterLink_.modulators[index];
-      parameterLink_.modulators[index] = COMPLEX_MOV(modulator);
+      parameterLink_.modulators[index] = COMPLEX_MOVE(modulator);
       
       isDirty_ = true;
 
@@ -299,12 +299,12 @@ namespace Framework
       utils::ScopedLock g{ waitLock_, utils::WaitMechanism::Spin };
       return details_;
     }
-    auto getParameterId() const noexcept -> std::string_view
+    auto getParameterId() const noexcept -> utils::string_view
     {
       utils::ScopedLock g{ waitLock_, utils::WaitMechanism::Spin };
       return details_.id;
     }
-    auto getParameterName() const noexcept -> std::string_view
+    auto getParameterName() const noexcept -> utils::string_view
     {
       utils::ScopedLock g{ waitLock_, utils::WaitMechanism::Spin };
       return details_.displayName;

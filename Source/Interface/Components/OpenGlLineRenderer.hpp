@@ -110,13 +110,13 @@ namespace Interface
     int fillFloatsCount_;
     bool shouldUpdateBufferSizes_ = true;
 
-    OpenGlShaderProgram *lineShader_ = nullptr;
+    OpenGlShaderProgram lineShader_;
     OpenGlUniform lineScaleUniform_;
     OpenGlUniform lineColourUniform_;
     OpenGlUniform lineWidthUniform_;
     OpenGlAttribute linePosition_;
 
-    OpenGlShaderProgram *fillShader_ = nullptr;
+    OpenGlShaderProgram fillShader_;
     OpenGlUniform fillScaleUniform_;
     OpenGlUniform fillColourFromUniform_;
     OpenGlUniform fillColourToUniform_;
@@ -128,12 +128,12 @@ namespace Interface
     GLuint fillBuffer_ = 0;
     GLuint indicesBuffer_ = 0;
 
-    std::unique_ptr<float[]> x_;
-    std::unique_ptr<float[]> y_;
-    std::unique_ptr<float[]> boosts_;
-    std::unique_ptr<float[]> lineData_;
-    std::unique_ptr<float[]> fillData_;
-    std::unique_ptr<int[]> indicesData_;
+    utils::up<float[]> x_;
+    utils::up<float[]> y_;
+    utils::up<float[]> boosts_;
+    utils::up<float[]> lineData_;
+    utils::up<float[]> fillData_;
+    utils::up<int[]> indicesData_;
 
     mutable std::atomic<bool> buffersLock_ = false;
 

@@ -10,7 +10,7 @@
 
 #pragma once
 
-#include "Framework/open_gl_primitives.hpp"
+#include "../LookAndFeel/Shaders.hpp"
 #include "../LookAndFeel/BaseComponent.hpp"
 #include "../LookAndFeel/Skin.hpp"
 #include "../LookAndFeel/Miscellaneous.hpp"
@@ -18,6 +18,7 @@
 namespace Interface
 {
   class Renderer;
+  class OpenGlComponent;
 
   class OpenGlContainer : public BaseComponent
   {

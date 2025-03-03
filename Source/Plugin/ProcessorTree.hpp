@@ -10,17 +10,10 @@
 
 #pragma once
 
-#include <span>
-
 #include "Framework/constants.hpp"
 #include "Framework/sync_primitives.hpp"
 #include "Framework/vector_map.hpp"
 #include "Framework/utils.hpp"
-
-namespace juce
-{
-  class UndoManager;
-}
 
 namespace Generation
 {
@@ -29,6 +22,7 @@ namespace Generation
 
 namespace Framework
 {
+  class UndoManager;
   struct IndexedData;
   class ParameterValue;
   class ParameterModulator;
@@ -46,7 +40,7 @@ namespace Plugin
     static constexpr size_t expandAmount = 2;
     static constexpr float expandThreshold = 0.75f;
 
-    ProcessorTree(u32 inSidechains, u32 outSidechains);
+    ProcessorTree(u32 inSidechains, u32 outSidechains, usize undoSteps);
     virtual ~ProcessorTree();
 
   public:
@@ -62,6 +56,9 @@ namespace Plugin
     void serialiseToJson(void *jsonData) const;
     virtual bool deserialiseFromJson(void *newSave, void *fallbackSave) = 0;
     
+    // gives out a unique id
+    u64 generateId() noexcept { return processorIdCounter_.fetch_add(1, std::memory_order_acq_rel); }
+
     auto getProcessor(u64 processorId) const noexcept -> Generation::BaseProcessor *;
     // creates a brand new processor
     template<utils::derived_from<Generation::BaseProcessor> T, typename ... Args>
@@ -69,12 +66,12 @@ namespace Plugin
     {
       auto processor = utils::up<T>::create(COMPLEX_FWD(args)...);
       auto *pointer = processor.get();
-      addProcessor(COMPLEX_MOV(processor));
+      addProcessor(COMPLEX_MOVE(processor));
       pointer->initialiseParameters();
       return pointer;
     }
     // creates a default processor or loads processor from save if jsonData != nullptr
-    auto createProcessor(std::string_view processorType, void *jsonData = nullptr)
+    auto createProcessor(utils::string_view processorType, void *jsonData = nullptr)
       -> Generation::BaseProcessor *;
     auto copyProcessor(utils::derived_from<Generation::BaseProcessor> auto *processor)
     {
@@ -83,11 +80,11 @@ namespace Plugin
     }
     auto deleteProcessor(u64 processorId) noexcept -> utils::up<Generation::BaseProcessor>;
 
-    auto getProcessorParameter(u64 parentProcessorId, std::string_view parameterName) const noexcept 
+    auto getProcessorParameter(u64 parentProcessorId, utils::string_view parameterName) const noexcept
       -> Framework::ParameterValue *;
     // see IndexedData::dynamicUpdateUuid
     void registerDynamicParameter(Framework::ParameterValue *parameter);
-    void updateDynamicParameters(std::string_view reason) noexcept;
+    void updateDynamicParameters(utils::string_view reason) noexcept;
 
     auto getUpdateFlag() const noexcept -> UpdateFlag { return updateFlag_.load(std::memory_order_acquire); }
     // only the audio thread changes the updateFlag
@@ -97,14 +94,14 @@ namespace Plugin
 
     auto getSampleRate() const noexcept -> float { return sampleRate_.load(std::memory_order_acquire); }
     auto getSamplesPerBlock() const noexcept -> u32 { return samplesPerBlock_.load(std::memory_order_acquire); }
-    auto getMinMaxFFTOrder() const noexcept -> std::pair<u32, u32>
+    auto getMinMaxFFTOrder() const noexcept -> utils::pair<u32, u32>
     { return { minFFTOrder_.load(std::memory_order_acquire), maxFFTOrder_.load(std::memory_order_acquire) }; }
     auto getMaxBinCount() const noexcept -> u32 { return (1 << (maxFFTOrder_.load(std::memory_order_acquire) - 1)) + 1; }
     auto getInputSidechains() const noexcept -> u32 { return inSidechains_; }
     auto getOutputSidechains() const noexcept -> u32 { return outSidechains_; }
-    virtual auto getLaneCount() const -> size_t = 0;
+    virtual auto getLaneCount() const -> usize = 0;
 
-    auto getParameterBridges() noexcept { return std::span{ parameterBridges_ }; }
+    auto getParameterBridges() noexcept { return utils::span{ parameterBridges_ }; }
     auto &getParameterModulators() noexcept { return parameterModulators_; }
 
     void pushUndo(Framework::WaitingUpdate *action, bool isNewTransaction = true);
@@ -115,7 +112,8 @@ namespace Plugin
     auto executeOutsideProcessing(const auto &function)
     {
       // check if we're in the middle of an audio callback
-      while (updateFlag_.load(std::memory_order_relaxed) != UpdateFlag::AfterProcess) { utils::millisleep(); }
+      utils::millisleep([&]()
+        { return updateFlag_.load(std::memory_order_relaxed) != UpdateFlag::AfterProcess; });
 
       utils::ScopedLock g{ processingLock_, utils::WaitMechanism::Spin };
       return function();
@@ -128,9 +126,9 @@ namespace Plugin
     void addProcessor(utils::up<Generation::BaseProcessor> processor);
 
     // all plugin undo steps are stored here
-    utils::up<juce::UndoManager> undoManager_;
+    utils::up<Framework::UndoManager> undoManager_;
     // the processor tree is stored in a flattened map
-    Framework::VectorMap<u64, utils::up<Generation::BaseProcessor>> allProcessors_;
+    utils::VectorMap<u64, utils::up<Generation::BaseProcessor>> allProcessors_;
     // outward facing parameters, which can be mapped to in-plugin parameters
     std::vector<Framework::ParameterBridge *> parameterBridges_{};
     // modulators inside the plugin

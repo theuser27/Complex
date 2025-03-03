@@ -10,8 +10,6 @@
 
 #include "parameters.hpp"
 
-#include <array>
-
 #include "utils.hpp"
 #include "simd_utils.hpp"
 #include "parameter_value.hpp"
@@ -25,7 +23,7 @@ namespace Framework
     return utils::array<ParameterDetails, sizeof...(Ts)>{ Ts::details... };
   }(Processors::enum_subtypes_filter_recursive<[]<typename T>() { return requires{ T::parameter_tag; }; }>());
 
-  auto getParameterDetails(std::string_view id) noexcept -> std::optional<ParameterDetails> 
+  auto getParameterDetails(utils::string_view id) noexcept -> std::optional<ParameterDetails>
   {
     auto iter = std::ranges::find_if(lookup, [&](const auto &v) { return v.id == id; });
     if (iter != lookup.end())
@@ -289,7 +287,7 @@ namespace Plugin
     }
   }
 
-  void ProcessorTree::updateDynamicParameters(std::string_view reason) noexcept
+  void ProcessorTree::updateDynamicParameters(utils::string_view reason) noexcept
   {
     using namespace Framework;
 

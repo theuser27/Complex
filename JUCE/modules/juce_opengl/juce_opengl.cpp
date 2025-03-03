@@ -300,4 +300,4 @@ JUCE_IMPL_WGL_EXTENSION_FUNCTION (wglCreateContextAttribsARB)
 #endif
 
 #include "opengl/juce_OpenGLContext.cpp"
-#include "utils/juce_OpenGLAppComponent.cpp"
+//#include "utils/juce_OpenGLAppComponent.cpp"

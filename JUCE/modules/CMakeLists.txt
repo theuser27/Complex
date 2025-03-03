@@ -26,10 +26,8 @@ juce_add_modules(
     ALIAS_NAMESPACE juce
     juce_audio_basics
     juce_audio_devices
-    juce_audio_formats
     juce_audio_plugin_client
     juce_audio_processors
-    juce_audio_utils
     juce_core
     juce_data_structures
     juce_events

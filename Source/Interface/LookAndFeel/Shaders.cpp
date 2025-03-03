@@ -13,6 +13,7 @@
 #include <juce_opengl/juce_opengl.h>
 
 #include "Framework/platform_definitions.hpp"
+#include "BaseComponent.hpp"
 
 namespace
 {
@@ -454,13 +455,13 @@ namespace
     "uniform " MEDIUMP " vec4 color;\n"
     "uniform " MEDIUMP " vec4 alt_color;\n"
     "uniform " MEDIUMP " vec4 mod_color;\n"
-    "uniform " MEDIUMP " vec4 static_values;\n"
+    "uniform " MEDIUMP " vec4 shader_values_out;\n"
     "varying " MEDIUMP " vec2 coordinates_out;\n"
     "\n"
     "void main() {\n"
     "    vec2 coordinates_out_norm = (coordinates_out * 0.5) + 0.5;\n"
-    "    float normLeftBound = static_values.x;\n"
-    "    float normRightBound = static_values.z;\n"
+    "    float normLeftBound = shader_values_out.x;\n"
+    "    float normRightBound = shader_values_out.z;\n"
     "    float areBoundsSwitched = sign(normLeftBound - normRightBound) * 0.5 + 0.5;\n"
     "    float pinXAlpha1 = clamp(ceil(-abs(coordinates_out_norm.x) + normLeftBound), 0.0, 1.0);\n"
     "    float pinXAlpha2 = clamp(ceil(-abs(-coordinates_out_norm.x + 1.0) + 1.0 - normRightBound), 0.0, 1.0);\n"
@@ -629,154 +630,334 @@ namespace
     "    gl_Position.z = 0.0;\n"
     "    gl_Position.w = 1.0;\n"
     "}\n";
+
+  const char *getVertexShader(Interface::Shaders::VertexShader shader)
+  {
+    using enum Interface::Shaders::VertexShader;
+
+    switch (shader)
+    {
+    case kImageVertex: return kImageVertexShader;
+    case kPassthroughVertex: return kPassthroughVertexShader;
+    case kScaleVertex: return kScaleVertexShader;
+    case kRotaryModulationVertex: return kRotaryModulationVertexShader;
+    case kLinearModulationVertex: return kLinearModulationVertexShader;
+    case kGainMeterVertex: return kGainMeterVertexShader;
+    case kLineVertex: return kLineVertexShader;
+    case kFillVertex: return kFillVertexShader;
+    case kBarHorizontalVertex: return kBarHorizontalVertexShader;
+    case kBarVerticalVertex: return kBarVerticalVertexShader;
+    }
+
+    COMPLEX_ASSERT_FALSE("Missing vertex shader source");
+    return nullptr;
+  }
+
+  const char *getFragmentShader(Interface::Shaders::FragmentShader shader)
+  {
+    using enum Interface::Shaders::FragmentShader;
+
+    switch (shader)
+    {
+    case kImageFragment: return kImageFragmentShader;
+    case kTintedImageFragment: return kTintedImageFragmentShader;
+    case kGainMeterFragment: return kGainMeterFragmentShader;
+    case kLineFragment: return kLineFragmentShader;
+    case kFillFragment: return kFillFragmentShader;
+    case kBarFragment: return kBarFragmentShader;
+    case kColorFragment: return kColorFragmentShader;
+    case kFadeSquareFragment: return kFadeSquareFragmentShader;
+    case kCircleFragment: return kCircleFragmentShader;
+    case kRingFragment: return kRingFragmentShader;
+    case kDiamondFragment: return kDiamondFragmentShader;
+    case kRoundedCornerFragment: return kRoundedCornerFragmentShader;
+    case kRoundedRectangleFragment: return kRoundedRectangleFragmentShader;
+    case kRoundedRectangleBorderFragment: return kRoundedRectangleBorderFragmentShader;
+    case kRotarySliderFragment: return kRotarySliderFragmentShader;
+    case kRotaryModulationFragment: return kRotaryModulationFragmentShader;
+    case kHorizontalSliderFragment: return kHorizontalSliderFragmentShader;
+    case kVerticalSliderFragment: return kVerticalSliderFragmentShader;
+    case kPinSliderFragment: return kPinSliderFragmentShader;
+    case kPlusFragment: return kPlusFragmentShader;
+    case kHighlightFragment: return kHighlightFragmentShader;
+    case kDotSliderFragment: return kDotSliderFragmentShader;
+    case kLinearModulationFragment: return kLinearModulationFragmentShader;
+    case kModulationKnobFragment: return kModulationKnobFragmentShader;
+    }
+
+    COMPLEX_ASSERT_FALSE("Missing fragment shader source");
+    return nullptr;
+  }
+
 }
 
 namespace Interface
 {
   using namespace juce::gl;
 
-  OpenGlShaderProgram *Shaders::getShaderProgram(VertexShader vertexShader,
-    FragmentShader fragmentShader, const GLchar **varyings)
-  {
-    int shaderProgramIndex = vertexShader * (int)kFragmentShaderCount + fragmentShader;
-    if (shaderPrograms_.contains(shaderProgramIndex))
-      return &shaderPrograms_.at(shaderProgramIndex);
-
-    auto [iterator, _] = shaderPrograms_.emplace(shaderProgramIndex, OpenGlShaderProgram(openGlContext_));
-    OpenGlShaderProgram *result = &iterator->second;
-    GLuint programId = result->getProgramId();
-    glAttachShader(programId, getVertexShaderId(vertexShader));
-    glAttachShader(programId, getFragmentShaderId(fragmentShader));
-    if (varyings)
-      glTransformFeedbackVaryings(programId, 1, varyings, GL_INTERLEAVED_ATTRIBS);
-
-    result->link();
-    return result;
-  }
-
-  const char *Shaders::getVertexShader(VertexShader shader)
-  {
-    switch (shader) {
-    case kImageVertex:
-      return kImageVertexShader;
-    case kPassthroughVertex:
-      return kPassthroughVertexShader;
-    case kScaleVertex:
-      return kScaleVertexShader;
-    case kRotaryModulationVertex:
-      return kRotaryModulationVertexShader;
-    case kLinearModulationVertex:
-      return kLinearModulationVertexShader;
-    case kGainMeterVertex:
-      return kGainMeterVertexShader;
-    case kLineVertex:
-      return kLineVertexShader;
-    case kFillVertex:
-      return kFillVertexShader;
-    case kBarHorizontalVertex:
-      return kBarHorizontalVertexShader;
-    case kBarVerticalVertex:
-      return kBarVerticalVertexShader;
-    default:
-      COMPLEX_ASSERT(false);
-      return nullptr;
-    }
-  }
-
-  const char *Shaders::getFragmentShader(FragmentShader shader)
-  {
-    switch (shader) {
-    case kImageFragment:
-      return kImageFragmentShader;
-    case kTintedImageFragment:
-      return kTintedImageFragmentShader;
-    case kGainMeterFragment:
-      return kGainMeterFragmentShader;
-    case kLineFragment:
-      return kLineFragmentShader;
-    case kFillFragment:
-      return kFillFragmentShader;
-    case kBarFragment:
-      return kBarFragmentShader;
-    case kColorFragment:
-      return kColorFragmentShader;
-    case kFadeSquareFragment:
-      return kFadeSquareFragmentShader;
-    case kCircleFragment:
-      return kCircleFragmentShader;
-    case kRingFragment:
-      return kRingFragmentShader;
-    case kDiamondFragment:
-      return kDiamondFragmentShader;
-    case kRoundedCornerFragment:
-      return kRoundedCornerFragmentShader;
-    case kRoundedRectangleFragment:
-      return kRoundedRectangleFragmentShader;
-    case kRoundedRectangleBorderFragment:
-      return kRoundedRectangleBorderFragmentShader;
-    case kRotarySliderFragment:
-      return kRotarySliderFragmentShader;
-    case kRotaryModulationFragment:
-      return kRotaryModulationFragmentShader;
-    case kHorizontalSliderFragment:
-      return kHorizontalSliderFragmentShader;
-    case kVerticalSliderFragment:
-      return kVerticalSliderFragmentShader;
-    case kPinSliderFragment:
-      return kPinSliderFragmentShader;
-    case kPlusFragment:
-      return kPlusFragmentShader;
-    case kHighlightFragment:
-      return kHighlightFragmentShader;
-    case kDotSliderFragment:
-      return kDotSliderFragmentShader;
-    case kLinearModulationFragment:
-      return kLinearModulationFragmentShader;
-    case kModulationKnobFragment:
-      return kModulationKnobFragmentShader;
-    default:
-      COMPLEX_ASSERT(false);
-      return nullptr;
-    }
-  }
-
-  bool Shaders::checkShaderCorrect(GLuint shaderId) const
+  static void checkShaderCorrect(GLuint shaderId) noexcept
   {
     GLint status = GL_FALSE;
     glGetShaderiv(shaderId, GL_COMPILE_STATUS, &status);
 
     if (status != GL_FALSE)
-      return true;
+      return;
 
-    GLchar info[16384];
-    GLsizei info_length = 0;
-    glGetShaderInfoLog(shaderId, sizeof(info), &info_length, info);
-    DBG(juce::String(info, (size_t)info_length));
-    return false;
+    std::vector<GLchar> info(16384);
+    glGetShaderInfoLog(shaderId, (GLsizei)info.size(), nullptr, info.data());
+    COMPLEX_ASSERT_FALSE("Shader compilation failed\n%s", info.data());
   }
 
   GLuint Shaders::createVertexShader(VertexShader shader) const
   {
-    GLuint shader_id = glCreateShader(GL_VERTEX_SHADER);
-    juce::String code_string = juce::OpenGLHelpers::translateVertexShaderToV3(getVertexShader(shader));
-    const GLchar *code = code_string.toRawUTF8();
-    glShaderSource(shader_id, 1, &code, nullptr);
-    glCompileShader(shader_id);
+    GLuint shaderId = glCreateShader(GL_VERTEX_SHADER);
+    juce::String codeString = juce::OpenGLHelpers::translateVertexShaderToV3(getVertexShader(shader));
+    const GLchar *code = codeString.toRawUTF8();
+    glShaderSource(shaderId, 1, &code, nullptr);
+    glCompileShader(shaderId);
 
-    COMPLEX_ASSERT(checkShaderCorrect(shader_id));
-    return shader_id;
+    checkShaderCorrect(shaderId);
+    return shaderId;
   }
 
   GLuint Shaders::createFragmentShader(FragmentShader shader) const
   {
-    GLuint shader_id = glCreateShader(GL_FRAGMENT_SHADER);
-    juce::String code_string = juce::OpenGLHelpers::translateFragmentShaderToV3(getFragmentShader(shader));
-    const GLchar *code = code_string.toRawUTF8();
-    glShaderSource(shader_id, 1, &code, nullptr);
-    glCompileShader(shader_id);
+    GLuint shaderId = glCreateShader(GL_FRAGMENT_SHADER);
+    juce::String codeString = juce::OpenGLHelpers::translateFragmentShaderToV3(getFragmentShader(shader));
+    const GLchar *code = codeString.toRawUTF8();
+    glShaderSource(shaderId, 1, &code, nullptr);
+    glCompileShader(shaderId);
 
-    COMPLEX_ASSERT(checkShaderCorrect(shader_id));
-    return shader_id;
+    checkShaderCorrect(shaderId);
+    return shaderId;
+  }
+  
+  OpenGlShaderProgram Shaders::getShaderProgram(VertexShader vertexShader,
+    FragmentShader fragmentShader, const GLchar **varyings)
+  {
+    int shaderProgramIndex = vertexShader * (int)kFragmentShaderCount + fragmentShader;
+    auto iter = shaderPrograms_.find(shaderProgramIndex);
+    if (iter != shaderPrograms_.data.end())
+      return iter->second;
+
+    // shader compilation
+    GLuint vertexShaderId, fragmentShaderId;
+    {
+      if (vertexShaderIds_[vertexShader] == 0)
+        vertexShaderIds_[vertexShader] = createVertexShader(vertexShader);
+      vertexShaderId = vertexShaderIds_[vertexShader];
+
+      if (fragmentShaderIds_[fragmentShader] == 0)
+        fragmentShaderIds_[fragmentShader] = createFragmentShader(fragmentShader);
+      fragmentShaderId = fragmentShaderIds_[fragmentShader];
+    }
+
+    auto &[index, program] = shaderPrograms_.data.emplace_back();
+    index = shaderProgramIndex;
+    program.id = glCreateProgram();
+
+    glAttachShader(program.id, vertexShaderId);
+    glAttachShader(program.id, fragmentShaderId);
+    if (varyings)
+      glTransformFeedbackVaryings(program.id, 1, varyings, GL_INTERLEAVED_ATTRIBS);
+
+    COMPLEX_CHECK_OPENGL_ERROR;
+
+    // program linking
+    glLinkProgram(program.id);
+
+    GLint status = GL_FALSE;
+    glGetProgramiv(program.id, GL_LINK_STATUS, &status);
+
+    if (status == (GLint)GL_FALSE)
+    {
+      std::vector<GLchar> info(16384);
+      glGetProgramInfoLog(program.id, (GLsizei)info.size(), nullptr, info.data());
+      COMPLEX_ASSERT_FALSE("%s", info.data());
+    }
+
+    COMPLEX_CHECK_OPENGL_ERROR;
+    return program;
+  }
+
+  void Shaders::releaseAll()
+  {
+    // > A value of 0 for shader will be silently ignored.
+    for (auto id : vertexShaderIds_)
+      glDeleteShader(id);
+    for (auto id : fragmentShaderIds_)
+      glDeleteShader(id);
+
+    for (auto &[_, program] : shaderPrograms_.data)
+    {
+      if (program.id == 0)
+        continue;
+
+      glDeleteProgram(program.id);
+      program.id = 0;
+    }
+    shaderPrograms_.data.clear();
+  }
+
+
+  OpenGlWrapper::OpenGlWrapper(juce::OpenGLContext &c) noexcept : context(c) { }
+
+  OpenGlWrapper::~OpenGlWrapper() noexcept = default;
+
+#if COMPLEX_DEBUG
+  static const char *getGLErrorMessage(const GLenum e) noexcept
+  {
+  #define CASE_GEN(x) case x: return #x;
+    switch (e)
+    {
+      CASE_GEN(GL_INVALID_ENUM)
+      CASE_GEN(GL_INVALID_VALUE)
+      CASE_GEN(GL_INVALID_OPERATION)
+      CASE_GEN(GL_OUT_OF_MEMORY)
+    #ifdef GL_STACK_OVERFLOW
+      CASE_GEN(GL_STACK_OVERFLOW)
+    #endif
+    #ifdef GL_STACK_UNDERFLOW
+      CASE_GEN(GL_STACK_UNDERFLOW)
+    #endif
+    #ifdef GL_INVALID_FRAMEBUFFER_OPERATION
+      CASE_GEN(GL_INVALID_FRAMEBUFFER_OPERATION)
+    #endif
+    default: break;
+    }
+  #undef CASE_GEN
+    return "Unknown error";
+  }
+
+  void checkGLError(const char *file, const int line)
+  {
+    for (;;)
+    {
+      GLenum e = juce::gl::glGetError();
+
+      if (e == juce::gl::GL_NO_ERROR)
+        break;
+
+      COMPLEX_ASSERT_FALSE("***** %s  at %s : %d", getGLErrorMessage(e), file, line);
+    }
+  }
+#endif
+
+  static utils::pair<int, int> createTexture(juce::OpenGLContext &context, GLuint &textureId,
+    int desiredW, int desiredH, const void *pixels, GLenum type, bool topLeft, GLenum texMagFilter = GL_LINEAR)
+  {
+    if (textureId == 0)
+    {
+      COMPLEX_CHECK_OPENGL_ERROR;
+      glGenTextures(1, &textureId);
+      glBindTexture(GL_TEXTURE_2D, textureId);
+      glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+
+      glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, texMagFilter);
+      glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+      glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+      COMPLEX_CHECK_OPENGL_ERROR;
+    }
+    else
+    {
+      glBindTexture(GL_TEXTURE_2D, textureId);
+      COMPLEX_CHECK_OPENGL_ERROR;
+    }
+
+    glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+    COMPLEX_CHECK_OPENGL_ERROR;
+
+    const auto textureNpotSupported = context.isTextureNpotSupported();
+    const auto getAllowedTextureSize = [&](int n)
+    {
+      return textureNpotSupported ? n : juce::nextPowerOfTwo(n);
+    };
+
+    auto width = getAllowedTextureSize(desiredW);
+    auto height = getAllowedTextureSize(desiredH);
+
+    const GLint internalformat = type == GL_ALPHA ? GL_ALPHA : GL_RGBA;
+
+    if (width != desiredW || height != desiredH)
+    {
+      glTexImage2D(GL_TEXTURE_2D, 0, internalformat,
+        width, height, 0, type, GL_UNSIGNED_BYTE, nullptr);
+
+      glTexSubImage2D(GL_TEXTURE_2D, 0, 0, topLeft ? (height - desiredH) : 0,
+        desiredW, desiredH, type, GL_UNSIGNED_BYTE, pixels);
+    }
+    else
+    {
+      glTexImage2D(GL_TEXTURE_2D, 0, internalformat,
+        desiredW, desiredH, 0, type, GL_UNSIGNED_BYTE, pixels);
+    }
+
+    COMPLEX_CHECK_OPENGL_ERROR;
+
+    return { width, height };
+  }
+
+  template <class PixelType>
+  static void flip(juce::HeapBlock<juce::PixelARGB> &dataCopy, const u8 *srcData, 
+    const int lineStride, const int w, const int h)
+  {
+    dataCopy.malloc(w * h);
+
+    for (int y = 0; y < h; ++y)
+    {
+      auto *src = (const PixelType *)srcData;
+      auto *dst = (juce::PixelARGB *)(dataCopy + w * (h - 1 - y));
+
+      for (int x = 0; x < w; ++x)
+        dst[x].set(src[x]);
+
+      srcData += lineStride;
+    }
+  }
+
+  utils::pair<int, int> loadImageAsTexture(juce::OpenGLContext &context,
+    GLuint &textureId, const juce::Image &image, GLenum texMagFilter)
+  {
+    auto imageW = image.getWidth();
+    auto imageH = image.getHeight();
+
+    juce::HeapBlock<juce::PixelARGB> dataCopy;
+    juce::Image::BitmapData srcData(image, juce::Image::BitmapData::readOnly);
+
+    switch (srcData.pixelFormat)
+    {
+    case juce::Image::ARGB:           flip<juce::PixelARGB> (dataCopy, srcData.data, srcData.lineStride, imageW, imageH); break;
+    case juce::Image::RGB:            flip<juce::PixelRGB>  (dataCopy, srcData.data, srcData.lineStride, imageW, imageH); break;
+    case juce::Image::SingleChannel:  flip<juce::PixelAlpha>(dataCopy, srcData.data, srcData.lineStride, imageW, imageH); break;
+    case juce::Image::UnknownFormat:
+    default: break;
+    }
+
+    return createTexture(context, textureId, imageW, imageH, dataCopy, GL_BGRA_EXT, true, texMagFilter);
+  }
+
+  utils::pair<int, int> loadARGBAsTexture(juce::OpenGLContext &context, GLuint &textureId,
+    const juce::PixelARGB *pixels, int desiredW, int desiredH, GLenum texMagFilter)
+  {
+    return createTexture(context, textureId, desiredW, desiredH, 
+      pixels, GL_BGRA_EXT, false, texMagFilter);
+  }
+
+  utils::pair<int, int> loadAlphaAsTexture(juce::OpenGLContext &context, GLuint &textureId,
+    const u8 *pixels, int desiredW, int desiredH, GLenum texMagFilter)
+  {
+    return createTexture(context, textureId, desiredW, desiredH, 
+      pixels, GL_ALPHA, false, texMagFilter);
+  }
+
+  utils::pair<int, int> loadARGBFlippedAsTexture(juce::OpenGLContext &context, GLuint &textureId,
+    const juce::PixelARGB *pixels, int desiredW, int desiredH, GLenum texMagFilter)
+  {
+    juce::HeapBlock<juce::PixelARGB> flippedCopy;
+    flip<juce::PixelARGB>(flippedCopy, (const u8 *)pixels, 4 * desiredW, desiredW, desiredH);
+
+    return createTexture(context, textureId, desiredW, desiredH, 
+      flippedCopy, GL_BGRA_EXT, true, texMagFilter);
   }
 
 }

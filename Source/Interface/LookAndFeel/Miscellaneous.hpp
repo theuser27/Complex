@@ -10,11 +10,11 @@
 
 #pragma once
 
-#include <cmath>
-#include <span>
+#include <math.h>
 #include <string>
 #include <vector>
 #include "Framework/platform_definitions.hpp"
+#include "Framework/stl_utils.hpp"
 
 namespace juce
 {
@@ -33,10 +33,14 @@ namespace Generation
   {
   public:
     virtual ~BaseProcessorListener() = default;
-    virtual void insertedSubProcessor([[maybe_unused]] size_t index, [[maybe_unused]] BaseProcessor &newSubProcessor) { }
-    virtual void deletedSubProcessor([[maybe_unused]] size_t index, [[maybe_unused]] BaseProcessor &deletedSubProcessor) { }
-    virtual void updatedSubProcessor([[maybe_unused]] size_t index, [[maybe_unused]] BaseProcessor &oldSubProcessor,
+    virtual void insertedSubProcessor([[maybe_unused]] usize index, [[maybe_unused]] BaseProcessor &newSubProcessor) { }
+    virtual void deletedSubProcessor([[maybe_unused]] usize index, [[maybe_unused]] BaseProcessor &deletedSubProcessor) { }
+    virtual void updatedSubProcessor([[maybe_unused]] usize index, [[maybe_unused]] BaseProcessor &oldSubProcessor,
       [[maybe_unused]] BaseProcessor &newSubProcessor) { }
+    // recommended to call only once if source == destination
+    virtual void movedSubProcessor([[maybe_unused]] BaseProcessor &subProcessor, 
+      [[maybe_unused]] BaseProcessor &sourceProcessor, [[maybe_unused]] usize sourceIndex,
+      [[maybe_unused]] BaseProcessor &destinationProcessor, [[maybe_unused]] usize destinationIndex) { }
   };
 }
 
@@ -227,7 +231,7 @@ namespace Interface
     std::vector<std::tuple<juce::Path, PathType, juce::Colour>> paths;
 
     void drawAll(juce::Graphics &g, const juce::PathStrokeType &strokeType, 
-      const juce::AffineTransform &transform, std::span<juce::Colour> colours) const;
+      const juce::AffineTransform &transform, utils::span<juce::Colour> colours) const;
   };
 
   struct PopupItems
@@ -253,15 +257,15 @@ namespace Interface
     PopupItems &operator=(PopupItems &&) noexcept;
 
     decltype(auto) addEntry(int subId, std::string subName, std::string subHint = {}, bool active = true, Shape shape = {})
-    { return items.emplace_back(Entry, subId, std::move(subName), std::move(subHint), std::move(shape), active); }
+    { return items.emplace_back(Entry, subId, COMPLEX_MOVE(subName), COMPLEX_MOVE(subHint), COMPLEX_MOVE(shape), active); }
 
     decltype(auto) addDelimiter(std::string subName, std::string subHint = {})
-    { return items.emplace_back(Delimiter, 0, std::move(subName), std::move(subHint)); }
+    { return items.emplace_back(Delimiter, 0, COMPLEX_MOVE(subName), COMPLEX_MOVE(subHint)); }
 
     decltype(auto) addInlineGroup() { return items.emplace_back(InlineGroup); }
 
     void addItem(const PopupItems &item) { items.push_back(item); }
-    void addItem(PopupItems &&item) noexcept { items.emplace_back(std::move(item)); }
+    void addItem(PopupItems &&item) noexcept { items.emplace_back(COMPLEX_MOVE(item)); }
     int size() const noexcept { return (int)items.size(); }
   };
 

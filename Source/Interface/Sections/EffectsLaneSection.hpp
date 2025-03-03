@@ -114,8 +114,10 @@ namespace Interface
 
     void insertedSubProcessor(size_t index, Generation::BaseProcessor &newSubProcessor) override;
     void deletedSubProcessor(size_t index, Generation::BaseProcessor &deletedSubProcessor) override;
+    void movedSubProcessor(Generation::BaseProcessor &subProcessor, Generation::BaseProcessor &sourceProcessor,
+      usize sourceIndex, Generation::BaseProcessor &destinationProcessor, usize destinationIndex) override;
 
-    void insertModule(size_t index, std::string_view newModuleType);
+    void insertModule(size_t index, utils::string_view newModuleType);
     utils::up<EffectModuleSection> deleteModule(const EffectModuleSection *instance, bool createUpdate = true);
 
     void setEffectPositions();
@@ -130,7 +132,7 @@ namespace Interface
     }
 
     // needs a point local to the EffectsLaneSection
-    size_t getIndexFromScreenPositionIgnoringSelf(Point<int> point,
+    usize getIndexFromScreenPositionIgnoringSelf(juce::Rectangle<int> point,
       const EffectModuleSection *moduleSection) const noexcept;
 
     void setLaneName(String newName);

@@ -14,29 +14,15 @@ namespace Interface
 {
   using namespace juce::gl;
 
-  OpenGlMultiQuad::OpenGlMultiQuad(int maxQuads, Shaders::FragmentShader shader, String name) :
-    OpenGlComponent(std::move(name)), fragmentShader_(shader), maxQuads_(maxQuads), numQuads_(maxQuads)
+  OpenGlMultiQuad::OpenGlMultiQuad(usize maxQuads, Shaders::FragmentShader shader, String name) :
+    OpenGlComponent{ COMPLEX_MOVE(name) }, fragmentShader_{ shader }, maxQuads_{ maxQuads }, numQuads_{ maxQuads }
   {
-    static const int triangles[] =
+    data_ = utils::shared_value<float[]>{ maxQuads * kNumFloatsPerQuad };
+    auto quadData = getQuadData();
+    for (usize i = 0; i < maxQuads; i++)
     {
-      0, 1, 2,
-      2, 3, 0
-    };
-
-    data_ = std::make_unique<float[]>(maxQuads_ * kNumFloatsPerQuad);
-    indices_ = std::make_unique<int[]>(maxQuads_ * kNumIndicesPerQuad);
-    vertexBuffer_ = 0;
-    indicesBuffer_ = 0;
-
-    modColor_ = Colours::transparentBlack;
-
-    for (int i = 0; i < (int)maxQuads_; i++)
-    {
-      setCoordinates(i, -1.0f, -1.0f, 2.0f, 2.0f);
-      setShaderValue(i, 1.0f);
-
-      for (int j = 0; j < (int)kNumIndicesPerQuad; j++)
-        indices_[i * kNumIndicesPerQuad + j] = triangles[j] + i * (int)kNumVertices;
+      quadData.setCoordinates(i, -1.0f, -1.0f, 2.0f, 2.0f);
+      quadData.setShaderValue(i, 1.0f);
     }
 
     setInterceptsMouseClicks(false, false);
@@ -44,42 +30,83 @@ namespace Interface
 
   OpenGlMultiQuad::~OpenGlMultiQuad() { destroy(); }
 
+  static void updateDimensions(utils::shared_value<float[]>::span &data, 
+    Rectangle<int> viewportBounds, usize numQuads)
+  {
+    float fullWidth = (float)viewportBounds.getWidth();
+    float fullHeight = (float)viewportBounds.getHeight();
+
+    for (usize i = 0; i < numQuads; ++i)
+    {
+      usize index = i * OpenGlMultiQuad::kNumFloatsPerQuad;
+      float quadWidth = data[2 * OpenGlMultiQuad::kNumFloatsPerVertex + index] - data[index];
+      float quadHeight = data[2 * OpenGlMultiQuad::kNumFloatsPerVertex + index + 1] - data[index + 1];
+      float w = quadWidth * fullWidth / 2.0f;
+      float h = quadHeight * fullHeight / 2.0f;
+      data[index + 2] = w;
+      data[index + 3] = h;
+      data[OpenGlMultiQuad::kNumFloatsPerVertex + index + 2] = w;
+      data[OpenGlMultiQuad::kNumFloatsPerVertex + index + 3] = h;
+      data[2 * OpenGlMultiQuad::kNumFloatsPerVertex + index + 2] = w;
+      data[2 * OpenGlMultiQuad::kNumFloatsPerVertex + index + 3] = h;
+      data[3 * OpenGlMultiQuad::kNumFloatsPerVertex + index + 2] = w;
+      data[3 * OpenGlMultiQuad::kNumFloatsPerVertex + index + 3] = h;
+    }
+  }
+
   void OpenGlMultiQuad::init(OpenGlWrapper &openGl)
   {
+    static constexpr int triangles[] =
+    {
+      0, 1, 2,
+      2, 3, 0
+    };
+
     COMPLEX_ASSERT(!isInitialised_.load(std::memory_order_acquire), "Init method more than once");
 
     glGenBuffers(1, &vertexBuffer_);
     glBindBuffer(GL_ARRAY_BUFFER, vertexBuffer_);
 
-    auto data = data_.lock();
-    GLsizeiptr vertSize = (GLsizeiptr)(maxQuads_ * kNumFloatsPerQuad * sizeof(float));
-    glBufferData(GL_ARRAY_BUFFER, vertSize, data, GL_STATIC_DRAW);
-    data_.unlock();
+    auto maxQuads = maxQuads_.get();
+    GLsizeiptr vertSize = (GLsizeiptr)(maxQuads * kNumFloatsPerQuad * sizeof(float));
+    
+    {
+      auto data = data_.read();
+      BaseComponent *component = targetComponent_ ? targetComponent_ : this;
+      auto customViewportBounds = customViewportBounds_.get();
+      auto viewportBounds = (!customViewportBounds.isEmpty()) ? customViewportBounds : component->getLocalBoundsSafe();
+      updateDimensions(data, viewportBounds, numQuads_);
+      glBufferData(GL_ARRAY_BUFFER, vertSize, data.data(), GL_STATIC_DRAW);
+    }
 
     glGenBuffers(1, &indicesBuffer_);
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, indicesBuffer_);
 
-    GLsizeiptr barSize = (GLsizeiptr)(maxQuads_ * kNumIndicesPerQuad * sizeof(int));
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, barSize, indices_.get(), GL_STATIC_DRAW);
+    GLsizeiptr barSize = (GLsizeiptr)(maxQuads * kNumIndicesPerQuad * sizeof(int));
+    auto indices = utils::up<int[]>::create(maxQuads * kNumIndicesPerQuad);
+    for (int i = 0; i < (int)maxQuads; i++)
+      for (int j = 0; j < (int)kNumIndicesPerQuad; j++)
+        indices[i * kNumIndicesPerQuad + j] = triangles[j] + i * (int)kNumVertices;
+    
+    glBufferData(GL_ELEMENT_ARRAY_BUFFER, barSize, indices.get(), GL_STATIC_DRAW);
 
     shader_ = openGl.shaders->getShaderProgram(Shaders::kPassthroughVertex, fragmentShader_);
-    shader_->use();
-    colorUniform_ = getUniform(*shader_, "color");
-    altColorUniform_ = getUniform(*shader_, "alt_color");
-    modColorUniform_ = getUniform(*shader_, "mod_color");
-    backgroundColorUniform_ = getUniform(*shader_, "background_color");
-    thumbColorUniform_ = getUniform(*shader_, "thumb_color");
-    position_ = getAttribute(*shader_, "position");
-    dimensions_ = getAttribute(*shader_, "dimensions");
-    coordinates_ = getAttribute(*shader_, "coordinates");
-    shader_values_ = getAttribute(*shader_, "shader_values");
-    thicknessUniform_ = getUniform(*shader_, "thickness");
-    roundingUniform_ = getUniform(*shader_, "rounding");
-    maxArcUniform_ = getUniform(*shader_, "max_arc");
-    thumbAmountUniform_ = getUniform(*shader_, "thumb_amount");
-    startPositionUniform_ = getUniform(*shader_, "start_pos");
-    overallAlphaUniform_ = getUniform(*shader_, "overall_alpha");
-    valuesUniform_ = getUniform(*shader_, "static_values");
+    shader_.use();
+    colorUniform_ = getUniform(shader_, "color");
+    altColorUniform_ = getUniform(shader_, "alt_color");
+    modColorUniform_ = getUniform(shader_, "mod_color");
+    backgroundColorUniform_ = getUniform(shader_, "background_color");
+    thumbColorUniform_ = getUniform(shader_, "thumb_color");
+    position_ = getAttribute(shader_, "position");
+    dimensions_ = getAttribute(shader_, "dimensions");
+    coordinates_ = getAttribute(shader_, "coordinates");
+    shader_values_ = getAttribute(shader_, "shader_values");
+    thicknessUniform_ = getUniform(shader_, "thickness");
+    roundingUniform_ = getUniform(shader_, "rounding");
+    maxArcUniform_ = getUniform(shader_, "max_arc");
+    thumbAmountUniform_ = getUniform(shader_, "thumb_amount");
+    startPositionUniform_ = getUniform(shader_, "start_pos");
+    overallAlphaUniform_ = getUniform(shader_, "overall_alpha");
 
     isInitialised_.store(true, std::memory_order_release);
   }
@@ -89,7 +116,7 @@ namespace Interface
     if (!isInitialised_.load(std::memory_order_acquire))
       return;
 
-    shader_ = nullptr;
+    shader_ = {};
     position_ = {};
     dimensions_ = {};
     coordinates_ = {};
@@ -104,7 +131,6 @@ namespace Interface
     thumbAmountUniform_ = {};
     startPositionUniform_ = {};
     overallAlphaUniform_ = {};
-    valuesUniform_ = {};
     if (vertexBuffer_)
       pushResourcesForDeletion(OpenGlAllocatedResource::Buffer, 1, vertexBuffer_);
     if (indicesBuffer_)
@@ -136,24 +162,21 @@ namespace Interface
     else
       glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
-    if (dirty_)
+    auto numQuads = numQuads_.get();
+    if (data_.hasUpdate())
     {
-      for (u32 i = 0; i < numQuads_; ++i)
-        setDimensions(i, getQuadWidth(i), getQuadHeight(i), 
-          (float)viewportBounds.getWidth(), (float)viewportBounds.getHeight());
+      auto data = data_.read();
+      updateDimensions(data, viewportBounds, numQuads);
 
       glBindBuffer(GL_ARRAY_BUFFER, vertexBuffer_);
 
-      auto data = data_.lock();
       GLsizeiptr vertSize = static_cast<GLsizeiptr>(kNumFloatsPerQuad * maxQuads_ * sizeof(float));
-      glBufferData(GL_ARRAY_BUFFER, vertSize, data, GL_STATIC_DRAW);
-      glBindBuffer(GL_ARRAY_BUFFER, 0);
-      data_.unlock();
+      glBufferData(GL_ARRAY_BUFFER, vertSize, data.data(), GL_STATIC_DRAW);
 
-      dirty_ = false;
+      glBindBuffer(GL_ARRAY_BUFFER, 0);
     }
 
-    shader_->use();
+    shader_.use();
 
     if (overallAlphaUniform_)
       overallAlphaUniform_.set(overallAlpha);
@@ -204,12 +227,6 @@ namespace Interface
     if (maxArcUniform_)
       maxArcUniform_.set(maxArc_);
 
-    if (valuesUniform_)
-    {
-      auto values = values_.get();
-      valuesUniform_.set(values[0], values[1], values[2], values[3]);
-    }
-
     COMPLEX_CHECK_OPENGL_ERROR;
 
     glBindBuffer(GL_ARRAY_BUFFER, vertexBuffer_);
@@ -237,7 +254,7 @@ namespace Interface
     }
 
     // render
-    glDrawElements(GL_TRIANGLES, (GLsizei)(numQuads_ * kNumIndicesPerQuad), GL_UNSIGNED_INT, nullptr);
+    glDrawElements(GL_TRIANGLES, (GLsizei)(numQuads * kNumIndicesPerQuad), GL_UNSIGNED_INT, nullptr);
 
     // clean-up
     glDisableVertexAttribArray(position_.attributeId);

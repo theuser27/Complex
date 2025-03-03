@@ -34,6 +34,212 @@ namespace juce
 
 //==============================================================================
 /**
+    An AudioIODeviceCallback object which streams audio through an AudioProcessor.
+
+    To use one of these, just make it the callback used by your AudioIODevice, and
+    give it a processor to use by calling setProcessor().
+
+    It's also a MidiInputCallback, so you can connect it to both an audio and midi
+    input to send both streams through the processor. To set a MidiOutput for the processor,
+    use the setMidiOutput() method.
+
+    @see AudioProcessor, AudioProcessorGraph
+
+    @tags{Audio}
+*/
+class JUCE_API  AudioProcessorPlayer    : public AudioIODeviceCallback,
+                                          public MidiInputCallback
+{
+public:
+    //==============================================================================
+    AudioProcessorPlayer (bool doDoublePrecisionProcessing = false);
+
+    /** Destructor. */
+    ~AudioProcessorPlayer() override;
+
+    //==============================================================================
+    /** Sets the processor that should be played.
+
+        The processor that is passed in will not be deleted or owned by this object.
+        To stop anything playing, pass a nullptr to this method.
+    */
+    void setProcessor (AudioProcessor* processorToPlay);
+
+    /** Returns the current audio processor that is being played. */
+    AudioProcessor* getCurrentProcessor() const noexcept            { return processor; }
+
+    /** Returns a midi message collector that you can pass midi messages to if you
+        want them to be injected into the midi stream that is being sent to the
+        processor.
+    */
+    MidiMessageCollector& getMidiMessageCollector() noexcept        { return messageCollector; }
+
+    /** Sets the MIDI output that should be used, if required.
+
+        The MIDI output will not be deleted or owned by this object. If the MIDI output is
+        deleted, pass a nullptr to this method.
+    */
+    void setMidiOutput (MidiOutput* midiOutputToUse);
+
+    /** Switch between double and single floating point precisions processing.
+
+        The audio IO callbacks will still operate in single floating point precision,
+        however, all internal processing including the AudioProcessor will be processed in
+        double floating point precision if the AudioProcessor supports it (see
+        AudioProcessor::supportsDoublePrecisionProcessing()). Otherwise, the processing will
+        remain single precision irrespective of the parameter doublePrecision.
+    */
+    void setDoublePrecisionProcessing (bool doublePrecision);
+
+    /** Returns true if this player processes internally processes the samples with
+        double floating point precision.
+    */
+    inline bool getDoublePrecisionProcessing() { return isDoublePrecision; }
+
+    //==============================================================================
+    /** @internal */
+    void audioDeviceIOCallbackWithContext (const float* const*, int, float* const*, int, int, const AudioIODeviceCallbackContext&) override;
+    /** @internal */
+    void audioDeviceAboutToStart (AudioIODevice*) override;
+    /** @internal */
+    void audioDeviceStopped() override;
+    /** @internal */
+    void handleIncomingMidiMessage (MidiInput*, const MidiMessage&) override;
+
+private:
+    struct NumChannels
+    {
+        NumChannels() = default;
+        NumChannels (int numIns, int numOuts) : ins (numIns), outs (numOuts) {}
+
+        explicit NumChannels (const AudioProcessor::BusesLayout& layout)
+            : ins (layout.getNumChannels (true, 0)), outs (layout.getNumChannels (false, 0)) {}
+
+        AudioProcessor::BusesLayout toLayout() const
+        {
+            return { { AudioChannelSet::canonicalChannelSet (ins) },
+                     { AudioChannelSet::canonicalChannelSet (outs) } };
+        }
+
+        int ins = 0, outs = 0;
+    };
+
+    //==============================================================================
+    NumChannels findMostSuitableLayout (const AudioProcessor&) const;
+    void resizeChannels();
+
+    //==============================================================================
+    AudioProcessor* processor = nullptr;
+    CriticalSection lock;
+    double sampleRate = 0;
+    int blockSize = 0;
+    bool isPrepared = false, isDoublePrecision = false;
+
+    NumChannels deviceChannels, defaultProcessorChannels, actualProcessorChannels;
+    std::vector<float*> channels;
+    AudioBuffer<float> tempBuffer;
+    AudioBuffer<double> conversionBuffer;
+
+    MidiBuffer incomingMidi;
+    MidiMessageCollector messageCollector;
+    MidiOutput* midiOutput = nullptr;
+    uint64_t sampleCount = 0;
+
+    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (AudioProcessorPlayer)
+};
+
+
+//==============================================================================
+/**
+    A component containing controls to let the user change the audio settings of
+    an AudioDeviceManager object.
+
+    Very easy to use - just create one of these and show it to the user.
+
+    @see AudioDeviceManager
+
+    @tags{Audio}
+*/
+class JUCE_API  AudioDeviceSelectorComponent  : public Component,
+                                                private ChangeListener
+{
+public:
+    //==============================================================================
+    /** Creates the component.
+
+        If your app needs only output channels, you might ask for a maximum of 0 input
+        channels, and the component won't display any options for choosing the input
+        channels. And likewise if you're doing an input-only app.
+
+        @param deviceManager            the device manager that this component should control
+        @param minAudioInputChannels    the minimum number of audio input channels that the application needs
+        @param maxAudioInputChannels    the maximum number of audio input channels that the application needs
+        @param minAudioOutputChannels   the minimum number of audio output channels that the application needs
+        @param maxAudioOutputChannels   the maximum number of audio output channels that the application needs
+        @param showMidiInputOptions     if true, the component will allow the user to select which midi inputs are enabled
+        @param showMidiOutputSelector   if true, the component will let the user choose a default midi output device
+        @param showChannelsAsStereoPairs    if true, channels will be treated as pairs; if false, channels will be
+                                        treated as a set of separate mono channels.
+        @param hideAdvancedOptionsWithButton    if true, only the minimum amount of UI components
+                                        are shown, with an "advanced" button that shows the rest of them
+    */
+    AudioDeviceSelectorComponent (AudioDeviceManager& deviceManager,
+                                  int minAudioInputChannels,
+                                  int maxAudioInputChannels,
+                                  int minAudioOutputChannels,
+                                  int maxAudioOutputChannels,
+                                  bool showMidiInputOptions,
+                                  bool showMidiOutputSelector,
+                                  bool showChannelsAsStereoPairs,
+                                  bool hideAdvancedOptionsWithButton);
+
+    /** Destructor */
+    ~AudioDeviceSelectorComponent() override;
+
+    /** The device manager that this component is controlling */
+    AudioDeviceManager& deviceManager;
+
+    /** Sets the standard height used for items in the panel. */
+    void setItemHeight (int itemHeight);
+
+    /** Returns the standard height used for items in the panel. */
+    int getItemHeight() const noexcept      { return itemHeight; }
+
+    /** Returns the ListBox that's being used to show the midi inputs, or nullptr if there isn't one. */
+    ListBox* getMidiInputSelectorListBox() const noexcept;
+
+    //==============================================================================
+    /** @internal */
+    void resized() override;
+
+private:
+    //==============================================================================
+    void updateDeviceType();
+    void updateMidiOutput();
+    void changeListenerCallback (ChangeBroadcaster*) override;
+    void updateAllControls();
+
+    std::unique_ptr<ComboBox> deviceTypeDropDown;
+    std::unique_ptr<Label> deviceTypeDropDownLabel;
+    std::unique_ptr<Component> audioDeviceSettingsComp;
+    String audioDeviceSettingsCompType;
+    int itemHeight = 0;
+    const int minOutputChannels, maxOutputChannels, minInputChannels, maxInputChannels;
+    const bool showChannelsAsStereoPairs;
+    const bool hideAdvancedOptionsWithButton;
+
+    class MidiInputSelectorComponentListBox;
+    Array<MidiDeviceInfo> currentMidiOutputs;
+    std::unique_ptr<MidiInputSelectorComponentListBox> midiInputsList;
+    std::unique_ptr<ComboBox> midiOutputSelector;
+    std::unique_ptr<Label> midiInputsLabel, midiOutputLabel;
+    std::unique_ptr<TextButton> bluetoothButton;
+
+    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (AudioDeviceSelectorComponent)
+};
+
+//==============================================================================
+/**
     An object that creates and plays a standalone instance of an AudioProcessor.
 
     The object will create your processor using the same createPluginFilter()

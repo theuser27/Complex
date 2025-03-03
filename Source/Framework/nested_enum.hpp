@@ -5,15 +5,20 @@
 #define NESTED_ENUM_VERSION_MINOR 4
 #define NESTED_ENUM_VERSION_PATCH 0
 
+// underlying enum type when none is specified
 #ifndef NESTED_ENUM_DEFAULT_UNDERLYING_TYPE
   #define NESTED_ENUM_DEFAULT_UNDERLYING_TYPE int
 #endif
 
+// user defined type to be used as std::array replacement
+// necessary methods: operator[]
 #ifndef NESTED_ENUM_ARRAY_TYPE
   #include <array>
   #define NESTED_ENUM_ARRAY_TYPE ::std::array
 #endif
 
+// user defined type to be used as std::pair replacement
+// necessary methods: none
 #ifndef NESTED_ENUM_PAIR_TYPE
   #include <utility>
   #define NESTED_ENUM_PAIR_TYPE ::std::pair
@@ -50,30 +55,30 @@ namespace nested_enum
     constexpr fixed_string(const char(&array)[N + 1]) noexcept
     {
       for (detail::size_t i = 0; i < N; ++i)
-        data[i] = array[i];
+        storage[i] = array[i];
 
-      data[N] = '\0';
+      storage[N] = '\0';
     }
 
     constexpr fixed_string(NESTED_ENUM_STRING_VIEW_TYPE view) noexcept
     {
       for (detail::size_t i = 0; i < N; ++i)
-        data[i] = view[i];
+        storage[i] = view[i];
 
-      data[N] = '\0';
+      storage[N] = '\0';
     }
 
     template<detail::size_t M>
     [[nodiscard]] constexpr auto append(fixed_string<M> other) const noexcept
     {
       fixed_string<N + M> result;
-      result.data[N + M] = '\0';
+      result.storage[N + M] = '\0';
 
       for (detail::size_t i = 0; i < N; ++i)
-        result.data[i] = data[i];
+        result.storage[i] = storage[i];
 
       for (detail::size_t i = 0; i < M; ++i)
-        result.data[N + i] = other.data[i];
+        result.storage[N + i] = other.storage[i];
 
       return result;
     }
@@ -85,24 +90,26 @@ namespace nested_enum
       fixed_string<N + 1 + M> result;
 
       for (detail::size_t i = 0; i < N; ++i)
-        result.data[i] = data[i];
-      result.data[N] = '\0';
+        result.storage[i] = storage[i];
+      result.storage[N] = '\0';
 
       for (detail::size_t i = 0; i < M; ++i)
-        result.data[N + 1 + i] = other.data[i];
-      result.data[N + 1 + M] = '\0';
+        result.storage[N + 1 + i] = other.storage[i];
+      result.storage[N + 1 + M] = '\0';
 
       return result;
     }
 
     [[nodiscard]] constexpr auto operator<=>(const fixed_string &) const = default;
-    [[nodiscard]] constexpr operator NESTED_ENUM_STRING_VIEW_TYPE() const noexcept { return { data, N }; }
+    [[nodiscard]] constexpr operator NESTED_ENUM_STRING_VIEW_TYPE() const noexcept { return { storage, N }; }
+    [[nodiscard]] constexpr char *data() noexcept { return storage; }
+    [[nodiscard]] constexpr const char *data() const noexcept { return storage; }
     [[nodiscard]] static constexpr detail::size_t size() noexcept { return N; }
 
-    char data[N + 1];
+    char storage[N + 1];
   };
 
-  template <detail::size_t N>
+  template<detail::size_t N>
   fixed_string(const char(&)[N]) -> fixed_string<N - 1>;
 
   namespace detail
@@ -132,7 +139,7 @@ namespace nested_enum
 
     template<class T, template <typename ...> class Template>
     inline constexpr bool is_specialization_v = false;
-    template<template <class...> class Template, class ... Ts>
+    template<template<typename...> class Template, class ... Ts>
     inline constexpr bool is_specialization_v<Template<Ts...>, Template> = true;
 
     template<typename T, typename ... Us>
@@ -148,12 +155,12 @@ namespace nested_enum
     template<typename T>
     inline constexpr bool is_floating_point_v = is_any_of_v<typename remove_cv<T>::type, float, double, long double>;
 
-    template<class T, T ... Is>
+    template<typename T, T ... Is>
     struct integer_sequence
     {
       using value_type = T;
       [[nodiscard]] static constexpr size_t size() noexcept { return sizeof...(Is); }
-  };
+    };
 
     template<size_t Size>
     using make_index_sequence =
@@ -175,21 +182,21 @@ namespace nested_enum
     template<typename T>
     concept Enum = __is_enum(T);
 
-    template <class T>
+    template<class T>
     inline constexpr bool is_complete_type_v = requires{ sizeof(T); };
 
-    template <typename ... Ts>
+    template<typename ... Ts>
     struct type_list
     {
       static constexpr auto size = sizeof...(Ts);
 
-      template <typename ... Us>
+      template<typename ... Us>
       constexpr auto operator+(type_list<Us...>) const noexcept
       {
         return type_list<Ts..., Us...>{};
       }
 
-      template <typename ... Us>
+      template<typename ... Us>
       constexpr bool operator==(type_list<Us...>) const noexcept
       {
         return is_same_v<type_list<Ts...>, type_list<Us...>>;
@@ -202,9 +209,9 @@ namespace nested_enum
     template<typename T = int>
     struct opt { bool isInitialised = false; T value = 0; };
 
-    inline constexpr fixed_string scopeResolution = "::";
+    inline constexpr fixed_string scopeResolutionString = "::";
 
-    template<typename Container, typename T>
+    template<class Container, typename T>
     constexpr auto find_index(const Container &container, const T &value)
     {
       static_assert(requires{ typename Container::value_type; }, "Array type must provide a value_type type-alias");
@@ -216,7 +223,7 @@ namespace nested_enum
       {
         for (; index != size; ++index)
           if (container[index].has_value() && container[index].value() == value)
-            return NESTED_ENUM_OPTIONAL_TYPE{ index };
+            return NESTED_ENUM_OPTIONAL_TYPE<size_t>{ index };
       }
       else
       {
@@ -224,7 +231,7 @@ namespace nested_enum
 
         for (; index != size; ++index)
           if (container[index] == value)
-            return NESTED_ENUM_OPTIONAL_TYPE{ index };
+            return NESTED_ENUM_OPTIONAL_TYPE<size_t>{ index };
       }
 
       return NESTED_ENUM_OPTIONAL_TYPE<size_t>{};
@@ -254,7 +261,7 @@ namespace nested_enum
     consteval auto get_string_values()
     {
       static_assert(type.size() > 0);
-      constexpr auto current = type.append(scopeResolution.append(value));
+      constexpr auto current = type.append(scopeResolutionString.append(value));
 
       if constexpr (sizeof...(values) == 0)
         return current.append_full(fixed_string{ "" });
@@ -364,9 +371,6 @@ namespace nested_enum
       return view;
     }
 
-    template<fixed_string prefix = "">
-    constexpr auto get_prefix() noexcept { return prefix; }
-
     template<typename T, typename E>
     concept this_underlying_type = is_same_v<T, typename E::underlying_type>;
   }
@@ -420,9 +424,11 @@ namespace nested_enum
     static constexpr auto name_and_id(bool clean = false)
     {
       if constexpr (UnwrapId)
-        return NESTED_ENUM_PAIR_TYPE{ name(clean), id().value() };
+        return NESTED_ENUM_PAIR_TYPE<NESTED_ENUM_STRING_VIEW_TYPE, 
+          NESTED_ENUM_STRING_VIEW_TYPE>{ name(clean), id().value() };
       else
-        return NESTED_ENUM_PAIR_TYPE{ name(clean), id() };
+        return NESTED_ENUM_PAIR_TYPE<NESTED_ENUM_STRING_VIEW_TYPE, 
+          NESTED_ENUM_OPTIONAL_TYPE<NESTED_ENUM_STRING_VIEW_TYPE>>{ name(clean), id() };
     }
     // returns the integer of the type name (if it has one)
     static constexpr auto integer() noexcept
@@ -454,7 +460,7 @@ namespace nested_enum
       auto value = enum_name_and_id(static_cast<const E &>(*this), clean).value();
       if constexpr (UnwrapId)
         return NESTED_ENUM_PAIR_TYPE<NESTED_ENUM_STRING_VIEW_TYPE, 
-        NESTED_ENUM_STRING_VIEW_TYPE>{ value.first, value.second.value() };
+          NESTED_ENUM_STRING_VIEW_TYPE>{ value.first, value.second.value() };
       else
         return value;
     }
@@ -469,7 +475,7 @@ namespace nested_enum
     static constexpr auto create_name(fixed_string<N> name)
     {
       if constexpr (requires { typename E::parent; })
-        return E::parent::internalName_.append(detail::scopeResolution.append(name));
+        return E::parent::internalName_.append(detail::scopeResolutionString.append(name));
       else
         return name;
     }
@@ -598,7 +604,8 @@ namespace nested_enum
     template<auto FilterPredicate, bool UnwrapIds = false>
     static constexpr auto enum_ids_filter() noexcept
     {
-      using id_type = typename detail::conditional<UnwrapIds, NESTED_ENUM_STRING_VIEW_TYPE, NESTED_ENUM_OPTIONAL_TYPE<NESTED_ENUM_STRING_VIEW_TYPE>>::type;
+      using id_type = typename detail::conditional<UnwrapIds, NESTED_ENUM_STRING_VIEW_TYPE, 
+        NESTED_ENUM_OPTIONAL_TYPE<NESTED_ENUM_STRING_VIEW_TYPE>>::type;
 
       if constexpr (E::internalEnumIds_.size() == 0)
       {
@@ -655,7 +662,7 @@ namespace nested_enum
           constexpr auto valuesNeeded = get_needed_values<FilterPredicate>(E::internalSubtypes_);
           NESTED_ENUM_ARRAY_TYPE<NESTED_ENUM_STRING_VIEW_TYPE, valuesNeeded.size()> values;
           for (detail::size_t i = 0; i < values.size(); i++)
-            values[i] = detail::get_substring(NESTED_ENUM_STRING_VIEW_TYPE{ E::internalEnumNames_ }, valuesNeeded[i], cleanString);
+            values[i] = detail::get_substring(E::internalEnumNames_, valuesNeeded[i], cleanString);
           
           return values;
         };
@@ -681,7 +688,8 @@ namespace nested_enum
     template<auto FilterPredicate, bool UnwrapIds = false>
     static constexpr auto enum_names_and_ids_filter(bool clean = false) noexcept
     {
-      using id_type = typename detail::conditional<UnwrapIds, NESTED_ENUM_STRING_VIEW_TYPE, NESTED_ENUM_OPTIONAL_TYPE<NESTED_ENUM_STRING_VIEW_TYPE>>::type;
+      using id_type = typename detail::conditional<UnwrapIds, NESTED_ENUM_STRING_VIEW_TYPE, 
+        NESTED_ENUM_OPTIONAL_TYPE<NESTED_ENUM_STRING_VIEW_TYPE>>::type;
 
       if constexpr (enum_count_filter(FilterPredicate) == 0)
         return NESTED_ENUM_ARRAY_TYPE<NESTED_ENUM_PAIR_TYPE<NESTED_ENUM_STRING_VIEW_TYPE, id_type>, 0>{};
@@ -706,12 +714,11 @@ namespace nested_enum
         constexpr auto stringsAndIdsClean = [&]()
         {
           NESTED_ENUM_ARRAY_TYPE<NESTED_ENUM_PAIR_TYPE<NESTED_ENUM_STRING_VIEW_TYPE, id_type>, stringsAndIds.size()> values;
-          NESTED_ENUM_STRING_VIEW_TYPE scope = "::";
 
           for (detail::size_t i = 0; i < stringsAndIds.size(); ++i)
           {
             auto string = stringsAndIds[i].first;
-            string.remove_prefix(string.rfind(scope) + scope.length());
+            string.remove_prefix(string.rfind(detail::scopeResolutionString) + detail::scopeResolutionString.size());
             values[i] = NESTED_ENUM_PAIR_TYPE{ string, stringsAndIds[i].second };
           }
 
@@ -1109,7 +1116,8 @@ namespace nested_enum
     template<bool UnwrapId = false>
     static constexpr auto enum_name_and_id(E value, bool clean = false)
     {
-      using id_type = typename detail::conditional<UnwrapId, NESTED_ENUM_STRING_VIEW_TYPE, NESTED_ENUM_OPTIONAL_TYPE<NESTED_ENUM_STRING_VIEW_TYPE>>::type;
+      using id_type = typename detail::conditional<UnwrapId, NESTED_ENUM_STRING_VIEW_TYPE, 
+        NESTED_ENUM_OPTIONAL_TYPE<NESTED_ENUM_STRING_VIEW_TYPE>>::type;
 
       auto index = detail::find_index(E::internalEnumValues_, value.internal_value);
       if (!index.has_value())
@@ -1157,11 +1165,8 @@ namespace nested_enum
       return detail::find_index(E::internalEnumIds_, id);
     }
     // returns the enum value of this type, specified by an integer
-    template<typename T> requires detail::this_underlying_type<T, E>
-    static constexpr auto enum_value(T integer)
+    static constexpr auto enum_value(detail::this_underlying_type<E> auto integer)
     {
-      static_assert(detail::is_same_v<T, typename E::underlying_type>);
-
       for (auto value : E::internalEnumValues_)
         if (value == integer)
           return NESTED_ENUM_OPTIONAL_TYPE<E>{ value };
@@ -1412,37 +1417,6 @@ namespace nested_enum
       }
     }
   };
-
-  // helper function for doing recursive iteration over types with enum_subtypes()
-  // it is intended for expanding branches without needing to write them manually
-  // 1st template parameter is the lambda itself and consequent template parameters are the deduced types
-  // Example:
-  // 
-  // template<nested_enum::NestedEnum T>
-  // void do_thing(T value)
-  // {
-  //   nested_enum::recurse_over_types<[]<auto Self, typename U, typename ... Us>(T value)
-  //     {
-  //       if constexpr (std::is_same_v<decltype(U::value()), T>)
-  //         if (U::value() == value)
-  //           do_something_else<typename U::linked_type>();
-  //       else if constexpr (sizeof...(Us) > 0)
-  //         Self.template operator()<Self, Us...>(value);
-  //       else
-  //       {
-  //         // Uncaught case
-  //         assert(false);
-  //       }
-  //     }>(SomeEnum::enum_subtypes(), value);
-  // }
-  //
-  // keep in mind that as of C++20 only captureless lambdas can be used as non-type template parameters
-  // any extra parameters can be passed in as a parameter pack
-  template<auto Lambda, typename ... Ts, typename ... Args>
-  constexpr auto recurse_over_types(const NESTED_ENUM_TUPLE_TYPE<type_identity<Ts>...> &, Args &&... args)
-  {
-    return Lambda.template operator()<Lambda, Ts...>(static_cast<Args &&>(args)...);
-  }
 
   template <NestedEnum E>
   constexpr bool operator==(const E &left, const E &right) noexcept

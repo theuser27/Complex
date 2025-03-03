@@ -41,9 +41,9 @@ namespace Interface
 
     enum DragMode
     {
-      notDragging,            /**< Dragging is not active.  */
-      absoluteDrag,           /**< The dragging corresponds directly to the value that is displayed.  */
-      velocityDrag            /**< The dragging value change is relative to the velocity of the mouse movement.  */
+      notDragging,    /// Dragging is not active.
+      absoluteDrag,   /// The dragging corresponds directly to the value that is displayed.
+      velocityDrag    /// The dragging value change is relative to the velocity of the mouse movement.
     };
 
     BaseSlider(Framework::ParameterValue *parameter);
@@ -107,7 +107,8 @@ namespace Interface
 
     Placement getPopupPlacement() const noexcept { return popupPlacement_; }
     Placement getModulationPlacement() const noexcept { return modulationControlPlacement_; }
-    juce::Rectangle<int> getModulationArea() const noexcept { return (modulationArea_.getWidth()) ? modulationArea_ : getLocalBounds(); }
+    juce::Rectangle<int> getModulationArea() const noexcept 
+    { return (modulationArea_.getWidth()) ? modulationArea_ : getLocalBounds(); }
 
     virtual juce::Colour getSelectedColor() const { return getColour(Skin::kWidgetPrimary1); }
     virtual juce::Colour getUnselectedColor() const { return juce::Colours::transparentBlack; }
@@ -160,7 +161,7 @@ namespace Interface
     { COMPLEX_ASSERT(totalCharacters > 0); maxTotalCharacters_ = totalCharacters; }
     void setMaxDecimalCharacters(int decimalCharacters) noexcept
     { COMPLEX_ASSERT(decimalCharacters >= 0); maxDecimalCharacters_ = decimalCharacters; }
-    void setPopupPrefix(juce::String prefix) noexcept { popupPrefix_ = COMPLEX_MOV(prefix); }
+    void setPopupPrefix(juce::String prefix) noexcept { popupPrefix_ = COMPLEX_MOVE(prefix); }
 
     // ========================================================== Miscellaneous
     using BaseControl::getValue;
@@ -433,7 +434,7 @@ namespace Interface
       resizeForText();
     }
 
-    void setUsedFont(juce::Font usedFont) noexcept { usedFont_ = COMPLEX_MOV(usedFont); isDirty_ = true; }
+    void setUsedFont(juce::Font usedFont) noexcept { usedFont_ = COMPLEX_MOVE(usedFont); isDirty_ = true; }
     void setDrawArrow(bool drawArrow) noexcept { drawArrow_ = drawArrow; isDirty_ = true; }
     void setAnchor(Placement anchor) noexcept { anchor_ = anchor; }
 
@@ -442,11 +443,11 @@ namespace Interface
     void setExtraNumberBoxPlacement(Placement placement) noexcept { extraNumberBoxPlacement_ = placement; }
     void setTextSelectorListener(TextSelectorListener *listener) noexcept { textSelectorListener_ = listener; }
 
-    void setOptionsTitle(std::string title) { optionsTitle_ = COMPLEX_MOV(title); }
+    void setOptionsTitle(std::string title) { optionsTitle_ = COMPLEX_MOVE(title); }
     void setItemIgnoreFunction(clg::small_fn<bool(const Framework::IndexedData &, int)> fn) noexcept
-    { ignoreItemFunction_ = COMPLEX_MOV(fn); }
+    { ignoreItemFunction_ = COMPLEX_MOVE(fn); }
 
-    std::string_view getTextValue(bool fromParameter = false);
+    utils::string_view getTextValue(bool fromParameter = false);
 
   protected:
     void resizeForText() noexcept;

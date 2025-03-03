@@ -10,6 +10,10 @@
 
 #include "EffectsState.hpp"
 
+#include <thread>
+
+#include "Interface/LookAndFeel/Miscellaneous.hpp"
+#include "Framework/circular_buffer.hpp"
 #include "Framework/simd_math.hpp"
 #include "Framework/simd_utils.hpp"
 #include "Framework/parameter_value.hpp"
@@ -24,13 +28,12 @@ namespace Generation
     subProcessors_.reserve(32);
 
     auto maxBinCount = processorTree->getMaxBinCount();
-    laneDataSource_.conversionBuffer.reserve(kChannelsPerInOut, maxBinCount);
-
     auto maxInOuts = std::max(processorTree->getInputSidechains(), processorTree->getOutputSidechains()) + 1;
+    laneDataSource_.scratchBuffer.reserve(maxInOuts * kChannelsPerInOut, maxBinCount);
     dataBuffer_.reserve(maxInOuts * kChannelsPerInOut, maxBinCount);
   }
 
-  void EffectsLane::insertSubProcessor(usize index, BaseProcessor &newSubProcessor) noexcept
+  void EffectsLane::insertSubProcessor(usize index, BaseProcessor &newSubProcessor, bool callListeners) noexcept
   {
     COMPLEX_ASSERT(newSubProcessor.getProcessorType() == Framework::Processors::EffectModule::id().value()
       && "You're trying to move a non-EffectModule into EffectChain");
@@ -39,11 +42,12 @@ namespace Generation
     effectModules_.insert(effectModules_.begin() + (std::ptrdiff_t)index, utils::as<EffectModule>(&newSubProcessor));
     subProcessors_.insert(subProcessors_.begin() + (std::ptrdiff_t)index, &newSubProcessor);
 
-    for (auto *listener : listeners_)
-      listener->insertedSubProcessor(index, newSubProcessor);
+    if (callListeners)
+      for (auto *listener : listeners_)
+        listener->insertedSubProcessor(index, newSubProcessor);
   }
 
-  BaseProcessor &EffectsLane::deleteSubProcessor(usize index) noexcept
+  BaseProcessor &EffectsLane::deleteSubProcessor(usize index, bool callListeners) noexcept
   {
     COMPLEX_ASSERT(index < subProcessors_.size());
 
@@ -51,8 +55,9 @@ namespace Generation
     effectModules_.erase(effectModules_.begin() + (ptrdiff_t)index);
     subProcessors_.erase(subProcessors_.begin() + (ptrdiff_t)index);
 
-    for (auto *listener : listeners_)
-      listener->deletedSubProcessor(index, *deletedProcessor);
+    if (callListeners)
+      for (auto *listener : listeners_)
+        listener->deletedSubProcessor(index, *deletedProcessor);
 
     return *deletedProcessor;
   }
@@ -72,11 +77,13 @@ namespace Generation
           if (shouldStop.load(std::memory_order_acquire))
             return;
 
+          utils::millisleep([&state]() { return !state.shouldWorkersProcess_.load(std::memory_order_acquire); });
+
           state.distributeWork();
         }
       }) { }
-    Thread(Thread &&other) noexcept : thread(std::move(other.thread)),
-      shouldStop(other.shouldStop.load(std::memory_order_relaxed)) { }
+    Thread(Thread &&other) noexcept : thread{ COMPLEX_MOVE(other.thread) },
+      shouldStop{ other.shouldStop.load(std::memory_order_relaxed) } { }
     std::thread thread{};
     std::atomic<bool> shouldStop = false;
   };
@@ -109,7 +116,7 @@ namespace Generation
       thread.thread.join();
   }
 
-  void EffectsState::insertSubProcessor(usize index, BaseProcessor &newSubProcessor) noexcept
+  void EffectsState::insertSubProcessor(usize index, BaseProcessor &newSubProcessor, bool callListeners) noexcept
   {
     COMPLEX_ASSERT(newSubProcessor.getProcessorType() == Framework::Processors::EffectsLane::id().value() &&
       "You're trying to insert a non-EffectChain into EffectsState");
@@ -118,11 +125,12 @@ namespace Generation
     lanes_.emplace_back(utils::as<EffectsLane>(&newSubProcessor));
     subProcessors_.emplace_back(&newSubProcessor);
 
-    for (auto *listener : listeners_)
-      listener->insertedSubProcessor(index, newSubProcessor);
+    if (callListeners)
+      for (auto *listener : listeners_)
+        listener->insertedSubProcessor(index, newSubProcessor);
   }
 
-  BaseProcessor &EffectsState::deleteSubProcessor(usize index) noexcept
+  BaseProcessor &EffectsState::deleteSubProcessor(usize index, bool callListeners) noexcept
   {
     COMPLEX_ASSERT(index < subProcessors_.size());
 
@@ -130,8 +138,9 @@ namespace Generation
     lanes_.erase(lanes_.begin() + (ptrdiff_t)index);
     subProcessors_.erase(subProcessors_.begin() + (ptrdiff_t)index);
 
-    for (auto *listener : listeners_)
-      listener->deletedSubProcessor(index, *deletedLane);
+    if (callListeners)
+      for (auto *listener : listeners_)
+        listener->deletedSubProcessor(index, *deletedLane);
 
     return *deletedLane;
   }
@@ -142,7 +151,7 @@ namespace Generation
       enum_ids_filter<Framework::kGetParameterPredicate, true>());
   }
 
-  std::span<char> EffectsState::getUsedInputChannels() noexcept
+  utils::span<char> EffectsState::getUsedInputChannels() noexcept
   {
     using namespace Framework;
 
@@ -175,7 +184,7 @@ namespace Generation
     return usedInputChannels_;
   }
 
-  std::span<char> EffectsState::getUsedOutputChannels() noexcept
+  utils::span<char> EffectsState::getUsedOutputChannels() noexcept
   {
     using namespace Framework;
 
@@ -207,7 +216,7 @@ namespace Generation
     return usedOutputChannels_;
   }
 
-  void EffectsState::writeInputData(Framework::CheckedPointer<float> inputBuffer, usize channels, usize samples) noexcept
+  void EffectsState::writeInputData(const Framework::Buffer &inputBuffer) noexcept
   {
     using namespace Framework;
     using namespace utils;
@@ -216,17 +225,17 @@ namespace Generation
     ScopedLock g{ dataBuffer_.getLock(), true, WaitMechanism::Spin };
 
     auto values = utils::array<simd_float, SimdBuffer<complex<float>, simd_float>::getRelativeSize()>{};
-    auto valueSources = utils::array<Framework::CheckedPointer<float>, decltype(values)::size()>{};
+    auto valueSources = utils::array<Framework::CheckedPointer<const float>, decltype(values)::size()>{};
     auto data = dataBuffer_.get();
     usize size = outputBuffer_.getSize();
-    for (usize i = 0; i < channels; i += values.size())
+    for (usize i = 0; i < inputBuffer.getChannels(); i += values.size())
     {
       // if the input is not used we skip it
       if (!usedInputChannels_[i])
         continue;
 
       for (u32 k = 0; k < valueSources.size(); ++k)
-        valueSources[k] = inputBuffer.offset(i * samples + k * samples, samples);
+        valueSources[k] = inputBuffer.get(i + k).offset(0, 2 * binCount);
 
       // skipping every n-th complex pair (currently simd_float can take 2 pairs)
       for (usize j = 0; j < binCount - 1; j += values.size())
@@ -253,6 +262,7 @@ namespace Generation
 
   void EffectsState::processLanes() noexcept
   {
+    shouldWorkersProcess_.store(true, std::memory_order_release);
     // sequential consistency just in case
     // triggers the chains to run again
     for (auto &lane : lanes_)
@@ -275,11 +285,11 @@ namespace Generation
   {
     for (usize i = 0; i < lanes_.size(); ++i)
     {
-      if (lanes_[i]->status_.load(std::memory_order_acquire) == EffectsLane::LaneStatus::Ready)
+      if (lanes_[i]->status_.load(std::memory_order_relaxed) == EffectsLane::LaneStatus::Ready)
       {
         auto expected = EffectsLane::LaneStatus::Ready;
         if (lanes_[i]->status_.compare_exchange_strong(expected, EffectsLane::LaneStatus::Running,
-          std::memory_order_acq_rel, std::memory_order_relaxed))
+          std::memory_order_seq_cst, std::memory_order_relaxed))
           processIndividualLanes(i);
       }
     }
@@ -296,6 +306,7 @@ namespace Generation
     thisLane->volumeScale_ = 1.0f;
     auto &laneDataSource = thisLane->laneDataSource_;
     laneDataSource.blockPhase = blockPhase;
+    laneDataSource.blockPosition = blockPosition;
     bool isLaneOn = thisLane->getParameter(Processors::EffectsLane::LaneEnabled::id().value())
       ->getInternalValue<u32>();
 
@@ -411,8 +422,7 @@ namespace Generation
     }
 
     // unlocking the last module's buffer
-    if (laneDataSource.sourceBuffer != laneDataSource.conversionBuffer)
-      unlockAtomic(laneDataSource.sourceBuffer.getLock(), false, WaitMechanism::Spin);
+    unlockAtomic(laneDataSource.sourceBuffer.getLock(), false, WaitMechanism::Spin);
 
     COMPLEX_ASSERT(dataBuffer_.getLock().lock.load() >= 0);
 
@@ -420,7 +430,7 @@ namespace Generation
     thisLane->status_.store(EffectsLane::LaneStatus::Finished, std::memory_order_release);
   }
 
-  void EffectsState::sumLanesAndWriteOutput(Framework::CheckedPointer<float> outputBuffer, usize channels, usize samples) noexcept
+  void EffectsState::sumLanesAndWriteOutput(Framework::Buffer &outputBuffer) noexcept
   {
     using namespace Framework;
     using namespace utils;
@@ -428,6 +438,7 @@ namespace Generation
     // TODO: redo when you get to multiple outputs
 
     ScopedLock g{ outputBuffer_.getLock(), true, WaitMechanism::Spin };
+    outputBuffer_.setBufferPosition(blockPosition);
     outputBuffer_.clear();
 
     // multipliers for scaling the multiple chains going into the same output
@@ -461,13 +472,13 @@ namespace Generation
     auto valueDestinations = utils::array<Framework::CheckedPointer<float>, decltype(values)::size()>{};
     auto data = outputBuffer_.get();
     usize size = outputBuffer_.getSize();
-    for (usize i = 0; i < channels; i += values.size())
+    for (usize i = 0; i < outputBuffer.getChannels(); i += values.size())
     {
       if (!usedOutputChannels_[i])
         continue;
 
       for (u32 k = 0; k < valueDestinations.size(); ++k)
-        valueDestinations[k] = outputBuffer.offset(i * samples + k * samples, samples);
+        valueDestinations[k] = outputBuffer.get(i + k).offset(0, 2 * binCount);
 
       // skipping every n-th complex pair (currently simd_float can take 2 pairs)
       for (usize j = 0; j < binCount - 1; j += values.size())

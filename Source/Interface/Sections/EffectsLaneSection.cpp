@@ -40,7 +40,7 @@ namespace Interface
       for (size_t i = 0; i < moduleOptions.size(); ++i)
         popupItems.addEntry((int)i, moduleOptions[i].first.data(), {}, true);
 
-      addModulesButton_->setOptions(COMPLEX_MOV(popupItems));
+      addModulesButton_->setOptions(COMPLEX_MOVE(popupItems));
     }
     addModulesButton_->setPopupPlacement(Placement::below);
     addModulesButton_->setPopupHandler([this](int selection)
@@ -54,7 +54,7 @@ namespace Interface
   EffectsContainer::~EffectsContainer() = default;
 
   EffectsLaneSection::EffectsLaneSection(Generation::EffectsLane *effectsLane, EffectsStateSection *parentState, String name) :
-    ProcessorSection{ "Effects Lane Section", effectsLane }, laneTitle_{ "Lane Title", COMPLEX_MOV(name) },
+    ProcessorSection{ "Effects Lane Section", effectsLane }, laneTitle_{ "Lane Title", COMPLEX_MOVE(name) },
     effectsLane_{ effectsLane }, parentState_{ parentState }
   {
     using namespace Framework;
@@ -112,7 +112,7 @@ namespace Interface
       effectModuleSection->getDraggableComponent().setListener(parentState_);
       effectModuleSection->getDraggableComponent().setIgnoreClip(parentState_);
       container_.addSubOpenGlContainer(effectModuleSection.get());
-      effectModules_.emplace_back(COMPLEX_MOV(effectModuleSection));
+      effectModules_.emplace_back(COMPLEX_MOVE(effectModuleSection));
     }
 
     // the show argument is false because we need the container to be a child of the viewport
@@ -217,38 +217,54 @@ namespace Interface
   {
     utils::up<EffectModuleSection> section = nullptr;
     if (auto &savedSection = newSubProcessor.getSavedSection(); savedSection.get())
-      section = COMPLEX_MOV(savedSection);
+      section = COMPLEX_MOVE(savedSection);
     else
       section = utils::up<EffectModuleSection>::create(utils::as<Generation::EffectModule>(&newSubProcessor), this);
 
     section->getDraggableComponent().setListener(parentState_);
     section->getDraggableComponent().setIgnoreClip(parentState_);
     container_.addSubOpenGlContainer(section.get());
-    effectModules_.insert(effectModules_.begin() + (ptrdiff_t)index, COMPLEX_MOV(section));
+    effectModules_.insert(effectModules_.begin() + (ptrdiff_t)index, COMPLEX_MOVE(section));
     setEffectPositions();
   }
 
   void EffectsLaneSection::deletedSubProcessor(size_t index, Generation::BaseProcessor &deletedSubProcessor)
   {
-    utils::up<EffectModuleSection> deletedSection{ COMPLEX_MOV(effectModules_[index]) };
+    utils::up<EffectModuleSection> deletedSection{ COMPLEX_MOVE(effectModules_[index]) };
     container_.removeSubOpenGlContainer(deletedSection.get());
-    deletedSubProcessor.setSavedSection(COMPLEX_MOV(deletedSection));
+    deletedSubProcessor.setSavedSection(COMPLEX_MOVE(deletedSection));
     effectModules_.erase(effectModules_.begin() + (ptrdiff_t)index);
     setEffectPositions();
   }
 
-  void EffectsLaneSection::insertModule(size_t index, std::string_view newModuleType)
+  void EffectsLaneSection::movedSubProcessor(Generation::BaseProcessor &,
+    Generation::BaseProcessor &sourceProcessor, usize sourceIndex,
+    Generation::BaseProcessor &destinationProcessor, usize destinationIndex)
+  {
+    if (&sourceProcessor == &destinationProcessor)
+    {
+      utils::up<EffectModuleSection> movedSection{ COMPLEX_MOVE(effectModules_[sourceIndex]) };
+      effectModules_.erase(effectModules_.begin() + (isize)sourceIndex);
+      effectModules_.insert(effectModules_.begin() + (isize)destinationIndex, COMPLEX_MOVE(movedSection));
+      setEffectPositions();
+    }
+    else
+    {
+      // TODO: handle once multiple lanes are available
+    }
+  }
+
+  void EffectsLaneSection::insertModule(size_t index, utils::string_view newModuleType)
   {
     COMPLEX_ASSERT(Framework::Processors::BaseEffect::enum_value_by_id(newModuleType).has_value()
       && "An invalid module type was provided to insert");
 
-    effectsLane_->getProcessorTree()->pushUndo(new Framework::AddProcessorUpdate{ *effectsLane_->getProcessorTree(),
-      effectsLane_->getProcessorId(), index, [newModuleType](Plugin::ProcessorTree &processorTree)
-      {
-        auto *effectModule = processorTree.createProcessor(Framework::Processors::EffectModule::id().value());
-        effectModule->insertSubProcessor(0, *processorTree.createProcessor(newModuleType));
-        return effectModule;
-      } });
+    auto &processorTree = *effectsLane_->getProcessorTree();
+    auto *effectModule = processorTree.createProcessor(Framework::Processors::EffectModule::id().value());
+    effectModule->insertSubProcessor(0, *processorTree.createProcessor(newModuleType));
+
+    effectsLane_->getProcessorTree()->pushUndo(new Framework::AddProcessorUpdate{ processorTree,
+      effectsLane_->getProcessorId(), index, *effectModule });
   }
 
   utils::up<EffectModuleSection> EffectsLaneSection::deleteModule(
@@ -269,7 +285,7 @@ namespace Interface
       return nullptr;
     }
 
-    utils::up<EffectModuleSection> removedModule{ COMPLEX_MOV(effectModules_[i]) };
+    utils::up<EffectModuleSection> removedModule{ COMPLEX_MOVE(effectModules_[i]) };
     container_.removeSubOpenGlContainer(removedModule.get());
     effectModules_.erase(effectModules_.begin() + (std::ptrdiff_t)i);
     return removedModule;
@@ -305,26 +321,36 @@ namespace Interface
     setScrollBarRange();
   }
 
-  size_t EffectsLaneSection::getIndexFromScreenPositionIgnoringSelf(Point<int> point,
-    const EffectModuleSection *moduleSection) const noexcept
+  usize EffectsLaneSection::getIndexFromScreenPositionIgnoringSelf(
+    juce::Rectangle<int> bounds, const EffectModuleSection *moduleSection) const noexcept
   {
-    for (size_t i = 0; i < effectModules_.size(); ++i)
+    auto centrePoint = bounds.getCentre();
+    if (auto target = effectModules_.front().get(); target != moduleSection &&
+      centrePoint.y <= getLocalArea(target, target->getLocalBounds()).getCentreY())
+      return 0;
+
+    if (auto target = effectModules_.back().get(); target != moduleSection &&
+      centrePoint.y >= getLocalArea(target, target->getLocalBounds()).getCentreY())
+      return effectModules_.size() - 1;
+
+    usize previousIndex = 0;
+    for (usize i = 0; i < effectModules_.size(); ++i)
     {
       if (moduleSection == effectModules_[i].get())
+      {
+        previousIndex = i;
         continue;
+      }
 
       auto nextBounds = getLocalArea(effectModules_[i].get(),
         effectModules_[i]->getLocalBounds());
 
-      if (nextBounds.getY() > point.y)
-        return i - 1;
-
-      if (nextBounds.getY() <= point.y && nextBounds.getBottom() > point.y)
+      if (nextBounds.contains(centrePoint))
         return i;
     }
 
-    return effectModules_.size() - 1;
+    return previousIndex;
   }
 
-  void EffectsLaneSection::setLaneName(String newName) { laneTitle_.setText(COMPLEX_MOV(newName)); }
+  void EffectsLaneSection::setLaneName(String newName) { laneTitle_.setText(COMPLEX_MOVE(newName)); }
 }

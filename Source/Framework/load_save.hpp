@@ -10,9 +10,8 @@
 
 #pragma once
 
-#include <tuple>
-
 #include "platform_definitions.hpp"
+#include "stl_utils.hpp"
 
 namespace juce
 {
@@ -24,12 +23,14 @@ namespace Framework
   namespace LoadSave
   {
     // returns absolute window dimensions
-    std::pair<int, int> getWindowSize();
+    utils::pair<int, int> getWindowSize();
     double getWindowScale();
-    std::tuple<usize, usize, usize> getParameterMappingsAndSidechains();
+    void getStartupParameters(usize &parameterMappings, usize &inSidechains, usize &outSidechains, usize &undoSteps);
 
     void saveWindowSize(int windowWidth, int windowHeight);
     void saveWindowScale(double windowScale);
+    void saveParameterMappings(usize parameterMappings);
+    void saveUndoStepCount(usize undoStepCount);
 
     void deserialiseSave(const juce::File &);
     void writeSave(void *jsonData);

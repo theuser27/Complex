@@ -75,7 +75,7 @@ namespace Interface
 
     setSkinOverride(sectionOverride);
 
-    string_ = COMPLEX_MOV(text);
+    string_ = COMPLEX_MOVE(text);
     float floatHeight = std::round(scaleValue(kHeight));
     Fonts::instance()->setHeight(font_, floatHeight * 0.5f);
     int height = (int)floatHeight;
@@ -202,7 +202,7 @@ namespace Interface
       list->type != PopupItems::InlineGroup)
     {
       childList_ = list;
-      listener_->summonNewPopupList(getBounds(), list);
+      listener_->summonNewPopupList(getBoundsSafe(), list);
     }
   }
 
@@ -636,7 +636,7 @@ namespace Interface
   void PopupSelector::newSelection(PopupList *list, int id)
   {
     // we must make sure that the object that provided the callback still exists
-    if (!checker_.wasObjectDeleted())
+    if (livenessChecker_.isObjectAlive())
     {
       if (id >= 0)
       {
@@ -734,7 +734,7 @@ namespace Interface
   void PopupSelector::focusLost(FocusChangeType)
   {
     // we must make sure that the object that provided the callback still exists
-    if (!checker_.wasObjectDeleted())
+    if (livenessChecker_.isObjectAlive())
     {
       setVisible(false);
       if (cancel_)

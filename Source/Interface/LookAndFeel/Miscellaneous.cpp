@@ -31,7 +31,7 @@ namespace Interface
   Shape &Shape::operator=(Shape &&) noexcept = default;
 
   void Shape::drawAll(juce::Graphics &g, const juce::PathStrokeType &strokeType, 
-    const juce::AffineTransform &transform, std::span<juce::Colour> colours) const
+    const juce::AffineTransform &transform, utils::span<juce::Colour> colours) const
   {
     for (size_t i = 0; i < paths.size(); ++i)
     {
@@ -56,7 +56,7 @@ namespace Interface
   }
 
   PopupItems::PopupItems(Type type, int id, std::string name, std::string hint, Shape icon, bool active) :
-    icon(std::move(icon)), name(std::move(name)), hint(std::move(hint)), type(type), id(id), isActive(active) { }
+    icon(COMPLEX_MOVE(icon)), name(COMPLEX_MOVE(name)), hint(COMPLEX_MOVE(hint)), type(type), id(id), isActive(active) { }
 
   PopupItems::PopupItems(const PopupItems &) = default;
   PopupItems::PopupItems(PopupItems &&) noexcept = default;
@@ -98,7 +98,7 @@ namespace Interface
         one.addRoundedRectangle(juce::Rectangle{ 6.5f, 6.5f, 6.0f, 7.0f }, 1.5f);
 
         Shape result;
-        result.paths.emplace_back(COMPLEX_MOV(one), Shape::Stroke, juce::Colour{});
+        result.paths.emplace_back(COMPLEX_MOVE(one), Shape::Stroke, juce::Colour{});
         return result;
       }();
 
@@ -126,8 +126,8 @@ namespace Interface
         two.closeSubPath();
 
         Shape result;
-        result.paths.emplace_back(COMPLEX_MOV(one), Shape::Stroke, juce::Colour{});
-        result.paths.emplace_back(COMPLEX_MOV(two), Shape::Fill, juce::Colour{});
+        result.paths.emplace_back(COMPLEX_MOVE(one), Shape::Stroke, juce::Colour{});
+        result.paths.emplace_back(COMPLEX_MOVE(two), Shape::Fill, juce::Colour{});
         return result;
       }();
 
@@ -146,7 +146,7 @@ namespace Interface
 
         path.addRoundedRectangle(juce::Rectangle{ 5.5f, 3.5f, 6.0f, 7.0f }, 1.5f);
         Shape result;
-        result.paths.emplace_back(COMPLEX_MOV(path), Shape::Stroke, juce::Colour{});
+        result.paths.emplace_back(COMPLEX_MOVE(path), Shape::Stroke, juce::Colour{});
         return result;
       }();
 
@@ -187,8 +187,8 @@ namespace Interface
         two.lineTo({ fStartX + fWidth, 5.5f });
 
         Shape result;
-        result.paths.emplace_back(COMPLEX_MOV(one), Shape::Stroke, juce::Colour{});
-        result.paths.emplace_back(COMPLEX_MOV(two), Shape::Stroke, juce::Colour{});
+        result.paths.emplace_back(COMPLEX_MOVE(one), Shape::Stroke, juce::Colour{});
+        result.paths.emplace_back(COMPLEX_MOVE(two), Shape::Stroke, juce::Colour{});
         return result;
       }();
 
@@ -281,7 +281,7 @@ namespace Interface
         strokePath.closeSubPath();
 
         Shape result;
-        result.paths.emplace_back(COMPLEX_MOV(strokePath), Shape::Stroke, juce::Colour{});
+        result.paths.emplace_back(COMPLEX_MOVE(strokePath), Shape::Stroke, juce::Colour{});
         return result;
       }();
 
@@ -318,8 +318,8 @@ namespace Interface
         fillPath.closeSubPath();
 
         Shape result;
-        result.paths.emplace_back(COMPLEX_MOV(strokePath), Shape::Stroke, juce::Colour{});
-        result.paths.emplace_back(COMPLEX_MOV(fillPath), Shape::Fill, juce::Colour{});
+        result.paths.emplace_back(COMPLEX_MOVE(strokePath), Shape::Stroke, juce::Colour{});
+        result.paths.emplace_back(COMPLEX_MOVE(fillPath), Shape::Fill, juce::Colour{});
         return result;
       }();
 
@@ -341,7 +341,7 @@ namespace Interface
         path.addArc(0.0f, 2.0f, 11.0f, 11.0f, kAngleStart, kAngle + kAngleStart, true);
 
         Shape result;
-        result.paths.emplace_back(COMPLEX_MOV(path), Shape::Stroke, juce::Colour{});
+        result.paths.emplace_back(COMPLEX_MOVE(path), Shape::Stroke, juce::Colour{});
         return result;
       }();
 

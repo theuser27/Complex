@@ -39,7 +39,8 @@
 #define JUCE_GRAPHICS_INCLUDE_COREGRAPHICS_HELPERS 1
 
 #include "juce_audio_processors.h"
-#include <juce_gui_extra/juce_gui_extra.h>
+#include <juce_core/juce_core.h>
+#include <juce_gui_basics/juce_gui_basics.h>
 
 //==============================================================================
 #if (JUCE_PLUGINHOST_VST || JUCE_PLUGINHOST_VST3) && (JUCE_LINUX || JUCE_BSD)
@@ -56,6 +57,90 @@
 
 #if JUCE_PLUGINHOST_AU && (JUCE_MAC || JUCE_IOS)
  #include <AudioUnit/AudioUnit.h>
+#endif
+
+#if JUCE_MAC
+ #import <WebKit/WebKit.h>
+ #import <IOKit/IOKitLib.h>
+ #import <IOKit/IOCFPlugIn.h>
+ #import <IOKit/hid/IOHIDLib.h>
+ #import <IOKit/hid/IOHIDKeys.h>
+ #import <IOKit/pwr_mgt/IOPMLib.h>
+
+ #if JUCE_PUSH_NOTIFICATIONS
+  #import <Foundation/NSUserNotification.h>
+
+  #include "native/juce_mac_PushNotifications.cpp"
+ #endif
+
+//==============================================================================
+#elif JUCE_IOS
+ #import <WebKit/WebKit.h>
+
+ #if JUCE_PUSH_NOTIFICATIONS
+  #import <UserNotifications/UserNotifications.h>
+  #include "native/juce_ios_PushNotifications.cpp"
+ #endif
+
+//==============================================================================
+#elif JUCE_ANDROID
+ #if JUCE_PUSH_NOTIFICATIONS
+  #include "native/juce_android_PushNotifications.cpp"
+ #endif
+
+//==============================================================================
+#elif JUCE_WINDOWS
+ #include <windowsx.h>
+ #include <vfw.h>
+ #include <commdlg.h>
+
+ #if JUCE_WEB_BROWSER
+  #include <exdisp.h>
+  #include <exdispid.h>
+
+  #if JUCE_USE_WIN_WEBVIEW2
+   #include <windows.foundation.h>
+   #include <windows.foundation.collections.h>
+
+   JUCE_BEGIN_IGNORE_WARNINGS_MSVC (4265)
+   #include <wrl.h>
+   #include <wrl/wrappers/corewrappers.h>
+   JUCE_END_IGNORE_WARNINGS_MSVC
+
+   #include "WebView2.h"
+
+   JUCE_BEGIN_IGNORE_WARNINGS_MSVC (4458)
+   #include "WebView2EnvironmentOptions.h"
+   JUCE_END_IGNORE_WARNINGS_MSVC
+  #endif
+
+ #endif
+
+//==============================================================================
+#elif (JUCE_LINUX || JUCE_BSD) && JUCE_WEB_BROWSER
+ JUCE_BEGIN_IGNORE_WARNINGS_GCC_LIKE ("-Wzero-as-null-pointer-constant", "-Wparentheses", "-Wdeprecated-declarations")
+
+ // If you're missing this header, you need to install the webkit2gtk-4.0 package
+ #include <gtk/gtk.h>
+ #include <gtk/gtkx.h>
+ #include <glib-unix.h>
+ #include <webkit2/webkit2.h>
+
+ JUCE_END_IGNORE_WARNINGS_GCC_LIKE
+#endif
+
+#if JUCE_MAC
+  #include <juce_gui_extra/embedding/juce_NSViewComponent.h>
+  #include <juce_gui_extra/native/juce_NSViewComponent.h>
+  #include "juce_gui_extra/native/juce_mac_NSViewFrameWatcher.h"
+  #include "juce_gui_extra/native/juce_mac_NSViewComponent.mm"
+#elif JUCE_WINDOWS
+  #include <juce_gui_extra/embedding/juce_HWNDComponent.h>
+  #include <juce_gui_extra/native/juce_win32_HWNDComponent.cpp>
+#elif JUCE_LINUX || JUCE_BSD
+  #include <juce_gui_extra/embedding/juce_XEmbedComponent.h>
+  #include <juce_gui_basics/native/x11/juce_linux_ScopedWindowAssociation.h>
+  #include <juce_gui_extra/native/juce_linux_XEmbedComponent.cpp>
 #endif
 
 namespace juce

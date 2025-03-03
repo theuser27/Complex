@@ -14,16 +14,25 @@
 
 namespace Interface
 {
+  class OpenGlQuad;
+  class EffectsStateSection;
+
   class LaneSelector final : public OpenGlContainer, public EffectsLaneListener
   {
   public:
-    LaneSelector() : OpenGlContainer{ "LaneSelector" } { }
+    LaneSelector();
+    ~LaneSelector() override;
 
     void resized() override;
 
     void laneTurnedOnOff(EffectsLaneSection *lane, bool isOn) override;
 
   private:
+    class Slider;
+
+    utils::up<Slider> slider_;
+    std::vector<OpenGlQuad> laneBackgrounds_;
+    EffectsStateSection *stateSection = nullptr;
     // TODO: custom slider class for the selector + lane boxes
   };
 }

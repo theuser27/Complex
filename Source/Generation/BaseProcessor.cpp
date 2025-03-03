@@ -16,12 +16,13 @@
 
 namespace Generation
 {
-  BaseProcessor::BaseProcessor(Plugin::ProcessorTree *processorTree, std::string_view processorType) noexcept :
-    processorTree_{ processorTree }, processorType_{ processorType } { }
+  BaseProcessor::BaseProcessor(Plugin::ProcessorTree *processorTree, utils::string_view processorType) noexcept :
+    processorTree_{ processorTree }, processorType_{ processorType }, processorId_{ processorTree_->generateId() } { }
   BaseProcessor::~BaseProcessor() noexcept = default;
 
   BaseProcessor::BaseProcessor(const BaseProcessor &other) noexcept : 
-    processorTree_(other.processorTree_), processorType_{ other.processorType_ }
+    processorTree_(other.processorTree_), processorType_{ other.processorType_ }, 
+    processorId_{ processorTree_->generateId() }
   {
     processorParameters_.data.reserve(other.processorParameters_.data.size());
     for (auto &parameterPair : other.processorParameters_.data)
@@ -39,14 +40,15 @@ namespace Generation
   }
 
   BaseProcessor::BaseProcessor(BaseProcessor &&other) noexcept :
-    processorTree_(other.processorTree_), processorType_{ other.processorType_ }
+    processorTree_(other.processorTree_), processorType_{ other.processorType_ },
+    processorId_{ processorTree_->generateId() }
   {
     processorParameters_.data.reserve(other.processorParameters_.data.size());
     for (auto &parameterPair : other.processorParameters_.data)
       processorParameters_.data.emplace_back(parameterPair.first,
         utils::up<Framework::ParameterValue>::create(*parameterPair.second));
 
-    subProcessors_ = COMPLEX_MOV(other.subProcessors_);
+    subProcessors_ = COMPLEX_MOVE(other.subProcessors_);
     for (auto &subProcessor : subProcessors_)
       subProcessor->setParentProcessorId(processorId_);
 
@@ -88,7 +90,7 @@ namespace Generation
         processorParameters_.data.emplace_back(other.processorParameters_.data[i].first,
           utils::up<Framework::ParameterValue>::create(*other.processorParameters_[i]));
 
-      subProcessors_ = COMPLEX_MOV(other.subProcessors_);
+      subProcessors_ = COMPLEX_MOVE(other.subProcessors_);
       for (auto &subProcessor : subProcessors_)
         subProcessor->setParentProcessorId(processorId_);
 
@@ -103,7 +105,7 @@ namespace Generation
       processorParameter.second->initialise();
   }
 
-  Framework::ParameterValue *BaseProcessor::getParameter(std::string_view parameterId) const noexcept
+  Framework::ParameterValue *BaseProcessor::getParameter(utils::string_view parameterId) const noexcept
   {
     const auto parameterIter = processorParameters_.find(parameterId);
     COMPLEX_ASSERT(parameterIter != processorParameters_.data.end() && "Parameter was not found");
@@ -129,10 +131,10 @@ namespace Generation
         subModule->updateParameters(flag, sampleRate);
   }
 
-  void BaseProcessor::remapParameters(std::optional<std::span<Framework::ParameterBridge *>> bridges, 
+  void BaseProcessor::remapParameters(utils::span<Framework::ParameterBridge *> bridges, 
     bool bridgeValueFromParameters, bool remapOnlyBridges) noexcept
   {
-    if (!bridges.has_value())
+    if (!bridges.size())
     {
       for (auto &parameter : processorParameters_.data)
       {
@@ -157,13 +159,12 @@ namespace Generation
       return;
     }
 
-    auto bridgeSpan = bridges.value();
-    COMPLEX_ASSERT(bridgeSpan.size() == processorParameters_.data.size());
+    COMPLEX_ASSERT(bridges.size() == processorParameters_.data.size());
 
     for (usize i = 0; i < processorParameters_.data.size(); ++i)
     {
       auto *parameter = processorParameters_.data[i].second.get();
-      auto *newBridge = bridgeSpan[i];
+      auto *newBridge = bridges[i];
       if (auto *oldBridge = processorParameters_.data[i].second->changeBridge(newBridge))
         oldBridge->resetParameterLink(nullptr);
       
@@ -172,9 +173,9 @@ namespace Generation
   }
 
   utils::up<Interface::ProcessorSection> &BaseProcessor::getSavedSection() noexcept { return savedSection_; }
-  void BaseProcessor::setSavedSection(utils::up<Interface::ProcessorSection> savedSection) noexcept { savedSection_ = COMPLEX_MOV(savedSection); }
+  void BaseProcessor::setSavedSection(utils::up<Interface::ProcessorSection> savedSection) noexcept { savedSection_ = COMPLEX_MOVE(savedSection); }
 
-  void BaseProcessor::createProcessorParameters(std::span<const std::string_view> parameterIds)
+  void BaseProcessor::createProcessorParameters(utils::span<const utils::string_view> parameterIds)
   {
     using namespace Framework;
 

@@ -94,14 +94,7 @@ namespace clg
     // Empty vtable which is used when small_fn is empty
     template <typename R, typename... Args>
     inline constexpr vtable_t<R, Args...> empty_vtable{};
-
-    template <std::size_t size, std::size_t alignment>
-    struct aligned_storage 
-    {
-      alignas(alignment) unsigned char data[size];
-    };
-
-  } // detail
+  }
 
   template <typename R, typename... Args, size_t MaxSize>
   class small_fn<auto(Args...) -> R, MaxSize>
@@ -131,7 +124,7 @@ namespace clg
     // We make sure that is_small_function == false and that we can invoke it like R(Args...)
     //
     template<typename FnT, typename fn_t = std::decay_t<FnT>> 
-      requires !detail::is_small_fn_v<fn_t> && std::is_invocable_r_v<R, fn_t &, Args...>
+      requires (!detail::is_small_fn_v<fn_t> && std::is_invocable_r_v<R, fn_t &, Args...>)
     constexpr small_fn(FnT&& fn) { from_fn(FWD(fn)); }
 
     constexpr ~small_fn() { vtable_->destroyer(&data_); }
@@ -161,11 +154,8 @@ namespace clg
       return *this;
     }
 
-    //
-    // This is the same enable_if as above
-    //
     template<typename FnT, typename fn_t = std::decay_t<FnT>>
-      requires !detail::is_small_fn_v<fn_t> && std::is_invocable_r_v<R, fn_t &, Args...>
+      requires (!detail::is_small_fn_v<fn_t> && std::is_invocable_r_v<R, fn_t &, Args...>)
     constexpr auto operator=(FnT&& fn) -> small_fn&
     {
       from_fn(FWD(fn));
@@ -183,7 +173,7 @@ namespace clg
     }
 
   private:
-    using storage_t = detail::aligned_storage<MaxSize - sizeof(vtable_t *), alignment>;
+    using storage_t = unsigned char[MaxSize - sizeof(vtable_t *)];
 
     template<typename FnT>
     auto from_fn(FnT&& fn) -> void
@@ -196,10 +186,10 @@ namespace clg
       static_assert(sizeof(fn_t) <= sizeof(storage_t),
         "This object is too big to fit inside the clg::small_fn");
 
-      static_assert(alignof(storage_t) % alignof(fn_t) == 0,
+      static_assert(alignment % alignof(fn_t) == 0,
         "clg::small_fn cannot be constructed from an object of this alignment");
 
-      static_assert(alignof(storage_t) >= alignof(fn_t),
+      static_assert(alignment >= alignof(fn_t),
         "clg::small_fn does not support alignment higher the one defined in the class");
 
       static constexpr auto vtable = vtable_t::template create<fn_t>();
@@ -209,7 +199,7 @@ namespace clg
       vtable_ = &vtable;
     }
 
-    storage_t data_;
+    alignas(alignment) storage_t data_;
     const vtable_t* vtable_;
   };
 

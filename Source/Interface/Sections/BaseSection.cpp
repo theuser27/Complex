@@ -18,7 +18,7 @@
 
 namespace Interface
 {
-  BaseSection::BaseSection(std::string_view name) : OpenGlContainer({ name.data(), name.size() })
+  BaseSection::BaseSection(utils::string_view name) : OpenGlContainer({ name.data(), name.size() })
   {
     setWantsKeyboardFocus(true);
   }
@@ -158,11 +158,11 @@ namespace Interface
   {
   public:
     OffOverlayQuad() : OpenGlMultiQuad{ 1, Shaders::kColorFragment, "OffOverlayQuad" }
-    { setQuad(0, -1.0f, -1.0f, 2.0f, 2.0f); }
+    { getQuadData().setQuad(0, -1.0f, -1.0f, 2.0f, 2.0f); }
   };
 
-  ProcessorSection::ProcessorSection(std::string_view name, Generation::BaseProcessor *processor) :
-    BaseSection{ name }, processor_(processor) { }
+  ProcessorSection::ProcessorSection(utils::string_view name, Generation::BaseProcessor *processor) :
+    BaseSection{ name }, processor_{ processor } { }
 
   ProcessorSection::~ProcessorSection() noexcept = default;
 

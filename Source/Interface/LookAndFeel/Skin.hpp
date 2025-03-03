@@ -10,7 +10,6 @@
 
 #pragma once
 
-#include <array>
 #include "Framework/platform_definitions.hpp"
 #include "Framework/vector_map.hpp"
 
@@ -19,7 +18,6 @@ namespace juce
   class File;
   class String;
   class Colour;
-  class LookAndFeel;
 }
 
 namespace Interface
@@ -196,7 +194,7 @@ namespace Interface
   protected:
     u32 colors_[kColorIdCount]{};
     float values_[kValueIdCount]{};
-    std::array<Framework::VectorMap<ColourId, u32>, kSectionsCount> colorOverrides_{};
-    std::array<Framework::VectorMap<ValueId, float>, kSectionsCount> valueOverrides_{};
+    utils::array<utils::VectorMap<ColourId, u32>, kSectionsCount> colorOverrides_{};
+    utils::array<utils::VectorMap<ValueId, float>, kSectionsCount> valueOverrides_{};
   };
 }

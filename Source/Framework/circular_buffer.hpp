@@ -10,8 +10,6 @@
 
 #pragma once
 
-#include <span>
-
 #include "utils.hpp"
 #include "memory_block.hpp"
 
@@ -71,10 +69,16 @@ namespace Framework
 
     usize getChannels() const noexcept { return channels_; }
     usize getSize() const noexcept { return size_; }
-    auto &getData() noexcept { return data_; }
-    const auto &getData() const noexcept { return data_; }
-    auto get() noexcept { return data_.get(); }
-    const auto get() const noexcept { return data_.get(); }
+    auto get(usize channel = 0) noexcept
+    {
+      COMPLEX_ASSERT(channel < channels_);
+      return data_.get().offset(channel * size_, size_);
+    }
+    auto get(usize channel = 0) const noexcept
+    {
+      COMPLEX_ASSERT(channel < channels_);
+      return data_.get().offset(channel * size_, size_);
+    }
 
   private:
     MemoryBlock<float> data_{};
@@ -110,7 +114,7 @@ namespace Framework
         end_ = 0;
       }
 
-      data_ = COMPLEX_MOV(newData);
+      data_ = COMPLEX_MOVE(newData);
     }
 
     void clear(u32 begin, u32 samples) noexcept
@@ -137,91 +141,81 @@ namespace Framework
     template<utils::MathOperations Operation = utils::MathOperations::Assign>
     static void applyToBuffer(Buffer &thisBuffer, const Buffer &otherBuffer,
       usize channels, usize samples, usize thisStart, usize otherStart,
-      std::span<char> channelsToApplyTo = {}) noexcept
+      utils::span<char> channelsToApplyTo = {}) noexcept
     {
       COMPLEX_ASSERT(thisBuffer.getChannels() >= channels);
       COMPLEX_ASSERT(otherBuffer.getChannels() >= channels);
       COMPLEX_ASSERT(thisBuffer.getSize() >= samples);
       COMPLEX_ASSERT(otherBuffer.getSize() >= samples);
 
-      float increment = 1.0f / (float)samples;
-      auto thisPointer = thisBuffer.getData().get();
-      auto otherPointer = otherBuffer.getData().get();
-
-      auto iterate = [&]<bool UseBitAnd>()
+      usize thisSize = thisBuffer.getSize();
+      usize otherSize = otherBuffer.getSize();
+      [[maybe_unused]] float increment = 1.0f / (float)samples;
+      
+      auto wrapIndex = [&]() -> usize (*)(usize, usize)
       {
-        usize thisSize = thisBuffer.getSize();
-        usize otherSize = otherBuffer.getSize();
+        if (utils::isPowerOfTwo(thisSize) && utils::isPowerOfTwo(otherSize))
+          return [](usize i, usize m) { return i & (m - 1); };
+        else
+          return [](usize i, usize m) { return i % m; };
+      }();
 
-        for (usize i = 0; i < channels; ++i)
+      for (usize i = 0; i < channels; ++i)
+      {
+        if (!channelsToApplyTo.empty() && !channelsToApplyTo[i])
+          continue;
+
+        auto thisPointer = thisBuffer.get(i);
+        auto otherPointer = otherBuffer.get(i);
+
+        [[maybe_unused]] float t = 0.0f;
+        for (usize k = 0; k < samples; k++)
         {
-          if (!channelsToApplyTo.empty() && !channelsToApplyTo[i])
-            continue;
+          usize thisIndex = wrapIndex(thisStart + k, thisSize);
+          usize otherIndex = wrapIndex(otherStart + k, otherSize);
 
-          [[maybe_unused]] float t = 0.0f;
-          for (usize k = 0; k < samples; k++)
+          if constexpr (Operation == utils::MathOperations::Add)
+            thisPointer[thisIndex] += otherPointer[otherIndex];
+          else if constexpr (Operation == utils::MathOperations::Multiply)
+            thisPointer[thisIndex] *= otherPointer[otherIndex];
+          else if constexpr (Operation == utils::MathOperations::FadeInAdd)
           {
-            usize thisIndex, otherIndex;
-            if constexpr (UseBitAnd)
-            {
-              thisIndex = (thisStart + k) & (thisSize - 1);
-              otherIndex = (otherStart + k) & (otherSize - 1);
-            }
-            else
-            {
-              thisIndex = (thisStart + k) % thisSize;
-              otherIndex = (otherStart + k) % otherSize;
-            }
-
-            if constexpr (Operation == utils::MathOperations::Add)
-              thisPointer[i * thisSize + thisIndex] += otherPointer[i * otherSize + otherIndex];
-            else if constexpr (Operation == utils::MathOperations::Multiply)
-              thisPointer[i * thisSize + thisIndex] *= otherPointer[i * otherSize + otherIndex];
-            else if constexpr (Operation == utils::MathOperations::FadeInAdd)
-            {
-              thisPointer[i * thisSize + thisIndex] = (1.0f - t) * thisPointer[i * thisSize + thisIndex] + 
-                t * (thisPointer[i * thisSize + thisIndex] + otherPointer[i * otherSize + otherIndex]);
-              t += increment;
-            }
-            else if constexpr (Operation == utils::MathOperations::FadeOutAdd)
-            {
-              thisPointer[i * thisSize + thisIndex] = (1.0f - t) * 
-                (thisPointer[i * thisSize + thisIndex] + otherPointer[i * otherSize + otherIndex]) +
-                t * otherPointer[i * otherSize + otherIndex];
-              t += increment;
-            }
-            else if constexpr (Operation == utils::MathOperations::Interpolate)
-            {
-              thisPointer[i * thisSize + thisIndex] = (1.0f - t) * thisPointer[i * thisSize + thisIndex] +
-                t * otherPointer[i * otherSize + otherIndex];
-              t += increment;
-            }
-            else
-              thisPointer[i * thisSize + thisIndex] = otherPointer[i * otherSize + otherIndex];
+            thisPointer[thisIndex] = (1.0f - t) * thisPointer[thisIndex] + 
+              t * (thisPointer[thisIndex] + otherPointer[otherIndex]);
+            t += increment;
           }
+          else if constexpr (Operation == utils::MathOperations::FadeOutAdd)
+          {
+            thisPointer[thisIndex] = (1.0f - t) * 
+              (thisPointer[thisIndex] + otherPointer[otherIndex]) +
+              t * otherPointer[otherIndex];
+            t += increment;
+          }
+          else if constexpr (Operation == utils::MathOperations::Interpolate)
+          {
+            thisPointer[thisIndex] = (1.0f - t) * thisPointer[thisIndex] +
+              t * otherPointer[otherIndex];
+            t += increment;
+          }
+          else
+            thisPointer[thisIndex] = otherPointer[otherIndex];
         }
-      };
-
-      if (utils::isPowerOfTwo(thisBuffer.getSize()) && utils::isPowerOfTwo(otherBuffer.getSize()))
-        iterate.template operator()<true>();
-      else
-        iterate.template operator()<false>();
+      }
     }
 
     u32 writeToBufferEnd(const float *const *const writer, u32 channels, u32 samples) noexcept
     {
-      auto thisPointer = data_.getData().get();
       usize thisSize = getSize();
       for (usize i = 0; i < channels; ++i)
       {
-        usize thisStart = i * thisSize;
+        auto thisPointer = data_.get(i);
 
         if (utils::isPowerOfTwo(thisSize))
           for (usize j = 0; j < samples; ++j)
-            thisPointer[thisStart + ((end_ + j) & (thisSize - 1))] = writer[i][j];
+            thisPointer[(end_ + j) & (thisSize - 1)] = writer[i][j];
         else
           for (usize j = 0; j < samples; ++j)
-            thisPointer[thisStart + ((end_ + j) % thisSize)] = writer[i][j];
+            thisPointer[(end_ + j) % thisSize] = writer[i][j];
       }
 
       return advanceEnd(samples);
@@ -232,23 +226,22 @@ namespace Framework
     //	reader's starting index = readeeIndex
     // - Can decide whether to advance the block or not
     void readBuffer(float *const *reader, u32 channels, u32 samples,
-      u32 readeeIndex = 0, std::span<char> channelsToRead = {}) const noexcept
+      u32 readeeIndex = 0, utils::span<char> channelsToRead = {}) const noexcept
     {
-      auto thisPointer = data_.getData().get();
+      usize thisSize = getSize();
       for (usize i = 0; i < channels; ++i)
       {
         if (!channelsToRead.empty() && !channelsToRead[i])
           continue;
 
-        const usize thisSize = getSize();
-        const usize thisStart = i * thisSize;
+        auto thisPointer = data_.get(i);
 
         if (utils::isPowerOfTwo(thisSize))
           for (usize j = 0; j < samples; ++j)
-            reader[i][j] = thisPointer[thisStart + ((readeeIndex + j) & (thisSize - 1))];
+            reader[i][j] = thisPointer[(readeeIndex + j) & (thisSize - 1)];
         else
           for (usize j = 0; j < samples; ++j)
-            reader[i][j] = thisPointer[thisStart + ((readeeIndex + j) % thisSize)];
+            reader[i][j] = thisPointer[(readeeIndex + j) % thisSize];
       }
     }
 
@@ -257,7 +250,7 @@ namespace Framework
     //	reader's starting index = readeeIndex
     // - Can decide whether to advance the block or not
     void readBuffer(Buffer &reader, u32 channels, u32 samples, 
-      u32 readeeIndex = 0, u32 readerIndex = 0, std::span<char> channelsToRead = {}) const noexcept
+      u32 readeeIndex = 0, u32 readerIndex = 0, utils::span<char> channelsToRead = {}) const noexcept
     { applyToBuffer(reader, data_, channels, samples, readerIndex, readeeIndex, channelsToRead); }
 
     // - A specified AudioBuffer writes own data starting at writerOffset to the end of the current buffer,
@@ -265,14 +258,14 @@ namespace Framework
     // - Adjusts end_ according to the new block written
     // - Returns the new endpoint
     u32 writeToBufferEnd(const Buffer &writer, u32 channels, u32 samples,
-      u32 writerIndex = 0, std::span<char> channelsToWrite = {}) noexcept
+      u32 writerIndex = 0, utils::span<char> channelsToWrite = {}) noexcept
     {
       applyToBuffer(data_, writer, channels, samples, end_, writerIndex, channelsToWrite);
       return advanceEnd(samples);
     }
 
     void writeToBuffer(const Buffer &writer, u32 channels, u32 samples,
-      u32 writeeIndex, u32 writerIndex = 0, std::span<char> channelsToWrite = {}) noexcept
+      u32 writeeIndex, u32 writerIndex = 0, utils::span<char> channelsToWrite = {}) noexcept
     { applyToBuffer(data_, writer, channels, samples, writeeIndex, writerIndex, channelsToWrite); }
 
     void add(float value, u32 channel, u32 index) noexcept
@@ -283,7 +276,7 @@ namespace Framework
     }
 
     void addBuffer(const Buffer &other, u32 channels, u32 samples,
-      std::span<char> channelsToAdd = {}, u32 thisStartIndex = 0, u32 otherStartIndex = 0) noexcept
+      utils::span<char> channelsToAdd = {}, u32 thisStartIndex = 0, u32 otherStartIndex = 0) noexcept
     {
       applyToBuffer<utils::MathOperations::Add>(data_, other, channels, samples, 
         thisStartIndex, otherStartIndex, channelsToAdd);
@@ -297,7 +290,7 @@ namespace Framework
     }
 
     void multiplyBuffer(const Buffer &other, u32 channels, u32 samples,
-      std::span<char> channelsToAdd = {}, u32 thisStartIndex = 0, u32 otherStartIndex = 0) noexcept
+      utils::span<char> channelsToAdd = {}, u32 thisStartIndex = 0, u32 otherStartIndex = 0) noexcept
     {
       applyToBuffer<utils::MathOperations::Multiply>(data_, other, channels, samples, 
         thisStartIndex, otherStartIndex, channelsToAdd);

@@ -84,13 +84,13 @@ namespace Framework
   float Window::getLanczosWindow(float position, float alpha) noexcept 
   { return utils::pow(utils::clamp(lanczosWindowLookup.linearLookup(position), 0.0f, 1.0f), alpha); }
 
-  void Window::applyWindow(Buffer &buffer, usize channels, std::span<char> channelsToProcess, 
+  void Window::applyWindow(Buffer &buffer, usize channels, utils::span<char> channelsToProcess,
     usize samples, Processors::SoundEngine::WindowType::type type, float alpha)
   {
     applyDefaultWindows(buffer, channels, channelsToProcess, samples, type, alpha);
   }
 
-  void Window::applyDefaultWindows(Buffer &buffer, usize channels, std::span<char> channelsToProcess,
+  void Window::applyDefaultWindows(Buffer &buffer, usize channels, utils::span<char> channelsToProcess,
     usize samples, Processors::SoundEngine::WindowType::type type, float alpha) noexcept
   {
     using WindowType = Processors::SoundEngine::WindowType::type;
@@ -108,8 +108,8 @@ namespace Framework
     float window = 1.0f;
     float position = 0.0f;
 
-    float *data = buffer.getData().get();
     usize size = buffer.getSize();
+    auto data = buffer.get().pointer;
 
     // applying window to first sample and middle
     {
@@ -200,7 +200,7 @@ namespace Framework
     }
   }
 
-  void Window::applyCustomWindows(Buffer &buffer, usize channels, std::span<char> channelsToCopy,
+  void Window::applyCustomWindows(Buffer &buffer, usize channels, utils::span<char> channelsToCopy,
     usize samples, Processors::SoundEngine::WindowType::type type, float alpha)
   {
     // TODO: see into how to generate custom windows based on spectral properties

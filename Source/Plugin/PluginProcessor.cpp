@@ -15,8 +15,8 @@
 #include "PluginEditor.hpp"
 #include "Renderer.hpp"
 
-ComplexAudioProcessor::ComplexAudioProcessor(usize parameterMappings, u32 inSidechains, u32 outSidechains) : 
-  ComplexPlugin{ inSidechains, outSidechains }, AudioProcessor{ [&]()
+ComplexAudioProcessor::ComplexAudioProcessor(usize parameterMappings, u32 inSidechains, u32 outSidechains, usize undoSteps) :
+  ComplexPlugin{ inSidechains, outSidechains, undoSteps }, AudioProcessor{ [&]()
     {
       BusesProperties buses{};
 
@@ -44,13 +44,10 @@ ComplexAudioProcessor::ComplexAudioProcessor(usize parameterMappings, u32 inSide
     parameterBridges_.push_back(bridge);
     addParameter(bridge);
   }
-
-  utils::loadLibraries();
 }
 
 ComplexAudioProcessor::~ComplexAudioProcessor()
 {
-  utils::unloadLibraries();
 }
 
 //==============================================================================
@@ -129,7 +126,7 @@ juce::AudioProcessorEditor* ComplexAudioProcessor::createEditor()
 // This creates new instances of the plugin..
 juce::AudioProcessor* JUCE_CALLTYPE createPluginFilter()
 {
-  auto [parameterMappings, inSidechains, outSidechains] = 
-    Framework::LoadSave::getParameterMappingsAndSidechains();
-  return new ComplexAudioProcessor{ parameterMappings, (u32)inSidechains, (u32)outSidechains };
+  usize parameterMappings, inSidechains, outSidechains, undoSteps;
+  Framework::LoadSave::getStartupParameters(parameterMappings, inSidechains, outSidechains, undoSteps);
+  return new ComplexAudioProcessor{ parameterMappings, (u32)inSidechains, (u32)outSidechains, undoSteps };
 }

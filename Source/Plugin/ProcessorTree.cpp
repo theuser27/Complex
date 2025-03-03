@@ -10,16 +10,13 @@
 
 #include "ProcessorTree.hpp"
 
-#include <juce_data_structures/juce_data_structures.h>
-
 #include "Framework/update_types.hpp"
 #include "Generation/BaseProcessor.hpp"
-#include "Generation/EffectsState.hpp"
 
 namespace Plugin
 {
-  ProcessorTree::ProcessorTree(u32 inSidechains, u32 outSidechains) : 
-    undoManager_{ utils::up<juce::UndoManager>::create(0, 100) }, allProcessors_{ 64 }, 
+  ProcessorTree::ProcessorTree(u32 inSidechains, u32 outSidechains, usize undoSteps) :
+    undoManager_{ utils::up<Framework::UndoManager>::create(undoSteps) }, allProcessors_{ 64 },
     inSidechains_(inSidechains), outSidechains_(outSidechains) { }
   ProcessorTree::~ProcessorTree()
   {
@@ -39,12 +36,12 @@ namespace Plugin
     -> utils::up<Generation::BaseProcessor>
   {
     auto iter = allProcessors_.find(processorId);
-    utils::up<Generation::BaseProcessor> deletedModule = COMPLEX_MOV(iter->second);
+    utils::up<Generation::BaseProcessor> deletedModule = COMPLEX_MOVE(iter->second);
     allProcessors_.data.erase(iter);
     return deletedModule;
   }
 
-  auto ProcessorTree::getProcessorParameter(u64 parentProcessorId, std::string_view parameterName) const noexcept
+  auto ProcessorTree::getProcessorParameter(u64 parentProcessorId, utils::string_view parameterName) const noexcept
     -> Framework::ParameterValue *
   {
     auto *processorPointer = getProcessor(parentProcessorId);
@@ -56,14 +53,16 @@ namespace Plugin
 
   void ProcessorTree::pushUndo(Framework::WaitingUpdate *action, bool isNewTransaction)
   {
-    std::function waitFunction = [this]()
+    clg::small_fn<utils::ScopedLock()> waitFunction = [this]()
     {
       // check if we're in the middle of an audio callback
-      while (updateFlag_.load(std::memory_order_acquire) != UpdateFlag::AfterProcess) { utils::millisleep(); }
+      utils::millisleep([&]()
+        { return updateFlag_.load(std::memory_order_relaxed) != UpdateFlag::AfterProcess; });
+
       return utils::ScopedLock{ processingLock_, utils::WaitMechanism::Spin };
     };
     
-    action->setWaitFunction(COMPLEX_MOV(waitFunction));
+    action->setWaitFunction(COMPLEX_MOVE(waitFunction));
     if (isNewTransaction)
       undoManager_->beginNewTransaction();
     undoManager_->perform(action);
@@ -74,19 +73,17 @@ namespace Plugin
 
   void ProcessorTree::addProcessor(utils::up<Generation::BaseProcessor> processor)
   {
-    u64 newProcessorId = processorIdCounter_.fetch_add(1, std::memory_order_acq_rel);
-    processor->processorId_ = newProcessorId;
-
-    allProcessors_.add(newProcessorId, COMPLEX_MOV(processor));
+    auto processorId = processor->processorId_;
+    allProcessors_.add(processorId, COMPLEX_MOVE(processor));
     if ((float)allProcessors_.data.size() / (float)allProcessors_.data.capacity() >= expandThreshold)
     {
-      Framework::VectorMap<u64, utils::up<Generation::BaseProcessor>>
+      utils::VectorMap<u64, utils::up<Generation::BaseProcessor>>
         newAllParameters{ allProcessors_.data.size() * expandAmount };
 
       auto swap = [this, &newAllParameters]()
       {
-        for (auto &[id, processor] : allProcessors_.data)
-          newAllParameters.add(id, COMPLEX_MOV(processor));
+        for (auto &pair : allProcessors_.data)
+          newAllParameters.data.emplace_back(COMPLEX_MOVE(pair));
 
         allProcessors_.data.swap(newAllParameters.data);
       };

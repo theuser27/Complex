@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.24)
-project("Complex" VERSION 0.0.9 LANGUAGES CXX C)
+project("Complex" VERSION 0.1.0 LANGUAGES CXX C)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED true)
 set_property(GLOBAL PROPERTY USE_FOLDERS true)
@@ -73,13 +73,11 @@ target_link_libraries(${TargetName}
 		juce::juce_audio_devices
 		juce::juce_audio_plugin_client
 		juce::juce_audio_processors
-		juce::juce_audio_utils
 		juce::juce_core
 		juce::juce_data_structures
 		juce::juce_events
 		juce::juce_graphics
 		juce::juce_gui_basics
-		juce::juce_gui_extra
 		juce::juce_opengl
 	PUBLIC
 		juce::juce_recommended_config_flags
@@ -96,11 +94,28 @@ elseif(CMAKE_SYSTEM_NAME STREQUAL "Darwin")
 	
 endif()
 
+if (CMAKE_SYSTEM_PROCESSOR MATCHES "(x86)|(X86)|(amd64)|(AMD64)|(x86_64)")
+  option(CACHE COMPLEX_ENABLE_FMA "Choose to enable FMA (fused multiply-add)" ON)
+  if (CMAKE_CXX_COMPILER_ID STREQUAL "GNU" OR CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
+    set(COMPLEX_SIMD_OPTIMISATION_OPTIONS -msse4.1 -mavx -mavx2)
+    set(COMPLEX_SIMD_OPTIMISATION -msse4.1 CACHE STRING "Choose SIMD optimisation" ${})
+  elseif (CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
+    set(COMPLEX_SIMD_OPTIMISATION_OPTIONS /arch:SSE2 /arch:AVX2)
+    set(COMPLEX_SIMD_OPTIMISATION /arch:SSE2 CACHE STRING "Choose SIMD optimisation")
+  endif()
+
+  set_property(CACHE COMPLEX_SIMD_OPTIMISATION PROPERTY STRINGS ${COMPLEX_SIMD_OPTIMISATION_OPTIONS})
+
+else (CMAKE_SYSTEM_PROCESSOR MATCHES "(arm)|(arm64)")
+
+endif ()
+
 if (CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
-	
+
 elseif (CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
-	
+
 elseif (CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
 	target_compile_options(${TargetName} PRIVATE /fp:fast /Zc:preprocessor /permissive- /wd5105)
 endif()
 
+target_compile_options(${TargetName} PRIVATE ${COMPLEX_SIMD_OPTIMISATION})

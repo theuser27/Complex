@@ -17,7 +17,7 @@
 
 namespace Interface
 {
-  PinBoundsBox::PinBoundsBox(std::string_view name, Framework::ParameterValue *lowBound, 
+  PinBoundsBox::PinBoundsBox(utils::string_view name, Framework::ParameterValue *lowBound,
     Framework::ParameterValue *highBound) : BaseSection{ name }
   {
     using namespace Framework;

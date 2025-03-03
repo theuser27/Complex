@@ -131,7 +131,15 @@ namespace simd_values
     #endif
     }
 
-    static strict_inline simd_type vector_call bitNot(simd_type value) { return bitXor(value, init(kFullMask)); }
+    static strict_inline simd_type vector_call bitNot(simd_type value)
+    {
+    #if COMPLEX_SSE4_1
+      auto dummy = _mm_undefined_si128();
+      return _mm_xor_si128(value, _mm_cmpeq_epi32(dummy, dummy));
+    #elif COMPLEX_NEON
+      return vmvnq_u32(value);
+    #endif
+    }
 
     static strict_inline simd_type vector_call equal(simd_type one, simd_type two)
     {
@@ -271,10 +279,10 @@ namespace simd_values
     {
     #if COMPLEX_SSE4_1
       simd_type mask = equal(value, _mm_shuffle_epi32(value, _MM_SHUFFLE(2, 3, 0, 1)));
-      mask = bitOr(mask, equal(value, _mm_shuffle_epi32(value, _MM_SHUFFLE(0, 1, 2, 3))));
+      mask = bitAnd(mask, equal(value, _mm_shuffle_epi32(value, _MM_SHUFFLE(0, 1, 2, 3))));
       return anyMask(mask);
     #elif COMPLEX_NEON
-      static_assert(false, "not implemented yet");
+      return vaddvq_u32(notEqual(value, vdupq_laneq_u32(value, 0))) == 0;
     #endif
     }
 
@@ -570,7 +578,7 @@ namespace simd_values
       return _mm_add_ps(add, _mm_mul_ps(mulOne, mulTwo));
     #endif
     #elif COMPLEX_NEON
-      return vmlaq_f32(add, mulOne, mulTwo);
+      return vfmaq_f32(add, mulOne, mulTwo);
     #endif
     }
 
@@ -583,7 +591,7 @@ namespace simd_values
       return _mm_sub_ps(sub, _mm_mul_ps(mulOne, mulTwo));
     #endif
     #elif COMPLEX_NEON
-      return vmlsq_f32(sub, mulOne, mulTwo);
+      return vfmsq_f32(sub, mulOne, mulTwo);
     #endif
     }
 
@@ -642,7 +650,14 @@ namespace simd_values
     }
 
     static strict_inline simd_type vector_call bitNot(simd_type value)
-    {	return bitXor(value, simd_mask::init((u32)(-1))); }
+    {
+    #if COMPLEX_SSE4_1
+      auto dummy = _mm_undefined_si128();
+      return _mm_xor_ps(value, toSimd(_mm_cmpeq_epi32(dummy, dummy)));
+    #elif COMPLEX_NEON
+      return toSimd(vmvnq_u32(toMask(value)));
+    #endif
+    }
 
     static strict_inline simd_type vector_call max(simd_type one, simd_type two)
     {
@@ -897,8 +912,16 @@ namespace simd_values
       value = utils::bit_cast<simd_type>(scalars);
     }
 
-    strict_inline array_t vector_call getArrayOfValues() const noexcept
-    { return utils::bit_cast<array_t>(value); }
+    constexpr strict_inline array_t vector_call getArrayOfValues() const noexcept
+    {
+    #ifdef COMPLEX_MSVC
+      array_t array;
+      array.fill(value.m128_f32);
+      return array;
+    #else
+      return utils::bit_cast<array_t>(value);
+    #endif
+    }
 
     template<typename T> requires ((sizeof(float) * size) % sizeof(T) == 0)
     strict_inline auto vector_call getArrayOfValues() const noexcept
@@ -911,8 +934,14 @@ namespace simd_values
     strict_inline bool vector_call operator==(simd_float other) const noexcept
     { return notEqual(*this, other).anyMask() == 0; }
 
-    strict_inline float vector_call operator[](usize index) const noexcept
-    { return utils::bit_cast<array_t>(value)[index]; }
+    constexpr strict_inline float vector_call operator[](usize index) const noexcept
+    {
+    #ifdef COMPLEX_MSVC
+      return value.m128_f32[index];
+    #else
+      return utils::bit_cast<array_t>(value)[index];
+    #endif
+    }
 
     strict_inline simd_float& vector_call operator+=(simd_float other) noexcept
     { value = add(value, other.value); return *this; }

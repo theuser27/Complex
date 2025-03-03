@@ -37,7 +37,7 @@ namespace Interface
     contentHolder.setInterceptsMouseClicks(false, true);
     contentHolder.addMouseListener(this, true);
 
-    scrollBarThickness = getLookAndFeel().getDefaultScrollbarWidth();
+    scrollBarThickness = 8;
 
     setInterceptsMouseClicks(false, true);
     setWantsKeyboardFocus(true);
@@ -125,7 +125,7 @@ namespace Interface
     Point<int> p(jmax(jmin(0, contentHolder.getWidth() - contentBounds.getWidth()), jmin(0, -(pos.x))),
       jmax(jmin(0, contentHolder.getHeight() - contentBounds.getHeight()), jmin(0, -(pos.y))));
 
-    return p.transformedBy(contentComp->getTransform().inverted());
+    return p;
   }
 
   void Viewport::setViewPosition(const int xPixelsOffset, const int yPixelsOffset)
@@ -434,38 +434,38 @@ namespace Interface
 
   bool Viewport::useMouseWheelMoveIfNeeded(const MouseEvent &e, const MouseWheelDetails &wheel)
   {
-    if (!(e.mods.isAltDown() || e.mods.isCtrlDown() || e.mods.isCommandDown()))
+    if (e.mods.isAltDown() || e.mods.isCtrlDown() || e.mods.isCommandDown())
+      return false;
+
+    const bool canScrollVert = (allowScrollingWithoutScrollbarV || getVerticalScrollBar().isVisible());
+    const bool canScrollHorz = (allowScrollingWithoutScrollbarH || getHorizontalScrollBar().isVisible());
+
+    if (!canScrollHorz && !canScrollVert)
+      return false;
+
+    auto deltaX = rescaleMouseWheelDistance(wheel.deltaX, singleStepX);
+    auto deltaY = rescaleMouseWheelDistance(wheel.deltaY, singleStepY);
+
+    auto pos = getViewPosition();
+
+    if (deltaX != 0 && deltaY != 0 && canScrollHorz && canScrollVert)
     {
-      const bool canScrollVert = (allowScrollingWithoutScrollbarV || getVerticalScrollBar().isVisible());
-      const bool canScrollHorz = (allowScrollingWithoutScrollbarH || getHorizontalScrollBar().isVisible());
+      pos.x -= deltaX;
+      pos.y -= deltaY;
+    }
+    else if (canScrollHorz && (deltaX != 0 || e.mods.isShiftDown() || !canScrollVert))
+    {
+      pos.x -= deltaX != 0 ? deltaX : deltaY;
+    }
+    else if (canScrollVert && deltaY != 0)
+    {
+      pos.y -= deltaY;
+    }
 
-      if (canScrollHorz || canScrollVert)
-      {
-        auto deltaX = rescaleMouseWheelDistance(wheel.deltaX, singleStepX);
-        auto deltaY = rescaleMouseWheelDistance(wheel.deltaY, singleStepY);
-
-        auto pos = getViewPosition();
-
-        if (deltaX != 0 && deltaY != 0 && canScrollHorz && canScrollVert)
-        {
-          pos.x -= deltaX;
-          pos.y -= deltaY;
-        }
-        else if (canScrollHorz && (deltaX != 0 || e.mods.isShiftDown() || !canScrollVert))
-        {
-          pos.x -= deltaX != 0 ? deltaX : deltaY;
-        }
-        else if (canScrollVert && deltaY != 0)
-        {
-          pos.y -= deltaY;
-        }
-
-        if (pos != getViewPosition())
-        {
-          setViewPosition(pos);
-          return true;
-        }
-      }
+    if (pos != getViewPosition())
+    {
+      setViewPosition(pos);
+      return true;
     }
 
     return false;

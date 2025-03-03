@@ -63,8 +63,6 @@ namespace Interface
 
     utils::shared_value<bool> isHeldDown_ = false;
     utils::shared_value<bool> isHoveredOver_ = false;
-
-    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(BaseButton)
   };
 
   class PowerButton final : public BaseButton
@@ -139,11 +137,11 @@ namespace Interface
     void redoImage() override;
     void setComponentsBounds(bool redoImage = true) override;
 
-    void setText(juce::String text) { text_ = std::move(text); }
-    void setOptions(PopupItems options) { popupOptions_ = std::move(options); }
+    void setText(juce::String text) { text_ = COMPLEX_MOVE(text); }
+    void setOptions(PopupItems options) { popupOptions_ = COMPLEX_MOVE(options); }
     void setPopupPlacement(Placement placement) { popupPlacement_ = placement; }
-    void setPopupHandler(std::function<void(int)> handler) { popupHandler_ = std::move(handler); }
-    void setCancelHandler(std::function<void()> handler) { cancelHandler_ = std::move(handler); }
+    void setPopupHandler(std::function<void(int)> handler) { popupHandler_ = COMPLEX_MOVE(handler); }
+    void setCancelHandler(std::function<void()> handler) { cancelHandler_ = COMPLEX_MOVE(handler); }
 
   protected:
     OpenGlQuad plusComponent_{ Shaders::kPlusFragment, "Options Button Plus Icon" };
@@ -174,8 +172,8 @@ namespace Interface
     void redoImage() override;
     void setComponentsBounds(bool redoImage = true) override;
 
-    void setText(juce::String text) { text_ = std::move(text); }
-    void setAction(std::function<void()> action) { action_ = std::move(action); }
+    void setText(juce::String text) { text_ = COMPLEX_MOVE(text); }
+    void setAction(std::function<void()> action) { action_ = COMPLEX_MOVE(action); }
   protected:
     OpenGlQuad fillComponent_{ Shaders::kRoundedRectangleFragment, "Action Button Fill" };
     PlainTextComponent textComponent_;

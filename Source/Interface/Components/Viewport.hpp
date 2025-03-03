@@ -52,7 +52,7 @@ namespace Interface
 
         @see setViewedComponent
     */
-    BaseComponent *getViewedComponent() const noexcept { return contentComp.get(); }
+    BaseComponent *getViewedComponent() const noexcept { return utils::as<BaseComponent>(contentComp.get()); }
 
     //==============================================================================
     /** Changes the position of the viewed component.
@@ -279,7 +279,7 @@ namespace Interface
   private:
     utils::up<ScrollBar> verticalScrollBar, horizontalScrollBar;
     BaseComponent contentHolder;
-    juce::WeakReference<BaseComponent> contentComp;
+    juce::WeakReference<Component> contentComp;
     juce::Rectangle<int> lastVisibleArea;
     int scrollBarThickness = 0;
     int singleStepX = 16, singleStepY = 16;

@@ -72,9 +72,9 @@ namespace Interface
   {
     popupSelector_->setPopupSkinOverride(skinOverride);
     popupSelector_->setComponent(source);
-    popupSelector_->setCallback(COMPLEX_MOV(callback));
-    popupSelector_->setCancelCallback(COMPLEX_MOV(cancel));
-    popupSelector_->setItems(COMPLEX_MOV(options), minWidth);
+    popupSelector_->setCallback(COMPLEX_MOVE(callback));
+    popupSelector_->setCancelCallback(COMPLEX_MOVE(cancel));
+    popupSelector_->setItems(COMPLEX_MOVE(options), minWidth);
     popupSelector_->positionList(getLocalPoint(source, position));
     popupSelector_->setVisible(true);
   }
@@ -84,9 +84,9 @@ namespace Interface
   {
     popupSelector_->setPopupSkinOverride(skinOverride);
     popupSelector_->setComponent(source);
-    popupSelector_->setCallback(COMPLEX_MOV(callback));
-    popupSelector_->setCancelCallback(COMPLEX_MOV(cancel));
-    popupSelector_->setItems(COMPLEX_MOV(options), minWidth);
+    popupSelector_->setCallback(COMPLEX_MOVE(callback));
+    popupSelector_->setCancelCallback(COMPLEX_MOVE(cancel));
+    popupSelector_->setItems(COMPLEX_MOVE(options), minWidth);
     popupSelector_->positionList(getLocalArea(source, source->getLocalBounds()), placement);
     popupSelector_->setVisible(true);
   }
@@ -105,8 +105,8 @@ namespace Interface
     Placement placement, bool primary, Skin::SectionOverride sectionOverride)
   {
     PopupDisplay *display = primary ? popupDisplay1_.get() : popupDisplay2_.get();
-    display->setContent(COMPLEX_MOV(text), getLocalArea(source, source->getLocalBounds()),
-      getBounds(), placement, sectionOverride);
+    display->setContent(COMPLEX_MOVE(text), getLocalArea(source, source->getLocalBounds()),
+      getBoundsSafe(), placement, sectionOverride);
     display->setVisible(true);
   }
 

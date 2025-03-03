@@ -19,7 +19,6 @@
 #include "../Components/OpenGlImage.hpp"
 #include "../Components/BaseButton.hpp"
 #include "../Components/BaseSlider.hpp"
-#include "../Components/Spectrogram.hpp"
 #include "../Components/PinBoundsBox.hpp"
 #include "EffectsLaneSection.hpp"
 
@@ -52,7 +51,7 @@ namespace Interface
   {
   public:
     SpectralMaskComponent(Framework::ParameterValue *lowBound, Framework::ParameterValue *highBound, 
-      Framework::ParameterValue *shiftBounds) : PinBoundsBox("Spectral Mask", lowBound, highBound), shiftBounds_(shiftBounds)
+      Framework::ParameterValue *shiftBounds) : PinBoundsBox{ "Spectral Mask", lowBound, highBound }, shiftBounds_(shiftBounds)
     {
       using namespace Framework;
 
@@ -194,7 +193,7 @@ namespace Interface
       return;
 
     PopupItems options = createPopupMenu();
-    showPopupSelector(this, e.getPosition(), COMPLEX_MOV(options),
+    showPopupSelector(this, e.getPosition(), COMPLEX_MOVE(options),
       [this](int selection) { handlePopupResult(selection); });
   }
 
@@ -253,6 +252,8 @@ namespace Interface
 
   void EffectModuleSection::paintBackground(Graphics &g)
   {
+    static constexpr float kIdTextHeight = 7.0f;
+
     maskComponent_->setRoundedCornerColour(getColour(Skin::kBackground));
 
     // drawing body
@@ -305,42 +306,131 @@ namespace Interface
     g.fillRect(lineX, lineY, 1, topMenuHeight / 2);
 
     paintUIBackground(g);
-  }
 
-  void EffectModuleSection::controlValueChanged(BaseControl *control)
-  {
-    if (control == effectTypeSelector_.get() && effectModule_)
-    {
-      if (!changeEffectOrAlgo(false))
-        return;
-
-      repaintBackground();
-    }
-    else if (control == effectAlgoSelector_.get() && effectModule_)
-    {
-      changeEffectOrAlgo(true);
-      /*initialiseParameters();
-      arrangeUI();*/
-      repaintBackground();
-    }
-    else
-      ProcessorSection::controlValueChanged(control);
+    String idString = "#";
+    idString += getProcessorId().value();
+    g.setColour(getColour(Skin::kNormalText));
+    auto font = Fonts::instance()->getInterVFont().italicised();
+    Fonts::instance()->setHeightFromAscent(font, scaleValue(kIdTextHeight));
+    g.setFont(font);
+    g.drawText(idString, (int)(rectangleBounds.getX() + outerRounding), 
+      (int)(rectangleBounds.getBottom() - outerRounding - font.getHeight()),
+      font.getStringWidth(idString), (int)font.getHeight(), 
+      juce::Justification::centredLeft, false);
   }
 
   static constexpr auto kCommonEffectParameters = Framework::Processors::BaseEffect::enum_ids_filter<Framework::kGetParameterPredicate, true>();
   static constexpr auto kEffectModuleParameters = Framework::Processors::EffectModule::enum_ids_filter<Framework::kGetParameterPredicate, true>();
+
+  void EffectModuleSection::controlValueChanged(BaseControl *control)
+  {
+    if (control != effectTypeSelector_.get() && control != effectAlgoSelector_.get())
+    {
+      ProcessorSection::controlValueChanged(control);
+      return;
+    }
+
+    if (!effectModule_)
+      return;
+
+    using namespace Framework;
+
+    Generation::BaseEffect *newEffect;
+    if (control == effectAlgoSelector_.get())
+      newEffect = getEffect();
+    else
+    {
+      auto effectType = effectTypeSelector_->getTextValue(false);
+      auto effectIndex = Processors::BaseEffect::enum_value_by_id(effectType);
+      if (!effectIndex.has_value())
+        return;
+
+      newEffect = effectModule_->changeEffect(effectType);
+
+      // resetting UI
+      setEffectType(newEffect->getProcessorType());
+
+      // replacing the parameters for algorithm and mask sliders
+      for (auto &id : kCommonEffectParameters)
+      {
+        auto *effectControl = getEffectControl(id);
+        auto *newEffectParameter = newEffect->getParameter(id);
+
+        if (auto parameterBridge = effectControl->getParameterLink()->hostControl)
+          parameterBridge->resetParameterLink(newEffectParameter->getParameterLink(), false);
+
+        effectControl->changeLinkedParameter(*newEffectParameter,
+          id == Processors::BaseEffect::Algorithm::id().value());
+        effectControl->resized();
+      }
+
+      effectTypeSelector_->resized();
+      effectTypeIcon_->setColor(getColour(Skin::kWidgetPrimary1));
+      mixNumberBox_->resized();
+      moduleActivator_->resized();
+      maskComponent_->resized();
+    }
+
+    initialiseParameters();
+
+    // replacing mapped out parameters, if there are any
+    usize parametersCount = 0;
+    usize parametersStart = 0;
+    auto algoId = effectAlgoSelector_->getTextValue();
+    for (auto &[id, count] : effectParameterCounts_)
+    {
+      if (id == algoId)
+      {
+        parametersCount = count;
+        break;
+      }
+      parametersStart += count;
+    }
+
+    static constexpr auto kReservedString = utils::string_view{ " (Reserved)" };
+
+    for (auto &[mappingIndex, parameterBridge] : parameterMappings.data)
+    {
+      if (auto *link = parameterBridge->getParameterLink(); link && link->parameter)
+        link->parameter->changeBridge(nullptr);
+
+      if (mappingIndex >= parametersCount)
+      {
+        String name = parameterBridge->getName();
+        name += { kReservedString.data(), kReservedString.size() };
+        parameterBridge->setCustomName(name);
+        continue;
+      }
+
+      auto newParameterLink = newEffect->getParameterUnchecked(
+        kCommonEffectParameters.size() + parametersStart + mappingIndex)->getParameterLink();
+
+      // if the new parameter is the old one, just add the bridge and fix name
+      if (parameterBridge->getParameterLink() == newParameterLink)
+      {
+        parameterBridge->setCustomName(parameterBridge->getName()
+          .dropLastCharacters((int)kReservedString.size()));
+        newParameterLink->parameter->changeBridge(parameterBridge);
+      }
+      else
+      {
+        parameterBridge->resetParameterLink(newEffect->getParameterUnchecked(
+          kCommonEffectParameters.size() + parametersStart + mappingIndex)->getParameterLink(), false);
+      }
+    }
+
+    arrangeUI();
+    repaintBackground();
+  }
 
   void EffectModuleSection::automationMappingChanged(BaseControl *control, bool isUnmapping)
   {
     if (!effectModule_ || isUnmapping)
       return;
 
-    if (std::ranges::find(kCommonEffectParameters, control->getParameterDetails().id) != 
-      kCommonEffectParameters.end())
-      return;
-
-    if (std::ranges::find(kEffectModuleParameters, control->getParameterDetails().id) !=
-      kEffectModuleParameters.end())
+    if (auto controlId = control->getParameterDetails().id; 
+      std::ranges::find(kCommonEffectParameters, controlId) != kCommonEffectParameters.end() ||
+      std::ranges::find(kEffectModuleParameters, controlId) != kEffectModuleParameters.end())
       return;
 
     auto algoId = effectAlgoSelector_->getTextValue();
@@ -352,7 +442,7 @@ namespace Interface
       parametersStart += count;
     }
     auto parameterLink = control->getParameterLink();
-    auto index = effectModule_->getEffect()->getParameterIndex(parameterLink->parameter);
+    auto index = getEffect()->getParameterIndex(parameterLink->parameter);
     index -= kCommonEffectParameters.size();
     index -= parametersStart;
 
@@ -373,7 +463,7 @@ namespace Interface
   Generation::BaseEffect *EffectModuleSection::getEffect() noexcept { return effectModule_->getEffect(); }
   TextSelector &EffectModuleSection::getAlgorithmSelector() const noexcept { return *effectAlgoSelector_; }
 
-  BaseControl *EffectModuleSection::getEffectControl(std::string_view id)
+  BaseControl *EffectModuleSection::getEffectControl(utils::string_view id)
   {
     using namespace Framework;
 
@@ -425,103 +515,10 @@ namespace Interface
     return options;
   }
 
-  bool EffectModuleSection::changeEffectOrAlgo(bool changeAlgo)
-  {
-    using namespace Framework;
-
-    Generation::BaseEffect *newEffect;
-    if (changeAlgo)
-      newEffect = getEffect();
-    else
-    {
-      auto effectType = effectTypeSelector_->getTextValue(false);
-      auto effectIndex = Processors::BaseEffect::enum_value_by_id(effectType);
-      if (!effectIndex.has_value())
-        return false;
-
-      newEffect = effectModule_->changeEffect(effectType);
-
-      // resetting UI
-      setEffectType(newEffect->getProcessorType());
-
-      // replacing the parameters for algorithm and mask sliders
-      for (auto &id : kCommonEffectParameters)
-      {
-        auto *control = getEffectControl(id);
-        auto *newEffectParameter = newEffect->getParameter(id);
-
-        if (auto parameterBridge = control->getParameterLink()->hostControl)
-          parameterBridge->resetParameterLink(newEffectParameter->getParameterLink(), false);
-
-        control->changeLinkedParameter(*newEffectParameter,
-          id == Processors::BaseEffect::Algorithm::id().value());
-        control->resized();
-      }
-
-      effectTypeSelector_->resized();
-      effectTypeIcon_->setColor(getColour(Skin::kWidgetPrimary1));
-      mixNumberBox_->resized();
-      moduleActivator_->resized();
-      maskComponent_->resized();
-    }
-
-    initialiseParameters();
-
-    // replacing mapped out parameters, if there are any
-    usize parametersCount = 0;
-    usize parametersStart = 0;
-    auto algoId = effectAlgoSelector_->getTextValue();
-    for (auto &[id, count] : effectParameterCounts_)
-    {
-      if (id == algoId)
-      {
-        parametersCount = count;
-        break;
-      }
-      parametersStart += count;
-    }
-
-    static constexpr auto kReservedString = std::string_view{ " (Reserved)" };
-
-    for (auto &[mappingIndex, parameterBridge] : parameterMappings.data)
-    {
-      if (auto *link = parameterBridge->getParameterLink(); link && link->parameter)
-        link->parameter->changeBridge(nullptr);
-
-      if (mappingIndex >= parametersCount)
-      {
-        String name = parameterBridge->getName();
-        name += { kReservedString.data(), kReservedString.size() };
-        parameterBridge->setCustomName(name);
-        continue;
-      }
-
-      auto newParameterLink = newEffect->getParameterUnchecked(
-        kCommonEffectParameters.size() + parametersStart + mappingIndex)->getParameterLink();
-
-      // if the new parameter is the old one, just add the bridge and fix name
-      if (parameterBridge->getParameterLink() == newParameterLink)
-      {
-        parameterBridge->setCustomName(parameterBridge->getName()
-          .dropLastCharacters((int)kReservedString.size()));
-        newParameterLink->parameter->changeBridge(parameterBridge);
-      }
-      else
-      {
-        parameterBridge->resetParameterLink(newEffect->getParameterUnchecked(
-          kCommonEffectParameters.size() + parametersStart + mappingIndex)->getParameterLink(), false);
-      }
-    }
-
-    arrangeUI();
-
-    return true;
-  }
-
 
   namespace
   {
-    std::vector<utils::up<BaseControl>> initFilterParameters(EffectModuleSection *section, std::string_view type)
+    std::vector<utils::up<BaseControl>> initFilterParameters(EffectModuleSection *section, utils::string_view type)
     {
       using namespace Framework;
 
@@ -534,12 +531,12 @@ namespace Interface
         auto gain = utils::up<RotarySlider>::create(
           baseEffect->getParameter(Processors::BaseEffect::Filter::Normal::Gain::id().value()));
         gain->setShouldUsePlusMinusPrefix(true);
-        parameters.emplace_back(COMPLEX_MOV(gain));
+        parameters.emplace_back(COMPLEX_MOVE(gain));
         auto cutoff = utils::up<RotarySlider>::create(
           baseEffect->getParameter(Processors::BaseEffect::Filter::Normal::Cutoff::id().value()));
         cutoff->setMaxTotalCharacters(6);
         cutoff->setMaxDecimalCharacters(4);
-        parameters.emplace_back(COMPLEX_MOV(cutoff));
+        parameters.emplace_back(COMPLEX_MOVE(cutoff));
         parameters.emplace_back(utils::up<RotarySlider>::create(
           baseEffect->getParameter(Processors::BaseEffect::Filter::Normal::Slope::id().value())));
       };
@@ -560,7 +557,7 @@ namespace Interface
       return parameters;
     }
 
-    void arrangeFilterUI(EffectModuleSection *section, juce::Rectangle<int> bounds, std::string_view type)
+    void arrangeFilterUI(EffectModuleSection *section, juce::Rectangle<int> bounds, utils::string_view type)
     {
       using namespace Framework;
 
@@ -605,7 +602,7 @@ namespace Interface
       }
     }
 
-    std::vector<utils::up<BaseControl>> initDynamicsParameters(EffectModuleSection *section, std::string_view type)
+    std::vector<utils::up<BaseControl>> initDynamicsParameters(EffectModuleSection *section, utils::string_view type)
     {
       using namespace Framework;
 
@@ -644,7 +641,7 @@ namespace Interface
       return parameters;
     }
 
-    void arrangeDynamicsUI(EffectModuleSection *section, juce::Rectangle<int> bounds, std::string_view type)
+    void arrangeDynamicsUI(EffectModuleSection *section, juce::Rectangle<int> bounds, utils::string_view type)
     {
       using namespace Framework;
 
@@ -694,7 +691,7 @@ namespace Interface
       }
     }
 
-    std::vector<utils::up<BaseControl>> initPhaseParameters(EffectModuleSection *section, std::string_view type)
+    std::vector<utils::up<BaseControl>> initPhaseParameters(EffectModuleSection *section, utils::string_view type)
     {
       using namespace Framework;
 
@@ -727,7 +724,7 @@ namespace Interface
       return parameters;
     }
 
-    void arrangePhaseUI(EffectModuleSection *section, juce::Rectangle<int> bounds, std::string_view type)
+    void arrangePhaseUI(EffectModuleSection *section, juce::Rectangle<int> bounds, utils::string_view type)
     {
       using namespace Framework;
 
@@ -773,7 +770,7 @@ namespace Interface
       }
     }
 
-    std::vector<utils::up<BaseControl>> initPitchParameters(EffectModuleSection *section, std::string_view type)
+    std::vector<utils::up<BaseControl>> initPitchParameters(EffectModuleSection *section, utils::string_view type)
     {
       using namespace Framework;
 
@@ -807,7 +804,7 @@ namespace Interface
       return parameters;
     }
 
-    void arrangePitchUI(EffectModuleSection *section, juce::Rectangle<int> bounds, std::string_view type)
+    void arrangePitchUI(EffectModuleSection *section, juce::Rectangle<int> bounds, utils::string_view type)
     {
       using namespace Framework;
 
@@ -848,7 +845,7 @@ namespace Interface
       }
     }
 
-    std::vector<utils::up<BaseControl>> initDestroyParameters(EffectModuleSection *section, std::string_view type)
+    std::vector<utils::up<BaseControl>> initDestroyParameters(EffectModuleSection *section, utils::string_view type)
     {
       using namespace Framework;
 
@@ -875,7 +872,7 @@ namespace Interface
       return parameters;
     }
 
-    void arrangeDestroyUI(EffectModuleSection *section, juce::Rectangle<int> bounds, std::string_view type)
+    void arrangeDestroyUI(EffectModuleSection *section, juce::Rectangle<int> bounds, utils::string_view type)
     {
       using namespace Framework;
 
@@ -917,7 +914,7 @@ namespace Interface
     }
   }
 
-  void EffectModuleSection::setEffectType(std::string_view type)
+  void EffectModuleSection::setEffectType(utils::string_view type)
   {
     using namespace Framework;
 
@@ -928,7 +925,7 @@ namespace Interface
         return utils::array{ utils::pair{ Ts::id().value(), Ts::enum_count(nested_enum::All) }... };
       }(Type::template enum_subtypes_filter<Framework::kGetActiveAlgoPredicate>());
 
-      return std::span{ typeCounts };
+      return utils::span{ typeCounts };
     };
 
     paintBackgroundFunction_ = nullptr;

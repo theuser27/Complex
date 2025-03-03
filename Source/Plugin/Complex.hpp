@@ -29,7 +29,7 @@ namespace Plugin
   class ComplexPlugin : public ProcessorTree
   {
   public:
-    ComplexPlugin(u32 inSidechains, u32 outSidechains);
+    ComplexPlugin(u32 inSidechains, u32 outSidechains, usize undoSteps);
 
     void initialise(float sampleRate, u32 samplesPerBlock);
     void process(float *const *buffer, u32 numSamples, 
@@ -40,18 +40,19 @@ namespace Plugin
     void updateParameters(UpdateFlag flag, float sampleRate) noexcept;
     void initialiseModuleTree() noexcept;
 
-    virtual void parameterChangeMidi(u64 parentModuleId, std::string_view parameterName, float value);
+    virtual void parameterChangeMidi(u64 parentModuleId, utils::string_view parameterName, float value);
 
     Generation::SoundEngine &getSoundEngine() noexcept { return *soundEngine_; }
     Generation::EffectsState &getEffectsState() noexcept;
     float getOverlap() noexcept;
     u32 getFFTSize() noexcept;
+    u32 getBlockPosition() noexcept;
 
     Interface::Renderer &getRenderer();
 
     bool deserialiseFromJson(void *newSave, void *fallbackSave) override;
     void loadDefaultPreset();
-    size_t getLaneCount() const final;
+    auto getLaneCount() const -> usize final;
 
   protected:
     // pointer to the main processing engine

@@ -10,11 +10,16 @@
 
 #pragma once
 
-#include <thread>
+#include "BaseProcessor.hpp"
+
 #include "Framework/sync_primitives.hpp"
 #include "Framework/simd_buffer.hpp"
-#include "BaseProcessor.hpp"
 #include "Plugin/ProcessorTree.hpp"
+
+namespace Framework
+{
+  class Buffer;
+}
 
 namespace Generation
 {
@@ -42,8 +47,8 @@ namespace Generation
     }
 
     // Inherited via BaseProcessor
-    void insertSubProcessor(usize index, BaseProcessor &newSubProcessor) noexcept override;
-    BaseProcessor &deleteSubProcessor(usize index) noexcept override;
+    void insertSubProcessor(usize index, BaseProcessor &newSubProcessor, bool callListeners = true) noexcept override;
+    BaseProcessor &deleteSubProcessor(usize index, bool callListeners = true) noexcept override;
     void initialiseParameters() override;
 
     auto *getEffectModule(usize index) const noexcept { return effectModules_[index]; }
@@ -99,16 +104,16 @@ namespace Generation
     void deserialiseFromJson(void *jsonData) override;
 
     // Inherited via BaseProcessor
-    void insertSubProcessor(usize index, BaseProcessor &newSubProcessor) noexcept override;
-    BaseProcessor &deleteSubProcessor(usize index) noexcept override;
+    void insertSubProcessor(usize index, BaseProcessor &newSubProcessor, bool callListeners = true) noexcept override;
+    BaseProcessor &deleteSubProcessor(usize index, bool callListeners = true) noexcept override;
     void initialiseParameters() override;
 
-    void writeInputData(Framework::CheckedPointer<float> inputBuffer, usize channels, usize samples) noexcept;
+    void writeInputData(const Framework::Buffer &inputBuffer) noexcept;
     void processLanes() noexcept;
-    void sumLanesAndWriteOutput(Framework::CheckedPointer<float> outputBuffer, usize channels, usize samples) noexcept;
+    void sumLanesAndWriteOutput(Framework::Buffer &outputBuffer) noexcept;
 
-    std::span<char> getUsedInputChannels() noexcept;
-    std::span<char> getUsedOutputChannels() noexcept;
+    utils::span<char> getUsedInputChannels() noexcept;
+    utils::span<char> getUsedOutputChannels() noexcept;
 
     auto getOutputBuffer(u32 channelCount, u32 beginChannel) const noexcept
     { return Framework::SimdBufferView{ outputBuffer_, beginChannel, channelCount }; }
@@ -119,6 +124,7 @@ namespace Generation
     // current number of FFT bins (real-imaginary pairs)
     u32 binCount = 0;
     float sampleRate = 0.0f;
+    u32 blockPosition = 0;
     float blockPhase = 0.0f;
 
   private:
@@ -143,5 +149,6 @@ namespace Generation
     Framework::SimdBuffer<Framework::complex<float>, simd_float> outputBuffer_{};
 
     std::vector<Thread> workerThreads_;
+    std::atomic<bool> shouldWorkersProcess_ = false;
   };
 }

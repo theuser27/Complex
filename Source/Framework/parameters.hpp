@@ -10,7 +10,6 @@
 
 #pragma once
 
-#include <span>
 #include <string>
 #include <vector>
 
@@ -23,6 +22,7 @@
 #include "utils.hpp"
 
 #define NESTED_ENUM_ARRAY_TYPE ::utils::array
+#define NESTED_ENUM_STRING_VIEW_TYPE ::utils::string_view
 // commented out because msvc likes to have ICEs
 //#define NESTED_ENUM_PAIR_TYPE ::utils::pair
 #include "nested_enum.hpp"
@@ -75,11 +75,11 @@ namespace Framework
 
   struct IndexedData
   {
-    std::string_view displayName{};                       // user-readable name for given parameter value
-    std::string_view id{};                                // uuid for parameter value
+    utils::string_view displayName{};                     // user-readable name for given parameter value
+    utils::string_view id{};                              // uuid for parameter value
     u64 count = 1;                                        // how many consecutive values are of this indexed type
                                                           //   can be more than the ones currently available
-    std::string_view dynamicUpdateUuid{};                 // this uuid is used to register for in ProcessorTree
+    utils::string_view dynamicUpdateUuid{};               // this uuid is used to register for in ProcessorTree
                                                           //   these updates will happen only if the parameter is not mapped/modulated
     struct DynamicData
     {
@@ -89,9 +89,9 @@ namespace Framework
     };
   };
 
-  inline constexpr auto kInputSidechainCountChange = std::string_view{ "39b66ac7-790c-4987-978b-e8679583b94c" };
-  inline constexpr auto kOutputSidechainCountChange = std::string_view{ "2a0534fd-2888-416e-b3aa-e1436f3c88e4" };
-  inline constexpr auto kLaneCountChange = std::string_view{ "ae2ace66-5e7a-41f9-8d45-92f4dc894947" };
+  inline constexpr auto kInputSidechainCountChange = utils::string_view{ "39b66ac7-790c-4987-978b-e8679583b94c" };
+  inline constexpr auto kOutputSidechainCountChange = utils::string_view{ "2a0534fd-2888-416e-b3aa-e1436f3c88e4" };
+  inline constexpr auto kLaneCountChange = utils::string_view{ "ae2ace66-5e7a-41f9-8d45-92f4dc894947" };
 
   inline constexpr auto kAllChangeIds = utils::array{ kInputSidechainCountChange, kOutputSidechainCountChange, kLaneCountChange };
 
@@ -108,15 +108,15 @@ namespace Framework
         Automatable | Extensible,
     };
 
-    std::string_view id{};												      // internal plugin name
-    std::string_view displayName{};                     // name displayed to the user
+    utils::string_view id{};												    // internal plugin name
+    utils::string_view displayName{};                   // name displayed to the user
     float minValue = 0.0f;                              // minimum scaled value
     float maxValue = 1.0f;                              // maximum scaled value
     float defaultValue = 0.0f;                          // default scaled value
     float defaultNormalisedValue = 0.0f;                // default normalised value
     ParameterScale scale = ParameterScale::Linear;      // value skew factor
-    std::string_view displayUnits{};                    // "%", " db", etc.
-    std::span<const IndexedData> indexedData{};         // extra data for indexed parameters
+    utils::string_view displayUnits{};                  // "%", " db", etc.
+    utils::span<const IndexedData> indexedData{};       // extra data for indexed parameters
     u32 flags = Modulatable | Automatable;              // various flags
     UpdateFlag updateFlag = UpdateFlag::Realtime;       // at which point during processing the parameter is updated
     std::string (*generateNumeric)(float value,         // string generator function for IndexedNumeric parameters
@@ -124,7 +124,7 @@ namespace Framework
     utils::sp<IndexedData::DynamicData> dynamicData;
   };
 
-  auto getParameterDetails(std::string_view id) noexcept
+  auto getParameterDetails(utils::string_view id) noexcept
     -> std::optional<ParameterDetails>;
 
   // with skewOnly == true a normalised value between [0,1] or [-0.5, 0.5] is returned,
@@ -215,7 +215,7 @@ namespace Framework
   {                                                                                                                       \
     constexpr auto integers = []<i32 ... Is>(const utils::integer_sequence<i32, Is...> &)                                 \
     {                                                                                                                     \
-      return NESTED_ENUM_ARRAY_TYPE{ std::string_view{ to_string<1 << (kMinFFTOrder + Is)> }... };                        \
+      return NESTED_ENUM_ARRAY_TYPE{ utils::string_view{ to_string<1 << (kMinFFTOrder + Is)> }... };                      \
     }(utils::make_integer_sequence<i32, kMaxFFTOrder - kMinFFTOrder + 1>{});                                              \
                                                                                                                           \
     NESTED_ENUM_ARRAY_TYPE<IndexedData, integers.size()> fftSizeLookup{};                                                 \
@@ -424,7 +424,7 @@ namespace Framework
           (Resample, ID, "1860e713-f01a-4183-94a4-61500da98911"),
           (ConstShift, ID, "e7528343-f4d2-42e4-9f66-b87416259844")
         ), (DEFER), (DEFER))
-        NESTED_ENUM_FROM(Processors::BaseEffect::Pitch, (Resample, u64, DECLARE_ALGO(false)),
+        NESTED_ENUM_FROM(Processors::BaseEffect::Pitch, (Resample, u64, DECLARE_ALGO(true)),
           (
             (Shift, ID_CODE, "38949dbf-6edc-446a-908d-955fe492077c", DECLARE_PARAMETER("Shift", -48.0f, 48.0f, 0.0f, 0.5f, 
               ParameterScale::Linear, " st", {}, ParameterDetails::Modulatable | ParameterDetails::Automatable | ParameterDetails::Stereo)),
@@ -446,8 +446,8 @@ namespace Framework
               ParameterScale::SymmetricLoudness, " db", {}, ParameterDetails::Modulatable | ParameterDetails::Automatable | ParameterDetails::Stereo)),
             (Mapping, ID_CODE, "0206e09a-f472-4cc7-94fd-d3f6f6cd5787",
               static constexpr auto kMappingNames = utils::array{ IndexedData{ "No Change", NoMapping::id().value() },
-                IndexedData{ "Switch Real/Imaginary parts", SwitchRealImag::id().value() }, IndexedData{ "Cartesian to Polar", CartToPolar::id().value() },
-                IndexedData{ "Polar to Cartesian", PolarToCart::id().value() } };
+                IndexedData{ "Swap Real/Imaginary", SwitchRealImag::id().value() }, IndexedData{ "Cartesian -> Polar", CartToPolar::id().value() },
+                IndexedData{ "Polar -> Cartesian", PolarToCart::id().value() } };
               DECLARE_PARAMETER("Mapping", 0.0f, (float)(kMappingNames.size() - 1), 0.0f, 0.0f, ParameterScale::Indexed,
               {}, kMappingNames, ParameterDetails::Modulatable | ParameterDetails::Automatable))
           ), (),

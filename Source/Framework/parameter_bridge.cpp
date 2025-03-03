@@ -76,7 +76,7 @@ namespace Framework
         newString += parameterIndex_ + 1;
         newString += " > ";
         newString += juce::String{ name.data(), name.size() };
-        name_.second = COMPLEX_MOV(newString);
+        name_.second = COMPLEX_MOVE(newString);
       }
     }
 
@@ -93,11 +93,12 @@ namespace Framework
   void ParameterBridge::updateUIParameter() noexcept
   {
     // for wasValueSet_ we only require atomicity, therefore memory_order_relaxed suffices
-    // for parameterLinkPointer_ it's fine to use relaxed because this method is only called from the message thread
-    //	which is the only one that touches the UI
     bool dummy = true;
     if (wasValueSet_.compare_exchange_strong(dummy, false, std::memory_order_relaxed))
     {
+      // for parameterLinkPointer_ it's fine to use relaxed because
+      // this method is only called from the message thread
+      // which is the only one that touches the UI
       auto link = parameterLinkPointer_.load(std::memory_order_relaxed);
       if (!link || !link->UIControl)
         return;
@@ -175,9 +176,9 @@ namespace Framework
       auto [indexedData, index] = getIndexedData(internalValue, details);
       std::string string;
       if (indexedData->count > 1)
-        string = std::format("{} {}", indexedData->displayName, index + 1);
+        string = std::format("{} {}", indexedData->displayName.data(), index + 1);
       else
-        string = std::format("{}", indexedData->displayName);     
+        string = std::format("{}", indexedData->displayName.data());
 
       return string.substr(0, (usize)maximumStringLength);
     }

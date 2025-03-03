@@ -11,7 +11,7 @@
 #pragma once
 
 #include "Framework/utils.hpp"
-#include "Framework/open_gl_primitives.hpp"
+#include "Interface/LookAndFeel/Shaders.hpp"
 
 namespace juce
 {
@@ -73,7 +73,7 @@ namespace Interface
     Plugin::ComplexPlugin &plugin_;
     juce::AudioProcessorEditor *topLevelComponent_ = nullptr;
 
-    alignas(8) unsigned char pimplStorage_[300]{};
+    alignas(8) unsigned char pimplStorage_[450]{};
     Pimpl *pimpl_ = nullptr;
 
     friend class Pimpl;

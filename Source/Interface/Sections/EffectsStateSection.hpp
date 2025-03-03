@@ -34,12 +34,11 @@ namespace Interface
     EffectsStateSection(Generation::EffectsState &state);
     ~EffectsStateSection() override;
 
-    void mouseWheelMove(const juce::MouseEvent &e, const juce::MouseWheelDetails &wheel) override;
-
     void resized() override;
 
     // Inherited via DraggableComponent::Listener
     EffectModuleSection *prepareToMove(EffectModuleSection *movedModule, const juce::MouseEvent &e, bool isCopying = false) override;
+    void draggingComponent(EffectModuleSection *component, const juce::MouseEvent &e) override;
     void releaseComponent(EffectModuleSection *movedModule, const juce::MouseEvent &e) override;
     juce::Point<int> mouseWheelWhileDragging(EffectModuleSection *movedModule,
       const juce::MouseEvent &e, const juce::MouseWheelDetails &wheel) override;
@@ -55,7 +54,7 @@ namespace Interface
     u32 laneViewStartIndex_ = 0;
 
     utils::up<EffectModuleSection> movedModuleCopy_;
-    std::pair<size_t, size_t> dragStartIndices_{};
+    utils::pair<usize, usize> dragStartIndices_{};
 
     Generation::EffectsState &state_;
   };

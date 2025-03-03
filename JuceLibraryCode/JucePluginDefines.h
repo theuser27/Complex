@@ -155,7 +155,7 @@
  #define JucePlugin_ARAFactoryID           "com.yourcompany.Complex.factory"
 #endif
 #ifndef  JucePlugin_ARADocumentArchiveID
- #define JucePlugin_ARADocumentArchiveID   "com.yourcompany.Complex.aradocumentarchive.0.0.9"
+ #define JucePlugin_ARADocumentArchiveID   "com.yourcompany.Complex.aradocumentarchive.0.1.0"
 #endif
 #ifndef  JucePlugin_ARACompatibleArchiveIDs
  #define JucePlugin_ARACompatibleArchiveIDs  ""

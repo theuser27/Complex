@@ -438,7 +438,7 @@ namespace Interface
   void BaseSlider::changeTextEntryFont(Font font)
   {
     if (textEntry_)
-      textEntry_->setUsedFont(COMPLEX_MOV(font));
+      textEntry_->setUsedFont(COMPLEX_MOVE(font));
   }
 
   void BaseSlider::showTextEntry()
@@ -544,7 +544,10 @@ namespace Interface
 
     knobArcThickness_ = getValue(Skin::kKnobArcThickness);
     float arc = quadComponent_.getMaxArc();
-    quadComponent_.setShaderValue(0, std::lerp(-arc, arc, (float)getValue()));
+    { 
+      auto quadData = quadComponent_.getQuadData();
+      quadData.setShaderValue(0, std::lerp(-arc, arc, (float)getValue()));
+    }
     quadComponent_.setColor(selectedColor_);
     quadComponent_.setAltColor(unselectedColor_);
     quadComponent_.setThumbColor(thumbColor_);
@@ -569,7 +572,10 @@ namespace Interface
     float radiusX = (size + 0.5f) / width;
     float radiusY = (size + 0.5f) / height;
 
-    quadComponent_.setQuad(0, -radiusX, -radiusY, 2.0f * radiusX, 2.0f * radiusY);
+    {
+      auto quadData = quadComponent_.getQuadData();
+      quadData.setQuad(0, -radiusX, -radiusY, 2.0f * radiusX, 2.0f * radiusY);
+    }
     quadComponent_.setThumbAmount(getValue(Skin::kKnobHandleLength));
     quadComponent_.setBounds(drawBounds_);
 
@@ -730,14 +736,14 @@ namespace Interface
     if (modifier_)
       return getUnionOfAllElements();
 
-    auto labelBounds = label_->getBounds();
+    auto labelBounds = label_->getBoundsSafe();
     auto usedFont = textEntry_->getUsedFont();
     Fonts::instance()->setHeightFromAscent(usedFont, (float)labelBounds.getHeight() * 0.5f);
     
     auto valueBounds = juce::Rectangle{ labelBounds.getX(), labelBounds.getBottom(),
       (int)std::ceil(getNumericTextMaxWidth(usedFont)), labelBounds.getHeight() };
 
-    textEntry_->setUsedFont(std::move(usedFont));
+    textEntry_->setUsedFont(COMPLEX_MOVE(usedFont));
     textEntry_->setBounds(valueBounds);
     textEntry_->setVisible(true);
     
@@ -775,7 +781,10 @@ namespace Interface
 
     quadComponent_.setActive(true);
     auto t = (float)Framework::scaleValue(getValue(), details_, getSampleRate(), false, true);
-    quadComponent_.setShaderValue(0, t);
+    {
+      auto quadData = quadComponent_.getQuadData();
+      quadData.setShaderValue(0, t);
+    }
     quadComponent_.setColor(selectedColor_);
     quadComponent_.setAltColor(unselectedColor_);
     quadComponent_.setThumbColor(thumbColor_);
@@ -791,15 +800,11 @@ namespace Interface
 
   void LinearSlider::setComponentsBounds(bool)
   {
-    if (isHorizontal())
+    float axis = isHorizontal() ? (float)drawBounds_.getWidth() : (float)drawBounds_.getHeight();
+    float margin = 2.0f * (getValue(Skin::kWidgetMargin) - 0.5f) / axis;
     {
-      float margin = 2.0f * (getValue(Skin::kWidgetMargin) - 0.5f) / (float)drawBounds_.getWidth();
-      quadComponent_.setQuad(0, -1.0f + margin, -1.0f, 2.0f - 2.0f * margin, 2.0f);
-    }
-    else
-    {
-      float margin = 2.0f * (getValue(Skin::kWidgetMargin) - 0.5f) / (float)drawBounds_.getHeight();
-      quadComponent_.setQuad(0, -1.0f, -1.0f + margin, 2.0f, 2.0f - 2.0f * margin);
+      auto quadData = quadComponent_.getQuadData();
+      quadData.setQuad(0, -1.0f + margin, -1.0f, 2.0f - 2.0f * margin, 2.0f);
     }
   }
 
@@ -893,7 +898,7 @@ namespace Interface
     if (e.mods.isPopupMenu())
     {
       PopupItems options = createPopupMenu();
-      showPopupSelector(this, e.getPosition(), std::move(options),
+      showPopupSelector(this, e.getPosition(), COMPLEX_MOVE(options),
         [this](int selection) { handlePopupResult(selection); }, {}, kMinPopupWidth);
       return;
     }
@@ -1014,7 +1019,7 @@ namespace Interface
     addOpenGlComponent(&imageComponent_);
 
     if (usedFont)
-      usedFont_ = std::move(usedFont.value());
+      usedFont_ = COMPLEX_MOVE(usedFont.value());
     else
       usedFont_ = Fonts::instance()->getInterVFont();
   }
@@ -1027,7 +1032,7 @@ namespace Interface
     if (e.mods.isPopupMenu())
     {
       PopupItems options = createPopupMenu();
-      showPopupSelector(this, e.getPosition(), std::move(options),
+      showPopupSelector(this, e.getPosition(), COMPLEX_MOVE(options),
         [this](int selection) { handlePopupResult(selection); }, {}, kMinPopupWidth);
       return;
     }
@@ -1047,8 +1052,9 @@ namespace Interface
     lastValue_ = getValue();
 
     PopupItems options{};
-    std::string title = (!optionsTitle_.empty()) ? optionsTitle_ : std::string{ details_.displayName };
-    options.addDelimiter(std::move(title));
+    std::string title = (!optionsTitle_.empty()) ? optionsTitle_ : std::string{ 
+      details_.displayName.data(), details_.displayName.size() };
+    options.addDelimiter(COMPLEX_MOVE(title));
     for (int i = 0, currentOption = 0, currentIndex = 0; i <= (int)details_.maxValue; ++i)
     {
       // move to next option if we've run out 
@@ -1062,16 +1068,16 @@ namespace Interface
       if (!ignoreItemFunction_ || ignoreItemFunction_(details_.indexedData[currentOption], currentIndex))
       {
         if (details_.indexedData[currentOption].count == 1)
-          options.addEntry(i, std::format("{}", details_.indexedData[currentOption].displayName));
+          options.addEntry(i, std::format("{}", details_.indexedData[currentOption].displayName.data()));
         else
-          options.addEntry(i, std::format("{} {}", details_.indexedData[currentOption].displayName, 
+          options.addEntry(i, std::format("{} {}", details_.indexedData[currentOption].displayName.data(),
             currentIndex + 1));
       }
 
       ++currentIndex;
     }
 
-    showPopupSelector(this, popupPlacement_, std::move(options),
+    showPopupSelector(this, popupPlacement_, COMPLEX_MOVE(options),
       [this](int value)
       {
         if (parameterLink_ && parameterLink_->hostControl)
@@ -1294,7 +1300,7 @@ namespace Interface
     setExtraElementsPositions(drawBounds_);
     auto bounds = getUnionOfAllElements();
     if (label_ && label_->isVisible())
-      bounds = bounds.getUnion(label_->getBounds());
+      bounds = bounds.getUnion(label_->getBoundsSafe());
     return bounds;
   }
 
@@ -1316,7 +1322,7 @@ namespace Interface
     extraNumberBox_ = numberBox;
   }
 
-  std::string_view TextSelector::getTextValue(bool fromParameter)
+  utils::string_view TextSelector::getTextValue(bool fromParameter)
   {
     // this assumes all TextSelector controls have ParameterScale::Indexed
     if (fromParameter)
@@ -1572,7 +1578,7 @@ namespace Interface
 
     setExtraElementsPositions(drawBounds_);
     if (label_)
-      return drawBounds_.getUnion(label_->getBounds());
+      return drawBounds_.getUnion(label_->getBoundsSafe());
     return drawBounds_;
   }
 
@@ -1600,13 +1606,19 @@ namespace Interface
 
     if (t > 0.0f)
     {
-      quadComponent_.setShaderValue(0, std::lerp(kPi, -kPi, t));
+      {
+        auto quadData = quadComponent_.getQuadData();
+        quadData.setShaderValue(0, std::lerp(kPi, -kPi, t));
+      }
       quadComponent_.setColor(unselectedColor_);
       quadComponent_.setAltColor(selectedColor_);
     }
     else
     {
-      quadComponent_.setShaderValue(0, std::lerp(-kPi, kPi, -t));
+      {
+        auto quadData = quadComponent_.getQuadData();
+        quadData.setShaderValue(0, std::lerp(-kPi, kPi, -t));
+      }
       quadComponent_.setColor(selectedColor_);
       quadComponent_.setAltColor(unselectedColor_);
     }
@@ -1620,7 +1632,8 @@ namespace Interface
   void ModulationSlider::setComponentsBounds(bool)
   {
     float radius = 1.0f - 1.0f / (float)drawBounds_.getWidth();
-    quadComponent_.setQuad(0, -radius, -radius, 2.0f * radius, 2.0f * radius);
+    auto quadData = quadComponent_.getQuadData();
+    quadData.setQuad(0, -radius, -radius, 2.0f * radius, 2.0f * radius);
   }
 
   void ModulationSlider::setDrawWhenNotVisible(bool draw) noexcept { quadComponent_.setDrawWhenNotVisible(draw); }

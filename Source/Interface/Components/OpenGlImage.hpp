@@ -49,7 +49,7 @@ namespace Interface
     void setActive(bool active) { isActive_ = active; }
 
     void setPaintFunction(std::function<void(Graphics &, juce::Rectangle<int>)> paintFunction) 
-    { paintFunction_ = std::move(paintFunction); }
+    { paintFunction_ = COMPLEX_MOVE(paintFunction); }
     void setShouldClearOnRedraw(bool clearOnRedraw) { clearOnRedraw_ = clearOnRedraw; }
     void paintEntireComponent(bool paintEntireComponent) { paintEntireComponent_ = paintEntireComponent; }
 
@@ -94,7 +94,7 @@ namespace Interface
     GLuint textureId_ = 0;
     int textureWidth_ = 0;
     int textureHeight_ = 0;
-    OpenGlShaderProgram *imageShader_ = nullptr;
+    OpenGlShaderProgram imageShader_;
     OpenGlUniform imageColour_;
     OpenGlAttribute imagePosition_;
     OpenGlAttribute textureCoordinates_;
@@ -145,7 +145,7 @@ namespace Interface
     int getTotalHeight() const { return (int)std::ceil(font_.getHeight()); }
     void updateState();
 
-    void setText(String text) noexcept { text_ = std::move(text); redrawImage(); }
+    void setText(String text) noexcept { text_ = COMPLEX_MOVE(text); redrawImage(); }
     void setTextHeight(float textSize) noexcept { textSize_ = textSize; }
     void setTextColour(Colour colour) noexcept { textColour_ = colour; }
     void setFontType(FontType type) noexcept { fontType_ = type; }
@@ -163,14 +163,14 @@ namespace Interface
   class PlainShapeComponent final : public OpenGlImage
   {
   public:
-    PlainShapeComponent(String name) : OpenGlImage(std::move(name)) { }
+    PlainShapeComponent(String name) : OpenGlImage{ COMPLEX_MOVE(name) } { }
 
     void resized() override { redrawImage(); }
     void paintToImage(Graphics &g, BaseComponent *target) override;
 
     void setShapes(Shape shape)
     {
-      shape_ = std::move(shape);
+      shape_ = COMPLEX_MOVE(shape);
       redrawImage();
     }
 

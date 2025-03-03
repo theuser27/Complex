@@ -26,7 +26,7 @@ namespace Interface
     2, 3, 0
   };
 
-  OpenGlImage::OpenGlImage(String name) : OpenGlComponent{ std::move(name) }
+  OpenGlImage::OpenGlImage(String name) : OpenGlComponent{ COMPLEX_MOVE(name) }
   {
     positionVertices_ = std::make_unique<float[]>(kNumPositions);
     float positionVertices[kNumPositions] =
@@ -106,10 +106,10 @@ namespace Interface
 
     imageShader_ = openGl.shaders->getShaderProgram(Shaders::kImageVertex, Shaders::kTintedImageFragment);
 
-    imageShader_->use();
-    imageColour_ = getUniform(*imageShader_, "color");
-    imagePosition_ = getAttribute(*imageShader_, "position");
-    textureCoordinates_ = getAttribute(*imageShader_, "tex_coord_in");
+    imageShader_.use();
+    imageColour_ = getUniform(imageShader_, "color");
+    imagePosition_ = getAttribute(imageShader_, "position");
+    textureCoordinates_ = getAttribute(imageShader_, "tex_coord_in");
 
     isInitialised_.store(true, std::memory_order_release);
   }
@@ -128,7 +128,9 @@ namespace Interface
     if (shouldReloadImage_)
     {
       auto *drawImage = drawImage_.lock();
-      std::tie(textureWidth_, textureHeight_) = loadImageAsTexture(openGl.context, textureId_, *drawImage, GL_LINEAR);
+      auto temp = loadImageAsTexture(openGl.context, textureId_, *drawImage, GL_LINEAR);
+      textureWidth_ = temp.first;
+      textureHeight_ = temp.second;
       shouldReloadImage_ = false;
       drawImage_.unlock();
     }
@@ -164,7 +166,7 @@ namespace Interface
     glBindTexture(GL_TEXTURE_2D, textureId_);
     glActiveTexture(GL_TEXTURE0);
 
-    imageShader_->use();
+    imageShader_.use();
 
     Colour colour = colour_.get();
     imageColour_.set(colour.getFloatRed(), colour.getFloatGreen(), colour.getFloatBlue(), colour.getFloatAlpha());
@@ -196,7 +198,7 @@ namespace Interface
     // preparing the image for next time if openGl reinitialises this object
     shouldReloadImage_ = true;
 
-    imageShader_ = nullptr;
+    imageShader_ = {};
     imageColour_ = {};
     imagePosition_ = {};
     textureCoordinates_ = {};
@@ -232,8 +234,8 @@ namespace Interface
   }
 
   PlainTextComponent::PlainTextComponent(String name, String text):
-    OpenGlImage(std::move(name)), text_(std::move(text)), 
-    font_(Fonts::instance()->getInterVFont()) { }
+    OpenGlImage{ COMPLEX_MOVE(name) }, text_{ COMPLEX_MOVE(text) },
+    font_{ Fonts::instance()->getInterVFont() } { }
 
   void PlainTextComponent::resized()
   {
@@ -271,7 +273,7 @@ namespace Interface
     }
 
     Fonts::instance()->setHeight(font, scaleValue(textSize_));
-    font_ = std::move(font);
+    font_ = COMPLEX_MOVE(font);
   }
 
   void PlainShapeComponent::paintToImage(Graphics &g, BaseComponent *target)

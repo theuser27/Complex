@@ -28,7 +28,7 @@ namespace Interface
   class BaseSection : public OpenGlContainer, public ControlListener
   {
   public:
-    BaseSection(std::string_view name);
+    BaseSection(utils::string_view name);
     ~BaseSection() noexcept override;
 
     void setBounds(int x, int y, int width, int height) final { BaseComponent::setBounds(x, y, width, height); }
@@ -48,7 +48,7 @@ namespace Interface
 
     void addControl(BaseControl *control);
     void removeControl(BaseControl *control, bool removeChild = false);
-    BaseControl *getControl(std::string_view id) { return controls_.at(id); }
+    BaseControl *getControl(utils::string_view id) { return controls_.at(id); }
 
     void setSkinOverride(Skin::SectionOverride skinOverride) noexcept final;
 
@@ -57,7 +57,7 @@ namespace Interface
 
     utils::up<OpenGlBackground> background_;
 
-    std::map<std::string_view, BaseControl *> controls_{};
+    std::map<utils::string_view, BaseControl *> controls_{};
   };
 
   class ProcessorSection : public BaseSection
@@ -65,7 +65,7 @@ namespace Interface
   public:
     static constexpr int kDefaultActivatorSize = 12;
 
-    ProcessorSection(std::string_view name, Generation::BaseProcessor *processor);
+    ProcessorSection(utils::string_view name, Generation::BaseProcessor *processor);
     ~ProcessorSection() noexcept override;
 
     void resized() override;

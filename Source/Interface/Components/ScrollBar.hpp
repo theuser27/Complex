@@ -232,7 +232,8 @@ namespace Interface
 
       OpenGlScrollQuad() : OpenGlMultiQuad(1, Shaders::kRoundedRectangleFragment, "OpenGlScrollQuad")
       {
-        setQuad(0, -1.0f, -1.0f, 2.0f, 2.0f);
+        auto quadData = getQuadData();
+        quadData.setQuad(0, -1.0f, -1.0f, 2.0f, 2.0f);        
         animator_.setHoverIncrement(kHoverChange);
       }
 
@@ -246,19 +247,27 @@ namespace Interface
 
         hoverAmount_ = animator_.getValue(Animator::Hover);
 
-        if (lastHover != hoverAmount_)
-        {
-          if (shrinkLeft_)
-            setQuadHorizontal(0, -1.0f, 1.0f + hoverAmount_);
-          else
-            setQuadHorizontal(0, 0.0f - hoverAmount_, 1.0f + hoverAmount_);
-        }
-
         Range<double> range = scrollBar_->getCurrentRange();
         Range<double> rangeLimit = scrollBar_->getRangeLimit();
-        double startRatio = (range.getStart() - rangeLimit.getStart()) / rangeLimit.getLength();
-        double endRatio = (range.getEnd() - rangeLimit.getStart()) / rangeLimit.getLength();
-        setQuadVertical(0, 1.0f - 2.0f * (float)endRatio, 2.0f * (float)(endRatio - startRatio));
+        double lastStartRatio = startRatio_;
+        double lastEndRatio = endRatio_;
+        startRatio_ = (range.getStart() - rangeLimit.getStart()) / rangeLimit.getLength();
+        endRatio_ = (range.getEnd() - rangeLimit.getStart()) / rangeLimit.getLength();
+
+        if (lastHover != hoverAmount_ || lastStartRatio != startRatio_ || lastEndRatio != endRatio_)
+        {
+          auto quadData = getQuadData();
+          if (lastHover != hoverAmount_)
+          {
+            if (shrinkLeft_)
+              quadData.setQuadHorizontal(0, -1.0f, 1.0f + hoverAmount_);
+            else
+              quadData.setQuadHorizontal(0, 0.0f - hoverAmount_, 1.0f + hoverAmount_);
+          }
+
+          quadData.setQuadVertical(0, 1.0f - 2.0f * (float)endRatio_, 
+            2.0f * (float)(endRatio_ - startRatio_));
+        }
 
         OpenGlMultiQuad::render(openGl);
       }
@@ -270,11 +279,14 @@ namespace Interface
       ScrollBar *scrollBar_ = nullptr;
       utils::shared_value<bool> shrinkLeft_ = false;
       float hoverAmount_ = -1.0f;
+      double startRatio_ = 0.0f;
+      double endRatio_ = 0.0f;
 
       friend class ScrollBar;
     };
 
-    utils::shared_value<Range<double>> totalRange{ Range{ 0.0, 1.0} }, visibleRange{ Range{ 0.0, 1.0} };
+    utils::shared_value<Range<double>> totalRange{ Range{ 0.0, 1.0 } };
+    utils::shared_value<Range<double>> visibleRange{ Range{ 0.0, 1.0 } };
     double singleStepSize = 0.1, dragStartRange = 0;
     int thumbAreaSize = 0, thumbStart = 0, thumbSize = 0;
     int dragStartMousePos = 0, lastMousePos = 0;

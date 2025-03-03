@@ -815,9 +815,7 @@ namespace Interface
   };
 
   //==============================================================================
-  struct TextEditor::TextHolderComponent : public Component,
-    public Timer,
-    public Value::Listener
+  struct TextEditor::TextHolderComponent : public Component, public Timer, public Value::Listener
   {
     TextHolderComponent(TextEditor &ed) : owner(ed)
     {
@@ -1857,6 +1855,7 @@ namespace Interface
       }
       else
       {
+        // TODO: change this with own popup
         PopupMenu m;
         m.setLookAndFeel(&getLookAndFeel());
         addPopupMenuItems(m, &e);

@@ -106,7 +106,7 @@ namespace Framework
   #if COMPLEX_SSE4_1
     return _mm_load_ps(aligned);
   #elif COMPLEX_NEON
-    static_assert(false, "not yet implemented");
+    return vld1q_f32(aligned);
   #endif
   }
 
@@ -115,7 +115,7 @@ namespace Framework
   #if COMPLEX_SSE4_1
     _mm_store_ps(aligned, value.value);
   #elif COMPLEX_NEON
-    static_assert(false, "not yet implemented");
+    vst1q_f32(aligned, value.value);
   #endif
   }
 
@@ -156,7 +156,7 @@ namespace Framework
 
     COMPLEX_ASSERT((uintptr_t)output % sizeof(simd_float) == 0 && "Output buffer is not aligned");
     simd_float scaling = 1.0f / (float)size;
-    for (usize i = 0; i < size; i += kSimdRatio)
+    for (usize i = 0; i < size; i += simd_float::size)
       fromSimdFloat(output + i, toSimdFloat(output + i) * scaling);
 
     // separating dc and nyquist bins and cleaning accidental writes to nyquist imaginary part

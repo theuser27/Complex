@@ -27,8 +27,9 @@ namespace Generation
 
     // input buffer size, kind of arbitrary but it must be longer than kMaxProcessingBufferLength
     u32 maxInputBufferLength = 1 << (maxOrder + 5);
-    // pre- and post-processing FFT buffers size (+ 2 for nyquist real/imaginary parts)
-    u32 maxProcessingBufferLength = (1 << maxOrder) + 2;
+    // pre- and post-processing FFT buffers size 
+    // (+ 2 for nyquist real/imaginary parts and then rounded up to next simd size)
+    u32 maxProcessingBufferLength = (1 << maxOrder) + utils::roundUpToMultiple(2U, (u32)simd_float::size);
     // output buffer size, must be longer than kMaxProcessingBufferLength
     u32 maxOutputBufferLength = (1 << maxOrder) * 2;
 
@@ -36,8 +37,8 @@ namespace Generation
 
     inputBuffer.reserve(maxInOuts * kChannelsPerInOut, maxInputBufferLength);
     // needs to be double the max FFT, otherwise we get out of bounds errors
-    FFTBuffer_.reserve(maxInOuts * kChannelsPerInOut, maxProcessingBufferLength, true);
-    outBuffer.reserve(maxInOuts * kChannelsPerInOut, maxOutputBufferLength * 2);
+    FFTBuffer_.reserve(maxInOuts * kChannelsPerInOut, maxProcessingBufferLength);
+    outBuffer.reserve(maxInOuts * kChannelsPerInOut, maxOutputBufferLength);
   }
 
   SoundEngine::~SoundEngine() noexcept = default;
@@ -94,7 +95,7 @@ namespace Generation
     // after changing from a higher to lower FFTSize
     if (FFTChangeOffset > 0)
       for (usize i = 0; i < FFTBuffer_.getChannels(); i++)
-        std::memset(FFTBuffer_.getData().get() + i * FFTBuffer_.getSize() + FFTSamples_, 0, (u32)FFTChangeOffset * sizeof(float));
+        std::memset(FFTBuffer_.get(i) + FFTSamples_, 0, (u32)FFTChangeOffset * sizeof(float));
 
     inputBuffer.readBuffer(FFTBuffer_, (u32)FFTBuffer_.getChannels(), usedInputChannels_, 
       FFTSamples_, inputBuffer.BlockBegin, (i32)nextOverlapOffset_ + FFTChangeOffset);
@@ -117,10 +118,10 @@ namespace Generation
       nextOverlap_ = getParameter(Processors::SoundEngine::Overlap::id().value())->getInternalValue<float>(sampleRate);
       windowType_ = Processors::SoundEngine::WindowType::enum_value_by_id(
         getParameter(Processors::SoundEngine::WindowType::id().value())->getInternalValue<Framework::IndexedData>(sampleRate).first->id).value();
-      alpha_ = std::lerp(kAlphaLowerBound, kAlphaUpperBound, getParameter(Processors::SoundEngine::WindowAlpha::id().value())->getInternalValue<float>(sampleRate));
+      alpha_ = utils::lerp(kAlphaLowerBound, kAlphaUpperBound, getParameter(Processors::SoundEngine::WindowAlpha::id().value())->getInternalValue<float>(sampleRate));
 
       // getting the next overlapOffset
-      nextOverlapOffset_ = (u32)std::floor((float)FFTSamples_ * (1.0f - nextOverlap_));
+      nextOverlapOffset_ = (u32)floorf((float)FFTSamples_ * (1.0f - nextOverlap_));
 
       break;
     case UpdateFlag::BeforeProcess:
@@ -152,7 +153,7 @@ namespace Generation
     // FFT-ed only if the input is used
     for (u32 i = 0; i < FFTBuffer_.getChannels(); i++)
       if (usedInputChannels_[i])
-        transforms->transformRealForward(FFTOrder_, FFTBuffer_.get() + i * FFTBuffer_.getSize(), i);
+        transforms->transformRealForward(FFTOrder_, FFTBuffer_.get(i), i);
   }
 
   void SoundEngine::processFFT(float sampleRate) noexcept
@@ -160,12 +161,12 @@ namespace Generation
     // + 1 for nyquist
     effectsState_->binCount = FFTSamples_ / 2 + 1;
     effectsState_->sampleRate = sampleRate;
-    double phase = (double)blockPosition_ / (double)FFTSamples_;
-    effectsState_->blockPhase = (float)phase;
+    effectsState_->blockPosition = blockPosition_;
+    effectsState_->blockPhase = (float)((double)blockPosition_ / (double)FFTSamples_);
 
-    effectsState_->writeInputData(FFTBuffer_.get(), FFTBuffer_.getChannels(), FFTBuffer_.getSize());
+    effectsState_->writeInputData(FFTBuffer_);
     effectsState_->processLanes();
-    effectsState_->sumLanesAndWriteOutput(FFTBuffer_.get(), FFTBuffer_.getChannels(), FFTBuffer_.getSize());
+    effectsState_->sumLanesAndWriteOutput(FFTBuffer_);
   }
 
   void SoundEngine::doIFFT() noexcept
@@ -173,7 +174,7 @@ namespace Generation
     // in-place IFFT
     for (u32 i = 0; i < FFTBuffer_.getChannels(); i++)
       if (usedOutputChannels_[i])
-        transforms->transformRealInverse(FFTOrder_, FFTBuffer_.getData().get() + i * FFTBuffer_.getSize(), i);
+        transforms->transformRealInverse(FFTOrder_, FFTBuffer_.get(i), i);
 
     // if the FFT size is big enough to guarantee that even with max overlap 
     // a block >= samplesPerBlock can be finished, we don't offset
@@ -230,7 +231,7 @@ namespace Generation
 
       // not optimal but it works somewhat ok
       // https://www.desmos.com/calculator/ozcckbnyvl
-      mult = (1.0f - currentOverlap_) * 3.25f * std::sqrt(alpha_ * currentOverlap_);
+      mult = (1.0f - currentOverlap_) * 3.25f * sqrtf(alpha_ * currentOverlap_);
       break;
     case WindowType::HannExp:
     case WindowType::Lanczos:
@@ -238,7 +239,7 @@ namespace Generation
         return;
 
       // TODO: add optimal scaling for these
-      mult = (1.0f - currentOverlap_) * 3.25f * std::sqrt(alpha_ * currentOverlap_);
+      mult = (1.0f - currentOverlap_) * 3.25f * sqrtf(alpha_ * currentOverlap_);
       break;
     default:
       COMPLEX_ASSERT_FALSE("Missing case");
@@ -313,7 +314,7 @@ namespace Generation
         u32 outIndex = (beginOutput + j) % outBufferSize;
         u32 inIndex = (beginInput + j) % inputBufferSize;
 
-        float value = std::lerp(dryBuffer.read(i, inIndex), outBuffer.read(i, outIndex), mix_);
+        float value = utils::lerp(dryBuffer.read(i, inIndex), outBuffer.read(i, outIndex), mix_);
         outBuffer.write(value, i, outIndex);
       }
     }
@@ -334,7 +335,7 @@ namespace Generation
     outBuffer.advanceBeginOutput(samples);
   }
 
-  void SoundEngine::insertSubProcessor(usize, BaseProcessor &newSubProcessor) noexcept
+  void SoundEngine::insertSubProcessor(usize, BaseProcessor &newSubProcessor, bool) noexcept
   {
     COMPLEX_ASSERT(newSubProcessor.getProcessorType() == Framework::Processors::EffectsState::id().value());
 

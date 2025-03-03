@@ -116,7 +116,7 @@ namespace Generation
       }
 
       strict_inline void readBuffer(Framework::Buffer &reader, u32 channels,
-        std::span<char> channelsToCopy, u32 samples, BeginPoint beginPoint = BeginPoint::BlockBegin, 
+        utils::span<char> channelsToCopy, u32 samples, BeginPoint beginPoint = BeginPoint::BlockBegin,
         i32 inputBufferOffset = 0, u32 readerBeginIndex = 0, bool advanceBlock = true) noexcept
       {
         u32 begin = 0;
@@ -152,7 +152,7 @@ namespace Generation
       }
 
       strict_inline void outBufferRead(Framework::CircularBuffer &outBuffer,
-        u32 channels, std::span<char> channelsToCopy, u32 samples, u32 outBufferIndex = 0,
+        u32 channels, utils::span<char> channelsToCopy, u32 samples, u32 outBufferIndex = 0,
         i32 inputBufferOffset = 0, BeginPoint beginPoint = BeginPoint::LastOutputBlock) const noexcept
       {
         u32 inputBufferBegin = 0;
@@ -207,8 +207,8 @@ namespace Generation
     Framework::Buffer FFTBuffer_;
     //
     // if an input isn't used there's no need to process it at all
-    std::span<char> usedInputChannels_{};
-    std::span<char> usedOutputChannels_{};
+    utils::span<char> usedInputChannels_{};
+    utils::span<char> usedOutputChannels_{};
     //
     // output buffer containing dry and wet data
     class OutputBuffer
@@ -247,7 +247,7 @@ namespace Generation
       }
 
       void readOutput(float *const *outputBuffer, u32 outputs,
-        std::span<char> channelsToCopy, u32 samples, float outGain) const noexcept
+        utils::span<char> channelsToCopy, u32 samples, float outGain) const noexcept
       {
         COMPLEX_ASSERT(outputs <= buffer_.getChannels());
         buffer_.readBuffer(outputBuffer, outputs, samples, getBeginOutput(), channelsToCopy);
@@ -268,7 +268,7 @@ namespace Generation
       }
 
       void addOverlapBuffer(const Framework::Buffer &other, u32 channels,
-        std::span<char> channelsToOvelap, u32 samples, i32 beginOutputOffset,
+        utils::span<char> channelsToOvelap, u32 samples, i32 beginOutputOffset,
         Framework::Processors::SoundEngine::WindowType::type windowType) noexcept
       {
         u32 bufferSize = getSize();
@@ -407,7 +407,7 @@ namespace Generation
 
   public:
     // Inherited via BaseProcessor
-    void insertSubProcessor(usize index, BaseProcessor &newSubProcessor) noexcept override;
+    void insertSubProcessor(usize index, BaseProcessor &newSubProcessor, bool callListeners = true) noexcept override;
     BaseProcessor *createCopy() const override
     { COMPLEX_ASSERT_FALSE("You're trying to copy SoundEngine, which is not meant to be copied"); return nullptr; }
     void initialiseParameters() override
@@ -424,6 +424,7 @@ namespace Generation
     u32 getProcessingDelay() const noexcept;
     auto &getEffectsState() const noexcept { return *effectsState_; }
     float getOverlap() const noexcept { return currentOverlap_; }
+    u32 getBlockPosition() const noexcept { return blockPosition_; }
 
     void deserialiseFromJson(void *jsonData) override;
   private:

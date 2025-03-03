@@ -50,28 +50,24 @@ namespace Interface
     void setSlope(float slope) noexcept { dbSlope_ = slope; }
     void setSpectrumData(Framework::SimdBufferView<Framework::complex<float>, simd_float> data) noexcept 
     {
-      lastBufferVersion = data.getLock().versionFlag;
-      bufferView_ = COMPLEX_MOV(data);
+      bufferView_ = COMPLEX_MOVE(data);
     }
 
     void setCornerColour(Colour colour) noexcept { corners_.setColor(colour); }
   private:
     bool updateAmplitudes(bool shouldDisplayPhases, float startDecade, 
-      float decadeCount, float decadeSlope, float overlap);
+      float decadeCount, float decadeSlope);
     void paintBackground(Graphics &g) const;
 
-    std::vector<std::unique_ptr<OpenGlLineRenderer>> amplitudeRenderers_{};
-    std::vector<std::unique_ptr<OpenGlLineRenderer>> phaseRenderers_{};
+    std::vector<utils::up<OpenGlLineRenderer>> amplitudeRenderers_{};
+    std::vector<utils::up<OpenGlLineRenderer>> phaseRenderers_{};
     OpenGlCorners corners_;
     OpenGlImage background_;
 
     Framework::SimdBuffer<Framework::complex<float>, simd_float> scratchBuffer_{};
-    Framework::SimdBuffer<Framework::complex<float>, simd_float> oldBuffer_{};
-    Framework::SimdBuffer<Framework::complex<float>, simd_float> oldBuffer2_{};
     Framework::SimdBuffer<Framework::complex<float>, simd_float> resultBuffer_{ kChannelsPerInOut, kResolution };
 
     utils::shared_value_block<Framework::SimdBufferView<Framework::complex<float>, simd_float>> bufferView_{};
-    utils::shared_value<u64> lastBufferVersion = 0;
 
     utils::shared_value<float> minFrequency_ = kDefaultMinFrequency;
     utils::shared_value<float> maxFrequency_ = kDefaultMaxFrequency;

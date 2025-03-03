@@ -10,6 +10,8 @@
 
 #pragma once
 
+#include <juce_data_structures/juce_data_structures.h>
+
 #include "OpenGlImage.hpp"
 
 namespace Interface
@@ -348,7 +350,7 @@ namespace Interface
         amounts of text, as it needs to dynamically build the string that's involved.
         It's best used for small text boxes.
     */
-    Value &getTextValue();
+    juce::Value &getTextValue();
 
     /** Inserts some text at the current caret position.
 
@@ -691,7 +693,7 @@ namespace Interface
     }
 
     auto getUsedFont() const { return usedFont_; }
-    void setUsedFont(Font font) { usedFont_ = COMPLEX_MOV(font); }
+    void setUsedFont(Font font) { usedFont_ = COMPLEX_MOVE(font); }
 
     OpenGlImage &getImageComponent() { return imageComponent_; }
     void redrawImage() { imageComponent_.redrawImage(); }
@@ -737,7 +739,7 @@ namespace Interface
       bool mouseDownInEditor = false;
     };
 
-    std::unique_ptr<Viewport> viewport;
+    utils::up<Viewport> viewport;
     TextHolderComponent *textHolder;
     BorderSize<int> borderSize{ 1, 1, 1, 3 };
     Justification justification{ Justification::topLeft };
@@ -761,7 +763,7 @@ namespace Interface
     bool clicksOutsideDismissVirtualKeyboard = false;
 
     UndoManager undoManager;
-    std::unique_ptr<CaretComponent> caret;
+    utils::up<CaretComponent> caret;
     Range<int> selection;
     int leftIndent = 4, topIndent = 4;
     unsigned int lastTransactionTime = 0;

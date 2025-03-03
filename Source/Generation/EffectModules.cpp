@@ -11,12 +11,12 @@
 #include "EffectModules.hpp"
 
 #include <algorithm>
-#include <array>
 
 #include "Framework/lookup.hpp"
 #include "Framework/simd_math.hpp"
 #include "Framework/parameter_value.hpp"
 #include "Plugin/ProcessorTree.hpp"
+#include "Interface/LookAndFeel/Miscellaneous.hpp"
 
 namespace Generation
 {
@@ -119,11 +119,13 @@ namespace Generation
 
 #undef DEFINE_PARAMETER_INIT
 
-  ///////////////////////////////////////////////
-  ///////////////////////////////////////////////
-  ////////////////// Utilities //////////////////
-  ///////////////////////////////////////////////
-  ///////////////////////////////////////////////
+  ///////////////////////////////////////
+  //  _   _ _   _ _ _ _   _            //
+  // | | | | |_(_) (_) |_(_) ___  ___  //
+  // | | | | __| | | | __| |/ _ \/ __| //
+  // | |_| | |_| | | | |_| |  __/\__ \ //
+  //  \___/ \__|_|_|_|\__|_|\___||___/ //
+  ///////////////////////////////////////
 
   auto BaseEffect::getShiftedBounds(BoundRepresentation representation,
     float sampleRate, u32 binCount) const noexcept -> std::pair<simd_float, simd_float>
@@ -135,7 +137,7 @@ namespace Generation
     simd_float lowBound = getParameter(Processors::BaseEffect::LowBound::id().value())->getInternalValue<simd_float>(sampleRate, true);
     simd_float highBound = getParameter(Processors::BaseEffect::HighBound::id().value())->getInternalValue<simd_float>(sampleRate, true);
     float nyquistFreq = sampleRate * 0.5f;
-    float maxOctave = (float)std::log2(nyquistFreq / kMinFrequency);
+    float maxOctave = (float)log2(nyquistFreq / kMinFrequency);
 
     simd_float boundShift = getParameter(Processors::BaseEffect::ShiftBounds::id().value())
       ->getInternalValue<simd_float>(sampleRate);
@@ -360,7 +362,7 @@ namespace Generation
 
     auto calculateDistancesFromCutoffs = [cutoffIndices, lowBoundIndices,
       cutoffAboveLowMask = simd_mask::greaterThanOrEqualSigned(cutoffIndices, lowBoundIndices),
-      rLog2Nyquist = simd_float{ (float)(1.0 / std::log2(sampleRate * 0.5 / kMinFrequency)) },
+      rLog2Nyquist = simd_float{ (float)(1.0 / log2(sampleRate * 0.5 / kMinFrequency)) },
       binDivisor = simd_float{ (float)(sampleRate / (FFTSize * kMinFrequency)) }](simd_int positionIndices)
     {
       // 1. both positionIndices and cutoffIndices are >= lowBound and < FFTSize_ or <= highBound and > 0
@@ -657,16 +659,12 @@ namespace Generation
     // minimising the bins to iterate on
     auto [start, processedCount, _] = minimiseRange(lowBoundIndices, highBoundIndices, binCount, true);
 
-    simd_float shiftIncrement = [&]()
-    {
-      auto [cos, sin] = cis(kPi * (getParameter(Parameters::PhaseShift::id().value())
-        ->getInternalValue<simd_float>(sampleRate, true) * 2.0f - 1.0f));
-      return merge(cos, sin, kPhaseMask);
-    }();
+    simd_float shiftIncrement = cis(kPi * (getParameter(Parameters::PhaseShift::id().value())
+      ->getInternalValue<simd_float>(sampleRate, true) * 2.0f - 1.0f));
     simd_float shift = shiftIncrement;
     simd_float interval = getParameter(Parameters::Interval::id().value())->getInternalValue<simd_float>(sampleRate);
     
-    simd_float(*slopeFunction)(simd_float, simd_float) = [&]() -> simd_float(*)(simd_float, simd_float)
+    auto slopeFunction = [&]() -> simd_float(*)(simd_float, simd_float)
     {
       auto [slopeId, _] = getParameter(Parameters::Slope::id().value())->getInternalValue<IndexedData>(sampleRate);
       if (slopeId->id == Parameters::Slope::Constant::id().value())
@@ -847,24 +845,14 @@ namespace Generation
     bool wrapAround = getParameter(Parameters::Wrap::id().value())->getInternalValue<u32>(sampleRate);
 
     utils::array<simd_float, 2 * kNeighbourBins + 1> leakMultipliers;
-    simd_float phaseShiftIncrement = [&]()
-    {
-      auto [phaseShiftCos, phaseShiftSin] = cis(shift * (source.blockPhase * 2.0f) * kPi);
-      return merge(phaseShiftCos, phaseShiftSin, kPhaseMask);
-    }();
+    simd_float phaseShiftIncrement = cis(shift * source.blockPhase * k2Pi);
     simd_float phaseShift = phaseShiftIncrement;
-    simd_float fractionalIncrement = [&]()
-    {
-      auto [cos, sin] = cis((simd_float::round(shift) - shift) * k2Pi);
-      return merge(cos, sin, kPhaseMask);
-    }();
+    simd_float fractionalIncrement = cis((simd_float::round(shift) - shift) * k2Pi);
     simd_float fractionalShift = fractionalIncrement;
 
     auto calculateCoefficients = [&](simd_float binFractionalShift) mutable
     {
-      auto cos = copyFromEven(fractionalShift);
-      auto sin = copyFromOdd(fractionalShift);
-      simd_float numerator = merge(sin, 1.0f - cos, kPhaseMask);
+      simd_float numerator = (simd_float{ 0.0f, 1.0f } - switchInner(fractionalShift)) ^ simd_mask{ kSignMask, 0U };
       simd_mask numZeroMask = simd_float::lessThan(complexMagnitude(numerator, true), kMultiplierEpsilon);
 
       for (i32 i = 0; i < leakMultipliers.size(); ++i)
@@ -919,7 +907,7 @@ namespace Generation
           simd_float result = gatherComplex(rawDestination.pointer, destinationIndicesInt);
           scatterComplex(rawDestination.pointer, destinationIndicesInt, result + wet);
 
-          /*calculateCoefficients(simd_float::round(destinationIndices) - destinationIndices);
+          calculateCoefficients(simd_float::round(destinationIndices) - destinationIndices);
           for (i32 j = 0; j < leakMultipliers.size(); ++j)
           {
             simd_int indices = destinationIndicesInt - kNeighbourBins + j;
@@ -929,7 +917,7 @@ namespace Generation
             simd_float result = gatherComplex(rawDestination.pointer, clampedIndices);
             scatterComplex(rawDestination.pointer, clampedIndices,
               merge(result, result + complexCartMul(wet, leakMultipliers[j]), inRangeMask));
-          }*/
+          }
 
           // TODO: maybe add an internal counter to do renormalisation every N runs
           phaseShift = complexCartMul(phaseShift, phaseShiftIncrement);
@@ -989,7 +977,7 @@ namespace Generation
     using Parameters = Processors::BaseEffect::Pitch::ConstShift::type;
 
     static constexpr auto kNeighbourBins = 2;
-    static constexpr float kMultiplierEpsilon = 1e-12f;
+    static constexpr float kMultiplierEpsilon = 1e-5f;
 
     auto [lowBoundIndices, highBoundIndices] = [&]()
     {
@@ -1008,14 +996,14 @@ namespace Generation
 
       auto [numerator, denominator] = [&]()
       {
-        auto [phaseShiftCos, phaseShiftSin] = cis(binFloatingPointShift * source.blockPhase * k2Pi);
-        simd_float phaseShift = merge(phaseShiftCos, phaseShiftSin, kPhaseMask);
+        simd_float phaseShift = cis(binFloatingPointShift * source.blockPhase * k2Pi);
 
         simd_float binFractionalShift = roundedShift - binFloatingPointShift;
-        auto [cos, sin] = cis(binFractionalShift * k2Pi);
-        simd_float numerator = merge(sin, 1.0f - cos, kPhaseMask);
+        simd_float numerator = (simd_float{ 0.0f, 1.0f } - switchInner(cis(binFractionalShift * k2Pi))) ^ simd_mask{ kSignMask, 0U };
         return utils::pair{ complexCartMul(numerator, phaseShift), binFractionalShift * k2Pi };
       }();
+      // this might at some point in time fail and the effect will produce silence unless gain matching is enabled
+      // in that case this guard has not done its job and should be increased
       simd_mask numZeroMask = simd_float::lessThan(complexMagnitude(numerator, true), kMultiplierEpsilon);
 
       for (i32 i = 0; i < leakMultipliers.size(); ++i)
@@ -1122,7 +1110,7 @@ namespace Generation
       }
     };
 
-    simd_float wet[2]{};
+    simd_float wet[2]{ utils::uninitialised, utils::uninitialised };
     for (u32 i = 0; i < binCount - 1; i += 2)
     {
       wet[0] = rawSource[i] * attenuation;
@@ -1171,12 +1159,16 @@ namespace Generation
 
   EffectModule::~EffectModule()
   {
+    if (getProcessorTree()->isBeingDestroyed())
+      return;
+
+    // delete all effects because they will otherwise remain inside the processorTree
     for (auto *effect : effects_)
-      if (effect && (BaseProcessor *)effect != getSubProcessor(0))
+      if (effect)
         getProcessorTree()->deleteProcessor(effect->getProcessorId());
   }
 
-  void EffectModule::insertSubProcessor(usize, BaseProcessor &newSubProcessor) noexcept
+  void EffectModule::insertSubProcessor(usize, BaseProcessor &newSubProcessor, bool) noexcept
   {
     COMPLEX_ASSERT(subProcessors_.size() == 0);
     usize effectIndex = (usize)(std::ranges::find(effectIds, newSubProcessor.getProcessorType()) - effectIds.begin());
@@ -1191,7 +1183,7 @@ namespace Generation
     parameter->updateValue(kDefaultSampleRate);
   }
 
-  BaseProcessor &EffectModule::updateSubProcessor(usize index, BaseProcessor &newSubProcessor) noexcept
+  BaseProcessor &EffectModule::updateSubProcessor(usize index, BaseProcessor &newSubProcessor, bool callListeners) noexcept
   {
     COMPLEX_ASSERT(std::ranges::find(effectIds, newSubProcessor.getProcessorType()) != effectIds.end()
       && "Unknown effect being inserted into EffectModule");
@@ -1200,13 +1192,14 @@ namespace Generation
     newSubProcessor.setParentProcessorId(processorId_);
     subProcessors_[0] = &newSubProcessor;
 
-    for (auto *listener : listeners_)
-      listener->updatedSubProcessor(index, *replacedEffect, newSubProcessor);
+    if (callListeners)
+      for (auto *listener : listeners_)
+        listener->updatedSubProcessor(index, *replacedEffect, newSubProcessor);
 
     return *replacedEffect;
   }
 
-  BaseEffect *EffectModule::changeEffect(std::string_view effectId)
+  BaseEffect *EffectModule::changeEffect(utils::string_view effectId)
   {
     using namespace Framework;
 
@@ -1269,10 +1262,10 @@ namespace Generation
     }
 
     // switching to being a reader and allowing other readers to participate
-    // seq_cst because the following atomic could be reordered prior to this one
+    // seq_cst because the following atomic could be reordered to happen prior to this one
+    dataBuffer_.setBufferPosition(source.blockPosition);
     dataBuffer_.getLock().lock.store(1, std::memory_order_seq_cst);
-    if (source.sourceBuffer != source.conversionBuffer)
-      source.sourceBuffer.getLock().lock.fetch_sub(1, std::memory_order_relaxed);
+    source.sourceBuffer.getLock().lock.fetch_sub(1, std::memory_order_relaxed);
 
     source.sourceBuffer = dataBuffer_;
   }

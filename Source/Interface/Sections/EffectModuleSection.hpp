@@ -111,7 +111,7 @@ namespace Interface
     auto getLaneSection() const noexcept -> EffectsLaneSection * { return laneSection_; }
     auto getEffect() noexcept -> Generation::BaseEffect *;
     auto getAlgorithmSelector() const noexcept -> TextSelector &;
-    auto getEffectControl(std::string_view name) -> BaseControl *;
+    auto getEffectControl(utils::string_view name) -> BaseControl *;
 
     auto getUIBounds() const noexcept -> juce::Rectangle<int>
     { return getLocalBounds().withTop(getYMaskOffset() + scaleValueRoundInt(kTopMenuHeight) + 1); }
@@ -121,8 +121,7 @@ namespace Interface
   private:
     auto createPopupMenu() const noexcept -> PopupItems;
 
-    bool changeEffectOrAlgo(bool changeAlgo);
-    void setEffectType(std::string_view type);
+    void setEffectType(utils::string_view type);
 
     auto getYMaskOffset() const noexcept -> int
     {
@@ -147,13 +146,13 @@ namespace Interface
     EffectsLaneSection *laneSection_ = nullptr;
     Generation::EffectModule *effectModule_ = nullptr;
     std::vector<utils::up<BaseControl>> effectControls_;
-    Framework::VectorMap<usize, Framework::ParameterBridge *> parameterMappings{};
+    utils::VectorMap<usize, Framework::ParameterBridge *> parameterMappings{};
 
     auto (*initialiseParametersFunction_)(EffectModuleSection *section, 
-      std::string_view type) -> std::vector<utils::up<BaseControl>> = nullptr;
+      utils::string_view type) -> std::vector<utils::up<BaseControl>> = nullptr;
     void (*arrangeUIFunction_)(EffectModuleSection *section, 
-      juce::Rectangle<int> bounds, std::string_view type) = nullptr;
+      juce::Rectangle<int> bounds, utils::string_view type) = nullptr;
     void (*paintBackgroundFunction_)(juce::Graphics &g, EffectModuleSection *section) = nullptr;
-    std::span<const utils::pair<std::string_view, u64>> effectParameterCounts_{};
+    utils::span<const utils::pair<utils::string_view, u64>> effectParameterCounts_{};
   };	
 }

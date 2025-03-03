@@ -11,21 +11,33 @@
 #pragma once
 
 #include <vector>
-#include <algorithm>
 
 #include "platform_definitions.hpp"
+#include "stl_utils.hpp"
 
-namespace Framework
+namespace utils
 {
   template<typename Key, typename Value>
   struct VectorMap
   {
-    std::vector<std::pair<Key, Value>> data{};
+  private:
+    static auto find_if(auto &container, const auto &predicate)
+    {
+      auto begin = container.begin();
+      auto end = container.end();
+      for (; begin != end; ++begin)
+        if (predicate(*begin))
+          break;
+      
+      return begin;
+    }
+  public:
+    std::vector<utils::pair<Key, Value>> data{};
 
     constexpr VectorMap() = default;
     VectorMap(usize size) noexcept { data.reserve(size); }
     VectorMap(const VectorMap &other) noexcept : data(other.data) {}
-    VectorMap(VectorMap &&other) noexcept : data(std::move(other.data)) {}
+    VectorMap(VectorMap &&other) noexcept : data(COMPLEX_MOVE(other.data)) {}
     VectorMap &operator=(const VectorMap &other) noexcept
     {
       if (this != &other)
@@ -35,81 +47,65 @@ namespace Framework
     VectorMap &operator=(VectorMap &&other) noexcept
     {
       if (this != &other)
-        data = std::move(other.data);
+        data = COMPLEX_MOVE(other.data);
       return *this;
     }
 
     [[nodiscard]] constexpr auto find(const Key &key) noexcept
-    {
-      auto iter = std::ranges::find_if(data.begin(), data.end(),
-        [&key](const auto &v) { return v.first == key; });
-      return iter;
-    }
+    { return find_if(data, [&key](const auto &v) { return v.first == key; }); }
 
     [[nodiscard]] constexpr auto find(const Key &key) const noexcept
-    {
-      auto iter = std::ranges::find_if(data.begin(), data.end(),
-        [&key](const auto &v) { return v.first == key; });
-      return iter;
-    }
+    { return find_if(data, [&key](const auto &v) { return v.first == key; }); }
 
-    template<typename Fn>
-    [[nodiscard]] constexpr auto find_if(Fn functor) noexcept
-    {
-      auto iter = std::ranges::find_if(data, functor);
-      return iter;
-    }
-
-    template<typename Fn>
-    [[nodiscard]] constexpr auto find_if(Fn functor) const noexcept
-    {
-      auto iter = std::ranges::find_if(data, functor);
-      return iter;
-    }
+    [[nodiscard]] constexpr auto find_if(const auto &functor) noexcept { return find_if(data, functor); }
+    [[nodiscard]] constexpr auto find_if(const auto &functor) const noexcept { return find_if(data, functor); }
 
     constexpr void add(Key key, Value value) noexcept
-    { data.emplace_back(std::move(key), std::move(value)); }
+    { data.emplace_back(COMPLEX_MOVE(key), COMPLEX_MOVE(value)); }
 
     constexpr void updateValue(const Key &key, Value newValue) noexcept
     {
       auto iter = find(key);
       if (iter == data.end())
         return;
-      iter->second = std::move(newValue);
+      iter->second = COMPLEX_MOVE(newValue);
     }
 
     constexpr void updateValue(typename decltype(data)::iterator iterator, Value newValue) noexcept
-    { (*iterator).second = std::move(newValue); }
+    { (*iterator).second = COMPLEX_MOVE(newValue); }
 
     constexpr void updateKey(const Key &key, Key newKey) noexcept
     {
       auto iter = find(key);
       if (iter == data.end())
         return;
-      iter->first = std::move(newKey);
+      iter->first = COMPLEX_MOVE(newKey);
     }
 
     constexpr void updateKey(typename decltype(data)::iterator iterator, Key newKey) noexcept
-    { (*iterator).first = std::move(newKey); }
+    { (*iterator).first = COMPLEX_MOVE(newKey); }
 
-    constexpr void update(const Key &key, std::pair<Key, Value> newEntry) noexcept
+    constexpr void update(const Key &key, utils::pair<Key, Value> newEntry) noexcept
     {
       auto iter = find(key);
       if (iter == data.end())
         return;
 
-      iter->first = std::move(newEntry.first);
-      iter->second = std::move(newEntry.second);
+      iter->first = COMPLEX_MOVE(newEntry.first);
+      iter->second = COMPLEX_MOVE(newEntry.second);
     }
 
-    constexpr void update(typename decltype(data)::iterator iterator, std::pair<Key, Value> newEntry) noexcept
-    { (*iterator) = std::move(newEntry); }
-
-    constexpr void erase(const Key &key) noexcept
-    { std::erase_if(data, [&](const auto &v) { return v.first == key; }); }
+    constexpr void update(typename decltype(data)::iterator iterator, utils::pair<Key, Value> newEntry) noexcept
+    { (*iterator) = COMPLEX_MOVE(newEntry); }
 
     constexpr void erase(typename decltype(data)::iterator iterator) noexcept
     { data.erase(iterator); }
+
+    constexpr void erase(const Key &key) noexcept
+    {
+      auto iter = find_if(data, [&key](const auto &v) { return v.first == key; });
+      data.erase(iter);
+    }
 
     const Value &operator[](usize index) const noexcept { return data[index].second; }
     Value &operator[](usize index) noexcept { return data[index].second; }

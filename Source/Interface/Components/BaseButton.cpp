@@ -46,7 +46,7 @@ namespace Interface
 
       mouseExit(e);
 
-      showPopupSelector(this, e.getPosition(), std::move(createPopupMenu()),
+      showPopupSelector(this, e.getPosition(), COMPLEX_MOVE(createPopupMenu()),
         [this](int selection) { handlePopupResult(selection); }, {}, kMinPopupWidth);
 
       return;
@@ -224,7 +224,8 @@ namespace Interface
 
         auto hoverAmount = animator.getValue(Animator::Hover);
         auto *backgroundComponent = utils::as<OpenGlQuad>(&target);
-        backgroundComponent->setQuad(0, -kPowerHoverRadius, -kPowerHoverRadius, 2.0f * kPowerHoverRadius, 2.0f * kPowerHoverRadius);
+        auto quadData = backgroundComponent->getQuadData();
+        quadData.setQuad(0, -kPowerHoverRadius, -kPowerHoverRadius, 2.0f * kPowerHoverRadius, 2.0f * kPowerHoverRadius);
         if (isHeldDown_ || !getValue())
         {
           backgroundComponent->setColor(backgroundColor_);
@@ -241,7 +242,7 @@ namespace Interface
         else
           backgroundComponent->setColor(offNormalColor_);
 
-        backgroundComponent->setQuad(0, -kPowerRadius, -kPowerRadius, 2.0f * kPowerRadius, 2.0f * kPowerRadius);
+        quadData.setQuad(0, -kPowerRadius, -kPowerRadius, 2.0f * kPowerRadius, 2.0f * kPowerRadius);
         backgroundComponent->render(openGl);
       });
 
@@ -270,7 +271,7 @@ namespace Interface
     
     setExtraElementsPositions(drawBounds_);
     if (label_)
-      return drawBounds_.getUnion(label_->getBounds());
+      return drawBounds_.getUnion(label_->getBoundsSafe());
     return drawBounds_;
   }
 
@@ -327,7 +328,7 @@ namespace Interface
     if (!parameter)
       setName(name);
 
-    setText(std::move(displayText));
+    setText(COMPLEX_MOVE(displayText));
 
     addOpenGlComponent(&borderComponent_);
     addOpenGlComponent(&plusComponent_);
@@ -376,7 +377,7 @@ namespace Interface
   }
 
   ActionButton::ActionButton(String name, String displayText) : BaseButton{ nullptr },
-     textComponent_{ "Action Button Text", displayText }, text_{ std::move(displayText) }
+     textComponent_{ "Action Button Text", displayText }, text_{ COMPLEX_MOVE(displayText) }
   {
     setName(name);
 

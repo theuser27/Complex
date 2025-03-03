@@ -16,11 +16,8 @@ namespace Framework
 {
   class Buffer;
 
-  class Window
+  struct Window
   {
-  public:
-    Window() = default;
-
     // all functions take a normalised value as position
     static float getHannWindow(float position) noexcept;
     static float getHammingWindow(float position) noexcept;
@@ -31,13 +28,13 @@ namespace Framework
     static float getHannExponentialWindow(float position, float alpha) noexcept;
     static float getLanczosWindow(float position, float alpha) noexcept;
 
-    void applyWindow(Buffer &buffer, usize channels, std::span<char> channelsToProcess,
+    void applyWindow(Buffer &buffer, usize channels, utils::span<char> channelsToProcess,
       usize samples, Processors::SoundEngine::WindowType::type type, float alpha);
 
-    static void applyDefaultWindows(Buffer &buffer, usize channels, std::span<char> channelsToProcess,
+    static void applyDefaultWindows(Buffer &buffer, usize channels, utils::span<char> channelsToProcess,
       usize samples, Processors::SoundEngine::WindowType::type type, float alpha) noexcept;
 
-    void applyCustomWindows(Buffer &buffer, usize channels, std::span<char> channelsToProcess,
+    void applyCustomWindows(Buffer &buffer, usize channels, utils::span<char> channelsToProcess,
       usize samples, Processors::SoundEngine::WindowType::type type, float alpha);
   };
 }

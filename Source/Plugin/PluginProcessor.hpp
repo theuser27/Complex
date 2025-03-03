@@ -16,7 +16,7 @@ class ComplexAudioProcessor final : public Plugin::ComplexPlugin, public juce::A
 {
 public:
   //==============================================================================
-  ComplexAudioProcessor(size_t parameterMappings, u32 inSidechains, u32 outSidechains);
+  ComplexAudioProcessor(size_t parameterMappings, u32 inSidechains, u32 outSidechains, usize undoSteps);
   ~ComplexAudioProcessor() override;
 
   //==============================================================================

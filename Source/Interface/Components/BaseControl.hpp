@@ -161,7 +161,7 @@ namespace Interface
 
     // extra stuff like label or modifying control (i.e. textSelector changing behaviour of a knob)
     // and their bounds relative to the drawBounds
-    Framework::VectorMap<BaseComponent *, juce::Rectangle<int>> extraElements_{};
+    utils::VectorMap<BaseComponent *, juce::Rectangle<int>> extraElements_{};
     utils::up<PlainTextComponent> label_;
     Placement labelPlacement_ = Placement::right;
 

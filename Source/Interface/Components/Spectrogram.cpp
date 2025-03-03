@@ -1,4 +1,4 @@
-/*
+﻿/*
   ==============================================================================
 
     Spectrogram.cpp
@@ -26,15 +26,17 @@ namespace
     simd_float real = _mm_shuffle_ps(one.value, two.value, _MM_SHUFFLE(2, 0, 2, 0));
     simd_float imaginary = _mm_shuffle_ps(one.value, two.value, _MM_SHUFFLE(3, 1, 3, 1));
   #elif COMPLEX_NEON
-    static_assert(false, "not implemented yet");
+    simd_float real = vuzp1q_f32(one.value, two.value);
+    simd_float imaginary = vuzp2q_f32(one.value, two.value);
   #endif
     auto magnitude = simd_float::sqrt(simd_float::mulAdd(real * real, imaginary, imaginary));
-    simd_float zeroes = 0.0f;
+    static constexpr simd_float zeroes = 0.0f;
   #if COMPLEX_SSE4_1
     one.value = _mm_unpacklo_ps(magnitude.value, zeroes.value);
     two.value = _mm_unpackhi_ps(magnitude.value, zeroes.value);
   #elif COMPLEX_NEON
-    static_assert(false, "not implemented yet");
+    one.value = vzip1q_f32(magnitude.value, zeroes.value);
+    two.value = vzip2q_f32(magnitude.value, zeroes.value);
   #endif
   }
 
@@ -45,15 +47,22 @@ namespace
     auto lowerOne = _mm_unpacklo_ps(one.value, one.value);
     auto upperOne = _mm_unpackhi_ps(one.value, one.value);
     auto addSubOne = _mm_addsub_ps(lowerOne, upperOne);
-    one.value = _mm_shuffle_ps(addSubOne, addSubOne, _MM_SHUFFLE(2, 0, 3, 1));
 
     auto lowerTwo = _mm_unpacklo_ps(two.value, two.value);
     auto upperTwo = _mm_unpackhi_ps(two.value, two.value);
     auto addSubTwo = _mm_addsub_ps(lowerTwo, upperTwo);
-    two.value = _mm_shuffle_ps(addSubTwo, addSubTwo, _MM_SHUFFLE(2, 0, 3, 1));
   #elif COMPLEX_NEON
-    static_assert(false, "not implemented yet");
+    static constexpr simd_mask kMinusPlus = { kSignMask, 0U };
+    auto lowerOne = vzip1q_f32(one.value, one.value);
+    auto upperOne = vzip2q_f32(one.value, one.value);
+    auto addSubOne = lowerOne + (upperOne ^ kMinusPlus);
+
+    auto lowerTwo = vzip1q_f32(two.value, two.value);
+    auto upperTwo = vzip2q_f32(two.value, two.value);
+    auto addSubTwo = lowerTwo + (upperTwo ^ kMinusPlus);
   #endif
+    one = utils::groupOdd(addSubOne);
+    two = utils::groupOdd(addSubTwo);
 
     function(one, two);
   }
@@ -61,26 +70,26 @@ namespace
 
 namespace Interface
 {
-  Spectrogram::Spectrogram(String name) : OpenGlComponent(COMPLEX_MOV(name))
+  Spectrogram::Spectrogram(String name) : OpenGlComponent{ COMPLEX_MOVE(name) }
   {
+    //Logger::setCurrentLogger(&log_);
+    //Logger::writeToLog("position,1,2,3,4");
     setInterceptsMouseClicks(true, false);
 
     auto maxBinCount = uiRelated.renderer->getPlugin().getMaxBinCount();
     scratchBuffer_.reserve(kChannelsPerInOut, maxBinCount);
-    oldBuffer_.reserve(kChannelsPerInOut, maxBinCount);
-    oldBuffer2_.reserve(kChannelsPerInOut, maxBinCount);
 
     amplitudeRenderers_.reserve(kChannelsPerInOut);
     for (size_t i = 0; i < kChannelsPerInOut; ++i)
     {
-      amplitudeRenderers_.emplace_back(std::make_unique<OpenGlLineRenderer>(kResolution));
+      amplitudeRenderers_.emplace_back(utils::up<OpenGlLineRenderer>::create(kResolution));
       amplitudeRenderers_[i]->setFill(true);
     }
 
     phaseRenderers_.reserve(kChannelsPerInOut);
     for (size_t i = 0; i < kChannelsPerInOut / 2; ++i)
     {
-      phaseRenderers_.emplace_back(std::make_unique<OpenGlLineRenderer>(kResolution));
+      phaseRenderers_.emplace_back(utils::up<OpenGlLineRenderer>::create(kResolution));
       phaseRenderers_[i]->setFill(false);
     }
 
@@ -92,7 +101,7 @@ namespace Interface
     background_.setPaintFunction([this](Graphics &g, juce::Rectangle<int>) { paintBackground(g); });
   }
 
-  Spectrogram::~Spectrogram() { destroy(); }
+  Spectrogram::~Spectrogram() { Logger::setCurrentLogger(nullptr); destroy(); }
 
   void Spectrogram::resized()
   {
@@ -137,7 +146,7 @@ namespace Interface
   }
 
   bool Spectrogram::updateAmplitudes(bool shouldDisplayPhases,
-    float startDecade, float decadeCount, float decadeSlope, float)
+    float startDecade, float decadeCount, float decadeSlope)
   {
     using namespace utils;
 
@@ -148,34 +157,73 @@ namespace Interface
       return false;
     }
 
-    auto version = bufferView.getLock().versionFlag.load(std::memory_order_relaxed);
-    // some arbitrary large number it doesn't really matter
-    const simd_float expectedPhaseDifference = (float)(((1 << 16) + version - lastBufferVersion) & ((1 << 16) - 1));
-    lastBufferVersion = version;
-
     COMPLEX_ASSERT(scratchBuffer_.getSimdChannels() == bufferView.getSimdChannels()
       && "Scratch buffer doesn't match the number of channels in memory");
 
+    u32 bufferPosition;
     {
       utils::ScopedLock g{ bufferView.getLock(), false, WaitMechanism::Sleep };
       scratchBuffer_.copy(bufferView, 0, 0, binCount_);
+      bufferPosition = bufferView.getBufferPosition();
     }
 
     bufferView_.unlock();
 
     // convert data to polar form
     if (shouldDisplayPhases)
-      utils::convertBufferInPlace<::midSide<complexCartToPolar>>(scratchBuffer_, binCount_);
+    {
+      // only for TESTING, don't use otherwise
+      /*simd_float blockPhase = (float)((double)bufferPosition / (double)(binCount_ * 2));
+      auto data = scratchBuffer_.get();
+      usize dataSize = scratchBuffer_.getSize();
+
+      for (usize i = 0; i < scratchBuffer_.getSimdChannels(); i++)
+      {
+        auto dc = data[dataSize * i];
+        // size - 1 to skip nyquist since it doesn't need to change
+        for (usize j = 0; j < binCount_ - 1; j += 2)
+        {
+          simd_float one = data[dataSize * i + j];
+          simd_float two = data[dataSize * i + j + 1];
+          ::midSide<complexCartToPolar>(one, two);
+          //data[dataSize * i + j] = one;
+          //data[dataSize * i + j + 1] = two;
+          simd_float offsetOne = (float)j * blockPhase * k2Pi;
+          simd_float offsetTwo = (float)(j + 1) * blockPhase * k2Pi;
+          data[dataSize * i + j] = merge(one, modSymmetric(one - offsetOne, kPi), kPhaseMask);
+          data[dataSize * i + j + 1] = merge(two, modSymmetric(two - offsetTwo, kPi), kPhaseMask);
+        }
+        data[dataSize * i] = dc;
+      }
+
+      if (previosPosition != bufferPosition)
+      {
+        String string{};
+        string.preallocateBytes(128);
+        string << (int)bufferPosition << ',';
+        for (usize i = 0; i < 4; ++i)
+        {
+          string << (data[i + 1][1] - previousData[i]) << ',';
+          //string << data[i + 1][1] << ',';
+          previousData[i] = data[i + 1][1];
+        }
+        string = string.dropLastCharacters(1);
+        Logger::writeToLog(string);
+        previosPosition = bufferPosition;
+      }*/
+    }
     else
       utils::convertBufferInPlace<::midSide<::complexMagnitude>>(scratchBuffer_, binCount_);
+    
+    auto scratchBufferRaw = scratchBuffer_.get();
 
     // handle dc and nyquist separately because the conversion functions wrote garbage there
-    for (size_t i = 0; i < scratchBuffer_.getChannels(); i += scratchBuffer_.getRelativeSize())
     {
-      simd_float dcAndNyquist = scratchBuffer_.readSimdValueAt(i, 0);
-      simd_float zeroes = 0.0f;
-      ::midSide(dcAndNyquist, zeroes);
-      scratchBuffer_.writeSimdValueAt(simd_float::abs(dcAndNyquist), i, 0);
+      simd_float dc = scratchBufferRaw[0];
+      simd_float nyquist = scratchBufferRaw[binCount_ - 1];
+      ::midSide(dc, nyquist);
+      scratchBufferRaw[0] = simd_float::abs(dc);
+      scratchBufferRaw[binCount_ - 1] = simd_float::abs(nyquist);
     }
 
     static constexpr simd_float defaultValue = { 0.001f, 0.0f };
@@ -188,7 +236,7 @@ namespace Interface
     const float width = (float)getWidthSafe();
     const float rangeMult = 1.0f / (maxDb - minDb);
 
-    // yes these are magic numbers, change at own risk
+    // yes these are magic numbers, change at your own risk
     const float decay = 0.25f + std::max(0.0f, 0.05f * std::log2(2048.0f / (float)binCount_ - 1.0f));
 
     constexpr float resolution = 1.0f / (kResolution - 1.0f);
@@ -199,9 +247,10 @@ namespace Interface
     const float slopeMultiplier = (float)dbToAmplitude(((decadeCount + startDecade) * decadeSlope) * resolution);
     float slope = 1.0f;
 
+    auto resultBufferRaw = resultBuffer_.get();
+    
     // current/previous - current/previous bin
-    // old - current bin from previous run
-    simd_float current, previous, old;
+    simd_float current, previous;
     u32 j, beginIndex, endIndex;
 
     auto findLargestInRange = [&]() // finds largest entries in the range
@@ -210,27 +259,20 @@ namespace Interface
       // the point covers a range of bins, we need to find the loudest one
       for (u32 k = beginIndex + 1; k <= endIndex; ++k)
       {
-        simd_float next = scratchBuffer_.readSimdValueAt(0, k);
+        simd_float next = scratchBufferRaw[k];
         simd_mask mask = copyFromEven(simd_float::greaterThan(next, current));
         indices = merge(indices, simd_int{ k }, mask);
         current = merge(current, next, mask);
       }
-
-      old = gatherComplex(oldBuffer_.get().pointer, indices);
-      //current = merge(current, modSymmetric(current - gatherComplex(oldBuffer_.getData().getData().get(), indices), kPi), kPhaseMask);
     };
 
     auto calculateAmplitude = [&]() // scales amplitudes and clamps
     {
       current *= scalingFactor * simd_float{ slope, 1.0f };
-      simd_float average = resultBuffer_.readSimdValueAt(0, j);
-      simd_float amplitude = lerp(average, current, decay);
-      simd_float phase = modSymmetric(current - expectedPhaseDifference * old, kPi);
-      average = lerp(average, current - old, 0.05f);
-      current = merge(amplitude, phase, kPhaseMask);
-
+      simd_float amplitude = lerp(resultBufferRaw[j], current, decay);
+      current = merge(amplitude, current, kPhaseMask);
+      resultBufferRaw[j] = current;
       current = merge(defaultValue, current, copyFromEven(simd_float::greaterThan(current, defaultValue)));
-      resultBuffer_.writeSimdValueAt(merge(amplitude, average, kPhaseMask), 0, j);
     };
 
     for (j = 0; j < kResolution; ++j)
@@ -239,15 +281,13 @@ namespace Interface
       {
         beginIndex = (u32)std::floor(rangeBegin);
         endIndex = (u32)std::floor(rangeEnd);
-        current = scratchBuffer_.readSimdValueAt(0, beginIndex);
+        current = scratchBufferRaw[beginIndex];
 
         if (endIndex - beginIndex <= 1)
         {
           simd_float lower = current;
-          lower = merge(lower, modSymmetric(lower - oldBuffer_.readSimdValueAt(0, beginIndex), kPi), kPhaseMask);
           u32 nextIndex = (u32)std::ceil(rangeBegin);
-          simd_float upper = scratchBuffer_.readSimdValueAt(0, nextIndex);
-          upper = merge(upper, modSymmetric(upper - oldBuffer_.readSimdValueAt(0, nextIndex), kPi), kPhaseMask);
+          simd_float upper = scratchBufferRaw[nextIndex];
 
           current = dbToAmplitude(lerp(amplitudeToDb(lower), amplitudeToDb(upper), rangeBegin - (float)beginIndex));
           current = merge(current, circularLerpSymmetric(lower, upper, rangeBegin - (float)beginIndex, kPi), kPhaseMask);
@@ -272,21 +312,19 @@ namespace Interface
           if (endIndex - beginIndex != 1 && j > 0)
           {
             // this is not the first iteration, we can use the value from the previous one
-            resultBuffer_.writeSimdValueAt(current, 0, j);
+            resultBufferRaw[j] = current;
           }
           else
           {
             // the point is entering the next bin, calculate its value
-            current = scratchBuffer_.readSimdValueAt(0, endIndex);
-            old = oldBuffer_.readSimdValueAt(0, endIndex);
-            //current = merge(current, modSymmetric(current - old, kPi), kPhaseMask);
+            current = scratchBufferRaw[endIndex];
 
             calculateAmplitude();
           }
         }
         else
         {
-          current = scratchBuffer_.readSimdValueAt(0, beginIndex);
+          current = scratchBufferRaw[beginIndex];
           findLargestInRange();
           calculateAmplitude();
         }
@@ -313,9 +351,6 @@ namespace Interface
         phaseRenderers_[k]->setYAt((int)j, height - phaseY[k * 2 + 1] * height);
       }
     }
-
-    oldBuffer2_.copy(oldBuffer_, 0, 0, binCount_);
-    oldBuffer_.copy(scratchBuffer_, 0, 0, binCount_);
 
     return true;
   }
@@ -349,9 +384,8 @@ namespace Interface
     auto &plugin = uiRelated.renderer->getPlugin();
     nyquistFreq_ = plugin.getSampleRate() * 0.5f;
     binCount_ = plugin.getFFTSize() / 2;
-    float overlap = plugin.getOverlap();
 
-    bool shouldDisplayPhases = shouldDisplayPhases_;
+    bool shouldDisplayPhases = false;
     float minFrequency = minFrequency_;
     float maxFrequency = maxFrequency_;
 
@@ -360,7 +394,7 @@ namespace Interface
     float startDecade = std::log10(minFrequency / sampleHz);
     float decadeCount = std::log10(maxFrequency / minFrequency);
 
-    if (!updateAmplitudes(shouldDisplayPhases, startDecade, decadeCount, decadeSlope, overlap))
+    if (!updateAmplitudes(shouldDisplayPhases, startDecade, decadeCount, decadeSlope))
       return;
 
     for (auto &amplitudeRenderer : amplitudeRenderers_)

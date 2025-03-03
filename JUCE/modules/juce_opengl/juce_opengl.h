@@ -42,7 +42,7 @@
   license:            GPL/Commercial
   minimumCppStandard: 17
 
-  dependencies:       juce_gui_extra
+  dependencies:       juce_gui_basics
   OSXFrameworks:      OpenGL
   iOSFrameworks:      OpenGLES
   linuxLibs:          GL
@@ -68,7 +68,7 @@
  #include "opengl/juce_gl.h"
 #endif
 
-#include <juce_gui_extra/juce_gui_extra.h>
+#include <juce_gui_basics/juce_gui_basics.h>
 
 //==============================================================================
 #if JUCE_OPENGL_ES || DOXYGEN
@@ -117,4 +117,4 @@ namespace juce
 #include "opengl/juce_OpenGLImage.h"
 #include "opengl/juce_OpenGLShaderProgram.h"
 #include "opengl/juce_OpenGLTexture.h"
-#include "utils/juce_OpenGLAppComponent.h"
+//#include "utils/juce_OpenGLAppComponent.h"

@@ -36,14 +36,13 @@ namespace Interface
       unsupported_ = versionSupported < kMinOpenGlVersion;
       if (unsupported_)
       {
-        NativeMessageBox::showMessageBoxAsync(AlertWindow::WarningIcon, "Unsupported OpenGl Version",
+        NativeMessageBox::showMessageBoxAsync(MessageBoxIconType::WarningIcon, "Unsupported OpenGl Version",
           String{ CharPointer_UTF8{ JucePlugin_Name " requires OpenGL version: " } } + String(kMinOpenGlVersion) +
           String("\nSupported version: ") + String(versionSupported));
         return;
       }
 
-      shaders_ = utils::up<Shaders>::create(openGlContext_);
-      openGl_.shaders = shaders_.get();
+      openGl_.shaders = &shaders_;
       uiRelated.renderer = &renderer_;
     }
 
@@ -74,7 +73,7 @@ namespace Interface
       doCleanupWork();
 
       openGl_.shaders = nullptr;
-      shaders_ = nullptr;
+      shaders_.releaseAll();
     }
 
     void timerCallback() override
@@ -91,8 +90,6 @@ namespace Interface
       openGlContext_.setOpenGLVersionRequired(OpenGLContext::openGL3_2);
       openGlContext_.setRenderer(this);
       openGlContext_.setComponentPaintingEnabled(false);
-      // attaching the context to an empty component so that we can activate it
-      // and also take advantage of componentRendering to lock the message manager
       openGlContext_.attachTo(*renderer_.gui_);
 
       startTimerHz(kParameterUpdateIntervalHz);
@@ -135,11 +132,17 @@ namespace Interface
           COMPLEX_ASSERT_FALSE("Missing resource type");
           break;
         }
-        cleanupQueue_.erase(cleanupQueue_.end() - 1);
+        cleanupQueue_.pop_back();
       }
     }
 
   private:
+    struct CleanupItem
+    {
+      OpenGlAllocatedResource type; 
+      GLsizei n; 
+      GLuint id;
+    };
     bool unsupported_ = false;
     utils::shared_value<bool> animate_ = true;
     std::atomic<bool> renderLock_ = false;
@@ -149,8 +152,8 @@ namespace Interface
     Plugin::ComplexPlugin &plugin_;
     OpenGLContext openGlContext_;
     OpenGlWrapper openGl_{ openGlContext_ };
-    utils::up<Shaders> shaders_;
-    std::vector<std::tuple<OpenGlAllocatedResource, GLsizei, GLuint>> cleanupQueue_{};
+    Shaders shaders_;
+    std::vector<CleanupItem> cleanupQueue_{};
     std::atomic<bool> cleanupQueueLock_{};
   };
 
@@ -187,9 +190,9 @@ namespace Interface
 
   void Renderer::reloadSkin(utils::up<Skin> skin)
   {
-    skinInstance_ = COMPLEX_MOV(skin);
+    skinInstance_ = COMPLEX_MOVE(skin);
     uiRelated.skin = skinInstance_.get();
-    juce::Rectangle<int> bounds = gui_->getBounds();
+    juce::Rectangle<int> bounds = gui_->getBoundsSafe();
     // TODO: trigger repaint in a more uhhh efficient manner
     gui_->setBounds(0, 0, bounds.getWidth() / 4, bounds.getHeight() / 4);
     gui_->setBounds(bounds);

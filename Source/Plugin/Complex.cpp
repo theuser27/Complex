@@ -18,8 +18,8 @@
 
 namespace Plugin
 {
-  ComplexPlugin::ComplexPlugin(u32 inSidechains, u32 outSidechains) :
-    ProcessorTree{ inSidechains, outSidechains } { }
+  ComplexPlugin::ComplexPlugin(u32 inSidechains, u32 outSidechains, usize undoSteps) :
+    ProcessorTree{ inSidechains, outSidechains, undoSteps } { }
 
   void ComplexPlugin::initialise(float sampleRate, u32 samplesPerBlock)
   {
@@ -44,7 +44,7 @@ namespace Plugin
   }
 
   void ComplexPlugin::parameterChangeMidi([[maybe_unused]] u64 parentModuleId,
-    [[maybe_unused]] std::string_view parameterName, [[maybe_unused]] float value)
+    [[maybe_unused]] utils::string_view parameterName, [[maybe_unused]] float value)
   {
     // TODO
   }
@@ -62,6 +62,8 @@ namespace Plugin
       SoundEngine::BlockSize::id().value())->getInternalValue<u32>();
   }
 
+  u32 ComplexPlugin::getBlockPosition() noexcept { return soundEngine_->getBlockPosition(); }
+
   Interface::Renderer &ComplexPlugin::getRenderer()
   {
     if (!rendererInstance_)
@@ -78,7 +80,7 @@ namespace Plugin
     return *rendererInstance_;
   }
 
-  size_t ComplexPlugin::getLaneCount() const
+  auto ComplexPlugin::getLaneCount() const -> usize
   {
     return soundEngine_->getEffectsState().getLaneCount();
   }

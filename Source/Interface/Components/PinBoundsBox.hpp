@@ -30,7 +30,8 @@ namespace Interface
   public:
     static constexpr int kAdditionalPinWidth = 20;
 
-    PinBoundsBox(std::string_view name, Framework::ParameterValue *lowBound, Framework::ParameterValue *highBound);
+    PinBoundsBox(utils::string_view name, Framework::ParameterValue *lowBound, 
+      Framework::ParameterValue *highBound);
     ~PinBoundsBox() override;
 
     void paintBackground(Graphics &g) override;

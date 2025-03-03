@@ -24,7 +24,7 @@ namespace Interface
     lanes_.reserve(state.getLaneCount());
     for (size_t i = 0; i < state.getLaneCount(); ++i)
     {
-      auto *lane = state_.getEffectsLane(i);
+      auto *lane = state.getEffectsLane(i);
       auto &laneSection = lanes_.emplace_back(utils::up<EffectsLaneSection>::create(lane, this, "Lane A"));
       addSubOpenGlContainer(laneSection.get());
     }
@@ -52,25 +52,6 @@ namespace Interface
 
       lane->setBounds(lanesX, lanesY, lanesWidth, lanesHeight);
       lanesX += lanesWidth + laneToLaneMargin;
-    }
-      
-
-
-  }
-
-  void EffectsStateSection::mouseWheelMove(const MouseEvent &e, const MouseWheelDetails &wheel)
-  {
-    for (auto &lane : lanes_)
-    {
-      if (!lane)
-        continue;
-
-      if (auto mouseEvent = e.getEventRelativeTo(lane.get()); 
-        lane->hitTest((int)mouseEvent.position.x, (int)mouseEvent.position.y))
-      {
-        lane->scrollLane(mouseEvent, wheel);
-        break;
-      }
     }
   }
 
@@ -101,8 +82,8 @@ namespace Interface
     }
   }
 
-  static size_t getLaneIndexForModule(juce::Rectangle<int> moduleBounds,
-    std::span<utils::up<EffectsLaneSection>> lanes)
+  static usize getLaneIndexForModule(juce::Rectangle<int> moduleBounds,
+    utils::span<utils::up<EffectsLaneSection>> lanes)
   {
     size_t laneIndex = 0;
     int largestAreaOverlap = 0;
@@ -110,7 +91,7 @@ namespace Interface
 
     while (true)
     {
-      auto horizontalOverlap = lanes[laneIndex]->getBounds().getHorizontalRange()
+      auto horizontalOverlap = lanes[laneIndex]->getBoundsSafe().getHorizontalRange()
         .getIntersectionWith(horizontalRange).getLength();
       if (horizontalOverlap > largestAreaOverlap)
         largestAreaOverlap = horizontalOverlap;
@@ -124,9 +105,14 @@ namespace Interface
     return laneIndex;
   }
 
+  void EffectsStateSection::draggingComponent(EffectModuleSection *, const juce::MouseEvent &)
+  {
+
+  }
+
   void EffectsStateSection::releaseComponent(EffectModuleSection *movedModule, const MouseEvent &)
   {
-    auto newIndices = [&]() -> std::pair<size_t, size_t>
+    auto newIndices = [&]() -> utils::pair<usize, usize>
     {
       auto bounds = getLocalArea(movedModule, movedModule->getLocalBounds());
       size_t laneIndex = getLaneIndexForModule(bounds, lanes_);
@@ -138,10 +124,11 @@ namespace Interface
         return { laneIndex, 0 };
 
       size_t effectIndex = lanes_[laneIndex]->getIndexFromScreenPositionIgnoringSelf(
-        lanes_[laneIndex]->getLocalPoint(this, bounds.getCentre()), movedModule);
+        lanes_[laneIndex]->getLocalArea(this, bounds), movedModule);
       return { laneIndex, effectIndex };
     }();
 
+    auto &processorTree = *getProcessor()->getProcessorTree();
     Framework::WaitingUpdate *update;
     if (movedModuleCopy_ != nullptr)
     {
@@ -149,10 +136,10 @@ namespace Interface
       removeSubOpenGlContainer(movedModuleCopy_.get());
       movedModuleCopy_->setAlwaysOnTop(false);
       auto *processor = movedModuleCopy_->getProcessor();
-      processor->setSavedSection(COMPLEX_MOV(movedModuleCopy_));
+      processor->setSavedSection(COMPLEX_MOVE(movedModuleCopy_));
 
-      update = new Framework::CopyProcessorUpdate(*state_.getProcessorTree(), *processor,
-        lanes_[newIndices.first]->getProcessorId().value(), newIndices.second);
+      update = new Framework::AddProcessorUpdate{ processorTree,
+        lanes_[newIndices.first]->getProcessorId().value(), newIndices.second, *processor };
     }
     else
     {
@@ -162,11 +149,11 @@ namespace Interface
         return;
       }
 
-      update = new Framework::MoveProcessorUpdate(*state_.getProcessorTree(), lanes_[newIndices.first]->getProcessorId().value(),
+      update = new Framework::MoveProcessorUpdate(processorTree, lanes_[newIndices.first]->getProcessorId().value(),
         newIndices.second, lanes_[dragStartIndices_.first]->getProcessorId().value(), dragStartIndices_.second);
     }
 
-    state_.getProcessorTree()->pushUndo(update);
+    processorTree.pushUndo(update);
   }
 
   juce::Point<int> EffectsStateSection::mouseWheelWhileDragging(EffectModuleSection *movedModule, 

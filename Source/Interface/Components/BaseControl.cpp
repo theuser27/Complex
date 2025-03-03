@@ -268,7 +268,7 @@ namespace Interface
   PopupItems BaseControl::createPopupMenu() const noexcept
   {
     PopupItems options{};
-    options.addDelimiter(std::string{ details_.displayName });
+    options.addDelimiter(std::string{ details_.displayName.data(), details_.displayName.size() });
     auto &defaultValue = options.addEntry(kDefaultValue, "Set to D" COMPLEX_UNDERSCORE_LITERAL "efault Value");
     defaultValue.shortcut = 'D';
 
@@ -292,7 +292,7 @@ namespace Interface
 
         PopupItems automationSlots{ PopupItems::AutomationList, kMappingList, "Assign automation slot" };
 
-        options.addItem(std::move(automationSlots));
+        options.addItem(COMPLEX_MOVE(automationSlots));
       }
     }
 

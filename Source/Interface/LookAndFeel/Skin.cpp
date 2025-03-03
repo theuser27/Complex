@@ -11,7 +11,6 @@
 #include "Skin.hpp"
 
 #include "Third Party/json/json.hpp"
-#include <juce_core/juce_core.h>
 #include <juce_graphics/juce_graphics.h>
 #include "BinaryData.h"
 
@@ -21,7 +20,7 @@ using json = nlohmann::json;
 
 namespace
 {
-  inline constexpr std::array<std::string_view, Interface::Skin::kSectionsCount> kOverrideNames = {
+  inline constexpr utils::array<std::string_view, Interface::Skin::kSectionsCount> kOverrideNames = {
     "All",
     "Overlays",
     "Effects Lane",
@@ -33,7 +32,7 @@ namespace
     "Destroy Module",
   };
 
-  inline constexpr std::array<std::string_view, Interface::Skin::kValueIdCount> kValueNames = {
+  inline constexpr utils::array<std::string_view, Interface::Skin::kValueIdCount> kValueNames = {
     "Body Rounding Top",
     "Body Rounding Bottom",
 
@@ -58,7 +57,7 @@ namespace
     "Knob Shadow Offset",
   };
 
-  inline constexpr std::array<std::string_view, Interface::Skin::kColorIdCount> kColorNames = {
+  inline constexpr utils::array<std::string_view, Interface::Skin::kColorIdCount> kColorNames = {
     "Background",
     "Body",
     "Background Element",
@@ -141,22 +140,18 @@ namespace Interface
   {
     juce::File getDefaultSkin()
     {
-    #if defined(JUCE_DATA_STRUCTURES_H_INCLUDED)
       juce::PropertiesFile::Options config_options;
       config_options.applicationName = "Complex";
       config_options.osxLibrarySubFolder = "Application Support";
       config_options.filenameSuffix = "skin";
 
-    #ifdef LINUX
+    #ifdef COMPLEX_LINUX
       config_options.folderName = "." + juce::String{ juce::CharPointer_UTF8{ JucePlugin_Name } }.toLowerCase();
     #else
       config_options.folderName = juce::String{ juce::CharPointer_UTF8{ JucePlugin_Name } }.toLowerCase();
     #endif
 
       return config_options.getDefaultFile();
-    #else
-      return File();
-    #endif
     }
 
     json updateJson(json data)
@@ -338,16 +333,16 @@ namespace Interface
       data[kValueNames[i]] = values_[i];
 
     json overrides;
-    for (int override_index = 0; override_index < kSectionsCount; ++override_index)
+    for (int overrideIndex = 0; overrideIndex < kSectionsCount; ++overrideIndex)
     {
-      json override_section;
-      for (const auto &[key, value] : colorOverrides_[override_index].data)
-        override_section[kColorNames[key - kInitialColor]] = juce::Colour{ value }.toString().toStdString();
+      json overrideSection;
+      for (const auto &[key, value] : colorOverrides_[overrideIndex].data)
+        overrideSection[kColorNames[key - kInitialColor]] = juce::Colour{ value }.toString().toStdString();
 
-      for (const auto &[key, value] : valueOverrides_[override_index].data)
-        override_section[kValueNames[key]] = value;
+      for (const auto &[key, value] : valueOverrides_[overrideIndex].data)
+        overrideSection[kValueNames[key]] = value;
 
-      overrides[kOverrideNames[override_index]] = override_section;
+      overrides[kOverrideNames[overrideIndex]] = overrideSection;
     }
 
     data["overrides"] = overrides;

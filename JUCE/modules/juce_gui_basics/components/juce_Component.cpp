@@ -1156,7 +1156,7 @@ void Component::setBounds (int x, int y, int w, int h)
                 repaintParent();
         }
 
-        boundsRelativeToParent.setBounds (x, y, w, h);
+        boundsRelativeToParent = Rectangle<int>(x, y, w, h);
 
         if (showing)
         {

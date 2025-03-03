@@ -18,24 +18,190 @@
 
 namespace Framework
 {
+  UndoManager::UndoManager(usize transactionsToKeep)
+  {
+    setTransationStorage(transactionsToKeep);
+  }
+  UndoManager::~UndoManager() = default;
+
+  void UndoManager::setTransationStorage(usize transactionsToKeep)
+  {
+    transactionsToKeep = utils::max(transactionsToKeep, (usize)1);
+    if (transactions.size() == transactionsToKeep)
+      return;
+
+    auto newTransactions = std::vector<decltype(transactions)::value_type>{ transactionsToKeep };
+    if (!transactions.size())
+    {
+      clearUndoHistory();
+      transactions = COMPLEX_MOVE(newTransactions);
+      return;
+    }
+
+    usize copySize, begin;
+    if ((usize)(undoActionsCount + redoActionsCount) <= transactionsToKeep)
+    {
+      // new buffer can house all currently stored actions
+      copySize = undoActionsCount + redoActionsCount;
+      begin = ((usize)currentIndex + 1 - undoActionsCount +
+        transactions.size()) % transactions.size();
+    }
+    else
+    {
+      // new buffer can't house all currently stored actions
+      // use half the size for undo and redo actions respectively
+      copySize = transactionsToKeep;
+      redoActionsCount = transactionsToKeep / 2;
+      undoActionsCount = transactionsToKeep - redoActionsCount;
+      begin = ((usize)currentIndex + 1 - undoActionsCount +
+        transactions.size()) % transactions.size();
+    }
+
+    currentIndex = undoActionsCount - 1;
+    for (usize i = 0; i < copySize; ++i)
+      newTransactions[i] = COMPLEX_MOVE(transactions[(begin + i) % transactions.size()]);
+    transactions = COMPLEX_MOVE(newTransactions);
+  }
+
+  void UndoManager::clearUndoHistory()
+  {
+    transactions.clear();
+    currentIndex = 0;
+    undoActionsCount = 1; // for the currentIndex
+    redoActionsCount = 0;
+  }
+
+  bool UndoManager::perform(UndoableAction *newAction)
+  {
+    if (newAction == nullptr)
+      return false;
+
+    utils::up action{ newAction };
+
+    if (isPerformingUndoRedo())
+    {
+      COMPLEX_ASSERT_FALSE("Don't call perform() recursively from the UndoableAction::perform() \
+        or undo() methods, or else these actions will be discarded!");
+      return false;
+    }
+
+    if (!action->perform())
+      return false;
+
+    COMPLEX_ASSERT(redoActionsCount == 0, "You need to call beginNewTransaction() \
+      if you want to overwrite undone actions");
+
+    auto &actionSet = transactions[currentIndex];
+    if (!actionSet.size())
+      actionSet.emplace_back(COMPLEX_MOVE(action));
+    else
+    {
+      auto &lastAction = actionSet.back();
+      auto coalescedAction = lastAction->combineActions(action.get());
+      if (coalescedAction != lastAction.get())
+      {
+        if (coalescedAction && coalescedAction != action.get())
+        {
+          action.reset(coalescedAction);
+          actionSet.pop_back();
+        }
+        
+        actionSet.emplace_back(COMPLEX_MOVE(action));
+      }
+    }
+
+    return true;
+  }
+
+  void UndoManager::beginNewTransaction()
+  {
+    // skip making a new action set if current one is empty
+    if (!transactions[currentIndex].size())
+      return;
+    currentIndex = (currentIndex + 1) % transactions.size();
+    transactions[currentIndex] = decltype(transactions)::value_type{};
+
+    undoActionsCount = utils::min(undoActionsCount + 1, transactions.size());
+    redoActionsCount = 0;
+  }
+
+  bool UndoManager::undo(bool undoCurrentTransactionOnly)
+  {
+    if (undoActionsCount == 0)
+      return false;
+    
+    isInsideUndoRedoCall = true;
+
+    bool success = [](auto &actions)
+    {
+      for (int i = (int)actions.size(); --i >= 0;)
+        if (!actions[i]->undo())
+          return false;
+
+      return true;
+    }(transactions[currentIndex]);
+
+    if (success)
+    {
+      if (!undoCurrentTransactionOnly)
+      {
+        currentIndex = (currentIndex - 1 + transactions.size()) % transactions.size();
+        --undoActionsCount;
+        ++redoActionsCount;
+      }
+    }
+    else
+      clearUndoHistory(); // very severe edge case, shouldn't happen
+
+    //sendChangeMessage();
+    isInsideUndoRedoCall = false;
+    return true;
+  }
+
+  bool UndoManager::redo()
+  {
+    if (redoActionsCount == 0)
+      return false;
+
+    isInsideUndoRedoCall = true;
+
+    bool success = [](auto &actions)
+    {
+      for (int i = (int)actions.size(); --i >= 0;)
+        if (!actions[i]->undo())
+          return false;
+
+      return true;
+    }(transactions[(currentIndex + 1) % transactions.size()]);
+
+    if (success)
+    {
+      currentIndex = (currentIndex + 1) % transactions.size();
+      --redoActionsCount;
+      ++undoActionsCount;
+    }
+    else
+      clearUndoHistory(); // very severe edge case, shouldn't happen
+
+    //sendChangeMessage();
+    isInsideUndoRedoCall = false;
+    return true;
+  }
+
   AddProcessorUpdate::~AddProcessorUpdate()
   {
-    if (!processorTree_.isBeingDestroyed() && addedProcessor_ && !isDone_)
+    if (!processorTree_.isBeingDestroyed() && addedProcessor_)
       processorTree_.deleteProcessor(addedProcessor_->getProcessorId());
   }
 
   bool AddProcessorUpdate::perform()
   {
     auto destinationPointer = processorTree_.getProcessor(destinationProcessorId_);
-
-    // if we've already undone once and we're redoing, we need to pass the already created module
-    if (!addedProcessor_)
-      addedProcessor_ = instantiationFunction_(processorTree_);
-
+    
     auto g = wait();
     destinationPointer->insertSubProcessor(destinationSubProcessorIndex_, *addedProcessor_);
 
-    isDone_ = true;
+    addedProcessor_ = nullptr;
 
     return true;
   }
@@ -47,38 +213,6 @@ namespace Framework
     auto g = wait();
     addedProcessor_ = &destinationPointer->deleteSubProcessor(destinationSubProcessorIndex_);
 
-    isDone_ = false;
-
-    return true;
-  }
-
-  CopyProcessorUpdate::~CopyProcessorUpdate()
-  {
-    if (!processorTree_.isBeingDestroyed() && !isDone_)
-      processorTree_.deleteProcessor(processorCopy.getProcessorId());
-  }
-
-  bool CopyProcessorUpdate::perform()
-  {
-    auto destinationPointer = processorTree_.getProcessor(destinationProcessorId_);
-
-    auto g = wait();
-    destinationPointer->insertSubProcessor(destinationSubProcessorIndex_, processorCopy);
-
-    isDone_ = true;
-
-    return true;
-  }
-
-  bool CopyProcessorUpdate::undo()
-  {
-    auto destinationPointer = processorTree_.getProcessor(destinationProcessorId_);
-
-    auto g = wait();
-    destinationPointer->deleteSubProcessor(destinationSubProcessorIndex_);
-
-    isDone_ = false;
-
     return true;
   }
 
@@ -88,8 +222,17 @@ namespace Framework
     auto sourcePointer = processorTree_.getProcessor(sourceProcessorId_);
 
     auto g = wait();
-    auto &movedProcessor = sourcePointer->deleteSubProcessor(sourceSubProcessorIndex_);
-    destinationPointer->insertSubProcessor(destinationSubProcessorIndex_, movedProcessor);
+    auto &movedProcessor = sourcePointer->deleteSubProcessor(sourceSubProcessorIndex_, false);
+    destinationPointer->insertSubProcessor(destinationSubProcessorIndex_, movedProcessor, false);
+
+    if (sourcePointer != destinationPointer)
+      for (auto listener : sourcePointer->getListeners())
+        listener->movedSubProcessor(movedProcessor, *sourcePointer, 
+          sourceSubProcessorIndex_, *destinationPointer, destinationSubProcessorIndex_);
+    
+    for (auto listener : destinationPointer->getListeners())
+      listener->movedSubProcessor(movedProcessor, *sourcePointer, 
+        sourceSubProcessorIndex_, *destinationPointer, destinationSubProcessorIndex_);
 
     return true;
   }
@@ -100,45 +243,24 @@ namespace Framework
     auto sourcePointer = processorTree_.getProcessor(sourceProcessorId_);
 
     auto g = wait();
-    auto &movedProcessor = destinationPointer->deleteSubProcessor(destinationSubProcessorIndex_);
-    sourcePointer->insertSubProcessor(sourceSubProcessorIndex_, movedProcessor);
+    auto &movedProcessor = destinationPointer->deleteSubProcessor(destinationSubProcessorIndex_, false);
+    sourcePointer->insertSubProcessor(sourceSubProcessorIndex_, movedProcessor, false);
 
-    return true;
-  }
+    if (sourcePointer != destinationPointer)
+      for (auto listener : sourcePointer->getListeners())
+        listener->movedSubProcessor(movedProcessor, *destinationPointer, 
+          destinationSubProcessorIndex_, *sourcePointer, sourceSubProcessorIndex_);
 
-  UpdateProcessorUpdate::~UpdateProcessorUpdate()
-  {
-    if (!processorTree_.isBeingDestroyed() && savedProcessor_)
-      processorTree_.deleteProcessor(savedProcessor_->getProcessorId());
-  }
-
-  bool UpdateProcessorUpdate::perform()
-  {
-    auto destinationPointer = processorTree_.getProcessor(destinationProcessorId_);
-
-    // if we've already undone once and we're redoing, we need to pass the already created module
-    if (!savedProcessor_)
-      savedProcessor_ = instantiationFunction_(processorTree_);
-
-    auto g = wait();
-    savedProcessor_ = &destinationPointer->updateSubProcessor(destinationSubProcessorIndex_, *savedProcessor_);
-
-    return true;
-  }
-
-  bool UpdateProcessorUpdate::undo()
-  {
-    auto destinationPointer = processorTree_.getProcessor(destinationProcessorId_);
-
-    auto g = wait();
-    savedProcessor_ = &destinationPointer->updateSubProcessor(destinationSubProcessorIndex_, *savedProcessor_);
+    for (auto listener : destinationPointer->getListeners())
+      listener->movedSubProcessor(movedProcessor, *destinationPointer, 
+        destinationSubProcessorIndex_, *sourcePointer, sourceSubProcessorIndex_);
 
     return true;
   }
 
   DeleteProcessorUpdate::~DeleteProcessorUpdate()
   {
-    if (!processorTree_.isBeingDestroyed() && deletedProcessor_ && isDone_)
+    if (!processorTree_.isBeingDestroyed() && deletedProcessor_)
       processorTree_.deleteProcessor(deletedProcessor_->getProcessorId());
   }
 
@@ -157,8 +279,6 @@ namespace Framework
     };
     recurseParameters(recurseParameters, deletedProcessor_);
 
-    isDone_ = true;
-
     return true;
   }
 
@@ -176,7 +296,7 @@ namespace Framework
     };
     recurseParameters(recurseParameters, deletedProcessor_);
 
-    isDone_ = false;
+    deletedProcessor_ = nullptr;
 
     return true;
   }

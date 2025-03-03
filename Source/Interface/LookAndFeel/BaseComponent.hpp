@@ -21,21 +21,21 @@ namespace utils
   {
   public:
     shared_value() = default;
-    explicit shared_value(std::unique_ptr<T> &&value) noexcept { this->value = std::move(value); }
+    explicit shared_value(std::unique_ptr<T> &&value) noexcept { this->value = COMPLEX_MOVE(value); }
     shared_value(shared_value &&other) noexcept
     {
       ScopedLock g{ other.guard, WaitMechanism::Spin, false };
-      value = std::move(value.value);
+      value = COMPLEX_MOVE(value.value);
     }
     shared_value &operator=(shared_value &&other) noexcept
     {
       ScopedLock g{ other.guard, WaitMechanism::Spin, false };
-      return shared_value::operator=(std::move(other.value));
+      return shared_value::operator=(COMPLEX_MOVE(other.value));
     }
     shared_value &operator=(std::unique_ptr<T> &&newValue) noexcept
     {
       ScopedLock g{ guard, WaitMechanism::Spin, false };
-      value = std::move(newValue);
+      value = COMPLEX_MOVE(newValue);
       return *this;
     }
 
@@ -62,70 +62,25 @@ namespace utils
   };
 
   template<typename T>
-  class shared_value<std::vector<T>>
-  {
-  public:
-    shared_value() = default;
-    explicit shared_value(std::vector<T> &&value) noexcept { this->value = std::move(value); }
-    shared_value(shared_value &&value) noexcept
-    {
-      ScopedLock g{ value.guard, WaitMechanism::Spin };
-      value = std::move(value.value);
-    }
-    shared_value &operator=(shared_value &&other) noexcept
-    {
-      ScopedLock g{ value.guard, WaitMechanism::Spin };
-      return shared_value::operator=(std::move(other.value));
-    }
-    shared_value &operator=(std::vector<T> &&newValue) noexcept
-    {
-      ScopedLock g{ value.guard, WaitMechanism::Spin };
-      value = std::move(newValue);
-      return *this;
-    }
-
-    [[nodiscard]] std::vector<T> &lock() noexcept
-    {
-      lockAtomic(guard, WaitMechanism::Spin, false);
-      return value;
-    }
-
-    [[nodiscard]] const std::vector<T> &lock() const noexcept
-    {
-      lockAtomic(guard, WaitMechanism::Spin, false);
-      return value;
-    }
-
-    void unlock() const noexcept
-    {
-      guard.store(false, std::memory_order_release);
-      guard.notify_one();
-    }
-  private:
-    mutable std::atomic<bool> guard = false;
-    std::vector<T> value{};
-  };
-
-  template<typename T>
   class shared_value_block
   {
   public:
     shared_value_block() = default;
-    explicit shared_value_block(T &&value) noexcept { this->value = std::move(value); }
+    explicit shared_value_block(T &&value) noexcept { this->value = COMPLEX_MOVE(value); }
     shared_value_block(shared_value_block &&other) noexcept
     {
       ScopedLock g{ other.guard, WaitMechanism::Sleep };
-      value = std::move(other.value);
+      value = COMPLEX_MOVE(other.value);
     }
     shared_value_block &operator=(shared_value_block &&other) noexcept
     {
       ScopedLock g{ other.guard, WaitMechanism::Sleep };
-      return shared_value_block::operator=(std::move(other.value));
+      return shared_value_block::operator=(COMPLEX_MOVE(other.value));
     }
     shared_value_block &operator=(T &&newValue) noexcept
     {
       ScopedLock g{ guard, WaitMechanism::WaitNotify };
-      value = std::move(newValue);
+      value = COMPLEX_MOVE(newValue);
       return *this;
     }
 
@@ -202,8 +157,6 @@ namespace Interface
     class ScopedIgnoreClip
     {
     public:
-      using container = std::vector<std::tuple<BaseComponent *, juce::Rectangle<int>, bool>>;
-
       ScopedIgnoreClip(std::vector<ViewportChange> &vector, const BaseComponent *ignoreClipIncluding) : vector_(vector)
       {
         COMPLEX_ASSERT(vector.back() != ScopedBoundsEmplace::doNotClipFlag);
@@ -283,8 +236,7 @@ namespace Interface
 
     juce::ModifierKeys redirectMods_{};
     BaseComponent *redirectMouse_ = nullptr;
-
   private:
-    JUCE_DECLARE_WEAK_REFERENCEABLE(BaseComponent)
+    COMPLEX_MAKE_LIVENESS_CHECKED;
   };
 }

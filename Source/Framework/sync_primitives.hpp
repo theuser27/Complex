@@ -11,7 +11,6 @@
 #pragma once
 
 #include <atomic>
-#include <thread>
 #include "Third Party/clog/small_function.hpp"
 
 #include "stl_utils.hpp"
@@ -48,28 +47,29 @@ namespace utils
       });
   }
 
-  void loadLibraries();
-  void unloadLibraries();
-
   void millisleep() noexcept;
+  void millisleep(const clg::small_fn<bool()> &shouldWaitFn);
 
+  // Spin - spinlock (use on realtime threads)
+  // Wait - waits for signal from locking site (use for unknown sleep length)
+  // Sleep - millisleep (use if you expect something reasonably soon)
+  // 
+  // all notify variants signal waiting sites upon unlock (REALTIME-UNSAFE)
   enum class WaitMechanism : u32 { Spin = 0, Wait, Sleep, SpinNotify = 4, WaitNotify, SleepNotify };
 
   // git blame for deadlocks
-  // versionFlag is incremented on writes to the data being protected
   template<typename T>
   struct LockBlame
   {
     std::atomic<T> lock{};
-    std::atomic<std::thread::id> lastLockId{};
-    std::atomic<u64> versionFlag{};
+    std::atomic<usize> lastLockId{};
   };
 
   template<typename T>
   struct ReentrantLock
   {
     std::atomic<T> lock{};
-    std::atomic<std::thread::id> lastLockId{};
+    std::atomic<usize> lastLockId{};
   };
 
   void lockAtomic(std::atomic<bool> &atomic, WaitMechanism mechanism, bool expected) noexcept;
@@ -81,18 +81,7 @@ namespace utils
   class ScopedLock
   {
   public:
-    ScopedLock(ReentrantLock<bool> &reentrantLock, WaitMechanism mechanism, bool expected = false) noexcept :
-      type_(ReentrantBoolType), mechanism_(mechanism), reentrantBool_{ &reentrantLock, false, expected }
-    {
-      reentrantBool_.wasLocked = std::this_thread::get_id() == 
-        reentrantLock.lastLockId.load(std::memory_order_relaxed);
-
-      if (!reentrantBool_.wasLocked)
-      {
-        lockAtomic(reentrantLock.lock, mechanism, expected);
-        reentrantLock.lastLockId.store(std::this_thread::get_id(), std::memory_order_relaxed);
-      }
-    }
+    ScopedLock(ReentrantLock<bool> &reentrantLock, WaitMechanism mechanism, bool expected = false) noexcept;
 
     ScopedLock(std::atomic<bool> &atomic, WaitMechanism mechanism, bool expected = false) noexcept :
       type_(BoolType), mechanism_(mechanism), bool_{ &atomic, expected }
@@ -158,7 +147,7 @@ namespace utils
       void store(T newValue) noexcept
       {
         ScopedLock g{ guard, WaitMechanism::Spin };
-        value = std::move(newValue);
+        value = COMPLEX_MOVE(newValue);
       }
 
       T value;
@@ -166,18 +155,132 @@ namespace utils
     };
 
     // if the type cannot fit into an atomic we can have an atomic_bool to guard it
-    using holder = std::conditional_t<sizeof(T) <= sizeof(std::uintptr_t), atomic_holder, guard_holder>;  // NOLINT(bugprone-sizeof-expression)
+    using holder = utils::conditional_t<sizeof(T) <= sizeof(std::uintptr_t), atomic_holder, guard_holder>;
   public:
     shared_value() = default;
     shared_value(const shared_value &other) noexcept : value{ other.value.load() } { }
-    shared_value(T newValue) noexcept : value{ std::move(newValue) } { }
+    shared_value(T newValue) noexcept : value{ COMPLEX_MOVE(newValue) } { }
     shared_value &operator=(const shared_value &other) noexcept { return shared_value::operator=(other.value.load()); }
-    shared_value &operator=(T newValue) noexcept { value.store(std::move(newValue)); return *this; }
+    shared_value &operator=(T newValue) noexcept { value.store(COMPLEX_MOVE(newValue)); return *this; }
     operator T() const noexcept { return get(); }
-    T operator->() const noexcept requires std::is_pointer_v<T> { return get(); }
+    T operator->() const noexcept requires utils::is_pointer_v<T> { return get(); }
 
     [[nodiscard]] T get() const noexcept { return value.load(); }
   private:
     holder value{};
+  };
+
+  // intended for quick writes and frequent reads
+  template<typename T>
+  class shared_value<T[]>
+  {
+  private:
+    enum Flag : u8 { Unused, Updated, Using };
+    up<T[]> data_{};
+    usize size_{};
+    mutable std::atomic<Flag> flag_{ Unused };
+
+    void changeFlag(Flag newFlag) noexcept
+    {
+      Flag flag = Unused;
+      while (!flag_.compare_exchange_weak(flag, newFlag, std::memory_order_acquire))
+      {
+        while (flag == Using)
+        {
+          millisleep();
+          flag = flag_.load(std::memory_order_relaxed);
+        }
+      }
+    }
+  public:
+    class span : public utils::span<T>
+    {
+      shared_value *holder_ = nullptr;
+      bool isWriting_ = false;
+      span(T *data, usize size, shared_value *holder, bool isWriting) :
+        utils::span<T>{ data, size }, holder_{ holder }, isWriting_{ isWriting } { }
+    public:
+      span(const span &) = delete;
+      ~span() noexcept
+      {
+        if (!holder_)
+          return;
+        
+        COMPLEX_ASSERT(holder_->flag_.load(std::memory_order_relaxed) == Using, 
+          "A span is given out only if it is the exclusive user of the data");
+        auto newFlag = isWriting_ ? Updated : Unused;
+        holder_->flag_.store(newFlag, std::memory_order_release);
+
+        holder_ = nullptr;
+      }
+      friend class shared_value;
+    };
+
+    shared_value() = default;
+    shared_value(const shared_value &) noexcept = delete;
+    shared_value(shared_value &&) noexcept = default;
+    shared_value(usize size) : data_{ up<T[]>::create(size) }, size_{ size } { }
+    shared_value &operator=(const shared_value &) noexcept = delete;
+    shared_value &operator=(shared_value &&other) noexcept
+    {
+      if (this != &other)
+      {
+        data_ = COMPLEX_MOVE(other.data_);
+        size_ = other.size_;
+      }
+      return *this;
+    }
+
+    void update() noexcept { changeFlag(Updated); }
+    bool hasUpdate() const noexcept
+    { return flag_.load(std::memory_order_relaxed) == Updated; }
+
+    void resize(usize size)
+    {
+      usize copySize = min(size, size_);
+      auto newData = up<T[]>::create(size);
+      
+      changeFlag(Using);
+
+      if (copySize != 0)
+        memcpy(newData.get(), data_.get(), copySize);
+      data_ = COMPLEX_MOVE(newData);
+      size_ = size;
+
+      flag_.store(Unused, std::memory_order_release);
+    }
+
+    void copy(T *writee) noexcept
+    {
+      changeFlag(Using);
+
+      memcpy(writee, data_.get(), size_ * sizeof(T));
+
+      flag_.store(Unused, std::memory_order_release);
+    }
+    pair<up<T[]>, usize> copy() noexcept
+    {
+      changeFlag(Using);
+
+      usize size = size_;
+      auto newData = up<T[]>::create(size);
+      memcpy(newData.get(), data_.get(), size_ * sizeof(T));
+
+      flag_.store(Unused, std::memory_order_release);
+      return { COMPLEX_MOVE(newData), size };
+    }
+
+    // locks the array and returns a span that will set update flag automatically
+
+    span read() noexcept
+    {
+      changeFlag(Using);
+      return { data_.get(), size_, this, false };
+    }
+    span write() noexcept
+    {
+      changeFlag(Using);
+      return { data_.get(), size_, this, true };
+    }
   };
 }

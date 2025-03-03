@@ -168,17 +168,13 @@ namespace Interface
     void positionList(juce::Point<int> sourcePosition);
     void positionList(juce::Rectangle<int> sourceBounds, Placement placement);
 
-    // unfortunately due to the way juce::WeakReference was designed
-    // it's pretty much impossible to get a reference to const object
-    // without doing lots of internal hacky casts
-    // no mutation, only check to see if the object still exists when a selection is made
-    void setComponent(const BaseComponent *component) { checker_ = const_cast<BaseComponent *>(component); }
-    void setCallback(std::function<void(int)> callback) { callback_ = COMPLEX_MOV(callback); }
-    void setCancelCallback(std::function<void()> cancel) { cancel_ = COMPLEX_MOV(cancel); }
+    void setComponent(const BaseComponent *component) { livenessChecker_ = component; }
+    void setCallback(std::function<void(int)> callback) { callback_ = COMPLEX_MOVE(callback); }
+    void setCancelCallback(std::function<void()> cancel) { cancel_ = COMPLEX_MOVE(cancel); }
     void setPopupSkinOverride(Skin::SectionOverride skinOverride) { commonInfo_.sectionOverride = skinOverride; }
     void setItems(PopupItems selections, int minWidth)
     {
-      items_ = COMPLEX_MOV(selections);
+      items_ = COMPLEX_MOVE(selections);
       fillAutomationListIfExists();
       commonInfo_.minWidth = minWidth;
       lists_[0]->setItems(&items_);
@@ -205,7 +201,7 @@ namespace Interface
     std::function<void(int)> callback_{};
     std::function<void()> cancel_{};
     std::vector<utils::up<PopupList>> lists_;
-    juce::WeakReference<BaseComponent> checker_;
+    utils::LivenessChecker livenessChecker_;
     PopupItems items_{};
 
     Placement lastPlacement_ = Placement::right;

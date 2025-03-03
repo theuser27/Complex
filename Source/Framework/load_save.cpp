@@ -26,6 +26,15 @@
 
 using json = nlohmann::json;
 
+// ADL serialiser of utils::string_view, do NOT delete
+namespace utils
+{
+  static void to_json(json &json, utils::string_view view)
+  {
+    json = std::string_view{ view.data(), view.size() };
+  }
+}
+
 namespace Framework::LoadSave
 {
   juce::File getConfigFile();
@@ -36,10 +45,10 @@ namespace
   class LoadingException final : public std::exception
   {
   public:
-    LoadingException(juce::String message) : message_(std::move(message)) { }
+    LoadingException(juce::String message) : message_{ COMPLEX_MOVE(message) } { }
     ~LoadingException() noexcept override = default;
 
-    char const *what() const override { return message_.toRawUTF8(); }
+    const char *what() const override { return message_.toRawUTF8(); }
     LoadingException &append(juce::String string) { message_ += string; return *this; }
     LoadingException &prepend(juce::String string) { message_ = string + message_; return *this; }
 
@@ -85,27 +94,23 @@ namespace Framework::LoadSave
 {
   juce::File getConfigFile()
   {
-  #if defined(JUCE_DATA_STRUCTURES_H_INCLUDED)
     juce::PropertiesFile::Options configOptions;
     configOptions.applicationName = "Complex";
     configOptions.osxLibrarySubFolder = "Application Support";
     configOptions.filenameSuffix = "config";
 
-  #ifdef LINUX
+  #ifdef COMPLEX_LINUX
     configOptions.folderName = "." + juce::String{ juce::CharPointer_UTF8{ JucePlugin_Name } }.toLowerCase();
   #else
     configOptions.folderName = juce::String{ juce::CharPointer_UTF8{ JucePlugin_Name } }.toLowerCase();
   #endif
 
     return configOptions.getDefaultFile();
-  #else
-    return File();
-  #endif
   }
 
 
 
-  std::pair<int, int> getWindowSize()
+  utils::pair<int, int> getWindowSize()
   {
     json data = getConfigJson();
 
@@ -132,30 +137,25 @@ namespace Framework::LoadSave
     return scale;
   }
 
-  std::tuple<usize, usize, usize> getParameterMappingsAndSidechains()
+  void getStartupParameters(usize &parameterMappings, usize &inSidechains, usize &outSidechains, usize &undoSteps)
   {
     json data = getConfigJson();
-    usize parameterMappings = 64;
-    usize in = 0;
-    usize out = 0;
+    parameterMappings = 100;
+    inSidechains = 0;
+    outSidechains = 0;
+    undoSteps = 500;
 
     if (data.contains("parameter_count"))
       parameterMappings = data["parameter_count"];
 
     if (data.contains("input_sidechains"))
-      in = data["input_sidechains"];
+      inSidechains = data["input_sidechains"];
 
     if (data.contains("output_sidechains"))
-      out = data["output_sidechains"];
+      outSidechains = data["output_sidechains"];
 
-    return { parameterMappings, in, out };
-  }
-
-  void saveParameterMappings(usize parameterMappings)
-  {
-    json data = getConfigJson();
-    data["parameter_count"] = parameterMappings;
-    saveConfigJson(data);
+    if (data.contains("undo_steps"))
+      undoSteps = data["undo_steps"];
   }
 
   void saveWindowSize(int windowWidth, int windowHeight)
@@ -170,6 +170,20 @@ namespace Framework::LoadSave
   {
     json data = getConfigJson();
     data["window_scale"] = windowScale;
+    saveConfigJson(data);
+  }
+
+  void saveParameterMappings(usize parameterMappings)
+  {
+    json data = getConfigJson();
+    data["parameter_count"] = parameterMappings;
+    saveConfigJson(data);
+  }
+
+  void saveUndoStepCount(usize undoStepCount)
+  {
+    json data = getConfigJson();
+    data["undo_steps"] = undoStepCount;
     saveConfigJson(data);
   }
 
@@ -193,13 +207,13 @@ namespace Framework
     {
       json previousState{};
       processorTree_.serialiseToJson(&previousState);
-      oldSavedState_ = COMPLEX_MOV(previousState);
+      oldSavedState_ = COMPLEX_MOVE(previousState);
     }
 
     processorTree_.clearState();
-    auto &oldSavedState = std::any_cast<json &>(oldSavedState_);
-    auto &newSavedState = std::any_cast<json &>(newSavedState_);
-    processorTree_.deserialiseFromJson(&newSavedState, &oldSavedState);
+    auto *oldSavedState = oldSavedState_.try_get<json>();
+    auto *newSavedState = newSavedState_.try_get<json>();
+    processorTree_.deserialiseFromJson(newSavedState, oldSavedState);
 
     return true;
   }
@@ -207,9 +221,9 @@ namespace Framework
   bool PresetUpdate::undo()
   {
     processorTree_.clearState();
-    auto &oldSavedState = std::any_cast<json &>(oldSavedState_);
-    auto &newSavedState = std::any_cast<json &>(newSavedState_);
-    processorTree_.deserialiseFromJson(&oldSavedState, &newSavedState);
+    auto *oldSavedState = oldSavedState_.try_get<json>();
+    auto *newSavedState = newSavedState_.try_get<json>();
+    processorTree_.deserialiseFromJson(oldSavedState, newSavedState);
 
     return true;
   }
@@ -255,13 +269,13 @@ namespace Plugin
     auto loadState = [&](json &data)
     {
       json &soundEngine = data["tree"][0];
-      std::string_view type = soundEngine["id"];
+      utils::string_view type = soundEngine["id"].get<utils::string_view>();
       if (type != Framework::Processors::SoundEngine::id().value())
         throw LoadingException{ "SoundEngine type doesn't match." };
 
       for (const auto &[_, parameter] : soundEngine["parameters"].items())
       {
-        if (parameter["id"].get<std::string_view>() == Framework::Processors::SoundEngine::BlockSize::id().value())
+        if (parameter["id"].get<utils::string_view>() == Framework::Processors::SoundEngine::BlockSize::id().value())
         {
           minFFTOrder_.store(parameter["min_value"].get<u32>(), std::memory_order_release);
           maxFFTOrder_.store(parameter["max_value"].get<u32>(), std::memory_order_release);
@@ -336,7 +350,7 @@ namespace Plugin
     isLoaded_.store(true, std::memory_order_release);
   }
 
-  auto ProcessorTree::createProcessor(std::string_view processorType, void *jsonData)
+  auto ProcessorTree::createProcessor(utils::string_view processorType, void *jsonData)
     -> Generation::BaseProcessor *
   {
     static constexpr auto processorTypes = Framework::Processors::
@@ -348,11 +362,11 @@ namespace Plugin
       utils::ignore = ((Ts::id() == processorType && (processor = utils::up<typename Ts::linked_type>::create(this), true)) || ...);
       if (processor == nullptr)
       {
-        throw LoadingException{ std::format("Processor with id {} does not exist", processorType) };
+        throw LoadingException{ std::format("Processor with id {} does not exist", processorType.data()) };
       }
 
       auto *pointer = processor.get();
-      addProcessor(COMPLEX_MOV(processor));
+      addProcessor(COMPLEX_MOVE(processor));
 
       if (jsonData != nullptr)
         pointer->deserialiseFromJson(jsonData);
@@ -366,13 +380,13 @@ namespace Plugin
 
 static void handleIndexedData(Framework::ParameterDetails &details, json *indexedData)
 {
-  std::vector<std::pair<std::string_view *, usize>> stringRelocations{};
+  std::vector<std::pair<utils::string_view *, usize>> stringRelocations{};
 
   usize relocationIndex = 0;
-  auto appendAndAddRelocation = [&](std::string_view &relocate, std::string_view text)
+  auto appendAndAddRelocation = [&](utils::string_view &relocate, utils::string_view text)
   {
     stringRelocations.emplace_back(&relocate, relocationIndex++);
-    details.dynamicData->stringData.append(text);
+    details.dynamicData->stringData.append(text.data(), text.size());
     details.dynamicData->stringData += '\0';
   };
 
@@ -412,14 +426,14 @@ static void handleIndexedData(Framework::ParameterDetails &details, json *indexe
     if (!value.contains("id") || !value.contains("display_name"))
     {
       throw LoadingException{ std::format("Missing indexed attributes in parameter {} ({})",
-        details.displayName, details.id) };
+        details.displayName.data(), details.id.data()) };
     }
 
-    std::string_view id = value["id"];
-    std::string_view name = value["display_name"];
+    utils::string_view id = value["id"].get<utils::string_view>();
+    utils::string_view name = value["display_name"].get<utils::string_view>();
     u64 count = value["count"].get<u64>();
     auto dynamicUpdateUuid = (!value.contains("dynamic_update_uuid")) ?
-      std::string_view{} : value["dynamic_update_uuid"].get<std::string_view>();
+      utils::string_view{} : value["dynamic_update_uuid"].get<utils::string_view>();
 
     if (details.indexedData.empty())
     {
@@ -433,7 +447,7 @@ static void handleIndexedData(Framework::ParameterDetails &details, json *indexe
         {
           // TODO: add option to continue loading without this indexed value
           throw LoadingException{ std::format("Unknown dynamic update reason ({}) for indexed element {} ({})",
-            dynamicUpdateUuid, name, id) };
+            dynamicUpdateUuid.data(), name.data(), id.data()) };
         }
         appendAndAddRelocation(element.dynamicUpdateUuid, dynamicUpdateUuid);
       }
@@ -445,7 +459,7 @@ static void handleIndexedData(Framework::ParameterDetails &details, json *indexe
     if (iter == details.indexedData.end())
     {
       throw LoadingException{ std::format("Unknown indexed element {} ({}) in parameter {} ({})",
-        name, id, details.displayName, details.id) };
+        name.data(), id.data(), details.displayName.data(), details.id.data()) };
     }
 
     accountedElements.emplace_back((usize)(iter - details.indexedData.begin()));
@@ -467,7 +481,7 @@ static void handleIndexedData(Framework::ParameterDetails &details, json *indexe
       {
         // TODO: add option to continue loading without this indexed value
         throw LoadingException{ std::format("Unknown dynamic update reason ({}) for indexed element {} ({})",
-          dynamicUpdateUuid, name, id) };
+          dynamicUpdateUuid.data(), name.data(), id.data()) };
       }
 
       appendAndAddRelocation(element.dynamicUpdateUuid, dynamicUpdateUuid);
@@ -507,7 +521,7 @@ namespace Generation
       json &subProcessorData = subProcessors.emplace_back();
       subProcessor->serialiseToJson(&subProcessorData);
     }
-    processorInfo["processors"] = COMPLEX_MOV(subProcessors);
+    processorInfo["processors"] = COMPLEX_MOVE(subProcessors);
 
     std::vector<json> parameters{};
     for (auto &[name, parameter] : processorParameters_.data)
@@ -515,10 +529,10 @@ namespace Generation
       json &parameterData = parameters.emplace_back();
       parameter->serialiseToJson(&parameterData);
     }
-    processorInfo["parameters"] = COMPLEX_MOV(parameters);
+    processorInfo["parameters"] = COMPLEX_MOVE(parameters);
   }
 
-  void BaseProcessor::deserialiseFromJson(std::span<const std::string_view> parameterIds, 
+  void BaseProcessor::deserialiseFromJson(utils::span<const utils::string_view> parameterIds,
     BaseProcessor *processor, void *jsonData)
   {
     json &data = *static_cast<json *>(jsonData);
@@ -541,16 +555,16 @@ namespace Generation
       catch (LoadingException &e)
       {
         auto [name, id] = getNameId();
-        throw e.prepend(std::format("Inside processor {} ({})\n", name, id));
+        throw e.prepend(std::format("Inside processor {} ({})\n", name.data(), id.data()));
       }
       auto parameterId = parameter->getParameterId();
       if (std::ranges::find(parameterIds, parameterId) == parameterIds.end())
       {
         auto [name, id] = getNameId();
         throw LoadingException{ std::format("Parameter {} ({}) is not part of processor {} ({}).", 
-          parameter->getParameterName(), parameterId, name, id) };
+          parameter->getParameterName().data(), parameterId.data(), name.data(), id.data()) };
       }
-      processor->processorParameters_.data.emplace_back(parameterId, COMPLEX_MOV(parameter));
+      processor->processorParameters_.data.emplace_back(parameterId, COMPLEX_MOVE(parameter));
     }
 
     for (auto &[_, value] : data["processors"].items())
@@ -558,10 +572,10 @@ namespace Generation
       if (!value.contains("id"))
       {
         auto [name, id] = getNameId();
-        throw LoadingException{ std::format("Unknown processor without id inside {} ({})", name, id) };
+        throw LoadingException{ std::format("Unknown processor without id inside {} ({})", name.data(), id.data()) };
       }
 
-      std::string_view subProcessorsId = value["id"];
+      utils::string_view subProcessorsId = value["id"].get<utils::string_view>();
       Generation::BaseProcessor *subProcessor;
       try
       {
@@ -570,7 +584,7 @@ namespace Generation
       catch (LoadingException &e)
       {
         auto [name, id] = getNameId();
-        throw e.prepend(std::format("Inside processor {} ({})\n", name, id));
+        throw e.prepend(std::format("Inside processor {} ({})\n", name.data(), id.data()));
       }
       processor->insertSubProcessor(processor->subProcessors_.size(), *subProcessor);
     }
@@ -585,7 +599,7 @@ namespace Generation
       throw LoadingException{ "More than one EffectsState is defined." };
 
     json &effectsState = subProcessors[0];
-    std::string_view type = effectsState["id"];
+    utils::string_view type = effectsState["id"].get<utils::string_view>();
     if (Framework::Processors::EffectsState::id().value() != type)
       throw LoadingException{ "EffectsState type doesn't match." };
 
@@ -601,7 +615,7 @@ namespace Generation
     json &subProcessors = data["processors"];
 
     for (auto &[_, value] : subProcessors.items())
-      if (value["id"].get<std::string_view>() != Framework::Processors::EffectsLane::id().value())
+      if (value["id"].get<utils::string_view>() != Framework::Processors::EffectsLane::id().value())
         throw LoadingException{ "Non-EffectLane found in EffectsState" };
     
     static constexpr auto kEffectsStateParameters = Framework::Processors::EffectsState::enum_ids_filter<
@@ -616,7 +630,7 @@ namespace Generation
     json &subProcessors = data["processors"];
 
     for (auto &[_, value] : subProcessors.items())
-      if (value["id"].get<std::string_view>() != Framework::Processors::EffectModule::id().value())
+      if (value["id"].get<utils::string_view>() != Framework::Processors::EffectModule::id().value())
         throw LoadingException{ "Non-EffectModule found in EffectsLane" };
 
     static constexpr auto kEffectsLaneParameters = Framework::Processors::EffectsLane::enum_ids_filter<
@@ -634,7 +648,7 @@ namespace Generation
       Framework::kGetProcessorPredicate, true>();
 
     for (auto &[_, value] : subProcessors.items())
-      if (std::ranges::find(kContainedEffects, value["id"].get<std::string_view>()) == kContainedEffects.end())
+      if (std::ranges::find(kContainedEffects, value["id"].get<utils::string_view>()) == kContainedEffects.end())
         throw LoadingException{ "Non-Effect found in EffectModule" };
 
     static constexpr auto kEffectModuleParameters = Framework::Processors::EffectModule::enum_ids_filter<
@@ -679,7 +693,7 @@ namespace Framework
         if (!element.dynamicUpdateUuid.empty())				
           elementData["dynamic_update_uuid"] = element.dynamicUpdateUuid;
       }
-      data["indexed_data"] = COMPLEX_MOV(indexedData);
+      data["indexed_data"] = COMPLEX_MOVE(indexedData);
     }
     
     // TODO: add modulators
@@ -694,13 +708,13 @@ namespace Framework
 
     json &data = *static_cast<json *>(jsonData);
 
-    std::string_view id = data["id"].get<std::string_view>();
+    utils::string_view id = data["id"].get<utils::string_view>();
     if (auto details = Framework::getParameterDetails(id); details.has_value())
       parameter->details_ = details.value();
     else
-      throw LoadingException{ std::format("Nonexistent parameter ({})", id) };
+      throw LoadingException{ std::format("Nonexistent parameter ({})", id.data()) };
 
-    if (parameter->details_.scale != ParameterScale::enum_value_by_id(data["scale"].get<std::string_view>()))
+    if (parameter->details_.scale != ParameterScale::enum_value_by_id(data["scale"].get<utils::string_view>()))
     {
       COMPLEX_ASSERT_FALSE();
       // TODO: log this
@@ -820,7 +834,7 @@ void ComplexAudioProcessor::setStateInformation(const void *data, int sizeInByte
   suspendProcessing(true);
 
   if (isLoaded_.load(std::memory_order_acquire))
-    pushUndo(new Framework::PresetUpdate{ *this, COMPLEX_MOV(jsonData) });
+    pushUndo(new Framework::PresetUpdate{ *this, COMPLEX_MOVE(jsonData) });
   else
     deserialiseFromJson(&jsonData, nullptr);
 

@@ -59,31 +59,31 @@ namespace Interface
     shouldUpdateBufferSizes_ = false;
 
     lineShader_ = openGl.shaders->getShaderProgram(Shaders::kLineVertex, Shaders::kLineFragment);
-    lineShader_->use();
-    lineColourUniform_ = getUniform(*lineShader_, "color");
-    lineScaleUniform_ = getUniform(*lineShader_, "scale");
-    lineWidthUniform_ = getUniform(*lineShader_, "line_width");
-    linePosition_ = getAttribute(*lineShader_, "position");
+    lineShader_.use();
+    lineColourUniform_ = getUniform(lineShader_, "color");
+    lineScaleUniform_ = getUniform(lineShader_, "scale");
+    lineWidthUniform_ = getUniform(lineShader_, "line_width");
+    linePosition_ = getAttribute(lineShader_, "position");
 
     fillShader_ = openGl.shaders->getShaderProgram(Shaders::kFillVertex, Shaders::kFillFragment);
-    fillShader_->use();
-    fillColourFromUniform_ = getUniform(*fillShader_, "color_from");
-    fillColourToUniform_ = getUniform(*fillShader_, "color_to");
-    fillCenterUniform_ = getUniform(*fillShader_, "center_position");
-    fillBoostAmountUniform_ = getUniform(*fillShader_, "boost_amount");
-    fillScaleUniform_ = getUniform(*fillShader_, "scale");
-    fillPosition_ = getAttribute(*fillShader_, "position");
+    fillShader_.use();
+    fillColourFromUniform_ = getUniform(fillShader_, "color_from");
+    fillColourToUniform_ = getUniform(fillShader_, "color_to");
+    fillCenterUniform_ = getUniform(fillShader_, "center_position");
+    fillBoostAmountUniform_ = getUniform(fillShader_, "boost_amount");
+    fillScaleUniform_ = getUniform(fillShader_, "scale");
+    fillPosition_ = getAttribute(fillShader_, "position");
   }
 
   void OpenGlLineRenderer::destroy(Renderer &renderer)
   {
-    lineShader_ = nullptr;
+    lineShader_ = {};
     linePosition_ = {};
     lineColourUniform_ = {};
     lineScaleUniform_ = {};
     lineWidthUniform_ = {};
 
-    fillShader_ = nullptr;
+    fillShader_ = {};
     fillColourFromUniform_ = {};
     fillColourToUniform_ = {};
     fillCenterUniform_ = {};
@@ -116,13 +116,13 @@ namespace Interface
     lineFloatsCount_ = kLineFloatsPerVertex * lineVerticesCount_;
     fillFloatsCount_ = kFillFloatsPerVertex * fillVerticesCount_;
 
-    x_ = std::make_unique<float[]>(pointCount_);
-    y_ = std::make_unique<float[]>(pointCount_);
-    boosts_ = std::make_unique<float[]>(pointCount_);
+    x_ = utils::up<float[]>::create(pointCount_);
+    y_ = utils::up<float[]>::create(pointCount_);
+    boosts_ = utils::up<float[]>::create(pointCount_);
 
-    lineData_ = std::make_unique<float[]>(lineFloatsCount_);
-    fillData_ = std::make_unique<float[]>(fillFloatsCount_);
-    indicesData_ = std::make_unique<int[]>(lineVerticesCount_);
+    lineData_ = utils::up<float[]>::create(lineFloatsCount_);
+    fillData_ = utils::up<float[]>::create(fillFloatsCount_);
+    indicesData_ = utils::up<int[]>::create(lineVerticesCount_);
 
     for (int i = 0; i < lineVerticesCount_; ++i)
       indicesData_[i] = i;
@@ -193,7 +193,7 @@ namespace Interface
     if (fill_)
     {
       glBindBuffer(GL_ARRAY_BUFFER, fillBuffer_);
-      fillShader_->use();
+      fillShader_.use();
 
       Colour fillColourFrom = fillColorFrom_.get();
       fillColourFromUniform_.set(fillColourFrom.getFloatRed(), fillColourFrom.getFloatGreen(),
@@ -213,7 +213,7 @@ namespace Interface
     }
 
     glBindBuffer(GL_ARRAY_BUFFER, lineBuffer_);
-    lineShader_->use();
+    lineShader_.use();
     glVertexAttribPointer(linePosition_.attributeId, kLineFloatsPerVertex, GL_FLOAT,
       GL_FALSE, kLineFloatsPerVertex * sizeof(float), nullptr);
     glEnableVertexAttribArray(linePosition_.attributeId);
@@ -315,7 +315,7 @@ namespace Interface
     {
       if (x_[i] != x_[i + 1] || y_[i] != y_[i + 1])
       {
-        prev_normalized_delta = normalise(Point<float>(x_[i + 1] - x_[i], y_[i + 1] - y_[i]));
+        prev_normalized_delta = normalise({ x_[i + 1] - x_[i], y_[i + 1] - y_[i] });
         break;
       }
     }

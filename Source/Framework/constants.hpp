@@ -18,6 +18,12 @@ namespace common
   inline constexpr float kPi = 3.141592653589793f;
   inline constexpr float k2Pi = kPi * 2.0f;
   inline constexpr float kEpsilon = 1e-20f;
+  inline constexpr u32 kFloatMantissaMask = 0x007fffffU;
+  inline constexpr u32 kFloatExponentMask = 0x7f800000U;
+  inline constexpr u32 kFloatExponentUnit = 1 << 23;
+  inline constexpr u32 kNotFloatExponentMask = ~kFloatExponentMask;
+  inline constexpr float kInvPi = 1.0f / kPi;
+  inline constexpr float kInv2Pi = 1.0f / k2Pi;
   inline constexpr double kDefaultSampleRate = 44100.0;
   inline constexpr u32 kMidiSize = 128;
   inline constexpr u32 kMidiKeyCenter = 60;
@@ -48,10 +54,6 @@ namespace common
   inline constexpr double kMinFrequency = kMidi0Frequency;                            // (can be changed)    lowest frequency that will be displayed
 
   // GUI constants
-  inline constexpr int kMinWindowWidth = 426;
-  inline constexpr int kMinWindowHeight = 500;
-  inline constexpr int kDefaultWindowWidth = 430;
-  inline constexpr int kDefaultWindowHeight = 700;
   inline constexpr float kWindowScaleIncrements = 0.25f;
   inline constexpr float kMinWindowScaleFactor = 0.5f;
   inline constexpr float kMaxWindowScaleFactor = 3.0f;
