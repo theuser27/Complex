@@ -160,7 +160,6 @@ namespace Interface
     std::atomic<bool> renderLock_ = false;
     std::atomic<bool> isResizing_ = false;
 
-    double lastTime_{};
     Renderer &renderer_;
     Plugin::ComplexPlugin &plugin_;
     OpenGLContext openGlContext_;

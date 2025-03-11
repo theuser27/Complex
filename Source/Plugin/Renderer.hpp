@@ -75,7 +75,7 @@ namespace Interface
 
     Pimpl *pimpl_ = nullptr;
     static constexpr usize kPimplAlignment = 8;
-    alignas(kPimplAlignment) unsigned char pimplStorage_[450]{};
+    alignas(kPimplAlignment) unsigned char pimplStorage_[460]{};
 
     friend class Pimpl;
   };

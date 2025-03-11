@@ -56,7 +56,7 @@ namespace common
     #endif
   #else
     #define PRINT_MESSAGE(message, ...) fprintf(stdout, message __VA_OPT__(,) __VA_ARGS__);
-    #define PRINT_SIMPLE PRINT_MESSAGE
+    #define PRINT_SIMPLE(...) PRINT_MESSAGE("%s", __VA_ARGS__)
   #endif
 
     PRINT_MESSAGE("\nError in file: %s\nat line: %d\ninside function: %s\n", fileName, line, functionName);
@@ -83,7 +83,7 @@ namespace common
 
     std::vsnprintf(buffer.data(), buffer.size(), string, args);
     PRINT_SIMPLE("\"");
-    PRINT_SIMPLE("%s", buffer.data());
+    PRINT_SIMPLE(buffer.data());
     PRINT_SIMPLE("\"\n\n");
 
     va_end(args);
