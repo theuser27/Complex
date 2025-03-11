@@ -1,6 +1,7 @@
 cmake_minimum_required(VERSION 3.24)
 project("Complex" VERSION 0.1.0 LANGUAGES CXX C)
 set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_C_STANDARD 11)
 set(CMAKE_CXX_STANDARD_REQUIRED true)
 set_property(GLOBAL PROPERTY USE_FOLDERS true)
 
@@ -91,7 +92,7 @@ if (CMAKE_SYSTEM_NAME STREQUAL "Windows")
 elseif(CMAKE_SYSTEM_NAME STREQUAL "Linux")
 	
 elseif(CMAKE_SYSTEM_NAME STREQUAL "Darwin")
-	
+
 endif()
 
 if (CMAKE_SYSTEM_PROCESSOR MATCHES "(x86)|(X86)|(amd64)|(AMD64)|(x86_64)")
@@ -113,7 +114,7 @@ endif ()
 if (CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
 
 elseif (CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
-
+	target_link_options(${TargetName} PUBLIC "-lc++")
 elseif (CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
 	target_compile_options(${TargetName} PRIVATE /fp:fast /Zc:preprocessor /permissive- /wd5105)
 endif()

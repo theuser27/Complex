@@ -36,7 +36,7 @@ noexcept
 {
     return( abs(x - internal::floor_check(x)) >= T(0.5) ? \
             // if 
-                static_cast<llint_t>(internal::floor_check(x) + sgn(x)) :
+                static_cast<llint_t>(internal::floor_check(x) + T(sgn(x))) :
             // else 
                 static_cast<llint_t>(internal::floor_check(x)) );
 }

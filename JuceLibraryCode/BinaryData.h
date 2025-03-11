@@ -27,7 +27,7 @@ namespace BinaryData
     const int            InterMedium_ttfSize = 454712;
 
     extern const char*   Complex_skin;
-    const int            Complex_skinSize = 4304;
+    const int            Complex_skinSize = 4157;
 
     // Number of elements in the namedResourceList and originalFileNames arrays.
     const int namedResourceListSize = 7;

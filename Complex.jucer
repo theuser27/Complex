@@ -36,10 +36,6 @@
         <FILE id="xFpIpz" name="memory_block.hpp" compile="0" resource="0"
               file="Source/Framework/memory_block.hpp"/>
         <FILE id="GEoS25" name="nested_enum.hpp" compile="0" resource="0" file="Source/Framework/nested_enum.hpp"/>
-        <FILE id="rNgDsh" name="open_gl_primitives.cpp" compile="1" resource="0"
-              file="Source/Framework/open_gl_primitives.cpp"/>
-        <FILE id="Ab2tGJ" name="open_gl_primitives.hpp" compile="0" resource="0"
-              file="Source/Framework/open_gl_primitives.hpp"/>
         <FILE id="nzaVCq" name="parameter_bridge.cpp" compile="1" resource="0"
               file="Source/Framework/parameter_bridge.cpp"/>
         <FILE id="VbaYQ5" name="parameter_bridge.hpp" compile="0" resource="0"
@@ -325,6 +321,25 @@
         <MODULEPATH id="juce_data_structures" path="JUCE/modules"/>
       </MODULEPATHS>
     </VS2022>
+    <XCODE_MAC targetFolder="Builds/MacOSX">
+      <CONFIGURATIONS>
+        <CONFIGURATION isDebug="1" name="Debug" recommendedWarnings="LLVM" headerPath="../../Source"/>
+        <CONFIGURATION isDebug="0" name="Release" osxArchitecture="64BitIntel" fastMath="1"
+                       recommendedWarnings="LLVM" headerPath="../../Source"/>
+      </CONFIGURATIONS>
+      <MODULEPATHS>
+        <MODULEPATH id="juce_audio_basics" path="JUCE/modules"/>
+        <MODULEPATH id="juce_audio_devices" path="JUCE/modules"/>
+        <MODULEPATH id="juce_audio_plugin_client" path="JUCE/modules"/>
+        <MODULEPATH id="juce_audio_processors" path="JUCE/modules"/>
+        <MODULEPATH id="juce_core" path="JUCE/modules"/>
+        <MODULEPATH id="juce_data_structures" path="JUCE/modules"/>
+        <MODULEPATH id="juce_events" path="JUCE/modules"/>
+        <MODULEPATH id="juce_graphics" path="JUCE/modules"/>
+        <MODULEPATH id="juce_gui_basics" path="JUCE/modules"/>
+        <MODULEPATH id="juce_opengl" path="JUCE/modules"/>
+      </MODULEPATHS>
+    </XCODE_MAC>
   </EXPORTFORMATS>
   <MODULES>
     <MODULE id="juce_audio_basics" showAllCode="1" useLocalCopy="0" useGlobalPath="0"/>

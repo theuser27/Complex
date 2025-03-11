@@ -10,6 +10,8 @@
 
 #include "Spectrogram.hpp"
 
+#include "Third Party/gcem/gcem.hpp"
+
 #include "Framework/utils.hpp"
 #include "Framework/simd_math.hpp"
 #include "Plugin/Complex.hpp"
@@ -53,13 +55,13 @@ namespace
     auto addSubTwo = _mm_addsub_ps(lowerTwo, upperTwo);
   #elif COMPLEX_NEON
     static constexpr simd_mask kMinusPlus = { kSignMask, 0U };
-    auto lowerOne = vzip1q_f32(one.value, one.value);
-    auto upperOne = vzip2q_f32(one.value, one.value);
-    auto addSubOne = lowerOne + (upperOne ^ kMinusPlus);
+    simd_float lowerOne = vzip1q_f32(one.value, one.value);
+    simd_float upperOne = vzip2q_f32(one.value, one.value);
+    simd_float addSubOne = lowerOne + (upperOne ^ kMinusPlus);
 
-    auto lowerTwo = vzip1q_f32(two.value, two.value);
-    auto upperTwo = vzip2q_f32(two.value, two.value);
-    auto addSubTwo = lowerTwo + (upperTwo ^ kMinusPlus);
+    simd_float lowerTwo = vzip1q_f32(two.value, two.value);
+    simd_float upperTwo = vzip2q_f32(two.value, two.value);
+    simd_float addSubTwo = lowerTwo + (upperTwo ^ kMinusPlus);
   #endif
     one = utils::groupOdd(addSubOne);
     two = utils::groupOdd(addSubTwo);
@@ -160,11 +162,11 @@ namespace Interface
     COMPLEX_ASSERT(scratchBuffer_.getSimdChannels() == bufferView.getSimdChannels()
       && "Scratch buffer doesn't match the number of channels in memory");
 
-    u32 bufferPosition;
+    //u32 bufferPosition;
     {
       utils::ScopedLock g{ bufferView.getLock(), false, WaitMechanism::Sleep };
       scratchBuffer_.copy(bufferView, 0, 0, binCount_);
-      bufferPosition = bufferView.getBufferPosition();
+      //bufferPosition = bufferView.getBufferPosition();
     }
 
     bufferView_.unlock();

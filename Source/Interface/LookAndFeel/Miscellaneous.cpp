@@ -65,7 +65,7 @@ namespace Interface
 
   namespace Paths
   {
-    juce::Path fromSvgData(const void *data, size_t data_size)
+    static juce::Path fromSvgData(const void *data, size_t data_size)
     {
       return juce::Drawable::createFromImageData(data, data_size)->getOutlineAsPath();
     }

@@ -134,8 +134,8 @@ namespace Framework
 
     bool success = [](auto &actions)
     {
-      for (int i = (int)actions.size(); --i >= 0;)
-        if (!actions[i]->undo())
+      for (usize i = actions.size(); i > 0; --i)
+        if (!actions[i - 1]->undo())
           return false;
 
       return true;
@@ -167,8 +167,8 @@ namespace Framework
 
     bool success = [](auto &actions)
     {
-      for (int i = (int)actions.size(); --i >= 0;)
-        if (!actions[i]->undo())
+      for (usize i = actions.size(); i > 0; --i)
+        if (!actions[i - 1]->undo())
           return false;
 
       return true;

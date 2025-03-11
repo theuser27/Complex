@@ -84,9 +84,9 @@ namespace Interface
 
     GLsizeiptr barSize = (GLsizeiptr)(maxQuads * kNumIndicesPerQuad * sizeof(int));
     auto indices = utils::up<int[]>::create(maxQuads * kNumIndicesPerQuad);
-    for (int i = 0; i < (int)maxQuads; i++)
-      for (int j = 0; j < (int)kNumIndicesPerQuad; j++)
-        indices[i * kNumIndicesPerQuad + j] = triangles[j] + i * (int)kNumVertices;
+    for (usize i = 0; i < maxQuads; i++)
+      for (usize j = 0; j < kNumIndicesPerQuad; j++)
+        indices[i * kNumIndicesPerQuad + j] = triangles[j] + (int)i * (int)kNumVertices;
     
     glBufferData(GL_ELEMENT_ARRAY_BUFFER, barSize, indices.get(), GL_STATIC_DRAW);
 

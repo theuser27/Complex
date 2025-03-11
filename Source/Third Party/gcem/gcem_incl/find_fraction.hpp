@@ -36,7 +36,7 @@ noexcept
 {
     return( abs(x - internal::floor_check(x)) >= T(0.5) ? \
             // if 
-                x - internal::floor_check(x) - sgn(x) : 
+                x - internal::floor_check(x) - T(sgn(x)) :
             //else 
                 x - internal::floor_check(x) );
 }

@@ -62,13 +62,13 @@ public:
 
     void componentMovedOrResized (bool /*wasMoved*/, bool /*wasResized*/) override
     {
-        if (auto* peer = owner.getTopLevelComponent()->getPeer())
-        {
-            const auto newArea = peer->getAreaCoveredBy (owner);
-
-            if (convertToRectInt ([view frame]) != newArea)
-                [view setFrame: makeNSRect (newArea)];
-        }
+        //if (auto* peer = owner.getTopLevelComponent()->getPeer())
+        //{
+        //    const auto newArea = peer->getAreaCoveredBy (owner);
+//
+        //    if (convertToRectInt ([view frame]) != newArea)
+        //        [view setFrame: makeNSRect (newArea)];
+        //}
     }
 
     void componentPeerChanged() override

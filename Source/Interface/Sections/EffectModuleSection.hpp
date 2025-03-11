@@ -73,6 +73,7 @@ namespace Interface
       ProcessorSection::renderOpenGlComponents(openGl);
     }
     void mouseDown(const juce::MouseEvent &e) override;
+    void mouseDown([[maybe_unused]] BaseControl *slider) override { }
     void paintBackground(juce::Graphics &g) override;
     void controlValueChanged(BaseControl *control) override;
     auto getPowerButtonBounds() const noexcept -> juce::Rectangle<int> override
@@ -153,6 +154,6 @@ namespace Interface
     void (*arrangeUIFunction_)(EffectModuleSection *section, 
       juce::Rectangle<int> bounds, utils::string_view type) = nullptr;
     void (*paintBackgroundFunction_)(juce::Graphics &g, EffectModuleSection *section) = nullptr;
-    utils::span<const utils::pair<utils::string_view, u64>> effectParameterCounts_{};
+    utils::span<const utils::pair<utils::string_view, usize>> effectParameterCounts_{};
   };	
 }

@@ -439,7 +439,7 @@ namespace Interface
       return;
     isArranging_ = true;
 
-    if (!controls_.size())
+    if (controls_.empty())
       return;
 
     bool isHorizontal = bounds_.getWidth() >= bounds_.getHeight();

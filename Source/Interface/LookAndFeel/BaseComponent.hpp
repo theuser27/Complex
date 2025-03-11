@@ -30,7 +30,8 @@ namespace utils
     shared_value &operator=(shared_value &&other) noexcept
     {
       ScopedLock g{ other.guard, WaitMechanism::Spin, false };
-      return shared_value::operator=(COMPLEX_MOVE(other.value));
+      value = COMPLEX_MOVE(other.value);
+      return *this;
     }
     shared_value &operator=(std::unique_ptr<T> &&newValue) noexcept
     {

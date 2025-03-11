@@ -444,13 +444,13 @@ namespace Generation
 
     // if scalars are negative/positive, attenuate phases in/outside the range
     // (gains is gain reduction in db and NOT a gain multiplier)
-    simd_float gains = getParameter(Processors::BaseEffect::Filter::Phase::Gain::id().value())->getInternalValue<simd_float>(sampleRate);
-    simd_mask gainMask = unsignSimd<true>(gains);
-
-    simd_float lowPhaseBound = getParameter(Processors::BaseEffect::Filter::Phase::LowPhaseBound::id().value())
-      ->getInternalValue<simd_float>(sampleRate);
-    simd_float highPhaseBound = getParameter(Processors::BaseEffect::Filter::Phase::HighPhaseBound::id().value())
-      ->getInternalValue<simd_float>(sampleRate);
+    // simd_float gains = getParameter(Processors::BaseEffect::Filter::Phase::Gain::id().value())->getInternalValue<simd_float>(sampleRate);
+    // simd_mask gainMask = unsignSimd<true>(gains);
+    //
+    // simd_float lowPhaseBound = getParameter(Processors::BaseEffect::Filter::Phase::LowPhaseBound::id().value())
+    //   ->getInternalValue<simd_float>(sampleRate);
+    // simd_float highPhaseBound = getParameter(Processors::BaseEffect::Filter::Phase::HighPhaseBound::id().value())
+    //   ->getInternalValue<simd_float>(sampleRate);
 
     for (u32 i = 0; i < processedCount; i += 2)
     {
@@ -706,7 +706,7 @@ namespace Generation
 
       // find the smallest offset forward and start from there
       u32 minOffset = horizontalMin(offsetBin)[0];
-      i32 indexChange = clamp((i32)minOffset - (i32)start, 0, (i32)processedCount);
+      u32 indexChange = (u32)clamp((i32)minOffset - (i32)start, 0, (i32)processedCount);
       processedCount -= indexChange;
       start += indexChange;
 
@@ -855,7 +855,7 @@ namespace Generation
       simd_float numerator = (simd_float{ 0.0f, 1.0f } - switchInner(fractionalShift)) ^ simd_mask{ kSignMask, 0U };
       simd_mask numZeroMask = simd_float::lessThan(complexMagnitude(numerator, true), kMultiplierEpsilon);
 
-      for (i32 i = 0; i < leakMultipliers.size(); ++i)
+      for (usize i = 0; i < leakMultipliers.size(); ++i)
       {
         simd_float fullDenominator = k2Pi * (binFractionalShift + (float)(i - kNeighbourBins));
         simd_mask denZeroMask = simd_float::lessThan(simd_float::abs(fullDenominator), kMultiplierEpsilon);
@@ -1026,9 +1026,9 @@ namespace Generation
       rawDestination[i] += rawSource[i] & outsideBoundsMask;
       simd_float wet = rawSource[i] & ~outsideBoundsMask;
 
-      for (i32 j = 0; j < leakMultipliers.size(); ++j)
+      for (u32 j = 0; j < leakMultipliers.size(); ++j)
       {
-        simd_int indices = simd_int{ (u32)((i32)i - kNeighbourBins + j) } + binShift;
+        simd_int indices = simd_int{ (i - (u32)kNeighbourBins + j) } + binShift;
         simd_int clampedIndices = simd_int::clampSigned(0, binCount - 1, indices);
         simd_mask inRangeMask = simd_int::equal(indices, clampedIndices);
 

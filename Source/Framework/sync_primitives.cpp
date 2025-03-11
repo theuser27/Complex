@@ -25,7 +25,7 @@
 namespace common
 {
   void complexPrintAssertMessage(const char *conditionString, const char *fileName, 
-    const char *functionName, int line, bool hasMoreArgs, ...)
+    const char *functionName, int line, int hasMoreArgs, ...)
   {
   #if COMPLEX_WINDOWS
     #define PRINT_MESSAGE(message, ...) { \
@@ -55,7 +55,7 @@ namespace common
       }
     #endif
   #else
-    #define PRINT_MESSAGE(message, ...) fprintf(stderr, message __VA_OPT__(,) __VA_ARGS__);
+    #define PRINT_MESSAGE(message, ...) fprintf(stdout, message __VA_OPT__(,) __VA_ARGS__);
     #define PRINT_SIMPLE PRINT_MESSAGE
   #endif
 
@@ -78,12 +78,12 @@ namespace common
 
     va_list argsCopy;
     va_copy(argsCopy, args);
-    std::vector<char> buffer(1 + std::vsnprintf(nullptr, 0, string, argsCopy));
+    std::vector<char> buffer(usize(std::vsnprintf(nullptr, 0, string, argsCopy) + 1));
     va_end(argsCopy);
 
     std::vsnprintf(buffer.data(), buffer.size(), string, args);
     PRINT_SIMPLE("\"");
-    PRINT_SIMPLE(buffer.data());
+    PRINT_SIMPLE("%s", buffer.data());
     PRINT_SIMPLE("\"\n\n");
 
     va_end(args);
@@ -129,7 +129,7 @@ namespace utils
     timeBeginPeriod(1);
     NtDelayExecution(0, (PLARGE_INTEGER)&delay);
     timeEndPeriod(1);
-  #elif
+  #else
     std::this_thread::sleep_for(std::chrono::milliseconds(1));
   #endif
   }
@@ -151,7 +151,7 @@ namespace utils
       NtDelayExecution(0, (PLARGE_INTEGER)&delay);
     } while (shouldWaitFn());
     timeEndPeriod(1);
-  #elif
+  #else
     while (shouldWaitFn())
       std::this_thread::sleep_for(std::chrono::milliseconds(1));
   #endif
@@ -316,7 +316,7 @@ namespace utils
   }
 
   ScopedLock::ScopedLock(ReentrantLock<bool> &reentrantLock, WaitMechanism mechanism, bool expected) noexcept :
-    type_(ReentrantBoolType), mechanism_(mechanism), reentrantBool_{ &reentrantLock, false, expected }
+    type_(ReentrantBoolEnum), mechanism_(mechanism), reentrantBool_{ &reentrantLock, false, expected }
   {
     auto threadId = getThreadId();
     reentrantBool_.wasLocked = threadId == reentrantLock.lastLockId.load(std::memory_order_relaxed);

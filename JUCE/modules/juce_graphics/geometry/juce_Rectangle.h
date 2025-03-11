@@ -621,10 +621,10 @@ public:
 
     //==============================================================================
     /** Returns true if the two rectangles are identical. */
-    bool operator== (const Rectangle& other) const noexcept     { return pos == other.pos && w == other.w && h == other.h; }
+    constexpr bool operator== (const Rectangle& other) const noexcept     { return pos == other.pos && w == other.w && h == other.h; }
 
     /** Returns true if the two rectangles are not identical. */
-    bool operator!= (const Rectangle& other) const noexcept     { return pos != other.pos || w != other.w || h != other.h; }
+    constexpr bool operator!= (const Rectangle& other) const noexcept     { return pos != other.pos || w != other.w || h != other.h; }
 
     /** Returns true if this coordinate is inside the rectangle. */
     bool contains (ValueType xCoord, ValueType yCoord) const noexcept

@@ -130,8 +130,7 @@
 #endif
 
 #if JUCE_MAC
-  #include <juce_gui_extra/embedding/juce_NSViewComponent.h>
-  #include <juce_gui_extra/native/juce_NSViewComponent.h>
+  #include "juce_gui_extra/embedding/juce_NSViewComponent.h"
   #include "juce_gui_extra/native/juce_mac_NSViewFrameWatcher.h"
   #include "juce_gui_extra/native/juce_mac_NSViewComponent.mm"
 #elif JUCE_WINDOWS

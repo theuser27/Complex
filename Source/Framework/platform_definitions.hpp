@@ -102,8 +102,9 @@
 #if COMPLEX_DEBUG
   namespace common
   {
-    void complexPrintAssertMessage(const char *conditionString, const char *fileName, 
-      const char *functionName, int line, bool hasMoreArgs = false, ...);
+    // using int instead of bool to avoid standard argument promotion bs
+    void complexPrintAssertMessage(const char *conditionString, const char *fileName,
+      const char *functionName, int line, int hasMoreArgs = false, ...);
   }
 
   #if COMPLEX_MSVC

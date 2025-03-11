@@ -46,9 +46,6 @@ namespace Generation
 
 namespace Interface
 {
-  #define COMPLEX_UNDERSCORE_LITERAL "\xcc\xb2"
-  #define COMPLEX_MIDDLE_DOT_LITERAL "\xc2\xb7"
-
   class Renderer;
   class Skin;
   class BaseSlider;

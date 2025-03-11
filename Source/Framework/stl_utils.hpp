@@ -15,6 +15,7 @@
 // collection of utilities i regularly use of but don't want to include the headers of
 namespace utils
 {
+  using nullptr_t = decltype(nullptr);
   [[nodiscard]] constexpr bool is_constant_evaluated() noexcept { return __builtin_is_constant_evaluated(); }
 
   template<typename To, typename From> requires (sizeof(To) == sizeof(From) && __is_trivially_copyable(To) && __is_trivially_copyable(From))
@@ -61,7 +62,6 @@ namespace utils
 
   #define COMPLEX_FWD(...) static_cast<decltype(__VA_ARGS__)&&>(__VA_ARGS__)
   #define COMPLEX_MOVE(...) static_cast<::utils::remove_reference_t<decltype(__VA_ARGS__)>&&>(__VA_ARGS__)
-  #define COMPLEX_IS_ALIGNED_TO(type, variable, alignment) (((alignof(type) + offsetof(type, variable)) % alignment) == 0)
 
   template<typename, typename> inline constexpr bool is_same_v = false;
   template<typename T> inline constexpr bool is_same_v<T, T> = true;
@@ -225,7 +225,9 @@ namespace utils
     T first;
     U second;
 
-    friend constexpr bool operator==(const pair &lhs, const pair &rhs) noexcept = default;
+    // not constexpr because some clang builds fail if types don't have constexpr operator==
+    // might update in the future
+    friend bool operator==(const pair &lhs, const pair &rhs) noexcept = default;
   };
 
   template <class T, class U>
@@ -253,7 +255,8 @@ namespace utils
         storage[i] = value;
     }
 
-    constexpr void fill(const T(&values)[Size])
+    template<auto ArraySize> requires (Size > 0 && ArraySize == Size)
+    constexpr void fill(const T(&values)[ArraySize])
     {
       for (usize i = 0; i < Size; ++i)
         storage[i] = values[i];
@@ -318,6 +321,7 @@ namespace utils
 
     constexpr span() noexcept = default;
     constexpr span(const span &other) noexcept = default;
+    constexpr span &operator=(const span &other) noexcept = default;
 
     template <typename It>
     constexpr span(It first, size_type count) noexcept : data_{ &(*first) }, size_{ count } { }
@@ -327,7 +331,7 @@ namespace utils
       size_{ static_cast<size_type>(last - first) } { COMPLEX_ASSERT(last > first); }
 
     template <auto Size>
-    constexpr span(type_identity<element_type>::type (&rawArray)[Size]) noexcept : 
+    constexpr span(type_identity<element_type>::type (&rawArray)[Size]) noexcept :
       data_{ rawArray }, size_{ static_cast<size_type>(Size) } { }
 
     constexpr span(auto &&range) requires requires { range.data(); range.size(); } :
@@ -422,6 +426,7 @@ namespace utils
     template<template<typename...> class Stringish, typename ... Ts>
     constexpr string_view(const Stringish<Ts...> &range) requires requires { range.data(); range.size(); } : 
       string_view{ range.data(), range.size() } { }
+    constexpr string_view &operator=(const string_view &other) noexcept = default;
 
     [[nodiscard]] constexpr size_type size() const noexcept { return size_; }
     [[nodiscard]] constexpr size_type length() const noexcept { return size(); }
@@ -560,7 +565,7 @@ namespace utils
     using V = remove_extent_t<T>;
   public:
     constexpr up() noexcept = default;
-    constexpr up(std::nullptr_t) noexcept {}
+    constexpr up(nullptr_t) noexcept {}
     constexpr up(T *pointer) : object_{ pointer } { }
     constexpr up(const up &other) noexcept = delete;
     constexpr up(up &&other) noexcept
@@ -639,8 +644,8 @@ namespace utils
   template<typename T, typename U>
   constexpr bool operator==(const up<T> &one, const up<U> &two) noexcept { return one.get() == two.get(); }
   template<typename T>
-  constexpr bool operator==(const up<T> &one, std::nullptr_t) noexcept { return one.get() == nullptr; }
+  constexpr bool operator==(const up<T> &one, nullptr_t) noexcept { return one.get() == nullptr; }
   template<typename T>
-  constexpr bool operator==(std::nullptr_t, const up<T> &two) noexcept { return two.get() == nullptr; }
+  constexpr bool operator==(nullptr_t, const up<T> &two) noexcept { return two.get() == nullptr; }
 
 }

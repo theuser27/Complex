@@ -53,6 +53,10 @@
  #import <IOKit/pwr_mgt/IOPMLib.h>
  #import <MetalKit/MetalKit.h>
 
+#if defined (MAC_OS_VERSION_14_4) && MAC_OS_X_VERSION_MIN_REQUIRED >= MAC_OS_VERSION_14_4
+ #import <ScreenCaptureKit/ScreenCaptureKit.h>
+#endif
+
 #elif JUCE_IOS
  #if JUCE_PUSH_NOTIFICATIONS
   #import <UserNotifications/UserNotifications.h>
@@ -275,8 +279,6 @@ namespace juce
 #include "misc/juce_JUCESplashScreen.cpp"
 
 #include "layout/juce_FlexBox.cpp"
-#include "layout/juce_GridItem.cpp"
-#include "layout/juce_Grid.cpp"
 
 #if JUCE_IOS || JUCE_WINDOWS
  #include "native/juce_MultiTouchMapper.h"

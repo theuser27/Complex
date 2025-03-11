@@ -977,8 +977,8 @@ public:
             if (! clip.isEmpty())
             {
                 Image temp (component.isOpaque() ? Image::RGB : Image::ARGB,
-                            roundToInt (clipW * displayScale),
-                            roundToInt (clipH * displayScale),
+                            roundToInt ((float)clipW * displayScale),
+                            roundToInt ((float)clipH * displayScale),
                             ! component.isOpaque());
 
                 {
@@ -1594,7 +1594,7 @@ public:
 
         const auto handled = [&]() -> bool
         {
-            if (auto* target = findCurrentTextInputTarget())
+            if ([[maybe_unused]] auto* target = findCurrentTextInputTarget())
                 if (const auto* inputContext = [view inputContext])
                     return [inputContext handleEvent: ev] && ! viewCannotHandleEvent;
 

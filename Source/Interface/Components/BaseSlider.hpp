@@ -268,7 +268,7 @@ namespace Interface
     TextSelector *modifier_ = nullptr;
   };
 
-  class LinearSlider final : public BaseSlider
+  class LinearSlider : public BaseSlider
   {
   public:
     static constexpr float kLinearWidthPercent = 0.26f;
@@ -335,7 +335,7 @@ namespace Interface
     void setVertical() { type_ = (SliderType)(type_ ^ (type_ & SliderType::IsHorizontalDrag)); }
   };
 
-  class ImageSlider final : public BaseSlider
+  class ImageSlider : public BaseSlider
   {
   public:
     ImageSlider(Framework::ParameterValue *parameter);
@@ -423,7 +423,7 @@ namespace Interface
     void addListener(auto *listener) noexcept
     { setTextSelectorListener(listener); BaseSlider::addListener(listener); }
     void removeListener(auto *listener) noexcept
-    { setTextSelectorListener(nullptr); BaseSlider::removeListener(listener); };
+    { setTextSelectorListener(nullptr); BaseSlider::removeListener(listener); }
 
     juce::Colour getBackgroundColor() const override { return getColour(Skin::kWidgetBackground2); }
 
@@ -504,7 +504,7 @@ namespace Interface
     bool isEditing_ = false;
   };
 
-  class ModulationSlider final : public BaseSlider
+  class ModulationSlider : public BaseSlider
   {
   public:
     ModulationSlider(Framework::ParameterValue *parameter);

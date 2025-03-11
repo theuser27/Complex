@@ -271,6 +271,7 @@ static bool contextRequiresTexture2DEnableDisable()
 #if JUCE_MAC || JUCE_IOS
 
  #if JUCE_MAC
+  #include "juce_gui_extra/embedding/juce_NSViewComponent.h"
   #include "native/juce_OpenGL_osx.h"
  #else
   #include "native/juce_OpenGL_ios.h"

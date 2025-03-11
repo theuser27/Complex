@@ -42,7 +42,7 @@
   license:            GPL/Commercial
   minimumCppStandard: 17
 
-  dependencies:       juce_gui_extra, juce_audio_basics
+  dependencies:       juce_audio_basics
   OSXFrameworks:      CoreAudio CoreMIDI AudioToolbox
   iOSFrameworks:      AudioToolbox
 

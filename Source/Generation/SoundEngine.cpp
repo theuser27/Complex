@@ -183,7 +183,7 @@ namespace Generation
 
     // overlap-adding
     outBuffer.addOverlapBuffer(FFTBuffer_, outBuffer.getChannelCount(), 
-      usedOutputChannels_, FFTSamples_, (i32)nextOverlapOffset_, windowType_);
+      usedOutputChannels_, FFTSamples_, nextOverlapOffset_, windowType_);
   }
 
   // when the overlap is more than what the window requires

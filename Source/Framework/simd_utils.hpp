@@ -105,7 +105,7 @@ namespace utils
   #ifdef COMPLEX_SSE4_1
     return _mm_blendv_ps(falseValue.value, trueValue.value, reinterpretToFloat(mask).value);
   #elif COMPLEX_NEON
-    return vbslq_f32(mask.value, reinterpretToFloat(trueValue).value, reinterpretToFloat(falseValue).value);
+    return vbslq_f32(mask.value, trueValue.value, falseValue.value);
   #endif
   }
 
@@ -115,8 +115,7 @@ namespace utils
     return reinterpretToInt(_mm_blendv_ps(reinterpretToFloat(falseValue).value, 
       reinterpretToFloat(trueValue).value, reinterpretToFloat(mask).value));
   #elif COMPLEX_NEON
-    return reinterpretToInt(vbslq_f32(mask.value, 
-      reinterpretToFloat(trueValue).value, reinterpretToFloat(falseValue).value));
+    return vbslq_u32(mask.value, trueValue.value, falseValue.value);
   #endif
   }
 
@@ -236,8 +235,7 @@ namespace utils
   #if COMPLEX_SSE4_1
     return _mm_shuffle_ps(value.value, value.value, _MM_SHUFFLE(3, 1, 2, 0));
   #elif COMPLEX_NEON
-    // 2 positions are already correct so just insert the 2 in the middle lmao
-    return vcopyq_laneq_f32(vcopyq_laneq_f32(value.value, 1, value.value, 2), 2, value.value, 1);
+    return vuzp1q_f32(value.value, vrev64q_f32(value.value));
   #endif
   }
 
@@ -488,7 +486,7 @@ namespace utils
     auto switched = _mm_shuffle_epi32(one, _MM_SHUFFLE(2, 3, 0, 1));
     return _mm_min_epi32(one, switched);
   #elif COMPLEX_NEON
-    return vreinterpretq_u32_s32(vminvq_s32(vreinterpretq_s32_u32(value.value)));
+    return simd_int{ (u32)vminvq_s32(vreinterpretq_s32_u32(value.value)) };
   #endif
   }
 
@@ -497,7 +495,7 @@ namespace utils
   #if COMPLEX_SSE4_1
     return reinterpretToFloat(horizontalMin(reinterpretToInt(value)));
   #elif COMPLEX_NEON
-    return vminvq_f32(value);
+    return vminvq_f32(value.value);
   #endif
   }
 
@@ -506,7 +504,7 @@ namespace utils
   #if COMPLEX_SSE4_1
     return _mm_rcp_ps(value.value);
   #elif COMPLEX_NEON
-    return vrecpeq_f32(values.value);
+    return vrecpeq_f32(value.value);
   #endif
   }
 
@@ -516,7 +514,7 @@ namespace utils
   #if COMPLEX_SSE4_1
     return _mm_srli_epi32(values.value, Shift);
   #elif COMPLEX_NEON
-    return vshrq_n_u32(values.value, shift);
+    return vshrq_n_u32(values.value, Shift);
   #endif
   }
 
@@ -526,7 +524,7 @@ namespace utils
   #if COMPLEX_SSE4_1
     return _mm_slli_epi32(values.value, Shift);
   #elif COMPLEX_NEON
-    return vshlq_n_u32(values.value, shift);
+    return vshlq_n_u32(values.value, Shift);
   #endif
   }
 

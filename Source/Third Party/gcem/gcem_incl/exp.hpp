@@ -42,7 +42,7 @@ noexcept
     T res = T(1);
 
     while (depth > depth_end - 1) {
-        res = T(1) + x/T(depth - 1) - x/depth/res;
+        res = T(1) + x/T(depth - 1) - x/T(depth)/res;
 
         --depth;
     }

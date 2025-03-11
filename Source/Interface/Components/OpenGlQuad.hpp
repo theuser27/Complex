@@ -50,7 +50,7 @@ namespace Interface
         data[3 * kNumFloatsPerVertex + index + 4] = x + w;
         data[3 * kNumFloatsPerVertex + index + 5] = y;
       }
-      void setShaderValue(usize i, float shaderValue, int valueIndex = 0) noexcept
+      void setShaderValue(usize i, float shaderValue, usize valueIndex = 0) noexcept
       {
         COMPLEX_ASSERT(i < maxQuads);
         usize index = i * kNumFloatsPerQuad + 6 + valueIndex;
@@ -234,8 +234,8 @@ namespace Interface
 
     void setCorners(juce::Rectangle<int> bounds, float rounding)
     {
-      float width = rounding / bounds.getWidth() * 2.0f;
-      float height = rounding / bounds.getHeight() * 2.0f;
+      float width = rounding / (float)bounds.getWidth() * 2.0f;
+      float height = rounding / (float)bounds.getHeight() * 2.0f;
 
       auto quadData = getQuadData();
 
@@ -247,10 +247,10 @@ namespace Interface
 
     void setCorners(juce::Rectangle<int> bounds, float topRounding, float bottomRounding)
     {
-      float topWidth = topRounding / bounds.getWidth() * 2.0f;
-      float topHeight = topRounding / bounds.getHeight() * 2.0f;
-      float bottomWidth = bottomRounding / bounds.getWidth() * 2.0f;
-      float bottomHeight = bottomRounding / bounds.getHeight() * 2.0f;
+      float topWidth = topRounding / (float)bounds.getWidth() * 2.0f;
+      float topHeight = topRounding / (float)bounds.getHeight() * 2.0f;
+      float bottomWidth = bottomRounding / (float)bounds.getWidth() * 2.0f;
+      float bottomHeight = bottomRounding / (float)bounds.getHeight() * 2.0f;
 
       auto quadData = getQuadData();
 
@@ -262,8 +262,8 @@ namespace Interface
 
     void setTopCorners(juce::Rectangle<int> bounds, float topRounding)
     {
-      float width = topRounding / bounds.getWidth() * 2.0f;
-      float height = topRounding / bounds.getHeight() * 2.0f;
+      float width = topRounding / (float)bounds.getWidth() * 2.0f;
+      float height = topRounding / (float)bounds.getHeight() * 2.0f;
 
       auto quadData = getQuadData();
 
@@ -275,8 +275,8 @@ namespace Interface
 
     void setBottomCorners(juce::Rectangle<int> bounds, float bottomRounding)
     {
-      float width = bottomRounding / bounds.getWidth() * 2.0f;
-      float height = bottomRounding / bounds.getHeight() * 2.0f;
+      float width = bottomRounding / (float)bounds.getWidth() * 2.0f;
+      float height = bottomRounding / (float)bounds.getHeight() * 2.0f;
 
       auto quadData = getQuadData();
       

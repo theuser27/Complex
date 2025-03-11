@@ -28,13 +28,13 @@ if((CMAKE_CXX_COMPILER_ID STREQUAL "MSVC") OR (CMAKE_CXX_COMPILER_FRONTEND_VARIA
     target_compile_options(juce_recommended_warning_flags INTERFACE "/W4")
 elseif((CMAKE_CXX_COMPILER_ID STREQUAL "Clang") OR (CMAKE_CXX_COMPILER_ID STREQUAL "AppleClang"))
     target_compile_options(juce_recommended_warning_flags INTERFACE
-        -Wall -Wshadow-all -Wshorten-64-to-32 -Wstrict-aliasing
+        -Wall -Wshadow-field -Wshorten-64-to-32 -Wstrict-aliasing
         -Wuninitialized -Wunused-parameter -Wconversion -Wsign-compare
         -Wint-conversion -Wconditional-uninitialized -Wconstant-conversion
         -Wsign-conversion -Wbool-conversion -Wextra-semi -Wunreachable-code
-        -Wcast-align -Wshift-sign-overflow -Wmissing-prototypes
-        -Wnullable-to-nonnull-conversion -Wno-ignored-qualifiers -Wswitch-enum
-        -Wpedantic -Wdeprecated
+        -Wshift-sign-overflow -Wmissing-prototypes
+        -Wnullable-to-nonnull-conversion -Wno-ignored-qualifiers
+        -Wdeprecated
         $<$<OR:$<COMPILE_LANGUAGE:CXX>,$<COMPILE_LANGUAGE:OBJCXX>>:
             -Wzero-as-null-pointer-constant -Wunused-private-field
             -Woverloaded-virtual -Wreorder
@@ -45,9 +45,8 @@ elseif(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
     target_compile_options(juce_recommended_warning_flags INTERFACE
         -Wall -Wextra -Wpedantic -Wstrict-aliasing -Wuninitialized
         -Wunused-parameter -Wsign-compare -Wsign-conversion -Wunreachable-code
-        -Wcast-align -Wno-implicit-fallthrough -Wno-maybe-uninitialized
-        -Wno-ignored-qualifiers -Wswitch-enum
-        -Wredundant-decls -Wno-strict-overflow -Wshadow
+        -Wno-implicit-fallthrough -Wno-maybe-uninitialized
+        -Wno-ignored-qualifiers -Wredundant-decls -Wno-strict-overflow -Wshadow
         $<$<COMPILE_LANGUAGE:CXX>:
             -Woverloaded-virtual -Wreorder -Wzero-as-null-pointer-constant>)
 endif()

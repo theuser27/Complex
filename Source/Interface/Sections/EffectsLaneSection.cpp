@@ -46,7 +46,7 @@ namespace Interface
     addModulesButton_->setPopupHandler([this](int selection)
       { 
         COMPLEX_ASSERT(lane_);
-        lane_->insertModule(lane_->getNumModules(), moduleOptions[selection].second);
+        lane_->insertModule(lane_->getNumModules(), moduleOptions[(usize)selection].second);
       });
     addControl(addModulesButton_.get());
   }

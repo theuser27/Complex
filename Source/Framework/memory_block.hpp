@@ -158,13 +158,28 @@ namespace Framework
       COMPLEX_ASSERT(alignment >= alignof(T));
       reset(header_);
 
-      auto headerSize = sizeof(Header);
-      auto extra = ((headerSize + alignment - 1) / alignment) * alignment;
+      usize headerSize = sizeof(Header);
+      usize extra = ((headerSize + alignment - 1) / alignment) * alignment;
+      usize totalSize = extra + size * sizeof(T);
     #ifdef COMPLEX_MSVC
-      unsigned char *memory = (unsigned char *)_aligned_malloc(extra + size * sizeof(T), alignment);
+      unsigned char *memory = (unsigned char *)_aligned_malloc(totalSize, alignment);
+    #elif COMPLEX_MAC
+      static_assert(alignof(max_align_t) >= sizeof(void *));
+      unsigned char *memory = nullptr;
+      if (alignment >= sizeof(void *)) // like in the posix docs
+      {
+        void *memory_;
+        // aligned_alloc is broken on mac for me, but posix_memalign seems to work
+        auto success = posix_memalign(&memory_, alignment, totalSize);
+        if (success == 0)
+          memory = (unsigned char *)memory_;
+      }
+      else // fall back to regular malloc
+        memory = (unsigned char *)malloc(totalSize);
     #else
-      unsigned char *memory = (unsigned char *)aligned_alloc(alignment, extra + size * sizeof(T)));
+      unsigned char *memory = (unsigned char *)aligned_alloc(alignment, totalSize);
     #endif
+      COMPLEX_ASSERT(memory, "Memory (%zu) could not be allocated with this alignment (%zu)", totalSize, alignment);
       header_ = new(memory) Header{ .alignment = alignment, .size = size };
       header_->data = new(memory + extra) T[size];
 
@@ -268,13 +283,13 @@ namespace Framework
     #ifdef COMPLEX_MSVC
       _aligned_free(header);
     #else
-      free(header);
+      ::free(header);
     #endif
     }
 
     Header *header_ = nullptr;
 
-    template <typename T, typename ExtraData>
+    template <typename U, typename OtherExtraData>
     friend class MemoryBlockView;
   };
 
@@ -339,7 +354,7 @@ namespace Framework
   private:
     MemoryBlock<T, ExtraData> block_{};
 
-    template<typename T, typename ExtraData>
+    template<typename U, typename OtherExtraData>
     friend class MemoryBlock;
   };
 

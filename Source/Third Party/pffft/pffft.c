@@ -198,7 +198,7 @@ typedef union v4sf_union {
 #define assertv4(v,f0,f1,f2,f3) assert(v.f[0] == (f0) && v.f[1] == (f1) && v.f[2] == (f2) && v.f[3] == (f3))
 
 /* detect bugs with the vector support macros */
-void validate_pffft_simd(void) {
+static void validate_pffft_simd(void) {
   float f[16] = { 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15 };
   v4sf_union a0, a1, a2, a3, t, u; 
   memcpy(a0.f, f, 4*sizeof(float));
@@ -511,10 +511,11 @@ static NEVER_INLINE(void) radb2_ps(int ido, int l1, const v4sf *cc, v4sf *ch, co
     }
     if (ido % 2 == 1) return;
   }
+  float minus2 = -2.0f;
   for (int k = 0; k < l1ido; k += ido) {
     a = cc[2*k + ido-1]; b = cc[2*k + ido];
     ch[k + ido-1] = VADD(a,a);
-    ch[k + ido-1 + l1ido] = SVMUL(-2.0f, b);
+    ch[k + ido-1 + l1ido] = SVMUL(minus2, b);
   }
 } /* radb2 */
 
@@ -1096,13 +1097,14 @@ static int realFFTInit(int fftSize, float *twiddleFactors, int *radixStages)
 
     for (int j = 1; j < radixStage; ++j)
     {
-      int i = innerStride, fi = 0;
+      int i = innerStride;
+      float fi = 0.0f;
       position += stride;
-      float argld = position * phaseStep;
+      float argld = (float)position * phaseStep;
       for (int ii = 3; ii <= interval; ii += 2)
       {
         i += 2;
-        fi += 1;
+        fi += 1.0f;
         twiddleFactors[i - 2] = cosf(fi*argld);
         twiddleFactors[i - 1] = sinf(fi*argld);
       }
@@ -1114,7 +1116,7 @@ static int realFFTInit(int fftSize, float *twiddleFactors, int *radixStages)
   return radixCount;
 }
 
-void complexFFTInit(int n, float *wa, int *ifac)
+static void complexFFTInit(int n, float *wa, int *ifac)
 {
   static const int factors[] = { 5,3,4,2 };
 
@@ -1134,15 +1136,15 @@ void complexFFTInit(int n, float *wa, int *ifac)
     int idot = ido + ido + 2;
     int ipm = ip - 1;
     for (int j=1; j<=ipm; j++) {
-      float argld;
-      int i1 = i, fi = 0;
+      int i1 = i;
+      float fi = 0.0f;
       wa[i-1] = 1;
       wa[i] = 0;
       ld += l1;
-      argld = ld*argh;
+      float argld = (float)ld*argh;
       for (int ii = 4; ii <= idot; ii += 2) {
         i += 2;
-        fi += 1;
+        fi += 1.0f;
         wa[i-1] = cosf(fi*argld);
         wa[i] = sinf(fi*argld);
       }
@@ -1156,7 +1158,7 @@ void complexFFTInit(int n, float *wa, int *ifac)
 }
 
 
-v4sf *cfftf1_ps(int n, const v4sf *input_readonly, v4sf *work1, v4sf *work2, const float *wa, const int *ifac, float sign) {
+static v4sf *cfftf1_ps(int n, const v4sf *input_readonly, v4sf *work1, v4sf *work2, const float *wa, const int *ifac, float sign) {
   v4sf *in  = (v4sf*)input_readonly;
   v4sf *out = (in == work2 ? work1 : work2); 
   int nf = ifac[1], k1;
@@ -1227,7 +1229,7 @@ PFFFT_Setup *pffft_new_setup(int N, pffft_transform_t transform)
   setup->transform = transform;
   /* nb of complex simd vectors */
   setup->Ncvec = (transform == PFFFT_REAL ? N/2 : N) / SIMD_SZ;
-  setup->data = (v4sf *)pffft_aligned_malloc(2 * setup->Ncvec * sizeof(v4sf));
+  setup->data = (v4sf *)pffft_aligned_malloc(2 * (size_t)setup->Ncvec * sizeof(v4sf));
   setup->e = (float *)setup->data;
   setup->twiddle = (float *)(setup->data + (2 * setup->Ncvec * (SIMD_SZ - 1)) / SIMD_SZ);
 
@@ -1358,7 +1360,7 @@ void pffft_zreorder(PFFFT_Setup *setup, const float *in, float *out, pffft_direc
   }
 }
 
-void pffft_cplx_finalize(int Ncvec, const v4sf *in, v4sf *out, const v4sf *e) {
+static void pffft_cplx_finalize(int Ncvec, const v4sf *in, v4sf *out, const v4sf *e) {
   int k, dk = Ncvec/SIMD_SZ; // number of 4x4 matrix blocks
   v4sf r0, i0, r1, i1, r2, i2, r3, i3;
   v4sf sr0, dr0, sr1, dr1, si0, di0, si1, di1;
@@ -1402,7 +1404,7 @@ void pffft_cplx_finalize(int Ncvec, const v4sf *in, v4sf *out, const v4sf *e) {
   }
 }
 
-void pffft_cplx_preprocess(int Ncvec, const v4sf *in, v4sf *out, const v4sf *e) {
+static void pffft_cplx_preprocess(int Ncvec, const v4sf *in, v4sf *out, const v4sf *e) {
   int k, dk = Ncvec/SIMD_SZ; // number of 4x4 matrix blocks
   v4sf r0, i0, r1, i1, r2, i2, r3, i3;
   v4sf sr0, dr0, sr1, dr1, si0, di0, si1, di1;
@@ -1500,7 +1502,7 @@ static NEVER_INLINE(void) pffft_real_finalize(int Ncvec, const v4sf *in, v4sf *o
   v4sf_union cr, ci, *uout = (v4sf_union*)out;
   v4sf save = in[7], zero=VZERO();
   float xr0, xi0, xr1, xi1, xr2, xi2, xr3, xi3;
-  static const float s = M_SQRT2/2;
+  static const float s = (float)M_SQRT2/2;
 
   cr.v = in[0]; ci.v = in[Ncvec*2-1];
   assert(in != out);
@@ -1592,7 +1594,7 @@ static NEVER_INLINE(void) pffft_real_preprocess(int Ncvec, const v4sf *in, v4sf 
 
   v4sf_union Xr, Xi, *uout = (v4sf_union*)out;
   float cr0, ci0, cr1, ci1, cr2, ci2, cr3, ci3;
-  static const float s = M_SQRT2;
+  static const float s = (float)M_SQRT2;
   assert(in != out);
   for (k=0; k < 4; ++k) {
     Xr.f[k] = ((float*)in)[8*k];
@@ -1628,7 +1630,7 @@ static NEVER_INLINE(void) pffft_real_preprocess(int Ncvec, const v4sf *in, v4sf 
 }
 
 
-void pffft_transform_internal(PFFFT_Setup *setup, const float *finput, float *foutput, v4sf *scratch,
+static void pffft_transform_internal(PFFFT_Setup *setup, const float *finput, float *foutput, v4sf *scratch,
                              pffft_direction_t direction, int ordered) {
   int Ncvec = setup->Ncvec;
   int nf_odd = (setup->ifac[1] & 1);

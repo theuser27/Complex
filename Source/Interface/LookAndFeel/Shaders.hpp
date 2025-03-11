@@ -63,10 +63,10 @@ namespace Interface
 
   struct OpenGlAttribute
   {
-    explicit operator bool() { return attributeId >= 0; }
+    explicit operator bool() { return (GLint)attributeId >= 0; }
 
     // If the uniform couldn't be found, this value will be < 0.
-    GLint attributeId = -1;
+    GLuint attributeId = (GLuint)-1;
   };
 
   struct OpenGlShaderProgram
@@ -181,5 +181,5 @@ namespace Interface
   inline OpenGlUniform getUniform(const OpenGlShaderProgram &program, const char *name)
   { return OpenGlUniform{ juce::gl::glGetUniformLocation(program.id, name) }; }
   inline OpenGlAttribute getAttribute(const OpenGlShaderProgram &program, const char *name)
-  { return OpenGlAttribute{ juce::gl::glGetAttribLocation(program.id, name) }; }
+  { return OpenGlAttribute{ (GLuint)juce::gl::glGetAttribLocation(program.id, name) }; }
 }

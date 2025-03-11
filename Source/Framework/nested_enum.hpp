@@ -542,9 +542,9 @@ namespace nested_enum
         return 0;
       else
       {
-        constexpr auto getSize = []<typename ... Ts>(InnerOuterAll selection, const detail::type_list<Ts...> &)
+        constexpr auto getSize = []<typename ... Ts>(InnerOuterAll innerSelection, const detail::type_list<Ts...> &)
         {
-          return ((TEST_INCLUSIVENESS(selection, Ts) ? detail::size_t(1) : detail::size_t(0)) + ...);
+          return ((TEST_INCLUSIVENESS(innerSelection, Ts) ? detail::size_t(1) : detail::size_t(0)) + ...);
         };
         constexpr auto innerSize = getSize(Inner, E::internalSubtypes_);
         constexpr auto outerSize = getSize(Outer, E::internalSubtypes_);
@@ -1268,8 +1268,7 @@ namespace nested_enum
     // the algorithm is a top-down DFS (in case you have repeating ids, which is not a good idea)
     static constexpr auto enum_name_by_id_recursive(NESTED_ENUM_STRING_VIEW_TYPE id, bool clean = false) -> NESTED_ENUM_OPTIONAL_TYPE<NESTED_ENUM_STRING_VIEW_TYPE>
     {
-      auto value = enum_name_by_id(id, clean);
-      if (value.has_value())
+      if (auto value = enum_name_by_id(id, clean); value.has_value())
         return value;
 
       if constexpr (E::internalEnumValues_.size() == 0)
@@ -1317,8 +1316,7 @@ namespace nested_enum
     // returns the id of an enum with the specified reflected string that is located somewhere in the subtree
     static constexpr auto enum_id_recursive(NESTED_ENUM_STRING_VIEW_TYPE enumName) -> NESTED_ENUM_OPTIONAL_TYPE<NESTED_ENUM_STRING_VIEW_TYPE>
     {
-      auto value = enum_id(enumName);
-      if (value.has_value())
+      if (auto value = enum_id(enumName); value.has_value())
         return value;
 
       if constexpr (E::internalEnumValues_.size() == 0)

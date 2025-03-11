@@ -54,7 +54,14 @@ namespace Interface
       doCleanupWork();
 
       openGl_.animate = animate_;
+
+    #if COMPLEX_MAC
+      if (bool expected = false; !renderLock_.compare_exchange_strong(expected, true,
+        std::memory_order_acq_rel, std::memory_order_relaxed))
+        return;
+    #else
       utils::ScopedLock g{ renderLock_, utils::WaitMechanism::WaitNotify };
+    #endif
 
       renderer_.gui_->renderOpenGlComponents(openGl_);
 
@@ -65,6 +72,11 @@ namespace Interface
       openGl_.context.swapBuffers();
       if (isResizing_.load(std::memory_order_acquire))
         juce::gl::glFinish();
+
+    #if COMPLEX_MAC
+      renderLock_.store(false, std::memory_order_release);
+      renderLock_.notify_all();
+    #endif
     }
 
     void openGLContextClosing() override
@@ -148,6 +160,7 @@ namespace Interface
     std::atomic<bool> renderLock_ = false;
     std::atomic<bool> isResizing_ = false;
 
+    double lastTime_{};
     Renderer &renderer_;
     Plugin::ComplexPlugin &plugin_;
     OpenGLContext openGlContext_;
@@ -162,7 +175,7 @@ namespace Interface
   {
     // if this fails, make pimplStorage_ big/aligned enough so that the implementation can fit
     // if only there were some way of backpropagating sizeof and alignof at compile time
-    static_assert(COMPLEX_IS_ALIGNED_TO(Renderer, pimplStorage_, alignof(Pimpl)) && sizeof(Pimpl) <= sizeof(pimplStorage_));
+    static_assert(kPimplAlignment >= alignof(Pimpl) && sizeof(Pimpl) <= sizeof(pimplStorage_));
 
     pimpl_ = new(pimplStorage_) Pimpl{ *this, plugin };
 

@@ -35,6 +35,11 @@ namespace utils
       return getNthElement<N, I + 1>(COMPLEX_FWD(args)...);
   }
 
+  template<typename T>
+  void zeroset(T &structure) { ::memset(&structure, 0, sizeof(T)); }
+  template<typename T, auto Size>
+  void zeroset(T (&rawArray)[Size]) { ::memset(rawArray, 0, Size * sizeof(T)); }
+
   constexpr strict_inline bool closeToZero(double value) noexcept
   { return value <= kEpsilon && value >= -kEpsilon; }
 
@@ -209,7 +214,7 @@ namespace utils
     };
   public:
     constexpr sp() noexcept = default;
-    constexpr sp(std::nullptr_t) noexcept {}
+    constexpr sp(nullptr_t) noexcept {}
     template<typename U> requires utils::is_convertible_v<U *, T *>
     explicit constexpr sp(U *instance)
     {
@@ -319,9 +324,9 @@ namespace utils
   template<typename T, typename U>
   constexpr bool operator==(const sp<T> &one, const sp<U> &two) noexcept { return one.get() == two.get(); }
   template<typename T>
-  constexpr bool operator==(const sp<T> &one, std::nullptr_t) noexcept { return one.get() == nullptr; }
+  constexpr bool operator==(const sp<T> &one, nullptr_t) noexcept { return one.get() == nullptr; }
   template<typename T>
-  constexpr bool operator==(std::nullptr_t, const sp<T> &two) noexcept { return two.get() == nullptr; }
+  constexpr bool operator==(nullptr_t, const sp<T> &two) noexcept { return two.get() == nullptr; }
 
   // ghetto std::any implementation
   class whatever

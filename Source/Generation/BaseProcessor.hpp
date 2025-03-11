@@ -57,7 +57,7 @@ namespace Generation
     BaseProcessor *getSubProcessor(usize index) const noexcept { return subProcessors_[index]; }
     auto getSubProcessorCount() const noexcept { return subProcessors_.size(); }
     usize getSubProcessorIndex(const BaseProcessor *subProcessor) noexcept
-    { return std::ranges::find(subProcessors_, subProcessor) - subProcessors_.begin(); }
+    { return (usize)(std::ranges::find(subProcessors_, subProcessor) - subProcessors_.begin()); }
 
     // the following functions are to be called outside of processing time
     virtual void insertSubProcessor([[maybe_unused]] usize index,
@@ -83,8 +83,8 @@ namespace Generation
     usize getParameterCount() const noexcept;
     usize getParameterIndex(const Framework::ParameterValue *parameter) noexcept
     {
-      return std::ranges::find_if(processorParameters_.data, [&](const auto &element)
-        { return element.second.get() == parameter; }) - processorParameters_.data.begin();
+      return (usize)(processorParameters_.find_if([&](const auto &element)
+        { return element.second.get() == parameter; }) - processorParameters_.data.begin());
     }
 
     virtual void updateParameters(UpdateFlag flag, float sampleRate, bool updateChildrenParameters = true) noexcept;

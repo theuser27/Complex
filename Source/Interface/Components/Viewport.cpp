@@ -10,7 +10,7 @@
 
 #include "Viewport.hpp"
 
-#include "Scrollbar.hpp"
+#include "ScrollBar.hpp"
 
 namespace Interface
 {

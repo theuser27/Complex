@@ -34,5 +34,5 @@ namespace Framework
 
     void deserialiseSave(const juce::File &);
     void writeSave(void *jsonData);
-  };
+  }
 }

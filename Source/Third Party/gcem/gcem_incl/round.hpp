@@ -32,7 +32,7 @@ noexcept
 {
     return( abs(x - internal::floor_check(x)) >= T(0.5) ? \
             // if 
-                internal::floor_check(x) + sgn(x) : \
+                internal::floor_check(x) + (float)sgn(x) : \
             // else 
                 internal::floor_check(x) );
 }

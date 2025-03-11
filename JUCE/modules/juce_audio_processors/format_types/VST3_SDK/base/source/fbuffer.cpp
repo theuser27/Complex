@@ -170,8 +170,8 @@ bool Buffer::put (uint8 byte)
   if (grow (fillSize + 1) == false)
     return false;
   
-    buffer [fillSize++] = byte;
-    return true;
+  buffer [fillSize++] = byte;
+  return true;
 }
 
 //-------------------------------------------------------------------------------------
@@ -180,8 +180,8 @@ bool Buffer::put (char c)
   if (grow (fillSize + 1) == false)
     return false;
   
-    buffer [fillSize++] = c;
-    return true;
+  buffer [fillSize++] = c;
+  return true;
 }
 
 //-------------------------------------------------------------------------------------

@@ -341,6 +341,7 @@ namespace Generation
   {
   public:
     EffectModule(Plugin::ProcessorTree *processorTree) noexcept;
+    EffectModule(const EffectModule &) = default;
     ~EffectModule() override;
 
     void deserialiseFromJson(void *jsonData) override;

@@ -1,4 +1,7 @@
 /Builds/
 /Build/
+/builds/
+/build/
 /.vs
 /.idea
+.DS_Store

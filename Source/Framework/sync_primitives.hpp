@@ -11,6 +11,9 @@
 #pragma once
 
 #include <atomic>
+#ifdef COMPLEX_ARM
+  #include <arm_acle.h>
+#endif
 #include "Third Party/clog/small_function.hpp"
 
 #include "stl_utils.hpp"
@@ -22,7 +25,11 @@ namespace utils
   #if COMPLEX_SSE4_1
     _mm_pause();
   #elif COMPLEX_NEON
-    __yield();
+    #if COMPLEX_MSVC
+      __yield();
+    #else
+      asm volatile ("yield");
+    #endif
   #endif
   }
 
@@ -31,19 +38,11 @@ namespace utils
   {
     unroll<Iterations>([]()
       {
-      #if COMPLEX_SSE4_1
-        _mm_pause();
-        _mm_pause();
-        _mm_pause();
-        _mm_pause();
-        _mm_pause();
-      #elif COMPLEX_NEON
-        __yield();
-        __yield();
-        __yield();
-        __yield();
-        __yield();
-      #endif
+        pause();
+        pause();
+        pause();
+        pause();
+        pause();
       });
   }
 
@@ -84,11 +83,11 @@ namespace utils
     ScopedLock(ReentrantLock<bool> &reentrantLock, WaitMechanism mechanism, bool expected = false) noexcept;
 
     ScopedLock(std::atomic<bool> &atomic, WaitMechanism mechanism, bool expected = false) noexcept :
-      type_(BoolType), mechanism_(mechanism), bool_{ &atomic, expected }
+      type_(BoolEnum), mechanism_(mechanism), bool_{ &atomic, expected }
     { lockAtomic(atomic, mechanism, expected); }
 
     ScopedLock(LockBlame<i32> &atomic, bool isExclusive, WaitMechanism mechanism,
-      const clg::small_fn<void()> &lambda = [](){}) noexcept : type_(I32Type), mechanism_(mechanism),
+      const clg::small_fn<void()> &lambda = [](){}) noexcept : type_(I32Enum), mechanism_(mechanism),
       i32_{ &atomic, isExclusive }
     { lockAtomic(atomic, isExclusive, mechanism, lambda); }
 
@@ -102,11 +101,11 @@ namespace utils
       if (type_ == Empty)
         return;
 
-      if (type_ == BoolType)
+      if (type_ == BoolEnum)
         unlockAtomic(*bool_.atomic, mechanism_, bool_.expected);
-      else if (type_ == I32Type)
+      else if (type_ == I32Enum)
         unlockAtomic(*i32_.atomic, i32_.isExclusive, mechanism_);
-      else if (type_ == ReentrantBoolType && !reentrantBool_.wasLocked)
+      else if (type_ == ReentrantBoolEnum && !reentrantBool_.wasLocked)
       {
         unlockAtomic(reentrantBool_.atomic->lock, mechanism_, reentrantBool_.expected);
         reentrantBool_.atomic->lastLockId.store({}, std::memory_order_relaxed);
@@ -116,13 +115,16 @@ namespace utils
     }
 
   private:
-    enum { Empty, BoolType, I32Type, ReentrantBoolType } type_;
+    enum { Empty, BoolEnum, I32Enum, ReentrantBoolEnum } type_;
     WaitMechanism mechanism_;
+    struct ReentrantBoolType { ReentrantLock<bool> *atomic; bool wasLocked; bool expected; };
+    struct BoolType { std::atomic<bool> *atomic; bool expected; };
+    struct I32Type { LockBlame<i32> *atomic; bool isExclusive; };
     union
     {
-      struct { ReentrantLock<bool> *atomic; bool wasLocked; bool expected; } reentrantBool_;
-      struct { std::atomic<bool> *atomic; bool expected; } bool_;
-      struct { LockBlame<i32> *atomic; bool isExclusive; } i32_;
+      ReentrantBoolType reentrantBool_;
+      BoolType bool_;
+      I32Type i32_;
     };
   };
 

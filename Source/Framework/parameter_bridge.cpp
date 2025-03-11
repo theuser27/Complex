@@ -12,7 +12,6 @@
 
 #include "parameter_value.hpp"
 #include "Interface/Components/BaseControl.hpp"
-#include "Interface/LookAndFeel/Miscellaneous.hpp"
 #include "Plugin/PluginProcessor.hpp"
 
 namespace Framework

@@ -62,7 +62,7 @@ namespace Interface
       { return containingLane == lane.get(); });
     COMPLEX_ASSERT(laneIterator != lanes_.end() && "Somehow we are preparing to move a module that isn't part of a lane??");
 
-    dragStartIndices_.first = laneIterator - lanes_.begin();
+    dragStartIndices_.first = usize(laneIterator - lanes_.begin());
     dragStartIndices_.second = laneIterator->get()->getModuleIndex(movedModule).value();
 
     if (isCopying)

@@ -198,7 +198,7 @@ namespace Framework
     static constexpr usize getSimdIndex(usize channel, usize channelSize, usize index) noexcept
     { return (channel / getRelativeSize()) * channelSize + index; }
 
-    template<typename T, SimdValue SIMD>
+    template<typename U, SimdValue OtherSIMD>
     friend class SimdBufferView;
   };
 
@@ -216,6 +216,7 @@ namespace Framework
       beginChannel_ = beginChannel;
       channels_ = (channels) ? channels : buffer.getChannels() - beginChannel;
     }
+    SimdBufferView &operator=(const SimdBufferView &) = default;
 
     bool isEmpty() const noexcept { return getChannels() == 0 || getSize() == 0; }
 
@@ -240,7 +241,7 @@ namespace Framework
     usize beginChannel_ = 0;
     usize channels_ = 0;
 
-    template<typename T, SimdValue SIMD>
+    template<typename U, SimdValue OtherSIMD>
     friend class SimdBuffer;
   };
 

@@ -322,7 +322,7 @@ namespace Interface
     if (items_->type == PopupItems::AutomationList)
     {
       auto lineWidth = totalWidth - crossWidth - scrollBarWidth;
-      for (size_t i = 0; i < items_->items.size(); i += 2)
+      for (usize i = 0; i < items_->items.size(); i += 2)
       {
         int elementHeight = 0;
         int lines = getLinesForText(commonInfo_->primaryFont, items_->items[i].name, lineWidth - hEntryPadding);
@@ -566,7 +566,7 @@ namespace Interface
 
           COMPLEX_ASSERT(iter != itemBounds_.end());
 
-          size_t index = (iter - itemBounds_.begin()) / 2;
+          usize index = usize(iter - itemBounds_.begin()) / 2;
           itemBounds_[index * 2].first->isActive = !itemBounds_[index * 2].first->isActive;
           itemBounds_[index * 2 + 1].first->isActive = !itemBounds_[index * 2 + 1].first->isActive;
 
@@ -580,7 +580,7 @@ namespace Interface
           return;
         }
 
-        for (size_t i = 0; i < bridges.size(); ++i)
+        for (usize i = 0; i < bridges.size(); ++i)
           drawEntry(bridges[i]->getName(), bridges[i]->getParameterLink(), 
             itemBounds_[i * 2].second, itemBounds_[i * 2 + 1].second);
       }
@@ -711,7 +711,7 @@ namespace Interface
 
   void PopupSelector::closeSubList(PopupItems *items)
   {
-    size_t index = 0;
+    usize index = 0;
     for (; index < lists_.size(); ++index)
       if (lists_[index]->getItems() == items)
         break;
@@ -889,7 +889,7 @@ namespace Interface
 
   void PopupSelector::fillAutomationListIfExists()
   {
-    auto recurse = [this](auto &self, PopupItems *items) -> bool
+    auto recurse = [](auto &self, PopupItems *items) -> bool
     {
       for (auto &item : items->items)
       {

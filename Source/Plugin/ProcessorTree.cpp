@@ -20,7 +20,7 @@ namespace Plugin
     inSidechains_(inSidechains), outSidechains_(outSidechains) { }
   ProcessorTree::~ProcessorTree()
   {
-    isBeingDestroyed_ = true;
+    isBeingDestroyed_.store(true);
     //undoManager_->~UndoManager();
   }
 

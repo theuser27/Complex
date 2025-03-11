@@ -73,8 +73,9 @@ namespace Interface
     Plugin::ComplexPlugin &plugin_;
     juce::AudioProcessorEditor *topLevelComponent_ = nullptr;
 
-    alignas(8) unsigned char pimplStorage_[450]{};
     Pimpl *pimpl_ = nullptr;
+    static constexpr usize kPimplAlignment = 8;
+    alignas(kPimplAlignment) unsigned char pimplStorage_[450]{};
 
     friend class Pimpl;
   };

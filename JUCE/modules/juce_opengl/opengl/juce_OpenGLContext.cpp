@@ -230,11 +230,11 @@ public:
             return RenderStatus::nominal;
 
         {
+            const auto [currentArea, currentScale] = areaAndScale.get();
             NativeContext::Locker locker (*nativeContext);
 
             JUCE_CHECK_OPENGL_ERROR
 
-            const auto [currentArea, currentScale] = areaAndScale.get();
             jassert(context.renderer != nullptr);
 
             bindVertexArray();
@@ -327,7 +327,7 @@ public:
         {
             [nativeContext->view update];
 
-            renderFrame ();
+            //renderFrame ();
         }
        #endif
     }

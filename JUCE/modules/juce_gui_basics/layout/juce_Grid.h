@@ -222,8 +222,8 @@ private:
     struct BoxAlignment;
 };
 
-constexpr Grid::Px operator"" _px (long double px)          { return Grid::Px { px }; }
-constexpr Grid::Px operator"" _px (unsigned long long px)   { return Grid::Px { px }; }
-constexpr Grid::Fr operator"" _fr (unsigned long long fr)   { return Grid::Fr { fr }; }
+constexpr Grid::Px operator""_px (long double px)          { return Grid::Px { px }; }
+constexpr Grid::Px operator""_px (unsigned long long px)   { return Grid::Px { px }; }
+constexpr Grid::Fr operator""_fr (unsigned long long fr)   { return Grid::Fr { fr }; }
 
 } // namespace juce

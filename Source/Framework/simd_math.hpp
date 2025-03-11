@@ -10,9 +10,6 @@
 
 #pragma once
 
-#include "Third Party/gcem/gcem.hpp"
-
-#include "sync_primitives.hpp"
 #include "simd_buffer.hpp"
 #include "simd_utils.hpp"
 

@@ -10,7 +10,6 @@
 
 #include "parameter_value.hpp"
 
-#include "simd_utils.hpp"
 #include "parameter_bridge.hpp"
 #include "Interface/Components/BaseControl.hpp"
 

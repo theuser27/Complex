@@ -10,8 +10,8 @@
 
 #pragma once
 
-#include <vector>
 #include <memory>
+#include <vector>
 
 #include "utils.hpp"
 #include "sync_primitives.hpp"

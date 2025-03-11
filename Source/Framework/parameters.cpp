@@ -21,7 +21,7 @@ namespace Framework
   static constexpr auto lookup = []<typename ... Ts>(const std::tuple<nested_enum::type_identity<Ts>...> &)
   {
     return utils::array<ParameterDetails, sizeof...(Ts)>{ Ts::details... };
-  }(Processors::enum_subtypes_filter_recursive<[]<typename T>() { return requires{ T::parameter_tag; }; }>());
+  }(Processors::enum_subtypes_filter_recursive<kGetParameterPredicate>());
 
   auto getParameterDetails(utils::string_view id) noexcept -> std::optional<ParameterDetails>
   {

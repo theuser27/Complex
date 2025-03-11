@@ -145,6 +145,8 @@ namespace Framework
         window = getLanczosWindow(position, alpha);
         centerWindow = getLanczosWindow(0.5f, alpha);
         break;
+      case WindowType::Rectangle:
+      case WindowType::Lerp:
       default:
         break;
       }
@@ -184,6 +186,8 @@ namespace Framework
       case WindowType::Lanczos:
         window = getLanczosWindow(position, alpha);
         break;
+      case WindowType::Rectangle:
+      case WindowType::Lerp:
       default:
         break;
       }

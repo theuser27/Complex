@@ -59,25 +59,25 @@ namespace Interface
     // thread safe ^^^ //         // not thread safe vvv //
 
 
-    strict_inline float getBoostAt(int index) const noexcept { return boosts_[index]; }
-    strict_inline float getYAt(int index) const noexcept { return y_[index]; }
-    strict_inline float getXAt(int index) const noexcept { return x_[index]; }
+    strict_inline float getBoostAt(usize index) const noexcept { return boosts_[index]; }
+    strict_inline float getYAt(usize index) const noexcept { return y_[index]; }
+    strict_inline float getXAt(usize index) const noexcept { return x_[index]; }
 
-    strict_inline void setBoost(int index, float val) noexcept
+    strict_inline void setBoost(usize index, float val) noexcept
     {
-      COMPLEX_ASSERT(pointCount_ > index);
+      COMPLEX_ASSERT((usize)pointCount_ > index);
       boosts_[index] = val;
       dirty_ = true;
     }
-    strict_inline void setYAt(int index, float val) noexcept
+    strict_inline void setYAt(usize index, float val) noexcept
     {
-      COMPLEX_ASSERT(pointCount_ > index);
+      COMPLEX_ASSERT((usize)pointCount_ > index);
       y_[index] = val;
       dirty_ = true;
     }
-    strict_inline void setXAt(int index, float val) noexcept
+    strict_inline void setXAt(usize index, float val) noexcept
     {
-      COMPLEX_ASSERT(pointCount_ > index);
+      COMPLEX_ASSERT((usize)pointCount_ > index);
       x_[index] = val;
       dirty_ = true;
     }

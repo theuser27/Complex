@@ -156,7 +156,7 @@ namespace Interface
 
     json updateJson(json data)
     {
-      int version = 0;
+      [[maybe_unused]] int version = 0;
       if (data.count("Plugin Version"))
         version = data["Plugin Version"];
 
@@ -333,7 +333,7 @@ namespace Interface
       data[kValueNames[i]] = values_[i];
 
     json overrides;
-    for (int overrideIndex = 0; overrideIndex < kSectionsCount; ++overrideIndex)
+    for (usize overrideIndex = 0; overrideIndex < kSectionsCount; ++overrideIndex)
     {
       json overrideSection;
       for (const auto &[key, value] : colorOverrides_[overrideIndex].data)
@@ -361,7 +361,7 @@ namespace Interface
     if (data.count("overrides"))
     {
       json overrides = data["overrides"];
-      for (int overrideIndex = 0; overrideIndex < kSectionsCount; ++overrideIndex)
+      for (usize overrideIndex = 0; overrideIndex < kSectionsCount; ++overrideIndex)
       {
         std::string_view name = kOverrideNames[overrideIndex];
         colorOverrides_[overrideIndex].data.clear();
@@ -394,7 +394,7 @@ namespace Interface
       }
     }
 
-    for (int i = 0; i < kColorIdCount; ++i)
+    for (usize i = 0; i < kColorIdCount; ++i)
     {
       if (data.contains(kColorNames[i]))
       {
@@ -403,7 +403,7 @@ namespace Interface
       }
     }
 
-    for (size_t i = 0; i < kValueIdCount; ++i)
+    for (usize i = 0; i < kValueIdCount; ++i)
     {
       if (data.contains(kValueNames[i]))
         values_[i] = data[kValueNames[i]];

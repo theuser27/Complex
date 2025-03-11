@@ -647,6 +647,7 @@ namespace
     case kFillVertex: return kFillVertexShader;
     case kBarHorizontalVertex: return kBarHorizontalVertexShader;
     case kBarVerticalVertex: return kBarVerticalVertexShader;
+    default: break;
     }
 
     COMPLEX_ASSERT_FALSE("Missing vertex shader source");
@@ -683,6 +684,7 @@ namespace
     case kDotSliderFragment: return kDotSliderFragmentShader;
     case kLinearModulationFragment: return kLinearModulationFragmentShader;
     case kModulationKnobFragment: return kModulationKnobFragmentShader;
+    default: break;
     }
 
     COMPLEX_ASSERT_FALSE("Missing fragment shader source");
@@ -784,9 +786,16 @@ namespace Interface
   {
     // > A value of 0 for shader will be silently ignored.
     for (auto id : vertexShaderIds_)
+    {
       glDeleteShader(id);
+      COMPLEX_CHECK_OPENGL_ERROR;
+    }
+
     for (auto id : fragmentShaderIds_)
+    {
       glDeleteShader(id);
+      COMPLEX_CHECK_OPENGL_ERROR;
+    }
 
     for (auto &[_, program] : shaderPrograms_.data)
     {
@@ -794,9 +803,13 @@ namespace Interface
         continue;
 
       glDeleteProgram(program.id);
+      COMPLEX_CHECK_OPENGL_ERROR;
       program.id = 0;
     }
     shaderPrograms_.data.clear();
+
+    utils::zeroset(vertexShaderIds_);
+    utils::zeroset(fragmentShaderIds_);
   }
 
 
@@ -853,7 +866,7 @@ namespace Interface
       glBindTexture(GL_TEXTURE_2D, textureId);
       glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
 
-      glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, texMagFilter);
+      glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, (GLint)texMagFilter);
       glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
       glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
       COMPLEX_CHECK_OPENGL_ERROR;

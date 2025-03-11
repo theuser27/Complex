@@ -263,7 +263,7 @@ namespace Interface
     double scaledValue = Framework::scaleValue(value, details_, getSampleRate(), true);
     if (!details_.indexedData.empty())
     {
-      usize index = (usize)(std::clamp(scaledValue, (double)details_.minValue, 
+      u64 index = (u64)(utils::clamp(scaledValue, (double)details_.minValue,
         (double)details_.maxValue) - details_.minValue);
       usize option = 0;
       while ((index || !details_.indexedData[option].count) && 

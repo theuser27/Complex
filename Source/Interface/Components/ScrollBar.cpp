@@ -25,7 +25,7 @@ namespace Interface
   //==============================================================================
   void ScrollBar::setRangeLimits(Range<double> newRangeLimit, NotificationType notification)
   {
-    if (totalRange != newRangeLimit)
+    if (totalRange.get() != newRangeLimit)
     {
       totalRange = newRangeLimit;
       setCurrentRange(visibleRange, notification);
@@ -43,7 +43,7 @@ namespace Interface
   {
     auto constrainedRange = totalRange.get().constrainRange(newRange);
 
-    if (visibleRange != constrainedRange)
+    if (visibleRange.get() != constrainedRange)
     {
       visibleRange = constrainedRange;
 

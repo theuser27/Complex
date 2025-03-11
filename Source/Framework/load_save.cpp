@@ -46,9 +46,10 @@ namespace
   {
   public:
     LoadingException(juce::String message) : message_{ COMPLEX_MOVE(message) } { }
+    LoadingException(const LoadingException &) = default;
     ~LoadingException() noexcept override = default;
 
-    const char *what() const override { return message_.toRawUTF8(); }
+    const char *what() const noexcept override { return message_.toRawUTF8(); }
     LoadingException &append(juce::String string) { message_ += string; return *this; }
     LoadingException &prepend(juce::String string) { message_ = string + message_; return *this; }
 
@@ -233,6 +234,7 @@ namespace Plugin
 {
   void ProcessorTree::clearState()
   {
+    isBeingDestroyed_.store(true);
     dynamicParameters_.clear();
 
     allProcessors_.data.clear();
@@ -337,7 +339,7 @@ namespace Plugin
     soundEngine_->setParentProcessorId(processorTreeId);
 
     static constexpr auto pluginParameterIds = Framework::Processors::SoundEngine::
-      enum_ids_filter<[]<typename T>() { return requires{ T::parameter_tag; }; }, true>();
+      enum_ids_filter<Framework::kGetParameterPredicate, true>();
 
     auto min = std::min(pluginParameterIds.size(), parameterBridges_.size());
     for (usize i = 0; i < min; ++i)
@@ -359,7 +361,7 @@ namespace Plugin
     return [&]<typename ... Ts>(const std::tuple<nested_enum::type_identity<Ts>...> &)
     {
       utils::up<Generation::BaseProcessor> processor = nullptr;
-      utils::ignore = ((Ts::id() == processorType && (processor = utils::up<typename Ts::linked_type>::create(this), true)) || ...);
+      utils::ignore = ((Ts::id().value() == processorType && (processor = utils::up<typename Ts::linked_type>::create(this), true)) || ...);
       if (processor == nullptr)
       {
         throw LoadingException{ std::format("Processor with id {} does not exist", processorType.data()) };

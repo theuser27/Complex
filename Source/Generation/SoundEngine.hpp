@@ -68,9 +68,9 @@ namespace Generation
         // recalculating indices based on the new size
         if (getChannelCount() * getSize())
         {
-          blockEnd_ = utils::clamp(((i32)newSize - (i32)getBlockEndToEnd()) % (i32)newSize, 0, (i32)newSize - 1);
-          blockBegin_ = utils::clamp(((i32)blockEnd_ - (i32)getBlockBeginToBlockEnd()) % (i32)newSize, 0, (i32)newSize - 1);
-          lastOutputBlock_ = utils::clamp(((i32)blockBegin_ - (i32)getLastOutputBlockToBlockBegin()) % (i32)newSize, 0, (i32)newSize - 1);
+          blockEnd_ = (u32)utils::clamp(((i32)newSize - (i32)getBlockEndToEnd()) % (i32)newSize, 0, (i32)newSize - 1);
+          blockBegin_ = (u32)utils::clamp(((i32)blockEnd_ - (i32)getBlockBeginToBlockEnd()) % (i32)newSize, 0, (i32)newSize - 1);
+          lastOutputBlock_ = (u32)utils::clamp(((i32)blockBegin_ - (i32)getLastOutputBlockToBlockBegin()) % (i32)newSize, 0, (i32)newSize - 1);
         }
         else
         {
@@ -90,7 +90,7 @@ namespace Generation
       strict_inline void advanceBlock(u32 newBegin, i32 samples)
       {
         blockBegin_ = newBegin;
-        blockEnd_ = (newBegin + samples) % getSize();
+        blockEnd_ = (newBegin + (u32)samples) % getSize();
       }
 
       // returns how many samples in the buffer can be read 
@@ -136,7 +136,7 @@ namespace Generation
           break;
         }
 
-        u32 currentBufferBegin = (getSize() + begin + inputBufferOffset) % getSize();
+        u32 currentBufferBegin = (getSize() + begin + (u32)inputBufferOffset) % getSize();
         
         buffer_.readBuffer(reader, channels, samples, 
           currentBufferBegin, readerBeginIndex, channelsToCopy);
@@ -231,9 +231,9 @@ namespace Generation
         // recalculating indices based on the new size
         if (getChannelCount() * getSize())
         {
-          addOverlap_ = utils::clamp(((i32)newSize - (i32)getAddOverlapToEnd()) % (i32)newSize, i32(0), (i32)newSize - 1);
-          toScaleOutput_ = utils::clamp(((i32)addOverlap_ - (i32)getToScaleOutputToAddOverlap()) % (i32)newSize, i32(0), (i32)newSize - 1);
-          beginOutput_ = utils::clamp(((i32)toScaleOutput_ - (i32)getBeginOutputToToScaleOutput()) % (i32)newSize, i32(0), (i32)newSize - 1);
+          addOverlap_ = (u32)utils::clamp(((i32)newSize - (i32)getAddOverlapToEnd()) % (i32)newSize, 0, (i32)newSize - 1);
+          toScaleOutput_ = (u32)utils::clamp(((i32)addOverlap_ - (i32)getToScaleOutputToAddOverlap()) % (i32)newSize, 0, (i32)newSize - 1);
+          beginOutput_ = (u32)utils::clamp(((i32)toScaleOutput_ - (i32)getBeginOutputToToScaleOutput()) % (i32)newSize, 0, (i32)newSize - 1);
         }
         else
         {
@@ -268,7 +268,7 @@ namespace Generation
       }
 
       void addOverlapBuffer(const Framework::Buffer &other, u32 channels,
-        utils::span<char> channelsToOvelap, u32 samples, i32 beginOutputOffset,
+        utils::span<char> channelsToOvelap, u32 samples, u32 beginOutputOffset,
         Framework::Processors::SoundEngine::WindowType::type windowType) noexcept
       {
         u32 bufferSize = getSize();
@@ -336,7 +336,7 @@ namespace Generation
         if (latencyOffset_ == newLatencyOffset)
           return;
 
-        beginOutput_ = (getSize() - newLatencyOffset) % getSize();
+        beginOutput_ = (u32)((i32)getSize() - newLatencyOffset) % getSize();
         toScaleOutput_ = 0;
         addOverlap_ = 0;
         buffer_.setEnd(0);

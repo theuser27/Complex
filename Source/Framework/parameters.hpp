@@ -196,8 +196,8 @@ namespace Framework
     return data;
   }
 
-  inline constexpr auto kGetParameterPredicate = []<typename T>() { return requires{ T::parameter_tag; }; };
-  inline constexpr auto kGetProcessorPredicate = []<typename T>() { return requires{ T::processor_tag; }; };
+  inline constexpr auto kGetParameterPredicate = []<typename T>() { return requires{ typename T::parameter_tag; }; };
+  inline constexpr auto kGetProcessorPredicate = []<typename T>() { return requires{ typename T::processor_tag; }; };
   inline constexpr auto kGetEffectPredicate = []<typename T>() { return requires{ T::effect_tag; }; };
   inline constexpr auto kGetActiveEffectPredicate = []<typename T>() { return requires{ T::effect_tag; requires T::effect_tag; }; };
   inline constexpr auto kGetAlgoPredicate = []<typename T>() { return requires{ T::algo_tag; }; };
@@ -405,7 +405,7 @@ namespace Framework
         NESTED_ENUM_FROM(Processors::BaseEffect::Phase, (Shift, u64, DECLARE_ALGO(true)),
           (
             (PhaseShift, ID_CODE, "98c64b24-cfec-4306-a38d-bce56c49ea35", DECLARE_PARAMETER("Shift", -180.0f, 180.0f, 0.0f, 0.5f, 
-              ParameterScale::Linear, "\xB0", {}, ParameterDetails::Modulatable | ParameterDetails::Automatable | ParameterDetails::Stereo)),
+              ParameterScale::Linear, COMPLEX_DEGREE_SIGN_LITERAL, {}, ParameterDetails::Modulatable | ParameterDetails::Automatable | ParameterDetails::Stereo)),
             (Interval  , ID_CODE, "38acd2c1-6a20-4003-8964-2f07dd983995", DECLARE_PARAMETER("Interval", 0.0f, 10.0f, 1.0f, gcem::pow(1.0f / 10.0f, 1.0f / 3.0f), 
               ParameterScale::Cubic, " oct", {}, ParameterDetails::Modulatable | ParameterDetails::Automatable | ParameterDetails::Stereo)),
             (Offset    , ID_CODE, "1808ef90-46e8-43b8-bcc1-908014abd2f6", DECLARE_PARAMETER("Offset", 0.0f, 1.0f, 0.0f, 0.0f, ParameterScale::Frequency, " hz", {}, 
@@ -446,8 +446,8 @@ namespace Framework
               ParameterScale::SymmetricLoudness, " db", {}, ParameterDetails::Modulatable | ParameterDetails::Automatable | ParameterDetails::Stereo)),
             (Mapping, ID_CODE, "0206e09a-f472-4cc7-94fd-d3f6f6cd5787",
               static constexpr auto kMappingNames = utils::array{ IndexedData{ "No Change", NoMapping::id().value() },
-                IndexedData{ "Swap Real/Imaginary", SwitchRealImag::id().value() }, IndexedData{ "Cartesian -> Polar", CartToPolar::id().value() },
-                IndexedData{ "Polar -> Cartesian", PolarToCart::id().value() } };
+                IndexedData{ "Swap Real/Imaginary", SwitchRealImag::id().value() }, IndexedData{ "Cartesian->Polar", CartToPolar::id().value() },
+                IndexedData{ "Polar->Cartesian", PolarToCart::id().value() } };
               DECLARE_PARAMETER("Mapping", 0.0f, (float)(kMappingNames.size() - 1), 0.0f, 0.0f, ParameterScale::Indexed,
               {}, kMappingNames, ParameterDetails::Modulatable | ParameterDetails::Automatable))
           ), (),

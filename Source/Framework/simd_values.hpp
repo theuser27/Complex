@@ -37,10 +37,11 @@ namespace simd_values
 
   #if COMPLEX_SSE4_1
     using simd_type = __m128i;
+    static constexpr usize size = 4;
   #elif COMPLEX_NEON
     using simd_type = uint32x4_t;
-  #endif 
-    static constexpr usize size = sizeof(simd_type) / sizeof(u32);
+    static constexpr usize size = 4;
+  #endif
     using array_t = utils::array<u32, size>;
 
     simd_type value;
@@ -91,7 +92,7 @@ namespace simd_values
     #if COMPLEX_SSE4_1
       return _mm_sub_epi32(_mm_setzero_si128(), value);
     #elif COMPLEX_NEON
-      return vmulq_n_u32(value, -1);
+      return vmulq_n_u32(value, (u32)(-1));
     #endif
     }
 
@@ -155,7 +156,7 @@ namespace simd_values
     #if COMPLEX_SSE4_1
       return _mm_max_epi32(one, two);
     #elif COMPLEX_NEON
-      return vmaxq_i32(one, two);
+      return vmaxq_s32(one, two);
     #endif
     }
 
@@ -173,7 +174,7 @@ namespace simd_values
     #if COMPLEX_SSE4_1
       return _mm_min_epi32(one, two);
     #elif COMPLEX_NEON
-      return vminq_i32(one, two);
+      return vminq_s32(one, two);
     #endif
     }
 
@@ -282,7 +283,7 @@ namespace simd_values
       mask = bitAnd(mask, equal(value, _mm_shuffle_epi32(value, _MM_SHUFFLE(0, 1, 2, 3))));
       return anyMask(mask);
     #elif COMPLEX_NEON
-      return vaddvq_u32(notEqual(value, vdupq_laneq_u32(value, 0))) == 0;
+      return vaddvq_u32(notEqual(value, vdupq_laneq_u32(value, 0)).value) == 0U;
     #endif
     }
 
@@ -310,7 +311,7 @@ namespace simd_values
         values.fill(initialValue);
       #ifdef COMPLEX_MSVC
         value = getInternalValue(values, utils::make_index_sequence<size>());
-      #elif
+      #else
         value = utils::bit_cast<simd_type>(values);
       #endif
       }
@@ -321,7 +322,7 @@ namespace simd_values
     constexpr strict_inline simd_int(const array_t &scalars) noexcept :
   #ifdef COMPLEX_MSVC
       value(getInternalValue(scalars, utils::make_index_sequence<size>())) { }
-  #elif
+  #else
       value(utils::bit_cast<simd_type>(scalars)) { }
   #endif
 
@@ -336,7 +337,7 @@ namespace simd_values
 
     #ifdef COMPLEX_MSVC
       value = getInternalValue(values, utils::make_index_sequence<size>());
-    #elif
+    #else
       value = utils::bit_cast<simd_type>(values);
     #endif
     }
@@ -543,11 +544,12 @@ namespace simd_values
     #endif
     }
 
-    static strict_inline simd_type vector_call neg(simd_type value) {
+    static strict_inline simd_type vector_call neg(simd_type value)
+    {
     #if COMPLEX_SSE4_1
       return _mm_xor_ps(value, _mm_set1_ps(-0.0f));
     #elif COMPLEX_NEON
-      return vmulq_n_f32(value, -1.0f);
+      return vnegq_f32(value);
     #endif
     }
 
@@ -588,10 +590,10 @@ namespace simd_values
     #if COMPLEX_FMA
       return _mm_fmsub_ps(mulOne, mulTwo, sub);
     #else
-      return _mm_sub_ps(sub, _mm_mul_ps(mulOne, mulTwo));
+      return _mm_sub_ps(_mm_mul_ps(mulOne, mulTwo), sub);
     #endif
     #elif COMPLEX_NEON
-      return vfmsq_f32(sub, mulOne, mulTwo);
+      return vfmaq_f32(neg(sub), mulOne, mulTwo);
     #endif
     }
 
@@ -870,7 +872,7 @@ namespace simd_values
         values.fill(initialValue);
       #ifdef COMPLEX_MSVC
         value = getInternalValue(values, utils::make_index_sequence<size>());
-      #elif
+      #else
         value = utils::bit_cast<simd_type>(values);
       #endif
       }
@@ -881,7 +883,7 @@ namespace simd_values
     constexpr strict_inline simd_float(const array_t &scalars) noexcept :
     #ifdef COMPLEX_MSVC
       value(getInternalValue(scalars, utils::make_index_sequence<size>())) { }
-    #elif
+    #else
       value(utils::bit_cast<simd_type>(scalars)) { }
     #endif
     
@@ -900,7 +902,7 @@ namespace simd_values
 
     #ifdef COMPLEX_MSVC
       value = getInternalValue(values, utils::make_index_sequence<size>());
-    #elif
+    #else
       value = utils::bit_cast<simd_type>(values);
     #endif
     }
