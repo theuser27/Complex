@@ -10,22 +10,10 @@
 
 #pragma once
 
-#include <string>
-#include <vector>
-
 #include "Third Party/gcem/gcem.hpp"
 #include "Third Party/constexpr-to-string/to_string.hpp"
-#include "Third Party/clog/small_function.hpp"
 
-#include "simd_values.hpp"
-#include "constants.hpp"
-#include "utils.hpp"
-
-#define NESTED_ENUM_ARRAY_TYPE ::utils::array
-#define NESTED_ENUM_STRING_VIEW_TYPE ::utils::string_view
-// commented out because msvc likes to have ICEs
-//#define NESTED_ENUM_PAIR_TYPE ::utils::pair
-#include "nested_enum.hpp"
+#include "parameter_types.hpp"
 
 namespace Generation
 {
@@ -50,142 +38,11 @@ namespace Plugin
 
 namespace Framework
 {
-  class ParameterValue;
-
-  // symmetric types apply the flipped curve to negative values
-  // all x values are normalised
-
-  NESTED_ENUM((ParameterScale, u32),
-    (
-      (Toggle            , ID, "3195faf6-b6ea-4d21-94a3-cb15b6184d84"), // round(x)
-      (Indexed           , ID, "f0850d8b-2f46-4860-82f8-5d46d2d27bef"), // round(x * (max - min))
-      (IndexedNumeric    , ID, "e593dbd0-1af6-410f-865b-4044646ab9c9"), // round(x * (max - min)), but cannot have values rearranged
-      (Linear            , ID, "e4c9e4aa-c9a0-493f-869b-f090460bfbf1"), // x * (max - min) + min
-      (Clamp             , ID, "20f78758-8eb1-403a-8207-9a124e4b5683"), // clamp(x, min, max)
-      (Quadratic         , ID, "9c3ac761-4c0e-462e-be03-8604c391e085"), // x ^ 2 * (max - min) + min
-      (SymmetricQuadratic, ID, "69f8a98b-7bd0-494d-b971-3ded188485c4"), // ((x - 0.5) ^ 2 * sgn(x - 0.5) + 0.5) * 2 * (max - min) + min
-      (Cubic             , ID, "cf999277-1c98-4b1b-a8ff-4161d2cd9f35"), // x ^ 3
-      (SymmetricCubic    , ID, "1124f08e-6ac1-4ac7-8cc7-81bd662e9fe7"), // x ^ 3
-      (Loudness          , ID, "b64df42f-b5b7-4b76-af63-167722c26543"), // 20 * log10(x)
-      (SymmetricLoudness , ID, "fb7963d1-2ba8-4061-88ab-76f9397fc6ad"), // 20 * log10(abs(x)) * sgn(x)
-      (Frequency         , ID, "9ed6e3bc-f91d-46fa-bd6a-2edcb1e178a2"), // (sampleRate / 2 * minFrequency) ^ x
-      (SymmetricFrequency, ID, "200df43d-0c2c-4e1d-a780-07b9c024ba1a")  // (sampleRate / 2 * minFrequency) ^ (abs(x)) * sgn(x)
-    )
-  )
-
-  struct IndexedData
-  {
-    utils::string_view displayName{};                     // user-readable name for given parameter value
-    utils::string_view id{};                              // uuid for parameter value
-    u64 count = 1;                                        // how many consecutive values are of this indexed type
-                                                          //   can be more than the ones currently available
-    utils::string_view dynamicUpdateUuid{};               // this uuid is used to register for in ProcessorTree
-                                                          //   these updates will happen only if the parameter is not mapped/modulated
-    struct DynamicData
-    {
-      std::string stringData{};
-      std::vector<IndexedData> dataLookup{};
-      clg::small_fn<bool(const Framework::IndexedData &, int)> ignoreItemFn{};
-    };
-  };
-
   inline constexpr auto kInputSidechainCountChange = utils::string_view{ "39b66ac7-790c-4987-978b-e8679583b94c" };
   inline constexpr auto kOutputSidechainCountChange = utils::string_view{ "2a0534fd-2888-416e-b3aa-e1436f3c88e4" };
   inline constexpr auto kLaneCountChange = utils::string_view{ "ae2ace66-5e7a-41f9-8d45-92f4dc894947" };
 
   inline constexpr auto kAllChangeIds = utils::array{ kInputSidechainCountChange, kOutputSidechainCountChange, kLaneCountChange };
-
-  struct ParameterDetails
-  {
-    enum Flags : u8
-    { 
-      None        = 0     ,
-      Stereo      = 1 << 0,         // if parameter allows stereo modulation
-      Modulatable = 1 << 1,         // if parameter allows modulation at all
-      Automatable = 1 << 2,         // if parameter allows host automation
-      Extensible  = 1 << 3,         // if parameter's minimum/maximum/default values can change
-      All = Stereo | Modulatable |  
-        Automatable | Extensible,
-    };
-
-    utils::string_view id{};												    // internal plugin name
-    utils::string_view displayName{};                   // name displayed to the user
-    float minValue = 0.0f;                              // minimum scaled value
-    float maxValue = 1.0f;                              // maximum scaled value
-    float defaultValue = 0.0f;                          // default scaled value
-    float defaultNormalisedValue = 0.0f;                // default normalised value
-    ParameterScale scale = ParameterScale::Linear;      // value skew factor
-    utils::string_view displayUnits{};                  // "%", " db", etc.
-    utils::span<const IndexedData> indexedData{};       // extra data for indexed parameters
-    u32 flags = Modulatable | Automatable;              // various flags
-    UpdateFlag updateFlag = UpdateFlag::Realtime;       // at which point during processing the parameter is updated
-    std::string (*generateNumeric)(float value,         // string generator function for IndexedNumeric parameters
-      const ParameterDetails &details) = nullptr;
-    utils::sp<IndexedData::DynamicData> dynamicData;
-  };
-
-  auto getParameterDetails(utils::string_view id) noexcept
-    -> std::optional<ParameterDetails>;
-
-  // with skewOnly == true a normalised value between [0,1] or [-0.5, 0.5] is returned,
-  // depending on whether the parameter is bipolar
-  double scaleValue(double value, const ParameterDetails &details, float sampleRate = kDefaultSampleRate,
-    bool scalePercent = false, bool skewOnly = false) noexcept;
-
-  constexpr auto getIndexedData(double scaledValue, const ParameterDetails &details) noexcept 
-    -> utils::pair<const IndexedData *, usize>
-  {
-    COMPLEX_ASSERT(details.scale == ParameterScale::Indexed ||
-      details.scale == ParameterScale::IndexedNumeric || 
-      details.scale == ParameterScale::Toggle);
-    COMPLEX_ASSERT(scaledValue <= (double)details.maxValue);
-
-    scaledValue -= details.minValue;
-    usize index = 0, option = 0;
-    // if we have an ignore function we need to check all items
-    if (details.dynamicData && details.dynamicData->ignoreItemFn)
-    {
-      auto ignoreItemFn = details.dynamicData->ignoreItemFn;
-      usize currentIndex = 0, currentOption = 0, i = (usize)scaledValue;
-
-      while (i)
-      {
-        // move to next option if we've run out 
-        if (details.indexedData[currentOption].count <= currentIndex)
-        {
-          currentIndex = 0;
-          // skip options that are not present
-          while (details.indexedData[++currentOption].count == 0) { }
-        }
-
-        if (ignoreItemFn(details.indexedData[currentOption], (int)currentIndex))
-        {
-          index = currentIndex;
-          option = currentOption;
-        }
-
-        ++currentIndex;
-        --i;
-      }
-    }
-    else
-    {
-      index = (usize)scaledValue;
-      while (details.indexedData[option].count <= index)
-      {
-        index -= details.indexedData[option].count;
-        ++option;
-      }
-    }
-    
-    return utils::pair{ &details.indexedData[option], index };
-  }
-
-  double unscaleValue(double value, const ParameterDetails &details,
-    float sampleRate = kDefaultSampleRate, bool unscalePercent = true) noexcept;
-
-  simd_float scaleValue(simd_float value, const ParameterDetails &details,
-    float sampleRate = kDefaultSampleRate) noexcept;
 
   template<template<typename, auto> class array_t, typename T, usize N>
   constexpr auto convertNameIdToIndexedData(const array_t<T, N> &array)
@@ -343,9 +200,9 @@ namespace Framework
       // Regular - Harmonic/Bin based filters (like dtblkfx peaks)
       NESTED_ENUM_FROM(Processors::BaseEffect, (Filter, u64, DECLARE_EFFECT(Generation::FilterEffect, true)),
         (
-          (Normal , ID, "49786369-b4b6-42c4-af5c-97eb40e16632"), 
-          (Regular, ID, "7dcd7705-b43f-41e9-8503-c7c8c71fe337"), 
-          (Phase  , ID, "8447eee5-e3e6-4307-8972-fdcd47a7bb6d")
+          (Normal , ID, "49786369-b4b6-42c4-af5c-97eb40e16632"),
+          (Gate   , ID, "38b204a1-dfac-4cb2-8cd3-d11274e6e227"),
+          (Regular, ID, "7dcd7705-b43f-41e9-8503-c7c8c71fe337")
         ), (DEFER), (DEFER), (DEFER))
         NESTED_ENUM_FROM(Processors::BaseEffect::Filter, (Normal, u64, DECLARE_ALGO(true)),
           (
@@ -356,6 +213,24 @@ namespace Framework
             (Slope , ID_CODE, "17c7d282-0732-4a79-adaa-d2ed436a6890" , DECLARE_PARAMETER("Slope", -1.0f, 1.0f, 0.25f, 0.75f, 
               ParameterScale::SymmetricQuadratic, "%", {}, ParameterDetails::Modulatable | ParameterDetails::Automatable | ParameterDetails::Stereo))
           )
+        )
+        NESTED_ENUM_FROM(Processors::BaseEffect::Filter, (Gate, u64, DECLARE_ALGO(true)),
+          (
+            (InputGain, ID_CODE, "741ebdbd-6269-485e-b527-f96d206ca74b", DECLARE_PARAMETER("Gain", kMinusInfDb, kInfDb, 0.0f, 0.5f,
+              ParameterScale::SymmetricLoudness, " db", {}, ParameterDetails::Modulatable | ParameterDetails::Automatable | ParameterDetails::Stereo)),
+            (Gain, ID_CODE, "95b7b39f-be9e-4a9e-bada-412bc51d424f", DECLARE_PARAMETER("Gain", kMinusInfDb, kInfDb, 0.0f, 0.5f,
+              ParameterScale::SymmetricLoudness, " db", {}, ParameterDetails::Modulatable | ParameterDetails::Automatable | ParameterDetails::Stereo)),
+            (Threshold, ID_CODE, "2a510c52-d916-458c-bf2f-e5edeed1d5ce", DECLARE_PARAMETER("Threshold", -180.0f, 0.0f, -45.0f, 0.5f,
+              ParameterScale::ReverseQuadratic, " db", {}, ParameterDetails::Modulatable | ParameterDetails::Automatable | ParameterDetails::Stereo)),
+            (Tilt, ID_CODE, "6147073f-709a-4d83-8449-bbb3d94c4a9c", DECLARE_PARAMETER("Tilt", -24.0f, 24.0f, 0.0f, 0.5f,
+              ParameterScale::SymmetricQuadratic, " db", {}, ParameterDetails::Modulatable | ParameterDetails::Automatable | ParameterDetails::Stereo)),
+            (Mode, ID_CODE, "bddbd917-96ee-40e0-a416-ea0b0cb1b3c9",
+              (static constexpr auto kModeNames = convertNameIdToIndexedData(enum_names_and_ids<::nested_enum::All, true>(true));
+              DECLARE_PARAMETER("Mode", 0.0f, (float)(kModeNames.size() - 1), 0.0f, 0.0f, ParameterScale::Indexed, {}, kModeNames,
+              ParameterDetails::Modulatable | ParameterDetails::Automatable | ParameterDetails::Extensible)))
+          ),
+          (), (), (), (),
+          (ENUM, Mode, ((Decibels, ID, "c1062f9a-1ee9-4173-aabc-ece944e3edf9"), (Rank, ID, "5c655206-c82a-462e-852d-52321afcc168")))
         )
         NESTED_ENUM_FROM(Processors::BaseEffect::Filter, (Regular, u64, DECLARE_ALGO(false)),
           (
@@ -369,16 +244,6 @@ namespace Framework
               ParameterScale::Linear, "", {}, ParameterDetails::Modulatable | ParameterDetails::Automatable | ParameterDetails::Stereo))
           )
         )
-        NESTED_ENUM_FROM(Processors::BaseEffect::Filter, (Phase, u64, DECLARE_ALGO(false)),
-          (
-            (Gain          , ID_CODE, "acdcaf46-4c54-4061-95b7-300f70e6315e", DECLARE_PARAMETER("Gain", kMinusInfDb, kInfDb, 0.0f, 0.5f, 
-              ParameterScale::SymmetricLoudness, " db", {}, ParameterDetails::Modulatable | ParameterDetails::Automatable | ParameterDetails::Stereo)),
-            (LowPhaseBound , ID_CODE, "d72c2090-fd54-4b22-a362-2f50b3515f2e", DECLARE_PARAMETER("Low Phase Bound", -180.0f, 180.0f, 0.0f, 0.5f, 
-              ParameterScale::Linear, "", {}, ParameterDetails::Modulatable | ParameterDetails::Automatable | ParameterDetails::Stereo)),
-            (HighPhaseBound, ID_CODE, "01b848ec-7b20-4c7f-999e-372ba1b2cf92", DECLARE_PARAMETER("High Phase Bound", -180.0f, 180.0f, 0.0f, 0.5f, 
-              ParameterScale::Linear, "", {}, ParameterDetails::Modulatable | ParameterDetails::Automatable | ParameterDetails::Stereo))
-          )
-        )
             
       // Contrast - dtblkfx contrast
       // Clip - dtblkfx clip
@@ -388,7 +253,7 @@ namespace Framework
           (Contrast  , ID, "c90fa192-f410-4924-8c84-0026969193ea"), 
           (Clip      , ID, "6c5df100-8d53-4678-850c-c260e5465666"), 
           (Compressor, ID, "457151a7-c1aa-4065-98cb-c9e7d5895115")
-        ), (DEFER), (DEFER), (DEFER))
+        ), (DEFER), (DEFER), (DEFER), (DEFER))
         NESTED_ENUM_FROM(Processors::BaseEffect::Dynamics, (Contrast, u64, DECLARE_ALGO(true)),
           ((Depth, ID_CODE, "e250f5f2-d0a0-4331-87fe-1b0b808e088d", DECLARE_PARAMETER("Depth", -1.0f, 1.0f, 0.0f, 0.5f, 
             ParameterScale::Linear, "%", {}, ParameterDetails::Modulatable | ParameterDetails::Automatable | ParameterDetails::Stereo))))
@@ -411,9 +276,9 @@ namespace Framework
             (Offset    , ID_CODE, "1808ef90-46e8-43b8-bcc1-908014abd2f6", DECLARE_PARAMETER("Offset", 0.0f, 1.0f, 0.0f, 0.0f, ParameterScale::Frequency, " hz", {}, 
               ParameterDetails::Modulatable | ParameterDetails::Automatable | ParameterDetails::Stereo)),
             (Slope     , ID_CODE, "c4ee95da-cb8d-4969-9ee4-5ca24019d5ed",
-              static constexpr auto kPhaseShiftSlopeNames = convertNameIdToIndexedData(enum_names_and_ids<::nested_enum::All, true>(true));
+              (static constexpr auto kPhaseShiftSlopeNames = convertNameIdToIndexedData(enum_names_and_ids<::nested_enum::All, true>(true));
               DECLARE_PARAMETER("Slope", 0.0f, (float)(kPhaseShiftSlopeNames.size() - 1), 0.0f, 0.0f, ParameterScale::Indexed, {}, kPhaseShiftSlopeNames,
-              ParameterDetails::Modulatable | ParameterDetails::Automatable | ParameterDetails::Extensible))
+              ParameterDetails::Modulatable | ParameterDetails::Automatable | ParameterDetails::Extensible)))
           ),
           (), (), (), 
           (ENUM, Slope, ((Constant, ID, "36722e1b-a1f3-4c1f-8599-647c1a637e0b"), (Linear, ID, "f1dc8a19-d0f2-4878-9b52-4ed05706281c"), (Exp, ID, "0a10a4b6-6657-42f4-80de-a5ce14d00d4a"))))
@@ -445,11 +310,11 @@ namespace Framework
             (Attenuation, ID_CODE, "f81e64d3-44c4-4a11-91f1-b2640d9e2839", DECLARE_PARAMETER("Real/Imag Atten", kMinusInfDb, kInfDb, 0.0f, 0.5f,
               ParameterScale::SymmetricLoudness, " db", {}, ParameterDetails::Modulatable | ParameterDetails::Automatable | ParameterDetails::Stereo)),
             (Mapping, ID_CODE, "0206e09a-f472-4cc7-94fd-d3f6f6cd5787",
-              static constexpr auto kMappingNames = utils::array{ IndexedData{ "No Change", NoMapping::id().value() },
+              (static constexpr auto kMappingNames = utils::array{ IndexedData{ "No Change", NoMapping::id().value() },
                 IndexedData{ "Swap Real/Imaginary", SwitchRealImag::id().value() }, IndexedData{ "Cartesian->Polar", CartToPolar::id().value() },
                 IndexedData{ "Polar->Cartesian", PolarToCart::id().value() } };
               DECLARE_PARAMETER("Mapping", 0.0f, (float)(kMappingNames.size() - 1), 0.0f, 0.0f, ParameterScale::Indexed,
-              {}, kMappingNames, ParameterDetails::Modulatable | ParameterDetails::Automatable))
+              {}, kMappingNames, ParameterDetails::Modulatable | ParameterDetails::Automatable)))
           ), (),
           (ENUM, (Mapping, u64),
             (

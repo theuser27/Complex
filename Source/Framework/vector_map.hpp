@@ -21,7 +21,7 @@ namespace utils
   struct VectorMap
   {
   private:
-    static auto find_if(auto &container, const auto &predicate)
+    static constexpr auto find_if(auto &container, const auto &predicate)
     {
       auto begin = container.begin();
       auto end = container.end();

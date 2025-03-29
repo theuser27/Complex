@@ -180,8 +180,7 @@ namespace Interface
     void saveToFile(const juce::File &destination);
 
     void jsonToState(void *jsonData);
-    bool stringToState(const juce::String &skin_string);
-    bool loadFromFile(const juce::File &source);
+    bool stringToState(utils::string_view skin_string);
     void loadDefaultSkin();
 
     static bool shouldScaleValue(ValueId valueId) noexcept

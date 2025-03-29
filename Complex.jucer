@@ -2,7 +2,7 @@
 
 <JUCERPROJECT id="MQJhEl" name="Complex" projectType="audioplug" addUsingNamespaceToJuceHeader="1"
               jucerFormatVersion="1" cppLanguageStandard="20" pluginFormats="buildStandalone,buildVST3"
-              displaySplashScreen="1" pluginManufacturer="theuser27" version="0.1.0"
+              displaySplashScreen="1" pluginManufacturer="theuser27" version="0.1.1"
               pluginDesc="Multi-lane Spectral Effects Suite" useAppConfig="0"
               includeBinaryInJuceHeader="0">
   <MAINGROUP id="zNsp6a" name="Complex">
@@ -40,6 +40,8 @@
               file="Source/Framework/parameter_bridge.cpp"/>
         <FILE id="VbaYQ5" name="parameter_bridge.hpp" compile="0" resource="0"
               file="Source/Framework/parameter_bridge.hpp"/>
+        <FILE id="Qjo7KI" name="parameter_types.hpp" compile="0" resource="0"
+              file="Source/Framework/parameter_types.hpp"/>
         <FILE id="sWzWTh" name="parameter_value.cpp" compile="1" resource="0"
               file="Source/Framework/parameter_value.cpp"/>
         <FILE id="QQTdZ0" name="parameter_value.hpp" compile="0" resource="0"
@@ -106,10 +108,6 @@
                 file="Source/Interface/LookAndFeel/BaseComponent.cpp"/>
           <FILE id="f7QtT0" name="BaseComponent.hpp" compile="0" resource="0"
                 file="Source/Interface/LookAndFeel/BaseComponent.hpp"/>
-          <FILE id="R1Bxgg" name="BorderBoundsConstrainer.cpp" compile="1" resource="0"
-                file="Source/Interface/LookAndFeel/BorderBoundsConstrainer.cpp"/>
-          <FILE id="cTL9sp" name="BorderBoundsConstrainer.hpp" compile="0" resource="0"
-                file="Source/Interface/LookAndFeel/BorderBoundsConstrainer.hpp"/>
           <FILE id="uaULql" name="Fonts.cpp" compile="1" resource="0" file="Source/Interface/LookAndFeel/Fonts.cpp"/>
           <FILE id="Ytfo18" name="Fonts.hpp" compile="0" resource="0" file="Source/Interface/LookAndFeel/Fonts.hpp"/>
           <FILE id="R3UoZO" name="Miscellaneous.cpp" compile="1" resource="0"
@@ -288,6 +286,10 @@
         <GROUP id="{41E9F0C0-27CA-7B26-AA3E-0A13B1D71FD6}" name="pffft">
           <FILE id="YMgTCX" name="pffft.c" compile="1" resource="0" file="Source/Third Party/pffft/pffft.c"/>
           <FILE id="nR2NJo" name="pffft.h" compile="0" resource="0" file="Source/Third Party/pffft/pffft.h"/>
+        </GROUP>
+        <GROUP id="{EA7529A0-E982-FCCD-EB1D-271E93047A5B}" name="visage">
+          <FILE id="zWQK2N" name="file_system.cpp" compile="1" resource="0" file="Source/Third Party/visage/file_system.cpp"/>
+          <FILE id="cIMN8j" name="file_system.h" compile="0" resource="0" file="Source/Third Party/visage/file_system.h"/>
         </GROUP>
       </GROUP>
     </GROUP>

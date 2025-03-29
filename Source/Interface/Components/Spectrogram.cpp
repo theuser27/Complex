@@ -239,7 +239,7 @@ namespace Interface
     const float rangeMult = 1.0f / (maxDb - minDb);
 
     // yes these are magic numbers, change at your own risk
-    const float decay = 0.25f + std::max(0.0f, 0.05f * std::log2(2048.0f / (float)binCount_ - 1.0f));
+    const simd_float decay = 0.25f + std::max(0.0f, 0.05f * std::log2(2048.0f / (float)binCount_ - 1.0f));
 
     constexpr float resolution = 1.0f / (kResolution - 1.0f);
     const float rangeMultiplier = std::pow(10.0f, decadeCount * resolution);
@@ -375,8 +375,6 @@ namespace Interface
 
   void Spectrogram::render(OpenGlWrapper &openGl)
   {
-    static constexpr float octaveToDecade = 1.0f / gcem::log10(2.0f);
-
     {
       ScopedBoundsEmplace b{ openGl.parentStack, this };
       background_.render(openGl);
@@ -391,7 +389,7 @@ namespace Interface
     float minFrequency = minFrequency_;
     float maxFrequency = maxFrequency_;
 
-    float decadeSlope = dbSlope_ * octaveToDecade;
+    float decadeSlope = dbSlope_ * kOctaveToDecadeConversionMult;
     float sampleHz = nyquistFreq_ / (float)binCount_;
     float startDecade = std::log10(minFrequency / sampleHz);
     float decadeCount = std::log10(maxFrequency / minFrequency);

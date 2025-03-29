@@ -11,7 +11,8 @@
 #include "Skin.hpp"
 
 #include "Third Party/json/json.hpp"
-#include <juce_graphics/juce_graphics.h>
+#include "Third Party/visage/file_system.h"
+//#include <juce_graphics/juce_graphics.h>
 #include "BinaryData.h"
 
 #include "../Sections/BaseSection.hpp"
@@ -138,20 +139,14 @@ namespace Interface
 {
   namespace
   {
-    juce::File getDefaultSkin()
+    visage::File getDefaultSkin()
     {
-      juce::PropertiesFile::Options config_options;
-      config_options.applicationName = "Complex";
-      config_options.osxLibrarySubFolder = "Application Support";
-      config_options.filenameSuffix = "skin";
-
-    #ifdef COMPLEX_LINUX
-      config_options.folderName = "." + juce::String{ juce::CharPointer_UTF8{ JucePlugin_Name } }.toLowerCase();
-    #else
-      config_options.folderName = juce::String{ juce::CharPointer_UTF8{ JucePlugin_Name } }.toLowerCase();
-    #endif
-
-      return config_options.getDefaultFile();
+      auto pluginFolder = visage::appDataDirectory().append(JucePlugin_Name);
+      if (!std::filesystem::exists(pluginFolder))
+      {
+        std::filesystem::create_directory(pluginFolder);
+      }
+      return pluginFolder.append(JucePlugin_Name ".skin");
     }
 
     json updateJson(json data)
@@ -168,13 +163,14 @@ namespace Interface
 
   Skin::Skin()
   {
-    juce::File defaultSkin = getDefaultSkin();
+    auto defaultSkin = getDefaultSkin();
 
     // temporary solution to ensure there's a skin file
     // if this throws put Complex.skin at Users\(user)\AppData\Roaming\Complex
-    if (defaultSkin.exists())
+    if (std::filesystem::exists(defaultSkin))
     {
-      if (!loadFromFile(defaultSkin))
+      auto stringState = visage::loadFileAsString(defaultSkin);
+      if (!stringToState(stringState))
         loadDefaultSkin();
     }
     else
@@ -412,11 +408,11 @@ namespace Interface
     }
   }
 
-  bool Skin::stringToState(const juce::String &skinString)
+  bool Skin::stringToState(utils::string_view skinString)
   {
     try
     {
-      json data = json::parse(skinString.toStdString(), nullptr, false);
+      json data = json::parse(skinString, nullptr, false);
       jsonToState(&data);
     }
     catch (const json::exception &)
@@ -426,17 +422,13 @@ namespace Interface
     return true;
   }
 
-  bool Skin::loadFromFile(const juce::File &source)
-  { return stringToState(source.loadFileAsString()); }
-
   void Skin::loadDefaultSkin()
   {
-    juce::MemoryInputStream skin{ BinaryData::Complex_skin, BinaryData::Complex_skinSize, false };
-    std::string skin_string = skin.readEntireStreamAsString().toStdString();
+    auto defaultSkin = utils::string_view{ BinaryData::Complex_skin, BinaryData::Complex_skinSize };
 
     try
     {
-      json data = json::parse(skin_string, nullptr, false);
+      json data = json::parse(defaultSkin, nullptr, false);
       jsonToState(&data);
     }
     catch (const json::exception &)

@@ -38,10 +38,11 @@ namespace
     "}\n"
 
   constexpr char kImageVertexShader[] =
-    "attribute " MEDIUMP " vec4 position;\n"
-    "attribute " MEDIUMP " vec2 tex_coord_in;\n"
+    "#version 150\n"
+    "in " MEDIUMP " vec4 position;\n"
+    "in " MEDIUMP " vec2 tex_coord_in;\n"
     "\n"
-    "varying " MEDIUMP " vec2 tex_coord_out;\n"
+    "out " MEDIUMP " vec2 tex_coord_out;\n"
     "\n"
     "void main() {\n"
     "    tex_coord_out = tex_coord_in;\n"
@@ -49,38 +50,43 @@ namespace
     "}\n";
 
   constexpr char kImageFragmentShader[] =
-    "varying " MEDIUMP " vec2 tex_coord_out;\n"
+    "#version 150\n"
+    "out " MEDIUMP " vec4 fragColor;\n"
+    "in " MEDIUMP " vec2 tex_coord_out;\n"
     "\n"
     "uniform sampler2D image;\n"
     "\n"
     "void main() {\n"
-    "    gl_FragColor = texture2D(image, tex_coord_out);\n"
+    "    fragColor = texture(image, tex_coord_out);\n"
     "}\n";
 
   constexpr char kTintedImageFragmentShader[] =
-    "varying " MEDIUMP " vec2 tex_coord_out;\n"
+    "#version 150\n"
+    "out " MEDIUMP " vec4 fragColor;\n"
+    "in " MEDIUMP " vec2 tex_coord_out;\n"
     "\n"
     "uniform sampler2D image;\n"
     "uniform " MEDIUMP " vec4 color;\n"
     "\n"
     "void main() {\n"
-    "    " MEDIUMP " vec4 image_color = texture2D(image, tex_coord_out);\n"
+    "    " MEDIUMP " vec4 image_color = texture(image, tex_coord_out);\n"
     "    image_color.r *= color.r;\n"
     "    image_color.g *= color.g;\n"
     "    image_color.b *= color.b;\n"
     "    image_color.a *= color.a;\n"
-    "    gl_FragColor = image_color;\n"
+    "    fragColor = image_color;\n"
     "}\n";
 
   constexpr char kPassthroughVertexShader[] =
-    "attribute " MEDIUMP " vec4 position;\n"
-    "attribute " MEDIUMP " vec2 dimensions;\n"
-    "attribute " MEDIUMP " vec2 coordinates;\n"
-    "attribute " MEDIUMP " vec4 shader_values;\n"
+    "#version 150\n"
+    "in " MEDIUMP " vec4 position;\n"
+    "in " MEDIUMP " vec2 dimensions;\n"
+    "in " MEDIUMP " vec2 coordinates;\n"
+    "in " MEDIUMP " vec4 shader_values;\n"
     "\n"
-    "varying " MEDIUMP " vec2 dimensions_out;\n"
-    "varying " MEDIUMP " vec2 coordinates_out;\n"
-    "varying " MEDIUMP " vec4 shader_values_out;\n"
+    "out " MEDIUMP " vec2 dimensions_out;\n"
+    "out " MEDIUMP " vec2 coordinates_out;\n"
+    "out " MEDIUMP " vec4 shader_values_out;\n"
     "\n"
     "void main() {\n"
     "    dimensions_out = dimensions;\n"
@@ -90,7 +96,8 @@ namespace
     "}\n";
 
   constexpr char kScaleVertexShader[] =
-    "attribute " MEDIUMP " vec4 position;\n"
+    "#version 150\n"
+    "in " MEDIUMP " vec4 position;\n"
     "uniform " MEDIUMP " vec2 scale;\n"
     "\n"
     "void main() {\n"
@@ -102,14 +109,15 @@ namespace
     "}\n";
 
   constexpr char kRotaryModulationVertexShader[] =
-    "attribute " MEDIUMP " vec4 position;\n"
-    "attribute " MEDIUMP " vec2 coordinates;\n"
-    "attribute " MEDIUMP " vec4 range;\n"
-    "attribute " MEDIUMP " float meter_radius;\n"
+    "#version 150\n"
+    "in " MEDIUMP " vec4 position;\n"
+    "in " MEDIUMP " vec2 coordinates;\n"
+    "in " MEDIUMP " vec4 range;\n"
+    "in " MEDIUMP " float meter_radius;\n"
     "\n"
-    "varying " MEDIUMP " vec2 coordinates_out;\n"
-    "varying " MEDIUMP " vec4 range_out;\n"
-    "varying " MEDIUMP " float meter_radius_out;\n"
+    "out " MEDIUMP " vec2 coordinates_out;\n"
+    "out " MEDIUMP " vec4 range_out;\n"
+    "out " MEDIUMP " float meter_radius_out;\n"
     "\n"
     "void main() {\n"
     "    coordinates_out = coordinates;\n"
@@ -119,12 +127,13 @@ namespace
     "}\n";
 
   constexpr char kLinearModulationVertexShader[] =
-    "attribute " MEDIUMP " vec4 position;\n"
-    "attribute " MEDIUMP " vec2 coordinates;\n"
-    "attribute " MEDIUMP " vec4 range;\n"
+    "#version 150\n"
+    "in " MEDIUMP " vec4 position;\n"
+    "in " MEDIUMP " vec2 coordinates;\n"
+    "in " MEDIUMP " vec4 range;\n"
     "\n"
-    "varying " MEDIUMP " vec2 coordinates_out;\n"
-    "varying " MEDIUMP " vec4 range_out;\n"
+    "out " MEDIUMP " vec2 coordinates_out;\n"
+    "out " MEDIUMP " vec4 range_out;\n"
     "\n"
     "void main() {\n"
     "    coordinates_out = coordinates;\n"
@@ -133,9 +142,10 @@ namespace
     "}\n";
 
   constexpr char kGainMeterVertexShader[] =
-    "attribute " MEDIUMP " vec4 position;\n"
+    "#version 150\n"
+    "in " MEDIUMP " vec4 position;\n"
     "\n"
-    "varying " MEDIUMP " vec2 position_out;\n"
+    "out " MEDIUMP " vec2 position_out;\n"
     "\n"
     "void main() {\n"
     "    gl_Position = position;\n"
@@ -143,106 +153,124 @@ namespace
     "}\n";
 
   constexpr char kGainMeterFragmentShader[] =
-    "varying " MEDIUMP " vec2 position_out;\n"
+    "#version 150\n"
+    "out " MEDIUMP " vec4 fragColor;\n"
+    "in " MEDIUMP " vec2 position_out;\n"
     "uniform " MEDIUMP " vec4 color_from;\n"
     "uniform " MEDIUMP " vec4 color_to;\n"
     "void main() {\n"
     "    " MEDIUMP " float t = (position_out.x + 1.0) / 2.0;\n"
-    "    gl_FragColor = color_to * t + color_from * (1.0 - t);\n"
+    "    fragColor = color_to * t + color_from * (1.0 - t);\n"
     "}\n";
 
   constexpr char kColorFragmentShader[] =
+    "#version 150\n"
+    "out " MEDIUMP " vec4 fragColor;\n"
     "uniform " MEDIUMP " vec4 color;\n"
     "void main() {\n"
-    "    gl_FragColor = color;\n"
+    "    fragColor = color;\n"
     "}\n";
 
   constexpr char kFadeSquareFragmentShader[] =
+    "#version 150\n"
+    "out " MEDIUMP " vec4 fragColor;\n"
     "uniform " MEDIUMP " vec4 color;\n"
-    "varying " MEDIUMP " vec2 dimensions_out;\n"
-    "varying " MEDIUMP " vec2 coordinates_out;\n"
-    "varying " MEDIUMP " vec4 shader_values_out;\n"
+    "in " MEDIUMP " vec2 dimensions_out;\n"
+    "in " MEDIUMP " vec2 coordinates_out;\n"
+    "in " MEDIUMP " vec4 shader_values_out;\n"
     "void main() {\n"
     "    float alpha1 = clamp((dimensions_out.x - abs(coordinates_out.x) * dimensions_out.x) * 0.5, 0.0, 1.0);\n"
     "    float alpha2 = clamp((dimensions_out.y - abs(coordinates_out.y) * dimensions_out.y) * 0.5, 0.0, 1.0);\n"
-    "    gl_FragColor = color;\n"
-    "    gl_FragColor.a = color.a * alpha1 * alpha2 * shader_values_out.x;\n"
+    "    fragColor = color;\n"
+    "    fragColor.a = color.a * alpha1 * alpha2 * shader_values_out.x;\n"
     "}\n";
 
   constexpr char kCircleFragmentShader[] =
+    "#version 150\n"
+    "out " MEDIUMP " vec4 fragColor;\n"
     "uniform " MEDIUMP " vec4 color;\n"
-    "varying " MEDIUMP " vec2 dimensions_out;\n"
-    "varying " MEDIUMP " vec2 coordinates_out;\n"
+    "in " MEDIUMP " vec2 dimensions_out;\n"
+    "in " MEDIUMP " vec2 coordinates_out;\n"
     "void main() {\n"
     "    float delta_center = length(coordinates_out) * 0.5 * dimensions_out.x;\n"
     "    float alpha = clamp(dimensions_out.x * 0.5 - delta_center, 0.0, 1.0);\n"
-    "    gl_FragColor = color;\n"
-    "    gl_FragColor.a = color.a * alpha;\n"
+    "    fragColor = color;\n"
+    "    fragColor.a = color.a * alpha;\n"
     "}\n";
 
   // ring around points when hovered over
   constexpr char kRingFragmentShader[] =
+    "#version 150\n"
+    "out " MEDIUMP " vec4 fragColor;\n"
     "uniform " MEDIUMP " vec4 color;\n"
     "uniform " MEDIUMP " vec4 alt_color;\n"
-    "varying " MEDIUMP " vec2 dimensions_out;\n"
+    "in " MEDIUMP " vec2 dimensions_out;\n"
     "uniform " MEDIUMP " float thickness;\n"
-    "varying " MEDIUMP " vec2 coordinates_out;\n"
+    "in " MEDIUMP " vec2 coordinates_out;\n"
     "void main() {\n"
     "    float full_radius = 0.5 * dimensions_out.x;\n"
     "    float delta_center = length(coordinates_out) * full_radius;\n"
     "    float alpha_out = clamp(full_radius - delta_center, 0.0, 1.0);\n"
     "    float alpha_in = clamp(delta_center - full_radius + thickness + 1.0, 0.0, 1.0);\n"
-    "    gl_FragColor = color * alpha_in + (1.0 - alpha_in) * alt_color;\n"
-    "    gl_FragColor.a = gl_FragColor.a * alpha_out;\n"
+    "    fragColor = color * alpha_in + (1.0 - alpha_in) * alt_color;\n"
+    "    fragColor.a = fragColor.a * alpha_out;\n"
     "}\n";
 
   // the diamond points inside the wavetable editor
-  const char *kDiamondFragmentShader =
+  constexpr char kDiamondFragmentShader[] =
+    "#version 150\n"
+    "out " MEDIUMP " vec4 fragColor;\n"
     "uniform " MEDIUMP " vec4 color;\n"
     "uniform " MEDIUMP " vec4 alt_color;\n"
-    "varying " MEDIUMP " vec2 dimensions_out;\n"
+    "in " MEDIUMP " vec2 dimensions_out;\n"
     "uniform " MEDIUMP " float thickness;\n"
-    "varying " MEDIUMP " vec2 coordinates_out;\n"
+    "in " MEDIUMP " vec2 coordinates_out;\n"
     "void main() {\n"
     "    float full_radius = 0.5 * dimensions_out.x;\n"
     "    float delta_center = (abs(coordinates_out.x) + abs(coordinates_out.y)) * full_radius;\n"
     "    float alpha_out = clamp(full_radius - delta_center, 0.0, 1.0);\n"
     "    float alpha_in = clamp(delta_center - full_radius + thickness + 1.0, 0.0, 1.0);\n"
-    "    gl_FragColor = color * alpha_in + (1.0 - alpha_in) * alt_color;\n"
-    "    gl_FragColor.a = gl_FragColor.a * alpha_out;\n"
+    "    fragColor = color * alpha_in + (1.0 - alpha_in) * alt_color;\n"
+    "    fragColor.a = fragColor.a * alpha_out;\n"
     "}\n";
 
   // rounded corners on the inside of sections (i.e. corners of wavetable/lfo/envelope windows)
-  const char *kRoundedCornerFragmentShader =
+  constexpr char kRoundedCornerFragmentShader[] =
+    "#version 150\n"
+    "out " MEDIUMP " vec4 fragColor;\n"
     "uniform " MEDIUMP " vec4 color;\n"
-    "varying " MEDIUMP " vec2 dimensions_out;\n"
-    "varying " MEDIUMP " vec2 coordinates_out;\n"
+    "in " MEDIUMP " vec2 dimensions_out;\n"
+    "in " MEDIUMP " vec2 coordinates_out;\n"
     "void main() {\n"
     "    float delta_center = length(coordinates_out * dimensions_out);\n"
     "    float alpha = clamp(delta_center - dimensions_out.x + 0.5, 0.0, 1.0);\n"
-    "    gl_FragColor = color;\n"
-    "    gl_FragColor.a = color.a * alpha;\n"
+    "    fragColor = color;\n"
+    "    fragColor.a = color.a * alpha;\n"
     "}\n";
 
   // rounded corners on the outside of sections
-  const char *kRoundedRectangleFragmentShader =
+  constexpr char kRoundedRectangleFragmentShader[] =
+    "#version 150\n"
+    "out " MEDIUMP " vec4 fragColor;\n"
     "uniform " MEDIUMP " vec4 color;\n"
-    "varying " MEDIUMP " vec2 dimensions_out;\n"
-    "varying " MEDIUMP " vec2 coordinates_out;\n"
+    "in " MEDIUMP " vec2 dimensions_out;\n"
+    "in " MEDIUMP " vec2 coordinates_out;\n"
     "uniform " MEDIUMP " float rounding;\n"
     "void main() {\n"
     "    vec2 center_offset = abs(coordinates_out) * dimensions_out - dimensions_out;\n"
     "    float delta_center = length(max(center_offset + vec2(rounding, rounding), vec2(0.0, 0.0)));\n"
     "    float alpha = clamp((rounding - delta_center) * 0.5 + 0.5, 0.0, 1.0);\n"
-    "    gl_FragColor = color;\n"
-    "    gl_FragColor.a = color.a * alpha;\n"
+    "    fragColor = color;\n"
+    "    fragColor.a = color.a * alpha;\n"
     "}\n";
 
   // the border around the popup menus and currently selected modulator
-  const char *kRoundedRectangleBorderFragmentShader =
+  constexpr char kRoundedRectangleBorderFragmentShader[] =
+    "#version 150\n"
+    "out " MEDIUMP " vec4 fragColor;\n"
     "uniform " MEDIUMP " vec4 color;\n"
-    "varying " MEDIUMP " vec2 dimensions_out;\n"
-    "varying " MEDIUMP " vec2 coordinates_out;\n"
+    "in " MEDIUMP " vec2 dimensions_out;\n"
+    "in " MEDIUMP " vec2 coordinates_out;\n"
     "uniform " MEDIUMP " float rounding;\n"
     "uniform " MEDIUMP " float thickness;\n"
     "uniform " MEDIUMP " float overall_alpha;\n"
@@ -254,22 +282,24 @@ namespace
     "    float border_delta = (rounding - delta_center) * 0.5;\n"
     "    float inside_border_delta = (rounding - delta_center_inside) * 0.5;\n"
     "    float alpha = clamp(border_delta + 0.5, 0.0, 1.0) * clamp(-inside_border_delta + 0.5, 0.0, 1.0);\n"
-    "    gl_FragColor = color;\n"
-    "    gl_FragColor.a = color.a * overall_alpha * alpha;\n"
+    "    fragColor = color;\n"
+    "    fragColor.a = color.a * overall_alpha * alpha;\n"
     "}\n";
 
   // overall knob design
-  const char *kRotarySliderFragmentShader =
+  constexpr char kRotarySliderFragmentShader[] =
+    "#version 150\n"
+    "out " MEDIUMP " vec4 fragColor;\n"
     "uniform " MEDIUMP " vec4 color;\n"
     "uniform " MEDIUMP " vec4 alt_color;\n"
     "uniform " MEDIUMP " vec4 thumb_color;\n"
-    "varying " MEDIUMP " vec2 dimensions_out;\n"
+    "in " MEDIUMP " vec2 dimensions_out;\n"
     "uniform " MEDIUMP " float thickness;\n"
     "uniform " MEDIUMP " float thumb_amount;\n"
     "uniform " MEDIUMP " float start_pos;\n"
     "uniform " MEDIUMP " float max_arc;\n"
-    "varying " MEDIUMP " vec4 shader_values_out;\n"
-    "varying " MEDIUMP " vec2 coordinates_out;\n"
+    "in " MEDIUMP " vec4 shader_values_out;\n"
+    "in " MEDIUMP " vec2 coordinates_out;\n"
     "void main() {\n"
     "    " MEDIUMP " float rads = atan(coordinates_out.x, coordinates_out.y);\n"
     "    float full_radius = 0.5 * dimensions_out.x;\n"
@@ -284,8 +314,8 @@ namespace
     "    float color_step1 = step(0.0, delta_rads);\n"
     "    float color_step2 = step(0.0, start_pos - rads);\n"
     "    float color_step = abs(color_step2 - color_step1);\n"
-    "    gl_FragColor = alt_color * color_step + color * (1.0 - color_step);\n"
-    "    gl_FragColor.a = gl_FragColor.a * alpha;\n"
+    "    fragColor = alt_color * color_step + color * (1.0 - color_step);\n"
+    "    fragColor.a = fragColor.a * alpha;\n"
     "    float thumb_length = full_radius * thumb_amount;\n"
     "    float thumb_x = sin(delta_rads) * delta_center;\n"
     "    float thumb_y = cos(delta_rads) * delta_center - (0.5 * center_arc);\n"
@@ -294,14 +324,16 @@ namespace
     "    float thumb_y_distance = thumb_y * outside_arc_step + adjusted_thumb_y * (1.0 - outside_arc_step);\n"
     "    float thumb_distance = length(vec2(thumb_x, thumb_y_distance));\n"
     "    float thumb_alpha = clamp(thickness * 0.5 - thumb_distance + 0.5, 0.0, 1.0);\n"
-    "    gl_FragColor = gl_FragColor * (1.0 - thumb_alpha) + thumb_color * thumb_alpha;\n"
+    "    fragColor = fragColor * (1.0 - thumb_alpha) + thumb_color * thumb_alpha;\n"
     "}\n";
 
   // modulation ring around the knob
-  const char *kRotaryModulationFragmentShader =
-    "varying " MEDIUMP " vec2 coordinates_out;\n"
-    "varying " MEDIUMP " vec2 dimensions_out;\n"
-    "varying " MEDIUMP " vec4 shader_values_out;\n"
+  constexpr char kRotaryModulationFragmentShader[] =
+    "#version 150\n"
+    "out " MEDIUMP " vec4 fragColor;\n"
+    "in " MEDIUMP " vec2 coordinates_out;\n"
+    "in " MEDIUMP " vec2 dimensions_out;\n"
+    "in " MEDIUMP " vec4 shader_values_out;\n"
     "uniform " MEDIUMP " float thickness;\n"
     "uniform " MEDIUMP " vec4 color;\n"
     "uniform " MEDIUMP " vec4 alt_color;\n"
@@ -330,21 +362,23 @@ namespace
     "    " MEDIUMP " vec4 out_color = color * (1.0 - alpha_stereo) + alt_color * alpha_stereo;\n"
     "    out_color = out_color * (1.0 - alpha_center) + color_center * alpha_center;\n"
     "    out_color.a = max(alpha, alpha_stereo) * overall_alpha * dist_amp;\n"
-    "    gl_FragColor = out_color;\n"
+    "    fragColor = out_color;\n"
     "}\n";
 
   // horizontal slider 
-  const char *kHorizontalSliderFragmentShader =
+  constexpr char kHorizontalSliderFragmentShader[] =
+    "#version 150\n"
+    "out " MEDIUMP " vec4 fragColor;\n"
     "uniform " MEDIUMP " vec4 color;\n"
     "uniform " MEDIUMP " vec4 alt_color;\n"
     "uniform " MEDIUMP " vec4 thumb_color;\n"
-    "varying " MEDIUMP " vec2 dimensions_out;\n"
+    "in " MEDIUMP " vec2 dimensions_out;\n"
     "uniform " MEDIUMP " float thickness;\n"
     "uniform " MEDIUMP " float thumb_amount;\n"
     "uniform " MEDIUMP " float start_pos;\n"
     "uniform " MEDIUMP " float rounding;\n"
-    "varying " MEDIUMP " vec4 shader_values_out;\n"
-    "varying " MEDIUMP " vec2 coordinates_out;\n"
+    "in " MEDIUMP " vec4 shader_values_out;\n"
+    "in " MEDIUMP " vec2 coordinates_out;\n"
     "void main() {\n"
     "    vec2 position = coordinates_out * dimensions_out;\n"
     "    vec2 center_offset = abs(position) - vec2(dimensions_out.x, thickness);\n"
@@ -355,22 +389,24 @@ namespace
     "    float color_step1 = step(0.001, delta_pos);\n"
     "    float color_step2 = step(0.001, start_pos - coordinates_out.x);\n"
     "    float color_step = abs(color_step2 - color_step1);\n"
-    "    gl_FragColor = alt_color * color_step + color * (1.0 - color_step);\n"
-    "    gl_FragColor.a = gl_FragColor.a * alpha;\n"
+    "    fragColor = alt_color * color_step + color * (1.0 - color_step);\n"
+    "    fragColor.a = fragColor.a * alpha;\n"
     "}\n";
 
   // vertical slider
-  const char *kVerticalSliderFragmentShader =
+  constexpr char kVerticalSliderFragmentShader[] =
+    "#version 150\n"
+    "out " MEDIUMP " vec4 fragColor;\n"
     "uniform " MEDIUMP " vec4 color;\n"
     "uniform " MEDIUMP " vec4 alt_color;\n"
     "uniform " MEDIUMP " vec4 thumb_color;\n"
-    "varying " MEDIUMP " vec2 dimensions_out;\n"
+    "in " MEDIUMP " vec2 dimensions_out;\n"
     "uniform " MEDIUMP " float thickness;\n"
     "uniform " MEDIUMP " float thumb_amount;\n"
     "uniform " MEDIUMP " float start_pos;\n"
     "uniform " MEDIUMP " float rounding;\n"
-    "varying " MEDIUMP " vec4 shader_values_out;\n"
-    "varying " MEDIUMP " vec2 coordinates_out;\n"
+    "in " MEDIUMP " vec4 shader_values_out;\n"
+    "in " MEDIUMP " vec2 coordinates_out;\n"
     "void main() {\n"
     "    vec2 position = coordinates_out * dimensions_out;\n"
     "    vec2 center_offset = abs(position) - vec2(thickness, dimensions_out.y);\n"
@@ -381,18 +417,20 @@ namespace
     "    float color_step1 = step(0.001, delta_pos);\n"
     "    float color_step2 = step(0.001, start_pos - coordinates_out.y);\n"
     "    float color_step = abs(color_step2 - color_step1);\n"
-    "    gl_FragColor = color * color_step + alt_color * (1.0 - color_step);\n"
-    "    gl_FragColor.a = gl_FragColor.a * alpha;\n"
+    "    fragColor = color * color_step + alt_color * (1.0 - color_step);\n"
+    "    fragColor.a = fragColor.a * alpha;\n"
     "    vec2 thumb_center_offset = abs(position - vec2(0.0, adjusted_value * dimensions_out.y)) - vec2(thickness, thumb_amount);\n"
     "    float thumb_delta_center = length(max(thumb_center_offset + vec2(rounding, rounding), vec2(0.0, 0.0)));\n"
     "    float thumb_alpha = clamp((rounding - thumb_delta_center) * 0.5 + 0.5, 0.0, 1.0) * alpha;\n"
-    "    gl_FragColor = gl_FragColor * (1.0 - thumb_alpha) + thumb_color * thumb_alpha;\n"
+    "    fragColor = fragColor * (1.0 - thumb_alpha) + thumb_color * thumb_alpha;\n"
     "}\n";
 
   // modulation line next to a slider 
-  const char *kLinearModulationFragmentShader =
-    "varying " MEDIUMP " vec2 coordinates_out;\n"
-    "varying " MEDIUMP " vec4 shader_values_out;\n"
+  constexpr char kLinearModulationFragmentShader[] =
+    "#version 150\n"
+    "out " MEDIUMP " vec4 fragColor;\n"
+    "in " MEDIUMP " vec2 coordinates_out;\n"
+    "in " MEDIUMP " vec4 shader_values_out;\n"
     "uniform " MEDIUMP " vec4 color;\n"
     "uniform " MEDIUMP " vec4 alt_color;\n"
     "uniform " MEDIUMP " vec4 mod_color;\n"
@@ -411,32 +449,36 @@ namespace
     "    " MEDIUMP " vec4 color_center = alpha_center * mod_color;\n"
     "    " MEDIUMP " vec4 color = color_left + color_right + color_center;\n"
     "    color.a = max(alpha, alpha_stereo);\n"
-    "    gl_FragColor = color;\n"
+    "    fragColor = color;\n"
     "}\n";
 
-  // coordinates_out are ndc (the same values as the position varying
+  // coordinates_out are ndc (the same values as the position in
   //		except when OpenGlCorners when they are coordinates inside the quad itself)
   // dimensions_out are the absolute dimensions of the object 
   //		(almost always act as a uniform but why it isn't one idk)
-  const char *kPinSliderFragmentShader =
+  constexpr char kPinSliderFragmentShader[] =
+    "#version 150\n"
+    "out " MEDIUMP " vec4 fragColor;\n"
     "uniform " MEDIUMP " vec4 color;\n"
-    "varying " MEDIUMP " vec2 dimensions_out;\n"
-    "varying " MEDIUMP " vec2 coordinates_out;\n"
+    "in " MEDIUMP " vec2 dimensions_out;\n"
+    "in " MEDIUMP " vec2 coordinates_out;\n"
     CONSTRAIN_AXIS_FUNCTION
     "\n"
     "void main() {\n"
     "    float pinXAlpha = constrainAxis(coordinates_out.x, 0.2, 0.0);\n"
     "    float pinYAlpha = clamp((coordinates_out.y + 1.0) * 0.75, 0.05, 1.0);\n"
     "    float alpha = pinXAlpha * pinYAlpha;\n"
-    "    gl_FragColor = color;\n"
-    "    gl_FragColor.a = color.a * alpha;\n"
+    "    fragColor = color;\n"
+    "    fragColor.a = color.a * alpha;\n"
     "}\n";
 
   // plus thickness is (width / dimensions)
-  const char *kPlusFragmentShader =
+  constexpr char kPlusFragmentShader[] =
+    "#version 150\n"
+    "out " MEDIUMP " vec4 fragColor;\n"
     "uniform " MEDIUMP " vec4 color;\n"
     "uniform " MEDIUMP " float thickness;\n"
-    "varying " MEDIUMP " vec2 coordinates_out;\n"
+    "in " MEDIUMP " vec2 coordinates_out;\n"
     CONSTRAIN_AXIS_FUNCTION
     "\n"
     "void main() {\n"
@@ -447,16 +489,18 @@ namespace
     "    float yAlpha1 = constrainAxis(coordinates_out_norm.y, normBound, 0.0);\n"
     "    float yAlpha2 = constrainAxis(-coordinates_out_norm.y, normBound, 1.0);\n"
     "    float alpha = (1.0 - xAlpha1 - xAlpha2) + (1.0 - yAlpha1 - yAlpha2);\n"
-    "    gl_FragColor = color;\n"
-    "    gl_FragColor.a = color.a * alpha;\n"
+    "    fragColor = color;\n"
+    "    fragColor.a = color.a * alpha;\n"
     "}\n";
 
-  const char *kHighlightFragmentShader =
+  constexpr char kHighlightFragmentShader[] =
+    "#version 150\n"
+    "out " MEDIUMP " vec4 fragColor;\n"
     "uniform " MEDIUMP " vec4 color;\n"
     "uniform " MEDIUMP " vec4 alt_color;\n"
     "uniform " MEDIUMP " vec4 mod_color;\n"
     "uniform " MEDIUMP " vec4 shader_values_out;\n"
-    "varying " MEDIUMP " vec2 coordinates_out;\n"
+    "in " MEDIUMP " vec2 coordinates_out;\n"
     "\n"
     "void main() {\n"
     "    vec2 coordinates_out_norm = (coordinates_out * 0.5) + 0.5;\n"
@@ -466,22 +510,24 @@ namespace
     "    float pinXAlpha1 = clamp(ceil(-abs(coordinates_out_norm.x) + normLeftBound), 0.0, 1.0);\n"
     "    float pinXAlpha2 = clamp(ceil(-abs(-coordinates_out_norm.x + 1.0) + 1.0 - normRightBound), 0.0, 1.0);\n"
     "    float alpha = (areBoundsSwitched + 1.0 - pinXAlpha1 - pinXAlpha2);\n"
-    "    gl_FragColor = color;\n"
-    "    gl_FragColor.a *= alpha;\n"
+    "    fragColor = color;\n"
+    "    fragColor.a *= alpha;\n"
     "}\n";
 
   // modulation knob when hovered over a control
-  const char *kModulationKnobFragmentShader =
+  constexpr char kModulationKnobFragmentShader[] =
+    "#version 150\n"
+    "out " MEDIUMP " vec4 fragColor;\n"
     "uniform " MEDIUMP " vec4 color;\n"
     "uniform " MEDIUMP " vec4 alt_color;\n"
     "uniform " MEDIUMP " vec4 mod_color;\n"
     "uniform " MEDIUMP " vec4 background_color;\n"
     "uniform " MEDIUMP " vec4 thumb_color;\n"
-    "varying " MEDIUMP " vec2 dimensions_out;\n"
+    "in " MEDIUMP " vec2 dimensions_out;\n"
     "uniform " MEDIUMP " float thickness;\n"
     "uniform " MEDIUMP " float overall_alpha;\n"
-    "varying " MEDIUMP " vec4 shader_values_out;\n"
-    "varying " MEDIUMP " vec2 coordinates_out;\n"
+    "in " MEDIUMP " vec4 shader_values_out;\n"
+    "in " MEDIUMP " vec2 coordinates_out;\n"
     "void main() {\n"
     "    float rads = atan(coordinates_out.x, -coordinates_out.y);\n"
     "    float full_radius = 0.5 * dimensions_out.x;\n"
@@ -489,30 +535,32 @@ namespace
     "    float circle_alpha = clamp(full_radius - delta_center, 0.0, 1.0);\n"
     "    float delta_rads = rads - shader_values_out.x;\n"
     "    float color_amount = clamp(delta_rads * max(delta_center, 1.0) * 1.6, 0.0, 1.0);\n"
-    "    gl_FragColor = alt_color * color_amount + color * (1.0 - color_amount);\n"
-    "    gl_FragColor.a = gl_FragColor.a * circle_alpha;\n"
+    "    fragColor = alt_color * color_amount + color * (1.0 - color_amount);\n"
+    "    fragColor.a = fragColor.a * circle_alpha;\n"
     "    float center_arc = full_radius - thickness * 0.5 - 0.5;\n"
     "    float delta_arc = delta_center - center_arc;\n"
     "    float distance_arc = abs(delta_arc);\n"
     "    float thumb_alpha = clamp(thickness * 0.5 - distance_arc + 0.5, 0.0, 1.0);\n"
-    "    gl_FragColor = gl_FragColor * (1.0 - thumb_alpha) + thumb_color * thumb_alpha;\n"
+    "    fragColor = fragColor * (1.0 - thumb_alpha) + thumb_color * thumb_alpha;\n"
     "    float mod_alpha1 = clamp(full_radius * 0.48 - delta_center, 0.0, 1.0) * mod_color.a;\n"
     "    float mod_alpha2 = clamp(full_radius * 0.35 - delta_center, 0.0, 1.0) * mod_color.a;\n"
-    "    gl_FragColor = gl_FragColor * (1.0 - mod_alpha1) + background_color * mod_alpha1;\n"
-    "    gl_FragColor = gl_FragColor * (1.0 - mod_alpha2) + mod_color * mod_alpha2;\n"
-    "    gl_FragColor.a = gl_FragColor.a * overall_alpha;\n"
+    "    fragColor = fragColor * (1.0 - mod_alpha1) + background_color * mod_alpha1;\n"
+    "    fragColor = fragColor * (1.0 - mod_alpha2) + mod_color * mod_alpha2;\n"
+    "    fragColor.a = fragColor.a * overall_alpha;\n"
     "}\n";
 
-  // coordinates_out are ndc (the same values as the position varying
+  // coordinates_out are ndc (the same values as the position in
   //		except when OpenGlCorners when they are coordinates inside the quad itself)
   // dimensions_out are the absolute dimensions of the object 
   //		(almost always act as a uniform but why it isn't one idk)
-  const char *kDotSliderFragmentShader =
+  constexpr char kDotSliderFragmentShader[] =
+    "#version 150\n"
+    "out " MEDIUMP " vec4 fragColor;\n"
     "uniform " MEDIUMP " vec4 color;\n"
     "uniform " MEDIUMP " float thumb_amount;\n"
-    "varying " MEDIUMP " vec2 dimensions_out;\n"
-    "varying " MEDIUMP " vec2 coordinates_out;\n"
-    "varying " MEDIUMP " vec4 shader_values_out;\n"
+    "in " MEDIUMP " vec2 dimensions_out;\n"
+    "in " MEDIUMP " vec2 coordinates_out;\n"
+    "in " MEDIUMP " vec4 shader_values_out;\n"
     CONSTRAIN_AXIS_FUNCTION
     "\n"
     "void main() {\n"
@@ -522,36 +570,41 @@ namespace
     "    float rounding = thumb_amount * 0.5;\n"
     "    float thumb_delta_center = length(max(thumb_center_offset + vec2(rounding), vec2(0.0)));\n"
     "    float thumb_alpha = clamp((rounding - thumb_delta_center) * 0.5 + 0.5, 0.0, 1.0);\n"
-    "    gl_FragColor = gl_FragColor * (1.0 - thumb_alpha) + thumb_color * thumb_alpha;\n"
+    "    fragColor = fragColor * (1.0 - thumb_alpha) + thumb_color * thumb_alpha;\n"
     "}\n";
 
-  const char *kLineFragmentShader =
+  constexpr char kLineFragmentShader[] =
+    "#version 150\n"
+    "out " MEDIUMP " vec4 fragColor;\n"
     "uniform " MEDIUMP " vec4 color;\n"
     "uniform " MEDIUMP " float line_width;\n"
     "uniform " MEDIUMP " float boost;\n"
-    "varying " MEDIUMP " float depth_out;\n"
+    "in " MEDIUMP " float depth_out;\n"
     "void main() {\n"
     "    " MEDIUMP " float dist_from_edge = min(depth_out, 1.0 - depth_out);\n"
     "    " MEDIUMP " float scale = line_width * dist_from_edge;\n"
-    "    gl_FragColor = vec4(color.xyz, color.a * scale * 0.5);\n"
+    "    fragColor = vec4(color.xyz, color.a * scale * 0.5);\n"
     "}\n";
 
-  const char *kFillFragmentShader =
+  constexpr char kFillFragmentShader[] =
+    "#version 150\n"
+    "out " MEDIUMP " vec4 fragColor;\n"
     "uniform " MEDIUMP " vec4 color_from;\n"
     "uniform " MEDIUMP " vec4 color_to;\n"
-    "varying " MEDIUMP " float boost;\n"
-    "varying " MEDIUMP " float distance;\n"
+    "in " MEDIUMP " float boost;\n"
+    "in " MEDIUMP " float distance;\n"
     "void main() {\n"
     "    " MEDIUMP " float delta = abs(distance);\n"
     "    " MEDIUMP " vec4 base_color = color_to * delta + color_from * (1.0 - delta);\n"
-    "    gl_FragColor = base_color;\n"
-    "    gl_FragColor.a = (boost + 1.0) * base_color.a;\n"
+    "    fragColor = base_color;\n"
+    "    fragColor.a = (boost + 1.0) * base_color.a;\n"
     "}\n";
 
-  const char *kLineVertexShader =
-    "attribute " MEDIUMP " vec3 position;\n"
+  constexpr char kLineVertexShader[] =
+    "#version 150\n"
+    "in " MEDIUMP " vec3 position;\n"
     "uniform " MEDIUMP " vec2 scale;\n"
-    "varying " MEDIUMP " float depth_out;\n"
+    "out " MEDIUMP " float depth_out;\n"
     "\n"
     "void main() {\n"
     "    depth_out = position.z;\n"
@@ -561,13 +614,14 @@ namespace
     "    gl_Position.w = 1.0;\n"
     "}\n";
 
-  const char *kFillVertexShader =
-    "attribute " MEDIUMP " vec3 position;\n"
+  constexpr char kFillVertexShader[] =
+    "#version 150\n"
+    "in " MEDIUMP " vec3 position;\n"
     "uniform " MEDIUMP " vec2 scale;\n"
     "uniform " MEDIUMP " float center_position;\n"
     "uniform " MEDIUMP " float boost_amount;\n"
-    "varying " MEDIUMP " float distance;\n"
-    "varying " MEDIUMP " float boost;\n"
+    "out " MEDIUMP " float distance;\n"
+    "out " MEDIUMP " float boost;\n"
     "\n"
     "void main() {\n"
     "    distance = (position.y - center_position) / (1.0 - center_position);\n"
@@ -578,20 +632,23 @@ namespace
     "    gl_Position.a = 1.0;\n"
     "}\n";
 
-  const char *kBarFragmentShader =
+  constexpr char kBarFragmentShader[] =
+    "#version 150\n"
+    "out " MEDIUMP " vec4 fragColor;\n"
     "uniform " MEDIUMP " vec4 color;\n"
-    "varying " MEDIUMP " vec2 corner_out;\n"
-    "varying " MEDIUMP " vec2 size;\n"
+    "in " MEDIUMP " vec2 corner_out;\n"
+    "in " MEDIUMP " vec2 size;\n"
     "void main() {\n"
     "    " MEDIUMP " float alpha_x = min(corner_out.x * size.x, (1.0 - corner_out.x) * size.x);\n"
     "    " MEDIUMP " float alpha_y = min(corner_out.y * size.y, (1.0 - corner_out.y) * size.y);\n"
-    "    gl_FragColor = color;\n"
-    "    gl_FragColor.a = gl_FragColor.a * min(1.0, min(alpha_x, alpha_y));\n"
+    "    fragColor = color;\n"
+    "    fragColor.a = fragColor.a * min(1.0, min(alpha_x, alpha_y));\n"
     "}\n";
 
-  const char *kBarHorizontalVertexShader =
-    "attribute " MEDIUMP " vec4 position;\n"
-    "attribute " MEDIUMP " vec2 corner;\n"
+  constexpr char kBarHorizontalVertexShader[] =
+    "#version 150\n"
+    "in " MEDIUMP " vec4 position;\n"
+    "in " MEDIUMP " vec2 corner;\n"
     "uniform " MEDIUMP " float offset;\n"
     "uniform " MEDIUMP " float scale;\n"
     "uniform " MEDIUMP " float width_percent;\n"
@@ -610,9 +667,10 @@ namespace
     "    gl_Position.w = 1.0;\n"
     "}\n";
 
-  const char *kBarVerticalVertexShader =
-    "attribute " MEDIUMP " vec4 position;\n"
-    "attribute " MEDIUMP " vec2 corner;\n"
+  constexpr char kBarVerticalVertexShader[] =
+    "#version 150\n"
+    "in " MEDIUMP " vec4 position;\n"
+    "in " MEDIUMP " vec2 corner;\n"
     "uniform " MEDIUMP " float offset;\n"
     "uniform " MEDIUMP " float scale;\n"
     "uniform " MEDIUMP " float width_percent;\n"
@@ -713,8 +771,7 @@ namespace Interface
   GLuint Shaders::createVertexShader(VertexShader shader) const
   {
     GLuint shaderId = glCreateShader(GL_VERTEX_SHADER);
-    juce::String codeString = juce::OpenGLHelpers::translateVertexShaderToV3(getVertexShader(shader));
-    const GLchar *code = codeString.toRawUTF8();
+    const GLchar *code = getVertexShader(shader);
     glShaderSource(shaderId, 1, &code, nullptr);
     glCompileShader(shaderId);
 
@@ -725,8 +782,7 @@ namespace Interface
   GLuint Shaders::createFragmentShader(FragmentShader shader) const
   {
     GLuint shaderId = glCreateShader(GL_FRAGMENT_SHADER);
-    juce::String codeString = juce::OpenGLHelpers::translateFragmentShaderToV3(getFragmentShader(shader));
-    const GLchar *code = codeString.toRawUTF8();
+    const GLchar *code = getFragmentShader(shader);
     glShaderSource(shaderId, 1, &code, nullptr);
     glCompileShader(shaderId);
 

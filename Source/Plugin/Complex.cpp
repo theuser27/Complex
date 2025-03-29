@@ -10,7 +10,6 @@
 
 #include "Complex.hpp"
 
-#include "Framework/parameter_value.hpp"
 #include "Generation/EffectsState.hpp"
 #include "Generation/SoundEngine.hpp"
 #include "Renderer.hpp"
@@ -55,13 +54,7 @@ namespace Plugin
   }
 
   float ComplexPlugin::getOverlap() noexcept { return soundEngine_->getOverlap(); }
-
-  u32 ComplexPlugin::getFFTSize() noexcept
-  {
-    return 1 << soundEngine_->getParameter(Framework::Processors::
-      SoundEngine::BlockSize::id().value())->getInternalValue<u32>();
-  }
-
+  u32 ComplexPlugin::getFFTSize() noexcept { return soundEngine_->getFFTSize(); }
   u32 ComplexPlugin::getBlockPosition() noexcept { return soundEngine_->getBlockPosition(); }
 
   Interface::Renderer &ComplexPlugin::getRenderer()

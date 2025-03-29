@@ -73,7 +73,7 @@ namespace Interface
     double snapValue(double attemptedValue, DragMode dragMode);
     void snapToValue(bool shouldSnap, float snapValue = 0.0f)
     {
-      shouldSnapToValue_ = shouldSnap;
+      flags_.shouldSnapToValue = shouldSnap;
       snapValue_ = snapValue;
     }
     juce::String formatValue(double value) const noexcept;
@@ -147,11 +147,12 @@ namespace Interface
       modColor_ = getModColor();
     }
 
-    void setShouldShowPopup(bool shouldShowPopup) noexcept { shouldShowPopup_ = shouldShowPopup; }
-    void setShowPopupOnHover(bool show) noexcept { showPopupOnHover_ = show; }
-    void setShouldUsePlusMinusPrefix(bool shouldUsePlusMinus) noexcept { shouldUsePlusMinusPrefix_ = shouldUsePlusMinus; }
+    void setShouldShowPopup(bool shouldShowPopup) noexcept { flags_.shouldShowPopup = shouldShowPopup; }
+    void setShowPopupOnHover(bool show) noexcept { flags_.showPopupOnHover = show; }
+    void setShouldUsePlusMinusPrefix(bool shouldUsePlusMinus) noexcept { flags_.shouldUsePlusMinusPrefix = shouldUsePlusMinus; }
     void setCanInputValue(bool canInputValue) noexcept { canInputValue_ = canInputValue; }
-    void setCanUseScrollWheel(bool canUseScrollWheel) noexcept { canUseScrollWheel_ = canUseScrollWheel; }
+    void setCanUseScrollWheel(bool canUseScrollWheel) noexcept { flags_.canUseScrollWheel = canUseScrollWheel; }
+    void setShouldCheckDbInfinities(bool shouldCheck) noexcept { flags_.shouldCheckDbInfinities = shouldCheck; }
 
     void setSensitivity(double sensitivity) noexcept { sensitivity_ = sensitivity; }
     void setPopupPlacement(Placement placement) { popupPlacement_ = placement; }
@@ -178,12 +179,17 @@ namespace Interface
     utils::shared_value<juce::Colour> modColor_;
 
     SliderType type_{};
-    bool shouldShowPopup_ = false;
-    bool showPopupOnHover_ = false;
-    bool shouldUsePlusMinusPrefix_ = false;
-    bool canUseScrollWheel_ = false;
-    bool shouldSnapToValue_ = false;
-    bool sensitiveMode_ = false;
+
+    struct
+    {
+      bool shouldShowPopup : 1 = false;
+      bool showPopupOnHover : 1 = false;
+      bool shouldUsePlusMinusPrefix : 1 = false;
+      bool canUseScrollWheel : 1 = false;
+      bool shouldSnapToValue : 1 = false;
+      bool sensitiveMode : 1 = false;
+      bool shouldCheckDbInfinities : 1 = false;
+    } flags_;
 
     double snapValue_ = 0.0;
     double sensitivity_ = kDefaultSensitivity;
@@ -290,8 +296,8 @@ namespace Interface
     {
       float multiply = 1.0f;
 
-      sensitiveMode_ = e.mods.isCommandDown();
-      if (sensitiveMode_)
+      flags_.sensitiveMode = e.mods.isCommandDown();
+      if (flags_.sensitiveMode)
         multiply *= kSlowDragMultiplier;
 
       setImmediateSensitivity((int)((double)std::max(getWidth(), getHeight()) / (sensitivity_ * multiply)));
@@ -354,8 +360,8 @@ namespace Interface
     {
       float multiply = 1.0f;
 
-      sensitiveMode_ = e.mods.isCommandDown();
-      if (sensitiveMode_)
+      flags_.sensitiveMode = e.mods.isCommandDown();
+      if (flags_.sensitiveMode)
         multiply *= kSlowDragMultiplier;
 
       setImmediateSensitivity((int)((double)std::max(getWidth(), getHeight()) / (sensitivity_ * multiply)));
@@ -523,8 +529,8 @@ namespace Interface
     {
       float multiply = 1.0f;
 
-      sensitiveMode_ = e.mods.isCommandDown();
-      if (sensitiveMode_)
+      flags_.sensitiveMode = e.mods.isCommandDown();
+      if (flags_.sensitiveMode)
         multiply *= kSlowDragMultiplier;
 
       setImmediateSensitivity((int)((double)std::max(getWidth(), getHeight()) / (sensitivity_ * multiply)));

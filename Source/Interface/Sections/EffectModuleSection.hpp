@@ -10,7 +10,7 @@
 
 #pragma once
 
-#include "Framework/parameters.hpp"
+#include "Framework/parameter_value.hpp"
 #include "Framework/parameter_bridge.hpp"
 #include "../Components/DraggableComponent.hpp"
 #include "../Components/BaseControl.hpp"

@@ -385,6 +385,20 @@ namespace utils
     for (usize i = 0; i < kChannelsPerInOut; ++i)
       values[array[2 * i]] = merge(values[array[2 * i]], value, kChannelMasks[i]);
   }
+  template<SimdValue SIMD>
+  strict_inline void vector_call scatterAddComplex(SIMD *values, simd_int indices, SIMD value, simd_mask mask) noexcept
+  {
+    auto array = indices.getArrayOfValues();
+    for (usize i = 0; i < kChannelsPerInOut; ++i)
+      values[array[2 * i]] = merge(values[array[2 * i]], values[array[2 * i]] + value, kChannelMasks[i] & mask);
+  }
+  template<SimdValue SIMD>
+  strict_inline void vector_call scatterAddComplex(SIMD *values, simd_int indices, SIMD value) noexcept
+  {
+    auto array = indices.getArrayOfValues();
+    for (usize i = 0; i < kChannelsPerInOut; ++i)
+      values[array[2 * i]] = merge(values[array[2 * i]], values[array[2 * i]] + value, kChannelMasks[i]);
+  }
 
 
 
@@ -627,11 +641,11 @@ namespace utils
   strict_inline simd_float vector_call dbToNormalised(simd_float db, float maxDb) noexcept
   { return log2(db + 1.0f) / log2(simd_float{ maxDb + 1.0f }); }
 
-  strict_inline simd_float vector_call normalisedToFrequency(simd_float normalised, float sampleRate) noexcept
-  { return pow(sampleRate * 0.5f / (float)kMinFrequency, normalised) * kMinFrequency; }
+  strict_inline simd_float vector_call normalisedToFrequency(simd_float normalised, float sampleRate, float minFrequency = kMinFrequency) noexcept
+  { return pow(sampleRate * 0.5f / minFrequency, normalised) * minFrequency; }
 
-  strict_inline simd_float vector_call frequencyToNormalised(simd_float frequency, float sampleRate) noexcept
-  { return log2(frequency / kMinFrequency) / log2(simd_float{ sampleRate * 0.5f / (float)kMinFrequency }); }
+  strict_inline simd_float vector_call frequencyToNormalised(simd_float frequency, float sampleRate, float minFrequency = kMinFrequency) noexcept
+  { return log2(frequency / minFrequency) / log2(simd_float{ sampleRate * 0.5f / minFrequency }); }
 
   // returns the proper bin which may also be nyquist, which is outside a power-of-2
   strict_inline simd_float vector_call normalisedToBin(simd_float normalised, u32 FFTSize, float sampleRate) noexcept

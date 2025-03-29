@@ -17,6 +17,7 @@
 #include "Framework/simd_math.hpp"
 #include "Framework/simd_utils.hpp"
 #include "Framework/parameter_value.hpp"
+#include "Framework/parameters.hpp"
 #include "Plugin/ProcessorTree.hpp"
 #include "EffectModules.hpp"
 

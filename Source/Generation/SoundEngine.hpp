@@ -269,54 +269,7 @@ namespace Generation
 
       void addOverlapBuffer(const Framework::Buffer &other, u32 channels,
         utils::span<char> channelsToOvelap, u32 samples, u32 beginOutputOffset,
-        Framework::Processors::SoundEngine::WindowType::type windowType) noexcept
-      {
-        u32 bufferSize = getSize();
-        u32 oldEnd = getEnd();
-        u32 newEnd = buffer_.setEnd((addOverlap_ + samples) % bufferSize);
-
-        // getting how many samples are going to be overlapped
-        // we clamp the value to max samples in case the FFT size was changed
-        u32 overlappedSamples = std::min(utils::circularDifference(addOverlap_, oldEnd, bufferSize), samples);
-
-        // writing stuff that isn't overlapped
-        if (u32 assignSamples = samples - overlappedSamples; assignSamples)
-        {
-          //buffer_.clear((bufferSize + newEnd - assignSamples) % bufferSize, assignSamples);
-          buffer_.writeToBuffer(other, channels, assignSamples,
-            (bufferSize + newEnd - assignSamples) % bufferSize, overlappedSamples, channelsToOvelap);
-        }
-
-        // overlapping
-        if (overlappedSamples)
-        {
-          if (windowType == Framework::Processors::SoundEngine::WindowType::Lerp)
-            Framework::CircularBuffer::applyToBuffer<utils::MathOperations::Interpolate>(buffer_.getData(), other, channels, 
-              overlappedSamples, addOverlap_, 0, channelsToOvelap);
-          else
-          {
-            // fading edges and overlapping
-            u32 fadeSamples = overlappedSamples / 4;
-
-            // fade in overlap
-            Framework::CircularBuffer::applyToBuffer<utils::MathOperations::FadeInAdd>(buffer_.getData(), other, channels, 
-              fadeSamples, addOverlap_, 0, channelsToOvelap);
-
-            // overlap
-            buffer_.addBuffer(other, channels, overlappedSamples - 2 * fadeSamples,
-              channelsToOvelap, (addOverlap_ + fadeSamples) % bufferSize, fadeSamples);
-
-
-            // fade out overlap
-            Framework::CircularBuffer::applyToBuffer<utils::MathOperations::FadeOutAdd>(buffer_.getData(), other, channels, 
-              fadeSamples, (addOverlap_ + overlappedSamples - fadeSamples) % bufferSize,
-              overlappedSamples - fadeSamples, channelsToOvelap);
-          }
-        }					
-
-        // offsetting the overlap index for the next block
-        addOverlap_ = (addOverlap_ + beginOutputOffset) % bufferSize;
-      }
+        nested_enum::typeless_enum windowType) noexcept;
 
       strict_inline float read(u32 channel, u32 index) const noexcept
       { return buffer_.read(channel, index); }
@@ -410,11 +363,7 @@ namespace Generation
     void insertSubProcessor(usize index, BaseProcessor &newSubProcessor, bool callListeners = true) noexcept override;
     BaseProcessor *createCopy() const override
     { COMPLEX_ASSERT_FALSE("You're trying to copy SoundEngine, which is not meant to be copied"); return nullptr; }
-    void initialiseParameters() override
-    {
-      createProcessorParameters(Framework::Processors::SoundEngine::
-        enum_ids_filter<Framework::kGetParameterPredicate, true>());
-    }
+    void initialiseParameters() override;
 
     // initialising pointers and FFT plans
     void resetBuffers() noexcept;
@@ -424,6 +373,7 @@ namespace Generation
     u32 getProcessingDelay() const noexcept;
     auto &getEffectsState() const noexcept { return *effectsState_; }
     float getOverlap() const noexcept { return currentOverlap_; }
+    u32 getFFTSize() const noexcept;
     u32 getBlockPosition() const noexcept { return blockPosition_; }
 
     void deserialiseFromJson(void *jsonData) override;
@@ -452,8 +402,7 @@ namespace Generation
     utils::shared_value<float> currentOverlap_ = kDefaultWindowOverlap;
     //
     // window type
-    Framework::Processors::SoundEngine::WindowType::type windowType_ = 
-      Framework::Processors::SoundEngine::WindowType::Hann;
+    nested_enum::typeless_enum windowType_{};
     //
     // window alpha
     float alpha_ = 0.0f;

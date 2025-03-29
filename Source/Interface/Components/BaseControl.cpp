@@ -152,23 +152,19 @@ namespace Interface
 
   void BaseControl::setPosition(Point<int> position)
   {
-    auto scaledAddedHitbox = BorderSize
-    {
-      scaleValueRoundInt((float)addedHitbox_.getTop()),
-      scaleValueRoundInt((float)addedHitbox_.getLeft()),
-      scaleValueRoundInt((float)addedHitbox_.getBottom()),
-      scaleValueRoundInt((float)addedHitbox_.getRight()) 
-    };
+    int scaledTop = scaleValueRoundInt((float)addedHitbox_.getTop());
+    int scaledLeft = scaleValueRoundInt((float)addedHitbox_.getLeft());
+    int scaledBottom = scaleValueRoundInt((float)addedHitbox_.getBottom());
+    int scaledRight = scaleValueRoundInt((float)addedHitbox_.getRight());
 
     COMPLEX_ASSERT(!drawBounds_.isEmpty(), "You need to call setSizes with \
       specific dimensions so that size can be calculated and stored");
 
     // offsetting the drawBounds and subsequently the extra elements bounds if origin position was changed
-    drawBounds_.setPosition({ scaledAddedHitbox.getLeft(), scaledAddedHitbox.getTop() });
-    OpenGlContainer::setBounds(position.x - scaledAddedHitbox.getLeft(), 
-      position.y - scaledAddedHitbox.getTop(),
-      drawBounds_.getWidth() + scaledAddedHitbox.getLeftAndRight(),
-      drawBounds_.getHeight() + scaledAddedHitbox.getTopAndBottom());
+    drawBounds_.setPosition({ scaledLeft, scaledTop });
+    OpenGlContainer::setBounds(position.x - scaledLeft, position.y - scaledTop,
+      drawBounds_.getWidth() + scaledLeft + scaledRight,
+      drawBounds_.getHeight() + scaledTop + scaledBottom);
   }
 
   void BaseControl::setBounds(int x, int y, int width, int height)
@@ -177,17 +173,14 @@ namespace Interface
     // for setting bounds of this particular control, we set drawBounds to the specified size
     // and expand the overall size to accommodate an added hitbox if necessary
     
-    auto scaledAddedHitbox = BorderSize
-    {
-      scaleValueRoundInt((float)addedHitbox_.getTop()),
-      scaleValueRoundInt((float)addedHitbox_.getLeft()),
-      scaleValueRoundInt((float)addedHitbox_.getBottom()),
-      scaleValueRoundInt((float)addedHitbox_.getRight())
-    };
-    drawBounds_ = { scaledAddedHitbox.getLeft(), scaledAddedHitbox.getTop(), width, height };
+    int scaledTop = scaleValueRoundInt((float)addedHitbox_.getTop());
+    int scaledLeft = scaleValueRoundInt((float)addedHitbox_.getLeft());
+    int scaledBottom = scaleValueRoundInt((float)addedHitbox_.getBottom());
+    int scaledRight = scaleValueRoundInt((float)addedHitbox_.getRight());
+    drawBounds_ = { scaledLeft, scaledTop, width, height };
     
-    OpenGlContainer::setBounds(x - scaledAddedHitbox.getLeft(), y - scaledAddedHitbox.getTop(),
-      width + scaledAddedHitbox.getLeftAndRight(), height + scaledAddedHitbox.getTopAndBottom());
+    OpenGlContainer::setBounds(x - scaledLeft, y - scaledTop,
+      width + scaledLeft + scaledRight, height + scaledTop + scaledBottom);
   }
 
   void BaseControl::repositionExtraElements()
@@ -244,7 +237,6 @@ namespace Interface
     if (!label_)
       return;
 
-    label_->setIgnoreClip(nullptr);
     removeOpenGlComponent(label_.get());
     label_ = nullptr;
   }

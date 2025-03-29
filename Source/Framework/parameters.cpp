@@ -18,18 +18,66 @@
 
 namespace Framework
 {
-  static constexpr auto lookup = []<typename ... Ts>(const std::tuple<nested_enum::type_identity<Ts>...> &)
+  static constexpr auto lookup = []<typename ... Ts>(nested_enum::type_list<Ts...>)
   {
     return utils::array<ParameterDetails, sizeof...(Ts)>{ Ts::details... };
   }(Processors::enum_subtypes_filter_recursive<kGetParameterPredicate>());
 
   auto getParameterDetails(utils::string_view id) noexcept -> std::optional<ParameterDetails>
   {
-    auto iter = std::ranges::find_if(lookup, [&](const auto &v) { return v.id == id; });
+    auto iter = utils::find_if(lookup, [&](const auto &v) { return v.id == id; });
     if (iter != lookup.end())
       return *iter;
 
     return {};
+  }
+
+  auto getIndexedData(double scaledValue, const ParameterDetails &details) noexcept -> utils::pair<const IndexedData *, usize>
+  {
+    COMPLEX_ASSERT(details.scale == ParameterScale::Indexed ||
+      details.scale == ParameterScale::IndexedNumeric ||
+      details.scale == ParameterScale::Toggle);
+    COMPLEX_ASSERT(scaledValue <= (double)details.maxValue);
+
+    scaledValue -= details.minValue;
+    usize index = 0, option = 0;
+    // if we have an ignore function we need to check all items
+    if (details.dynamicData && details.dynamicData->ignoreItemFn)
+    {
+      auto ignoreItemFn = details.dynamicData->ignoreItemFn;
+      usize currentIndex = 0, currentOption = 0, i = (usize)scaledValue;
+
+      while (i)
+      {
+        // move to next option if we've run out 
+        if (details.indexedData[currentOption].count <= currentIndex)
+        {
+          currentIndex = 0;
+          // skip options that are not present
+          while (details.indexedData[++currentOption].count == 0) { }
+        }
+
+        if (ignoreItemFn(details.indexedData[currentOption], (int)currentIndex))
+        {
+          index = currentIndex;
+          option = currentOption;
+        }
+
+        ++currentIndex;
+        --i;
+      }
+    }
+    else
+    {
+      index = (usize)scaledValue;
+      while (details.indexedData[option].count <= index)
+      {
+        index -= details.indexedData[option].count;
+        ++option;
+      }
+    }
+
+    return utils::pair{ &details.indexedData[option], index };
   }
 
   double scaleValue(double value, const ParameterDetails &details, float sampleRate, bool scalePercent, bool skewOnly) noexcept
@@ -59,6 +107,10 @@ namespace Framework
     case ParameterScale::Quadratic:
       result = (!skewOnly) ? value * value * (details.maxValue - details.minValue) + details.minValue : value * value;
       break;
+    case ParameterScale::ReverseQuadratic:
+      result = value - 1.0;
+      result = (!skewOnly) ? details.maxValue - result * result * (details.maxValue - details.minValue): 1.0 - (result * result);
+      break;
     case ParameterScale::SymmetricQuadratic:
       value = value * 2.0 - 1.0;
       sign = unsignFloat(value);
@@ -67,6 +119,10 @@ namespace Framework
       break;
     case ParameterScale::Cubic:
       result = (!skewOnly) ? value * value * value * (details.maxValue - details.minValue) + details.minValue : value * value * value;
+      break;
+    case ParameterScale::ReverseCubic:
+      result = value - 1.0;
+      result = (!skewOnly) ? result * result * result * (details.maxValue - details.minValue) + details.maxValue : (result * result * result) + 1.0;
       break;
     case ParameterScale::SymmetricCubic:
       value = 2.0 * value - 1.0;
@@ -138,18 +194,26 @@ namespace Framework
     case ParameterScale::Quadratic:
       result = std::sqrt((value - details.minValue) / (details.maxValue - details.minValue));
       break;
+    case ParameterScale::ReverseQuadratic:
+      value = -(value - details.maxValue) / (details.maxValue - details.minValue);
+      result = -std::sqrt(value) + 1.0;
+      break;
     case ParameterScale::SymmetricQuadratic:
-      value = 2.0 * (value - details.minValue) / (details.maxValue - details.minValue) - 1.0;
+      value = 2.0 * ((value - details.minValue) / (details.maxValue - details.minValue) - 0.5);
       sign = unsignFloat(value);
-      result = std::sqrt(value) * sign;
+      result = (std::sqrt(value) * sign + 1.0) * 0.5;
       break;
     case ParameterScale::Cubic:
       value = (value - details.minValue) / (details.maxValue - details.minValue);
-      result = std::pow(value, 1.0f / 3.0f);
+      result = std::pow(value, 1.0 / 3.0);
+      break;
+    case ParameterScale::ReverseCubic:
+      value = (value - details.maxValue) / (details.maxValue - details.minValue);
+      result = std::pow(value, 1.0 / 3.0) + 1.0;
       break;
     case ParameterScale::SymmetricCubic:
       value = 2.0 * (value - details.minValue) / (details.maxValue - details.minValue) - 1.0;
-      result = std::pow(value, 1.0f / 3.0f);
+      result = (std::pow(value, 1.0f / 3.0f) + 1.0) * 0.5;
       break;
     case ParameterScale::Loudness:
       value = dbToNormalised(value, (double)details.maxValue);
@@ -199,6 +263,10 @@ namespace Framework
     case ParameterScale::Quadratic:
       result = value * value * (details.maxValue - details.minValue) + details.minValue;
       break;
+    case ParameterScale::ReverseQuadratic:
+      result = value - 1.0;
+      result = details.maxValue - result * result * (details.maxValue - details.minValue);
+      break;
     case ParameterScale::SymmetricQuadratic:
       value -= 0.5f;
       sign = getSign(value);
@@ -207,6 +275,10 @@ namespace Framework
       break;
     case ParameterScale::Cubic:
       result = value * value * value * (details.maxValue - details.minValue) + details.minValue;
+      break;
+    case ParameterScale::ReverseCubic:
+      result = value - 1.0f;
+      result = result * result * result * (details.maxValue - details.minValue) + details.maxValue;
       break;
     case ParameterScale::SymmetricCubic:
       value = simd_float::mulSub(1.0f, value, 2.0f);

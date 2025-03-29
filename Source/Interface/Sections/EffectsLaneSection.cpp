@@ -10,6 +10,7 @@
 
 #include "EffectsLaneSection.hpp"
 
+#include "Framework/parameters.hpp"
 #include "Plugin/ProcessorTree.hpp"
 #include "Framework/update_types.hpp"
 #include "Generation/EffectModules.hpp"

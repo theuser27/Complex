@@ -142,7 +142,7 @@ namespace Interface
     for (auto *listener : controlListeners_)
       listener->hoverStarted(this);
 
-    if (showPopupOnHover_)
+    if (flags_.showPopupOnHover)
       showPopup(true);
 
     if (shouldRepaintOnHover_)
@@ -177,7 +177,7 @@ namespace Interface
 
   void BaseSlider::mouseWheelMove(const MouseEvent &e, const MouseWheelDetails &wheel)
   {
-    if (!isEnabled() || (!canUseScrollWheel_ || needsToRedirectMouse(e)))
+    if (!isEnabled() || (!flags_.canUseScrollWheel || needsToRedirectMouse(e)))
     {
       if (!redirectMouse(RedirectMouseWheel, e, &wheel))
         BaseControl::mouseWheelMove(e, wheel);
@@ -288,7 +288,7 @@ namespace Interface
   double BaseSlider::snapValue(double attemptedValue, DragMode dragMode)
   {
     static constexpr double percent = 0.025;
-    if (!shouldSnapToValue_ || sensitiveMode_ || dragMode != DragMode::absoluteDrag)
+    if (!flags_.shouldSnapToValue || flags_.sensitiveMode || dragMode != DragMode::absoluteDrag)
       return attemptedValue;
 
     if (attemptedValue - snapValue_ <= percent && attemptedValue - snapValue_ >= -percent)
@@ -302,17 +302,13 @@ namespace Interface
       details_.scale == Framework::ParameterScale::IndexedNumeric)
       return String(value) + details_.displayUnits.data();
 
-    if (details_.scale == Framework::ParameterScale::Loudness && utils::closeTo(kInfDb, value))
-    {
-      String format = "inf";
-      format = ((shouldUsePlusMinusPrefix_) ? String("+") : String()) + format;
-      return format + details_.displayUnits.data();
-    }
-    if (auto closeToInf = utils::closeTo(kInfDb, value); details_.scale == Framework::ParameterScale::SymmetricLoudness &&
+    if (auto closeToInf = utils::closeTo(kInfDb, value); 
+      (details_.scale == Framework::ParameterScale::SymmetricLoudness || 
+        details_.scale == Framework::ParameterScale::Loudness || flags_.shouldCheckDbInfinities) &&
       (utils::closeTo(kMinusInfDb, value) || closeToInf))
     {
       String format = "inf";
-      format = ((closeToInf) ? (shouldUsePlusMinusPrefix_) ? String("+") : String() : String("-")) + format;
+      format = ((closeToInf) ? (flags_.shouldUsePlusMinusPrefix) ? "+" : "" : "-") + format;
       return format + details_.displayUnits.data();
     }
 
@@ -337,11 +333,11 @@ namespace Interface
       numberOfIntegers--;
       displayCharacters += 1;
     }
-    else if (shouldUsePlusMinusPrefix_)
+    else if (flags_.shouldUsePlusMinusPrefix)
     {
       insertIndex++;
       displayCharacters += 1;
-      format = String("+") + format;
+      format = "+" + format;
     }
 
     // insert leading zeroes
@@ -366,7 +362,7 @@ namespace Interface
       integerPlaces--;
 
     String maxStringLength;
-    if (shouldUsePlusMinusPrefix_ || details_.minValue < 0.0f)
+    if (flags_.shouldUsePlusMinusPrefix || details_.minValue < 0.0f)
       maxStringLength += '+';
 
     // figured out that 8s take up the most space in DDin
@@ -464,7 +460,7 @@ namespace Interface
 
   void BaseSlider::showPopup(bool primary)
   {
-    if (shouldShowPopup_)
+    if (flags_.shouldShowPopup)
       showPopupDisplay(this, getScaledValueString(getValue()), popupPlacement_, primary);
   }
 
@@ -528,8 +524,8 @@ namespace Interface
   {
     float multiply = 1.0f;
 
-    sensitiveMode_ = e.mods.isShiftDown();
-    if (sensitiveMode_)
+    flags_.sensitiveMode = e.mods.isShiftDown();
+    if (flags_.sensitiveMode)
       multiply *= kSlowDragMultiplier;
 
     setImmediateSensitivity((int)(kDefaultRotaryDragLength / (sensitivity_ * multiply)));
@@ -914,8 +910,8 @@ namespace Interface
   {
     float multiply = 1.0f;
 
-    sensitiveMode_ = e.mods.isShiftDown();
-    if (sensitiveMode_)
+    flags_.sensitiveMode = e.mods.isShiftDown();
+    if (flags_.sensitiveMode)
       multiply *= kSlowDragMultiplier;
 
     auto mouseEvent = e.getEventRelativeTo(parent_);
@@ -1433,9 +1429,9 @@ namespace Interface
   {
     static constexpr float kNormalDragMultiplier = 0.5f;
 
-    sensitiveMode_ = e.mods.isShiftDown();
+    flags_.sensitiveMode = e.mods.isShiftDown();
     float multiply = kNormalDragMultiplier;
-    if (sensitiveMode_)
+    if (flags_.sensitiveMode)
       multiply *= kSlowDragMultiplier;
 
     auto sensitivity = (double)std::max(getWidth(), getHeight()) / (sensitivity_ * multiply);

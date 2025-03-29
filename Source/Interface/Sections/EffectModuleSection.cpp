@@ -13,6 +13,7 @@
 #include "Plugin/ProcessorTree.hpp"
 #include "Framework/parameter_value.hpp"
 #include "Framework/parameter_bridge.hpp"
+#include "Framework/parameters.hpp"
 #include "Generation/EffectModules.hpp"
 #include "../LookAndFeel/Miscellaneous.hpp"
 #include "../LookAndFeel/Fonts.hpp"
@@ -541,6 +542,25 @@ namespace Interface
           baseEffect->getParameter(Processors::BaseEffect::Filter::Normal::Slope::id().value())));
       };
 
+      auto initGate = [&]()
+      {
+        parameters.reserve(Processors::BaseEffect::Filter::Gate::enum_count_filter(Framework::kGetParameterPredicate));
+        auto gain = utils::up<RotarySlider>::create(
+          baseEffect->getParameter(Processors::BaseEffect::Filter::Gate::Gain::id().value()));
+        gain->setShouldUsePlusMinusPrefix(true);
+        parameters.emplace_back(COMPLEX_MOVE(gain));
+        auto threshold = utils::up<RotarySlider>::create(
+          baseEffect->getParameter(Processors::BaseEffect::Filter::Gate::Threshold::id().value()));
+        threshold->setMaxTotalCharacters(6);
+        threshold->setMaxDecimalCharacters(4);
+        threshold->setShouldCheckDbInfinities(true);
+        parameters.emplace_back(COMPLEX_MOVE(threshold));
+        auto tilt = utils::up<RotarySlider>::create(
+          baseEffect->getParameter(Processors::BaseEffect::Filter::Gate::Tilt::id().value()));
+        tilt->setShouldUsePlusMinusPrefix(true);
+        parameters.emplace_back(COMPLEX_MOVE(tilt));
+      };
+
       auto initRegular = [&]() { };
 
       switch (Processors::BaseEffect::Filter::enum_value_by_id(type).value())
@@ -549,6 +569,9 @@ namespace Interface
         initNormal();
         break;
       default:
+      case Processors::BaseEffect::Filter::Gate:
+        initGate();
+        break;
       case Processors::BaseEffect::Filter::Regular:
         initRegular();
         break;
@@ -588,6 +611,33 @@ namespace Interface
         slopeSlider->setPosition(Point{ bounds.getX() + 2 * rotaryInterval, bounds.getY() });
       };
 
+      auto arrangeGate = [&]()
+      {
+        int knobEdgeOffset = scaleValueRoundInt(32);
+        int knobTopOffset = scaleValueRoundInt(32);
+
+        int knobsHeight = scaleValueRoundInt(RotarySlider::kDefaultWidthHeight);
+
+        bounds = bounds.withTrimmedLeft(knobEdgeOffset).withTrimmedRight(knobEdgeOffset)
+          .withTrimmedTop(knobTopOffset).withHeight(knobsHeight);
+        int rotaryInterval = (int)std::round((float)bounds.getWidth() / 3.0f);
+
+        // gain rotary
+        auto *gainSlider = section->getEffectControl(Processors::BaseEffect::Filter::Gate::Gain::id().value());
+        utils::ignore = gainSlider->setSizes(knobsHeight);
+        gainSlider->setPosition(Point{ bounds.getX(), bounds.getY() });
+
+        // threshold rotary
+        auto *thresholdSlider = section->getEffectControl(Processors::BaseEffect::Filter::Gate::Threshold::id().value());
+        utils::ignore = thresholdSlider->setSizes(knobsHeight);
+        thresholdSlider->setPosition(Point{ bounds.getX() + rotaryInterval, bounds.getY() });
+
+        // tilt rotary
+        auto *tiltSlider = section->getEffectControl(Processors::BaseEffect::Filter::Gate::Tilt::id().value());
+        utils::ignore = tiltSlider->setSizes(knobsHeight);
+        tiltSlider->setPosition(Point{ bounds.getX() + 2 * rotaryInterval, bounds.getY() });
+      };
+
       auto arrangeRegular = [&]() { };
 
       switch (Processors::BaseEffect::Filter::enum_value_by_id(type).value())
@@ -596,6 +646,9 @@ namespace Interface
         arrangeNormal();
         break;
       default:
+      case Processors::BaseEffect::Filter::Gate:
+        arrangeGate();
+        break;
       case Processors::BaseEffect::Filter::Regular:
         arrangeRegular();
         break;
@@ -920,7 +973,7 @@ namespace Interface
 
     auto getEffectParameterCounts = []<nested_enum::NestedEnum Type>()
     {
-      static constexpr auto typeCounts = []<typename ... Ts>(const std::tuple<nested_enum::type_identity<Ts>...> &)
+      static constexpr auto typeCounts = []<typename ... Ts>(nested_enum::type_list<Ts...>)
       {
         return utils::array{ utils::pair{ Ts::id().value(), Ts::enum_count(nested_enum::All) }... };
       }(Type::template enum_subtypes_filter<Framework::kGetActiveAlgoPredicate>());

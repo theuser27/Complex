@@ -13,11 +13,6 @@
 #include "platform_definitions.hpp"
 #include "stl_utils.hpp"
 
-namespace juce
-{
-  class File;
-}
-
 namespace Framework
 {
   namespace LoadSave
@@ -31,8 +26,5 @@ namespace Framework
     void saveWindowScale(double windowScale);
     void saveParameterMappings(usize parameterMappings);
     void saveUndoStepCount(usize undoStepCount);
-
-    void deserialiseSave(const juce::File &);
-    void writeSave(void *jsonData);
   }
 }

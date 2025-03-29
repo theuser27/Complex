@@ -47,7 +47,8 @@ namespace Interface
     void setValue(double shouldBeOn, juce::NotificationType notification) final;
     void valueChanged() override
     {
-      redoImage();
+      if (redrawOnValueChange_)
+        redoImage();
       BaseControl::valueChanged();
     }
     juce::String getScaledValueString(double value, bool) const override
@@ -61,6 +62,7 @@ namespace Interface
   protected:
     void updateState(bool isHeldDown, bool isHoveredOver) noexcept;
 
+    bool redrawOnValueChange_ = false;
     utils::shared_value<bool> isHeldDown_ = false;
     utils::shared_value<bool> isHoveredOver_ = false;
   };
@@ -147,6 +149,8 @@ namespace Interface
     OpenGlQuad plusComponent_{ Shaders::kPlusFragment, "Options Button Plus Icon" };
     OpenGlQuad borderComponent_{ Shaders::kRoundedRectangleBorderFragment, "Options Button Border" };
     PlainTextComponent textComponent_;
+
+    utils::shared_value<float> normalThickness_ = 1.0f;
 
     PopupItems popupOptions_{};
     Placement popupPlacement_ = Placement::below;

@@ -14,7 +14,6 @@
 #include "Framework/simd_buffer.hpp"
 #include "BaseProcessor.hpp"
 #include "Plugin/ProcessorTree.hpp"
-#include "Framework/parameters.hpp"
 
 namespace Generation
 {
@@ -152,10 +151,12 @@ namespace Generation
 
   private:
     void runNormal(Framework::ComplexDataSource &source,
-      Framework::SimdBuffer<Framework::complex<float>, simd_float> &destination, u32 binCount, float sampleRate) const noexcept;
+      Framework::SimdBuffer<Framework::complex<float>, simd_float> &destination, 
+      u32 binCount, float sampleRate) const noexcept;
 
-    void runPhase(Framework::ComplexDataSource &source,
-      Framework::SimdBuffer<Framework::complex<float>, simd_float> &destination, u32 binCount, float sampleRate) const noexcept;
+    void runGate(Framework::ComplexDataSource &source,
+      Framework::SimdBuffer<Framework::complex<float>, simd_float> &destination,
+      u32 binCount, float sampleRate) const noexcept;
 
     //// Modes
     // 
@@ -211,7 +212,8 @@ namespace Generation
       u32 binCount, float sampleRate) const noexcept;
 
     void runClip(Framework::ComplexDataSource &source,
-      Framework::SimdBuffer<Framework::complex<float>, simd_float> &destination, u32 binCount, float sampleRate) const noexcept;
+      Framework::SimdBuffer<Framework::complex<float>, simd_float> &destination, 
+      u32 binCount, float sampleRate) const noexcept;
 
     static simd_float vector_call matchPower(simd_float target, simd_float current) noexcept;
 
@@ -341,7 +343,7 @@ namespace Generation
   {
   public:
     EffectModule(Plugin::ProcessorTree *processorTree) noexcept;
-    EffectModule(const EffectModule &) = default;
+    EffectModule(const EffectModule &other) noexcept;
     ~EffectModule() override;
 
     void deserialiseFromJson(void *jsonData) override;
@@ -353,17 +355,12 @@ namespace Generation
     void insertSubProcessor(usize index, BaseProcessor &newSubProcessor, bool callListeners = true) noexcept override;
     BaseProcessor &updateSubProcessor(usize index, BaseProcessor &newSubProcessor, bool callListeners = true) noexcept override;
     EffectModule *createCopy() const override { return processorTree_->createProcessor<EffectModule>(*this); }
-    void initialiseParameters() override
-    {
-      createProcessorParameters(Framework::Processors::EffectModule::
-        enum_ids_filter<Framework::kGetParameterPredicate, true>());
-    }
+    void initialiseParameters() override;
 
     BaseEffect *getEffect() const noexcept { return utils::as<BaseEffect>(subProcessors_[0]); }
     BaseEffect *changeEffect(utils::string_view effectType);
   private:
-    static constexpr auto effectCount = Framework::Processors::BaseEffect::enum_count_filter(Framework::kGetActiveEffectPredicate);
     Framework::SimdBuffer<Framework::complex<float>, simd_float> buffer_{};
-    utils::array<BaseEffect *, effectCount> effects_{};
+    utils::up<BaseEffect *[]> effects_{};
   };
 }

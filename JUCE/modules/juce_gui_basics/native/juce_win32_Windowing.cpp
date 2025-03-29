@@ -2733,14 +2733,14 @@ private:
 
     void updateShadower()
     {
-        if (! component.isCurrentlyModal() && (styleFlags & windowHasDropShadow) != 0
-            && ((! hasTitleBar()) || SystemStats::getOperatingSystemType() < SystemStats::WinVista))
-        {
-            shadower = component.getLookAndFeel().createDropShadowerForComponent (component);
+        //if (! component.isCurrentlyModal() && (styleFlags & windowHasDropShadow) != 0
+        //    && ((! hasTitleBar()) || SystemStats::getOperatingSystemType() < SystemStats::WinVista))
+        //{
+        //    shadower = component.getLookAndFeel().createDropShadowerForComponent (component);
 
-            if (shadower != nullptr)
-                shadower->setOwner (&component);
-        }
+        //    if (shadower != nullptr)
+        //        shadower->setOwner (&component);
+        //}
     }
 
     void setIcon (const Image& newIcon) override

@@ -11,7 +11,7 @@
 #pragma once
 
 #include "Framework/vector_map.hpp"
-#include "Framework/parameters.hpp"
+#include "Framework/parameter_types.hpp"
 #include "OpenGlContainer.hpp"
 
 namespace Framework

@@ -11,10 +11,11 @@
 #include "load_save.hpp"
 
 #include "Third Party/json/json.hpp"
-#include <juce_core/juce_core.h>
+#include "Third Party/visage/file_system.h"
 
 #include "Framework/parameter_value.hpp"
 #include "Framework/parameter_bridge.hpp"
+#include "Framework/parameters.hpp"
 #include "Plugin/ProcessorTree.hpp"
 #include "Generation/SoundEngine.hpp"
 #include "Generation/EffectsState.hpp"
@@ -35,37 +36,42 @@ namespace utils
   }
 }
 
-namespace Framework::LoadSave
-{
-  juce::File getConfigFile();
-}
-
 namespace
 {
   class LoadingException final : public std::exception
   {
   public:
-    LoadingException(juce::String message) : message_{ COMPLEX_MOVE(message) } { }
+    LoadingException(std::string message) : message_{ COMPLEX_MOVE(message) } { }
     LoadingException(const LoadingException &) = default;
     ~LoadingException() noexcept override = default;
 
-    const char *what() const noexcept override { return message_.toRawUTF8(); }
-    LoadingException &append(juce::String string) { message_ += string; return *this; }
-    LoadingException &prepend(juce::String string) { message_ = string + message_; return *this; }
+    const char *what() const noexcept override { return message_.data(); }
+    LoadingException &append(std::string string) { message_ += string; return *this; }
+    LoadingException &prepend(std::string string) { message_ = string + message_; return *this; }
 
   private:
-    juce::String message_;
+    std::string message_;
   };
+
+  visage::File getConfigFilePath()
+  {
+    auto pluginFolder = visage::appDataDirectory().append(JucePlugin_Name);
+    if (!std::filesystem::exists(pluginFolder))
+    {
+      std::filesystem::create_directory(pluginFolder);
+    }
+    return pluginFolder.append(JucePlugin_Name ".config");
+  }
 
   json getConfigJson()
   {
-    juce::File configFile = Framework::LoadSave::getConfigFile();
-    if (!configFile.exists())
+    visage::File configFile = getConfigFilePath();
+    if (!std::filesystem::exists(configFile))
       return {};
 
     try
     {
-      json parsed = json::parse(configFile.loadFileAsString().toStdString(), nullptr, false);
+      json parsed = json::parse(visage::loadFileAsString(configFile), nullptr, false);
       if (parsed.is_discarded())
         return {};
       return parsed;
@@ -78,11 +84,8 @@ namespace
 
   void saveConfigJson(const json &configState)
   {
-    juce::File configFile = Framework::LoadSave::getConfigFile();
-
-    if (!configFile.exists())
-      configFile.create();
-    configFile.replaceWithText(configState.dump(2, ' ', true));
+    visage::File configFile = getConfigFilePath();
+    visage::replaceFileWithText(configFile, configState.dump(2, ' ', true));
   }
 
   void upgradeSave([[maybe_unused]] json &save)
@@ -93,24 +96,6 @@ namespace
 
 namespace Framework::LoadSave
 {
-  juce::File getConfigFile()
-  {
-    juce::PropertiesFile::Options configOptions;
-    configOptions.applicationName = "Complex";
-    configOptions.osxLibrarySubFolder = "Application Support";
-    configOptions.filenameSuffix = "config";
-
-  #ifdef COMPLEX_LINUX
-    configOptions.folderName = "." + juce::String{ juce::CharPointer_UTF8{ JucePlugin_Name } }.toLowerCase();
-  #else
-    configOptions.folderName = juce::String{ juce::CharPointer_UTF8{ JucePlugin_Name } }.toLowerCase();
-  #endif
-
-    return configOptions.getDefaultFile();
-  }
-
-
-
   utils::pair<int, int> getWindowSize()
   {
     json data = getConfigJson();
@@ -186,17 +171,6 @@ namespace Framework::LoadSave
     json data = getConfigJson();
     data["undo_steps"] = undoStepCount;
     saveConfigJson(data);
-  }
-
-  void writeSave(void *jsonData)
-  {
-    json &data = *static_cast<json *>(jsonData);
-    juce::File testSave = juce::File::getSpecialLocation(juce::File::userDesktopDirectory)
-      .getChildFile(juce::File::createLegalFileName("test_save.json"));
-    if (!testSave.replaceWithText(data.dump()))
-    {
-      COMPLEX_ASSERT_FALSE("Couldn't save");
-    }
   }
 }
 
@@ -301,14 +275,14 @@ namespace Plugin
     }
     catch (const LoadingException &e)
     {
-      juce::String error = "There was an error opening the preset.\n";
+      std::string error = "There was an error opening the preset.\n";
       error += e.what();
       juce::NativeMessageBox::showMessageBoxAsync(juce::MessageBoxIconType::NoIcon, "Error opening preset", error);
     }
     catch (const std::exception &e)
     {
       // idk what happened
-      juce::String error = "An unknown error occured while opening preset.\n";
+      std::string error = "An unknown error occured while opening preset.\n";
       error += e.what();
       juce::NativeMessageBox::showMessageBoxAsync(juce::MessageBoxIconType::NoIcon, "Error opening preset", error);
     }
@@ -358,7 +332,7 @@ namespace Plugin
     static constexpr auto processorTypes = Framework::Processors::
       enum_subtypes_filter_recursive<Framework::kGetProcessorPredicate>();
 
-    return [&]<typename ... Ts>(const std::tuple<nested_enum::type_identity<Ts>...> &)
+    return [&]<typename ... Ts>(nested_enum::type_list<Ts...>)
     {
       utils::up<Generation::BaseProcessor> processor = nullptr;
       utils::ignore = ((Ts::id().value() == processorType && (processor = utils::up<typename Ts::linked_type>::create(this), true)) || ...);
@@ -804,7 +778,7 @@ void ComplexAudioProcessor::getStateInformation(juce::MemoryBlock &destinationDa
 
   json data{};
   serialiseToJson(&data);
-  juce::String dataString = data.dump(2, ' ', true);
+  std::string dataString = data.dump(2, ' ', true);
   juce::MemoryOutputStream stream;
   stream.writeString(dataString);
   destinationData.append(stream.getData(), stream.getDataSize());
@@ -819,12 +793,12 @@ void ComplexAudioProcessor::setStateInformation(const void *data, int sizeInByte
   }
 
   juce::MemoryInputStream stream{ data, (usize)sizeInBytes, false };
-  juce::String dataString = stream.readEntireStreamAsString();
+  std::string dataString = stream.readEntireStreamAsString().toStdString();
   
   json jsonData{};
   try
   {
-    jsonData = json::parse(dataString.toRawUTF8());
+    jsonData = json::parse(dataString.data());
     upgradeSave(jsonData);
   }
   catch (const std::exception &e)

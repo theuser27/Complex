@@ -14,6 +14,7 @@
 
 #include "lookup.hpp"
 #include "circular_buffer.hpp"
+#include "parameters.hpp"
 
 namespace Framework
 {
@@ -85,15 +86,16 @@ namespace Framework
   { return utils::pow(utils::clamp(lanczosWindowLookup.linearLookup(position), 0.0f, 1.0f), alpha); }
 
   void Window::applyWindow(Buffer &buffer, usize channels, utils::span<char> channelsToProcess,
-    usize samples, Processors::SoundEngine::WindowType::type type, float alpha)
+    usize samples, nested_enum::typeless_enum windowType, float alpha)
   {
-    applyDefaultWindows(buffer, channels, channelsToProcess, samples, type, alpha);
+    applyDefaultWindows(buffer, channels, channelsToProcess, samples, windowType, alpha);
   }
 
   void Window::applyDefaultWindows(Buffer &buffer, usize channels, utils::span<char> channelsToProcess,
-    usize samples, Processors::SoundEngine::WindowType::type type, float alpha) noexcept
+    usize samples, nested_enum::typeless_enum windowType, float alpha) noexcept
   {
     using WindowType = Processors::SoundEngine::WindowType::type;
+    auto type = windowType.extract<WindowType>().value();
 
     if (type == WindowType::Lerp || type == WindowType::Rectangle)
       return;
@@ -205,11 +207,11 @@ namespace Framework
   }
 
   void Window::applyCustomWindows(Buffer &buffer, usize channels, utils::span<char> channelsToCopy,
-    usize samples, Processors::SoundEngine::WindowType::type type, float alpha)
+    usize samples, nested_enum::typeless_enum windowType, float alpha)
   {
     // TODO: see into how to generate custom windows based on spectral properties
     // redirecting to the default types for now
-    applyDefaultWindows(buffer, channels, channelsToCopy, samples, type, alpha);
+    applyDefaultWindows(buffer, channels, channelsToCopy, samples, windowType, alpha);
   }
 
 }

@@ -329,6 +329,17 @@ namespace Interface
       setName(name);
 
     setText(COMPLEX_MOVE(displayText));
+    borderComponent_.setRenderFunction([this](OpenGlWrapper &openGl, OpenGlComponent &target)
+      {
+        auto *quad = utils::as<OpenGlQuad>(&target);
+
+        auto &animator = target.getAnimator();
+        animator.tick(openGl.animate);
+
+        auto lineThickness = normalThickness_.get();
+        quad->setThickness(animator.getValue(Animator::Hover) * 0.25f * lineThickness + lineThickness);
+        target.render(openGl);
+      });
 
     addOpenGlComponent(&borderComponent_);
     addOpenGlComponent(&plusComponent_);

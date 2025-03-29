@@ -12,11 +12,14 @@
 
 #include "Framework/fourier_transform.hpp"
 #include "Framework/parameter_value.hpp"
+#include "Framework/parameters.hpp"
 #include "EffectsState.hpp"
 #include "../Plugin/ProcessorTree.hpp"
 
 namespace Generation
 {
+  using WindowType = Framework::Processors::SoundEngine::WindowType::type;
+
   SoundEngine::SoundEngine(Plugin::ProcessorTree *processorTree) noexcept :
     BaseProcessor{ processorTree, Framework::Processors::SoundEngine::id().value() }
   {
@@ -45,6 +48,12 @@ namespace Generation
 
   u32 SoundEngine::getProcessingDelay() const noexcept 
   { return FFTSamples_ + processorTree_->getSamplesPerBlock(); }
+
+  u32 SoundEngine::getFFTSize() const noexcept
+  {
+    return 1 << getParameter(Framework::Processors::
+      SoundEngine::BlockSize::id().value())->getInternalValue<u32>();
+  }
 
   void SoundEngine::resetBuffers() noexcept
   {
@@ -186,6 +195,58 @@ namespace Generation
       usedOutputChannels_, FFTSamples_, nextOverlapOffset_, windowType_);
   }
 
+  void SoundEngine::OutputBuffer::addOverlapBuffer(const Framework::Buffer &other, u32 channels, 
+    utils::span<char> channelsToOvelap, u32 samples, u32 beginOutputOffset, nested_enum::typeless_enum windowType) noexcept
+  {
+    u32 bufferSize = getSize();
+    u32 oldEnd = getEnd();
+    u32 newEnd = buffer_.setEnd((addOverlap_ + samples) % bufferSize);
+
+    // getting how many samples are going to be overlapped
+    // we clamp the value to max samples in case the FFT size was changed
+    u32 overlappedSamples = std::min(utils::circularDifference(addOverlap_, oldEnd, bufferSize), samples);
+
+    // writing stuff that isn't overlapped
+    if (u32 assignSamples = samples - overlappedSamples; assignSamples)
+    {
+      //buffer_.clear((bufferSize + newEnd - assignSamples) % bufferSize, assignSamples);
+      buffer_.writeToBuffer(other, channels, assignSamples,
+        (bufferSize + newEnd - assignSamples) % bufferSize, overlappedSamples, channelsToOvelap);
+    }
+
+    auto type = windowType.extract<WindowType>().value();
+
+    // overlapping
+    if (overlappedSamples)
+    {
+      if (type == WindowType::Lerp)
+        Framework::CircularBuffer::applyToBuffer<utils::MathOperations::Interpolate>(buffer_.getData(), other, channels,
+          overlappedSamples, addOverlap_, 0, channelsToOvelap);
+      else
+      {
+        // fading edges and overlapping
+        u32 fadeSamples = overlappedSamples / 4;
+
+        // fade in overlap
+        Framework::CircularBuffer::applyToBuffer<utils::MathOperations::FadeInAdd>(buffer_.getData(), other, channels,
+          fadeSamples, addOverlap_, 0, channelsToOvelap);
+
+        // overlap
+        buffer_.addBuffer(other, channels, overlappedSamples - 2 * fadeSamples,
+          channelsToOvelap, (addOverlap_ + fadeSamples) % bufferSize, fadeSamples);
+
+
+        // fade out overlap
+        Framework::CircularBuffer::applyToBuffer<utils::MathOperations::FadeOutAdd>(buffer_.getData(), other, channels,
+          fadeSamples, (addOverlap_ + overlappedSamples - fadeSamples) % bufferSize,
+          overlappedSamples - fadeSamples, channelsToOvelap);
+      }
+    }
+
+    // offsetting the overlap index for the next block
+    addOverlap_ = (addOverlap_ + beginOutputOffset) % bufferSize;
+  }
+
   // when the overlap is more than what the window requires
   // there will be an increase in gain, so we need to offset that
   void SoundEngine::scaleDown(u32 start, u32 samples) noexcept
@@ -197,8 +258,10 @@ namespace Generation
     // from previous scaleDown run in order to apply extra attenuation 
     // when moving the overlap control (essentially becomes linear interpolation)
 
+    auto type = windowType_.extract<WindowType>().value();
+
     float mult;
-    switch (windowType_)
+    switch (type)
     {
     case WindowType::Lerp: return;
     case WindowType::Rectangle:
@@ -342,6 +405,12 @@ namespace Generation
     newSubProcessor.setParentProcessorId(processorId_);
     effectsState_ = utils::as<EffectsState>(&newSubProcessor);
     subProcessors_.emplace_back(effectsState_);
+  }
+
+  void SoundEngine::initialiseParameters()
+  {
+    createProcessorParameters(Framework::Processors::SoundEngine::
+      enum_ids_filter<Framework::kGetParameterPredicate, true>());
   }
 
   void SoundEngine::process(float *const *buffer, u32 samples,

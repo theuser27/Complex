@@ -10,6 +10,7 @@
 
 #include "HeaderFooterSections.hpp"
 
+#include "Framework/parameters.hpp"
 #include "Framework/windows.hpp"
 #include "Generation/EffectsState.hpp"
 #include "Generation/SoundEngine.hpp"

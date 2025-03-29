@@ -16,7 +16,7 @@
 #include "utils.hpp"
 #include "sync_primitives.hpp"
 #include "simd_utils.hpp"
-#include "parameters.hpp"
+#include "parameter_types.hpp"
 
 namespace Plugin
 {

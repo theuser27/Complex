@@ -16,11 +16,6 @@
 namespace utils
 {
   using nullptr_t = decltype(nullptr);
-  [[nodiscard]] constexpr bool is_constant_evaluated() noexcept { return __builtin_is_constant_evaluated(); }
-
-  template<typename To, typename From> requires (sizeof(To) == sizeof(From) && __is_trivially_copyable(To) && __is_trivially_copyable(From))
-  [[nodiscard]] constexpr To bit_cast(const From &value) noexcept { return __builtin_bit_cast(To, value); }
-  
   template<typename ...> using void_t = void;
   template<typename T> struct type_identity { using type = T; };
 
@@ -178,6 +173,11 @@ namespace utils
   concept derived_from = is_base_of_v<Base, Derived> &&
     is_convertible_v<const volatile Derived *, const volatile Base *>;
 
+  [[nodiscard]] constexpr bool is_constant_evaluated() noexcept { return __builtin_is_constant_evaluated(); }
+
+  template<typename To, typename From> requires (sizeof(To) == sizeof(From) && __is_trivially_copyable(To) && __is_trivially_copyable(From))
+  [[nodiscard]] constexpr To bit_cast(const From &value) noexcept { return __builtin_bit_cast(To, value); }
+
   template<typename T>
   [[nodiscard]] inline constexpr T *launder(T *pointer) noexcept
   {
@@ -207,6 +207,23 @@ namespace utils
         [[maybe_unused]] auto dummy = ((fn(Is), Is) + ...);
       }(make_index_sequence<N>());
     }
+  }
+
+  namespace detail
+  {
+    template<auto> struct sink { sink(auto &&) { } };
+  }
+
+  template <auto N>
+  decltype(auto) get_nth_element(auto &&... args)
+  {
+    return [&]<auto ... Is>(index_sequence<Is...>)
+    {
+      return [](detail::sink<Is> ..., auto &&element, auto &&...)
+      {
+        return COMPLEX_FWD(element);
+      }(COMPLEX_FWD(args)...);
+    }(make_index_sequence<N>());
   }
 
   template<typename T>
@@ -297,7 +314,7 @@ namespace utils
       return true;
     }
 
-    internal_value_type storage[(Size == 0) ? 1 : Size];
+    internal_value_type storage[(Size == 0) ? 1 : Size]{};
   #undef ASSERT_NOT_ZERO_SIZED
   };
 
@@ -530,13 +547,18 @@ namespace utils
 
     static constexpr size_type get_size(const char *string)
     {
-      size_type count = 0;
-      while (*string != char())
+      if constexpr (requires(const char *s) { __builtin_strlen(s); })
+        return __builtin_strlen(string);
+      else
       {
-        ++count;
-        ++string;
+        size_type count = 0;
+        while (*string != char())
+        {
+          ++count;
+          ++string;
+        }
+        return count;
       }
-      return count;
     }
     static constexpr int compare_strings(const char *lhs, usize lhs_size,
       const char *rhs, usize rhs_size) noexcept
@@ -647,5 +669,29 @@ namespace utils
   constexpr bool operator==(const up<T> &one, nullptr_t) noexcept { return one.get() == nullptr; }
   template<typename T>
   constexpr bool operator==(nullptr_t, const up<T> &two) noexcept { return two.get() == nullptr; }
+
+  static constexpr auto find(const auto &container, const auto &element)
+  {
+    auto begin = container.begin();
+    auto end = container.end();
+    for (; begin != end; ++begin)
+      if (*begin == element)
+        break;
+
+    return begin;
+  }
+
+  static constexpr auto find_if(const auto &container, const auto &predicate)
+  {
+    auto begin = container.begin();
+    auto end = container.end();
+    for (; begin != end; ++begin)
+      if (predicate(*begin))
+        break;
+
+    return begin;
+  }
+
+
 
 }
