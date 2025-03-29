@@ -72,7 +72,7 @@ namespace Framework
         auto name = link->parameter->getParameterDetails().displayName;
         juce::String newString{};
         newString.preallocateBytes(64);
-        newString += parameterIndex_ + 1;
+        newString += juce::String{ parameterIndex_ + 1 };
         newString += " > ";
         newString += juce::String{ name.data(), name.size() };
         name_.second = COMPLEX_MOVE(newString);

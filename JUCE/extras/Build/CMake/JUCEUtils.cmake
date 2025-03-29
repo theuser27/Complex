@@ -357,6 +357,7 @@ function(juce_add_binary_data target)
     target_sources(${target} PRIVATE "${binary_file_names}")
     target_include_directories(${target} INTERFACE ${juce_binary_data_folder})
     target_compile_features(${target} PRIVATE cxx_std_17)
+    set_target_properties(${target} PROPERTIES POSITION_INDEPENDENT_CODE TRUE)
 
     # This fixes an issue where Xcode is unable to find binary data during archive.
     if(CMAKE_GENERATOR STREQUAL "Xcode")

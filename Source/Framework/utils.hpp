@@ -17,6 +17,7 @@
   #include <new>
 #endif
 #include <atomic>
+#include <cstring>
 
 #include "constants.hpp"
 #include "stl_utils.hpp"

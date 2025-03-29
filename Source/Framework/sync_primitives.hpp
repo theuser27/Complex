@@ -17,6 +17,8 @@
 #include "Third Party/clog/small_function.hpp"
 
 #include "stl_utils.hpp"
+#include "simd_values.hpp"
+#include <cstring>
 
 namespace utils
 {

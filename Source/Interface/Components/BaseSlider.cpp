@@ -277,7 +277,7 @@ namespace Interface
       if (details_.indexedData[option].count > 1)
       {
         string += ' ';
-        string += (index + 1);
+        string += String(index + 1);
       }
       return (addPrefix) ? popupPrefix_ + string : string;
     }
