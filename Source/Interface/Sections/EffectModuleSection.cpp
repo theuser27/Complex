@@ -309,7 +309,7 @@ namespace Interface
     paintUIBackground(g);
 
     String idString = "#";
-    idString += getProcessorId().value();
+    idString += String(getProcessorId().value());
     g.setColour(getColour(Skin::kNormalText));
     auto font = Fonts::instance()->getInterVFont().italicised();
     Fonts::instance()->setHeightFromAscent(font, scaleValue(kIdTextHeight));

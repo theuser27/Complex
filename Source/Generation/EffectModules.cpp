@@ -27,7 +27,7 @@ namespace Generation
     static constexpr auto indexedData = []()
     {
       // MSVC has issues with __builtin_array_init_helper so we check if we have anything
-      if constexpr (Type::template enum_count_filter(kGetActiveAlgoPredicate) == 0)
+      if constexpr (Type::template enum_count_filter<>(kGetActiveAlgoPredicate) == 0)
         return utils::array<IndexedData, 0>{};
       else
       {

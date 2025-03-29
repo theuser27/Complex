@@ -112,8 +112,8 @@ namespace utils
   strict_inline simd_int vector_call merge(simd_int falseValue, simd_int trueValue, simd_mask mask) noexcept
   {
   #ifdef COMPLEX_SSE4_1
-    return reinterpretToInt(_mm_blendv_ps(reinterpretToFloat(falseValue).value, 
-      reinterpretToFloat(trueValue).value, reinterpretToFloat(mask).value));
+    return reinterpretToInt(simd_float(_mm_blendv_ps(reinterpretToFloat(falseValue).value, 
+      reinterpretToFloat(trueValue).value, reinterpretToFloat(mask).value)));
   #elif COMPLEX_NEON
     return vbslq_u32(mask.value, trueValue.value, falseValue.value);
   #endif
@@ -336,10 +336,10 @@ namespace utils
     
     if constexpr (utils::is_same_v<SIMD, simd_float>)
     {
-      values[array[0]] = reinterpretToFloat(_mm_insert_epi32(one, valueArray[0], 0));
-      values[array[1]] = reinterpretToFloat(_mm_insert_epi32(two, valueArray[1], 1));
-      values[array[2]] = reinterpretToFloat(_mm_insert_epi32(three, valueArray[2], 2));
-      values[array[3]] = reinterpretToFloat(_mm_insert_epi32(four, valueArray[3], 3));
+      values[array[0]] = reinterpretToFloat(simd_int(_mm_insert_epi32(one, valueArray[0], 0)));
+      values[array[1]] = reinterpretToFloat(simd_int(_mm_insert_epi32(two, valueArray[1], 1)));
+      values[array[2]] = reinterpretToFloat(simd_int(_mm_insert_epi32(three, valueArray[2], 2)));
+      values[array[3]] = reinterpretToFloat(simd_int(_mm_insert_epi32(four, valueArray[3], 3)));
     }
     else
     {

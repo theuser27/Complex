@@ -12,6 +12,8 @@
 
 #include <memory>
 #include <vector>
+#include <format>
+#include <cstring>
 
 #include "utils.hpp"
 #include "sync_primitives.hpp"
