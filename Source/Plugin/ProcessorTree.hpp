@@ -61,13 +61,14 @@ namespace Plugin
 
     auto getProcessor(u64 processorId) const noexcept -> Generation::BaseProcessor *;
     // creates a brand new processor
-    template<utils::derived_from<Generation::BaseProcessor> T, typename ... Args>
-    auto createProcessor(Args &&... args) -> T *
+    template<utils::derived_from<Generation::BaseProcessor> T, bool InitialiseParameters = true>
+    auto createProcessor(auto &&... args) -> T *
     {
       auto processor = utils::up<T>::create(COMPLEX_FWD(args)...);
       auto *pointer = processor.get();
       addProcessor(COMPLEX_MOVE(processor));
-      pointer->initialiseParameters();
+      if constexpr (InitialiseParameters)
+        pointer->initialiseParameters();
       return pointer;
     }
     // creates a default processor or loads processor from save if jsonData != nullptr

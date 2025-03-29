@@ -41,7 +41,7 @@ namespace common
 
   // FFT constants; some internal processing relies that sizes be powers of 2
   inline constexpr u32 kMinFFTOrder = 7;                    // (can be changed)    128 samples min
-  inline constexpr u32 kMaxFFTOrder = 14;                   // (can be changed)    16384 samples max
+  inline constexpr u32 kMaxFFTOrder = 15;                   // (can be changed)    16384 samples max
   inline constexpr u32 kDefaultFFTOrder = 12;               // (can be changed)    4096 samples default
   inline constexpr float kMinWindowOverlap = 0.0f;          // (can be changed)    minimum window overlap
   inline constexpr float kMaxWindowOverlap = 0.96875f;      // (can be changed)    maximum window overlap

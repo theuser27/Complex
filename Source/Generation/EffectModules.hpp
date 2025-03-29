@@ -131,6 +131,7 @@ namespace Generation
     // 
     // freeze input
     // record and play back input
+    // nyquist gate (some values of destroy/reinterpret cause massive spikes)
 
     // TODO:
     // idea: mix 2 input signals (left and right/right and left channels)

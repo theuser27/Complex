@@ -92,7 +92,7 @@ if (CMAKE_SYSTEM_NAME STREQUAL "Windows")
 elseif(CMAKE_SYSTEM_NAME STREQUAL "Linux")
 	
 elseif(CMAKE_SYSTEM_NAME STREQUAL "Darwin")
-
+	target_link_options(${TargetName} PUBLIC "-lc++")
 endif()
 
 if (CMAKE_SYSTEM_PROCESSOR MATCHES "(x86)|(X86)|(amd64)|(AMD64)|(x86_64)")
@@ -114,7 +114,7 @@ endif ()
 if (CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
 
 elseif (CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
-	target_link_options(${TargetName} PUBLIC)
+
 elseif (CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
 	target_compile_options(${TargetName} PRIVATE /fp:fast /Zc:preprocessor /permissive- /wd5105)
 endif()

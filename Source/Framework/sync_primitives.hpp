@@ -11,14 +11,16 @@
 #pragma once
 
 #include <atomic>
-#ifdef COMPLEX_ARM
-  #include <arm_acle.h>
-#endif
+
 #include "Third Party/clog/small_function.hpp"
 
 #include "stl_utils.hpp"
-#include "simd_values.hpp"
-#include <cstring>
+
+#if defined(COMPLEX_X64)
+  #include <immintrin.h>
+#elif defined(COMPLEX_ARM)
+  #include <arm_acle.h>
+#endif
 
 namespace utils
 {

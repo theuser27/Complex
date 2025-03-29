@@ -10,6 +10,8 @@
 
 #include "parameter_bridge.hpp"
 
+#include <format>
+
 #include "parameter_value.hpp"
 #include "Interface/Components/BaseControl.hpp"
 #include "Plugin/PluginProcessor.hpp"

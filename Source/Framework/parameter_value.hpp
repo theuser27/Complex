@@ -12,8 +12,6 @@
 
 #include <memory>
 #include <vector>
-#include <format>
-#include <cstring>
 
 #include "utils.hpp"
 #include "sync_primitives.hpp"
@@ -33,8 +31,8 @@ namespace Interface
 namespace Framework
 {
   template<typename T>
-  concept ParameterRepresentation = std::is_same_v<T, float> || std::is_same_v<T, u32>
-    || SimdValue<T> || std::is_same_v<T, Framework::IndexedData>;
+  concept ParameterRepresentation = utils::is_same_v<T, float> || utils::is_same_v<T, u32>
+    || SimdValue<T> || utils::is_same_v<T, Framework::IndexedData>;
 
   struct atomic_simd_float
   {
@@ -137,7 +135,7 @@ namespace Framework
       
       [[maybe_unused]] T result;
 
-      if constexpr (std::is_same_v<T, simd_float>)
+      if constexpr (utils::is_same_v<T, simd_float>)
       {
         COMPLEX_ASSERT(details_.scale != ParameterScale::Toggle && "Parameter isn't supposed to be a toggle control");
         COMPLEX_ASSERT(details_.scale != ParameterScale::Indexed && "Parameter isn't supposed to be a choice control");
@@ -149,7 +147,7 @@ namespace Framework
           result = internalValue_;
         return result;
       }
-      else if constexpr (std::is_same_v<T, float>)
+      else if constexpr (utils::is_same_v<T, float>)
       {
         COMPLEX_ASSERT(details_.scale != ParameterScale::Toggle && "Parameter isn't supposed to be a toggle control");
         COMPLEX_ASSERT(details_.scale != ParameterScale::Indexed && "Parameter isn't supposed to be a choice control");
@@ -175,7 +173,7 @@ namespace Framework
 
         return result;
       }
-      else if constexpr (std::is_same_v<T, simd_int>)
+      else if constexpr (utils::is_same_v<T, simd_int>)
       {
         COMPLEX_ASSERT(details_.scale == ParameterScale::Toggle || details_.scale == ParameterScale::Indexed || 
           details_.scale == ParameterScale::IndexedNumeric && 
@@ -187,7 +185,7 @@ namespace Framework
           result = utils::toInt(internalValue_);
         return result;
       }
-      else if constexpr (std::is_same_v<T, u32>)
+      else if constexpr (utils::is_same_v<T, u32>)
       {
         COMPLEX_ASSERT(details_.scale == ParameterScale::Toggle || details_.scale == ParameterScale::Indexed || 
           details_.scale == ParameterScale::IndexedNumeric && 
@@ -204,7 +202,7 @@ namespace Framework
           result = utils::toInt(internalValue_)[0];
         return result;
       }
-      else if constexpr (std::is_same_v<T, Framework::IndexedData>)
+      else if constexpr (utils::is_same_v<T, Framework::IndexedData>)
       {
         COMPLEX_ASSERT(details_.scale == ParameterScale::Indexed &&
           "Parameter must be indexed to support value to string conversion");
@@ -273,7 +271,7 @@ namespace Framework
       utils::ScopedLock g{ waitLock_, utils::WaitMechanism::Spin };
 
       std::weak_ptr deletedModulator = parameterLink_.modulators[index];
-      parameterLink_.modulators.erase(parameterLink_.modulators.begin() + (std::ptrdiff_t)index);
+      parameterLink_.modulators.erase(parameterLink_.modulators.begin() + (isize)index);
 
       isDirty_ = true;
 

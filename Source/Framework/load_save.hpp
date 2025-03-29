@@ -12,7 +12,6 @@
 
 #include "platform_definitions.hpp"
 #include "stl_utils.hpp"
-#include <format>
 
 namespace Framework
 {

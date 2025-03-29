@@ -10,6 +10,8 @@
 
 #include "load_save.hpp"
 
+#include <format>
+
 #include "Third Party/json/json.hpp"
 #include "Third Party/visage/file_system.h"
 
@@ -259,7 +261,7 @@ namespace Plugin
         }
       }
 
-      soundEngine_ = createProcessor<Generation::SoundEngine>(this);
+      soundEngine_ = createProcessor<Generation::SoundEngine, false>(this);
       soundEngine_->setParentProcessorId(processorTreeId);
       soundEngine_->deserialiseFromJson(&soundEngine);
 
@@ -419,7 +421,7 @@ static void handleIndexedData(Framework::ParameterDetails &details, json *indexe
       appendAndAddRelocation(element.displayName, name);
       if (!dynamicUpdateUuid.empty())
       {
-        if (std::ranges::find(Framework::kAllChangeIds, dynamicUpdateUuid) == Framework::kAllChangeIds.end())
+        if (utils::find(Framework::kAllChangeIds, dynamicUpdateUuid) == Framework::kAllChangeIds.end())
         {
           // TODO: add option to continue loading without this indexed value
           throw LoadingException{ std::format("Unknown dynamic update reason ({}) for indexed element {} ({})",
@@ -431,7 +433,7 @@ static void handleIndexedData(Framework::ParameterDetails &details, json *indexe
       continue;
     }
 
-    auto iter = std::ranges::find_if(details.indexedData, [id](const auto &data) { return data.id == id; });
+    auto iter = utils::find_if(details.indexedData, [id](const auto &data) { return data.id == id; });
     if (iter == details.indexedData.end())
     {
       throw LoadingException{ std::format("Unknown indexed element {} ({}) in parameter {} ({})",
@@ -453,7 +455,7 @@ static void handleIndexedData(Framework::ParameterDetails &details, json *indexe
 
     if (!isDynamicUpdateUuidSame && !dynamicUpdateUuid.empty())
     {
-      if (std::ranges::find(Framework::kAllChangeIds, dynamicUpdateUuid) == Framework::kAllChangeIds.end())
+      if (utils::find(Framework::kAllChangeIds, dynamicUpdateUuid) == Framework::kAllChangeIds.end())
       {
         // TODO: add option to continue loading without this indexed value
         throw LoadingException{ std::format("Unknown dynamic update reason ({}) for indexed element {} ({})",
@@ -521,6 +523,29 @@ namespace Generation
       return std::pair{ name, id };
     };
 
+    for (auto parameterId : parameterIds)
+    {
+      bool isPresent = false;
+      for (const auto &[_, value] : data["parameters"].items())
+      {
+        auto savedId = value["id"].get<utils::string_view>();
+        if (savedId == parameterId)
+        {
+          isPresent = true;
+          break;
+        }
+      }
+      
+      if (!isPresent)
+      {
+        auto [processorName, processorId] = getNameId();
+        auto parameterName = Framework::Processors::enum_name_by_id_recursive(parameterId, false).value();
+
+        throw LoadingException{ std::format("Missing Parameter {} ({}) inside processor {} ({}).",
+          parameterName.data(), parameterId.data(), processorName.data(), processorId.data()) };
+      }
+    }
+
     for (auto &[_, value] : data["parameters"].items())
     {
       utils::up<Framework::ParameterValue> parameter;
@@ -534,13 +559,23 @@ namespace Generation
         throw e.prepend(std::format("Inside processor {} ({})\n", name.data(), id.data()));
       }
       auto parameterId = parameter->getParameterId();
-      if (std::ranges::find(parameterIds, parameterId) == parameterIds.end())
+      if (utils::find(parameterIds, parameterId) == parameterIds.end())
       {
         auto [name, id] = getNameId();
         throw LoadingException{ std::format("Parameter {} ({}) is not part of processor {} ({}).", 
           parameter->getParameterName().data(), parameterId.data(), name.data(), id.data()) };
       }
-      processor->processorParameters_.data.emplace_back(parameterId, COMPLEX_MOVE(parameter));
+
+      auto id = value["id"].get<utils::string_view>();
+      auto iter = utils::find_if(processor->processorParameters_.data, 
+        [id](const auto &parameter) { return parameter.first == id; });
+      if (iter != processor->processorParameters_.data.end())
+      {
+        COMPLEX_ASSERT_FALSE("Multiple same parameters found %s (%s).\nLast one will be discarded now.", 
+          value["display_name"].get<utils::string_view>().data(), id.data());
+      }
+      else
+        processor->processorParameters_.data.emplace_back(parameterId, COMPLEX_MOVE(parameter));
     }
 
     for (auto &[_, value] : data["processors"].items())
@@ -624,7 +659,7 @@ namespace Generation
       Framework::kGetProcessorPredicate, true>();
 
     for (auto &[_, value] : subProcessors.items())
-      if (std::ranges::find(kContainedEffects, value["id"].get<utils::string_view>()) == kContainedEffects.end())
+      if (utils::find(kContainedEffects, value["id"].get<utils::string_view>()) == kContainedEffects.end())
         throw LoadingException{ "Non-Effect found in EffectModule" };
 
     static constexpr auto kEffectModuleParameters = Framework::Processors::EffectModule::enum_ids_filter<
