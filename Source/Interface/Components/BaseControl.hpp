@@ -193,9 +193,9 @@ namespace Interface
 
     void addControl(BaseControl *control)
     {
-      COMPLEX_ASSERT(std::ranges::find_if(controls_, [&](auto element) 
+      COMPLEX_ASSERT(utils::find_if(controls_, [&](auto element) 
         { return element.first == control; }) == controls_.end());
-      controls_.emplace_back(control, std::pair<int, int>{});
+      controls_.emplace_back(control, utils::pair<int, int>{});
       control->addComponentListener(this);
     }
     void deleteControl(BaseControl *control) 
@@ -210,7 +210,7 @@ namespace Interface
 
     void setControlSizes(BaseControl *control, int height, int width = 0) noexcept
     {
-      auto iter = std::ranges::find_if(controls_, 
+      auto iter = utils::find_if(controls_, 
         [&](auto element) { return element.first == control; });
       COMPLEX_ASSERT(iter != controls_.end());
       iter->second = { width, height };
@@ -222,7 +222,7 @@ namespace Interface
   private:
     BaseComponent *parent_ = nullptr;
     juce::Rectangle<int> bounds_{};
-    std::vector<std::pair<BaseControl *, std::pair<int, int>>> controls_{};
+    std::vector<utils::pair<BaseControl *, utils::pair<int, int>>> controls_{};
     int controlSpacing_ = 0;
     Placement anchor_ = Placement::centerVertical | Placement::left;
     bool isArranging_ = false;

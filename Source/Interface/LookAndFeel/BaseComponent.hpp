@@ -14,100 +14,6 @@
 #include "Framework/utils.hpp"
 #include "Framework/sync_primitives.hpp"
 
-namespace utils
-{
-  template<typename T>
-  class shared_value<std::unique_ptr<T>>
-  {
-  public:
-    shared_value() = default;
-    explicit shared_value(std::unique_ptr<T> &&value) noexcept { this->value = COMPLEX_MOVE(value); }
-    shared_value(shared_value &&other) noexcept
-    {
-      ScopedLock g{ other.guard, WaitMechanism::Spin, false };
-      value = COMPLEX_MOVE(value.value);
-    }
-    shared_value &operator=(shared_value &&other) noexcept
-    {
-      ScopedLock g{ other.guard, WaitMechanism::Spin, false };
-      value = COMPLEX_MOVE(other.value);
-      return *this;
-    }
-    shared_value &operator=(std::unique_ptr<T> &&newValue) noexcept
-    {
-      ScopedLock g{ guard, WaitMechanism::Spin, false };
-      value = COMPLEX_MOVE(newValue);
-      return *this;
-    }
-
-    [[nodiscard]] std::add_pointer_t<std::remove_all_extents_t<T>> lock() noexcept
-    {
-      lockAtomic(guard, WaitMechanism::Spin, false);
-      return value.get();
-    }
-
-    [[nodiscard]] std::add_pointer_t<std::remove_all_extents_t<const T>> lock() const noexcept
-    {
-      lockAtomic(guard, WaitMechanism::Spin, false);
-      return value.get();
-    }
-
-    void unlock() const noexcept
-    {
-      guard.store(false, std::memory_order_release);
-      guard.notify_one();
-    }
-  private:
-    mutable std::atomic<bool> guard = false;
-    std::unique_ptr<T> value{};
-  };
-
-  template<typename T>
-  class shared_value_block
-  {
-  public:
-    shared_value_block() = default;
-    explicit shared_value_block(T &&value) noexcept { this->value = COMPLEX_MOVE(value); }
-    shared_value_block(shared_value_block &&other) noexcept
-    {
-      ScopedLock g{ other.guard, WaitMechanism::Sleep };
-      value = COMPLEX_MOVE(other.value);
-    }
-    shared_value_block &operator=(shared_value_block &&other) noexcept
-    {
-      ScopedLock g{ other.guard, WaitMechanism::Sleep };
-      return shared_value_block::operator=(COMPLEX_MOVE(other.value));
-    }
-    shared_value_block &operator=(T &&newValue) noexcept
-    {
-      ScopedLock g{ guard, WaitMechanism::WaitNotify };
-      value = COMPLEX_MOVE(newValue);
-      return *this;
-    }
-
-    [[nodiscard]] T &lock() noexcept
-    {
-      lockAtomic(guard, WaitMechanism::WaitNotify, false);
-      return value;
-    }
-
-    [[nodiscard]] const T &lock() const noexcept
-    {
-      lockAtomic(guard, WaitMechanism::WaitNotify, false);
-      return value;
-    }
-
-    void unlock() const noexcept
-    {
-      guard.store(false, std::memory_order_release);
-      guard.notify_one();
-    }
-  private:
-    mutable std::atomic<bool> guard = false;
-    T value{};
-  };
-}
-
 namespace Interface
 {
   class BaseComponent;
@@ -117,10 +23,9 @@ namespace Interface
     BaseComponent *component = nullptr;
     juce::Rectangle<int> change{};
     bool isClipping = true;
-  };
 
-  constexpr bool operator==(const ViewportChange &one, const ViewportChange &two) noexcept
-  { return one.component == two.component && one.change == two.change && one.isClipping == two.isClipping; }
+    constexpr bool operator==(const ViewportChange &) const noexcept = default;
+  };
 
   class BaseComponent : public juce::Component
   {

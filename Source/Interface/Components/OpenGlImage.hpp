@@ -10,7 +10,6 @@
 
 #pragma once
 
-#include <variant>
 #include "Interface/LookAndFeel/Miscellaneous.hpp"
 #include "OpenGlComponent.hpp"
 
@@ -48,23 +47,21 @@ namespace Interface
     void setColor(Colour colour) { colour_ = colour; }
     void setActive(bool active) { isActive_ = active; }
 
-    void setPaintFunction(std::function<void(Graphics &, juce::Rectangle<int>)> paintFunction) 
+    void setPaintFunction(clg::small_fn<void(Graphics &, juce::Rectangle<int>)> paintFunction) 
     { paintFunction_ = COMPLEX_MOVE(paintFunction); }
     void setShouldClearOnRedraw(bool clearOnRedraw) { clearOnRedraw_ = clearOnRedraw; }
     void paintEntireComponent(bool paintEntireComponent) { paintEntireComponent_ = paintEntireComponent; }
 
-    void setVertexPosition(size_t index, float x, float y)
+    void setVertexPosition(usize index, float x, float y)
     {
-      auto vertices = positionVertices_.lock();
+      auto vertices = positionVertices_.write();
       vertices[index] = x;
       vertices[index + 1] = y;
-      positionVertices_.unlock();
-      hasNewVertices_ = true;
     }
 
     void movePosition(float x, float y)
     {
-      auto vertices = positionVertices_.lock();
+      auto vertices = positionVertices_.write();
       vertices[0]  = -1.0f + x;
       vertices[1]  =  1.0f + y;
       vertices[4]  = -1.0f + x;
@@ -73,8 +70,6 @@ namespace Interface
       vertices[9]  = -1.0f + y;
       vertices[12] =  1.0f + x;
       vertices[13] =  1.0f + y;
-      positionVertices_.unlock();
-      hasNewVertices_ = true;
     }
 
   protected:
@@ -84,13 +79,12 @@ namespace Interface
     utils::shared_value<bool> useScissor_ = true;
     utils::shared_value<bool> isActive_ = true;
 
-    utils::shared_value<bool> hasNewVertices_ = true;
     utils::shared_value<bool> shouldReloadImage_ = false;
     utils::shared_value<BaseComponent *> targetComponent_ = nullptr;
     utils::shared_value<juce::Rectangle<int>> customViewportBounds_{};
     utils::shared_value<juce::Rectangle<int>> customScissorBounds_{};
 
-    utils::shared_value<std::unique_ptr<Image>> drawImage_;
+    utils::shared_value_block<Image> drawImage_;
     GLuint textureId_ = 0;
     int textureWidth_ = 0;
     int textureHeight_ = 0;
@@ -99,11 +93,11 @@ namespace Interface
     OpenGlAttribute imagePosition_;
     OpenGlAttribute textureCoordinates_;
 
-    utils::shared_value<std::unique_ptr<float[]>> positionVertices_;
+    utils::shared_value<float[]> positionVertices_;
     GLuint vertexBuffer_{};
     GLuint triangleBuffer_{};
 
-    std::function<void(Graphics &, juce::Rectangle<int>)> paintFunction_{};
+    clg::small_fn<void(Graphics &, juce::Rectangle<int>)> paintFunction_{};
     bool paintEntireComponent_ = true;
     bool clearOnRedraw_ = true;
 

@@ -1255,12 +1255,11 @@ namespace Generation
     {
       [&]<typename ... Ts>(nested_enum::type_list<Ts...>)
       {
-        std::ignore = ((Ts::id().value() == effectId && (effect = processorTree_->createProcessor<typename Ts::linked_type>(processorTree_), true)) || ...);
+        std::ignore = ((Ts::id().value() == effectId && (effect = processorTree_->createProcessor<typename Ts::linked_type, true>(processorTree_), true)) || ...);
       }(Processors::BaseEffect::enum_subtypes_filter<kGetActiveEffectPredicate>());
 
       COMPLEX_ASSERT(effect && "Unknown effect type was provided");
 
-      effect->initialiseParameters();
       effects_[newEffectIndex] = effect;
     }
 

@@ -10,7 +10,6 @@
 
 #pragma once
 
-#include "Framework/parameter_bridge.hpp"
 #include "BaseSection.hpp"
 #include "../Components/OpenGlQuad.hpp"
 #include "../Components/OpenGlImage.hpp"

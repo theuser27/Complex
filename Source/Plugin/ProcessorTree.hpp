@@ -61,7 +61,7 @@ namespace Plugin
 
     auto getProcessor(u64 processorId) const noexcept -> Generation::BaseProcessor *;
     // creates a brand new processor
-    template<utils::derived_from<Generation::BaseProcessor> T, bool InitialiseParameters = true>
+    template<utils::derived_from<Generation::BaseProcessor> T, bool InitialiseParameters = false>
     auto createProcessor(auto &&... args) -> T *
     {
       auto processor = utils::up<T>::create(COMPLEX_FWD(args)...);
@@ -103,7 +103,7 @@ namespace Plugin
     virtual auto getLaneCount() const -> usize = 0;
 
     auto getParameterBridges() noexcept { return utils::span{ parameterBridges_ }; }
-    auto &getParameterModulators() noexcept { return parameterModulators_; }
+    auto getParameterModulators() noexcept { return utils::span{ parameterModulators_ }; }
 
     void pushUndo(Framework::WaitingUpdate *action, bool isNewTransaction = true);
     void undo();

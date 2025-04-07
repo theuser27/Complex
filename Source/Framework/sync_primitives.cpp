@@ -162,7 +162,7 @@ namespace utils
     usize threadId{};
     auto threadId_ = std::this_thread::get_id();
     static_assert(sizeof(usize) >= sizeof(threadId_));
-    std::memcpy(&threadId, &threadId_, sizeof(threadId_));
+    ::memcpy(&threadId, &threadId_, sizeof(threadId_));
     return threadId;
   }
 

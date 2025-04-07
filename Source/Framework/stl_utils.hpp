@@ -179,32 +179,26 @@ namespace utils
   [[nodiscard]] constexpr To bit_cast(const From &value) noexcept { return __builtin_bit_cast(To, value); }
 
   template<typename T>
-  [[nodiscard]] inline constexpr T *launder(T *pointer) noexcept
+  [[nodiscard]] constexpr T *launder(T *pointer) noexcept
   {
     static_assert(!is_function_v<T>, "can't launder functions");
     static_assert(!is_void_v<T>, "can't launder cv-void");
     return __builtin_launder(pointer);
   }
 
-  template<usize N, typename Fn> requires requires(Fn fn) { fn(); }
-  inline void unroll(const Fn &fn)
+  template<usize N, typename Fn>
+  constexpr strict_inline void unroll(const Fn &fn)
   {
     if constexpr (N >= 1)
     {
       [&]<usize ... Is>(const index_sequence<Is...> &)
       {
-        [[maybe_unused]] auto dummy = ((fn(), Is) + ...);
-      }(make_index_sequence<N>());
-    }
-  }
-  template<usize N, typename Fn> requires requires(Fn fn, usize i) { fn(i); }
-  inline void unroll(const Fn &fn)
-  {
-    if constexpr (N >= 1)
-    {
-      [&]<usize ... Is>(const index_sequence<Is...> &)
-      {
-        [[maybe_unused]] auto dummy = ((fn(Is), Is) + ...);
+
+        if constexpr (requires(Fn fn, usize i) { fn(i); })
+          [[maybe_unused]] auto dummy = ((fn(Is), Is) + ...);
+        else if constexpr (requires(Fn fn) { fn(); })
+          [[maybe_unused]] auto dummy = ((fn(), Is) + ...);
+        else COMPLEX_ASSERT_FALSE("Couldn't find correct overload, consider adding it here");
       }(make_index_sequence<N>());
     }
   }
@@ -214,12 +208,12 @@ namespace utils
     template<auto> struct sink { sink(auto &&) { } };
   }
 
-  template <auto N>
-  decltype(auto) get_nth_element(auto &&... args)
+  template<auto N>
+  constexpr decltype(auto) get_nth_element(auto &&... args)
   {
-    return [&]<auto ... Is>(index_sequence<Is...>)
+    return [&]<auto ... Is>(index_sequence<Is...>) -> decltype(auto)
     {
-      return [](detail::sink<Is> ..., auto &&element, auto &&...)
+      return [](detail::sink<Is> ..., auto &&element, auto &&...) -> decltype(auto)
       {
         return COMPLEX_FWD(element);
       }(COMPLEX_FWD(args)...);
@@ -670,7 +664,7 @@ namespace utils
   template<typename T>
   constexpr bool operator==(nullptr_t, const up<T> &two) noexcept { return two.get() == nullptr; }
 
-  static constexpr auto find(const auto &container, const auto &element)
+  static constexpr auto find(auto &container, const auto &element)
   {
     auto begin = container.begin();
     auto end = container.end();
@@ -681,7 +675,7 @@ namespace utils
     return begin;
   }
 
-  static constexpr auto find_if(const auto &container, const auto &predicate)
+  static constexpr auto find_if(auto &container, const auto &predicate)
   {
     auto begin = container.begin();
     auto end = container.end();

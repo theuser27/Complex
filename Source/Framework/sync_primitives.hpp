@@ -16,9 +16,9 @@
 
 #include "stl_utils.hpp"
 
-#if defined(COMPLEX_X64)
+#if COMPLEX_X64
   #include <immintrin.h>
-#elif defined(COMPLEX_ARM)
+#elif COMPLEX_ARM
   #include <arm_acle.h>
 #endif
 
@@ -288,5 +288,50 @@ namespace utils
       changeFlag(Using);
       return { data_.get(), size_, this, true };
     }
+  };
+
+  template<typename T>
+  class shared_value_block
+  {
+  public:
+    shared_value_block() = default;
+    explicit shared_value_block(T &&value) noexcept { this->value = COMPLEX_MOVE(value); }
+    shared_value_block(shared_value_block &&other) noexcept
+    {
+      ScopedLock g{ other.guard, WaitMechanism::Sleep };
+      value = COMPLEX_MOVE(other.value);
+    }
+    shared_value_block &operator=(shared_value_block &&other) noexcept
+    {
+      ScopedLock g{ other.guard, WaitMechanism::Sleep };
+      return shared_value_block::operator=(COMPLEX_MOVE(other.value));
+    }
+    shared_value_block &operator=(T &&newValue) noexcept
+    {
+      ScopedLock g{ guard, WaitMechanism::WaitNotify };
+      value = COMPLEX_MOVE(newValue);
+      return *this;
+    }
+
+    [[nodiscard]] T &lock() noexcept
+    {
+      lockAtomic(guard, WaitMechanism::WaitNotify, false);
+      return value;
+    }
+
+    [[nodiscard]] const T &lock() const noexcept
+    {
+      lockAtomic(guard, WaitMechanism::WaitNotify, false);
+      return value;
+    }
+
+    void unlock() const noexcept
+    {
+      guard.store(false, std::memory_order_release);
+      guard.notify_one();
+    }
+  private:
+    mutable std::atomic<bool> guard = false;
+    T value{};
   };
 }

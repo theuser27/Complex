@@ -28,17 +28,19 @@ namespace Interface
 
   OpenGlImage::OpenGlImage(String name) : OpenGlComponent{ COMPLEX_MOVE(name) }
   {
-    positionVertices_ = std::make_unique<float[]>(kNumPositions);
-    float positionVertices[kNumPositions] =
+    positionVertices_ = utils::shared_value<float[]>{ kNumPositions };
+    static constexpr float positionVertices[kNumPositions] =
     {
       -1.0f,  1.0f, 0.0f, 1.0f,
       -1.0f, -1.0f, 0.0f, 0.0f,
        1.0f, -1.0f, 1.0f, 0.0f,
        1.0f,  1.0f, 1.0f, 1.0f
     };
-    auto vertices = positionVertices_.lock();
-    memcpy(vertices, positionVertices, kNumPositions * sizeof(float));
-    positionVertices_.unlock();
+
+    {
+      auto vertices = positionVertices_.write();
+      memcpy(vertices.data(), positionVertices, kNumPositions * sizeof(float));
+    }
 
     setInterceptsMouseClicks(false, false);
   }
@@ -61,22 +63,20 @@ namespace Interface
     if (redrawArea == juce::Rectangle<int>{})
       redrawArea = { width, height };
 
-    auto *drawImage = drawImage_.lock();
-    bool newImage = drawImage == nullptr || drawImage->getWidth() != width || drawImage->getHeight() != height;
+    auto &drawImage = drawImage_.lock();
+    bool newImage = drawImage.isNull() || drawImage.getWidth() != width || drawImage.getHeight() != height;
     if (!newImage && !forceRedraw)
       return;
 
     if (newImage)
     {
-      drawImage_.unlock();
-      drawImage_ = std::make_unique<Image>(Image::ARGB, width, height, false);
-      drawImage = drawImage_.lock();
+      drawImage = Image{ Image::ARGB, width, height, false };
     }
 
     if (clearOnRedraw_)
-      drawImage->clear(redrawArea);
+      drawImage.clear(redrawArea);
 
-    Graphics g(*drawImage);
+    Graphics g{ drawImage };
     if (paintFunction_)
       paintFunction_(g, redrawArea);
     else
@@ -93,10 +93,11 @@ namespace Interface
     glGenBuffers(1, &vertexBuffer_);
     glBindBuffer(GL_ARRAY_BUFFER, vertexBuffer_);
 
-    GLsizeiptr vertSize = static_cast<GLsizeiptr>(kNumPositions * sizeof(float));
-    auto vertices = positionVertices_.lock();
-    glBufferData(GL_ARRAY_BUFFER, vertSize, vertices, GL_STATIC_DRAW);
-    positionVertices_.unlock();
+    {
+      GLsizeiptr vertSize = static_cast<GLsizeiptr>(kNumPositions * sizeof(float));
+      auto vertices = positionVertices_.read();
+      glBufferData(GL_ARRAY_BUFFER, vertSize, vertices.data(), GL_STATIC_DRAW);
+    }
 
     glGenBuffers(1, &triangleBuffer_);
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, triangleBuffer_);
@@ -127,8 +128,8 @@ namespace Interface
 
     if (shouldReloadImage_)
     {
-      auto *drawImage = drawImage_.lock();
-      auto temp = loadImageAsTexture(openGl.context, textureId_, *drawImage, GL_LINEAR);
+      auto &drawImage = drawImage_.lock();
+      auto temp = loadImageAsTexture(openGl.context, textureId_, drawImage, GL_LINEAR);
       textureWidth_ = temp.first;
       textureHeight_ = temp.second;
       shouldReloadImage_ = false;
@@ -153,13 +154,11 @@ namespace Interface
 
     glBindBuffer(GL_ARRAY_BUFFER, vertexBuffer_);
 
-    if (hasNewVertices_)
+    if (positionVertices_.hasUpdate())
     {
       GLsizeiptr vertSize = static_cast<GLsizeiptr>(kNumPositions * sizeof(float));
-      auto vertices = positionVertices_.lock();
-      glBufferData(GL_ARRAY_BUFFER, vertSize, vertices, GL_STATIC_DRAW);
-      positionVertices_.unlock();
-      hasNewVertices_ = false;
+      auto vertices = positionVertices_.read();
+      glBufferData(GL_ARRAY_BUFFER, vertSize, vertices.data(), GL_STATIC_DRAW);
     }
 
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, triangleBuffer_);

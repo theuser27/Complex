@@ -10,6 +10,8 @@
 
 #include "BaseSlider.hpp"
 
+#include <format>
+
 #include "Third Party/gcem/gcem.hpp"
 #include "Framework/update_types.hpp"
 #include "Framework/parameter_value.hpp"

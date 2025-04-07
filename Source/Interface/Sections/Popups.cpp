@@ -10,6 +10,7 @@
 
 #include "Popups.hpp"
 
+#include "Framework/parameter_bridge.hpp"
 #include "Framework/parameter_value.hpp"
 #include "Plugin/Renderer.hpp"
 #include "Plugin/Complex.hpp"
