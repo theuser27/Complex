@@ -128,14 +128,14 @@ namespace Interface
   }
 
   void OpenGlContainer::showPopupSelector(const BaseComponent *source, Point<int> position,
-    PopupItems options, std::function<void(int)> callback, std::function<void()> cancel, int minWidth) const
+    PopupItems options, utils::dyn_fn<void(int)> callback, utils::dyn_fn<void()> cancel, int minWidth) const
   {
     uiRelated.renderer->getGui()->popupSelector(source, position, COMPLEX_MOVE(options), getSectionOverride(),
       COMPLEX_MOVE(callback), COMPLEX_MOVE(cancel), minWidth);
   }
 
   void OpenGlContainer::showPopupSelector(const BaseComponent *source, Placement placement,
-    PopupItems options, std::function<void(int)> callback, std::function<void()> cancel, int minWidth) const
+    PopupItems options, utils::dyn_fn<void(int)> callback, utils::dyn_fn<void()> cancel, int minWidth) const
   {
     uiRelated.renderer->getGui()->popupSelector(source, placement, COMPLEX_MOVE(options), getSectionOverride(),
       COMPLEX_MOVE(callback), COMPLEX_MOVE(cancel), minWidth);

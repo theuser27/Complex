@@ -104,10 +104,10 @@ namespace Framework
   class WaitingUpdate : public UndoableAction
   {
   public:
-    void setWaitFunction(clg::small_fn<utils::ScopedLock()> waitFunction) { waitFunction_ = COMPLEX_MOVE(waitFunction); }
+    void setWaitFunction(utils::small_fn<utils::ScopedLock()> waitFunction) { waitFunction_ = COMPLEX_MOVE(waitFunction); }
   protected:
     auto wait() const { return waitFunction_(); }
-    clg::small_fn<utils::ScopedLock()> waitFunction_ = []() -> utils::ScopedLock
+    utils::small_fn<utils::ScopedLock()> waitFunction_ = []() -> utils::ScopedLock
     {
       COMPLEX_ASSERT_FALSE("Wait function for update hasn't been set");
       std::abort();

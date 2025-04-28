@@ -1,4 +1,4 @@
-/*
+﻿/*
   ==============================================================================
 
     utils.hpp
@@ -11,35 +11,27 @@
 #pragma once
 
 #include <math.h>
-#ifdef COMPLEX_MSVC
+#include <atomic>
+#include <string.h>
+#include <stdlib.h>
+
+#if __has_include(<vcruntime_new.h>) // MSVC header for operator new stuff
   #include <vcruntime_new.h>
 #else
   #include <new>
 #endif
-#include <atomic>
-#include <cstring>
 
-#include "constants.hpp"
 #include "stl_utils.hpp"
+#include "constants.hpp"
 
 namespace utils
 {
   enum class MathOperations { Assign, Add, Multiply, FadeInAdd, FadeOutAdd, Interpolate };
 
-  // get you the N-th element of a parameter pack
-  template <auto N, auto I = 0, typename T>
-  decltype(auto) getNthElement(T &&arg, [[maybe_unused]] auto &&... args)
-  {
-    if constexpr (I == N)
-      return COMPLEX_FWD(arg);
-    else if constexpr (sizeof...(args) > 0)
-      return getNthElement<N, I + 1>(COMPLEX_FWD(args)...);
-  }
-
   template<typename T>
-  void zeroset(T &structure) { ::memset(&structure, 0, sizeof(T)); }
+  strict_inline void zeroset(T &structure) { ::memset(&structure, 0, sizeof(T)); }
   template<typename T, auto Size>
-  void zeroset(T (&rawArray)[Size]) { ::memset(rawArray, 0, Size * sizeof(T)); }
+  strict_inline void zeroset(T (&rawArray)[Size]) { ::memset(rawArray, 0, Size * sizeof(T)); }
 
   constexpr strict_inline bool closeToZero(double value) noexcept
   { return value <= kEpsilon && value >= -kEpsilon; }
@@ -80,7 +72,7 @@ namespace utils
 
   // always returns a bin < FFTSize, therefore cannot return nyquist
   strict_inline double normalisedToBinSafe(double normalised, u32 FFTSize, double sampleRate) noexcept
-  { return utils::min(normalisedToBinUnsafe(normalised, FFTSize, sampleRate), (double)FFTSize / 2.0 - 1.0); }
+  { return min(normalisedToBinUnsafe(normalised, FFTSize, sampleRate), (double)FFTSize / 2.0 - 1.0); }
 
   strict_inline double binToNormalised(double bin, u32 FFTSize, double sampleRate) noexcept
   {
@@ -747,5 +739,282 @@ namespace utils
 #define COMPLEX_MAKE_LIVENESS_CHECKED                     \
     ::utils::LivenessChecker::Master livenessIndicator_{};\
     friend ::utils::LivenessChecker
+
+  namespace detail
+  {
+    template <typename R, typename... Args>
+    struct vtable_t
+    {
+      using Copier = void (*)(void *, const void *);
+      using Destroyer = void (*)(void *);
+      using Invoker = R(*)(const void *, Args &&...);
+      using Mover = void (*)(void *, void *);
+
+      template<typename FnT>
+      static constexpr vtable_t create() noexcept
+      {
+        return vtable_t{ sizeof(FnT), alignof(FnT), &copy<FnT>, &destroy<FnT>, &invoke<FnT>, &move<FnT> };
+      }
+
+      template<typename FnT>
+      static constexpr void copy(void *dest, const void *src)
+      {
+        const auto &object{ *static_cast<const FnT *>(src) };
+        ::new (dest) FnT{ object };
+      }
+
+      template<typename FnT>
+      static constexpr void destroy(void *src)
+      {
+        auto &object{ *static_cast<FnT *>(src) };
+        object.~FnT();
+      }
+
+      template<typename FnT>
+      static constexpr void move(void *dest, void *src)
+      {
+        auto &object{ *static_cast<FnT *>(src) };
+        ::new (dest) FnT{ COMPLEX_MOVE(object) };
+      }
+
+      template<typename FnT>
+      static constexpr R invoke(const void *data, Args &&... args)
+      {
+        const auto &object{ *static_cast<const FnT *>(data) };
+        return object(COMPLEX_FWD(args)...);
+      }
+
+      static constexpr R empty_invoke(const void *, Args &&...)
+      {
+        // bad function call
+        ::abort();
+      }
+
+      usize size = 0;
+      usize alignment = 0;
+      Copier copier = [](void *, const void *) { };
+      Destroyer destroyer = [](void *) { };
+      Invoker invoker = &empty_invoke;
+      Mover mover = [](void *, void *) { };
+    };
+
+    // Empty vtable which is used when fn is empty
+    template<typename R, typename ... Args>
+    inline constexpr vtable_t<R, Args...> empty_vtable{};
+  }
+
+  inline constexpr usize heap_allocated = usize(-1) >> 1;
+
+  // ghetto std::function implementation that can also be stack-allocated
+  // and go back and forth between the heap and stack if needed
+  // based on https://github.com/colugomusic/clog/blob/master/include/clog/small_function.hpp
+  template<typename Signature, usize MaxSize = 32>
+  class fn;
+
+  template<typename R, typename ... Args, usize MaxSize>
+  class fn<R(Args...), MaxSize>
+  {
+  public:
+    static constexpr bool is_on_heap = MaxSize == heap_allocated;
+
+    constexpr fn() noexcept { }
+    constexpr fn(nullptr_t) noexcept { }
+
+    template<usize Size>
+    constexpr fn(const fn<R(Args...), Size> &rhs)
+    {
+      allocate(rhs.vtable_);
+      vtable_->copier(data_, rhs.data_);
+    }
+
+    // needed because fn & go to the lambda constructor otherwise
+    template<usize Size>
+    constexpr fn(fn<R(Args...), Size> &rhs) :
+      fn{ static_cast<const fn<R(Args...), Size> &>(rhs) } { }
+
+    template<usize Size>
+    constexpr fn(fn<R(Args...), Size> &&rhs) noexcept
+    {
+      if constexpr (is_on_heap && fn<R(Args...), Size>::is_on_heap)
+      {
+        // optimisation: both on heap, exchange pointers
+        vtable_ = rhs.vtable_;
+        data_ = rhs.data_;
+        rhs.data_ = nullptr;
+        rhs.vtable_ = &detail::empty_vtable<R, Args...>;
+      }
+      else
+      {
+        allocate(rhs.vtable_);
+        vtable_->mover(data_, rhs.data_);
+        rhs.~fn<R(Args...), Size>();
+      }
+    }
+
+    template<typename FnT, typename fn_t = remove_cvref_t<FnT>>
+      requires is_invocable_r_v<R, fn_t &, Args...>
+    constexpr fn(FnT &&lambda) { from_fn(COMPLEX_FWD(lambda)); }
+
+    constexpr ~fn()
+    {
+      if (vtable_ == &detail::empty_vtable<R, Args...>)
+        return;
+
+      vtable_->destroyer(data_);
+      if constexpr (is_on_heap)
+        ::operator delete[](data_, std::align_val_t(vtable_->alignment));
+      vtable_ = &detail::empty_vtable<R, Args...>;
+    }
+
+    template<usize Size>
+    constexpr fn &operator=(const fn<R(Args...), Size> &rhs)
+    {
+      this->~fn();
+
+      allocate(rhs.vtable_);
+      vtable_->copier(data_, rhs.data_);
+
+      return *this;
+    }
+
+    template<usize Size>
+    constexpr fn &operator=(fn<R(Args...), Size> &&rhs) noexcept
+    {
+      if constexpr (is_on_heap && fn<R(Args...), Size>::is_on_heap)
+      {
+        // optimisation: both on heap, exchange pointers
+        this->~fn();
+
+        vtable_ = rhs.vtable_;
+        data_ = rhs.data_;
+        rhs.data_ = nullptr;
+        rhs.vtable_ = &detail::empty_vtable<R, Args...>;
+      }
+      else
+      {
+        vtable_->destroyer(data_);
+        allocate(rhs.vtable_);
+        vtable_->mover(data_, rhs.data_);
+
+        rhs.~fn<R(Args...), Size>();
+      }
+
+      return *this;
+    }
+
+    constexpr fn &operator=(nullptr_t)
+    {
+      this->~fn();
+      return *this;
+    }
+
+    template<typename FnT, typename fn_t = remove_cvref_t<FnT>>
+      requires is_invocable_r_v<R, fn_t &, Args...>
+    constexpr auto operator=(FnT &&lambda) -> fn &
+    {
+      from_fn(COMPLEX_FWD(lambda));
+      return *this;
+    }
+
+    constexpr fn<R(Args...), heap_allocated> to_dyn_fn() const & { return { *this }; }
+    constexpr fn<R(Args...), heap_allocated> to_dyn_fn() & { return { *this }; }
+    constexpr fn<R(Args...), heap_allocated> to_dyn_fn() const && { return COMPLEX_MOVE(*this); }
+    constexpr fn<R(Args...), heap_allocated> to_dyn_fn() && { return COMPLEX_MOVE(*this); }
+
+    template<usize Size> fn<R(Args...), Size> constexpr to_small_fn() const & { return { *this }; }
+    template<usize Size> fn<R(Args...), Size> constexpr to_small_fn() & { return { *this }; }
+    template<usize Size> fn<R(Args...), Size> constexpr to_small_fn() const && { return COMPLEX_MOVE(*this); }
+    template<usize Size> fn<R(Args...), Size> constexpr to_small_fn() && { return COMPLEX_MOVE(*this); }
+
+    explicit constexpr operator bool() const noexcept
+    {
+      return vtable_ != &detail::empty_vtable<R, Args...>;
+    }
+
+    constexpr R operator()(Args ... args) const
+    {
+      return vtable_->invoker(data_, COMPLEX_FWD(args)...);
+    }
+
+  private:
+    static constexpr usize alignment = 8;
+    using vtable_t = detail::vtable_t<R, Args...>;
+
+    static_assert(((MaxSize - sizeof(vtable_t)) % alignment == 0) || is_on_heap);
+
+    using storage_t = conditional_t<is_on_heap, void *, unsigned char[MaxSize - sizeof(vtable_t *)]>;
+
+    constexpr void allocate(const vtable_t *newVtable)
+    {
+      if constexpr (is_on_heap)
+      {
+        if (vtable_ && vtable_->alignment >= newVtable->alignment && vtable_->size >= newVtable->size)
+        {
+          // we already have enough memory, no allocation needed
+          // however we might be losing track of the current amount of memory available 
+          // but we'd need to store this information dynamically otherwise ¯\_(ツ)_/¯
+          vtable_->destroyer(data_);
+        }
+        else
+        {
+          // we have (no) memory and it's not enough
+          if (data_)
+            ::operator delete[](data_, std::align_val_t(vtable_->alignment));
+
+          // msvc back at it again to make your life miserable
+          // https://developercommunity.visualstudio.com/t/using-c17-new-stdalign-val-tn-syntax-results-in-er/528320
+        #if COMPLEX_MSVC
+          data_ = operator new[](newVtable->size * sizeof(unsigned char), std::align_val_t(newVtable->alignment));
+        #else
+          data_ = new(std::align_val_t(newVtable->alignment)) unsigned char[newVtable->size];
+        #endif
+        }
+      }
+      else
+      {
+        COMPLEX_ASSERT(alignment >= newVtable->alignment && sizeof(storage_t) >= newVtable->size);
+      }
+
+      vtable_ = newVtable;
+    }
+
+    template<typename FnT>
+    constexpr void from_fn(FnT &&lambda)
+    {
+      using fn_t = remove_cvref_t<FnT>;
+
+      static_assert(is_copy_constructible_v<fn_t>,
+        "fn cannot be constructed from a non-copyable type");
+
+      static_assert(sizeof(fn_t) <= sizeof(storage_t) || is_on_heap,
+        "fn is too small to fit this object");
+
+      static_assert((alignment % alignof(fn_t) == 0) || is_on_heap,
+        "fn cannot be constructed from an object of this alignment");
+
+      static_assert(alignment >= alignof(fn_t) || is_on_heap,
+        "fn does not support alignment higher the one defined in the class");
+
+      static constexpr auto vtable = vtable_t::template create<fn_t>();
+
+      allocate(&vtable);
+
+      ::new (data_) fn_t{ COMPLEX_FWD(lambda) };
+
+      vtable_ = &vtable;
+    }
+
+    alignas(is_on_heap ? alignof(storage_t) : alignment) storage_t data_ { };
+    const vtable_t *vtable_ = &detail::empty_vtable<R, Args...>;
+
+    template<typename, usize>
+    friend class fn;
+  };
+
+  template<typename Signature>
+  using dyn_fn = fn<Signature, heap_allocated>;
+
+  template<typename Signature, usize MaxSize = 32>
+  using small_fn = fn<Signature, MaxSize>;
 
 }

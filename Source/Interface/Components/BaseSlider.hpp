@@ -450,7 +450,7 @@ namespace Interface
     void setTextSelectorListener(TextSelectorListener *listener) noexcept { textSelectorListener_ = listener; }
 
     void setOptionsTitle(std::string title) { optionsTitle_ = COMPLEX_MOVE(title); }
-    void setItemIgnoreFunction(clg::small_fn<bool(const Framework::IndexedData &, int)> fn) noexcept
+    void setItemIgnoreFunction(utils::small_fn<bool(const Framework::IndexedData &, int)> fn) noexcept
     { ignoreItemFunction_ = COMPLEX_MOVE(fn); }
 
     utils::string_view getTextValue(bool fromParameter = false);
@@ -459,7 +459,7 @@ namespace Interface
     void resizeForText() noexcept;
 
     std::string optionsTitle_{};
-    clg::small_fn<bool(const Framework::IndexedData &, int)> ignoreItemFunction_{};
+    utils::small_fn<bool(const Framework::IndexedData &, int)> ignoreItemFunction_{};
     juce::Font usedFont_{};
     double lastValue_ = 0.0;
     int textWidth_{};

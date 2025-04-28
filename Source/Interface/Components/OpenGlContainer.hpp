@@ -38,9 +38,9 @@ namespace Interface
     void removeAllSubOpenGlContainers(bool removeChild = false);
 
     void showPopupSelector(const BaseComponent *source, juce::Point<int> position, PopupItems options,
-      std::function<void(int)> callback, std::function<void()> cancel = {}, int minWidth = kMinPopupWidth) const;
+      utils::dyn_fn<void(int)> callback, utils::dyn_fn<void()> cancel = {}, int minWidth = kMinPopupWidth) const;
     void showPopupSelector(const BaseComponent *source, Placement placement, PopupItems options,
-      std::function<void(int)> callback, std::function<void()> cancel = {}, int minWidth = kMinPopupWidth) const;
+      utils::dyn_fn<void(int)> callback, utils::dyn_fn<void()> cancel = {}, int minWidth = kMinPopupWidth) const;
     // ReSharper disable once CppHiddenFunction
     void hidePopupSelector() const;
     void showPopupDisplay(BaseComponent *source, juce::String text, Placement placement, bool primary) const;

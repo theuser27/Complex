@@ -41,11 +41,11 @@ namespace Interface
     void notifyChange();
     void notifyFresh();
     void popupSelector(const BaseComponent *source, juce::Point<int> position, PopupItems options,
-      Skin::SectionOverride skinOverride, std::function<void(int)> callback, 
-      std::function<void()> cancel = {}, int minWidth = kMinPopupWidth);
+      Skin::SectionOverride skinOverride, utils::dyn_fn<void(int)> callback, 
+      utils::dyn_fn<void()> cancel = {}, int minWidth = kMinPopupWidth);
     void popupSelector(const BaseComponent *source, Placement placement, PopupItems options,
-      Skin::SectionOverride skinOverride, std::function<void(int)> callback, 
-      std::function<void()> cancel = {}, int minWidth = kMinPopupWidth);
+      Skin::SectionOverride skinOverride, utils::dyn_fn<void(int)> callback, 
+      utils::dyn_fn<void()> cancel = {}, int minWidth = kMinPopupWidth);
     void hidePopupSelector();
     void popupDisplay(BaseComponent *source, juce::String text, Placement placement, bool primary, 
       Skin::SectionOverride sectionOverride = Skin::kPopupBrowser);

@@ -53,7 +53,7 @@ namespace Plugin
 
   void ProcessorTree::pushUndo(Framework::WaitingUpdate *action, bool isNewTransaction)
   {
-    clg::small_fn<utils::ScopedLock()> waitFunction = [this]()
+    utils::small_fn<utils::ScopedLock()> waitFunction = [this]()
     {
       // check if we're in the middle of an audio callback
       utils::millisleep([&]()

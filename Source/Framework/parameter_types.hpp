@@ -13,8 +13,6 @@
 #include <string>
 #include <vector>
 
-#include "Third Party/clog/small_function.hpp"
-
 #include "simd_values.hpp"
 #include "constants.hpp"
 #include "utils.hpp"
@@ -62,7 +60,7 @@ namespace Framework
     {
       std::string stringData{};
       std::vector<IndexedData> dataLookup{};
-      clg::small_fn<bool(const Framework::IndexedData &, int)> ignoreItemFn{};
+      utils::small_fn<bool(const Framework::IndexedData &, int)> ignoreItemFn{};
     };
   };
 

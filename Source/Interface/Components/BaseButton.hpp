@@ -142,8 +142,8 @@ namespace Interface
     void setText(juce::String text) { text_ = COMPLEX_MOVE(text); }
     void setOptions(PopupItems options) { popupOptions_ = COMPLEX_MOVE(options); }
     void setPopupPlacement(Placement placement) { popupPlacement_ = placement; }
-    void setPopupHandler(std::function<void(int)> handler) { popupHandler_ = COMPLEX_MOVE(handler); }
-    void setCancelHandler(std::function<void()> handler) { cancelHandler_ = COMPLEX_MOVE(handler); }
+    void setPopupHandler(utils::dyn_fn<void(int)> handler) { popupHandler_ = COMPLEX_MOVE(handler); }
+    void setCancelHandler(utils::dyn_fn<void()> handler) { cancelHandler_ = COMPLEX_MOVE(handler); }
 
   protected:
     OpenGlQuad plusComponent_{ Shaders::kPlusFragment, "Options Button Plus Icon" };
@@ -154,8 +154,8 @@ namespace Interface
 
     PopupItems popupOptions_{};
     Placement popupPlacement_ = Placement::below;
-    std::function<void(int)> popupHandler_{ [](int) { } };
-    std::function<void()> cancelHandler_{ []() { } };
+    utils::dyn_fn<void(int)> popupHandler_{ [](int) { } };
+    utils::dyn_fn<void()> cancelHandler_{ []() { } };
 
     juce::String text_{};
     juce::Colour borderColour_{};
@@ -177,12 +177,12 @@ namespace Interface
     void setComponentsBounds(bool redoImage = true) override;
 
     void setText(juce::String text) { text_ = COMPLEX_MOVE(text); }
-    void setAction(std::function<void()> action) { action_ = COMPLEX_MOVE(action); }
+    void setAction(utils::dyn_fn<void()> action) { action_ = COMPLEX_MOVE(action); }
   protected:
     OpenGlQuad fillComponent_{ Shaders::kRoundedRectangleFragment, "Action Button Fill" };
     PlainTextComponent textComponent_;
 
-    std::function<void()> action_{};
+    utils::dyn_fn<void()> action_{};
 
     juce::String text_{};
     juce::Colour fillColour_{};

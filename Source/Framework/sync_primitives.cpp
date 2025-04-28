@@ -134,7 +134,7 @@ namespace utils
   #endif
   }
 
-  void millisleep(const clg::small_fn<bool()> &shouldWaitFn)
+  void millisleep(const utils::small_fn<bool()> &shouldWaitFn)
   {
   #ifdef COMPLEX_WINDOWS
     // initial check if we should even wait
@@ -201,7 +201,7 @@ namespace utils
     }
   }
 
-  i32 lockAtomic(LockBlame<i32> &lock, bool isExclusive, WaitMechanism mechanism, const clg::small_fn<void()> &lambda) noexcept
+  i32 lockAtomic(LockBlame<i32> &lock, bool isExclusive, WaitMechanism mechanism, const utils::small_fn<void()> &lambda) noexcept
   {
     i32 state, desired;
     auto threadId = getThreadId();

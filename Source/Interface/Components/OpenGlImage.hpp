@@ -47,7 +47,7 @@ namespace Interface
     void setColor(Colour colour) { colour_ = colour; }
     void setActive(bool active) { isActive_ = active; }
 
-    void setPaintFunction(clg::small_fn<void(Graphics &, juce::Rectangle<int>)> paintFunction) 
+    void setPaintFunction(utils::small_fn<void(Graphics &, juce::Rectangle<int>)> paintFunction) 
     { paintFunction_ = COMPLEX_MOVE(paintFunction); }
     void setShouldClearOnRedraw(bool clearOnRedraw) { clearOnRedraw_ = clearOnRedraw; }
     void paintEntireComponent(bool paintEntireComponent) { paintEntireComponent_ = paintEntireComponent; }
@@ -97,7 +97,7 @@ namespace Interface
     GLuint vertexBuffer_{};
     GLuint triangleBuffer_{};
 
-    clg::small_fn<void(Graphics &, juce::Rectangle<int>)> paintFunction_{};
+    utils::small_fn<void(Graphics &, juce::Rectangle<int>)> paintFunction_{};
     bool paintEntireComponent_ = true;
     bool clearOnRedraw_ = true;
 

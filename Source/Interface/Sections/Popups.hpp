@@ -168,8 +168,8 @@ namespace Interface
     void positionList(juce::Rectangle<int> sourceBounds, Placement placement);
 
     void setComponent(const BaseComponent *component) { livenessChecker_ = component; }
-    void setCallback(std::function<void(int)> callback) { callback_ = COMPLEX_MOVE(callback); }
-    void setCancelCallback(std::function<void()> cancel) { cancel_ = COMPLEX_MOVE(cancel); }
+    void setCallback(utils::dyn_fn<void(int)> callback) { callback_ = COMPLEX_MOVE(callback); }
+    void setCancelCallback(utils::dyn_fn<void()> cancel) { cancel_ = COMPLEX_MOVE(cancel); }
     void setPopupSkinOverride(Skin::SectionOverride skinOverride) { commonInfo_.sectionOverride = skinOverride; }
     void setItems(PopupItems selections, int minWidth)
     {
@@ -197,8 +197,8 @@ namespace Interface
     void fillAutomationListIfExists();
 
     PopupList::CommonListInfo commonInfo_{};
-    std::function<void(int)> callback_{};
-    std::function<void()> cancel_{};
+    utils::dyn_fn<void(int)> callback_{};
+    utils::dyn_fn<void()> cancel_{};
     std::vector<utils::up<PopupList>> lists_;
     utils::LivenessChecker livenessChecker_;
     PopupItems items_{};

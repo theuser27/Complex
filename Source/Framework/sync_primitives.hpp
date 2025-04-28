@@ -12,9 +12,7 @@
 
 #include <atomic>
 
-#include "Third Party/clog/small_function.hpp"
-
-#include "stl_utils.hpp"
+#include "utils.hpp"
 
 #if COMPLEX_X64
   #include <immintrin.h>
@@ -51,7 +49,7 @@ namespace utils
   }
 
   void millisleep() noexcept;
-  void millisleep(const clg::small_fn<bool()> &shouldWaitFn);
+  void millisleep(const utils::small_fn<bool()> &shouldWaitFn);
 
   // Spin - spinlock (use on realtime threads)
   // Wait - waits for signal from locking site (use for unknown sleep length)
@@ -78,7 +76,7 @@ namespace utils
   void lockAtomic(std::atomic<bool> &atomic, WaitMechanism mechanism, bool expected) noexcept;
   void unlockAtomic(std::atomic<bool> &atomic, WaitMechanism mechanism, bool expected) noexcept;
   i32 lockAtomic(LockBlame<i32> &lock, bool isExclusive, WaitMechanism mechanism,
-    const clg::small_fn<void()> &lambda = [](){}) noexcept;
+    const utils::small_fn<void()> &lambda = [](){}) noexcept;
   void unlockAtomic(LockBlame<i32> &atomic, bool wasExclusive, WaitMechanism mechanism) noexcept;
 
   class ScopedLock
@@ -91,7 +89,7 @@ namespace utils
     { lockAtomic(atomic, mechanism, expected); }
 
     ScopedLock(LockBlame<i32> &atomic, bool isExclusive, WaitMechanism mechanism,
-      const clg::small_fn<void()> &lambda = [](){}) noexcept : type_(I32Enum), mechanism_(mechanism),
+      const utils::small_fn<void()> &lambda = [](){}) noexcept : type_(I32Enum), mechanism_(mechanism),
       i32_{ &atomic, isExclusive }
     { lockAtomic(atomic, isExclusive, mechanism, lambda); }
 

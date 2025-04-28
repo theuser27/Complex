@@ -118,6 +118,12 @@ namespace utils
   template<typename T> // only function types and reference types can't be const qualified
   inline constexpr bool is_function_v = !is_const_v<const T> && !is_reference_v<T>;
 
+  template<typename Return, typename Callable, typename ... Args>
+  inline constexpr bool is_invocable_r_v = requires(Callable & callable, Args ... args)
+  {
+    requires is_same_v<Return, decltype(callable(COMPLEX_FWD(args)...))>;
+  };
+
   using type_id_t = const void *;
   template<typename T>
   inline constexpr type_id_t type_id = []<typename U>()

@@ -80,13 +80,13 @@ namespace Interface
     Colour getColour(Skin::ColourId colourId) const;
 
     void setRefreshFrequency(RenderFlag frequency) noexcept { renderFlag_ = frequency; }
-    void setRenderFunction(clg::small_fn<void(OpenGlWrapper &, OpenGlComponent &)> function) noexcept
+    void setRenderFunction(utils::small_fn<void(OpenGlWrapper &, OpenGlComponent &)> function) noexcept
     { renderFunction_ = COMPLEX_MOVE(function); }
     void setIgnoreClip(BaseComponent *ignoreClipIncluding) noexcept;
 
   protected:
     Animator animator_{};
-    utils::shared_value<clg::small_fn<void(OpenGlWrapper &, OpenGlComponent &)>> renderFunction_{};
+    utils::shared_value<utils::small_fn<void(OpenGlWrapper &, OpenGlComponent &)>> renderFunction_{};
     utils::shared_value<RenderFlag> renderFlag_ = RenderFlag::Dirty;
     utils::shared_value<BaseComponent *> ignoreClipIncluding_ = nullptr;
     std::atomic<bool> isInitialised_ = false;

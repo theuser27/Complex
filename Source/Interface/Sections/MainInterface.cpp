@@ -68,7 +68,7 @@ namespace Interface
   }
 
   void MainInterface::popupSelector(const BaseComponent *source, juce::Point<int> position, PopupItems options, 
-    Skin::SectionOverride skinOverride, std::function<void(int)> callback, std::function<void()> cancel, int minWidth)
+    Skin::SectionOverride skinOverride, utils::dyn_fn<void(int)> callback, utils::dyn_fn<void()> cancel, int minWidth)
   {
     popupSelector_->setPopupSkinOverride(skinOverride);
     popupSelector_->setComponent(source);
@@ -80,7 +80,7 @@ namespace Interface
   }
 
   void MainInterface::popupSelector(const BaseComponent *source, Placement placement, PopupItems options,
-    Skin::SectionOverride skinOverride, std::function<void(int)> callback, std::function<void()> cancel, int minWidth)
+    Skin::SectionOverride skinOverride, utils::dyn_fn<void(int)> callback, utils::dyn_fn<void()> cancel, int minWidth)
   {
     popupSelector_->setPopupSkinOverride(skinOverride);
     popupSelector_->setComponent(source);
