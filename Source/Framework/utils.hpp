@@ -869,7 +869,8 @@ namespace utils
     template<usize Size>
     constexpr fn &operator=(const fn<R(Args...), Size> &rhs)
     {
-      this->~fn();
+      if (vtable_ && data_)
+        vtable_->destroyer(data_);
 
       allocate(rhs.vtable_);
       vtable_->copier(data_, rhs.data_);
@@ -892,7 +893,8 @@ namespace utils
       }
       else
       {
-        vtable_->destroyer(data_);
+        if (vtable_ && data_)
+          vtable_->destroyer(data_);
         allocate(rhs.vtable_);
         vtable_->mover(data_, rhs.data_);
 
@@ -959,7 +961,10 @@ namespace utils
         {
           // we have (no) memory and it's not enough
           if (data_)
+          {
+            COMPLEX_ASSERT(vtable_);
             ::operator delete[](data_, std::align_val_t(vtable_->alignment));
+          }
 
           // msvc back at it again to make your life miserable
           // https://developercommunity.visualstudio.com/t/using-c17-new-stdalign-val-tn-syntax-results-in-er/528320
