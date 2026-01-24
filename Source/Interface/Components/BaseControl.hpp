@@ -1,18 +1,12 @@
-/*
-  ==============================================================================
 
-    BaseControl.hpp
-    Created: 31 Jul 2023 7:37:15pm
-    Author:  theuser27
-
-  ==============================================================================
-*/
+// Created: 2023-07-31 19:37:15
 
 #pragma once
 
-#include "Framework/vector_map.hpp"
+#include "Framework/memory.hpp"
 #include "Framework/parameter_types.hpp"
-#include "OpenGlContainer.hpp"
+#include "../LookAndFeel/BaseComponent.hpp"
+#include "../LookAndFeel/Graphics.hpp"
 
 namespace Framework
 {
@@ -27,205 +21,257 @@ namespace Interface
   class PlainTextComponent;
   class BaseSection;
 
-  class BaseControl : public OpenGlContainer
+  class BaseControl : public Component
   {
   public:
-    enum MenuId
-    {
-      kCancel = 0,
-      kMidiLearn,
-      kClearMidiLearn,
-      kDefaultValue,
-      kManualEntry,
-      kCopyNormalisedValue,
-      kCopyValue,
-      kPasteValue,
-      kClearModulations,
-      kMapFirstSlot,
-      kClearMapping,
-      kControlMenuIdsSize,
-      kMappingList = 64,
-    };
-    static constexpr bool isUnmappingParameter(int id) { return id % 2 != kMappingList % 2; }
+    static constexpr int kDefaultMaxTotalCharacters = 5;
+    static constexpr int kDefaultMaxDecimalCharacters = 2;
+    static constexpr float kSlowDragMultiplier = 0.1f;
+    static constexpr float kDefaultSensitivity = 1.0f;
+    static constexpr float kPopupPrimaryFontHeight = 13.0f;
+    static constexpr float kPopupSecondaryFontHeight = 11.0f;
+    static constexpr int kPopupMinWidth = 150;
 
-    BaseControl();
-    ~BaseControl() override;
+    BaseControl(Framework::ParameterValue *parameter);
 
-    // ====================================================== Parameter related
-    Framework::ParameterDetails getParameterDetails() const noexcept { return details_; }
-    virtual void setParameterDetails(const Framework::ParameterDetails &details) { details_ = details; }
-
-    Framework::ParameterLink *getParameterLink() const noexcept { return parameterLink_; }
     // returns the replaced link
     Framework::ParameterLink *setParameterLink(Framework::ParameterLink *parameterLink) noexcept;
 
-    virtual Framework::ParameterValue *changeLinkedParameter(Framework::ParameterValue &parameter,
+    Framework::ParameterValue *changeLinkedParameter(Framework::ParameterValue &parameter,
       bool getValueFromParameter = true);
 
     bool setValueFromHost(double value, Framework::ParameterBridge *notifyingBridge) noexcept;
-    void setValueFromParameter() noexcept;
     void setValueToHost() const noexcept;
-    void setValueToParameter() const noexcept;
 
-    double getValueRaw() const noexcept { return value_.load(std::memory_order_acquire); }
-    void setValueRaw(double newValue) noexcept { value_.store(newValue, std::memory_order_release); }
-    virtual void setValue(double newValue, 
-      juce::NotificationType notification = juce::sendNotificationSync) = 0;
+    double getValue() const noexcept { return value.load(satomi::memory_order_relaxed); }
+    bool setValue(double newValue, bool notify = true);
     virtual void valueChanged();
 
-    virtual juce::String getScaledValueString(double value, bool addPrefix = true) const = 0;
-    static juce::String getNormalisedValueString(double value)
-    {
-      static constexpr auto kMaxDecimalCount = 5;
-      return juce::String{ value, kMaxDecimalCount };
-    }
-    double getValueFromText(const juce::String &text) const;
+    utils::string getScaledValueString(utils::Allocator allocator, 
+      double value, bool addPrefix = true) const;
+    double getValueFromText(utils::string_view text) const;
 
-    virtual void showTextEntry() = 0;
-    void setResetValue(double resetValue) noexcept { resetValue_ = resetValue; }
-    bool hasParameter() const noexcept { return hasParameter_; }
     void handlePopupResult(int result);
 
     void beginChange(double oldValue) noexcept;
     void endChange();
 
-    void addListener(auto *listener) { controlListeners_.emplace_back(listener); }
-    void removeListener(auto *listener) { std::erase(controlListeners_, listener); }
+    void addListener(ControlListener *listener) { controlListeners.emplace_back(listener); }
+    void removeListener(ControlListener *listener) { controlListeners.erase(listener); }
 
-    // ========================================================= Layout related
-    void resized() override;
-    void moved() override;
-    void parentHierarchyChanged() override;
-
-    auto getDrawBounds() const noexcept { return drawBounds_; }
-    auto getAddedHitbox() const noexcept { return addedHitbox_; }
-    
-    // returns tight bounds around all contained elements (drawn components, label, etc.)
-    // by the end of this method drawBounds need to have been set to encompass the drawn components
-    virtual juce::Rectangle<int> setSizes(int height, int width = 0) = 0;
-    // sets the bounds based on drawBounds + position + added hitbox
-    // call after initialising drawBounds with setSizes
-    void setPosition(juce::Point<int> position);
-    void setBounds(int x, int y, int width, int height) final;
-    using OpenGlContainer::setBounds;
-    // sets extra outer size
-    void setAddedHitbox(juce::BorderSize<int> addedHitBox) noexcept { addedHitbox_ = addedHitBox; }
-    // positions extra external elements (label, combined control, etc.) relative to drawBounds
-    virtual void setExtraElementsPositions(juce::Rectangle<int> anchorBounds) = 0;
-    void repositionExtraElements();
-
-    // ====================================================== Rendering related
-    void renderOpenGlComponents(OpenGlWrapper &openGl) final;
-    void paint(juce::Graphics &) override { }
-    // redraws components when an action occurs
-    virtual void redoImage() = 0;
-    // sets positions of all drawable components relative to drawBounds
-    // drawBounds is guaranteed to be a valid area
-    virtual void setComponentsBounds(bool redoImage = true) = 0;
-    // refreshes colours from Skin
-    virtual void setColours();
-
-    // ========================================================== Label related
-    void addLabel();
-    void removeLabel();
-    
-    // ========================================================== Miscellaneous
-    using OpenGlContainer::getValue;
-    bool isActive() const noexcept { return isActive_; }
-
-    void setLabelPlacement(Placement placement) { labelPlacement_ = placement; }
-    void setShouldRepaintOnHover(bool shouldRepaintOnHover) noexcept { shouldRepaintOnHover_ = shouldRepaintOnHover; }
-
-  protected:
     void resetValue() noexcept;
-    PopupItems createPopupMenu() const noexcept;
-    juce::Rectangle<int> getUnionOfAllElements() const noexcept;
+    void createPopupMenu(PopupSelector *selector);
 
-    // ============================================================== Variables
-    std::atomic<double> value_ = 0.0;
-    double valueBeforeChange_ = 0.0;
-    double resetValue_ = 0.0;
-    bool hasBegunChange_ = false;
+    void showTextEntry(Font font);
+    float getNumericTextMaxWidth(const Font &usedFont) const;
 
-    bool hasParameter_ = false;
-    bool isActive_ = true;
-    bool canInputValue_ = false;
+    void showPopup(bool primary);
+    void hidePopup(bool primary);
 
-    Framework::ParameterLink *parameterLink_ = nullptr;
-    Framework::ParameterDetails details_{};
+    satomi::atomic<double> value = 0.0;
+    double valueBeforeChange = 0.0;
+    double valueInterval = 0.0;
+    float sensitivity = kDefaultSensitivity;
+    ModifierKeys resetValueModifiers;
 
-    // drawBounds is a space inside getLocalBounds() where components are being drawn
-    juce::Rectangle<int> drawBounds_{};
-    // this determines how much to extend the bounds relative to drawBounds so that the hitbox is larger
-    juce::BorderSize<int> addedHitbox_{};
+    utils::string popupPrefix{};
+    Placement::Enum popupPlacement = Placement::bottom;
 
-    // extra stuff like label or modifying control (i.e. textSelector changing behaviour of a knob)
-    // and their bounds relative to the drawBounds
-    utils::VectorMap<BaseComponent *, juce::Rectangle<int>> extraElements_{};
-    utils::up<PlainTextComponent> label_;
-    Placement labelPlacement_ = Placement::right;
+    Placement::Enum labelPlacement = Placement::right;
 
-    bool shouldRepaintOnHover_ = false;
+    struct
+    {
+      // feature flags
+      bool shouldShowPopup : 1 = false;
+      bool showPopupOnHover : 1 = false;
+      bool shouldUsePlusMinusPrefix : 1 = false;
+      bool canUseScrollWheel : 1 = false;
+      bool shouldCheckDbInfinities : 1 = false;
+      bool canInputValue : 1 = false;
+      bool hasLabel : 1 = false;
+      bool shouldRepaintOnHover : 1 = false;
+      bool isDraggable : 1 = true;
+      bool isHorizotalDraggable : 1 = false;
+      bool canLoopAround : 1 = false;
+      bool isBipolar : 1 = false;
+      bool shouldMoveOnValueChange : 1 = false;
+      bool resetValueOnDoubleClick : 1 = true;
 
-    BaseSection *parent_ = nullptr;
-    std::vector<ControlListener *> controlListeners_{};
+      // state flags
+      bool hasParameter : 1 = false;
+      bool isInSensitiveMode : 1 = false;
+      bool hasBegunChange : 1 = false;
+      bool isTextEntryVisible : 1 = false;
+    } controlFlags{};
+
+    Animator animator_{};
+
+    u32 maxTotalCharacters = kDefaultMaxTotalCharacters;
+    u32 maxDecimalCharacters = kDefaultMaxDecimalCharacters;
+    Point<int> lastMouseDragPosition{};
+
+    Framework::ParameterLink *parameterLink = nullptr;
+    Framework::ParameterDetails details{};
+
+    utils::vector<ControlListener *> controlListeners{};
   };
 
-  // responsible for positioning of multiple controls
-  // e.g. arranged in a horizontal strip
-  class ControlContainer : public juce::ComponentListener
+  class BaseButton : public BaseControl
   {
   public:
-    ~ControlContainer() override
-    {
-      for (auto &[control, _] : controls_)
-        control->removeComponentListener(this);
-    }
+    static constexpr int kLabelOffset = 8;
+    static constexpr float kHoverIncrement = 0.1f;
 
-    void componentBeingDeleted(juce::Component &component) override 
-    {
-      std::erase_if(controls_, [&](auto element) { return element.first == &component; });
-      component.removeComponentListener(this);
-      repositionControls();
-    }
-    void componentMovedOrResized(juce::Component &, bool, bool) override { repositionControls(); }
-    void componentVisibilityChanged(juce::Component &) override { repositionControls(); }
+    BaseButton(Framework::ParameterValue *parameter) : BaseControl{ parameter } { }
 
-    void addControl(BaseControl *control)
-    {
-      COMPLEX_ASSERT(utils::find_if(controls_, [&](auto element) 
-        { return element.first == control; }) == controls_.end());
-      controls_.emplace_back(control, utils::pair<int, int>{});
-      control->addComponentListener(this);
-    }
-    void deleteControl(BaseControl *control) 
-    {
-      std::erase_if(controls_, [&](auto element) { return element.first == control; });
-      control->removeComponentListener(this);
-    }
-    
-    void setAnchor(Placement anchor) noexcept { anchor_ = anchor; }
-    void setParentAndBounds(BaseComponent *parent, juce::Rectangle<int> bounds) noexcept
-    { parent_ = parent; bounds_ = bounds; }
+    bool mouseDown(const MouseEvent &e) override;
+    bool mouseUp(const MouseEvent &e) override;
+    bool mouseEnter(const MouseEvent &e) override;
+    bool mouseExit(const MouseEvent &e) override;
 
-    void setControlSizes(BaseControl *control, int height, int width = 0) noexcept
-    {
-      auto iter = utils::find_if(controls_, 
-        [&](auto element) { return element.first == control; });
-      COMPLEX_ASSERT(iter != controls_.end());
-      iter->second = { width, height };
-    }
-    void setControlSpacing(int spacing) noexcept { controlSpacing_ = spacing; }
+    bool isOn() const noexcept { return ::round(getValue()) != 0.0; }
 
-    void repositionControls();
+    utils::string getTextFromValue(bool value) const noexcept;
 
-  private:
-    BaseComponent *parent_ = nullptr;
-    juce::Rectangle<int> bounds_{};
-    std::vector<utils::pair<BaseControl *, utils::pair<int, int>>> controls_{};
-    int controlSpacing_ = 0;
-    Placement anchor_ = Placement::centerVertical | Placement::left;
-    bool isArranging_ = false;
+  protected:
+    void updateState(bool isHeldDown, bool isHoveredOver) noexcept;
   };
 
+  class PowerButton final : public BaseButton
+  {
+  public:
+    static constexpr int kAddedMargin = 4;
+
+    PowerButton(Framework::ParameterValue *parameter);
+
+
+  };
+
+  class RadioButton final : public BaseButton
+  {
+  public:
+    static constexpr int kAddedMargin = 4;
+
+    RadioButton(Framework::ParameterValue *parameter);
+
+    float rounding = 0.0f;
+  };
+
+  class BaseSlider : public BaseControl
+  {
+  public:
+    BaseSlider(Framework::ParameterValue *parameter) : BaseControl{ parameter } { }
+    
+    bool mouseDown(const MouseEvent &e) override;
+    bool mouseDrag(const MouseEvent &e) override;
+    bool mouseEnter(const MouseEvent &e) override;
+    bool mouseExit(const MouseEvent &e) override;
+    bool mouseUp(const MouseEvent &e) override;
+    bool mouseWheelMove(const MouseEvent &e) override;
+  };
+
+  class TextSelector;
+
+  class RotarySlider final : public BaseSlider
+  {
+  public:
+    static constexpr float kRotaryAngle = 0.75f * kPi;
+    static constexpr double kDefaultRotaryDragLength = 200.0;
+    static constexpr int kDefaultWidthHeight = 36;
+    static constexpr int kDefaultArcDimensions = 36;
+    static constexpr int kDefaultBodyDimensions = 23;
+    static constexpr int kLabelOffset = 6;
+    static constexpr int kLabelVerticalPadding = 3;
+
+    RotarySlider(Framework::ParameterValue *parameter);
+
+    bool render(OpenGlWrapper &openGl) override;
+    bool mouseDrag(const MouseEvent &e) override;
+
+    void drawShadow(Graphics &g) const;
+
+    void setModifier(TextSelector *modifier) noexcept
+    {
+      modifier_ = modifier;
+      controlFlags.shouldShowPopup = modifier;
+    }
+
+    float maxArc{};
+    float knobArcThickness_{};
+    float knobSizeScale_ = 1.0f;
+    TextSelector *modifier_ = nullptr;
+  };
+
+  class PinSlider : public BaseSlider
+  {
+  public:
+    static constexpr int kDefaultPinSliderWidth = 10;
+
+    PinSlider(Framework::ParameterValue *parameter);
+
+    bool mouseDown(const MouseEvent &e) override;
+    bool mouseDrag(const MouseEvent &e) override;
+
+    double totalRange = 0.0;
+    double runningTotal = 0.0;
+  };
+
+  class NumberBox;
+  class PlainShapeComponent;
+
+  class TextSelector final : public BaseSlider
+  {
+  public:
+    static constexpr int kDefaultTextSelectorHeight = 16;
+    static constexpr int kLabelHMargin = 8;
+    static constexpr int kLabelVMargin = 4;
+
+    static constexpr float kHeightFontAscentRatio = 0.5f;
+    static constexpr float kPaddingHeightRatio = 0.25f;
+    static constexpr float kBetweenElementsMarginHeightRatio = 0.25f;
+    static constexpr float kNumberBoxMarginToHeightRatio = 0.25f;
+    static constexpr float kHeightToArrowWidthRatio = 5.0f / 16.0f;
+    static constexpr float kArrowWidthHeightRatio = 0.5f;
+
+    TextSelector(Framework::ParameterValue *parameter);
+
+    bool render(OpenGlWrapper &openGl) override;
+
+    bool mouseDown(const MouseEvent &e) override;
+    bool mouseUp(const MouseEvent &e) override;
+    bool mouseWheelMove(const MouseEvent &e) override;
+
+    utils::string_view getTextValue(bool fromParameter = false);
+
+    utils::string optionsTitle_{};
+    Font usedFont_{};
+    double lastValue_ = 0.0;
+    int textWidth_{};
+    bool isDirty_ = false;
+    bool isDropDownVisible_ = false;
+    Placement::Enum anchor_ = Placement::left;
+    Placement::Enum extraNumberBoxPlacement_ = Placement::right;
+
+    PlainShapeComponent *extraIcon_ = nullptr;
+  };
+
+  class NumberBox final : public BaseSlider
+  {
+  public:
+    static constexpr int kDefaultNumberBoxHeight = 16;
+    static constexpr int kLabelOffset = 4;
+
+    static constexpr float kTriangleWidthRatio = 0.5f;
+    static constexpr float kTriangleToValueMarginRatio = 2.0f / 16.0f;
+    static constexpr float kValueToEndMarginRatio = 5.0f / 16.0f;
+
+    NumberBox(Framework::ParameterValue *parameter);
+
+    bool render(OpenGlWrapper &openGl) override;
+
+    bool mouseDrag(const MouseEvent &e) override;
+
+    bool drawBackground_ = true;
+    bool isEditing_ = false;
+  };
 }

@@ -8,7 +8,7 @@
   ==============================================================================
 */
 
-#include "BaseButton.hpp"
+#include "BaseControl.hpp"
 
 #include "Framework/parameter_bridge.hpp"
 #include "Framework/parameter_value.hpp"
@@ -18,35 +18,16 @@
 
 namespace Interface
 {
-  BaseButton::BaseButton(Framework::ParameterValue *parameter)
-  {
-    setRepaintsOnMouseActivity(false);
-    
-    if (!parameter)
-      return;
-
-    hasParameter_ = true;
-    canInputValue_ = false;
-
-    auto name = parameter->getParameterDetails().id;
-    setName({ name.data(), name.size() });
-    setParameterLink(parameter->getParameterLink());
-    setParameterDetails(parameter->getParameterDetails());
-    setValueRaw(parameterLink_->parameter->getNormalisedValue());
-  }
-
-  BaseButton::~BaseButton() = default;
-
-  void BaseButton::mouseDown(const MouseEvent &e)
+  bool BaseButton::mouseDown(const MouseEvent &e)
   {
     if (e.mods.isPopupMenu())
     {
-      if (!hasParameter())
-        return;
+      if (!controlFlags.hasParameter)
+        return true;
 
       mouseExit(e);
 
-      showPopupSelector(this, e.getPosition(), COMPLEX_MOVE(createPopupMenu()),
+      showPopupSelector(this, Point{ e.x, e.y }, COMPLEX_MOVE(createPopupMenu()),
         [this](int selection) { handlePopupResult(selection); }, {}, kMinPopupWidth);
 
       return;
@@ -54,14 +35,14 @@ namespace Interface
 
     updateState(true, true);
 
-    for (auto &component : openGlComponents_)
-      component->getAnimator().setIsClicked(true);
+    animator_.isClicked = true;
+    return true;
   }
 
-  void BaseButton::mouseUp(const MouseEvent &e)
+  bool BaseButton::mouseUp(const MouseEvent &e)
   {
     if (e.mods.isPopupMenu())
-      return;
+      return true;
 
     bool wasDown = isHeldDown();
     bool isOver = isMouseOver(true);
@@ -80,9 +61,9 @@ namespace Interface
     if (parameterLink_ && parameterLink_->hostControl)
       parameterLink_->hostControl->beginChangeGesture();
 
-    beginChange(getValue());
+    beginChange(isOn());
 
-    setValue(!getValue(), NotificationType::sendNotificationSync);
+    setValue(!isOn(), true);
 
     setValueToHost();
     endChange();
@@ -108,19 +89,6 @@ namespace Interface
       component->getAnimator().setIsHovered(false);
   }
 
-  void BaseButton::setValue(double shouldBeOn, NotificationType notification)
-  {
-    if (shouldBeOn == getValueRaw())
-      return;
-
-    setValueRaw(shouldBeOn);
-
-    if (notification != NotificationType::dontSendNotification)
-    {
-      valueChanged();
-    }
-  }
-
   String BaseButton::getTextFromValue(bool value) const noexcept
   {
     if (!details_.indexedData.empty())
@@ -143,17 +111,16 @@ namespace Interface
 
   PowerButton::PowerButton(Framework::ParameterValue *parameter) : BaseButton{ parameter }
   {
-    shapeComponent_.getAnimator().setHoverIncrement(kHoverIncrement);
+    animator_.setHoverIncrement(kHoverIncrement);
     shapeComponent_.setShapes(Paths::powerButtonIcon());
     shapeComponent_.setRenderFunction([this](OpenGlWrapper &openGl, OpenGlComponent &target)
       {
         Colour finalColour = activeColour_;
 
-        auto &animator = target.getAnimator();
-        animator.tick(openGl.animate);
+        animator_.tick(openGl.animate);
 
         if (!isHeldDown_)
-          finalColour = finalColour.interpolatedWith(hoverColour_, animator.getValue(Animator::Hover));
+          finalColour = finalColour.interpolatedWith(hoverColour_, animator_.getValue(Animator::Hover));
 
         utils::as<PlainShapeComponent>(&target)->setColor(finalColour);
         target.render(openGl);
@@ -164,17 +131,15 @@ namespace Interface
     setAddedHitbox(BorderSize{ kAddedMargin });
   }
 
-  PowerButton::~PowerButton() = default;
-
   void PowerButton::setColours()
   {
     BaseButton::setColours();
     onNormalColor_ = getColour(Skin::kWidgetAccent1);
   }
 
-  juce::Rectangle<int> PowerButton::setSizes(int height, int)
+  Rectangle<int> PowerButton::setSizes(int height, int)
   {
-    if (drawBounds_.getHeight() != height)
+    if (drawBounds_.h != height)
     {
       drawBounds_ = { height, height };
     }
@@ -188,7 +153,7 @@ namespace Interface
     Colour offHoverColor_ = onNormalColor_;
     Colour offDownColor_ = onDownColor_;
 
-    if (getValue())
+    if (isOn())
     {
       activeColour_ = (isHeldDown_) ? onDownColor_ : onNormalColor_;
       hoverColour_ = onHoverColor_;
@@ -213,20 +178,19 @@ namespace Interface
 
   RadioButton::RadioButton(Framework::ParameterValue *parameter) : BaseButton{ parameter }
   {
-    backgroundComponent_.getAnimator().setHoverIncrement(kHoverIncrement);
+    animator_.setHoverIncrement(kHoverIncrement);
     backgroundComponent_.setRenderFunction([this](OpenGlWrapper &openGl, OpenGlComponent &target)
       {
         static constexpr float kPowerRadius = 0.8f;
         static constexpr float kPowerHoverRadius = 1.0f;
 
-        auto &animator = target.getAnimator();
-        animator.tick(openGl.animate);
+        animator_.tick(openGl.animate);
 
-        auto hoverAmount = animator.getValue(Animator::Hover);
+        auto hoverAmount = animator_.getValue(Animator::Hover);
         auto *backgroundComponent = utils::as<OpenGlQuad>(&target);
         auto quadData = backgroundComponent->getQuadData();
         quadData.setQuad(0, -kPowerHoverRadius, -kPowerHoverRadius, 2.0f * kPowerHoverRadius, 2.0f * kPowerHoverRadius);
-        if (isHeldDown_ || !getValue())
+        if (isHeldDown_ || !isOn())
         {
           backgroundComponent->setColor(backgroundColor_);
           backgroundComponent->render(openGl);
@@ -237,7 +201,7 @@ namespace Interface
           backgroundComponent->render(openGl);
         }
 
-        if (getValue())
+        if (isOn())
           backgroundComponent->setColor(onNormalColor_);
         else
           backgroundComponent->setColor(offNormalColor_);
@@ -249,10 +213,8 @@ namespace Interface
     addOpenGlComponent(&backgroundComponent_);
 
     addLabel();
-    setAddedHitbox(BorderSize{ kAddedMargin });
+    addedHitbox = Rectangle<u16>{ kAddedMargin, kAddedMargin, kAddedMargin, kAddedMargin };
   }
-
-  RadioButton::~RadioButton() = default;
 
   void RadioButton::setColours()
   {
@@ -262,9 +224,9 @@ namespace Interface
     backgroundColor_ = getColour(Skin::kBackground);
   }
 
-  juce::Rectangle<int> RadioButton::setSizes(int height, int)
+  Rectangle<int> RadioButton::setSizes(int height, int)
   {
-    if (drawBounds_.getHeight() != height)
+    if (drawBounds_.h != height)
     {
       drawBounds_ = { height, height };
     }
@@ -275,37 +237,37 @@ namespace Interface
     return drawBounds_;
   }
 
-  void RadioButton::setExtraElementsPositions(juce::Rectangle<int> anchorBounds)
+  void RadioButton::setExtraElementsPositions(Rectangle<int> anchorBounds)
   {
     if (!label_)
       return;
 
     label_->updateState();
     auto labelTextWidth = label_->getTotalWidth();
-    auto labelX = anchorBounds.getX();
+    auto labelX = anchorBounds.x;
     switch (labelPlacement_)
     {
     case Placement::right:
-      labelX += anchorBounds.getWidth() + scaleValueRoundInt(kLabelOffset);
-      label_->setJustification(Justification::centredLeft);
+      labelX += anchorBounds.w + scaleValueRoundInt(kLabelOffset);
+      label_->setJustification(Placement::centerVertical | Placement::left);
       break;
     default:
     case Placement::above:
     case Placement::below:
     case Placement::left:
       labelX -= scaleValueRoundInt(kLabelOffset) + labelTextWidth;
-      label_->setJustification(Justification::centredRight);
+      label_->setJustification(Placement::centerVertical | Placement::right);
       break;
     }
 
     label_->setBounds(labelX, 
-      anchorBounds.getY() - (label_->getTotalHeight() - anchorBounds.getHeight()) / 2, 
+      anchorBounds.y - (label_->getTotalHeight() - anchorBounds.h) / 2, 
       labelTextWidth, label_->getTotalHeight());
   }
 
   void RadioButton::redoImage()
   {
-    if (getValue())
+    if (isOn())
       backgroundComponent_.setColor(onNormalColor_);
     else
       backgroundComponent_.setColor(offNormalColor_);
@@ -319,34 +281,21 @@ namespace Interface
       this->redoImage();
   }
 
-  void RadioButton::setRounding(float rounding) noexcept { backgroundComponent_.setRounding(rounding); }
-
-
-  OptionsButton::OptionsButton(Framework::ParameterValue *parameter, String name, String displayText) :
-    BaseButton{ parameter }, textComponent_{ "Options Button Text", displayText }
+  OptionsButton::OptionsButton(Framework::ParameterValue *parameter, std::string displayText) :
+    BaseButton{ parameter }, text_{ COMPLEX_MOVE(displayText) }
   {
-    if (!parameter)
-      setName(name);
-
-    setText(COMPLEX_MOVE(displayText));
-    borderComponent_.setRenderFunction([this](OpenGlWrapper &openGl, OpenGlComponent &target)
-      {
-        auto *quad = utils::as<OpenGlQuad>(&target);
-
-        auto &animator = target.getAnimator();
-        animator.tick(openGl.animate);
-
-        auto lineThickness = normalThickness_.get();
-        quad->setThickness(animator.getValue(Animator::Hover) * 0.25f * lineThickness + lineThickness);
-        target.render(openGl);
-      });
-
-    addOpenGlComponent(&borderComponent_);
-    addOpenGlComponent(&plusComponent_);
-    addOpenGlComponent(&textComponent_);
   }
 
   OptionsButton::~OptionsButton() = default;
+
+  bool OptionsButton::render(OpenGlWrapper &openGl) override
+  {
+    animator_.tick(openGl.animate);
+    borderComponent_.setThickness(animator_.getValue(Animator::Hover) * 
+      0.25f * normalThickness_ + normalThickness_);
+
+    return true;
+  }
 
   void OptionsButton::setColours()
   {
@@ -354,7 +303,7 @@ namespace Interface
     borderColour_ = getColour(Skin::kBody);
   }
 
-  juce::Rectangle<int> OptionsButton::setSizes(int height, int width)
+  Rectangle<int> OptionsButton::setSizes(int height, int width)
   {
     drawBounds_ = { width, height };
     return drawBounds_;
@@ -377,17 +326,17 @@ namespace Interface
   {
     borderComponent_.setBounds(drawBounds_);
     int plusSize = scaleValueRoundInt(kPlusRelativeSize);
-    int halfHeight = drawBounds_.getHeight() / 2;
-    juce::Rectangle plusBounds{ drawBounds_.getX() + halfHeight, drawBounds_.getY() + halfHeight - plusSize / 2, plusSize, plusSize };
+    int halfHeight = drawBounds_.h / 2;
+    Rectangle plusBounds{ drawBounds_.x + halfHeight, drawBounds_.y + halfHeight - plusSize / 2, plusSize, plusSize };
     plusComponent_.setBounds(plusBounds);
-    juce::Rectangle textBounds{ plusBounds.getRight() + halfHeight, 0, getWidth() - plusBounds.getRight() - halfHeight, getHeight() };
+    Rectangle textBounds{ plusBounds.getRight() + halfHeight, 0, getWidth() - plusBounds.getRight() - halfHeight, getHeight() };
     textComponent_.setBounds(textBounds);
 
     if (redoImage)
       this->redoImage();
   }
 
-  ActionButton::ActionButton(String name, String displayText) : BaseButton{ nullptr },
+  ActionButton::ActionButton(std::string name, std::string displayText) : BaseButton{ nullptr },
      textComponent_{ "Action Button Text", displayText }, text_{ COMPLEX_MOVE(displayText) }
   {
     setName(name);
@@ -430,7 +379,7 @@ namespace Interface
 
     action_();
 
-    setValue(!getValue(), NotificationType::sendNotificationSync);
+    setValue(!isOn(), NotificationType::sendNotificationSync);
 
     for (auto &component : openGlComponents_)
       component->getAnimator().setIsClicked(false);
@@ -443,7 +392,7 @@ namespace Interface
     textColour_ = getColour(Skin::kActionButtonText);
   }
 
-  juce::Rectangle<int> ActionButton::setSizes(int height, int width)
+  Rectangle<int> ActionButton::setSizes(int height, int width)
   {
     drawBounds_ = { width, height };
     return drawBounds_;
@@ -456,7 +405,7 @@ namespace Interface
     
     textComponent_.setFontType(PlainTextComponent::kText);
     textComponent_.setTextColour(textColour_);
-    textComponent_.setJustification(Justification::centred);
+    textComponent_.setJustification(Placement::center);
     textComponent_.setText(text_);
   }
 

@@ -22,7 +22,7 @@
  * Gauss-Legendre quadrature: 30 points
  */
 
-static const long double gauss_legendre_30_points[30] = \
+inline constexpr long double gauss_legendre_30_points[30] = \
 {
     -0.05147184255531769583302521316672L,
      0.05147184255531769583302521316672L,
@@ -56,7 +56,7 @@ static const long double gauss_legendre_30_points[30] = \
      0.99689348407464954027163005091870L\
 };
 
-static const long double gauss_legendre_30_weights[30] = \
+inline constexpr long double gauss_legendre_30_weights[30] = \
 {
     0.10285265289355884034128563670542L,
     0.10285265289355884034128563670542L,

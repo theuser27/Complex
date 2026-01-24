@@ -11,28 +11,20 @@
 #pragma once
 
 #include "Framework/platform_definitions.hpp"
-#include "Framework/vector_map.hpp"
-
-namespace juce
-{
-  class File;
-  class String;
-  class Colour;
-}
+#include "Framework/memory.hpp"
+#include "gui_utils.hpp"
+#include "Miscellaneous.hpp"
 
 namespace Interface
 {
-  class OpenGlContainer;
-  class MainInterface;
-  class BaseSection;
+  class Component;
 
   class Skin
   {
   public:
-    enum SectionOverride
+    enum SectionOverride : u8
     {
       kNone,
-      kOverlay,
       kEffectsLane,
       kPopupBrowser,
       kFilterModule,
@@ -45,9 +37,10 @@ namespace Interface
       kUseParentOverride = kSectionsCount
     };
 
-    enum ValueId
+    enum ValueId : u32
     {
-      kBodyRoundingTop,
+      kInitialValue,
+      kBodyRoundingTop = kInitialValue,
       kBodyRoundingBottom,
 
       kWidgetLineWidth,
@@ -70,12 +63,16 @@ namespace Interface
       kKnobShadowWidth,
       kKnobShadowOffset,
 
+      kScrollHitboxWidth,
+      kScrollPadding,
+      kScrollShrinkPercent,
+
       kValueIdCount
     };
 
-    enum ColourId
+    enum ColourId : u32
     {
-      kInitialColor = 0x42345678,
+      kInitialColor,
       kBackground = kInitialColor,
       kBody,
       kBackgroundElement,
@@ -150,50 +147,74 @@ namespace Interface
       kTextEditorCaret,
       kTextEditorSelection,
 
-      kFinalColor
+      kColorIdCount
     };
-
-    static constexpr auto kColorIdCount = kFinalColor - kInitialColor;
 
     Skin();
 
-    void clearSkin();
+    Colour getColour(ColourId colorId, const Component *component) const;
+    float getValue(ValueId valueId, const Component *component) const;
 
-    void setColour(ColourId colorId, const juce::Colour &color) noexcept;
-    u32 getColour(ColourId colorId) const;
-    u32 getColour(SectionOverride section, ColourId colorId) const;
-    u32 getColour(const OpenGlContainer *section, ColourId colorId) const;
-
-    void setValue(ValueId valueId, float value);
-    float getValue(ValueId valueId) const;
-    float getValue(SectionOverride section, ValueId valueId) const;
-    float getValue(const OpenGlContainer *section, ValueId valueId) const;
-
-    void addColourOverride(int section, ColourId colorId, const juce::Colour &color);
-    void removeColourOverride(int section, ColourId colorId);
-    bool overridesColour(int section, ColourId colorId) const;
-
-    void addOverrideValue(int section, ValueId valueId, float value);
-    void removeOverrideValue(int section, ValueId valueId);
-    bool overridesValue(int section, ValueId valueId) const;
-
-    void saveToFile(const juce::File &destination);
-
+    void saveToFile(char *saveFile);
     void jsonToState(void *jsonData);
-    bool stringToState(utils::string_view skin_string);
-    void loadDefaultSkin();
+    bool stringToState(utils::string_view skinString);
 
     static bool shouldScaleValue(ValueId valueId) noexcept
     {
       return valueId != kWidgetFillFade && valueId != kWidgetFillBoost &&
-        valueId != kWidgetLineBoost && valueId != kKnobHandleLength &&
-        valueId != kWidgetFillCenter;
+        valueId != kWidgetLineBoost && valueId != kWidgetFillCenter;
     }
 
-  protected:
-    u32 colors_[kColorIdCount]{};
-    float values_[kValueIdCount]{};
-    utils::array<utils::VectorMap<ColourId, u32>, kSectionsCount> colorOverrides_{};
-    utils::array<utils::VectorMap<ValueId, float>, kSectionsCount> valueOverrides_{};
+    Colour colours[kSectionsCount][kColorIdCount]{};
+    float values[kSectionsCount][kValueIdCount]{};
   };
+
+  strict_inline float
+  getValue(Skin::ValueId valueId, bool isScaled, Skin::SectionOverride skinOverride = Skin::kNone) noexcept
+  {
+    if (uiRelated.skin)
+    {
+      COMPLEX_ASSERT(skinOverride < Skin::kSectionsCount);
+      COMPLEX_ASSERT(valueId < Skin::kValueIdCount);
+      auto value = uiRelated.skin->values[skinOverride][valueId];
+      return (isScaled) ? scaleValue(value) : value;
+    }
+
+    return 0.0f;
+  }
+
+  strict_inline float 
+  getValue(Skin::ValueId valueId, bool isScaled, Component *component) noexcept
+  {
+    if (uiRelated.skin)
+    {
+      auto value = uiRelated.skin->getValue(valueId, component);
+      return (isScaled) ? scaleValue(value) : value;
+    }
+
+    return 0.0f;
+  }
+
+  strict_inline Colour
+  getColour(Skin::ColourId colorId, Skin::SectionOverride skinOverride = Skin::kNone) noexcept
+  {
+    if (uiRelated.skin)
+    {
+      COMPLEX_ASSERT(skinOverride < Skin::kSectionsCount);
+      COMPLEX_ASSERT(colorId < Skin::kColorIdCount);
+      return uiRelated.skin->colours[skinOverride][colorId];
+    }
+
+    return Colours::black;
+  }
+
+  strict_inline Colour
+  getColour(Skin::ColourId colorId, Component *component) noexcept
+  {
+    if (uiRelated.skin)
+      return uiRelated.skin->getColour(colorId, component);
+
+    return Colours::black;
+  }
+
 }

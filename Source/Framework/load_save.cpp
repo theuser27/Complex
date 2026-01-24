@@ -2,7 +2,7 @@
   ==============================================================================
 
     load_save.cpp
-    Created: 3 Dec 2022 1:46:31am
+    Created: 3 Dec 2022 01:46:31
     Author:  theuser27
 
   ==============================================================================
@@ -10,849 +10,753 @@
 
 #include "load_save.hpp"
 
-#include <format>
+#include "cplug/config.h"
 
-#include "Third Party/json/json.hpp"
-#include "Third Party/visage/file_system.h"
+#include "Third Party/xhl/files.h"
+#include "Third Party/cjson/cjson.h"
 
 #include "Framework/parameter_value.hpp"
 #include "Framework/parameter_bridge.hpp"
-#include "Framework/parameters.hpp"
-#include "Plugin/ProcessorTree.hpp"
 #include "Generation/SoundEngine.hpp"
 #include "Generation/EffectsState.hpp"
 #include "Generation/EffectModules.hpp"
 #include "Interface/LookAndFeel/Miscellaneous.hpp"
 #include "update_types.hpp"
 #include "Plugin/Renderer.hpp"
-#include "Plugin/PluginProcessor.hpp"
+#include "Plugin/Complex.hpp"
 
-using json = nlohmann::json;
 
-// ADL serialiser of utils::string_view, do NOT delete
-namespace utils
+// after finishing work with the arena and freeing it, reset this pointer
+thread_local utils::bumpArena *jsonArena;
+
+static void *
+#ifdef COMPLEX_WINDOWS
+__cdecl
+#endif
+cjsonAllocate(size_t size)
 {
-  static void to_json(json &json, utils::string_view view)
+  COMPLEX_ASSERT(jsonArena, "Someone forgot to set the arena before using json");
+  return utils::bumpArena::insert(jsonArena, size, alignof(void *));
+}
+
+// we free the arena at the end, so it's pointless to deallocate
+static void 
+#ifdef COMPLEX_WINDOWS
+__cdecl
+#endif
+cjsonFree(void *) { }
+
+void initialiseCJSONHooks()
+{
+  cjson_Hooks hooks{ .malloc_fn = cjsonAllocate, .free_fn = cjsonFree };
+  cjson_InitHooks(&hooks);
+}
+
+utils::string_view
+findOrAddPermanentString(utils::string_view string);
+
+namespace Framework::LoadSave
+{
+  utils::string getConfigFilePath(utils::string_view file)
   {
-    json = std::string_view{ view.data(), view.size() };
+    static constexpr auto bufferSize = 512;
+    static const auto path = []()
+    {
+      char buffer[bufferSize];
+      int pathSize = xfiles_get_user_directory(buffer, sizeof(buffer), XFILES_USER_DIRECTORY_APPDATA);
+      auto string = utils::string::create(localScratch, "%*s" XFILES_DIR_STR "%s", pathSize, buffer, CPLUG_PLUGIN_NAME);
+
+      // adding the path to the long term plugin storage
+      return findOrAddPermanentString(string);
+    }();
+
+    if (!xfiles_exists(path.data()))
+      xfiles_create_directory(path.data());
+
+    return utils::string::create(localScratch, "%v" XFILES_DIR_STR "%v", path, file);
   }
 }
 
 namespace
 {
-  class LoadingException final : public std::exception
+  thread_local utils::string *errorPath;
+
+  void useConfigJson(const auto &predicate, bool save = false)
   {
-  public:
-    LoadingException(std::string message) : message_{ COMPLEX_MOVE(message) } { }
-    LoadingException(const LoadingException &) = default;
-    ~LoadingException() noexcept override = default;
+    auto filePath = Framework::LoadSave::getConfigFilePath(CPLUG_PLUGIN_NAME ".config");
 
-    const char *what() const noexcept override { return message_.data(); }
-    LoadingException &append(std::string string) { message_ += string; return *this; }
-    LoadingException &prepend(std::string string) { message_ = string + message_; return *this; }
+    if (!xfiles_exists(filePath.data()))
+      xfiles_write(filePath.data(), "{}", sizeof("{}"));
 
-  private:
-    std::string message_;
-  };
+    char *string;
+    usize stringSize;
+    if (!xfiles_read(filePath.data(), (void **)&string, &stringSize))
+      return;
 
-  visage::File getConfigFilePath()
-  {
-    auto pluginFolder = visage::appDataDirectory().append(JucePlugin_Name);
-    if (!std::filesystem::exists(pluginFolder))
+    jsonArena = utils::bumpArena::createNested(localScratch, COMPLEX_KB(16));
+
+    cjson *json = cjson_Parse(string, stringSize);
+    if (json)
+      predicate(json);
+
+    if (save)
     {
-      std::filesystem::create_directory(pluginFolder);
+      size_t size;
+      char *text = cjson_Print(json, &size);
+      xfiles_write(filePath.data(), text, size);
     }
-    return pluginFolder.append(JucePlugin_Name ".config");
+
+    XFILES_FREE(string);
+    utils::bumpArena::destroy(jsonArena);
+    jsonArena = nullptr;
   }
 
-  json getConfigJson()
+  void upgradeSave([[maybe_unused]] cjson *save)
   {
-    visage::File configFile = getConfigFilePath();
-    if (!std::filesystem::exists(configFile))
-      return {};
-
-    try
-    {
-      json parsed = json::parse(visage::loadFileAsString(configFile), nullptr, false);
-      if (parsed.is_discarded())
-        return {};
-      return parsed;
-    }
-    catch (const json::exception &)
-    {
-      return {};
-    }
-  }
-
-  void saveConfigJson(const json &configState)
-  {
-    visage::File configFile = getConfigFilePath();
-    visage::replaceFileWithText(configFile, configState.dump(2, ' ', true));
-  }
-
-  void upgradeSave([[maybe_unused]] json &save)
-  {
-
+    // TODO: change all string ids to numeric ones
+    // TODO: low/highBound and shiftBounds now belong to EffectModule
+    // TODO: json's "indexed_data" is now "options"
   }
 }
 
 namespace Framework::LoadSave
 {
-  utils::pair<int, int> getWindowSize()
+  i32
+  getModuleWidth()
   {
-    json data = getConfigJson();
+    i32 moduleWidth = Interface::kEffectModuleWidth;
 
-    int width = Interface::kMinWidth;
-    int height = Interface::kMinHeight;
+    useConfigJson([&](cjson *json)
+      {
+        if (cjson *item = cjson_GetObjectItem(json, "module_width"))
+          moduleWidth = utils::max<i32>(Interface::kMinWidth, (i32)item->vint);
+      });
 
-    if (data.contains("window_width"))
-      width = std::max<int>(Interface::kMinWidth, data["window_width"]);
-
-    if (data.contains("window_height"))
-      height = std::max<int>(Interface::kMinHeight, data["window_height"]);
-    
-    return { width, height };
+    return moduleWidth;
   }
-
-  double getWindowScale()
+  void getWindowSizeScale(u32 &windowWidth, u32 &windowHeight, float &windowScale)
   {
-    json data = getConfigJson();
-    double scale = 1.0;
+    windowWidth = Interface::kMinWidth;
+    windowHeight = Interface::kMinHeight;
+    windowScale = 1.0f;
+    
+    useConfigJson([&](cjson *json)
+      {
+        if (cjson *item = cjson_GetObjectItem(json, "window_width"))
+          windowWidth = utils::max<u32>(Interface::kMinWidth, (u32)item->vuint);
 
-    if (data.contains("window_scale"))
-      scale = data["window_scale"];
+        if (cjson *item = cjson_GetObjectItem(json, "window_height"))
+          windowHeight = utils::max<u32>(Interface::kMinHeight, (u32)item->vuint);
 
-    return scale;
+        if (cjson *item = cjson_GetObjectItem(json, "window_scale"))
+          windowScale = (float)item->vdouble;
+      });
   }
 
   void getStartupParameters(usize &parameterMappings, usize &inSidechains, usize &outSidechains, usize &undoSteps)
   {
-    json data = getConfigJson();
     parameterMappings = 100;
     inSidechains = 0;
     outSidechains = 0;
     undoSteps = 500;
 
-    if (data.contains("parameter_count"))
-      parameterMappings = data["parameter_count"];
+    useConfigJson([&](cjson *json)
+      {
+        if (cjson *item = cjson_GetObjectItem(json, "parameter_count"))
+          parameterMappings = (usize)item->vuint;
 
-    if (data.contains("input_sidechains"))
-      inSidechains = data["input_sidechains"];
+        if (cjson *item = cjson_GetObjectItem(json, "input_sidechains"))
+          inSidechains = (usize)item->vuint;
 
-    if (data.contains("output_sidechains"))
-      outSidechains = data["output_sidechains"];
+        if (cjson *item = cjson_GetObjectItem(json, "output_sidechains"))
+          outSidechains = (usize)item->vuint;
 
-    if (data.contains("undo_steps"))
-      undoSteps = data["undo_steps"];
+        if (cjson *item = cjson_GetObjectItem(json, "undo_steps"))
+          undoSteps = (usize)item->vuint;
+      });
   }
 
-  void saveWindowSize(int windowWidth, int windowHeight)
-  {
-    json data = getConfigJson();
-    data["window_width"] = windowWidth;
-    data["window_height"] = windowHeight;
-    saveConfigJson(data);
+#define setJsonItem(data, key, type, value)           \
+  {                                                   \
+    if (cjson *item = cjson_GetObjectItem(data, key)) \
+      cjson_Set(item, type, value);                   \
+    else                                              \
+    {                                                 \
+      item = cjson_Create(cjson_Object);              \
+      cjson_AddExistingTo(data, key, item);           \
+    }                                                 \
   }
 
-  void saveWindowScale(double windowScale)
+  void saveWindowSizeScale(u32 windowWidth, u32 windowHeight, float windowScale)
   {
-    json data = getConfigJson();
-    data["window_scale"] = windowScale;
-    saveConfigJson(data);
+    useConfigJson([&](cjson *data)
+      {
+        setJsonItem(data, "window_width", cjson_Unsigned, windowWidth);
+        setJsonItem(data, "window_height", cjson_Unsigned, windowHeight);
+        setJsonItem(data, "window_scale", cjson_Float, windowScale);
+      }, true);
   }
 
   void saveParameterMappings(usize parameterMappings)
   {
-    json data = getConfigJson();
-    data["parameter_count"] = parameterMappings;
-    saveConfigJson(data);
+    useConfigJson([&](cjson *data)
+      {
+        setJsonItem(data, "parameter_count", cjson_Unsigned, parameterMappings);
+      }, true);
   }
 
   void saveUndoStepCount(usize undoStepCount)
   {
-    json data = getConfigJson();
-    data["undo_steps"] = undoStepCount;
-    saveConfigJson(data);
-  }
-}
-
-namespace Framework
-{
-  bool PresetUpdate::perform()
-  {
-    if (!oldSavedState_.has_value())
-    {
-      json previousState{};
-      processorTree_.serialiseToJson(&previousState);
-      oldSavedState_ = COMPLEX_MOVE(previousState);
-    }
-
-    processorTree_.clearState();
-    auto *oldSavedState = oldSavedState_.try_get<json>();
-    auto *newSavedState = newSavedState_.try_get<json>();
-    processorTree_.deserialiseFromJson(newSavedState, oldSavedState);
-
-    return true;
-  }
-
-  bool PresetUpdate::undo()
-  {
-    processorTree_.clearState();
-    auto *oldSavedState = oldSavedState_.try_get<json>();
-    auto *newSavedState = newSavedState_.try_get<json>();
-    processorTree_.deserialiseFromJson(oldSavedState, newSavedState);
-
-    return true;
-  }
-}
-
-namespace Plugin
-{
-  void ProcessorTree::clearState()
-  {
-    isBeingDestroyed_.store(true);
-    dynamicParameters_.clear();
-
-    allProcessors_.data.clear();
-    processorIdCounter_.store(processorTreeId + 1, std::memory_order_release);
-  }
-
-  void ProcessorTree::serialiseToJson(void *jsonData) const
-  {
-    json &data = *static_cast<json *>(jsonData);
-
-    std::vector<Generation::BaseProcessor *> topLevelProcessors{};
-    for (auto &[id, processor] : allProcessors_.data)
-      if (processor->getParentProcessorId() == processorTreeId)
-        topLevelProcessors.push_back(processor.get());
-
-    COMPLEX_ASSERT(!topLevelProcessors.empty());
-
-    json topLevelProcessorsSerialised{};
-
-    for (auto &topLevelProcessor : topLevelProcessors)
-    {
-      json &topLevelData = topLevelProcessorsSerialised.emplace_back();
-      topLevelProcessor->serialiseToJson(&topLevelData);
-    }
-
-    data["version"] = JucePlugin_VersionString;
-    data["tree"] = topLevelProcessorsSerialised;
-  }
-
-  bool ComplexPlugin::deserialiseFromJson(void *newSave, void *fallbackSave)
-  {
-    json &newData = *static_cast<json *>(newSave);
-
-    auto loadState = [&](json &data)
-    {
-      json &soundEngine = data["tree"][0];
-      utils::string_view type = soundEngine["id"].get<utils::string_view>();
-      if (type != Framework::Processors::SoundEngine::id().value())
-        throw LoadingException{ "SoundEngine type doesn't match." };
-
-      for (const auto &[_, parameter] : soundEngine["parameters"].items())
+    useConfigJson([&](cjson *data)
       {
-        if (parameter["id"].get<utils::string_view>() == Framework::Processors::SoundEngine::BlockSize::id().value())
+        setJsonItem(data, "undo_steps", cjson_Unsigned, undoStepCount);
+      }, true);
+  }
+
+#undef setJsonItem
+}
+
+static void handleIndexedData(utils::bumpArena *arena, [[maybe_unused]] bool isAutomated, 
+  Framework::ParameterDetails &details, cjson *indexedData)
+{
+  //bool isExtensible = (details.flags & Framework::ParameterDetails::Extensible) != 0;
+
+  auto processSingle = [&](const auto &self, Framework::IndexedData &option, cjson *data) -> Framework::IndexedData &
+  {
+    auto *newOption = anew(arena, Framework::IndexedData, { option });
+
+    if (cjson *children = cjson_GetObjectItem(data, "options"))
+    {
+      Framework::IndexedData dummy{ .parent = newOption };
+      for (cjson *value = children->child; value; value = value->next)
+      {
+        bool isPresent = false;
+        auto *child = option.children;
+        for (; child; child = child->next)
         {
-          minFFTOrder_.store(parameter["min_value"].get<u32>(), std::memory_order_release);
-          maxFFTOrder_.store(parameter["max_value"].get<u32>(), std::memory_order_release);
-          break;
+          if (child->id == cjson_GetObjectItem(value, "id")->vuint)
+          {
+            isPresent = true;
+            break;
+          }
+        }
+
+        if (isPresent)
+        {
+          auto &newChildOption = self(self, *child, value);
+          // this uses the overloaded comma operator (im sorry)
+          dummy, newChildOption;
+
+          char *string = cjson_GetObjectItem(value, "display_name")->vstring;
+          utils::string_view dataName{ string, utils::getStringSize(string) };
+          if (dataName != newChildOption.displayName)
+          {
+            dataName = findOrAddPermanentString(dataName);
+            newChildOption.displayName = dataName;
+          }
+
+          newChildOption.count = (u32)cjson_GetObjectItem(value, "count")->vuint;
+          if ([[maybe_unused]] cjson *dataUuid = cjson_GetObjectItem(value, "dynamic_update_uuid"))
+          {
+            COMPLEX_ASSERT(newChildOption.dynamicUpdateUuid = dataUuid->vuint);
+          }
+        }
+        else
+        {
+          // TODO:
         }
       }
 
-      soundEngine_ = createProcessor<Generation::SoundEngine, false>(this);
-      soundEngine_->setParentProcessorId(processorTreeId);
-      soundEngine_->deserialiseFromJson(&soundEngine);
-
-      for (auto &reason : Framework::kAllChangeIds)
-        updateDynamicParameters(reason);
-    };
-
-    bool isSuccessful = false;
-    try
-    {
-      loadState(newData);
-      isSuccessful = true;
-    }
-    catch (const LoadingException &e)
-    {
-      std::string error = "There was an error opening the preset.\n";
-      error += e.what();
-      juce::NativeMessageBox::showMessageBoxAsync(juce::MessageBoxIconType::NoIcon, "Error opening preset", error);
-    }
-    catch (const std::exception &e)
-    {
-      // idk what happened
-      std::string error = "An unknown error occured while opening preset.\n";
-      error += e.what();
-      juce::NativeMessageBox::showMessageBoxAsync(juce::MessageBoxIconType::NoIcon, "Error opening preset", error);
-    }
-
-    if (!isSuccessful)
-    {
-      if (fallbackSave)
-        loadState(*static_cast<json *>(fallbackSave));
-      else
-        loadDefaultPreset();
-    }
-
-    return isSuccessful;
-  }
-
-  void ComplexPlugin::loadDefaultPreset()
-  {
-    soundEngine_ = utils::as<Generation::SoundEngine>(createProcessor(Framework::Processors::SoundEngine::id().value()));
-    auto *effectsState = createProcessor(Framework::Processors::EffectsState::id().value());
-    auto *effectsLane = createProcessor(Framework::Processors::EffectsLane::id().value());
-    auto *effectModule = createProcessor(Framework::Processors::EffectModule::id().value());
-    auto *effect = createProcessor(Framework::Processors::BaseEffect::Dynamics::id().value());
-
-    effectModule->insertSubProcessor(0, *effect);
-    effectsLane->insertSubProcessor(0, *effectModule);
-    effectsState->insertSubProcessor(0, *effectsLane);
-    soundEngine_->insertSubProcessor(0, *effectsState);
-    soundEngine_->setParentProcessorId(processorTreeId);
-
-    static constexpr auto pluginParameterIds = Framework::Processors::SoundEngine::
-      enum_ids_filter<Framework::kGetParameterPredicate, true>();
-
-    auto min = std::min(pluginParameterIds.size(), parameterBridges_.size());
-    for (usize i = 0; i < min; ++i)
-    {
-      auto *parameter = getProcessorParameter(soundEngine_->getProcessorId(), pluginParameterIds[i]);
-      COMPLEX_ASSERT(parameter);
-      parameterBridges_[i]->resetParameterLink(parameter->getParameterLink(), true);
-    }
-
-    isLoaded_.store(true, std::memory_order_release);
-  }
-
-  auto ProcessorTree::createProcessor(utils::string_view processorType, void *jsonData)
-    -> Generation::BaseProcessor *
-  {
-    static constexpr auto processorTypes = Framework::Processors::
-      enum_subtypes_filter_recursive<Framework::kGetProcessorPredicate>();
-
-    return [&]<typename ... Ts>(nested_enum::type_list<Ts...>)
-    {
-      utils::up<Generation::BaseProcessor> processor = nullptr;
-      utils::ignore = ((Ts::id().value() == processorType && (processor = utils::up<typename Ts::linked_type>::create(this), true)) || ...);
-      if (processor == nullptr)
+      // second loop to add new/missing options from the save
+      for (auto child = option.children; child; child = child->next)
       {
-        throw LoadingException{ std::format("Processor with id {} does not exist", processorType.data()) };
+        bool isPresent = false;
+        for (auto newChild = newOption->children; newChild; newChild = newChild->next)
+        {
+          if (newChild->id == child->id)
+          {
+            isPresent = true;
+            break;
+          }
+        }
+
+        if (!isPresent)
+        {
+          auto *missing = Framework::IndexedData::deepCopy(arena, child);
+          // this uses the overloaded comma operator (im sorry)
+          dummy, *missing;
+          newOption->count -= missing->count;
+        }
       }
 
-      auto *pointer = processor.get();
-      addProcessor(COMPLEX_MOVE(processor));
+      newOption->children = dummy.next;
+    }
 
-      if (jsonData != nullptr)
-        pointer->deserialiseFromJson(jsonData);
-      else
-        pointer->initialiseParameters();
-
-      return pointer;
-    }(processorTypes);
-  }
-}
-
-static void handleIndexedData(Framework::ParameterDetails &details, json *indexedData)
-{
-  std::vector<std::pair<utils::string_view *, usize>> stringRelocations{};
-
-  usize relocationIndex = 0;
-  auto appendAndAddRelocation = [&](utils::string_view &relocate, utils::string_view text)
-  {
-    stringRelocations.emplace_back(&relocate, relocationIndex++);
-    details.dynamicData->stringData.append(text.data(), text.size());
-    details.dynamicData->stringData += '\0';
+    return *newOption;
   };
 
-  auto doStringRelocations = [&]()
-  {
-    for (usize i = 0, textIndex = 0; i < stringRelocations.size(); ++i)
-    {
-      *stringRelocations[i].first = details.dynamicData->stringData.data() + textIndex;
-      textIndex += stringRelocations[i].first->size() + 1;
-    }
-  };
-
-  if (details.scale == Framework::ParameterScale::IndexedNumeric)
-  {
-    float minValue = details.minValue;
-    float maxValue = details.maxValue;
-    std::vector<std::string> generatedStrings{};
-    details.dynamicData->dataLookup.reserve((usize)(maxValue - minValue) + 1);
-    for (float i = minValue; i <= maxValue; ++i)
-    {
-      auto string = details.generateNumeric(i, details);
-      auto &element = details.dynamicData->dataLookup.emplace_back();
-      appendAndAddRelocation(element.displayName, string);
-    }
-
-    doStringRelocations();
-    
-    return;
-  }
-
-  std::vector<usize> accountedElements{};
-  accountedElements.reserve(details.indexedData.empty() ? indexedData->size() : details.indexedData.size());
-  details.dynamicData->dataLookup.reserve(details.indexedData.empty() ? indexedData->size() : details.indexedData.size());
-
-  for (auto &[_, value] : indexedData->items())
-  {
-    if (!value.contains("id") || !value.contains("display_name"))
-    {
-      throw LoadingException{ std::format("Missing indexed attributes in parameter {} ({})",
-        details.displayName.data(), details.id.data()) };
-    }
-
-    utils::string_view id = value["id"].get<utils::string_view>();
-    utils::string_view name = value["display_name"].get<utils::string_view>();
-    u64 count = value["count"].get<u64>();
-    auto dynamicUpdateUuid = (!value.contains("dynamic_update_uuid")) ?
-      utils::string_view{} : value["dynamic_update_uuid"].get<utils::string_view>();
-
-    if (details.indexedData.empty())
-    {
-      auto &element = details.dynamicData->dataLookup.emplace_back();
-      element.count = count;
-      appendAndAddRelocation(element.id, id);
-      appendAndAddRelocation(element.displayName, name);
-      if (!dynamicUpdateUuid.empty())
-      {
-        if (utils::find(Framework::kAllChangeIds, dynamicUpdateUuid) == Framework::kAllChangeIds.end())
-        {
-          // TODO: add option to continue loading without this indexed value
-          throw LoadingException{ std::format("Unknown dynamic update reason ({}) for indexed element {} ({})",
-            dynamicUpdateUuid.data(), name.data(), id.data()) };
-        }
-        appendAndAddRelocation(element.dynamicUpdateUuid, dynamicUpdateUuid);
-      }
-
-      continue;
-    }
-
-    auto iter = utils::find_if(details.indexedData, [id](const auto &data) { return data.id == id; });
-    if (iter == details.indexedData.end())
-    {
-      throw LoadingException{ std::format("Unknown indexed element {} ({}) in parameter {} ({})",
-        name.data(), id.data(), details.displayName.data(), details.id.data()) };
-    }
-
-    accountedElements.emplace_back((usize)(iter - details.indexedData.begin()));
-    auto &element = details.dynamicData->dataLookup.emplace_back(*iter);
-
-    bool isNameSame = element.displayName == name;
-    bool isDynamicUpdateUuidSame = dynamicUpdateUuid == element.dynamicUpdateUuid;
-    element.count = count;
-
-    if (isNameSame && isDynamicUpdateUuidSame)
-      continue;
-
-    if (!isNameSame)
-      appendAndAddRelocation(element.displayName, name);
-
-    if (!isDynamicUpdateUuidSame && !dynamicUpdateUuid.empty())
-    {
-      if (utils::find(Framework::kAllChangeIds, dynamicUpdateUuid) == Framework::kAllChangeIds.end())
-      {
-        // TODO: add option to continue loading without this indexed value
-        throw LoadingException{ std::format("Unknown dynamic update reason ({}) for indexed element {} ({})",
-          dynamicUpdateUuid.data(), name.data(), id.data()) };
-      }
-
-      appendAndAddRelocation(element.dynamicUpdateUuid, dynamicUpdateUuid);
-    }
-  }
-
-  // do string_view relocations
-  doStringRelocations();
-
-  // append elements that were not present in the save
-  for (usize i = 0; i < details.indexedData.size(); ++i)
-  {
-    auto erasedCount = std::erase(accountedElements, i);
-    if (erasedCount != 0)
-      continue;
-
-    details.dynamicData->dataLookup.emplace_back(details.indexedData[i]);
-  }
-
-  details.indexedData = details.dynamicData->dataLookup;
-}
-
-namespace Generation
-{
-  void BaseProcessor::serialiseToJson(void *jsonData) const
-  {
-    COMPLEX_ASSERT(getParentProcessorId() != 0 && "This processor wasn't assigned a parent \
-      or the parent forgot to set their id inside the child");
-
-    json &processorInfo = *static_cast<json *>(jsonData);
-    processorInfo["id"] = processorType_;
-
-    std::vector<json> subProcessors{};
-    subProcessors.reserve(subProcessors_.size());
-    for (auto &subProcessor : subProcessors_)
-    {
-      json &subProcessorData = subProcessors.emplace_back();
-      subProcessor->serialiseToJson(&subProcessorData);
-    }
-    processorInfo["processors"] = COMPLEX_MOVE(subProcessors);
-
-    std::vector<json> parameters{};
-    for (auto &[name, parameter] : processorParameters_.data)
-    {
-      json &parameterData = parameters.emplace_back();
-      parameter->serialiseToJson(&parameterData);
-    }
-    processorInfo["parameters"] = COMPLEX_MOVE(parameters);
-  }
-
-  void BaseProcessor::deserialiseFromJson(utils::span<const utils::string_view> parameterIds,
-    BaseProcessor *processor, void *jsonData)
-  {
-    json &data = *static_cast<json *>(jsonData);
-    auto *processorTree = processor->processorTree_;
-
-    auto getNameId = [processor]()
-    {
-      auto id = processor->getProcessorType();
-      auto name = Framework::Processors::enum_name_by_id_recursive(id, false).value();
-      return std::pair{ name, id };
-    };
-
-    for (auto parameterId : parameterIds)
-    {
-      bool isPresent = false;
-      for (const auto &[_, value] : data["parameters"].items())
-      {
-        auto savedId = value["id"].get<utils::string_view>();
-        if (savedId == parameterId)
-        {
-          isPresent = true;
-          break;
-        }
-      }
-      
-      if (!isPresent)
-      {
-        auto [processorName, processorId] = getNameId();
-        auto parameterName = Framework::Processors::enum_name_by_id_recursive(parameterId, false).value();
-
-        throw LoadingException{ std::format("Missing Parameter {} ({}) inside processor {} ({}).",
-          parameterName.data(), parameterId.data(), processorName.data(), processorId.data()) };
-      }
-    }
-
-    for (auto &[_, value] : data["parameters"].items())
-    {
-      utils::up<Framework::ParameterValue> parameter;
-      try
-      {
-        parameter = Framework::ParameterValue::deserialiseFromJson(processorTree, &value);
-      } 
-      catch (LoadingException &e)
-      {
-        auto [name, id] = getNameId();
-        throw e.prepend(std::format("Inside processor {} ({})\n", name.data(), id.data()));
-      }
-      auto parameterId = parameter->getParameterId();
-      if (utils::find(parameterIds, parameterId) == parameterIds.end())
-      {
-        auto [name, id] = getNameId();
-        throw LoadingException{ std::format("Parameter {} ({}) is not part of processor {} ({}).", 
-          parameter->getParameterName().data(), parameterId.data(), name.data(), id.data()) };
-      }
-
-      auto id = value["id"].get<utils::string_view>();
-      auto iter = utils::find_if(processor->processorParameters_.data, 
-        [id](const auto &parameter) { return parameter.first == id; });
-      if (iter != processor->processorParameters_.data.end())
-      {
-        COMPLEX_ASSERT_FALSE("Multiple same parameters found %s (%s).\nLast one will be discarded now.", 
-          value["display_name"].get<utils::string_view>().data(), id.data());
-      }
-      else
-        processor->processorParameters_.data.emplace_back(parameterId, COMPLEX_MOVE(parameter));
-    }
-
-    for (auto &[_, value] : data["processors"].items())
-    {
-      if (!value.contains("id"))
-      {
-        auto [name, id] = getNameId();
-        throw LoadingException{ std::format("Unknown processor without id inside {} ({})", name.data(), id.data()) };
-      }
-
-      utils::string_view subProcessorsId = value["id"].get<utils::string_view>();
-      Generation::BaseProcessor *subProcessor;
-      try
-      {
-        subProcessor = processorTree->createProcessor(subProcessorsId, &value);
-      }
-      catch (LoadingException &e)
-      {
-        auto [name, id] = getNameId();
-        throw e.prepend(std::format("Inside processor {} ({})\n", name.data(), id.data()));
-      }
-      processor->insertSubProcessor(processor->subProcessors_.size(), *subProcessor);
-    }
-  }
-
-  void SoundEngine::deserialiseFromJson(void *jsonData)
-  {
-    json &data = *static_cast<json *>(jsonData);
-    json &subProcessors = data["processors"];
-
-    if (subProcessors.size() > 1)
-      throw LoadingException{ "More than one EffectsState is defined." };
-
-    json &effectsState = subProcessors[0];
-    utils::string_view type = effectsState["id"].get<utils::string_view>();
-    if (Framework::Processors::EffectsState::id().value() != type)
-      throw LoadingException{ "EffectsState type doesn't match." };
-
-    static constexpr auto kSoundEngineParameters = Framework::Processors::SoundEngine::enum_ids_filter<
-      Framework::kGetParameterPredicate, true>();
-
-    BaseProcessor::deserialiseFromJson(kSoundEngineParameters, this, &data);
-  }
-
-  void EffectsState::deserialiseFromJson(void *jsonData)
-  {
-    json &data = *static_cast<json *>(jsonData);
-    json &subProcessors = data["processors"];
-
-    for (auto &[_, value] : subProcessors.items())
-      if (value["id"].get<utils::string_view>() != Framework::Processors::EffectsLane::id().value())
-        throw LoadingException{ "Non-EffectLane found in EffectsState" };
-    
-    static constexpr auto kEffectsStateParameters = Framework::Processors::EffectsState::enum_ids_filter<
-      Framework::kGetParameterPredicate, true>();
-
-    BaseProcessor::deserialiseFromJson(kEffectsStateParameters, this, &data);
-  }
-
-  void EffectsLane::deserialiseFromJson(void *jsonData)
-  {
-    json &data = *static_cast<json *>(jsonData);
-    json &subProcessors = data["processors"];
-
-    for (auto &[_, value] : subProcessors.items())
-      if (value["id"].get<utils::string_view>() != Framework::Processors::EffectModule::id().value())
-        throw LoadingException{ "Non-EffectModule found in EffectsLane" };
-
-    static constexpr auto kEffectsLaneParameters = Framework::Processors::EffectsLane::enum_ids_filter<
-      Framework::kGetParameterPredicate, true>();
-
-    BaseProcessor::deserialiseFromJson(kEffectsLaneParameters, this, &data);
-  }
-
-  void EffectModule::deserialiseFromJson(void *jsonData)
-  {
-    json &data = *static_cast<json *>(jsonData);
-    json &subProcessors = data["processors"];
-
-    static constexpr auto kContainedEffects = Framework::Processors::BaseEffect::enum_ids_filter<
-      Framework::kGetProcessorPredicate, true>();
-
-    for (auto &[_, value] : subProcessors.items())
-      if (utils::find(kContainedEffects, value["id"].get<utils::string_view>()) == kContainedEffects.end())
-        throw LoadingException{ "Non-Effect found in EffectModule" };
-
-    static constexpr auto kEffectModuleParameters = Framework::Processors::EffectModule::enum_ids_filter<
-      Framework::kGetParameterPredicate, true>();
-
-    BaseProcessor::deserialiseFromJson(kEffectModuleParameters, this, &data);
-  }
-
-  void BaseEffect::deserialiseFromJson(void *jsonData)
-  {
-    BaseProcessor::deserialiseFromJson(parameters_, this, jsonData);
-  }
+  auto &newOptions = processSingle(processSingle, *details.options, indexedData);
+  details.options = &newOptions;
+  details.defaultOptionId = cjson_GetObjectItem(indexedData, "default_option_id")->vuint;
 }
 
 namespace Framework
 {
   void ParameterValue::serialiseToJson(void *jsonData) const
   {
-    json &data = *static_cast<json *>(jsonData);
-    data["id"] = details_.id;
-    data["display_name"] = details_.displayName;
-    data["value"] = normalisedValue_;
-    data["min_value"] = details_.minValue;
-    data["max_value"] = details_.maxValue;
-    data["default_value"] = details_.defaultValue;
-    data["default_normalised_value"] = details_.defaultNormalisedValue;
-    data["scale"] = ParameterScale::enum_id(details_.scale).value();
-    data["is_stereo"] = (details_.flags & ParameterDetails::Stereo) != 0;
-    data["is_modulatable"] = (details_.flags & ParameterDetails::Modulatable) != 0;
-    data["is_extensible"] = (details_.flags & ParameterDetails::Extensible) != 0;
+    cjson *data = (cjson *)jsonData;
+    cjson_AddTo(data, "id", cjson_Unsigned, details_.id);
+    cjson_AddTo(data, "display_name", cjson_String, details_.displayName.data());
+    cjson_AddTo(data, "value", cjson_Float, normalisedValue_);
+    cjson_AddTo(data, "scale", cjson_Unsigned, details_.scale);
+    cjson_AddTo(data, "is_stereo", cjson_Bool, (details_.flags & ParameterDetails::Stereo) != 0);
+    cjson_AddTo(data, "is_modulatable", cjson_Bool, (details_.flags & ParameterDetails::Modulatable) != 0);
+    cjson_AddTo(data, "is_extensible", cjson_Bool, (details_.flags & ParameterDetails::Extensible) != 0);
     if (parameterLink_.hostControl)
-      data["automation_slot"] = parameterLink_.hostControl->getIndex();
-    if (details_.scale == ParameterScale::Indexed && !details_.indexedData.empty())
+      cjson_AddTo(data, "automation_slot", cjson_Unsigned, parameterLink_.hostControl->parameterIndex);
+    if (details_.scale == ParameterScale::Indexed)
     {
-      json indexedData{};
-      for (const auto &element : details_.indexedData)
+      auto recurseOptions = [&](const auto &self, cjson *optionData, IndexedData *option) -> void
       {
-        json &elementData = indexedData.emplace_back();
-        elementData["id"] = element.id;
-        elementData["display_name"] = element.displayName;
-        elementData["count"] = element.count;
-        if (!element.dynamicUpdateUuid.empty())				
-          elementData["dynamic_update_uuid"] = element.dynamicUpdateUuid;
-      }
-      data["indexed_data"] = COMPLEX_MOVE(indexedData);
+        cjson *children = cjson_Create(cjson_Array);
+        for (auto *child = option->children; child; child = child->next)
+        {
+          cjson *childData = cjson_AddTo(children, nullptr, cjson_Object);
+          cjson_AddTo(childData, "id", cjson_Unsigned, child->id);
+          cjson_AddTo(childData, "display_name", cjson_String, child->displayName.data());
+          cjson_AddTo(childData, "count", cjson_Unsigned, child->count);
+
+          if (child->dynamicUpdateUuid != uuid{})
+            cjson_AddTo(childData, "dynamic_update_uuid", cjson_Unsigned, child->dynamicUpdateUuid);
+          
+          self(self, childData, child);
+        }
+
+        if (option->children)
+          cjson_AddExistingTo(optionData, "options", children);
+      };
+
+      cjson_AddTo(data, "min_value", cjson_Unsigned, (u64)0);
+      cjson_AddTo(data, "max_value", cjson_Unsigned, (u64)details_.options->count);
+      cjson_AddTo(data, "default_option_id", cjson_Unsigned, details_.defaultOptionId);
+      recurseOptions(recurseOptions, data, details_.options);
+    }
+    else
+    {
+      cjson_AddTo(data, "min_value", cjson_Float, (double)details_.minValue);
+      cjson_AddTo(data, "max_value", cjson_Float, (double)details_.maxValue);
+      cjson_AddTo(data, "default_value", cjson_Float, (double)details_.defaultValue);
+      cjson_AddTo(data, "default_normalised_value", cjson_Float, (double)details_.defaultNormalisedValue);
     }
     
     // TODO: add modulators
   }
 
-  
-
-  utils::up<ParameterValue> ParameterValue::deserialiseFromJson(
-    Plugin::ProcessorTree *processorTree, void *jsonData)
+  utils::dll<ParameterValue> *
+  ParameterValue::deserialiseFromJson(Generation::BaseProcessor *processor, void *jsonData, 
+    ParameterDetails &reference, utils::dll<ParameterValue> *memory)
   {
-    auto parameter = utils::up<ParameterValue>::create(ParameterDetails{});
+    COMPLEX_ASSERT(memory);
 
-    json &data = *static_cast<json *>(jsonData);
+    auto *linkedList = new (memory) utils::dll<ParameterValue>{ reference };
+    auto *parameter = &linkedList->object;
+    cjson *data = (cjson *)jsonData;
 
-    utils::string_view id = data["id"].get<utils::string_view>();
-    if (auto details = Framework::getParameterDetails(id); details.has_value())
-      parameter->details_ = details.value();
+    if (parameter->details_.scale != cjson_GetObjectItem(data, "scale")->vuint)
+    {
+      COMPLEX_ASSERT_FALSE();
+      // TODO: log this
+    }
+
+    u64 automationSlot = u64(-1);
+    if (cjson *slot = cjson_GetObjectItem(data, "automation_slot"))
+      automationSlot = slot->vuint;
+
+    COMPLEX_ASSERT(cjson_GetObjectItem(data, "is_stereo")->vbool == ((parameter->details_.flags & ParameterDetails::Stereo) != 0));
+
+    if (parameter->details_.scale == ParameterScale::Indexed)
+    {
+      if (!cjson_GetObjectItem(data, "options"))
+      {
+        auto errorString = utils::string::create("%v\nOptions parameter %v (%zu) is missing its options, replacing with default ones from the plugin.",
+          utils::string_view{ *errorPath }, parameter->details_.displayName, parameter->details_.id);
+        Interface::showNativeMessageBox("Error opening preset", errorString.data(), Interface::MessageBoxType::Warning);
+
+        parameter->details_.options = IndexedData::deepCopy(processor->arena, parameter->details_.options);
+      }
+      else
+      {
+        // indexed values validation and deserialisation
+        handleIndexedData(processor->arena, automationSlot != u64(-1), parameter->details_, data);
+        processor->state->registerDynamicParameter(parameter);
+      }
+    }
     else
-      throw LoadingException{ std::format("Nonexistent parameter ({})", id.data()) };
-
-    if (parameter->details_.scale != ParameterScale::enum_value_by_id(data["scale"].get<utils::string_view>()))
     {
-      COMPLEX_ASSERT_FALSE();
-      // TODO: log this
-    }
+      float minValue = (float)cjson_GetObjectItem(data, "min_value")->vdouble;
+      float maxValue = (float)cjson_GetObjectItem(data, "max_value")->vdouble;
 
-    auto minValue = data["min_value"].get<float>();
-    auto maxValue = data["max_value"].get<float>();
-    std::optional<u64> automationSlot{};
-    if (data.contains("automation_slot"))
-      automationSlot = data["automation_slot"].get<u64>();
-    parameter->details_.flags |= (data["is_stereo"].get<bool>()) ? ParameterDetails::Stereo : 0;
+      float referenceMin = parameter->details_.minValue;
+      float referenceMax = parameter->details_.maxValue;
 
-    // if the save contains an expanded range but the parameter in this version isn't extensible
-    // then there's nothing we can do about it
-    if ((parameter->details_.minValue > minValue || parameter->details_.maxValue < maxValue) &&
-      (parameter->details_.flags & ParameterDetails::Extensible) == 0)
-    {
-      COMPLEX_ASSERT_FALSE();
-      // TODO: log this
-    }
-
-    bool changedMinMax = false;
-    if (parameter->details_.minValue != minValue || parameter->details_.maxValue != maxValue)
-    {
-      // the range of the parameter was changed while being automated
-      // we mustn't change the range of the parameter otherwise we're going to ruin someone's project
-      if (automationSlot.has_value())
+      // if the save contains an expanded range but the parameter in this version isn't extensible
+      // then there's nothing we can do about it
+      if ((referenceMin > minValue || referenceMax < maxValue) &&
+        (parameter->details_.flags & ParameterDetails::Extensible) == 0)
       {
-        // if we're here then that means the range was changed but it's not larger than the range available
-        parameter->details_.minValue = minValue;
-        parameter->details_.maxValue = maxValue;
-        changedMinMax = true;
+        COMPLEX_ASSERT_FALSE();
+        // TODO: log this
       }
 
-      // always set min/max for dynamic indexed parameters, 
-      // since it might be possible to check them at this time
-      if (parameter->details_.scale == ParameterScale::Indexed &&
-        (parameter->details_.flags & ParameterDetails::Extensible) != 0)
+      bool changedMinMax = false;
+      if (referenceMin != minValue || referenceMax != maxValue)
       {
-        parameter->details_.minValue = minValue;
-        parameter->details_.maxValue = maxValue;
-        changedMinMax = true;
-      }
-    }
+        // the range of the parameter was changed while being automated
+        // we mustn't change the range of the parameter otherwise we're going to ruin someone's project
+        if (automationSlot != u64(-1))
+        {
+          // if we're here then that means the range was changed but it's not larger than the range available
+          parameter->details_.minValue = minValue;
+          parameter->details_.maxValue = maxValue;
+          changedMinMax = true;
+        }
+        else
+        {
+          minValue = referenceMin;
+          maxValue = referenceMax;
+        }
 
-    // indexed values validation and deserialisation
-    if ((parameter->details_.scale == ParameterScale::Indexed && data.contains("indexed_data")) ||
-      (parameter->details_.scale == ParameterScale::IndexedNumeric && changedMinMax))
-    {
-      parameter->details_.dynamicData = utils::sp<IndexedData::DynamicData>::create();
-      handleIndexedData(parameter->details_, &data["indexed_data"]);
-      processorTree->registerDynamicParameter(parameter.get());
+        // always set min/max for dynamic indexed parameters, 
+        // since it might be possible to check them at this time
+        if (parameter->details_.scale == ParameterScale::Indexed &&
+          (parameter->details_.flags & ParameterDetails::Extensible) != 0)
+        {
+          parameter->details_.minValue = minValue;
+          parameter->details_.maxValue = maxValue;
+          changedMinMax = true;
+        }
+      }
     }
 
     // TODO: fit modulation here
 
-    [[maybe_unused]] auto value =
-      parameter->normalisedValue_ = std::clamp(data["value"].get<float>(), 0.0f, 1.0f);
+    float value = utils::clamp((float)cjson_GetObjectItem(data, "value")->vdouble, 0.0f, 1.0f);
+    parameter->normalisedValue_ = value;  
     parameter->isDirty_ = true;
-    parameter->updateValue(processorTree->getSampleRate());
+    parameter->updateValue(processor->state->plugin->getSampleRate());
 
     // paranoid check just in case 
     COMPLEX_ASSERT(parameter->normalisedValue_ == value);
 
-    if (automationSlot.has_value())
+    if (automationSlot != u64(-1))
     {
-      auto slot = automationSlot.value();
-      auto parameterBridges = processorTree->getParameterBridges();
-
       // if we don't have enough parameters then too bad, we only guarantee kMaxParameterMappings generic parameters
-      if (slot < parameterBridges.size())
-        parameterBridges[slot]->resetParameterLink(&parameter->parameterLink_, true);
+      // TODO: report this to user
+      if (automationSlot < (u64)processor->state->parameterBridges.size())
+        processor->state->parameterBridges[automationSlot].resetParameterLink(parameter->getParameterLink(), true);
     }
 
-    return parameter;
+    return linkedList;
   }
 }
 
-void ComplexAudioProcessor::getStateInformation(juce::MemoryBlock &destinationData)
+namespace Generation
 {
-  if (!isLoaded_.load(std::memory_order_acquire))
+  void BaseProcessor::serialiseToJson(void *jsonData, utils::span<Framework::ParameterValue *> parametersToSerialise) const
   {
-    loadDefaultPreset();
+    cjson *processorInfo = (cjson *)jsonData;
+    cjson_AddTo(processorInfo, "id", cjson_Unsigned, metadata->id);
+
+    cjson *serialisedChildren = cjson_AddTo(processorInfo, "processors", cjson_Array);
+    for (auto *child = children; child; child = child->next)
+    {
+      cjson *subProcessorData = cjson_AddTo(serialisedChildren, nullptr, cjson_Object);
+      child->serialiseToJson(subProcessorData);
+    }
+
+    cjson *serialisedParameters = cjson_AddTo(processorInfo, "parameters", cjson_Array);
+    if (parametersToSerialise.empty())
+    {
+      for (auto *parameter = parameters; parameter; parameter = parameter->next)
+      {
+        cjson *parameterData = cjson_AddTo(serialisedParameters, nullptr, cjson_Object);
+        parameter->object.serialiseToJson(parameterData);
+      }
+    }
+    else
+    {
+      for (auto &parameter : parametersToSerialise)
+      {
+        cjson *parameterData = cjson_AddTo(serialisedParameters, nullptr, cjson_Object);
+        parameter->serialiseToJson(parameterData);
+      }
+    }
   }
 
-  json data{};
-  serialiseToJson(&data);
-  std::string dataString = data.dump(2, ' ', true);
-  juce::MemoryOutputStream stream;
-  stream.writeString(dataString);
-  destinationData.append(stream.getData(), stream.getDataSize());
+  void deserialiseParametersFromJson(void *jsonData, Framework::ProcessorMetadata *metadata,
+    utils::dll<Framework::ParameterValue> *&parameters, BaseProcessor *processor, bool validateParameters)
+  {
+    cjson *data = (cjson *)jsonData;
+    cjson *parametersCopy = cjson_Duplicate(cjson_GetObjectItem(data, "parameters"), true);
+
+    auto *memory = arranew(processor->arena, utils::dll<Framework::ParameterValue>, metadata->parametersCount, {});
+
+    auto insertParameter = [&](auto *parameter)
+    {
+      if (parameters)
+      {
+        parameters->previous->next = parameter;
+        parameter->previous = parameters->previous;
+        parameters->previous = parameter;
+      }
+      else
+      {
+        parameter->previous = parameter;
+        parameters = parameter;
+      }
+    };
+
+    for (auto *expectedParameter = metadata->parameters; 
+      expectedParameter; expectedParameter = expectedParameter->next)
+    {
+      utils::dll<Framework::ParameterValue> *parameter{};
+      for (auto child = parametersCopy->child; child; child = child->next)
+      {
+        uuid id = cjson_GetObjectItem(child, "id")->vuint;
+        if (id == expectedParameter->details.id)
+        {
+          parameter = Framework::ParameterValue::deserialiseFromJson(processor, 
+            child, expectedParameter->details, memory);
+          cjson_Delete(cjson_DetachItemViaPointer(parametersCopy, child));
+          break;
+        }
+      }
+
+      if (!parameter)
+      {
+        auto errorString = utils::string::create("%v\nMissing Parameter %v (%zu), replacing with a default initialised one. \
+          This should have been handled by the version upgrade routine but it wasn't. \
+          If this is the mainline version of the plugin consider reporting it to the developer.",
+          utils::string_view{ *errorPath }, expectedParameter->details.displayName, expectedParameter->details.id);
+        Interface::showNativeMessageBox("Error opening preset", errorString.data(), Interface::MessageBoxType::Warning);
+
+        parameter = new (memory) utils::dll<Framework::ParameterValue>{ expectedParameter->details };
+      }
+
+      ++memory;
+      insertParameter(parameter);
+    }
+
+    // handle remaining parameters
+    if (validateParameters)
+    {
+      for (auto child = parametersCopy->child; child; child = child->next)
+      {
+        bool isPresent = false;
+        uuid id = cjson_GetObjectItem(child, "id")->vuint;
+        for (auto *parameter = metadata->parameters; parameter; parameter = parameter->next)
+        {
+          if (id == parameter->details.id)
+          {
+            isPresent = true;
+            break;
+          }
+        }
+
+        if (!isPresent)
+        {
+          auto displayName = cjson_GetObjectItem(child, "display_name")->vstring;
+          auto errorString = utils::string::create("%v\nUnexpected parameter %s (%zu).",
+            utils::string_view{ *errorPath }, displayName, id);
+          Interface::showNativeMessageBox("Error opening preset", errorString.data(), Interface::MessageBoxType::Warning);
+        }
+      }
+    }
+  }
+
+  void BaseProcessor::deserialiseFromJson(void *jsonData)
+  {
+    auto oldSize = errorPath->size();
+    errorPath->appendFormat("Inside processor %v (%zu):\n", metadata->name, metadata->id);
+    auto newSize = errorPath->size();
+
+    cjson *data = (cjson *)jsonData;
+    parameterCount = (u32)metadata->parametersCount;
+    deserialiseParametersFromJson(jsonData, metadata, parameters, this,
+      (metadata->flags & Framework::ProcessorMetadata::NoParameterValidationTag) == 0);
+
+    cjson *processors = cjson_GetObjectItem(data, "processors");
+    for (auto *processor = processors->child; processor; processor = processor->next)
+    {
+      uuid subProcessorsId = cjson_GetObjectItem(processor, "id")->vuint;
+      Generation::BaseProcessor *subProcessor = state->createProcessor(subProcessorsId, processor);
+      insertSubProcessor(childrenCount, *subProcessor);
+    }
+
+    errorPath->removeSuffix(newSize - oldSize);
+  }
 }
 
-void ComplexAudioProcessor::setStateInformation(const void *data, int sizeInBytes)
+
+namespace Plugin
 {
-  if (!data || sizeInBytes == 0)
+  void serialiseToJson(State *state, void *jsonData)
   {
-    loadDefaultPreset();
-    return;
+    utils::vector<Generation::BaseProcessor *> topLevelProcessors{};
+    for (auto &[id, processor] : state->allProcessors.data)
+      if (!processor->parent)
+        topLevelProcessors.emplace_back(processor);
+
+    COMPLEX_ASSERT(!topLevelProcessors.empty());
+
+    cjson *data = (cjson *)jsonData;
+    cjson_AddTo(data, "version", cjson_String, CPLUG_PLUGIN_VERSION);
+    cjson *topLevelProcessorsSerialised = cjson_AddTo(data, "tree", cjson_Array);
+
+    for (auto &topLevelProcessor : topLevelProcessors)
+    {
+      cjson *topLevelData = cjson_AddTo(topLevelProcessorsSerialised, nullptr, cjson_Object);
+      topLevelProcessor->serialiseToJson(topLevelData);
+    }
   }
 
-  juce::MemoryInputStream stream{ data, (usize)sizeInBytes, false };
-  std::string dataString = stream.readEntireStreamAsString().toStdString();
+  utils::sp<State>
+  ComplexPlugin::loadDefaultPreset()
+  {
+    using namespace Generation;
+
+    auto state = utils::sp<State>::create(this);
+
+    state->soundEngine = utils::as<SoundEngine>(state->createProcessor(Processors::SoundEngine));
+    auto *effectsState = state->createProcessor(Processors::EffectsState);
+    auto *effectsLane = state->createProcessor(Processors::EffectsLane);
+
+    effectsState->insertSubProcessor(0, *effectsLane);
+    state->soundEngine->insertSubProcessor(0, *effectsState);
+
+    auto min = utils::min(state->parameterBridges.size(),
+      Generation::SoundEngine::kParametersValues.size());
+    for (usize i = 0; i < min; ++i)
+    {
+      auto *parameter = state->getProcessorParameter(state->soundEngine->stateId, 
+        Generation::SoundEngine::kParametersValues[i]);
+      COMPLEX_ASSERT(parameter);
+      state->parameterBridges[i].resetParameterLink(parameter->getParameterLink(), true);
+    }
+
+    return state;
+  }
+
+  Generation::BaseProcessor *
+  State::createProcessor(uuid processorId, void *jsonData)
+  {
+    auto *metadata = findProcessorMetadata(processorId);
+    Generation::BaseProcessor *processor = metadata->create(this, metadata, nullptr);
+    if (jsonData != nullptr)
+      processor->deserialiseFromJson(jsonData);
+    else
+      processor->initialiseParameters();
+
+    allProcessors.add(processor->stateId, processor);
+    expandIfNecessary();
+
+    return processor;
+  }
   
-  json jsonData{};
-  try
+  utils::sp<State>
+  deserialiseFromJson(ComplexPlugin *plugin, void *newSave)
   {
-    jsonData = json::parse(dataString.data());
-    upgradeSave(jsonData);
+    auto state = utils::sp<State>::create(plugin);
+    cjson *newData = (cjson *)newSave;
+    
+    utils::string errorPath_{};
+    errorPath = &errorPath_;
+
+    cjson *soundEngineJson = cjson_GetArrayItem(cjson_GetObjectItem(newData, "tree"), 0);
+    uuid type = cjson_GetObjectItem(soundEngineJson, "id")->vuint;
+    if (type != Generation::Processors::SoundEngine)
+    {
+      Interface::showNativeMessageBox("Error opening preset",
+        "SoundEngine type doesn't match.", Interface::MessageBoxType::Error);
+      return nullptr;
+    }
+
+    cjson *parameters = cjson_GetObjectItem(soundEngineJson, "parameters");
+    
+    for (auto *parameter = parameters->child; parameter; parameter = parameter->next)
+    {
+      if (cjson_GetObjectItem(soundEngineJson, "id")->vuint == Generation::SoundEngine::BlockSize)
+      {
+        state->minFFTOrder = (u32)cjson_GetObjectItem(soundEngineJson, "min_value")->vuint;
+        state->maxFFTOrder = (u32)cjson_GetObjectItem(soundEngineJson, "max_value")->vuint;
+        break;
+      }
+    }
+
+    auto soundEngine = state->createProcessor(Generation::Processors::SoundEngine);
+    soundEngine->deserialiseFromJson(soundEngineJson);
+
+    for (auto &id : Framework::ParameterChangeReason::kParameterChangeReasonValues)
+      state->updateDynamicParameters(id);
+
+    Framework::ParameterBridge::notifyParameterChange();
+
+    return state;
   }
-  catch (const std::exception &e)
+
+  void saveState(ComplexPlugin *plugin, const void *stateCtx, cplug_writeProc writeProc)
   {
-    juce::NativeMessageBox::showMessageBoxAsync(juce::MessageBoxIconType::NoIcon, 
-      "Error opening preset", e.what());
+    if (!plugin->state_)
+      return;
+
+    jsonArena = utils::bumpArena::createNested(localScratch, COMPLEX_KB(128));
+
+    cjson *data = cjson_Create(cjson_Object);
+    serialiseToJson(plugin->state_.get(), data);
+    usize size = 0;
+    char *dataString = cjson_Print(data, &size);
+    writeProc(stateCtx, dataString, size);
+
+    utils::bumpArena::destroy(jsonArena);
+    jsonArena = nullptr;
   }
 
-  suspendProcessing(true);
+  void loadState(ComplexPlugin *plugin, utils::string_view data)
+  {
+    bool wasStateInitialised = plugin->wasStateInitialised;
+    plugin->wasStateInitialised = true;
 
-  if (isLoaded_.load(std::memory_order_acquire))
-    pushUndo(new Framework::PresetUpdate{ *this, COMPLEX_MOVE(jsonData) });
-  else
-    deserialiseFromJson(&jsonData, nullptr);
+    utils::sp<State> state{};
 
-  if (rendererInstance_)
-    rendererInstance_->updateFullGui();
+    if (data.size() != 0)
+    {
+      jsonArena = utils::bumpArena::createNested(localScratch, COMPLEX_KB(128));
+      const char *potentialError = nullptr;
+      cjson *jsonData = cjson_ParseWithOpts(data.data(), data.size(), &potentialError, false);
+      if (!jsonData)
+      {
+        Interface::showNativeMessageBox("Error opening preset",
+          potentialError, Interface::MessageBoxType::Error);
+      }
+      else
+      {
+        upgradeSave(jsonData);
+        state = deserialiseFromJson(plugin, jsonData);
+      }
 
-  suspendProcessing(false);
+      utils::bumpArena::destroy(jsonArena);
+      jsonArena = nullptr;
+    }
 
-  isLoaded_.store(true, std::memory_order_release);
+    if (!state)
+      state = plugin->loadDefaultPreset();
+
+    auto [minOrder, maxOrder] = state->soundEngine->getMinMaxFFTOrder();
+    state->fft = plugin->getFFTConverter(minOrder, maxOrder);
+
+    if (wasStateInitialised && plugin->state_.get())
+      plugin->pushUndo(new Framework::PresetUpdate{ *plugin, COMPLEX_MOVE(state) });
+    else
+      plugin->state_ = COMPLEX_MOVE(state);
+  }
 }

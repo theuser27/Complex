@@ -2,7 +2,7 @@
   ==============================================================================
 
     SoundEngine.hpp
-    Created: 12 Aug 2021 2:12:59am
+    Created: 12 Aug 2021 02:12:59
     Author:  theuser27
 
   ==============================================================================
@@ -22,7 +22,7 @@ namespace Framework
 
 namespace Plugin
 {
-  class ProcessorTree;
+  struct State;
 }
 
 namespace Generation
@@ -32,301 +32,94 @@ namespace Generation
   class SoundEngine final : public BaseProcessor
   {
   public:
-    SoundEngine(Plugin::ProcessorTree *processorTree) noexcept;
-    ~SoundEngine() noexcept override;
+    COMPLEX_ENUM_LOCAL(Parameters,
+      (        Mix, 1757890335887669700),
+      (  BlockSize, 1757890343009612500),
+      (    Overlap, 1757890352148067900),
+      ( WindowType, 1757856325668537300),
+      (WindowAlpha, 1758060737254466200),
+      (    OutGain, 1758060942415217700),
+    )
 
-    SoundEngine(const SoundEngine &) = delete;
-    SoundEngine(SoundEngine &&) = delete;
-    SoundEngine &operator=(SoundEngine &&) = delete;
-    SoundEngine &operator=(const SoundEngine &) = delete;
+    SoundEngine(Plugin::State *state, Framework::ProcessorMetadata *metadata, utils::bumpArena *arena) noexcept;
 
   private:
     //=========================================================================================
     // Data
     //
     // pre FFT-ed data buffer; size is as big as it can be (while still being reasonable)
-    class InputBuffer
+    struct InputBuffer : Framework::CircularBuffer
     {
-    public:
-      enum BeginPoint
-      { LastOutputBlock, BlockBegin, BlockEnd, End };
+      u32 lastOutputBlock_ = 0;
+      u32 blockBegin_ = 0;
+      u32 blockEnd_ = 0;
+
+      // except in reserve(), lock must be acquired manually to have access to this struct
+      mutable satomi::atomic<bool> lock{};
+
+      enum BeginPoint { LastOutputBlock, BlockBegin, BlockEnd, End };
 
       void reset()
       {
         lastOutputBlock_ = 0;
         blockBegin_ = 0;
         blockEnd_ = 0;
-        buffer_.setEnd(0);
+        end = 0;
       }
 
-      void reserve(u32 newNumChannels, u32 newSize, bool fitToSize = false)
-      {
-        COMPLEX_ASSERT(newNumChannels > 0 && newSize > 0);
-        if ((newNumChannels <= getChannelCount()) && (newSize <= getSize()) && !fitToSize)
-          return;
-
-        // recalculating indices based on the new size
-        if (getChannelCount() * getSize())
-        {
-          blockEnd_ = (u32)utils::clamp(((i32)newSize - (i32)getBlockEndToEnd()) % (i32)newSize, 0, (i32)newSize - 1);
-          blockBegin_ = (u32)utils::clamp(((i32)blockEnd_ - (i32)getBlockBeginToBlockEnd()) % (i32)newSize, 0, (i32)newSize - 1);
-          lastOutputBlock_ = (u32)utils::clamp(((i32)blockBegin_ - (i32)getLastOutputBlockToBlockBegin()) % (i32)newSize, 0, (i32)newSize - 1);
-        }
-        else
-        {
-          // sanity check
-          lastOutputBlock_ = 0;
-          blockBegin_ = 0;
-          blockEnd_ = 0;
-        }
-
-        buffer_.reserve(newNumChannels, newSize, fitToSize);
-      }
+      void reserve(SoundEngine *engine, u32 newChannels, u32 newSize);
 
       strict_inline void advanceLastOutputBlock(u32 samples)
-      { lastOutputBlock_ = (lastOutputBlock_ + samples) % getSize(); }
+      { lastOutputBlock_ = (lastOutputBlock_ + samples) % size; }
 
       // used for manually advancing the block to a desired position
       strict_inline void advanceBlock(u32 newBegin, i32 samples)
       {
         blockBegin_ = newBegin;
-        blockEnd_ = (newBegin + (u32)samples) % getSize();
+        blockEnd_ = (newBegin + (u32)samples) % size;
       }
 
       // returns how many samples in the buffer can be read 
       // starting at blockBegin_/blockEnd_until end_
-      strict_inline u32 newSamplesToRead(u32 overlapOffset = 0, BeginPoint beginPoint = BlockBegin) const noexcept
+      strict_inline u32 newSamplesToRead(BeginPoint beginPoint, u32 overlapOffset = 0) const noexcept
       {
-        u32 begin;
-        switch (beginPoint)
-        {
-        case BlockBegin:
-          begin = blockBegin_;
-          break;
-        default:
-          begin = blockEnd_;
-          break;
-        }
+        u32 begin = (beginPoint == BlockBegin) ? blockBegin_ : blockEnd_;
 
         // calculating the start position of the current block
-        u32 currentBufferStart = (begin + overlapOffset) % getSize();
+        u32 currentBufferStart = (begin + overlapOffset) % size;
 
         // calculating how many samples can be read from the current start position
-        return (getSize() + getEnd() - currentBufferStart) % getSize();
+        auto ret = (size + end - currentBufferStart) % size;
+        COMPLEX_ASSERT(ret < size - ret);
+        return ret;
       }
 
-      strict_inline void readBuffer(Framework::Buffer &reader, u32 channels,
-        utils::span<char> channelsToCopy, u32 samples, BeginPoint beginPoint = BeginPoint::BlockBegin,
-        i32 inputBufferOffset = 0, u32 readerBeginIndex = 0, bool advanceBlock = true) noexcept
+      strict_inline u32 getIndex(BeginPoint beginPoint, i32 offset = 0)
       {
-        u32 begin = 0;
-        switch (beginPoint)
-        {
-        case BeginPoint::LastOutputBlock:
-          begin = lastOutputBlock_;
-          break;
-        case BeginPoint::BlockBegin:
-          begin = blockBegin_;
-          break;
-        case BeginPoint::BlockEnd:
-          begin = blockEnd_;
-          break;
-        case BeginPoint::End:
-          begin = getEnd();
-          break;
-        }
-
-        u32 currentBufferBegin = (getSize() + begin + (u32)inputBufferOffset) % getSize();
-        
-        buffer_.readBuffer(reader, channels, samples, 
-          currentBufferBegin, readerBeginIndex, channelsToCopy);
-
-        if (advanceBlock)
-          this->advanceBlock(currentBufferBegin, (i32)samples);
+        u32 index = (beginPoint == LastOutputBlock) ? lastOutputBlock_ :
+                    (beginPoint ==      BlockBegin) ? blockBegin_ :
+                    (beginPoint ==        BlockEnd) ? blockEnd_ :
+                    (beginPoint ==             End) ? end : 0;
+        return (offset == 0) ? index : (size + index + (u32)offset) % size;
       }
 
-      strict_inline void writeToBufferEnd(const float *const *const writer,
-        u32 channels, u32 samples) noexcept
-      {
-        buffer_.writeToBufferEnd(writer, channels, samples);
-      }
-
-      strict_inline void outBufferRead(Framework::CircularBuffer &outBuffer,
-        u32 channels, utils::span<char> channelsToCopy, u32 samples, u32 outBufferIndex = 0,
-        i32 inputBufferOffset = 0, BeginPoint beginPoint = BeginPoint::LastOutputBlock) const noexcept
-      {
-        u32 inputBufferBegin = 0;
-        switch (beginPoint)
-        {
-        case BeginPoint::LastOutputBlock:
-          inputBufferBegin = lastOutputBlock_;
-          break;
-        case BeginPoint::BlockBegin:
-          inputBufferBegin = blockBegin_;
-          break;
-        case BeginPoint::BlockEnd:
-          inputBufferBegin = blockEnd_;
-          break;
-        case BeginPoint::End:
-          inputBufferBegin = getEnd();
-          break;
-        }
-
-        u32 inputBufferIndex = (getSize() + inputBufferBegin + inputBufferOffset) % getSize();
-        buffer_.readBuffer(outBuffer.getData(), channels, samples, inputBufferIndex, outBufferIndex, channelsToCopy);
-      }
-
-      strict_inline Framework::CircularBuffer& getBuffer() noexcept {	return buffer_; }
-      strict_inline u32 getChannelCount() const noexcept { return buffer_.getChannels(); }
-      strict_inline u32 getSize() const noexcept { return buffer_.getSize(); }
-
-      strict_inline u32 getLastOutputBlock() const noexcept { return lastOutputBlock_; }
-      strict_inline u32 getBlockBegin() const noexcept { return blockBegin_; }
-      strict_inline u32 getBlockEnd() const noexcept { return blockEnd_; }
-      strict_inline u32 getEnd() const noexcept { return buffer_.getEnd(); }
-
-      strict_inline u32 getLastOutputBlockToBlockBegin() const noexcept
-      { return (getSize() + blockBegin_ - lastOutputBlock_) % getSize(); }
-
-      strict_inline u32 getBlockBeginToBlockEnd() const noexcept
-      { return (getSize() + blockEnd_ - blockBegin_) % getSize(); }
-
-      strict_inline u32 getBlockEndToEnd() const noexcept
-      { return (getSize() + getEnd() - blockEnd_) % getSize(); }
-
-    private:
-      Framework::CircularBuffer buffer_;
-      u32 lastOutputBlock_ = 0;
-      u32 blockBegin_ = 0;
-      u32 blockEnd_ = 0;
-
-    } inputBuffer;
+      strict_inline u32 getLastOutputBlockToBlockBegin() const noexcept { return (size + blockBegin_ - lastOutputBlock_) % size; }
+      strict_inline u32 getBlockBeginToBlockEnd() const noexcept { return (size + blockEnd_ - blockBegin_) % size; }
+      strict_inline u32 getBlockEndToEnd() const noexcept { return (size + end - blockEnd_) % size; }
+    } inBuffer{};
     //
     // FFT-ed data buffer, size is double the max FFT block
     // even/odd indices - real/imaginary
     Framework::Buffer FFTBuffer_;
+    satomi::atomic<bool> FFTBufferLock_{};
     //
     // if an input isn't used there's no need to process it at all
-    utils::span<char> usedInputChannels_{};
-    utils::span<char> usedOutputChannels_{};
+    utils::span<bool> usedInputChannels_{};
+    utils::span<bool> usedOutputChannels_{};
     //
     // output buffer containing dry and wet data
-    class OutputBuffer
+    struct OutputBuffer : Framework::CircularBuffer
     {
-    public:
-      void reset()
-      {
-        beginOutput_ = 0;
-        toScaleOutput_ = 0;
-        addOverlap_ = 0;
-        buffer_.setEnd(0);
-      }
-
-      void reserve(u32 newNumChannels, u32 newSize, bool fitToSize = false)
-      {
-        COMPLEX_ASSERT(newNumChannels > 0 && newSize > 0);
-        if ((newNumChannels <= getChannelCount()) && (newSize <= getSize()) && !fitToSize)
-          return;
-
-        // recalculating indices based on the new size
-        if (getChannelCount() * getSize())
-        {
-          addOverlap_ = (u32)utils::clamp(((i32)newSize - (i32)getAddOverlapToEnd()) % (i32)newSize, 0, (i32)newSize - 1);
-          toScaleOutput_ = (u32)utils::clamp(((i32)addOverlap_ - (i32)getToScaleOutputToAddOverlap()) % (i32)newSize, 0, (i32)newSize - 1);
-          beginOutput_ = (u32)utils::clamp(((i32)toScaleOutput_ - (i32)getBeginOutputToToScaleOutput()) % (i32)newSize, 0, (i32)newSize - 1);
-        }
-        else
-        {
-          // sanity check
-          beginOutput_ = 0;
-          toScaleOutput_ = 0;
-          addOverlap_ = 0;
-        }
-
-        buffer_.reserve(newNumChannels, newSize, fitToSize);
-      }
-
-      void readOutput(float *const *outputBuffer, u32 outputs,
-        utils::span<char> channelsToCopy, u32 samples, float outGain) const noexcept
-      {
-        COMPLEX_ASSERT(outputs <= buffer_.getChannels());
-        buffer_.readBuffer(outputBuffer, outputs, samples, getBeginOutput(), channelsToCopy);
-
-        // zero out non-copied channels
-        for (u32 i = 0; i < outputs; i++)
-        {
-          if (!channelsToCopy[i])
-          {
-            std::memset(outputBuffer[i], 0, samples * sizeof(float));
-            continue;
-          }
-          
-          if (outGain != 1.0f)
-            for (u32 j = 0; j < samples; ++j)
-              outputBuffer[i][j] *= outGain;
-        }
-      }
-
-      void addOverlapBuffer(const Framework::Buffer &other, u32 channels,
-        utils::span<char> channelsToOvelap, u32 samples, u32 beginOutputOffset,
-        nested_enum::typeless_enum windowType) noexcept;
-
-      strict_inline float read(u32 channel, u32 index) const noexcept
-      { return buffer_.read(channel, index); }
-
-      strict_inline void write(float value, u32 channel, u32 index) noexcept
-      { buffer_.write(value, channel, index); }
-
-      strict_inline void add(float value, u32 channel, u32 index) noexcept
-      { buffer_.add(value, channel, index); }
-
-      strict_inline void multiply(float value, u32 channel, u32 index) noexcept
-      { buffer_.multiply(value, channel, index); }
-
-
-      strict_inline void setLatencyOffset(i32 newLatencyOffset) noexcept
-      {
-        if (latencyOffset_ == newLatencyOffset)
-          return;
-
-        beginOutput_ = (u32)((i32)getSize() - newLatencyOffset) % getSize();
-        toScaleOutput_ = 0;
-        addOverlap_ = 0;
-        buffer_.setEnd(0);
-
-        latencyOffset_ = newLatencyOffset;
-
-        buffer_.clear();
-      }
-
-      strict_inline void advanceBeginOutput(u32 samples) noexcept
-      { beginOutput_ = (beginOutput_ + samples) % getSize(); }
-
-      strict_inline void advanceToScaleOutput(u32 samples) noexcept
-      { toScaleOutput_ = (toScaleOutput_ + samples) % getSize(); }
-
-
-      strict_inline Framework::CircularBuffer& getBuffer() noexcept {	return buffer_; }
-      strict_inline u32 getChannelCount() const noexcept { return buffer_.getChannels(); }
-      strict_inline u32 getSize() const noexcept { return buffer_.getSize(); }
-
-      strict_inline i32 getLatencyOffset() const noexcept { return latencyOffset_; }
-      strict_inline u32 getBeginOutput() const noexcept { return beginOutput_; }
-      strict_inline u32 getToScaleOutput() const noexcept { return toScaleOutput_; }
-      strict_inline u32 getAddOverlap() const noexcept { return addOverlap_; }
-      strict_inline u32 getEnd() const noexcept { return buffer_.getEnd(); }
-
-      strict_inline u32 getBeginOutputToToScaleOutput() const noexcept
-      { return (getSize() + toScaleOutput_ - beginOutput_) % getSize(); }
-      
-      strict_inline u32 getToScaleOutputToAddOverlap() const noexcept
-      { return (getSize() + addOverlap_ - toScaleOutput_) % getSize(); }
-
-      strict_inline u32 getAddOverlapToEnd() const noexcept
-      { return (getSize() + getEnd() - addOverlap_) % getSize(); }
-
-    private:
-      Framework::CircularBuffer buffer_;
       // static offset equal to the additional latency caused by overlap
       i32 latencyOffset_ = 0;
       // index of the first new sample that can be output
@@ -335,48 +128,76 @@ namespace Generation
       u32 toScaleOutput_ = 0;
       // index of the first sample of the last add-overlapped block
       u32 addOverlap_ = 0;
-    } outBuffer;
+
+      // except in reserve(), lock must be acquired manually to have access to this struct
+      mutable satomi::atomic<bool> lock{};
+
+      void reset()
+      {
+        beginOutput_ = 0;
+        toScaleOutput_ = 0;
+        addOverlap_ = 0;
+        end = 0;
+      }
+
+      void reserve(SoundEngine *engine, u32 newChannels, u32 newSize);
+
+      strict_inline void setLatencyOffset(i32 newLatencyOffset) noexcept
+      {
+        if (latencyOffset_ == newLatencyOffset)
+          return;
+
+        beginOutput_ = (u32)((i32)size - newLatencyOffset) % size;
+        toScaleOutput_ = 0;
+        addOverlap_ = 0;
+        end = 0;
+
+        latencyOffset_ = newLatencyOffset;
+
+        clear();
+      }
+
+      strict_inline void advanceBeginOutput(u32 samples) noexcept { beginOutput_ = (beginOutput_ + samples) % size; }
+      strict_inline void advanceToScaleOutput(u32 samples) noexcept { toScaleOutput_ = (toScaleOutput_ + samples) % size; }
+      strict_inline void advanceAddOverlap(u32 samples) noexcept { addOverlap_ = (addOverlap_ + samples) % size; }
+
+      strict_inline u32 getBeginOutputToToScaleOutput() const noexcept { return (size + toScaleOutput_ - beginOutput_) % size; }
+      strict_inline u32 getToScaleOutputToAddOverlap() const noexcept { return (size + addOverlap_ - toScaleOutput_) % size; }
+      strict_inline u32 getAddOverlapToEnd() const noexcept { return (size + end - addOverlap_) % size; }
+    } outBuffer{};
     //
     // windows pointer for accessing windowing types
     Framework::Window windows{};
-    //
-    // pointer to an array of fourier transforms
-    utils::up<Framework::FFT> transforms;
-    //
-    //
-    EffectsState *effectsState_ = nullptr;
 
     //=========================================================================================
     // Methods
     //
+    void resizeBuffers(u32 maxOrder, u32 maxSidechainInputs, u32 maxSidechainOutputs);
     void copyBuffers(const float *const *buffer, u32 inputs, u32 samples) noexcept;
     void isReadyToPerform(u32 samples) noexcept;
-    void doFFT() noexcept;
+    void doFFT(Framework::FFT &ffts) noexcept;
     void processFFT(float sampleRate) noexcept;
-    void doIFFT() noexcept;
-    void scaleDown(u32 start, u32 samples) noexcept;
+    void doIFFT(Framework::FFT &ffts) noexcept;
     void mixOut(u32 samples) noexcept;
     void fillOutput(float *const *buffer, u32 outputs, u32 samples) noexcept;
 
   public:
     // Inherited via BaseProcessor
-    void insertSubProcessor(usize index, BaseProcessor &newSubProcessor, bool callListeners = true) noexcept override;
-    BaseProcessor *createCopy() const override
-    { COMPLEX_ASSERT_FALSE("You're trying to copy SoundEngine, which is not meant to be copied"); return nullptr; }
+    bool insertSubProcessor(usize index, BaseProcessor &newSubProcessor, bool callListeners = true) override;
     void initialiseParameters() override;
 
     // initialising pointers and FFT plans
     void resetBuffers() noexcept;
-    void updateParameters(UpdateFlag flag, float sampleRate, bool updateChildrenParameters = true) noexcept override;
-    void process(float *const *buffer, u32 samples, float sampleRate, u32 numInputs, u32 numOutputs) noexcept;
+    void updateParameters(UpdateFlag flag, float sampleRate, bool updateChildrenParameters = true) noexcept;
+    void process(float *const *in, float *const *out, u32 samples, float sampleRate, 
+      u32 numInputs, u32 numOutputs, Framework::FFT &ffts) noexcept;
 
     u32 getProcessingDelay() const noexcept;
-    auto &getEffectsState() const noexcept { return *effectsState_; }
+    auto &getEffectsState() const noexcept { return *utils::as<EffectsState>(children); }
     float getOverlap() const noexcept { return currentOverlap_; }
     u32 getFFTSize() const noexcept;
+    utils::pair<u32, u32> getMinMaxFFTOrder();
     u32 getBlockPosition() const noexcept { return blockPosition_; }
-
-    void deserialiseFromJson(void *jsonData) override;
   private:
     //=========================================================================================
     // Parameters
@@ -402,7 +223,7 @@ namespace Generation
     utils::shared_value<float> currentOverlap_ = kDefaultWindowOverlap;
     //
     // window type
-    nested_enum::typeless_enum windowType_{};
+    uuid windowTypeId_{};
     //
     // window alpha
     float alpha_ = 0.0f;
@@ -432,4 +253,9 @@ namespace Generation
     //
     bool isInitialised_ = false;
   };
+
+  static_assert(utils::is_trivially_destructible_v<SoundEngine>);
 }
+
+extern template Generation::SoundEngine *createProcessor<>(Plugin::State *, Framework::ProcessorMetadata *,const void *);
+extern template void *initialiseTypeStructure<Generation::SoundEngine>(void *metadata, Framework::PluginStructure &structure);

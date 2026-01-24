@@ -10,28 +10,26 @@
 
 #pragma once
 
-#include "../Sections/BaseSection.hpp"
+#include "../LookAndFeel/BaseComponent.hpp"
 
 namespace Interface
 {
-  class OpenGlQuad;
+  struct OpenGlQuad;
   class EffectsStateSection;
 
-  class LaneSelector final : public OpenGlContainer, public EffectsLaneListener
+  class LaneSelector final : public Component
   {
   public:
     LaneSelector();
-    ~LaneSelector() override;
+    ~LaneSelector() noexcept override;
 
-    void resized() override;
-
-    void laneTurnedOnOff(EffectsLaneSection *lane, bool isOn) override;
+    void laneTurnedOnOff(EffectsLaneSection *lane, bool isOn);
 
   private:
     class Slider;
 
     utils::up<Slider> slider_;
-    std::vector<OpenGlQuad> laneBackgrounds_;
+    utils::vector<OpenGlQuad> laneBackgrounds_;
     EffectsStateSection *stateSection = nullptr;
     // TODO: custom slider class for the selector + lane boxes
   };

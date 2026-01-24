@@ -10,8 +10,6 @@
 
 #pragma once
 
-#include <juce_data_structures/juce_data_structures.h>
-
 #include "OpenGlImage.hpp"
 
 namespace Interface
@@ -20,9 +18,15 @@ namespace Interface
 
   // text editor with base implementation taken from juce's
   // will trim excess functionality later 
-  class TextEditor final : public BaseComponent, public juce::TextInputTarget
+  class TextEditor final : public Component
   {
   public:
+    enum CallbackFlags { FocusLost, EscapePressed, EnterPressed };
+    Component *triggeringComponent = nullptr;
+    void (*callback)(Component *component, CallbackFlags flags, TextEditor &editor) = nullptr;
+    std::string enteredText{};
+    std::string hintText{};
+
     //==============================================================================
     /** Creates a new, empty text editor.
 
@@ -826,6 +830,5 @@ namespace Interface
     void setSelection(Range<int>) noexcept;
     Point<int> getTextOffset() const noexcept;
 
-    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(TextEditor)
   };
 }

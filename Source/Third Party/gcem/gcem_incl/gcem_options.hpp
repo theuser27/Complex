@@ -18,7 +18,6 @@
   ##
   ################################################################################*/
 
-#include <cstddef>      // size_t
 #include <limits>
 #include <type_traits>
 

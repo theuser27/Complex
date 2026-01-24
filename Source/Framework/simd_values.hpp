@@ -2,7 +2,7 @@
   ==============================================================================
 
     simd_values.hpp
-    Created: 22 May 2021 6:22:20pm
+    Created: 22 May 2021 18:22:20
     Author:  theuser27
 
   ==============================================================================
@@ -15,19 +15,29 @@
 
 // the project cannot run without vectorisation (either x86 SSE4.1 or ARM NEON, however it can run without FMA)
 #if COMPLEX_SSE4_1
-  #include <immintrin.h>
+  #include <smmintrin.h>
 #elif COMPLEX_NEON
   #include <arm_neon.h>
 #else
   #error Either SSE4.1 or ARM NEON is needed for this program to work
 #endif
 
+extern "C"
+{
+  __m128 _mm_fmadd_ps(__m128, __m128, __m128);
+  __m128 _mm_fmsub_ps(__m128, __m128, __m128);
+}
+
+#if defined(COMPLEX_MSVC) && !defined(_mm_undefined_si128)
+  #define _mm_undefined_si128 _mm_setzero_si128
+#endif
+
 namespace simd_values
 {
-  inline constexpr u32 kFullMask = UINT32_MAX;
-  inline constexpr u32 kNoChangeMask = UINT32_MAX;
-  inline constexpr u32 kNotSignMask = (u32)INT32_MAX;
-  inline constexpr u32 kSignMask = kNotSignMask + 1U;
+  inline constexpr u32 kFullMask = u32(-1);
+  inline constexpr u32 kNoChangeMask = u32(-1);
+  inline constexpr u32 kSignMask = 1U << 31;
+  inline constexpr u32 kNotSignMask = kSignMask - 1;
 
   struct alignas(COMPLEX_SIMD_ALIGNMENT) simd_int
   {

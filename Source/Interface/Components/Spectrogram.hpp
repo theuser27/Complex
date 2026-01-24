@@ -17,7 +17,7 @@
 
 namespace Interface
 {
-  class Spectrogram final : public OpenGlComponent
+  class Spectrogram final : public Component
   {
   public:
     static constexpr int kResolution = 400;
@@ -28,36 +28,19 @@ namespace Interface
     static constexpr float kDefaultMaxFrequency = 21000.0f;
     static constexpr float kDbSlopePerOctave = 3.0f;
 
-    Spectrogram(String name = "Spectrogram");
-    ~Spectrogram() override;
+    Spectrogram();
+    ~Spectrogram() noexcept override;
 
     void init(OpenGlWrapper &openGl) override;
-    void render(OpenGlWrapper &openGl) override;
+    bool render(OpenGlWrapper &openGl) override;
     void destroy() override;
 
     void resized() override;
     void mouseDown(const MouseEvent &e) override;
-    void mouseDrag(const juce::MouseEvent &e) override;
+    void mouseDrag(const MouseEvent &e) override;
 
-    void paintBackgroundLines(bool paint) noexcept { shouldPaintBackgroundLines_ = paint; }
-    void setShouldDisplayPhases(bool shouldDisplayPhases) noexcept { shouldDisplayPhases_ = shouldDisplayPhases; }
-
-    void setMinFrequency(float frequency) noexcept { minFrequency_ = frequency; }
-    void setMaxFrequency(float frequency) noexcept { maxFrequency_ = frequency; }
-    void setMinDb(float db) noexcept { minDb_ = db; }
-    void setMaxDb(float db) noexcept { maxDb_ = db; }
-    void setDecayMultiplier(float decay) noexcept { decayMultiplier_ = decay; }
-    void setSlope(float slope) noexcept { dbSlope_ = slope; }
-    void setSpectrumData(Framework::SimdBufferView<Framework::complex<float>, simd_float> data) noexcept 
-    {
-      bufferView_ = COMPLEX_MOVE(data);
-    }
-
-    void setCornerColour(Colour colour) noexcept { corners_.setColor(colour); }
-  private:
-    bool updateAmplitudes(bool shouldDisplayPhases, float startDecade, 
-      float decadeCount, float decadeSlope);
-    void paintBackground(Graphics &g) const;
+    void setCornerColour(Colour colour) noexcept 
+    { corners_.fragment.uniforms.colour = colour.getNormalisedRGBA(); }
 
     std::vector<utils::up<OpenGlLineRenderer>> amplitudeRenderers_{};
     std::vector<utils::up<OpenGlLineRenderer>> phaseRenderers_{};
@@ -67,20 +50,25 @@ namespace Interface
     Framework::SimdBuffer<Framework::complex<float>, simd_float> scratchBuffer_{};
     Framework::SimdBuffer<Framework::complex<float>, simd_float> resultBuffer_{ kChannelsPerInOut, kResolution };
 
-    utils::shared_value_block<Framework::SimdBufferView<Framework::complex<float>, simd_float>> bufferView_{};
+    Framework::SimdBufferView<Framework::complex<float>, simd_float> bufferView_{};
 
-    utils::shared_value<float> minFrequency_ = kDefaultMinFrequency;
-    utils::shared_value<float> maxFrequency_ = kDefaultMaxFrequency;
-    utils::shared_value<float> minDb_ = kDefaultMinDb;
-    utils::shared_value<float> maxDb_ = kDefaultMaxDb;
-    utils::shared_value<bool> shouldDisplayPhases_ = false;
-    utils::shared_value<float> referencePhase_ = 0.0f;
-    utils::shared_value<bool> shouldInterpolateLines_ = true;
-    utils::shared_value<bool> shouldPaintBackgroundLines_ = true;
-    utils::shared_value<float> decayMultiplier_ = kDecayMult;
-    utils::shared_value<float> dbSlope_ = kDbSlopePerOctave;
+    float minFrequency_ = kDefaultMinFrequency;
+    float maxFrequency_ = kDefaultMaxFrequency;
+    float minDb_ = kDefaultMinDb;
+    float maxDb_ = kDefaultMaxDb;
+    bool shouldDisplayPhases_ = false;
+    float referencePhase_ = 0.0f;
+    bool shouldInterpolateLines_ = true;
+    bool shouldPaintBackgroundLines_ = true;
+    float decayMultiplier_ = kDecayMult;
+    float dbSlope_ = kDbSlopePerOctave;
 
     float nyquistFreq_ = kDefaultSampleRate * 0.5f;
     u32 binCount_ = 0;
+
+  private:
+    bool updateAmplitudes(bool shouldDisplayPhases, float startDecade,
+      float decadeCount, float decadeSlope);
+    void paintBackground(Graphics &g) const;
   };
 }

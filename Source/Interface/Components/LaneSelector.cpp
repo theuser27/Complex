@@ -21,18 +21,18 @@ namespace Interface
     {
 
     }
-    ~Slider() override = default;
+    ~Slider() noexcept override = default;
 
     bool hitTest([[maybe_unused]] int x, [[maybe_unused]] int y) override
     {
       return false;
     }
 
-    juce::Rectangle<int> setSizes([[maybe_unused]] int height, [[maybe_unused]] int width) override
+    Rectangle<int> setSizes([[maybe_unused]] int height, [[maybe_unused]] int width) override
     {
       return {};
     }
-    void setExtraElementsPositions([[maybe_unused]] juce::Rectangle<int> anchorBounds) override
+    void setExtraElementsPositions([[maybe_unused]] Rectangle<int> anchorBounds) override
     {
 
     }
@@ -49,11 +49,6 @@ namespace Interface
   LaneSelector::LaneSelector() : OpenGlContainer{ "LaneSelector" },
     slider_{ utils::up<Slider>::create() } { }
   LaneSelector::~LaneSelector() = default;
-
-  void LaneSelector::resized()
-  {
-
-  }
 
   void LaneSelector::laneTurnedOnOff([[maybe_unused]] EffectsLaneSection *lane, [[maybe_unused]] bool isOn)
   {

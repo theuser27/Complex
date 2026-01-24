@@ -37,11 +37,10 @@ namespace Interface
     void resized() override;
 
     // Inherited via DraggableComponent::Listener
-    EffectModuleSection *prepareToMove(EffectModuleSection *movedModule, const juce::MouseEvent &e, bool isCopying = false) override;
-    void draggingComponent(EffectModuleSection *component, const juce::MouseEvent &e) override;
-    void releaseComponent(EffectModuleSection *movedModule, const juce::MouseEvent &e) override;
-    juce::Point<int> mouseWheelWhileDragging(EffectModuleSection *movedModule,
-      const juce::MouseEvent &e, const juce::MouseWheelDetails &wheel) override;
+    EffectModuleSection *prepareToMove(EffectModuleSection *movedModule, const MouseEvent &e, bool isCopying = false) override;
+    void draggingComponent(EffectModuleSection *component, const MouseEvent &e) override;
+    void releaseComponent(EffectModuleSection *movedModule, const MouseEvent &e) override;
+    Point<int> mouseWheelWhileDragging(EffectModuleSection *movedModule, const MouseEvent &e) override;
 
     void createLane(EffectsLaneSection *laneToCopy = nullptr);
     void deleteLane(EffectsLaneSection *laneToDelete);

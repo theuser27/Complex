@@ -13,16 +13,13 @@
 #include "Framework/parameter_value.hpp"
 #include "OpenGlImage.hpp"
 #include "OpenGlQuad.hpp"
-#include "BaseSlider.hpp"
+#include "BaseControl.hpp"
 
 namespace Interface
 {
-  PinBoundsBox::PinBoundsBox(utils::string_view name, Framework::ParameterValue *lowBound,
-    Framework::ParameterValue *highBound) : BaseSection{ name }
+  PinBoundsBox::PinBoundsBox(Framework::ParameterValue *lowBound, Framework::ParameterValue *highBound)
   {
     using namespace Framework;
-
-    setInterceptsMouseClicks(false, true);
 
     //highlight_ = makeOpenGlComponent<OpenGlQuad>(Shaders::kHighlightFragment, "highlight");
     addOpenGlComponent(&highlight_);
@@ -125,7 +122,7 @@ namespace Interface
   void PinBoundsBox::setRoundedCornerColour(Colour colour) noexcept { roundedCorners_.setColor(colour); }
 
   void PinBoundsBox::paintHighlightBox(Graphics &g, float lowBoundValue, 
-                                       float highBoundValue, Colour colour, float shiftValue) const
+    float highBoundValue, Colour colour, float shiftValue) const
   {
     g.setColour(colour);
 

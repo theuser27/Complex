@@ -10,23 +10,8 @@
 
 #include "Shaders.hpp"
 
-#include <juce_opengl/juce_opengl.h>
-
-#include "Framework/platform_definitions.hpp"
-#include "BaseComponent.hpp"
-
 namespace
 {
-  #if JUCE_OPENGL_ES || OPENGL_ES
-    #define HIGHP "highp"
-    #define MEDIUMP "mediump"
-    #define LOWP "lowp"
-  #else
-    #define HIGHP
-    #define MEDIUMP
-    #define LOWP
-  #endif
-
   #define CONSTRAIN_AXIS_FUNCTION																								\
     "float constrainAxis(float normAxis, float constraint, float offset) {\n"		\
     "    return clamp(ceil(-abs(normAxis + offset) + constraint), 0.0, 1.0);\n" \
@@ -39,10 +24,10 @@ namespace
 
   constexpr char kImageVertexShader[] =
     "#version 150\n"
-    "in " MEDIUMP " vec4 position;\n"
-    "in " MEDIUMP " vec2 tex_coord_in;\n"
+    "in vec4 position;\n"
+    "in vec2 tex_coord_in;\n"
     "\n"
-    "out " MEDIUMP " vec2 tex_coord_out;\n"
+    "out vec2 tex_coord_out;\n"
     "\n"
     "void main() {\n"
     "    tex_coord_out = tex_coord_in;\n"
@@ -51,8 +36,8 @@ namespace
 
   constexpr char kImageFragmentShader[] =
     "#version 150\n"
-    "out " MEDIUMP " vec4 fragColor;\n"
-    "in " MEDIUMP " vec2 tex_coord_out;\n"
+    "out vec4 fragColor;\n"
+    "in vec2 tex_coord_out;\n"
     "\n"
     "uniform sampler2D image;\n"
     "\n"
@@ -62,14 +47,14 @@ namespace
 
   constexpr char kTintedImageFragmentShader[] =
     "#version 150\n"
-    "out " MEDIUMP " vec4 fragColor;\n"
-    "in " MEDIUMP " vec2 tex_coord_out;\n"
+    "out vec4 fragColor;\n"
+    "in vec2 tex_coord_out;\n"
     "\n"
     "uniform sampler2D image;\n"
-    "uniform " MEDIUMP " vec4 color;\n"
+    "uniform vec4 color;\n"
     "\n"
     "void main() {\n"
-    "    " MEDIUMP " vec4 image_color = texture(image, tex_coord_out);\n"
+    "    vec4 image_color = texture(image, tex_coord_out);\n"
     "    image_color.r *= color.r;\n"
     "    image_color.g *= color.g;\n"
     "    image_color.b *= color.b;\n"
@@ -79,14 +64,14 @@ namespace
 
   constexpr char kPassthroughVertexShader[] =
     "#version 150\n"
-    "in " MEDIUMP " vec4 position;\n"
-    "in " MEDIUMP " vec2 dimensions;\n"
-    "in " MEDIUMP " vec2 coordinates;\n"
-    "in " MEDIUMP " vec4 shader_values;\n"
+    "in vec4 position;\n"
+    "in vec2 dimensions;\n"
+    "in vec2 coordinates;\n"
+    "in vec4 shader_values;\n"
     "\n"
-    "out " MEDIUMP " vec2 dimensions_out;\n"
-    "out " MEDIUMP " vec2 coordinates_out;\n"
-    "out " MEDIUMP " vec4 shader_values_out;\n"
+    "out vec2 dimensions_out;\n"
+    "out vec2 coordinates_out;\n"
+    "out vec4 shader_values_out;\n"
     "\n"
     "void main() {\n"
     "    dimensions_out = dimensions;\n"
@@ -97,8 +82,8 @@ namespace
 
   constexpr char kScaleVertexShader[] =
     "#version 150\n"
-    "in " MEDIUMP " vec4 position;\n"
-    "uniform " MEDIUMP " vec2 scale;\n"
+    "in vec4 position;\n"
+    "uniform vec2 scale;\n"
     "\n"
     "void main() {\n"
     "    gl_Position = position;\n"
@@ -110,14 +95,14 @@ namespace
 
   constexpr char kRotaryModulationVertexShader[] =
     "#version 150\n"
-    "in " MEDIUMP " vec4 position;\n"
-    "in " MEDIUMP " vec2 coordinates;\n"
-    "in " MEDIUMP " vec4 range;\n"
-    "in " MEDIUMP " float meter_radius;\n"
+    "in vec4 position;\n"
+    "in vec2 coordinates;\n"
+    "in vec4 range;\n"
+    "in float meter_radius;\n"
     "\n"
-    "out " MEDIUMP " vec2 coordinates_out;\n"
-    "out " MEDIUMP " vec4 range_out;\n"
-    "out " MEDIUMP " float meter_radius_out;\n"
+    "out vec2 coordinates_out;\n"
+    "out vec4 range_out;\n"
+    "out float meter_radius_out;\n"
     "\n"
     "void main() {\n"
     "    coordinates_out = coordinates;\n"
@@ -128,12 +113,12 @@ namespace
 
   constexpr char kLinearModulationVertexShader[] =
     "#version 150\n"
-    "in " MEDIUMP " vec4 position;\n"
-    "in " MEDIUMP " vec2 coordinates;\n"
-    "in " MEDIUMP " vec4 range;\n"
+    "in vec4 position;\n"
+    "in vec2 coordinates;\n"
+    "in vec4 range;\n"
     "\n"
-    "out " MEDIUMP " vec2 coordinates_out;\n"
-    "out " MEDIUMP " vec4 range_out;\n"
+    "out vec2 coordinates_out;\n"
+    "out vec4 range_out;\n"
     "\n"
     "void main() {\n"
     "    coordinates_out = coordinates;\n"
@@ -143,9 +128,9 @@ namespace
 
   constexpr char kGainMeterVertexShader[] =
     "#version 150\n"
-    "in " MEDIUMP " vec4 position;\n"
+    "in vec4 position;\n"
     "\n"
-    "out " MEDIUMP " vec2 position_out;\n"
+    "out vec2 position_out;\n"
     "\n"
     "void main() {\n"
     "    gl_Position = position;\n"
@@ -154,30 +139,30 @@ namespace
 
   constexpr char kGainMeterFragmentShader[] =
     "#version 150\n"
-    "out " MEDIUMP " vec4 fragColor;\n"
-    "in " MEDIUMP " vec2 position_out;\n"
-    "uniform " MEDIUMP " vec4 color_from;\n"
-    "uniform " MEDIUMP " vec4 color_to;\n"
+    "out vec4 fragColor;\n"
+    "in vec2 position_out;\n"
+    "uniform vec4 color_from;\n"
+    "uniform vec4 color_to;\n"
     "void main() {\n"
-    "    " MEDIUMP " float t = (position_out.x + 1.0) / 2.0;\n"
+    "    float t = (position_out.x + 1.0) / 2.0;\n"
     "    fragColor = color_to * t + color_from * (1.0 - t);\n"
     "}\n";
 
   constexpr char kColorFragmentShader[] =
     "#version 150\n"
-    "out " MEDIUMP " vec4 fragColor;\n"
-    "uniform " MEDIUMP " vec4 color;\n"
+    "out vec4 fragColor;\n"
+    "uniform vec4 color;\n"
     "void main() {\n"
     "    fragColor = color;\n"
     "}\n";
 
   constexpr char kFadeSquareFragmentShader[] =
     "#version 150\n"
-    "out " MEDIUMP " vec4 fragColor;\n"
-    "uniform " MEDIUMP " vec4 color;\n"
-    "in " MEDIUMP " vec2 dimensions_out;\n"
-    "in " MEDIUMP " vec2 coordinates_out;\n"
-    "in " MEDIUMP " vec4 shader_values_out;\n"
+    "out vec4 fragColor;\n"
+    "uniform vec4 color;\n"
+    "in vec2 dimensions_out;\n"
+    "in vec2 coordinates_out;\n"
+    "in vec4 shader_values_out;\n"
     "void main() {\n"
     "    float alpha1 = clamp((dimensions_out.x - abs(coordinates_out.x) * dimensions_out.x) * 0.5, 0.0, 1.0);\n"
     "    float alpha2 = clamp((dimensions_out.y - abs(coordinates_out.y) * dimensions_out.y) * 0.5, 0.0, 1.0);\n"
@@ -187,10 +172,10 @@ namespace
 
   constexpr char kCircleFragmentShader[] =
     "#version 150\n"
-    "out " MEDIUMP " vec4 fragColor;\n"
-    "uniform " MEDIUMP " vec4 color;\n"
-    "in " MEDIUMP " vec2 dimensions_out;\n"
-    "in " MEDIUMP " vec2 coordinates_out;\n"
+    "out vec4 fragColor;\n"
+    "uniform vec4 color;\n"
+    "in vec2 dimensions_out;\n"
+    "in vec2 coordinates_out;\n"
     "void main() {\n"
     "    float delta_center = length(coordinates_out) * 0.5 * dimensions_out.x;\n"
     "    float alpha = clamp(dimensions_out.x * 0.5 - delta_center, 0.0, 1.0);\n"
@@ -201,12 +186,12 @@ namespace
   // ring around points when hovered over
   constexpr char kRingFragmentShader[] =
     "#version 150\n"
-    "out " MEDIUMP " vec4 fragColor;\n"
-    "uniform " MEDIUMP " vec4 color;\n"
-    "uniform " MEDIUMP " vec4 alt_color;\n"
-    "in " MEDIUMP " vec2 dimensions_out;\n"
-    "uniform " MEDIUMP " float thickness;\n"
-    "in " MEDIUMP " vec2 coordinates_out;\n"
+    "out vec4 fragColor;\n"
+    "uniform vec4 color;\n"
+    "uniform vec4 alt_color;\n"
+    "in vec2 dimensions_out;\n"
+    "uniform float thickness;\n"
+    "in vec2 coordinates_out;\n"
     "void main() {\n"
     "    float full_radius = 0.5 * dimensions_out.x;\n"
     "    float delta_center = length(coordinates_out) * full_radius;\n"
@@ -219,12 +204,12 @@ namespace
   // the diamond points inside the wavetable editor
   constexpr char kDiamondFragmentShader[] =
     "#version 150\n"
-    "out " MEDIUMP " vec4 fragColor;\n"
-    "uniform " MEDIUMP " vec4 color;\n"
-    "uniform " MEDIUMP " vec4 alt_color;\n"
-    "in " MEDIUMP " vec2 dimensions_out;\n"
-    "uniform " MEDIUMP " float thickness;\n"
-    "in " MEDIUMP " vec2 coordinates_out;\n"
+    "out vec4 fragColor;\n"
+    "uniform vec4 color;\n"
+    "uniform vec4 alt_color;\n"
+    "in vec2 dimensions_out;\n"
+    "uniform float thickness;\n"
+    "in vec2 coordinates_out;\n"
     "void main() {\n"
     "    float full_radius = 0.5 * dimensions_out.x;\n"
     "    float delta_center = (abs(coordinates_out.x) + abs(coordinates_out.y)) * full_radius;\n"
@@ -237,10 +222,10 @@ namespace
   // rounded corners on the inside of sections (i.e. corners of wavetable/lfo/envelope windows)
   constexpr char kRoundedCornerFragmentShader[] =
     "#version 150\n"
-    "out " MEDIUMP " vec4 fragColor;\n"
-    "uniform " MEDIUMP " vec4 color;\n"
-    "in " MEDIUMP " vec2 dimensions_out;\n"
-    "in " MEDIUMP " vec2 coordinates_out;\n"
+    "out vec4 fragColor;\n"
+    "uniform vec4 color;\n"
+    "in vec2 dimensions_out;\n"
+    "in vec2 coordinates_out;\n"
     "void main() {\n"
     "    float delta_center = length(coordinates_out * dimensions_out);\n"
     "    float alpha = clamp(delta_center - dimensions_out.x + 0.5, 0.0, 1.0);\n"
@@ -251,11 +236,11 @@ namespace
   // rounded corners on the outside of sections
   constexpr char kRoundedRectangleFragmentShader[] =
     "#version 150\n"
-    "out " MEDIUMP " vec4 fragColor;\n"
-    "uniform " MEDIUMP " vec4 color;\n"
-    "in " MEDIUMP " vec2 dimensions_out;\n"
-    "in " MEDIUMP " vec2 coordinates_out;\n"
-    "uniform " MEDIUMP " float rounding;\n"
+    "out vec4 fragColor;\n"
+    "uniform vec4 color;\n"
+    "in vec2 dimensions_out;\n"
+    "in vec2 coordinates_out;\n"
+    "uniform float rounding;\n"
     "void main() {\n"
     "    vec2 center_offset = abs(coordinates_out) * dimensions_out - dimensions_out;\n"
     "    float delta_center = length(max(center_offset + vec2(rounding, rounding), vec2(0.0, 0.0)));\n"
@@ -267,13 +252,13 @@ namespace
   // the border around the popup menus and currently selected modulator
   constexpr char kRoundedRectangleBorderFragmentShader[] =
     "#version 150\n"
-    "out " MEDIUMP " vec4 fragColor;\n"
-    "uniform " MEDIUMP " vec4 color;\n"
-    "in " MEDIUMP " vec2 dimensions_out;\n"
-    "in " MEDIUMP " vec2 coordinates_out;\n"
-    "uniform " MEDIUMP " float rounding;\n"
-    "uniform " MEDIUMP " float thickness;\n"
-    "uniform " MEDIUMP " float overall_alpha;\n"
+    "out vec4 fragColor;\n"
+    "uniform vec4 color;\n"
+    "in vec2 dimensions_out;\n"
+    "in vec2 coordinates_out;\n"
+    "uniform float rounding;\n"
+    "uniform float thickness;\n"
+    "uniform float overall_alpha;\n"
     "void main() {\n"
     "    vec2 center_offset = abs(coordinates_out) * dimensions_out - dimensions_out;\n"
     "    float delta_center = length(max(center_offset + vec2(rounding, rounding), vec2(0.0, 0.0)));\n"
@@ -289,19 +274,19 @@ namespace
   // overall knob design
   constexpr char kRotarySliderFragmentShader[] =
     "#version 150\n"
-    "out " MEDIUMP " vec4 fragColor;\n"
-    "uniform " MEDIUMP " vec4 color;\n"
-    "uniform " MEDIUMP " vec4 alt_color;\n"
-    "uniform " MEDIUMP " vec4 thumb_color;\n"
-    "in " MEDIUMP " vec2 dimensions_out;\n"
-    "uniform " MEDIUMP " float thickness;\n"
-    "uniform " MEDIUMP " float thumb_amount;\n"
-    "uniform " MEDIUMP " float start_pos;\n"
-    "uniform " MEDIUMP " float max_arc;\n"
-    "in " MEDIUMP " vec4 shader_values_out;\n"
-    "in " MEDIUMP " vec2 coordinates_out;\n"
+    "out vec4 fragColor;\n"
+    "uniform vec4 color;\n"
+    "uniform vec4 alt_color;\n"
+    "uniform vec4 thumb_color;\n"
+    "in vec2 dimensions_out;\n"
+    "uniform float thickness;\n"
+    "uniform float thumb_amount;\n"
+    "uniform float start_pos;\n"
+    "uniform float max_arc;\n"
+    "in vec4 shader_values_out;\n"
+    "in vec2 coordinates_out;\n"
     "void main() {\n"
-    "    " MEDIUMP " float rads = atan(coordinates_out.x, coordinates_out.y);\n"
+    "    float rads = atan(coordinates_out.x, coordinates_out.y);\n"
     "    float full_radius = 0.5 * dimensions_out.x;\n"
     "    float delta_center = length(coordinates_out) * full_radius;\n"
     "    float center_arc = full_radius - thickness * 0.5 - 0.5;\n"
@@ -330,36 +315,36 @@ namespace
   // modulation ring around the knob
   constexpr char kRotaryModulationFragmentShader[] =
     "#version 150\n"
-    "out " MEDIUMP " vec4 fragColor;\n"
-    "in " MEDIUMP " vec2 coordinates_out;\n"
-    "in " MEDIUMP " vec2 dimensions_out;\n"
-    "in " MEDIUMP " vec4 shader_values_out;\n"
-    "uniform " MEDIUMP " float thickness;\n"
-    "uniform " MEDIUMP " vec4 color;\n"
-    "uniform " MEDIUMP " vec4 alt_color;\n"
-    "uniform " MEDIUMP " vec4 mod_color;\n"
-    "uniform " MEDIUMP " float overall_alpha;\n"
-    "uniform " MEDIUMP " float start_pos;\n"
-    "const " MEDIUMP " float kPi = 3.14159265359;\n"
+    "out vec4 fragColor;\n"
+    "in vec2 coordinates_out;\n"
+    "in vec2 dimensions_out;\n"
+    "in vec4 shader_values_out;\n"
+    "uniform float thickness;\n"
+    "uniform vec4 color;\n"
+    "uniform vec4 alt_color;\n"
+    "uniform vec4 mod_color;\n"
+    "uniform float overall_alpha;\n"
+    "uniform float start_pos;\n"
+    "const float kPi = 3.14159265359;\n"
     "\n"
     "void main() {\n"
-    "    " MEDIUMP " float full_radius = dimensions_out.x * 0.5;\n"
-    "    " MEDIUMP " float dist = length(coordinates_out) * full_radius;\n"
-    "    " MEDIUMP " float inner_radius = full_radius - thickness;\n"
-    "    " MEDIUMP " float dist_outer_amp = clamp((full_radius - dist) * 0.5 + 0.5, 0.0, 1.0);\n"
-    "    " MEDIUMP " float dist_amp = dist_outer_amp * clamp((dist - inner_radius) * 0.5 + 0.5, 0.0, 1.0);\n"
-    "    " MEDIUMP " float rads = mod(atan(coordinates_out.x, coordinates_out.y) + kPi + start_pos, 2.0 * kPi) - kPi;\n"
-    "    " MEDIUMP " float rads_amp_low = clamp(full_radius * 0.5 * (rads - shader_values_out.x) + 1.0, 0.0, 1.0);\n"
-    "    " MEDIUMP " float rads_amp_high = clamp(full_radius * 0.5 * (shader_values_out.y - rads) + 1.0, 0.0, 1.0);\n"
-    "    " MEDIUMP " float rads_amp_low_stereo = clamp(full_radius * 0.5 * (rads - shader_values_out.z) + 0.5, 0.0, 1.0);\n"
-    "    " MEDIUMP " float rads_amp_high_stereo = clamp(full_radius * 0.5 * (shader_values_out.a - rads) + 0.5, 0.0, 1.0);\n"
-    "    " MEDIUMP " float alpha = rads_amp_low * rads_amp_high;\n"
-    "    " MEDIUMP " float alpha_stereo = rads_amp_low_stereo * rads_amp_high_stereo;\n"
-    "    " MEDIUMP " float alpha_center = min(alpha, alpha_stereo);\n"
-    "    " MEDIUMP " vec4 color_left = (alpha - alpha_center) * color;\n"
-    "    " MEDIUMP " vec4 color_right = (alpha_stereo - alpha_center) * alt_color;\n"
-    "    " MEDIUMP " vec4 color_center = alpha_center * mod_color;\n"
-    "    " MEDIUMP " vec4 out_color = color * (1.0 - alpha_stereo) + alt_color * alpha_stereo;\n"
+    "    float full_radius = dimensions_out.x * 0.5;\n"
+    "    float dist = length(coordinates_out) * full_radius;\n"
+    "    float inner_radius = full_radius - thickness;\n"
+    "    float dist_outer_amp = clamp((full_radius - dist) * 0.5 + 0.5, 0.0, 1.0);\n"
+    "    float dist_amp = dist_outer_amp * clamp((dist - inner_radius) * 0.5 + 0.5, 0.0, 1.0);\n"
+    "    float rads = mod(atan(coordinates_out.x, coordinates_out.y) + kPi + start_pos, 2.0 * kPi) - kPi;\n"
+    "    float rads_amp_low = clamp(full_radius * 0.5 * (rads - shader_values_out.x) + 1.0, 0.0, 1.0);\n"
+    "    float rads_amp_high = clamp(full_radius * 0.5 * (shader_values_out.y - rads) + 1.0, 0.0, 1.0);\n"
+    "    float rads_amp_low_stereo = clamp(full_radius * 0.5 * (rads - shader_values_out.z) + 0.5, 0.0, 1.0);\n"
+    "    float rads_amp_high_stereo = clamp(full_radius * 0.5 * (shader_values_out.a - rads) + 0.5, 0.0, 1.0);\n"
+    "    float alpha = rads_amp_low * rads_amp_high;\n"
+    "    float alpha_stereo = rads_amp_low_stereo * rads_amp_high_stereo;\n"
+    "    float alpha_center = min(alpha, alpha_stereo);\n"
+    "    vec4 color_left = (alpha - alpha_center) * color;\n"
+    "    vec4 color_right = (alpha_stereo - alpha_center) * alt_color;\n"
+    "    vec4 color_center = alpha_center * mod_color;\n"
+    "    vec4 out_color = color * (1.0 - alpha_stereo) + alt_color * alpha_stereo;\n"
     "    out_color = out_color * (1.0 - alpha_center) + color_center * alpha_center;\n"
     "    out_color.a = max(alpha, alpha_stereo) * overall_alpha * dist_amp;\n"
     "    fragColor = out_color;\n"
@@ -368,17 +353,17 @@ namespace
   // horizontal slider 
   constexpr char kHorizontalSliderFragmentShader[] =
     "#version 150\n"
-    "out " MEDIUMP " vec4 fragColor;\n"
-    "uniform " MEDIUMP " vec4 color;\n"
-    "uniform " MEDIUMP " vec4 alt_color;\n"
-    "uniform " MEDIUMP " vec4 thumb_color;\n"
-    "in " MEDIUMP " vec2 dimensions_out;\n"
-    "uniform " MEDIUMP " float thickness;\n"
-    "uniform " MEDIUMP " float thumb_amount;\n"
-    "uniform " MEDIUMP " float start_pos;\n"
-    "uniform " MEDIUMP " float rounding;\n"
-    "in " MEDIUMP " vec4 shader_values_out;\n"
-    "in " MEDIUMP " vec2 coordinates_out;\n"
+    "out vec4 fragColor;\n"
+    "uniform vec4 color;\n"
+    "uniform vec4 alt_color;\n"
+    "uniform vec4 thumb_color;\n"
+    "in vec2 dimensions_out;\n"
+    "uniform float thickness;\n"
+    "uniform float thumb_amount;\n"
+    "uniform float start_pos;\n"
+    "uniform float rounding;\n"
+    "in vec4 shader_values_out;\n"
+    "in vec2 coordinates_out;\n"
     "void main() {\n"
     "    vec2 position = coordinates_out * dimensions_out;\n"
     "    vec2 center_offset = abs(position) - vec2(dimensions_out.x, thickness);\n"
@@ -396,17 +381,17 @@ namespace
   // vertical slider
   constexpr char kVerticalSliderFragmentShader[] =
     "#version 150\n"
-    "out " MEDIUMP " vec4 fragColor;\n"
-    "uniform " MEDIUMP " vec4 color;\n"
-    "uniform " MEDIUMP " vec4 alt_color;\n"
-    "uniform " MEDIUMP " vec4 thumb_color;\n"
-    "in " MEDIUMP " vec2 dimensions_out;\n"
-    "uniform " MEDIUMP " float thickness;\n"
-    "uniform " MEDIUMP " float thumb_amount;\n"
-    "uniform " MEDIUMP " float start_pos;\n"
-    "uniform " MEDIUMP " float rounding;\n"
-    "in " MEDIUMP " vec4 shader_values_out;\n"
-    "in " MEDIUMP " vec2 coordinates_out;\n"
+    "out vec4 fragColor;\n"
+    "uniform vec4 color;\n"
+    "uniform vec4 alt_color;\n"
+    "uniform vec4 thumb_color;\n"
+    "in vec2 dimensions_out;\n"
+    "uniform float thickness;\n"
+    "uniform float thumb_amount;\n"
+    "uniform float start_pos;\n"
+    "uniform float rounding;\n"
+    "in vec4 shader_values_out;\n"
+    "in vec2 coordinates_out;\n"
     "void main() {\n"
     "    vec2 position = coordinates_out * dimensions_out;\n"
     "    vec2 center_offset = abs(position) - vec2(thickness, dimensions_out.y);\n"
@@ -428,26 +413,26 @@ namespace
   // modulation line next to a slider 
   constexpr char kLinearModulationFragmentShader[] =
     "#version 150\n"
-    "out " MEDIUMP " vec4 fragColor;\n"
-    "in " MEDIUMP " vec2 coordinates_out;\n"
-    "in " MEDIUMP " vec4 shader_values_out;\n"
-    "uniform " MEDIUMP " vec4 color;\n"
-    "uniform " MEDIUMP " vec4 alt_color;\n"
-    "uniform " MEDIUMP " vec4 mod_color;\n"
+    "out vec4 fragColor;\n"
+    "in vec2 coordinates_out;\n"
+    "in vec4 shader_values_out;\n"
+    "uniform vec4 color;\n"
+    "uniform vec4 alt_color;\n"
+    "uniform vec4 mod_color;\n"
     "\n"
     "void main() {\n"
-    "    " MEDIUMP " float position = coordinates_out.x * 0.5 + 0.5;\n"
-    "    " MEDIUMP " float dist1 = clamp(200.0 * (position - shader_values_out.x), 0.0, 1.0);\n"
-    "    " MEDIUMP " float dist2 = clamp(200.0 * (shader_values_out.y - position), 0.0, 1.0);\n"
-    "    " MEDIUMP " float stereo_dist1 = clamp(200.0 * (position - shader_values_out.z), 0.0, 1.0);\n"
-    "    " MEDIUMP " float stereo_dist2 = clamp(200.0 * (shader_values_out.a - position), 0.0, 1.0);\n"
-    "    " MEDIUMP " float alpha = dist1 * dist2;\n"
-    "    " MEDIUMP " float alpha_stereo = stereo_dist1 * stereo_dist2;\n"
-    "    " MEDIUMP " float alpha_center = min(alpha, alpha_stereo);\n"
-    "    " MEDIUMP " vec4 color_left = (alpha - alpha_center) * color;\n"
-    "    " MEDIUMP " vec4 color_right = (alpha_stereo - alpha_center) * alt_color;\n"
-    "    " MEDIUMP " vec4 color_center = alpha_center * mod_color;\n"
-    "    " MEDIUMP " vec4 color = color_left + color_right + color_center;\n"
+    "    float position = coordinates_out.x * 0.5 + 0.5;\n"
+    "    float dist1 = clamp(200.0 * (position - shader_values_out.x), 0.0, 1.0);\n"
+    "    float dist2 = clamp(200.0 * (shader_values_out.y - position), 0.0, 1.0);\n"
+    "    float stereo_dist1 = clamp(200.0 * (position - shader_values_out.z), 0.0, 1.0);\n"
+    "    float stereo_dist2 = clamp(200.0 * (shader_values_out.a - position), 0.0, 1.0);\n"
+    "    float alpha = dist1 * dist2;\n"
+    "    float alpha_stereo = stereo_dist1 * stereo_dist2;\n"
+    "    float alpha_center = min(alpha, alpha_stereo);\n"
+    "    vec4 color_left = (alpha - alpha_center) * color;\n"
+    "    vec4 color_right = (alpha_stereo - alpha_center) * alt_color;\n"
+    "    vec4 color_center = alpha_center * mod_color;\n"
+    "    vec4 color = color_left + color_right + color_center;\n"
     "    color.a = max(alpha, alpha_stereo);\n"
     "    fragColor = color;\n"
     "}\n";
@@ -458,10 +443,10 @@ namespace
   //		(almost always act as a uniform but why it isn't one idk)
   constexpr char kPinSliderFragmentShader[] =
     "#version 150\n"
-    "out " MEDIUMP " vec4 fragColor;\n"
-    "uniform " MEDIUMP " vec4 color;\n"
-    "in " MEDIUMP " vec2 dimensions_out;\n"
-    "in " MEDIUMP " vec2 coordinates_out;\n"
+    "out vec4 fragColor;\n"
+    "uniform vec4 color;\n"
+    "in vec2 dimensions_out;\n"
+    "in vec2 coordinates_out;\n"
     CONSTRAIN_AXIS_FUNCTION
     "\n"
     "void main() {\n"
@@ -475,10 +460,10 @@ namespace
   // plus thickness is (width / dimensions)
   constexpr char kPlusFragmentShader[] =
     "#version 150\n"
-    "out " MEDIUMP " vec4 fragColor;\n"
-    "uniform " MEDIUMP " vec4 color;\n"
-    "uniform " MEDIUMP " float thickness;\n"
-    "in " MEDIUMP " vec2 coordinates_out;\n"
+    "out vec4 fragColor;\n"
+    "uniform vec4 color;\n"
+    "uniform float thickness;\n"
+    "in vec2 coordinates_out;\n"
     CONSTRAIN_AXIS_FUNCTION
     "\n"
     "void main() {\n"
@@ -495,12 +480,12 @@ namespace
 
   constexpr char kHighlightFragmentShader[] =
     "#version 150\n"
-    "out " MEDIUMP " vec4 fragColor;\n"
-    "uniform " MEDIUMP " vec4 color;\n"
-    "uniform " MEDIUMP " vec4 alt_color;\n"
-    "uniform " MEDIUMP " vec4 mod_color;\n"
-    "uniform " MEDIUMP " vec4 shader_values_out;\n"
-    "in " MEDIUMP " vec2 coordinates_out;\n"
+    "out vec4 fragColor;\n"
+    "uniform vec4 color;\n"
+    "uniform vec4 alt_color;\n"
+    "uniform vec4 mod_color;\n"
+    "uniform vec4 shader_values_out;\n"
+    "in vec2 coordinates_out;\n"
     "\n"
     "void main() {\n"
     "    vec2 coordinates_out_norm = (coordinates_out * 0.5) + 0.5;\n"
@@ -517,17 +502,17 @@ namespace
   // modulation knob when hovered over a control
   constexpr char kModulationKnobFragmentShader[] =
     "#version 150\n"
-    "out " MEDIUMP " vec4 fragColor;\n"
-    "uniform " MEDIUMP " vec4 color;\n"
-    "uniform " MEDIUMP " vec4 alt_color;\n"
-    "uniform " MEDIUMP " vec4 mod_color;\n"
-    "uniform " MEDIUMP " vec4 background_color;\n"
-    "uniform " MEDIUMP " vec4 thumb_color;\n"
-    "in " MEDIUMP " vec2 dimensions_out;\n"
-    "uniform " MEDIUMP " float thickness;\n"
-    "uniform " MEDIUMP " float overall_alpha;\n"
-    "in " MEDIUMP " vec4 shader_values_out;\n"
-    "in " MEDIUMP " vec2 coordinates_out;\n"
+    "out vec4 fragColor;\n"
+    "uniform vec4 color;\n"
+    "uniform vec4 alt_color;\n"
+    "uniform vec4 mod_color;\n"
+    "uniform vec4 background_color;\n"
+    "uniform vec4 thumb_color;\n"
+    "in vec2 dimensions_out;\n"
+    "uniform float thickness;\n"
+    "uniform float overall_alpha;\n"
+    "in vec4 shader_values_out;\n"
+    "in vec2 coordinates_out;\n"
     "void main() {\n"
     "    float rads = atan(coordinates_out.x, -coordinates_out.y);\n"
     "    float full_radius = 0.5 * dimensions_out.x;\n"
@@ -555,12 +540,12 @@ namespace
   //		(almost always act as a uniform but why it isn't one idk)
   constexpr char kDotSliderFragmentShader[] =
     "#version 150\n"
-    "out " MEDIUMP " vec4 fragColor;\n"
-    "uniform " MEDIUMP " vec4 color;\n"
-    "uniform " MEDIUMP " float thumb_amount;\n"
-    "in " MEDIUMP " vec2 dimensions_out;\n"
-    "in " MEDIUMP " vec2 coordinates_out;\n"
-    "in " MEDIUMP " vec4 shader_values_out;\n"
+    "out vec4 fragColor;\n"
+    "uniform vec4 color;\n"
+    "uniform float thumb_amount;\n"
+    "in vec2 dimensions_out;\n"
+    "in vec2 coordinates_out;\n"
+    "in vec4 shader_values_out;\n"
     CONSTRAIN_AXIS_FUNCTION
     "\n"
     "void main() {\n"
@@ -575,36 +560,36 @@ namespace
 
   constexpr char kLineFragmentShader[] =
     "#version 150\n"
-    "out " MEDIUMP " vec4 fragColor;\n"
-    "uniform " MEDIUMP " vec4 color;\n"
-    "uniform " MEDIUMP " float line_width;\n"
-    "uniform " MEDIUMP " float boost;\n"
-    "in " MEDIUMP " float depth_out;\n"
+    "out vec4 fragColor;\n"
+    "uniform vec4 color;\n"
+    "uniform float line_width;\n"
+    "uniform float boost;\n"
+    "in float depth_out;\n"
     "void main() {\n"
-    "    " MEDIUMP " float dist_from_edge = min(depth_out, 1.0 - depth_out);\n"
-    "    " MEDIUMP " float scale = line_width * dist_from_edge;\n"
+    "    float dist_from_edge = min(depth_out, 1.0 - depth_out);\n"
+    "    float scale = line_width * dist_from_edge;\n"
     "    fragColor = vec4(color.xyz, color.a * scale * 0.5);\n"
     "}\n";
 
   constexpr char kFillFragmentShader[] =
     "#version 150\n"
-    "out " MEDIUMP " vec4 fragColor;\n"
-    "uniform " MEDIUMP " vec4 color_from;\n"
-    "uniform " MEDIUMP " vec4 color_to;\n"
-    "in " MEDIUMP " float boost;\n"
-    "in " MEDIUMP " float distance;\n"
+    "out vec4 fragColor;\n"
+    "uniform vec4 color_from;\n"
+    "uniform vec4 color_to;\n"
+    "in float boost;\n"
+    "in float distance;\n"
     "void main() {\n"
-    "    " MEDIUMP " float delta = abs(distance);\n"
-    "    " MEDIUMP " vec4 base_color = color_to * delta + color_from * (1.0 - delta);\n"
+    "    float delta = abs(distance);\n"
+    "    vec4 base_color = color_to * delta + color_from * (1.0 - delta);\n"
     "    fragColor = base_color;\n"
     "    fragColor.a = (boost + 1.0) * base_color.a;\n"
     "}\n";
 
   constexpr char kLineVertexShader[] =
     "#version 150\n"
-    "in " MEDIUMP " vec3 position;\n"
-    "uniform " MEDIUMP " vec2 scale;\n"
-    "out " MEDIUMP " float depth_out;\n"
+    "in vec3 position;\n"
+    "uniform vec2 scale;\n"
+    "out float depth_out;\n"
     "\n"
     "void main() {\n"
     "    depth_out = position.z;\n"
@@ -616,12 +601,12 @@ namespace
 
   constexpr char kFillVertexShader[] =
     "#version 150\n"
-    "in " MEDIUMP " vec3 position;\n"
-    "uniform " MEDIUMP " vec2 scale;\n"
-    "uniform " MEDIUMP " float center_position;\n"
-    "uniform " MEDIUMP " float boost_amount;\n"
-    "out " MEDIUMP " float distance;\n"
-    "out " MEDIUMP " float boost;\n"
+    "in vec3 position;\n"
+    "uniform vec2 scale;\n"
+    "uniform float center_position;\n"
+    "uniform float boost_amount;\n"
+    "out float distance;\n"
+    "out float boost;\n"
     "\n"
     "void main() {\n"
     "    distance = (position.y - center_position) / (1.0 - center_position);\n"
@@ -634,27 +619,27 @@ namespace
 
   constexpr char kBarFragmentShader[] =
     "#version 150\n"
-    "out " MEDIUMP " vec4 fragColor;\n"
-    "uniform " MEDIUMP " vec4 color;\n"
-    "in " MEDIUMP " vec2 corner_out;\n"
-    "in " MEDIUMP " vec2 size;\n"
+    "out vec4 fragColor;\n"
+    "uniform vec4 color;\n"
+    "in vec2 corner_out;\n"
+    "in vec2 size;\n"
     "void main() {\n"
-    "    " MEDIUMP " float alpha_x = min(corner_out.x * size.x, (1.0 - corner_out.x) * size.x);\n"
-    "    " MEDIUMP " float alpha_y = min(corner_out.y * size.y, (1.0 - corner_out.y) * size.y);\n"
+    "    float alpha_x = min(corner_out.x * size.x, (1.0 - corner_out.x) * size.x);\n"
+    "    float alpha_y = min(corner_out.y * size.y, (1.0 - corner_out.y) * size.y);\n"
     "    fragColor = color;\n"
     "    fragColor.a = fragColor.a * min(1.0, min(alpha_x, alpha_y));\n"
     "}\n";
 
   constexpr char kBarHorizontalVertexShader[] =
     "#version 150\n"
-    "in " MEDIUMP " vec4 position;\n"
-    "in " MEDIUMP " vec2 corner;\n"
-    "uniform " MEDIUMP " float offset;\n"
-    "uniform " MEDIUMP " float scale;\n"
-    "uniform " MEDIUMP " float width_percent;\n"
-    "uniform " MEDIUMP " vec2 dimensions;\n"
-    "out " MEDIUMP " vec2 corner_out;\n"
-    "out " MEDIUMP " vec2 size;\n"
+    "in vec4 position;\n"
+    "in vec2 corner;\n"
+    "uniform float offset;\n"
+    "uniform float scale;\n"
+    "uniform float width_percent;\n"
+    "uniform vec2 dimensions;\n"
+    "out vec2 corner_out;\n"
+    "out vec2 size;\n"
     "void main()\n"
     "{\n"
     "    gl_Position = position;\n"
@@ -669,14 +654,14 @@ namespace
 
   constexpr char kBarVerticalVertexShader[] =
     "#version 150\n"
-    "in " MEDIUMP " vec4 position;\n"
-    "in " MEDIUMP " vec2 corner;\n"
-    "uniform " MEDIUMP " float offset;\n"
-    "uniform " MEDIUMP " float scale;\n"
-    "uniform " MEDIUMP " float width_percent;\n"
-    "uniform " MEDIUMP " vec2 dimensions;\n"
-    "out " MEDIUMP " vec2 corner_out;\n"
-    "out " MEDIUMP " vec2 size;\n"
+    "in vec4 position;\n"
+    "in vec2 corner;\n"
+    "uniform float offset;\n"
+    "uniform float scale;\n"
+    "uniform float width_percent;\n"
+    "uniform vec2 dimensions;\n"
+    "out vec2 corner_out;\n"
+    "out vec2 size;\n"
     "void main()\n"
     "{\n"
     "    gl_Position = position;\n"
@@ -753,65 +738,37 @@ namespace
 
 namespace Interface
 {
-  using namespace juce::gl;
-
-  static void checkShaderCorrect(GLuint shaderId) noexcept
+  GLuint 
+  createShader(const char *shader, bool isFragment)
   {
+    GLuint shaderId = glCreateShader(isFragment ? GL_FRAGMENT_SHADER : GL_VERTEX_SHADER);
+    glShaderSource(shaderId, 1, &shader, nullptr);
+    glCompileShader(shaderId);
+
     GLint status = GL_FALSE;
     glGetShaderiv(shaderId, GL_COMPILE_STATUS, &status);
 
-    if (status != GL_FALSE)
-      return;
-
-    std::vector<GLchar> info(16384);
-    glGetShaderInfoLog(shaderId, (GLsizei)info.size(), nullptr, info.data());
-    COMPLEX_ASSERT_FALSE("Shader compilation failed\n%s", info.data());
-  }
-
-  GLuint Shaders::createVertexShader(VertexShader shader) const
-  {
-    GLuint shaderId = glCreateShader(GL_VERTEX_SHADER);
-    const GLchar *code = getVertexShader(shader);
-    glShaderSource(shaderId, 1, &code, nullptr);
-    glCompileShader(shaderId);
-
-    checkShaderCorrect(shaderId);
-    return shaderId;
-  }
-
-  GLuint Shaders::createFragmentShader(FragmentShader shader) const
-  {
-    GLuint shaderId = glCreateShader(GL_FRAGMENT_SHADER);
-    const GLchar *code = getFragmentShader(shader);
-    glShaderSource(shaderId, 1, &code, nullptr);
-    glCompileShader(shaderId);
-
-    checkShaderCorrect(shaderId);
-    return shaderId;
-  }
-  
-  OpenGlShaderProgram Shaders::getShaderProgram(VertexShader vertexShader,
-    FragmentShader fragmentShader, const GLchar **varyings)
-  {
-    int shaderProgramIndex = vertexShader * (int)kFragmentShaderCount + fragmentShader;
-    auto iter = shaderPrograms_.find(shaderProgramIndex);
-    if (iter != shaderPrograms_.data.end())
-      return iter->second;
-
-    // shader compilation
-    GLuint vertexShaderId, fragmentShaderId;
+    if (status == GL_FALSE)
     {
-      if (vertexShaderIds_[vertexShader] == 0)
-        vertexShaderIds_[vertexShader] = createVertexShader(vertexShader);
-      vertexShaderId = vertexShaderIds_[vertexShader];
-
-      if (fragmentShaderIds_[fragmentShader] == 0)
-        fragmentShaderIds_[fragmentShader] = createFragmentShader(fragmentShader);
-      fragmentShaderId = fragmentShaderIds_[fragmentShader];
+      utils::vector<GLchar> info{ utils::generalAllocator, 16384 };
+      glGetShaderInfoLog(shaderId, (GLsizei)info.size(), nullptr, info.data());
+      COMPLEX_ASSERT_FALSE("Shader compilation failed\n%s", info.data());
     }
 
-    auto &[index, program] = shaderPrograms_.data.emplace_back();
-    index = shaderProgramIndex;
+    return shaderId;
+  }
+
+  OpenGlShaderProgram 
+  Shaders::getShaderProgram(GLuint vertexShaderId, GLuint fragmentShaderId, const GLchar **varyings)
+  {
+    u64 shaderProgramKey = (u64)vertexShaderId | ((u64)fragmentShaderId << 32);
+
+    auto programIter = shaderPrograms.find(shaderProgramKey);
+    if (programIter != shaderPrograms.data.end())
+      return programIter->second;
+
+    auto &[key, program] = shaderPrograms.data.emplace_back();
+    key = shaderProgramKey;
     program.id = glCreateProgram();
 
     glAttachShader(program.id, vertexShaderId);
@@ -819,7 +776,7 @@ namespace Interface
     if (varyings)
       glTransformFeedbackVaryings(program.id, 1, varyings, GL_INTERLEAVED_ATTRIBS);
 
-    COMPLEX_CHECK_OPENGL_ERROR;
+    COMPLEX_CHECK_OPENGL_ERROR();
 
     // program linking
     glLinkProgram(program.id);
@@ -829,52 +786,47 @@ namespace Interface
 
     if (status == (GLint)GL_FALSE)
     {
-      std::vector<GLchar> info(16384);
+      utils::vector<GLchar> info{ utils::generalAllocator, 16384 };
       glGetProgramInfoLog(program.id, (GLsizei)info.size(), nullptr, info.data());
       COMPLEX_ASSERT_FALSE("%s", info.data());
     }
 
-    COMPLEX_CHECK_OPENGL_ERROR;
+    COMPLEX_CHECK_OPENGL_ERROR();
     return program;
   }
 
   void Shaders::releaseAll()
   {
-    // > A value of 0 for shader will be silently ignored.
-    for (auto id : vertexShaderIds_)
+    for (auto &[_, id] : vertexShaders.data)
     {
       glDeleteShader(id);
-      COMPLEX_CHECK_OPENGL_ERROR;
+      COMPLEX_CHECK_OPENGL_ERROR();
     }
+    vertexShaders.data.clear();
 
-    for (auto id : fragmentShaderIds_)
+    for (auto &[_, id] : fragmentShaders.data)
     {
       glDeleteShader(id);
-      COMPLEX_CHECK_OPENGL_ERROR;
+      COMPLEX_CHECK_OPENGL_ERROR();
     }
+    fragmentShaders.data.clear();
 
-    for (auto &[_, program] : shaderPrograms_.data)
+    for (auto &[_, program] : shaderPrograms.data)
     {
       if (program.id == 0)
         continue;
 
       glDeleteProgram(program.id);
-      COMPLEX_CHECK_OPENGL_ERROR;
+      COMPLEX_CHECK_OPENGL_ERROR();
       program.id = 0;
     }
-    shaderPrograms_.data.clear();
-
-    utils::zeroset(vertexShaderIds_);
-    utils::zeroset(fragmentShaderIds_);
+    shaderPrograms.data.clear();
   }
 
 
-  OpenGlWrapper::OpenGlWrapper(juce::OpenGLContext &c) noexcept : context(c) { }
-
-  OpenGlWrapper::~OpenGlWrapper() noexcept = default;
-
 #if COMPLEX_DEBUG
-  static const char *getGLErrorMessage(const GLenum e) noexcept
+  static const char *
+  getGLErrorMessage(GLenum e) noexcept
   {
   #define CASE_GEN(x) case x: return #x;
     switch (e)
@@ -902,9 +854,9 @@ namespace Interface
   {
     for (;;)
     {
-      GLenum e = juce::gl::glGetError();
+      GLenum e = glGetError();
 
-      if (e == juce::gl::GL_NO_ERROR)
+      if (e == GL_NO_ERROR)
         break;
 
       COMPLEX_ASSERT_FALSE("***** %s  at %s : %d", getGLErrorMessage(e), file, line);
@@ -912,61 +864,42 @@ namespace Interface
   }
 #endif
 
-  static utils::pair<int, int> createTexture(juce::OpenGLContext &context, GLuint &textureId,
-    int desiredW, int desiredH, const void *pixels, GLenum type, bool topLeft, GLenum texMagFilter = GL_LINEAR)
+  utils::pair<int, int>
+  createTexture(GLuint &textureId, int desiredW, int desiredH, const void *pixels,
+    GLenum type, [[maybe_unused]] bool topLeft, GLenum texMagFilter = GL_LINEAR)
   {
     if (textureId == 0)
     {
-      COMPLEX_CHECK_OPENGL_ERROR;
+      COMPLEX_CHECK_OPENGL_ERROR();
       glGenTextures(1, &textureId);
       glBindTexture(GL_TEXTURE_2D, textureId);
       glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
 
-      glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, (GLint)texMagFilter);
+      glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, texMagFilter);
       glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
       glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-      COMPLEX_CHECK_OPENGL_ERROR;
+      COMPLEX_CHECK_OPENGL_ERROR();
     }
     else
     {
       glBindTexture(GL_TEXTURE_2D, textureId);
-      COMPLEX_CHECK_OPENGL_ERROR;
+      COMPLEX_CHECK_OPENGL_ERROR();
     }
 
     glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
-    COMPLEX_CHECK_OPENGL_ERROR;
-
-    const auto textureNpotSupported = context.isTextureNpotSupported();
-    const auto getAllowedTextureSize = [&](int n)
-    {
-      return textureNpotSupported ? n : juce::nextPowerOfTwo(n);
-    };
-
-    auto width = getAllowedTextureSize(desiredW);
-    auto height = getAllowedTextureSize(desiredH);
+    COMPLEX_CHECK_OPENGL_ERROR();
 
     const GLint internalformat = type == GL_ALPHA ? GL_ALPHA : GL_RGBA;
 
-    if (width != desiredW || height != desiredH)
-    {
-      glTexImage2D(GL_TEXTURE_2D, 0, internalformat,
-        width, height, 0, type, GL_UNSIGNED_BYTE, nullptr);
+    glTexImage2D(GL_TEXTURE_2D, 0, internalformat,
+      desiredW, desiredH, 0, type, GL_UNSIGNED_BYTE, pixels);
 
-      glTexSubImage2D(GL_TEXTURE_2D, 0, 0, topLeft ? (height - desiredH) : 0,
-        desiredW, desiredH, type, GL_UNSIGNED_BYTE, pixels);
-    }
-    else
-    {
-      glTexImage2D(GL_TEXTURE_2D, 0, internalformat,
-        desiredW, desiredH, 0, type, GL_UNSIGNED_BYTE, pixels);
-    }
+    COMPLEX_CHECK_OPENGL_ERROR();
 
-    COMPLEX_CHECK_OPENGL_ERROR;
-
-    return { width, height };
+    return { desiredW, desiredH };
   }
 
-  template <class PixelType>
+  /*template <class PixelType>
   static void flip(juce::HeapBlock<juce::PixelARGB> &dataCopy, const u8 *srcData, 
     const int lineStride, const int w, const int h)
   {
@@ -1027,6 +960,54 @@ namespace Interface
 
     return createTexture(context, textureId, desiredW, desiredH, 
       flippedCopy, GL_BGRA_EXT, true, texMagFilter);
-  }
+  }*/
 
+  bool 
+  setViewport(Point<int> positionInViewport, Rectangle<int> viewportBounds,
+    Rectangle<int> scissorBounds, const OpenGlWrapper &openGl, const Component *ignoreClipIncluding)
+  {
+    auto findIndex = [](const utils::vector<ViewportChange> &vector, const Component *target)
+    {
+      isize index;
+      for (index = vector.size() - 1; index >= 0; --index)
+        if (vector[index].component == target)
+          break;
+      return index;
+    };
+
+    isize startingIndex = (isize)openGl.parentStack.size();
+
+    // if target is at the top, there's nothing to do
+    if (startingIndex != 0)
+    {
+      isize clippingIndex = (!ignoreClipIncluding) ?
+        (isize)openGl.parentStack.size() : findIndex(openGl.parentStack, ignoreClipIncluding);
+      COMPLEX_ASSERT(clippingIndex > 0, "Clipping target not found");
+
+      viewportBounds += positionInViewport;
+      scissorBounds += positionInViewport;
+
+      for (isize i = startingIndex - 1; i > 0; --i)
+      {
+        auto [_, bounds, isClipping] = openGl.parentStack[i];
+
+        if (isClipping && i < clippingIndex)
+          bounds.withZeroOrigin().intersectRectangle(scissorBounds);
+
+        viewportBounds = viewportBounds + bounds.getPosition();
+        scissorBounds = scissorBounds + bounds.getPosition();
+      }
+    }
+
+    if (scissorBounds.w <= 0 || scissorBounds.h <= 0)
+      return false;
+
+    glViewport(viewportBounds.x, openGl.topLevelHeight - viewportBounds.getBottom(),
+      viewportBounds.w, viewportBounds.h);
+
+    glScissor(scissorBounds.x, openGl.topLevelHeight - scissorBounds.getBottom(),
+      scissorBounds.w, scissorBounds.h);
+
+    return true;
+  }
 }

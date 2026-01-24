@@ -16,42 +16,32 @@ namespace Interface
 {
   class EffectModuleSection;
 
-  class DraggableComponent final : public BaseComponent
+  class DraggableComponent final : public Component
   {
   public:
     class Listener
     {
     public:
       virtual ~Listener() = default;
-      virtual EffectModuleSection *prepareToMove(EffectModuleSection *component, const juce::MouseEvent &e, bool isCopying) = 0;
-      virtual void draggingComponent([[maybe_unused]] EffectModuleSection *component, [[maybe_unused]] const juce::MouseEvent &e) { }
-      virtual void releaseComponent(EffectModuleSection *component, const juce::MouseEvent &e) = 0;
-      virtual juce::Point<int> mouseWheelWhileDragging(EffectModuleSection *component,
-        const juce::MouseEvent &e, const juce::MouseWheelDetails &wheel) = 0;
+      virtual EffectModuleSection *prepareToMove(EffectModuleSection *component, const MouseEvent &e, bool isCopying) = 0;
+      virtual void draggingComponent([[maybe_unused]] EffectModuleSection *component, [[maybe_unused]] const MouseEvent &e) { }
+      virtual void releaseComponent(EffectModuleSection *component, const MouseEvent &e) = 0;
+      virtual Point<int> mouseWheelWhileDragging(EffectModuleSection *component, const MouseEvent &e) = 0;
     };
 
-    DraggableComponent() noexcept { setInterceptsMouseClicks(true, false); }
+    bool render(OpenGlWrapper &openGl) override;
 
-    void paint(juce::Graphics &g) override;
+    bool mouseEnter(const MouseEvent &e) override;
+    bool mouseDown(const MouseEvent &e) override;
+    bool mouseDrag(const MouseEvent &e) override;
+    bool mouseUp(const MouseEvent &e) override;
+    bool mouseExit(const MouseEvent &e) override;
+    bool mouseWheelMove(const MouseEvent &e) override;
 
-    void mouseMove(const juce::MouseEvent &e) override;
-    void mouseDown(const juce::MouseEvent &e) override;
-    void mouseDrag(const juce::MouseEvent &e) override;
-    void mouseUp(const juce::MouseEvent &e) override;
-    void mouseExit(const juce::MouseEvent &e) override;
-    void mouseWheelMove(const juce::MouseEvent &e, 
-      const juce::MouseWheelDetails &wheel) override;
-
-    auto *getDraggedComponent() const noexcept { return draggedComponent_; }
-    void setDraggedComponent(EffectModuleSection *draggedComponent) noexcept { draggedComponent_ = draggedComponent; }
-    void setIgnoreClip(BaseComponent *ignoreClipIncluding) noexcept { ignoreClipIncluding_ = ignoreClipIncluding; }
-    void setListener(Listener *listener) noexcept { listener_ = listener; }
-
-  private:
-    BaseComponent *ignoreClipIncluding_ = nullptr;
+    Component *ignoreClipIncluding_ = nullptr;
     EffectModuleSection *draggedComponent_ = nullptr;
     EffectModuleSection *currentlyDraggedComponent_ = nullptr;
-    juce::Point<int> initialPosition_{};
+    Point<int> initialPosition_{};
     Listener *listener_ = nullptr;
   };
 }

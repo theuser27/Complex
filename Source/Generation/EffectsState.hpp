@@ -2,7 +2,7 @@
   ==============================================================================
 
     EffectsState.hpp
-    Created: 2 Oct 2021 8:53:05pm
+    Created: 2 Oct 2021 20:53:05
     Author:  theuser27
 
   ==============================================================================
@@ -14,11 +14,15 @@
 
 #include "Framework/sync_primitives.hpp"
 #include "Framework/simd_buffer.hpp"
-#include "Plugin/ProcessorTree.hpp"
 
 namespace Framework
 {
-  class Buffer;
+  struct Buffer;
+}
+
+namespace Plugin
+{
+  struct State;
 }
 
 namespace Generation
@@ -29,36 +33,39 @@ namespace Generation
   class EffectsLane final : public BaseProcessor
   {
   public:
-    EffectsLane() = delete;
+    COMPLEX_ENUM_LOCAL(Parameters,
+      ( LaneEnabled, 1758157321265403900),
+      (       Input, 1758157334428822300),
+      (      Output, 1758157341650409000),
+      (GainMatching, 1758157353552984900),
+    )
+    COMPLEX_ENUM_LOCAL(InputOptions,
+      (     InputOptionsMain, 1758157430681746300),
+      (InputOptionsSidechain, 1758157438261920000),
+      (     InputOptionsLane, 1758157445897557300),
+    )
+    COMPLEX_ENUM_LOCAL(OutputOptions,
+      (     OutputOptionsMain, 1758157487088872000),
+      (OutputOptionsSidechain, 1758157490890168800),
+      (     OutputOptionsNone, 1758157494872876200),
+    )
 
-    EffectsLane(Plugin::ProcessorTree *processorTree) noexcept;
-
-    EffectsLane(const EffectsLane &other) noexcept : BaseProcessor{ other } { }
-    EffectsLane &operator=(const EffectsLane &other) noexcept 
-    { BaseProcessor::operator=(other); return *this; }
-
-    void deserialiseFromJson(void *jsonData) override;
+    EffectsLane(Plugin::State *state, Framework::ProcessorMetadata *metadata, utils::bumpArena *arena) noexcept;
+    EffectsLane(const EffectsLane &other, utils::bumpArena *arena) noexcept : BaseProcessor{ other, arena } { }
 
     void initialise() noexcept override
     {
       BaseProcessor::initialise();
-      status_.store(LaneStatus::Finished, std::memory_order_release);
-      currentEffectIndex_.store(0, std::memory_order_release);
+      status_.store(LaneStatus::Finished, satomi::memory_order_release);
+      currentEffectIndex_.store(0, satomi::memory_order_release);
     }
 
     // Inherited via BaseProcessor
-    void insertSubProcessor(usize index, BaseProcessor &newSubProcessor, bool callListeners = true) noexcept override;
+    bool insertSubProcessor(usize index, BaseProcessor &newSubProcessor, bool callListeners = true) override;
     BaseProcessor &deleteSubProcessor(usize index, bool callListeners = true) noexcept override;
     void initialiseParameters() override;
 
-    auto *getEffectModule(usize index) const noexcept { return effectModules_[index]; }
-    auto getEffectModuleCount() const noexcept { return effectModules_.size(); }
-
-    EffectsLane *createCopy() const override { return processorTree_->createProcessor<EffectsLane>(*this); }
-
-  private:
     Framework::ComplexDataSource laneDataSource_;
-    std::vector<EffectModule *> effectModules_{};
 
     //// Parameters
     // 
@@ -67,8 +74,7 @@ namespace Generation
     // 3. output index
     // 4. gain match
 
-    utils::shared_value<simd_float> volumeScale_{};
-    std::atomic<u32> currentEffectIndex_ = 0;
+    satomi::atomic<u32> currentEffectIndex_ = 0;
 
     // Finished - finished all processing
     // Ready - ready for a thread to begin work
@@ -76,10 +82,13 @@ namespace Generation
     // Stopped - temporarily stopped to wait for data from another lane
     enum class LaneStatus : u32 { Finished, Ready, Running, Stopped };
 
-    std::atomic<LaneStatus> status_ = LaneStatus::Finished;
+    satomi::atomic<LaneStatus> status_ = LaneStatus::Finished;
+    utils::shared_value<simd_float> volumeScale_{};
 
     friend class EffectsState;
   };
+
+  static_assert(utils::is_trivially_destructible_v<EffectsLane>);
 
   class EffectsState final : public BaseProcessor
   {
@@ -89,66 +98,53 @@ namespace Generation
     {
       bool checkForFeedback();
 
-      std::pair<u32, u32> sourceIndex, destinationIndex;
+      utils::pair<u32, u32> sourceIndex, destinationIndex;
     };
 
-    EffectsState() = delete;
+    EffectsState(Plugin::State *state, Framework::ProcessorMetadata *metadata, utils::bumpArena *arena) noexcept;
+
     EffectsState(const EffectsState &) = delete;
-    EffectsState(EffectsState &&) = delete;
-    EffectsState &operator=(const EffectsState &other) = delete;
-    EffectsState &operator=(EffectsState &&other) = delete;
-
-    EffectsState(Plugin::ProcessorTree *processorTree) noexcept;
-    ~EffectsState() noexcept override;
-
-    void deserialiseFromJson(void *jsonData) override;
 
     // Inherited via BaseProcessor
-    void insertSubProcessor(usize index, BaseProcessor &newSubProcessor, bool callListeners = true) noexcept override;
-    BaseProcessor &deleteSubProcessor(usize index, bool callListeners = true) noexcept override;
+    bool insertSubProcessor(usize index, BaseProcessor &newSubProcessor, bool callListeners = true) override;
+    BaseProcessor &deleteSubProcessor(usize index, bool callListeners = true) override;
     void initialiseParameters() override;
 
     void writeInputData(const Framework::Buffer &inputBuffer) noexcept;
     void processLanes() noexcept;
     void sumLanesAndWriteOutput(Framework::Buffer &outputBuffer) noexcept;
 
-    utils::span<char> getUsedInputChannels() noexcept;
-    utils::span<char> getUsedOutputChannels() noexcept;
+    utils::span<bool> getUsedInputChannels() noexcept;
+    utils::span<bool> getUsedOutputChannels() noexcept;
 
-    auto getOutputBuffer(u32 channelCount, u32 beginChannel) const noexcept
-    { return Framework::SimdBufferView{ outputBuffer_, beginChannel, channelCount }; }
-
-    usize getLaneCount() const noexcept { return lanes_.size(); }
-    auto *getEffectsLane(usize index) const noexcept { return lanes_[index]; }
+    const Framework::SimdBuffer *getOutputBuffer() const noexcept { return outputBuffer_; }
 
     // current number of FFT bins (real-imaginary pairs)
     u32 binCount = 0;
     float sampleRate = 0.0f;
     u32 blockPosition = 0;
     float blockPhase = 0.0f;
-
-  private:
-    struct Thread;
-    friend struct Thread;
     
-    BaseProcessor *createCopy() const override
-    { COMPLEX_ASSERT_FALSE("You're trying to copy EffectsState, which is not meant to be copied"); return nullptr; }
-
     void checkUsage();
     
     void distributeWork() const noexcept;
-    void processIndividualLanes(usize laneIndex) const noexcept;
-
-    std::vector<EffectsLane *> lanes_{};
+    void processIndividualLanes(EffectsLane *lane) const noexcept;
 
     // if an input/output isn't used there's no need to process it at all
-    std::vector<char> usedInputChannels_{};
-    std::vector<char> usedOutputChannels_{};
-    std::vector<float> outputScaleMultipliers_{};
+    utils::span<bool> usedInputChannels_{};
+    utils::span<bool> usedOutputChannels_{};
+    utils::span<float> outputScaleMultipliers_{};
 
-    Framework::SimdBuffer<Framework::complex<float>, simd_float> outputBuffer_{};
+    Framework::SimdBuffer *outputBuffer_{};
 
-    std::vector<Thread> workerThreads_;
-    std::atomic<bool> shouldWorkersProcess_ = false;
+    satomi::atomic<bool> shouldWorkersProcess_ = false;
   };
+
+  static_assert(utils::is_trivially_destructible_v<EffectsState>);
 }
+
+extern template Generation::EffectsLane *createProcessor<>(Plugin::State *, Framework::ProcessorMetadata *, const void *);
+extern template void *initialiseTypeStructure<Generation::EffectsLane>(void *metadata, Framework::PluginStructure &structure);
+
+extern template Generation::EffectsState *createProcessor<>(Plugin::State *, Framework::ProcessorMetadata *, const void *);
+extern template void *initialiseTypeStructure<Generation::EffectsState>(void *metadata, Framework::PluginStructure &structure);

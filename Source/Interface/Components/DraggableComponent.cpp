@@ -9,77 +9,84 @@
 */
 
 #include "DraggableComponent.hpp"
+
+#include "Plugin/Renderer.hpp"
+#include "../LookAndFeel/Graphics.hpp"
 #include "../Sections/EffectModuleSection.hpp"
 
 namespace Interface
 {
-  void DraggableComponent::paint(juce::Graphics &g)
+  bool DraggableComponent::render(OpenGlWrapper &openGl)
   {
     static constexpr float kDotDiameter = 2.0f;
     static constexpr float kDotsOffset = 6.0f;
 
-    auto dotsDiameter = scaleValueRoundInt(kDotDiameter);
-    auto dotsOffset = scaleValueRoundInt(kDotsOffset);
+    int dotsDiameter = scaleValueRoundInt(kDotDiameter);
+    int dotsOffset = scaleValueRoundInt(kDotsOffset);
 
-    auto centeredX = utils::centerAxis(dotsDiameter + dotsOffset, getWidth());
-    auto centeredY = utils::centerAxis(dotsDiameter + dotsOffset, getHeight());
+    int centeredX = utils::centerAxis(dotsDiameter + dotsOffset, bounds.w);
+    int centeredY = utils::centerAxis(dotsDiameter + dotsOffset, bounds.h);
 
-    auto centreRectangle = juce::Rectangle{ centeredX, centeredY, dotsOffset, dotsOffset }.toFloat();
+    auto centreRectangle = Rectangle{ (float)centeredX, (float)centeredY, 
+      (float)dotsOffset, (float)dotsOffset };
 
-    g.setColour(getDraggedComponent()->getColour(Skin::kWidgetSecondary1));
-    g.fillEllipse(centreRectangle.getX(), centreRectangle.getY(), kDotDiameter, kDotDiameter);
-    g.fillEllipse(centreRectangle.getX(), centreRectangle.getBottom(), kDotDiameter, kDotDiameter);
-    g.fillEllipse(centreRectangle.getRight(), centreRectangle.getY(), kDotDiameter, kDotDiameter);
-    g.fillEllipse(centreRectangle.getRight(), centreRectangle.getBottom(), kDotDiameter, kDotDiameter);
+    nvgFillColor(g.context, getColour(Skin::kWidgetSecondary1));
+    nvgEllipse(g.context, centreRectangle.x, centreRectangle.y, kDotDiameter, kDotDiameter);
+    nvgEllipse(g.context, centreRectangle.x, centreRectangle.getBottom(), kDotDiameter, kDotDiameter);
+    nvgEllipse(g.context, centreRectangle.getRight(), centreRectangle.y, kDotDiameter, kDotDiameter);
+    nvgEllipse(g.context, centreRectangle.getRight(), centreRectangle.getBottom(), kDotDiameter, kDotDiameter);
+
+    return true;
   }
 
-  void DraggableComponent::mouseMove(const juce::MouseEvent &)
+  bool DraggableComponent::mouseEnter(const MouseEvent &)
   {
-    setMouseCursor(juce::MouseCursor::StandardCursorType::DraggingHandCursor);
+    setMouseCursor(uiRelated.renderer, MouseCursorTypes::DraggingHandCursor);
+    return true;
   }
 
-  void DraggableComponent::mouseDown(const juce::MouseEvent &e)
+  void DraggableComponent::mouseDown(const MouseEvent &e)
   {
     // this might create a copy so we need to get the actual component we're dragging
     currentlyDraggedComponent_ = listener_->prepareToMove(draggedComponent_, e, e.mods.isCommandDown());
     COMPLEX_ASSERT(currentlyDraggedComponent_);
-    currentlyDraggedComponent_->setAlwaysOnTop(true);
+    currentlyDraggedComponent_->layerIndex = 1;
     currentlyDraggedComponent_->setIgnoreClip(ignoreClipIncluding_);
     initialPosition_ = currentlyDraggedComponent_->getPosition();
   }
 
-  void DraggableComponent::mouseDrag(const juce::MouseEvent &e)
+  void DraggableComponent::mouseDrag(const MouseEvent &e)
   {
-    currentlyDraggedComponent_->setTopLeftPosition(initialPosition_ + e.getOffsetFromDragStart());
+    currentlyDraggedComponent_->setPosition(initialPosition_ + e.getOffsetFromDragStart());
     listener_->draggingComponent(currentlyDraggedComponent_, e);
   }
 
-  void DraggableComponent::mouseUp(const juce::MouseEvent &e)
+  void DraggableComponent::mouseUp(const MouseEvent &e)
   {
     COMPLEX_ASSERT(currentlyDraggedComponent_);
     listener_->releaseComponent(currentlyDraggedComponent_, e);
     currentlyDraggedComponent_->setIgnoreClip(nullptr);
-    currentlyDraggedComponent_->setAlwaysOnTop(false);
+    currentlyDraggedComponent_->layerIndex = 0;
 
     currentlyDraggedComponent_ = nullptr;
   }
 
-  void DraggableComponent::mouseExit(const juce::MouseEvent &)
+  bool DraggableComponent::mouseExit(const MouseEvent &)
   {
-    setMouseCursor(juce::MouseCursor::StandardCursorType::NormalCursor);
+    setMouseCursor(uiRelated.renderer, MouseCursorTypes::NormalCursor);
+    return true;
   }
 
-  void DraggableComponent::mouseWheelMove(const juce::MouseEvent &e, 
-    const juce::MouseWheelDetails &wheel)
+  void DraggableComponent::mouseWheelMove(const MouseEvent &e)
   {
     if (!currentlyDraggedComponent_)
     {
-      BaseComponent::mouseWheelMove(e, wheel);
+      Component::mouseWheelMove(e);
       return;
     }
 
-    initialPosition_ += listener_->mouseWheelWhileDragging(currentlyDraggedComponent_, e, wheel);
-    currentlyDraggedComponent_->setTopLeftPosition(initialPosition_ + e.getOffsetFromDragStart());
+    initialPosition_ += listener_->mouseWheelWhileDragging(currentlyDraggedComponent_, e);
+    currentlyDraggedComponent_->setPosition(initialPosition_ + e.getOffsetFromDragStart());
   }
 
 }

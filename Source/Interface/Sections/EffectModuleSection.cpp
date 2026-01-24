@@ -110,7 +110,7 @@ namespace Interface
   };
 
   EffectModuleSection::EffectModuleSection(Generation::EffectModule *effectModule, EffectsLaneSection *laneSection) :
-    ProcessorSection("Effect Module Section", effectModule), laneSection_(laneSection), effectModule_(effectModule)
+    ProcessorSection(effectModule), laneSection_(laneSection), effectModule_(effectModule)
   {
     using namespace Framework;
 
@@ -160,7 +160,7 @@ namespace Interface
       baseEffect->getParameter(Processors::BaseEffect::ShiftBounds::id().value()));
     addSubOpenGlContainer(maskComponent_.get());
 
-    setEffectType(baseEffect->getProcessorType());
+    setEffectType(baseEffect->processorId);
     initialiseParameters();
   }
 
@@ -168,7 +168,7 @@ namespace Interface
 
   utils::up<EffectModuleSection> EffectModuleSection::createCopy() const
   {
-    auto *copiedModule = effectModule_->getProcessorTree()->copyProcessor(effectModule_);
+    auto *copiedModule = effectModule_->state->copyProcessor(effectModule_);
     return utils::up<EffectModuleSection>::create(copiedModule, laneSection_);
   }
 
@@ -193,7 +193,7 @@ namespace Interface
     if (!dropdownHitbox.contains(e.getPosition()) && !e.mods.isPopupMenu())
       return;
 
-    PopupItems options = createPopupMenu();
+    PopupItem options = createPopupMenu();
     showPopupSelector(this, e.getPosition(), COMPLEX_MOVE(options),
       [this](int selection) { handlePopupResult(selection); });
   }
@@ -229,7 +229,7 @@ namespace Interface
       yOffset + utils::centerAxis(mixNumberBoxHeight, topMenuHeight) });
 
     // left hand side
-    draggableBox_.setBounds(juce::Rectangle{ 0, yOffset, scaleValueRoundInt(kDraggableSectionWidth), topMenuHeight });
+    draggableBox_.setBounds(Rectangle{ 0, yOffset, scaleValueRoundInt(kDraggableSectionWidth), topMenuHeight });
 
     int effectTypeSelectorIconDimensions = scaleValueRoundInt(kIconSize);
     effectTypeIcon_->setColor(getColour(Skin::kWidgetPrimary1));
@@ -309,7 +309,7 @@ namespace Interface
     paintUIBackground(g);
 
     String idString = "#";
-    idString += String(getProcessorId().value());
+    idString += processorId.value();
     g.setColour(getColour(Skin::kNormalText));
     auto font = Fonts::instance()->getInterVFont().italicised();
     Fonts::instance()->setHeightFromAscent(font, scaleValue(kIdTextHeight));
@@ -336,6 +336,7 @@ namespace Interface
 
     using namespace Framework;
 
+    bool shouldNotifyParameterChanges = false;
     Generation::BaseEffect *newEffect;
     if (control == effectAlgoSelector_.get())
       newEffect = getEffect();
@@ -349,7 +350,7 @@ namespace Interface
       newEffect = effectModule_->changeEffect(effectType);
 
       // resetting UI
-      setEffectType(newEffect->getProcessorType());
+      setEffectType(newEffect->processorId);
 
       // replacing the parameters for algorithm and mask sliders
       for (auto &id : kCommonEffectParameters)
@@ -357,8 +358,11 @@ namespace Interface
         auto *effectControl = getEffectControl(id);
         auto *newEffectParameter = newEffect->getParameter(id);
 
-        if (auto parameterBridge = effectControl->getParameterLink()->hostControl)
+        if (auto parameterBridge = effectControl->parameterLink_->hostControl)
+        {
           parameterBridge->resetParameterLink(newEffectParameter->getParameterLink(), false);
+          shouldNotifyParameterChanges = true;
+        }
 
         effectControl->changeLinkedParameter(*newEffectParameter,
           id == Processors::BaseEffect::Algorithm::id().value());
@@ -403,8 +407,8 @@ namespace Interface
         continue;
       }
 
-      auto newParameterLink = newEffect->getParameterUnchecked(
-        kCommonEffectParameters.size() + parametersStart + mappingIndex)->getParameterLink();
+      auto newParameterLink = newEffect->processorParameters_[
+        kCommonEffectParameters.size() + parametersStart + mappingIndex]->getParameterLink();
 
       // if the new parameter is the old one, just add the bridge and fix name
       if (parameterBridge->getParameterLink() == newParameterLink)
@@ -415,10 +419,14 @@ namespace Interface
       }
       else
       {
-        parameterBridge->resetParameterLink(newEffect->getParameterUnchecked(
-          kCommonEffectParameters.size() + parametersStart + mappingIndex)->getParameterLink(), false);
+        parameterBridge->resetParameterLink(newEffect->processorParameters_[
+          kCommonEffectParameters.size() + parametersStart + mappingIndex]->getParameterLink(), false);
+        shouldNotifyParameterChanges = true;
       }
     }
+
+    if (shouldNotifyParameterChanges)
+      Framework::ParameterBridge::notifyParameterChange();
 
     arrangeUI();
     repaintBackground();
@@ -502,9 +510,9 @@ namespace Interface
     }
   }
 
-  PopupItems EffectModuleSection::createPopupMenu() const noexcept
+  PopupItem EffectModuleSection::createPopupMenu() const noexcept
   {
-    PopupItems options{};
+    PopupItem options{};
     options.addDelimiter("Module Settings");
     auto &deleteOption = options.addEntry(kDeleteInstance, "D" COMPLEX_UNDERSCORE_LITERAL "elete");
     deleteOption.shortcut = 'D';

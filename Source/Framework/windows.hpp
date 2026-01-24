@@ -2,7 +2,7 @@
   ==============================================================================
 
     windows.hpp
-    Created: 5 Aug 2021 3:39:49am
+    Created: 5 Aug 2021 03:39:49
     Author:  theuser27
 
   ==============================================================================
@@ -11,33 +11,33 @@
 #pragma once
 
 #include "stl_utils.hpp"
-#define NESTED_ENUM_ARRAY_TYPE ::utils::array
-#define NESTED_ENUM_STRING_VIEW_TYPE ::utils::string_view
-#include "nested_enum.hpp"
 
 namespace Framework
 {
-  class Buffer;
+  struct Buffer;
+  struct CircularBuffer;
 
   struct Window
   {
-    // all functions take a normalised value as position
-    static float getHannWindow(float position) noexcept;
-    static float getHammingWindow(float position) noexcept;
-    static float getTriangleWindow(float position) noexcept;
-    static float getSineWindow(float position) noexcept;
+    COMPLEX_ENUM_LOCAL(Types,
+      (       Lerp, 1757856220258303000),
+      (       Hann, 1757856231973283300),
+      (    Hamming, 1757856234278114900),
+      (   Triangle, 1757856253138693000),
+      (       Sine, 1757856261326615000),
+      (  Rectangle, 1757856269202469800),
+      (Exponential, 1757856275556662800),
+      (    HannExp, 1757856284388080900),
+      (    Lanczos, 1757856295720547400),
+    )
 
-    static float getExponentialWindow(float position, float alpha) noexcept;
-    static float getHannExponentialWindow(float position, float alpha) noexcept;
-    static float getLanczosWindow(float position, float alpha) noexcept;
+    void applyWindow(Buffer &buffer, u32 channels, utils::span<bool> channelsToProcess,
+      u32 samples, uuid windowType, float alpha);
 
-    void applyWindow(Buffer &buffer, usize channels, utils::span<char> channelsToProcess,
-      usize samples, nested_enum::typeless_enum windowType, float alpha);
+    void addOverlap(CircularBuffer &destination, Buffer &source, u32 channels, 
+      utils::span<bool> channelsToProcess, u32 samples, u32 destinationBegin, uuid windowType);
 
-    static void applyDefaultWindows(Buffer &buffer, usize channels, utils::span<char> channelsToProcess,
-      usize samples, nested_enum::typeless_enum windowType, float alpha) noexcept;
-
-    void applyCustomWindows(Buffer &buffer, usize channels, utils::span<char> channelsToProcess,
-      usize samples, nested_enum::typeless_enum windowType, float alpha);
+    void scaleDown(Buffer &buffer, u32 channels, utils::span<bool> channelsToProcess,
+      u32 start, u32 samples, uuid windowType, float overlap, float alpha);
   };
 }

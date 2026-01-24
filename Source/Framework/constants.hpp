@@ -2,7 +2,7 @@
   ==============================================================================
 
     constants.hpp
-    Created: 11 Jun 2023 3:25:10am
+    Created: 11 Jun 2023 03:25:10
     Author:  theuser27
 
   ==============================================================================
@@ -39,9 +39,9 @@ namespace common
   inline constexpr float kInfDb = 764.616188299f;
   inline constexpr float kMinusInfDb = -758.595589072f;
 
-  // FFT constants; some internal processing relies that sizes be powers of 2
+  // FFT constants; internal processing relies that sizes be powers of 2
   inline constexpr u32 kMinFFTOrder = 7;                    // (can be changed)    128 samples min
-  inline constexpr u32 kMaxFFTOrder = 15;                   // (can be changed)    16384 samples max
+  inline constexpr u32 kMaxFFTOrder = 15;                   // (can be changed)    32768 samples max
   inline constexpr u32 kDefaultFFTOrder = 12;               // (can be changed)    4096 samples default
   inline constexpr float kMinWindowOverlap = 0.0f;          // (can be changed)    minimum window overlap
   inline constexpr float kMaxWindowOverlap = 0.96875f;      // (can be changed)    maximum window overlap
@@ -63,9 +63,11 @@ namespace common
   // used for updating parameters
   enum class UpdateFlag : u8 { NoUpdates = 0, Realtime = 1, BeforeProcess = 2, AfterProcess = 3 };
 
-  #define COMPLEX_UNDERSCORE_LITERAL "\xcc\xb2"
-  #define COMPLEX_MIDDLE_DOT_LITERAL "\xc2\xb7"
-  #define COMPLEX_DEGREE_SIGN_LITERAL "\xc2\xb0"
+  #define COMPLEX_UNDERSCORE_LITERAL "\xCC\xB2"
+  #define COMPLEX_MIDDLE_DOT_LITERAL "\xC2\xB7"
+  #define COMPLEX_DEGREE_SIGN_LITERAL "\xC2\xB0"
+  #define COMPLEX_PLUS_MINUS_SIGN_LITERAL "\xC2\xB1"
+  #define COMPLEX_MINUS_PLUS_SIGN_LITERAL "\xE2\x88\x93"
 }
 
 using namespace common;

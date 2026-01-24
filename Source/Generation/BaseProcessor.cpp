@@ -2,133 +2,129 @@
   ==============================================================================
 
     BaseProcessor.cpp
-    Created: 11 Jul 2022 3:35:27am
+    Created: 11 Jul 2022 03:35:27
     Author:  theuser27
 
   ==============================================================================
 */
 
 #include "BaseProcessor.hpp"
+
+#include "Framework/parameter_types.hpp"
 #include "Framework/parameter_value.hpp"
 #include "Framework/parameter_bridge.hpp"
-#include "../Plugin/ProcessorTree.hpp"
-#include "Interface/Sections/BaseSection.hpp"
+#include "Plugin/Complex.hpp"
 
 namespace Generation
 {
-  BaseProcessor::BaseProcessor(Plugin::ProcessorTree *processorTree, utils::string_view processorType) noexcept :
-    processorTree_{ processorTree }, processorType_{ processorType }, processorId_{ processorTree_->generateId() } { }
-  BaseProcessor::~BaseProcessor() noexcept = default;
+  BaseProcessor::BaseProcessor(Plugin::State *state, Framework::ProcessorMetadata *metadata, utils::bumpArena *arena) noexcept : 
+    metadata{ metadata }, state{ state }, stateId{ state->stateIdCounter++ }, arena{ arena } { }
 
-  BaseProcessor::BaseProcessor(const BaseProcessor &other) noexcept : 
-    processorTree_(other.processorTree_), processorType_{ other.processorType_ }, 
-    processorId_{ processorTree_->generateId() }
+  BaseProcessor::BaseProcessor(const BaseProcessor &other, utils::bumpArena *arena) noexcept :
+    metadata{ other.metadata }, state{ other.state }, stateId{ state->stateIdCounter++ }, arena{ arena }
   {
-    processorParameters_.data.reserve(other.processorParameters_.data.size());
-    for (auto &parameterPair : other.processorParameters_.data)
-      processorParameters_.data.emplace_back(parameterPair.first,
-        utils::up<Framework::ParameterValue>::create(*parameterPair.second));
+    using T = utils::remove_reference_t<decltype(*parameters)>;
 
-    subProcessors_.reserve(other.subProcessors_.size());
-    for (auto &subProcessor : other.subProcessors_)
+    if (other.parameters)
     {
-      auto &newInstance = subProcessors_.emplace_back(subProcessor->createCopy());
-      newInstance->setParentProcessorId(processorId_);
-    }
+      parameterCount = other.parameterCount;
 
-    dataBuffer_.copy(other.dataBuffer_);
-  }
+      auto *memory = arranew(arena, T, parameterCount);
+      parameters = memory;
 
-  BaseProcessor::BaseProcessor(BaseProcessor &&other) noexcept :
-    processorTree_(other.processorTree_), processorType_{ other.processorType_ },
-    processorId_{ processorTree_->generateId() }
-  {
-    processorParameters_.data.reserve(other.processorParameters_.data.size());
-    for (auto &parameterPair : other.processorParameters_.data)
-      processorParameters_.data.emplace_back(parameterPair.first,
-        utils::up<Framework::ParameterValue>::create(*parameterPair.second));
-
-    subProcessors_ = COMPLEX_MOVE(other.subProcessors_);
-    for (auto &subProcessor : subProcessors_)
-      subProcessor->setParentProcessorId(processorId_);
-
-    dataBuffer_.swap(other.dataBuffer_);
-  }
-
-
-  BaseProcessor &BaseProcessor::operator=(const BaseProcessor &other) noexcept
-  {
-    COMPLEX_ASSERT(processorType_ == other.processorType_ && "Object to copy is not of the same type");
-
-    if (this != &other)
-    {
-      processorParameters_.data.reserve(other.processorParameters_.data.size());
-      for (usize i = 0; i < other.processorParameters_.data.size(); i++)
-        processorParameters_.data.emplace_back(other.processorParameters_.data[i].first,
-          utils::up<Framework::ParameterValue>::create(*other.processorParameters_[i]));
-
-      subProcessors_.reserve(other.subProcessors_.size());
-      for (auto &subProcessor : other.subProcessors_)
+      auto *parameter = parameters;
+      auto *otherParameter = other.parameters;
+      for (usize i = 0; i < parameterCount; ++i)
       {
-        auto &newInstance = subProcessors_.emplace_back(subProcessor->createCopy());
-        newInstance->setParentProcessorId(processorId_);
+        parameter = new (memory) T{ otherParameter->object };
+        parameter->object.parentProcessor = this;
+        parameter->previous = memory - 1;
+        parameter->next = memory + 1;
+
+        ++otherParameter;
+        ++memory;
       }
 
-      dataBuffer_.copy(other.dataBuffer_);
+      parameters->previous = parameter;
+      parameter->next = nullptr;
     }
-    return *this;
-  }
 
-  BaseProcessor &BaseProcessor::operator=(BaseProcessor &&other) noexcept
-  {
-    COMPLEX_ASSERT(processorType_ == other.processorType_ && "Object to move is not of the same type");
-
-    if (this != &other)
+    if (other.children)
     {
-      processorParameters_.data.reserve(other.processorParameters_.data.size());
-      for (usize i = 0; i < other.processorParameters_.data.size(); i++)
-        processorParameters_.data.emplace_back(other.processorParameters_.data[i].first,
-          utils::up<Framework::ParameterValue>::create(*other.processorParameters_[i]));
+      childrenCount = other.childrenCount;
 
-      subProcessors_ = COMPLEX_MOVE(other.subProcessors_);
-      for (auto &subProcessor : subProcessors_)
-        subProcessor->setParentProcessorId(processorId_);
-
-      dataBuffer_.swap(other.dataBuffer_);
+      children = other.children->createCopy();
+      children->parent = this;
+      for (auto otherChild = other.children->next, child = children; otherChild; 
+        (otherChild = otherChild->next), (child = child->next))
+      {
+        child->next = otherChild->createCopy();
+        child->next->parent = this;
+        child->next->previous = child;
+      }
     }
-    return *this;
+
+    if (other.dataBuffer)
+    {
+      dataBuffer = Framework::SimdBuffer::create(arena, other.dataBuffer->channels, state->getMaxBinCount());
+      Framework::applyToThisNoMask<utils::MathOperations::Assign>(dataBuffer, 
+        other.dataBuffer, other.dataBuffer->channels, other.dataBuffer->size);
+    }
   }
 
   void BaseProcessor::initialise() noexcept
   {
-    for (auto &processorParameter : processorParameters_.data)
-      processorParameter.second->initialise();
+    for (auto *parameter = parameters; parameter; parameter = parameter->next)
+      parameter->object.initialise();
   }
 
-  Framework::ParameterValue *BaseProcessor::getParameter(utils::string_view parameterId) const noexcept
+  // the following functions are to be called outside of processing time
+  bool BaseProcessor::insertSubProcessor([[maybe_unused]] usize index, 
+    [[maybe_unused]] BaseProcessor &newSubProcessor, [[maybe_unused]] bool callListeners)
   {
-    const auto parameterIter = processorParameters_.find(parameterId);
-    COMPLEX_ASSERT(parameterIter != processorParameters_.data.end() && "Parameter was not found");
-    return parameterIter->second.get();
+    COMPLEX_HARD_ASSERT_FALSE("insertSubProcessor is not implemented for %zu", metadata->id);
   }
 
-  Framework::ParameterValue * BaseProcessor::getParameterUnchecked(usize index) const noexcept 
-  { return processorParameters_[index].get(); }
+  BaseProcessor &
+  BaseProcessor::deleteSubProcessor([[maybe_unused]] usize index, [[maybe_unused]] bool callListeners)
+  {
+    COMPLEX_HARD_ASSERT_FALSE("deleteSubProcessor is not implemented for %zu", metadata->id);
+  }
 
-  usize BaseProcessor::getParameterCount() const noexcept { return processorParameters_.data.size(); }
+  utils::pair<BaseProcessor &, bool>
+  BaseProcessor::updateSubProcessor([[maybe_unused]] usize index, 
+    [[maybe_unused]] BaseProcessor &newSubProcessor, [[maybe_unused]] bool callListeners)
+  {
+    COMPLEX_HARD_ASSERT_FALSE("updateSubProcessor is not implemented for %zu", metadata->id);
+  }
+
+  Framework::ParameterValue *
+  BaseProcessor::getParameter(uuid parameterId) const noexcept
+  {
+    COMPLEX_HARD_ASSERT(parameters, "No parameters contained in processor %v (%zu) to find", 
+      metadata->name, metadata->id);
+
+    for (auto *parameter = parameters; parameter; parameter = parameter->next)
+      if (parameter->object.getParameterId() == parameterId)
+        return &parameter->object;
+
+    COMPLEX_HARD_ASSERT("Parameter (%zu) was not found", parameterId);
+    return nullptr;
+  }
 
   void BaseProcessor::updateParameters(UpdateFlag flag, float sampleRate, bool updateChildrenParameters) noexcept
   {
     if (flag == UpdateFlag::NoUpdates)
       return;
 
-    for (usize i = 0; i < processorParameters_.data.size(); i++)
-      if (processorParameters_[i]->getUpdateFlag() == flag)
-        processorParameters_[i]->updateValue(sampleRate);
+    auto parameter = parameters;
+    for (usize i = 0; i < parameterCount; (i++), (parameter = parameter->next))
+      if (parameter->object.getUpdateFlag() == flag)
+        parameter->object.updateValue(sampleRate);
 
     if (updateChildrenParameters)
-      for (auto &subModule : subProcessors_)
-        subModule->updateParameters(flag, sampleRate);
+      for (auto child = children; child; child = child->next)
+        child->updateParameters(flag, sampleRate);
   }
 
   void BaseProcessor::remapParameters(utils::span<Framework::ParameterBridge *> bridges, 
@@ -136,9 +132,10 @@ namespace Generation
   {
     if (!bridges.size())
     {
-      for (auto &parameter : processorParameters_.data)
+      auto *parameter = parameters;
+      for (usize i = 0; i < parameterCount; (++i), (parameter = parameter->next))
       {
-        auto bridge = parameter.second->getParameterLink()->hostControl;
+        auto bridge = parameter->object.getParameterLink()->hostControl;
         if (!bridge)
           continue;
         
@@ -147,40 +144,127 @@ namespace Generation
           if (bridge->getParameterLink())
             bridge->resetParameterLink(nullptr);
           else
-            bridge->resetParameterLink(parameter.second->getParameterLink(), bridgeValueFromParameters);
+            bridge->resetParameterLink(parameter->object.getParameterLink(), bridgeValueFromParameters);
         }
         else
         {
           bridge->resetParameterLink(nullptr);
-          parameter.second->changeBridge(nullptr);
+          parameter->object.changeBridge(nullptr);
         }
       }
+    }
+    else
+    {
+      COMPLEX_ASSERT(bridges.size() == parameterCount);
 
+      auto *parameter = parameters;
+      for (usize i = 0; i < parameterCount; (++i), (parameter = parameter->next))
+      {
+        auto *newBridge = bridges[i];
+        if (auto *oldBridge = parameter->object.changeBridge(newBridge))
+          oldBridge->resetParameterLink(nullptr);
+
+        newBridge->resetParameterLink(parameter->object.getParameterLink(), bridgeValueFromParameters);
+      }
+    }
+
+    Framework::ParameterBridge::notifyParameterChange();
+  }
+
+  void BaseProcessor::insertProcessorAt(BaseProcessor &processor, usize index)
+  {
+    COMPLEX_ASSERT(index <= childrenCount,
+      "You're trying to insert at %zu, when size is %zu", index, childrenCount);
+
+    ++childrenCount;
+    processor.parent = this;
+
+    if (!children)
+    {
+      children = &processor;
       return;
     }
 
-    COMPLEX_ASSERT(bridges.size() == processorParameters_.data.size());
+    auto childAfter = children;
+    for (usize i = 0; i < index; (++i), (childAfter = childAfter->next)) { }
 
-    for (usize i = 0; i < processorParameters_.data.size(); ++i)
-    {
-      auto *parameter = processorParameters_.data[i].second.get();
-      auto *newBridge = bridges[i];
-      if (auto *oldBridge = processorParameters_.data[i].second->changeBridge(newBridge))
-        oldBridge->resetParameterLink(nullptr);
-      
-      newBridge->resetParameterLink(parameter->getParameterLink(), bridgeValueFromParameters);
-    }
+    processor.previous = childAfter->previous;
+    processor.next = childAfter;
+
+    if (processor.previous)
+      processor.previous->next = &processor;
+    if (processor.next)
+      processor.next->previous = &processor;
   }
 
-  utils::up<Interface::ProcessorSection> &BaseProcessor::getSavedSection() noexcept { return savedSection_; }
-  void BaseProcessor::setSavedSection(utils::up<Interface::ProcessorSection> savedSection) noexcept { savedSection_ = COMPLEX_MOVE(savedSection); }
-
-  void BaseProcessor::createProcessorParameters(utils::span<const utils::string_view> parameterIds)
+  void BaseProcessor::reportUnexpectedProcessorInsert(BaseProcessor &attempedInsert, 
+    utils::span<const uuid> acceptedProcessorIds)
   {
-    using namespace Framework;
+    auto string = utils::string::create("Attempted insert of %v(id: %zu) inside an %v(id: %zu). \
+      If this shows to you as a user, report it to the dev. \n\nSupported subprocessors by this type are: ", 
+      attempedInsert.metadata->name, attempedInsert.metadata->id, metadata->name, metadata->id
+    );
 
-    for (const auto &id : parameterIds)
-      processorParameters_.data.emplace_back(id, 
-        utils::up<ParameterValue>::create(getParameterDetails(id).value()));
+    for (auto id : acceptedProcessorIds)
+    {
+      auto *acceptedMetadata = state->findProcessorMetadata(id);
+      string.appendFormat("%v(id: %zu), ", acceptedMetadata->name, acceptedMetadata->id);
+    }
+
+    Interface::showNativeMessageBox("Erroneous processor insert", string.data(), Interface::MessageBoxType::Warning);
+  }
+
+  utils::dll<Framework::ParameterValue> *
+  BaseProcessor::createParameters(usize count, Framework::ParameterMetadata *pararmeterMetadata,
+    utils::dll<Framework::ParameterValue> *copy)
+  {
+    using T = utils::remove_reference_t<decltype(*parameters)>;
+
+    if (!count)
+      return nullptr;
+
+    auto *memory = arranew(arena, T, count);
+
+    if (!copy)
+    {
+      for (usize i = 0; i < count; (++i), (pararmeterMetadata = pararmeterMetadata->next))
+      {
+        T *slot;
+        if (pararmeterMetadata->details.scale == Framework::ParameterScale::Indexed)
+        {
+          auto details = pararmeterMetadata->details;
+          auto *optionStub = Framework::IndexedData::deepCopy(arena, details.options);
+          details.options = optionStub;
+          slot = new (memory + i) T{ pararmeterMetadata->details };
+        }
+        else
+          slot = new (memory + i) T{ pararmeterMetadata->details };
+
+        slot->object.parentProcessor = this;
+        slot->previous = slot - 1;
+        slot->next = slot + 1;
+      }
+    }
+    else
+    {
+      for (usize i = 0; i < count; (++i), (copy = copy->next))
+      {
+        auto *slot = new (memory + i) T{ copy->object };
+        if (auto details = slot->object.getParameterDetails(); details.scale == Framework::ParameterScale::Indexed)
+        {
+          auto *optionStub = Framework::IndexedData::deepCopy(arena, details.options);
+          details.options = optionStub;
+          slot->object.setParameterDetails(details);
+        }
+        slot->object.parentProcessor = this;
+        slot->previous = slot - 1;
+        slot->next = slot + 1;
+      }
+    }
+
+    memory[0].previous = &memory[count - 1];
+    memory[count - 1].next = nullptr;
+
+    return memory;
   }
 }

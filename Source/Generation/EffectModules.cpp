@@ -2,7 +2,7 @@
   ==============================================================================
 
     EffectModules.cpp
-    Created: 27 Jul 2021 12:30:19am
+    Created: 27 Jul 2021 00:30:19
     Author:  theuser27
 
   ==============================================================================
@@ -10,120 +10,477 @@
 
 #include "EffectModules.hpp"
 
-#include "Framework/lookup.hpp"
 #include "Framework/simd_math.hpp"
 #include "Framework/parameter_value.hpp"
-#include "Framework/parameters.hpp"
-#include "Plugin/ProcessorTree.hpp"
-#include "Interface/LookAndFeel/Miscellaneous.hpp"
+#include "Plugin/Complex.hpp"
 
 namespace Generation
 {
-  template<typename Type>
-  void fillAndSetParameters(BaseEffect &effect)
+  using RunEffectFn = void(EffectModule *effectModule, EffectModule::EffectData *effectData, Framework::ComplexDataSource &source,
+    Framework::SimdBuffer *destination, u32 binCount, float sampleRate);
+  using CreateEffectFn = EffectModule::EffectData *(EffectModule *module, EffectModule::EffectData *copy);
+
+  static EffectModule::EffectData *
+  createEffectGeneric(EffectModule *module, EffectModule::EffectData *)
   {
-    using namespace Framework;
-
-    static constexpr auto indexedData = []()
-    {
-      // MSVC has issues with __builtin_array_init_helper so we check if we have anything
-      if constexpr (Type::template enum_count_filter<>(kGetActiveAlgoPredicate) == 0)
-        return utils::array<IndexedData, 0>{};
-      else
-      {
-        constexpr auto nameIdPairs = Type::template enum_names_and_ids_filter<kGetActiveAlgoPredicate, true>(true);
-        utils::array<IndexedData, nameIdPairs.size()> data{};
-
-        for (usize i = 0; i < data.size(); i++)
-        {
-          data[i].id = nameIdPairs[i].second;
-          data[i].displayName = nameIdPairs[i].first;
-        }
-        
-        return data;
-      }
-    }();
-
-    effect.createProcessorParameters(effect.parameters_);
-
-    auto *parameter = effect.getParameter(Processors::BaseEffect::Algorithm::id().value());
-    auto details = parameter->getParameterDetails();
-    details.indexedData = indexedData;
-    details.maxValue = (float)(indexedData.size() - 1);
-    parameter->setParameterDetails(details);
+    return anew(module->arena, EffectModule::EffectData, {});
   }
 
-  template<nested_enum::NestedEnum E>
-  E getEffectAlgorithm(BaseEffect &effect)
+#define EFFECT_VTABLE(name, creationFunction) static void(*const vtable##name[])() = { (void (*)())creationFunction, (void (*)())run##name }
+#define COMPLEX_STRUCTURE_EFFECT(nameString, idNumber, vtableArray, ...) (*new(arena->insert(arena, sizealignof(Framework::ProcessorMetadata))) \
+  ProcessorMetadata{ .flags = ProcessorMetadata::ProcessorTag, .id = idNumber, .name = nameString __VA_OPT__(,) __VA_ARGS__, .vtable = vtableArray }).computeCounts()
+
+  static Framework::ParameterValue *
+  getParameter(EffectModule::EffectData *effectData, uuid id)
   {
-    static constexpr auto algoId = Framework::Processors::BaseEffect::Algorithm::id().value();
-    return E::enum_value_by_id(effect.getParameter(algoId)->getInternalValue<Framework::IndexedData>().first->id).value();
+    auto *parameter = effectData->parameters;
+    for (usize i = 0; i < effectData->parameterCount; (++i), (parameter = parameter->next))
+      if (parameter->object.getParameterId() == id)
+        return &parameter->object;
+
+    COMPLEX_ASSERT_FALSE("Couldn't find parameter with id: %zu", id);
+    return nullptr;
   }
 
-
-  void BaseEffect::initialiseParameters()
+  namespace Utility
   {
-    if (!parameters_.empty())
-      createProcessorParameters(parameters_);
-    else
-      createProcessorParameters(Framework::Processors::BaseEffect::
-        enum_ids_filter<Framework::kGetParameterPredicate, true>());
-  }
+    static constexpr uuid id = 1759541555994809100;
 
-  template<template<typename, auto> class Array, typename T, usize ... Ns>
-  static constexpr auto concatenateArrays(const Array<T, Ns> &... arrays)
-  {
-    if constexpr (sizeof...(arrays) == 0)
+    //// Parameters
+    // 
+    // 5. channel pan (stereo) - [-1.0f, 1.0f]
+    // 6. flip phases (stereo) - [0, 1]
+    // 7. reverse spectrum bins (stereo) - [0, 1]
+    // 
+    // freeze input
+    // record and play back input
+    // nyquist gate (some values of destroy/reinterpret cause massive spikes)
+    //
+    // TODO:
+    // idea: mix 2 input signals (left and right/right and left channels)
+    // idea: flip the phases, panning
+    // 
+    //void run(EffectModule *effectModule, EffectModule::EffectData *effectData,
+    //  Framework::ComplexDataSource &source,
+    //  Framework::SimdBuffer * &destination,
+    //  u32 binCount, float sampleRate) noexcept
+    //{
+    //}
+
+    static Framework::IndexedData &initialiseTypeStructure(Framework::PluginStructure &structure)
     {
-      auto empty = Array<T, 0>{};
-      return empty;
-    }
-    else
-    {
-      constexpr usize N = (Ns + ...);
-      Array<T, N> total;
-      usize index = 0;
+      using namespace Framework;
 
-      auto iterate = [&](const auto &current)
-      {
-        for (usize i = 0; i < current.size(); i++)
-          total[index + i] = current[i];
+      auto *arena = structure.getNewArena(128);
 
-        index += current.size();
-      };
-
-      (iterate(arrays), ...);
-
-      return total;
+      return COMPLEX_STRUCTURE_INDEXED_DATA(.displayName = "Utility", .id = id, .count = 0);
     }
   }
 
-#define DEFINE_PARAMETER_INIT(x) 																																\
-  x##Effect::x##Effect(Plugin::ProcessorTree *processorTree) : BaseEffect{ processorTree,				\
-    Framework::Processors::BaseEffect::x::id().value() }																		    \
-  {																																															\
-    using namespace Framework;																																	\
-    static constexpr auto allParameters = []<typename ... Ts>(nested_enum::type_list<Ts...>)	  \
-    {																																														\
-      return concatenateArrays(																													        \
-        Processors::BaseEffect::enum_ids_filter<kGetParameterPredicate, true>(),						    \
-        Ts::template enum_ids_filter<kGetParameterPredicate, true>()...);												\
-    }(Processors::BaseEffect::x::template enum_subtypes_filter<kGetActiveAlgoPredicate>());	    \
-    parameters_ = allParameters;																																\
-  }																																															\
-  void x##Effect::initialiseParameters()																												\
-  { fillAndSetParameters<Framework::Processors::BaseEffect::x::type>(*this); }
+  namespace Filter
+  {
+    static constexpr uuid id = 1759541579349223900;
 
-  DEFINE_PARAMETER_INIT(Utility)
-  DEFINE_PARAMETER_INIT(Filter)
-  DEFINE_PARAMETER_INIT(Dynamics)
-  DEFINE_PARAMETER_INIT(Phase)
-  DEFINE_PARAMETER_INIT(Pitch)
-  DEFINE_PARAMETER_INIT(Stretch)
-  DEFINE_PARAMETER_INIT(Warp)
-  DEFINE_PARAMETER_INIT(Destroy)
+    COMPLEX_ENUM(Types,
+      (Normal, 1758738064349498000),
+      (  Gate, 1758738078894475000),
+    );
 
-#undef DEFINE_PARAMETER_INIT
+    // Normal - normal filtering
+    //  gain (stereo) - range[-$ db, +$ db] (symmetric loudness);
+    //    lowers the loudness at/around the cutoff point for negative/positive values
+    //    *parameter values are interpreted linearly, so the control needs to have an exponential slope
+    // 
+    //  cutoff (stereo) - range[0.0f, 1.0f]; controls where the filtering starts
+    //    at 0.0f/1.0f it's at the low/high boundary
+    //    *parameter values are interpreted linearly, so the control needs to have an exponential slope
+    // 
+    //  slope (stereo) - range[-1.0f, 1.0f]; controls the slope transition
+    //    at 0.0f it stretches from the cutoff to the frequency boundaries
+    //    at 1.0f only the center bin is left unaffected
+    //
+    COMPLEX_ENUM(Normal,
+      (  Gain, 1758735249666771200),
+      (Cutoff, 1758735281753747800),
+      ( Slope, 1758735286827413600),
+    );
+
+    void runNormal(EffectModule *effectModule, EffectModule::EffectData *effectData,
+      Framework::ComplexDataSource &source, Framework::SimdBuffer *destination,
+      u32 binCount, float sampleRate) noexcept;
+
+
+    // Gate - frequency gating
+    //  threshold (stereo) - range[0%, 100%]; threshold is relative to the loudest bin in the spectrum
+    // 
+    //  gain (stereo) - range[-$ db, +$ db] (symmetric loudness);
+    //    positive/negative values lower the loudness of the bins below/above the threshold
+    // 
+    //  tilt (stereo) - range[-100%, +100%]; tilt relative to the loudest bin in the spectrum
+    //    at min/max values the left/right-most part of the masked spectrum will have no threshold
+    // 
+    //  delta - instead of the absolute loudness it uses the averaged loudness change from the 2 neighbouring bins
+    //
+    COMPLEX_ENUM(Gate,
+      (InputGain, 1758738170767008600),
+      (     Gain, 1758738189871090300),
+      (Threshold, 1758738202274301800),
+      (     Tilt, 1758738216078618500),
+      (     Mode, 1758738231926723100),
+    );
+
+    COMPLEX_ENUM(GateMode,
+      (Decibels, 1759681582236601500),
+      (    Rank, 1759681594091286600),
+    );
+
+    void runGate(EffectModule *effectModule, EffectModule::EffectData *effectData,
+      Framework::ComplexDataSource &source, Framework::SimdBuffer *destination,
+      u32 binCount, float sampleRate) noexcept;
+
+
+
+    // Tilt filter
+    // Regular - triangles, squares, saws, pointy, sweep and custom, razor comb peak
+    // Regular key tracked - regular filtering based on fundamental frequency (like dtblkfx autoharm)
+    // 
+    // TODO: write a constexpr generator for all of the weird mask types (triangle, saw, square, etc)
+
+    static Framework::IndexedData &initialiseTypeStructure(Framework::PluginStructure &structure)
+    {
+      using namespace Framework;
+
+      EFFECT_VTABLE(Normal, createEffectGeneric);
+      EFFECT_VTABLE(Gate, createEffectGeneric);
+
+      auto *arena = structure.getNewArena(COMPLEX_KB(4));
+
+      auto &group = COMPLEX_STRUCTURE_INDEXED_DATA(.displayName = "Filter", .id = id).addChildren(
+        COMPLEX_STRUCTURE_INDEXED_DATA(.displayName = "Normal", .id = Types::Normal,
+          .processorMetadata = COMPLEX_STRUCTURE_EFFECT("Normal", Types::Normal, vtableNormal, .parameters = 
+            (
+              COMPLEX_STRUCTURE_PARAMETER("Gain", Normal::Gain, kMinusInfDb, kInfDb, 0.0f, 0.5f, ParameterScale::SymmetricLoudness,
+                " db", ParameterDetails::Modulatable | ParameterDetails::Automatable | ParameterDetails::Stereo),
+              COMPLEX_STRUCTURE_PARAMETER("Cutoff", Normal::Cutoff, 0.0f, 1.0f, 0.5f, 0.5f, ParameterScale::Frequency,
+                " hz", ParameterDetails::Modulatable | ParameterDetails::Automatable | ParameterDetails::Stereo),
+              COMPLEX_STRUCTURE_PARAMETER("Slope", Normal::Slope, -1.0f, 1.0f, 0.25f, 0.75f, ParameterScale::SymmetricQuadratic,
+                "%", ParameterDetails::Modulatable | ParameterDetails::Automatable | ParameterDetails::Stereo)
+            )
+          )
+        ),
+        COMPLEX_STRUCTURE_INDEXED_DATA(.displayName = "Gate", .id = Types::Gate,
+          .processorMetadata = COMPLEX_STRUCTURE_EFFECT("Gate", Types::Gate, vtableGate, .parameters =
+            (
+              COMPLEX_STRUCTURE_PARAMETER("Input Gain", Gate::InputGain, kMinusInfDb, kInfDb, 0.0f, 0.5f, ParameterScale::SymmetricLoudness,
+                " db", ParameterDetails::Modulatable | ParameterDetails::Automatable | ParameterDetails::Stereo),
+              COMPLEX_STRUCTURE_PARAMETER("Gain", Gate::Gain, kMinusInfDb, kInfDb, 0.0f, 0.5f, ParameterScale::SymmetricLoudness,
+                " db", ParameterDetails::Modulatable | ParameterDetails::Automatable | ParameterDetails::Stereo),
+              COMPLEX_STRUCTURE_PARAMETER("Threshold", Gate::Threshold, -180.0f, 0.0f, -45.0f, 0.5f, ParameterScale::ReverseQuadratic,
+                " db", ParameterDetails::Modulatable | ParameterDetails::Automatable | ParameterDetails::Stereo),
+              COMPLEX_STRUCTURE_PARAMETER("Tilt", Gate::Tilt, -24.0f, 24.0f, 0.0f, 0.5f, ParameterScale::SymmetricQuadratic,
+                " db", ParameterDetails::Modulatable | ParameterDetails::Automatable | ParameterDetails::Stereo),
+              COMPLEX_STRUCTURE_PARAMETER("Mode", Gate::Mode,
+                {
+                  .options = COMPLEX_STRUCTURE_INDEXED_DATA().addChildren(
+                    COMPLEX_STRUCTURE_INDEXED_DATA(.displayName = "Decibels", .id = GateMode::Decibels),
+                    COMPLEX_STRUCTURE_INDEXED_DATA(.displayName = "Rank", .id = GateMode::Rank)),
+                  .defaultOptionId = GateMode::Decibels
+                }, ParameterScale::Indexed, {}, ParameterDetails::Modulatable | ParameterDetails::Automatable | ParameterDetails::Extensible)
+            )
+          )
+        )
+      );
+
+      return group;
+    }
+  }
+
+  namespace Dynamics
+  {
+    static constexpr uuid id = 1759541589473873300;
+
+    COMPLEX_ENUM(Types,
+      (Contrast, 1759688533355766700),
+      (    Clip, 1759688538437588200),
+    );
+
+    static constexpr float kContrastMaxPositiveValue = 4.0f;
+    static constexpr float kContrastMaxNegativeValue = -0.5f;
+
+    COMPLEX_ENUM(Contrast,
+      (Depth, 1758892756432074300),
+    );
+
+    // Dtblkfx Contrast
+    //  contrast (stereo) - range[-1.0f, 1.0f]; controls the relative loudness of the bins
+    //
+    void runContrast(EffectModule *effectModule, EffectModule::EffectData *effectData,
+      Framework::ComplexDataSource &source, Framework::SimdBuffer *destination,
+      u32 binCount, float sampleRate) noexcept;
+
+
+    COMPLEX_ENUM(Clip,
+      (Threshold, 1758894269115524800),
+    );
+
+    // Dtblkfx Clip
+    //  clip (stereo) - range[-1.0f, 1.0f]; controls the relative loudness of the bins
+    //
+    void runClip(EffectModule *effectModule, EffectModule::EffectData *effectData,
+      Framework::ComplexDataSource &source, Framework::SimdBuffer *destination,
+      u32 binCount, float sampleRate) noexcept;
+
+
+
+    // TODO:
+    //// Compressor
+    //
+    // Depth, Threshold, Ratio
+    //
+
+    // specops noise filter/focus, thinner
+    // spectral compander, gate (threshold), clipping
+
+    static Framework::IndexedData &initialiseTypeStructure(Framework::PluginStructure &structure)
+    {
+      using namespace Framework;
+
+      EFFECT_VTABLE(Contrast, createEffectGeneric);
+      EFFECT_VTABLE(Clip, createEffectGeneric);
+
+      auto *arena = structure.getNewArena(COMPLEX_KB(1));
+
+      auto &group = COMPLEX_STRUCTURE_INDEXED_DATA(.displayName = "Dynamics", .id = id).addChildren(
+        COMPLEX_STRUCTURE_INDEXED_DATA(.displayName = "Contrast", .id = Types::Contrast,
+          .processorMetadata = COMPLEX_STRUCTURE_EFFECT("Contrast", Types::Contrast, vtableContrast, .parameters =
+            (
+              COMPLEX_STRUCTURE_PARAMETER("Depth", Contrast::Depth, -1.0f, 1.0f, 0.0f, 0.5f, ParameterScale::Linear,
+                "%", ParameterDetails::Modulatable | ParameterDetails::Automatable | ParameterDetails::Stereo)
+            )
+          )
+        ),
+        COMPLEX_STRUCTURE_INDEXED_DATA(.displayName = "Clip", .id = Types::Clip,
+          .processorMetadata = COMPLEX_STRUCTURE_EFFECT("Clip", Types::Clip, vtableClip, .parameters =
+            (
+              COMPLEX_STRUCTURE_PARAMETER("Threshold", Clip::Threshold, 0.0f, 1.0f, 0.0f, 0.0f, ParameterScale::Linear,
+                "%", ParameterDetails::Modulatable | ParameterDetails::Automatable | ParameterDetails::Stereo)
+            )
+          )
+        )
+      );
+
+      return group;
+    }
+
+  }
+
+  namespace Phase
+  {
+    static constexpr uuid id = 1759541605615040500;
+
+    COMPLEX_ENUM(Types,
+      (Shift, 1759688567995948900),
+    );
+
+    COMPLEX_ENUM(Shift,
+      (PhaseShift, 1758894408955417000),
+      (  Interval, 1758894436267696200),
+      (    Offset, 1758894440849627800),
+      (     Slope, 1758894444857670900),
+    );
+
+    COMPLEX_ENUM(SlopeOptions,
+      (   Constant, 1758897431173532900),
+      (     Linear, 1758897457186700600),
+      (Exponential, 1758897461956898900),
+    );
+
+    void runShift(EffectModule *effectModule, EffectModule::EffectData *effectData,
+      Framework::ComplexDataSource &source, Framework::SimdBuffer *destination,
+      u32 binCount, float sampleRate) noexcept;
+
+    // TODO:
+    // phase zeroer, (constrained) phase randomiser (smear), channel phase shifter (pha-979), etc
+    // phase filter - filtering based on phase
+    // mfreeformphase impl
+
+    static Framework::IndexedData &initialiseTypeStructure(Framework::PluginStructure &structure)
+    {
+      using namespace Framework;
+
+      EFFECT_VTABLE(Shift, createEffectGeneric);
+
+      auto *arena = structure.getNewArena(COMPLEX_KB(4));
+
+      auto &group = COMPLEX_STRUCTURE_INDEXED_DATA(.displayName = "Phase", .id = id).addChildren(
+        COMPLEX_STRUCTURE_INDEXED_DATA(.displayName = "Shift", .id = Types::Shift,
+          .processorMetadata = COMPLEX_STRUCTURE_EFFECT("Contrast", Types::Shift, vtableShift, .parameters =
+            (
+              COMPLEX_STRUCTURE_PARAMETER("Phase Shift", Shift::PhaseShift, -180.0f, 180.0f, 0.0f, 0.5f, ParameterScale::Linear,
+                COMPLEX_DEGREE_SIGN_LITERAL, ParameterDetails::Modulatable | ParameterDetails::Automatable | ParameterDetails::Stereo),
+              COMPLEX_STRUCTURE_PARAMETER("Interval", Shift::Interval, 0.0f, 10.0f, 1.0f, ::powf(1.0f / 10.0f, 1.0f / 3.0f), ParameterScale::Cubic,
+                " oct", ParameterDetails::Modulatable | ParameterDetails::Automatable | ParameterDetails::Stereo),
+              COMPLEX_STRUCTURE_PARAMETER("Offset", Shift::Offset, 0.0f, 1.0f, 0.0f, 0.0f, ParameterScale::Frequency,
+                " hz", ParameterDetails::Modulatable | ParameterDetails::Automatable | ParameterDetails::Stereo),
+              COMPLEX_STRUCTURE_PARAMETER("Slope", Shift::Slope,
+                {
+                  .options = COMPLEX_STRUCTURE_INDEXED_DATA().addChildren(
+                    COMPLEX_STRUCTURE_INDEXED_DATA(.displayName = "Constant", .id = SlopeOptions::Constant),
+                    COMPLEX_STRUCTURE_INDEXED_DATA(.displayName = "Linear", .id = SlopeOptions::Linear),
+                    COMPLEX_STRUCTURE_INDEXED_DATA(.displayName = "Exponential", .id = SlopeOptions::Exponential)),
+                  .defaultOptionId = SlopeOptions::Constant
+                }, ParameterScale::Indexed, {}, ParameterDetails::Modulatable | ParameterDetails::Automatable | ParameterDetails::Extensible)
+            )
+          )
+        )
+      );
+
+      return group;
+    }
+  }
+
+  namespace Pitch
+  {
+    static constexpr uuid id = 1759541664963033000;
+
+    COMPLEX_ENUM(Types,
+      (  Resample, 1759689528336006800),
+      (ConstShift, 1759689536970851100),
+    );
+
+    COMPLEX_ENUM(Resample,
+      (Shift, 1759183155307420200),
+      ( Wrap, 1759183162433058600),
+    );
+
+    void runResample(EffectModule *effectModule, EffectModule::EffectData *effectData,
+      Framework::ComplexDataSource &source, Framework::SimdBuffer *destination,
+      u32 binCount, float sampleRate) noexcept;
+
+
+    COMPLEX_ENUM(ConstShift, 
+      (Shift, 1759183248900862000),
+    );
+
+    void runConstShift(EffectModule *effectModule, EffectModule::EffectData *effectData,
+      Framework::ComplexDataSource &source, Framework::SimdBuffer *destination,
+      u32 binCount, float sampleRate) noexcept;
+
+    // TODO: shift, harmonic shift, harmonic repitch
+
+    static Framework::IndexedData &initialiseTypeStructure(Framework::PluginStructure &structure)
+    {
+      using namespace Framework;
+
+      EFFECT_VTABLE(Resample, createEffectGeneric);
+      EFFECT_VTABLE(ConstShift, createEffectGeneric);
+
+      auto *arena = structure.getNewArena(COMPLEX_KB(1));
+
+      auto &group = COMPLEX_STRUCTURE_INDEXED_DATA(.displayName = "Pitch", .id = id).addChildren(
+        COMPLEX_STRUCTURE_INDEXED_DATA(.displayName = "Resample", .id = Types::Resample,
+          .processorMetadata = COMPLEX_STRUCTURE_EFFECT("Resample", Types::Resample, vtableResample, .parameters =
+            (
+              COMPLEX_STRUCTURE_PARAMETER("Shift", Resample::Shift, -48.0f, 48.0f, 0.0f, 0.5f, ParameterScale::Linear,
+                " st", ParameterDetails::Modulatable | ParameterDetails::Automatable | ParameterDetails::Stereo),
+              COMPLEX_STRUCTURE_PARAMETER("Wrap", Resample::Wrap, 0.0f, 1.0f, 0.0f, 0.0f, ParameterScale::Toggle,
+                {}, ParameterDetails::Modulatable | ParameterDetails::Automatable)
+            )
+          )
+        ),
+        COMPLEX_STRUCTURE_INDEXED_DATA(.displayName = "Frequency Shift", .id = Types::ConstShift,
+          .processorMetadata = COMPLEX_STRUCTURE_EFFECT("Frequency Shift", Types::ConstShift, vtableConstShift, .parameters =
+            (
+              COMPLEX_STRUCTURE_PARAMETER("Shift", Resample::Shift, -20'000.0f, 20'000.0f, 0.0f, 0.5f, ParameterScale::SymmetricCubic,
+                " hz", ParameterDetails::Modulatable | ParameterDetails::Automatable | ParameterDetails::Stereo)
+            )
+          )
+        )
+      );
+
+      return group;
+    }
+
+  }
+
+  namespace Stretch
+  {
+    static constexpr uuid id = 1759541679484794800;
+
+    // specops geometry
+  }
+
+  namespace Warp
+  {
+    static constexpr uuid id = 1759541685084772400;
+
+    // vocode, harmonic match, cross/warp mix
+  }
+
+  namespace Destroy
+  {
+    static constexpr uuid id = 1759541690760143400;
+
+    COMPLEX_ENUM(Types,
+      (Reinterpret, 1759689938250169600),
+    );
+
+    COMPLEX_ENUM(Reinterpret,
+      (Attenuation, 1759183439582926800),
+      (    Mapping, 1759183450466983800),
+    );
+
+    COMPLEX_ENUM(ReinterpretMappingOptions,
+      (     NoMapping, 1759183512424948900),
+      (SwitchRealImag, 1759183528061831600),
+      (   CartToPolar, 1759183533232284100),
+      (   PolarToCart, 1759183546859800500)
+    );
+
+    void runReinterpret(EffectModule *effectModule, EffectModule::EffectData *effectData, 
+      Framework::ComplexDataSource &source, Framework::SimdBuffer *destination,
+      u32 binCount, float sampleRate) noexcept;
+
+
+    // resize, specops effects category
+    // randomising bin positions
+    // bin sorting - by amplitude, phase
+    // TODO: freezer and glitcher classes
+
+    static Framework::IndexedData &initialiseTypeStructure(Framework::PluginStructure &structure)
+    {
+      using namespace Framework;
+
+      EFFECT_VTABLE(Reinterpret, createEffectGeneric);
+
+      auto *arena = structure.getNewArena(COMPLEX_KB(1));
+
+      auto &group = COMPLEX_STRUCTURE_INDEXED_DATA(.displayName = "Destroy", .id = id).addChildren(
+        COMPLEX_STRUCTURE_INDEXED_DATA(.displayName = "Reinterpret", .id = Types::Reinterpret,
+          .processorMetadata = COMPLEX_STRUCTURE_EFFECT("Reinterpret", Types::Reinterpret, vtableReinterpret, .parameters =
+            (
+              COMPLEX_STRUCTURE_PARAMETER("Real/Imag Atten", Reinterpret::Attenuation, kMinusInfDb, kInfDb, 0.0f, 0.5f,
+                ParameterScale::SymmetricLoudness, " db", ParameterDetails::Modulatable | ParameterDetails::Automatable | ParameterDetails::Stereo),
+              COMPLEX_STRUCTURE_PARAMETER("Mapping", Reinterpret::Mapping,
+                {
+                  .options = COMPLEX_STRUCTURE_INDEXED_DATA().addChildren(
+                    COMPLEX_STRUCTURE_INDEXED_DATA(.displayName = "No Change", .id = ReinterpretMappingOptions::NoMapping),
+                    COMPLEX_STRUCTURE_INDEXED_DATA(.displayName = "Swap Real/Imaginary", .id = ReinterpretMappingOptions::SwitchRealImag),
+                    COMPLEX_STRUCTURE_INDEXED_DATA(.displayName = "Cartesian->Polar", .id = ReinterpretMappingOptions::CartToPolar),
+                    COMPLEX_STRUCTURE_INDEXED_DATA(.displayName = "Polar->Cartesian", .id = ReinterpretMappingOptions::PolarToCart)),
+                  .defaultOptionId = ReinterpretMappingOptions::NoMapping
+                }, ParameterScale::Indexed, {}, ParameterDetails::Modulatable | ParameterDetails::Automatable)
+            )
+          )
+        )
+      );
+
+      return group;
+    }
+  }
+
+#undef COMPLEX_STRUCTURE_GET_MEMORY
+#define COMPLEX_STRUCTURE_GET_MEMORY COMPLEX_STRUCTURE_ARENA_INSERT
 
   ///////////////////////////////////////
   //  _   _ _   _ _ _ _   _            //
@@ -133,28 +490,73 @@ namespace Generation
   //  \___/ \__|_|_|_|\__|_|\___||___/ //
   ///////////////////////////////////////
 
-  auto BaseEffect::getShiftedBounds(BoundRepresentation representation,
-    float sampleRate, u32 binCount) const noexcept -> std::pair<simd_float, simd_float>
+  static void circularLoop(const auto &lambda, u32 start, u32 length, u32 binCount)
+  {
+    for (u32 i = 0; i < length - 1; i++)
+      lambda((start + i) & (binCount - 2));
+
+    // since we're masking to power-of-2 we skip nyquist
+    // process it if passed, else continue onwards
+    if ((start + length) > (binCount - 1))
+      lambda(binCount - 1);
+    else
+      lambda(start + length);
+  }
+  
+  static strict_inline simd_mask vector_call isOutsideBounds(simd_int positionIndices,
+    simd_int lowBoundIndices, simd_int highBoundIndices, simd_mask isHighAboveLow)
+  {
+    simd_mask belowLowBounds = simd_int::lessThanSigned(positionIndices, lowBoundIndices);
+    simd_mask aboveHighBounds = simd_int::greaterThanSigned(positionIndices, highBoundIndices);
+
+    // 1st case examples: |   *  [    ]     | or
+    //                    |      [    ]  *  |
+    // 2nd case example:  |     ]   *  [    |
+    return isHighAboveLow ^ belowLowBounds ^ aboveHighBounds;
+  }
+
+  static strict_inline simd_mask vector_call isOutsideBounds(
+    simd_int positionIndices, simd_int lowBoundIndices, simd_int highBoundIndices)
+  {
+    return isOutsideBounds(positionIndices, lowBoundIndices, highBoundIndices,
+      simd_int::greaterThanOrEqualSigned(highBoundIndices, lowBoundIndices));
+  }
+
+  static strict_inline simd_mask vector_call isInsideBounds(simd_int positionIndices,
+      simd_int lowBoundIndices, simd_int highBoundIndices, simd_mask isHighAboveLow)
+  { return ~isOutsideBounds(positionIndices, lowBoundIndices, highBoundIndices, isHighAboveLow); }
+
+  static strict_inline simd_mask vector_call isInsideBounds(
+    simd_int positionIndices, simd_int lowBoundIndices, simd_int highBoundIndices)
+  { return ~isOutsideBounds(positionIndices, lowBoundIndices, highBoundIndices); }
+
+  
+  // first - low shifted boundary, second - high shifted boundary
+  utils::pair<simd_float, simd_float>
+  getShiftedBounds(EffectModule *module, EffectModule::BoundRepresentation representation,
+    float sampleRate, u32 binCount) noexcept
   {
     using namespace utils;
     using namespace Framework;
 
     u32 FFTSize = (binCount - 1) * 2;
-    simd_float lowBound = getParameter(Processors::BaseEffect::LowBound::id().value())->getInternalValue<simd_float>(sampleRate, true);
-    simd_float highBound = getParameter(Processors::BaseEffect::HighBound::id().value())->getInternalValue<simd_float>(sampleRate, true);
+    
+    simd_float lowBound = module->getParameter(EffectModule::LowBound)->getInternalValue<simd_float>(sampleRate, true);
+    simd_float highBound = module->getParameter(EffectModule::HighBound)->getInternalValue<simd_float>(sampleRate, true);
+
     float nyquistFreq = sampleRate * 0.5f;
     float maxOctave = (float)log2(nyquistFreq / kMinFrequency);
 
-    simd_float boundShift = getParameter(Processors::BaseEffect::ShiftBounds::id().value())
+    simd_float boundShift = module->getParameter(EffectModule::ShiftBounds)
       ->getInternalValue<simd_float>(sampleRate);
     lowBound = simd_float::clamp(lowBound + boundShift, 0.0f, 1.0f);
     highBound = simd_float::clamp(highBound + boundShift, 0.0f, 1.0f);
 
     switch (representation)
     {
-    case BoundRepresentation::Normalised:
+    case EffectModule::BoundRepresentation::Normalised:
       break;
-    case BoundRepresentation::Frequency:
+    case EffectModule::BoundRepresentation::Frequency:
       lowBound = exp2(lowBound * maxOctave);
       highBound = exp2(highBound * maxOctave);
       // snapping to 0 hz if it's below the minimum frequency
@@ -162,7 +564,7 @@ namespace Generation
       highBound = (highBound & simd_float::greaterThan(highBound, 1.0f)) * kMinFrequency;
 
       break;
-    case BoundRepresentation::BinIndex:
+    case EffectModule::BoundRepresentation::BinIndex:
       lowBound = normalisedToBin(lowBound, FFTSize, sampleRate);
       highBound = normalisedToBin(highBound, FFTSize, sampleRate);
 
@@ -174,15 +576,26 @@ namespace Generation
     return { lowBound, highBound };
   }
 
-  auto vector_call BaseEffect::minimiseRange(simd_int lowIndices, 
-    simd_int highIndices, u32 binCount, bool isProcessedRange) -> std::tuple<u32, u32, bool>
+  // returns starting point, distance to end of processed/unprocessed range, and if the range is stereo
+  static auto vector_call 
+  minimiseRange(simd_int lowIndices, simd_int highIndices, u32 binCount, bool isProcessedRange)
   {
     COMPLEX_ASSERT(utils::isPowerOfTwo(binCount - 1), "Bin count is not power-of-2 + 1, but instead %d", binCount);
 
-    // 1. all the indices in the respective bounds are the same (mono)
-    // 2. the indices in the respective bounds are different (stereo)
+    // 1. the indices in the respective bounds are different (stereo)
+    // 2. all the indices in the respective bounds are the same (mono)
+
+    struct
+    {
+      u32 start;
+      u32 distance;
+      bool isStereoRange;
+    } ret{ 0, binCount, true };
 
     // 1.
+    ret = { 0, binCount, true };
+
+    // 2.
     if (lowIndices.allSame() && highIndices.allSame())
     {
       u32 start = lowIndices[0];
@@ -193,35 +606,33 @@ namespace Generation
       if (length == 0 || (start & (binCount - 2)) == (end & (binCount - 2)))
       {
         if (isProcessedRange)
-          return { start, binCount, false };
+          ret = { start, binCount, false };
         else
-          return { (start + binCount) % binCount, 0, false };
+          ret = { (start + binCount) % binCount, 0, false };
       }
       else
       {
         if (isProcessedRange)
-          return { start, length + 1, false };
+          ret = { start, length + 1, false };
         else
-          return { (start + length + 1) % binCount, binCount - length - 1, false };
+          ret = { (start + length + 1) % binCount, binCount - length - 1, false };
       }
     }
 
-    // 2.
-    // trying to rationalise what parts to cover is proving too complicated
-    return { 0, binCount, true };
+    return ret;
   }
 
-  void BaseEffect::copyUnprocessedData(Framework::SimdBufferView<Framework::complex<float>, simd_float> source,
-    Framework::SimdBuffer<Framework::complex<float>, simd_float> &destination, simd_int lowBoundIndices,
+  static void copyUnprocessedData(const Framework::SimdBuffer *source,
+    Framework::SimdBuffer *destination, simd_int lowBoundIndices,
     simd_int highBoundIndices, u32 binCount) noexcept
   {
-    COMPLEX_ASSERT(destination.getSize() == source.getSize());
+    COMPLEX_ASSERT(destination->size == source->size);
     auto [index, unprocessedCount, isStereo] = minimiseRange(lowBoundIndices, highBoundIndices, binCount, false);
 
-    usize channels = std::min(source.getChannels(), destination.getChannels());
-    usize size = destination.getSize();
-    auto rawSource = source.get();
-    auto rawDestination = destination.get();
+    usize channels = utils::min(source->channels, destination->channels);
+    usize size = destination->size;
+    auto rawSource = source->get();
+    auto rawDestination = destination->get();
 
     if (isStereo)
     {
@@ -232,12 +643,12 @@ namespace Generation
       simd_int starts[] = { (highBoundIndices + 1) & ~isHighAboveLow, (highBoundIndices + 1) & isHighAboveLow };
       simd_int lengths[] = { lowBoundIndices - starts[0], (binCount - starts[1]) & isHighAboveLow };
 
-      for (usize i = 0; i < channels; i += source.getRelativeSize())
+      for (usize i = 0; i < channels; i += source->kRelativeSize)
       {
         auto sourceChannel = rawSource.offset(i * size);
         auto destinationChannel = rawDestination.offset(i * size);
 
-        for (usize iteration = 0; iteration <= std::size(starts); ++iteration)
+        for (usize iteration = 0; iteration <= countof(starts); ++iteration)
         {
           simd_int start = starts[iteration];
           simd_int length = lengths[iteration];
@@ -264,7 +675,7 @@ namespace Generation
       if (!unprocessedCount)
         return;
 
-      for (usize i = 0; i < channels; i += source.getRelativeSize())
+      for (usize i = 0; i < channels; i += source->kRelativeSize)
       {
         for (usize j = 0; j < unprocessedCount - 1; j++)
         {
@@ -280,7 +691,7 @@ namespace Generation
     }
   }
 
-  simd_float vector_call DynamicsEffect::matchPower(simd_float target, simd_float current) noexcept
+  static simd_float vector_call matchPower(simd_float target, simd_float current) noexcept
   {
     simd_float result = 1.0f;
     result = result & simd_float::greaterThan(target, 0.0f);
@@ -316,19 +727,16 @@ namespace Generation
   // 1. When dealing with nyquist it's best to have a small section after your main algorithm to process it separately.
   // 2. Whenever in doubt, look at other algorithm implementations for ideas
 
-  void FilterEffect::runNormal(Framework::ComplexDataSource &source,
-    Framework::SimdBuffer<Framework::complex<float>, simd_float> &destination, 
-    u32 binCount, float sampleRate) const noexcept
+  void Filter::runNormal(EffectModule *effectModule, EffectModule::EffectData *effectData, 
+    Framework::ComplexDataSource &source, Framework::SimdBuffer *destination, 
+    u32 binCount, float sampleRate) noexcept
   {
     using namespace utils;
     using namespace Framework;
 
-    using BaseParameters = Processors::BaseEffect::type;
-    using Parameters = Processors::BaseEffect::Filter::Normal::type;
-
-    simd_float lowBoundNorm = getParameter(BaseParameters::LowBound::id().value())->getInternalValue<simd_float>(sampleRate, true);
-    simd_float highBoundNorm = getParameter(BaseParameters::HighBound::id().value())->getInternalValue<simd_float>(sampleRate, true);
-    simd_float boundShift = getParameter(BaseParameters::ShiftBounds::id().value())->getInternalValue<simd_float>(sampleRate);
+    simd_float lowBoundNorm = effectModule->getParameter(EffectModule::LowBound)->getInternalValue<simd_float>(sampleRate, true);
+    simd_float highBoundNorm = effectModule->getParameter(EffectModule::HighBound)->getInternalValue<simd_float>(sampleRate, true);
+    simd_float boundShift = effectModule->getParameter(EffectModule::ShiftBounds)->getInternalValue<simd_float>(sampleRate);
     simd_float boundsDistance = modOnce(simd_float{ 1.0f } + highBoundNorm - lowBoundNorm, 1.0f);
 
     u32 FFTSize = (binCount - 1) * 2;
@@ -336,8 +744,8 @@ namespace Generation
     // getting the boundaries in terms of bin position
     auto [lowBoundIndices, highBoundIndices] = [&]()
     {
-      auto [low, high] = getShiftedBounds(BoundRepresentation::BinIndex, sampleRate, binCount);
-      return std::pair{ toInt(low), toInt(high) };
+      auto [low, high] = getShiftedBounds(effectModule, EffectModule::BoundRepresentation::BinIndex, sampleRate, binCount);
+      return utils::pair{ toInt(low), toInt(high) };
     }();
     simd_mask isHighAboveLowMask = simd_int::greaterThanOrEqualSigned(highBoundIndices, lowBoundIndices);
 
@@ -347,23 +755,22 @@ namespace Generation
     // cutoff is described as exponential normalised value of the sample rate
     // it is dependent on the values of the low/high bounds
     simd_float cutoffNorm = modOnce(lowBoundNorm + boundShift + boundsDistance * 
-      getParameter(Parameters::Cutoff::id().value())->getInternalValue<simd_float>(sampleRate, true), 1.0f, false);
+      getParameter(effectData, Filter::Normal::Cutoff)->getInternalValue<simd_float>(sampleRate, true), 1.0f, false);
     simd_int cutoffIndices = toInt(normalisedToBin(cutoffNorm, FFTSize, sampleRate));
 
     // if mask scalars are negative/positive -> brickwall/linear slope
     // slopes are logarithmic
-    simd_float slopes = getParameter(Parameters::Slope::id().value())->getInternalValue<simd_float>(sampleRate) / 2.0f;
+    simd_float slopes = getParameter(effectData, Filter::Normal::Slope)->getInternalValue<simd_float>(sampleRate) / 2.0f;
     simd_mask slopeMask = ~unsignSimd<true>(slopes);
     simd_mask slopeZeroMask = simd_float::equal(slopes, 0.0f);
 
     // if scalars are negative/positive, attenuate at/around cutoff
     // (gains is gain reduction in db and NOT a gain multiplier)
-    simd_float gainsParameter = getParameter(Parameters::Gain::id().value())->getInternalValue<simd_float>(sampleRate);
+    simd_float gainsParameter = getParameter(effectData, Filter::Normal::Gain)->getInternalValue<simd_float>(sampleRate);
     simd_mask gainType = unsignSimd<true>(gainsParameter);
 
     // copy both un/processed data
-    SimdBuffer<complex<float>, simd_float>::applyToThisNoMask<MathOperations::Assign>(
-      destination, source.sourceBuffer, destination.getChannels(), binCount, 0, 0, 0, 0);
+    applyToThisNoMask<MathOperations::Assign>(destination, source.sourceBuffer, destination->channels, binCount);
 
     auto calculateDistancesFromCutoffs = [cutoffIndices, lowBoundIndices,
       cutoffAboveLowMask = simd_mask::greaterThanOrEqualSigned(cutoffIndices, lowBoundIndices),
@@ -408,7 +815,7 @@ namespace Generation
       return ratio & simd_int::notEqual(precedingIndices, succeedingIndices);
     };
 
-    auto rawDestination = destination.get();
+    auto rawDestination = destination->get();
     circularLoop([&](u32 index)
       {
         // the distances are logarithmic
@@ -431,35 +838,34 @@ namespace Generation
       }, start, processedCount, binCount);
   }
 
-  void FilterEffect::runGate(Framework::ComplexDataSource &source,
-    Framework::SimdBuffer<Framework::complex<float>, simd_float> &destination,
-    u32 binCount, float sampleRate) const noexcept
+  void Filter::runGate(EffectModule *effectModule, EffectModule::EffectData *effectData,
+    Framework::ComplexDataSource &source, Framework::SimdBuffer *destination,
+    u32 binCount, float sampleRate) noexcept
   {
     using namespace utils;
     using namespace Framework;
-    using Parameters = Processors::BaseEffect::Filter::Gate::type;
 
     // getting the boundaries in terms of bin position
     auto [lowBoundIndices, highBoundIndices] = [&]()
     {
-      auto shiftedBoundsIndices = getShiftedBounds(BoundRepresentation::BinIndex, sampleRate, binCount);
+      auto shiftedBoundsIndices = getShiftedBounds(effectModule, EffectModule::BoundRepresentation::BinIndex, sampleRate, binCount);
       return utils::pair{ toInt(shiftedBoundsIndices.first), toInt(shiftedBoundsIndices.second) };
     }();
     simd_mask isHighAboveLowMask = simd_int::greaterThanOrEqualSigned(highBoundIndices, lowBoundIndices);
 
     // minimising the bins to iterate on
-    auto [start, processedCount, _] = minimiseRange(lowBoundIndices, highBoundIndices, binCount, true);
+    //auto [start, processedCount, _] = minimiseRange(lowBoundIndices, highBoundIndices, binCount, true);
 
-    simd_float threshold = (float)binCount * dbToAmplitude(getParameter(Parameters::Threshold::id().value())
+    simd_float threshold = (float)binCount * dbToAmplitude(getParameter(effectData, Filter::Gate::Threshold)
       ->getInternalValue<simd_float>(sampleRate));
-    simd_float gainParameter = getParameter(Parameters::Gain::id().value())->getInternalValue<simd_float>(sampleRate);
+    simd_float gainParameter = getParameter(effectData, Filter::Gate::Gain)->getInternalValue<simd_float>(sampleRate);
     simd_mask gainType = ~unsignSimd<true>(gainParameter);
     gainParameter = -gainParameter;
 
     simd_float slope = 1.0f;
     simd_float slopeMultiplier = utils::uninitialised;
     {
-      simd_float tiltParameter = getParameter(Parameters::Tilt::id().value())->getInternalValue<simd_float>(sampleRate);
+      simd_float tiltParameter = getParameter(effectData, Filter::Gate::Tilt)->getInternalValue<simd_float>(sampleRate);
       simd_float decadeSlope = tiltParameter * kOctaveToDecadeConversionMult;
       float sampleHz = sampleRate / (float)(2 * binCount);
       float startDecade = ::log10f((float)kMinFrequency / sampleHz);
@@ -468,8 +874,8 @@ namespace Generation
       slopeMultiplier = dbToAmplitude(((decadeCount + startDecade) * decadeSlope) * resolution);
     }
 
-    auto rawSource = source.sourceBuffer.get();
-    auto rawDestination = destination.get();
+    auto rawSource = source.sourceBuffer->get();
+    auto rawDestination = destination->get();
 
     for (u32 i = 0; i < binCount; ++i)
     {
@@ -487,40 +893,18 @@ namespace Generation
     }
   }
 
-  void FilterEffect::run(Framework::ComplexDataSource &source,
-    Framework::SimdBuffer<Framework::complex<float>, simd_float> &destination, 
+  void Dynamics::runContrast(EffectModule *effectModule, EffectModule::EffectData *effectData,
+    Framework::ComplexDataSource &source, Framework::SimdBuffer *destination, 
     u32 binCount, float sampleRate) noexcept
-  {
-    using namespace Framework;
-    switch (getEffectAlgorithm<Processors::BaseEffect::Filter::type>(*this))
-    {
-    case Processors::BaseEffect::Filter::Normal:
-      runNormal(source, destination, binCount, sampleRate);
-      break;
-    case Processors::BaseEffect::Filter::Regular:
-      break;
-    case Processors::BaseEffect::Filter::Gate:
-      runGate(source, destination, binCount, sampleRate);
-      break;
-    default:
-      COMPLEX_ASSERT_FALSE("Invalid Algorithm");
-      break;
-    }
-  }
-
-  void DynamicsEffect::runContrast(Framework::ComplexDataSource &source,
-    Framework::SimdBuffer<Framework::complex<float>, simd_float> &destination, u32 binCount, float sampleRate) const noexcept
   {
     using namespace utils;
     using namespace Framework;
 
-    using Parameters = Processors::BaseEffect::Dynamics::Contrast::type;
-
     // getting the boundaries in terms of bin position
     auto [lowBoundIndices, highBoundIndices] = [&]()
     {
-      auto shiftedBoundsIndices = getShiftedBounds(BoundRepresentation::BinIndex, sampleRate, binCount);
-      return std::pair{ toInt(shiftedBoundsIndices.first), toInt(shiftedBoundsIndices.second) };
+      auto shiftedBoundsIndices = getShiftedBounds(effectModule, EffectModule::BoundRepresentation::BinIndex, sampleRate, binCount);
+      return utils::pair{ toInt(shiftedBoundsIndices.first), toInt(shiftedBoundsIndices.second) };
     }();
     simd_mask isHighAboveLowMask = simd_int::greaterThanOrEqualSigned(highBoundIndices, lowBoundIndices);
 
@@ -528,7 +912,7 @@ namespace Generation
     auto [start, processedCount, _] = minimiseRange(lowBoundIndices, highBoundIndices, binCount, true);
 
     // calculating contrast
-    simd_float depthParameter = getParameter(Parameters::Depth::id().value())
+    simd_float depthParameter = getParameter(effectData, Dynamics::Contrast::Depth)
       ->getInternalValue<simd_float>(sampleRate);
     simd_float contrast = depthParameter * depthParameter;
     contrast = merge(simd_float(kContrastMaxNegativeValue) * contrast, 
@@ -540,10 +924,10 @@ namespace Generation
     max = merge(simd_float(1e30f), max, simd_float::greaterThan(contrast, 0.0f));
 
     // copy both un/processed data
-    SimdBuffer<complex<float>, simd_float>::applyToThisNoMask<MathOperations::Assign>(
-      destination, source.sourceBuffer, destination.getChannels(), binCount, 0, 0, 0, 0);
+    applyToThisNoMask<MathOperations::Assign>(
+      destination, source.sourceBuffer, destination->channels, binCount);
 
-    auto rawDestination = destination.get();
+    auto rawDestination = destination->get();
     simd_float inPower = 0.0f;
     circularLoop([&](u32 index)
       {
@@ -574,12 +958,12 @@ namespace Generation
     circularLoop([&](u32 index) { rawDestination[index] *= outScale; }, start, processedCount, binCount);
   }
 
-  void DynamicsEffect::runClip(Framework::ComplexDataSource &source,
-    Framework::SimdBuffer<Framework::complex<float>, simd_float> &destination, u32 binCount, float sampleRate) const noexcept
+  void Dynamics::runClip(EffectModule *effectModule, EffectModule::EffectData *effectData, 
+    Framework::ComplexDataSource &source, Framework::SimdBuffer *destination, 
+    u32 binCount, float sampleRate) noexcept
   {
     using namespace utils;
     using namespace Framework;
-    using Parameters = Processors::BaseEffect::Dynamics::Clip::type;
 
     static constexpr float kSilenceThreshold = 1e-30f;
     static constexpr float kLoudestThreshold = 1e30f;
@@ -587,15 +971,15 @@ namespace Generation
     // getting the boundaries in terms of bin position
     auto [lowBoundIndices, highBoundIndices] = [&]()
     {
-      auto shiftedBoundsIndices = getShiftedBounds(BoundRepresentation::BinIndex, sampleRate, binCount);
+      auto shiftedBoundsIndices = getShiftedBounds(effectModule, EffectModule::BoundRepresentation::BinIndex, sampleRate, binCount);
       return utils::pair{ toInt(shiftedBoundsIndices.first), toInt(shiftedBoundsIndices.second) };
     }();
     simd_mask isHighAboveLowMask = simd_int::greaterThanOrEqualSigned(highBoundIndices, lowBoundIndices);
 
-    COMPLEX_ASSERT(source.sourceBuffer.getSize() == destination.getSize());
+    COMPLEX_ASSERT(source.sourceBuffer->size == destination->size);
 
-    auto rawSource = source.sourceBuffer.get();
-    auto rawDestination = destination.get();
+    auto rawSource = source.sourceBuffer->get();
+    auto rawDestination = destination->get();
 
     // getting the min/max power in the range selected
     utils::pair<simd_float, simd_float> powerMinMax{ kLoudestThreshold, kSilenceThreshold };
@@ -611,7 +995,7 @@ namespace Generation
     }
 
     // calculating clipping
-    simd_float thresholdParameter = getParameter(Parameters::Threshold::id().value())
+    simd_float thresholdParameter = getParameter(effectData, Dynamics::Clip::Threshold)
       ->getInternalValue<simd_float>(sampleRate);
     simd_float threshold = exp(lerp(log(simd_float::max(powerMinMax.first, 1e-36f)),
                                     log(simd_float::max(powerMinMax.second, 1e-36f)),
@@ -646,56 +1030,34 @@ namespace Generation
       }, start, processedCount, binCount);
   }
 
-  void DynamicsEffect::run(Framework::ComplexDataSource &source,
-    Framework::SimdBuffer<Framework::complex<float>, simd_float> &destination, u32 binCount, float sampleRate) noexcept
-  {
-    using namespace Framework;
-
-    switch (getEffectAlgorithm<Processors::BaseEffect::Dynamics::type>(*this))
-    {
-    case Processors::BaseEffect::Dynamics::Contrast:
-      // based on dtblkfx contrast
-      runContrast(source, destination, binCount, sampleRate);
-      break;
-    case Processors::BaseEffect::Dynamics::Clip:
-      // based on dtblkfx clip
-      runClip(source, destination, binCount, sampleRate);
-      break;
-    default:
-      COMPLEX_ASSERT_FALSE("Invalid Algorithm");
-      break;
-    }
-  }
-
-  void PhaseEffect::runShift(Framework::ComplexDataSource &source,
-    Framework::SimdBuffer<Framework::complex<float>, simd_float> &destination, u32 binCount, float sampleRate) const noexcept
+  void Phase::runShift(EffectModule *effectModule, EffectModule::EffectData *effectData, 
+    Framework::ComplexDataSource &source, Framework::SimdBuffer *destination, 
+    u32 binCount, float sampleRate) noexcept
   {
     using namespace utils;
     using namespace Framework;
 
-    using Parameters = Processors::BaseEffect::Phase::Shift::type;
-
     auto [lowBoundIndices, highBoundIndices] = [&]()
     {
-      auto shiftedBoundsIndices = getShiftedBounds(BoundRepresentation::BinIndex, sampleRate, binCount);
-      return std::pair{ toInt(shiftedBoundsIndices.first), toInt(shiftedBoundsIndices.second) };
+      auto shiftedBoundsIndices = getShiftedBounds(effectModule, EffectModule::BoundRepresentation::BinIndex, sampleRate, binCount);
+      return utils::pair{ toInt(shiftedBoundsIndices.first), toInt(shiftedBoundsIndices.second) };
     }();
     simd_mask isHighAboveLow = simd_int::greaterThanOrEqualSigned(highBoundIndices, lowBoundIndices);
 
     // minimising the bins to iterate on
     auto [start, processedCount, _] = minimiseRange(lowBoundIndices, highBoundIndices, binCount, true);
 
-    simd_float shiftIncrement = cis(kPi * (getParameter(Parameters::PhaseShift::id().value())
+    simd_float shiftIncrement = cis(kPi * (getParameter(effectData, Phase::Shift::PhaseShift)
       ->getInternalValue<simd_float>(sampleRate, true) * 2.0f - 1.0f));
     simd_float shift = shiftIncrement;
-    simd_float interval = getParameter(Parameters::Interval::id().value())->getInternalValue<simd_float>(sampleRate);
+    simd_float interval = getParameter(effectData, Phase::Shift::Interval)->getInternalValue<simd_float>(sampleRate);
     
     auto slopeFunction = [&]() -> simd_float(*)(simd_float, simd_float)
     {
-      auto [slopeId, _] = getParameter(Parameters::Slope::id().value())->getInternalValue<IndexedData>(sampleRate);
-      if (slopeId->id == Parameters::Slope::Constant::id().value())
+      auto [slopeId, _] = getParameter(effectData, Phase::Shift::Slope)->getInternalValue<IndexedData>(sampleRate);
+      if (slopeId->id == Phase::Shift::Slope)
         return [](simd_float x, simd_float) { return x; };
-      else if (slopeId->id == Parameters::Slope::Linear::id().value())
+      else if (slopeId->id == Phase::SlopeOptions::Linear)
       {
         // explicitly normalising because the result shoots up at some point
         return [](simd_float x, simd_float increment)
@@ -704,7 +1066,7 @@ namespace Generation
           return y * simd_float::invSqrt(complexMagnitude(y, false));
         };
       }
-      else if (slopeId->id == Parameters::Slope::Exp::id().value())
+      else if (slopeId->id == Phase::SlopeOptions::Exponential)
       {
         return [](simd_float x, simd_float)
         {
@@ -719,15 +1081,14 @@ namespace Generation
     }();
 
     // overwrite old data
-    SimdBuffer<complex<float>, simd_float>::applyToThisNoMask<MathOperations::Assign>(
-      destination, source.sourceBuffer, destination.getChannels(), binCount);
+    applyToThisNoMask<MathOperations::Assign>(destination, source.sourceBuffer, destination->channels, binCount);
 
-    auto rawDestination = destination.get();
+    auto rawDestination = destination->get();
 
     // if interval between bins is 0 this means every bin is affected
     if (interval == simd_float{ 0.0f })
     {
-      simd_int offsetBin = toInt(normalisedToBin(getParameter(Parameters::Offset::id().value())
+      simd_int offsetBin = toInt(normalisedToBin(getParameter(effectData, Phase::Shift::Offset)
         ->getInternalValue<simd_float>(sampleRate, true), 2 * (binCount - 1), sampleRate));
 
       // find the smallest offset forward and start from there
@@ -753,7 +1114,7 @@ namespace Generation
     // otherwise the interval specifies how many octaves up the next affected bin is
     
     // offset is skewed towards an exp-like curve so we need to normalise it
-    simd_float offsetNorm = getParameter(Parameters::Offset::id().value())
+    simd_float offsetNorm = getParameter(effectData, Phase::Shift::Offset)
       ->getInternalValue<simd_float>(sampleRate) * 2.0f / sampleRate;
     simd_float binStep = 1.0f / (float)(binCount - 1);
     simd_float logBase = log2(interval + 1.0f);
@@ -830,43 +1191,27 @@ namespace Generation
     }
   }
 
-  void PhaseEffect::run(Framework::ComplexDataSource &source,
-    Framework::SimdBuffer<Framework::complex<float>, simd_float> &destination, u32 binCount, float sampleRate) noexcept
-  {
-    using namespace Framework;
-    switch (getEffectAlgorithm<Processors::BaseEffect::Phase::type>(*this))
-    {
-    case Processors::BaseEffect::Phase::Shift:
-      runShift(source, destination, binCount, sampleRate);
-      break;
-    default:
-      COMPLEX_ASSERT_FALSE("Invalid Algorithm");
-      break;
-    }
-  }
-
-  void PitchEffect::runResample(Framework::ComplexDataSource &source,
-    Framework::SimdBuffer<Framework::complex<float>, simd_float> &destination, u32 binCount, float sampleRate) const noexcept
+  void Pitch::runResample(EffectModule *effectModule, EffectModule::EffectData *effectData, 
+    Framework::ComplexDataSource &source, Framework::SimdBuffer *destination, 
+    u32 binCount, float sampleRate) noexcept
   {
     using namespace utils;
     using namespace Framework;
-
-    using Parameters = Processors::BaseEffect::Pitch::Resample::type;
 
     static constexpr auto kNeighbourBins = 2;
     static constexpr float kMultiplierEpsilon = 1e-12f;
 
     auto [lowBoundIndices, highBoundIndices] = [&]()
     {
-      auto shiftedBoundsIndices = getShiftedBounds(BoundRepresentation::BinIndex, sampleRate, binCount);
-      return std::pair{ toInt(shiftedBoundsIndices.first), toInt(shiftedBoundsIndices.second) };
+      auto shiftedBoundsIndices = getShiftedBounds(effectModule, EffectModule::BoundRepresentation::BinIndex, sampleRate, binCount);
+      return utils::pair{ toInt(shiftedBoundsIndices.first), toInt(shiftedBoundsIndices.second) };
     }();
     simd_mask isHighAboveLow = simd_int::greaterThanOrEqualSigned(highBoundIndices, lowBoundIndices);
 
-    simd_float shift = exp2(getParameter(Parameters::Shift::id().value())
+    simd_float shift = exp2(getParameter(effectData, Pitch::Resample::Shift)
       ->getInternalValue<simd_float>(sampleRate) / (float)kNotesPerOctave);
 
-    bool wrapAround = getParameter(Parameters::Wrap::id().value())->getInternalValue<u32>(sampleRate);
+    bool wrapAround = getParameter(effectData, Pitch::Resample::Wrap)->getInternalValue<u32>(sampleRate);
 
     utils::array<simd_float, 2 * kNeighbourBins + 1> leakMultipliers;
     simd_float phaseShift = utils::uninitialised;
@@ -895,11 +1240,11 @@ namespace Generation
       }
     };
 
-    destination.clear();
+    destination->clear();
     copyUnprocessedData(source.sourceBuffer, destination, lowBoundIndices, highBoundIndices, binCount);
 
-    auto rawDestination = destination.get();
-    auto rawSource = source.sourceBuffer.get();
+    auto rawDestination = destination->get();
+    auto rawSource = source.sourceBuffer->get();
 
     if (!wrapAround)
     {
@@ -916,7 +1261,7 @@ namespace Generation
         (binCount - starts[1] - toInt(simd_float::max(0.0f, (float)(binCount - 1) - downscaledNyquist))) & ~isHighAboveLow
       };
 
-      for (usize iteration = 0; iteration < std::size(starts); ++iteration)
+      for (usize iteration = 0; iteration < countof(starts); ++iteration)
       {
         simd_int start = starts[iteration];
         simd_int length = lengths[iteration];
@@ -987,28 +1332,27 @@ namespace Generation
     }
   }
 
-  void PitchEffect::runConstShift(Framework::ComplexDataSource &source,
-    Framework::SimdBuffer<Framework::complex<float>, simd_float> &destination, u32 binCount, float sampleRate) const noexcept
+  void Pitch::runConstShift(EffectModule *effectModule, EffectModule::EffectData *effectData, 
+    Framework::ComplexDataSource &source, Framework::SimdBuffer *destination, 
+    u32 binCount, float sampleRate) noexcept
   {
     using namespace utils;
     using namespace Framework;
-
-    using Parameters = Processors::BaseEffect::Pitch::ConstShift::type;
 
     static constexpr auto kNeighbourBins = 2;
     static constexpr float kMultiplierEpsilon = 1e-5f;
 
     auto [lowBoundIndices, highBoundIndices] = [&]()
     {
-      auto shiftedBoundsIndices = getShiftedBounds(BoundRepresentation::BinIndex, sampleRate, binCount);
-      return std::pair{ toInt(shiftedBoundsIndices.first), toInt(shiftedBoundsIndices.second) };
+      auto shiftedBoundsIndices = getShiftedBounds(effectModule, EffectModule::BoundRepresentation::BinIndex, sampleRate, binCount);
+      return utils::pair{ toInt(shiftedBoundsIndices.first), toInt(shiftedBoundsIndices.second) };
     }();
     simd_mask isHighAboveLow = simd_int::greaterThanOrEqualSigned(highBoundIndices, lowBoundIndices);
 
     simd_int binShift = utils::uninitialised;
     utils::array<simd_float, 2 * kNeighbourBins + 1> leakMultipliers;
     {
-      simd_float binFloatingPointShift = getParameter(Parameters::Shift::id().value())
+      simd_float binFloatingPointShift = getParameter(effectData, Pitch::ConstShift::Shift)
         ->getInternalValue<simd_float>(sampleRate) * 2.0f * (float)(binCount - 1) / sampleRate;
       simd_float roundedShift = simd_float::round(binFloatingPointShift);
       binShift = toInt(roundedShift);
@@ -1038,9 +1382,9 @@ namespace Generation
       }
     }
 
-    destination.clear();
-    auto rawDestination = destination.get();
-    auto rawSource = source.sourceBuffer.get();
+    destination->clear();
+    auto rawDestination = destination->get();
+    auto rawSource = source.sourceBuffer->get();
 
     for (u32 i = 0; i < binCount; ++i)
     {
@@ -1060,69 +1404,49 @@ namespace Generation
     }
   }
 
-  void PitchEffect::run(Framework::ComplexDataSource &source,
-    Framework::SimdBuffer<Framework::complex<float>, simd_float> &destination, 
+  void Destroy::runReinterpret(EffectModule *effectModule, EffectModule::EffectData *effectData, 
+    Framework::ComplexDataSource &source, Framework::SimdBuffer *destination, 
     u32 binCount, float sampleRate) noexcept
-  {
-    using namespace Framework;
-    switch (getEffectAlgorithm<Processors::BaseEffect::Pitch::type>(*this))
-    {
-    case Processors::BaseEffect::Pitch::Resample:
-      runResample(source, destination, binCount, sampleRate);
-      break;
-    case Processors::BaseEffect::Pitch::ConstShift:
-      runConstShift(source, destination, binCount, sampleRate);
-      break;
-    default:
-      COMPLEX_ASSERT_FALSE("Invalid Algorithm");
-      break;
-    }
-  }
-
-  void DestroyEffect::runReinterpret(Framework::ComplexDataSource &source, 
-    Framework::SimdBuffer<Framework::complex<float>, simd_float> &destination, 
-    u32 binCount, float sampleRate) const noexcept
   {
     using namespace utils;
     using namespace Framework;
 
-    using Parameters = Processors::BaseEffect::Destroy::Reinterpret::type;
-
     auto [lowBoundIndices, highBoundIndices] = [&]()
     {
-      auto shiftedBoundsIndices = getShiftedBounds(BoundRepresentation::BinIndex, sampleRate, binCount);
-      return std::pair{ toInt(shiftedBoundsIndices.first), toInt(shiftedBoundsIndices.second) };
+      auto shiftedBoundsIndices = getShiftedBounds(effectModule, EffectModule::BoundRepresentation::BinIndex, sampleRate, binCount);
+      return utils::pair{ toInt(shiftedBoundsIndices.first), toInt(shiftedBoundsIndices.second) };
     }();
     simd_mask isHighAboveLow = simd_int::greaterThanOrEqualSigned(highBoundIndices, lowBoundIndices);
-    auto [start, processedCount, _] = minimiseRange(lowBoundIndices, highBoundIndices, binCount, true);
+    //auto [start, processedCount, _] = minimiseRange(lowBoundIndices, highBoundIndices, binCount, true);
 
     simd_float attenuation = [&]()
     {
-      auto parameter = getParameter(Parameters::Attenuation::id().value())->getInternalValue<simd_float>();
+      auto parameter = getParameter(effectData, Destroy::Reinterpret::Attenuation)->getInternalValue<simd_float>();
       auto mergeMask = merge(kRealMask, kImaginaryMask, simd_float::greaterThan(parameter, 0.0f));
       return merge(1.0f, dbToAmplitude(parameter | simd_mask{ kSignMask }), mergeMask);
     }();
 
-    auto mappingType = Parameters::Mapping::enum_value_by_id(getParameter(
-      Parameters::Mapping::id().value())->getInternalValue<IndexedData>().first->id).value();
+    auto mappingType = getParameter(effectData,
+      Destroy::Reinterpret::Mapping)->getInternalValue<IndexedData>().first->id;
 
-    auto rawDestination = destination.get();
-    auto rawSource = source.sourceBuffer.get();
+    auto rawDestination = destination->get();
+    auto rawSource = source.sourceBuffer->get();
 
     auto operations = [mappingType](simd_float &one, simd_float &two)
     {
+      using enum Destroy::ReinterpretMappingOptions::Value;
       switch (mappingType)
       {
-      case Parameters::Mapping::NoMapping:
+      case NoMapping:
         break;
-      case Parameters::Mapping::SwitchRealImag:
+      case SwitchRealImag:
         one = switchInner(one);
         two = switchInner(two);
         break;
-      case Parameters::Mapping::CartToPolar:
+      case CartToPolar:
         complexCartToPolar(one, two);
         break;
-      case Parameters::Mapping::PolarToCart:
+      case PolarToCart:
         complexPolarToCart(one, two);
         break;
       default:
@@ -1131,7 +1455,7 @@ namespace Generation
       }
     };
 
-    simd_float wet[2]{ utils::uninitialised, utils::uninitialised };
+    simd_float wet[2]{};
     for (u32 i = 0; i < binCount - 1; i += 2)
     {
       wet[0] = rawSource[i] * attenuation;
@@ -1150,152 +1474,166 @@ namespace Generation
     rawDestination[binCount - 1] = wet[0];
   }
 
-  void DestroyEffect::run(Framework::ComplexDataSource &source, 
-    Framework::SimdBuffer<Framework::complex<float>, simd_float> &destination, 
-    u32 binCount, float sampleRate) noexcept
+  static EffectModule::EffectData *
+  createEffect(Framework::ProcessorMetadata *processorMetadata, EffectModule *module, 
+    EffectModule::EffectData *copy = nullptr, void *jsonData = nullptr)
   {
-    using namespace Framework;
-    switch (getEffectAlgorithm<Processors::BaseEffect::Destroy::type>(*this))
+    if (copy)
+      processorMetadata = copy->metadata;
+
+    COMPLEX_ASSERT(processorMetadata->parameters);
+    COMPLEX_ASSERT(processorMetadata->vtable[0]);
+
+    auto *createFn = (CreateEffectFn *)processorMetadata->vtable[EffectModule::CreateVtableIndex];
+
+    EffectModule::EffectData *effectData = createFn(module, copy);
+    effectData->metadata = processorMetadata;
+
+    utils::dll<Framework::ParameterValue> *effectParameters;
+    usize parameterCount;
+    if (copy)
     {
-    case Processors::BaseEffect::Destroy::Reinterpret:
-      runReinterpret(source, destination, binCount, sampleRate);
-      break;
-    default:
-      COMPLEX_ASSERT_FALSE("Invalid Algorithm");
-      break;
+      parameterCount = copy->parameterCount;
+      effectParameters = module->createParameters(parameterCount, processorMetadata->parameters, copy->parameters);
     }
-  }
-
-  static constexpr auto effectIds = Framework::Processors::BaseEffect::enum_ids_filter<Framework::kGetActiveEffectPredicate, true>();
-  static constexpr auto effectCount = Framework::Processors::BaseEffect::enum_count_filter(Framework::kGetActiveEffectPredicate);
-
-  EffectModule::EffectModule(Plugin::ProcessorTree *processorTree) noexcept :
-    BaseProcessor{ processorTree, Framework::Processors::EffectModule::id().value() }
-  {
-    using namespace Framework;
-
-    auto maxBinCount = processorTree->getMaxBinCount();
-    dataBuffer_.reserve(kChannelsPerInOut, maxBinCount);
-    buffer_.reserve(kChannelsPerInOut, maxBinCount);
-
-    effects_ = utils::up<BaseEffect *[]>::create(effectCount);
-  }
-
-  EffectModule::EffectModule(const EffectModule &other) noexcept : BaseProcessor{ other }
-  {
-    buffer_.copy(other.buffer_);
-    effects_ = utils::up<BaseEffect *[]>::create(effectCount);
-    for (auto *processor : subProcessors_)
+    else if (jsonData)
     {
-      usize effectIndex = (usize)(utils::find(effectIds, processor->getProcessorType()) - effectIds.begin());
-      effects_[effectIndex] = utils::as<BaseEffect>(processor);
+      parameterCount = processorMetadata->parametersCount;
+      deserialiseParametersFromJson(jsonData, processorMetadata, effectParameters, module, true);
     }
-  }
-
-  EffectModule::~EffectModule()
-  {
-    if (getProcessorTree()->isBeingDestroyed())
-      return;
-
-    // delete all effects because they will otherwise remain inside the processorTree
-    for (usize i = 0; i < effectCount; ++i)
-      if (effects_[i])
-        getProcessorTree()->deleteProcessor(effects_[i]->getProcessorId());
-  }
-
-  void EffectModule::insertSubProcessor(usize, BaseProcessor &newSubProcessor, bool) noexcept
-  {
-    COMPLEX_ASSERT(subProcessors_.size() == 0);
-    usize effectIndex = (usize)(utils::find(effectIds, newSubProcessor.getProcessorType()) - effectIds.begin());
-    COMPLEX_ASSERT(effectIndex < effectIds.size() && "Unknown effect being inserted into EffectModule");
-
-    newSubProcessor.setParentProcessorId(processorId_);
-    subProcessors_.emplace_back(&newSubProcessor);
-    effects_[effectIndex] = utils::as<BaseEffect>(&newSubProcessor);
-
-    auto *parameter = getParameter(Framework::Processors::EffectModule::ModuleType::id().value());
-    parameter->updateNormalisedValue((float)unscaleValue((double)effectIndex, parameter->getParameterDetails()));
-    parameter->updateValue(kDefaultSampleRate);
-  }
-
-  BaseProcessor &EffectModule::updateSubProcessor(usize index, BaseProcessor &newSubProcessor, bool callListeners) noexcept
-  {
-    COMPLEX_ASSERT(utils::find(effectIds, newSubProcessor.getProcessorType()) != effectIds.end()
-      && "Unknown effect being inserted into EffectModule");
-
-    auto *replacedEffect = subProcessors_[0];
-    newSubProcessor.setParentProcessorId(processorId_);
-    subProcessors_[0] = &newSubProcessor;
-
-    if (callListeners)
-      for (auto *listener : listeners_)
-        listener->updatedSubProcessor(index, *replacedEffect, newSubProcessor);
-
-    return *replacedEffect;
-  }
-
-  inline void EffectModule::initialiseParameters()
-  {
-    createProcessorParameters(Framework::Processors::EffectModule::
-      enum_ids_filter<Framework::kGetParameterPredicate, true>());
-  }
-
-  BaseEffect *EffectModule::changeEffect(utils::string_view effectId)
-  {
-    using namespace Framework;
-
-    if (subProcessors_[0]->getProcessorType() == effectId)
-      return utils::as<BaseEffect>(subProcessors_[0]);
-    
-    usize newEffectIndex = utils::find(effectIds, effectId) - effectIds.begin();
-    BaseEffect *effect;
-    if (effects_[newEffectIndex])
-      effect = effects_[newEffectIndex];
     else
     {
-      [&]<typename ... Ts>(nested_enum::type_list<Ts...>)
-      {
-        std::ignore = ((Ts::id().value() == effectId && (effect = processorTree_->createProcessor<typename Ts::linked_type, true>(processorTree_), true)) || ...);
-      }(Processors::BaseEffect::enum_subtypes_filter<kGetActiveEffectPredicate>());
+      parameterCount = processorMetadata->parametersCount;
+      effectParameters = module->createParameters(parameterCount, processorMetadata->parameters);
+    }
+    
+    effectData->parameters = effectParameters;
+    effectData->parameterCount = parameterCount;
 
-      COMPLEX_ASSERT(effect && "Unknown effect type was provided");
+    auto previousLast = module->parameters->previous;
+    module->parameters->previous = effectData->parameters->previous;
+    effectData->parameters->previous = previousLast->next;
+    effectData->parameters->previous->next = effectData->parameters->previous;
 
-      effects_[newEffectIndex] = effect;
+    return effectData;
+  }
+
+  EffectModule::EffectModule(Plugin::State *state, Framework::ProcessorMetadata *metadata, utils::bumpArena *arena) noexcept :
+    BaseProcessor{ state, metadata, arena }
+  {
+    using namespace Framework;
+
+    dataBuffer = Framework::SimdBuffer::create(arena, kChannelsPerInOut, state->getMaxBinCount());
+    buffer = Framework::SimdBuffer::create(arena, kChannelsPerInOut, state->getMaxBinCount());
+  }
+
+  EffectModule::EffectModule(const EffectModule &other, utils::bumpArena *arena) noexcept : BaseProcessor{ other, arena }
+  {
+    if (other.buffer)
+    {
+      buffer = Framework::SimdBuffer::create(arena, other.buffer->channels, state->getMaxBinCount());
+      Framework::applyToThisNoMask<utils::MathOperations::Assign>(buffer, 
+        other.buffer, buffer->channels, buffer->size);
     }
 
-    getProcessorTree()->executeOutsideProcessing([&]()
-      {
-        updateSubProcessor(0, *effect);
-
-        auto *parameter = getParameter(Processors::EffectModule::ModuleType::id().value());
-        parameter->updateNormalisedValue((float)unscaleValue((double)newEffectIndex, parameter->getParameterDetails()));
-        parameter->updateValue(kDefaultSampleRate);
-      });
+    auto [effectOption, _] = getParameter(EffectModule::ModuleType)->getInternalValue<Framework::IndexedData>();
     
-    return effect;
+    auto *effect = other.effects;
+    for (; effect && effect->metadata->id != effectOption->processorMetadata->id; effect = effect->next) { }
+
+    effects = createEffect(effectOption->processorMetadata, this, effect);
+    currentActiveEffect.store(effects, satomi::memory_order_release);
+  }
+
+  void EffectModule::serialiseToJson(void *jsonData, utils::span<Framework::ParameterValue *>) const
+  {
+    auto *effect = currentActiveEffect.load(satomi::memory_order_acquire);
+
+    auto parametersToSerialise = utils::vector<Framework::ParameterValue *>{
+      localScratch, effect->parameterCount + parameterCount };
+    
+    auto parameter = parameters;
+    for (usize i = 0; i < parameterCount; (++i), (parameter = parameter->next))
+      parametersToSerialise.emplace_back(&parameter->object);
+    
+    auto *effectParameter = effect->parameters;
+    for (usize i = 0; i < effect->parameterCount; (++i), (effectParameter = effectParameter->next))
+      parametersToSerialise.emplace_back(&effectParameter->object);
+
+    BaseProcessor::serialiseToJson(jsonData, parametersToSerialise);
+  }
+
+  void EffectModule::initialiseParameters()
+  {
+    parameters = createParameters(metadata->parametersCount, metadata->parameters);
+    parameterCount = metadata->parametersCount;
+    auto [effectOption, _] = getParameter(EffectModule::ModuleType)->getInternalValue<Framework::IndexedData>();
+    effects = createEffect(effectOption->processorMetadata, this);
+    currentActiveEffect.store(effects, satomi::memory_order_release);
+  }
+
+  void EffectModule::deserialiseFromJson(void *jsonData)
+  {
+    BaseProcessor::deserialiseFromJson(jsonData);
+    auto [effectOption, _] = getParameter(EffectModule::ModuleType)->getInternalValue<Framework::IndexedData>();
+    effects = createEffect(effectOption->processorMetadata, this, nullptr, jsonData);
+    currentActiveEffect.store(effects, satomi::memory_order_release);
+  }
+
+  EffectModule::EffectData *
+  EffectModule::changeEffect(Framework::IndexedData *effectOption)
+  {
+    using namespace Framework;
+
+    auto *currentEffect = currentActiveEffect.load(satomi::memory_order_acquire);
+
+    if (currentEffect->metadata->id == effectOption->processorMetadata->id)
+      return currentEffect;
+    
+    auto *effect = effects;
+    while (true)
+    {
+      if (effect->metadata->id == effectOption->processorMetadata->id)
+      {
+        currentActiveEffect.store(effect, satomi::memory_order_release);
+        return effect;
+      }
+
+      if (!effect->next)
+        break;
+
+      effect = effect->next;
+    }
+
+    auto *newEffect = createEffect(effectOption->processorMetadata, this);
+    effect->next = newEffect;
+
+    currentActiveEffect.store(newEffect, satomi::memory_order_release);
+    
+    return newEffect;
   }
 
   void EffectModule::processEffect(Framework::ComplexDataSource &source, u32 binCount, float sampleRate) noexcept
   {
     using namespace Framework;
     using namespace utils;
-
-    if (!getParameter(Processors::EffectModule::ModuleEnabled::id().value())->getInternalValue<u32>(sampleRate))
+        
+    if (!getParameter(ModuleEnabled)->getInternalValue<u32>(sampleRate))
       return;
 
-    auto *effect = as<BaseEffect>(subProcessors_[0]);
+    auto *effect = currentActiveEffect.load(satomi::memory_order_acquire);
 
     // getting exclusive access to data
-    lockAtomic(dataBuffer_.getLock(), true, WaitMechanism::Spin);
+    lockAtomic(dataBuffer->dataLock, false, true, WaitMechanism::Spin);
 
-    effect->run(source, dataBuffer_, binCount, sampleRate);
+    ((RunEffectFn *)effect->metadata->vtable[RunVtableIndex])(this, effect, source, dataBuffer, binCount, sampleRate);
 
     // if the mix is 100% for all channels, we can skip mixing entirely
-    simd_float wetMix = getParameter(Processors::EffectModule::ModuleMix::id().value())->getInternalValue<simd_float>(sampleRate);
+    simd_float wetMix = getParameter(ModuleMix)->getInternalValue<simd_float>(sampleRate);
     if (wetMix != 1.0f)
     {
-      auto sourceData = source.sourceBuffer.get();
-      auto destinationData = dataBuffer_.get();
+      auto sourceData = source.sourceBuffer->get();
+      auto destinationData = dataBuffer->get();
       simd_float dryMix = 1.0f - wetMix;
       for (u32 i = 0; i < binCount; i++)
         destinationData[i] = simd_float::mulAdd(dryMix * sourceData[i], wetMix, destinationData[i]);
@@ -1303,10 +1641,57 @@ namespace Generation
 
     // switching to being a reader and allowing other readers to participate
     // seq_cst because the following atomic could be reordered to happen prior to this one
-    dataBuffer_.setBufferPosition(source.blockPosition);
-    dataBuffer_.getLock().lock.store(1, std::memory_order_seq_cst);
-    source.sourceBuffer.getLock().lock.fetch_sub(1, std::memory_order_relaxed);
+    dataBuffer->dataLock.lock.store(1, satomi::memory_order_seq_cst);
+    source.sourceBuffer->dataLock.lock.fetch_sub(1, satomi::memory_order_relaxed);
 
-    source.sourceBuffer = dataBuffer_;
+    source.sourceBuffer = dataBuffer;
   }
+}
+
+template<> Generation::EffectModule *
+createProcessor(Plugin::State *state, Framework::ProcessorMetadata *metadata, const void *copy)
+{
+  auto *arena = utils::bumpArena::createNested(state->processorStorage, COMPLEX_MB(1));
+
+  if (copy)
+    return anew(state->processorStorage, Generation::EffectModule, { *(const Generation::EffectModule *)copy, arena });
+  else
+    return anew(state->processorStorage, Generation::EffectModule, { state, metadata, arena });
+}
+template<> void *
+initialiseTypeStructure<Generation::EffectModule>(void *, Framework::PluginStructure &structure)
+{
+  using namespace Framework;
+  using namespace Generation;
+
+  auto *arena = structure.getNewArena(COMPLEX_KB(2));
+
+  ProcessorMetadata &effectModule = COMPLEX_STRUCTURE_PROCESSOR(EffectModule, "Effect Module", Generation::Processors::EffectModule);
+  effectModule.flags |= ProcessorMetadata::NoParameterValidationTag;
+  effectModule.parameters =
+    (
+      COMPLEX_STRUCTURE_PARAMETER("Module Type", EffectModule::ModuleType,
+        {
+          .options = COMPLEX_STRUCTURE_INDEXED_DATA().addChildren(
+            Utility::initialiseTypeStructure(structure),
+            Filter::initialiseTypeStructure(structure),
+            Dynamics::initialiseTypeStructure(structure),
+            Phase::initialiseTypeStructure(structure),
+            Pitch::initialiseTypeStructure(structure),
+            Destroy::initialiseTypeStructure(structure)),
+          .defaultOptionId = Filter::id
+        }, ParameterScale::Indexed, {}, ParameterDetails::Automatable | ParameterDetails::Extensible, UpdateFlag::AfterProcess),
+      COMPLEX_STRUCTURE_PARAMETER("Module Enabled", EffectModule::ModuleEnabled, 0.0f, 1.0f, 1.0f, 1.0f,
+        ParameterScale::Toggle, {}, ParameterDetails::Modulatable | ParameterDetails::Automatable, UpdateFlag::Realtime, Framework::printToggleValues),
+      COMPLEX_STRUCTURE_PARAMETER("Module Mix", EffectModule::ModuleMix, 0.0f, 1.0f, 1.0f, 1.0f, ParameterScale::Linear, "%",
+        ParameterDetails::Modulatable | ParameterDetails::Automatable | ParameterDetails::Stereo),
+      COMPLEX_STRUCTURE_PARAMETER("Low Bound", EffectModule::LowBound, 0.0f, 1.0f, 0.0f, 0.0f, ParameterScale::Frequency, " hz",
+        ParameterDetails::Modulatable | ParameterDetails::Automatable | ParameterDetails::Stereo),
+      COMPLEX_STRUCTURE_PARAMETER("High Bound", EffectModule::HighBound, 0.0f, 1.0f, 1.0f, 1.0f, ParameterScale::Frequency, " hz",
+        ParameterDetails::Modulatable | ParameterDetails::Automatable | ParameterDetails::Stereo),
+      COMPLEX_STRUCTURE_PARAMETER("Shift Bounds", EffectModule::ShiftBounds, -1.0f, 1.0f, 0.0f, 0.5f, ParameterScale::Linear, "%",
+        ParameterDetails::Modulatable | ParameterDetails::Automatable | ParameterDetails::Stereo)
+    );
+
+  return &effectModule.computeCounts();
 }

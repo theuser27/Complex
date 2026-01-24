@@ -2,7 +2,7 @@
   ==============================================================================
 
     BaseProcessor.hpp
-    Created: 11 Jul 2022 3:35:27am
+    Created: 11 Jul 2022 03:35:27
     Author:  theuser27
 
   ==============================================================================
@@ -10,18 +10,20 @@
 
 #pragma once
 
-#include "Framework/vector_map.hpp"
 #include "Framework/simd_buffer.hpp"
+#include "Framework/parameter_types.hpp"
 
 namespace Framework
 {
   class ParameterBridge;
   class ParameterValue;
+  struct ParameterMetadata;
+  struct ProcessorMetadata;
 }
 
 namespace Plugin
 {
-  class ProcessorTree;
+  struct State;
 }
 
 namespace Interface
@@ -31,63 +33,47 @@ namespace Interface
 
 namespace Generation
 {
-  class BaseProcessorListener;
+  COMPLEX_ENUM(Processors,
+    ( SoundEngine, 1757890316114499300),
+    (EffectsState, 1758070326562653000),
+    ( EffectsLane, 1758070341249565300),
+    (EffectModule, 1758070362397345100),
+  )
 
   class BaseProcessor
   {
   public:
+    BaseProcessor(Plugin::State *state, Framework::ProcessorMetadata *metadata, utils::bumpArena *arena) noexcept;
+    BaseProcessor(const BaseProcessor &other, utils::bumpArena *arena) noexcept;
+    BaseProcessor(BaseProcessor &&) = default;
+
     BaseProcessor() = delete;
-
-    BaseProcessor(Plugin::ProcessorTree *processorTree, utils::string_view processorType) noexcept;
-    BaseProcessor(const BaseProcessor &other) noexcept;
-    BaseProcessor &operator=(const BaseProcessor &other) noexcept;
-    BaseProcessor(BaseProcessor &&other) noexcept;
-    BaseProcessor &operator=(BaseProcessor &&other) noexcept;
-
-    virtual ~BaseProcessor() noexcept;
+    BaseProcessor(const BaseProcessor &) = delete;
+    BaseProcessor &operator=(const BaseProcessor &) = delete;
+    BaseProcessor &operator=(BaseProcessor &&) = delete;
 
     virtual void initialise() noexcept;
+    virtual void initialiseParameters() { }
 
-    virtual void serialiseToJson(void *jsonData) const;
-    static void deserialiseFromJson(utils::span<const utils::string_view> parameterIds,
-      BaseProcessor *processor, void *jsonData);
-    virtual BaseProcessor *createCopy() const = 0;
-    void clearSubProcessors() noexcept { subProcessors_.clear(); }
-
-    BaseProcessor *getSubProcessor(usize index) const noexcept { return subProcessors_[index]; }
-    auto getSubProcessorCount() const noexcept { return subProcessors_.size(); }
-    usize getSubProcessorIndex(const BaseProcessor *subProcessor) noexcept
-    { return (usize)(std::ranges::find(subProcessors_, subProcessor) - subProcessors_.begin()); }
+    virtual void serialiseToJson(void *jsonData, utils::span<Framework::ParameterValue *> parametersToSerialise = {}) const;
+    virtual void deserialiseFromJson(void *jsonData);
+    BaseProcessor *
+    createCopy() const { return metadata->create(state, metadata, this); }
 
     // the following functions are to be called outside of processing time
-    virtual void insertSubProcessor([[maybe_unused]] usize index,
-      [[maybe_unused]] BaseProcessor &newSubProcessor, [[maybe_unused]] bool callListeners = true) noexcept
-    {
-      COMPLEX_ASSERT_FALSE("insertSubProcessor is not implemented for %s", getProcessorType().data());
-      std::abort();
-    }
-    virtual BaseProcessor &deleteSubProcessor([[maybe_unused]] usize index, [[maybe_unused]] bool callListeners = true) noexcept
-    {
-      COMPLEX_ASSERT_FALSE("deleteSubProcessor is not implemented for %s", getProcessorType().data());
-      std::abort();
-    }
-    virtual BaseProcessor &updateSubProcessor([[maybe_unused]] usize index,
-      [[maybe_unused]] BaseProcessor &newSubProcessor, [[maybe_unused]] bool callListeners = true) noexcept
-    {
-      COMPLEX_ASSERT_FALSE("updateSubProcessor is not implemented for %s", getProcessorType().data());
-      std::abort();
-    }
+    virtual bool insertSubProcessor(usize index, BaseProcessor &newSubProcessor, bool callListeners = true);
+    virtual BaseProcessor &
+    deleteSubProcessor(usize index, bool callListeners = true);
+    virtual utils::pair<BaseProcessor &, bool>
+    updateSubProcessor(usize index, BaseProcessor &newSubProcessor, bool callListeners = true);
     
-    Framework::ParameterValue *getParameter(utils::string_view parameterId) const noexcept;
-    Framework::ParameterValue *getParameterUnchecked(usize index) const noexcept;
-    usize getParameterCount() const noexcept;
-    usize getParameterIndex(const Framework::ParameterValue *parameter) noexcept
-    {
-      return (usize)(processorParameters_.find_if([&](const auto &element)
-        { return element.second.get() == parameter; }) - processorParameters_.data.begin());
-    }
+    Framework::ParameterValue *
+    getParameter(uuid parameterId) const noexcept;
+    utils::dll<Framework::ParameterValue> *
+    createParameters(usize count, Framework::ParameterMetadata *metadata, 
+      utils::dll<Framework::ParameterValue> *copy = nullptr);
 
-    virtual void updateParameters(UpdateFlag flag, float sampleRate, bool updateChildrenParameters = true) noexcept;
+    void updateParameters(UpdateFlag flag, float sampleRate, bool updateChildrenParameters = true) noexcept;
     // remaps parameters from the current bridges (if they exist) to new ones (if they exist)
     // if no bridges are provided they are assumed to be nullptr
     // if remapOnlyBridges is also provided it will unmap/remap only the bridges from the parameters 
@@ -98,42 +84,56 @@ namespace Generation
     //void randomiseParameters();
     //void setAllParametersRandomisation(bool toRandomise = true);
     //void setParameterRandomisation(utils::string_view name, bool toRandomise = true);
-
-    utils::string_view getProcessorType() const noexcept { return processorType_; }
-    u64 getProcessorId() const noexcept { return processorId_; }
-    Plugin::ProcessorTree *getProcessorTree() const noexcept { return processorTree_; }
-    auto getDataBuffer() const noexcept { return Framework::SimdBufferView{ dataBuffer_ }; }
     
-    u64 getParentProcessorId() const noexcept { return parentProcessorId_; }
-    void setParentProcessorId(u64 newParentModuleId) noexcept { parentProcessorId_ = newParentModuleId; }
+    static BaseProcessor *
+    getChild(BaseProcessor *children, usize index)
+    {
+      for (usize i = 0; i < index && children; (++i), (children = children->next)) { }
+      return children;
+    }
+    static BaseProcessor *
+    getChild(BaseProcessor *children, usize index, uuid id)
+    {
+      for (usize i = 0; children;)
+      {
+        if (id != children->metadata->id)
+        {
+          children = children->next;
+          continue;
+        }
+        if (i >= index)
+          break;
+        ++i;
+        children = children->next;
+      }
+      return children;
+    }
 
-    void addListener(BaseProcessorListener *listener) { listeners_.push_back(listener); }
-    void removeListener(BaseProcessorListener *listener) { std::erase(listeners_, listener); }
-    auto getListeners() { return utils::span{ listeners_ }; }
+    Framework::ProcessorMetadata *metadata{};
+    Plugin::State *state;
+    const u64 stateId = 0;
+    
+    BaseProcessor *parent = nullptr;
+    BaseProcessor *previous = nullptr;
+    BaseProcessor *next = nullptr;
+    BaseProcessor *children = nullptr;
+    u32 childrenCount{};
 
-    utils::up<Interface::ProcessorSection> &getSavedSection() noexcept;
-    void setSavedSection(utils::up<Interface::ProcessorSection> savedSection) noexcept;
+    u32 parameterCount{};
+    // first node's previous points to the last, last node's next is always nullptr
+    utils::dll<Framework::ParameterValue> *parameters{};
+    Framework::SimdBuffer *dataBuffer = nullptr;
 
-    virtual void initialiseParameters() { }
-    virtual void deserialiseFromJson([[maybe_unused]] void *jsonData) { }
+    utils::bumpArena *arena = nullptr;
 
   protected:
-    void createProcessorParameters(utils::span<const utils::string_view> parameterIds);
-
-    // data contextual to every individual module
-    Framework::SimdBuffer<Framework::complex<float>, simd_float> dataBuffer_{};
-    std::vector<BaseProcessor *> subProcessors_{};
-    utils::VectorMap<utils::string_view, utils::up<Framework::ParameterValue>> processorParameters_;
-
-    // data contextual to the base BaseProcessor
-    Plugin::ProcessorTree *const processorTree_;
-    const utils::string_view processorType_;
-    const u64 processorId_;
-    u64 parentProcessorId_ = 0;
-
-    std::vector<BaseProcessorListener *> listeners_{};
-    utils::up<Interface::ProcessorSection> savedSection_;
-
-    friend class Plugin::ProcessorTree;
+    void insertProcessorAt(BaseProcessor &processor, usize index);
+    void reportUnexpectedProcessorInsert(BaseProcessor &attempedInsert,
+      utils::span<const uuid> acceptedProcessorIds);
   };
+
+  static_assert(utils::is_trivially_destructible_v<BaseProcessor>);
+
+  void deserialiseParametersFromJson(void *jsonData, Framework::ProcessorMetadata *metadata,
+    utils::dll<Framework::ParameterValue> *&parameters, BaseProcessor *processor, bool validateParameters);
 }

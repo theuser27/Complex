@@ -2,7 +2,7 @@
   ==============================================================================
 
     simd_math.hpp
-    Created: 14 Sep 2021 12:55:12am
+    Created: 14 Sep 2021 00:55:12
     Author:  theuser27
 
   ==============================================================================
@@ -12,6 +12,14 @@
 
 #include "simd_buffer.hpp"
 #include "simd_utils.hpp"
+
+#ifdef COMPLEX_INTEL_SVML
+extern "C"
+{
+  __m128 _mm_tan_ps(__m128 a);
+  __m128 _mm_atan2_ps(__m128 a, __m128 b);
+}
+#endif
 
 namespace utils
 {
@@ -27,33 +35,34 @@ namespace utils
     static constexpr simd_float kHalfPiPart2 = 0.0004838267953f;
 
     // taylor coefficients of sin
-    static constexpr simd_float kSin1 = -0.16666655f;
-    static constexpr simd_float kSin2 = 0.00833216f;
-    static constexpr simd_float kSin3 = -0.00019515282f;
+    static constexpr simd_float kSin1 = -0.166666518f;
+    static constexpr simd_float kSin2 = 0.00833202855f;
+    static constexpr simd_float kSin3 = -0.0001950085f;
 
     // taylor coefficients of cos
     static constexpr simd_float kCos0 = 1.0f;
     static constexpr simd_float kCos1 = -0.5f;
-    static constexpr simd_float kCos2 = 0.041666646f;
-    static constexpr simd_float kCos3 = -0.0013887316f;
+    static constexpr simd_float kCos2 = 0.0416666459f;
+    static constexpr simd_float kCos3 = -0.0013887321f;
     static constexpr simd_float kCos4 = 0.000024433157f;
 
     static constexpr simd_float k2InvPi = 2.0f / kPi;
-    static constexpr simd_float kTruncate = 12582912.0f;
+    static constexpr simd_float kRound = 12582912.0f;
 
     simd_float normalisedInput = radians * k2InvPi;
-    simd_int truncatedInt = reinterpretToInt(normalisedInput + kTruncate);
-    simd_float truncatedFloat = reinterpretToFloat(truncatedInt) - kTruncate;
+    // using the magic constant and the hidden GRS bits to round normalisedInput
+    simd_int roundedInt = reinterpretToInt(normalisedInput + kRound);
+    simd_float roundedFloat = reinterpretToFloat(roundedInt) - kRound;
     // checks if angle is exactly 0, +/-90 or +/-180 degrees
-    // extra xor is to guard against nefarious bits left by fast math
-    simd_mask exactMask = simd_float::equal(truncatedFloat, normalisedInput & simd_mask{ ~1U });
+    // extra masking is to guard against nefarious bits left by fast math
+    simd_mask exactMask = simd_float::equal(roundedFloat, normalisedInput & simd_mask{ ~1U });
 
-    simd_float position = radians - (truncatedFloat * kHalfPiPart1) - (truncatedFloat * kHalfPiPart2);
+    simd_float position = radians - (roundedFloat * kHalfPiPart1) - (roundedFloat * kHalfPiPart2);
     simd_float position2 = position * position;
 
-    simd_int lowestMantissaBit = truncatedInt & 1;
-    simd_mask sinSign = shiftLeft<30>(truncatedInt & 2);
-    simd_mask cosSign = shiftLeft<30>((truncatedInt + lowestMantissaBit) & 2);
+    simd_int lowestMantissaBit = roundedInt & 1;
+    simd_mask sinSign = shiftLeft<30>(roundedInt & 2);
+    simd_mask cosSign = shiftLeft<30>((roundedInt + lowestMantissaBit) & 2);
     simd_mask hasLowestBitMask = simd_int::notEqual(lowestMantissaBit, 0);
 
     simd_float cos = simd_float::mulAdd(kCos0, position2, simd_float::mulAdd(kCos1, position2,
@@ -62,6 +71,7 @@ namespace utils
       simd_float::mulAdd(kSin1, position2, simd_float::mulAdd(kSin2, position2, kSin3)));
 
     cos = merge(cos, 1.0f, exactMask);
+    // equivalent: sin = merge(sin, 0.0f, exactMask);
     sin = sin & ~exactMask;
 
     return { merge(cos, sin, hasLowestBitMask) ^ cosSign,
@@ -78,26 +88,27 @@ namespace utils
     // modified taylor coefficients of { cos, sin }
     static constexpr simd_float k0 = { 1.0f, 0.0f };
     static constexpr simd_float k1 = { -0.5f, 1.0f };
-    static constexpr simd_float k2 = { 0.041666646f, -0.16666655f };
-    static constexpr simd_float k3 = { -0.0013887316f, 0.00833216f };
-    static constexpr simd_float k4 = { 0.000024433157f, -0.00019515282f };
+    static constexpr simd_float k2 = { 0.0416666459f, -0.166666518f };
+    static constexpr simd_float k3 = { -0.0013887321f, 0.00833202855f };
+    static constexpr simd_float k4 = { 0.000024433157f, -0.0001950085f };
 
     static constexpr simd_float k2InvPi = 2.0f / kPi;
-    static constexpr simd_float kTruncate = 12582912.0f;
+    static constexpr simd_float kRound = 12582912.0f;
     static constexpr simd_float kExact = { 1.0f, 0.0f };
 
     simd_float normalisedInput = angle * k2InvPi;
-    simd_int truncatedInt = reinterpretToInt(normalisedInput + kTruncate);
-    simd_float truncatedFloat = reinterpretToFloat(truncatedInt) - kTruncate;
+    // using the magic constant and the hidden GRS bits to round normalisedInput
+    simd_int roundedInt = reinterpretToInt(normalisedInput + kRound);
+    simd_float roundedFloat = reinterpretToFloat(roundedInt) - kRound;
     // checks if angle is exactly 0, +/-90 or +/-180 degrees
-    // extra and is to guard against nefarious bits left by fast math
-    simd_mask exactMask = simd_float::equal(truncatedFloat, normalisedInput & simd_mask{ ~1U });
+    // extra masking is to guard against nefarious bits left by fast math
+    simd_mask exactMask = simd_float::equal(roundedFloat, normalisedInput & simd_mask{ ~1U });
 
-    simd_float position = angle - (truncatedFloat * kHalfPiPart1) - (truncatedFloat * kHalfPiPart2);
+    simd_float position = angle - (roundedFloat * kHalfPiPart1) - (roundedFloat * kHalfPiPart2);
     simd_float position2 = position * position;
 
-    simd_int lowestMantissaBit = truncatedInt & 1;
-    simd_mask signs = shiftLeft<30>((truncatedInt + (lowestMantissaBit & kRealMask)) & 2);
+    simd_int lowestMantissaBit = roundedInt & 1;
+    simd_mask signs = shiftLeft<30>((roundedInt + (lowestMantissaBit & kRealMask)) & 2);
     simd_mask hasLowestBitMask = simd_int::notEqual(lowestMantissaBit, 0);
 
     simd_float values = simd_float::mulAdd(k0, merge(position, position2, kRealMask),
@@ -316,15 +327,15 @@ namespace utils
   }
 
   template<auto ConversionFunction>
-  strict_inline void convertBuffer(const Framework::SimdBufferView<Framework::complex<float>, simd_float> &source,
-    Framework::SimdBuffer<Framework::complex<float>, simd_float> &destination, usize size)
+  strict_inline void convertBuffer(const Framework::SimdBuffer *source,
+    Framework::SimdBuffer *destination, usize size)
   {
-    auto rawSource = source.get();
-    auto rawDestination = destination.get();
-    usize sourceSize = source.getSize();
-    usize destinationSize = destination.getSize();
+    auto rawSource = source->get();
+    auto rawDestination = destination->get();
+    usize sourceSize = source->size;
+    usize destinationSize = destination->size;
     
-    for (usize i = 0; i < source.getSimdChannels(); i++)
+    for (usize i = 0; i < source->getSimdChannels(); i++)
     {
       // size - 1 to skip nyquist since it doesn't need to get processed
       for (usize j = 0; j < size - 1; j += 2)
@@ -343,10 +354,10 @@ namespace utils
   }
 
   template<auto ConversionFunction>
-  strict_inline void convertBufferInPlace(Framework::SimdBuffer<Framework::complex<float>, simd_float> &buffer, usize size)
+  strict_inline void convertBufferInPlace(Framework::SimdBuffer *buffer, usize size)
   {
-    auto data = buffer.get();
-    usize dataSize = buffer.getSize();
+    auto data = buffer->get();
+    usize dataSize = buffer->size;
 
     for (usize i = 0; i < buffer.getSimdChannels(); i++)
     {

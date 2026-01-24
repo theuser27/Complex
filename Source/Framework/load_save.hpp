@@ -2,7 +2,7 @@
   ==============================================================================
 
     load_save.hpp
-    Created: 3 Dec 2022 1:46:31am
+    Created: 3 Dec 2022 01:46:31
     Author:  theuser27
 
   ==============================================================================
@@ -11,19 +11,26 @@
 #pragma once
 
 #include "platform_definitions.hpp"
-#include "stl_utils.hpp"
+
+namespace utils
+{
+  class string_view;
+  class string;
+}
 
 namespace Framework
 {
   namespace LoadSave
   {
+    utils::string
+    getConfigFilePath(utils::string_view file);
     // returns absolute window dimensions
-    utils::pair<int, int> getWindowSize();
-    double getWindowScale();
+    void getWindowSizeScale(u32 &windowWidth, u32 &windowHeight, float &windowScale);
+    i32
+    getModuleWidth();
     void getStartupParameters(usize &parameterMappings, usize &inSidechains, usize &outSidechains, usize &undoSteps);
 
-    void saveWindowSize(int windowWidth, int windowHeight);
-    void saveWindowScale(double windowScale);
+    void saveWindowSizeScale(u32 windowWidth, u32 windowHeight, float windowScale);
     void saveParameterMappings(usize parameterMappings);
     void saveUndoStepCount(usize undoStepCount);
   }

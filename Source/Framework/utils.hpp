@@ -2,7 +2,7 @@
   ==============================================================================
 
     utils.hpp
-    Created: 27 Jul 2021 12:53:28am
+    Created: 27 Jul 2021 00:53:28
     Author:  theuser27
 
   ==============================================================================
@@ -10,28 +10,13 @@
 
 #pragma once
 
-#include <math.h>
-#include <atomic>
-#include <string.h>
-#include <stdlib.h>
-
-#if __has_include(<vcruntime_new.h>) // MSVC header for operator new stuff
-  #include <vcruntime_new.h>
-#else
-  #include <new>
-#endif
-
+#include "satomi.hpp"
 #include "stl_utils.hpp"
 #include "constants.hpp"
 
 namespace utils
 {
   enum class MathOperations { Assign, Add, Multiply, FadeInAdd, FadeOutAdd, Interpolate };
-
-  template<typename T>
-  strict_inline void zeroset(T &structure) { ::memset(&structure, 0, sizeof(T)); }
-  template<typename T, auto Size>
-  strict_inline void zeroset(T (&rawArray)[Size]) { ::memset(rawArray, 0, Size * sizeof(T)); }
 
   constexpr strict_inline bool closeToZero(double value) noexcept
   { return value <= kEpsilon && value >= -kEpsilon; }
@@ -98,41 +83,12 @@ namespace utils
   { return kCentsPerNote * frequencyToMidiNote(frequency); }
 
 
-  strict_inline u32 log2(u32 value) noexcept
-  {
-  #if defined(COMPLEX_GCC) || defined(COMPLEX_CLANG)
-    constexpr u32 kMaxBitIndex = sizeof(u32) * 8 - 1;
-    return kMaxBitIndex - __builtin_clz(max(value, 1));
-  #elif defined(COMPLEX_MSVC)
-    unsigned long result = 0;
-    _BitScanReverse(&result, value);
-    return result;
-  #else
-    u32 num = 0;
-    while (value >>= 1)
-      num++;
-    return num;
-  #endif
-  }
 
-  constexpr strict_inline bool isPowerOfTwo(utils::integral auto value) noexcept
-  { return (value & (value - 1)) == 0; }
+
+
 
   strict_inline float nextPowerOfTwo(float value) noexcept
   { return ::roundf(::powf(2.0f, ::ceilf(::logf(value) * kExpConversionMult))); }
-
-  template<utils::integral T>
-  constexpr auto roundUpToMultiple(T i, T factor)
-  { return ((i + factor - 1) / factor) * factor; }
-
-  strict_inline float rms(const float *buffer, u32 num) noexcept
-  {
-    float squared_total = 0.0f;
-    for (u32 i = 0; i < num; i++)
-      squared_total += buffer[i] * buffer[i];
-
-    return sqrtf(squared_total / (float)num);
-  }
 
   constexpr strict_inline i32 prbs32(i32 x) noexcept
   {
@@ -140,178 +96,147 @@ namespace utils
     return (i32)(((u32)x >> 1U) ^ (-(x & 1) & 0xd0000001U));
   }
 
-  template <typename T> 
-  constexpr strict_inline int signum(T val) noexcept
-  { return (T(0) < val) - (val < T(0)); }
-
-  // returns the starting position of the centered element relative to container
-  template<typename T>
-  constexpr T centerAxis(T elementRange, T containerRange) noexcept
-  { return (containerRange - elementRange) / T(2); }
-
-  template<utils::floating_point T>
-  constexpr strict_inline T unsignFloat(T &value) noexcept
+  template<typename Struct>
+  constexpr Struct *
+  createFAM(const auto &allocate, usize size, bool initialiseToZero = false)
   {
-    int sign = signum(value);
-    value *= (T)sign;
-    return (T)sign;
+    using T = utils::remove_cvref_t<decltype(Struct::data)>;
+
+    usize extra = utils::roundUpToMultiple(sizeof(Struct), alignof(T));
+    usize totalSize = extra + size * sizeof(T);
+
+    byte *memory = (byte *)allocate(totalSize, utils::max(alignof(Struct), alignof(T)));
+    auto *object = new(memory) Struct{ .data = new(memory + extra) T[size] };
+
+    if (initialiseToZero)
+      ::zeroset(object->data, size);
+
+    return object;
   }
 
-  template<utils::signed_integral T>
-  constexpr strict_inline int unsignInt(T &value) noexcept
+  class ScopedNoDenormals
   {
-    int sign = signum(value);
-    value *= sign;
-    return (T)sign;
-  }
+  public:
+    ScopedNoDenormals() noexcept;
+    ~ScopedNoDenormals() noexcept;
 
-  template<utils::floating_point T>
-  constexpr strict_inline T smoothStep(T value) noexcept
-  {
-    T sqr = value * value;
-    return (T(3) * sqr) - (T(2) * sqr * value);
-  }
-
-  template<typename T>
-  strict_inline T *as(auto *pointer)
-  {
-  #if COMPLEX_DEBUG
-    auto *castPointer = dynamic_cast<T *>(pointer);
-    COMPLEX_ASSERT(castPointer, "Unsuccessful cast");
-    return castPointer;
-  #else
-    return static_cast<T *>(pointer);
-  #endif
-  }
-
-  // if you want to augment the control block, derive from this type (non-virtually)
-  struct sp_ref_base
-  {
-    static constexpr u64 isCombinedMask = u64(1) << 63;
-    static constexpr u64 refCountMask = ~isCombinedMask;
-
-    std::atomic<u64> refCount = 1;
+  private:
+    u64 flags_;
   };
 
-  // ghetto shared_ptr implementation with changable control block
-  template<typename T, typename RefCountT = sp_ref_base> 
-    requires utils::is_base_of_v<sp_ref_base, RefCountT>
+  class Dylib
+  {
+  public:
+    Dylib(const char *fullPath);
+    ~Dylib();
+    void *handle;
+  };
+
+  // ghetto shared_ptr implementation
+  template<typename T>
   class sp
   {
   protected:
-    struct combined : public RefCountT
+    struct control_block
     {
-      constexpr combined() : RefCountT{ .refCount = RefCountT::isCombinedMask + 1 } { }
-      T *create_object(auto &&... args) { return ::new(object_) T{ COMPLEX_FWD(args)... }; }
-      alignas(alignof(T)) unsigned char object_[sizeof(T)]{};
+      satomi::atomic<u64> refCount = 1;
+      T *object_ = nullptr;
     };
+
   public:
     constexpr sp() noexcept = default;
-    constexpr sp(nullptr_t) noexcept {}
-    template<typename U> requires utils::is_convertible_v<U *, T *>
-    explicit constexpr sp(U *instance)
-    {
-      object_ = instance;
-      refCount_ = new RefCountT{};
-    }
-    constexpr sp(const sp &other) noexcept
-    {
-      if (!other.refCount_)
-        return;
-
-      object_ = other.object_;
-      refCount_ = other.refCount_;
-      refCount_->refCount.fetch_add(1, std::memory_order_relaxed);
-    }
-    template<typename U> requires utils::is_convertible_v<U *, T *>
-    constexpr sp(const sp<U, RefCountT> &other) noexcept
-    {
-      if (!other.refCount_)
-        return;
-
-      object_ = other.object_;
-      refCount_ = other.refCount_;
-      refCount_->refCount.fetch_add(1, std::memory_order_relaxed);
-    }
-    constexpr sp(sp &&other) noexcept
-    {
-      object_ = other.object_;
-      refCount_ = other.refCount_;
-      other.object_ = nullptr;
-      other.refCount_ = nullptr;
-    }
-    template<typename U> requires utils::is_convertible_v<U *, T *>
-    constexpr sp(sp<U, RefCountT> &&other) noexcept
-    {
-      object_ = other.object_;
-      refCount_ = other.refCount_;
-      other.object_ = nullptr;
-      other.refCount_ = nullptr;
-    }
-    constexpr sp &operator=(const sp &other) noexcept { sp<T>{ other }.swap(*this); return *this; }
-    template<typename U> requires utils::is_convertible_v<U *, T *>
-    constexpr sp &operator=(const sp<U, RefCountT> &other) noexcept { sp<T>{ other }.swap(*this); return *this; }
-    constexpr sp &operator=(sp &&other) noexcept { sp<T>{ COMPLEX_MOVE(other) }.swap(*this); return *this; }
-    template<typename U> requires utils::is_convertible_v<U *, T *>
-    constexpr sp &operator=(sp<U, RefCountT> &&other) noexcept { sp<T>{ COMPLEX_MOVE(other) }.swap(*this); return *this; }
-    constexpr ~sp() noexcept
+    constexpr sp(nullptr_t) noexcept { }
+    constexpr sp(const sp &other) noexcept : refCount_{ other.refCount_ }
     {
       if (!refCount_)
         return;
 
-      auto *refCount = refCount_;
+      refCount_->refCount.fetch_add(1, satomi::memory_order_relaxed);
+    }
+    constexpr sp(sp &&other) noexcept { swap(other); }
+    constexpr sp &operator=(const sp &other) noexcept
+    {
+      if (this != &other)
+      {
+        this->~sp();
+
+        refCount_ = other.refCount_;
+        refCount_->refCount.fetch_add(1, satomi::memory_order_relaxed);
+      }
+
+      return *this;
+    }
+    constexpr sp &operator=(sp &&other) noexcept
+    {
+      if (this != &other)
+      {
+        this->~sp();
+
+        swap(other);
+      }
+
+      return *this;
+    }
+    constexpr ~sp() noexcept
+    {
+      auto refCount = refCount_;
       refCount_ = nullptr;
-      auto value = refCount->refCount.fetch_sub(1, std::memory_order_acq_rel);
-      if ((value & RefCountT::refCountMask) > 1)
+      if (!refCount)
         return;
 
-      if (value & RefCountT::isCombinedMask)
-      {
-        object_->~T();
-        delete static_cast<combined *>(refCount);
-      }
+      auto value = refCount->refCount.fetch_sub(1, satomi::memory_order_acq_rel);
+      if (value > 1)
+        return;
+
+      refCount->object_->~T();
+      refCount->~control_block();
+      if (utils::is_constant_evaluated())
+        operator delete[](refCount, utils::align_val_t(alignof(T)));
       else
-      {
-        delete object_;
-        delete refCount;
-      }
+        utils::deallocate(refCount);
     }
 
     static constexpr sp<T> create(auto &&... args)
     {
-      sp shared;
-      auto *refCount = new combined{};
-      shared.object_ = refCount->create_object(COMPLEX_FWD(args)...);
-      shared.refCount_ = refCount;
+      constexpr auto alignment = alignof(T);
+      constexpr auto headerSize = utils::roundUpToMultiple(sizeof(control_block), alignment);
+      constexpr auto totalSize = headerSize + sizeof(T);
+
+      byte *memory;
+      if (utils::is_constant_evaluated())
+      {
+        // can't use operator new[] the usual way because of a longstanding bug in msvc...
+        // https://developercommunity.visualstudio.com/t/using-c17-new-stdalign-val-tn-syntax-results-in-er/528320
+        memory = (byte *)operator new[](totalSize, utils::align_val_t(alignment));
+      }
+      else
+        memory = (byte *)utils::allocate(totalSize, alignment);
+      
+      sp shared{};
+      shared.refCount_ = new(memory) control_block{};
+      shared.refCount_->object_ = new(memory + headerSize) T{ COMPLEX_FWD(args)... };
+
       return shared;
     }
 
     constexpr void swap(sp &other) noexcept
     {
-      auto *otherObject = other.object_;
-      auto *otherRefCount = other.refCount_;
-      other.object_ = object_; 
-      other.refCount_ = refCount_;
-      object_ = otherObject;
-      refCount_ = otherRefCount;
+      COMPLEX_SWAP_MEMBERS(refCount_, other);
     }
 
     constexpr void reset() noexcept { sp{}.swap(*this); }
-    template<typename U> requires utils::is_convertible_v<U *, T *>
-    constexpr void reset(U *pointer) { sp<T>{ pointer }.swap(*this); }
 
-    constexpr T *get() const noexcept { return object_; }
+    constexpr T *get() const noexcept { return (refCount_) ? refCount_->object_ : nullptr; }
     constexpr T *operator->() const noexcept { return get(); }
     constexpr T &operator*() const noexcept { return *get(); }
 
     constexpr usize use_count() const noexcept
-    { return (!refCount_) ? 0 : (refCount_->refCount.load(std::memory_order_relaxed) & RefCountT::refCountMask); }
+    { return (!refCount_) ? 0 : refCount_->refCount.load(satomi::memory_order_relaxed); }
 
     explicit constexpr operator bool() const noexcept { return get() != nullptr; }
 
   protected:
-    RefCountT *refCount_ = nullptr;
-    T *object_ = nullptr;
+    control_block *refCount_ = nullptr;
   };
 
   template<typename T, typename U>
@@ -338,7 +263,7 @@ namespace utils
       Storage &operator=(const Storage &) = delete;
 
       void *pointer;
-      unsigned char buffer[sizeof(pointer)];
+      byte buffer[sizeof(pointer)];
     };
 
     enum Op { OpAccess, OpClone, OpDestroy, OpMoveOut, OpTransfer, OpTypeId };
@@ -359,25 +284,25 @@ namespace utils
       static void ManageStorage(Op op, const whatever *instance, InOutParams *inOutParams)
       {
         // The contained object is in storage.buffer
-        auto objectPtr = utils::launder(reinterpret_cast<const T *>(&instance->storage.buffer));
+        auto objectPtr = utils::launder((const T *)&instance->storage.buffer);
         switch (op)
         {
         case OpAccess:
           inOutParams->object = const_cast<T *>(objectPtr);
           break;
         case OpClone:
-          ::new(&inOutParams->whateverPtr->storage.buffer) T(*objectPtr);
+          new(&inOutParams->whateverPtr->storage.buffer) T(*objectPtr);
           inOutParams->whateverPtr->manager = instance->manager;
           break;
         case OpDestroy:
           objectPtr->~T();
           break;
         case OpMoveOut:
-          ::new(inOutParams->object) T{ COMPLEX_MOVE(*const_cast<T *>(objectPtr)) };
+          new(inOutParams->object) T{ COMPLEX_MOVE(*const_cast<T *>(objectPtr)) };
           objectPtr->~T();
           break;
         case OpTransfer:
-          ::new(&inOutParams->whateverPtr->storage.buffer) T{ COMPLEX_MOVE(*const_cast<T *>(objectPtr)) };
+          new(&inOutParams->whateverPtr->storage.buffer) T{ COMPLEX_MOVE(*const_cast<T *>(objectPtr)) };
           objectPtr->~T();
           inOutParams->whateverPtr->manager = instance->manager;
           const_cast<whatever *>(instance)->manager = nullptr;
@@ -392,8 +317,7 @@ namespace utils
       static T &CreateStorage(Storage &storage, Args&&... args)
       {
         void *address = &storage.buffer;
-        ::new (address) T{ COMPLEX_FWD(args)... };
-        return *static_cast<T *>(address);
+        return *new (address) T{ COMPLEX_FWD(args)... };
       }
     };
 
@@ -418,7 +342,7 @@ namespace utils
           delete objectPtr;
           break;
         case OpMoveOut:
-          ::new(inOutParams->object) T{ COMPLEX_MOVE(*const_cast<T *>(objectPtr)) };
+          (void)new(inOutParams->object) T{ COMPLEX_MOVE(*const_cast<T *>(objectPtr)) };
           objectPtr->~T();
           break;
         case OpTransfer:
@@ -444,20 +368,8 @@ namespace utils
     template<typename T>
     using get_manager = utils::conditional_t<is_small<T>, ManagerInternal<T>, ManagerExternal<T>>;
 
-    template<typename Sig>
-    struct signature;
-
-    template<typename Ret, typename T>
-    struct signature<Ret(T)> { using type = T; };
-
-    template<typename Ret, typename Obj, typename T>
-    struct signature<Ret(Obj:: *)(T)> { using type = T; };
-
-    template<typename Ret, typename Obj, typename T>
-    struct signature<Ret(Obj:: *)(T) const> { using type = T; };
-
   public:
-    constexpr whatever() noexcept : manager{ nullptr } { }
+    constexpr whatever() noexcept = default;
     ~whatever() noexcept { reset(); }
     whatever(const whatever &other)
     {
@@ -578,9 +490,9 @@ namespace utils
     usize visit(VisitorFunctions &&... visitors)
     {
       usize index = 0;
-      auto probe = [this, &index]<typename T>(T && visitor)
+      auto probe = [this, &index]<typename T>(T &&visitor)
       {
-        using URef = typename signature<T>::type;
+        using URef = typename detail::signature<T>::type;
         using UClean = utils::remove_cvref_t<URef>;
         static_assert(utils::is_lvalue_reference_v<URef>, "Parameter must an lvalue reference");
 
@@ -606,11 +518,11 @@ namespace utils
     template<typename ... Ts>
     bool is_one_of()
     {
-      auto matches = (((manager == &get_manager<Ts>::ManageStorage) ? usize(1) : usize(0)) + ...);
+      auto matches = (usize(manager == &get_manager<Ts>::ManageStorage) + ...);
       return matches > 0;
     }
 
-    template<template <typename...> class VariantLike, typename ... Us>
+    template<template<typename...> class VariantLike, typename ... Us>
     usize try_extract(VariantLike<Us...> &variant)
     {
       if (!has_value())
@@ -634,7 +546,7 @@ namespace utils
         return false;
       };
 
-      bool isFound = (probe.template operator() < Us > () || ...);
+      bool isFound = (probe.template operator()<Us>() || ...);
       if (!isFound)
         return usize(-1);
       return index;
@@ -660,14 +572,14 @@ namespace utils
   private:
     struct ControlBlock
     {
-      std::atomic<bool> exists = true;
-      std::atomic<usize> refCount = 1;
+      satomi::atomic<bool> exists = true;
+      satomi::atomic<usize> refCount = 1;
     } *controlBlock_ = nullptr;
 
     void construct(ControlBlock *controlBlock)
     {
       controlBlock_ = controlBlock;
-      controlBlock_->refCount.fetch_add(1, std::memory_order_relaxed);
+      controlBlock_->refCount.fetch_add(1, satomi::memory_order_relaxed);
     }
   public:
     struct Master
@@ -679,8 +591,8 @@ namespace utils
 
         auto *controlBlock = controlBlock_;
         controlBlock_ = nullptr;
-        controlBlock->exists.store(false, std::memory_order_relaxed);
-        auto value = controlBlock->refCount.fetch_sub(1, std::memory_order_relaxed);
+        controlBlock->exists.store(false, satomi::memory_order_relaxed);
+        auto value = controlBlock->refCount.fetch_sub(1, satomi::memory_order_relaxed);
         COMPLEX_ASSERT(value != 0);
         if (value > 1)
           return;
@@ -707,7 +619,7 @@ namespace utils
       
       auto *controlBlock = controlBlock_;
       controlBlock_ = nullptr;
-      auto value = controlBlock->refCount.fetch_sub(1, std::memory_order_relaxed);
+      auto value = controlBlock->refCount.fetch_sub(1, satomi::memory_order_relaxed);
       COMPLEX_ASSERT(value != 0);
       if (value > 1)
         return;
@@ -732,7 +644,7 @@ namespace utils
     bool isObjectAlive() const noexcept
     {
       return controlBlock_ != nullptr &&
-        controlBlock_->exists.load(std::memory_order_relaxed);
+        controlBlock_->exists.load(satomi::memory_order_relaxed);
     }
   };
 
@@ -760,7 +672,7 @@ namespace utils
       static constexpr void copy(void *dest, const void *src)
       {
         const auto &object{ *static_cast<const FnT *>(src) };
-        ::new (dest) FnT{ object };
+        (void)new (dest) FnT{ object };
       }
 
       template<typename FnT>
@@ -774,7 +686,7 @@ namespace utils
       static constexpr void move(void *dest, void *src)
       {
         auto &object{ *static_cast<FnT *>(src) };
-        ::new (dest) FnT{ COMPLEX_MOVE(object) };
+        (void)new (dest) FnT{ COMPLEX_MOVE(object) };
       }
 
       template<typename FnT>
@@ -787,15 +699,20 @@ namespace utils
       static constexpr R empty_invoke(const void *, Args &&...)
       {
         // bad function call
-        ::abort();
+        COMPLEX_TRAP();
       }
+
+      // you can't just assign lambdas to the fn ptrs because micro soft can't fix their compiler
+      static constexpr void empty_copy([[maybe_unused]] void *, [[maybe_unused]] const void *) { }
+      static constexpr void empty_destroy([[maybe_unused]] void *) { }
+      static constexpr void empty_move([[maybe_unused]] void *, [[maybe_unused]] void *) { }
 
       usize size = 0;
       usize alignment = 0;
-      Copier copier = [](void *, const void *) { };
-      Destroyer destroyer = [](void *) { };
+      Copier copier = &empty_copy;
+      Destroyer destroyer = &empty_destroy;
       Invoker invoker = &empty_invoke;
-      Mover mover = [](void *, void *) { };
+      Mover mover = &empty_move;
     };
 
     // Empty vtable which is used when fn is empty
@@ -803,7 +720,7 @@ namespace utils
     inline constexpr vtable_t<R, Args...> empty_vtable{};
   }
 
-  inline constexpr usize heap_allocated = usize(-1) >> 1;
+  inline constexpr usize heap_allocated_tag = usize(-1) >> 1;
 
   // ghetto std::function implementation that can also be stack-allocated
   // and go back and forth between the heap and stack if needed
@@ -815,7 +732,7 @@ namespace utils
   class fn<R(Args...), MaxSize>
   {
   public:
-    static constexpr bool is_on_heap = MaxSize == heap_allocated;
+    static constexpr bool is_on_heap = MaxSize == heap_allocated_tag;
 
     constexpr fn() noexcept { }
     constexpr fn(nullptr_t) noexcept { }
@@ -828,9 +745,13 @@ namespace utils
     }
 
     // needed because fn & go to the lambda constructor otherwise
+    // and cannot forward to proper copy constructor because uhhh ¯\_(ツ)_/¯
     template<usize Size>
-    constexpr fn(fn<R(Args...), Size> &rhs) :
-      fn{ static_cast<const fn<R(Args...), Size> &>(rhs) } { }
+    constexpr fn(fn<R(Args...), Size> &rhs)
+    {
+      allocate(rhs.vtable_);
+      vtable_->copier(data_, rhs.data_);
+    }
 
     template<usize Size>
     constexpr fn(fn<R(Args...), Size> &&rhs) noexcept
@@ -862,7 +783,7 @@ namespace utils
 
       vtable_->destroyer(data_);
       if constexpr (is_on_heap)
-        ::operator delete[](data_, std::align_val_t(vtable_->alignment));
+        operator delete[](data_, utils::align_val_t(vtable_->alignment));
       vtable_ = &detail::empty_vtable<R, Args...>;
     }
 
@@ -918,10 +839,10 @@ namespace utils
       return *this;
     }
 
-    constexpr fn<R(Args...), heap_allocated> to_dyn_fn() const & { return { *this }; }
-    constexpr fn<R(Args...), heap_allocated> to_dyn_fn() & { return { *this }; }
-    constexpr fn<R(Args...), heap_allocated> to_dyn_fn() const && { return COMPLEX_MOVE(*this); }
-    constexpr fn<R(Args...), heap_allocated> to_dyn_fn() && { return COMPLEX_MOVE(*this); }
+    constexpr fn<R(Args...), heap_allocated_tag> to_dyn_fn() const & { return { *this }; }
+    constexpr fn<R(Args...), heap_allocated_tag> to_dyn_fn() & { return { *this }; }
+    constexpr fn<R(Args...), heap_allocated_tag> to_dyn_fn() const && { return COMPLEX_MOVE(*this); }
+    constexpr fn<R(Args...), heap_allocated_tag> to_dyn_fn() && { return COMPLEX_MOVE(*this); }
 
     template<usize Size> fn<R(Args...), Size> constexpr to_small_fn() const & { return { *this }; }
     template<usize Size> fn<R(Args...), Size> constexpr to_small_fn() & { return { *this }; }
@@ -944,7 +865,7 @@ namespace utils
 
     static_assert(((MaxSize - sizeof(vtable_t)) % alignment == 0) || is_on_heap);
 
-    using storage_t = conditional_t<is_on_heap, void *, unsigned char[MaxSize - sizeof(vtable_t *)]>;
+    using storage_t = conditional_t<is_on_heap, void *, byte[MaxSize - sizeof(vtable_t *)]>;
 
     constexpr void allocate(const vtable_t *newVtable)
     {
@@ -963,16 +884,12 @@ namespace utils
           if (data_)
           {
             COMPLEX_ASSERT(vtable_);
-            ::operator delete[](data_, std::align_val_t(vtable_->alignment));
+            operator delete[](data_, utils::align_val_t(vtable_->alignment));
           }
 
-          // msvc back at it again to make your life miserable
+          // can't use operator new[] the usual way because of a longstanding bug in msvc...
           // https://developercommunity.visualstudio.com/t/using-c17-new-stdalign-val-tn-syntax-results-in-er/528320
-        #if COMPLEX_MSVC
-          data_ = operator new[](newVtable->size * sizeof(unsigned char), std::align_val_t(newVtable->alignment));
-        #else
-          data_ = new(std::align_val_t(newVtable->alignment)) unsigned char[newVtable->size];
-        #endif
+          data_ = operator new[](newVtable->size, utils::align_val_t(newVtable->alignment));
         }
       }
       else
@@ -1004,12 +921,12 @@ namespace utils
 
       allocate(&vtable);
 
-      ::new (data_) fn_t{ COMPLEX_FWD(lambda) };
+      (void)new (data_) fn_t{ COMPLEX_FWD(lambda) };
 
       vtable_ = &vtable;
     }
 
-    alignas(is_on_heap ? alignof(storage_t) : alignment) storage_t data_ { };
+    alignas(is_on_heap ? alignof(storage_t) : alignment) storage_t data_{};
     const vtable_t *vtable_ = &detail::empty_vtable<R, Args...>;
 
     template<typename, usize>
@@ -1017,9 +934,80 @@ namespace utils
   };
 
   template<typename Signature>
-  using dyn_fn = fn<Signature, heap_allocated>;
+  using dynFn = fn<Signature, heap_allocated_tag>;
 
   template<typename Signature, usize MaxSize = 32>
-  using small_fn = fn<Signature, MaxSize>;
+  using smallFn = fn<Signature, MaxSize>;
 
+
+  class thread
+  {
+    void createThread(utils::dynFn<int()> *procedure);
+  public:
+    struct id
+    {
+    #ifdef COMPLEX_WINDOWS
+      /*DWORD*/ unsigned int native_id{};
+    #else
+      /*pthread_t*/ unsigned long native_id{};
+    #endif
+
+      bool operator==(const id &other) const;
+      explicit operator bool() { return native_id; }
+    } thread_id{};
+
+    static id getCurrentId();
+    [[noreturn]] static void exit(int result);
+
+    ~thread();
+
+    thread(auto &&function)
+    {
+      if constexpr (requires{ requires utils::is_same_v<decltype(function()), void>; })
+      {
+        createThread(new(utils::allocate(sizealignof(utils::dynFn<int()>))) 
+          utils::dynFn<int()>{ [fn = COMPLEX_MOVE(function)]() { fn(); return 0; } });
+      }
+      else
+      {
+        createThread(new(utils::allocate(sizealignof(utils::dynFn<int()>)))
+          utils::dynFn<int()>{ [fn = COMPLEX_MOVE(function)]() { return (int)fn(); } });
+      }
+    }
+    thread() = default;
+    thread(const thread &) = delete;
+    thread(thread &&other) noexcept : thread{}
+    {
+      COMPLEX_SWAP_MEMBERS(thread_id, other);
+      COMPLEX_SWAP_MEMBERS(handle_, other);
+    }
+    thread &operator=(const thread &other) = delete;
+    thread &operator=(thread &&other) noexcept
+    {
+      if (&other != this)
+      {
+        this->~thread();
+        COMPLEX_SWAP_MEMBERS(thread_id, other);
+      }
+
+      return *this;
+    }
+
+    bool join(int *exitCode = nullptr);
+    bool detach();
+    void yield();
+
+    bool operator==(const thread &other) const = default;
+  private:
+  #ifdef COMPLEX_WINDOWS
+    /*HANDLE*/ void *handle_{};
+  #endif
+  };
+}
+
+namespace Interface
+{
+  // adapted from https://github.com/thegabman/native_message_box/blob/master/include/NMB/NMB.h
+  enum class MessageBoxType { Info, Warning, Error };
+  bool showNativeMessageBox(const char *title, const char *message, MessageBoxType type);
 }

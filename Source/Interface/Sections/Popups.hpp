@@ -10,200 +10,96 @@
 
 #pragma once
 
-#include "BaseSection.hpp"
+#include "../LookAndFeel/BaseComponent.hpp"
 #include "../Components/OpenGlQuad.hpp"
-#include "../Components/OpenGlImage.hpp"
 
 namespace Interface
 {
-  class OpenGlQuad;
-  class OpenGlImage;
+  class BaseControl;
 
-  class PopupDisplay final : public OpenGlContainer
+  class PopupDisplay final : public Component
   {
   public:
+    static constexpr int kLineHeight = 16;
+
     PopupDisplay();
-    ~PopupDisplay() override;
 
-    void resized() override { }
+    bool render(OpenGlWrapper &openGl) override;
+    virtual void handleCommandMessage(u64 commandId, utils::whatever) override;
 
-    void setContent(juce::String text, juce::Rectangle<int> sourceBounds, 
-      juce::Rectangle<int> screen, Placement placement, Skin::SectionOverride sectionOverride);
+    void setContent(Component *sourceComponent, utils::string displayText, 
+      Placement::Enum relativePlacement)
+    {
+      source = sourceComponent;
+      isControl = false;
+      placement = relativePlacement;
+      text = COMPLEX_MOVE(displayText);
+    }
+    void setContentControl(BaseControl *sourceControl, Placement::Enum relativePlacement)
+    {
+      source = sourceControl;
+      isControl = true;
+      placement = relativePlacement;
+    }
 
-  private:
-    void redo();
-
-    OpenGlQuad body_{ Shaders::kRoundedRectangleFragment };
-    OpenGlQuad border_{ Shaders::kRoundedRectangleBorderFragment };
-    OpenGlImage text_{ "Popup Text" };
-
-    juce::String string_;
-    juce::Font font_;
+    utils::string text;
+    FontId textFontId;
+    FontId numericFontId;
+    i32 cachedFontWidth{};
+    bool isControl = false;
+    Placement::Enum placement{};
+    Component *source{};
   };
 
-  class PopupList final : public OpenGlContainer, OpenGlScrollBarListener
+  class PopupList;
+
+  struct PopupItem : Component
   {
-  public:
-    class Listener
-    {
-    public:
-      virtual ~Listener() = default;
-      virtual void newSelection(PopupList *list, int id) = 0;
-      virtual void summonNewPopupList([[maybe_unused]] juce::Rectangle<int> sourceBounds,
-        [[maybe_unused]] PopupItems *items) { }
-      virtual void closeSubList([[maybe_unused]] PopupItems *items) { }
-    };
-
-    struct CommonListInfo
-    {
-      juce::Font primaryFont;
-      juce::Font secondaryFont;
-      int minWidth = 0;
-      int listRounding = 0;
-      Skin::SectionOverride sectionOverride;
-    };
-
-    static constexpr float kScrollSensitivity = 150.0f;
-    static constexpr float kAutomationListWidth = 150.0f;
-
-    static constexpr float kIconSize = 16.0f;
-    static constexpr float kScrollBarWidth = 8.0f;
-    static constexpr float kSideArrowWidth = 4.0f;
-    static constexpr float kCrossWidth = 8.0f;
-
-    static constexpr float kPrimaryTextLineHeight = 16.0f;
-    static constexpr float kSecondaryTextLineHeight = 12.0f;
-    static constexpr float kDelimiterHeight = 20.0f;
-    static constexpr float kInlineGroupHeight = 28.0f;	// serves also as minimum width for the elements
-
-    static constexpr float kVPadding = 4.0f;
-    static constexpr float kHEntryPadding = 12.0f;
-    static constexpr float kHEntryToSideArrowMinMargin = 16.0f;
-    static constexpr float kVEntryToHintMargin = 3.0f;
-
-    PopupList();
-    ~PopupList() override;
-
-    void mouseEnter(const juce::MouseEvent &e) override { mouseMove(e); }
-    void mouseMove(const juce::MouseEvent &e) override;
-    void mouseDrag(const juce::MouseEvent &e) override;
-    void mouseExit(const juce::MouseEvent &) override;
-    void mouseUp(const juce::MouseEvent &e) override;
-    void mouseWheelMove(const juce::MouseEvent &, const juce::MouseWheelDetails &wheel) override;
-    void resized() override { }
-    void visibilityChanged() override;
-    
-    std::pair<PopupItems *, juce::Rectangle<int>> getSelection(juce::Point<int> position);
-    PopupItems *getItems() const noexcept { return items_; }
-    int getListWidth() const noexcept { return listWidth_; }
-    int getListHeight() const noexcept { return listHeight_; }
-    int getVisibleHeight() const noexcept { return visibleHeight_; }
-    bool getIsUsed() const noexcept { return isUsed_; }
-
-    void scrollBarMoved(ScrollBar *, double rangeStart) override 
-    { viewPosition_ = (float)rangeStart; }
-
-    void setItems(PopupItems *items) { items_ = items; }
-    void setCommonInfo(CommonListInfo *commonInfo) { commonInfo_ = commonInfo; }
-    void setListener(Listener *listener) { listener_ = listener; }
-    void setIsUsed(bool isUsed) { isUsed_ = isUsed; }
-    void select(std::pair<PopupItems *, juce::Rectangle<int>> selectedItem);
-
-    void recalculateSizes();
-    void setComponentsBounds();
-  private:
-    void setScrollBarRange(int visibleHeight, int listHeight);
-    void paintList(juce::Graphics &g, juce::Rectangle<int> redrawArea);
-    int getViewPosition() const;
-
-    Listener *listener_ = nullptr;
-    PopupItems *items_ = nullptr;
-    PopupItems *childList_ = nullptr;
-    CommonListInfo *commonInfo_ = nullptr;
-    std::vector<std::pair<PopupItems *, juce::Rectangle<int>>> itemBounds_{};
-    utils::shared_value<juce::Rectangle<int>> hoveredBounds_{};
-    utils::shared_value<float> hoveredRouding_ = 0.0f;
-    utils::shared_value<float> viewPosition_ = 0.0f;
-    utils::shared_value<int> listWidth_ = 0;
-    utils::shared_value<int> listHeight_ = 0;
-    utils::shared_value<int> visibleHeight_ = 0;
-    bool isUsed_ = false;
-
-    utils::up<ScrollBar> scrollBar_;
-    OpenGlQuad background_{ Shaders::kRoundedRectangleFragment };
-    OpenGlImage rows_{ "Popup List Items" };
-    OpenGlQuad hover_{ Shaders::kRoundedRectangleFragment };
+    i32 id = 0;
+    i32 shortcutKeyCode = '\0';
+    Area<i32> sublistMinSize{ 0, 0 };
+    bool isActive = true;
+    bool closesPopup = true;
+    bool canBeChosen = true;
+    void *extraData = nullptr;
   };
 
-  class PopupSelector final : public BaseSection, public PopupList::Listener
+  class PopupSelector final : public Component
   {
   public:
     static constexpr float kPrimaryFontHeight = 13.0f;
     static constexpr float kSecondaryFontHeight = 11.0f;
 
     PopupSelector();
-    ~PopupSelector() override;
 
-    void renderOpenGlComponents(OpenGlWrapper &openGl) override
-    {
-      openGl.parentStack.emplace_back(ScopedBoundsEmplace::doNotClipFlag);
-      BaseSection::renderOpenGlComponents(openGl);
-    }
+    bool render(OpenGlWrapper &openGl) override;
 
-    void resized() override;
-    void visibilityChanged() override
-    {
-      if (isShowing())
-        grabKeyboardFocus();
-    }
+    bool keyPressed(const KeyPress &key) override;
 
-    bool keyPressed(const juce::KeyPress &key) override;
+    void newSelection(PopupList *list, PopupItem *entry);
+    void summonNewPopupList(Rectangle<int> sourceBounds, PopupItem *items);
+    void closeSubList(PopupItem *items);
+    bool handleFocus(bool hasFocus, FocusChange focusChange) override;
 
-    void newSelection(PopupList *list, int id) override;
-    void summonNewPopupList(juce::Rectangle<int> sourceBounds, PopupItems *items) override;
-    void closeSubList(PopupItems *items) override;
-    void focusLost(FocusChangeType) override;
+    void handleCommandMessage(u64 commandId, utils::whatever extraData) override;
 
-    void positionList(juce::Point<int> sourcePosition);
-    void positionList(juce::Rectangle<int> sourceBounds, Placement placement);
+    void positionList(Point<int> sourcePosition);
+    void positionList(Rectangle<int> sourceBounds, Placement::Enum placement);
 
-    void setComponent(const BaseComponent *component) { livenessChecker_ = component; }
-    void setCallback(utils::dyn_fn<void(int)> callback) { callback_ = COMPLEX_MOVE(callback); }
-    void setCancelCallback(utils::dyn_fn<void()> cancel) { cancel_ = COMPLEX_MOVE(cancel); }
-    void setPopupSkinOverride(Skin::SectionOverride skinOverride) { commonInfo_.sectionOverride = skinOverride; }
-    void setItems(PopupItems selections, int minWidth)
-    {
-      items_ = COMPLEX_MOVE(selections);
-      fillAutomationListIfExists();
-      commonInfo_.minWidth = minWidth;
-      lists_[0]->setItems(&items_);
-      lists_[0]->setIsUsed(true);
-      lists_[0]->recalculateSizes();
-    }
+    void resetState();
 
-    void resetState()
-    {
-      callback_ = {};
-      cancel_ = {};
-      for (auto &list : lists_)
-      {
-        list->setVisible(false);
-        list->setIsUsed(false);
-      }
-      lastPlacement_ = Placement::right;
-    }
-  private:
-    void addList();
-    void fillAutomationListIfExists();
+    // parameters, set to use popup selector
+    utils::smallFn<void(PopupSelector *, PopupItem *)> callback{};
+    utils::smallFn<void(PopupSelector *)> cancel{};
+    PopupItem *items{};
+    Component *summoningComponent{};
 
-    PopupList::CommonListInfo commonInfo_{};
-    utils::dyn_fn<void(int)> callback_{};
-    utils::dyn_fn<void()> cancel_{};
-    std::vector<utils::up<PopupList>> lists_;
-    utils::LivenessChecker livenessChecker_;
-    PopupItems items_{};
-
-    Placement lastPlacement_ = Placement::right;
+    // state
+    Placement::Enum lastPlacement = Placement::right;
+    utils::vector<PopupList *> lists{};
+    PopupItem *deepestHoveredItem{};
+    // TODO: timeout until any of the parents' siblings
+    //       for longer than a specified time
   };
 
 }

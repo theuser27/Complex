@@ -2,7 +2,7 @@
   ==============================================================================
 
     update_types.cpp
-    Created: 16 Nov 2022 2:11:06am
+    Created: 16 Nov 2022 02:11:06
     Author:  theuser27
 
   ==============================================================================
@@ -11,10 +11,9 @@
 #include "update_types.hpp"
 
 #include "Generation/BaseProcessor.hpp"
-#include "Plugin/ProcessorTree.hpp"
+#include "Plugin/Complex.hpp"
 #include "Framework/parameter_value.hpp"
 #include "Interface/Components/BaseControl.hpp"
-#include "Interface/Sections/BaseSection.hpp"
 
 namespace Framework
 {
@@ -30,7 +29,7 @@ namespace Framework
     if (transactions.size() == transactionsToKeep)
       return;
 
-    auto newTransactions = std::vector<decltype(transactions)::value_type>{ transactionsToKeep };
+    auto newTransactions = decltype(transactions){ utils::generalAllocator, transactionsToKeep };
     if (!transactions.size())
     {
       clearUndoHistory();
@@ -190,13 +189,13 @@ namespace Framework
 
   AddProcessorUpdate::~AddProcessorUpdate()
   {
-    if (!processorTree_.isBeingDestroyed() && addedProcessor_)
-      processorTree_.deleteProcessor(addedProcessor_->getProcessorId());
+    if (addedProcessor_)
+      state_.deleteProcessor(addedProcessor_);
   }
 
   bool AddProcessorUpdate::perform()
   {
-    auto destinationPointer = processorTree_.getProcessor(destinationProcessorId_);
+    auto destinationPointer = state_.getProcessor(destinationStateId_);
     
     auto g = wait();
     destinationPointer->insertSubProcessor(destinationSubProcessorIndex_, *addedProcessor_);
@@ -208,7 +207,7 @@ namespace Framework
 
   bool AddProcessorUpdate::undo()
   {
-    auto destinationPointer = processorTree_.getProcessor(destinationProcessorId_);
+    auto destinationPointer = state_.getProcessor(destinationStateId_);
 
     auto g = wait();
     addedProcessor_ = &destinationPointer->deleteSubProcessor(destinationSubProcessorIndex_);
@@ -218,64 +217,64 @@ namespace Framework
 
   bool MoveProcessorUpdate::perform()
   {
-    auto destinationPointer = processorTree_.getProcessor(destinationProcessorId_);
-    auto sourcePointer = processorTree_.getProcessor(sourceProcessorId_);
+    auto destinationPointer = state_.getProcessor(destinationStateId_);
+    auto sourcePointer = state_.getProcessor(sourceStateId_);
 
     auto g = wait();
     auto &movedProcessor = sourcePointer->deleteSubProcessor(sourceSubProcessorIndex_, false);
     destinationPointer->insertSubProcessor(destinationSubProcessorIndex_, movedProcessor, false);
 
-    if (sourcePointer != destinationPointer)
-      for (auto listener : sourcePointer->getListeners())
-        listener->movedSubProcessor(movedProcessor, *sourcePointer, 
-          sourceSubProcessorIndex_, *destinationPointer, destinationSubProcessorIndex_);
-    
-    for (auto listener : destinationPointer->getListeners())
-      listener->movedSubProcessor(movedProcessor, *sourcePointer, 
-        sourceSubProcessorIndex_, *destinationPointer, destinationSubProcessorIndex_);
+    //if (sourcePointer != destinationPointer)
+    //  for (auto listener : sourcePointer->listeners_)
+    //    listener->movedSubProcessor(movedProcessor, *sourcePointer, 
+    //      sourceSubProcessorIndex_, *destinationPointer, destinationSubProcessorIndex_);
+    //
+    //for (auto listener : destinationPointer->listeners_)
+    //  listener->movedSubProcessor(movedProcessor, *sourcePointer, 
+    //    sourceSubProcessorIndex_, *destinationPointer, destinationSubProcessorIndex_);
 
     return true;
   }
 
   bool MoveProcessorUpdate::undo()
   {
-    auto destinationPointer = processorTree_.getProcessor(destinationProcessorId_);
-    auto sourcePointer = processorTree_.getProcessor(sourceProcessorId_);
+    auto destinationPointer = state_.getProcessor(destinationStateId_);
+    auto sourcePointer = state_.getProcessor(sourceStateId_);
 
     auto g = wait();
     auto &movedProcessor = destinationPointer->deleteSubProcessor(destinationSubProcessorIndex_, false);
     sourcePointer->insertSubProcessor(sourceSubProcessorIndex_, movedProcessor, false);
 
-    if (sourcePointer != destinationPointer)
-      for (auto listener : sourcePointer->getListeners())
-        listener->movedSubProcessor(movedProcessor, *destinationPointer, 
-          destinationSubProcessorIndex_, *sourcePointer, sourceSubProcessorIndex_);
+    //if (sourcePointer != destinationPointer)
+    //  for (auto listener : sourcePointer->listeners_)
+    //    listener->movedSubProcessor(movedProcessor, *destinationPointer, 
+    //      destinationSubProcessorIndex_, *sourcePointer, sourceSubProcessorIndex_);
 
-    for (auto listener : destinationPointer->getListeners())
-      listener->movedSubProcessor(movedProcessor, *destinationPointer, 
-        destinationSubProcessorIndex_, *sourcePointer, sourceSubProcessorIndex_);
+    //for (auto listener : destinationPointer->listeners_)
+    //  listener->movedSubProcessor(movedProcessor, *destinationPointer, 
+    //    destinationSubProcessorIndex_, *sourcePointer, sourceSubProcessorIndex_);
 
     return true;
   }
 
   DeleteProcessorUpdate::~DeleteProcessorUpdate()
   {
-    if (!processorTree_.isBeingDestroyed() && deletedProcessor_)
-      processorTree_.deleteProcessor(deletedProcessor_->getProcessorId());
+    if (deletedProcessor_)
+      state_.deleteProcessor(deletedProcessor_);
   }
 
   bool DeleteProcessorUpdate::perform()
   {
-    auto destinationPointer = processorTree_.getProcessor(destinationProcessorId_);
+    auto destinationPointer = state_.getProcessor(destinationStateId_);
 
     auto g = wait();
     deletedProcessor_ = &destinationPointer->deleteSubProcessor(destinationSubProcessorIndex_);
     auto recurseParameters = [](const auto &self, Generation::BaseProcessor *processor) -> void
     {
       processor->remapParameters({}, true, true);
-      processor->setSavedSection(nullptr);
-      for (usize i = 0; i < processor->getSubProcessorCount(); ++i)
-        self(self, processor->getSubProcessor(i));
+      auto child = processor->children;
+      for (usize i = 0; i < processor->childrenCount; (++i), (child = child->next))
+        self(self, child);
     };
     recurseParameters(recurseParameters, deletedProcessor_);
 
@@ -284,15 +283,16 @@ namespace Framework
 
   bool DeleteProcessorUpdate::undo()
   {
-    auto destinationPointer = processorTree_.getProcessor(destinationProcessorId_);
+    auto destinationPointer = state_.getProcessor(destinationStateId_);
 
     auto g = wait();
     destinationPointer->insertSubProcessor(destinationSubProcessorIndex_, *deletedProcessor_);
     auto recurseParameters = [](const auto &self, Generation::BaseProcessor *processor) -> void
     {
       processor->remapParameters({}, true, true);
-      for (usize i = 0; i < processor->getSubProcessorCount(); ++i)
-        self(self, processor->getSubProcessor(i));
+      auto child = processor->children;
+      for (usize i = 0; i < processor->childrenCount; (++i), (child = child->next))
+        self(self, child);
     };
     recurseParameters(recurseParameters, deletedProcessor_);
 
@@ -307,14 +307,14 @@ namespace Framework
     // on the other hand, if this is being called on a redo, we need to change the value appropriately
     if (!firstTime_)
     {
-      if (details_.has_value())
+      if (hasDetails_)
       {
-        auto details = baseParameter_->getParameterDetails();
+        auto details = baseParameter_->details;
         // TODO: currently  no BaseControl implements setParameterDetails correctly
-        baseParameter_->setParameterDetails(details_.value());
+        baseParameter_->details = details_;
         details_ = details;
       }
-      baseParameter_->setValueRaw(newValue_);
+      baseParameter_->setValue(newValue_, false);
       baseParameter_->setValueToHost();
     }
     
@@ -324,15 +324,33 @@ namespace Framework
 
   bool ParameterUpdate::undo()
   {
-    if (details_.has_value())
+    if (hasDetails_)
     {
-      auto details = baseParameter_->getParameterDetails();
-      baseParameter_->setParameterDetails(details_.value());
+      auto details = baseParameter_->details;
+      baseParameter_->details = details_;
       details_ = details;
     }
     
-    baseParameter_->setValueRaw(oldValue_);
+    baseParameter_->setValue(oldValue_, false);
     baseParameter_->setValueToHost();
+    return true;
+  }
+
+  bool PresetUpdate::perform()
+  {
+    auto g = wait();
+    auto oldState = plugin_.exchangeStates(COMPLEX_MOVE(state));
+    state = COMPLEX_MOVE(oldState);
+
+    return true;
+  }
+
+  bool PresetUpdate::undo()
+  {
+    auto g = wait();
+    auto newState = plugin_.exchangeStates(COMPLEX_MOVE(state));
+    state = COMPLEX_MOVE(newState);
+
     return true;
   }
 }

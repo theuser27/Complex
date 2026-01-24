@@ -2,7 +2,7 @@
   ==============================================================================
 
     parameter_types.hpp
-    Created: 26 Mar 2025 11:20:23am
+    Created: 26 Mar 2025 11:20:23
     Author:  theuser27
 
   ==============================================================================
@@ -10,16 +10,25 @@
 
 #pragma once
 
-#include <string>
-#include <vector>
-
-#include "simd_values.hpp"
 #include "constants.hpp"
 #include "utils.hpp"
+#include "memory.hpp"
 
-#define NESTED_ENUM_ARRAY_TYPE ::utils::array
-#define NESTED_ENUM_STRING_VIEW_TYPE ::utils::string_view
-#include "nested_enum.hpp"
+namespace Plugin
+{
+  struct State;
+}
+
+namespace simd_values
+{
+  struct simd_int;
+  struct simd_float;
+}
+
+namespace Generation
+{
+  class BaseProcessor;
+}
 
 namespace Framework
 {
@@ -28,40 +37,107 @@ namespace Framework
   // symmetric types apply the flipped curve to negative values
   // all x values are normalised
 
-  NESTED_ENUM((ParameterScale, u32),
-    (
-      (Toggle            , ID, "3195faf6-b6ea-4d21-94a3-cb15b6184d84"), // round(x)
-      (Indexed           , ID, "f0850d8b-2f46-4860-82f8-5d46d2d27bef"), // round(x * (max - min))
-      (IndexedNumeric    , ID, "e593dbd0-1af6-410f-865b-4044646ab9c9"), // round(x * (max - min)), but cannot have values rearranged
-      (Linear            , ID, "e4c9e4aa-c9a0-493f-869b-f090460bfbf1"), // x * (max - min) + min
-      (Clamp             , ID, "20f78758-8eb1-403a-8207-9a124e4b5683"), // clamp(x, min, max)
-      (Quadratic         , ID, "9c3ac761-4c0e-462e-be03-8604c391e085"), // x ^ 2 * (max - min) + min
-      (ReverseQuadratic  , ID, "ed4e371b-26d6-42b0-8148-9f0355055d6b"), // (x - 1) ^ 2 * sgn(x - 1) * (max - min) + max
-      (SymmetricQuadratic, ID, "69f8a98b-7bd0-494d-b971-3ded188485c4"), // ((x - 0.5) ^ 2 * sgn(x - 0.5) + 0.5) * 2 * (max - min) + min
-      (Cubic             , ID, "cf999277-1c98-4b1b-a8ff-4161d2cd9f35"), // x ^ 3
-      (ReverseCubic      , ID, "f427599a-c9c7-45be-b824-50fde17f1b3c"), // (x - 1) ^ 3 * (max - min) + max
-      (SymmetricCubic    , ID, "1124f08e-6ac1-4ac7-8cc7-81bd662e9fe7"), // (2 * x - 1) ^ 3
-      (Loudness          , ID, "b64df42f-b5b7-4b76-af63-167722c26543"), // 20 * log10(x)
-      (SymmetricLoudness , ID, "fb7963d1-2ba8-4061-88ab-76f9397fc6ad"), // 20 * log10(abs(x)) * sgn(x)
-      (Frequency         , ID, "9ed6e3bc-f91d-46fa-bd6a-2edcb1e178a2"), // (sampleRate / 2 * minFrequency) ^ x
-      (SymmetricFrequency, ID, "200df43d-0c2c-4e1d-a780-07b9c024ba1a")  // (sampleRate / 2 * minFrequency) ^ (abs(x)) * sgn(x)
-    )
-  )
+  COMPLEX_ENUM(ParameterScale,
+    (            Toggle, 1757693064462006100),  // round(x)
+    (           Indexed, 1757693075999062000),  // round(x * (max - min))
+    (            Linear, 1757693088052707600),  // x * (max - min) + min
+    (             Clamp, 1757693157266612600),  // clamp(x, min, max)
+    (         Quadratic, 1757693166022104900),  // x ^ 2 * (max - min) + min
+    (  ReverseQuadratic, 1757693171422009600),  // (x - 1) ^ 2 * sgn(x - 1) * (max - min) + max
+    (SymmetricQuadratic, 1757693229769487000),  // ((x - 0.5) ^ 2 * sgn(x - 0.5) + 0.5) * 2 * (max - min) + min
+    (             Cubic, 1757693243184020300),  // x ^ 3
+    (      ReverseCubic, 1757693263245919300),  // (x - 1) ^ 3 * (max - min) + max
+    (    SymmetricCubic, 1757693277746078900),  // (2 * x - 1) ^ 3
+    (          Loudness, 1757693294934436100),  // 20 * log10(x)
+    ( SymmetricLoudness, 1757693297826885200),  // 20 * log10(abs(x)) * sgn(x)
+    (         Frequency, 1757693375693329300),  // (sampleRate / 2 * minFrequency) ^ x
+    (SymmetricFrequency, 1757693385953525000)   // (sampleRate / 2 * minFrequency) ^ (abs(x)) * sgn(x)
+  );
+
+  COMPLEX_ENUM(ParameterChangeReason, 
+    ( inputSidechain, 1757682036260828100),
+    (outputSidechain, 1757682033430552800),
+    (      laneCount, 1757682031418305900),
+  );
+
+  struct ProcessorMetadata;
+  struct ParameterMetadata;
 
   struct IndexedData
   {
-    utils::string_view displayName{};                     // user-readable name for given parameter value
-    utils::string_view id{};                              // uuid for parameter value
-    u64 count = 1;                                        // how many consecutive values are of this indexed type
-                                                          //   can be more than the ones currently available
-    utils::string_view dynamicUpdateUuid{};               // this uuid is used to register for in ProcessorTree
-                                                          //   these updates will happen only if the parameter is not mapped/modulated
-    struct DynamicData
+    enum { NoneFlag, VtableFlag, ProcessorFlag, ParameterFlag };
+
+    utils::string_view displayName{};           // user-readable name for given parameter value
+    uuid id{};                                  // uuid for parameter value
+    u32 count = 1;                              // how many consecutive values are of this indexed type
+                                                //   can be more than the ones currently available
+    u32 flags{};
+    uuid dynamicUpdateUuid{};                   // this uuid is used to register for in the State
+                                                //   these updates will happen only if the parameter is not mapped/modulated
+    IndexedData *parent{};
+    IndexedData *children{};
+    IndexedData *next{};
+    union
     {
-      std::string stringData{};
-      std::vector<IndexedData> dataLookup{};
-      utils::small_fn<bool(const Framework::IndexedData &, int)> ignoreItemFn{};
+      utils::span<void(*const)()> vtable{};
+      ProcessorMetadata *processorMetadata;
+      ParameterMetadata *parameterMetadata;
     };
+
+    operator IndexedData *() { return this; }
+    IndexedData &operator,(IndexedData &other) 
+    {
+      if (next)
+        *next, other;
+      else
+      {
+        next = &other;
+        other.parent = parent;
+        if (parent)
+          parent->count += other.count;
+      }
+
+      return *this;
+    }
+
+    template<typename ... Args>
+    IndexedData &
+    addChildren(Args &&... args)
+    {
+      IndexedData *childrenArgs[] = { (&args)... };
+      childrenArgs[0]->parent = this;
+      count += childrenArgs[0]->count;
+      for (usize i = 1; i < sizeof...(Args); ++i)
+      {
+        childrenArgs[i - 1]->next = childrenArgs[i];
+        childrenArgs[i]->parent = this;
+        count += childrenArgs[i]->count;
+      }
+      children = childrenArgs[0];
+      return *this;
+    }
+
+    static IndexedData *deepCopy(auto *arena, IndexedData *options)
+    {
+      auto *newOption = anew(arena, Framework::IndexedData, { *options });
+      if (newOption->children)
+      {
+        newOption->children = deepCopy(arena, newOption->children);
+        for (auto child = newOption->children; child->next; child = child->next)
+          child->next = deepCopy(arena, child->next);
+      }
+
+      return newOption;
+    }
+
+    static void visit(IndexedData *data, const auto &predicate)
+    {
+      for (auto *child = data->children; child; child = child->next)
+      {
+        predicate(*child);
+        visit(child, predicate);
+      }
+    }
   };
 
   struct ParameterDetails
@@ -77,37 +153,180 @@ namespace Framework
         Automatable | Extensible,
     };
 
-    utils::string_view id{};												    // internal plugin name
-    utils::string_view displayName{};                   // name displayed to the user
-    float minValue = 0.0f;                              // minimum scaled value
-    float maxValue = 1.0f;                              // maximum scaled value
-    float defaultValue = 0.0f;                          // default scaled value
-    float defaultNormalisedValue = 0.0f;                // default normalised value
-    ParameterScale scale = ParameterScale::Linear;      // value skew factor
-    utils::string_view displayUnits{};                  // "%", " db", etc.
-    utils::span<const IndexedData> indexedData{};       // extra data for indexed parameters
-    u32 flags = Modulatable | Automatable;              // various flags
-    UpdateFlag updateFlag = UpdateFlag::Realtime;       // at which point during processing the parameter is updated
-    std::string (*generateNumeric)(float value,         // string generator function for IndexedNumeric parameters
+    utils::string_view displayName{};                     // name displayed to the user
+    uuid id{};												                    // parameter id
+    union
+    {
+      struct
+      {
+        float minValue;                                   // minimum scaled value
+        float maxValue;                                   // maximum scaled value
+        float defaultValue;                               // default scaled value
+        float defaultNormalisedValue;                     // default normalised value
+      };
+      struct
+      {
+        IndexedData *options;                             // (nested) list of options
+        uuid defaultOptionId;                             // id of the default option
+      };
+    };
+
+    ParameterScale::Value scale = ParameterScale::Linear; // value skew factor
+    utils::string_view displayUnits{};                    // "%", " db", etc.
+    u32 flags = Modulatable | Automatable;                // various flags
+    UpdateFlag updateFlag = UpdateFlag::Realtime;         // at which point during processing the parameter is updated
+    void (*generateNumeric)(char *string,                 // string generator function for IndexedNumeric parameters
+      usize stringSize, float value,
       const ParameterDetails &details) = nullptr;
-    utils::sp<IndexedData::DynamicData> dynamicData;
   };
 
-  auto getParameterDetails(utils::string_view id) noexcept
-    -> std::optional<ParameterDetails>;
 
-  auto getIndexedData(double scaledValue, const ParameterDetails &details) noexcept
-    -> utils::pair<const IndexedData *, usize>;
+  utils::pair<const IndexedData *, usize>
+  getIndexedData(double scaledValue, const ParameterDetails &details) noexcept;
+  double
+  getValueFromOptionText(utils::string_view text, const ParameterDetails &details) noexcept;
+  double
+  getValueFromOptionId(uuid optionId, const ParameterDetails &details) noexcept;
 
   // with skewOnly == true a normalised value between [0,1] or [-0.5, 0.5] is returned,
   // depending on whether the parameter is bipolar
-  double scaleValue(double value, const ParameterDetails &details, float sampleRate = kDefaultSampleRate,
+  double
+  scaleValue(double value, const ParameterDetails &details, float sampleRate = kDefaultSampleRate,
     bool scalePercent = false, bool skewOnly = false) noexcept;
 
-  double unscaleValue(double value, const ParameterDetails &details,
+  double
+  unscaleValue(double value, const ParameterDetails &details,
     float sampleRate = kDefaultSampleRate, bool unscalePercent = true) noexcept;
 
-  simd_float scaleValue(simd_float value, const ParameterDetails &details,
+  simd_values::simd_float
+  scaleValue(simd_values::simd_float value, const ParameterDetails &details,
     float sampleRate = kDefaultSampleRate) noexcept;
 
+
+
+  struct ParameterMetadata
+  {
+    Framework::ParameterDetails details{};
+    ParameterMetadata *next{};
+
+    ParameterMetadata &operator,(ParameterMetadata &other)
+    {
+      if (next)
+        *next, other;
+      else
+        next = &other;
+      return *this;
+    }
+    operator ParameterMetadata *() { return this; }
+  };
+
+  struct ProcessorMetadata
+  {
+    enum : u32
+    {
+      NoTag = 0U,
+      GroupTag = NoTag,
+      ProcessorTag = 1U << 0,
+      NoParameterValidationTag = 1U << 1,
+
+      InactiveTag = 1U << 30,
+      RuntimeAddedTag = 1U << 31,
+    };
+
+    u32 flags{};
+    uuid id{};
+    utils::string_view name{};
+    Generation::BaseProcessor *(*create)(Plugin::State *, ProcessorMetadata *, const void *){};
+    ProcessorMetadata *parent{};
+    ProcessorMetadata *next{};
+    ProcessorMetadata *children{};
+    ParameterMetadata *parameters{};
+    u32 childrenCount{};
+    u32 parametersCount{};
+    utils::span<void(*const)()> vtable{};
+
+    ProcessorMetadata &operator,(ProcessorMetadata &other)
+    {
+      if (next)
+        *next, other;
+      else
+        next = &other;
+      return *this;
+    }
+    operator ProcessorMetadata *() { return this; }
+
+    ProcessorMetadata &
+    computeCounts()
+    {
+      for (auto child = children; child; child = child->next)
+      {
+        ++childrenCount;
+        child->parent = this;
+      }
+
+      for (auto parameter = parameters; parameter; parameter = parameter->next)
+        ++parametersCount;
+
+      return *this;
+    }
+
+    ProcessorMetadata &
+    computeParameterCounts(const auto &lambda)
+    {
+      for (auto child = children; child; child = child->next)
+      {
+        ++childrenCount;
+        child->parent = this;
+      }
+
+      lambda(*this);
+
+      for (auto parameter = parameters; parameter; parameter = parameter->next)
+        ++parametersCount;
+
+      return *this;
+    }
+  };
+
+  struct PluginStructure
+  {
+    u64 versionNumber{};
+
+    utils::bumpArena *arena{};
+
+    Framework::ProcessorMetadata *metadata{};
+    utils::vectornd<utils::sp<utils::Dylib>> loadedDynamicLibs{};
+
+    utils::bumpArena *getNewArena(usize size)
+    {
+      return utils::bumpArena::createNested(arena, size);
+    }
+  };
+
+  inline void printToggleValues(char *string, usize size, float value, const ParameterDetails &)
+  {
+    static constexpr utils::string_view toggleStrings[] = { "Off", "On" };
+    size = utils::min(toggleStrings[(usize)value].size(), size - 1);
+    ::memcpy(string, toggleStrings[(usize)value].data(), size);
+    string[size] = '\0';
+  }
 }
+
+#define COMPLEX_STRUCTURE_PARAMETER(...) (*anew(arena, Framework::ParameterMetadata, { .details = { __VA_ARGS__ } }))
+#define COMPLEX_STRUCTURE_PARAMETER_CUSTOM(...) (__VA_ARGS__(*anew(arena, Framework::ParameterMetadata, {})))
+
+#define COMPLEX_STRUCTURE_PROCESSOR(T, nameString, idNumber, ...) (*anew(arena, Framework::ProcessorMetadata, \
+  { .flags = ProcessorMetadata::ProcessorTag, .id = idNumber, .name = { nameString, sizeof(nameString)  }, \
+    .create = (Generation::BaseProcessor *(*)(Plugin::State *, ProcessorMetadata *, const void *))(::createProcessor<T>) __VA_OPT__(,) __VA_ARGS__ }))
+#define COMPLEX_STRUCTURE_GROUP(nameString, idNumber, ...) (*anew(arena, Framework::ProcessorMetadata, \
+  { .flags = ProcessorMetadata::GroupTag, .id = idNumber, .name = { nameString, sizeof(nameString) } __VA_OPT__(,) __VA_ARGS__ }))
+
+// count == 0 if nothing is provided
+#define COMPLEX_STRUCTURE_INDEXED_DATA(...) (*anew(arena, Framework::IndexedData, { COMPLEX_DEPAREN(__VA_OPT__(COMPLEX_IGNORE)(.count = 0)) __VA_ARGS__ }))
+
+template<typename T>
+T *
+createProcessor(Plugin::State *state, Framework::ProcessorMetadata *metadata, const void *copy = nullptr);
+template<typename T>
+void *
+initialiseTypeStructure(void *metadata, Framework::PluginStructure &structure);

@@ -1,94 +1,97 @@
 /*
-  ==============================================================================
+	==============================================================================
 
-    parameter_bridge.hpp
-    Created: 28 Jul 2022 4:21:59am
-    Author:  theuser27
+		parameter_bridge.hpp
+		Created: 28 Jul 2022 04:21:59
+		Author:  theuser27
 
-  ==============================================================================
+	==============================================================================
 */
 
 #pragma once
 
-#include <juce_audio_processors/juce_audio_processors.h>
-
-#include "platform_definitions.hpp"
+#include "satomi.hpp"
+#include "stl_utils.hpp"
+#include "memory.hpp"
 
 namespace Plugin
 {
-  class ComplexPlugin;
+	struct State;
 }
 
 namespace Framework
 {
-  struct ParameterLink;
+	struct ParameterLink;
 
-  class ParameterBridge final : public juce::AudioProcessorParameter
-  {
-  public:
-    class Listener
-    {
-    public:
-      virtual ~Listener() { }
-      virtual void parameterLinkReset(ParameterBridge *bridge,
-        ParameterLink *newLink, ParameterLink *oldLink) = 0;
-    };
-    
-    static constexpr float kDefaultParameterValue = 0.5f;
+	class ParameterBridge
+	{
+	public:
+		class Listener
+		{
+		public:
+			virtual ~Listener() { }
+			virtual void parameterLinkReset(ParameterBridge *bridge,
+				ParameterLink *newLink, ParameterLink *oldLink) = 0;
+		};
+		
+		static constexpr float kDefaultParameterValue = 0.5f;
 
-    ParameterBridge() = delete;
-    ParameterBridge(const ParameterBridge &) = delete;
-    ParameterBridge(ParameterBridge &&) = delete;
-    ParameterBridge &operator=(const ParameterBridge &) = delete;
-    ParameterBridge &operator=(ParameterBridge &&) = delete;
+		ParameterBridge() = delete;
+		ParameterBridge(const ParameterBridge &) = delete;
+		ParameterBridge(ParameterBridge &&) = delete;
+		ParameterBridge &operator=(const ParameterBridge &) = delete;
+		ParameterBridge &operator=(ParameterBridge &&) = delete;
 
-    ParameterBridge(Plugin::ComplexPlugin *plugin,
-      u64 parameterIndex = UINT64_MAX, ParameterLink *link = nullptr) noexcept;
-    ~ParameterBridge() noexcept override;
+		ParameterBridge(Plugin::State *state,
+			u64 parameterIndex = u64(-1), ParameterLink *link = nullptr) noexcept;
+		~ParameterBridge() noexcept;
 
-    auto *getParameterLink() const noexcept { return parameterLinkPointer_.load(std::memory_order_acquire); }
-    void resetParameterLink(ParameterLink *link, bool getValueFromParameter = true) noexcept;
+		auto *getParameterLink() const noexcept { return parameterLinkPointer_.load(satomi::memory_order_acquire); }
+		void resetParameterLink(ParameterLink *link, bool getValueFromParameter = true) noexcept;
+		static void notifyParameterChange() noexcept;
 
-    void setValueFromUI(float newValue) noexcept
-    {
-      value_.store(newValue, std::memory_order_release);
-      sendValueChangedMessageToListeners(newValue);
-    }
+		void beginChangeGesture();
+		void setValueFromUI(float newValue) noexcept;
+		void endChangeGesture();
 
-    void updateUIParameter() noexcept;
+		void updateUIParameter() noexcept;
 
-    void setCustomName(const juce::String &name);
+		void setCustomName(utils::string name);
 
-    u64 getIndex() const noexcept { return parameterIndex_; }
-    bool isMappedToParameter() const noexcept { return parameterLinkPointer_.load(std::memory_order_acquire); }
+		bool isMappedToParameter() const noexcept { return parameterLinkPointer_.load(satomi::memory_order_acquire); }
 
-    // Inherited via AudioProcessorParameter
-    float getValue() const override { return value_.load(std::memory_order_relaxed); }
-    void setValue(float newValue) override;
-    float getDefaultValue() const override;
+		float getValue() const { return value_.load(satomi::memory_order_relaxed); }
+		void setValue(float newValue)
+		{
+			auto oldValue = value_.exchange(newValue, satomi::memory_order_relaxed);
+			if (oldValue != newValue)
+				wasValueSet_.store(true, satomi::memory_order_relaxed);
+		}
+		float getDefaultValue() const;
 
-    juce::String getName() const;
-    juce::String getName(int maximumStringLength) const override;
-    juce::String getLabel() const override;
-    juce::String getText(float value, int maximumStringLength) const override;
-    float getValueForText(const juce::String &text) const override;
+		utils::string getName() const;
+		utils::string getName(int maximumStringLength) const;
+		void getName(char *buffer, usize maximumStringLength) const;
+		utils::string getLabel() const;
+		void getText(float value, char *buffer, usize maximumStringLength) const;
+		float getValueForText(utils::string_view text) const;
 
-    bool isAutomatable() const override { return true; }
-    int getNumSteps() const override;
-    bool isDiscrete() const override;
-    bool isBoolean() const override;
+		bool isAutomatable() const { return true; }
+		int getNumSteps() const;
+		bool isDiscrete() const;
+		bool isBoolean() const;
 
-    void addListener(Listener *listener) { listeners_.emplace_back(listener); }
-    void removeListener(Listener *listener) noexcept { std::erase(listeners_, listener); }
+		void addListener(Listener *listener) { listeners_.emplace_back(listener); }
+		void removeListener(Listener *listener) noexcept { listeners_.erase(listener); }
 
-  private:
-    u64 parameterIndex_ = UINT64_MAX;
-    std::pair<std::atomic<bool>, juce::String> name_{};
-    std::atomic<float> value_ = kDefaultParameterValue;
-    std::atomic<bool> wasValueSet_ = false;
-    std::atomic<ParameterLink *> parameterLinkPointer_ = nullptr;
+		const u64 parameterIndex;
+	private:
+		utils::pair<satomi::atomic<bool>, utils::string> name_{};
+		satomi::atomic<float> value_ = kDefaultParameterValue;
+		satomi::atomic<bool> wasValueSet_ = false;
+		satomi::atomic<ParameterLink *> parameterLinkPointer_ = nullptr;
 
-    Plugin::ComplexPlugin *plugin_ = nullptr;
-    std::vector<Listener *> listeners_{};
-  };
+		Plugin::State *state = nullptr;
+		utils::vector<Listener *> listeners_{};
+	};
 }

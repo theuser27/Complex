@@ -27,14 +27,12 @@ namespace
     return value;
   }
 
-  strict_inline juce::Point<float> normalise(juce::Point<float> point)
+  strict_inline Interface::Point<float> normalise(Interface::Point<float> point)
   { return point * inverseSqrt(point.x * point.x + point.y * point.y); }
 }
 
 namespace Interface
 {
-  using namespace juce::gl;
-
   OpenGlLineRenderer::OpenGlLineRenderer(int pointCount) { setPointCount(pointCount); }
 
   OpenGlLineRenderer::~OpenGlLineRenderer() = default;
@@ -92,11 +90,11 @@ namespace Interface
     fillPosition_ = {};
 
     if (lineBuffer_)
-      renderer.pushOpenGlResourceToDelete(OpenGlAllocatedResource::Buffer, 1, lineBuffer_);
+      glDeleteBuffers(1, lineBuffer_);
     if (fillBuffer_)
-      renderer.pushOpenGlResourceToDelete(OpenGlAllocatedResource::Buffer, 1, fillBuffer_);
+			glDeleteBuffers(1, fillBuffer_);
     if (indicesBuffer_)
-      renderer.pushOpenGlResourceToDelete(OpenGlAllocatedResource::Buffer, 1, indicesBuffer_);
+			glDeleteBuffers(1, indicesBuffer_);
 
     lineBuffer_ = 0;
     fillBuffer_ = 0;
@@ -107,8 +105,6 @@ namespace Interface
   {
     if (pointCount == pointCount_)
       return;
-    
-    utils::ScopedLock g{ buffersLock_, utils::WaitMechanism::WaitNotify };
     
     pointCount_ = pointCount;
     lineVerticesCount_ = kLineVerticesPerPoint * (pointCount_ + 2);
@@ -133,11 +129,9 @@ namespace Interface
     shouldUpdateBufferSizes_ = true;
   }
 
-  void OpenGlLineRenderer::render(const OpenGlWrapper &openGl, const OpenGlComponent &target, juce::Rectangle<int> bounds)
+  void OpenGlLineRenderer::render(const OpenGlWrapper &openGl, const Component &target, Rectangle<int> bounds)
   {
-    utils::ScopedLock g{ buffersLock_, utils::WaitMechanism::WaitNotify };
-
-    if (!setViewPort(target, target, bounds, bounds, openGl, nullptr))
+    if (!setViewPort(target.getPosition(), bounds, bounds, openGl, nullptr))
       return;
 
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
@@ -146,8 +140,8 @@ namespace Interface
 
     if (dirty_)
     {
-      setLineVertices((float)target.getWidthSafe(), (float)target.getHeightSafe());
-      setFillVertices((float)target.getWidthSafe(), (float)target.getHeightSafe());
+      setLineVertices((float)target.bounds.w, (float)target.bounds.h);
+      setFillVertices((float)target.bounds.w, (float)target.bounds.h);
 
       if (shouldUpdateBufferSizes_)
       {
@@ -186,8 +180,8 @@ namespace Interface
     float y_shrink = 1.0f;
     if (fit_)
     {
-      x_shrink = 1.0f - 0.33f * lineWidth_ / (float)target.getWidthSafe();
-      y_shrink = 1.0f - 0.33f * lineWidth_ / (float)target.getHeightSafe();
+      x_shrink = 1.0f - 0.33f * lineWidth_ / (float)target.bounds.w;
+      y_shrink = 1.0f - 0.33f * lineWidth_ / (float)target.bounds.h;
     }
 
     if (fill_)
@@ -195,12 +189,10 @@ namespace Interface
       glBindBuffer(GL_ARRAY_BUFFER, fillBuffer_);
       fillShader_.use();
 
-      Colour fillColourFrom = fillColorFrom_.get();
-      fillColourFromUniform_.set(fillColourFrom.getFloatRed(), fillColourFrom.getFloatGreen(),
-        fillColourFrom.getFloatBlue(), fillColourFrom.getFloatAlpha());
-      Colour fillColourTo = fillColorTo_.get();
-      fillColourToUniform_.set(fillColourTo.getFloatRed(), fillColourTo.getFloatGreen(),
-        fillColourTo.getFloatBlue(), fillColourTo.getFloatAlpha());
+      fillColourFromUniform_.set(fillColorFrom_.getFloatRed(), fillColorFrom_.getFloatGreen(),
+        fillColorFrom_.getFloatBlue(), fillColorFrom_.getFloatAlpha());
+      fillColourToUniform_.set(fillColorTo_.getFloatRed(), fillColorTo_.getFloatGreen(),
+        fillColorTo_.getFloatBlue(), fillColorTo_.getFloatAlpha());
 
       fillCenterUniform_.set(fillCenter_);
       fillBoostAmountUniform_.set(fillBoostAmount_);
@@ -218,8 +210,7 @@ namespace Interface
       GL_FALSE, kLineFloatsPerVertex * sizeof(float), nullptr);
     glEnableVertexAttribArray(linePosition_.attributeId);
 
-    Colour colour = colour_.get();
-    lineColourUniform_.set(colour.getFloatRed(), colour.getFloatGreen(), colour.getFloatBlue(), colour.getFloatAlpha());
+    lineColourUniform_.set(colour_.getFloatRed(), colour_.getFloatGreen(), colour_.getFloatBlue(), colour_.getFloatAlpha());
 
     lineScaleUniform_.set(x_shrink, y_shrink);
     lineWidthUniform_.set(lineWidth_);
@@ -239,10 +230,10 @@ namespace Interface
     float *boosts = boosts_.get();
 
     int active_points = pointCount_ - 2 * buffer_vertices;
-    int start_index = std::max((int)std::ceil(start * (float)(active_points - 1)), 0);
+    int start_index = utils::max((int)::ceilf(start * (float)(active_points - 1)), 0);
     float end_position = end * (float)(active_points - 1);
-    int end_index = std::max((int)std::ceil(end_position), 0);
-    float progress = end_position - std::trunc(end_position);
+    int end_index = utils::max((int)::ceilf(end_position), 0);
+    float progress = end_position - ::truncf(end_position);
 
     start_index %= active_points;
     end_index %= active_points;
@@ -335,10 +326,10 @@ namespace Interface
       
       int next_index = std::min(i + 1, pointCount_ - 1);
       Point<float> delta{ x_[next_index] - point.x, y_[next_index] - point.y };
-      if (delta.isOrigin())
+      if (delta == Point<float>{})
         delta = prev_normalized_delta;
 
-      float next_magnitude = std::sqrt(delta.getDistanceSquaredFromOrigin());
+      float next_magnitude = ::sqrtf(delta.x * delta.x + delta.y * delta.y);
       Point<float> normalized_delta{ delta.x / next_magnitude, delta.y / next_magnitude };
       Point<float> delta_normal{ -normalized_delta.y, normalized_delta.x };
 
@@ -354,9 +345,10 @@ namespace Interface
       float max_inner_radius = std::max(radius, 0.5f * (next_magnitude + magnitude));
       magnitude = next_magnitude;
 
-      float bisect_delta_cos = bisect_line.getDotProduct(delta_normal);
-      float inner_mult = std::min(10.0f, 1.0f / std::fabs(bisect_delta_cos));
-      Point<float> inner_point = point + bisect_line * std::min(inner_mult * radius, max_inner_radius);
+      // dot product
+      float bisect_delta_cos = bisect_line.x * delta_normal.x + bisect_line.y * delta_normal.y;
+      float inner_mult = utils::min(10.0f, 1.0f / ::fabsf(bisect_delta_cos));
+      Point<float> inner_point = point + bisect_line * utils::min(inner_mult * radius, max_inner_radius);
       Point<float> outer_point = point - bisect_line * radius;
 
       float x1, x2, x3, x4, x5, x6;
@@ -427,15 +419,16 @@ namespace Interface
       prev_normalized_delta = normalized_delta;
     }
 
-    Point<float> start{ getXAt(0), getYAt(0) };
-    Point<float> end{ getXAt(pointCount_ - 1), getYAt(pointCount_ - 1) };
+    Point<float> start{ x_[0], y_[0] };
+    Point<float> end{ x_[pointCount_ - 1], y_[pointCount_ - 1] };
 
-    Point<float> delta_start_offset = line_radius * normalise({ start.x - getXAt(1), start.y - getYAt(1) });
-    Point<float> delta_end_offset = line_radius * normalise({ end.x - getXAt(pointCount_ - 2), end.y - getYAt(pointCount_ - 2) });
+    Point<float> delta_start_offset = normalise({ x_[0] - x_[1], y_[0] - y_[1] }) * line_radius;
+    Point<float> delta_end_offset = normalise({ x_[pointCount_ - 1] - x_[pointCount_ - 2], 
+      y_[pointCount_ - 1] - y_[pointCount_ - 2] }) * line_radius;
     for (int i = 0; i < kLineVerticesPerPoint; ++i)
     {
-      lineData_[i * kLineFloatsPerVertex] = (start.x + delta_start_offset.x) * x_adjust - 1.0f;
-      lineData_[i * kLineFloatsPerVertex + 1] = 1.0f - (start.y + delta_start_offset.y) * y_adjust;
+      lineData_[i * kLineFloatsPerVertex] = (x_[0] + delta_start_offset.x) * x_adjust - 1.0f;
+      lineData_[i * kLineFloatsPerVertex + 1] = 1.0f - (y_[0] + delta_start_offset.y) * y_adjust;
       lineData_[i * kLineFloatsPerVertex + 2] = boosts[0];
 
       int copy_index_start = (pointCount_ + 1) * kLineFloatsPerPoint + i * kLineFloatsPerVertex;

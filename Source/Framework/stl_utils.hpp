@@ -2,7 +2,7 @@
   ==============================================================================
 
     stl_utils.hpp
-    Created: 11 Oct 2024 8:26:35pm
+    Created: 11 Oct 2024 20:26:35
     Author:  theuser27
 
   ==============================================================================
@@ -11,12 +11,59 @@
 #pragma once
 
 #include "platform_definitions.hpp"
+#include "macro_helpers.hpp"
 
 // collection of utilities i regularly use of but don't want to include the headers of
+
+namespace std
+{
+  template<typename T>
+  class initializer_list
+  {
+  public:
+    using value_type      = T;
+    using reference       = const T &;
+    using const_reference = const T &;
+    using size_type       = usize;
+
+    using iterator       = const T *;
+    using const_iterator = const T *;
+
+    constexpr initializer_list() noexcept = default;
+    
+    constexpr const_iterator data() const noexcept { return data_; }
+    constexpr size_type size() const noexcept { return size_; }
+    constexpr const_iterator begin() const noexcept { return data_; }
+    constexpr const_iterator end() const noexcept { return begin() + size(); }
+
+  private:
+    iterator data_{};
+    size_type	size_{};
+
+    // private constructors
+  #ifdef _MSC_VER
+  public:
+    constexpr initializer_list(const T *begin, const T *end) noexcept : data_{ begin }, size_{ size_type(end - begin) } { }
+  #else
+    constexpr initializer_list(const_iterator data, size_type size) : data_{ data }, size_{ size } { }
+  #endif
+  };
+
+  template<typename T> constexpr const T *begin(initializer_list<T> list) noexcept { return list.begin(); }
+  template<typename T> constexpr const T *end(initializer_list<T> list) noexcept { return list.end(); }
+
+  // forward declaring things for manually defined structured bindings to work
+
+  template<typename T>
+  struct tuple_size;
+
+  template<usize I, typename T>
+  struct tuple_element;
+}
+
 namespace utils
 {
   using nullptr_t = decltype(nullptr);
-  template<typename ...> using void_t = void;
   template<typename T> struct type_identity { using type = T; };
 
   template<bool Test, typename True, typename False>
@@ -27,7 +74,7 @@ namespace utils
   using conditional_t = typename conditional<Test, True, False>::type;
 
   template<typename T, typename = void> struct add_reference { using lvalue = T; using rvalue = T; };
-  template<typename T> struct add_reference<T, void_t<T &>> { using lvalue = T &; using rvalue = T &&; };
+  template<typename T> requires requires(T &a) { a; } struct add_reference<T> { using lvalue = T &; using rvalue = T &&; };
   template<typename T> using add_lvalue_reference_t = typename add_reference<T>::lvalue;
   template<typename T> using add_rvalue_reference_t = typename add_reference<T>::rvalue;
 
@@ -55,8 +102,21 @@ namespace utils
   template<typename T, auto N> struct remove_extent<T[N]> { using type = T; };
   template<typename T> using remove_extent_t = typename remove_extent<T>::type;
 
+  template<typename T> struct remove_pointer { using type = T; };
+  template<typename T> struct remove_pointer<T *> { using type = T; };
+  template<typename T> using remove_pointer_t = typename remove_pointer<T>::type;
+
+  template<typename T> struct underlying_type { using type = __underlying_type(T); };
+  template<typename T> using underlying_type_t = typename underlying_type<T>::type;
+
+  #define COMPLEX_ARRAY_SIZE(array) (sizeof(array) / sizeof(array[0]))
   #define COMPLEX_FWD(...) static_cast<decltype(__VA_ARGS__)&&>(__VA_ARGS__)
   #define COMPLEX_MOVE(...) static_cast<::utils::remove_reference_t<decltype(__VA_ARGS__)>&&>(__VA_ARGS__)
+  #define COMPLEX_SWAP(x, y) { auto temp_____ = COMPLEX_MOVE(x); (x) = COMPLEX_MOVE(y); y = COMPLEX_MOVE(temp_____); }
+  #define COMPLEX_SWAP_MEMBERS(variable, otherObject, /*thisObject*/...) \
+    auto _##variable##__ = (otherObject).variable;                   \
+    (otherObject).variable = __VA_OPT__((__VA_ARGS__).)variable; \
+    __VA_OPT__((__VA_ARGS__).)variable = _##variable##__;
 
   template<typename, typename> inline constexpr bool is_same_v = false;
   template<typename T> inline constexpr bool is_same_v<T, T> = true;
@@ -83,10 +143,32 @@ namespace utils
   inline constexpr bool is_constructible_v = __is_constructible(T, Args...);
 
   template<typename T>
-  inline constexpr bool is_copy_constructible_v = __is_constructible(T, add_lvalue_reference_t<const T>);
+  inline constexpr bool is_copy_constructible_v = __is_constructible(T, const T &);
 
   template<typename T>
   inline constexpr bool is_default_constructible_v = __is_constructible(T);
+
+  template<typename T>
+  inline constexpr bool is_trivially_copy_constructible_v = __is_trivially_constructible(T, const T &);
+  template<typename T>
+  inline constexpr bool is_trivially_move_constructible_v = __is_trivially_constructible(T, T);
+
+  template<typename T>
+  inline constexpr bool is_trivially_destructible_v =
+#if COMPLEX_GCC
+  #if __has_builtin(__is_trivially_destructible)
+    __is_trivially_destructible(T);
+  #else
+    __has_trivial_destructor(T);
+  #endif
+#else
+    __is_trivially_destructible(T);
+#endif
+
+  template<typename T>
+  inline constexpr bool is_trivially_copy_assignable_v = __is_trivially_assignable(T &, const T &);
+  template<typename T>
+  inline constexpr bool is_trivially_move_assignable_v = __is_trivially_assignable(T &, T);
 
   template<class Base, class Derived>
   inline constexpr bool is_base_of_v = __is_base_of(Base, Derived);
@@ -97,9 +179,9 @@ namespace utils
 #else
     __is_convertible_to(From, To);
 #endif
-  template<class T, template <typename ...> class Template>
+  template<class T, template<typename ...> class Template>
   inline constexpr bool is_specialization_v = false;
-  template<template <class...> class Template, class ... Ts>
+  template<template<typename ...> class Template, typename ... Ts>
   inline constexpr bool is_specialization_v<Template<Ts...>, Template> = true;
 
   template<typename T, typename ... Us>
@@ -114,6 +196,9 @@ namespace utils
 
   template<typename T>
   inline constexpr bool is_floating_point_v = is_any_of_v<remove_cv_t<T>, float, double, long double>;
+
+  template<typename T>
+  inline constexpr bool is_enum_v = __is_enum(T);
 
   template<typename T> // only function types and reference types can't be const qualified
   inline constexpr bool is_function_v = !is_const_v<const T> && !is_reference_v<T>;
@@ -135,6 +220,11 @@ namespace utils
   #endif
   }.template operator()<T>();
 
+  template<typename T>
+  inline constexpr T min_limit = (T(-1) < T(0)) ? T(T(1) << (sizeof(T) * 8 - 1)) : T(0);
+  template<typename T>
+  inline constexpr T max_limit = (T(-1) < T(0)) ? T(T(-1) ^ (T(1) << (sizeof(T) * 8 - 1))) : T(-1);
+
   template<class T, T ... Is>
   struct integer_sequence
   {
@@ -144,7 +234,7 @@ namespace utils
 
   template<class T, T Size>
   using make_integer_sequence =
-#if COMPLEX_GCC
+#if defined(__GNUC__) && !defined(__clang__)
     integer_sequence<T, __integer_pack(Size)...>;
 #else
     __make_integer_seq<integer_sequence, T, Size>;
@@ -159,6 +249,17 @@ namespace utils
 
   struct uninitialised_t { };
   inline constexpr uninitialised_t uninitialised{};
+
+  struct align_val_t
+  {
+    usize value{};
+
+    // based on the definition of std::align_val_t
+    // https://en.cppreference.com/w/cpp/memory/new/align_val_t
+    template<typename T> requires utils::is_enum_v<T> &&
+      utils::is_same_v<utils::underlying_type_t<T>, usize>
+    constexpr operator T() { return T(value); }
+  };
 
   template<typename T>
   add_rvalue_reference_t<T> declval() noexcept;
@@ -179,13 +280,29 @@ namespace utils
   concept derived_from = is_base_of_v<Base, Derived> &&
     is_convertible_v<const volatile Derived *, const volatile Base *>;
 
+  namespace detail
+  {
+    template<typename Sig>
+    struct signature;
+
+    template<typename Ret, typename T>
+    struct signature<Ret(T)> { using type = T; };
+
+    template<typename Ret, typename Obj, typename T>
+    struct signature<Ret(Obj:: *)(T)> { using type = T; };
+
+    template<typename Ret, typename Obj, typename T>
+    struct signature<Ret(Obj:: *)(T) const> { using type = T; };
+  }
+
   [[nodiscard]] constexpr bool is_constant_evaluated() noexcept { return __builtin_is_constant_evaluated(); }
 
   template<typename To, typename From> requires (sizeof(To) == sizeof(From) && __is_trivially_copyable(To) && __is_trivially_copyable(From))
   [[nodiscard]] constexpr To bit_cast(const From &value) noexcept { return __builtin_bit_cast(To, value); }
 
   template<typename T>
-  [[nodiscard]] constexpr T *launder(T *pointer) noexcept
+  [[nodiscard]] inline constexpr T *
+  launder(T *pointer) noexcept
   {
     static_assert(!is_function_v<T>, "can't launder functions");
     static_assert(!is_void_v<T>, "can't launder cv-void");
@@ -199,7 +316,6 @@ namespace utils
     {
       [&]<usize ... Is>(const index_sequence<Is...> &)
       {
-
         if constexpr (requires(Fn fn, usize i) { fn(i); })
           [[maybe_unused]] auto dummy = ((fn(Is), Is) + ...);
         else if constexpr (requires(Fn fn) { fn(); })
@@ -215,11 +331,12 @@ namespace utils
   }
 
   template<auto N>
-  constexpr decltype(auto) get_nth_element(auto &&... args)
+  constexpr decltype(auto) 
+  get_nth_element(auto &&... args)
   {
-    return [&]<auto ... Is>(index_sequence<Is...>) -> decltype(auto)
+    return [&]<auto ... Is>(index_sequence<Is...>)
     {
-      return [](detail::sink<Is> ..., auto &&element, auto &&...) -> decltype(auto)
+      return [](detail::sink<Is> ..., auto &&element, auto &&...)
       {
         return COMPLEX_FWD(element);
       }(COMPLEX_FWD(args)...);
@@ -227,14 +344,78 @@ namespace utils
   }
 
   template<typename T>
-  constexpr strict_inline T lerp(T a, T b, T t) noexcept { return a + t * (b - a); }
+  constexpr T lerp(T a, T b, T t) noexcept { return a + t * (b - a); }
   template<typename T>
-  constexpr strict_inline T (min)(T one, T two) noexcept { return (one < two) ? one : two; }
+  constexpr T (min)(T one, T two) noexcept { return (one < two) ? one : two; }
   template<typename T>
-  constexpr strict_inline T (max)(T one, T two) noexcept { return (one >= two) ? one : two; }
+  constexpr T (max)(T one, T two) noexcept { return (one >= two) ? one : two; }
   template<typename T>
-  constexpr strict_inline T clamp(T value, T min, T max) noexcept
+  constexpr T clamp(T value, T min, T max) noexcept
   { return (value > max) ? max : (value < min) ? min : value; }
+  template<typename T>
+  constexpr T abs(const T x) noexcept
+  {
+    if constexpr (utils::is_floating_point_v<T>)
+      return x == T(0) ? T(0) : x < T(0) ?  -x : x;
+    else
+      return x < T(0) ? -x : x;
+  }
+
+  constexpr usize
+  getStringSize(const char *string) noexcept
+  {
+    if constexpr (requires(const char *s) { __builtin_strlen(s); })
+      return __builtin_strlen(string);
+    else
+    {
+      usize count = 0;
+      while (*string != char())
+      {
+        ++count;
+        ++string;
+      }
+      return count;
+    }
+  }
+
+  constexpr int
+  compareStrings(const char *lhs, usize lhsSize,
+    const char *rhs, usize rhsSize) noexcept
+  {
+    int result = __builtin_memcmp(lhs, rhs,
+      (lhsSize < rhsSize) ? lhsSize : rhsSize);
+
+    if (result != 0)
+      return result;
+
+    if (lhsSize < rhsSize)
+      return -1;
+
+    if (lhsSize > rhsSize)
+      return 1;
+
+    return 0;
+  }
+
+  constexpr int
+  compareCaseInsensitive(const char *lhs, usize lhsSize,
+    const char *rhs, usize rhsSize) noexcept
+  {
+    if (lhsSize > rhsSize)
+      return 1;
+    else if (lhsSize < rhsSize)
+      return -1;
+
+    for (usize i = 0; i < lhsSize; ++i)
+    {
+      int left  = (lhs[i] >= 'A' && lhs[i] < 'Z') ? lhs[i] | (1 << 5) : lhs[i];
+      int right = (rhs[i] >= 'A' && rhs[i] < 'Z') ? rhs[i] | (1 << 5) : rhs[i];
+      if (int result = left - right; result != 0)
+        return result;
+    }
+
+    return 0;
+  }
 
   template<typename T, typename U>
   struct pair
@@ -247,14 +428,39 @@ namespace utils
     friend bool operator==(const pair &lhs, const pair &rhs) noexcept = default;
   };
 
-  template <class T, class U>
+  template<typename T, typename U>
   pair(T, U) -> pair<T, U>;
+
+  // singly-linked list
+  template<typename T>
+  struct sll
+  {
+    T object;
+    sll *next{};
+  };
+
+  // doubly-linked list
+  template<typename T>
+  struct dll
+  {
+    T object;
+    dll *previous{};
+    dll *next{};
+  };
+
+#define COMPLEX_INTERNAL_DEFINE_ENUM_MAPPING(name, ...) name = __VA_ARGS__
+#define COMPLEX_ENUM(name, /*valueIdPairs*/...) \
+  namespace name { enum Value : uuid { COMPLEX_FOR_EACH(COMPLEX_INTERNAL_ITERATE, COMPLEX_INTERNAL_DEFINE_ENUM_MAPPING, (), (,), __VA_ARGS__) }; \
+  inline constexpr auto k##name##Values = utils::array{ COMPLEX_FOR_EACH(COMPLEX_INTERNAL_ITERATE_EXCLUSIVE, COMPLEX_INTERNAL_GET_1, (), (,), __VA_ARGS__) }; }
+#define COMPLEX_ENUM_LOCAL(name, /*valueIdPairs*/...) \
+  enum name : uuid { COMPLEX_FOR_EACH(COMPLEX_INTERNAL_ITERATE, COMPLEX_INTERNAL_DEFINE_ENUM_MAPPING, (), (,), __VA_ARGS__) }; \
+  static constexpr auto k##name##Values = utils::array{ COMPLEX_FOR_EACH(COMPLEX_INTERNAL_ITERATE_EXCLUSIVE, COMPLEX_INTERNAL_GET_1, (name::), (,), __VA_ARGS__) };
 
   template<typename T, usize Size>
   class array
   {
   #define ASSERT_NOT_ZERO_SIZED(x) static_assert(Size != 0, "Calling" #x "is not valid for zero-sized array.")
-    using internal_value_type = conditional_t<Size == 0 && !__is_constructible(T), char, T>;
+    using internal_value_type = conditional_t<Size == 0 && requires { T{}; }, char, T>;
   public:
     using value_type = T;
     using size_type = usize;
@@ -321,7 +527,7 @@ namespace utils
   template <typename First, typename ... Rest> requires (is_same_v<First, Rest> && ...)
   array(First, Rest...) -> array<First, sizeof...(Rest) + 1>;
 
-  template <typename T>
+  template<typename T>
   class span
   {
   public:
@@ -329,69 +535,71 @@ namespace utils
     using value_type = remove_cv_t<T>;
     using size_type = usize;
     using difference_type = isize;
-    using pointer = T *;
-    using const_pointer = const T *;
-    using reference = T &;
-    using const_reference = const T &;
     using iterator = T *;
     using const_iterator = const T *;
+
+    static constexpr auto npos = size_type(-1);
+
+    T *data_{};
+    size_type size_{};
 
     constexpr span() noexcept = default;
     constexpr span(const span &other) noexcept = default;
     constexpr span &operator=(const span &other) noexcept = default;
 
-    template <typename It>
+    template<typename It>
     constexpr span(It first, size_type count) noexcept : data_{ &(*first) }, size_{ count } { }
 
-    template <typename It>
-    constexpr span(It first, It last) noexcept : data_{ &(*first) }, 
-      size_{ static_cast<size_type>(last - first) } { COMPLEX_ASSERT(last > first); }
+    template<typename It>
+    constexpr span(It first, It pastLast) noexcept : data_{ &(*first) }, 
+      size_{ (size_type)(pastLast - first) } { COMPLEX_ASSERT(pastLast > first); }
 
-    template <auto Size>
-    constexpr span(type_identity<element_type>::type (&rawArray)[Size]) noexcept :
-      data_{ rawArray }, size_{ static_cast<size_type>(Size) } { }
+    template<auto Size>
+    constexpr span(T (&rawArray)[Size]) noexcept :
+      data_{ rawArray }, size_{ (size_type)Size } { }
 
-    constexpr span(auto &&range) requires requires { range.data(); range.size(); } :
-      data_{ range.data() }, size_{ static_cast<size_type>(range.size()) } { }
+    constexpr span(auto &range, size_type start = 0, size_type length = npos) 
+      requires requires { range.data(); range.size(); } : data_{ range.data() + start },
+      size_{ utils::min((size_type)range.size() - start, length) } { }
 
-    template <typename U> requires is_convertible_v<U(*)[], element_type(*)[]>
+    template<typename U> requires is_convertible_v<U(*)[], element_type(*)[]>
     constexpr span(const span<U> &other) noexcept : data_{ other.data() }, size_{ other.size() } { }
 
-    [[nodiscard]] constexpr auto first(const size_type count) const noexcept
+    [[nodiscard]] constexpr span removeLast(size_type count) const noexcept
     {
-      COMPLEX_ASSERT(count <= size_, "Count out of range in span::first(count)");
-      return span<element_type>{ size_, count };
+      COMPLEX_ASSERT(count <= size_, "Count out of range in span::removeLast(count)");
+      return { data_, count };
     }
-    [[nodiscard]] constexpr auto last(const size_type count) const noexcept
+    [[nodiscard]] constexpr span removeFirst(size_type count) const noexcept
     {
-      COMPLEX_ASSERT(count <= size_, "Count out of range in span::last(count)");
-      return span<element_type>{ data_ + (size_ - count), count };
+      COMPLEX_ASSERT(count <= size_, "Count out of range in span::removeFirst(count)");
+      return { data_ + (size_ - count), count };
     }
-    [[nodiscard]] constexpr auto subspan(const size_type position, const size_type count = size_type(-1)) const noexcept
+    [[nodiscard]] constexpr span subrange(size_type position, size_type count = npos) const noexcept
     {
-      COMPLEX_ASSERT(position <= size_, "Position out of range in span::subspan(position, count)");
-      COMPLEX_ASSERT(count == size_type(-1) || count <= size_ - position,
-        "Count out of range in span::subspan(position, count)");
+      COMPLEX_ASSERT(position <= size_, "Position out of range in span::subrange(position, count)");
+      COMPLEX_ASSERT(count == npos || count <= size_ - position,
+        "Count out of range in span::subrange(position, count)");
 
-      return span<element_type>{ data_ + position, count == size_type(-1) ? size_ - position : count };
+      return { data_ + position, utils::min(size_ - position, count) };
     }
 
     [[nodiscard]] constexpr size_type size() const noexcept { return size_; }
-    [[nodiscard]] constexpr size_type size_bytes() const noexcept { return size_ * sizeof(element_type); }
+    [[nodiscard]] constexpr size_type sizeBytes() const noexcept { return size_ * sizeof(element_type); }
     [[nodiscard]] constexpr bool empty() const noexcept { return size_ == 0; }
 
-    [[nodiscard]] constexpr pointer data() const noexcept { return data_; }
-    [[nodiscard]] constexpr reference operator[](const size_type position) const noexcept
+    [[nodiscard]] constexpr T *data() const noexcept { return data_; }
+    [[nodiscard]] constexpr T &operator[](const size_type position) const noexcept
     {
       COMPLEX_ASSERT(position < size_, "Span index out of range");
       return data_[position];
     }
-    [[nodiscard]] constexpr reference front() const noexcept
+    [[nodiscard]] constexpr T &front() const noexcept
     {
       COMPLEX_ASSERT(size_ > 0, "Front of empty span");
       return data_[0];
     }
-    [[nodiscard]] constexpr reference back() const noexcept
+    [[nodiscard]] constexpr T &back() const noexcept
     {
       COMPLEX_ASSERT(size_ > 0, "Back of empty span");
       return data_[size_ - 1];
@@ -401,10 +609,6 @@ namespace utils
     [[nodiscard]] constexpr const_iterator begin() const noexcept { return (size_ == 0) ? const_iterator{} : const_iterator(data_); }
     [[nodiscard]] constexpr iterator end() noexcept { return (size_ == 0) ? iterator{} : iterator(data_ + size_); }
     [[nodiscard]] constexpr const_iterator end() const noexcept { return (size_ == 0) ? const_iterator{} : const_iterator(data_ + size_); }
-
-  protected:
-    pointer data_ = nullptr;
-    size_type size_ = 0;
   };
 
   // deduction guide for raw arrays
@@ -415,81 +619,18 @@ namespace utils
   template<typename It>
   span(It, It) -> span<remove_reference_t<decltype(*declval<It>())>>;
 
+  // deduction guide for pointer/iterator with size
+  template<typename It>
+  span(It, usize) -> span<remove_reference_t<decltype(*declval<It>())>>;
+
   // deduction guide for contiguous containers
   template<typename Range>
-  span(Range &&) -> span<remove_reference_t<decltype(declval<Range>()[0])>>;
+  span(Range &) -> span<remove_reference_t<decltype(declval<Range>()[0])>>;
 
-  class string_view
+  class string_view : public span<const char>
   {
   public:
-    using value_type = char;
-    using size_type = usize;
-    using difference_type = isize;
-    using pointer = char *;
-    using const_pointer = const char *;
-    using reference = char &;
-    using const_reference = const char &;
-    using iterator = char *;
-    using const_iterator = const char *;
-
-    static constexpr auto npos = size_type(-1);
-
-    constexpr string_view() noexcept = default;
-    constexpr string_view(const string_view &other) noexcept = default;
-    constexpr string_view(const char *string) : string_view{ string, get_size(string) } { }
-    constexpr string_view(const char *string, size_type size) noexcept : data_{ string }, size_{ size } { }
-    template <auto Size>
-    constexpr string_view(type_identity<char>::type (&rawArray)[Size]) noexcept : string_view{ rawArray, Size } { }
-    template<template<typename...> class Stringish, typename ... Ts>
-    constexpr string_view(const Stringish<Ts...> &range) requires requires { range.data(); range.size(); } : 
-      string_view{ range.data(), range.size() } { }
-    constexpr string_view &operator=(const string_view &other) noexcept = default;
-
-    [[nodiscard]] constexpr size_type size() const noexcept { return size_; }
-    [[nodiscard]] constexpr size_type length() const noexcept { return size(); }
-    [[nodiscard]] constexpr bool empty() const noexcept { return size_ == 0; }
-
-    [[nodiscard]] constexpr const_pointer data() const noexcept { return data_; }
-    [[nodiscard]] constexpr const_reference operator[](const size_type position) const noexcept
-    {
-      COMPLEX_ASSERT(position < size_, "View index out of range");
-      return data_[position];
-    }
-    [[nodiscard]] constexpr const_reference front() const noexcept
-    {
-      COMPLEX_ASSERT(size_ > 0, "Front of empty view");
-      return data_[0];
-    }
-    [[nodiscard]] constexpr const_reference back() const noexcept
-    {
-      COMPLEX_ASSERT(size_ > 0, "Back of empty view");
-      return data_[size_ - 1];
-    }
-
-    [[nodiscard]] constexpr iterator begin() noexcept { return (size_ == 0) ? iterator{} : iterator(data_); }
-    [[nodiscard]] constexpr const_iterator begin() const noexcept { return (size_ == 0) ? const_iterator{} : const_iterator(data_); }
-    [[nodiscard]] constexpr iterator end() noexcept { return (size_ == 0) ? iterator{} : iterator(data_ + size_); }
-    [[nodiscard]] constexpr const_iterator end() const noexcept { return (size_ == 0) ? const_iterator{} : const_iterator(data_ + size_); }
-
-    constexpr void remove_prefix(const size_type count) noexcept
-    {
-      COMPLEX_ASSERT(size_ >= count, "Count out of range in string_view::remove_prefix(count)");
-      data_ += count;
-      size_ -= count;
-    }
-    constexpr void remove_suffix(const size_type count) noexcept
-    {
-      COMPLEX_ASSERT(size_ >= count, "Count out of range in string_view::remove_suffix(count)");
-      size_ -= count;
-    }
-    [[nodiscard]] constexpr string_view substr(const size_type position = 0, size_type count = npos) const noexcept
-    {
-      COMPLEX_ASSERT(position <= size_, "Position out of range in string_view::substr(position, count)");
-      COMPLEX_ASSERT(count == npos || count <= size_ - position,
-        "Count out of range in string_view::substr(position, count)");
-
-      return string_view{ data_ + position, count == npos ? size_ - position : count };
-    }
+    using span<const char>::span;
 
     [[nodiscard]] constexpr size_type find(const char *substring, size_type size, size_type position = 0) const noexcept
     {
@@ -497,15 +638,16 @@ namespace utils
       COMPLEX_ASSERT(position + size <= size_, "Position out of range in string_view::find(substring, size, position)");
 
       for (; position + size <= size_; ++position)
-        if (compare_strings(data_ + position, size, substring, size) == 0)
+        if (utils::compareStrings(data_ + position, size, substring, size) == 0)
           return position;
 
       return npos;
     }
     [[nodiscard]] constexpr size_type find(string_view substring, size_type position = 0) const noexcept
     { return find(substring.data(), substring.size(), position); }
-    [[nodiscard]] constexpr size_type find(const char *substring, size_type position = 0) const noexcept
-    { return find(substring, get_size(substring), position); }
+    template<auto Size>
+    [[nodiscard]] constexpr size_type find(const char(&substring)[Size], size_type position = 0) const noexcept
+    { return find(substring, Size, position); }
 
     [[nodiscard]] constexpr size_type rfind(const char *substring, size_type size, size_type position = npos) const noexcept
     {
@@ -517,7 +659,7 @@ namespace utils
 
       while (true)
       {
-        if (compare_strings(data_ + position, size, substring, size) == 0)
+        if (utils::compareStrings(data_ + position, size, substring, size) == 0)
           return position;
 
         if (position == 0)
@@ -528,55 +670,22 @@ namespace utils
     }
     [[nodiscard]] constexpr size_type rfind(string_view substring, size_type position = npos) const noexcept
     { return rfind(substring.data(), substring.size(), position); }
-    [[nodiscard]] constexpr size_type rfind(const char *substring, size_type position = npos) const noexcept
-    { return rfind(substring, get_size(substring), position); }
+    template<auto Size>
+    [[nodiscard]] constexpr size_type rfind(const char(&substring)[Size], size_type position = npos) const noexcept
+    { return rfind(substring, Size, position); }
     
 
-    [[nodiscard]] constexpr int compare(const string_view other) const noexcept
-    { return compare_strings(data(), size(), other.data(), other.size()); }
+    [[nodiscard]] constexpr int compare(string_view other) const noexcept
+    { return utils::compareStrings(data(), size(), other.data(), other.size()); }
+
+    [[nodiscard]] constexpr int compareCaseInsensitive(string_view other) const noexcept
+    { return utils::compareCaseInsensitive(data(), size(), other.data(), other.size()); }
 
     [[nodiscard]] friend constexpr bool operator==(string_view lhs, string_view rhs) noexcept
     { return lhs.size() == rhs.size() && (lhs.data() == rhs.data() || lhs.compare(rhs) == 0); }
 
     [[nodiscard]] friend constexpr bool operator<(string_view lhs, string_view rhs) noexcept
     { return lhs.compare(rhs) < 0; }
-
-  private:
-    const_pointer data_ = nullptr;
-    size_type size_ = 0;
-
-    static constexpr size_type get_size(const char *string)
-    {
-      if constexpr (requires(const char *s) { __builtin_strlen(s); })
-        return __builtin_strlen(string);
-      else
-      {
-        size_type count = 0;
-        while (*string != char())
-        {
-          ++count;
-          ++string;
-        }
-        return count;
-      }
-    }
-    static constexpr int compare_strings(const char *lhs, usize lhs_size,
-      const char *rhs, usize rhs_size) noexcept
-    {
-      int result = __builtin_memcmp(lhs, rhs, 
-        (lhs_size < rhs_size) ? lhs_size : rhs_size);
-
-      if (result != 0)
-        return result;
-
-      if (lhs_size < rhs_size)
-        return -1;
-
-      if (lhs_size > rhs_size)
-        return 1;
-
-      return 0;
-    }
   };
 
   // ghetto unique_ptr implementation
@@ -619,9 +728,9 @@ namespace utils
 
     static constexpr up<T> create(usize size) requires is_array
     {
-        up unique;
-        unique.object_ = new V[size]{};
-        return unique;
+      up unique;
+      unique.object_ = new V[size]{};
+      return unique;
     }
     static constexpr up<T> create(auto &&... args) requires (!is_array)
     {
@@ -632,9 +741,7 @@ namespace utils
 
     constexpr void swap(up &other) noexcept
     {
-      auto *otherObject = other.object_;
-      other.object_ = object_; 
-      object_ = otherObject;
+      COMPLEX_SWAP_MEMBERS(object_, other);
     }
 
     constexpr void reset() noexcept { up{}.swap(*this); }
@@ -651,7 +758,7 @@ namespace utils
     constexpr V *get() const noexcept { return object_; }
     constexpr V *operator->() const noexcept { return object_; }
     constexpr V &operator*() const noexcept { return *object_; }
-    constexpr V &operator[](size_t index) const noexcept { return object_[index]; }
+    constexpr V &operator[](usize index) const noexcept requires is_array { return object_[index]; }
 
     explicit constexpr operator bool() const noexcept { return object_; }
 
@@ -670,7 +777,82 @@ namespace utils
   template<typename T>
   constexpr bool operator==(nullptr_t, const up<T> &two) noexcept { return two.get() == nullptr; }
 
-  static constexpr auto find(auto &container, const auto &element)
+  // checked array
+  // thin abstraction intended to be zero-cost in release builds 
+  // but provide checked access for debug ones
+  template<typename T>
+  struct ca
+  {
+    T *pointer = nullptr;
+  #if COMPLEX_DEBUG
+  private:
+    [[maybe_unused]] usize size = 0;
+  public:
+  #endif
+
+    constexpr ca() = default;
+    constexpr ca(T *data, [[maybe_unused]] usize dataSize = 0) : pointer(data)
+    #if COMPLEX_DEBUG
+      , size(dataSize)
+    #endif
+    { }
+
+    constexpr ca offset(usize offset, [[maybe_unused]] usize explicitSize = 0) noexcept
+    {
+      COMPLEX_ASSERT(pointer);
+      COMPLEX_ASSERT(offset < size);
+      COMPLEX_ASSERT(explicitSize == 0 || explicitSize <= size - offset);
+      return ca
+      {
+        pointer + offset 
+      #if COMPLEX_DEBUG
+        , (explicitSize) ? explicitSize : size - offset
+      #endif
+      };
+    }
+
+    constexpr T &operator[](usize index) noexcept
+    {
+      COMPLEX_ASSERT(pointer);
+      COMPLEX_ASSERT(index < size);
+      return pointer[index];
+    }
+
+    constexpr const T &operator[](usize index) const noexcept
+    {
+      COMPLEX_ASSERT(pointer);
+      COMPLEX_ASSERT(index < size);
+      return pointer[index];
+    }
+
+    constexpr operator T *() noexcept { return pointer; }
+  };
+
+  template<typename T, auto Size>
+  constexpr auto 
+  find(const T (&array)[Size], const T &element)
+  {
+    decltype(Size) i = 0;
+    for (; i < Size; ++i)
+      if (array[i] == element)
+        break;
+
+    return &array[i];
+  }
+  template<typename T, auto Size>
+  constexpr auto 
+  find_if(const T(&array)[Size], const auto &predicate)
+  {
+    decltype(Size) i = 0;
+    for (; i < Size; ++i)
+      if (predicate(array[i]))
+        break;
+
+    return &array[i];
+  }
+
+  constexpr auto 
+  find(auto &container, const auto &element)
   {
     auto begin = container.begin();
     auto end = container.end();
@@ -681,7 +863,8 @@ namespace utils
     return begin;
   }
 
-  static constexpr auto find_if(auto &container, const auto &predicate)
+  constexpr auto 
+  find_if(auto &container, const auto &predicate)
   {
     auto begin = container.begin();
     auto end = container.end();
@@ -692,6 +875,228 @@ namespace utils
     return begin;
   }
 
+  constexpr usize 
+  find_index(auto &container, const auto &element)
+  { return (usize)(utils::find(container, element) - container.begin()); }
+
+  constexpr usize 
+  find_index_if(auto &container, const auto &predicate)
+  { return (usize)(utils::find_if(container, predicate) - container.begin()); }
+
+  constexpr bool 
+  all_of(auto &container, const auto &predicate)
+  {
+    auto begin = container.begin();
+    auto end = container.end();
+    for (; begin != end; ++begin)
+      if (!predicate(*begin))
+        return false;
+
+    return true;
+  }
+
+  constexpr bool
+  none_of(auto &container, const auto &predicate)
+  {
+    auto begin = container.begin();
+    auto end = container.end();
+    for (; begin != end; ++begin)
+      if (predicate(*begin))
+        return false;
+
+    return true;
+  }
+
+  template<typename T>
+  constexpr utils::dll<T> *
+  find_if(utils::dll<T> *start, const auto &predicate,
+    utils::dll<T> *sentinel = nullptr)
+  {
+    for (auto *node = start; node != sentinel; node = node->next)
+      if (predicate(node))
+        return node;
+
+    return nullptr;
+  }
+
+  constexpr void quicksort(auto &container, usize lower, usize upper, const auto &predicate)
+  {
+    if (lower >= upper)
+      return;
+    
+    COMPLEX_SWAP(container[lower], container[(upper + lower) / 2]);
+    const auto &pivot = container[lower];
+    usize	m = lower;
+
+    for (usize i = lower + 1; i <= upper; ++i)
+    {
+      if (predicate(container[i], pivot))
+      {
+        ++m;
+        COMPLEX_SWAP(container[m], container[i]);
+      }
+    }
+
+    COMPLEX_SWAP(container[lower], container[m]);
+    quicksort(container, lower, m - 1, predicate);
+    quicksort(container, m + 1, upper, predicate);
+  }
+
+  constexpr void quicksort(auto &container, const auto &predicate) 
+  { quicksort(container, 0, container.size(), predicate); }
 
 
+#if COMPLEX_MSVC
+  extern "C"
+  {
+    unsigned char _BitScanReverse(unsigned long *Index, unsigned long Mask);
+    unsigned char _BitScanReverse64(unsigned long *Index, unsigned __int64 Mask);
+    unsigned char _BitScanForward(unsigned long *Index, unsigned long Mask);
+    unsigned char _BitScanForward64(unsigned long *Index, unsigned __int64 Mask);
+  #pragma intrinsic(_BitScanReverse, _BitScanReverse64, _BitScanForward, _BitScanForward64)
+  }
+#endif
+
+  strict_inline u32
+  log2(u32 value) noexcept
+  {
+  #if COMPLEX_GCC || COMPLEX_CLANG
+    constexpr u32 kMaxBitIndex = sizeof(u32) * 8 - 1;
+    return kMaxBitIndex - __builtin_clz(max(value, u32(1)));
+  #elif COMPLEX_MSVC
+    unsigned long result = 0;
+    _BitScanReverse(&result, value);
+    return result;
+  #else
+    u32 num = 0;
+    while (value >>= 1)
+      num++;
+    return num;
+  #endif
+  }
+
+  strict_inline usize 
+  log2(usize value) noexcept
+  {
+    COMPLEX_ASSERT(value != 0);
+  #if COMPLEX_GCC || COMPLEX_CLANG
+    constexpr usize kMaxBitIndex = sizeof(value) * 8 - 1;
+    return kMaxBitIndex - __builtin_clzll(utils::max(value, usize(1)));
+  #elif COMPLEX_MSVC
+    unsigned long result = 0;
+    _BitScanReverse64(&result, value);
+    return result;
+  #else
+    usize num = 0;
+    while (value >>= 1)
+      num++;
+    return num;
+  #endif
+  }
+
+  constexpr bool 
+  isPowerOfTwo(utils::integral auto value) noexcept
+  { return (value & (value - 1)) == 0; }
+
+  template<utils::integral T>
+  constexpr T 
+  roundUpToMultiple(T i, T factor) noexcept
+  { return ((i + factor - 1) / factor) * factor; }
+
+  strict_inline usize 
+  getAlignment(void *pointer) noexcept
+  {
+    COMPLEX_ASSERT(pointer);
+  #if COMPLEX_GCC || COMPLEX_CLANG
+    return usize(1) << __builtin_ctzll((usize)pointer);
+  #elif COMPLEX_MSVC
+    unsigned long result = 0;
+    _BitScanForward64(&result, (usize)pointer);
+    return usize(1) << result;
+  #else
+    usize value = (usize)pointer;
+    usize num = 0;
+    while ((value & 1) == 0)
+    {
+      value >>= 1;
+      num++;
+    }
+    return usize(1) << num;
+  #endif
+  }
+
+  template <typename T> 
+  constexpr int signum(T val) noexcept { return (T(0) < val) - (val < T(0)); }
+
+  // returns the starting position of the centered element relative to container
+  template<typename T>
+  constexpr T 
+  centerAxis(T elementRange, T containerRange) noexcept
+  { return (containerRange - elementRange) / T(2); }
+
+  template<utils::floating_point T>
+  constexpr T 
+  unsignFloat(T &value) noexcept
+  {
+    int sign = signum(value);
+    value *= (T)sign;
+    return (T)sign;
+  }
+
+  template<utils::signed_integral T>
+  constexpr T
+  unsignInt(T &value) noexcept
+  {
+    int sign = signum(value);
+    value *= sign;
+    return (T)sign;
+  }
+
+  template<utils::floating_point T>
+  constexpr T 
+  smoothStep(T value) noexcept
+  {
+    T sqr = value * value;
+    return (T(3) * sqr) - (T(2) * sqr * value);
+  }
+
+  template<typename T, typename U>
+  constexpr T *
+  as(U *pointer)
+  {
+  #if 0
+    auto *castPointer = dynamic_cast<T *>(pointer);
+    COMPLEX_ASSERT(castPointer, "Unsuccessful cast");
+    return castPointer;
+  #else
+    return static_cast<T *>(pointer);
+  #endif
+  }
+
+  // malloc replacement
+  byte *allocate(usize size, usize alignment = alignof(void *));
+  // free replacement
+  void deallocate(const void *memory);
+
+  // acquires a contiguous block of virtual memory
+  // cannot be used as a resource yet
+  // 
+  // size is rounded up to the nearest page size
+  byte *reserveMemory(usize &size);
+  // assigns pages to a given reserved virtual address space
+  // can be used as a resource now
+  //
+  // size is rounded up to the nearest page size
+  // starting at memory, rounded up to the nearest page
+  void commitMemory(void *memory, usize &size);
+  // unassign ceil(size / pageSize) number of pages,
+  // starting at memory, rounded up to the nearest page
+  void decommitMemory(void *memory, usize size);
+  // relinquish contiguous block of virtual memory
+  // 
+  // memory MUST point to a block returned by reserveMemory
+  // (because of windows VirtualFree)
+  // and size MUST be equal to the size, modified by reserveMemory
+  // (because of posix munmap)
+  void releaseMemory(void *memory, usize size);
 }

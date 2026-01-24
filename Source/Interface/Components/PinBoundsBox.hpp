@@ -10,7 +10,7 @@
 
 #pragma once
 
-#include "../Sections/BaseSection.hpp"
+#include "../LookAndFeel/BaseComponent.hpp"
 #include "OpenGlQuad.hpp"
 #include "OpenGlImage.hpp"
 
@@ -21,8 +21,8 @@ namespace Framework
 
 namespace Interface
 {
-  class OpenGlQuad;
-  class OpenGlCorners;
+  struct OpenGlQuad;
+  struct OpenGlCorners;
   class PinSlider;
 
   class PinBoundsBox : public BaseSection
@@ -30,8 +30,7 @@ namespace Interface
   public:
     static constexpr int kAdditionalPinWidth = 20;
 
-    PinBoundsBox(utils::string_view name, Framework::ParameterValue *lowBound, 
-      Framework::ParameterValue *highBound);
+    PinBoundsBox(Framework::ParameterValue *lowBound, Framework::ParameterValue *highBound);
     ~PinBoundsBox() override;
 
     void paintBackground(Graphics &g) override;
@@ -50,10 +49,8 @@ namespace Interface
     void setRounding(float topRounding, float bottomRounding) noexcept;
     void setRoundedCornerColour(Colour colour) noexcept;
 
-  protected:
     utils::up<PinSlider> lowBound_;
     utils::up<PinSlider> highBound_;
-    OpenGlImage highlight_{ "highlight" };
     OpenGlCorners roundedCorners_{};
 
     Colour primaryColour_{};

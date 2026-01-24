@@ -1,8 +1,6 @@
-/Builds/
-/Build/
-/builds/
-/build/
-/.vs
-/.idea
+.cache
 .DS_Store
-/JuceLibraryCode
+.ideas
+.clangd
+build_test
+Build

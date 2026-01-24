@@ -10,55 +10,97 @@
 
 #pragma once
 
-#include "juce_opengl/opengl/juce_gl.h"
+#include "glad/glad.h"
 
-#include "Framework/vector_map.hpp"
+#include "Framework/memory.hpp"
+#include "Framework/macro_helpers.hpp"
+#include "gui_utils.hpp"
+#include "Miscellaneous.hpp"
 
-namespace juce
+extern "C"
 {
-  template<typename T>
-  class Rectangle;
-  class OpenGLContext;
-  class OpenGLShaderProgram;
-  class Image;
-  class PixelARGB;
+  typedef struct NVGcontext NVGcontext;
 }
 
 namespace Interface
 {
-#if COMPLEX_DEBUG
-  void checkGLError(const char *file, const int line);
-  #define COMPLEX_CHECK_OPENGL_ERROR checkGLError(__FILE__, __LINE__)
-#else
-  #define COMPLEX_CHECK_OPENGL_ERROR
-#endif
-
-  enum class OpenGlAllocatedResource : u8 { Buffer, Texture };
-
+  template<typename T>
   struct OpenGlUniform
   {
-    /** Sets a vecn float uniform. */
-    void set(GLfloat n1) const noexcept { juce::gl::glUniform1f(uniformId, n1); }
-    void set(GLfloat n1, GLfloat n2) const noexcept { juce::gl::glUniform2f(uniformId, n1, n2); }
-    void set(GLfloat n1, GLfloat n2, GLfloat n3) const noexcept { juce::gl::glUniform3f(uniformId, n1, n2, n3); }
-    void set(GLfloat n1, GLfloat n2, GLfloat n3, GLfloat n4) const noexcept { juce::gl::glUniform4f(uniformId, n1, n2, n3, n4); }
-    /** Sets a vector float uniform. */
-    void set(const GLfloat *values, GLsizei numValues) const noexcept { juce::gl::glUniform1fv(uniformId, numValues, values); }
-    /** Sets an vecn int uniform. */
-    void set(GLint n1) const noexcept { juce::gl::glUniform1i(uniformId, n1); }
-    void set(GLint n1, GLint n2, GLint n3, GLint n4) const noexcept { juce::gl::glUniform4i(uniformId, n1, n2, n3, n4); }
-    /** Sets a nxn matrix float uniform. */
-    void setMatrix2(const GLfloat *values, GLint count, GLboolean transpose) const noexcept
-    { juce::gl::glUniformMatrix2fv(uniformId, count, transpose, values); }
-    void setMatrix3(const GLfloat *values, GLint count, GLboolean transpose) const noexcept
-    { juce::gl::glUniformMatrix3fv(uniformId, count, transpose, values); }
-    void setMatrix4(const GLfloat *values, GLint count, GLboolean transpose) const noexcept
-    { juce::gl::glUniformMatrix4fv(uniformId, count, transpose, values); }
+    static constexpr auto size = sizeof(T) / sizeof(utils::remove_extent_t<T>);
+    static constexpr bool isFloat = utils::is_floating_point_v<utils::remove_extent_t<T>>;
+    static constexpr bool isArray = utils::is_array_v<T>;
+
+    template<typename U>
+    OpenGlUniform &operator=(U rhs) noexcept
+    {
+      if constexpr (size == 1)
+        data = rhs;
+      else if constexpr (size == 2)
+      {
+        auto [one, two] = rhs;
+        data[0] = one;
+        data[1] = two;
+      }
+      else if constexpr (size == 3)
+      {
+        auto [one, two, three] = rhs;
+        data[0] = one;
+        data[1] = two;
+        data[2] = three;
+      }
+      else if constexpr (size == 4)
+      {
+        auto [one, two, three, four] = rhs;
+        data[0] = one;
+        data[1] = two;
+        data[2] = three;
+        data[3] = four;
+      }
+    }
+
+    void set()
+    {
+      COMPLEX_ASSERT(uniformId >= 0);
+
+      if constexpr (!isArray)
+      {
+        if constexpr (isFloat)
+          glUniform1f(uniformId, data);
+        else
+          glUniform1i(uniformId, data);
+      }
+      else
+      {
+        if constexpr (size == 2)
+        {
+          if constexpr (isFloat)
+            glUniform2f(uniformId, data[0], data[1]);
+          else
+            glUniform2i(uniformId, data[0], data[1]);
+        }
+        else if constexpr (size == 3)
+        {
+          if constexpr (isFloat)
+            glUniform3f(uniformId, data[0], data[1], data[2]);
+          else
+            glUniform3i(uniformId, data[0], data[1], data[2]);
+        }
+        else if constexpr (size == 4)
+        {
+          if constexpr (isFloat)
+            glUniform4f(uniformId, data[0], data[1], data[2], data[3]);
+          else
+            glUniform4i(uniformId, data[0], data[1], data[2], data[3]);
+        }
+      }
+    }
 
     explicit operator bool() { return uniformId >= 0; }
 
     // If the uniform couldn't be found, this value will be < 0.
     GLint uniformId = -1;
+    T data{};
   };
 
   struct OpenGlAttribute
@@ -69,17 +111,229 @@ namespace Interface
     GLuint attributeId = (GLuint)-1;
   };
 
+  struct OpenGlBuffer
+  {
+    ~OpenGlBuffer() noexcept { if (id) glDeleteBuffers(1, &id); }
+    GLuint id = 0;
+  };
+
+  struct OpenGlTexture
+  {
+    ~OpenGlTexture() noexcept { if (id) glDeleteTextures(1, &id); }
+    GLuint id = 0;
+  };
+
   struct OpenGlShaderProgram
   {
     void use() const noexcept
     {
       COMPLEX_ASSERT(id != 0);
-      juce::gl::glUseProgram(id);
+      glUseProgram(id);
     }
 
     GLuint id = 0;
   };
 
+
+  #define COMPLEX_INTERNAL_UNIFORM_DECLARATION(x, y) <x> y{}
+  #define COMPLEX_INTERNAL_IN_DECLARATION(x, y) y
+  #define COMPLEX_INTERNAL_SHADER_DECLARATION(x, y) #x #y
+  #define COMPLEX_INTERNAL_NAME_DECLARATION(x, y) #y
+  #define COMPLEX_INTERNAL_IN_PARAMETER(x, y) utils::pair{ utils::type_identity<x>{}, ins.y }
+  
+  #define COMPLEX_INTERNAL_DEFINE_GL_TYPES                            \
+    using uint = u32;                                                 \
+    using vec2 = float[2]; using ivec2 = i32[2]; using uvec2 = u32[2];\
+    using vec3 = float[3]; using ivec3 = i32[3]; using uvec3 = u32[3];\
+    using vec4 = float[4]; using ivec4 = i32[4]; using uvec4 = u32[4];
+
+
+
+  #define COMPLEX_DEFINE_VERTEX_SHADER(name, extraVariables, uniformsPack, insPack, outsPack, ...)\
+    struct name                                                                                   \
+    {                                                                                             \
+      COMPLEX_INTERNAL_DEFINE_GL_TYPES                                                            \
+                                                                                                  \
+      static constexpr utils::type_id_t key = utils::type_id<name>;                               \
+      static constexpr const char *uniformNames[] = { COMPLEX_FOR_EACH(                           \
+        COMPLEX_INTERNAL_ITERATE_EXCLUSIVE, COMPLEX_INTERNAL_NAME_DECLARATION, (, (,)),    \
+        COMPLEX_DEPAREN(uniformsPack)) "" };                                                      \
+      static constexpr const char *insNames[] = { COMPLEX_FOR_EACH(                               \
+        COMPLEX_INTERNAL_ITERATE_EXCLUSIVE, COMPLEX_INTERNAL_NAME_DECLARATION, (, (,)),    \
+        COMPLEX_DEPAREN(insPack)) "" };                                                           \
+      static constexpr char code[] =                                                              \
+        "#version 150\n"                                                                          \
+        COMPLEX_FOR_EACH(COMPLEX_INTERNAL_ITERATE, COMPLEX_INTERNAL_SHADER_DECLARATION,    \
+          ("uniform ", ";\n"), COMPLEX_DEPAREN(uniformsPack))                                     \
+        COMPLEX_FOR_EACH(COMPLEX_INTERNAL_ITERATE, COMPLEX_INTERNAL_SHADER_DECLARATION,    \
+          ("in ", ";\n"), COMPLEX_DEPAREN(insPack))                                               \
+        COMPLEX_FOR_EACH(COMPLEX_INTERNAL_ITERATE, COMPLEX_INTERNAL_SHADER_DECLARATION,    \
+          ("out ", ";\n"), COMPLEX_DEPAREN(outsPack))                                             \
+        __VA_ARGS__;                                                                              \
+                                                                                                  \
+      struct                                                                                      \
+      {                                                                                           \
+        COMPLEX_FOR_EACH(COMPLEX_INTERNAL_ITERATE, COMPLEX_INTERNAL_UNIFORM_DECLARATION,   \
+          (OpenGlUniform, ;), COMPLEX_DEPAREN(uniformsPack))                                      \
+      } uniforms{};                                                                               \
+      struct                                                                                      \
+      {                                                                                           \
+        COMPLEX_FOR_EACH(COMPLEX_INTERNAL_ITERATE, COMPLEX_INTERNAL_IN_DECLARATION,        \
+          (OpenGlAttribute, ;), COMPLEX_DEPAREN(insPack))                                         \
+      } ins{};                                                                                    \
+                                                                                                  \
+      void getVariables(OpenGlShaderProgram program)                                              \
+      {                                                                                           \
+        [[maybe_unused]] usize i = 0;                                                             \
+                                                                                                  \
+        COMPLEX_FOR_EACH(COMPLEX_INTERNAL_ITERATE, COMPLEX_INTERNAL_IN_DECLARATION,        \
+          (uniforms., .uniformId = glGetUniformLocation(program.id, uniformNames[i++]);),         \
+          COMPLEX_DEPAREN(uniformsPack))                                                          \
+                                                                                                  \
+        i = 0;                                                                                    \
+                                                                                                  \
+        COMPLEX_FOR_EACH(COMPLEX_INTERNAL_ITERATE, COMPLEX_INTERNAL_IN_DECLARATION, (ins., \
+          .attributeId = (GLuint)glGetAttribLocation(program.id, insNames[i++]));,                \
+          COMPLEX_DEPAREN(insPack))                                                               \
+      }                                                                                           \
+                                                                                                  \
+      void setUniforms()                                                                          \
+      {                                                                                           \
+        COMPLEX_FOR_EACH(COMPLEX_INTERNAL_ITERATE, COMPLEX_INTERNAL_IN_DECLARATION,        \
+          (uniforms., .set());, COMPLEX_DEPAREN(uniformsPack))                                    \
+      }                                                                                           \
+                                                                                                  \
+      void enableAttributes()                                                                     \
+      {                                                                                           \
+        glBindBuffer(GL_ARRAY_BUFFER, vertexBuffer);                                              \
+        auto iterate = []<typename ... Ts>(utils::pair<utils::type_identity<Ts>,                  \
+          OpenGlAttribute> ... args)                                                              \
+        {                                                                                         \
+          static constexpr auto cycle = (sizeof(Ts) + ...);                                       \
+          usize offset = 0;                                                                       \
+          auto function = [&offset]<typename T>(auto arg)                                         \
+          {                                                                                       \
+            using underlying = utils::remove_extent_t<T>;                                         \
+            constexpr auto size = sizeof(T) / sizeof(underlying);                                 \
+            GLenum type = utils::is_floating_point_v<underlying> ?                                \
+              GL_FLOAT : (underlying(-1) < underlying(0)) ? GL_INT : GL_UNSIGNED_INT;             \
+                                                                                                  \
+            if (arg)                                                                              \
+            {                                                                                     \
+              glVertexAttribPointer(arg.attributeId, size, type, GL_FALSE,                        \
+                cycle, (GLvoid *)offset);                                                         \
+              glEnableVertexAttribArray(arg.attributeId);                                         \
+            }                                                                                     \
+            offset += sizeof(T);                                                                  \
+          };                                                                                      \
+                                                                                                  \
+          (function.template operator()<Ts>(args.second), ...);                                   \
+        };                                                                                        \
+                                                                                                  \
+        iterate(COMPLEX_FOR_EACH(COMPLEX_INTERNAL_ITERATE_EXCLUSIVE,                       \
+          COMPLEX_INTERNAL_IN_PARAMETER, (, (,)), COMPLEX_DEPAREN(insPack)));                     \
+      }                                                                                           \
+                                                                                                  \
+      void disableAttributes()                                                                    \
+      {                                                                                           \
+        OpenGlAttribute attributes[] = { COMPLEX_FOR_EACH(                                        \
+          COMPLEX_INTERNAL_ITERATE_EXCLUSIVE, COMPLEX_INTERNAL_IN_DECLARATION,             \
+          (ins., (,)), COMPLEX_DEPAREN(insPack)) };                                               \
+        for (usize i = 0; i < sizeof(attributes) / sizeof(attributes[0]); ++i)                    \
+          if (attributes[i])                                                                      \
+            glDisableVertexAttribArray(attributes[i].attributeId);                                \
+                                                                                                  \
+        glBindBuffer(GL_ARRAY_BUFFER, 0);                                                         \
+      }                                                                                           \
+                                                                                                  \
+      GLuint vertexBuffer = 0;                                                                    \
+      GLuint shaderId = 0;                                                                        \
+                                                                                                  \
+      COMPLEX_DEPAREN(extraVariables)                                                             \
+    };
+
+  #define COMPLEX_DEFINE_FRAGMENT_SHADER(name, extraVariables, uniformsPack, insPack, ...)        \
+    struct name                                                                                   \
+    {                                                                                             \
+      COMPLEX_INTERNAL_DEFINE_GL_TYPES                                                            \
+                                                                                                  \
+      static constexpr utils::type_id_t key = utils::type_id<name>;                               \
+      static constexpr const char *uniformNames[] = { COMPLEX_FOR_EACH(                           \
+        COMPLEX_INTERNAL_ITERATE_EXCLUSIVE, COMPLEX_INTERNAL_NAME_DECLARATION,             \
+        (, (,)), COMPLEX_DEPAREN(uniformsPack)) "" };                                             \
+      static constexpr char code[] =                                                              \
+        "#version 150\n"                                                                          \
+        "out vec4 fragColor;\n"                                                                   \
+        COMPLEX_FOR_EACH(COMPLEX_INTERNAL_ITERATE, COMPLEX_INTERNAL_SHADER_DECLARATION,    \
+          ("uniform ", ";\n"), COMPLEX_DEPAREN(uniformsPack))                                     \
+        COMPLEX_FOR_EACH(COMPLEX_INTERNAL_ITERATE, COMPLEX_INTERNAL_SHADER_DECLARATION,    \
+          ("in ", ";\n"), COMPLEX_DEPAREN(insPack))                                               \
+        __VA_ARGS__;                                                                              \
+                                                                                                  \
+      struct                                                                                      \
+      {                                                                                           \
+        COMPLEX_FOR_EACH(COMPLEX_INTERNAL_ITERATE, COMPLEX_INTERNAL_UNIFORM_DECLARATION,   \
+          (OpenGlUniform, ;), COMPLEX_DEPAREN(uniformsPack))                                      \
+      } uniforms{};                                                                               \
+                                                                                                  \
+      void getVariables(OpenGlShaderProgram program)                                              \
+      {                                                                                           \
+        [[maybe_unused]] usize i = 0;                                                             \
+                                                                                                  \
+        COMPLEX_FOR_EACH(COMPLEX_INTERNAL_ITERATE, COMPLEX_INTERNAL_IN_DECLARATION,        \
+          (uniforms., .uniformId = glGetUniformLocation(program.id, uniformNames[i++]);),         \
+          COMPLEX_DEPAREN(uniformsPack))                                                          \
+      }                                                                                           \
+                                                                                                  \
+      void setUniforms()                                                                          \
+      {                                                                                           \
+        COMPLEX_FOR_EACH(COMPLEX_INTERNAL_ITERATE, COMPLEX_INTERNAL_IN_DECLARATION,        \
+          (uniforms., .set());, COMPLEX_DEPAREN(uniformsPack))                                    \
+      }                                                                                           \
+                                                                                                  \
+      GLuint shaderId = 0;                                                                        \
+                                                                                                  \
+      COMPLEX_DEPAREN(extraVariables)                                                             \
+    };
+
+  struct FragmentShader
+  {
+    void *object = nullptr;
+    utils::type_id_t key = nullptr;
+    const char *code = nullptr;
+    GLuint *shaderId = nullptr;
+    void (*getVariablesPointer)(void *, OpenGlShaderProgram program) = nullptr;
+    void (*setUniformsPointer)(void *) = nullptr;
+
+    constexpr FragmentShader() = default;
+
+    template<typename T>
+    constexpr FragmentShader(T &shaderObject)
+    {
+      object = &shaderObject;
+      key = shaderObject.key;
+      code = shaderObject.code;
+      shaderId = &shaderObject.shaderId;
+      getVariablesPointer = [](void *object, OpenGlShaderProgram program) 
+      { ((T *)object)->getVariables(program); };
+      setUniformsPointer = [](void *object) { ((T *)object)->setUniforms(); };
+    }
+    
+    void getVariables(OpenGlShaderProgram program) { getVariablesPointer(object, program); }
+    void setUniforms() { setUniformsPointer(object); }
+  };
+
+#if COMPLEX_DEBUG
+  void checkGLError(const char *file, const int line);
+  #define COMPLEX_CHECK_OPENGL_ERROR() checkGLError(__FILE__, __LINE__)
+#else
+  #define COMPLEX_CHECK_OPENGL_ERROR()
+#endif
+  
+
+
+
+  GLuint createShader(const char *shader, bool isFragment = true);
 
   class Shaders
   {
@@ -130,56 +384,92 @@ namespace Interface
       kFragmentShaderCount
     };
 
-    OpenGlShaderProgram getShaderProgram(VertexShader vertexShader, 
-      FragmentShader fragmentShader, const GLchar **varyings = nullptr);
+    OpenGlShaderProgram getShaderProgram(GLuint vertexShaderId,
+      GLuint fragmentShaderId, const GLchar **varyings = nullptr);
 
     void releaseAll();
 
-  private:
-    GLuint createVertexShader(VertexShader shader) const;
-    GLuint createFragmentShader(FragmentShader shader) const;
+    GLuint addVertexShader(utils::type_id_t key, const char *shader)
+    {
+      if (auto iter = vertexShaders.find(key); iter != vertexShaders.data.end())
+        return iter->second;
 
-    utils::VectorMap<int, OpenGlShaderProgram> shaderPrograms_;
+      auto id = createShader(shader, false);
+      vertexShaders.add(key, id);
+      return id;
+    }
 
-    GLuint vertexShaderIds_[kVertexShaderCount]{};
-    GLuint fragmentShaderIds_[kFragmentShaderCount]{};
+    GLuint getVertexShader(utils::type_id_t key)
+    {
+      if (auto iter = vertexShaders.find(key); iter != vertexShaders.data.end())
+        return iter->second;
+
+      return 0;
+    }
+
+    GLuint addFragmentShader(utils::type_id_t key, const char *shader)
+    {
+      if (auto iter = fragmentShaders.find(key); iter != fragmentShaders.data.end())
+        return iter->second;
+
+      auto id = createShader(shader, true);
+      fragmentShaders.add(key, id);
+      return id;
+    }
+
+    GLuint getFragmentShader(utils::type_id_t key)
+    {
+      if (auto iter = fragmentShaders.find(key); iter != fragmentShaders.data.end())
+        return iter->second;
+
+      return 0;
+    }
+
+    utils::vector_map<u64, OpenGlShaderProgram> shaderPrograms;
+    utils::vector_map<utils::type_id_t, GLuint> vertexShaders;
+    utils::vector_map<utils::type_id_t, GLuint> fragmentShaders;
   };
 
 
-  struct ViewportChange;
-  class OpenGlComponent;
-  class BaseComponent;
 
   struct OpenGlWrapper
   {
-    OpenGlWrapper(juce::OpenGLContext &c) noexcept;
-    ~OpenGlWrapper() noexcept;
-
-    std::vector<ViewportChange> parentStack;
-    juce::OpenGLContext &context;
+    utils::vector<ViewportChange> parentStack{};
     Shaders *shaders = nullptr;
+    Graphics *cache = nullptr;
+    NVGcontext *g = nullptr;
     int topLevelHeight = 0;
-    bool animate = true;
   };
 
-  bool setViewPort(const BaseComponent &target, const OpenGlComponent &renderSource, juce::Rectangle<int> viewportBounds,
-    juce::Rectangle<int> scissorBounds, const OpenGlWrapper &openGl, const BaseComponent *ignoreClipIncluding);
+  bool setViewport(Point<int> positionInViewport, Rectangle<int> viewportBounds,
+    Rectangle<int> scissorBounds, const OpenGlWrapper &openGl, const Component *ignoreClipIncluding);
+  
+  strict_inline void clearWithColour(OpenGlWrapper &openGl, Colour colour, Rectangle<int> bounds)
+  {
+    glEnable(GL_SCISSOR_TEST);
+    glScissor(bounds.x, openGl.topLevelHeight - bounds.getBottom(), bounds.w, bounds.h);
+    auto normalisedColour = colour.getNormalisedRGBA();
+    glClearColor(normalisedColour[0], normalisedColour[1], normalisedColour[2], normalisedColour[3]);
+    glClear(GL_COLOR_BUFFER_BIT);
+    glDisable(GL_SCISSOR_TEST);
+  }
 
-  auto loadImageAsTexture(juce::OpenGLContext &context, GLuint &textureId,
-    const juce::Image &image, GLenum texMagFilter = juce::gl::GL_LINEAR)
-    -> utils::pair<int, int>;
-  auto loadARGBAsTexture(juce::OpenGLContext &context, GLuint &textureId,
-    const juce::PixelARGB *pixels, int desiredW, int desiredH, GLenum texMagFilter = juce::gl::GL_LINEAR)
-    -> utils::pair<int, int>;
-  auto loadAlphaAsTexture(juce::OpenGLContext &context, GLuint &textureId,
-    const u8 *pixels, int desiredW, int desiredH, GLenum texMagFilter = juce::gl::GL_LINEAR)
-    -> utils::pair<int, int>;
-  auto loadARGBFlippedAsTexture(juce::OpenGLContext &context, GLuint &textureId,
-    const juce::PixelARGB *pixels, int desiredW, int desiredH, GLenum texMagFilter = juce::gl::GL_LINEAR)
-    -> utils::pair<int, int>;
+  //auto loadImageAsTexture(juce::OpenGLContext &context, GLuint &textureId,
+  //  const juce::Image &image, GLenum texMagFilter = GL_LINEAR)
+  //  -> utils::pair<int, int>;
+  //auto loadARGBAsTexture(juce::OpenGLContext &context, GLuint &textureId,
+  //  const juce::PixelARGB *pixels, int desiredW, int desiredH, GLenum texMagFilter = GL_LINEAR)
+  //  -> utils::pair<int, int>;
+  //auto loadAlphaAsTexture(juce::OpenGLContext &context, GLuint &textureId,
+  //  const u8 *pixels, int desiredW, int desiredH, GLenum texMagFilter = GL_LINEAR)
+  //  -> utils::pair<int, int>;
+  //auto loadARGBFlippedAsTexture(juce::OpenGLContext &context, GLuint &textureId,
+  //  const juce::PixelARGB *pixels, int desiredW, int desiredH, GLenum texMagFilter = GL_LINEAR)
+  //  -> utils::pair<int, int>;
 
-  inline OpenGlUniform getUniform(const OpenGlShaderProgram &program, const char *name)
-  { return OpenGlUniform{ juce::gl::glGetUniformLocation(program.id, name) }; }
+  template<typename T>
+  inline OpenGlUniform<T> getUniform(const OpenGlShaderProgram &program, const char *name)
+  { return OpenGlUniform<T>{ glGetUniformLocation(program.id, name) }; }
   inline OpenGlAttribute getAttribute(const OpenGlShaderProgram &program, const char *name)
-  { return OpenGlAttribute{ (GLuint)juce::gl::glGetAttribLocation(program.id, name) }; }
+  { return OpenGlAttribute{ (GLuint)glGetAttribLocation(program.id, name) }; }
 }

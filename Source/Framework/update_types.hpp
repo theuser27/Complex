@@ -2,7 +2,7 @@
   ==============================================================================
 
     update_types.hpp
-    Created: 16 Nov 2022 2:11:06am
+    Created: 16 Nov 2022 02:11:06
     Author:  theuser27
 
   ==============================================================================
@@ -13,10 +13,11 @@
 #include "utils.hpp"
 #include "sync_primitives.hpp"
 #include "parameter_types.hpp"
+#include "Plugin/Complex.hpp"
 
 namespace Plugin
 {
-  class ProcessorTree;
+  struct ComplexPlugin;
 }
 
 namespace Generation
@@ -31,72 +32,14 @@ namespace Interface
 
 namespace Framework
 {
-  enum class UpdateType { AddProcessor, MoveProcessor, DeleteProcessor, ParameterUpdate, PresetUpdate };
-
-  class UndoableAction
+  enum UpdateType : u32
   {
-  protected:
-    UndoableAction() = default;
-  public:
-    UpdateType type{};
-    virtual ~UndoableAction() = default;
-
-    virtual bool perform() = 0;
-    virtual bool undo() = 0;
-
-    /// Allows multiple actions to be coalesced into a single action object, to reduce storage space.
-    /// The combined action can be the current, next or an entire new action
-    virtual UndoableAction *combineActions([[maybe_unused]] UndoableAction *nextAction) { return nullptr; }
+    kAddProcessorUpdate,
+    kMoveProcessorUpdate,
+    kDeleteProcessorUpdate,
+    kParameterUpdate,
+    kPresetUpdate
   };
-
-  class UndoManager
-  {
-  public:
-    UndoManager(usize transactionsToKeep);
-
-    ~UndoManager();
-
-    void clearUndoHistory();
-    void setTransationStorage(usize transactionsToKeep);
-
-    /// Performs an action and adds it to the undo history list.
-    bool perform(UndoableAction *action);
-
-    /// Starts a new group of actions that together will be treated as a single transaction.
-    void beginNewTransaction();
-
-    // Returns true if there's at least one action in the list to undo.
-    bool canUndo() const { return undoActionsCount; }
-
-    /// Tries to roll-back the last transaction, 
-    /// returns true if the transaction can be undone, and false if it fails, or
-    /// if there aren't any transactions to undo
-    /// 
-    /// if undoCurrentTransactionOnly == true, then the transaction index won't be changed
-    /// when undone and things can immediately be added to the current transaction
-    bool undo(bool undoCurrentTransactionOnly = false);
-
-    /// Returns the number of UndoableAction objects that have been performed during the
-    /// transaction that is currently open.
-    usize getNumActionsInCurrentTransaction() const { return transactions[currentIndex].size(); }
-
-    /// Returns true if there's at least one action in the list to redo.
-    bool canRedo() const { return redoActionsCount; }
-
-    /// Tries to redo the last transaction that was undone.
-    /// returns true if the transaction can be redone, and false if it fails, or
-    /// if there aren't any transactions to redo
-    bool redo();
-
-    /// Returns true if the caller code is in the middle of an undo or redo action.
-    bool isPerformingUndoRedo() const noexcept { return isInsideUndoRedoCall; }
-
-  private:
-    std::vector<std::vector<utils::up<UndoableAction>>> transactions{};
-    usize currentIndex = 0, undoActionsCount = 0, redoActionsCount = 0;
-    bool isInsideUndoRedoCall = false;
-  };
-
 
   // most of the updates need to happen outside of processing, but parts of them could be unbounded in time
   // (i.e. allocations) however those can happen regardless if we're currently processing or not
@@ -104,14 +47,7 @@ namespace Framework
   class WaitingUpdate : public UndoableAction
   {
   public:
-    void setWaitFunction(utils::small_fn<utils::ScopedLock()> waitFunction) { waitFunction_ = COMPLEX_MOVE(waitFunction); }
-  protected:
-    auto wait() const { return waitFunction_(); }
-    utils::small_fn<utils::ScopedLock()> waitFunction_ = []() -> utils::ScopedLock
-    {
-      COMPLEX_ASSERT_FALSE("Wait function for update hasn't been set");
-      std::abort();
-    };
+    utils::smallFn<utils::ScopedLock()> wait{};
   };
 
   // updates use IDs to point to processors since they are guaranteed to be unique
@@ -120,11 +56,10 @@ namespace Framework
   class AddProcessorUpdate final : public WaitingUpdate
   {
   public:
-    AddProcessorUpdate(Plugin::ProcessorTree &processorTree, u64 destinationProcessorId,
+    AddProcessorUpdate(Plugin::State &state, u64 destinationStateId,
       usize destinationSubProcessorIndex, Generation::BaseProcessor &newProcessor) noexcept : 
-      processorTree_(processorTree), addedProcessor_(&newProcessor),
-      destinationProcessorId_(destinationProcessorId),
-      destinationSubProcessorIndex_(destinationSubProcessorIndex) { type = UpdateType::AddProcessor; }
+      state_(state), addedProcessor_(&newProcessor), destinationStateId_(destinationStateId),
+      destinationSubProcessorIndex_(destinationSubProcessorIndex) { type = kAddProcessorUpdate; }
 
     ~AddProcessorUpdate() override;
 
@@ -132,42 +67,42 @@ namespace Framework
     bool undo() override;
 
   private:
-    Plugin::ProcessorTree &processorTree_;
+    Plugin::State &state_;
 
     Generation::BaseProcessor *addedProcessor_;
 
-    u64 destinationProcessorId_;
+    u64 destinationStateId_;
     usize destinationSubProcessorIndex_;
   };
 
   class MoveProcessorUpdate final : public WaitingUpdate
   {
   public:
-    MoveProcessorUpdate(Plugin::ProcessorTree &processorTree, u64 destinationProcessorId,
-      usize destinationSubProcessorIndex, u64 sourceProcessorId, usize sourceSubProcessorIndex) noexcept :
-      processorTree_(processorTree), destinationProcessorId_(destinationProcessorId),
-      destinationSubProcessorIndex_(destinationSubProcessorIndex), sourceProcessorId_(sourceProcessorId),
-      sourceSubProcessorIndex_(sourceSubProcessorIndex) { type = UpdateType::MoveProcessor; }
+    MoveProcessorUpdate(Plugin::State &state, u64 destinationStateId,
+      usize destinationSubProcessorIndex, u64 sourceStateId, usize sourceSubProcessorIndex) noexcept :
+      state_(state), destinationStateId_(destinationStateId),
+      destinationSubProcessorIndex_(destinationSubProcessorIndex), sourceStateId_(sourceStateId),
+      sourceSubProcessorIndex_(sourceSubProcessorIndex) { type = kMoveProcessorUpdate; }
 
     bool perform() override;
     bool undo() override;
 
   private:
-    Plugin::ProcessorTree &processorTree_;
+    Plugin::State &state_;
 
-    u64 destinationProcessorId_;
+    u64 destinationStateId_;
     usize destinationSubProcessorIndex_;
-    u64 sourceProcessorId_;
+    u64 sourceStateId_;
     usize sourceSubProcessorIndex_;
   };
 
   class DeleteProcessorUpdate final : public WaitingUpdate
   {
   public:
-    DeleteProcessorUpdate(Plugin::ProcessorTree &processorTree, u64 destinationProcessorId,
-      usize destinationSubProcessorIndex) noexcept : processorTree_(processorTree),
-      destinationProcessorId_(destinationProcessorId), 
-      destinationSubProcessorIndex_(destinationSubProcessorIndex) { type = UpdateType::DeleteProcessor; }
+    DeleteProcessorUpdate(Plugin::State &state, u64 destinationStateId,
+      usize destinationSubProcessorIndex) noexcept : state_(state),
+      destinationStateId_(destinationStateId), 
+      destinationSubProcessorIndex_(destinationSubProcessorIndex) { type = kDeleteProcessorUpdate; }
 
     ~DeleteProcessorUpdate() override;
 
@@ -175,57 +110,64 @@ namespace Framework
     bool undo() override;
 
   private:
-    Plugin::ProcessorTree &processorTree_;
+    Plugin::State &state_;
 
     Generation::BaseProcessor *deletedProcessor_ = nullptr;
 
-    u64 destinationProcessorId_;
+    u64 destinationStateId_;
     usize destinationSubProcessorIndex_;
   };
 
   class ParameterUpdate final : public WaitingUpdate
   {
   public:
-    ParameterUpdate(Interface::BaseControl *parameterUI, double oldValue, double newValue) :
-      baseParameter_(parameterUI), oldValue_(oldValue), newValue_(newValue) { type = UpdateType::ParameterUpdate; }
+    ParameterUpdate(Interface::BaseControl *parameterUI, double oldValue, double newValue, 
+      ParameterDetails *optionalDetails = nullptr) : baseParameter_(parameterUI), 
+      oldValue_(oldValue), newValue_(newValue)
+    {
+      type = kParameterUpdate;
+      if (optionalDetails)
+      {
+        details_ = *optionalDetails;
+        hasDetails_ = true;
+      }
+    }
 
     bool perform() override;
     bool undo() override;
 
-    void setDetailsChange(ParameterDetails details) noexcept { details_ = details; }
-
     UndoableAction *combineActions(UndoableAction *nextAction) override
     {
       auto parameterUpdate = static_cast<ParameterUpdate *>(nextAction);
-      if (nextAction->type != UpdateType::ParameterUpdate || baseParameter_ != parameterUpdate->baseParameter_)
+      if (nextAction->type != kParameterUpdate || baseParameter_ != parameterUpdate->baseParameter_)
         return nullptr;
 
       newValue_ = parameterUpdate->newValue_;
       return this;
     }
 
+
   private:
     Interface::BaseControl *baseParameter_;
-    std::optional<ParameterDetails> details_{};
     double oldValue_;
     double newValue_;
+    ParameterDetails details_{};
+    bool hasDetails_ = false;
     bool firstTime_ = true;
   };
 
   class PresetUpdate final : public WaitingUpdate
   {
   public:
-    PresetUpdate(Plugin::ProcessorTree &processorTree, utils::whatever newSavedState) :
-      processorTree_(processorTree), newSavedState_{ COMPLEX_MOVE(newSavedState) } 
-    { type = UpdateType::PresetUpdate; }
+    PresetUpdate(Plugin::ComplexPlugin &plugin, utils::sp<Plugin::State> newSavedState) :
+      plugin_(plugin), state{ COMPLEX_MOVE(newSavedState) }
+    { type = kPresetUpdate; }
 
     bool perform() override;
     bool undo() override;
 
   private:
-    Plugin::ProcessorTree &processorTree_;
-    utils::whatever oldSavedState_{};
-    utils::whatever newSavedState_{};
-    bool firstTime_ = true;
+    Plugin::ComplexPlugin &plugin_;
+    utils::sp<Plugin::State> state;
   };
 }

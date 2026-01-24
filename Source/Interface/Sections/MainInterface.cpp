@@ -11,141 +11,186 @@
 #include "MainInterface.hpp"
 
 #include "Plugin/Complex.hpp"
+#include "Generation/SoundEngine.hpp"
+#include "Generation/EffectsState.hpp"
 #include "Plugin/Renderer.hpp"
-#include "Popups.hpp"
-#include "HeaderFooterSections.hpp"
-#include "EffectsStateSection.hpp"
+#include "../LookAndFeel/Shaders.hpp"
+//#include "../Components/BaseControl.hpp"
+//#include "../Components/Spectrogram.hpp"
+//#include "Popups.hpp"
+//#include "EffectsStateSection.hpp"
 
 namespace Interface
 {
-  MainInterface::MainInterface() : BaseSection{ "Main Interface" }
+  MainInterface::MainInterface()
   {
+    sizingFlags = (SizingFlags)(sizingFlags | IsVertical);
+    arena = utils::bumpArena::create(COMPLEX_MB(256), COMPLEX_MB(1));
     reinstantiateUI();
-
-    setOpaque(false);
   }
 
-  MainInterface::~MainInterface() = default;
-
-  void MainInterface::resized()
+  MainInterface::~MainInterface()
   {
-    backgroundColour_ = getColour(Skin::kBackground);
-
-    int width = getWidth();
-    int height = getHeight();
-
-    popupSelector_->setBounds(0, 0, width, height);
-    headerFooter_->setBounds(0, 0, width, height);
-
-    int effectsStateXStart = scaleValueRoundInt(kHWindowEdgeMargin);
-    int effectsStateYStart = scaleValueRoundInt(kHeaderHeight +
-      kMainVisualiserHeight + kVGlobalMargin);
-    int effectsStateWidth = scaleValueRoundInt(kEffectsStateMinWidth);
-    int effectsStateHeight = getHeight() - effectsStateYStart - 
-      scaleValueRoundInt(kLaneToBottomSettingsMargin + kFooterHeight);
-    auto bounds = juce::Rectangle{ effectsStateXStart, effectsStateYStart,
-      effectsStateWidth, effectsStateHeight };
-
-    effectsStateSection_->setBounds(bounds);
+    deleteAllChildComponents();
+    utils::bumpArena::destroy(arena);
   }
 
-  void MainInterface::renderOpenGlComponents(OpenGlWrapper &openGl)
+  bool MainInterface::render(OpenGlWrapper &openGl)
   {
-    auto backgroundColour = backgroundColour_.get();
-    juce::gl::glClearColor(backgroundColour.getFloatRed(), backgroundColour.getFloatGreen(), 
-      backgroundColour.getFloatBlue(), 1.0f);
-    juce::gl::glClear(juce::gl::GL_COLOR_BUFFER_BIT);
+    nvgFillColor(openGl.g, getColour(Skin::kBackground));
+    nvgRect(openGl.g, 0.0f, 0.0f, (float)bounds.w, (float)bounds.h);
 
-    COMPLEX_ASSERT(openGl.parentStack.empty());
+    //nvgFillColor(openGl.g, getColour(Skin::kBody));
+    //nvgRect(openGl.g, (float)bottomBar.bounds.x, (float)bottomBar.bounds.y,
+    //  (float)bottomBar.bounds.w, (float)bottomBar.bounds.h);
 
-    openGl.parentStack.emplace_back(this, getBoundsSafe(), true);
-    openGl.parentStack.emplace_back(ScopedBoundsEmplace::doNotAddFlag);
-    openGl.topLevelHeight = getHeightSafe();
-
-    BaseSection::renderOpenGlComponents(openGl);
-
-    openGl.parentStack.pop_back();
+    return true;
   }
 
-  void MainInterface::popupSelector(const BaseComponent *source, juce::Point<int> position, PopupItems options, 
-    Skin::SectionOverride skinOverride, utils::dyn_fn<void(int)> callback, utils::dyn_fn<void()> cancel, int minWidth)
-  {
-    popupSelector_->setPopupSkinOverride(skinOverride);
-    popupSelector_->setComponent(source);
-    popupSelector_->setCallback(COMPLEX_MOVE(callback));
-    popupSelector_->setCancelCallback(COMPLEX_MOVE(cancel));
-    popupSelector_->setItems(COMPLEX_MOVE(options), minWidth);
-    popupSelector_->positionList(getLocalPoint(source, position));
-    popupSelector_->setVisible(true);
-  }
+  //void MainInterface::controlValueChanged(BaseControl *control)
+  //{
+  //  if (control == windowTypeSelector_.get())
+  //    windowAlphaNumberBox_->setVisible(windowTypeSelector_->getValue() >= kDynamicWindowsStart);
+  //}
 
-  void MainInterface::popupSelector(const BaseComponent *source, Placement placement, PopupItems options,
-    Skin::SectionOverride skinOverride, utils::dyn_fn<void(int)> callback, utils::dyn_fn<void()> cancel, int minWidth)
-  {
-    popupSelector_->setPopupSkinOverride(skinOverride);
-    popupSelector_->setComponent(source);
-    popupSelector_->setCallback(COMPLEX_MOVE(callback));
-    popupSelector_->setCancelCallback(COMPLEX_MOVE(cancel));
-    popupSelector_->setItems(COMPLEX_MOVE(options), minWidth);
-    popupSelector_->positionList(getLocalArea(source, source->getLocalBounds()), placement);
-    popupSelector_->setVisible(true);
-  }
+  static constexpr int kHeaderHorizontalEdgePadding = 10;
+  static constexpr int kHeaderNumberBoxMargin = 12;
 
-  void MainInterface::hidePopupSelector()
-  {
-    popupSelector_->setVisible(false);
-    popupSelector_->setPopupSkinOverride(Skin::kNone);
-    popupSelector_->setComponent(nullptr);
-    popupSelector_->setCallback({});
-    popupSelector_->setCancelCallback({});
-    popupSelector_->resetState();
-  }
+  static constexpr int kFooterHPadding = 16;
 
-  void MainInterface::popupDisplay(BaseComponent *source, juce::String text,
-    Placement placement, bool primary, Skin::SectionOverride sectionOverride)
-  {
-    PopupDisplay *display = primary ? popupDisplay1_.get() : popupDisplay2_.get();
-    display->setContent(COMPLEX_MOVE(text), getLocalArea(source, source->getLocalBounds()),
-      getBoundsSafe(), placement, sectionOverride);
-    display->setVisible(true);
-  }
+  static constexpr int kLabelToControlMargin = 4;
+  static constexpr float kDynamicWindowsStart = (float)utils::find_index(Framework::Window::kTypesValues, 
+    Framework::Window::Exponential) / (float)Framework::Window::kTypesValues.size();
 
-  void MainInterface::hideDisplay(bool primary)
-  {
-    PopupDisplay *display = primary ? popupDisplay1_.get() : popupDisplay2_.get();
-    display->setVisible(false);
-  }
 
   void MainInterface::reinstantiateUI()
   {
-    removeAllSubOpenGlContainers(false);
+    removeChildComponent(&resizeCorner);
+    deleteAllChildComponents();
 
-    headerFooter_ = utils::up<HeaderFooterSections>::create(uiRelated.renderer->getPlugin().getSoundEngine());
-    addSubOpenGlContainer(headerFooter_.get());
+    addChildComponent(&resizeCorner);
 
-    effectsStateSection_ = utils::up<EffectsStateSection>::create(uiRelated.renderer->getPlugin().getEffectsState());
-    addSubOpenGlContainer(effectsStateSection_.get());
+    //using namespace Framework;
 
-    popupSelector_ = utils::up<PopupSelector>::create();
-    addSubOpenGlContainer(popupSelector_.get());
-    popupSelector_->setVisible(false);
-    popupSelector_->setAlwaysOnTop(true);
-    popupSelector_->setWantsKeyboardFocus(true);
+    //controls_ = {};
+    //removeAllChildren();
+    //
+    //auto &soundEngine = getPlugin(uiRelated.renderer).getSoundEngine();
 
-    popupDisplay1_ = utils::up<PopupDisplay>::create();
-    addSubOpenGlContainer(popupDisplay1_.get());
-    popupDisplay1_->setVisible(false);
-    popupDisplay1_->setAlwaysOnTop(true);
-    popupDisplay1_->setWantsKeyboardFocus(false);
+    //mixNumberBox_ = utils::up<NumberBox>::create(
+    //  soundEngine.getParameter(Processors::SoundEngine::MasterMix::id().value()));
+    //mixNumberBox_->setMaxTotalCharacters(5);
+    //mixNumberBox_->setMaxDecimalCharacters(2);
+    //mixNumberBox_->setCanUseScrollWheel(true);
+    //mixNumberBox_->desiredPosition = { .placement = Placement::centerVertical | Placement::right };
+    //topBar.addChildComponent(mixNumberBox_.get());
 
-    popupDisplay2_ = utils::up<PopupDisplay>::create();
-    addSubOpenGlContainer(popupDisplay2_.get());
-    popupDisplay2_->setVisible(false);
-    popupDisplay2_->setAlwaysOnTop(true);
-    popupDisplay2_->setWantsKeyboardFocus(false);
+    //gainNumberBox_ = utils::up<NumberBox>::create(
+    //  soundEngine.getParameter(Processors::SoundEngine::OutGain::id().value()));
+    //gainNumberBox_->setMaxTotalCharacters(5);
+    //gainNumberBox_->setMaxDecimalCharacters(2);
+    //gainNumberBox_->setShouldUsePlusMinusPrefix(true);
+    //gainNumberBox_->setCanUseScrollWheel(true);
+    //gainNumberBox_->desiredPosition = { .placement = Placement::centerVertical | Placement::right };
+    //topBar.addChildComponent(gainNumberBox_.get());
 
-    popupSelector_->toFront(true);
-    popupDisplay1_->toFront(true);
-    popupDisplay2_->toFront(true);
+    //topBar.desiredW =
+    //{
+    //  .type = Dimension::Grow,
+    //  .maxSize = u32(-1),
+    //  .margin = { kHeaderHorizontalEdgePadding, kHeaderHorizontalEdgePadding },
+    //  .padding = { kHeaderNumberBoxMargin, 0 }
+    //};
+    //topBar.desiredH = { .type = Dimension::Fixed, .size = kHeaderHeight };
+    //topBar.desiredPosition = { .placement = Placement::top };
+    //addChildComponent(&topBar);
+
+
+    //spectrogram_ = utils::up<Spectrogram>::create("Main Spectrum");
+    //spectrogram_->bufferView_ = soundEngine.getEffectsState().getOutputBuffer(kChannelsPerInOut, 0);
+    //spectrogram_->desiredW = { .type = Dimension::Grow, .maxSize = u32(-1), .margin = { kHWindowEdgeMargin, kHWindowEdgeMargin } };
+    //spectrogram_->desiredH = { .type = Dimension::Fixed, .size = kMainVisualiserHeight };
+    //spectrogram_->desiredPosition = { .placement = Placement::top };
+    //addChildComponent(spectrogram_.get());
+
+
+    //effectsStateSection_ = utils::up<EffectsStateSection>::create(soundEngine.getEffectsState());
+    //effectsStateSection_->desiredW = { .type = Dimension::Fit, .margin = { kHWindowEdgeMargin, kHWindowEdgeMargin } };
+    //effectsStateSection_->desiredH = { .type = Dimension::Grow, .maxSize = u32(-1) };
+    //effectsStateSection_->desiredPosition = { .placement = Placement::top };
+    //addChildComponent(effectsStateSection_.get());
+
+
+    //blockSizeNumberBox_ = utils::up<NumberBox>::create(
+    //  soundEngine.getParameter(Processors::SoundEngine::BlockSize::id().value()));
+    //blockSizeNumberBox_->setMaxTotalCharacters(5);
+    //blockSizeNumberBox_->setMaxDecimalCharacters(0);
+    //blockSizeNumberBox_->setAlternativeMode(true);
+    //blockSizeNumberBox_->setCanUseScrollWheel(true);
+    //addControl(blockSizeNumberBox_.get(), false);
+
+    //overlapNumberBox_ = utils::up<NumberBox>::create(
+    //  soundEngine.getParameter(Processors::SoundEngine::Overlap::id().value()));
+    //overlapNumberBox_->setMaxTotalCharacters(4);
+    //overlapNumberBox_->setMaxDecimalCharacters(2);
+    //overlapNumberBox_->setAlternativeMode(true);
+    //overlapNumberBox_->setCanUseScrollWheel(true);
+    //addControl(overlapNumberBox_.get(), false);
+
+    //windowTypeSelector_ = utils::up<TextSelector>::create(
+    //  soundEngine.getParameter(Processors::SoundEngine::WindowType::id().value()),
+    //  Font{ .id = uiRelated.cache->DDinFontId, .height = Graphics::kDDinDefaultHeight,
+    //  .kerning = Graphics::kDDinDefaultKerning });
+    //windowTypeSelector_->setCanUseScrollWheel(true);
+    //windowTypeSelector_->setPopupPlacement(Placement::top);
+    //windowTypeSelector_->setLabelPlacement(Placement::left);
+    //windowTypeSelector_->addLabel();
+    //windowTypeSelector_->setTextSelectorListener(this);
+    //addControl(windowTypeSelector_.get(), false);
+
+    //windowAlphaNumberBox_ = utils::up<NumberBox>::create(
+    //  soundEngine.getParameter(Processors::SoundEngine::WindowAlpha::id().value()));
+    //windowAlphaNumberBox_->setMaxTotalCharacters(4);
+    //windowAlphaNumberBox_->setMaxDecimalCharacters(2);
+    //windowAlphaNumberBox_->setAlternativeMode(true);
+    //windowAlphaNumberBox_->setCanUseScrollWheel(true);
+    //windowAlphaNumberBox_->removeLabel();
+    //controlValueChanged(windowTypeSelector_.get());
+    //addControl(windowAlphaNumberBox_.get(), false);
+
+    //windowTypeSelector_->setExtraNumberBox(windowAlphaNumberBox_.get());
+    //windowTypeSelector_->setExtraNumberBoxPlacement(Placement::left);
+
+    //bottomBar.desiredW =
+    //{
+    //  .type = Dimension::Grow,
+    //  .maxSize = u32(-1),
+    //  .margin = { kHeaderHorizontalEdgePadding, kHeaderHorizontalEdgePadding }
+    //};
+    //bottomBar.desiredH =
+    //{
+    //  .type = Dimension::Fixed,
+    //  .size = kHeaderHorizontalEdgePadding,
+    //  .margin = { kLaneToBottomSettingsMargin, 0 }
+    //};
+    //bottomBar.desiredPosition = { .placement = Placement::bottom };
+    //addChildComponent(&bottomBar);
+
+
+    //popupSelector_ = utils::up<PopupSelector>::create();
+    //addChildComponent(popupSelector_.get());
+    //popupSelector_->setVisible(false);
+    //popupSelector_->layerIndex = 1;
+    //popupSelector_->featureFlags.wantsFocus = true;
+
+    //popupDisplay1_ = utils::up<PopupDisplay>::create();
+    //popupDisplay1_->setVisible(false);
+    //popupDisplay1_->layerIndex = 1;
+    //addChildComponent(popupDisplay1_.get());
+
+    //popupDisplay2_ = utils::up<PopupDisplay>::create();
+    //popupDisplay2_->setVisible(false);
+    //popupDisplay2_->layerIndex = 1;
+    //addChildComponent(popupDisplay2_.get());
   }
 }

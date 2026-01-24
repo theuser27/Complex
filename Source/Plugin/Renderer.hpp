@@ -2,7 +2,7 @@
   ==============================================================================
 
     Renderer.hpp
-    Created: 20 Dec 2022 7:34:54pm
+    Created: 20 Dec 2022 19:34:54
     Author:  theuser27
 
   ==============================================================================
@@ -10,73 +10,62 @@
 
 #pragma once
 
-#include "Framework/utils.hpp"
-#include "Interface/LookAndFeel/Shaders.hpp"
+#include "pugl/pugl.h"
+#include "Interface/LookAndFeel/gui_utils.hpp"
 
-namespace juce
+extern "C"
 {
-  class AudioProcessorEditor;
+  //typedef struct PuglViewImpl PuglView;
+  //union PuglEvent;
+  union CplugEvent;
+}
+
+namespace satomi
+{
+  template<typename T>
+  class atomic;
 }
 
 namespace Plugin
 {
-  class ComplexPlugin;
+  struct ComplexPlugin;
 }
 
 namespace Interface
 {
-  class OpenGlComponent;
+  class Component;
   class MainInterface;
   class Skin;
+  struct OpenGlWrapper;
 
-  class Renderer
+  class Renderer;
+
+  Renderer *createRenderer(Plugin::ComplexPlugin &plugin);
+  void destroyRenderer(Renderer *renderer);
+
+  Plugin::ComplexPlugin &getPlugin(Renderer *renderer);
+  MainInterface *getGui(Renderer *renderer);
+  Skin *getSkin(Renderer *renderer);
+  PuglView *getPuglView(Renderer *renderer);
+
+  OpenGlWrapper &getOpenGlContext(Renderer *renderer);
+
+  Area<u32> getUISize(Renderer *renderer);
+  bool setUISize(Renderer *renderer, u32 width, u32 height);
+
+  void setMouseCursor(Renderer *renderer, MouseCursorTypes cursorType);
+
+  void setFocusedComponent(Renderer *renderer, Component *component);
+  void moveFocusTo(Renderer *renderer, Component &component);
+
+  struct MouseInteractions
   {
-  public:
-    static constexpr double kMinOpenGlVersion = 1.4;
+    Component *hovered = nullptr;
+    Component *clicked = nullptr;
+    Component *focused = nullptr;
 
-    Renderer(Plugin::ComplexPlugin &plugin);
-    ~Renderer() noexcept;
-
-    void startUI();
-    void stopUI();
-
-    void reloadSkin(utils::up<Skin> skin);
-    void updateFullGui();
-    void setGuiScale(double scale);
-    void clampScaleWidthHeight(double &desiredScale, int &windowWidth, int &windowHeight) const;
-
-    //void notifyModulationsChanged();
-    //void notifyModulationValueChanged(int index);
-    //void connectModulation(std::string source, std::string destination);
-    //void connectModulation(vital::ModulationConnection *connection);
-    //void setModulationValues(const std::string &source, const std::string &destination,
-    //  vital::mono_float amount, bool bipolar, bool stereo, bool bypass);
-    //void initModulationValues(const std::string &source, const std::string &destination);
-    //void disconnectModulation(std::string source, std::string destination);
-    //void disconnectModulation(vital::ModulationConnection *connection);
-
-    auto &getPlugin() noexcept { return plugin_; }
-    MainInterface *getGui() noexcept;
-    std::atomic<bool> &getRenderLock() noexcept;
-    Skin *getSkin() noexcept;
-
-    void setEditor(juce::AudioProcessorEditor *editor) noexcept { topLevelComponent_ = editor; }
-    void pushOpenGlResourceToDelete(OpenGlAllocatedResource type, GLsizei n, GLuint id);
-    void setIsResizing(bool isResizing) noexcept;
-
-  private:
-    class Pimpl;
-
-    utils::up<Skin> skinInstance_;
-    utils::up<MainInterface> gui_;
-
-    Plugin::ComplexPlugin &plugin_;
-    juce::AudioProcessorEditor *topLevelComponent_ = nullptr;
-
-    Pimpl *pimpl_ = nullptr;
-    static constexpr usize kPimplAlignment = 8;
-    alignas(kPimplAlignment) unsigned char pimplStorage_[460]{};
-
-    friend class Pimpl;
+    MouseEvent mouseState{};
   };
+
+  MouseInteractions getMouseInteractions(Renderer *renderer);
 }

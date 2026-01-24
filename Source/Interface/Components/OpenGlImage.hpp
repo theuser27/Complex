@@ -10,58 +10,33 @@
 
 #pragma once
 
-#include "Interface/LookAndFeel/Miscellaneous.hpp"
-#include "OpenGlComponent.hpp"
+#include "../LookAndFeel/shader_types.hpp"
+#include "../LookAndFeel/Graphics.hpp"
+#include "../LookAndFeel/Miscellaneous.hpp"
+#include "../LookAndFeel/BaseComponent.hpp"
 
 namespace Interface
 {
   // Drawing class that acquires its logic from the paint method
   // of the currently linked component (i.e. the owner of the object)
   // and draws it on an owned image resource
-  class OpenGlImage : public OpenGlComponent
+  class OpenGlImage : public Component
   {
   public:
-    OpenGlImage(String name = "OpenGlImage");
-    ~OpenGlImage() override;
+    OpenGlImage();
 
-    void redrawImage(juce::Rectangle<int> redrawArea = {}, bool forceRedraw = true);
-    virtual void paintToImage(Graphics &g, BaseComponent *target)
-    {
-      if (paintEntireComponent_)
-        target->paintEntireComponent(g, false);
-      else
-        target->paint(g);
-    }
+    void redrawImage(Rectangle<int> redrawArea = {}, bool forceRedraw = true);
 
-    void init(OpenGlWrapper &openGl) override;
-    void render(OpenGlWrapper &openGl) override;
-    void destroy() override;
-
-    void setTargetComponent(BaseComponent *targetComponent) { targetComponent_ = targetComponent; }
-    // this is for responsible for render and also raster coords within targetComponent (either this or something else)
-    void setCustomViewportBounds(juce::Rectangle<int> customViewportBounds) { customViewportBounds_ = customViewportBounds; }
-    void setCustomScissorBounds(juce::Rectangle<int> customScissorBounds) { customScissorBounds_ = customScissorBounds; }
-    void setAdditive(bool additive) { isAdditive_ = additive; }
-    void setScissor(bool scissor) { useScissor_ = scissor; }
-    void setUseAlpha(bool useAlpha) { useAlpha_ = useAlpha; }
-    void setColor(Colour colour) { colour_ = colour; }
-    void setActive(bool active) { isActive_ = active; }
-
-    void setPaintFunction(utils::small_fn<void(Graphics &, juce::Rectangle<int>)> paintFunction) 
-    { paintFunction_ = COMPLEX_MOVE(paintFunction); }
-    void setShouldClearOnRedraw(bool clearOnRedraw) { clearOnRedraw_ = clearOnRedraw; }
-    void paintEntireComponent(bool paintEntireComponent) { paintEntireComponent_ = paintEntireComponent; }
+    bool render(OpenGlWrapper &openGl) override;
 
     void setVertexPosition(usize index, float x, float y)
     {
-      auto vertices = positionVertices_.write();
       vertices[index] = x;
       vertices[index + 1] = y;
     }
 
     void movePosition(float x, float y)
     {
-      auto vertices = positionVertices_.write();
       vertices[0]  = -1.0f + x;
       vertices[1]  =  1.0f + y;
       vertices[4]  = -1.0f + x;
@@ -72,106 +47,39 @@ namespace Interface
       vertices[13] =  1.0f + y;
     }
 
-  protected:
-    utils::shared_value<Colour> colour_ = Colours::white;
-    utils::shared_value<bool> isAdditive_ = false;
-    utils::shared_value<bool> useAlpha_ = false;
-    utils::shared_value<bool> useScissor_ = true;
-    utils::shared_value<bool> isActive_ = true;
+    ImageVertex vertexShader{};
+    TintedImageFragment fragmentShader{};
+    OpenGlShaderProgram shaderProgram{};
 
-    utils::shared_value<bool> shouldReloadImage_ = false;
-    utils::shared_value<BaseComponent *> targetComponent_ = nullptr;
-    utils::shared_value<juce::Rectangle<int>> customViewportBounds_{};
-    utils::shared_value<juce::Rectangle<int>> customScissorBounds_{};
+    u64 textureId{};
+    Rectangle<i32> textureBoundsInFramebuffer{};
+    
+    float vertices[ImageVertex::kNumPositions];
 
-    utils::shared_value_block<Image> drawImage_;
-    GLuint textureId_ = 0;
-    int textureWidth_ = 0;
-    int textureHeight_ = 0;
-    OpenGlShaderProgram imageShader_;
-    OpenGlUniform imageColour_;
-    OpenGlAttribute imagePosition_;
-    OpenGlAttribute textureCoordinates_;
-
-    utils::shared_value<float[]> positionVertices_;
-    GLuint vertexBuffer_{};
-    GLuint triangleBuffer_{};
-
-    utils::small_fn<void(Graphics &, juce::Rectangle<int>)> paintFunction_{};
-    bool paintEntireComponent_ = true;
-    bool clearOnRedraw_ = true;
-
-    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(OpenGlImage)
-  };
-
-  class OpenGlBackground final : public OpenGlImage
-  {
-  public:
-    OpenGlBackground() : OpenGlImage{ "OpenGlBackground" } { setShouldClearOnRedraw(false); }
-
-    void paintToImage(Graphics &g, BaseComponent *target) override;
-    void setComponentToRedraw(BaseSection *componentToRedraw)
-    { componentToRedraw_ = componentToRedraw; }
-
-  protected:
-    BaseSection *componentToRedraw_ = nullptr;
-
-    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(OpenGlBackground)
+    utils::smallFn<void(Graphics &, Rectangle<i32>)> paintFunction{};
+    Component *ignoreClipIncluding = nullptr;
+    bool isDirty = false;
+    bool additiveBlending = false;
+    bool useAlpha = false;
+    bool shouldReloadImage = false;
+    bool clearOnRedraw = true;
   };
 
   class PlainTextComponent final : public OpenGlImage
   {
   public:
-    enum FontType
-    {
-      kTitle,
-      kText,
-      kValues
-    };
+    PlainTextComponent(utils::string text = {});
 
-    PlainTextComponent(String name, String text = {});
-
-    void resized() override;
-    void paintToImage(Graphics &g, BaseComponent *target) override;
-
-    String getText() const { return text_; }
-    int getTotalWidth() const { return font_.getStringWidth(text_); }
-    int getTotalHeight() const { return (int)std::ceil(font_.getHeight()); }
-    void updateState();
-
-    void setText(String text) noexcept { text_ = COMPLEX_MOVE(text); redrawImage(); }
-    void setTextHeight(float textSize) noexcept { textSize_ = textSize; }
-    void setTextColour(Colour colour) noexcept { textColour_ = colour; }
-    void setFontType(FontType type) noexcept { fontType_ = type; }
-    void setJustification(Justification justification) noexcept { justification_ = justification; }
-
-  private:
-    String text_;
-    float textSize_ = 11.0f;
-    Colour textColour_ = Colours::white;
-    Font font_;
-    FontType fontType_ = kText;
-    Justification justification_ = Justification::centred;
+    utils::string text;
+    Colour textColour = Colours::white;
+    Font font;
   };
 
   class PlainShapeComponent final : public OpenGlImage
   {
   public:
-    PlainShapeComponent(String name) : OpenGlImage{ COMPLEX_MOVE(name) } { }
+    PlainShapeComponent();
 
-    void resized() override { redrawImage(); }
-    void paintToImage(Graphics &g, BaseComponent *target) override;
-
-    void setShapes(Shape shape)
-    {
-      shape_ = COMPLEX_MOVE(shape);
-      redrawImage();
-    }
-
-    void setJustification(Justification justification) { justification_ = justification; }
-
-  private:
-    Shape shape_;
-    Justification justification_ = Justification::centred;
+    Shape shape;
   };
 }

@@ -10,20 +10,21 @@
 
 #include "Skin.hpp"
 
-#include "Third Party/json/json.hpp"
-#include "Third Party/visage/file_system.h"
-//#include <juce_graphics/juce_graphics.h>
-#include "BinaryData.h"
+#include "cplug/config.h"
 
-#include "../Sections/BaseSection.hpp"
+#include "Third Party/cjson/cjson.h"
+#include "Third Party/xhl/files.h"
 
-using json = nlohmann::json;
+#include "Data/BinaryData.h"
+
+#include "Framework/load_save.hpp"
+#include "BaseComponent.hpp"
 
 namespace
 {
-  inline constexpr utils::array<std::string_view, Interface::Skin::kSectionsCount> kOverrideNames = {
+  inline constexpr utils::string_view kOverrideNames[Interface::Skin::kSectionsCount] =
+  {
     "All",
-    "Overlays",
     "Effects Lane",
     "Popup Browser",
     "Filter Module",
@@ -33,7 +34,8 @@ namespace
     "Destroy Module",
   };
 
-  inline constexpr utils::array<std::string_view, Interface::Skin::kValueIdCount> kValueNames = {
+  inline constexpr utils::string_view kValueNames[Interface::Skin::kValueIdCount] =
+  {
     "Body Rounding Top",
     "Body Rounding Bottom",
 
@@ -56,9 +58,14 @@ namespace
     "Knob Handle Length",
     "Knob Shadow Width",
     "Knob Shadow Offset",
+
+    "Scroll Hitbox Width",
+    "Scroll Padding",
+    "Scroll Shrink Percent",
   };
 
-  inline constexpr utils::array<std::string_view, Interface::Skin::kColorIdCount> kColorNames = {
+  inline constexpr utils::string_view kColorNames[Interface::Skin::kColorIdCount] =
+  {
     "Background",
     "Body",
     "Background Element",
@@ -135,305 +142,181 @@ namespace
   };
 }
 
+extern thread_local utils::bumpArena *jsonArena;
+extern thread_local utils::bumpArena *localScratch;
+
 namespace Interface
 {
   namespace
   {
-    visage::File getDefaultSkin()
+    void updateJson([[maybe_unused]] cjson *data)
     {
-      auto pluginFolder = visage::appDataDirectory().append(JucePlugin_Name);
-      if (!std::filesystem::exists(pluginFolder))
-      {
-        std::filesystem::create_directory(pluginFolder);
-      }
-      return pluginFolder.append(JucePlugin_Name ".skin");
-    }
-
-    json updateJson(json data)
-    {
-      [[maybe_unused]] int version = 0;
-      if (data.count("Plugin Version"))
-        version = data["Plugin Version"];
+      //[[maybe_unused]] int version = 0;
+      //if (cjson *pluginVersion = cjson_GetObjectItem(data, "Plugin Version"))
+      //  version = (int)pluginVersion->vuint;
 
       // if skin versions upgrades are ever needed, insert them here
-
-      return data;
     }
   }
 
   Skin::Skin()
   {
-    auto defaultSkin = getDefaultSkin();
+    auto skinFile = Framework::LoadSave::getConfigFilePath(CPLUG_PLUGIN_NAME ".skin");
 
     // temporary solution to ensure there's a skin file
     // if this throws put Complex.skin at Users\(user)\AppData\Roaming\Complex
-    if (std::filesystem::exists(defaultSkin))
+    if (xfiles_exists(skinFile.data()))
     {
-      auto stringState = visage::loadFileAsString(defaultSkin);
-      if (!stringToState(stringState))
-        loadDefaultSkin();
+      char *string;
+      usize stringSize;
+      if (xfiles_read(skinFile.data(), (void **)&string, &stringSize))
+      {
+        if (stringToState({ string, stringSize }))
+          return;
+      }
     }
-    else
-      loadDefaultSkin();
 
-    /*try
+    auto defaultSkin = utils::string_view{ BinaryData::Complex_skin, BinaryData::Complex_skinSize };
+    if (stringToState(defaultSkin))
     {
-      if (!defaultSkin.exists())
-        throw std::exception("skin file doesn't exist");
-      
-      loadFromFile(defaultSkin);
-
+      xfiles_write(skinFile.data(), defaultSkin.data(), defaultSkin.size());
+      return;
     }
-    catch (const std::exception &e)
-    {
-      std::cerr << e.what() << '\n';
-    }*/
+
+    COMPLEX_HARD_ASSERT_FALSE("Couldn't parse default skin");
   }
 
-  void Skin::clearSkin()
+  Colour Skin::getColour(ColourId colorId, const Component *component) const
   {
-    for (int i = 0; i < kSectionsCount; ++i)
-      colorOverrides_[i].data.clear();
-    for (int i = 0; i < kSectionsCount; ++i)
-      valueOverrides_[i].data.clear();
+    while (component->skinOverride == kUseParentOverride)
+      component = component->parent;
+
+    COMPLEX_ASSERT(component->skinOverride < kSectionsCount);
+    COMPLEX_ASSERT(colorId < kColorIdCount);
+
+    return colours[component->skinOverride][colorId];
   }
 
-  void Skin::setColour(ColourId colorId, const juce::Colour &color) noexcept
+  float Skin::getValue(ValueId valueId, const Component *component) const
   {
-    auto index = colorId - kInitialColor;
-    COMPLEX_ASSERT(index < kColorIdCount);
-    colors_[index] = color.getARGB();
-  }
-  u32 Skin::getColour(ColourId colorId) const
-  {
-    auto index = colorId - kInitialColor;
-    COMPLEX_ASSERT(index < kColorIdCount);
-    return colors_[index];
-  }
+    while (component->skinOverride == kUseParentOverride)
+      component = component->parent;
 
-
-
-  u32 Skin::getColour(SectionOverride section, ColourId colorId) const
-  {
-    if (section == kNone)
-      return getColour(colorId);
-
-    if (auto iter = colorOverrides_[section].find(colorId); iter != colorOverrides_[section].data.end())
-      return iter->second;
-
-    return getColour(colorId);
-  }
-
-  u32 Skin::getColour(const OpenGlContainer *section, ColourId colorId) const
-  {
-    SectionOverride sectionOverride;
-    do
-    {
-      sectionOverride = section->getSectionOverride();
-      if (auto iter = colorOverrides_[sectionOverride].find(colorId); 
-        iter != colorOverrides_[sectionOverride].data.end())
-        return iter->second;
-
-      section = dynamic_cast<OpenGlContainer *>(section->getParentSafe());
-    } while (sectionOverride != kNone && section != nullptr);
-
-    return getColour(colorId);
-  }
-
-  void Skin::setValue(ValueId valueId, float value)
-  {
+    COMPLEX_ASSERT(component->skinOverride < kSectionsCount);
     COMPLEX_ASSERT(valueId < kValueIdCount);
-    values_[valueId] = value;
+
+    return values[component->skinOverride][valueId];
   }
 
-  float Skin::getValue(ValueId valueId) const
+  void Skin::saveToFile(char *saveFile)
   {
-    COMPLEX_ASSERT(valueId < kValueIdCount);
-    return values_[valueId];
-  }
+    jsonArena = utils::bumpArena::createNested(localScratch, COMPLEX_KB(128));
 
-  float Skin::getValue(SectionOverride section, ValueId valueId) const
-  {
-    if (auto iter = valueOverrides_[section].find(valueId); iter != valueOverrides_[section].data.end())
-      return iter->second;
+    cjson *data = cjson_Create(cjson_Object);
+    cjson_AddTo(data, "Plugin Version", cjson_String, CPLUG_PLUGIN_VERSION);
 
-    return getValue(valueId);
-  }
-
-  float Skin::getValue(const OpenGlContainer *section, ValueId valueId) const
-  {
-    SectionOverride sectionOverride;
-    do
+    for (usize i = kInitialColor; i < kColorIdCount; ++i)
     {
-      sectionOverride = section->getSectionOverride();
-      if (auto iter = valueOverrides_[sectionOverride].find(valueId); iter != valueOverrides_[sectionOverride].data.end())
-        return iter->second;
-
-      section = dynamic_cast<OpenGlContainer *>(section->getParentSafe());
-    } while (sectionOverride != kNone && section != nullptr);
-
-    return getValue(valueId);
-  }
-
-  void Skin::addColourOverride(int section, ColourId colorId, const juce::Colour &color)
-  {
-    if (section == kNone)
-      setColour(colorId, color);
-    else
-      colorOverrides_[section][colorId] = color.getARGB();
-  }
-
-  void Skin::removeColourOverride(int section, ColourId colorId)
-  {
-    if (section != kNone)
-      colorOverrides_[section].erase(colorId);
-  }
-
-  bool Skin::overridesColour(int section, ColourId colorId) const
-  {
-    if (section == kNone)
-      return true;
-
-    return colorOverrides_[section].find(colorId) != colorOverrides_[section].data.end();
-  }
-
-  void Skin::addOverrideValue(int section, ValueId valueId, float value)
-  {
-    if (section == kNone)
-      setValue(valueId, value);
-    else
-      valueOverrides_[section][valueId] = value;
-  }
-
-  void Skin::removeOverrideValue(int section, ValueId valueId)
-  {
-    if (section != kNone)
-      valueOverrides_[section].erase(valueId);
-  }
-
-  bool Skin::overridesValue(int section, ValueId valueId) const
-  {
-    if (section == kNone)
-      return true;
-
-    return valueOverrides_[section].find(valueId) != valueOverrides_[section].data.end();
-  }
-
-  void Skin::saveToFile(const juce::File &destination)
-  {
-    json data;
-    for (int i = 0; i < kColorIdCount; ++i)
-      data[kColorNames[i]] = juce::Colour{ colors_[i] }.toString().toStdString();
-
-    for (int i = 0; i < kValueIdCount; ++i)
-      data[kValueNames[i]] = values_[i];
-
-    json overrides;
-    for (usize overrideIndex = 0; overrideIndex < kSectionsCount; ++overrideIndex)
-    {
-      json overrideSection;
-      for (const auto &[key, value] : colorOverrides_[overrideIndex].data)
-        overrideSection[kColorNames[key - kInitialColor]] = juce::Colour{ value }.toString().toStdString();
-
-      for (const auto &[key, value] : valueOverrides_[overrideIndex].data)
-        overrideSection[kValueNames[key]] = value;
-
-      overrides[kOverrideNames[overrideIndex]] = overrideSection;
+      auto string = colours[0][i].toString();
+      cjson_AddTo(data, kColorNames[i].data(), cjson_String, string.data());
     }
 
-    data["overrides"] = overrides;
-    data["Plugin Version"] = JucePlugin_VersionCode;
+    for (usize i = kInitialValue; i < kValueIdCount; ++i)
+      cjson_AddTo(data, kValueNames[i].data(), cjson_Float, (double)values[0][i]);
 
-    (void)destination.replaceWithText(data.dump());
+    cjson *overrides = cjson_AddTo(data, "overrides", cjson_Object);
+    for (usize overrideIndex = kNone + 1; overrideIndex < kSectionsCount; ++overrideIndex)
+    {
+      cjson *overrideSection = cjson_AddTo(overrides, kOverrideNames[overrideIndex].data(), cjson_Object);
+      for (usize i = kInitialColor; i < kColorIdCount; ++i)
+      {
+        if (colours[overrideIndex][i] != colours[0][i])
+        {
+          auto string = colours[overrideIndex][i].toString();
+          cjson_AddTo(overrideSection, kColorNames[i].data(), cjson_String, string.data());
+        }
+      }
+
+      for (usize i = kInitialValue; i < kValueIdCount; ++i)
+        if (values[overrideIndex][i] != values[0][i])
+          cjson_AddTo(overrideSection, kValueNames[i].data(), cjson_Float, (double)values[overrideIndex][i]);
+    }
+
+    usize stringSize;
+    char *string = cjson_Print(data, &stringSize);
+    xfiles_write(saveFile, string, stringSize);
+
+    utils::bumpArena::destroy(jsonArena);
+    jsonArena = nullptr;
   }
 
   void Skin::jsonToState(void *jsonData)
   {
-    json &data = *static_cast<json *>(jsonData);
+    cjson *data = (cjson *)jsonData;
 
-    clearSkin();
-    data = updateJson(data);
+    updateJson(data);
 
-    if (data.count("overrides"))
+    for (usize i = kInitialColor; i < kColorIdCount; ++i)
     {
-      json overrides = data["overrides"];
-      for (usize overrideIndex = 0; overrideIndex < kSectionsCount; ++overrideIndex)
-      {
-        std::string_view name = kOverrideNames[overrideIndex];
-        colorOverrides_[overrideIndex].data.clear();
-        valueOverrides_[overrideIndex].data.clear();
+      if (cjson *c = cjson_GetObjectItem(data, kColorNames[i].data()))
+        colours[0][i] = Colour::fromString(c->vstring);
+      else
+        colours[0][i] = Colours::black;
+    }
 
-        if (overrides.count(name) == 0)
+    for (usize i = kInitialValue; i < kValueIdCount; ++i)
+    {
+      if (cjson *v = cjson_GetObjectItem(data, kValueNames[i].data()))
+        values[0][i] = (float)v->vdouble;
+      else
+        values[0][i] = 0.0f;
+    }
+
+    // default every override to base skin
+    for (usize i = kNone + 1; i < kSectionsCount; ++i)
+    {
+      ::memcpy(colours[i], colours[0], sizeof(Skin::colours[0]));
+      ::memcpy(values[i], values[0], sizeof(Skin::values[0]));
+    }
+
+    if (cjson *overrides = cjson_GetObjectItem(data, "overrides"))
+    {
+      for (usize overrideIndex = kNone; overrideIndex < kSectionsCount; ++overrideIndex)
+      {
+        cjson *section = cjson_GetObjectItem(overrides, kOverrideNames[overrideIndex].data());
+        if (!section)
           continue;
 
-        json overrideSection = overrides[name];
-        for (int i = 0; i < kColorIdCount; ++i)
-        {
-          if (overrideSection.count(kColorNames[i]))
-          {
-            ColourId colorId = static_cast<Skin::ColourId>(i + Skin::kInitialColor);
+        for (usize i = kInitialColor; i < kColorIdCount; ++i)
+          if (cjson *c = cjson_GetObjectItem(section, kColorNames[i].data()))
+            colours[overrideIndex][i] = Colour::fromString(c->vstring);
 
-            std::string_view colorString = overrideSection[kColorNames[i]].get<std::string_view>();
-            colorOverrides_[overrideIndex].add(colorId, juce::Colour::fromString(colorString.data()).getARGB());
-          }
-        }
-
-        for (int i = 0; i < kValueIdCount; ++i)
-        {
-          if (overrideSection.count(kValueNames[i]))
-          {
-            Skin::ValueId valueId = static_cast<Skin::ValueId>(i);
-            float value = overrideSection[kValueNames[i]];
-            valueOverrides_[overrideIndex].add(valueId, value);
-          }
-        }
+        for (usize i = kInitialValue; i < kValueIdCount; ++i)
+          if (cjson *v = cjson_GetObjectItem(section, kValueNames[i].data()))
+            values[overrideIndex][i] = (float)v->vdouble;
       }
-    }
-
-    for (usize i = 0; i < kColorIdCount; ++i)
-    {
-      if (data.contains(kColorNames[i]))
-      {
-        std::string_view colorString = data[kColorNames[i]].get<std::string_view>();
-        colors_[i] = juce::Colour::fromString(colorString.data()).getARGB();
-      }
-    }
-
-    for (usize i = 0; i < kValueIdCount; ++i)
-    {
-      if (data.contains(kValueNames[i]))
-        values_[i] = data[kValueNames[i]];
-      else
-        values_[i] = 0.0f;
     }
   }
 
   bool Skin::stringToState(utils::string_view skinString)
   {
-    try
+    jsonArena = utils::bumpArena::createNested(localScratch, COMPLEX_KB(128));
+    
+    const char *potentialError = nullptr;
+    cjson *data = cjson_ParseWithOpts(skinString.data(), skinString.size(), &potentialError, false);
+    if (!data)
     {
-      json data = json::parse(skinString, nullptr, false);
-      jsonToState(&data);
-    }
-    catch (const json::exception &)
-    {
+      Interface::showNativeMessageBox("Couldn't parse skin preset correctly.",
+        potentialError, Interface::MessageBoxType::Warning);
+
       return false;
     }
+
+    jsonToState(data);
+
+    utils::bumpArena::destroy(jsonArena);
+    jsonArena = nullptr;
+
     return true;
-  }
-
-  void Skin::loadDefaultSkin()
-  {
-    auto defaultSkin = utils::string_view{ BinaryData::Complex_skin, BinaryData::Complex_skinSize };
-
-    try
-    {
-      json data = json::parse(defaultSkin, nullptr, false);
-      jsonToState(&data);
-    }
-    catch (const json::exception &)
-    {
-      COMPLEX_ASSERT_FALSE("Couldn't parse default skin");
-    }
   }
 }

@@ -2,7 +2,7 @@
   ==============================================================================
 
     parameter_value.hpp
-    Created: 11 Jul 2022 3:22:48pm
+    Created: 11 Jul 2022 15:22:48
     Author:  theuser27
 
   ==============================================================================
@@ -10,17 +10,15 @@
 
 #pragma once
 
-#include <memory>
-#include <vector>
-
 #include "utils.hpp"
+#include "memory.hpp"
 #include "sync_primitives.hpp"
 #include "simd_utils.hpp"
 #include "parameter_types.hpp"
 
 namespace Plugin
 {
-  class ProcessorTree;
+  struct State;
 }
 
 namespace Interface
@@ -34,71 +32,42 @@ namespace Framework
   concept ParameterRepresentation = utils::is_same_v<T, float> || utils::is_same_v<T, u32>
     || SimdValue<T> || utils::is_same_v<T, Framework::IndexedData>;
 
-  struct atomic_simd_float
-  {
-    atomic_simd_float(simd_float value) : value(value) { }
-
-    simd_float load() const noexcept
-    {
-      utils::ScopedLock g{ guard, utils::WaitMechanism::Spin, false };
-      simd_float currentValue = value;
-      return currentValue;
-    }
-
-    void store(simd_float newValue) noexcept
-    {
-      utils::ScopedLock g{ guard, utils::WaitMechanism::Spin, false };
-      value = newValue;
-    }
-
-    simd_float add(const simd_float &other) noexcept
-    {
-      utils::ScopedLock g{ guard, utils::WaitMechanism::Spin, false };
-      value += other;
-      simd_float result = value;
-      return result;
-    }
-
-  private:
-    simd_float value = 0.0f;
-    mutable std::atomic<bool> guard = false;
-  };
-
   class ParameterBridge;
   class ParameterValue;
 
   class ParameterModulator
   {
   public:
-    ParameterModulator() = default;
-    virtual ~ParameterModulator() = default;
-
     // deltaValue is the difference between the current and previous values
-    virtual simd_float getDeltaValue() { return currentValue_.load() - previousValue_.load(); }
+    simd_float getDeltaValue()
+    {
+      return currentValue.load(satomi::memory_order_relaxed) -
+        previousValue.load(satomi::memory_order_relaxed);
+    }
 
-  protected:
-    atomic_simd_float currentValue_{ 0.0f };
-    atomic_simd_float previousValue_{ 0.0f };
+    satomi::atomic<simd_float> currentValue{ 0.0f };
+    satomi::atomic<simd_float> previousValue{ 0.0f };
   };
 
   struct ParameterLink
   {
     // the lifetime of the UIControl and parameter are the same, so there's no danger of accessing freed memory
     // as for the hostControl, in the destructor of the UI element, tied to the BaseProcessor,
-    // we reset it's pointer to the ParameterLink and so it cannot access the parameter/UIControl
+    // we reset its pointer to the ParameterLink and so it cannot access the parameter/UIControl
     Interface::BaseControl *UIControl = nullptr;
     ParameterBridge *hostControl = nullptr;
-    std::vector<std::weak_ptr<ParameterModulator>> modulators{};
+    utils::vector<ParameterModulator *> modulators{};
     ParameterValue *parameter = nullptr;
   };
 
   class ParameterValue
   {
-    ParameterValue() = delete;
   public:
     ParameterValue(ParameterValue &&) = delete;
     ParameterValue &operator=(const ParameterValue &) = delete;
     ParameterValue &operator=(ParameterValue &&) = delete;
+
+    ParameterValue() = default;
 
     ParameterValue(ParameterDetails details) noexcept :
       details_(COMPLEX_MOVE(details)) { initialise(); }
@@ -107,23 +76,26 @@ namespace Framework
       details_(other.details_)
     {
       utils::ScopedLock g{ other.waitLock_, utils::WaitMechanism::Spin };
-      normalisedValue_ = other.normalisedValue_;
-      modulations_ = other.modulations_;
-      normalisedInternalValue_ = other.normalisedInternalValue_;
-      internalValue_ = other.internalValue_;
+      initialise(&other.normalisedValue_);
     }
 
-    ~ParameterValue() noexcept;
-
-    void initialise(std::optional<float> value = {})
+    void initialise(const float *value = nullptr, float sampleRate = kDefaultSampleRate)
     {
       utils::ScopedLock g{ waitLock_, utils::WaitMechanism::Spin };
 
-      normalisedValue_ = value.value_or(details_.defaultNormalisedValue);
+      if (!value && details_.scale == ParameterScale::Indexed)
+      {
+        internalValue_ = (float)getValueFromOptionId(details_.defaultOptionId, details_);
+        normalisedValue_ = (float)unscaleValue(internalValue_[0], details_, sampleRate);
+      }
+      else
+      {
+        normalisedValue_ = (value) ? *value : details_.defaultNormalisedValue;
+        internalValue_ = (!value) ? details_.defaultValue : (float)scaleValue(*value, details_, sampleRate);
+      }
       modulations_ = 0.0f;
-      normalisedInternalValue_ = value.value_or(details_.defaultNormalisedValue);
-      internalValue_ = (!value.has_value()) ? details_.defaultValue :
-        (float)scaleValue(value.value(), details_);
+      normalisedInternalValue_ = normalisedValue_;
+
       isDirty_ = false;
     }
     
@@ -137,9 +109,8 @@ namespace Framework
 
       if constexpr (utils::is_same_v<T, simd_float>)
       {
-        COMPLEX_ASSERT(details_.scale != ParameterScale::Toggle && "Parameter isn't supposed to be a toggle control");
-        COMPLEX_ASSERT(details_.scale != ParameterScale::Indexed && "Parameter isn't supposed to be a choice control");
-        COMPLEX_ASSERT(details_.scale != ParameterScale::IndexedNumeric && "Parameter isn't supposed to be a choice control");
+        COMPLEX_ASSERT(details_.scale != ParameterScale::Toggle, "Parameter isn't supposed to be a toggle control");
+        COMPLEX_ASSERT(details_.scale != ParameterScale::Indexed, "Parameter isn't supposed to be a choice control");
 
         if (isNormalised)
           result = normalisedInternalValue_;
@@ -149,9 +120,8 @@ namespace Framework
       }
       else if constexpr (utils::is_same_v<T, float>)
       {
-        COMPLEX_ASSERT(details_.scale != ParameterScale::Toggle && "Parameter isn't supposed to be a toggle control");
-        COMPLEX_ASSERT(details_.scale != ParameterScale::Indexed && "Parameter isn't supposed to be a choice control");
-        COMPLEX_ASSERT(details_.scale != ParameterScale::IndexedNumeric && "Parameter isn't supposed to be a choice control");
+        COMPLEX_ASSERT(details_.scale != ParameterScale::Toggle, "Parameter isn't supposed to be a toggle control");
+        COMPLEX_ASSERT(details_.scale != ParameterScale::Indexed, "Parameter isn't supposed to be a choice control");
 
         if (details_.flags & ParameterDetails::Stereo)
         {
@@ -175,51 +145,39 @@ namespace Framework
       }
       else if constexpr (utils::is_same_v<T, simd_int>)
       {
-        COMPLEX_ASSERT(details_.scale == ParameterScale::Toggle || details_.scale == ParameterScale::Indexed || 
-          details_.scale == ParameterScale::IndexedNumeric && 
-          "Parameter is supposed to be either a toggle or choice control");
-
-        if (details_.scale == ParameterScale::Toggle)
-          result = utils::reinterpretToInt(internalValue_);
-        else
-          result = utils::toInt(internalValue_);
-        return result;
+        return utils::toInt(simd_float::round(internalValue_));
       }
       else if constexpr (utils::is_same_v<T, u32>)
       {
-        COMPLEX_ASSERT(details_.scale == ParameterScale::Toggle || details_.scale == ParameterScale::Indexed || 
-          details_.scale == ParameterScale::IndexedNumeric && 
-          "Parameter is supposed to be either a toggle or choice control");
-
         if (details_.scale == ParameterScale::Toggle)
-          result = static_cast<u32>(utils::reinterpretToInt(internalValue_)[0]);
+          result = (u32)(simd_float::round(internalValue_)[0]);
         else if (details_.flags & ParameterDetails::Stereo)
         {
           simd_int difference = utils::getStereoDifference(utils::toInt(modulations_));
-          result = static_cast<u32>(scaleValue(modulations_ - utils::toFloat(difference), details_, sampleRate)[0]);
+          result = (u32)(simd_float::round(scaleValue(modulations_ - utils::toFloat(difference), details_, sampleRate))[0]);
         }
         else
-          result = utils::toInt(internalValue_)[0];
+          result = (u32)(simd_float::round(internalValue_)[0]);
         return result;
       }
       else if constexpr (utils::is_same_v<T, Framework::IndexedData>)
       {
-        COMPLEX_ASSERT(details_.scale == ParameterScale::Indexed &&
+        COMPLEX_ASSERT(details_.scale == ParameterScale::Indexed,
           "Parameter must be indexed to support value to string conversion");
-        COMPLEX_ASSERT(details_.minValue >= 0.0f && (usize)details_.maxValue <= details_.indexedData.size());
-        COMPLEX_ASSERT((details_.flags & ParameterDetails::Stereo) == 0 && 
+        COMPLEX_ASSERT((details_.flags & ParameterDetails::Stereo) == 0,
           "Indexed types that support value to string conversion must not be stereo");
 
         return getIndexedData(internalValue_[0], details_);
       }
       else
       {
-        COMPLEX_ASSERT_FALSE("Unknown type provided");
+        COMPLEX_HARD_ASSERT_FALSE("Unknown type provided");
         return result;
       }
     }
 
-    auto changeControl(Interface::BaseControl *control) noexcept -> Interface::BaseControl *
+    Interface::BaseControl *
+    changeControl(Interface::BaseControl *control) noexcept
     {
       utils::ScopedLock g{ waitLock_, utils::WaitMechanism::Spin };
 
@@ -228,7 +186,8 @@ namespace Framework
       return oldControl;
     }
 
-    auto changeBridge(ParameterBridge *bridge) noexcept -> ParameterBridge *
+    ParameterBridge *
+    changeBridge(ParameterBridge *bridge) noexcept
     {
       utils::ScopedLock g{ waitLock_, utils::WaitMechanism::Spin };
 
@@ -237,40 +196,37 @@ namespace Framework
       return oldBridge;
     }
 
-    void addModulator(std::weak_ptr<ParameterModulator> modulator, i64 index = -1)
+    void addModulator(ParameterModulator &modulator, isize index = -1)
     {
-      COMPLEX_ASSERT(!modulator.expired() && "You're trying to add an empty modulator to parameter");
-
       utils::ScopedLock g{ waitLock_, utils::WaitMechanism::Spin };
 
-      if (index < 0) parameterLink_.modulators.emplace_back(COMPLEX_MOVE(modulator));
-      else parameterLink_.modulators.emplace(parameterLink_.modulators.begin() + index, COMPLEX_MOVE(modulator));
+      if (index < 0) parameterLink_.modulators.emplace_back(&modulator);
+      else parameterLink_.modulators.emplace(parameterLink_.modulators.begin() + index, &modulator);
 
       isDirty_ = true;
     }
 
-    auto updateModulator(std::weak_ptr<ParameterModulator> modulator, usize index)
-      -> std::weak_ptr<ParameterModulator>
+    ParameterModulator &
+    updateModulator(ParameterModulator &modulator, usize index)
     {
-      COMPLEX_ASSERT(!modulator.expired() && "You're updating with an empty modulator");
-
       utils::ScopedLock g{ waitLock_, utils::WaitMechanism::Spin };
 
-      std::weak_ptr replacedModulator = parameterLink_.modulators[index];
-      parameterLink_.modulators[index] = COMPLEX_MOVE(modulator);
+      auto &replacedModulator = *parameterLink_.modulators[index];
+      parameterLink_.modulators[index] = &modulator;
       
       isDirty_ = true;
 
       return replacedModulator;
     }
 
-    auto deleteModulator(usize index) -> std::weak_ptr<ParameterModulator>
+    ParameterModulator &
+    deleteModulator(usize index)
     {
       COMPLEX_ASSERT(index < parameterLink_.modulators.size() && "You're have given an index that's too large");
 
       utils::ScopedLock g{ waitLock_, utils::WaitMechanism::Spin };
 
-      std::weak_ptr deletedModulator = parameterLink_.modulators[index];
+      auto &deletedModulator = *parameterLink_.modulators[index];
       parameterLink_.modulators.erase(parameterLink_.modulators.begin() + (isize)index);
 
       isDirty_ = true;
@@ -281,60 +237,62 @@ namespace Framework
     // this method will only update the values of the parameter, parameter bridge and ui control
     // it will NOT notify the latter about the change, so any GUI changes must be forced
     void updateValue(float sampleRate);
-    void updateNormalisedValue(std::optional<float> value = {}) noexcept
+    void updateNormalisedValue(float *value = nullptr) noexcept
     {
       utils::ScopedLock g{ waitLock_, utils::WaitMechanism::Spin };
-      if (value.has_value())
-        normalisedValue_ = value.value();
+      if (value)
+        normalisedValue_ = *value;
       isDirty_ = true;
     }
 
-    auto getNormalisedValue() const noexcept -> float
+    float
+    getNormalisedValue() const noexcept
     {
       utils::ScopedLock g{ waitLock_, utils::WaitMechanism::Spin };
       return normalisedValue_;
     }
-    auto getParameterDetails() const noexcept -> ParameterDetails
+    ParameterDetails
+    getParameterDetails() const noexcept
     {
       utils::ScopedLock g{ waitLock_, utils::WaitMechanism::Spin };
       return details_;
     }
-    auto getParameterId() const noexcept -> utils::string_view
-    {
-      utils::ScopedLock g{ waitLock_, utils::WaitMechanism::Spin };
-      return details_.id;
-    }
-    auto getParameterName() const noexcept -> utils::string_view
+    uuid // id can't change, so there's no reason to acquire a lock
+    getParameterId() const noexcept { return details_.id; }
+    utils::string_view
+    getParameterName() const noexcept
     {
       utils::ScopedLock g{ waitLock_, utils::WaitMechanism::Spin };
       return details_.displayName;
     }
-    auto getScale() const noexcept -> Framework::ParameterScale
+    Framework::ParameterScale::Value
+    getScale() const noexcept
     {
       utils::ScopedLock g{ waitLock_, utils::WaitMechanism::Spin };
       return details_.scale;
     }
-    auto getUpdateFlag() const noexcept -> UpdateFlag
+    UpdateFlag
+    getUpdateFlag() const noexcept
     {
       utils::ScopedLock g{ waitLock_, utils::WaitMechanism::Spin };
       return details_.updateFlag;
     }
-    auto getParameterLink() noexcept -> ParameterLink * { return &parameterLink_; }
-    auto getThemeColour() const noexcept -> u32 { return themeColour_; }
+    ParameterLink *
+    getParameterLink() noexcept { return &parameterLink_; }
 
-    void setParameterDetails(const ParameterDetails &details, std::optional<float> value = {}) noexcept
+    void setParameterDetails(const ParameterDetails &details, float *value = nullptr) noexcept
     {
       utils::ScopedLock g{ waitLock_, utils::WaitMechanism::Spin };
       details_ = details;
-      if (value.has_value())
-        normalisedValue_ = value.value();
+      if (value)
+        normalisedValue_ = *value;
       isDirty_ = true;
     }
-    void setThemeColour(u32 colour) noexcept { themeColour_ = colour; }
 
     void serialiseToJson(void *jsonData) const;
-    static auto deserialiseFromJson(Plugin::ProcessorTree *processorTree, void *jsonData)
-      -> utils::up<ParameterValue>;
+    static utils::dll<ParameterValue> *
+    deserialiseFromJson(Generation::BaseProcessor *processor, void *jsonData, 
+      ParameterDetails &reference, utils::dll<ParameterValue> *memory = nullptr);
 
   private:
     // after adding modulations and scaling
@@ -346,12 +304,15 @@ namespace Framework
     // normalised, received from gui changes or from host when mapped out
     float normalisedValue_ = 0.0f;
 
-    ParameterLink parameterLink_{ nullptr, nullptr, {}, this };
-
-    ParameterDetails details_;
-
-    u32 themeColour_ = 0;
-    mutable std::atomic<bool> waitLock_ = false;
+    mutable satomi::atomic<bool> waitLock_ = false;
     bool isDirty_ = false;
+
+  public:
+    Generation::BaseProcessor *parentProcessor{};
+  private:
+
+    ParameterLink parameterLink_{ .parameter = this };
+
+    ParameterDetails details_{};
   };
 }

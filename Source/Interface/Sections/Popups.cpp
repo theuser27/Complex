@@ -1,136 +1,207 @@
-/*
-  ==============================================================================
 
-    Popups.cpp
-    Created: 2 Feb 2023 7:49:54pm
-    Author:  theuser27
-
-  ==============================================================================
-*/
+// Created: 2023-02-02 19:49:54
 
 #include "Popups.hpp"
 
-#include "Framework/parameter_bridge.hpp"
 #include "Framework/parameter_value.hpp"
 #include "Plugin/Renderer.hpp"
 #include "Plugin/Complex.hpp"
-#include "../LookAndFeel/Fonts.hpp"
+#include "../LookAndFeel/Graphics.hpp"
 #include "../Components/OpenGlImage.hpp"
-#include "../Components/ScrollBar.hpp"
 #include "../Components/BaseControl.hpp"
 
 namespace
 {
-  int getLinesForText(const juce::Font &font, const juce::String &string, int widthAvailable)
+  int getLinesForText(Interface::Graphics &g, utils::string_view string, int widthAvailable)
   {
-    float hintWidth = font.getStringWidthFloat(string);
-    return (int)std::ceil(hintWidth / (float)widthAvailable);
+    float hintWidth = g.getStringWidthFloat(string);
+    return (int)::ceilf(hintWidth / (float)widthAvailable);
   }
 }
 
 namespace Interface
 {
-  PopupDisplay::PopupDisplay() : OpenGlContainer{ "Popup Display" }
+  static Range<i32>
+  getPopupDisplayDimensions(Component *c, i32 *availablePrimarySize)
   {
-    font_ = Fonts::instance()->getDDinFont();
-    
-    addOpenGlComponent(&body_);
-    addOpenGlComponent(&border_);
-    addOpenGlComponent(&text_);
+    const int lineHeight = scaleValueRoundInt(PopupDisplay::kLineHeight);
 
-    text_.setPaintFunction([this](Graphics &g, juce::Rectangle<int>)
+    auto *display = (PopupDisplay *)c;
+    if (!availablePrimarySize)
+    {
+      if (display->isControl)
       {
-        g.setColour(getColour(Skin::kWidgetPrimary1));
-        g.setFont(font_);
-        g.drawText(string_, getLocalBounds(), Justification::centred); 
-      });
+        auto *control = (BaseControl *)display->source;
+        display->text = COMPLEX_MOVE(control->getScaledValueString(control->getValue()));
+      }
 
-    setSkinOverride(Skin::kPopupBrowser);
+      display->cachedFontWidth = (i32)::ceilf(uiRelated.cache->getStringWidthFloat(display->text));
+      return Range<i32>{ 0, display->cachedFontWidth };
+    }
+    else
+    {
+      auto lineCount = (i32)::ceilf((float)display->cachedFontWidth / (float)(*availablePrimarySize));
+      return Range<i32>{ lineHeight, lineCount *lineHeight };
+    }
   }
 
-  PopupDisplay::~PopupDisplay() = default;
-
-  void PopupDisplay::redo()
+  PopupDisplay::PopupDisplay()
   {
-    juce::Rectangle<int> bounds = getLocalBounds();
-    float rounding = getValue(Skin::kBodyRoundingTop);
+    utils::bumpArena::createNested(getUIArena(), COMPLEX_KB(8));
+    skinOverride = Skin::kUseParentOverride;
+    placement = Placement::custom;
+    sizingFlags = Component::HasText;
+    padding = { kLineHeight, kLineHeight, kLineHeight, kLineHeight };
+    desiredSize.getTextDimensions = getPopupDisplayDimensions;
 
-    body_.setBounds(bounds);
-    body_.setRounding(rounding);
-    body_.setColor(getColour(Skin::kPopupDisplayBackground));
-
-    border_.setBounds(bounds);
-    border_.setRounding(rounding);
-    border_.setThickness(1.0f);
-    border_.setColor(getColour(Skin::kPopupDisplayBorder));
-
-    text_.setColor(getColour(Skin::kNormalText));
-    text_.setBounds(bounds);
-    text_.redrawImage();
+    textFontId = uiRelated.cache->InterFontId;
+    numericFontId = uiRelated.cache->DDinFontId;
   }
 
-  void PopupDisplay::setContent(String text, juce::Rectangle<int> sourceBounds, juce::Rectangle<int> screen,
-    Placement placement, Skin::SectionOverride sectionOverride)
+  bool PopupDisplay::render(OpenGlWrapper &openGl)
   {
-    static constexpr int kHeight = 24;
+    float rounding = getValue(Skin::kBodyRoundingTop, true);
+    nvgRoundedRect(openGl.g, 0.0f, 0.0f, (float)bounds.w, (float)bounds.y, rounding);
+    nvgFillColor(openGl.g, getColour(Skin::kPopupDisplayBackground));
+    nvgFill(openGl.g);
 
-    setSkinOverride(sectionOverride);
+    nvgRoundedRect(openGl.g, 0.0f, 0.0f, (float)bounds.w, (float)bounds.y, rounding);
+    nvgStrokeColor(openGl.g, getColour(Skin::kPopupDisplayBorder));
+    nvgStroke(openGl.g);
 
-    string_ = COMPLEX_MOVE(text);
-    float floatHeight = std::round(scaleValue(kHeight));
-    Fonts::instance()->setHeight(font_, floatHeight * 0.5f);
-    int height = (int)floatHeight;
-    int padding = height / 4;
-    int buffer = padding * 2 + 2;
-    int width = font_.getStringWidth(string_) + buffer;
+    auto usedFontId = (isControl) ? numericFontId : textFontId;
+    auto fontHeight = uiRelated.cache->getFontHeightFromAscent(usedFontId, (float)bounds.h * 0.5f);
+    auto fontKerning = uiRelated.cache->getKerningForHeight(usedFontId, (float)bounds.h * 0.5f);
+    uiRelated.cache->setFont({ .id = usedFontId, .height = fontHeight, .kerning = fontKerning });
 
-    int middleX = sourceBounds.getX() + sourceBounds.getWidth() / 2;
-    int middleY = sourceBounds.getY() + sourceBounds.getHeight() / 2;
+    auto textPadding = scaleValue(padding.toFloat());
+    float width = scaleValue((float)bounds.w);
 
-    juce::Rectangle<int> bounds{};
+    nvgStrokeColor(openGl.g, getColour(Skin::kWidgetPrimary1));
+    nvgTextAlign(openGl.g, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
+    nvgTextBox(openGl.g, textPadding.x, textPadding.y, width, text.data(), text.data() + text.size());
+    nvgText(openGl.g, textPadding.x, textPadding.y, text.data(), text.data() + text.size());
 
-    if (placement == Placement::above)
-      bounds = { middleX - width / 2, sourceBounds.getY() - height, width, height };
-    else if (placement == Placement::below)
-      bounds = { middleX - width / 2, sourceBounds.getBottom(), width, height };
-    else if (placement == Placement::left)
-      bounds = { sourceBounds.getX() - width, middleY - height / 2, width, height };
-    else if (placement == Placement::right)
-      bounds = { sourceBounds.getRight(), middleY - height / 2, width, height };
-
-    setBounds(bounds.constrainedWithin(screen));
-    redo();
+    return true;
   }
 
-  PopupList::PopupList() : OpenGlContainer{ "Popup List" }
+  void PopupDisplay::handleCommandMessage(u64 commandId, utils::whatever)
+  {
+    switch (commandId)
+    {
+    case Component::HandleCustomPosition:
+    {
+      Point<i32> position{};
+      COMPLEX_ASSERT((placement & Placement::custom) == 0);
+      i32 extraOffsetX = bounds.w / 2;
+      i32 extraOffsetY = bounds.h / 2;
+
+      switch (placement & Placement::justifyX)
+      {
+      case Placement::left:
+        position.x -= bounds.w + extraOffsetX;
+        break;
+
+      case Placement::right:
+        position.x += source->bounds.w + extraOffsetX;
+        break;
+
+      default:
+      case Placement::justifyX:
+        position.x += (source->bounds.w - bounds.w) / 2;
+        break;
+      }
+      
+      switch (placement & Placement::justifyY)
+      {
+      case Placement::top:
+        position.y -= bounds.h + extraOffsetY;
+        break;
+
+      default:
+      case Placement::bottom:
+        position.y += source->bounds.h + extraOffsetY;
+        break;
+
+      case Placement::justifyY:
+        position.y += (source->bounds.h - bounds.h) / 2;
+        break;
+      }
+
+      bounds.setPosition(getRelativePoint(source, position));
+
+    } break;
+    }
+  }
+
+  class PopupList final : public Component
+  {
+  public:
+    static constexpr float kScrollSensitivity = 150.0f;
+    static constexpr float kAutomationListWidth = 150.0f;
+
+    static constexpr float kIconSize = 16.0f;
+    static constexpr float kScrollBarWidth = 8.0f;
+    static constexpr float kSideArrowWidth = 4.0f;
+    static constexpr float kCrossWidth = 8.0f;
+
+    static constexpr float kPrimaryTextLineHeight = 16.0f;
+    static constexpr float kSecondaryTextLineHeight = 12.0f;
+    static constexpr float kDelimiterHeight = 20.0f;
+    static constexpr float kInlineGroupHeight = 28.0f;	// serves also as minimum width for the elements
+
+    static constexpr float kVPadding = 4.0f;
+    static constexpr float kHEntryPadding = 12.0f;
+    static constexpr float kHEntryToSideArrowMinMargin = 16.0f;
+    static constexpr float kVEntryToHintMargin = 3.0f;
+
+    PopupList();
+    ~PopupList() noexcept override;
+
+    bool render(OpenGlWrapper &openGl) override;
+
+    bool mouseEnter(const MouseEvent &e) override { return mouseMove(e); }
+    bool mouseMove(const MouseEvent &e) override;
+    bool mouseDrag(const MouseEvent &e) override;
+    bool mouseExit(const MouseEvent &) override;
+    bool mouseUp(const MouseEvent &e) override;
+    bool mouseWheelMove(const MouseEvent &) override;
+    void visibilityChanged() override;
+
+    utils::pair<PopupItem *, Rectangle<int>> getSelection(Point<int> position);
+
+    void select(utils::pair<PopupItem *, Rectangle<int>> selectedItem);
+
+    void recalculateSizes();
+    void setComponentsBounds();
+
+    void setScrollBarRange(int visibleHeight, int listHeight);
+    void paintList(Graphics &g, Rectangle<int> redrawArea);
+    int getViewPosition() const;
+
+    PopupItem *items = nullptr;
+    PopupItem *childList = nullptr;
+    PopupSelector *selector = nullptr;
+    utils::vector<utils::pair<PopupItem *, Rectangle<int>>> itemBounds_{};
+    Rectangle<int> hoveredBounds_{};
+    float hoveredRouding_ = 0.0f;
+    float viewPosition_ = 0.0f;
+    int listWidth_ = 0;
+    int listHeight_ = 0;
+    int visibleHeight_ = 0;
+    bool isUsed = false;
+  };
+
+  /*PopupList::PopupList()
   {
     background_.setTargetComponent(this);
     addOpenGlComponent(&background_);
 
     rows_.setColor(Colours::white);
-    rows_.setPaintFunction([this](Graphics &g, juce::Rectangle<int> redrawArea) { paintList(g, redrawArea); });
-    rows_.setRenderFunction([this](OpenGlWrapper &openGl, OpenGlComponent &target)
-      {
-        float offset = 2.0f * (float)getViewPosition() / (float)getListHeight();
-        auto *rows = utils::as<OpenGlImage>(&target);
-        rows->movePosition(0.0f, offset);
-        rows->render(openGl);
-      });
+    rows_.setPaintFunction([this](Graphics &g, Rectangle<int> redrawArea) { paintList(g, redrawArea); });
     addOpenGlComponent(&rows_);
 
     hover_.setAdditive(true);
-    hover_.setRenderFunction([this](OpenGlWrapper &openGl, OpenGlComponent &target)
-      {
-        auto bounds = hoveredBounds_.get();
-        if (bounds.isEmpty())
-          return;
-        
-        int y = bounds.getY() - getViewPosition();
-        auto *hover = utils::as<OpenGlQuad>(&target);
-        hover->setCustomViewportBounds(bounds.withY(y));
-        hover->setRounding(hoveredRouding_);
-        hover->render(openGl);
-      });
     addOpenGlComponent(&hover_);
 
     scrollBar_ = utils::up<ScrollBar>::create(true);
@@ -141,19 +212,34 @@ namespace Interface
 
   PopupList::~PopupList() = default;
 
+  bool PopupList::render(OpenGlWrapper &openGl) override
+  {
+    float offset = 2.0f * (float)getViewPosition() / (float)getListHeight();
+    rows_.movePosition(0.0f, offset);
+
+    if (!hoveredBounds_.isEmpty())
+    {
+      int y = hoveredBounds_.y - getViewPosition();
+      hover_.setCustomViewportBounds(hoveredBounds_.withY(y));
+      hover_.setRounding(hoveredRouding_);
+    }
+
+    return true;
+  }
+
   int PopupList::getViewPosition() const
   {
-    int max = std::max(0, getListHeight() - getVisibleHeight());
+    int max = utils::max(0, getListHeight() - getVisibleHeight());
     return utils::clamp((int)viewPosition_.get(), 0, max);
   }
 
   void PopupList::visibilityChanged()
   {
-    hoveredBounds_ = juce::Rectangle<int>{};
+    hoveredBounds_ = Rectangle<int>{};
     childList_ = nullptr;
   }
 
-  std::pair<PopupItems *, juce::Rectangle<int>> PopupList::getSelection(Point<int> position)
+  utils::pair<PopupItem *, Rectangle<int>> PopupList::getSelection(Point<int> position)
   {
     position.y -= (commonInfo_->listRounding - getViewPosition());
     for (auto [item, bounds] : itemBounds_)
@@ -161,14 +247,14 @@ namespace Interface
       if (!bounds.contains(position))
         continue;
 
-      if (item->type == PopupItems::InlineGroup)
+      if (item->type == PopupItem::InlineGroup)
       {
         hoveredRouding_ = (float)commonInfo_->listRounding * 0.5f;
-        int x = position.x - bounds.getX();
-        int elementWidth = bounds.getWidth() / item->size();
+        int x = position.x - bounds.x;
+        int elementWidth = bounds.w / item->size();
         int hoveredElement = x / elementWidth;
-        return { &item->items[hoveredElement], juce::Rectangle{ bounds.getX() + hoveredElement * elementWidth,
-          bounds.getY(), elementWidth, bounds.getHeight() } };
+        return { &item->items[hoveredElement], Rectangle{ bounds.x + hoveredElement * elementWidth,
+          bounds.y, elementWidth, bounds.h } };
       }
       
       hoveredRouding_ = 0.0f;
@@ -189,9 +275,9 @@ namespace Interface
       childList_ = nullptr;
     }
     // if we were hovering over a normal item and change to a delimiter/inactive item, turn off hover
-    if (list && (list->type == PopupItems::Delimiter || !list->isActive))
+    if (list && (list->type == PopupItem::Delimiter || !list->isActive))
     {
-      hoveredBounds_ = juce::Rectangle<int>{};
+      hoveredBounds_ = Rectangle<int>{};
       return;
     }
     // otherwise, we're changing to a normal item and we move hover
@@ -200,23 +286,23 @@ namespace Interface
 
     // summoning child dropdown
     if (list && childList_ != list && !list->items.empty() && 
-      list->type != PopupItems::InlineGroup)
+      list->type != PopupItem::InlineGroup)
     {
       childList_ = list;
-      listener_->summonNewPopupList(getBoundsSafe(), list);
+      listener_->summonNewPopupList(getBounds(), list);
     }
   }
 
   void PopupList::mouseDrag(const MouseEvent &e)
   {
     auto [list, bounds] = getSelection(e.position.toInt());
-    if (list && (list->type == PopupItems::Delimiter || !list->isActive))
+    if (list && (list->type == PopupItem::Delimiter || !list->isActive))
     {
-      hoveredBounds_ = juce::Rectangle<int>{};
+      hoveredBounds_ = Rectangle<int>{};
       return;
     }
 
-    if (e.position.x < 0.0f || e.position.x > (float)getWidth())
+    if (e.x < 0.0f || e.x > (float)getWidth())
       bounds = {};
     hoveredBounds_ = bounds + Point{ 0, (int)commonInfo_->listRounding };
   }
@@ -224,40 +310,40 @@ namespace Interface
   void PopupList::mouseExit(const MouseEvent &)
   {
     if (!childList_)
-      hoveredBounds_ = juce::Rectangle<int>{};
+      hoveredBounds_ = Rectangle<int>{};
   }
 
   void PopupList::mouseUp(const MouseEvent &e)
   {
-    if (e.position.x < 0 || e.position.x > (float)getWidth())
+    if (e.x < 0 || e.x > (float)getWidth())
       return;
 
     select(getSelection(e.position.toInt()));
   }
 
-  void PopupList::select(std::pair<PopupItems *, juce::Rectangle<int>> selectedItem)
+  void PopupList::select(utils::pair<PopupItem *, Rectangle<int>> selectedItem)
   {
     auto [item, bounds] = selectedItem;
     
     if (item == nullptr || !item->isActive ||
-      item->type == PopupItems::Delimiter ||
-      item->type == PopupItems::AutomationList ||
-      item->type == PopupItems::InlineGroup)
+      item->type == PopupItem::Delimiter ||
+      item->type == PopupItem::AutomationList ||
+      item->type == PopupItem::InlineGroup)
       return;
 
     listener_->newSelection(this, item->id);
 
     // redraw list if upon change
-    if (items_->type == PopupItems::AutomationList)
+    if (items_->type == PopupItem::AutomationList)
     {
-      hoveredBounds_ = juce::Rectangle<int>{};
+      hoveredBounds_ = Rectangle<int>{};
       rows_.redrawImage(bounds);
     }
   }
 
   void PopupList::recalculateSizes()
   {
-    hoveredBounds_ = juce::Rectangle<int>{};
+    hoveredBounds_ = Rectangle<int>{};
     childList_ = nullptr;
     itemBounds_.clear();
     
@@ -271,7 +357,7 @@ namespace Interface
     int automationListWidth = scaleValueRoundInt(kAutomationListWidth);
     int entryToSideArrowMinMargin = scaleValueRoundInt(kHEntryToSideArrowMinMargin);
 
-    if (items_->type == PopupItems::AutomationList)
+    if (items_->type == PopupItem::AutomationList)
     {
       totalWidth = automationListWidth + crossWidth + scrollBarWidth;
     }
@@ -281,27 +367,27 @@ namespace Interface
       for (auto &[subItems, icon, name, hint, type, id, shortcut, isActive] : items_->items)
       {
         int elementWidth = 0;
-        if (type == PopupItems::Entry || type == PopupItems::AutomationList)
+        if (type == PopupItem::Entry || type == PopupItem::AutomationList)
         {
           elementWidth = commonInfo_->primaryFont.getStringWidth(name);
           elementWidth += hEntryPadding * 2;
-          if (!subItems.empty() || type == PopupItems::AutomationList)
+          if (!subItems.empty() || type == PopupItem::AutomationList)
             elementWidth += entryToSideArrowMinMargin + sideArrowWidth;
         }
-        else if (type == PopupItems::InlineGroup)
+        else if (type == PopupItem::InlineGroup)
         {
           COMPLEX_ASSERT(!inlineGroupSize.has_value() && "Multiple inline groups cannot be handled");
           inlineGroupSize = (int)subItems.size();
           elementWidth = inlineGroupHeight * (int)subItems.size() + vPadding * 2;
         }
-        else if (type == PopupItems::Delimiter)
+        else if (type == PopupItem::Delimiter)
         {
           elementWidth = commonInfo_->primaryFont.getStringWidth(name);
           elementWidth += hEntryPadding;
           elementWidth += commonInfo_->primaryFont.getStringWidth(hint);
           elementWidth += hEntryPadding * 2;
         }
-        totalWidth = std::max(totalWidth, elementWidth);
+        totalWidth = utils::max(totalWidth, elementWidth);
       }
 
       if (inlineGroupSize)
@@ -320,18 +406,18 @@ namespace Interface
     int primaryTextLineHeight = scaleValueRoundInt(kPrimaryTextLineHeight);
     int secondaryTextLineHeight = scaleValueRoundInt(kSecondaryTextLineHeight);
     int totalHeight = 0;
-    if (items_->type == PopupItems::AutomationList)
+    if (items_->type == PopupItem::AutomationList)
     {
       auto lineWidth = totalWidth - crossWidth - scrollBarWidth;
       for (usize i = 0; i < items_->items.size(); i += 2)
       {
         int elementHeight = 0;
         int lines = getLinesForText(commonInfo_->primaryFont, items_->items[i].name, lineWidth - hEntryPadding);
-        elementHeight += std::max(lines, 1) * primaryTextLineHeight;
+        elementHeight += utils::max(lines, 1) * primaryTextLineHeight;
         elementHeight += 2 * vPadding;
 
-        itemBounds_.emplace_back(&items_->items[i], juce::Rectangle{ 0, totalHeight, lineWidth, elementHeight });
-        itemBounds_.emplace_back(&items_->items[i + 1], juce::Rectangle{ lineWidth, totalHeight +
+        itemBounds_.emplace_back(&items_->items[i], Rectangle{ 0, totalHeight, lineWidth, elementHeight });
+        itemBounds_.emplace_back(&items_->items[i + 1], Rectangle{ lineWidth, totalHeight +
            utils::centerAxis(crossWidth, elementHeight), crossWidth, crossWidth });
 
         totalHeight += elementHeight;
@@ -342,7 +428,7 @@ namespace Interface
       for (int i = 0; i < items_->size(); ++i)
       {
         int elementHeight = 0;
-        if (items_->items[i].type == PopupItems::Entry || items_->items[i].type == PopupItems::AutomationList)
+        if (items_->items[i].type == PopupItem::Entry || items_->items[i].type == PopupItem::AutomationList)
         {
           elementHeight += primaryTextLineHeight;
           elementHeight += 2 * vPadding;
@@ -354,21 +440,21 @@ namespace Interface
             elementHeight += lines * secondaryTextLineHeight;
           }
 
-          itemBounds_.emplace_back(&items_->items[i], juce::Rectangle{ 0, totalHeight, totalWidth, elementHeight });
+          itemBounds_.emplace_back(&items_->items[i], Rectangle{ 0, totalHeight, totalWidth, elementHeight });
         }
-        else if (items_->items[i].type == PopupItems::InlineGroup)
+        else if (items_->items[i].type == PopupItem::InlineGroup)
         {
           elementHeight += vPadding + inlineGroupHeight;
           if (items_->size() > i + 1)
             elementHeight += vPadding;
 
           itemBounds_.emplace_back(&items_->items[i], 
-            juce::Rectangle{ vPadding, totalHeight + vPadding, totalWidth - 2 * vPadding, inlineGroupHeight });
+            Rectangle{ vPadding, totalHeight + vPadding, totalWidth - 2 * vPadding, inlineGroupHeight });
         }
-        else if (items_->items[i].type == PopupItems::Delimiter)
+        else if (items_->items[i].type == PopupItem::Delimiter)
         {
           elementHeight += delimiterHeight;
-          itemBounds_.emplace_back(&items_->items[i], juce::Rectangle{ 0, totalHeight, totalWidth, delimiterHeight });
+          itemBounds_.emplace_back(&items_->items[i], Rectangle{ 0, totalHeight, totalWidth, delimiterHeight });
         }
 
         totalHeight += elementHeight;
@@ -406,18 +492,18 @@ namespace Interface
     hover_.setCustomScissorBounds({ 0, listRounding, width, visibleHeight });
     hover_.setColor(getColour(commonInfo_->sectionOverride, Skin::kWidgetPrimary1).darker(0.8f));
 
-    rows_.setBounds(0, listRounding, getWidth(), std::max(listHeight, visibleHeight));
+    rows_.setBounds(0, listRounding, getWidth(), utils::max(listHeight, visibleHeight));
     rows_.setCustomScissorBounds({ width, visibleHeight });
     rows_.redrawImage();
   }
 
-  void PopupList::mouseWheelMove(const MouseEvent &, const MouseWheelDetails &wheel)
+  void PopupList::mouseWheelMove(const MouseEvent &e)
   {
-    viewPosition_ = viewPosition_.get() - wheel.deltaY * kScrollSensitivity;
+    viewPosition_ = viewPosition_.get() - e.wheelDeltaY * kScrollSensitivity;
     int visibleHeight = getVisibleHeight();
     int listHeight = getListHeight();
     viewPosition_ = utils::clamp(viewPosition_.get(), 0.0f, 
-      (float)(std::max(listHeight, visibleHeight) - visibleHeight));
+      (float)(utils::max(listHeight, visibleHeight) - visibleHeight));
     setScrollBarRange(visibleHeight, listHeight);
   }
 
@@ -425,13 +511,13 @@ namespace Interface
   {
     static constexpr double kScrollStepRatio = 0.025f;
 
-    scrollBar_->setRangeLimits(0.0f, std::max(listHeight, getHeight()));
+    scrollBar_->setRangeLimits(0.0f, utils::max(listHeight, getHeight()));
     scrollBar_->setCurrentRange(getViewPosition(), visibleHeight, dontSendNotification);
     scrollBar_->setSingleStepSize(scrollBar_->getHeight() * kScrollStepRatio);
     scrollBar_->cancelPendingUpdate();
   }
 
-  void PopupList::paintList(Graphics &g, juce::Rectangle<int> redrawArea)
+  void PopupList::paintList(Graphics &g, Rectangle<int> redrawArea)
   {
     static const Path sideArrow = []()
     {
@@ -468,19 +554,19 @@ namespace Interface
 
     switch (items_->type)
     {
-    case PopupItems::Entry:
+    case PopupItem::Entry:
       for (auto [item, bound] : itemBounds_)
       {
         switch (item->type)
         {
-        case PopupItems::Entry:
-        case PopupItems::AutomationList:
+        case PopupItem::Entry:
+        case PopupItem::AutomationList:
           g.setFont(commonInfo_->primaryFont);
           g.setColour(primaryTextColour);
           g.drawText(item->name, hEntryPadding, bound.getY() + vPadding,
             entryTextWidth, primaryTextLineHeight, Justification::centredLeft, true);
 
-          if (item->size() || item->type == PopupItems::AutomationList)
+          if (item->size() || item->type == PopupItem::AutomationList)
           {
             g.setColour(secondaryTextColour);
             auto transform = sideArrow.getTransformToScaleToFit((float)(bound.getRight() - hEntryPadding) - sideArrowWidth,
@@ -506,12 +592,12 @@ namespace Interface
             g.fillRect(bound);
           }
           break;
-        case PopupItems::InlineGroup:
+        case PopupItem::InlineGroup:
         {
-          float containerWidth = (float)bound.getWidth() / (float)item->size();
+          float containerWidth = (float)bound.w / (float)item->size();
           float strokeWidth = scaleValue(1.0f);
-          auto iconBounds = juce::Rectangle{ (float)bound.getX() + utils::centerAxis(iconSize, containerWidth),
-            (float)bound.getY() + utils::centerAxis(iconSize, (float)bound.getHeight()), iconSize, iconSize };
+          auto iconBounds = Rectangle{ (float)bound.x + utils::centerAxis(iconSize, containerWidth),
+            (float)bound.y + utils::centerAxis(iconSize, (float)bound.h), iconSize, iconSize };
           auto transform = AffineTransform::translation(iconBounds.getPosition()).scaled(uiRelated.scale);
           auto colours = std::vector{ secondaryTextColour, themeColour };
 
@@ -523,7 +609,7 @@ namespace Interface
           }
         }
         break;
-        case PopupItems::Delimiter:
+        case PopupItem::Delimiter:
           g.setColour(delimiterBackground);
           g.fillRect(bound);
           g.setFont(commonInfo_->secondaryFont);
@@ -539,15 +625,15 @@ namespace Interface
         }
       }
       break;
-    case PopupItems::AutomationList:
+    case PopupItem::AutomationList:
       {
-        int extraOffset = (int)std::round(((float)primaryTextLineHeight - commonInfo_->primaryFont.getHeight()) * 0.5f);
+        int extraOffset = (int)::roundf(((float)primaryTextLineHeight - commonInfo_->primaryFont.getHeight()) * 0.5f);
         auto drawEntry = [&](const String &name, const Framework::ParameterLink *mapping, 
-          juce::Rectangle<int> itemBounds, juce::Rectangle<int> crossBounds)
+          Rectangle<int> itemBounds, Rectangle<int> crossBounds)
         {
           g.setFont(commonInfo_->primaryFont);
           g.setColour((mapping) ? Colour{ mapping->parameter->getThemeColour() } : primaryTextColour);
-          g.drawMultiLineText(name, hEntryPadding, itemBounds.getY() + vPadding + extraOffset +
+          g.drawMultiLineText(name, hEntryPadding, itemBounds.y + vPadding + extraOffset +
             (int)commonInfo_->primaryFont.getAscent(), entryTextWidth, Justification::centredLeft);
 
           if (mapping)
@@ -562,7 +648,7 @@ namespace Interface
 
         if (g.getClipBounds() != redrawArea)
         {
-          auto iter = std::ranges::find_if(itemBounds_, 
+          auto iter = utils::find_if(itemBounds_, 
             [&](const auto &pair) { return pair.second == redrawArea; });
 
           COMPLEX_ASSERT(iter != itemBounds_.end());
@@ -572,8 +658,8 @@ namespace Interface
           itemBounds_[index * 2 + 1].first->isActive = !itemBounds_[index * 2 + 1].first->isActive;
 
           g.setColour(Colours::transparentBlack);
-          g.fillRect({ 0, itemBounds_[index * 2].second.getY(), g.getClipBounds().getWidth(), 
-            itemBounds_[index * 2].second.getHeight() }, true);
+          g.fillRect({ 0, itemBounds_[index * 2].second.y, g.getClipBounds().getWidth(), 
+            itemBounds_[index * 2].second.h }, true);
 
           drawEntry(bridges[index]->getName(), bridges[index]->getParameterLink(),
             itemBounds_[index * 2].second, itemBounds_[index * 2 + 1].second);
@@ -586,91 +672,86 @@ namespace Interface
             itemBounds_[i * 2].second, itemBounds_[i * 2 + 1].second);
       }
       break;
-    case PopupItems::Delimiter:
-    case PopupItems::InlineGroup:
+    case PopupItem::Delimiter:
+    case PopupItem::InlineGroup:
     default:
       COMPLEX_ASSERT_FALSE("Invalid popup menu top level type");
       break;
     }
+  }*/
+
+  PopupSelector::PopupSelector()
+  {
+    arena = utils::bumpArena::createNested(getUIArena(), COMPLEX_KB(512));
+    placement = Placement::custom;
   }
 
-  PopupSelector::PopupSelector() : BaseSection{ "Popup Selector" }
+  bool PopupSelector::render(OpenGlWrapper &openGl)
   {
-    setInterceptsMouseClicks(false, true);
-    addList();
-  }
-
-  PopupSelector::~PopupSelector() = default;
-
-  void PopupSelector::resized()
-  {
-    commonInfo_.primaryFont = Fonts::instance()->getInterVFont();
-    commonInfo_.secondaryFont = commonInfo_.primaryFont;
-    Fonts::instance()->setHeight(commonInfo_.primaryFont, scaleValue(kPrimaryFontHeight));
-    Fonts::instance()->setHeight(commonInfo_.secondaryFont, scaleValue(kSecondaryFontHeight));
-    commonInfo_.listRounding = scaleValueRoundInt(getValue(Skin::kBodyRoundingTop));
+    // unclip children
+    openGl.parentStack.back().isClipping = false;
+    return true;
   }
 
   bool PopupSelector::keyPressed(const KeyPress &key)
   {
     // get currently focused sublist
     PopupList *selectedList = nullptr;
-    for (auto &list : lists_)
+    for (auto &list : lists)
     {
-      if (!list->getIsUsed())
+      if (!list->isUsed)
         break;
-      selectedList = list.get();
+      selectedList = list;
     }
 
-    for (auto &item : selectedList->getItems()->items)
+    COMPLEX_ASSERT(selectedList);
+
+    for (usize i = 0; i < selectedList->items->childComponents.size(); ++i)
     {
-      if (!key.isKeyCode(item.shortcut))
+      // this is safe because only popup items can be childen
+      auto *item = utils::as<PopupItem>(selectedList->items->childComponents[i]);
+      if (key.keyCode != item->shortcutKeyCode)
         continue;
       
-      newSelection(selectedList, item.id);
+      newSelection(selectedList, item);
       return true;
     }
 
     return false;
   }
 
-  void PopupSelector::newSelection(PopupList *list, int id)
+  void PopupSelector::newSelection(PopupList *list, PopupItem *entry)
   {
-    // we must make sure that the object that provided the callback still exists
-    if (livenessChecker_.isObjectAlive())
+    if (entry->id >= 0)
     {
-      if (id >= 0)
+      if (callback)
       {
-        callback_(id);
-        if (list->getItems()->type == PopupItems::AutomationList 
-          && BaseControl::isUnmappingParameter(id))
+        callback(this, entry);
+        if (!entry->closesPopup)
           return;
-
-        setVisible(false);
       }
-      else
-        cancel_();
+
+      componentFlags.isVisible = false;
     }
+    else if (cancel)
+      cancel(this);
 
     resetState();
   }
 
-  void PopupSelector::summonNewPopupList(juce::Rectangle<int> sourceBounds, PopupItems *items)
+  void PopupSelector::summonNewPopupList(Rectangle<int> sourceBounds, PopupItem *items)
   {
     PopupList *newList = nullptr;
-    for (auto &list : lists_)
-      if (!list->getIsUsed())
-        newList = list.get();
+    for (auto *list : lists)
+      if (!list->isUsed)
+        newList = list;
 
     if (!newList)
-    {
-      addList();
-      newList = lists_.back().get();
-    }
+      newList = anew(arena, PopupList, {});
 
     // we may have already used it with these items
     bool isCached = newList->getItems() == items && 
-      items->type != PopupItems::AutomationList;
+      items->type != PopupItem::AutomationList;
     if (!isCached)
     {
       newList->setItems(items);
@@ -681,26 +762,25 @@ namespace Interface
 
     int width = newList->getListWidth();
     int height = newList->getListHeight() + 2 * commonInfo_.listRounding;
-    int windowWidth = getWidth();
-    int windowHeight = getHeight();
+    auto [_, __, windowWidth, windowHeight] = getLocalBounds();
 
-    int y = sourceBounds.getY();
+    int y = sourceBounds.y;
     if (y + height >= getHeight())
     {
-      y = std::max(sourceBounds.getBottom() - height, 0);
-      height = std::min(height, windowHeight);
+      y = utils::max(sourceBounds.getBottom() - height, 0);
+      height = utils::min(height, windowHeight);
     }
 
     int x = sourceBounds.getRight();
     if ((lastPlacement_ == Placement::left || x + width >= windowWidth) 
-      && sourceBounds.getX() - width > 0)
+      && sourceBounds.x - width > 0)
     {
-      x = sourceBounds.getX() - width;
+      x = sourceBounds.x - width;
       lastPlacement_ = Placement::left;
     }
     else
     {
-      x = std::min(x + width, windowWidth) - width;
+      x = utils::min(x + width, windowWidth) - width;
       lastPlacement_ = Placement::right;
     }
 
@@ -710,7 +790,7 @@ namespace Interface
     newList->setVisible(true);
   }
 
-  void PopupSelector::closeSubList(PopupItems *items)
+  void PopupSelector::closeSubList(PopupItem *items)
   {
     usize index = 0;
     for (; index < lists_.size(); ++index)
@@ -732,17 +812,31 @@ namespace Interface
     }
   }
 
-  void PopupSelector::focusLost(FocusChangeType)
+  bool PopupSelector::handleFocus(bool hasFocus, FocusChange)
   {
-    // we must make sure that the object that provided the callback still exists
-    if (livenessChecker_.isObjectAlive())
+    if (!hasFocus)
     {
-      setVisible(false);
-      if (cancel_)
-        cancel_();
+      componentFlags.isVisible = false;
+      if (cancel)
+        cancel(this);
+
+      resetState();
     }
 
-    resetState();
+    return true;
+  }
+
+  void PopupSelector::handleCommandMessage(u64 commandId, utils::whatever)
+  {
+    switch (commandId)
+    {
+    case Component::HandleCustomPosition:
+    {
+
+
+      break;
+    }
+    }
   }
 
   void PopupSelector::positionList(Point<int> sourcePosition)
@@ -761,8 +855,7 @@ namespace Interface
     int width = lastUsedList->getListWidth();
     int height = lastUsedList->getListHeight() + 2 * commonInfo_.listRounding;
     auto [x, y] = sourcePosition;
-    int windowWidth = getWidth();
-    int windowHeight = getHeight();
+    auto [_, __, windowWidth, windowHeight] = getLocalBounds();
 
     // do we have space to the right
     if (x + width > windowWidth)
@@ -773,7 +866,7 @@ namespace Interface
       else
       {
         // neither have enough space, offset and shrink if necessary
-        width = std::min(width, windowWidth);
+        width = utils::min(width, windowWidth);
         x = windowWidth - width;
       }
     }
@@ -783,7 +876,7 @@ namespace Interface
         y -= height;
       else
       {
-        height = std::min(windowHeight, height);
+        height = utils::min(windowHeight, height);
         y = windowHeight - height;
       }
     }
@@ -793,12 +886,27 @@ namespace Interface
     lastUsedList->setVisible(true);
   }
 
-  void PopupSelector::positionList(juce::Rectangle<int> sourceBounds, Placement placement)
+  void PopupSelector::resetState()
+  {
+    callback = {};
+    cancel = {};
+    for (auto &list : lists)
+    {
+      list->componentFlags.isVisible = false;
+      list->isUsed = false;
+    }
+    lastPlacement = Placement::right;
+    utils::bumpArena::clear(arena);
+    skinOverride = Skin::kNone;
+    componentFlags.isVisible = false;
+  }
+
+  void PopupSelector::positionList(Rectangle<int> sourceBounds, Placement::Enum placement)
   {
     PopupList *lastUsedList = nullptr;
-    for (auto &list : lists_)
+    for (auto &list : lists)
     {
-      if (list->getIsUsed())
+      if (list->isUsed)
         lastUsedList = list.get();
       else
         break;
@@ -809,8 +917,7 @@ namespace Interface
     auto position = sourceBounds.getPosition();
     int width = lastUsedList->getListWidth();
     int height = lastUsedList->getListHeight() + 2 * commonInfo_.listRounding;
-    int windowWidth = getWidth();
-    int windowHeight = getHeight();
+    auto [_, __, windowWidth, windowHeight] = getLocalBounds();
     int popupToElement = scaleValueRoundInt(kPopupToElement);
 
     auto [finalX, finalY] = position;
@@ -821,15 +928,15 @@ namespace Interface
         return;
 
       // popup cannot be fit horizontally, find the side with the most width
-      if (position.x + sourceBounds.getWidth() >= windowWidth - position.x)
+      if (position.x + sourceBounds.w >= windowWidth - position.x)
       {
-        width = std::min(width, position.x + sourceBounds.getWidth() - offset);
-        finalX = position.x + sourceBounds.getWidth() - offset - width;
+        width = utils::min(width, position.x + sourceBounds.w - offset);
+        finalX = position.x + sourceBounds.w - offset - width;
       }
       else
       {
         finalX = position.x + offset;
-        width = std::min(width, windowWidth - finalX);
+        width = utils::min(width, windowWidth - finalX);
       }
     };
 
@@ -839,38 +946,38 @@ namespace Interface
         return;
 
       // popup cannot be fit vertically, find the side with the most height
-      if (position.y + sourceBounds.getHeight() >= windowHeight - position.y)
+      if (position.y + sourceBounds.h >= windowHeight - position.y)
       {
-        height = std::min(height, position.y + sourceBounds.getHeight() - offset);
-        finalY = position.y + sourceBounds.getHeight() - offset - height;
+        height = utils::min(height, position.y + sourceBounds.h - offset);
+        finalY = position.y + sourceBounds.h - offset - height;
       }
       else
       {
         finalY = position.y + offset;
-        height = std::min(height, windowHeight - finalY);
+        height = utils::min(height, windowHeight - finalY);
       }
     };
 
     if (placement == Placement::below || placement == Placement::above)
     {
       checkHorizontal();
-      finalY = (placement == Placement::below) ? finalY + sourceBounds.getHeight() + popupToElement :
+      finalY = (placement == Placement::below) ? finalY + sourceBounds.h + popupToElement :
         finalY - height - popupToElement;
-      checkVertical(sourceBounds.getHeight() + popupToElement);
+      checkVertical(sourceBounds.h + popupToElement);
     }
     else if (placement == Placement::left || placement == Placement::right)
     {
       checkVertical();
       finalX = (placement == Placement::left) ? finalX - width - popupToElement :
-        finalX + sourceBounds.getWidth() + popupToElement;
-      checkHorizontal(sourceBounds.getWidth() + popupToElement);
+        finalX + sourceBounds.w + popupToElement;
+      checkHorizontal(sourceBounds.w + popupToElement);
     }
     else
     {
       COMPLEX_ASSERT_FALSE("You need to choose a one of the placements for the popup");
       checkHorizontal();
-      finalY = finalY + sourceBounds.getHeight();
-      checkVertical(sourceBounds.getHeight());
+      finalY = finalY + sourceBounds.h;
+      checkVertical(sourceBounds.h);
     }
 
     lastUsedList->setBounds(finalX, finalY, width, height);
@@ -878,51 +985,5 @@ namespace Interface
     lastUsedList->setVisible(true);
   }
 
-  void PopupSelector::addList()
-  {
-    auto &list = lists_.emplace_back(utils::up<PopupList>::create());
-    list->setListener(this);
-    list->setCommonInfo(&commonInfo_);
-    list->setAlwaysOnTop(true);
-    list->setWantsKeyboardFocus(false);
-    addSubOpenGlContainer(list.get());
-  }
-
-  void PopupSelector::fillAutomationListIfExists()
-  {
-    auto recurse = [](auto &self, PopupItems *items) -> bool
-    {
-      for (auto &item : items->items)
-      {
-        if (item.type == PopupItems::AutomationList)
-        {
-          COMPLEX_ASSERT(item.items.empty());
-
-          int id = item.id;
-          auto bridges = uiRelated.renderer->getPlugin().getParameterBridges();
-          item.items.reserve(bridges.size() * 2);
-          for (auto *bridge : bridges)
-          {
-            auto *parameterLink = bridge->getParameterLink();
-            item.items.emplace_back(PopupItems::Entry, id, bridge->getName().toStdString(),
-              std::string{}, Shape{}, parameterLink == nullptr);
-
-            item.items.emplace_back(PopupItems::Entry, id + 1, std::string{},
-              std::string{}, Shape{}, parameterLink != nullptr);
-
-            id += 2;
-          }
-
-          return true;
-        }
-
-        if (!item.items.empty() && self(self, &item))
-          return true;
-      }
-
-      return false;
-    };
-
-    (void)recurse(recurse, &items_);
-  }
+  
 }

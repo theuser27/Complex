@@ -10,139 +10,319 @@
 
 #pragma once
 
-#include <juce_gui_basics/juce_gui_basics.h>
 #include "Framework/utils.hpp"
 #include "Framework/sync_primitives.hpp"
+#include "gui_utils.hpp"
+#include "Miscellaneous.hpp"
+#include "Skin.hpp"
 
 namespace Interface
 {
-  class BaseComponent;
+  class Component;
+  struct OpenGlWrapper;
+  class PopupDisplay;
+  class PopupSelector;
+  struct PopupItem;
 
-  struct ViewportChange
+  // Basic UI thread loop:
+  // 1. Perform any modifications from the UI
+  // 2. Calculate sizes and positions
+  // 3. Do rendering
+
+  enum class RenderFlag : u8
   {
-    BaseComponent *component = nullptr;
-    juce::Rectangle<int> change{};
-    bool isClipping = true;
-
-    constexpr bool operator==(const ViewportChange &) const noexcept = default;
+    // skip rendering on component
+    NoWork, 
+    // render and update flag to NoWork
+    Dirty, 
+    // render every frame
+    Realtime
   };
 
-  class BaseComponent : public juce::Component
+  void calculateSizes(utils::span<Component *> children, Component *component);
+  void calculatePositions(utils::span<Component *> children,
+    Component *component, Rectangle<i32> boundsInComponent = {});
+
+  PopupDisplay *getPopupDisplay(bool primary);
+  PopupSelector *getPopupSelector();
+  utils::bumpArena *getUIArena();
+
+  void deleteComponent(Component *component);
+
+  class Component
   {
   public:
-    enum RedirectMouse { RedirectMouseWheel, RedirectMouseDown, RedirectMouseDrag, RedirectMouseUp, RedirectMouseMove,
-      RedirectMouseEnter, RedirectMouseExit, RedirectMouseDoubleClick };
-
-    class ScopedBoundsEmplace
+    enum CommandMessages : u64
     {
-    public:
-      static constexpr auto doNotAddFlag = ViewportChange{ nullptr, {}, true };
-      static constexpr auto doNotClipFlag = ViewportChange{ nullptr, {}, false };
-
-      ScopedBoundsEmplace(std::vector<ViewportChange> &vector, BaseComponent *component) :
-        ScopedBoundsEmplace{ vector, component, component->getBoundsSafe() } { }
-
-      ScopedBoundsEmplace(std::vector<ViewportChange> &vector, BaseComponent *component, 
-        juce::Rectangle<int> bounds) : vector_(vector)
-      {
-        shouldAdd_ = vector.back() != doNotAddFlag;
-        if (!shouldAdd_)
-          vector.erase(vector.end() - 1);
-        else if (vector.back() == doNotClipFlag)
-          vector.back() = { component, bounds, false };
-        else
-          vector.emplace_back(component, bounds, true);
-      }
-
-      ~ScopedBoundsEmplace() noexcept { if (shouldAdd_) vector_.pop_back(); }
-    private:
-      std::vector<ViewportChange> &vector_;
-      bool shouldAdd_;
+      HandleCustomPosition = 1,
     };
 
-    class ScopedIgnoreClip
+    enum SizingFlags : u16
     {
-    public:
-      ScopedIgnoreClip(std::vector<ViewportChange> &vector, const BaseComponent *ignoreClipIncluding) : vector_(vector)
-      {
-        COMPLEX_ASSERT(vector.back() != ScopedBoundsEmplace::doNotClipFlag);
-        COMPLEX_ASSERT(vector.back() != ScopedBoundsEmplace::doNotAddFlag);
-        
-        if (ignoreClipIncluding == nullptr)
-        {
-          i_ = vector.size();
-          return;
-        }
+      None = 0,
 
-        for (i_ = vector.size() - 1; i_ > 0; --i_)
-        {
-          vector[i_].isClipping = false;
-          if (vector[i_].component == ignoreClipIncluding)
-            break;
-        }
-      }
+      // maximum size will optimistically grow as the parent grows
+      GrowableX = 1 << 0,
+      GrowableY = 1 << 1,
 
-      ~ScopedIgnoreClip() noexcept
-      {
-        for (; i_ < vector_.size(); ++i_)
-          vector_[i_].isClipping = true;
-      }
-    private:
-      std::vector<ViewportChange> &vector_;
-      size_t i_;
+      // maximum size will be matched with siblings
+      // unless minimum size is bigger
+      SameAsSiblingsX = 1 << 2,
+      SameAsSiblingsY = 1 << 3,
+      
+      // the size along the scrollable direction will be unconstrained
+      // and will always fit the children
+      ScrollableX = 1 << 4,
+      ScrollableY = 1 << 5,
+
+      // adds an extra scrollbar to the off-axis' size
+      HasScrollbarX = 1 << 6,
+      HasScrollbarY = 1 << 7,
+
+      ScrollIsPartOfPadding = 1 << 8,
+
+      // will use desiredSize.getTextDimensions to calculate dimensions
+      HasText = 1 << 9,
+      // controls the children stack direction
+      IsVertical = 1 << 10,
+
+      ScrollableWithBarX = ScrollableX | HasScrollbarX,
+      ScrollableWithBarY = ScrollableY | HasScrollbarY,
     };
 
-    BaseComponent(juce::String name = juce::String()) : Component{ name } { }
+    virtual bool mouseMove([[maybe_unused]] const MouseEvent &event) { return false; }
+    virtual bool mouseEnter([[maybe_unused]] const MouseEvent &event) { return false; }
+    virtual bool mouseExit([[maybe_unused]] const MouseEvent &event) { return false; }
+    virtual bool mouseDown([[maybe_unused]] const MouseEvent &event) { return false; }
+    virtual bool mouseDrag([[maybe_unused]] const MouseEvent &event) { return false; }
+    virtual bool mouseUp([[maybe_unused]] const MouseEvent &event) { return false; }
+    virtual bool mouseWheelMove([[maybe_unused]] const MouseEvent &event) { return false; }
 
-    void parentHierarchyChanged() override;
-    void paint(juce::Graphics &) override { }
-    // if you get an error here declare setBounds(int, int, int, int) in juce::Component as virtual
-    void setBounds(int x, int y, int w, int h) override;
-    using Component::setBounds;
-    void setBoundsSafe(juce::Rectangle<int> bounds) noexcept { boundsSafe_ = bounds; }
-    void setBoundsSafe(int x, int y, int w, int h) noexcept { setBoundsSafe(juce::Rectangle{ x, y, w, h }); }
-
-    void setVisible(bool shouldBeVisible) override
+    Rectangle<i32> getLocalBounds() const noexcept { return bounds.withZeroOrigin(); }
+    Point<i32> getPosition() const noexcept { return bounds.getPosition(); }
+    Point<i32> 
+    getPositionInWindow() const noexcept
     {
-      isVisibleSafe_ = shouldBeVisible;
-      Component::setVisible(shouldBeVisible);
+      Point relativePosition = getPosition();
+      auto *component = parent;
+      while (component)
+      {
+        relativePosition = relativePosition + component->getPosition();
+        component = component->parent;
+      }
+      return relativePosition;
     }
 
-    // if you get an error here declare setAlwaysOnTop(bool) in juce::Component as virtual
-    void setAlwaysOnTop(bool shouldStayOnTop) final
+    Point<i32> 
+    getRelativePoint(const Component *source,
+      Point<i32> pointRelativeToSource = {}) const noexcept
     {
-      isAlwaysOnTopSafe_ = shouldStayOnTop;
-      Component::setAlwaysOnTop(shouldStayOnTop);
+      Point position = getPositionInWindow();
+      Point otherPosition = pointRelativeToSource;
+      if (source)
+        otherPosition += source->getPositionInWindow();
+      return { otherPosition.x - position.x, otherPosition.y - position.y };
+    }
+    Rectangle<i32> 
+    getRelativeArea(const Component *source,
+      Rectangle<i32> areaRelativeToSource = {}) const noexcept
+    {
+      return Rectangle{ getRelativePoint(source, areaRelativeToSource.getPosition()),
+        areaRelativeToSource.w, areaRelativeToSource.y };
     }
 
-    bool isVisibleSafe() const noexcept { return isVisibleSafe_.get(); }
-    bool isAlwaysOnTopSafe() const noexcept { return isAlwaysOnTopSafe_.get(); }
+    bool contains(Point<i32> parentPoint) { return bounds.contains(parentPoint); }
+    bool contains(Point<float> parentPoint) { return contains(parentPoint.toInt()); }
 
-    juce::Rectangle<int> getBoundsSafe() const noexcept { return boundsSafe_.get(); }
-    juce::Rectangle<int> getLocalBoundsSafe() const noexcept { return boundsSafe_.get().withZeroOrigin(); }
-    juce::Point<int> getPositionSafe() const noexcept { return boundsSafe_.get().getPosition(); }
+    Component *getComponentAt(i32 x, i32 y);
+    Component *getComponentAt(Point<i32> position) { return getComponentAt(position.x, position.y); }
 
-    int getWidthSafe() const noexcept { return getLocalBoundsSafe().getWidth(); }
-    int getHeightSafe() const noexcept { return getLocalBoundsSafe().getHeight(); }
+    bool 
+    isParentOf(const Component *possibleChild) const noexcept
+    {
+      while (possibleChild != nullptr)
+      {
+        possibleChild = possibleChild->parent;
+        if (possibleChild == this)
+          return true;
+      }
+      return false;
+    }
+    void addChildComponent(Component *child, i8 layerIndex = 0);
+    // keepFocus is a promise that you WILL NOT delete the object after removal,
+    // otherwise the UI system will be reading into "freed" arena memory
+    void removeChildComponent(Component *childToRemove, bool keepFocus = false);
+    Component *removeChildComponent(usize childIndexToRemove, bool keepFocus = false);
+    void removeAllChildComponents();
 
-    BaseComponent *getParentSafe() const noexcept { return parentSafe_.get(); }
-    void setParentSafe(BaseComponent *parent) noexcept { parentSafe_ = parent; }
+    // this one removes and frees component from arena
+    void deleteChildComponent(Component *childToDelete);
+    void deleteChildComponent(usize childIndexToDelete);
+    void deleteAllChildComponents();
+
+    bool hasFocus(bool trueIfChildIsFocused) const;
+    void grabFocus();
+    void giveAwayFocus();
+
+    // needs wantsFocus=1
+    enum FocusChange
+    {
+      FocusClick,         // focus changed by a click (focusOnMouseClick=1),  initiator <-- indirect target
+      FocusGrabbed,       // focus manually grabbed by (grabFocus()),         initiator <-- indirect target
+      FocusGivenAway,     // focus willingly given away (giveAwayFocus()),    initiator --> indirect target
+      FocusMoved,         // focus manually moved to (moveFocusTo()),         initiator -->   direct target
+      FocusSetInvisible,  // focus changed due to invisibility (isVisible=0), initiator --> indirect target
+    };
+    virtual bool handleFocus([[maybe_unused]] bool hasFocus, [[maybe_unused]] FocusChange focusChange) { return true; }
+
+    virtual bool keyPressed([[maybe_unused]] const KeyPress &key) { return false; }
+    virtual bool modifierKeysChanged([[maybe_unused]] const ModifierKeys &modifiers) { return false; }
+
+    virtual void handleCommandMessage([[maybe_unused]] u64 commandId, [[maybe_unused]] utils::whatever extraData = {}) { }
+
+    void doRender(OpenGlWrapper &openGl);
+    void renderScrollbars(OpenGlWrapper &openGl, float scrollHoverIncrement);
+    virtual bool render([[maybe_unused]] OpenGlWrapper &openGl) { return true; }
+
+    utils::bumpArena *arena{};
+
+    Rectangle<i32> previousBounds{};
+    Rectangle<i32> bounds{};
+    Rectangle<u16> addedHitbox{};
+
+    Component *parent = nullptr;
+    utils::vector<Component *> childComponents{};
+    i8 layerIndex = 0;
+    Skin::SectionOverride skinOverride = Skin::kUseParentOverride;
+    struct
+    {
+      // feature flags
+      bool clickable : 1 = false;
+      bool clickableChildren : 1 = true;
+      bool wantsFocus : 1 = false;
+      bool focusOnMouseClick : 1 = false;
+      bool stealsMouseEvents : 1 = false;
+
+      // state flags
+      bool isVisible : 1 = true;
+      bool isHovered : 1 = false;
+      bool isClicked : 1 = false;
+      bool isOpenGlInitialised : 1 = false;
+      bool destroyOpenGl : 1 = false;
+      bool hasRenderedFeatures : 1 = false;
+      bool hasSummonnedPopupSelector : 1 = false;
+      RenderFlag renderState : 2 = RenderFlag::Dirty;
+    } componentFlags{};
     
-    bool redirectMouse(RedirectMouse type, const juce::MouseEvent &e,
-      const juce::MouseWheelDetails *wheel = nullptr, bool findFromParent = true) const;
-    bool needsToRedirectMouse(const juce::MouseEvent &e) const noexcept;
-    void setRedirectMouseToComponent(BaseComponent *component) { redirectMouse_ = component; }
-    void setRedirectMouseModifiers(juce::ModifierKeys redirectMods) { redirectMods_ = redirectMods; }
+    Range<u8> scrollWidths{};
 
-  protected:
-    utils::shared_value<BaseComponent *> parentSafe_ = nullptr;
-    utils::shared_value<juce::Rectangle<int>> boundsSafe_{};
-    utils::shared_value<bool> isVisibleSafe_ = false;
-    utils::shared_value<bool> isAlwaysOnTopSafe_ = false;
+    SizingFlags sizingFlags = None;
 
-    juce::ModifierKeys redirectMods_{};
-    BaseComponent *redirectMouse_ = nullptr;
+    // margin in parent
+    Rectangle<i16> margin{};
+    // padding for children
+    Rectangle<u8> padding{};
+    Placement::Enum placement{};
+    union
+    {
+      Rectangle<i32> minMax{};
+      // Text
+      // returns primary/secondary axis min and max size if availablePrimarySize ==/!= nullptr
+      Range<i32> (*getTextDimensions)(Component *c, i32 *availablePrimarySize);
+    } desiredSize{ { 0, 0, utils::max_limit<i32>, utils::max_limit<i32> } };
+
+    Point<i32> scrollOffset{};
+    Area<i32> scrollableArea{};
+  };
+
+  COMPLEX_DEFINE_ENUM_OPERATION(Component::SizingFlags, |, u16)
+  COMPLEX_DEFINE_ENUM_OPERATION(Component::SizingFlags, &, u16)
+
+
+  class BaseControl;
+  class BaseSection : public Component, public ControlListener
+  {
+  public:
+    void controlValueChanged(BaseControl *) override { }
+
+    void addControl(BaseControl *control, bool addChild = true);
+    void removeControl(BaseControl *control);
+    BaseControl *getControl(uuid id) { return controls_.find(id)->second; }
+
+    utils::vector_map<uuid, BaseControl *> controls_{};
+  };
+
+  class PowerButton;
+  class ProcessorSection : public BaseSection
+  {
+  public:
+    static constexpr int kDefaultActivatorSize = 12;
+
+    ProcessorSection(Generation::BaseProcessor *processor) : processor{ processor } { }
+
+    void setActivator(PowerButton *activator);
+
+    Generation::BaseProcessor *processor = nullptr;
+    PowerButton *activator = nullptr;
+  };
+
+  class ScopedBoundsEmplace
+  {
+  public:
+    static constexpr auto doNotAddFlag = ViewportChange{ nullptr, {}, true };
+    static constexpr auto doNotClipFlag = ViewportChange{ nullptr, {}, false };
+
+    ScopedBoundsEmplace(utils::vector<ViewportChange> &vector, Component *component) :
+      ScopedBoundsEmplace{ vector, component, component->bounds } { }
+
+    ScopedBoundsEmplace(utils::vector<ViewportChange> &vector,
+      Component *component, Rectangle<int> bounds) : vector_(vector)
+    {
+      shouldAdd_ = vector.back() != doNotAddFlag;
+      if (!shouldAdd_)
+        vector.erase(vector.end() - 1);
+      else if (vector.back() == doNotClipFlag)
+        vector.back() = { component, bounds, false };
+      else
+        vector.emplace_back(component, bounds, true);
+    }
+
+    ~ScopedBoundsEmplace() noexcept { if (shouldAdd_) vector_.pop_back(); }
   private:
-    COMPLEX_MAKE_LIVENESS_CHECKED;
+    utils::vector<ViewportChange> &vector_;
+    bool shouldAdd_;
+  };
+
+  class ScopedIgnoreClip
+  {
+  public:
+    ScopedIgnoreClip(utils::vector<ViewportChange> &vector,
+      const Component *ignoreClipIncluding) : vector_(vector)
+    {
+      COMPLEX_ASSERT(vector.back() != ScopedBoundsEmplace::doNotClipFlag);
+      COMPLEX_ASSERT(vector.back() != ScopedBoundsEmplace::doNotAddFlag);
+        
+      if (ignoreClipIncluding == nullptr)
+      {
+        i_ = vector.size();
+        return;
+      }
+
+      for (i_ = vector.size() - 1; i_ > 0; --i_)
+      {
+        vector[i_].isClipping = false;
+        if (vector[i_].component == ignoreClipIncluding)
+          break;
+      }
+    }
+
+    ~ScopedIgnoreClip() noexcept
+    {
+      for (; i_ < vector_.size(); ++i_)
+        vector_[i_].isClipping = true;
+    }
+  private:
+    utils::vector<ViewportChange> &vector_;
+    usize i_;
   };
 }

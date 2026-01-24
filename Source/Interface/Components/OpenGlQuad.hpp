@@ -1,289 +1,180 @@
 /*
-  ==============================================================================
+	==============================================================================
 
-    OpenGlQuad.hpp
-    Created: 14 Dec 2022 2:05:11am
-    Author:  theuser27
+		OpenGlQuad.hpp
+		Created: 14 Dec 2022 2:05:11am
+		Author:  theuser27
 
-  ==============================================================================
+	==============================================================================
 */
 
 #pragma once
 
-#include "OpenGlComponent.hpp"
+#include "../LookAndFeel/BaseComponent.hpp"
+#include "../LookAndFeel/Shaders.hpp"
+#include "../LookAndFeel/shader_types.hpp"
 
 namespace Interface
 {
-  class OpenGlMultiQuad : public OpenGlComponent
-  {
-  public:
-    static constexpr usize kNumVertices = 4;
-    static constexpr usize kNumFloatsPerVertex = 10;
-    static constexpr usize kNumFloatsPerQuad = kNumVertices * kNumFloatsPerVertex;
-    static constexpr usize kNumIndicesPerQuad = 6;
+	class OpenGlMultiQuad : public Component
+	{
+	public:
+		static constexpr auto kVerticesPerQuad = 4;
+		static constexpr auto kFloatsPerVertex = PassthroughVertex::kFloatsPerVertex;
+		static constexpr auto kFloatsPerQuad = kVerticesPerQuad * kFloatsPerVertex;
+		static constexpr auto kIndicesPerQuad = 6;
 
-    struct QuadData
-    {
-      float getQuadX(usize i) const noexcept { return data[kNumFloatsPerQuad * i]; }
-      float getQuadY(usize i) const noexcept { return data[kNumFloatsPerQuad * i + 1]; }
-      float getQuadWidth(usize i) const noexcept
-      {
-        usize index = kNumFloatsPerQuad * i;
-        return data[2 * kNumFloatsPerVertex + index] - data[index];
-      }
-      float getQuadHeight(usize i) const noexcept
-      {
-        usize index = kNumFloatsPerQuad * i;
-        return data[2 * kNumFloatsPerVertex + index + 1] - data[index + 1];
-      }
-      void setCoordinates(usize i, float x, float y, float w, float h) noexcept
-      {
-        COMPLEX_ASSERT(i < maxQuads);
-        usize index = i * kNumFloatsPerQuad;
+		OpenGlMultiQuad(utils::span<float> data, FragmentShader shader);
 
-        data[index + 4] = x;
-        data[index + 5] = y;
-        data[kNumFloatsPerVertex + index + 4] = x;
-        data[kNumFloatsPerVertex + index + 5] = y + h;
-        data[2 * kNumFloatsPerVertex + index + 4] = x + w;
-        data[2 * kNumFloatsPerVertex + index + 5] = y + h;
-        data[3 * kNumFloatsPerVertex + index + 4] = x + w;
-        data[3 * kNumFloatsPerVertex + index + 5] = y;
-      }
-      void setShaderValue(usize i, float shaderValue, usize valueIndex = 0) noexcept
-      {
-        COMPLEX_ASSERT(i < maxQuads);
-        usize index = i * kNumFloatsPerQuad + 6 + valueIndex;
+		bool render(OpenGlWrapper &openGl) override;
 
-        data[index] = shaderValue;
-        data[kNumFloatsPerVertex + index] = shaderValue;
-        data[2 * kNumFloatsPerVertex + index] = shaderValue;
-        data[3 * kNumFloatsPerVertex + index] = shaderValue;
-      }
-      void setQuadHorizontal(usize i, float x, float w) noexcept
-      {
-        COMPLEX_ASSERT(i < maxQuads);
-        usize index = i * kNumFloatsPerQuad;
+		void setCoordinates(usize i, float x, float y, float w, float h) noexcept
+		{
+			COMPLEX_ASSERT(i < maxQuads);
+			usize index = i * kFloatsPerQuad;
 
-        data[index] = x;
-        data[kNumFloatsPerVertex + index] = x;
-        data[2 * kNumFloatsPerVertex + index] = x + w;
-        data[3 * kNumFloatsPerVertex + index] = x + w;
-      }
-      void setQuadVertical(usize i, float y, float h) noexcept
-      {
-        COMPLEX_ASSERT(i < maxQuads);
-        usize index = i * kNumFloatsPerQuad;
+			data[index + 4] = x;
+			data[index + 5] = y;
+			data[kFloatsPerVertex + index + 4] = x;
+			data[kFloatsPerVertex + index + 5] = y + h;
+			data[2 * kFloatsPerVertex + index + 4] = x + w;
+			data[2 * kFloatsPerVertex + index + 5] = y + h;
+			data[3 * kFloatsPerVertex + index + 4] = x + w;
+			data[3 * kFloatsPerVertex + index + 5] = y;
+		}
+		void setShaderValue(usize i, float shaderValue, usize valueIndex = 0) noexcept
+		{
+			COMPLEX_ASSERT(i < maxQuads);
+			usize index = i * kFloatsPerQuad + 6 + valueIndex;
 
-        data[index + 1] = y;
-        data[kNumFloatsPerVertex + index + 1] = y + h;
-        data[2 * kNumFloatsPerVertex + index + 1] = y + h;
-        data[3 * kNumFloatsPerVertex + index + 1] = y;
-      }
-      void setQuad(usize i, float x, float y, float w, float h) noexcept
-      {
-        COMPLEX_ASSERT(i < maxQuads);
-        usize index = i * kNumFloatsPerQuad;
+			data[index] = shaderValue;
+			data[kFloatsPerVertex + index] = shaderValue;
+			data[2 * kFloatsPerVertex + index] = shaderValue;
+			data[3 * kFloatsPerVertex + index] = shaderValue;
+		}
+		void setQuadHorizontal(usize i, float x, float w) noexcept
+		{
+			COMPLEX_ASSERT(i < maxQuads);
+			usize index = i * kFloatsPerQuad;
 
-        data[index] = x;
-        data[index + 1] = y;
-        data[kNumFloatsPerVertex + index] = x;
-        data[kNumFloatsPerVertex + index + 1] = y + h;
-        data[2 * kNumFloatsPerVertex + index] = x + w;
-        data[2 * kNumFloatsPerVertex + index + 1] = y + h;
-        data[3 * kNumFloatsPerVertex + index] = x + w;
-        data[3 * kNumFloatsPerVertex + index + 1] = y;
-      }
+			data[index] = x;
+			data[kFloatsPerVertex + index] = x;
+			data[2 * kFloatsPerVertex + index] = x + w;
+			data[3 * kFloatsPerVertex + index] = x + w;
+		}
+		void setQuadVertical(usize i, float y, float h) noexcept
+		{
+			COMPLEX_ASSERT(i < maxQuads);
+			usize index = i * kFloatsPerQuad;
 
-      float &operator[](usize i) noexcept { return data[i]; }
+			data[index + 1] = y;
+			data[kFloatsPerVertex + index + 1] = y + h;
+			data[2 * kFloatsPerVertex + index + 1] = y + h;
+			data[3 * kFloatsPerVertex + index + 1] = y;
+		}
+		void setQuad(usize i, float x, float y, float w, float h) noexcept
+		{
+			COMPLEX_ASSERT(i < maxQuads);
+			usize index = i * kFloatsPerQuad;
 
-      utils::shared_value<float[]>::span data;
-      usize maxQuads;
-    };
+			data[index] = x;
+			data[index + 1] = y;
+			data[kFloatsPerVertex + index] = x;
+			data[kFloatsPerVertex + index + 1] = y + h;
+			data[2 * kFloatsPerVertex + index] = x + w;
+			data[2 * kFloatsPerVertex + index + 1] = y + h;
+			data[3 * kFloatsPerVertex + index] = x + w;
+			data[3 * kFloatsPerVertex + index + 1] = y;
+		}
 
-    OpenGlMultiQuad(usize maxQuads, Shaders::FragmentShader shader = Shaders::kColorFragment, 
-      String name = "OpenGlMultiQuad");
-    ~OpenGlMultiQuad() override;
+		PassthroughVertex vertexShader{};
+		FragmentShader fragmentShader{};
+		OpenGlShaderProgram shaderProgram{};
 
-    void resized() override
-    {
-      OpenGlComponent::resized();
-      data_.update();
-    }
+		/*
+		 *  data array indices per quad
+		 *  0 - 1: vertex ndc position
+		 *  2 - 3: scaled width and height for quad (acts like a uniform for individual quads)
+		 *  4 - 5: coordinates inside the quad (ndc for most situations, normalised for OpenGLCorners)
+		 *  6 - 7: shader values (doubles as left channel shader values)
+		 *  8 - 9: right channel shader values (necessary for the modulation meters/indicators)
+		 */
+		utils::span<float> data;
+		u32 maxQuads, numQuads;
+		Component *ignoreClipIncluding = nullptr;
 
-    void init(OpenGlWrapper &openGl) override;
-    void render(OpenGlWrapper &openGl) override;
-    void destroy() override;
+		bool isDirty = false;
+		bool additiveBlending = false;
+	};
 
-    Colour getColor() const noexcept { return color_; }
-    float getMaxArc() const noexcept { return maxArc_; }
-    auto getQuadData() noexcept { return QuadData{ data_.write(), maxQuads_ }; }
+	struct OpenGlQuad final : public OpenGlMultiQuad
+	{
+		float vertices[1 * kFloatsPerQuad]{};
 
-    void setFragmentShader(Shaders::FragmentShader shader) noexcept { fragmentShader_ = shader; }
-    void setColor(Colour color) noexcept { color_ = color; }
-    void setAltColor(Colour color) noexcept { altColor_ = color; }
-    void setModColor(Colour color) noexcept { modColor_ = color; }
-    void setBackgroundColor(Colour color) noexcept { backgroundColor_ = color; }
-    void setThumbColor(Colour color) noexcept { thumbColor_ = color; }
-    void setThumbAmount(float amount) noexcept { thumbAmount_ = amount; }
-    void setStartPos(float position) noexcept { startPosition_ = position; }
-    void setMaxArc(float maxArc) noexcept { maxArc_ = maxArc; }
-    void setActive(bool active) noexcept { active_ = active; }
-    void setThickness(float thickness) noexcept { thickness_ = thickness; }
-    void setAdditive(bool additive) noexcept { additiveBlending_ = additive; }
-    void setOverallAlpha(float alpha) noexcept { overallAlpha_ = alpha; }
-    void setRounding(float rounding) noexcept
-    {
-      float adjusted = 2.0f * rounding;
-      if (adjusted != rounding_)
-        rounding_ = adjusted;
-    }
+		OpenGlQuad(FragmentShader shader) :
+			OpenGlMultiQuad{ utils::span{ vertices }, COMPLEX_MOVE(shader) }
+		{
+			setQuad(0, -1.0f, -1.0f, 2.0f, 2.0f);
+		}
+	};
 
-    void setDrawWhenNotVisible(bool draw) noexcept { drawWhenNotVisible_ = draw; }
-    void setTargetComponent(BaseComponent *targetComponent) noexcept { targetComponent_ = targetComponent; }
-    void setCustomViewportBounds(juce::Rectangle<int> bounds) noexcept
-    {
-      auto oldBounds = customViewportBounds_.get();
-      customViewportBounds_ = bounds;
-      if (bounds.withZeroOrigin() != oldBounds.withZeroOrigin())
-        data_.update();
-    }
-    void setCustomScissorBounds(juce::Rectangle<int> bounds) noexcept { customScissorBounds_ = bounds; }
+	struct OpenGlCorners final : public OpenGlMultiQuad
+	{
+		float vertices[4 * kFloatsPerQuad]{};
+		RoundedCornerFragment fragment{};
 
-    void setNumQuads(usize newNumQuads) noexcept
-    {
-      COMPLEX_ASSERT(newNumQuads <= maxQuads_);
-      numQuads_ = newNumQuads;
-      data_.update();
-    }
+		OpenGlCorners() : OpenGlMultiQuad{ utils::span{ vertices }, FragmentShader{ fragment } }
+		{
+			setCoordinates(0, 1.0f, 1.0f, -1.0f, -1.0f);
+			setCoordinates(1, 1.0f, 0.0f, -1.0f, 1.0f);
+			setCoordinates(2, 0.0f, 0.0f, 1.0f, 1.0f);
+			setCoordinates(3, 0.0f, 1.0f, 1.0f, -1.0f);
+		}
 
-  protected:
-    utils::shared_value<BaseComponent *> targetComponent_ = nullptr;
-    utils::shared_value<juce::Rectangle<int>> customViewportBounds_{};
-    utils::shared_value<juce::Rectangle<int>> customScissorBounds_{};
-    utils::shared_value<Shaders::FragmentShader> fragmentShader_;
+		void setCorners(Rectangle<int> cornerBounds, float rounding)
+		{
+			float width = rounding / (float)cornerBounds.w * 2.0f;
+			float height = rounding / (float)cornerBounds.h * 2.0f;
 
-    utils::shared_value<bool> drawWhenNotVisible_ = false;
-    utils::shared_value<bool> active_ = true;
-    utils::shared_value<Colour> color_;
-    utils::shared_value<Colour> altColor_;
-    utils::shared_value<Colour> modColor_ = Colours::transparentBlack;
-    utils::shared_value<Colour> backgroundColor_;
-    utils::shared_value<Colour> thumbColor_;
-    utils::shared_value<float> maxArc_ = 2.0f;
-    utils::shared_value<float> thumbAmount_ = 0.5f;
-    utils::shared_value<float> startPosition_ = 0.0f;
-    utils::shared_value<float> overallAlpha_ = 1.0f;
-    utils::shared_value<bool> additiveBlending_ = false;
-    utils::shared_value<float> thickness_ = 1.0f;
-    utils::shared_value<float> rounding_ = 5.0f;
+			setQuad(0, -1.0f, -1.0f, width, height);
+			setQuad(1, -1.0f, 1.0f - height, width, height);
+			setQuad(2, 1.0f - width, 1.0f - height, width, height);
+			setQuad(3, 1.0f - width, -1.0f, width, height);
+		}
 
-    /*/
-     *  data_ array indices per quad
-     *  0 - 1: vertex ndc position
-     *  2 - 3: scaled width and height for quad (acts like a uniform for individual quads)
-     *  4 - 5: coordinates inside the quad (ndc for most situations, normalised for OpenGLCorners)
-     *  6 - 7: shader values (doubles as left channel shader values)
-     *  8 - 9: right channel shader values (necessary for the modulation meters/indicators)
-    /*/
-    utils::shared_value<float[]> data_;
-    utils::shared_value<usize> maxQuads_, numQuads_;
+		void setCorners(Rectangle<int> cornerBounds, float topRounding, float bottomRounding)
+		{
+			float topWidth = topRounding / (float)cornerBounds.w * 2.0f;
+			float topHeight = topRounding / (float)cornerBounds.h * 2.0f;
+			float bottomWidth = bottomRounding / (float)cornerBounds.w * 2.0f;
+			float bottomHeight = bottomRounding / (float)cornerBounds.h * 2.0f;
 
-    OpenGlShaderProgram shader_;
-    OpenGlUniform colorUniform_;
-    OpenGlUniform altColorUniform_;
-    OpenGlUniform modColorUniform_;
-    OpenGlUniform backgroundColorUniform_;
-    OpenGlUniform thumbColorUniform_;
-    OpenGlUniform thicknessUniform_;
-    OpenGlUniform roundingUniform_;
-    OpenGlUniform maxArcUniform_;
-    OpenGlUniform thumbAmountUniform_;
-    OpenGlUniform startPositionUniform_;
-    OpenGlUniform overallAlphaUniform_;
-    OpenGlAttribute position_;
-    OpenGlAttribute dimensions_;
-    OpenGlAttribute coordinates_;
-    OpenGlAttribute shader_values_;
+			setQuad(0, -1.0f, -1.0f, bottomWidth, bottomHeight);
+			setQuad(1, -1.0f, 1.0f - topHeight, topWidth, topHeight);
+			setQuad(2, 1.0f - topWidth, 1.0f - topHeight, topWidth, topHeight);
+			setQuad(3, 1.0f - bottomWidth, -1.0f, bottomWidth, bottomHeight);
+		}
 
-    GLuint vertexBuffer_ = 0;
-    GLuint indicesBuffer_ = 0;
-  };
+		void setTopCorners(Rectangle<int> cornerBounds, float topRounding)
+		{
+			float width = topRounding / (float)cornerBounds.w * 2.0f;
+			float height = topRounding / (float)cornerBounds.h * 2.0f;
 
-  class OpenGlQuad final : public OpenGlMultiQuad
-  {
-  public:
-    OpenGlQuad(Shaders::FragmentShader shader, String name = "OpenGlQuad") :
-      OpenGlMultiQuad(1, shader, COMPLEX_MOVE(name))
-    {
-      getQuadData().setQuad(0, -1.0f, -1.0f, 2.0f, 2.0f);
-    }
-  };
+			setQuad(0, -2.0f, -2.0f, 0.0f, 0.0f);
+			setQuad(1, -1.0f, 1.0f - height, width, height);
+			setQuad(2, 1.0f - width, 1.0f - height, width, height);
+			setQuad(3, -2.0f, -2.0f, 0.0f, 0.0f);
+		}
 
-  class OpenGlCorners final : public OpenGlMultiQuad
-  {
-  public:
-    OpenGlCorners() : OpenGlMultiQuad(4, Shaders::kRoundedCornerFragment, "OpenGlCorners")
-    {
-      auto quadData = getQuadData();
-      quadData.setCoordinates(0, 1.0f, 1.0f, -1.0f, -1.0f);
-      quadData.setCoordinates(1, 1.0f, 0.0f, -1.0f, 1.0f);
-      quadData.setCoordinates(2, 0.0f, 0.0f, 1.0f, 1.0f);
-      quadData.setCoordinates(3, 0.0f, 1.0f, 1.0f, -1.0f);
-    }
-
-    void setCorners(juce::Rectangle<int> bounds, float rounding)
-    {
-      float width = rounding / (float)bounds.getWidth() * 2.0f;
-      float height = rounding / (float)bounds.getHeight() * 2.0f;
-
-      auto quadData = getQuadData();
-
-      quadData.setQuad(0, -1.0f, -1.0f, width, height);
-      quadData.setQuad(1, -1.0f, 1.0f - height, width, height);
-      quadData.setQuad(2, 1.0f - width, 1.0f - height, width, height);
-      quadData.setQuad(3, 1.0f - width, -1.0f, width, height);
-    }
-
-    void setCorners(juce::Rectangle<int> bounds, float topRounding, float bottomRounding)
-    {
-      float topWidth = topRounding / (float)bounds.getWidth() * 2.0f;
-      float topHeight = topRounding / (float)bounds.getHeight() * 2.0f;
-      float bottomWidth = bottomRounding / (float)bounds.getWidth() * 2.0f;
-      float bottomHeight = bottomRounding / (float)bounds.getHeight() * 2.0f;
-
-      auto quadData = getQuadData();
-
-      quadData.setQuad(0, -1.0f, -1.0f, bottomWidth, bottomHeight);
-      quadData.setQuad(1, -1.0f, 1.0f - topHeight, topWidth, topHeight);
-      quadData.setQuad(2, 1.0f - topWidth, 1.0f - topHeight, topWidth, topHeight);
-      quadData.setQuad(3, 1.0f - bottomWidth, -1.0f, bottomWidth, bottomHeight);
-    }
-
-    void setTopCorners(juce::Rectangle<int> bounds, float topRounding)
-    {
-      float width = topRounding / (float)bounds.getWidth() * 2.0f;
-      float height = topRounding / (float)bounds.getHeight() * 2.0f;
-
-      auto quadData = getQuadData();
-
-      quadData.setQuad(0, -2.0f, -2.0f, 0.0f, 0.0f);
-      quadData.setQuad(1, -1.0f, 1.0f - height, width, height);
-      quadData.setQuad(2, 1.0f - width, 1.0f - height, width, height);
-      quadData.setQuad(3, -2.0f, -2.0f, 0.0f, 0.0f);
-    }
-
-    void setBottomCorners(juce::Rectangle<int> bounds, float bottomRounding)
-    {
-      float width = bottomRounding / (float)bounds.getWidth() * 2.0f;
-      float height = bottomRounding / (float)bounds.getHeight() * 2.0f;
-
-      auto quadData = getQuadData();
-      
-      quadData.setQuad(0, -1.0f, -1.0f, width, height);
-      quadData.setQuad(1, -2.0f, -2.0f, 0.0f, 0.0f);
-      quadData.setQuad(2, -2.0f, -2.0f, 0.0f, 0.0f);
-      quadData.setQuad(3, 1.0f - width, -1.0f, width, height);
-    }
-  };
+		void setBottomCorners(Rectangle<int> cornerBounds, float bottomRounding)
+		{
+			float width = bottomRounding / (float)cornerBounds.w * 2.0f;
+			float height = bottomRounding / (float)cornerBounds.h * 2.0f;
+			
+			setQuad(0, -1.0f, -1.0f, width, height);
+			setQuad(1, -2.0f, -2.0f, 0.0f, 0.0f);
+			setQuad(2, -2.0f, -2.0f, 0.0f, 0.0f);
+			setQuad(3, 1.0f - width, -1.0f, width, height);
+		}
+	};
 }
