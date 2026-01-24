@@ -57,8 +57,8 @@
 #define switch_custom_end }
 
 #define COMPLEX_DEFINE_ENUM_OPERATION(T, operation, underlying) \
-  constexpr T operator operation (T a, T b) { return (T)((underlying)(a) operation (underlying)(b)); }\
-  constexpr T operator operation##=(T a, T b) { return (T)((underlying)(a) operation (underlying)(b)); }
+  constexpr underlying operator operation (T a, auto b) { return (underlying)(a) operation (underlying)(b); }\
+  constexpr T operator operation##=(T a, auto b) { return (T)((underlying)(a) operation (underlying)(b)); }
 
 // enabling portable out of order designated initialisers
 #define with(T, ...)\

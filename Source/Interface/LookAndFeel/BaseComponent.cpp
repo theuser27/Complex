@@ -90,6 +90,12 @@ namespace Interface
       component->bounds.x = min;
       component->bounds.w = max;
     }
+    else if (component->sizingFlags & Component::Fixed)
+    {
+      auto minMax = TRANSPOSE(component, component->desiredSize.minMax);
+      component->bounds.x = minMax.x;
+      component->bounds.w = minMax.w;
+    }
     else
     {
       auto minMax = TRANSPOSE(component, component->desiredSize.minMax);
@@ -134,6 +140,12 @@ namespace Interface
       auto range = component->desiredSize.getTextDimensions(component, &component->bounds.w);
       component->bounds.y = utils::max(component->bounds.y, range.min);
       component->bounds.h = utils::max(component->bounds.h, range.max);
+    }
+    else if (component->sizingFlags & Component::Fixed)
+    {
+      auto minMax = TRANSPOSE(component, component->desiredSize.minMax);
+      component->bounds.y = minMax.y;
+      component->bounds.h = minMax.h;
     }
     else
     {
@@ -482,13 +494,34 @@ namespace Interface
       auto *selector = getPopupSelector();
       if (selector->cancel)
         selector->cancel(selector);
+      
       //selector->resetState();
+      component->removeChildComponent(selector);
     }
     component->deleteAllChildComponents();
     utils::bumpArena::remove(component);
   }
 
-  Component *Component::getComponentAt(i32 x, i32 y)
+  bool 
+  Component::mouseWheelMove(const MouseEvent &event)
+  {
+    if ((sizingFlags & Component::ScrollableX) == 0 && event.wheelDeltaX != 0.0f)
+    {
+      // TODO:
+      return true;
+    }
+
+    if ((sizingFlags & Component::ScrollableY) == 0 && event.wheelDeltaY != 0.0f)
+    {
+      // TODO:
+      return true;
+    }
+
+    return false;
+  }
+
+  Component *
+  Component::getComponentAt(i32 x, i32 y)
   {
     if (componentFlags.clickableChildren)
     {
@@ -771,7 +804,10 @@ namespace Interface
     bool continueRender = render(openGl);
     COMPLEX_CHECK_OPENGL_ERROR();
     if (!continueRender)
+    {
+      nvgTranslate(openGl.g, (float)(-bounds.x), (float)(-bounds.y));
       return;
+    }
 
     for (auto *child : childComponents)
     {

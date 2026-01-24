@@ -966,37 +966,24 @@ namespace Interface
   setViewport(Point<int> positionInViewport, Rectangle<int> viewportBounds,
     Rectangle<int> scissorBounds, const OpenGlWrapper &openGl, const Component *ignoreClipIncluding)
   {
-    auto findIndex = [](const utils::vector<ViewportChange> &vector, const Component *target)
+    viewportBounds += positionInViewport;
+    scissorBounds += positionInViewport;
+
+    bool isClipping = ignoreClipIncluding == nullptr;
+    for (usize i = openGl.parentStack.size(); i > 0; --i)
     {
-      isize index;
-      for (index = vector.size() - 1; index >= 0; --index)
-        if (vector[index].component == target)
-          break;
-      return index;
-    };
+      auto [parent, bounds, isClippingFromStack] = openGl.parentStack[i - 1];
 
-    isize startingIndex = (isize)openGl.parentStack.size();
+      if (isClippingFromStack && isClipping)
+        bounds.withZeroOrigin().intersectRectangle(scissorBounds);
 
-    // if target is at the top, there's nothing to do
-    if (startingIndex != 0)
-    {
-      isize clippingIndex = (!ignoreClipIncluding) ?
-        (isize)openGl.parentStack.size() : findIndex(openGl.parentStack, ignoreClipIncluding);
-      COMPLEX_ASSERT(clippingIndex > 0, "Clipping target not found");
+      viewportBounds = viewportBounds + bounds.getPosition();
+      scissorBounds = scissorBounds + bounds.getPosition();
 
-      viewportBounds += positionInViewport;
-      scissorBounds += positionInViewport;
+      isClipping &= parent != ignoreClipIncluding;
 
-      for (isize i = startingIndex - 1; i > 0; --i)
-      {
-        auto [_, bounds, isClipping] = openGl.parentStack[i];
-
-        if (isClipping && i < clippingIndex)
-          bounds.withZeroOrigin().intersectRectangle(scissorBounds);
-
-        viewportBounds = viewportBounds + bounds.getPosition();
-        scissorBounds = scissorBounds + bounds.getPosition();
-      }
+      if (scissorBounds.w <= 0 || scissorBounds.h <= 0)
+        return false;
     }
 
     if (scissorBounds.w <= 0 || scissorBounds.h <= 0)

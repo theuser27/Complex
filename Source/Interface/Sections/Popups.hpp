@@ -28,14 +28,14 @@ namespace Interface
     virtual void handleCommandMessage(u64 commandId, utils::whatever) override;
 
     void setContent(Component *sourceComponent, utils::string displayText, 
-      Placement::Enum relativePlacement)
+      Placement relativePlacement)
     {
       source = sourceComponent;
       isControl = false;
       placement = relativePlacement;
       text = COMPLEX_MOVE(displayText);
     }
-    void setContentControl(BaseControl *sourceControl, Placement::Enum relativePlacement)
+    void setContentControl(BaseControl *sourceControl, Placement relativePlacement)
     {
       source = sourceControl;
       isControl = true;
@@ -47,21 +47,26 @@ namespace Interface
     FontId numericFontId;
     i32 cachedFontWidth{};
     bool isControl = false;
-    Placement::Enum placement{};
+    Placement placement{};
     Component *source{};
   };
 
+  class PopupSelector;
   class PopupList;
 
   struct PopupItem : Component
   {
+    // TODO: rendering
+
     i32 id = 0;
     i32 shortcutKeyCode = '\0';
     Area<i32> sublistMinSize{ 0, 0 };
-    bool isActive = true;
+    void *extraData = nullptr;
     bool closesPopup = true;
     bool canBeChosen = true;
-    void *extraData = nullptr;
+
+    bool isActive = true;
+    PopupSelector *selector = nullptr;
   };
 
   class PopupSelector final : public Component
@@ -72,11 +77,9 @@ namespace Interface
 
     PopupSelector();
 
-    bool render(OpenGlWrapper &openGl) override;
-
     bool keyPressed(const KeyPress &key) override;
 
-    void newSelection(PopupList *list, PopupItem *entry);
+    void newSelection(PopupItem *entry);
     void summonNewPopupList(Rectangle<int> sourceBounds, PopupItem *items);
     void closeSubList(PopupItem *items);
     bool handleFocus(bool hasFocus, FocusChange focusChange) override;
@@ -84,18 +87,20 @@ namespace Interface
     void handleCommandMessage(u64 commandId, utils::whatever extraData) override;
 
     void positionList(Point<int> sourcePosition);
-    void positionList(Rectangle<int> sourceBounds, Placement::Enum placement);
+    void positionList(Rectangle<int> sourceBounds, Placement placement);
 
     void resetState();
 
-    // parameters, set to use popup selector
+    void summon(Component *summoningComponent, Point<i32> position);
+
     utils::smallFn<void(PopupSelector *, PopupItem *)> callback{};
     utils::smallFn<void(PopupSelector *)> cancel{};
     PopupItem *items{};
-    Component *summoningComponent{};
 
     // state
-    Placement::Enum lastPlacement = Placement::right;
+    Component *summoner{};
+    Point<i32> summoningPoint{};
+    Placement lastPlacement = Placement::right;
     utils::vector<PopupList *> lists{};
     PopupItem *deepestHoveredItem{};
     // TODO: timeout until any of the parents' siblings

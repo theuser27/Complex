@@ -88,24 +88,26 @@ namespace std
 
 namespace Interface
 {
-  namespace Placement
+  enum class Placement : u8
   {
-    enum Enum : u8
-    {
-      // centered on x and y by default
+    // centered on x and y by default
+    centered = 0,
 
-      left     = 1 << 0,
-      top      = 1 << 1,
-      right    = 1 << 2,
-      bottom   = 1 << 3,
+    left = 1 << 0,
+    top = 1 << 1,
+    right = 1 << 2,
+    bottom = 1 << 3,
 
-      justifyX = left | right,
-      justifyY = top | bottom,
+    justifyX = left | right,
+    justifyY = top | bottom,
 
-      // leaves user to do manual positioning
-      custom         = 1 << 4,
-    };
-  }
+    // leaves user to do manual positioning
+    custom = 1 << 4,
+  };
+
+  COMPLEX_DEFINE_ENUM_OPERATION(Placement, &, u8)
+  COMPLEX_DEFINE_ENUM_OPERATION(Placement, |, u8)
+  COMPLEX_DEFINE_ENUM_OPERATION(Placement, <<, u8)
 
   template<typename T>
   struct Point

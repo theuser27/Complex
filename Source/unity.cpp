@@ -22,6 +22,7 @@
 #include "Interface/LookAndFeel/Skin.cpp"
 
 #include "Interface/Sections/MainInterface.cpp"
+#include "Interface/Sections/Popups.cpp"
 
 #include "Plugin/Complex.cpp"
 #include "Plugin/Renderer.cpp"

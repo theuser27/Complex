@@ -186,6 +186,7 @@ namespace Interface
     {
       (void)openGl;
 
+      // TODO:
 
       return true;
     }
@@ -276,9 +277,9 @@ namespace Interface
     return { minSize, maxSize };
   }
 
+  void handlePopupResult(BaseControl *control, PopupItem *selectedItem);
 
-
-  void BaseControl::createPopupMenu(PopupSelector *selector)
+  void BaseControl::createPopupMenu(PopupSelector *selector, Point<i32> position)
   {
     auto *itemArena = selector->arena;
   
@@ -340,7 +341,7 @@ namespace Interface
     options.addChildComponent(&inlineGroup);
 
     static constexpr auto iconWidthHeight = 16;
-  #define ICON(idNumber) ITEM(idNumber, .sizingFlags = GrowableX | GrowableY, \
+  #define ICON(idNumber) ITEM(idNumber, .sizingFlags |= GrowableX | GrowableY, \
     .desiredSize.minMax = (Rectangle<i32>{ iconWidthHeight, iconWidthHeight, iconWidthHeight, iconWidthHeight }))
 
     inlineGroup.addChildComponent(ICON(kCopyNormalisedValue));
@@ -356,9 +357,10 @@ namespace Interface
   #undef ITEM
 
     selector->items = &options;
-    selector->summoningComponent = this;
-    selector->componentFlags.isVisible = true;
-    componentFlags.hasSummonnedPopupSelector = true;
+    selector->callback = [this](PopupSelector *, PopupItem *selectedItem)
+    { handlePopupResult(this, selectedItem); };
+    selector->cancel = {};
+    selector->summon(this, position);
   }
 
 
@@ -496,33 +498,35 @@ namespace Interface
     return Framework::unscaleValue(parsedValue, details, true);
   }
 
-  void BaseControl::handlePopupResult(int result)
+  void handlePopupResult(BaseControl *control, PopupItem *selectedItem)
   {
     auto &plugin = getPlugin(uiRelated.renderer);
 
-    if (result == kDefaultValue)
+    auto result = selectedItem->id;
+
+    if (selectedItem->id == kDefaultValue)
     {
-      beginChange(getValue());
-      resetValue();
-      endChange();
+      control->beginChange(control->getValue());
+      control->resetValue();
+      control->endChange();
     }
     else if (result == kManualEntry)
     {
       auto font = uiRelated.cache->getInterFont();
-      showTextEntry(font);
+      control->showTextEntry(font);
     }
     else if (result == kCopyValue || result == kCopyNormalisedValue)
     {
       char stringBuffer[128]{};
       usize stringSize{};
-      double currentValue = getValue();
+      double currentValue = control->getValue();
 
-      if (!controlFlags.hasParameter || result == kCopyNormalisedValue)
+      if (!control->controlFlags.hasParameter || result == kCopyNormalisedValue)
         stringSize = utils::floatToString(currentValue, stringBuffer, sizeof(stringBuffer) - 1, 6);
       else
       {
         stringSize = utils::floatToString(Framework::scaleValue(
-          currentValue, details, plugin.getSampleRate(), true),
+          currentValue, control->details, plugin.getSampleRate(), true),
           stringBuffer, sizeof(stringBuffer) - 1);
       }
 
@@ -533,17 +537,17 @@ namespace Interface
       usize length;
       const char *string = (const char *)puglGetClipboard(getPuglView(uiRelated.renderer), 0, &length);
       if (string && length > 0)
-        setValue(getValueFromText(utils::string_view{ string, length }));
+        control->setValue(control->getValueFromText(utils::string_view{ string, length }));
     }
     else if (result == kClearMapping)
     {
-      if (!parameterLink || !parameterLink->hostControl)
+      if (!control->parameterLink || !control->parameterLink->hostControl)
         return;
 
-      parameterLink->hostControl->resetParameterLink(nullptr);
+      control->parameterLink->hostControl->resetParameterLink(nullptr);
       Framework::ParameterBridge::notifyParameterChange();
-      for (auto &listener : controlListeners)
-        listener->automationMappingChanged(this, true);
+      for (auto &listener : control->controlListeners)
+        listener->automationMappingChanged(control, true);
     }
     else if (result == kMapFirstSlot)
     {
@@ -551,10 +555,10 @@ namespace Interface
       {
         if (!parameter.isMappedToParameter())
         {
-          parameter.resetParameterLink(parameterLink);
+          parameter.resetParameterLink(control->parameterLink);
           Framework::ParameterBridge::notifyParameterChange();
-          for (auto &listener : controlListeners)
-            listener->automationMappingChanged(this, false);
+          for (auto &listener : control->controlListeners)
+            listener->automationMappingChanged(control, false);
           break;
         }
       }
@@ -577,14 +581,14 @@ namespace Interface
       }
       else
       {
-        if (!parameterLink)
+        if (!control->parameterLink)
           return;
 
         auto &bridge = plugin.state_->parameterBridges[index];
-        bridge.resetParameterLink(parameterLink);
+        bridge.resetParameterLink(control->parameterLink);
         Framework::ParameterBridge::notifyParameterChange();
-        for (auto &listener : controlListeners)
-          listener->automationMappingChanged(this, false);
+        for (auto &listener : control->controlListeners)
+          listener->automationMappingChanged(control, false);
       }
     }
   }

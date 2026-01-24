@@ -45,13 +45,12 @@ namespace Interface
 
     double getValue() const noexcept { return value.load(satomi::memory_order_relaxed); }
     bool setValue(double newValue, bool notify = true);
+    void resetValue() noexcept;
     virtual void valueChanged();
 
     utils::string getScaledValueString(utils::Allocator allocator, 
       double value, bool addPrefix = true) const;
     double getValueFromText(utils::string_view text) const;
-
-    void handlePopupResult(int result);
 
     void beginChange(double oldValue) noexcept;
     void endChange();
@@ -59,8 +58,7 @@ namespace Interface
     void addListener(ControlListener *listener) { controlListeners.emplace_back(listener); }
     void removeListener(ControlListener *listener) { controlListeners.erase(listener); }
 
-    void resetValue() noexcept;
-    void createPopupMenu(PopupSelector *selector);
+    void createPopupMenu(PopupSelector *selector, Point<i32> position);
 
     void showTextEntry(Font font);
     float getNumericTextMaxWidth(const Font &usedFont) const;
@@ -75,9 +73,9 @@ namespace Interface
     ModifierKeys resetValueModifiers;
 
     utils::string popupPrefix{};
-    Placement::Enum popupPlacement = Placement::bottom;
+    Placement popupPlacement = Placement::bottom;
 
-    Placement::Enum labelPlacement = Placement::right;
+    Placement labelPlacement = Placement::right;
 
     struct
     {
@@ -249,8 +247,8 @@ namespace Interface
     int textWidth_{};
     bool isDirty_ = false;
     bool isDropDownVisible_ = false;
-    Placement::Enum anchor_ = Placement::left;
-    Placement::Enum extraNumberBoxPlacement_ = Placement::right;
+    Placement anchor_ = Placement::left;
+    Placement extraNumberBoxPlacement_ = Placement::right;
 
     PlainShapeComponent *extraIcon_ = nullptr;
   };

@@ -61,34 +61,39 @@ namespace Interface
     {
       None = 0,
 
+      // the size of the component will whatever is set in desiredSize
+      Fixed = 1 << 0,
+
       // maximum size will optimistically grow as the parent grows
-      GrowableX = 1 << 0,
-      GrowableY = 1 << 1,
+      GrowableX = 1 << 1,
+      GrowableY = 1 << 2,
 
       // maximum size will be matched with siblings
       // unless minimum size is bigger
-      SameAsSiblingsX = 1 << 2,
-      SameAsSiblingsY = 1 << 3,
+      SameAsSiblingsX = 1 << 3,
+      SameAsSiblingsY = 1 << 4,
       
       // the size along the scrollable direction will be unconstrained
       // and will always fit the children
-      ScrollableX = 1 << 4,
-      ScrollableY = 1 << 5,
+      ScrollableX = 1 << 5,
+      ScrollableY = 1 << 6,
 
       // adds an extra scrollbar to the off-axis' size
-      HasScrollbarX = 1 << 6,
-      HasScrollbarY = 1 << 7,
-
-      ScrollIsPartOfPadding = 1 << 8,
-
-      // will use desiredSize.getTextDimensions to calculate dimensions
-      HasText = 1 << 9,
-      // controls the children stack direction
-      IsVertical = 1 << 10,
+      HasScrollbarX = 1 << 7,
+      HasScrollbarY = 1 << 8,
 
       ScrollableWithBarX = ScrollableX | HasScrollbarX,
       ScrollableWithBarY = ScrollableY | HasScrollbarY,
+
+      ScrollIsPartOfPadding = 1 << 9,
+
+      // will use desiredSize.getTextDimensions to calculate dimensions
+      HasText = 1 << 10,
+      // controls the children stack direction
+      IsVertical = 1 << 11,
     };
+
+    // all mouse events return true/false if they have/have not consumed the event
 
     virtual bool mouseMove([[maybe_unused]] const MouseEvent &event) { return false; }
     virtual bool mouseEnter([[maybe_unused]] const MouseEvent &event) { return false; }
@@ -96,7 +101,7 @@ namespace Interface
     virtual bool mouseDown([[maybe_unused]] const MouseEvent &event) { return false; }
     virtual bool mouseDrag([[maybe_unused]] const MouseEvent &event) { return false; }
     virtual bool mouseUp([[maybe_unused]] const MouseEvent &event) { return false; }
-    virtual bool mouseWheelMove([[maybe_unused]] const MouseEvent &event) { return false; }
+    virtual bool mouseWheelMove(const MouseEvent &event);
 
     Rectangle<i32> getLocalBounds() const noexcept { return bounds.withZeroOrigin(); }
     Point<i32> getPosition() const noexcept { return bounds.getPosition(); }
@@ -117,10 +122,13 @@ namespace Interface
     getRelativePoint(const Component *source,
       Point<i32> pointRelativeToSource = {}) const noexcept
     {
-      Point position = getPositionInWindow();
+      if (source->parent == parent)
+        return pointRelativeToSource;
+
       Point otherPosition = pointRelativeToSource;
       if (source)
         otherPosition += source->getPositionInWindow();
+      Point position = getPositionInWindow();
       return { otherPosition.x - position.x, otherPosition.y - position.y };
     }
     Rectangle<i32> 
@@ -149,7 +157,8 @@ namespace Interface
       return false;
     }
     void addChildComponent(Component *child, i8 layerIndex = 0);
-    // keepFocus is a promise that you WILL NOT delete the object after removal,
+    // keepFocus will let the UI system continue focus on childToRemove
+    // but you MUST NOT delete the object after removal,
     // otherwise the UI system will be reading into "freed" arena memory
     void removeChildComponent(Component *childToRemove, bool keepFocus = false);
     Component *removeChildComponent(usize childIndexToRemove, bool keepFocus = false);
@@ -222,7 +231,7 @@ namespace Interface
     Rectangle<i16> margin{};
     // padding for children
     Rectangle<u8> padding{};
-    Placement::Enum placement{};
+    Placement placement{};
     union
     {
       Rectangle<i32> minMax{};
