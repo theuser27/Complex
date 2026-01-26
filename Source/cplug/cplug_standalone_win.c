@@ -35,7 +35,6 @@
 #include <stdio.h>
 
 #include "cplug.h"
-#include "config.h"
 
 #pragma comment(lib, "winmm.lib")
 #pragma comment(lib, "cfgmgr32.lib")

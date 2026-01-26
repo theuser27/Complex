@@ -21,6 +21,8 @@ namespace Interface
   {
     using namespace Framework;
 
+    // TODO: consider making shift accessible with ctrl + left click instead of just left click
+
     //highlight_ = makeOpenGlComponent<OpenGlQuad>(Shaders::kHighlightFragment, "highlight");
     addOpenGlComponent(&highlight_);
     /*highlight_.setCustomRenderFunction([this](OpenGlWrapper &openGl, bool animate)

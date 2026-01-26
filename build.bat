@@ -4,11 +4,12 @@ set debug=1
 set release=0
 set vst=1
 set standalone=0
-
+set clap=0
 
 for %%a in (%*) do set "%%~a=1"
-if "%standalone%"=="1"           echo [standalone build]     && set vst=0
-if "%vst%"=="1"                  echo [vst build]            && set standalone=0
+if "%standalone%"=="1"           echo [standalone build]     && set vst=0 && set clap=0
+if "%clap%"=="1"                 echo [clap build]           && set vst=0 && set standalone=0
+if "%vst%"=="1"                  echo [vst build]            && set standalone=0 && clap=0
 if "%release%"=="1"              echo [release mode]         && set debug=0
 if "%debug%"=="1"                echo [debug mode]           && set release=0
 if "%~1"==""                     echo [assuming `vst` build] && set vst=1
@@ -27,6 +28,11 @@ if "%vst%"=="1" (
   set build_dir=%build_dir%\vst3
   set compiler_flags= /DLL %compiler_flags%
   set linker_flags= /OUT:"Complex.vst3" /DLL %linker_flags%
+) else if "%clap%"=="1" (
+  :: Clap build
+  set build_dir=%build_dir%\clap
+  set compiler_flags= /D "COMPLEX_CLAP" /DLL %compiler_flags%
+  set linker_flags= /OUT:"Complex.clap" /DLL %linker_flags%
 ) else if "%standalone%"=="1" (
   :: Standalone build
   set build_dir=%build_dir%\standalone

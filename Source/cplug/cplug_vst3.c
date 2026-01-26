@@ -11,7 +11,6 @@
 
 #include "cplug.h"
 #include "vst3_c_api.h"
-#include "config.h"
 
 int stbsp_snprintf(char *buffer, int count, const char *format, ...);
 

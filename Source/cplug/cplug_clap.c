@@ -1,10 +1,11 @@
 /* Released into the public domain by Tré Dudman - 2024
  * For licensing and more info see https://github.com/Tremus/CPLUG */
 
-#include <clap/clap.h>
-#include <cplug.h>
 #include <stdio.h>
 #include <string.h>
+
+#include "clap/clap.h"
+#include "cplug/cplug.h"
 
 typedef struct CLAPPlugin
 {

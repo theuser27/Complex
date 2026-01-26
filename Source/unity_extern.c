@@ -26,6 +26,8 @@
   #define NOSCROLL
 #endif
 
+#include "cplug/config.h"
+
 #ifdef COMPLEX_STANDALONE
   #if COMPLEX_WINDOWS
     #include "cplug/cplug_standalone_win.c"
@@ -34,6 +36,8 @@
   #else
     #include "cplug/cplug_standalone_osx.m"
   #endif
+#elif COMPLEX_CLAP
+  #include "cplug/cplug_clap.c"
 #else
   #include "cplug/cplug_vst3.c"
 #endif

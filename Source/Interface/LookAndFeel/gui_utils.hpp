@@ -483,24 +483,24 @@ namespace Interface
 
     constexpr operator decltype(flags)() { return flags; }
 
-    /// last known state, won't query OS
+    // last known state, won't query OS
     //static ModifierKeys getCurrentModifiers() noexcept;
-    /// queries for mouse buttons at this point in time
+    // queries for mouse buttons at this point in time
     //static ModifierKeys getCurrentModifiersRealtime() noexcept;
   };
 
   enum class MouseCursorTypes
   {
-    Normal,                 /// Default pointing arrow
-    Caret,                  /// Caret (I-Beam) for text entry
-    Crosshair,              /// Cross-hair
-    PointingHand,           /// Hand with a pointing finger
-    Forbidden,              /// Operation not allowed
-    LeftRightResize,        /// Left/right arrow for horizontal resize
-    UpDownResize,           /// Up/down arrow for vertical resize
-    UpLeftDownRightResize,  /// Diagonal arrow for down/right resize
-    UpRightDownLeftResize,  /// Diagonal arrow for down/left resize
-    AllScroll,              /// Omnidirectional "arrow" for scrolling
+    Normal,                 // Default pointing arrow
+    Caret,                  // Caret (I-Beam) for text entry
+    Crosshair,              // Cross-hair
+    PointingHand,           // Hand with a pointing finger
+    Forbidden,              // Operation not allowed
+    LeftRightResize,        // Left/right arrow for horizontal resize
+    UpDownResize,           // Up/down arrow for vertical resize
+    UpLeftDownRightResize,  // Diagonal arrow for down/right resize
+    UpRightDownLeftResize,  // Diagonal arrow for down/left resize
+    AllScroll,              // Omnidirectional "arrow" for scrolling
   };
 
   class Component;
@@ -514,25 +514,25 @@ namespace Interface
     Component *originalComponent;
     ModifierKeys mods;
 
-    /// The amount that the wheel has been moved in the X axis.
-    /// If isReversed == true/false, then a negative deltaX means that the wheel has been
-    /// pushed physically to the left/right.
+    // The amount that the wheel has been moved in the X axis.
+    // If isReversed == true/false, then a negative deltaX means that the wheel has been
+    // pushed physically to the left/right.
     float wheelDeltaX = 0.0f;
 
-    /// The amount that the wheel has been moved in the Y axis.
-    /// If isReversed == true/false, then a negative deltaY means that the wheel has been
-    /// pushed physically upwards/downwards.
+    // The amount that the wheel has been moved in the Y axis.
+    // If isReversed == true/false, then a negative deltaY means that the wheel has been
+    // pushed physically upwards/downwards.
     float wheelDeltaY = 0.0f;
 
-    /// Indicates whether the user has reversed the direction of the wheel.
-    /// See deltaX and deltaY for an explanation of the effects of this value.
+    // Indicates whether the user has reversed the direction of the wheel.
+    // See deltaX and deltaY for an explanation of the effects of this value.
     bool wheelIsReversed = false;
 
-    /// If true, then the wheel has continuous, un-stepped motion.
+    // If true, then the wheel has continuous, un-stepped motion.
     bool wheelIsSmooth = false;
 
-    /// If true, then this event is part of the inertial momentum phase that follows
-    /// the wheel being released.
+    // If true, then this event is part of the inertial momentum phase that follows
+    // the wheel being released.
     bool wheelIsInertial = false;
 
     u8 numberOfClicks = 0;
@@ -544,24 +544,24 @@ namespace Interface
 
   struct KeyPress
   {
-    /// a code that represents the key - this value must be
-    /// one of special constants listed in this class, or an
-    /// 8 - bit character code such as a letter(case is ignored),
-    /// digit or a simple key like "," or ".". Note that this
-    /// isn't the same as the textCharacter parameter, so for example
-    /// a keyCode of 'a' and a shift - key modifier should have a
-    /// textCharacter value of 'A'.
+    // a code that represents the key - this value must be
+    // one of special constants listed in this class, or an
+    // 8 - bit character code such as a letter(case is ignored),
+    // digit or a simple key like "," or ".". Note that this
+    // isn't the same as the textCharacter parameter, so for example
+    // a keyCode of 'a' and a shift - key modifier should have a
+    // textCharacter value of 'A'.
     i32 keyCode = 0;
 
-    /// the modifiers to associate with the keystroke
+    // the modifiers to associate with the keystroke
     ModifierKeys mods;
 
-    /// the character that would be printed if someone typed
-    /// this keypress into a text editor. This value may be
-    /// null if the keypress is a non - printing character
+    // the character that would be printed if someone typed
+    // this keypress into a text editor. This value may be
+    // null if the keypress is a non - printing character
     u32 textCharacter = 0;
 
-    /// Returns true if this keypress is for the given keycode without any modifiers.
+    // Returns true if this keypress is for the given keycode without any modifiers.
     constexpr bool operator==(i32 code) const noexcept
     { return keyCode == code && !mods.test(ModifierKeys::allKeyboardModifiers); }
 
