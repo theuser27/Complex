@@ -1,12 +1,5 @@
-/*
-  ==============================================================================
 
-    EffectsState.cpp
-    Created: 2 Oct 2021 20:53:05
-    Author:  theuser27
-
-  ==============================================================================
-*/
+// Created: 2021-10-02 20:53:05
 
 #include "EffectsState.hpp"
 
@@ -29,14 +22,14 @@ namespace Generation
     dataBuffer = Framework::SimdBuffer::create(arena, maxInOuts * kChannelsPerInOut, state->getMaxBinCount());
   }
 
-  bool 
+  bool
   EffectsLane::insertSubProcessor(usize index, BaseProcessor &newSubProcessor, [[maybe_unused]] bool callListeners)
   {
     if (newSubProcessor.metadata->id != Processors::EffectModule)
     {
       static constexpr uuid acceptedProcessorIds[] = { Processors::EffectModule };
       reportUnexpectedProcessorInsert(newSubProcessor, acceptedProcessorIds);
-      
+
       return false;
     }
 
@@ -68,7 +61,7 @@ namespace Generation
     auto inSidechains = state->plugin->inSidechains;
     auto outSidechains = state->plugin->outSidechains;
 
-    usedInputChannels_ = { arranew(arena, bool, 
+    usedInputChannels_ = { arranew(arena, bool,
       (inSidechains + 1) * kChannelsPerInOut, {}), (inSidechains + 1) * kChannelsPerInOut };
 
     usedOutputChannels_ = { arranew(arena, bool,
@@ -78,12 +71,12 @@ namespace Generation
       (outSidechains + 1) * kChannelsPerInOut, {}), (outSidechains + 1) * kChannelsPerInOut };
 
     // size is half the max because a single SIMD package stores both real and imaginary parts
-    
+
     dataBuffer = Framework::SimdBuffer::create(arena, (inSidechains + 1) * kChannelsPerInOut, state->getMaxBinCount());
     outputBuffer_ = Framework::SimdBuffer::create(arena, (outSidechains + 1) * kChannelsPerInOut, state->getMaxBinCount());
   }
 
-  bool 
+  bool
   EffectsState::insertSubProcessor(usize index, BaseProcessor &newSubProcessor, [[maybe_unused]] bool callListeners)
   {
     if (newSubProcessor.metadata->id != Processors::EffectsLane)
@@ -103,7 +96,7 @@ namespace Generation
   BaseProcessor &EffectsState::deleteSubProcessor(usize index, [[maybe_unused]] bool callListeners)
   {
     COMPLEX_ASSERT(index < childrenCount);
-        
+
     auto *child = children;
     for (usize i = 0; i < index; (++i), (child = child->next)) { }
 
@@ -125,7 +118,7 @@ namespace Generation
 
     ::zeroset(usedInputChannels_.data(), usedInputChannels_.size());
 
-    for (auto *lane = getChild(children, 0, Processors::EffectsLane); lane; 
+    for (auto *lane = getChild(children, 0, Processors::EffectsLane); lane;
       lane = getChild(lane, 1, Processors::EffectsLane))
     {
       // if the input is not another lane's output and the chain is enabled
@@ -226,7 +219,7 @@ namespace Generation
     shouldWorkersProcess_.store(true, satomi::memory_order_release);
     // sequential consistency just in case
     // triggers the chains to run again
-    for (auto *lane = (EffectsLane *)getChild(children, 0, Processors::EffectsLane); lane; 
+    for (auto *lane = (EffectsLane *)getChild(children, 0, Processors::EffectsLane); lane;
       lane = (EffectsLane *)getChild(lane, 1, Processors::EffectsLane))
       lane->status_.store(EffectsLane::LaneStatus::Ready, satomi::memory_order_seq_cst);
 
@@ -236,7 +229,7 @@ namespace Generation
     for (auto *lane = (EffectsLane *)getChild(children, 0, Processors::EffectsLane); lane;
       lane = (EffectsLane *)getChild(lane, 1, Processors::EffectsLane))
     {
-      while (lane->status_.load(satomi::memory_order_acquire) != EffectsLane::LaneStatus::Finished) 
+      while (lane->status_.load(satomi::memory_order_acquire) != EffectsLane::LaneStatus::Finished)
       { utils::longPause<5>(); }
     }
   }
@@ -246,7 +239,7 @@ namespace Generation
     // TODO: decide on a heuristic when to add worker threads
     if (false)
     {
-      auto &worker = state->reserveFreeWorker((usize)utils::type_id<EffectsState>);
+      auto &worker = state->reserveFreeWorker(typeId(EffectsState));
       worker.start([this](satomi::atomic<bool> &shouldStop)
         {
           while (!shouldStop.load(satomi::memory_order_acquire))
@@ -262,7 +255,7 @@ namespace Generation
 
   void EffectsState::distributeWork() const noexcept
   {
-    for (auto *lane = (EffectsLane *)getChild(children, 0, Processors::EffectsLane); lane; 
+    for (auto *lane = (EffectsLane *)getChild(children, 0, Processors::EffectsLane); lane;
       lane = (EffectsLane *)getChild(lane, 1, Processors::EffectsLane))
     {
       if (lane->status_.load(satomi::memory_order_relaxed) == EffectsLane::LaneStatus::Ready)
@@ -287,10 +280,10 @@ namespace Generation
     bool isLaneOn = thisLane->getParameter(EffectsLane::LaneEnabled)->getInternalValue<u32>();
     i32 lockValue;
 
-    // Lane Input 
+    // Lane Input
     // if this lane's input is another's output and that lane can be used,
     // we wait until it is finished and then copy its data
-    if (auto inputIndex = thisLane->getParameter(EffectsLane::Input)->getInternalValue<Framework::IndexedData>(); 
+    if (auto inputIndex = thisLane->getParameter(EffectsLane::Input)->getInternalValue<Framework::IndexedData>();
       inputIndex.first->id == EffectsLane::InputOptionsLane)
     {
       auto *otherLane = (EffectsLane *)getChild(children, inputIndex.second, Processors::EffectsLane);
@@ -337,7 +330,7 @@ namespace Generation
         laneDataSource.simdChannelOffset = (u32)inputIndex.second + 1;
       }
       else COMPLEX_ASSERT_FALSE("Missing case");
-      
+
       if (isLaneOn)
       {
         // getting shared access to the state's transformed data
@@ -365,7 +358,7 @@ namespace Generation
       {
         // magnitudes are: [left channel, right channel, left channel + 1, right channel + 1]
         simd_float values = complexMagnitude({ data[i], data[i + 1] }, false);
-        // [left channel,     left channel + 1, right channel,     right channel + 1] + 
+        // [left channel,     left channel + 1, right channel,     right channel + 1] +
         // [left channel + 1, left channel,     right channel + 1, right channel    ]
         loudness += groupEven(values) + groupEvenReverse(values);
       }
@@ -508,27 +501,27 @@ initialiseTypeStructure<Generation::EffectsLane>(void *, Framework::PluginStruct
   auto arena = structure.getNewArena(COMPLEX_KB(2));
 
   ProcessorMetadata &effectsLane = COMPLEX_STRUCTURE_PROCESSOR(Generation::EffectsLane, "Effects Lane", Processors::EffectsLane);
-  effectsLane.parameters = 
+  effectsLane.parameters =
   (
     COMPLEX_STRUCTURE_PARAMETER("Lane Enabled", EffectsLane::LaneEnabled, 0.0f, 1.0f, 1.0f, 1.0f, ParameterScale::Toggle, {},
       ParameterDetails::Modulatable | ParameterDetails::Automatable, UpdateFlag::BeforeProcess, Framework::printToggleValues),
-    COMPLEX_STRUCTURE_PARAMETER("Input", EffectsLane::Input, 
+    COMPLEX_STRUCTURE_PARAMETER("Input", EffectsLane::Input,
       {
         .options = COMPLEX_STRUCTURE_INDEXED_DATA().addChildren(
           COMPLEX_STRUCTURE_INDEXED_DATA(.displayName = "Main", .id = EffectsLane::InputOptionsMain),
-          COMPLEX_STRUCTURE_INDEXED_DATA(.displayName = "Sidechain", .id = EffectsLane::InputOptionsSidechain, 
+          COMPLEX_STRUCTURE_INDEXED_DATA(.displayName = "Sidechain", .id = EffectsLane::InputOptionsSidechain,
             .dynamicUpdateUuid = ParameterChangeReason::inputSidechain),
           COMPLEX_STRUCTURE_INDEXED_DATA(.displayName = "Lane", .id = EffectsLane::InputOptionsLane,
             .dynamicUpdateUuid = ParameterChangeReason::laneCount)),
-        .defaultOptionId = EffectsLane::InputOptionsMain 
+        .defaultOptionId = EffectsLane::InputOptionsMain
       }, ParameterScale::Indexed, {}, ParameterDetails::Modulatable | ParameterDetails::Automatable | ParameterDetails::Extensible, UpdateFlag::BeforeProcess),
-    COMPLEX_STRUCTURE_PARAMETER("Output", EffectsLane::Output, 
+    COMPLEX_STRUCTURE_PARAMETER("Output", EffectsLane::Output,
       {
         .options = COMPLEX_STRUCTURE_INDEXED_DATA().addChildren(
           COMPLEX_STRUCTURE_INDEXED_DATA(.displayName = "Main", .id = EffectsLane::OutputOptionsMain),
           COMPLEX_STRUCTURE_INDEXED_DATA(.displayName = "Sidechain", .id = EffectsLane::OutputOptionsSidechain,
             .dynamicUpdateUuid = ParameterChangeReason::outputSidechain),
-          COMPLEX_STRUCTURE_INDEXED_DATA(.displayName = "None", .id = EffectsLane::OutputOptionsNone)), 
+          COMPLEX_STRUCTURE_INDEXED_DATA(.displayName = "None", .id = EffectsLane::OutputOptionsNone)),
         .defaultOptionId = EffectsLane::OutputOptionsMain
       }, ParameterScale::Indexed, {}, ParameterDetails::Modulatable | ParameterDetails::Automatable | ParameterDetails::Extensible, UpdateFlag::BeforeProcess),
     COMPLEX_STRUCTURE_PARAMETER("Gain Matching", EffectsLane::GainMatching, 0.0f, 1.0f, 1.0f, 1.0f, ParameterScale::Toggle, {},

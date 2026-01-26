@@ -1,12 +1,5 @@
-/*
-  ==============================================================================
 
-    Renderer.cpp
-    Created: 20 Dec 2022 19:34:54
-    Author:  theuser27
-
-  ==============================================================================
-*/
+// Created: 2022-12-20 19:34:54
 
 #include "Renderer.hpp"
 
@@ -235,7 +228,8 @@ namespace Interface
       renderer->isInitialised = true;
       uiRelated.renderer = renderer;
 
-    }	break;
+      break;
+    }
     case PUGL_CLOSE:
     {
       renderer->teardownGl();
@@ -243,7 +237,8 @@ namespace Interface
       renderer->isInitialised = false;
       renderer->area = {};
 
-    } break;
+      break;
+    }
     case PUGL_UNREALIZE:
     {
       renderer->teardownGl();
@@ -251,16 +246,19 @@ namespace Interface
       renderer->isInitialised = false;
       renderer->area = {};
 
-    }	break;
+      break;
+    }
     case PUGL_CONFIGURE:
     {
       renderer->resizeChange((event->configure.style & PUGL_VIEW_STYLE_RESIZING) != 0);
       renderer->area = { event->configure.width, event->configure.height };
 
-    }	break;
+      break;
+    }
     case PUGL_DPI_CHANGE:
       //setScaleFactor(event->dpiChange.newScaleFactor);
       break;
+
     case PUGL_EXPOSE:
     {
       renderer->gui->desiredSize = { { (i32)renderer->area.w, (i32)renderer->area.h, 
@@ -290,8 +288,9 @@ namespace Interface
       puglSwapBuffers(view);
       if (renderer->isResizing)
         glFinish();
-
-    } break;
+      
+      break;
+    }
     case PUGL_UPDATE: break;
     case PUGL_LOOP_ENTER: break;
     case PUGL_LOOP_LEAVE: break;
@@ -310,8 +309,9 @@ namespace Interface
         renderer->mouseDownComponent_->mouseExit(e);
         renderer->mouseDownComponent_ = nullptr;
       }
-
-    } break;
+      
+      break;
+    }
     case PUGL_POINTER_IN:
     case PUGL_POINTER_OUT:
     {
@@ -324,15 +324,16 @@ namespace Interface
       e.mods |= renderer->mouseButtonsDown_.flags;
       e.mouseDownPosition = renderer->lastMouseDownPosition_;
 
-      renderer->lastMousePosition_ = { e.x, e.y };
-      renderer->lastKeyboardMods_ = e.mods & ModifierKeys::allKeyboardModifiers;
-
       if (event->type == PUGL_POINTER_IN)
         renderer->handleMouseEnter(COMPLEX_MOVE(e));
       else
         renderer->handleMouseLeave(COMPLEX_MOVE(e));
 
-    } break;
+      renderer->lastMousePosition_ = { e.x, e.y };
+      renderer->lastKeyboardMods_ = e.mods & ModifierKeys::allKeyboardModifiers;
+
+      break;
+    }
     case PUGL_BUTTON_PRESS:
     case PUGL_BUTTON_RELEASE:
     {
@@ -360,18 +361,19 @@ namespace Interface
       e.mods |= renderer->mouseButtonsDown_;
       e.mouseDownPosition = { e.x, e.y };
 
-      renderer->lastMousePosition_ = { e.x, e.y };
-      renderer->lastKeyboardMods_ = e.mods & ModifierKeys::allKeyboardModifiers;
-
       if (event->type == PUGL_BUTTON_PRESS)
       {
-        renderer->lastMouseDownPosition_ = { e.x, e.y };
         renderer->handleMouseDown(COMPLEX_MOVE(e));
+        renderer->lastMouseDownPosition_ = { e.x, e.y };
       }
       else
         renderer->handleMouseUp(COMPLEX_MOVE(e));
 
-    } break;
+      renderer->lastMousePosition_ = { e.x, e.y };
+      renderer->lastKeyboardMods_ = e.mods & ModifierKeys::allKeyboardModifiers;
+
+      break;
+    }
     case PUGL_MOTION:
     {
       MouseEvent e;
@@ -383,12 +385,13 @@ namespace Interface
       e.mods |= renderer->mouseButtonsDown_;
       e.mouseDownPosition = { e.x, e.y };
 
+      renderer->handleMouseMove(COMPLEX_MOVE(e));
+
       renderer->lastMousePosition_ = { e.x, e.y };
       renderer->lastKeyboardMods_ = e.mods & ModifierKeys::allKeyboardModifiers;
 
-      renderer->handleMouseMove(COMPLEX_MOVE(e));
-
-    } break;
+      break;
+    }
     case PUGL_SCROLL:
     {
       MouseEvent e;
@@ -402,12 +405,13 @@ namespace Interface
       e.wheelDeltaX = (float)event->scroll.dx;
       e.wheelDeltaY = (float)event->scroll.dy;
 
+      renderer->handleMouseWheel(COMPLEX_MOVE(e));
+
       renderer->lastKeyboardMods_ = e.mods & ModifierKeys::allKeyboardModifiers;
       renderer->lastMousePosition_ = { e.x, e.y };
 
-      renderer->handleMouseWheel(COMPLEX_MOVE(e));
-
-    } break;
+      break;
+    }
     case PUGL_TIMER:
     {
       if (event->timer.id == Renderer::kTimerParameterUpdate)
@@ -416,9 +420,12 @@ namespace Interface
         for (usize i = 0; i < state->parameterBridges.size(); ++i)
           state->parameterBridges[i].updateUIParameter();
       }
-    }	break;
+
+      break;
+    }
     case PUGL_CLIENT:
       break;
+
     default:
       break;
     }
@@ -431,7 +438,8 @@ namespace Interface
   {
     auto *arena = utils::bumpArena::create(COMPLEX_MB(256), COMPLEX_MB(1));
 
-    auto *renderer = anew(arena, Renderer, { .plugin = plugin, .arena = arena });
+    auto *renderer = anew(arena, Renderer, { .plugin = plugin, 
+      .shaders = { arena }, .arena = arena });
     uiRelated.renderer = renderer;
     renderer->skinInstance = anew(arena, Skin, {});
     uiRelated.skin = renderer->skinInstance;
@@ -589,6 +597,9 @@ namespace Interface
 
   void Renderer::handleMouseMove(MouseEvent e)
   {
+    if (lastMousePosition_ == Point{ e.x, e.y })
+      return;
+
     Component *newHoveredComponent = nullptr;
     auto eventFunc = &Component::mouseMove;
 
@@ -625,7 +636,7 @@ namespace Interface
 
       mouseHoveredComponent_ = newHoveredComponent;
     }
-    
+
     if (mouseHoveredComponent_)
     {
       auto relativeEvent = getRelativeEvent(e, mouseHoveredComponent_);
@@ -635,49 +646,68 @@ namespace Interface
 
   void Renderer::handleMouseDown(MouseEvent e)
   {
-    mouseDownComponent_ = gui->getComponentAt(e.x, e.y);
+    handleMouseMove(e);
+
+    mouseDownComponent_ = gui->getComponentAt(e.x, e.y, true);
     auto *newKeyboardFocusComponent = mouseDownComponent_;
     while (newKeyboardFocusComponent && !newKeyboardFocusComponent->componentFlags.wantsFocus)
       newKeyboardFocusComponent = newKeyboardFocusComponent->parent;
 
     if (focusedComponent_ && newKeyboardFocusComponent != focusedComponent_ &&
+      // does the old focused component allow losing focus
       focusedComponent_->handleFocus(false, Component::FocusClick))
     {
       focusedComponent_ = newKeyboardFocusComponent;
-      if (focusedComponent_)
-        focusedComponent_->handleFocus(true, Component::FocusClick);
+      // does the newly focused component exist and allow gaining focus
+      if (focusedComponent_ && !focusedComponent_->handleFocus(true, Component::FocusClick))
+        focusedComponent_ = nullptr;
     }
 
-    if (mouseDownComponent_)
-      mouseDownComponent_->mouseDown(getRelativeEvent(e, mouseDownComponent_));
+    bool success = false;
+    while (mouseDownComponent_)
+    {
+      mouseDownComponent_->componentFlags.isClicked = true;
+      success = mouseDownComponent_->mouseDown(getRelativeEvent(e, mouseDownComponent_));
+      if (success)
+        break;
+      mouseDownComponent_->componentFlags.isClicked = false;
+
+      mouseDownComponent_ = mouseDownComponent_->parent;
+      while (mouseDownComponent_ && !mouseDownComponent_->componentFlags.clickable)
+        mouseDownComponent_ = mouseDownComponent_->parent;
+    }
   }
 
   void Renderer::handleMouseUp(MouseEvent e)
   {
-    mouseHoveredComponent_ = gui->getComponentAt(e.x, e.y);
+    handleMouseMove(e);
+
     bool exited = mouseHoveredComponent_ != mouseDownComponent_;
 
     if (mouseDownComponent_)
     {
       auto event = getRelativeEvent(e, mouseDownComponent_);
 
-      auto *mouseDownComponent = mouseDownComponent_;
+      auto *oldMouseDownComponent = mouseDownComponent_;
       mouseDownComponent_ = nullptr;
 
       if (exited && mouseHoveredComponent_ && mouseHoveredComponent_->componentFlags.stealsMouseEvents)
       {
-        event.originalComponent = mouseDownComponent;
+        event.originalComponent = oldMouseDownComponent;
         mouseHoveredComponent_->mouseUp(event);
-        return;
+        oldMouseDownComponent->componentFlags.isClicked = false;
       }
+      else
+        oldMouseDownComponent->mouseUp(event);
 
-      mouseDownComponent->mouseUp(event);
+      oldMouseDownComponent->componentFlags.isClicked = false;
       if (exited)
-        mouseDownComponent->mouseExit(event);
+        oldMouseDownComponent->mouseExit(event);
     }
 
     if (exited && mouseHoveredComponent_)
     {
+      mouseHoveredComponent_->componentFlags.isHovered = true;
       mouseHoveredComponent_->mouseEnter(getRelativeEvent(e, mouseHoveredComponent_));
     }
   }
@@ -695,6 +725,7 @@ namespace Interface
       mouseHoveredComponent_ = nullptr;
 
       mouseHoveredComponent->mouseExit(getRelativeEvent(COMPLEX_MOVE(e), mouseHoveredComponent));
+      mouseHoveredComponent->componentFlags.isHovered = false;
     }
   }
 

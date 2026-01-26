@@ -1,12 +1,5 @@
-/*
-  ==============================================================================
 
-    Fonts.hpp
-    Created: 5 Dec 2022 2:08:35am
-    Author:  theuser27
-
-  ==============================================================================
-*/
+// Created: 2022-12-05 02:08:35
 
 #pragma once
 
@@ -44,8 +37,18 @@ namespace Interface
     Graphics();
     ~Graphics();
 
-    Font getDDinFont() const { return Font{ .id = DDinFontId, .height = kDDinDefaultHeight, .kerning = kDDinDefaultKerning }; }
-    Font getInterFont() const { return Font{ .id = InterFontId, .height = kInterVDefaultHeight, .kerning = kInterVDefaultKerning }; }
+    Font getDDinFont(float height = kDDinDefaultHeight) const 
+    {
+      height = scaleValue(height);
+      return Font{ .id = DDinFontId, .height = height,
+        .kerning = getKerningForHeight(DDinFontId, height) };
+    }
+    Font getInterFont(float height = kDDinDefaultHeight) const 
+    {
+      height = scaleValue(height);
+      return Font{ .id = InterFontId, .height = kInterVDefaultHeight, 
+        .kerning = getKerningForHeight(InterFontId, height) };
+    }
 
     float getKerningForHeight(int fontId, float height) const noexcept
     {
@@ -62,7 +65,7 @@ namespace Interface
     Font getFont(FontId fontId, float height) const
     {
       Font font{ fontId, scaleValue(height) };
-      font.kerning = uiRelated.cache->getKerningForHeight(font.id, font.height);
+      font.kerning = getKerningForHeight(font.id, font.height);
       return font;
     }
 
@@ -130,7 +133,7 @@ namespace Interface
       return (iter == textureBounds.data.end()) ? Rectangle<i32>{} : iter->second;
     }
 
-    u64 getStaticTextureId(utils::type_id_t staticId)
+    u64 getStaticTextureId(utils::typeInfo staticId)
     {
       auto iter = staticTextureIds.get_first_of(staticId);
       if (iter == staticTextureIds.data.end())
@@ -142,7 +145,7 @@ namespace Interface
     operator NVGcontext *() const { return context; }
 
     utils::vector_map<u64, Rectangle<i32>> textureBounds{};
-    utils::vector_map<utils::type_id_t, u64> staticTextureIds{};
+    utils::vector_map<utils::typeInfo, u64> staticTextureIds{};
 
     u64 idGenerator{};
     Area<i32> planeArea{};

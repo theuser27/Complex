@@ -1,12 +1,5 @@
-/*
-  ==============================================================================
 
-    Miscellaneous.cpp
-    Created: 22 Jun 2024 7:00:15pm
-    Author:  theuser27
-
-  ==============================================================================
-*/
+// Created: 2024-06-22 19:00:15
 
 #include "Miscellaneous.hpp"
 
@@ -22,16 +15,16 @@ namespace Interface
 {
   constinit thread_local InterfaceRelated uiRelated{};
 
-  void Shape::drawAll(Graphics &g, Rectangle<float> bounds, float scale,
-    float strokeWidth, utils::span<Colour> colours) const
-  {
-    for (usize i = 0; i < paths.size(); ++i)
-    {
-      auto &[fn, predefinedColour] = paths[i];
-      auto colour = (predefinedColour == Colour{}) ? colours[i] : predefinedColour;
-      fn(g, colour, bounds, scale, strokeWidth);
-    }
-  }
+  //void Shape::drawAll(Graphics &g, Rectangle<float> bounds, float scale,
+  //  float strokeWidth, utils::span<Colour> colours) const
+  //{
+  //  for (usize i = 0; i < paths.size(); ++i)
+  //  {
+  //    auto &[fn, predefinedColour] = paths[i];
+  //    auto colour = (predefinedColour == Colour{}) ? colours[i] : predefinedColour;
+  //    fn(g, colour, bounds, scale, strokeWidth);
+  //  }
+  //}
 
   SVG::SVG(utils::bumpArena *arena, const void *data, usize size)
   {
@@ -82,7 +75,7 @@ namespace Interface
 
   namespace Paths
   {
-    Shape pasteValueIcon()
+    void pasteValueIcon()
     {
       //static const Shape shape = []()
       //{
@@ -113,11 +106,9 @@ namespace Interface
       //  result.paths.emplace_back(COMPLEX_MOVE(one), Shape::Stroke, juce::Colour{});
       //  return result;
       //}();
-
-      return {};
     }
 
-    Shape enterValueIcon()
+    void enterValueIcon()
     {
       //static const Shape shape = []()
       //{
@@ -142,12 +133,30 @@ namespace Interface
       //  result.paths.emplace_back(COMPLEX_MOVE(two), Shape::Fill, juce::Colour{});
       //  return result;
       //}();
-
-      return {};
     }
 
-    Shape copyNormalisedValueIcon()
+
+
+    void copyNormalisedValueIcon(Graphics &g, Rectangle<float> bounds,
+      float strokeWidth, utils::span<Colour> colours)
     {
+      COMPLEX_ASSERT(colours.size() >= 1);
+      COMPLEX_ASSERT(bounds.w == bounds.y);
+
+      static constexpr float size = 16.0f;
+
+
+
+      nvgSave(g);
+
+      nvgTranslate(g, bounds.x, bounds.y);
+      nvgStrokeWidth(g, scaleValue(strokeWidth));
+      nvgStrokeColor(g, colours[0]);
+
+      nvgBeginPath(g);
+
+      //nvgMoveTo(g, x + scale * path->pts[0], y + scale * path->pts[1]);
+
       //static const Shape shape = []()
       //{
       //  juce::Path path;
@@ -162,10 +171,10 @@ namespace Interface
       //  return result;
       //}();
 
-      return {};
+      nvgRestore(g);
     }
 
-    Shape copyScaledValueIcon()
+    void copyScaledValueIcon()
     {
       //static const Shape shape = []()
       //{
@@ -203,11 +212,9 @@ namespace Interface
       //  result.paths.emplace_back(COMPLEX_MOVE(two), Shape::Stroke, juce::Colour{});
       //  return result;
       //}();
-
-      return {};
     }
 
-    Shape filterIcon()
+    void filterIcon()
     {
       //static const auto shape = []()
       //{
@@ -216,11 +223,9 @@ namespace Interface
       //    BinaryData::Icon_Filter_svgSize), Shape::Stroke, juce::Colour{});
       //  return result;
       //}();
-
-      return {};
     }
 
-    Shape dynamicsIcon()
+    void dynamicsIcon()
     {
       //static const auto shape = []()
       //{
@@ -229,11 +234,9 @@ namespace Interface
       //    BinaryData::Icon_Dynamics_svgSize), Shape::Stroke, juce::Colour{});
       //  return result;
       //}();
-
-      return {};
     }
 
-    Shape phaseIcon()
+    void phaseIcon()
     {
       //static const auto shape = []()
       //{
@@ -248,11 +251,9 @@ namespace Interface
       //  result.paths.emplace_back(draw, Colour{});
       //  return result;
       //}();
-
-      return {};
     }
 
-    Shape pitchIcon()
+    void pitchIcon()
     {
       //static const auto shape = []()
       //{
@@ -266,11 +267,9 @@ namespace Interface
       //  };
       //  return result;
       //}();
-
-      return {};
     }
 
-    Shape destroyIcon()
+    void destroyIcon()
     {
       //static const auto shape = []()
       //{
@@ -307,11 +306,9 @@ namespace Interface
       //  result.paths.emplace_back(COMPLEX_MOVE(strokePath), Shape::Stroke, juce::Colour{});
       //  return result;
       //}();
-
-      return {};
     }
 
-    Shape contrastIcon()
+    void contrastIcon()
     {
       //static const auto shape = []()
       //{
@@ -345,12 +342,12 @@ namespace Interface
       //  result.paths.emplace_back(COMPLEX_MOVE(fillPath), Shape::Fill, juce::Colour{});
       //  return result;
       //}();
-
-      return {};
     }
 
-    Shape powerButtonIcon()
+    utils::pair<DrawingFn *, Rectangle<i32>>
+    powerButtonIcon()
     {
+      return {};
       /*static const auto shape = []()
       {
         static constexpr float kAngle = 0.8f * k2Pi;
@@ -367,8 +364,6 @@ namespace Interface
         result.paths.emplace_back(COMPLEX_MOVE(path), Shape::Stroke, juce::Colour{});
         return result;
       }();*/
-
-      return {};
     }
   }
 
@@ -386,13 +381,13 @@ namespace Interface
         : utils::max(distance, 1.0f));
     };
 
-    if (e.mods.testFlags(ModifierKeys::ctrlAltCommandModifiers))
+    if (e.mods.test(ModifierKeys::ctrlAltCommandModifiers))
       return {};
 
     auto deltaX = rescaleMouseWheelDistance(e.wheelDeltaX, singleStepX);
     auto deltaY = rescaleMouseWheelDistance(e.wheelDeltaY, singleStepY);
 
-    if (e.mods.testFlags(ModifierKeys::shiftModifier))
+    if (e.mods.test(ModifierKeys::shiftModifier))
     {
       auto temp = deltaX;
       deltaX = -deltaY;

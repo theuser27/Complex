@@ -1,12 +1,5 @@
-/*
-  ==============================================================================
 
-    sync_primitives.hpp
-    Created: 10 Mar 2024 02:06:32
-    Author:  theuser27
-
-  ==============================================================================
-*/
+// Created: 2024-03-10 02:06:32
 
 #pragma once
 
@@ -15,19 +8,6 @@
 
 namespace utils
 {
-  template<usize Iterations>
-  strict_inline void longPause() noexcept
-  {
-    unroll<Iterations>([]()
-      {
-        COMPLEX_PAUSE();
-        COMPLEX_PAUSE();
-        COMPLEX_PAUSE();
-        COMPLEX_PAUSE();
-        COMPLEX_PAUSE();
-      });
-  }
-
   void millisleep() noexcept;
 
   /// this timer is intended to be used inside a running loop

@@ -1,12 +1,5 @@
-/*
-  ==============================================================================
 
-    stl_utils.hpp
-    Created: 11 Oct 2024 20:26:35
-    Author:  theuser27
-
-  ==============================================================================
-*/
+// Created: 2024-10-11 20:26:35
 
 #pragma once
 
@@ -26,8 +19,8 @@ namespace std
     using const_reference = const T &;
     using size_type       = usize;
 
-    using iterator       = const T *;
-    using const_iterator = const T *;
+    using iterator        = const T *;
+    using const_iterator  = const T *;
 
     constexpr initializer_list() noexcept = default;
     
@@ -209,17 +202,6 @@ namespace utils
     requires is_same_v<Return, decltype(callable(COMPLEX_FWD(args)...))>;
   };
 
-  using type_id_t = const void *;
-  template<typename T>
-  inline constexpr type_id_t type_id = []<typename U>()
-  {
-  #ifdef _MSC_VER
-    return __FUNCSIG__;
-  #else
-    return __PRETTY_FUNCTION__;
-  #endif
-  }.template operator()<T>();
-
   template<typename T>
   inline constexpr T min_limit = (T(-1) < T(0)) ? T(T(1) << (sizeof(T) * 8 - 1)) : T(0);
   template<typename T>
@@ -310,7 +292,7 @@ namespace utils
   }
 
   template<usize N, typename Fn>
-  constexpr strict_inline void unroll(const Fn &fn)
+  constexpr void unroll(const Fn &fn)
   {
     if constexpr (N >= 1)
     {
@@ -325,22 +307,17 @@ namespace utils
     }
   }
 
-  namespace detail
+  template<usize Iterations>
+  strict_inline void longPause() noexcept
   {
-    template<auto> struct sink { sink(auto &&) { } };
-  }
-
-  template<auto N>
-  constexpr decltype(auto) 
-  get_nth_element(auto &&... args)
-  {
-    return [&]<auto ... Is>(index_sequence<Is...>)
-    {
-      return [](detail::sink<Is> ..., auto &&element, auto &&...)
+    unroll<Iterations>([]()
       {
-        return COMPLEX_FWD(element);
-      }(COMPLEX_FWD(args)...);
-    }(make_index_sequence<N>());
+        COMPLEX_PAUSE();
+        COMPLEX_PAUSE();
+        COMPLEX_PAUSE();
+        COMPLEX_PAUSE();
+        COMPLEX_PAUSE();
+      });
   }
 
   template<typename T>
@@ -460,7 +437,7 @@ namespace utils
   class array
   {
   #define ASSERT_NOT_ZERO_SIZED(x) static_assert(Size != 0, "Calling" #x "is not valid for zero-sized array.")
-    using internal_value_type = conditional_t<Size == 0 && requires { T{}; }, char, T>;
+    using internal_value_type = conditional_t<Size == 0 && !requires { T{}; }, char, T>;
   public:
     using value_type = T;
     using size_type = usize;
@@ -565,17 +542,20 @@ namespace utils
     template<typename U> requires is_convertible_v<U(*)[], element_type(*)[]>
     constexpr span(const span<U> &other) noexcept : data_{ other.data() }, size_{ other.size() } { }
 
-    [[nodiscard]] constexpr span removeLast(size_type count) const noexcept
+    [[nodiscard]] constexpr span 
+    removeLast(size_type count) const noexcept
     {
       COMPLEX_ASSERT(count <= size_, "Count out of range in span::removeLast(count)");
       return { data_, count };
     }
-    [[nodiscard]] constexpr span removeFirst(size_type count) const noexcept
+    [[nodiscard]] constexpr span 
+    removeFirst(size_type count) const noexcept
     {
       COMPLEX_ASSERT(count <= size_, "Count out of range in span::removeFirst(count)");
       return { data_ + (size_ - count), count };
     }
-    [[nodiscard]] constexpr span subrange(size_type position, size_type count = npos) const noexcept
+    [[nodiscard]] constexpr span 
+    subrange(size_type position, size_type count = npos) const noexcept
     {
       COMPLEX_ASSERT(position <= size_, "Position out of range in span::subrange(position, count)");
       COMPLEX_ASSERT(count == npos || count <= size_ - position,
@@ -589,17 +569,20 @@ namespace utils
     [[nodiscard]] constexpr bool empty() const noexcept { return size_ == 0; }
 
     [[nodiscard]] constexpr T *data() const noexcept { return data_; }
-    [[nodiscard]] constexpr T &operator[](const size_type position) const noexcept
+    [[nodiscard]] constexpr T &
+    operator[](const size_type position) const noexcept
     {
       COMPLEX_ASSERT(position < size_, "Span index out of range");
       return data_[position];
     }
-    [[nodiscard]] constexpr T &front() const noexcept
+    [[nodiscard]] constexpr T &
+    front() const noexcept
     {
       COMPLEX_ASSERT(size_ > 0, "Front of empty span");
       return data_[0];
     }
-    [[nodiscard]] constexpr T &back() const noexcept
+    [[nodiscard]] constexpr T &
+    back() const noexcept
     {
       COMPLEX_ASSERT(size_ > 0, "Back of empty span");
       return data_[size_ - 1];
@@ -632,7 +615,8 @@ namespace utils
   public:
     using span<const char>::span;
 
-    [[nodiscard]] constexpr size_type find(const char *substring, size_type size, size_type position = 0) const noexcept
+    [[nodiscard]] constexpr size_type 
+    find(const char *substring, size_type size, size_type position = 0) const noexcept
     {
       COMPLEX_ASSERT(size <= size_, "Size of substring is larger than the searched string in string_view::find(substring, size, position)");
       COMPLEX_ASSERT(position + size <= size_, "Position out of range in string_view::find(substring, size, position)");
@@ -643,13 +627,16 @@ namespace utils
 
       return npos;
     }
-    [[nodiscard]] constexpr size_type find(string_view substring, size_type position = 0) const noexcept
+    [[nodiscard]] constexpr size_type 
+    find(string_view substring, size_type position = 0) const noexcept
     { return find(substring.data(), substring.size(), position); }
     template<auto Size>
-    [[nodiscard]] constexpr size_type find(const char(&substring)[Size], size_type position = 0) const noexcept
+    [[nodiscard]] constexpr size_type 
+    find(const char(&substring)[Size], size_type position = 0) const noexcept
     { return find(substring, Size, position); }
 
-    [[nodiscard]] constexpr size_type rfind(const char *substring, size_type size, size_type position = npos) const noexcept
+    [[nodiscard]] constexpr size_type 
+    rfind(const char *substring, size_type size, size_type position = npos) const noexcept
     {
       COMPLEX_ASSERT(size <= size_, "Size of substring is larger than the searched string in string_view::rfind(substring, size, position)");
       COMPLEX_ASSERT(position + size <= size_, "Position out of range in string_view::rfind(substring, size, position)");
@@ -668,25 +655,52 @@ namespace utils
         --position;
       }
     }
-    [[nodiscard]] constexpr size_type rfind(string_view substring, size_type position = npos) const noexcept
+    [[nodiscard]] constexpr size_type 
+    rfind(string_view substring, size_type position = npos) const noexcept
     { return rfind(substring.data(), substring.size(), position); }
     template<auto Size>
-    [[nodiscard]] constexpr size_type rfind(const char(&substring)[Size], size_type position = npos) const noexcept
+    [[nodiscard]] constexpr size_type
+    rfind(const char(&substring)[Size], size_type position = npos) const noexcept
     { return rfind(substring, Size, position); }
     
 
-    [[nodiscard]] constexpr int compare(string_view other) const noexcept
+    [[nodiscard]] constexpr int
+    compare(string_view other) const noexcept
     { return utils::compareStrings(data(), size(), other.data(), other.size()); }
 
-    [[nodiscard]] constexpr int compareCaseInsensitive(string_view other) const noexcept
+    [[nodiscard]] constexpr int
+    compareCaseInsensitive(string_view other) const noexcept
     { return utils::compareCaseInsensitive(data(), size(), other.data(), other.size()); }
 
-    [[nodiscard]] friend constexpr bool operator==(string_view lhs, string_view rhs) noexcept
+    [[nodiscard]] friend constexpr bool 
+    operator==(string_view lhs, string_view rhs) noexcept
     { return lhs.size() == rhs.size() && (lhs.data() == rhs.data() || lhs.compare(rhs) == 0); }
 
-    [[nodiscard]] friend constexpr bool operator<(string_view lhs, string_view rhs) noexcept
+    [[nodiscard]] friend constexpr bool 
+    operator<(string_view lhs, string_view rhs) noexcept
     { return lhs.compare(rhs) < 0; }
   };
+
+  struct typeInfo
+  {
+    string_view p{};
+
+    template<typename T>
+    static constexpr typeInfo 
+    create()
+    {
+    #ifdef _MSC_VER
+      return typeInfo{ string_view{ __FUNCSIG__ } };
+    #else
+      return typeInfo{ string_view{ __PRETTY_FUNCTION__ } };
+    #endif
+    }
+
+    constexpr bool operator==(const typeInfo &other) const = default;
+    constexpr bool operator<(const typeInfo &other) const { return p < other.p; }
+  };
+
+  #define typeId(T) ::utils::typeInfo::create<T>()
 
   // ghetto unique_ptr implementation
   template<typename T>

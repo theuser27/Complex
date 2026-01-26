@@ -15,6 +15,17 @@
 
 #endif
 
+#ifdef COMPLEX_WINDOWS
+  #define WIN32_LEAN_AND_MEAN
+  #define NOMINMAX
+  #define NOMCX
+  #define NOIME
+  #define NOSERVICE
+  #define NOCRYPT
+  #define NOOPENFILE
+  #define NOSCROLL
+#endif
+
 #ifdef COMPLEX_STANDALONE
   #if COMPLEX_WINDOWS
     #include "cplug/cplug_standalone_win.c"

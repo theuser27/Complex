@@ -1,12 +1,5 @@
-/*
-  ==============================================================================
 
-    Complex.cpp
-    Created: 23 May 2021 00:20:15
-    Author:  theuser27
-
-  ==============================================================================
-*/
+// Created: 2021-05-23 00:20:15
 
 #include "Complex.hpp"
 
@@ -343,7 +336,7 @@ namespace Plugin
 
 
   State::Thread &
-  State::reserveFreeWorker(usize reservationTag)
+  State::reserveFreeWorker(utils::typeInfo reservationTag)
   {
     for (auto &worker : workers)
       if (worker.thread == utils::thread{})

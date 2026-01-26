@@ -1,12 +1,5 @@
-/*
-  ==============================================================================
 
-    BaseProcessor.cpp
-    Created: 11 Jul 2022 03:35:27
-    Author:  theuser27
-
-  ==============================================================================
-*/
+// Created: 2022-07-11 03:35:27
 
 #include "BaseProcessor.hpp"
 
@@ -17,7 +10,7 @@
 
 namespace Generation
 {
-  BaseProcessor::BaseProcessor(Plugin::State *state, Framework::ProcessorMetadata *metadata, utils::bumpArena *arena) noexcept : 
+  BaseProcessor::BaseProcessor(Plugin::State *state, Framework::ProcessorMetadata *metadata, utils::bumpArena *arena) noexcept :
     metadata{ metadata }, state{ state }, stateId{ state->stateIdCounter++ }, arena{ arena } { }
 
   BaseProcessor::BaseProcessor(const BaseProcessor &other, utils::bumpArena *arena) noexcept :
@@ -55,7 +48,7 @@ namespace Generation
 
       children = other.children->createCopy();
       children->parent = this;
-      for (auto otherChild = other.children->next, child = children; otherChild; 
+      for (auto otherChild = other.children->next, child = children; otherChild;
         (otherChild = otherChild->next), (child = child->next))
       {
         child->next = otherChild->createCopy();
@@ -67,7 +60,7 @@ namespace Generation
     if (other.dataBuffer)
     {
       dataBuffer = Framework::SimdBuffer::create(arena, other.dataBuffer->channels, state->getMaxBinCount());
-      Framework::applyToThisNoMask<utils::MathOperations::Assign>(dataBuffer, 
+      Framework::applyToThisNoMask<utils::MathOperations::Assign>(dataBuffer,
         other.dataBuffer, other.dataBuffer->channels, other.dataBuffer->size);
     }
   }
@@ -79,7 +72,7 @@ namespace Generation
   }
 
   // the following functions are to be called outside of processing time
-  bool BaseProcessor::insertSubProcessor([[maybe_unused]] usize index, 
+  bool BaseProcessor::insertSubProcessor([[maybe_unused]] usize index,
     [[maybe_unused]] BaseProcessor &newSubProcessor, [[maybe_unused]] bool callListeners)
   {
     COMPLEX_HARD_ASSERT_FALSE("insertSubProcessor is not implemented for %zu", metadata->id);
@@ -92,7 +85,7 @@ namespace Generation
   }
 
   utils::pair<BaseProcessor &, bool>
-  BaseProcessor::updateSubProcessor([[maybe_unused]] usize index, 
+  BaseProcessor::updateSubProcessor([[maybe_unused]] usize index,
     [[maybe_unused]] BaseProcessor &newSubProcessor, [[maybe_unused]] bool callListeners)
   {
     COMPLEX_HARD_ASSERT_FALSE("updateSubProcessor is not implemented for %zu", metadata->id);
@@ -101,7 +94,7 @@ namespace Generation
   Framework::ParameterValue *
   BaseProcessor::getParameter(uuid parameterId) const noexcept
   {
-    COMPLEX_HARD_ASSERT(parameters, "No parameters contained in processor %v (%zu) to find", 
+    COMPLEX_HARD_ASSERT(parameters, "No parameters contained in processor %v (%zu) to find",
       metadata->name, metadata->id);
 
     for (auto *parameter = parameters; parameter; parameter = parameter->next)
@@ -127,7 +120,7 @@ namespace Generation
         child->updateParameters(flag, sampleRate);
   }
 
-  void BaseProcessor::remapParameters(utils::span<Framework::ParameterBridge *> bridges, 
+  void BaseProcessor::remapParameters(utils::span<Framework::ParameterBridge *> bridges,
     bool bridgeValueFromParameters, bool remapOnlyBridges) noexcept
   {
     if (!bridges.size())
@@ -138,7 +131,7 @@ namespace Generation
         auto bridge = parameter->object.getParameterLink()->hostControl;
         if (!bridge)
           continue;
-        
+
         if (remapOnlyBridges)
         {
           if (bridge->getParameterLink())
@@ -197,11 +190,11 @@ namespace Generation
       processor.next->previous = &processor;
   }
 
-  void BaseProcessor::reportUnexpectedProcessorInsert(BaseProcessor &attempedInsert, 
+  void BaseProcessor::reportUnexpectedProcessorInsert(BaseProcessor &attempedInsert,
     utils::span<const uuid> acceptedProcessorIds)
   {
     auto string = utils::string::create("Attempted insert of %v(id: %zu) inside an %v(id: %zu). \
-      If this shows to you as a user, report it to the dev. \n\nSupported subprocessors by this type are: ", 
+      If this shows to you as a user, report it to the dev. \n\nSupported subprocessors by this type are: ",
       attempedInsert.metadata->name, attempedInsert.metadata->id, metadata->name, metadata->id
     );
 

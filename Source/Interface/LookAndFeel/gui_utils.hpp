@@ -1,12 +1,5 @@
-/*
-  ==============================================================================
 
-    gui_utils.hpp
-    Created: 27 Feb 2025 4:51:34am
-    Author:  theuser27
-
-  ==============================================================================
-*/
+// Created: 2025-02-27 04:51:34
 
 #pragma once
 
@@ -471,7 +464,7 @@ namespace Interface
     constexpr ModifierKeys withoutFlags(decltype(flags) rawFlagsToClear) const noexcept { return ModifierKeys(flags & ~rawFlagsToClear); }
     constexpr ModifierKeys withFlags(decltype(flags) rawFlagsToSet) const noexcept { return ModifierKeys(flags | rawFlagsToSet); }
 
-    constexpr bool testFlags(decltype(flags) flagsToTest) const noexcept { return (flags & flagsToTest) != 0; }
+    constexpr bool test(decltype(flags) flagsToTest) const noexcept { return (flags & flagsToTest) != 0; }
 
     constexpr u8 getMouseButtonsDownCount() const noexcept
     {
@@ -570,7 +563,7 @@ namespace Interface
 
     /// Returns true if this keypress is for the given keycode without any modifiers.
     constexpr bool operator==(i32 code) const noexcept
-    { return keyCode == code && !mods.testFlags(ModifierKeys::allKeyboardModifiers); }
+    { return keyCode == code && !mods.test(ModifierKeys::allKeyboardModifiers); }
 
     //==============================================================================
     /** Returns true if this is a valid KeyPress.

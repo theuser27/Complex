@@ -35,24 +35,24 @@ namespace Interface
     BaseControl(Framework::ParameterValue *parameter);
 
     // returns the replaced link
-    Framework::ParameterLink *setParameterLink(Framework::ParameterLink *parameterLink) noexcept;
+    Framework::ParameterLink *setParameterLink(Framework::ParameterLink *parameterLink);
 
     Framework::ParameterValue *changeLinkedParameter(Framework::ParameterValue &parameter,
       bool getValueFromParameter = true);
 
-    bool setValueFromHost(double value, Framework::ParameterBridge *notifyingBridge) noexcept;
-    void setValueToHost() const noexcept;
+    bool setValueFromHost(double value, Framework::ParameterBridge *notifyingBridge);
+    void setValueToHost() const;
 
-    double getValue() const noexcept { return value.load(satomi::memory_order_relaxed); }
+    double getValue() const { return value.load(satomi::memory_order_relaxed); }
     bool setValue(double newValue, bool notify = true);
-    void resetValue() noexcept;
+    void resetValue();
     virtual void valueChanged();
 
     utils::string getScaledValueString(utils::Allocator allocator, 
       double value, bool addPrefix = true) const;
     double getValueFromText(utils::string_view text) const;
 
-    void beginChange(double oldValue) noexcept;
+    void beginChange(double oldValue);
     void endChange();
 
     void addListener(ControlListener *listener) { controlListeners.emplace_back(listener); }
@@ -94,6 +94,7 @@ namespace Interface
       bool isBipolar : 1 = false;
       bool shouldMoveOnValueChange : 1 = false;
       bool resetValueOnDoubleClick : 1 = true;
+      bool isEnabled : 1 = true;
 
       // state flags
       bool hasParameter : 1 = false;
@@ -102,7 +103,7 @@ namespace Interface
       bool isTextEntryVisible : 1 = false;
     } controlFlags{};
 
-    Animator animator_{};
+    Animator animator{};
 
     u32 maxTotalCharacters = kDefaultMaxTotalCharacters;
     u32 maxDecimalCharacters = kDefaultMaxDecimalCharacters;
@@ -112,6 +113,42 @@ namespace Interface
     Framework::ParameterDetails details{};
 
     utils::vector<ControlListener *> controlListeners{};
+  };
+
+  class Label : public Component
+  {
+  public:
+    Label(BaseControl *control) : control{ control }
+    {
+      sizingFlags |= Component::HasText;
+      desiredSize.getTextDimensions = [](Component *c, i32 *availablePrimarySize)
+      {
+        if (!availablePrimarySize)
+        {
+          auto *label = (Label *)c;
+          auto *control = label->control;
+
+          uiRelated.cache->setFont(uiRelated.cache->getInterFont());
+          label->currentString = control->getScaledValueString(control->arena, control->getValue());
+
+          auto max = (i32)::ceilf(uiRelated.cache->getStringWidthFloat(label->currentString));
+          return Range<i32>{ 0, max };
+        }
+        else
+        {
+          auto height = (i32)::roundf(uiRelated.cache->getFontAscentFromHeight(
+            uiRelated.cache->InterFontId, scaleValue(Graphics::kInterVDefaultHeight)));
+
+          // labels are always a single line
+          return Range<i32>{ height, height };
+        }
+      };
+    }
+
+    bool render(OpenGlWrapper &openGl) override;
+
+    BaseControl *control{};
+    utils::string currentString{};
   };
 
   class BaseButton : public BaseControl
@@ -124,15 +161,8 @@ namespace Interface
 
     bool mouseDown(const MouseEvent &e) override;
     bool mouseUp(const MouseEvent &e) override;
-    bool mouseEnter(const MouseEvent &e) override;
-    bool mouseExit(const MouseEvent &e) override;
 
-    bool isOn() const noexcept { return ::round(getValue()) != 0.0; }
-
-    utils::string getTextFromValue(bool value) const noexcept;
-
-  protected:
-    void updateState(bool isHeldDown, bool isHoveredOver) noexcept;
+    bool isOn() const { return ::round(getValue()) != 0.0; }
   };
 
   class PowerButton final : public BaseButton
@@ -142,7 +172,7 @@ namespace Interface
 
     PowerButton(Framework::ParameterValue *parameter);
 
-
+    bool render(OpenGlWrapper &openGl) override;
   };
 
   class RadioButton final : public BaseButton
@@ -151,6 +181,9 @@ namespace Interface
     static constexpr int kAddedMargin = 4;
 
     RadioButton(Framework::ParameterValue *parameter);
+
+    bool render(OpenGlWrapper &openGl) override;
+
 
     float rounding = 0.0f;
   };
@@ -188,7 +221,7 @@ namespace Interface
 
     void drawShadow(Graphics &g) const;
 
-    void setModifier(TextSelector *modifier) noexcept
+    void setModifier(TextSelector *modifier)
     {
       modifier_ = modifier;
       controlFlags.shouldShowPopup = modifier;

@@ -1,12 +1,5 @@
-/*
-  ==============================================================================
 
-    EffectsState.hpp
-    Created: 2 Oct 2021 20:53:05
-    Author:  theuser27
-
-  ==============================================================================
-*/
+// Created: 2021-10-02 20:53:05
 
 #pragma once
 
@@ -68,7 +61,7 @@ namespace Generation
     Framework::ComplexDataSource laneDataSource_;
 
     //// Parameters
-    // 
+    //
     // 1. lane enabled
     // 2. input index
     // 3. output index
@@ -124,9 +117,9 @@ namespace Generation
     float sampleRate = 0.0f;
     u32 blockPosition = 0;
     float blockPhase = 0.0f;
-    
+
     void checkUsage();
-    
+
     void distributeWork() const noexcept;
     void processIndividualLanes(EffectsLane *lane) const noexcept;
 

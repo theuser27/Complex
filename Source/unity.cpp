@@ -12,6 +12,7 @@
 #include "Generation/SoundEngine.cpp"
 
 #include "Interface/Components/BaseControl.cpp"
+#include "Interface/Components/BaseButton.cpp"
 #include "Interface/Components/OpenGlQuad.cpp"
 
 #include "Interface/LookAndFeel/BaseComponent.cpp"

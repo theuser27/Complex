@@ -215,20 +215,20 @@ namespace Interface
     cjson *data = cjson_Create(cjson_Object);
     cjson_AddTo(data, "Plugin Version", cjson_String, CPLUG_PLUGIN_VERSION);
 
-    for (usize i = kInitialColor; i < kColorIdCount; ++i)
+    for (usize i = 0; i < kColorIdCount; ++i)
     {
       auto string = colours[0][i].toString();
       cjson_AddTo(data, kColorNames[i].data(), cjson_String, string.data());
     }
 
-    for (usize i = kInitialValue; i < kValueIdCount; ++i)
+    for (usize i = 0; i < kValueIdCount; ++i)
       cjson_AddTo(data, kValueNames[i].data(), cjson_Float, (double)values[0][i]);
 
     cjson *overrides = cjson_AddTo(data, "overrides", cjson_Object);
     for (usize overrideIndex = kNone + 1; overrideIndex < kSectionsCount; ++overrideIndex)
     {
       cjson *overrideSection = cjson_AddTo(overrides, kOverrideNames[overrideIndex].data(), cjson_Object);
-      for (usize i = kInitialColor; i < kColorIdCount; ++i)
+      for (usize i = 0; i < kColorIdCount; ++i)
       {
         if (colours[overrideIndex][i] != colours[0][i])
         {
@@ -237,7 +237,7 @@ namespace Interface
         }
       }
 
-      for (usize i = kInitialValue; i < kValueIdCount; ++i)
+      for (usize i = 0; i < kValueIdCount; ++i)
         if (values[overrideIndex][i] != values[0][i])
           cjson_AddTo(overrideSection, kValueNames[i].data(), cjson_Float, (double)values[overrideIndex][i]);
     }
@@ -256,7 +256,7 @@ namespace Interface
 
     updateJson(data);
 
-    for (usize i = kInitialColor; i < kColorIdCount; ++i)
+    for (usize i = 0; i < kColorIdCount; ++i)
     {
       if (cjson *c = cjson_GetObjectItem(data, kColorNames[i].data()))
         colours[0][i] = Colour::fromString(c->vstring);
@@ -264,7 +264,7 @@ namespace Interface
         colours[0][i] = Colours::black;
     }
 
-    for (usize i = kInitialValue; i < kValueIdCount; ++i)
+    for (usize i = 0; i < kValueIdCount; ++i)
     {
       if (cjson *v = cjson_GetObjectItem(data, kValueNames[i].data()))
         values[0][i] = (float)v->vdouble;
@@ -287,11 +287,11 @@ namespace Interface
         if (!section)
           continue;
 
-        for (usize i = kInitialColor; i < kColorIdCount; ++i)
+        for (usize i = 0; i < kColorIdCount; ++i)
           if (cjson *c = cjson_GetObjectItem(section, kColorNames[i].data()))
             colours[overrideIndex][i] = Colour::fromString(c->vstring);
 
-        for (usize i = kInitialValue; i < kValueIdCount; ++i)
+        for (usize i = 0; i < kValueIdCount; ++i)
           if (cjson *v = cjson_GetObjectItem(section, kValueNames[i].data()))
             values[overrideIndex][i] = (float)v->vdouble;
       }

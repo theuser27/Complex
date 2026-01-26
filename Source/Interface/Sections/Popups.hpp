@@ -1,17 +1,9 @@
-/*
-  ==============================================================================
 
-    Popups.hpp
-    Created: 2 Feb 2023 7:49:54pm
-    Author:  theuser27
-
-  ==============================================================================
-*/
+// Created: 2023-20-02 19:49:54
 
 #pragma once
 
 #include "../LookAndFeel/BaseComponent.hpp"
-#include "../Components/OpenGlQuad.hpp"
 
 namespace Interface
 {
@@ -34,12 +26,14 @@ namespace Interface
       isControl = false;
       placement = relativePlacement;
       text = COMPLEX_MOVE(displayText);
+      componentFlags.isVisible = true;
     }
     void setContentControl(BaseControl *sourceControl, Placement relativePlacement)
     {
       source = sourceControl;
       isControl = true;
       placement = relativePlacement;
+      componentFlags.isVisible = true;
     }
 
     utils::string text;
@@ -56,7 +50,12 @@ namespace Interface
 
   struct PopupItem : Component
   {
-    // TODO: rendering
+    PopupItem()
+    {
+      skinOverride = Skin::kUseParentOverride;
+    }
+
+    bool render(OpenGlWrapper &openGl) override;
 
     i32 id = 0;
     i32 shortcutKeyCode = '\0';
@@ -78,19 +77,14 @@ namespace Interface
     PopupSelector();
 
     bool keyPressed(const KeyPress &key) override;
+    bool handleFocus(bool hasFocus, FocusChange focusChange) override;
+    void handleCommandMessage(u64 commandId, utils::whatever extraData) override;
 
     void newSelection(PopupItem *entry);
     void summonNewPopupList(Rectangle<int> sourceBounds, PopupItem *items);
     void closeSubList(PopupItem *items);
-    bool handleFocus(bool hasFocus, FocusChange focusChange) override;
-
-    void handleCommandMessage(u64 commandId, utils::whatever extraData) override;
-
-    void positionList(Point<int> sourcePosition);
-    void positionList(Rectangle<int> sourceBounds, Placement placement);
 
     void resetState();
-
     void summon(Component *summoningComponent, Point<i32> position);
 
     utils::smallFn<void(PopupSelector *, PopupItem *)> callback{};

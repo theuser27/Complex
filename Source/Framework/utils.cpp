@@ -1,12 +1,5 @@
-﻿/*
-  ==============================================================================
-
-    utils.cpp
-    Created: 10 Mar 2024 02:06:32
-    Author:  theuser27
-
-  ==============================================================================
-*/
+﻿
+// Created: 2024-03-10 02:06:32
 
 #include "utils.hpp"
 
@@ -27,6 +20,8 @@
   #define NOIME
   #define NOSERVICE
   #define NOCRYPT
+  #define NOOPENFILE
+  #define NOSCROLL
   #include <windows.h>
   #include <timeapi.h>
   #pragma comment(lib, "winmm.lib")
@@ -357,7 +352,7 @@ namespace utils
   #endif
   }
 
-  ScopedNoDenormals::ScopedNoDenormals() noexcept
+  ScopedNoDenormals::ScopedNoDenormals()
   {
   #if COMPLEX_X64
     u32 mask = 0x8040;
@@ -375,7 +370,7 @@ namespace utils
   #endif
   }
 
-  ScopedNoDenormals::~ScopedNoDenormals() noexcept
+  ScopedNoDenormals::~ScopedNoDenormals()
   {
   #if COMPLEX_X64
     _mm_setcsr((u32)flags_);
@@ -613,11 +608,11 @@ namespace utils
   thread::id::operator==(const id &other) const
   {
   #ifdef COMPLEX_WINDOWS
-    return native_id == other.native_id;
+    return nativeId == other.nativeId;
   #else
-    auto ret = native_id == other.native_id;
+    auto ret = nativeId == other.nativeId;
     // on linux this should just compare the values directly inside the function
-    COMPLEX_ASSERT(::pthread_equal((::pthread_t)native_id, (::pthread_t)other.native_id) == ret);
+    COMPLEX_ASSERT(::pthread_equal((::pthread_t)nativeId, (::pthread_t)other.nativeId) == ret);
     return ret;
   #endif
   }
@@ -626,14 +621,14 @@ namespace utils
   thread::getCurrentId()
   {
   #if COMPLEX_WINDOWS
-    return { (decltype(thread::id::native_id))::GetCurrentThreadId() };
+    return { (decltype(thread::id::nativeId))::GetCurrentThreadId() };
   //#elif COMPLEX_LINUX
   //  auto threadId_ = ::gettid();
   //#elif COMPLEX_MAC
   //  // https://elliotth.blogspot.com/2012/04/gettid-on-mac-os.html
   //  auto threadId_ = ::syscall(SYS_thread_selfid);
   #else
-    return { (decltype(thread::id::native_id))::pthread_self() };
+    return { (decltype(thread::id::nativeId))::pthread_self() };
   #endif
   }
 
@@ -671,12 +666,12 @@ namespace utils
     handle_ = (decltype(handle_))::CreateThread(
       nullptr, 0, threadEntry, (LPVOID)procedure, 0, nullptr);
   #else
-    static_assert(sizeof(::pthread_t) == sizeof(thread_id.native_id));
-    if (pthread_create((::pthread_t *)&thread_id.native_id, nullptr, threadEntry, (void *)procedure) != 0)
-      thread_id = {};
+    static_assert(sizeof(::pthread_t) == sizeof(threadId.nativeId));
+    if (pthread_create((::pthread_t *)&threadId.nativeId, nullptr, threadEntry, (void *)procedure) != 0)
+      threadId = {};
   #endif
 
-    if (!thread_id)
+    if (!threadId)
     {
       utils::deallocate(procedure);
     }
@@ -684,10 +679,10 @@ namespace utils
 
   thread::~thread()
   {
-    if (thread_id)
+    if (threadId)
     {
       join();
-      thread_id = {};
+      threadId = {};
     }
   }
 
@@ -709,7 +704,7 @@ namespace utils
     ::CloseHandle(handle);
   #else
     void *result;
-    auto handle = (::pthread_t)thread_id.native_id;
+    auto handle = (::pthread_t)threadId.nativeId;
     if (::pthread_join(handle, &result) != 0)
       return false;
     if (exitCode != nullptr)
@@ -724,7 +719,7 @@ namespace utils
     // https://stackoverflow.com/questions/12744324/how-to-detach-a-thread-on-windows-c#answer-12746081
     return ::CloseHandle((::HANDLE)handle_) != 0;
   #else
-    return ::pthread_detach((::pthread_t)thread_id.native_id) == 0;
+    return ::pthread_detach((::pthread_t)threadId.nativeId) == 0;
   #endif
   }
 

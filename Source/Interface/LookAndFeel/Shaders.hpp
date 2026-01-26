@@ -1,12 +1,5 @@
-/*
-  ==============================================================================
 
-    Shaders.hpp
-    Created: 16 Nov 2022 6:47:15am
-    Author:  theuser27
-
-  ==============================================================================
-*/
+// Created: 2022-11-16 06:47:15
 
 #pragma once
 
@@ -154,7 +147,7 @@ namespace Interface
     {                                                                                             \
       COMPLEX_INTERNAL_DEFINE_GL_TYPES                                                            \
                                                                                                   \
-      static constexpr utils::type_id_t key = utils::type_id<name>;                               \
+      static constexpr utils::typeInfo key = typeId(name);                                        \
       static constexpr const char *uniformNames[] = { COMPLEX_FOR_EACH(                           \
         COMPLEX_INTERNAL_ITERATE_EXCLUSIVE, COMPLEX_INTERNAL_NAME_DECLARATION, (, (,)),    \
         COMPLEX_DEPAREN(uniformsPack)) "" };                                                      \
@@ -257,7 +250,7 @@ namespace Interface
     {                                                                                             \
       COMPLEX_INTERNAL_DEFINE_GL_TYPES                                                            \
                                                                                                   \
-      static constexpr utils::type_id_t key = utils::type_id<name>;                               \
+      static constexpr utils::typeInfo key = typeId(name);                                        \
       static constexpr const char *uniformNames[] = { COMPLEX_FOR_EACH(                           \
         COMPLEX_INTERNAL_ITERATE_EXCLUSIVE, COMPLEX_INTERNAL_NAME_DECLARATION,             \
         (, (,)), COMPLEX_DEPAREN(uniformsPack)) "" };                                             \
@@ -299,7 +292,7 @@ namespace Interface
   struct FragmentShader
   {
     void *object = nullptr;
-    utils::type_id_t key = nullptr;
+    utils::typeInfo key{};
     const char *code = nullptr;
     GLuint *shaderId = nullptr;
     void (*getVariablesPointer)(void *, OpenGlShaderProgram program) = nullptr;
@@ -384,12 +377,20 @@ namespace Interface
       kFragmentShaderCount
     };
 
+    Shaders(utils::bumpArena *parentArena)
+    {
+      arena = utils::bumpArena::createNested(parentArena, COMPLEX_KB(8));
+      vertexShaders.data.reserve(arena, 32);
+      fragmentShaders.data.reserve(arena, 32);
+      shaderPrograms.data.reserve(arena, 32);
+    }
+
     OpenGlShaderProgram getShaderProgram(GLuint vertexShaderId,
       GLuint fragmentShaderId, const GLchar **varyings = nullptr);
 
     void releaseAll();
 
-    GLuint addVertexShader(utils::type_id_t key, const char *shader)
+    GLuint addVertexShader(utils::typeInfo key, const char *shader)
     {
       if (auto iter = vertexShaders.find(key); iter != vertexShaders.data.end())
         return iter->second;
@@ -399,7 +400,7 @@ namespace Interface
       return id;
     }
 
-    GLuint getVertexShader(utils::type_id_t key)
+    GLuint getVertexShader(utils::typeInfo key)
     {
       if (auto iter = vertexShaders.find(key); iter != vertexShaders.data.end())
         return iter->second;
@@ -407,7 +408,7 @@ namespace Interface
       return 0;
     }
 
-    GLuint addFragmentShader(utils::type_id_t key, const char *shader)
+    GLuint addFragmentShader(utils::typeInfo key, const char *shader)
     {
       if (auto iter = fragmentShaders.find(key); iter != fragmentShaders.data.end())
         return iter->second;
@@ -417,7 +418,7 @@ namespace Interface
       return id;
     }
 
-    GLuint getFragmentShader(utils::type_id_t key)
+    GLuint getFragmentShader(utils::typeInfo key)
     {
       if (auto iter = fragmentShaders.find(key); iter != fragmentShaders.data.end())
         return iter->second;
@@ -425,9 +426,10 @@ namespace Interface
       return 0;
     }
 
+    utils::bumpArena *arena{};
     utils::vector_map<u64, OpenGlShaderProgram> shaderPrograms;
-    utils::vector_map<utils::type_id_t, GLuint> vertexShaders;
-    utils::vector_map<utils::type_id_t, GLuint> fragmentShaders;
+    utils::vector_map<utils::typeInfo, GLuint> vertexShaders;
+    utils::vector_map<utils::typeInfo, GLuint> fragmentShaders;
   };
 
 

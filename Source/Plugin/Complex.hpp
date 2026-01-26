@@ -1,12 +1,5 @@
-/*
-  ==============================================================================
 
-    Complex.hpp
-    Created: 23 May 2021 00:20:15
-    Author:  theuser27
-
-  ==============================================================================
-*/
+// Created: 2021-05-23 00:20:15
 
 #pragma once
 
@@ -239,11 +232,11 @@ namespace Plugin
       }
 
       utils::thread thread{};
-      usize reservationTag{};
+      utils::typeInfo reservationTag{};
       satomi::atomic<bool> shouldStop = false;
     };
 
-    Thread &reserveFreeWorker(usize reservationTag);
+    Thread &reserveFreeWorker(utils::typeInfo reservationTag);
 
     ComplexPlugin *plugin;
     Generation::SoundEngine *soundEngine = nullptr;

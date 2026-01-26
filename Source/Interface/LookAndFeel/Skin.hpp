@@ -33,14 +33,13 @@ namespace Interface
       kPitchModule,
       kDestroyModule,
 
-      kSectionsCount,
-      kUseParentOverride = kSectionsCount
+      kUseParentOverride,
+      kSectionsCount = kUseParentOverride
     };
 
     enum ValueId : u32
     {
-      kInitialValue,
-      kBodyRoundingTop = kInitialValue,
+      kBodyRoundingTop,
       kBodyRoundingBottom,
 
       kWidgetLineWidth,
@@ -72,8 +71,7 @@ namespace Interface
 
     enum ColourId : u32
     {
-      kInitialColor,
-      kBackground = kInitialColor,
+      kBackground,
       kBody,
       kBackgroundElement,
       kHeadingText,

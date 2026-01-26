@@ -26,7 +26,7 @@ namespace Interface
   }
 
   Framework::ParameterLink *
-  BaseControl::setParameterLink(Framework::ParameterLink *newParameterLink) noexcept
+  BaseControl::setParameterLink(Framework::ParameterLink *newParameterLink)
   {
     auto replacedLink = parameterLink;
     if (replacedLink)
@@ -69,7 +69,7 @@ namespace Interface
 
   bool 
   BaseControl::setValueFromHost(double newValue, 
-    Framework::ParameterBridge *notifyingBridge) noexcept
+    Framework::ParameterBridge *notifyingBridge)
   {
     if (!parameterLink || parameterLink->hostControl != notifyingBridge)
       return false;
@@ -92,7 +92,7 @@ namespace Interface
     return true;
   }
 
-  void BaseControl::setValueToHost() const noexcept
+  void BaseControl::setValueToHost() const
   {
     if (parameterLink && parameterLink->hostControl)
       parameterLink->hostControl->setValueFromUI((float)getValue());
@@ -128,7 +128,7 @@ namespace Interface
       listener->controlValueChanged(this);
   }
 
-  void BaseControl::beginChange(double oldValue) noexcept
+  void BaseControl::beginChange(double oldValue)
   {
     valueBeforeChange = oldValue;
     controlFlags.hasBegunChange = true;
@@ -141,7 +141,7 @@ namespace Interface
       new Framework::ParameterUpdate(this, valueBeforeChange, getValue()));
   }
 
-  void BaseControl::resetValue() noexcept
+  void BaseControl::resetValue()
   {
     bool isMapped = parameterLink && parameterLink->hostControl;
     if (isMapped)
@@ -357,6 +357,7 @@ namespace Interface
   #undef ITEM
 
     selector->items = &options;
+    selector->skinOverride = skinOverride;
     selector->callback = [this](PopupSelector *, PopupItem *selectedItem)
     { handlePopupResult(this, selectedItem); };
     selector->cancel = {};
@@ -634,5 +635,19 @@ namespace Interface
     (void)primary;
     //auto *popupDisplay = getGui(uiRelated.renderer)->getPopupDisplay(primary);
     //popupDisplay->componentFlags.isVisible = false;
+  }
+
+  bool 
+  Label::render(OpenGlWrapper &openGl)
+  {
+    (void)openGl;
+    //nvgSave(openGl.g);
+
+    //openGl.cache->setFont(openGl.cache->getInterFont());
+    //nvgText(openGl.g, )
+
+    //nvgRestore(openGl.g);
+
+    return true;
   }
 }

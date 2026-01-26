@@ -1,12 +1,5 @@
-/*
-  ==============================================================================
 
-    SoundEngine.cpp
-    Created: 12 Aug 2021 02:12:59
-    Author:  theuser27
-
-  ==============================================================================
-*/
+// Created: 2021-08-12 02:12:59
 
 #include "SoundEngine.hpp"
 
@@ -94,7 +87,7 @@ createProcessor(Plugin::State *state, Framework::ProcessorMetadata *metadata, co
 
 namespace Generation
 {
-  SoundEngine::SoundEngine(Plugin::State *state, Framework::ProcessorMetadata *metadata, 
+  SoundEngine::SoundEngine(Plugin::State *state, Framework::ProcessorMetadata *metadata,
     utils::bumpArena *arena) noexcept : BaseProcessor{ state, metadata, arena }
   {
     using namespace Framework;
@@ -108,7 +101,7 @@ namespace Generation
   {
     // input buffer size, kind of arbitrary but it must be longer than kMaxProcessingBufferLength
     u32 maxInputBufferLength = 1 << (maxOrder + 5);
-    // pre- and post-processing FFT buffers size 
+    // pre- and post-processing FFT buffers size
     // (+ 2 for nyquist real/imaginary parts and then rounded up to next simd size)
     u32 maxProcessingBufferLength = utils::roundUpToMultiple((1U << maxOrder) + 2, (u32)simd_float::size);
     // output buffer size, must be longer than kMaxProcessingBufferLength
@@ -139,7 +132,7 @@ namespace Generation
     }
   }
 
-  u32 SoundEngine::getProcessingDelay() const noexcept 
+  u32 SoundEngine::getProcessingDelay() const noexcept
   { return FFTSamples_ + state->plugin->getSamplesPerBlock(); }
 
   u32 SoundEngine::getFFTSize() const noexcept
@@ -182,7 +175,7 @@ namespace Generation
     isPerforming_ = false;
     hasEnoughSamples_ = false;
 
-    // if there are scaled and/or processed samples 
+    // if there are scaled and/or processed samples
     // that haven't already been output we don't need to perform
     u32 samplesReady = outBuffer.getBeginOutputToToScaleOutput() +
       outBuffer.getToScaleOutputToAddOverlap();
@@ -200,7 +193,7 @@ namespace Generation
     u32 prevFFTNumSamples = FFTSamples_;
     // how many samples we're processing currently
     FFTSamples_ = 1 << FFTOrder_;
-    
+
     i32 FFTChangeOffset = (i32)prevFFTNumSamples - (i32)FFTSamples_;
 
     // clearing upper samples that could remain
@@ -289,7 +282,7 @@ namespace Generation
       if (usedOutputChannels_[i])
         ffts.transformRealInverse(FFTOrder_, FFTBuffer_.get(i), i);
 
-    // if the FFT size is big enough to guarantee that even with max overlap 
+    // if the FFT size is big enough to guarantee that even with max overlap
     // a block >= samplesPerBlock can be finished, we don't offset
     // otherwise, we offset 2 block sizes back
     outBuffer.setLatencyOffset(2 * (i32)state->plugin->getSamplesPerBlock());
@@ -313,7 +306,7 @@ namespace Generation
       if (u32 assignSamples = FFTSamples_ - overlappedSamples; assignSamples)
       {
         //buffer_.clear((bufferSize + newEnd - assignSamples) % bufferSize, assignSamples);
-        applyToBuffer(CircularBuffer::assignBuffersFn, outBuffer, 
+        applyToBuffer(CircularBuffer::assignBuffersFn, outBuffer,
           FFTBuffer_, outBuffer.channels, assignSamples,
           (bufferSize + outBuffer.end - assignSamples) % bufferSize, overlappedSamples, usedOutputChannels_);
       }
@@ -330,7 +323,7 @@ namespace Generation
     u32 start = outBuffer.toScaleOutput_;
     u32 toScaleSamples = outBuffer.getToScaleOutputToAddOverlap();
     outBuffer.advanceToScaleOutput(toScaleSamples);
-    
+
     i32 FFTChangeOffset = (i32)FFTSamplesAtReset_ - (i32)FFTSamples_;
     i32 latencyOffset = FFTChangeOffset - outBuffer.latencyOffset_;
 
@@ -349,7 +342,7 @@ namespace Generation
 
     // when the overlap is more than what the window requires
     // there will be an increase in gain, so we need to offset that
-    windows.scaleDown(outBuffer, outBuffer.channels, 
+    windows.scaleDown(outBuffer, outBuffer.channels,
       usedOutputChannels_, start, toScaleSamples, windowTypeId_, currentOverlap_, alpha_);
 
     // only wet
@@ -358,7 +351,7 @@ namespace Generation
       inBuffer.advanceLastOutputBlock(samples);
       return;
     }
-      
+
     // mix both
     u32 beginInput = (inBuffer.size + inBuffer.lastOutputBlock_ + latencyOffset) % inBuffer.size;
 
@@ -457,7 +450,7 @@ namespace Generation
       isReadyToPerform(samples);
       if (!isPerforming_)
         break;
-      
+
       updateParameters(UpdateFlag::Realtime, sampleRate, true);
       doFFT(ffts);
       processFFT(sampleRate);
@@ -512,6 +505,6 @@ initialiseTypeStructure<Generation::SoundEngine>(void *, Framework::PluginStruct
   );
 
   soundEngine.children = (ProcessorMetadata *)initialiseTypeStructure<EffectsState>(&soundEngine, structure);
-  
+
   return &soundEngine.computeCounts();
 }

@@ -1,12 +1,5 @@
-/*
-  ==============================================================================
 
-    BaseComponent.cpp
-    Created: 11 Dec 2023 4:49:17pm
-    Author:  theuser27
-
-  ==============================================================================
-*/
+// Created: 2023-12-11 16:49:17
 
 #include "BaseComponent.hpp"
 
@@ -22,7 +15,7 @@
 namespace Interface
 {
   PopupSelector *getPopupSelector() { return getGui(uiRelated.renderer)->getPopupSelector(); }
-  PopupDisplay *getPopupDisplay(bool primary) { return getGui(uiRelated.renderer)->getPopupDisplay(primary); }
+  PopupDisplay *getPopupDisplay(bool primary = true) { return getGui(uiRelated.renderer)->getPopupDisplay(primary); }
   utils::bumpArena *getUIArena() { return getGui(uiRelated.renderer)->arena; }
 
 #define GET_PRIMARY_FLAG(component, flag) ((flag) << (i32)(!!(component->sizingFlags & Component::IsVertical)))
@@ -489,15 +482,25 @@ namespace Interface
       component->componentFlags.destroyOpenGl = true;
       component->render(getOpenGlContext(uiRelated.renderer));
     }
-    if (component->componentFlags.hasSummonnedPopupSelector)
+    
+    auto *gui = getGui(uiRelated.renderer);
+    if (auto *selector = gui->getPopupSelector(); selector->summoner == component)
     {
-      auto *selector = getPopupSelector();
       if (selector->cancel)
         selector->cancel(selector);
-      
-      //selector->resetState();
+
+      selector->resetState();
       component->removeChildComponent(selector);
     }
+    if (auto *display = gui->getPopupDisplay(true); display->source == component)
+    {
+      display->componentFlags.isVisible = false;
+    }
+    if (auto *display = gui->getPopupDisplay(false); display->source == component)
+    {
+      display->componentFlags.isVisible = false;
+    }
+
     component->deleteAllChildComponents();
     utils::bumpArena::remove(component);
   }
@@ -521,25 +524,24 @@ namespace Interface
   }
 
   Component *
-  Component::getComponentAt(i32 x, i32 y)
+  Component::getComponentAt(i32 x, i32 y, bool onlyClickable)
   {
-    if (componentFlags.clickableChildren)
+    if (!onlyClickable || componentFlags.clickableChildren)
     {
       for (usize i = childComponents.size(); i > 0; --i)
       {
         auto *child = childComponents[i - 1];
         if (child->componentFlags.isVisible && child->contains(Point{ x, y }))
         {
-          auto *result = child->getComponentAt(x - child->bounds.x, y - child->bounds.y);
+          auto *result = child->getComponentAt(x - child->bounds.x,
+            y - child->bounds.y, onlyClickable);
           if (result)
             return result;
         }
       }
     }
 
-    if (!componentFlags.clickable)
-      return this;
-    return nullptr;
+    return (onlyClickable && !componentFlags.clickable) ? nullptr : this;
   }
 
   bool Component::hasFocus(bool trueIfChildIsFocused) const

@@ -1,12 +1,5 @@
-/*
-  ==============================================================================
 
-    memory.hpp
-    Created: 22 Jul 2022 17:34:59
-    Author:  theuser27
-
-  ==============================================================================
-*/
+// Created: 2022-07-22 17:34:59
 
 #pragma once
 
@@ -732,24 +725,26 @@ namespace utils
     }
   };
 
-  struct type_map : public vector_map<usize, void *>
+  struct type_map : public vector_map<typeInfo, void *>
   {
+    using base = vector_map<typeInfo, void *>;
+
     constexpr void iterate(const auto &lambda)
     {
       using T = typename detail::signature<decltype(&remove_cvref_t<decltype(lambda)>::operator())>::type;
-      constexpr auto type = (usize)utils::type_id<T>;
+      constexpr auto type = typeId(T);
       for (auto iter = get_first_of(type);
         iter != data.end() && iter->first == type; ++iter)
         lambda(static_cast<T>(iter->second));
     }
 
     constexpr auto add_ordered(auto entry) noexcept
-    { return vector_map<usize, void *>::add_ordered((usize)type_id<decltype(entry)>, (void *)COMPLEX_MOVE(entry)); }
+    { return base::add_ordered(typeId(decltype(entry)), (void *)COMPLEX_MOVE(entry)); }
 
     template<typename T>
     constexpr void update_ordered(T entry, T updatedEntry) noexcept
     {
-      auto iter = get_first_of((usize)type_id<T>);
+      auto iter = get_first_of(typeId(T));
       if (iter == data.end())
         return;
 
@@ -759,12 +754,12 @@ namespace utils
       if (iter == data.end())
         return;
 
-      (*iter) = pair{ (usize)type_id<T>, COMPLEX_MOVE(updatedEntry) };
+      (*iter) = pair{ typeId(T), COMPLEX_MOVE(updatedEntry) };
     }
 
     constexpr void erase_ordered(auto entry) noexcept
     {
-      auto iter = get_first_of((usize)type_id<decltype(entry)>);
+      auto iter = get_first_of(typeId(decltype(entry)));
       if (iter == data.end())
         return;
 

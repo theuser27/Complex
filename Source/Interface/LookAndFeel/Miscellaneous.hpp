@@ -1,12 +1,5 @@
-/*
-  ==============================================================================
 
-    Miscellaneous.hpp
-    Created: 9 Feb 2024 2:01:31am
-    Author:  theuser27
-
-  ==============================================================================
-*/
+// Created: 2024-02-09 02:01:31
 
 #pragma once
 
@@ -150,31 +143,35 @@ namespace Interface
 
   // encompasses a manually programmed draw or 
   // a precalculated SVG (stored in Graphics) captured inside the closure
-  struct Shape
-  {
-    using DrawingFunc = void(Graphics &g, Colour colour,
-      Rectangle<float> bounds, float scale, float strokeWidth);
+  using DrawingFn = void(Graphics &g, utils::span<Colour> colours,
+    Rectangle<float> bounds, float strokeWidth);
 
-    utils::vector<utils::pair<utils::smallFn<DrawingFunc>, Colour>> paths{};
-
-    void drawAll(Graphics &g, Rectangle<float> bounds, float scale,
-      float strokeWidth, utils::span<Colour> colours) const;
-  };
+  void drawShape(Graphics &g, Rectangle<float> bounds, float scale,
+    float strokeWidth, Colour colour, const utils::smallFn<DrawingFn> &path);
 
   namespace Paths
   {
-    Shape pasteValueIcon();
-    Shape enterValueIcon();
-    Shape copyNormalisedValueIcon();
-    Shape copyScaledValueIcon();
+    void pasteValueIcon(Graphics &g, Rectangle<float> bounds,
+      float strokeWidth, utils::span<Colour> colours);
+    void enterValueIcon(Graphics &g, Rectangle<float> bounds,
+      float strokeWidth, utils::span<Colour> colours);
+    void copyNormalisedValueIcon(Graphics &g, Rectangle<float> bounds,
+      float strokeWidth, utils::span<Colour> colours);
+    void copyScaledValueIcon(Graphics &g, Rectangle<float> bounds,
+      float strokeWidth, utils::span<Colour> colours);
 
-    Shape filterIcon();
-    Shape dynamicsIcon();
-    Shape phaseIcon();
-    Shape pitchIcon();
-    Shape destroyIcon();
+    void filterIcon(Graphics &g, Rectangle<float> bounds,
+      float strokeWidth, utils::span<Colour> colours);
+    void dynamicsIcon(Graphics &g, Rectangle<float> bounds,
+      float strokeWidth, utils::span<Colour> colours);
+    void phaseIcon(Graphics &g, Rectangle<float> bounds,
+      float strokeWidth, utils::span<Colour> colours);
+    void pitchIcon(Graphics &g, Rectangle<float> bounds,
+      float strokeWidth, utils::span<Colour> colours);
+    void destroyIcon(Graphics &g, Rectangle<float> bounds,
+      float strokeWidth, utils::span<Colour> colours);
 
-    Shape powerButtonIcon();
+    utils::pair<DrawingFn *, Rectangle<i32>> powerButtonIcon();
   }
 
   struct ViewportChange

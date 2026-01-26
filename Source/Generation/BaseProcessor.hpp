@@ -1,12 +1,5 @@
-/*
-  ==============================================================================
 
-    BaseProcessor.hpp
-    Created: 11 Jul 2022 03:35:27
-    Author:  theuser27
-
-  ==============================================================================
-*/
+// Created: 2022-07-11 03:35:27
 
 #pragma once
 
@@ -66,17 +59,17 @@ namespace Generation
     deleteSubProcessor(usize index, bool callListeners = true);
     virtual utils::pair<BaseProcessor &, bool>
     updateSubProcessor(usize index, BaseProcessor &newSubProcessor, bool callListeners = true);
-    
+
     Framework::ParameterValue *
     getParameter(uuid parameterId) const noexcept;
     utils::dll<Framework::ParameterValue> *
-    createParameters(usize count, Framework::ParameterMetadata *metadata, 
+    createParameters(usize count, Framework::ParameterMetadata *metadata,
       utils::dll<Framework::ParameterValue> *copy = nullptr);
 
     void updateParameters(UpdateFlag flag, float sampleRate, bool updateChildrenParameters = true) noexcept;
     // remaps parameters from the current bridges (if they exist) to new ones (if they exist)
     // if no bridges are provided they are assumed to be nullptr
-    // if remapOnlyBridges is also provided it will unmap/remap only the bridges from the parameters 
+    // if remapOnlyBridges is also provided it will unmap/remap only the bridges from the parameters
     // while the parameters still keep a reference to them
     void remapParameters(utils::span<Framework::ParameterBridge *> bridges,
       bool bridgeValueFromParameters, bool remapOnlyBridges = false) noexcept;
@@ -84,7 +77,7 @@ namespace Generation
     //void randomiseParameters();
     //void setAllParametersRandomisation(bool toRandomise = true);
     //void setParameterRandomisation(utils::string_view name, bool toRandomise = true);
-    
+
     static BaseProcessor *
     getChild(BaseProcessor *children, usize index)
     {
@@ -112,7 +105,7 @@ namespace Generation
     Framework::ProcessorMetadata *metadata{};
     Plugin::State *state;
     const u64 stateId = 0;
-    
+
     BaseProcessor *parent = nullptr;
     BaseProcessor *previous = nullptr;
     BaseProcessor *next = nullptr;

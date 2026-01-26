@@ -126,6 +126,14 @@ namespace Interface
     }
   }
 
+  bool 
+  PopupItem::render(OpenGlWrapper &openGl)
+  {
+    (void)openGl;
+
+    return false;
+  }
+
   class PopupList final : public Component
   {
   public:
@@ -386,7 +394,6 @@ namespace Interface
   {
     summoner = summoningComponent;
     summoningPoint = position;
-    summoningComponent->componentFlags.hasSummonnedPopupSelector = true;
     grabFocus();
 
     // TODO: summon new list

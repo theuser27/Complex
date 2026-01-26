@@ -1,12 +1,5 @@
-/*
-  ==============================================================================
 
-    SoundEngine.hpp
-    Created: 12 Aug 2021 02:12:59
-    Author:  theuser27
-
-  ==============================================================================
-*/
+// Created: 2021-08-12 02:12:59
 
 #pragma once
 
@@ -79,7 +72,7 @@ namespace Generation
         blockEnd_ = (newBegin + (u32)samples) % size;
       }
 
-      // returns how many samples in the buffer can be read 
+      // returns how many samples in the buffer can be read
       // starting at blockBegin_/blockEnd_until end_
       strict_inline u32 newSamplesToRead(BeginPoint beginPoint, u32 overlapOffset = 0) const noexcept
       {
@@ -189,7 +182,7 @@ namespace Generation
     // initialising pointers and FFT plans
     void resetBuffers() noexcept;
     void updateParameters(UpdateFlag flag, float sampleRate, bool updateChildrenParameters = true) noexcept;
-    void process(float *const *in, float *const *out, u32 samples, float sampleRate, 
+    void process(float *const *in, float *const *out, u32 samples, float sampleRate,
       u32 numInputs, u32 numOutputs, Framework::FFT &ffts) noexcept;
 
     u32 getProcessingDelay() const noexcept;
@@ -208,10 +201,10 @@ namespace Generation
     // 4. Window Type
     // 5. Window Alpha
     // 6. Out Gain
-    // 
+    //
     //=========================================================================================
     // Variables
-    // 
+    //
     // mix amount with dry signal
     float mix_ = 1.0f;
     //

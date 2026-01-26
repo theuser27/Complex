@@ -79,7 +79,5 @@ namespace Interface
   {
   public:
     PlainShapeComponent();
-
-    Shape shape;
   };
 }

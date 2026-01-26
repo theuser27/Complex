@@ -1,12 +1,5 @@
-/*
-  ==============================================================================
 
-    BaseComponent.hpp
-    Created: 11 Dec 2023 4:49:17pm
-    Author:  theuser27
-
-  ==============================================================================
-*/
+// Created: 2023-12-11 16:49:17
 
 #pragma once
 
@@ -142,8 +135,10 @@ namespace Interface
     bool contains(Point<i32> parentPoint) { return bounds.contains(parentPoint); }
     bool contains(Point<float> parentPoint) { return contains(parentPoint.toInt()); }
 
-    Component *getComponentAt(i32 x, i32 y);
-    Component *getComponentAt(Point<i32> position) { return getComponentAt(position.x, position.y); }
+    Component *getComponentAt(i32 x, i32 y, bool onlyClickable = false);
+    Component *
+    getComponentAt(Point<i32> position, bool onlyClickable = false) 
+    { return getComponentAt(position.x, position.y, onlyClickable); }
 
     bool 
     isParentOf(const Component *possibleChild) const noexcept
@@ -218,9 +213,8 @@ namespace Interface
       bool isClicked : 1 = false;
       bool isOpenGlInitialised : 1 = false;
       bool destroyOpenGl : 1 = false;
-      bool hasRenderedFeatures : 1 = false;
-      bool hasSummonnedPopupSelector : 1 = false;
       RenderFlag renderState : 2 = RenderFlag::Dirty;
+      bool hasRenderedFeatures : 1 = false;
     } componentFlags{};
     
     Range<u8> scrollWidths{};

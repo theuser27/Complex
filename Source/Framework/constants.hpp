@@ -1,12 +1,5 @@
-/*
-  ==============================================================================
 
-    constants.hpp
-    Created: 11 Jun 2023 03:25:10
-    Author:  theuser27
-
-  ==============================================================================
-*/
+// Created: 2023-06-11 03:25:10
 
 #pragma once
 
@@ -48,7 +41,7 @@ namespace common
   inline constexpr float kDefaultWindowOverlap = 0.5f;      // (can be changed)    default window overlap
   inline constexpr float kAlphaLowerBound = 1.0f;           // (can be changed)    lower bound for alpha exponent
   inline constexpr float kAlphaUpperBound = 10.0f;          // (can be changed)    upper bound for alpha exponent
-  inline constexpr u32 kWindowResolution = (1 << 10) + 1;   // (can be changed)    1025 samples window lookup resolution
+  inline constexpr u32 kWindowResolution = (1 << 8) + 1;    // (can be changed)    257 samples window lookup resolution
                                                             //                     (+ 1 in order to have a distinct sample in the center)
   
   // processing constants

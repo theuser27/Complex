@@ -1,12 +1,5 @@
-/*
-  ==============================================================================
 
-    EffectModules.cpp
-    Created: 27 Jul 2021 00:30:19
-    Author:  theuser27
-
-  ==============================================================================
-*/
+// Created: 2021-07-27 00:30:19
 
 #include "EffectModules.hpp"
 
@@ -47,11 +40,11 @@ namespace Generation
     static constexpr uuid id = 1759541555994809100;
 
     //// Parameters
-    // 
+    //
     // 5. channel pan (stereo) - [-1.0f, 1.0f]
     // 6. flip phases (stereo) - [0, 1]
     // 7. reverse spectrum bins (stereo) - [0, 1]
-    // 
+    //
     // freeze input
     // record and play back input
     // nyquist gate (some values of destroy/reinterpret cause massive spikes)
@@ -59,7 +52,7 @@ namespace Generation
     // TODO:
     // idea: mix 2 input signals (left and right/right and left channels)
     // idea: flip the phases, panning
-    // 
+    //
     //void run(EffectModule *effectModule, EffectModule::EffectData *effectData,
     //  Framework::ComplexDataSource &source,
     //  Framework::SimdBuffer * &destination,
@@ -90,11 +83,11 @@ namespace Generation
     //  gain (stereo) - range[-$ db, +$ db] (symmetric loudness);
     //    lowers the loudness at/around the cutoff point for negative/positive values
     //    *parameter values are interpreted linearly, so the control needs to have an exponential slope
-    // 
+    //
     //  cutoff (stereo) - range[0.0f, 1.0f]; controls where the filtering starts
     //    at 0.0f/1.0f it's at the low/high boundary
     //    *parameter values are interpreted linearly, so the control needs to have an exponential slope
-    // 
+    //
     //  slope (stereo) - range[-1.0f, 1.0f]; controls the slope transition
     //    at 0.0f it stretches from the cutoff to the frequency boundaries
     //    at 1.0f only the center bin is left unaffected
@@ -112,13 +105,13 @@ namespace Generation
 
     // Gate - frequency gating
     //  threshold (stereo) - range[0%, 100%]; threshold is relative to the loudest bin in the spectrum
-    // 
+    //
     //  gain (stereo) - range[-$ db, +$ db] (symmetric loudness);
     //    positive/negative values lower the loudness of the bins below/above the threshold
-    // 
+    //
     //  tilt (stereo) - range[-100%, +100%]; tilt relative to the loudest bin in the spectrum
     //    at min/max values the left/right-most part of the masked spectrum will have no threshold
-    // 
+    //
     //  delta - instead of the absolute loudness it uses the averaged loudness change from the 2 neighbouring bins
     //
     COMPLEX_ENUM(Gate,
@@ -143,7 +136,7 @@ namespace Generation
     // Tilt filter
     // Regular - triangles, squares, saws, pointy, sweep and custom, razor comb peak
     // Regular key tracked - regular filtering based on fundamental frequency (like dtblkfx autoharm)
-    // 
+    //
     // TODO: write a constexpr generator for all of the weird mask types (triangle, saw, square, etc)
 
     static Framework::IndexedData &initialiseTypeStructure(Framework::PluginStructure &structure)
@@ -157,7 +150,7 @@ namespace Generation
 
       auto &group = COMPLEX_STRUCTURE_INDEXED_DATA(.displayName = "Filter", .id = id).addChildren(
         COMPLEX_STRUCTURE_INDEXED_DATA(.displayName = "Normal", .id = Types::Normal,
-          .processorMetadata = COMPLEX_STRUCTURE_EFFECT("Normal", Types::Normal, vtableNormal, .parameters = 
+          .processorMetadata = COMPLEX_STRUCTURE_EFFECT("Normal", Types::Normal, vtableNormal, .parameters =
             (
               COMPLEX_STRUCTURE_PARAMETER("Gain", Normal::Gain, kMinusInfDb, kInfDb, 0.0f, 0.5f, ParameterScale::SymmetricLoudness,
                 " db", ParameterDetails::Modulatable | ParameterDetails::Automatable | ParameterDetails::Stereo),
@@ -358,7 +351,7 @@ namespace Generation
       u32 binCount, float sampleRate) noexcept;
 
 
-    COMPLEX_ENUM(ConstShift, 
+    COMPLEX_ENUM(ConstShift,
       (Shift, 1759183248900862000),
     );
 
@@ -437,7 +430,7 @@ namespace Generation
       (   PolarToCart, 1759183546859800500)
     );
 
-    void runReinterpret(EffectModule *effectModule, EffectModule::EffectData *effectData, 
+    void runReinterpret(EffectModule *effectModule, EffectModule::EffectData *effectData,
       Framework::ComplexDataSource &source, Framework::SimdBuffer *destination,
       u32 binCount, float sampleRate) noexcept;
 
@@ -502,7 +495,7 @@ namespace Generation
     else
       lambda(start + length);
   }
-  
+
   static strict_inline simd_mask vector_call isOutsideBounds(simd_int positionIndices,
     simd_int lowBoundIndices, simd_int highBoundIndices, simd_mask isHighAboveLow)
   {
@@ -530,7 +523,7 @@ namespace Generation
     simd_int positionIndices, simd_int lowBoundIndices, simd_int highBoundIndices)
   { return ~isOutsideBounds(positionIndices, lowBoundIndices, highBoundIndices); }
 
-  
+
   // first - low shifted boundary, second - high shifted boundary
   utils::pair<simd_float, simd_float>
   getShiftedBounds(EffectModule *module, EffectModule::BoundRepresentation representation,
@@ -540,7 +533,7 @@ namespace Generation
     using namespace Framework;
 
     u32 FFTSize = (binCount - 1) * 2;
-    
+
     simd_float lowBound = module->getParameter(EffectModule::LowBound)->getInternalValue<simd_float>(sampleRate, true);
     simd_float highBound = module->getParameter(EffectModule::HighBound)->getInternalValue<simd_float>(sampleRate, true);
 
@@ -577,7 +570,7 @@ namespace Generation
   }
 
   // returns starting point, distance to end of processed/unprocessed range, and if the range is stereo
-  static auto vector_call 
+  static auto vector_call
   minimiseRange(simd_int lowIndices, simd_int highIndices, u32 binCount, bool isProcessedRange)
   {
     COMPLEX_ASSERT(utils::isPowerOfTwo(binCount - 1), "Bin count is not power-of-2 + 1, but instead %d", binCount);
@@ -660,7 +653,7 @@ namespace Generation
             if (runNotCompleteMask.anyMask() == 0)
               break;
 
-            utils::scatterComplex(destinationChannel.pointer, start, 
+            utils::scatterComplex(destinationChannel.pointer, start,
               utils::gatherComplex(sourceChannel.pointer, start), runNotCompleteMask);
 
             start += 1;
@@ -683,7 +676,7 @@ namespace Generation
           rawDestination[i * size + currentIndex] = rawSource[i * size + currentIndex];
         }
 
-        auto currentIndex = (index + unprocessedCount > binCount - 1) ? 
+        auto currentIndex = (index + unprocessedCount > binCount - 1) ?
           binCount - 1 : index + unprocessedCount - 1;
 
         rawDestination[i * size + currentIndex] = rawSource[i * size + currentIndex];
@@ -714,21 +707,21 @@ namespace Generation
   /////////////////////////////////////////////////////////////
 
   //// Layout
-  // 
+  //
   // Simd values are laid out:
-  // 
-  //        [left real     , left imaginary, right real     , right imaginary] or 
+  //
+  //        [left real     , left imaginary, right real     , right imaginary] or
   //        [left magnitude, left phase    , right magnitude, right phase    ],
-  // 
+  //
   // depending on the module's preferred way of handling data. (see @needsPolarData)
 
   //// Tips
-  // 
+  //
   // 1. When dealing with nyquist it's best to have a small section after your main algorithm to process it separately.
   // 2. Whenever in doubt, look at other algorithm implementations for ideas
 
-  void Filter::runNormal(EffectModule *effectModule, EffectModule::EffectData *effectData, 
-    Framework::ComplexDataSource &source, Framework::SimdBuffer *destination, 
+  void Filter::runNormal(EffectModule *effectModule, EffectModule::EffectData *effectData,
+    Framework::ComplexDataSource &source, Framework::SimdBuffer *destination,
     u32 binCount, float sampleRate) noexcept
   {
     using namespace utils;
@@ -754,7 +747,7 @@ namespace Generation
 
     // cutoff is described as exponential normalised value of the sample rate
     // it is dependent on the values of the low/high bounds
-    simd_float cutoffNorm = modOnce(lowBoundNorm + boundShift + boundsDistance * 
+    simd_float cutoffNorm = modOnce(lowBoundNorm + boundShift + boundsDistance *
       getParameter(effectData, Filter::Normal::Cutoff)->getInternalValue<simd_float>(sampleRate, true), 1.0f, false);
     simd_int cutoffIndices = toInt(normalisedToBin(cutoffNorm, FFTSize, sampleRate));
 
@@ -833,7 +826,7 @@ namespace Generation
         // convert db reduction to amplitude multiplier
         gains = dbToAmplitude(-gains);
 
-        rawDestination[index] = merge(rawDestination[index] * gains, rawDestination[index], 
+        rawDestination[index] = merge(rawDestination[index] * gains, rawDestination[index],
           isOutsideBounds(start, lowBoundIndices, highBoundIndices, isHighAboveLowMask));
       }, start, processedCount, binCount);
   }
@@ -894,7 +887,7 @@ namespace Generation
   }
 
   void Dynamics::runContrast(EffectModule *effectModule, EffectModule::EffectData *effectData,
-    Framework::ComplexDataSource &source, Framework::SimdBuffer *destination, 
+    Framework::ComplexDataSource &source, Framework::SimdBuffer *destination,
     u32 binCount, float sampleRate) noexcept
   {
     using namespace utils;
@@ -915,7 +908,7 @@ namespace Generation
     simd_float depthParameter = getParameter(effectData, Dynamics::Contrast::Depth)
       ->getInternalValue<simd_float>(sampleRate);
     simd_float contrast = depthParameter * depthParameter;
-    contrast = merge(simd_float(kContrastMaxNegativeValue) * contrast, 
+    contrast = merge(simd_float(kContrastMaxNegativeValue) * contrast,
       simd_float(kContrastMaxPositiveValue) * contrast, simd_float::greaterThanOrEqual(depthParameter, 0.0f));
 
     simd_float min = exp(simd_float(-80.0f) / (contrast * 2.0f + 1.0f));
@@ -934,7 +927,7 @@ namespace Generation
         inPower += complexMagnitude(rawDestination[index], false) &
           isInsideBounds(index, lowBoundIndices, highBoundIndices, isHighAboveLowMask);
       }, start, processedCount, binCount);
-    
+
     simd_int boundDistanceCount = (modOnce(simd_int{ binCount } + highBoundIndices - lowBoundIndices, simd_int{ binCount }) + 1)
       & simd_int::notEqual(lowBoundIndices, highBoundIndices);
     simd_float inScale = matchPower(toFloat(boundDistanceCount), inPower);
@@ -953,13 +946,13 @@ namespace Generation
         rawDestination[index] = bin;
       }, start, processedCount, binCount);
 
-    // normalising 
+    // normalising
     simd_float outScale = matchPower(inPower, outPower);
     circularLoop([&](u32 index) { rawDestination[index] *= outScale; }, start, processedCount, binCount);
   }
 
-  void Dynamics::runClip(EffectModule *effectModule, EffectModule::EffectData *effectData, 
-    Framework::ComplexDataSource &source, Framework::SimdBuffer *destination, 
+  void Dynamics::runClip(EffectModule *effectModule, EffectModule::EffectData *effectData,
+    Framework::ComplexDataSource &source, Framework::SimdBuffer *destination,
     u32 binCount, float sampleRate) noexcept
   {
     using namespace utils;
@@ -1013,7 +1006,7 @@ namespace Generation
         simd_mask isIndexInside = isInsideBounds(index, lowBoundIndices, highBoundIndices, isHighAboveLowMask);
         simd_float magnitude = complexMagnitude(rawDestination[index], false);
 
-        rawDestination[index] = merge(rawDestination[index], 
+        rawDestination[index] = merge(rawDestination[index],
           rawDestination[index] * sqrtThreshold / simd_float::sqrt(magnitude),
           simd_float::greaterThanOrEqual(magnitude, threshold) & isIndexInside);
 
@@ -1021,7 +1014,7 @@ namespace Generation
         outPower += simd_float::min(magnitude, threshold) & isIndexInside;
       }, start, processedCount, binCount);
 
-    // normalising 
+    // normalising
     simd_float outScale = matchPower(inPower, outPower);
     circularLoop([&](u32 index)
       {
@@ -1030,8 +1023,8 @@ namespace Generation
       }, start, processedCount, binCount);
   }
 
-  void Phase::runShift(EffectModule *effectModule, EffectModule::EffectData *effectData, 
-    Framework::ComplexDataSource &source, Framework::SimdBuffer *destination, 
+  void Phase::runShift(EffectModule *effectModule, EffectModule::EffectData *effectData,
+    Framework::ComplexDataSource &source, Framework::SimdBuffer *destination,
     u32 binCount, float sampleRate) noexcept
   {
     using namespace utils;
@@ -1051,7 +1044,7 @@ namespace Generation
       ->getInternalValue<simd_float>(sampleRate, true) * 2.0f - 1.0f));
     simd_float shift = shiftIncrement;
     simd_float interval = getParameter(effectData, Phase::Shift::Interval)->getInternalValue<simd_float>(sampleRate);
-    
+
     auto slopeFunction = [&]() -> simd_float(*)(simd_float, simd_float)
     {
       auto [slopeId, _] = getParameter(effectData, Phase::Shift::Slope)->getInternalValue<IndexedData>(sampleRate);
@@ -1101,7 +1094,7 @@ namespace Generation
         {
           simd_mask offsetMask = simd_int::greaterThanOrEqualSigned(index, offsetBin);
           simd_mask insideRangeMask = isInsideBounds(index, lowBoundIndices, highBoundIndices, isHighAboveLow);
-          rawDestination[index] = merge(rawDestination[index], 
+          rawDestination[index] = merge(rawDestination[index],
             complexCartMul(rawDestination[index], shift),
             offsetMask & insideRangeMask);
 
@@ -1112,7 +1105,7 @@ namespace Generation
     }
 
     // otherwise the interval specifies how many octaves up the next affected bin is
-    
+
     // offset is skewed towards an exp-like curve so we need to normalise it
     simd_float offsetNorm = getParameter(effectData, Phase::Shift::Offset)
       ->getInternalValue<simd_float>(sampleRate) * 2.0f / sampleRate;
@@ -1129,13 +1122,13 @@ namespace Generation
 
       simd_float startOffset = interval * binStep;
       COMPLEX_ASSERT(simd_float::lessThanOrEqual(startOffset, 0.0f).anyMask() == 0);
-        
+
       // this is derived below, the next 2 lines get the next bin after dc in case any channels started there
       simd_float multiple = simd_float::ceil(log2(binStep / startOffset) / logBase);
       startOffset *= exp2(logBase * multiple);
       offsetNorm = merge(offsetNorm, startOffset, zeroMask);
     }
-      
+
     auto algorithm = [&]()
     {
       simd_int indices = toInt(simd_float::round(offsetNorm * (float)binCount));
@@ -1154,8 +1147,8 @@ namespace Generation
 
       return true;
     };
-      
-    // if inteval < 1, then it's possible for the next while loop to make any progress, 
+
+    // if inteval < 1, then it's possible for the next while loop to make any progress,
     // so we make sure that interval * offsetNorm will yield a number at least as big as a single bin step
     {
       simd_float increment = interval * offsetNorm;
@@ -1181,7 +1174,7 @@ namespace Generation
         nextBin += binStep;
       }
     }
-      
+
     while (true)
     {
       if (!algorithm())
@@ -1191,8 +1184,8 @@ namespace Generation
     }
   }
 
-  void Pitch::runResample(EffectModule *effectModule, EffectModule::EffectData *effectData, 
-    Framework::ComplexDataSource &source, Framework::SimdBuffer *destination, 
+  void Pitch::runResample(EffectModule *effectModule, EffectModule::EffectData *effectData,
+    Framework::ComplexDataSource &source, Framework::SimdBuffer *destination,
     u32 binCount, float sampleRate) noexcept
   {
     using namespace utils;
@@ -1221,7 +1214,7 @@ namespace Generation
       auto cycle = binFloatingPointShift * source.blockPhase;
       // modding the phase to get more accurate values, not important
       cycle -= simd_float::round(cycle * 0.5f) * 2.0f;
-      phaseShift = cis(cycle * k2Pi);			
+      phaseShift = cis(cycle * k2Pi);
 
       simd_float denominator = (simd_float::round(binFloatingPointShift) - binFloatingPointShift) * k2Pi;
       simd_float numerator = (simd_float{ 0.0f, 1.0f } - switchInner(cis(denominator))) ^ simd_mask{ kSignMask, 0U };
@@ -1256,7 +1249,7 @@ namespace Generation
       simd_int starts[] = { lowBoundIndices & isHighAboveLow, lowBoundIndices & ~isHighAboveLow };
       // shortening the range by however many bins get shifted out of bounds as well
       simd_int lengths[] =
-      { 
+      {
         (highBoundIndices + 1) - starts[0] - toInt(simd_float::max(0.0f, toFloat(highBoundIndices) - downscaledNyquist)),
         (binCount - starts[1] - toInt(simd_float::max(0.0f, (float)(binCount - 1) - downscaledNyquist))) & ~isHighAboveLow
       };
@@ -1299,7 +1292,7 @@ namespace Generation
     {
       /*simd_float destinationIndices = shift * toFloat(lowBoundIndices);
       simd_float lengths = toFloat(modOnce(binCount + highBoundIndices - lowBoundIndices, binCount, false));
-     
+
       while (true)
       {
         simd_mask runCompletedMask = simd_mask::equal(getSign(lengths), kSignMask);
@@ -1332,8 +1325,8 @@ namespace Generation
     }
   }
 
-  void Pitch::runConstShift(EffectModule *effectModule, EffectModule::EffectData *effectData, 
-    Framework::ComplexDataSource &source, Framework::SimdBuffer *destination, 
+  void Pitch::runConstShift(EffectModule *effectModule, EffectModule::EffectData *effectData,
+    Framework::ComplexDataSource &source, Framework::SimdBuffer *destination,
     u32 binCount, float sampleRate) noexcept
   {
     using namespace utils;
@@ -1398,14 +1391,14 @@ namespace Generation
         simd_int clampedIndices = simd_int::clampSigned(0, binCount - 1, indices);
         simd_mask inRangeMask = simd_int::equal(indices, clampedIndices);
 
-        scatterAddComplex(rawDestination.pointer, clampedIndices, 
+        scatterAddComplex(rawDestination.pointer, clampedIndices,
           complexCartMul(wet, leakMultipliers[j]), inRangeMask);
       }
     }
   }
 
-  void Destroy::runReinterpret(EffectModule *effectModule, EffectModule::EffectData *effectData, 
-    Framework::ComplexDataSource &source, Framework::SimdBuffer *destination, 
+  void Destroy::runReinterpret(EffectModule *effectModule, EffectModule::EffectData *effectData,
+    Framework::ComplexDataSource &source, Framework::SimdBuffer *destination,
     u32 binCount, float sampleRate) noexcept
   {
     using namespace utils;
@@ -1463,9 +1456,9 @@ namespace Generation
 
       operations(wet[0], wet[1]);
 
-      rawDestination[i    ] = merge(wet[0], rawSource[i    ], 
+      rawDestination[i    ] = merge(wet[0], rawSource[i    ],
         isOutsideBounds(i    , lowBoundIndices, highBoundIndices, isHighAboveLow));
-      rawDestination[i + 1] = merge(wet[1], rawSource[i + 1], 
+      rawDestination[i + 1] = merge(wet[1], rawSource[i + 1],
         isOutsideBounds(i + 1, lowBoundIndices, highBoundIndices, isHighAboveLow));
     }
 
@@ -1475,7 +1468,7 @@ namespace Generation
   }
 
   static EffectModule::EffectData *
-  createEffect(Framework::ProcessorMetadata *processorMetadata, EffectModule *module, 
+  createEffect(Framework::ProcessorMetadata *processorMetadata, EffectModule *module,
     EffectModule::EffectData *copy = nullptr, void *jsonData = nullptr)
   {
     if (copy)
@@ -1506,7 +1499,7 @@ namespace Generation
       parameterCount = processorMetadata->parametersCount;
       effectParameters = module->createParameters(parameterCount, processorMetadata->parameters);
     }
-    
+
     effectData->parameters = effectParameters;
     effectData->parameterCount = parameterCount;
 
@@ -1532,12 +1525,12 @@ namespace Generation
     if (other.buffer)
     {
       buffer = Framework::SimdBuffer::create(arena, other.buffer->channels, state->getMaxBinCount());
-      Framework::applyToThisNoMask<utils::MathOperations::Assign>(buffer, 
+      Framework::applyToThisNoMask<utils::MathOperations::Assign>(buffer,
         other.buffer, buffer->channels, buffer->size);
     }
 
     auto [effectOption, _] = getParameter(EffectModule::ModuleType)->getInternalValue<Framework::IndexedData>();
-    
+
     auto *effect = other.effects;
     for (; effect && effect->metadata->id != effectOption->processorMetadata->id; effect = effect->next) { }
 
@@ -1551,11 +1544,11 @@ namespace Generation
 
     auto parametersToSerialise = utils::vector<Framework::ParameterValue *>{
       localScratch, effect->parameterCount + parameterCount };
-    
+
     auto parameter = parameters;
     for (usize i = 0; i < parameterCount; (++i), (parameter = parameter->next))
       parametersToSerialise.emplace_back(&parameter->object);
-    
+
     auto *effectParameter = effect->parameters;
     for (usize i = 0; i < effect->parameterCount; (++i), (effectParameter = effectParameter->next))
       parametersToSerialise.emplace_back(&effectParameter->object);
@@ -1589,7 +1582,7 @@ namespace Generation
 
     if (currentEffect->metadata->id == effectOption->processorMetadata->id)
       return currentEffect;
-    
+
     auto *effect = effects;
     while (true)
     {
@@ -1609,7 +1602,7 @@ namespace Generation
     effect->next = newEffect;
 
     currentActiveEffect.store(newEffect, satomi::memory_order_release);
-    
+
     return newEffect;
   }
 
@@ -1617,7 +1610,7 @@ namespace Generation
   {
     using namespace Framework;
     using namespace utils;
-        
+
     if (!getParameter(ModuleEnabled)->getInternalValue<u32>(sampleRate))
       return;
 

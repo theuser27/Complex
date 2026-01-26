@@ -1,12 +1,5 @@
-/*
-  ==============================================================================
 
-    MainInterface.cpp
-    Created: 10 Oct 2022 6:02:52pm
-    Author:  theuser27
-
-  ==============================================================================
-*/
+// Created: 2022-10-10 18:02:52
 
 #include "MainInterface.hpp"
 
@@ -39,6 +32,7 @@ namespace Interface
   {
     nvgFillColor(openGl.g, getColour(Skin::kBackground));
     nvgRect(openGl.g, 0.0f, 0.0f, (float)bounds.w, (float)bounds.h);
+
 
     //nvgFillColor(openGl.g, getColour(Skin::kBody));
     //nvgRect(openGl.g, (float)bottomBar.bounds.x, (float)bottomBar.bounds.y,
