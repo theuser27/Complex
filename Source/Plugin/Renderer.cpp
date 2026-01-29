@@ -86,6 +86,7 @@ namespace Interface
     bool isInitialised = false;
     bool isVisible = false;
     bool isResizing = false;
+    bool isHandlingOrphanedMouseEvents = false;
     bool hasEnteredResizeCorner = false;
     float fps = 60.0f;
 
@@ -605,17 +606,8 @@ namespace Interface
 
     if (mouseDownComponent_)
     {
-      newHoveredComponent = gui->getComponentAt(e.x, e.y);
-      bool hoverStealsMouseEvent = mouseDownComponent_ && newHoveredComponent &&
-        mouseDownComponent_ != newHoveredComponent && newHoveredComponent->componentFlags.stealsMouseEvents;
-
-      if (!hoverStealsMouseEvent)
-      {
-        mouseDownComponent_->mouseDrag(getRelativeEvent(e, mouseDownComponent_));
-        return;
-      }
-
-      eventFunc = &Component::mouseDrag;
+      mouseDownComponent_->mouseDrag(getRelativeEvent(e, mouseDownComponent_));
+      return;
     }
 
     if (!newHoveredComponent)
@@ -648,6 +640,8 @@ namespace Interface
   {
     handleMouseMove(e);
 
+    // TODO: handle more than 1 button being pressed
+
     mouseDownComponent_ = gui->getComponentAt(e.x, e.y, true);
     auto *newKeyboardFocusComponent = mouseDownComponent_;
     while (newKeyboardFocusComponent && !newKeyboardFocusComponent->componentFlags.wantsFocus)
@@ -676,11 +670,22 @@ namespace Interface
       while (mouseDownComponent_ && !mouseDownComponent_->componentFlags.clickable)
         mouseDownComponent_ = mouseDownComponent_->parent;
     }
+
+    // if the component has decided to not handle further mouse events
+    // this makes the upcoming mouse events orphaned, 
+    // which can be handled by other components if acceptsOrphanedMouseEvents == true
+    if (!mouseDownComponent_->componentFlags.isClicked)
+    {
+      mouseDownComponent_ = nullptr;
+      isHandlingOrphanedMouseEvents = true;
+    }
   }
 
   void Renderer::handleMouseUp(MouseEvent e)
   {
     handleMouseMove(e);
+
+    // TODO: handle more than 1 button being pressed
 
     bool exited = mouseHoveredComponent_ != mouseDownComponent_;
 
@@ -689,16 +694,10 @@ namespace Interface
       auto event = getRelativeEvent(e, mouseDownComponent_);
 
       auto *oldMouseDownComponent = mouseDownComponent_;
-      mouseDownComponent_ = nullptr;
+      if (!oldMouseDownComponent->mouseUp(event))
+        return;
 
-      if (exited && mouseHoveredComponent_ && mouseHoveredComponent_->componentFlags.stealsMouseEvents)
-      {
-        event.originalComponent = oldMouseDownComponent;
-        mouseHoveredComponent_->mouseUp(event);
-        oldMouseDownComponent->componentFlags.isClicked = false;
-      }
-      else
-        oldMouseDownComponent->mouseUp(event);
+      mouseDownComponent_ = nullptr;
 
       oldMouseDownComponent->componentFlags.isClicked = false;
       if (exited)

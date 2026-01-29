@@ -669,14 +669,20 @@ namespace utils
     return result[0];
   }
 
+  strict_inline float pow(float base, float exponent) noexcept
+  { return exp2(log2(base) * exponent); }
+
   strict_inline float exp(float exponent) noexcept
   { return exp2(exponent * kExpConversionMult); }
 
   strict_inline float log(float value) noexcept
   { return log2(value) * kLogConversionMult; }
 
-  strict_inline float pow(float base, float exponent) noexcept
-  { return exp2(log2(base) * exponent); }
+  strict_inline float exp10(float exponent) noexcept
+  { return exp2(exponent * kExp10ConversionMult); }
+
+  strict_inline float log10(float exponent) noexcept
+  { return log2(exponent * kLog10ConversionMult); }
 
   strict_inline simd_float powerScale(simd_float value, simd_float power)
   {

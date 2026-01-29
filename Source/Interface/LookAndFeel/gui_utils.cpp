@@ -10,8 +10,6 @@ namespace Interface
 {
   MouseEvent MouseEvent::getEventRelativeTo(Component *otherComponent) const noexcept
   {
-    COMPLEX_ASSERT(otherComponent != nullptr);
-
     MouseEvent ret = *this;
     ret.eventComponent = otherComponent;
     auto newPosition = otherComponent->getRelativePoint(eventComponent, Point{ x, y });

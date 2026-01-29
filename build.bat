@@ -9,12 +9,13 @@ set clap=0
 for %%a in (%*) do set "%%~a=1"
 if "%standalone%"=="1"           echo [standalone build]     && set vst=0 && set clap=0
 if "%clap%"=="1"                 echo [clap build]           && set vst=0 && set standalone=0
-if "%vst%"=="1"                  echo [vst build]            && set standalone=0 && clap=0
+if "%vst%"=="1"                  echo [vst build]            && set standalone=0 && set clap=0
 if "%release%"=="1"              echo [release mode]         && set debug=0
 if "%debug%"=="1"                echo [debug mode]           && set release=0
 if "%~1"==""                     echo [assuming `vst` build] && set vst=1
 if "%~1"=="release" if "%~2"=="" echo [assuming `vst` build] && set vst=1
 
+echo:
 
 set top_level=..\..\..
 set compiler_flags= /I%top_level%\Source\ /std:c++20 /nologo /diagnostics:column /FC /permissive- /MP /Zc:preprocessor /W4 /wd"4201" /sdl- /Zc:inline /fp:precise /D "PUGL_STATIC" /D "_CRT_SECURE_NO_WARNINGS" /D "_MBCS" /errorReport:prompt /GR- /Gd
@@ -56,12 +57,12 @@ where cl > NUL 2> NUL
 if %ERRORLEVEL% neq 0 (
   echo cl.exe wasn't found
   echo trying to set up native tools cmd
-  call "C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Auxiliary\Build\vcvarsall.bat" x64
+  call "%VS2022INSTALLDIR%\VC\Auxiliary\Build\vcvarsall.bat" x64
+  echo:
 )
 
 call :StartTimer
 
-echo %build_dir%
 if not exist %build_dir% mkdir %build_dir%
 pushd %build_dir%
 
@@ -74,6 +75,9 @@ del vc*0.pdb > NUL 2> NUL
 del *.lib > NUL 2> NUL
 
 popd
+
+echo %cd%\%build_dir%
+echo:
 
 call :StopTimer
 call :DisplayTimerResult

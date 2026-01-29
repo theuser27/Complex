@@ -10,7 +10,6 @@
 
 #include "BaseControl.hpp"
 
-#include "Third Party/gcem/gcem.hpp"
 #include "Framework/update_types.hpp"
 #include "Framework/parameter_value.hpp"
 #include "Framework/parameter_bridge.hpp"
@@ -19,133 +18,135 @@
 #include "../LookAndFeel/Graphics.hpp"
 #include "../LookAndFeel/Shaders.hpp"
 #include "../LookAndFeel/Skin.hpp"
-#include "OpenGlQuad.hpp"
-#include "OpenGlImage.hpp"
-#include "../Sections/Popups.hpp"
-//#include "TextEditor.hpp"
 #include "Plugin/Renderer.hpp"
 
 namespace Interface
 {
   static float getSampleRate() noexcept { return getPlugin(uiRelated.renderer).getSampleRate(); }
 
-  bool BaseSlider::mouseDown(const MouseEvent &e)
+  bool 
+  BaseSlider::mouseDown(const MouseEvent &e)
   {
-    lastMouseDragPosition_ = { e.x, e.y };
+    lastMouseDragPosition = { e.x, e.y };
 
-    if (e.mods.isAltDown() && controlFlags.canInputValue)
+    if (e.mods.test(ModifierKeys::altModifier) && controlFlags.canInputValue)
     {
-      showTextEntry();
+      componentFlags.isClicked = false;
+      mouseExit(e);
+
+      if (controlFlags.hasParameter)
+        showTextEntry();
+
       return true;
     }
 
-    if (e.mods.isPopupMenu())
+    if (e.mods.test(ModifierKeys::popupMenuClickModifier))
     {
-      auto *selector = getPopupSelector();
-      selector->
-      showPopupSelector(this, { e.x, e.y }, createPopupMenu(),
-        [this](int selection) { handlePopupResult(selection); }, {}, kMinPopupWidth);
+      componentFlags.isClicked = false;
+      mouseExit(e);
+
+      if (controlFlags.hasParameter)
+        createPopupMenu(getPopupSelector(), { e.x, e.y });
+
       return true;
     }
 
-    if (!controlFlags.resetValueOnDoubleClick && e.mods.withoutMouseButtons() == resetValueModifiers_)
+    if (!controlFlags.resetValueOnDoubleClick && 
+      resetValueModifiers != ModifierKeys::noModifiers &&
+      e.mods.withoutFlags(ModifierKeys::allMouseButtonModifiers) == resetValueModifiers)
     {
       resetValue();
-      showPopup(true);
+      showPopup();
       return true;
     }
 
-    showPopup(true);
+    showPopup();
 
-    if (parameterLink_ && parameterLink_->hostControl)
-      parameterLink_->hostControl->beginChangeGesture();
+    if (parameterLink && parameterLink->hostControl)
+      parameterLink->hostControl->beginChangeGesture();
 
     beginChange(getValue());
 
     mouseDrag(e);
 
-    animator_.isClicked = true;
-
-    for (auto *listener : controlListeners_)
+    for (auto *listener : controlListeners)
       listener->mouseDown(this, e);
 
     return true;
   }
 
-  bool BaseSlider::mouseDrag(const MouseEvent &e)
+  bool 
+  BaseSlider::mouseDrag(const MouseEvent &e)
   {
     if (!componentFlags.isClicked)
       return false;
 
     auto mouseDiff = (controlFlags.isHorizotalDraggable) ? 
-      e.x - lastMouseDragPosition_.x : lastMouseDragPosition_.y - e.y;
-    lastMouseDragPosition_ = { e.x, e.y };
+      e.x - lastMouseDragPosition.x : lastMouseDragPosition.y - e.y;
+    lastMouseDragPosition = { e.x, e.y };
 
-    double newPos = getValue() + mouseDiff * (1.0 / sensitivity_);
+    double newPos = getValue() + mouseDiff * (1.0 / sensitivity);
     newPos = (controlFlags.canLoopAround) ? newPos - ::floor(newPos) : utils::clamp(newPos, 0.0, 1.0);
 
     setValue(newPos, true);
     setValueToHost();
 
-    if (!e.mods.isPopupMenu())
-      showPopup(true);
-
     return true;
   }
 
-  bool BaseSlider::mouseUp(const MouseEvent &e)
+  bool 
+  BaseSlider::mouseUp(const MouseEvent &e)
   {
-    if (!componentFlags.isClicked || e.mods.isPopupMenu() || e.mods.isAltDown())
+    if (!componentFlags.isClicked)
       return false;
 
     endChange();
-    if (parameterLink_ && parameterLink_->hostControl)
-      parameterLink_->hostControl->endChangeGesture();
+    if (parameterLink && parameterLink->hostControl)
+      parameterLink->hostControl->endChangeGesture();
 
-    animator_.isClicked = false;
-
-    if (e.numberOfClicks >= 2)
+    if (e.numberOfClicks == 2)
     {
-      if (!controlFlags.resetValueOnDoubleClick || e.mods.isPopupMenu())
-        return;
+      if (!controlFlags.resetValueOnDoubleClick || 
+        e.mods.test(ModifierKeys::popupMenuClickModifier))
+        return true;
 
       resetValue();
+      showPopup();
 
-      showPopup(true);
+      return true;
     }
 
-    for (auto *listener : controlListeners_)
+    for (auto *listener : controlListeners)
       listener->mouseUp(this, e);
 
     return true;
   }
 
-  bool BaseSlider::mouseEnter(const MouseEvent &e)
+  bool 
+  BaseSlider::mouseEnter(const MouseEvent &e)
   {
-    animator_.isHovered = true;
-
-    for (auto *listener : controlListeners_)
+    for (auto *listener : controlListeners)
       listener->hoverStarted(this, e);
 
     if (controlFlags.showPopupOnHover)
-      showPopup(true);
+      showPopup();
 
     return true;
   }
 
-  bool BaseSlider::mouseExit(const MouseEvent &e)
+  bool 
+  BaseSlider::mouseExit(const MouseEvent &e)
   {
-    animator_.isHovered = false;
-
-    for (auto *listener : controlListeners_)
+    for (auto *listener : controlListeners)
       listener->hoverEnded(this, e);
 
-    hidePopup(true);
+    hidePopup();
 
     return true;
   }
 
-  bool BaseSlider::mouseWheelMove(const MouseEvent &e)
+  bool 
+  BaseSlider::mouseWheelMove(const MouseEvent &e)
   {
     if (!controlFlags.canUseScrollWheel)
       return false;
@@ -158,7 +159,7 @@ namespace Interface
     //
     //lastMouseWheelTime_ = e.eventTime;
 
-    if (e.mods.isAnyMouseButtonDown())
+    if (e.mods.test(ModifierKeys::allMouseButtonModifiers))
       return true;
     
     auto value = getValue();
@@ -169,11 +170,11 @@ namespace Interface
     if (valueDelta == 0.0)
       return true;
     
-    auto newValue = value + utils::max(valueInterval_, ::fabs(valueDelta)) * (valueDelta < 0.0 ? -1.0 : 1.0);
+    auto newValue = value + utils::max(valueInterval, ::fabs(valueDelta)) * (valueDelta < 0.0 ? -1.0 : 1.0);
 
-    bool isMapped = parameterLink_ && parameterLink_->hostControl;
+    bool isMapped = parameterLink && parameterLink->hostControl;
     if (isMapped)
-      parameterLink_->hostControl->beginChangeGesture();
+      parameterLink->hostControl->beginChangeGesture();
 
     if (!controlFlags.hasBegunChange)
       beginChange(value);
@@ -182,73 +183,11 @@ namespace Interface
     setValueToHost();
 
     if (isMapped)
-      parameterLink_->hostControl->endChangeGesture();
+      parameterLink->hostControl->endChangeGesture();
 
-    showPopup(true);
+    showPopup();
 
     return true;
-  }
-
-
-
-
-
-  void BaseSlider::addTextEntry()
-  {
-    if (textEntry_)
-      return;
-
-    canInputValue_ = true;
-
-    textEntry_ = utils::up<TextEditor>::create("Slider Text Entry");
-    textEntry_->setMultiLine(false);
-    textEntry_->setScrollToShowCursor(true);
-    textEntry_->addListener(this);
-    textEntry_->setSelectAllWhenFocused(true);
-    textEntry_->setKeyboardType(TextEditor::numericKeyboard);
-    textEntry_->setJustification(Justification::centred);
-    textEntry_->setIndents(0, 0);
-    textEntry_->setBorder({ 0, 0, 0, 0 });
-    textEntry_->setAlwaysOnTop(true);
-    textEntry_->setInterceptsMouseClicks(true, false);
-    textEntry_->getImageComponent().setRenderFunction(
-      [this](OpenGlWrapper &openGl, OpenGlComponent &target)
-      {
-        ScopedBoundsEmplace b{ openGl.parentStack, textEntry_.get() };
-        target.render(openGl);
-      });
-    addChildComponent(textEntry_.get());
-  }
-
-  void BaseSlider::removeTextEntry()
-  {
-    canInputValue_ = false;
-    if (textEntry_)
-    {
-      removeChildComponent(textEntry_.get());
-      textEntry_ = nullptr;
-    }
-  }
-
-  void BaseSlider::showTextEntry()
-  {
-    std::string text = (!hasParameter()) ? floatToString(getValue()) :
-      floatToString(Framework::scaleValue(getValue(), details_, getSampleRate(), true), maxDecimalCharacters_);
-
-    textEntry_->setText(text);
-    textEntry_->selectAll();
-    if (textEntry_->isVisible())
-      textEntry_->grabKeyboardFocus();
-    textEntry_->setVisible(true);
-  }
-
-  void BaseSlider::textEditorReturnKeyPressed(TextEditor &editor)
-  {
-    if (&editor != textEntry_.get())
-      return;
-
-    updateValueFromTextEntry();
-    textEntry_->setVisible(false);
   }
 
 
@@ -265,216 +204,189 @@ namespace Interface
 
   RotarySlider::RotarySlider(Framework::ParameterValue *parameter) : BaseSlider{ parameter }
   {
-    hasLabel = true;
-    labelPlacement_ = Placement::right;
-
-    addTextEntry();
-    changeTextEntryFont(uiRelated.cache->getDDinFont());
-
-    quadComponent_.setMaxArc(kRotaryAngle);
-    quadComponent_.setFragmentShader(Shaders::kRotarySliderFragment);
-    animator_.setHoverIncrement(0.15f);
-
-    imageComponent_.setPaintFunction([this](Graphics &g, Rectangle<int>) { drawShadow(g); });
-
-    addOpenGlComponent(&imageComponent_);
-    addOpenGlComponent(&quadComponent_);
-    addOpenGlComponent(&textEntry_->getImageComponent());
-
-    imageComponent_.setIgnoreClip(this);
-    textEntry_->getImageComponent().setIgnoreClip(this);
-
     // yes i know this is dumb but it works for now
-    if (details_.minValue == -details_.maxValue)
+    if (details.minValue == -details.maxValue)
     {
-      setBipolar(true);
-      setShouldUsePlusMinusPrefix(true);
+      controlFlags.isBipolar = true;
+      controlFlags.shouldUsePlusMinusPrefix = true;
     }
   }
 
-  bool RotarySlider::render(OpenGlWrapper &openGl)
+  bool 
+  RotarySlider::render(OpenGlWrapper &openGl)
   {
-    animator_.tick();
-    quadComponent_.setThickness(knobArcThickness_ +
-      knobArcThickness_ * 0.15f * animator_.getValue(Animator::Hover));
+    static constexpr float kHoverIncrement = 0.15f;
+
+    animator.tick(componentFlags.isHovered, componentFlags.isClicked, kHoverIncrement, 0.0f);
+    float thickness = knobArcThickness * (1.0f + 0.15f * animator.getValue(Animator::Hover));
+    
+    // TODO:
 
     return true;
   }
 
-  bool RotarySlider::mouseDrag(const MouseEvent &e)
+  bool 
+  RotarySlider::mouseDrag(const MouseEvent &e)
   {
-    auto oldSensitivity = sensitivity_;
+    auto oldSensitivity = sensitivity;
 
-    controlFlags.isInSensitiveMode = e.mods.isShiftDown();
+    controlFlags.isInSensitiveMode = e.mods.test(ModifierKeys::shiftModifier);
     if (controlFlags.isInSensitiveMode)
-      sensitivity_ = kDefaultRotaryDragLength / (sensitivity_ * kSlowDragMultiplier);
+      sensitivity = kDefaultRotaryDragLength / (sensitivity * kSlowDragMultiplier);
 
     auto result = BaseSlider::mouseDrag(e);
 
-    sensitivity_ = oldSensitivity;
+    sensitivity = oldSensitivity;
     return result;
   }
 
-  void RotarySlider::drawShadow(Graphics &g) const
+  static void drawRotaryShadow(RotarySlider *rotary, Graphics &g)
   {
-    Colour shadowColor = getColour(Skin::kShadow);
+    //Colour shadowColor = getColour(Skin::kShadow);
 
-    auto width = (float)drawBounds_.getWidth();
-    auto height = (float)drawBounds_.getHeight();
+    //auto width = (float)drawBounds_.getWidth();
+    //auto height = (float)drawBounds_.getHeight();
 
-    float centerX = width / 2.0f;
-    float centerY = height / 2.0f;
-    float strokeWidth = Interface::getValue(Skin::kKnobArcThickness, true, skinOverride);
-    float radius = knobSizeScale_ * Interface::getValue(Skin::kKnobArcSize, true, skinOverride) / 2.0f;
-    float shadowWidth = Interface::getValue(Skin::kKnobShadowWidth, true, skinOverride);
-    float shadowOffset = Interface::getValue(Skin::kKnobShadowOffset, true, skinOverride);
+    //float centerX = width / 2.0f;
+    //float centerY = height / 2.0f;
+    //float strokeWidth = Interface::getValue(Skin::kKnobArcThickness, true, skinOverride);
+    //float radius = knobSizeScale_ * Interface::getValue(Skin::kKnobArcSize, true, skinOverride) / 2.0f;
+    //float shadowWidth = Interface::getValue(Skin::kKnobShadowWidth, true, skinOverride);
+    //float shadowOffset = Interface::getValue(Skin::kKnobShadowOffset, true, skinOverride);
 
-    Colour body = getColour(Skin::kRotaryBody);
-    float bodyRadius = knobSizeScale_ * Interface::getValue(Skin::kKnobBodySize, true, skinOverride) / 2.0f;
-    if (bodyRadius >= 0.0f && bodyRadius < width)
-    {
-      if (shadowWidth > 0.0f)
-      {
-        Colour transparentShadow = shadowColor.withAlpha(0.0f);
-        float shadowRadius = bodyRadius + shadowWidth;
-        ColourGradient shadowGradient(shadowColor, centerX, centerY + shadowOffset,
-          transparentShadow, centerX - shadowRadius, centerY + shadowOffset, true);
-        float shadowStart = utils::max(0.0f, bodyRadius - std::abs(shadowOffset)) / shadowRadius;
-        shadowGradient.addColour(shadowStart, shadowColor);
-        shadowGradient.addColour(1.0f - (1.0f - shadowStart) * 0.75f, shadowColor.withMultipliedAlpha(0.5625f));
-        shadowGradient.addColour(1.0f - (1.0f - shadowStart) * 0.5f, shadowColor.withMultipliedAlpha(0.25f));
-        shadowGradient.addColour(1.0f - (1.0f - shadowStart) * 0.25f, shadowColor.withMultipliedAlpha(0.0625f));
-        g.setGradientFill(shadowGradient);
-        g.fillRect(getLocalBounds());
-      }
+    //Colour body = getColour(Skin::kRotaryBody);
+    //float bodyRadius = knobSizeScale_ * Interface::getValue(Skin::kKnobBodySize, true, skinOverride) / 2.0f;
+    //if (bodyRadius >= 0.0f && bodyRadius < width)
+    //{
+    //  if (shadowWidth > 0.0f)
+    //  {
+    //    Colour transparentShadow = shadowColor.withAlpha(0.0f);
+    //    float shadowRadius = bodyRadius + shadowWidth;
+    //    ColourGradient shadowGradient(shadowColor, centerX, centerY + shadowOffset,
+    //      transparentShadow, centerX - shadowRadius, centerY + shadowOffset, true);
+    //    float shadowStart = utils::max(0.0f, bodyRadius - std::abs(shadowOffset)) / shadowRadius;
+    //    shadowGradient.addColour(shadowStart, shadowColor);
+    //    shadowGradient.addColour(1.0f - (1.0f - shadowStart) * 0.75f, shadowColor.withMultipliedAlpha(0.5625f));
+    //    shadowGradient.addColour(1.0f - (1.0f - shadowStart) * 0.5f, shadowColor.withMultipliedAlpha(0.25f));
+    //    shadowGradient.addColour(1.0f - (1.0f - shadowStart) * 0.25f, shadowColor.withMultipliedAlpha(0.0625f));
+    //    g.setGradientFill(shadowGradient);
+    //    g.fillRect(getLocalBounds());
+    //  }
 
-      g.setColour(body);
-      juce::Rectangle ellipse{ centerX - bodyRadius, centerY - bodyRadius, 2.0f * bodyRadius, 2.0f * bodyRadius };
-      g.fillEllipse(ellipse);
+    //  g.setColour(body);
+    //  juce::Rectangle ellipse{ centerX - bodyRadius, centerY - bodyRadius, 2.0f * bodyRadius, 2.0f * bodyRadius };
+    //  g.fillEllipse(ellipse);
 
-      ColourGradient borderGradient(getColour(Skin::kRotaryBodyBorder), centerX, 0.0f,
-        body, centerX, 0.75f * height, false);
+    //  ColourGradient borderGradient(getColour(Skin::kRotaryBodyBorder), centerX, 0.0f,
+    //    body, centerX, 0.75f * height, false);
 
-      g.setGradientFill(borderGradient);
-      g.drawEllipse(ellipse.reduced(0.5f), 1.0f);
-    }
+    //  g.setGradientFill(borderGradient);
+    //  g.drawEllipse(ellipse.reduced(0.5f), 1.0f);
+    //}
 
-    Path shadowOutline;
-    Path shadowPath;
+    //Path shadowOutline;
+    //Path shadowPath;
 
-    PathStrokeType shadowStroke(strokeWidth + 1, PathStrokeType::beveled, PathStrokeType::rounded);
-    shadowOutline.addCentredArc(centerX, centerY, radius, radius,
-      0.0f, -kRotaryAngle, kRotaryAngle, true);
-    shadowStroke.createStrokedPath(shadowPath, shadowOutline);
-    if ((!getColour(Skin::kRotaryArcUnselected).isTransparent() && isActive()) ||
-      (!getColour(Skin::kRotaryArcUnselectedDisabled).isTransparent() && !isActive()))
-    {
-      g.setColour(shadowColor);
-      g.fillPath(shadowPath);
-    }
+    //PathStrokeType shadowStroke(strokeWidth + 1, PathStrokeType::beveled, PathStrokeType::rounded);
+    //shadowOutline.addCentredArc(centerX, centerY, radius, radius,
+    //  0.0f, -kRotaryAngle, kRotaryAngle, true);
+    //shadowStroke.createStrokedPath(shadowPath, shadowOutline);
+    //if ((!getColour(Skin::kRotaryArcUnselected).isTransparent() && isActive()) ||
+    //  (!getColour(Skin::kRotaryArcUnselectedDisabled).isTransparent() && !isActive()))
+    //{
+    //  g.setColour(shadowColor);
+    //  g.fillPath(shadowPath);
+    //}
   }
 
   PinSlider::PinSlider(Framework::ParameterValue *parameter) : BaseSlider(parameter)
   {
-    quadComponent_.setFragmentShader(Shaders::kPinSliderFragment);
-    imageComponent_.setAlwaysOnTop(true);
-    imageComponent_.setPaintFunction([this](Graphics &g, juce::Rectangle<int>)
-      {
-        static constexpr float kWidth = 10.0f;
-        static constexpr float kHeight = kWidth * 0.9f;
-        static constexpr float kRounding = 1.0f;
-        static constexpr float kVerticalSideYLength = 4.0f;
-        static constexpr float kRotatedSideAngle = kPi * 0.25f;
+    controlFlags.shouldShowPopup = true;
+  }
 
-        static constexpr float controlPoint1YOffset = gcem::tan(kRotatedSideAngle / 2.0f) * kRounding;
-        static constexpr float controlPoint2XOffset = controlPoint1YOffset * gcem::cos(kRotatedSideAngle);
-        static constexpr float controlPoint2YOffset = controlPoint1YOffset * gcem::sin(kRotatedSideAngle);
+  bool PinSlider::render(OpenGlWrapper &openGl)
+  {
+    //static constexpr float kWidth = 10.0f;
+    //static constexpr float kHeight = kWidth * 0.9f;
+    //static constexpr float kRounding = 1.0f;
+    //static constexpr float kVerticalSideYLength = 4.0f;
+    //static constexpr float kRotatedSideAngle = kPi * 0.25f;
 
-        static constexpr float controlPoint3XOffset = controlPoint2XOffset;
-        static constexpr float controlPoint3YOffset = controlPoint2YOffset;
+    //static constexpr float controlPoint1YOffset = gcem::tan(kRotatedSideAngle / 2.0f) * kRounding;
+    //static constexpr float controlPoint2XOffset = controlPoint1YOffset * gcem::cos(kRotatedSideAngle);
+    //static constexpr float controlPoint2YOffset = controlPoint1YOffset * gcem::sin(kRotatedSideAngle);
 
-        static const Path pinPentagon = []()
-        {
-          Path shape{};
+    //static constexpr float controlPoint3XOffset = controlPoint2XOffset;
+    //static constexpr float controlPoint3YOffset = controlPoint2YOffset;
 
-          // top
-          shape.startNewSubPath(kWidth * 0.5f, 0.0f);
-          shape.lineTo(kWidth - kRounding, 0.0f);
-          shape.quadraticTo(kWidth, 0.0f, kWidth, kRounding);
+    //static const Path pinPentagon = []()
+    //{
+    //  Path shape{};
 
-          // right vertical
-          shape.lineTo(kWidth, kVerticalSideYLength - controlPoint1YOffset);
-          shape.quadraticTo(kWidth, kVerticalSideYLength,
-            kWidth - controlPoint2XOffset, kVerticalSideYLength + controlPoint2YOffset);
+    //  // top
+    //  shape.startNewSubPath(kWidth * 0.5f, 0.0f);
+    //  shape.lineTo(kWidth - kRounding, 0.0f);
+    //  shape.quadraticTo(kWidth, 0.0f, kWidth, kRounding);
 
-          // right sideways
-          shape.lineTo(kWidth * 0.5f + controlPoint3XOffset, kHeight - controlPoint3YOffset);
-          shape.quadraticTo(kWidth * 0.5f, kHeight,
-            kWidth * 0.5f - controlPoint3XOffset, kHeight - controlPoint3YOffset);
+    //  // right vertical
+    //  shape.lineTo(kWidth, kVerticalSideYLength - controlPoint1YOffset);
+    //  shape.quadraticTo(kWidth, kVerticalSideYLength,
+    //    kWidth - controlPoint2XOffset, kVerticalSideYLength + controlPoint2YOffset);
 
-          // left sideways
-          shape.lineTo(controlPoint2XOffset, kVerticalSideYLength + controlPoint2YOffset);
-          shape.quadraticTo(0.0f, kVerticalSideYLength,
-            0.0f, kVerticalSideYLength - controlPoint2YOffset);
+    //  // right sideways
+    //  shape.lineTo(kWidth * 0.5f + controlPoint3XOffset, kHeight - controlPoint3YOffset);
+    //  shape.quadraticTo(kWidth * 0.5f, kHeight,
+    //    kWidth * 0.5f - controlPoint3XOffset, kHeight - controlPoint3YOffset);
 
-          // left vertical
-          shape.lineTo(0.0f, kRounding);
-          shape.quadraticTo(0.0f, 0.0f, kRounding, 0.0f);
+    //  // left sideways
+    //  shape.lineTo(controlPoint2XOffset, kVerticalSideYLength + controlPoint2YOffset);
+    //  shape.quadraticTo(0.0f, kVerticalSideYLength,
+    //    0.0f, kVerticalSideYLength - controlPoint2YOffset);
 
-          shape.closeSubPath();
-          return shape;
-        }();
+    //  // left vertical
+    //  shape.lineTo(0.0f, kRounding);
+    //  shape.quadraticTo(0.0f, 0.0f, kRounding, 0.0f);
 
-        auto bounds = drawBounds_.withZeroOrigin().toFloat();
-        g.setColour(getThumbColor());
-        g.fillPath(pinPentagon, pinPentagon.getTransformToScaleToFit(bounds, true, Justification::top));
-      });
+    //  shape.closeSubPath();
+    //  return shape;
+    //}();
 
-    addTextEntry();
-    setShouldShowPopup(true);
+    //auto bounds = drawBounds_.withZeroOrigin().toFloat();
+    //g.setColour(getThumbColor());
+    //g.fillPath(pinPentagon, pinPentagon.getTransformToScaleToFit(bounds, true, Justification::top));
 
-    addOpenGlComponent(&quadComponent_);
-    addOpenGlComponent(&imageComponent_);
-    addOpenGlComponent(&textEntry_->getImageComponent());
+    return false;
   }
 
   bool PinSlider::mouseDown(const MouseEvent &e)
   {
-    if (e.mods.isPopupMenu())
-    {
-      PopupItem options = createPopupMenu();
-      showPopupSelector(this, e.getPosition(), COMPLEX_MOVE(options),
-        [this](int selection) { handlePopupResult(selection); }, {}, kMinPopupWidth);
-      return true;
-    }
+    if (e.mods.test(ModifierKeys::popupMenuClickModifier))
+      return BaseSlider::mouseDown(e);
 
     auto mouseEvent = e.getEventRelativeTo(parent);
-    lastMouseDragPosition_ = { mouseEvent.x, mouseEvent.y };
-    runningTotal_ = getValue();
+    lastMouseDragPosition = { mouseEvent.x, mouseEvent.y };
+    runningTotal = getValue();
 
     return BaseSlider::mouseDown(mouseEvent);
   }
 
-  void PinSlider::mouseDrag(const MouseEvent &e)
+  bool PinSlider::mouseDrag(const MouseEvent &e)
   {
     float multiply = 1.0f;
 
-    flags_.sensitiveMode = e.mods.isShiftDown();
-    if (flags_.sensitiveMode)
+    controlFlags.isInSensitiveMode = e.mods.test(ModifierKeys::shiftModifier);
+    if (controlFlags.isInSensitiveMode)
       multiply *= kSlowDragMultiplier;
 
-    auto mouseEvent = e.getEventRelativeTo(parent_);
+    auto mouseEvent = e.getEventRelativeTo(parent);
 
-    auto normalisedDiff = ((double)mouseEvent.position.x - lastMouseDragPosition_.x) / totalRange_;
-    runningTotal_ += multiply * normalisedDiff;
-    setValue(utils::clamp(runningTotal_, 0.0, 1.0), true);
-    lastMouseDragPosition_ = { mouseEvent.x, mouseEvent.y };
+    auto normalisedDiff = ((double)mouseEvent.x - lastMouseDragPosition.x) / totalRange;
+    runningTotal += multiply * normalisedDiff;
+    setValue(utils::clamp(runningTotal, 0.0, 1.0), true);
+    lastMouseDragPosition = { mouseEvent.x, mouseEvent.y };
 
     setValue(getValue(), false);
     setValueToHost();
-
-    if (!e.mods.isPopupMenu())
-      showPopup(true);
   }
 
   TextSelector::TextSelector(Framework::ParameterValue *parameter) : BaseSlider(parameter)
@@ -607,6 +519,8 @@ namespace Interface
 
       ++currentIndex;
     }
+
+    controlFlags.isInModalState = true;
 
     showPopupSelector(this, popupPlacement_, COMPLEX_MOVE(options),
       [this](int value)

@@ -102,7 +102,7 @@ int fonsExpandAtlas(FONScontext* s, int width, int height);
 int fonsResetAtlas(FONScontext* stash, int width, int height);
 
 // Add fonts
-int fonsAddFont(FONScontext* s, const char* name, const char* path, int fontIndex);
+//int fonsAddFont(FONScontext* s, const char* name, const char* path, int fontIndex);
 int fonsAddFontMem(FONScontext* s, const char* name, unsigned char* data, int ndata, int freeData, int fontIndex);
 int fonsGetFontByName(FONScontext* s, const char* name);
 
@@ -913,33 +913,33 @@ error:
 	return FONS_INVALID;
 }
 
-int fonsAddFont(FONScontext* stash, const char* name, const char* path, int fontIndex)
-{
-	FILE* fp = 0;
-	int dataSize = 0;
-	size_t readed;
-	unsigned char* data = NULL;
-
-	// Read in the font data.
-	fp = fopen(path, "rb");
-	if (fp == NULL) goto error;
-	fseek(fp,0,SEEK_END);
-	dataSize = (int)ftell(fp);
-	fseek(fp,0,SEEK_SET);
-	data = (unsigned char*)malloc(dataSize);
-	if (data == NULL) goto error;
-	readed = fread(data, 1, dataSize, fp);
-	fclose(fp);
-	fp = 0;
-	if (readed != (size_t)dataSize) goto error;
-
-	return fonsAddFontMem(stash, name, data, dataSize, 1, fontIndex);
-
-error:
-	if (data) free(data);
-	if (fp) fclose(fp);
-	return FONS_INVALID;
-}
+//int fonsAddFont(FONScontext* stash, const char* name, const char* path, int fontIndex)
+//{
+//	FILE* fp = 0;
+//	int dataSize = 0;
+//	size_t readed;
+//	unsigned char* data = NULL;
+//
+//	// Read in the font data.
+//	fp = fopen(path, "rb");
+//	if (fp == NULL) goto error;
+//	fseek(fp,0,SEEK_END);
+//	dataSize = (int)ftell(fp);
+//	fseek(fp,0,SEEK_SET);
+//	data = (unsigned char*)malloc(dataSize);
+//	if (data == NULL) goto error;
+//	readed = fread(data, 1, dataSize, fp);
+//	fclose(fp);
+//	fp = 0;
+//	if (readed != (size_t)dataSize) goto error;
+//
+//	return fonsAddFontMem(stash, name, data, dataSize, 1, fontIndex);
+//
+//error:
+//	if (data) free(data);
+//	if (fp) fclose(fp);
+//	return FONS_INVALID;
+//}
 
 int fonsAddFontMem(FONScontext* stash, const char* name, unsigned char* data, int dataSize, int freeData, int fontIndex)
 {

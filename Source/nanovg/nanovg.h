@@ -391,7 +391,7 @@ float nvgRadToDeg(float rad);
 
 // Creates image by loading it from the disk from specified file name.
 // Returns handle to the image.
-int nvgCreateImage(NVGcontext* ctx, const char* filename, int imageFlags);
+//int nvgCreateImage(NVGcontext* ctx, const char* filename, int imageFlags);
 
 // Creates image by loading it from the specified chunk of memory.
 // Returns handle to the image.
@@ -566,10 +566,10 @@ void nvgStroke(NVGcontext* ctx);
 
 // Creates font by loading it from the disk from specified file name.
 // Returns handle to the font.
-int nvgCreateFont(NVGcontext* ctx, const char* name, const char* filename);
+//int nvgCreateFont(NVGcontext* ctx, const char* name, const char* filename);
 
 // fontIndex specifies which font face to load from a .ttf/.ttc file.
-int nvgCreateFontAtIndex(NVGcontext* ctx, const char* name, const char* filename, const int fontIndex);
+//int nvgCreateFontAtIndex(NVGcontext* ctx, const char* name, const char* filename, const int fontIndex);
 
 // Creates font by loading it from the specified memory chunk.
 // Returns handle to the font.

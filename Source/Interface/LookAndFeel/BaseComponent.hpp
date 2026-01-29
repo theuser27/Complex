@@ -205,7 +205,7 @@ namespace Interface
       bool clickableChildren : 1 = true;
       bool wantsFocus : 1 = false;
       bool focusOnMouseClick : 1 = false;
-      bool stealsMouseEvents : 1 = false;
+      bool acceptsOrphanedMouseEvents : 1 = false;
 
       // state flags
       bool isVisible : 1 = true;

@@ -28,6 +28,8 @@ namespace common
   inline constexpr float kDbToAmplitudeConversionMult = 1.0f / kAmplitudeToDbConversionMult;
   inline constexpr float kExpConversionMult = 1.44269504089f;
   inline constexpr float kLogConversionMult = 0.69314718056f;
+  inline constexpr float kExp10ConversionMult = 3.321928094887f;
+  inline constexpr float kLog10ConversionMult = 0.30102999566f;
   static constexpr float kOctaveToDecadeConversionMult = 3.321928095f;
   inline constexpr float kInfDb = 764.616188299f;
   inline constexpr float kMinusInfDb = -758.595589072f;

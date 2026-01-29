@@ -178,19 +178,4 @@ namespace Interface
       nvgluBindFramebuffer(nullptr);
     };
   }
-
-  PlainShapeComponent::PlainShapeComponent()
-  {
-    paintFunction = [this](Graphics &g, Rectangle<i32>)
-    {
-      float scale = uiRelated.scale;
-      for (auto &[path, colour] : shape.paths)
-      {
-        nvgFillColor(g.context, Colours::white);
-        nvgStrokeColor(g.context, Colours::white);
-        path(g, colour, bounds.toFloat(), scale, 1.0f);
-      }
-    };
-  }
-
 }

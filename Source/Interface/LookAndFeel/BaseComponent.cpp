@@ -26,6 +26,9 @@ namespace Interface
 
   static void calculateFitPrimary(Component *component, utils::span<Component *> children)
   {
+    if (!component->componentFlags.isVisible)
+      return;
+
     component->previousBounds = component->bounds;
     component->bounds = {};
 
@@ -37,6 +40,9 @@ namespace Interface
 
     for (auto *child : children)
     {
+      if (!child->componentFlags.isVisible)
+        continue;
+
       calculateFitPrimary(child, child->childComponents);
 
       auto padding = TRANSPOSE(component, child->padding);
@@ -119,6 +125,9 @@ namespace Interface
 
     for (auto *child : children)
     {
+      if (!child->componentFlags.isVisible)
+        continue;
+
       calculateFitSecondary(child, child->childComponents);
 
       auto padding = TRANSPOSE(component, child->padding);
@@ -179,6 +188,9 @@ namespace Interface
     i32 minimumPrimarySize = padding.x + padding.w;
     for (auto &child : children)
     {
+      if (!child->componentFlags.isVisible)
+        continue;
+
       auto margin = TRANSPOSE(component, child->margin);
       minimumPrimarySize += child->bounds.x + margin.x + margin.w;
 
@@ -258,15 +270,16 @@ namespace Interface
 
       for (; componentCount; ++j)
       {
-        if (sortedMax[j]->bounds.x <= biggestMinimum &&
-          sortedMax[j]->bounds.w >= smallestMaximum)
+        auto *c = sortedMax[j];
+        if (c->bounds.x <= biggestMinimum &&
+          c->bounds.w >= smallestMaximum)
         {
           i32 size = remaining / (i32)(componentCount);
 
-          auto minMax = children[j]->desiredSize.minMax;
-          sortedMax[j]->bounds.w = utils::clamp(size, minMax.x, minMax.w);
+          auto minMax = c->desiredSize.minMax;
+          c->bounds.w = utils::clamp(size, minMax.x, minMax.w);
 
-          remaining -= sortedMax[j]->bounds.w;
+          remaining -= c->bounds.w;
           --componentCount;
         }
       }
@@ -278,6 +291,9 @@ namespace Interface
 
     for (auto *child : children)
     {
+      if (!child->componentFlags.isVisible)
+        continue;
+
       // scaling the final primary size
       child->bounds.w = scaleValueRoundInt((float)child->bounds.w);
       calculateGrowPrimary(child, child->childComponents);
@@ -288,6 +304,9 @@ namespace Interface
   {
     for (auto &child : children)
     {
+      if (!child->componentFlags.isVisible)
+        continue;
+
       child->bounds.h = utils::min(child->bounds.h, component->bounds.h);
       // scaling the final secondary size
       child->bounds.h = scaleValueRoundInt((float)child->bounds.h);
@@ -297,14 +316,16 @@ namespace Interface
       COMPLEX_SWAP(component->bounds.w, component->bounds.h);
 
     for (auto *child : children)
+    {
+      if (!child->componentFlags.isVisible)
+        continue;
+
       calculateGrowSecondary(child, child->childComponents);
+    }
   }
 
   void calculateSizes(utils::span<Component *> children, Component *component)
   {
-    if (!component->componentFlags.isVisible)
-      return;
-
     calculateFitPrimary(component, children);
     calculateGrowPrimary(component, children);
     calculateFitSecondary(component, children);

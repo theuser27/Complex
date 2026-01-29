@@ -216,6 +216,7 @@ extern "C"
   void *memmove(void *destination, const void *source, usize count);
   void *memset(void *destination, int value, usize count);
 
+  float fabsf(float arg);
   float truncf(float arg);
   float floorf(float arg);
   float ceilf(float arg);
@@ -226,6 +227,7 @@ extern "C"
   float powf(float base, float exponent);
   float sqrtf(float arg);
 
+  double fabs(double arg);
   double trunc(double arg);
   double floor(double arg);
   double ceil(double arg);

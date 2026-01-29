@@ -7,6 +7,8 @@
 #include "Framework/parameter_types.hpp"
 #include "../LookAndFeel/BaseComponent.hpp"
 #include "../LookAndFeel/Graphics.hpp"
+#include "TextEditor.hpp"
+#include "OpenGlImage.hpp"
 
 namespace Framework
 {
@@ -63,8 +65,8 @@ namespace Interface
     void showTextEntry(Font font);
     float getNumericTextMaxWidth(const Font &usedFont) const;
 
-    void showPopup(bool primary);
-    void hidePopup(bool primary);
+    void showPopup(bool primary = true);
+    void hidePopup(bool primary = true);
 
     satomi::atomic<double> value = 0.0;
     double valueBeforeChange = 0.0;
@@ -75,8 +77,6 @@ namespace Interface
     utils::string popupPrefix{};
     Placement popupPlacement = Placement::bottom;
 
-    Placement labelPlacement = Placement::right;
-
     struct
     {
       // feature flags
@@ -86,7 +86,6 @@ namespace Interface
       bool canUseScrollWheel : 1 = false;
       bool shouldCheckDbInfinities : 1 = false;
       bool canInputValue : 1 = false;
-      bool hasLabel : 1 = false;
       bool shouldRepaintOnHover : 1 = false;
       bool isDraggable : 1 = true;
       bool isHorizotalDraggable : 1 = false;
@@ -101,13 +100,14 @@ namespace Interface
       bool isInSensitiveMode : 1 = false;
       bool hasBegunChange : 1 = false;
       bool isTextEntryVisible : 1 = false;
+      bool isInModalState : 1 = false;
     } controlFlags{};
 
     Animator animator{};
 
     u32 maxTotalCharacters = kDefaultMaxTotalCharacters;
     u32 maxDecimalCharacters = kDefaultMaxDecimalCharacters;
-    Point<int> lastMouseDragPosition{};
+    Point<i32> lastMouseDragPosition{};
 
     Framework::ParameterLink *parameterLink = nullptr;
     Framework::ParameterDetails details{};
@@ -115,40 +115,24 @@ namespace Interface
     utils::vector<ControlListener *> controlListeners{};
   };
 
-  class Label : public Component
+  class Label final : public Component
   {
   public:
-    Label(BaseControl *control) : control{ control }
-    {
-      sizingFlags |= Component::HasText;
-      desiredSize.getTextDimensions = [](Component *c, i32 *availablePrimarySize)
-      {
-        if (!availablePrimarySize)
-        {
-          auto *label = (Label *)c;
-          auto *control = label->control;
-
-          uiRelated.cache->setFont(uiRelated.cache->getInterFont());
-          label->currentString = control->getScaledValueString(control->arena, control->getValue());
-
-          auto max = (i32)::ceilf(uiRelated.cache->getStringWidthFloat(label->currentString));
-          return Range<i32>{ 0, max };
-        }
-        else
-        {
-          auto height = (i32)::roundf(uiRelated.cache->getFontAscentFromHeight(
-            uiRelated.cache->InterFontId, scaleValue(Graphics::kInterVDefaultHeight)));
-
-          // labels are always a single line
-          return Range<i32>{ height, height };
-        }
-      };
-    }
+    Label();
 
     bool render(OpenGlWrapper &openGl) override;
 
     BaseControl *control{};
     utils::string currentString{};
+    // default implementation to get the human readable value
+    // but it can be exchanged for anything
+    utils::string (*getString)(BaseControl *control) = [](BaseControl *control)
+    {
+      return control->getScaledValueString(control->arena, control->getValue());
+    };
+    // colour id to use from control when rendering
+    Skin::ColourId textColour = Skin::kNormalText;
+    Font font = uiRelated.cache->getInterFont();
   };
 
   class BaseButton : public BaseControl
@@ -201,8 +185,6 @@ namespace Interface
     bool mouseWheelMove(const MouseEvent &e) override;
   };
 
-  class TextSelector;
-
   class RotarySlider final : public BaseSlider
   {
   public:
@@ -219,18 +201,9 @@ namespace Interface
     bool render(OpenGlWrapper &openGl) override;
     bool mouseDrag(const MouseEvent &e) override;
 
-    void drawShadow(Graphics &g) const;
-
-    void setModifier(TextSelector *modifier)
-    {
-      modifier_ = modifier;
-      controlFlags.shouldShowPopup = modifier;
-    }
-
     float maxArc{};
-    float knobArcThickness_{};
-    float knobSizeScale_ = 1.0f;
-    TextSelector *modifier_ = nullptr;
+    float knobArcThickness{};
+    float knobSizeScale = 1.0f;
   };
 
   class PinSlider : public BaseSlider
@@ -240,15 +213,14 @@ namespace Interface
 
     PinSlider(Framework::ParameterValue *parameter);
 
+    bool render(OpenGlWrapper &openGl) override;
+
     bool mouseDown(const MouseEvent &e) override;
     bool mouseDrag(const MouseEvent &e) override;
 
     double totalRange = 0.0;
     double runningTotal = 0.0;
   };
-
-  class NumberBox;
-  class PlainShapeComponent;
 
   class TextSelector final : public BaseSlider
   {
@@ -274,19 +246,19 @@ namespace Interface
 
     utils::string_view getTextValue(bool fromParameter = false);
 
-    utils::string optionsTitle_{};
-    Font usedFont_{};
-    double lastValue_ = 0.0;
-    int textWidth_{};
-    bool isDirty_ = false;
-    bool isDropDownVisible_ = false;
-    Placement anchor_ = Placement::left;
-    Placement extraNumberBoxPlacement_ = Placement::right;
+    void setExtraIcon(Paths::DrawingFn *drawFn);
 
-    PlainShapeComponent *extraIcon_ = nullptr;
+    Label text{};
+    PlainShapeComponent downArrow{};
+
+    utils::string dropdownTitle{};
+    double lastValue = 0.0;
+
+  private:
+    PlainShapeComponent *extraIcon = nullptr;
   };
 
-  class NumberBox final : public BaseSlider
+  class Numberbox final : public BaseSlider
   {
   public:
     static constexpr int kDefaultNumberBoxHeight = 16;
@@ -296,13 +268,47 @@ namespace Interface
     static constexpr float kTriangleToValueMarginRatio = 2.0f / 16.0f;
     static constexpr float kValueToEndMarginRatio = 5.0f / 16.0f;
 
-    NumberBox(Framework::ParameterValue *parameter);
+    Numberbox(Framework::ParameterValue *parameter);
 
     bool render(OpenGlWrapper &openGl) override;
 
     bool mouseDrag(const MouseEvent &e) override;
 
-    bool drawBackground_ = true;
-    bool isEditing_ = false;
+    bool drawBackground = true;
+    bool isEditing = false;
+
+    TextEditor editor{};
   };
+
+  struct CombinationRotarySlider final : Component
+  {
+  private:
+    TextSelector *modifier{};
+
+  public:
+    RotarySlider *rotary{};
+    Label label{};
+    TextEditor valueEditor{};
+
+    CombinationRotarySlider(utils::bumpArena *arenaToUse)
+    {
+      arena = arenaToUse;
+      addChildComponent(&label);
+      addChildComponent(&valueEditor);
+    }
+
+    void setModifier(TextSelector *newModifier)
+    {
+      if (modifier)
+        removeChildComponent(modifier);
+
+      modifier = newModifier;
+      rotary->controlFlags.shouldShowPopup = modifier;
+      valueEditor.componentFlags.isVisible = !modifier;
+
+      if (modifier)
+        addChildComponent(modifier);
+    }
+  };
+
 }

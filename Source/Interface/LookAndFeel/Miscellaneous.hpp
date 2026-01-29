@@ -12,11 +12,6 @@
 
 extern "C" struct NSVGimage;
 
-namespace Generation
-{
-  class BaseProcessor;
-}
-
 namespace Plugin
 {
   struct State;
@@ -130,27 +125,14 @@ namespace Interface
     virtual void mouseUp([[maybe_unused]] BaseControl *slider, [[maybe_unused]] const MouseEvent &e) { }
   };
 
-  struct SVG
-  {
-    NSVGimage *image = nullptr;
-
-    SVG(utils::bumpArena *arena, const void *data, usize size);
-    ~SVG();
-
-    void draw(Graphics &g, Colour colour,
-      Rectangle<float> bounds, float scale, float strokeWidth) const;
-  };
-
-  // encompasses a manually programmed draw or 
-  // a precalculated SVG (stored in Graphics) captured inside the closure
-  using DrawingFn = void(Graphics &g, utils::span<Colour> colours,
+  void drawSVG(NSVGimage *image, Graphics &g, Colour colour,
     Rectangle<float> bounds, float strokeWidth);
-
-  void drawShape(Graphics &g, Rectangle<float> bounds, float scale,
-    float strokeWidth, Colour colour, const utils::smallFn<DrawingFn> &path);
 
   namespace Paths
   {
+    using DrawingFn = void(Graphics &g, utils::span<Colour> colours,
+      Rectangle<float> bounds, float strokeWidth);
+
     void pasteValueIcon(Graphics &g, Rectangle<float> bounds,
       float strokeWidth, utils::span<Colour> colours);
     void enterValueIcon(Graphics &g, Rectangle<float> bounds,
@@ -183,7 +165,7 @@ namespace Interface
     constexpr bool operator==(const ViewportChange &) const noexcept = default;
   };
 
-  utils::pair<i32, i32> 
-  getScrollOffsets(const MouseEvent &e, float singleStepX = 16, float singleStepY = 16);
+  utils::pair<i32, i32> getScrollOffsets(const MouseEvent &e, 
+    float singleStepX = 16, float singleStepY = 16);
 
 }

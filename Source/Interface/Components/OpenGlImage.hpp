@@ -75,9 +75,15 @@ namespace Interface
     Font font;
   };
 
-  class PlainShapeComponent final : public OpenGlImage
+  struct PlainShapeComponent final : public Component
   {
-  public:
-    PlainShapeComponent();
+    void (*draw)(OpenGlWrapper &openGl, Component *reference, Component *self) = nullptr;
+    Component *reference = nullptr;
+
+    bool render(OpenGlWrapper &openGl)
+    {
+      draw(openGl, reference, this);
+      return true;
+    }
   };
 }

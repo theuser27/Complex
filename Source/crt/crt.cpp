@@ -1,10 +1,12 @@
 
-#include "../Framework/platform_definitions.hpp"
+#include "Framework/platform_definitions.hpp"
+#include "Framework/simd_values.hpp"
+#include "Framework/simd_utils.hpp"
 
 namespace utils
 {
   // malloc replacement
-  byte *allocate(usize size, usize alignment = alignof(void *));
+  byte *allocate(usize size, usize alignment);
   // free replacement
   void deallocate(const void *memory);
 }
@@ -17,6 +19,8 @@ namespace std
 extern "C++"
 {
   [[nodiscard]] void *__cdecl operator new(usize size) { return utils::allocate(size); }
+  [[nodiscard]] void *__cdecl operator new(usize size, std::align_val_t alignment)
+  { return utils::allocate(size, (usize)alignment); }
   [[nodiscard]] void *__cdecl operator new[](usize size) { return utils::allocate(size); }
   [[nodiscard]] void *__cdecl operator new[](usize size, std::align_val_t alignment)
   { return utils::allocate(size, (usize)alignment); }
@@ -35,24 +39,47 @@ extern "C"
 {
   void *memset(void *dest, int ch, usize count);
 
-  void *malloc(usize size) { return utils::allocate(size); }
-  void *calloc(usize num, usize size) { return memset(utils::allocate(size * num), 0, size * num); }
-  void *realloc(void *pointer, usize new_size)
+  __declspec(restrict) void *malloc(usize size) { return utils::allocate(size); }
+  __declspec(restrict) void *calloc(usize num, usize size) { return memset(utils::allocate(size * num), 0, size * num); }
+  __declspec(restrict) void *realloc(void *pointer, usize new_size)
   {
     return nullptr;
     //return memset(utils::allocate(size * num), 0, size * num);
   }
   void free(void *pointer) { utils::deallocate(pointer); }
 
+  int abs(int x) { return x & utils::max_limit<int>; }
+
+  float floorf(float x) { return simd_float::floor(x)[0]; }
+  float ceilf(float x) { return simd_float::ceil(x)[0]; }
+  float roundf(float x) { return simd_float::round(x)[0]; }
+
+  float sinf(float x) { return utils::cis(x)[1]; }
+  float cosf(float x) { return utils::cis(x)[0]; }
+  float tanf(float x) { return utils::tan(x)[0]; }
+  float atan2f(float y, float x) { return utils::atan2(y, x)[0]; }
+
+  float sqrtf(float x) { return simd_float::sqrt(x)[0]; }
+  float expf(float x) { return utils::exp(x); }
+  float powf(float x, float y) { return utils::pow(x, y); }
+  float log10f(float x) { return utils::log10(x); }
+
+  int tolower(int c)
+  {
+    if (c >= 'A' && c <= 'Z')
+      return c + 'a' - 'A';
+    return c;
+  }
+
 
 #if COMPLEX_MSVC 
-  int _fltused = 0;
+  constinit int _fltused = 0;
 
   int __cdecl _purecall() { COMPLEX_TRAP(); }
 
-  __int64 __memset_nt_threshold = 33554432;
-  __int64 __memset_fast_string_threshold = 524288;
-  __int8 __favor = 1; // __FAVOR_ENFSTRG
+  constinit __int64 __memset_nt_threshold = 33554432;
+  constinit __int64 __memset_fast_string_threshold = 524288;
+  constinit __int8 __favor = 1; // __FAVOR_ENFSTRG
 
   enum ISA_AVAILABILITY
   {
@@ -70,7 +97,7 @@ extern "C"
     // ARM64 NEON is temporary. They may eventually be merged.
   };
 
-  __int32 __isa_available = __ISA_AVAILABLE_SSE42;
+  constinit __int32 __isa_available = __ISA_AVAILABLE_SSE42;
 #endif
 }
 

@@ -614,6 +614,14 @@ namespace Interface
   void BaseControl::showTextEntry(Font font)
   {
     (void)font;
+    //std::string text = (!hasParameter()) ? floatToString(getValue()) :
+    //  floatToString(Framework::scaleValue(getValue(), details_, getSampleRate(), true), maxDecimalCharacters_);
+
+    //textEntry_->setText(text);
+    //textEntry_->selectAll();
+    //if (textEntry_->isVisible())
+    //  textEntry_->grabKeyboardFocus();
+    //textEntry_->setVisible(true);
   }
 
   void BaseControl::showPopup(bool primary)
@@ -637,7 +645,36 @@ namespace Interface
     //popupDisplay->componentFlags.isVisible = false;
   }
 
-  bool 
+  Label::Label()
+  {
+    sizingFlags |= Component::HasText;
+    desiredSize.getTextDimensions = [](Component *c, i32 *availablePrimarySize)
+    {
+      if (!availablePrimarySize)
+      {
+        auto *label = (Label *)c;
+        auto *control = label->control;
+
+        COMPLEX_ASSERT(control, "Forgot to set reference to control in label");
+
+        label->currentString = label->getString(control);
+
+        uiRelated.cache->setFont(label->font);
+        auto max = (i32)::ceilf(uiRelated.cache->getStringWidthFloat(label->currentString));
+        return Range<i32>{ 0, max };
+      }
+      else
+      {
+        auto height = (i32)::roundf(uiRelated.cache->getFontAscentFromHeight(
+          uiRelated.cache->InterFontId, scaleValue(Graphics::kInterVDefaultHeight)));
+
+        // labels are always a single line
+        return Range<i32>{ height, height };
+      }
+    };
+  }
+
+  bool
   Label::render(OpenGlWrapper &openGl)
   {
     (void)openGl;

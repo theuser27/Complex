@@ -26,15 +26,8 @@ namespace Interface
   //  }
   //}
 
-  SVG::SVG(utils::bumpArena *arena, const void *data, usize size)
-  {
-    auto s = utils::string{ arena, (const char *)data, size };
-    image = nsvgParse(s.data(), "px", 96);
-  }
-  SVG::~SVG() { nsvgDelete(image); }
-
-  void SVG::draw(Graphics &g, Colour colour,
-    Rectangle<float> bounds, float scale, float strokeWidth) const
+  void drawSVG(NSVGimage *image, Graphics &g, Colour colour,
+    Rectangle<float> bounds, float scale, float strokeWidth)
   {
     nvgSave(g);
 

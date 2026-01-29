@@ -22,6 +22,6 @@
 #define CPLUG_VST3_TUID_COMPONENT  'cplg', 'comp', 'xmpl', 0
 #define CPLUG_VST3_TUID_CONTROLLER 'cplg', 'edit', 'xmpl', 0
 
-#define CPLUG_CLAP_ID              "com.cplug.example"
+#define CPLUG_CLAP_ID              "com.theuser27.complex"
 #define CPLUG_CLAP_DESCRIPTION     "Example plugin"
 #define CPLUG_CLAP_FEATURES        CLAP_PLUGIN_FEATURE_AUDIO_EFFECT, CLAP_PLUGIN_FEATURE_STEREO

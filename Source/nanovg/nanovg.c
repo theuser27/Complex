@@ -26,6 +26,7 @@
 #include "fontstash.h"
 
 #ifndef NVG_NO_STB
+#define STBI_NO_STDIO
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
 #endif
@@ -830,21 +831,21 @@ void nvgFillPaint(NVGcontext* ctx, NVGpaint paint)
 }
 
 #ifndef NVG_NO_STB
-int nvgCreateImage(NVGcontext* ctx, const char* filename, int imageFlags)
-{
-	int w, h, n, image;
-	unsigned char* img;
-	stbi_set_unpremultiply_on_load(1);
-	stbi_convert_iphone_png_to_rgb(1);
-	img = stbi_load(filename, &w, &h, &n, 4);
-	if (img == NULL) {
-//		printf("Failed to load %s - %s\n", filename, stbi_failure_reason());
-		return 0;
-	}
-	image = nvgCreateImageRGBA(ctx, w, h, imageFlags, img);
-	stbi_image_free(img);
-	return image;
-}
+//int nvgCreateImage(NVGcontext* ctx, const char* filename, int imageFlags)
+//{
+//	int w, h, n, image;
+//	unsigned char* img;
+//	stbi_set_unpremultiply_on_load(1);
+//	stbi_convert_iphone_png_to_rgb(1);
+//	img = stbi_load(filename, &w, &h, &n, 4);
+//	if (img == NULL) {
+////		printf("Failed to load %s - %s\n", filename, stbi_failure_reason());
+//		return 0;
+//	}
+//	image = nvgCreateImageRGBA(ctx, w, h, imageFlags, img);
+//	stbi_image_free(img);
+//	return image;
+//}
 
 int nvgCreateImageMem(NVGcontext* ctx, int imageFlags, unsigned char* data, int ndata)
 {
@@ -2330,15 +2331,15 @@ void nvgStroke(NVGcontext* ctx)
 }
 
 // Add fonts
-int nvgCreateFont(NVGcontext* ctx, const char* name, const char* filename)
-{
-	return fonsAddFont(ctx->fs, name, filename, 0);
-}
-
-int nvgCreateFontAtIndex(NVGcontext* ctx, const char* name, const char* filename, const int fontIndex)
-{
-	return fonsAddFont(ctx->fs, name, filename, fontIndex);
-}
+//int nvgCreateFont(NVGcontext* ctx, const char* name, const char* filename)
+//{
+//	return fonsAddFont(ctx->fs, name, filename, 0);
+//}
+//
+//int nvgCreateFontAtIndex(NVGcontext* ctx, const char* name, const char* filename, const int fontIndex)
+//{
+//	return fonsAddFont(ctx->fs, name, filename, fontIndex);
+//}
 
 int nvgCreateFontMem(NVGcontext* ctx, const char* name, unsigned char* data, int ndata, int freeData)
 {
