@@ -22,7 +22,7 @@ namespace Interface
   class Skin
   {
   public:
-    enum SectionOverride : u8
+    enum Override : u8
     {
       kNone,
       kEffectsLane,
@@ -157,7 +157,7 @@ namespace Interface
     void jsonToState(void *jsonData);
     bool stringToState(utils::string_view skinString);
 
-    static bool shouldScaleValue(ValueId valueId) noexcept
+    static bool shouldScaleValue(ValueId valueId)
     {
       return valueId != kWidgetFillFade && valueId != kWidgetFillBoost &&
         valueId != kWidgetLineBoost && valueId != kWidgetFillCenter;
@@ -168,7 +168,7 @@ namespace Interface
   };
 
   strict_inline float
-  getValue(Skin::ValueId valueId, bool isScaled, Skin::SectionOverride skinOverride = Skin::kNone) noexcept
+  getValue(Skin::ValueId valueId, bool isScaled, Skin::Override skinOverride = Skin::kNone)
   {
     if (uiRelated.skin)
     {
@@ -182,7 +182,7 @@ namespace Interface
   }
 
   strict_inline float 
-  getValue(Skin::ValueId valueId, bool isScaled, Component *component) noexcept
+  getValue(Skin::ValueId valueId, bool isScaled, Component *component)
   {
     if (uiRelated.skin)
     {
@@ -194,7 +194,7 @@ namespace Interface
   }
 
   strict_inline Colour
-  getColour(Skin::ColourId colorId, Skin::SectionOverride skinOverride = Skin::kNone) noexcept
+  getColour(Skin::ColourId colorId, Skin::Override skinOverride = Skin::kNone)
   {
     if (uiRelated.skin)
     {
@@ -207,7 +207,7 @@ namespace Interface
   }
 
   strict_inline Colour
-  getColour(Skin::ColourId colorId, Component *component) noexcept
+  getColour(Skin::ColourId colorId, Component *component)
   {
     if (uiRelated.skin)
       return uiRelated.skin->getColour(colorId, component);

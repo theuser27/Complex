@@ -73,6 +73,8 @@ namespace Framework
       exitedChild = true;
       option = option->parent;
       size = option->parent->count;
+
+      // find the index of the parent again
       index = 0;
       for (auto *child = option; index < size; ++index)
         if (child == option)

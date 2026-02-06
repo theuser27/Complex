@@ -490,7 +490,7 @@ namespace utils
 
     [[nodiscard]] constexpr bool operator==(const array &other) const noexcept
     {
-      for (usize i = 0; i < size(); ++i)
+      for (size_type i = 0; i < size(); ++i)
         if (storage[i] != other.storage[i])
           return false;
 
@@ -853,6 +853,7 @@ namespace utils
 
     return &array[i];
   }
+
   template<typename T, auto Size>
   constexpr auto 
   find_if(const T(&array)[Size], const auto &predicate)

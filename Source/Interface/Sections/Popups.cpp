@@ -42,9 +42,9 @@ namespace Interface
     arena = utils::bumpArena::createNested(getUIArena(), COMPLEX_KB(8));
     skinOverride = Skin::kUseParentOverride;
     placement = Placement::custom;
-    sizingFlags = Component::HasText;
+    sizingFlags = Component::CustomDimensions;
     padding = { kLineHeight, kLineHeight, kLineHeight, kLineHeight };
-    desiredSize.getTextDimensions = getPopupDisplayDimensions;
+    desiredSize.getDimensions = getPopupDisplayDimensions;
 
     textFontId = uiRelated.cache->InterFontId;
     numericFontId = uiRelated.cache->DDinFontId;

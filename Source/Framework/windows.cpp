@@ -3,8 +3,7 @@
 
 #include "windows.hpp"
 
-#include "Third Party/gcem/gcem.hpp"
-
+#include "utils.hpp"
 #include "simd_utils.hpp"
 #include "circular_buffer.hpp"
 
@@ -16,13 +15,13 @@ namespace Framework
 
   static constexpr float createHannWindow(float position)
   {
-    return 0.5f * (1.0f - gcem::cos(k2Pi * position));
+    return 0.5f * (1.0f - const_math::cos(k2Pi * position));
   }
 
   // an accurate version of the traditional hamming window
   static constexpr float createHammingWindow(float position)
   {
-    return (25.0f / 46.0f) + ((-21.0f / 46.0f) * gcem::cos(k2Pi * position));
+    return (25.0f / 46.0f) + ((-21.0f / 46.0f) * const_math::cos(k2Pi * position));
   }
 
   static constexpr float createTriangleWindow(float position)
@@ -32,21 +31,21 @@ namespace Framework
 
   static constexpr float createSineWindow(float position)
   {
-    return gcem::sin(k2Pi * position);
+    return const_math::sin(k2Pi * position);
   }
 
   // dynamic windows
 
   static constexpr float createExponentialWindow(float position)
   {
-    return gcem::exp((-k2Pi) * utils::abs(position - 0.5f));
+    return const_math::exp((-k2Pi) * utils::abs(position - 0.5f));
   }
 
   static constexpr float createLanczosWindow(float position)
   {
     float adjustedPosition = position - 0.5f;
     return adjustedPosition == 0.0f ? 1.0f :
-      gcem::sin(k2Pi * adjustedPosition) / (k2Pi * adjustedPosition);
+      const_math::sin(k2Pi * adjustedPosition) / (k2Pi * adjustedPosition);
   }
   
 

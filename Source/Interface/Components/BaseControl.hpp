@@ -62,7 +62,8 @@ namespace Interface
 
     void createPopupMenu(PopupSelector *selector, Point<i32> position);
 
-    void showTextEntry(Font font);
+    void showTextEntry();
+    void updateValueFromTextEntry();
     float getNumericTextMaxWidth(const Font &usedFont) const;
 
     void showPopup(bool primary = true);
@@ -111,6 +112,8 @@ namespace Interface
 
     Framework::ParameterLink *parameterLink = nullptr;
     Framework::ParameterDetails details{};
+
+    TextEditor *textEntry = nullptr;
 
     utils::vector<ControlListener *> controlListeners{};
   };
@@ -189,7 +192,7 @@ namespace Interface
   {
   public:
     static constexpr float kRotaryAngle = 0.75f * kPi;
-    static constexpr double kDefaultRotaryDragLength = 200.0;
+    static constexpr float kDefaultRotaryDragLength = 200.0f;
     static constexpr int kDefaultWidthHeight = 36;
     static constexpr int kDefaultArcDimensions = 36;
     static constexpr int kDefaultBodyDimensions = 23;
@@ -244,8 +247,6 @@ namespace Interface
     bool mouseUp(const MouseEvent &e) override;
     bool mouseWheelMove(const MouseEvent &e) override;
 
-    utils::string_view getTextValue(bool fromParameter = false);
-
     void setExtraIcon(Paths::DrawingFn *drawFn);
 
     Label text{};
@@ -274,10 +275,16 @@ namespace Interface
 
     bool mouseDrag(const MouseEvent &e) override;
 
-    bool drawBackground = true;
-    bool isEditing = false;
+    void setHeight(i32 newHeight)
+    {
+      editor.font.height = (float)newHeight * 0.5f;
+    }
 
     TextEditor editor{};
+
+    float backgroundRounding = 4.0f;
+    bool drawBackgroundArrow = true;
+    bool isEditing = false;
   };
 
   struct CombinationRotarySlider final : Component
@@ -287,14 +294,25 @@ namespace Interface
 
   public:
     RotarySlider *rotary{};
+    Component infoSection{};
     Label label{};
     TextEditor valueEditor{};
 
-    CombinationRotarySlider(utils::bumpArena *arenaToUse)
+    CombinationRotarySlider(RotarySlider *rotary, utils::bumpArena *arenaToUse) : rotary{ rotary }
     {
       arena = arenaToUse;
-      addChildComponent(&label);
-      addChildComponent(&valueEditor);
+      
+      addChildComponent(rotary);
+
+      infoSection.arena = arenaToUse;
+      infoSection.sizingFlags |= Component::IsVertical;
+      addChildComponent(&infoSection);
+
+      label.sizingFlags |= Component::SameAsSiblingsX;
+      infoSection.addChildComponent(&label);
+
+      valueEditor.sizingFlags |= Component::SameAsSiblingsX;
+      infoSection.addChildComponent(&valueEditor);
     }
 
     void setModifier(TextSelector *newModifier)

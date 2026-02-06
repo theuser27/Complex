@@ -1,6 +1,4 @@
 
-#include "Framework/utils.cpp"
-
 #include "Framework/fourier_transform.cpp"
 #include "Framework/load_save.cpp"
 #include "Framework/parameter_bridge.cpp"
@@ -14,6 +12,7 @@
 
 #include "Interface/Components/BaseControl.cpp"
 #include "Interface/Components/BaseButton.cpp"
+#include "Interface/Components/BaseSlider.cpp"
 #include "Interface/Components/OpenGlQuad.cpp"
 
 #include "Interface/LookAndFeel/BaseComponent.cpp"

@@ -18,6 +18,7 @@ if "%~1"=="release" if "%~2"=="" echo [assuming `vst` build] && set vst=1
 echo:
 
 set top_level=..\..\..
+set compiled_files= %top_level%\Source\unity_extern.c %top_level%\Source\unity1.cpp %top_level%\Source\unity2.cpp
 set compiler_flags= /I%top_level%\Source\ /std:c++20 /nologo /diagnostics:column /FC /permissive- /MP /Zc:preprocessor /W4 /wd"4201" /sdl- /Zc:inline /fp:precise /D "PUGL_STATIC" /D "_CRT_SECURE_NO_WARNINGS" /D "_MBCS" /errorReport:prompt /GR- /Gd
 set linker_flags=   /ERRORREPORT:PROMPT /MANIFEST:EMBED /INCREMENTAL:NO /DEBUG /noexp /nocoffgrpinfo /OPT:REF /OPT:ICF Opengl32.lib Dwmapi.lib kernel32.lib user32.lib Gdi32.lib Ole32.lib Shell32.lib
 
@@ -45,10 +46,12 @@ if not exist %build_dir% mkdir %build_dir%
 
 if "%debug%"=="1" (
   set build_dir=%build_dir%\Debug
-  set compiler_flags= /Od /Ob1 /Zi /MTd /RTC1 %compiler_flags%
+  set compiler_flags= /MTd /Od /Ob1 /Zi /RTC1 %compiler_flags%
+  REM set linker_flags= /NODEFAULTLIB:libcpmtd.lib %linker_flags%
 ) else (
   set build_dir=%build_dir%\Release
-  set compiler_flags= /Ox /GL %compiler_flags%
+  set compiler_flags= /MT /Ox /GL %compiler_flags%
+  REM set linker_flags= /NODEFAULTLIB:libcpmt.lib %linker_flags%
 )
 
 if not exist %build_dir% mkdir %build_dir%
@@ -68,7 +71,7 @@ pushd %build_dir%
 
 del /Q * > NUL 2> NUL
 
-call cl %compiler_flags% %top_level%\Source\unity_extern.c %top_level%\Source\unity.cpp %top_level%\Source\unity_data.cpp /link %linker_flags%
+call cl %compiler_flags% %compiled_files% /link %linker_flags%
 
 del *.obj > NUL 2> NUL
 del vc*0.pdb > NUL 2> NUL

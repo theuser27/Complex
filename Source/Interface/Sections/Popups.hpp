@@ -50,11 +50,6 @@ namespace Interface
 
   struct PopupItem : Component
   {
-    PopupItem()
-    {
-      skinOverride = Skin::kUseParentOverride;
-    }
-
     bool render(OpenGlWrapper &openGl) override;
 
     i32 id = 0;

@@ -10,6 +10,7 @@ namespace common
   // general constants; don't change
   inline constexpr float kPi = 3.141592653589793f;
   inline constexpr float k2Pi = kPi * 2.0f;
+  inline constexpr float kExp = 2.71828182845904523536f;
   inline constexpr float kEpsilon = 1e-20f;
   inline constexpr u32 kFloatMantissaMask = 0x007fffffU;
   inline constexpr u32 kFloatExponentMask = 0x7f800000U;

@@ -377,8 +377,6 @@ namespace utils
   template<typename T>
   class vector
   {
-    static constexpr usize kStartingCapacity = 16;
-
     T *data_{};
     usize	allocatorType_ : 1 = (usize)AllocatorType::General;
     usize freeingDestructor_ : 1 = true;
@@ -395,6 +393,8 @@ namespace utils
     using const_reference = const T &;
     using iterator = T *;
     using const_iterator = const T *;
+
+    static constexpr usize kStartingCapacity = 16;
 
     ~vector()
     {

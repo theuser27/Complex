@@ -82,9 +82,9 @@ namespace Interface
 
     primaryAxis = utils::max(primaryAxis, nonPositionedMinSize);
 
-    if (component->sizingFlags & Component::HasText)
+    if (component->sizingFlags & Component::CustomDimensions)
     {
-      auto [min, max] = component->desiredSize.getTextDimensions(component, nullptr);
+      auto [min, max] = component->desiredSize.getDimensions(component, nullptr);
       // caching bounds for future use
       component->bounds.x = min;
       component->bounds.w = max;
@@ -137,9 +137,9 @@ namespace Interface
         child->bounds.h + padding.y + padding.h + margin.y + margin.h);
     }
 
-    if (component->sizingFlags & Component::HasText)
+    if (component->sizingFlags & Component::CustomDimensions)
     {
-      auto range = component->desiredSize.getTextDimensions(component, &component->bounds.w);
+      auto range = component->desiredSize.getDimensions(component, &component->bounds.w);
       component->bounds.y = utils::max(component->bounds.y, range.min);
       component->bounds.h = utils::max(component->bounds.h, range.max);
     }
@@ -358,9 +358,8 @@ namespace Interface
     i32 primaryUsed = padding.getRight();
     i32 groupCount = 0;
     bool isInGroup = false;
-    for (usize i = 0; i < children.size(); ++i)
+    for (auto &child : children)
     {
-      auto &child = children[i];
       if (child->placement & Placement::custom)
       {
         // component has decided to take care of its own position
@@ -496,7 +495,7 @@ namespace Interface
 #undef GET_SECONDARY_FLAG
 #undef GET_PRIMARY_FLAG
 
-  void deleteComponent(Component *component)
+  void deleteComponent(Component *component, bool freeArena)
   {
     if (component->componentFlags.isOpenGlInitialised)
     {
@@ -522,8 +521,9 @@ namespace Interface
       display->componentFlags.isVisible = false;
     }
 
-    component->deleteAllChildComponents();
-    utils::bumpArena::remove(component);
+    component->deleteAllChildComponents(false);
+    if (freeArena)
+      utils::bumpArena::remove(component);
   }
 
   bool 
@@ -565,7 +565,8 @@ namespace Interface
     return (onlyClickable && !componentFlags.clickable) ? nullptr : this;
   }
 
-  bool Component::hasFocus(bool trueIfChildIsFocused) const
+  bool 
+  Component::hasFocus(bool trueIfChildIsFocused) const
   {
     auto *focusedComponent = getMouseInteractions(uiRelated.renderer).focused;
     if (!trueIfChildIsFocused && this != focusedComponent)
@@ -574,7 +575,8 @@ namespace Interface
     return isParentOf(focusedComponent);
   }
 
-  static bool isShowing(Component *component)
+  static bool 
+  isShowing(Component *component)
   {
     while (component)
     {
@@ -587,7 +589,8 @@ namespace Interface
     return true;
   }
 
-  bool grabFocusInternal(Component *component, Component *origin = nullptr)
+  static bool 
+  grabFocusInternal(Component *component, Component *origin = nullptr)
   {
     if (!isShowing(component))
       return true;
@@ -658,6 +661,9 @@ namespace Interface
 
     auto iter = utils::find_if(childComponents, 
       [&](Component *element) { return element->layerIndex > layer; });
+    
+    if (childComponents.capacity() == 0 && arena)
+      childComponents.reserve(arena, childComponents.kStartingCapacity);
     childComponents.emplace(iter, child);
 
     child->parent = this;
@@ -677,7 +683,8 @@ namespace Interface
       childToRemove->giveAwayFocus();
   }
 
-  Component *Component::removeChildComponent(usize childIndexToRemove, bool keepFocus)
+  Component *
+  Component::removeChildComponent(usize childIndexToRemove, bool keepFocus)
   {
     COMPLEX_ASSERT(childIndexToRemove < childComponents.size());
 
@@ -704,26 +711,26 @@ namespace Interface
     }
   }
 
-  void Component::deleteChildComponent(Component *childToDelete)
+  void Component::deleteChildComponent(Component *childToDelete, bool freeArena)
   {
     removeChildComponent(childToDelete);
-    deleteComponent(childToDelete);
+    deleteComponent(childToDelete, freeArena);
   }
 
-  void Component::deleteChildComponent(usize childIndexToDelete)
+  void Component::deleteChildComponent(usize childIndexToDelete, bool freeArena)
   {
     auto childToDelete = removeChildComponent(childIndexToDelete);
-    deleteComponent(childToDelete);
+    deleteComponent(childToDelete, freeArena);
   }
 
-  void Component::deleteAllChildComponents()
+  void Component::deleteAllChildComponents(bool freeArena)
   {
     if (auto *focusedComponent = getMouseInteractions(uiRelated.renderer).focused)
       if (isParentOf(focusedComponent))
         focusedComponent->giveAwayFocus();
 
     for (usize i = childComponents.size(); i > 0; --i)
-      deleteComponent(childComponents[i - 1]);
+      deleteComponent(childComponents[i - 1], freeArena);
     
     childComponents.clear();
   }

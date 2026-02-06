@@ -8,3 +8,5 @@
 #include "Data/BinaryData7.cpp"
 
 #include "Framework/windows.cpp"
+
+#include "Framework/utils.cpp"

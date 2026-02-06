@@ -948,3 +948,255 @@ namespace Interface
   enum class MessageBoxType { Info, Warning, Error };
   bool showNativeMessageBox(const char *title, const char *message, MessageBoxType type);
 }
+
+// https://github.com/colugomusic/snd/blob/master/include/snd/const_math.hpp
+// MIT License
+// 
+// Copyright(c) 2020 colugomusic
+// 
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files(the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and /or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions :
+// 
+// The above copyright notice and this permission notice shall be included in all
+// copies or substantial portions of the Software.
+// 
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+// SOFTWARE.
+namespace const_math
+{
+  template <typename T>
+  constexpr auto EPSILON = T(0.001);
+
+  template<typename T> 
+  constexpr T
+  sin(T x) 
+  {
+    x = (x < 0) ? -x + kPi : x;
+
+    usize n = 0;
+    while (x >= EPSILON<T>)
+    {
+      x /= 3;
+      ++n;
+    }
+
+    for (usize i = 0; i < n; ++i)
+      x = 3 * x - 4 * (x * x * x);
+
+    return x;
+  }
+
+  template<typename T> 
+  constexpr T cos(T x) { return sin(kPi / 2 - x); }
+
+  template<typename T> 
+  constexpr T
+  pow(T base, int exponent)
+  {
+    bool isNegative = exponent < 0;
+    if (isNegative)
+      exponent = -exponent;
+
+    T y = 1;
+    for (int i = 0; i < exponent; ++i)
+      y *= base;
+    
+    return (isNegative) ? T(1) / y : y;
+  }
+
+  template<typename T> 
+  constexpr T
+  nearest(T x)
+  {
+    return (int)(x - T(0.5)) > (int)(x) ? 
+      (T)((int)(x + T(0.5))) : (T)((int)(x));
+  }
+
+  template<typename T> 
+  constexpr T
+  fraction(T x)
+  {
+    return (int)(x - T(0.5)) > (int)(x) ? 
+      -(((T)(int)(x + T(0.5))) - x) : 
+      x - ((T)(int)(x));
+  }
+
+  template<typename T> 
+  constexpr T
+  exp(T x)
+  {
+    T y = fraction(x);
+    y = 1 + y + pow(y, 2) / 2 + pow(y, 3) / 6 + pow(y, 4) / 24 +
+      pow(y, 5) / 120 + pow(y, 6) / 720 + pow(y, 7) / 5040;
+
+    return pow((T)kExp, (int)nearest(x)) * y;
+  }
+
+  template<typename T>
+  constexpr bool is_nan(const T x) { return x != x; }
+
+
+  template<typename T>
+  constexpr T quiet_nan()
+  {
+    if constexpr (utils::is_same_v<T, float>)
+      return __builtin_nanf("0");
+    else if constexpr (utils::is_same_v<T, double>)
+      return __builtin_nan("0");
+    else
+    {
+      // we do not handle other types here
+    }
+  }
+
+  template<typename T>
+  constexpr T
+  abs(T x)
+  {
+    if (x == T(0))
+      return T(0);
+    return (x < T(0)) ? -x : x;
+  }
+
+  template<typename T>
+  constexpr T 
+  min()
+  {
+    if constexpr (utils::is_same_v<T, float>)
+      return 1.175494351e-38F;
+    else if constexpr (utils::is_same_v<T, double>)
+      return 2.2250738585072014e-308;
+    else
+    {
+      // we do not handle other types here
+    }
+  }
+
+  template<typename T>
+  constexpr T 
+  max()
+  {
+    if constexpr (utils::is_same_v<T, float>)
+      return 3.402823466e+38F;
+    else if constexpr (utils::is_same_v<T, double>)
+      return 1.7976931348623158e+308;
+    else
+    {
+      // should return but we don't know what the type is
+    }
+  }
+
+  template<typename T>
+  constexpr T 
+  infinity()
+  {
+    if constexpr (utils::is_same_v<T, float>)
+      return __builtin_huge_valf();
+    else if constexpr (utils::is_same_v<T, double>)
+      return __builtin_huge_val();
+    else
+    {
+      // should return but we don't know what the type is
+    }
+  }
+
+  template<typename T>
+  constexpr T
+  floor(T x)
+  {
+    if (is_nan(x))
+      return quiet_nan<T>();
+    // +/- infinite and signed-zero cases 
+    else if (abs(x) == infinity<T>() || min<T>() > abs(x))
+      return x;
+    else
+    {
+      auto floor_int = [](T x, T x_whole)
+      {
+        return x_whole - static_cast<T>((x < T(0)) && (x < x_whole));
+      };
+
+      if constexpr (utils::is_same_v<T, float>)
+        return (abs(x) >= 8388608.f) ? x : floor_int(x, (float)(int)x);
+      else if constexpr (utils::is_same_v<T, double>)
+        return (abs(x) >= 4503599627370496.) ? x : floor_int(x, (double)(long long)x);
+      else
+      {
+        // we do not handle other types here
+      }
+    }
+  }
+
+  /*
+   * Compile-time tangent function
+   *
+   * @param x a real-valued input.
+   * @return the tangent function using
+   * \f[ \tan(x) = \dfrac{x}{1 - \dfrac{x^2}{3 - \dfrac{x^2}{5 - \ddots}}} \f]
+   * To deal with a singularity at \f$ \pi / 2 \f$, the following expansion is employed:
+   * \f[ \tan(x) = - \frac{1}{x-\pi/2} - \sum_{k=1}^\infty \frac{(-1)^k 2^{2k} B_{2k}}{(2k)!} (x - \pi/2)^{2k - 1} \f]
+   * where \f$ B_n \f$ is the n-th Bernoulli number.
+   */
+  template<typename T>
+  constexpr T
+  tan(T x)
+  {
+    if (min<T>() > abs(x))
+      return 0;
+
+    bool isNegative = x < T(0);
+    x = (isNegative) ? -x : x;
+
+    // tan(x) = tan(x + pi)
+    x -= T(kPi) * floor(x / T(kPi));
+    if (x > T(kPi))
+      return quiet_nan<T>();
+
+    // main calculation
+    T y{};
+    
+    // deals with a singularity at tan(pi/2)
+    if (x > T(1.55) && x < T(1.60))
+    {
+      if (min<T>() > abs(x - T(kPi / 2)))
+        y = T(1.633124e+16);
+      else
+      {
+        x -= T(kPi / 2);
+        // this is based on a fourth-order expansion of tan(z) using Bernoulli numbers
+        y = -1 / x + (x / 3 + (pow(x, 3) / 45 + (2 * pow(x, 5) / 945 + pow(x, 7) / 4725)));
+      }
+    }
+    else
+    {
+      auto tan_cf_recur = [](const auto &self, T xx, int depth, int max_depth) -> T
+      {
+        // continued fraction calculation
+        // https://math.stackexchange.com/a/433857
+        T z = T(2 * depth - 1);
+        if (depth < max_depth)
+          z -= xx / self(self, xx, depth + 1, max_depth);
+
+        return z;
+      };
+
+      if (x > T(1.4))
+        y = x / tan_cf_recur(tan_cf_recur, x * x, 1, 45);
+      else if (x > T(1))
+        y = x / tan_cf_recur(tan_cf_recur, x * x, 1, 35);
+      else
+        y = x / tan_cf_recur(tan_cf_recur, x * x, 1, 25);
+    }
+
+    return (isNegative) ? -y : y;
+  }
+}

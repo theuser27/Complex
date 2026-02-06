@@ -10,8 +10,6 @@
 
 #include "Spectrogram.hpp"
 
-#include "Third Party/gcem/gcem.hpp"
-
 #include "Framework/utils.hpp"
 #include "Framework/simd_math.hpp"
 #include "Plugin/Complex.hpp"

@@ -37,7 +37,7 @@ namespace Generation
 
   namespace Utility
   {
-    static constexpr uuid id = 1759541555994809100;
+    //static constexpr uuid id = 1759541555994809100;
 
     //// Parameters
     //
@@ -66,13 +66,13 @@ namespace Generation
 
       auto *arena = structure.getNewArena(128);
 
-      return COMPLEX_STRUCTURE_INDEXED_DATA(.displayName = "Utility", .id = id, .count = 0);
+      return COMPLEX_STRUCTURE_INDEXED_DATA(.displayName = "Utility", .count = 0);
     }
   }
 
   namespace Filter
   {
-    static constexpr uuid id = 1759541579349223900;
+    //static constexpr uuid id = 1759541579349223900;
 
     COMPLEX_ENUM(Types,
       (Normal, 1758738064349498000),
@@ -148,8 +148,8 @@ namespace Generation
 
       auto *arena = structure.getNewArena(COMPLEX_KB(4));
 
-      auto &group = COMPLEX_STRUCTURE_INDEXED_DATA(.displayName = "Filter", .id = id).addChildren(
-        COMPLEX_STRUCTURE_INDEXED_DATA(.displayName = "Normal", .id = Types::Normal,
+      auto &group = COMPLEX_STRUCTURE_INDEXED_DATA(.displayName = "Filter").addChildren(
+        COMPLEX_STRUCTURE_INDEXED_DATA(.displayName = "Normal", .id = Types::Normal, .flags = IndexedData::ProcessorFlag,
           .processorMetadata = COMPLEX_STRUCTURE_EFFECT("Normal", Types::Normal, vtableNormal, .parameters =
             (
               COMPLEX_STRUCTURE_PARAMETER("Gain", Normal::Gain, kMinusInfDb, kInfDb, 0.0f, 0.5f, ParameterScale::SymmetricLoudness,
@@ -161,7 +161,7 @@ namespace Generation
             )
           )
         ),
-        COMPLEX_STRUCTURE_INDEXED_DATA(.displayName = "Gate", .id = Types::Gate,
+        COMPLEX_STRUCTURE_INDEXED_DATA(.displayName = "Gate", .id = Types::Gate, .flags = IndexedData::ProcessorFlag,
           .processorMetadata = COMPLEX_STRUCTURE_EFFECT("Gate", Types::Gate, vtableGate, .parameters =
             (
               COMPLEX_STRUCTURE_PARAMETER("Input Gain", Gate::InputGain, kMinusInfDb, kInfDb, 0.0f, 0.5f, ParameterScale::SymmetricLoudness,
@@ -190,7 +190,7 @@ namespace Generation
 
   namespace Dynamics
   {
-    static constexpr uuid id = 1759541589473873300;
+    //static constexpr uuid id = 1759541589473873300;
 
     COMPLEX_ENUM(Types,
       (Contrast, 1759688533355766700),
@@ -243,8 +243,8 @@ namespace Generation
 
       auto *arena = structure.getNewArena(COMPLEX_KB(1));
 
-      auto &group = COMPLEX_STRUCTURE_INDEXED_DATA(.displayName = "Dynamics", .id = id).addChildren(
-        COMPLEX_STRUCTURE_INDEXED_DATA(.displayName = "Contrast", .id = Types::Contrast,
+      auto &group = COMPLEX_STRUCTURE_INDEXED_DATA(.displayName = "Dynamics").addChildren(
+        COMPLEX_STRUCTURE_INDEXED_DATA(.displayName = "Contrast", .id = Types::Contrast, .flags = IndexedData::ProcessorFlag,
           .processorMetadata = COMPLEX_STRUCTURE_EFFECT("Contrast", Types::Contrast, vtableContrast, .parameters =
             (
               COMPLEX_STRUCTURE_PARAMETER("Depth", Contrast::Depth, -1.0f, 1.0f, 0.0f, 0.5f, ParameterScale::Linear,
@@ -252,7 +252,7 @@ namespace Generation
             )
           )
         ),
-        COMPLEX_STRUCTURE_INDEXED_DATA(.displayName = "Clip", .id = Types::Clip,
+        COMPLEX_STRUCTURE_INDEXED_DATA(.displayName = "Clip", .id = Types::Clip, .flags = IndexedData::ProcessorFlag,
           .processorMetadata = COMPLEX_STRUCTURE_EFFECT("Clip", Types::Clip, vtableClip, .parameters =
             (
               COMPLEX_STRUCTURE_PARAMETER("Threshold", Clip::Threshold, 0.0f, 1.0f, 0.0f, 0.0f, ParameterScale::Linear,
@@ -269,7 +269,7 @@ namespace Generation
 
   namespace Phase
   {
-    static constexpr uuid id = 1759541605615040500;
+    //static constexpr uuid id = 1759541605615040500;
 
     COMPLEX_ENUM(Types,
       (Shift, 1759688567995948900),
@@ -305,8 +305,8 @@ namespace Generation
 
       auto *arena = structure.getNewArena(COMPLEX_KB(4));
 
-      auto &group = COMPLEX_STRUCTURE_INDEXED_DATA(.displayName = "Phase", .id = id).addChildren(
-        COMPLEX_STRUCTURE_INDEXED_DATA(.displayName = "Shift", .id = Types::Shift,
+      auto &group = COMPLEX_STRUCTURE_INDEXED_DATA(.displayName = "Phase").addChildren(
+        COMPLEX_STRUCTURE_INDEXED_DATA(.displayName = "Shift", .id = Types::Shift, .flags = IndexedData::ProcessorFlag,
           .processorMetadata = COMPLEX_STRUCTURE_EFFECT("Contrast", Types::Shift, vtableShift, .parameters =
             (
               COMPLEX_STRUCTURE_PARAMETER("Phase Shift", Shift::PhaseShift, -180.0f, 180.0f, 0.0f, 0.5f, ParameterScale::Linear,
@@ -334,7 +334,7 @@ namespace Generation
 
   namespace Pitch
   {
-    static constexpr uuid id = 1759541664963033000;
+    //static constexpr uuid id = 1759541664963033000;
 
     COMPLEX_ENUM(Types,
       (  Resample, 1759689528336006800),
@@ -370,8 +370,8 @@ namespace Generation
 
       auto *arena = structure.getNewArena(COMPLEX_KB(1));
 
-      auto &group = COMPLEX_STRUCTURE_INDEXED_DATA(.displayName = "Pitch", .id = id).addChildren(
-        COMPLEX_STRUCTURE_INDEXED_DATA(.displayName = "Resample", .id = Types::Resample,
+      auto &group = COMPLEX_STRUCTURE_INDEXED_DATA(.displayName = "Pitch").addChildren(
+        COMPLEX_STRUCTURE_INDEXED_DATA(.displayName = "Resample", .id = Types::Resample, .flags = IndexedData::ProcessorFlag,
           .processorMetadata = COMPLEX_STRUCTURE_EFFECT("Resample", Types::Resample, vtableResample, .parameters =
             (
               COMPLEX_STRUCTURE_PARAMETER("Shift", Resample::Shift, -48.0f, 48.0f, 0.0f, 0.5f, ParameterScale::Linear,
@@ -381,7 +381,7 @@ namespace Generation
             )
           )
         ),
-        COMPLEX_STRUCTURE_INDEXED_DATA(.displayName = "Frequency Shift", .id = Types::ConstShift,
+        COMPLEX_STRUCTURE_INDEXED_DATA(.displayName = "Frequency Shift", .id = Types::ConstShift, .flags = IndexedData::ProcessorFlag,
           .processorMetadata = COMPLEX_STRUCTURE_EFFECT("Frequency Shift", Types::ConstShift, vtableConstShift, .parameters =
             (
               COMPLEX_STRUCTURE_PARAMETER("Shift", Resample::Shift, -20'000.0f, 20'000.0f, 0.0f, 0.5f, ParameterScale::SymmetricCubic,
@@ -398,21 +398,21 @@ namespace Generation
 
   namespace Stretch
   {
-    static constexpr uuid id = 1759541679484794800;
+    //static constexpr uuid id = 1759541679484794800;
 
     // specops geometry
   }
 
   namespace Warp
   {
-    static constexpr uuid id = 1759541685084772400;
+    //static constexpr uuid id = 1759541685084772400;
 
     // vocode, harmonic match, cross/warp mix
   }
 
   namespace Destroy
   {
-    static constexpr uuid id = 1759541690760143400;
+    //static constexpr uuid id = 1759541690760143400;
 
     COMPLEX_ENUM(Types,
       (Reinterpret, 1759689938250169600),
@@ -448,8 +448,8 @@ namespace Generation
 
       auto *arena = structure.getNewArena(COMPLEX_KB(1));
 
-      auto &group = COMPLEX_STRUCTURE_INDEXED_DATA(.displayName = "Destroy", .id = id).addChildren(
-        COMPLEX_STRUCTURE_INDEXED_DATA(.displayName = "Reinterpret", .id = Types::Reinterpret,
+      auto &group = COMPLEX_STRUCTURE_INDEXED_DATA(.displayName = "Destroy").addChildren(
+        COMPLEX_STRUCTURE_INDEXED_DATA(.displayName = "Reinterpret", .id = Types::Reinterpret, .flags = IndexedData::ProcessorFlag,
           .processorMetadata = COMPLEX_STRUCTURE_EFFECT("Reinterpret", Types::Reinterpret, vtableReinterpret, .parameters =
             (
               COMPLEX_STRUCTURE_PARAMETER("Real/Imag Atten", Reinterpret::Attenuation, kMinusInfDb, kInfDb, 0.0f, 0.5f,
@@ -1672,7 +1672,7 @@ initialiseTypeStructure<Generation::EffectModule>(void *, Framework::PluginStruc
             Phase::initialiseTypeStructure(structure),
             Pitch::initialiseTypeStructure(structure),
             Destroy::initialiseTypeStructure(structure)),
-          .defaultOptionId = Filter::id
+          .defaultOptionId = Filter::Types::Normal
         }, ParameterScale::Indexed, {}, ParameterDetails::Automatable | ParameterDetails::Extensible, UpdateFlag::AfterProcess),
       COMPLEX_STRUCTURE_PARAMETER("Module Enabled", EffectModule::ModuleEnabled, 0.0f, 1.0f, 1.0f, 1.0f,
         ParameterScale::Toggle, {}, ParameterDetails::Modulatable | ParameterDetails::Automatable, UpdateFlag::Realtime, Framework::printToggleValues),

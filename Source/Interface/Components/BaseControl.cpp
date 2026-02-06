@@ -19,6 +19,8 @@ namespace Interface
 {
   BaseControl::BaseControl(Framework::ParameterValue *parameter)
   {
+    componentFlags.clickable = true;
+    componentFlags.clickableChildren = false;
     if (!parameter)
       return;
 
@@ -116,6 +118,9 @@ namespace Interface
         return false;
     }
 
+    if (textEntry)
+      textEntry->enteredText = getScaledValueString(arena, getValue());
+
     if (notify)
       valueChanged();
 
@@ -182,7 +187,8 @@ namespace Interface
 
   struct ControlPopupItem : PopupItem
   {
-    bool render(OpenGlWrapper &openGl) override
+    bool
+    render(OpenGlWrapper &openGl) override
     {
       (void)openGl;
 
@@ -193,7 +199,7 @@ namespace Interface
   };
 
   static Range<i32>
-  getItemTextMetrics(Component *c, i32 *availableWidth)
+  getControlPopupItemTextMetrics(Component *c, i32 *availableWidth)
   {
     auto *item = (ControlPopupItem *)c;
 
@@ -277,15 +283,16 @@ namespace Interface
     return { minSize, maxSize };
   }
 
-  void handlePopupResult(BaseControl *control, PopupItem *selectedItem);
+  void handleControlPopupResult(BaseControl *control, PopupItem *selectedItem);
 
   void BaseControl::createPopupMenu(PopupSelector *selector, Point<i32> position)
   {
     auto *itemArena = selector->arena;
   
-  #define ITEM(idNumber, ...) (&with_val(*anew(itemArena, ControlPopupItem, {}), .id = idNumber, __VA_OPT__(,) __VA_ARGS__))
+  #define ITEM(idNumber, ...) (&with_val(*anew(itemArena, ControlPopupItem, {}), \
+    .arena = itemArena, .id = idNumber, __VA_OPT__(,) __VA_ARGS__))
   #define TEXT_ITEM(idNumber, ...) ITEM(idNumber, \
-    .desiredSize.getTextDimensions = getItemTextMetrics, .sizingFlags = HasText)
+    .desiredSize.getDimensions = getControlPopupItemTextMetrics, .sizingFlags = Component::CustomDimensions)
 
     ControlPopupItem &options = *ITEM(kTopLevel);
     options.sizingFlags = Component::IsVertical;
@@ -359,7 +366,7 @@ namespace Interface
     selector->items = &options;
     selector->skinOverride = skinOverride;
     selector->callback = [this](PopupSelector *, PopupItem *selectedItem)
-    { handlePopupResult(this, selectedItem); };
+    { handleControlPopupResult(this, selectedItem); };
     selector->cancel = {};
     selector->summon(this, position);
   }
@@ -499,7 +506,7 @@ namespace Interface
     return Framework::unscaleValue(parsedValue, details, true);
   }
 
-  void handlePopupResult(BaseControl *control, PopupItem *selectedItem)
+  void handleControlPopupResult(BaseControl *control, PopupItem *selectedItem)
   {
     auto &plugin = getPlugin(uiRelated.renderer);
 
@@ -514,7 +521,7 @@ namespace Interface
     else if (result == kManualEntry)
     {
       auto font = uiRelated.cache->getInterFont();
-      control->showTextEntry(font);
+      control->showTextEntry();
     }
     else if (result == kCopyValue || result == kCopyNormalisedValue)
     {
@@ -611,9 +618,13 @@ namespace Interface
   //  }
   //}
 
-  void BaseControl::showTextEntry(Font font)
+  void BaseControl::showTextEntry()
   {
-    (void)font;
+    if (!controlFlags.canInputValue)
+      return;
+
+    controlFlags.isInModalState = true;
+
     //std::string text = (!hasParameter()) ? floatToString(getValue()) :
     //  floatToString(Framework::scaleValue(getValue(), details_, getSampleRate(), true), maxDecimalCharacters_);
 
@@ -622,6 +633,18 @@ namespace Interface
     //if (textEntry_->isVisible())
     //  textEntry_->grabKeyboardFocus();
     //textEntry_->setVisible(true);
+  }
+
+  void BaseControl::updateValueFromTextEntry()
+  {
+    if (!controlFlags.canInputValue || 
+      !textEntry || textEntry->enteredText.empty())
+      return;
+
+    auto newValue = getValueFromText(textEntry->enteredText);
+    setValue(newValue, true);
+    if (auto hostControl = parameterLink->hostControl)
+      hostControl->setValueFromUI((float)newValue);
   }
 
   void BaseControl::showPopup(bool primary)
@@ -647,8 +670,8 @@ namespace Interface
 
   Label::Label()
   {
-    sizingFlags |= Component::HasText;
-    desiredSize.getTextDimensions = [](Component *c, i32 *availablePrimarySize)
+    sizingFlags |= Component::CustomDimensions;
+    desiredSize.getDimensions = [](Component *c, i32 *availablePrimarySize)
     {
       if (!availablePrimarySize)
       {

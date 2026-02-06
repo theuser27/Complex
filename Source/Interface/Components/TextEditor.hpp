@@ -1,4 +1,4 @@
-
+﻿
 // Created: 2023-12-15 21:18:29
 
 #pragma once
@@ -9,7 +9,15 @@ namespace Interface
 {
   class TextEditor : public Component
   {
+  public:
+    enum CallbackFlags { FocusLost, EscapePressed, EnterPressed };
 
+    Component *triggeringComponent = nullptr;
+    void (*callback)(Component *component, CallbackFlags flags, TextEditor &editor) = nullptr;
+    utils::string enteredText{};
+    utils::string hintText{};
+
+    Font font{};
   };
 
   // text editor with base implementation taken from juce's

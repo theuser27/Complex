@@ -40,7 +40,7 @@ namespace Interface
   PopupSelector *getPopupSelector();
   utils::bumpArena *getUIArena();
 
-  void deleteComponent(Component *component);
+  void deleteComponent(Component *component, bool freeArena = true);
 
   class Component
   {
@@ -80,8 +80,9 @@ namespace Interface
 
       ScrollIsPartOfPadding = 1 << 9,
 
-      // will use desiredSize.getTextDimensions to calculate dimensions
-      HasText = 1 << 10,
+      // will use desiredSize.getDimensions to calculate dimensions
+      // mainly used to get text sizes but can be used for anything
+      CustomDimensions = 1 << 10,
       // controls the children stack direction
       IsVertical = 1 << 11,
     };
@@ -160,9 +161,9 @@ namespace Interface
     void removeAllChildComponents();
 
     // this one removes and frees component from arena
-    void deleteChildComponent(Component *childToDelete);
-    void deleteChildComponent(usize childIndexToDelete);
-    void deleteAllChildComponents();
+    void deleteChildComponent(Component *childToDelete, bool freeArena = true);
+    void deleteChildComponent(usize childIndexToDelete, bool freeArena = true);
+    void deleteAllChildComponents(bool freeArena = true);
 
     bool hasFocus(bool trueIfChildIsFocused) const;
     void grabFocus();
@@ -197,7 +198,7 @@ namespace Interface
     Component *parent = nullptr;
     utils::vector<Component *> childComponents{};
     i8 layerIndex = 0;
-    Skin::SectionOverride skinOverride = Skin::kUseParentOverride;
+    Skin::Override skinOverride = Skin::kUseParentOverride;
     struct
     {
       // feature flags
@@ -229,9 +230,9 @@ namespace Interface
     union
     {
       Rectangle<i32> minMax{};
-      // Text
+      // CustomDimensions
       // returns primary/secondary axis min and max size if availablePrimarySize ==/!= nullptr
-      Range<i32> (*getTextDimensions)(Component *c, i32 *availablePrimarySize);
+      Range<i32> (*getDimensions)(Component *c, i32 *availablePrimarySize);
     } desiredSize{ { 0, 0, utils::max_limit<i32>, utils::max_limit<i32> } };
 
     Point<i32> scrollOffset{};

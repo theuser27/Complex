@@ -1200,7 +1200,7 @@ static void glnvg__renderFlush(void* uptr)
 		glStencilFunc(GL_ALWAYS, 0, 0xffffffff);
 		glActiveTexture(GL_TEXTURE0);
 		glBindTexture(GL_TEXTURE_2D, 0);
-		#if NANOVG_GL_USE_STATE_FILTER
+#if NANOVG_GL_USE_STATE_FILTER
 		gl->boundTexture = 0;
 		gl->stencilMask = 0xffffffff;
 		gl->stencilFunc = GL_ALWAYS;
@@ -1210,7 +1210,7 @@ static void glnvg__renderFlush(void* uptr)
 		gl->blendFunc.srcAlpha = GL_INVALID_ENUM;
 		gl->blendFunc.dstRGB = GL_INVALID_ENUM;
 		gl->blendFunc.dstAlpha = GL_INVALID_ENUM;
-		#endif
+#endif
 
 #if NANOVG_GL_USE_UNIFORMBUFFER
 		// Upload ubo for frag shaders
