@@ -106,8 +106,8 @@ echo [serialising data]
 pushd helpers
 if not exist build mkdir build
 pushd build
-call cl /nologo /FC /MTd ../serialise_binary.cpp /link /DEBUG kernel32.lib Shell32.lib Shlwapi.lib Ole32.lib > NUL 2> NUL
-serialise_binary.exe ..\..\Source\Data ..\..\Data
+call cl /nologo /FC /MTd ../resource_generator.cpp /link /DEBUG kernel32.lib Shell32.lib Shlwapi.lib Ole32.lib > NUL 2> NUL
+resource_generator.exe ..\..\Source\Data ..\..\Data
 popd
 rd /q /s build
 popd
