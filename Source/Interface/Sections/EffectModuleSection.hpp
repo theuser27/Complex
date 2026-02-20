@@ -72,9 +72,9 @@ namespace Interface
 			ProcessorSection::renderOpenGlComponents(openGl);
 		}
 		void mouseDown(const MouseEvent &e) override;
-		void mouseDown([[maybe_unused]] BaseControl *slider) override { }
+		void mouseDown([[maybe_unused]] Control *slider) override { }
 		void paintBackground(Graphics &g) override;
-		void controlValueChanged(BaseControl *control) override;
+		void controlValueChanged(Control *control) override;
 		auto getPowerButtonBounds() const noexcept -> Rectangle<int> override
 		{
 			auto widthHeight = (int)::roundf(scaleValue(kDefaultActivatorSize));
@@ -87,7 +87,7 @@ namespace Interface
 		// handle unmapping of parameters that don't have a UI control, 
 		//  automationMappingChanged for mapping
 		//  parameterLinkReset for unmapping
-		void automationMappingChanged(BaseControl *control, bool isUnmapping) override;
+		void automationMappingChanged(Control *control, bool isUnmapping) override;
 		void parameterLinkReset(Framework::ParameterBridge *bridge,
 			Framework::ParameterLink *newLink, Framework::ParameterLink *oldLink) override;
 
@@ -111,7 +111,7 @@ namespace Interface
 		auto getLaneSection() const noexcept -> EffectsLaneSection * { return laneSection_; }
 		auto getEffect() noexcept -> Generation::BaseEffect *;
 		auto getAlgorithmSelector() const noexcept -> TextSelector &;
-		auto getEffectControl(utils::string_view name) -> BaseControl *;
+		auto getEffectControl(utils::string_view name) -> Control *;
 
 		auto getUIBounds() const noexcept -> Rectangle<int>
 		{ return getLocalBounds().withTop(getYMaskOffset() + scaleValueRoundInt(kTopMenuHeight) + 1); }
@@ -144,11 +144,11 @@ namespace Interface
 
 		EffectsLaneSection *laneSection_ = nullptr;
 		Generation::EffectModule *effectModule_ = nullptr;
-		std::vector<utils::up<BaseControl>> effectControls_;
+		std::vector<utils::up<Control>> effectControls_;
 		utils::vector_map<usize, Framework::ParameterBridge *> parameterMappings{};
 
 		auto (*initialiseParametersFunction_)(EffectModuleSection *section, 
-			utils::string_view type) -> std::vector<utils::up<BaseControl>> = nullptr;
+			utils::string_view type) -> std::vector<utils::up<Control>> = nullptr;
 		void (*arrangeUIFunction_)(EffectModuleSection *section, 
 			Rectangle<int> bounds, utils::string_view type) = nullptr;
 		void (*paintBackgroundFunction_)(Graphics &g, EffectModuleSection *section) = nullptr;

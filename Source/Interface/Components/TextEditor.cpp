@@ -3,12 +3,142 @@
 
 #include "TextEditor.hpp"
 
+#include "Plugin/Renderer.hpp"
 #include "../LookAndFeel/Miscellaneous.hpp"
-#include "Interface/LookAndFeel/Fonts.hpp"
+#include "BaseControl.hpp"
 
 namespace Interface
 {
-  struct TextAtom
+  TextEditor::TextEditor()
+  {
+  }
+
+  bool
+  TextEditor::mouseEnter(const MouseEvent &)
+  {
+    if (componentFlags.clickable)
+      setMouseCursor(uiRelated.renderer, MouseCursorTypes::Caret);
+    return true;
+  }
+
+  bool
+  TextEditor::mouseExit(const MouseEvent &)
+  {
+    if (componentFlags.clickable)
+      setMouseCursor(uiRelated.renderer, MouseCursorTypes::Normal);
+    return true;
+  }
+
+  bool 
+  TextEditor::mouseDown(const MouseEvent &)
+  {
+    return true;
+  }
+
+  bool 
+  TextEditor::mouseDrag(const MouseEvent &)
+  {
+    return true;
+  }
+
+  bool 
+  TextEditor::mouseUp(const MouseEvent &)
+  {
+    return true;
+  }
+
+  bool 
+  TextEditor::render(OpenGlWrapper &openGl)
+  {
+    openGl.cache->setFont(font, scaleValue((float)bounds.h));
+    float ascender, lineHeight;
+    nvgTextMetrics(openGl.g, &ascender, nullptr, &lineHeight);
+    nvgText(openGl.g, 0.0f, ((float)bounds.h - lineHeight) * 0.5f + ascender,
+      text.data(), text.data() + text.size());
+    return true;
+  }
+
+  static Range<i32>
+  getLabelTextMetrics(Component *c, i32 *availableWidth)
+  {
+    auto *self = (Label *)c;
+
+    float lineHeight = scaleValue((float)((self->componentFlags.isVertical) ?
+      self->desiredSize.y : self->desiredSize.x));
+    
+    if (!availableWidth)
+    {
+      COMPLEX_ASSERT(self->control, "Forgot to set reference to control in label");
+
+      if (!self->text.capacity())
+        self->text.reserve(self->control->arena, (1 << 5) - 1);
+
+      self->cacheString(self, self->control);
+      uiRelated.cache->setFont(self->font, lineHeight);
+      auto max = (i32)::ceilf(uiRelated.cache->getStringWidthFloat(self->text));
+
+      return Range<i32>{ 0, max };
+    }
+    else
+    {
+      auto height = (i32)::ceilf(lineHeight);
+
+      // labels are always a single line
+      return Range<i32>{ height, height };
+    }
+  }
+
+  Label::Label()
+  {
+    desiredSize.x = kPrimaryTextLineHeight;
+    desiredSize.y = desiredSize.x;
+    sizingFlags |= Component::CustomDimensions;
+    getDimensions = getLabelTextMetrics;
+  }
+
+  SliderValueEditor::SliderValueEditor()
+  {
+    font = Graphics::DDinType;
+
+    getDimensions = [](Component *c, i32 *availableWidth)
+    {
+      i32 max{};
+      auto *self = (SliderValueEditor *)c;
+
+      float lineHeight = scaleValue((float)((self->componentFlags.isVertical) ?
+        self->desiredSize.y : self->desiredSize.x));
+
+      if (!availableWidth)
+        max = (i32)::ceilf(self->control->getNumericTextMaxWidth(self->font, lineHeight));
+      else
+        max = (i32)::ceilf(lineHeight);
+
+      return Range<i32>{ max, max };
+    };
+
+    cacheString = [](TextEditor *, Control *) { };
+
+    callback = [](TextEditor &editor, CallbackFlags flags)
+    {
+      auto &self = (SliderValueEditor &)editor;
+      auto *control = self.control;
+
+      if (flags == EnterPressed && !self.text.empty() &&
+        control->controlFlags.canInputValue)
+      {
+        auto newValue = control->getValueFromText(self.text);
+        control->setValue(newValue, true);
+        if (auto hostControl = control->parameterLink->hostControl)
+          hostControl->setValueFromUI((float)newValue);
+      }
+
+      self.cachedValue = control->getValue();
+      control->getScaledValueString(self.text, self.cachedValue);
+      control->controlFlags.isInModalState = false;
+    };
+  }
+
+  /*struct TextAtom
   {
     //==============================================================================
     String atomText;
@@ -721,7 +851,7 @@ namespace Interface
 
 
   //==============================================================================
-  struct TextEditor::InsertAction : public UndoableAction
+  struct TextEditor::InsertAction : public UndoAction
   {
     InsertAction(TextEditor &ed, const String &newText, int insertPos,
       const Font &newFont, Colour newColour, int oldCaret, int newCaret)
@@ -763,7 +893,7 @@ namespace Interface
   };
 
   //==============================================================================
-  struct TextEditor::RemoveAction : public UndoableAction
+  struct TextEditor::RemoveAction : public UndoAction
   {
     RemoveAction(TextEditor &ed, Range<int> rangeToRemove, int oldCaret, int newCaret,
       const Array<UniformTextSection *> &oldSections)
@@ -1824,13 +1954,13 @@ namespace Interface
   }
 
   //==============================================================================
-  /*void TextEditor::mouseEnter(const MouseEvent &mouseEvent)
-  {
-    if (hasKeyboardFocus(false))
-      return;
+  //void TextEditor::mouseEnter(const MouseEvent &mouseEvent)
+  //{
+  //  if (hasKeyboardFocus(false))
+  //    return;
 
-    setMouseCursor(MouseCursor::PointingHandCursor);
-  }*/
+  //  setMouseCursor(MouseCursor::PointingHandCursor);
+  //}
 
   void TextEditor::mouseDown(const MouseEvent &e)
   {
@@ -2099,7 +2229,7 @@ namespace Interface
     return true;
   }
 
-  bool TextEditor::deleteForwards(bool /*moveInWholeWordSteps*/)
+  bool TextEditor::deleteForwards(bool)
   {
     if (selection.isEmpty() && selection.getStart() < getTotalNumChars())
       setSelection({ selection.getStart(), selection.getStart() + 1 });
@@ -2702,5 +2832,5 @@ namespace Interface
         --i;
       }
     }
-  }
+  }*/
 }

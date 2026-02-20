@@ -441,6 +441,8 @@ namespace Interface
     Graphics *cache = nullptr;
     NVGcontext *g = nullptr;
     int topLevelHeight = 0;
+
+    operator NVGcontext *() { return g; }
   };
 
   bool setViewport(Point<int> positionInViewport, Rectangle<int> viewportBounds,

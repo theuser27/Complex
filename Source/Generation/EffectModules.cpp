@@ -153,7 +153,7 @@ namespace Generation
           .processorMetadata = COMPLEX_STRUCTURE_EFFECT("Normal", Types::Normal, vtableNormal, .parameters =
             (
               COMPLEX_STRUCTURE_PARAMETER("Gain", Normal::Gain, kMinusInfDb, kInfDb, 0.0f, 0.5f, ParameterScale::SymmetricLoudness,
-                " db", ParameterDetails::Modulatable | ParameterDetails::Automatable | ParameterDetails::Stereo),
+                " dB", ParameterDetails::Modulatable | ParameterDetails::Automatable | ParameterDetails::Stereo),
               COMPLEX_STRUCTURE_PARAMETER("Cutoff", Normal::Cutoff, 0.0f, 1.0f, 0.5f, 0.5f, ParameterScale::Frequency,
                 " hz", ParameterDetails::Modulatable | ParameterDetails::Automatable | ParameterDetails::Stereo),
               COMPLEX_STRUCTURE_PARAMETER("Slope", Normal::Slope, -1.0f, 1.0f, 0.25f, 0.75f, ParameterScale::SymmetricQuadratic,
@@ -165,13 +165,13 @@ namespace Generation
           .processorMetadata = COMPLEX_STRUCTURE_EFFECT("Gate", Types::Gate, vtableGate, .parameters =
             (
               COMPLEX_STRUCTURE_PARAMETER("Input Gain", Gate::InputGain, kMinusInfDb, kInfDb, 0.0f, 0.5f, ParameterScale::SymmetricLoudness,
-                " db", ParameterDetails::Modulatable | ParameterDetails::Automatable | ParameterDetails::Stereo),
+                " dB", ParameterDetails::Modulatable | ParameterDetails::Automatable | ParameterDetails::Stereo),
               COMPLEX_STRUCTURE_PARAMETER("Gain", Gate::Gain, kMinusInfDb, kInfDb, 0.0f, 0.5f, ParameterScale::SymmetricLoudness,
-                " db", ParameterDetails::Modulatable | ParameterDetails::Automatable | ParameterDetails::Stereo),
+                " dB", ParameterDetails::Modulatable | ParameterDetails::Automatable | ParameterDetails::Stereo),
               COMPLEX_STRUCTURE_PARAMETER("Threshold", Gate::Threshold, -180.0f, 0.0f, -45.0f, 0.5f, ParameterScale::ReverseQuadratic,
-                " db", ParameterDetails::Modulatable | ParameterDetails::Automatable | ParameterDetails::Stereo),
+                " dB", ParameterDetails::Modulatable | ParameterDetails::Automatable | ParameterDetails::Stereo),
               COMPLEX_STRUCTURE_PARAMETER("Tilt", Gate::Tilt, -24.0f, 24.0f, 0.0f, 0.5f, ParameterScale::SymmetricQuadratic,
-                " db", ParameterDetails::Modulatable | ParameterDetails::Automatable | ParameterDetails::Stereo),
+                " dB", ParameterDetails::Modulatable | ParameterDetails::Automatable | ParameterDetails::Stereo),
               COMPLEX_STRUCTURE_PARAMETER("Mode", Gate::Mode,
                 {
                   .options = COMPLEX_STRUCTURE_INDEXED_DATA().addChildren(
@@ -453,7 +453,7 @@ namespace Generation
           .processorMetadata = COMPLEX_STRUCTURE_EFFECT("Reinterpret", Types::Reinterpret, vtableReinterpret, .parameters =
             (
               COMPLEX_STRUCTURE_PARAMETER("Real/Imag Atten", Reinterpret::Attenuation, kMinusInfDb, kInfDb, 0.0f, 0.5f,
-                ParameterScale::SymmetricLoudness, " db", ParameterDetails::Modulatable | ParameterDetails::Automatable | ParameterDetails::Stereo),
+                ParameterScale::SymmetricLoudness, " dB", ParameterDetails::Modulatable | ParameterDetails::Automatable | ParameterDetails::Stereo),
               COMPLEX_STRUCTURE_PARAMETER("Mapping", Reinterpret::Mapping,
                 {
                   .options = COMPLEX_STRUCTURE_INDEXED_DATA().addChildren(

@@ -168,8 +168,8 @@ namespace Framework
     utils::string_view displayUnits{};                    // "%", " db", etc.
     u32 flags = Modulatable | Automatable;                // various flags
     UpdateFlag updateFlag = UpdateFlag::Realtime;         // at which point during processing the parameter is updated
-    void (*generateNumeric)(char *string,                 // string generator function for IndexedNumeric parameters
-      usize stringSize, float value,
+    usize (*generateNumeric)(char *string,                // string generator function for IndexedNumeric parameters
+      usize stringSize, double value,
       const ParameterDetails &details) = nullptr;
   };
 
@@ -296,12 +296,13 @@ namespace Framework
     }
   };
 
-  inline void printToggleValues(char *string, usize size, float value, const ParameterDetails &)
+  inline usize printToggleValues(char *string, usize size, double value, const ParameterDetails &)
   {
     static constexpr utils::string_view toggleStrings[] = { "Off", "On" };
     size = utils::min(toggleStrings[(usize)value].size(), size - 1);
     ::memcpy(string, toggleStrings[(usize)value].data(), size);
     string[size] = '\0';
+    return size;
   }
 }
 
@@ -315,7 +316,7 @@ namespace Framework
   { .flags = ProcessorMetadata::GroupTag, .id = idNumber, .name = { nameString, sizeof(nameString) } __VA_OPT__(,) __VA_ARGS__ }))
 
 // count == 0 if nothing is provided
-#define COMPLEX_STRUCTURE_INDEXED_DATA(...) (*anew(arena, Framework::IndexedData, { COMPLEX_DEPAREN(__VA_OPT__(COMPLEX_IGNORE)(.count = 0)) __VA_ARGS__ }))
+#define COMPLEX_STRUCTURE_INDEXED_DATA(...) (*anew(arena, Framework::IndexedData, { COMPLEX_DEFAULT_OR(.count = 0, __VA_ARGS__) }))
 
 template<typename T>
 T *

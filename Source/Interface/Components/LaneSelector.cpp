@@ -14,10 +14,10 @@
 
 namespace Interface
 {
-  class LaneSelector::Slider final : public BaseSlider
+  class LaneSelector::Slider final : public Slider
   {
   public:
-    Slider() : BaseSlider{ nullptr }
+    Slider() : Slider{ nullptr }
     {
 
     }

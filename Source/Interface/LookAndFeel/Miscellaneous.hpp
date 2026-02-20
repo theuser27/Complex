@@ -23,10 +23,10 @@ namespace Interface
   class Skin;
   class Graphics;
   class Component;
-  class BaseSlider;
-  class BaseControl;
+  class Slider;
+  class Control;
   class TextSelector;
-  class BaseButton;
+  class Button;
   class TextEditor;
   class ScrollBar;
   class EffectsLaneSection;
@@ -42,16 +42,16 @@ namespace Interface
 
   // thread_local variable for the message thread so that we don't need to pass pointers around
   extern thread_local InterfaceRelated uiRelated;
-  strict_inline float scaleValue(float value) noexcept { return uiRelated.scale * value; }
+  strict_inline float scaleValue(float value) { return uiRelated.scale * value; }
   strict_inline Rectangle<float>
-  scaleValue(Rectangle<float> bounds) noexcept
+  scaleValue(Rectangle<float> bounds)
   {
     auto values = utils::bit_cast<simd_float>(bounds);
     values = uiRelated.scale * utils::toFloat(values);
     return utils::bit_cast<Rectangle<float>>(values);
   }
-  strict_inline float scaleValueRound(float value) noexcept { return ::roundf(uiRelated.scale * value); }
-  strict_inline i32 scaleValueRoundInt(float value) noexcept { return (int)::roundf(uiRelated.scale * value); }
+  strict_inline float scaleValueRound(float value) { return ::roundf(uiRelated.scale * value); }
+  strict_inline i32 scaleValueRoundInt(float value) { return (int)::roundf(uiRelated.scale * value); }
   strict_inline Rectangle<i32> 
   scaleValueRoundInt(Rectangle<i32> bounds)
   {
@@ -59,9 +59,13 @@ namespace Interface
     values = utils::toInt(simd_float::round(uiRelated.scale * utils::toFloat(values)));
     return utils::bit_cast<Rectangle<i32>>(values);
   }
+  strict_inline float unscaleValue(float value) { return value / uiRelated.scale; }
 
   inline constexpr int kScrollbarMinThickness = 4;
   inline constexpr int kScrollbarMaxThickness = 8;
+
+  inline constexpr int kPrimaryTextLineHeight = 16;
+  inline constexpr int kSecondaryTextLineHeight = 12;
 
   // HeaderFooter sizes
   inline constexpr int kHeaderHeight = 40;
@@ -117,12 +121,12 @@ namespace Interface
   class ControlListener
   {
   public:
-    virtual void controlValueChanged(BaseControl *control) = 0;
-    virtual void automationMappingChanged([[maybe_unused]] BaseControl *control, [[maybe_unused]] bool isUnmapping) { }
-    virtual void hoverStarted([[maybe_unused]] BaseControl *slider, [[maybe_unused]] const MouseEvent &e) { }
-    virtual void hoverEnded([[maybe_unused]] BaseControl *slider, [[maybe_unused]] const MouseEvent &e) { }
-    virtual void mouseDown([[maybe_unused]] BaseControl *slider, [[maybe_unused]] const MouseEvent &e) { }
-    virtual void mouseUp([[maybe_unused]] BaseControl *slider, [[maybe_unused]] const MouseEvent &e) { }
+    virtual void controlValueChanged(Control *control) = 0;
+    virtual void automationMappingChanged([[maybe_unused]] Control *control, [[maybe_unused]] bool isUnmapping) { }
+    virtual void hoverStarted([[maybe_unused]] Control *slider, [[maybe_unused]] const MouseEvent &e) { }
+    virtual void hoverEnded([[maybe_unused]] Control *slider, [[maybe_unused]] const MouseEvent &e) { }
+    virtual void mouseDown([[maybe_unused]] Control *slider, [[maybe_unused]] const MouseEvent &e) { }
+    virtual void mouseUp([[maybe_unused]] Control *slider, [[maybe_unused]] const MouseEvent &e) { }
   };
 
   void drawSVG(NSVGimage *image, Graphics &g, Colour colour,

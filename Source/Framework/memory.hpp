@@ -8,21 +8,29 @@
 
 namespace utils
 {
+  struct bumpArena;
+}
+
+extern thread_local utils::bumpArena *localScratch;
+extern utils::bumpArena *globalArena;
+
+namespace utils
+{
   enum class AllocatorType : u8 { General, BumpArena };
 
   template<typename T>
   concept AllocatorConcept = requires(T *allocator, usize size,
-    usize alignment, bool clean, bool threadSafe, const void *existingAllocation)
+    usize alignment, bool clean, const void *existingAllocation)
   {
     // AllocatorType tag
     requires utils::is_same_v<decltype(T::type), const utils::AllocatorType>;
 
     // basic usage functions
-    T::insert(allocator, size, alignment, clean, threadSafe);
-    T::remove(existingAllocation, threadSafe);
+    T::insert(allocator, size, alignment, clean);
+    T::remove(existingAllocation);
 
     // extracting an effective allocator from an existing allocation and being able to use it
-    T::insert(static_cast<decltype(T::fromAllocation(existingAllocation))>(nullptr), size, alignment, clean, threadSafe);
+    T::insert(static_cast<decltype(T::fromAllocation(existingAllocation))>(nullptr), size, alignment, clean);
   };
 
   struct bumpArena
@@ -46,6 +54,7 @@ namespace utils
     };
 
     satomi::atomic<bool> lock{};
+    bool threadSafe = true;
     u8 flags{};
 
     // reserved and committed sizes stored are size - 1 to be able to represent up to 4 GB
@@ -56,7 +65,7 @@ namespace utils
 
     bumpArena *nextArena{};
 
-    static usize getUsedSize(bumpArena *arena) noexcept;
+    static usize getUsedSize(bumpArena *arena);
     static strict_inline bumpArena *
     fromAllocation(const void *data)
     {
@@ -64,16 +73,16 @@ namespace utils
       return utils::launder((bumpArena *)((byte *)node - node->offsetToArena));
     }
 
-    static byte *insert(bumpArena *arena, usize size, usize alignment, bool clean = false, bool threadSafe = true);
-    static strict_inline byte *
-    insert(const void *data, usize size, usize alignment, bool clean = false, bool threadSafe = true)
+    [[nodiscard]] static byte *insert(bumpArena *arena, usize size, usize alignment, bool clean = false);
+    [[nodiscard]] static strict_inline byte *
+    insert(const void *data, usize size, usize alignment, bool clean = false)
     {
-      return insert(fromAllocation(data), size, alignment, clean, threadSafe);
+      return insert(fromAllocation(data), size, alignment, clean);
     }
-    static void remove(const void *data, bool threadSafe = true);
-    static void shrinkToFit(bumpArena *arena, bool shrinkToCommitted, bool threadSafe = true);
+    static void remove(const void *data);
+    static void shrinkToFit(bumpArena *arena, bool shrinkToCommitted);
 
-    static strict_inline bumpArena *
+    [[nodiscard]] static strict_inline bumpArena *
     create(usize reservedSize = COMPLEX_MB(64), usize commitSize = COMPLEX_KB(64))
     {
       reservedSize = utils::clamp(reservedSize, sizeof(bumpArena), usize(u32(-1)) + 1);
@@ -88,7 +97,7 @@ namespace utils
         .committedSize = (u32)(commitSize - 1), .freeNodeStart = (u32)sizeof(bumpArena) };
     }
     template<typename T>
-    static strict_inline bumpArena *
+    [[nodiscard]] static strict_inline bumpArena *
     createNested(T *differentArena, usize allocateSize) requires requires { T::insert(differentArena, usize(0), usize(0)); }
     {
       allocateSize = utils::min(allocateSize + sizeof(bumpArena), usize(u32(-1)) + 1);
@@ -103,7 +112,7 @@ namespace utils
         .committedSize = (u32)(allocateSize - 1), .freeNodeStart = (u32)sizeof(bumpArena) };
     }
 
-    static void clear(bumpArena *arena, bool threadSafe = true);
+    static void clear(bumpArena *arena);
 
     static void destroy(bumpArena *arena);
   };
@@ -201,7 +210,7 @@ namespace utils
     static void relinkDeallocation(const void *oldChildResource, const void *newChildResource);
   };
 
-  // anew, the replacement to operator new (with arenas)
+  // anew, the replacement to operator new (with arenas/allocators)
   // using placement new on memory resource, provided by an arena implementation
 
   #define anew(allocator, T, ...) (new(allocator->insert(allocator, sizealignof(T))) T __VA_ARGS__)
@@ -211,9 +220,9 @@ namespace utils
   {
     struct AllocatorVtable
     {
-      byte *(*insert)(void *allocator, usize size, usize alignment, bool clean, bool threadSafe);
-      void (*remove)(const void *allocation, bool threadSafe);
-      Allocator(*fromAllocation)(const void *allocation);
+      byte *(*insert)(void *allocator, usize size, usize alignment, bool clean);
+      void (*remove)(const void *allocation);
+      Allocator (*fromAllocation)(const void *allocation);
       AllocatorType type;
     };
 
@@ -226,14 +235,14 @@ namespace utils
       auto *allocator = T::fromAllocation(allocation);
       return { &allocatorTable[(usize)allocator->type], allocator };
     }
-    template<typename T>
+    template<AllocatorConcept T>
     static constexpr AllocatorVtable 
     createVtable()
     {
       return AllocatorVtable
       {
-        .insert = [](void *allocator, usize size, usize alignment, bool clean, bool threadSafe)
-        { return T::insert((T *)allocator, size, alignment, clean, threadSafe); },
+        .insert = [](void *allocator, usize size, usize alignment, bool clean)
+        { return T::insert((T *)allocator, size, alignment, clean); },
         .remove = T::remove,
         .fromAllocation = Allocator::getAllocatorFromFunction<T>,
         .type = T::type
@@ -243,14 +252,11 @@ namespace utils
 
     static constexpr AllocatorVtable generalAllocatorVtable
     {
-      .insert = [](void *, usize size, usize alignment, bool clean, bool)
+      .insert = [](void *, usize size, usize alignment, bool clean)
       {
-        byte *memory = utils::allocate(size, alignment);
-        if (clean)
-          ::zeroset(memory, size);
-        return memory;
+        return utils::allocate(size, alignment, clean);
       },
-      .remove = [](const void *allocation, bool) { utils::deallocate(allocation); },
+      .remove = [](const void *allocation) { utils::deallocate(allocation); },
       .fromAllocation = getGeneralAllocator,
       .type = AllocatorType::General
     };
@@ -271,16 +277,16 @@ namespace utils
       bool freeingDestructor = true) : vtable{ vtable }, allocator{ allocator },
       freeingDestructor{ freeingDestructor } { }
 
-    strict_inline byte *
-    insert(usize size, usize alignment, bool clean = true, bool threadSafe = true) const
-    { return vtable->insert(allocator, size, alignment, clean, threadSafe); }
-    strict_inline void remove(const void *allocation, bool threadSafe = true) const { if (allocation) vtable->remove(allocation, threadSafe); }
+    [[nodiscard]] strict_inline byte *
+    insert(usize size, usize alignment, bool clean = true) const
+    { return vtable->insert(allocator, size, alignment, clean); }
+    strict_inline void remove(const void *allocation) const { if (allocation) vtable->remove(allocation); }
     strict_inline Allocator fromAllocation(const void *allocation) const { return vtable->fromAllocation(allocation); }
-    strict_inline AllocatorType type() const noexcept { return vtable->type; }
+    strict_inline AllocatorType type() const { return vtable->type; }
 
     static constexpr Allocator fromType(AllocatorType type) { return { &allocatorTable[(usize)type], nullptr }; }
 
-    explicit operator bool() const noexcept { return vtable; }
+    explicit operator bool() const { return vtable; }
   };
 
   inline constexpr Allocator generalAllocator{ &Allocator::generalAllocatorVtable, nullptr };
@@ -408,7 +414,7 @@ namespace utils
     }
 
     vector(Allocator allocator, usize reserveSpace) { reserve(allocator, reserveSpace); }
-    vector(Allocator allocator, const auto &data) requires requires { data.data(); data.size(); }
+    vector(Allocator allocator, utils::span<const T> data)
     {
       utils::contiguousClone(allocator, allocator, data.data(), data.size(), data_, size_, capacity_);
       allocatorType_ = (usize)allocator.type();
@@ -419,8 +425,8 @@ namespace utils
     constexpr vector() = default;
     vector(const vector &other) = delete;
     vector &operator=(const vector &other) = delete;
-    constexpr vector(vector &&other) { swap(other); }
-    vector &operator=(vector &&other)
+    constexpr vector(vector &&other) noexcept { swap(other); }
+    vector &operator=(vector &&other) noexcept
     {
       if (this == &other)
         return *this;
@@ -448,7 +454,29 @@ namespace utils
     void reserve(usize capacity) { reserve({}, capacity); }
     void reserve(Allocator allocator, usize capacity)
     {
-      auto oldAllocator = Allocator::fromType((AllocatorType)allocatorType_).fromAllocation(data_);
+      // are we caching allocator for future use?
+      if (!capacity_ && !capacity)
+      {
+        allocatorType_ = (usize)allocator.type();
+        data_ = (decltype(data_))allocator.allocator;
+      }
+
+      if (!capacity || capacity <= capacity_)
+        return;
+
+      // increase size by at least double the current one
+      capacity = utils::max(2 * capacity_, capacity);
+
+      Allocator oldAllocator;
+      // have we cached the arena we want to allocate in?
+      if (!capacity_ && data_)
+      {
+        oldAllocator = Allocator::fromType((AllocatorType)allocatorType_);
+        oldAllocator.allocator = data_;
+      }
+      else
+        oldAllocator = Allocator::fromType((AllocatorType)allocatorType_).fromAllocation(data_);
+
       allocator = (allocator) ? allocator : oldAllocator;
       utils::contiguousReserve(allocator, oldAllocator, capacity, data_, size_, capacity_);
       allocatorType_ = (usize)allocator.type();
@@ -550,7 +578,7 @@ namespace utils
         utils::contiguousMoveElements(data_ + lastShift, data_ + lastShift + offset, size_ - lastShift);
     }
 
-    constexpr void swap(vector &other) noexcept
+    constexpr void swap(vector &other)
     {
       COMPLEX_SWAP_MEMBERS(data_, other);
       COMPLEX_SWAP_MEMBERS(allocatorType_, other);
@@ -589,25 +617,25 @@ namespace utils
   {
     utils::vector<utils::pair<Key, Value>> data{};
 
-    const Value &operator[](usize index) const noexcept { return data[index].second; }
-    Value &operator[](usize index) noexcept { return data[index].second; }
+    const Value &operator[](usize index) const { return data[index].second; }
+    Value &operator[](usize index) { return data[index].second; }
 
     //---------------------------------------------------------
     // the following functions assume keys are unique
 
-    constexpr auto find(const Key &key) noexcept
+    constexpr auto find(const Key &key) 
     { return utils::find_if(data, [&key](const auto &v) { return v.first == key; }); }
 
-    constexpr auto find(const Key &key) const noexcept
+    constexpr auto find(const Key &key) const 
     { return utils::find_if(data, [&key](const auto &v) { return v.first == key; }); }
 
-    constexpr auto find_if(const auto &functor) noexcept { return utils::find_if(data, functor); }
-    constexpr auto find_if(const auto &functor) const noexcept { return utils::find_if(data, functor); }
+    constexpr auto find_if(const auto &functor)  { return utils::find_if(data, functor); }
+    constexpr auto find_if(const auto &functor) const  { return utils::find_if(data, functor); }
 
-    constexpr void add(Key key, Value value) noexcept
+    constexpr void add(Key key, Value value) 
     { data.emplace_back(COMPLEX_MOVE(key), COMPLEX_MOVE(value)); }
 
-    constexpr void update(const Key &key, utils::pair<Key, Value> updatedEntry) noexcept
+    constexpr void update(const Key &key, utils::pair<Key, Value> updatedEntry) 
     {
       auto iter = find(key);
       if (iter == data.end())
@@ -616,7 +644,7 @@ namespace utils
       (*iter) = COMPLEX_MOVE(updatedEntry);
     }
 
-    constexpr void erase(const Key &key) noexcept
+    constexpr void erase(const Key &key) 
     {
       auto iter = utils::find_if(data, [&key](const auto &v) { return v.first == key; });
       if (iter != data.end())
@@ -657,12 +685,12 @@ namespace utils
     //---------------------------------------------------------
     // the following functions assume keys are NOT unique
 
-    constexpr auto binary_search(const utils::pair<Key, Value> &element) const noexcept
+    constexpr auto binary_search(const utils::pair<Key, Value> &element) const 
     {
       auto [iter, wasFound] = binary_search(data, element, [](const auto &element, const auto &test) { return element == test; });
       return (wasFound) ? iter : data.end();
     }
-    constexpr auto binary_search(const utils::pair<Key, Value> &element) noexcept
+    constexpr auto binary_search(const utils::pair<Key, Value> &element) 
     {
       auto [iter, wasFound] = binary_search(data, element, [](const auto &element, const auto &test) { return element == test; });
       return (wasFound) ? iter : data.end();
@@ -693,7 +721,7 @@ namespace utils
 
     // this will work correctly only if you ever use the ordered functions
     // returns iterator of the added element
-    constexpr auto add_ordered(Key key, Value value) noexcept
+    constexpr auto add_ordered(Key key, Value value) 
     {
       // find AN occurance of specified key
       auto [iter, _] = binary_search(data, key, [](const auto &element, const auto &test) { return element == test.first; });
@@ -707,7 +735,7 @@ namespace utils
 
 
     // this will work correctly only if you ever use the ordered functions
-    constexpr void update_ordered(const utils::pair<Key, Value> &entry, utils::pair<Key, Value> updatedEntry) noexcept
+    constexpr void update_ordered(const utils::pair<Key, Value> &entry, utils::pair<Key, Value> updatedEntry) 
     {
       auto iter = binary_search(entry);
       if (iter == data.end())
@@ -717,7 +745,7 @@ namespace utils
     }
 
     // this will work correctly only if you ever use the ordered functions
-    constexpr void erase_ordered(const utils::pair<Key, Value> &element) noexcept
+    constexpr void erase_ordered(const utils::pair<Key, Value> &element) 
     {
       auto iter = binary_search(element);
       if (iter != data.end())
@@ -738,11 +766,11 @@ namespace utils
         lambda(static_cast<T>(iter->second));
     }
 
-    constexpr auto add_ordered(auto entry) noexcept
+    constexpr auto add_ordered(auto entry) 
     { return base::add_ordered(typeId(decltype(entry)), (void *)COMPLEX_MOVE(entry)); }
 
     template<typename T>
-    constexpr void update_ordered(T entry, T updatedEntry) noexcept
+    constexpr void update_ordered(T entry, T updatedEntry) 
     {
       auto iter = get_first_of(typeId(T));
       if (iter == data.end())
@@ -757,7 +785,7 @@ namespace utils
       (*iter) = pair{ typeId(T), COMPLEX_MOVE(updatedEntry) };
     }
 
-    constexpr void erase_ordered(auto entry) noexcept
+    constexpr void erase_ordered(auto entry) 
     {
       auto iter = get_first_of(typeId(decltype(entry)));
       if (iter == data.end())
@@ -1251,6 +1279,7 @@ namespace utils
     using const_iterator = const char *;
 
     static constexpr auto npos = size_type(-1);
+    static constexpr auto minimumCapacity = size_type((1 << 4) - 1);
 
     ~string()
     {
@@ -1264,16 +1293,6 @@ namespace utils
     }
 
 
-    // convenience constructors, because it gets really annoying otherwise
-    static string 
-    create(const char *format, auto &&... args) 
-    { return create(utils::generalAllocator, format, COMPLEX_FWD(args)...); }
-
-    template<auto Size>
-    string(const char(&data)[Size]) : string{ utils::generalAllocator, data, Size } { }
-    string(const auto &data, size_type start = 0, size_type size = npos) : string{ utils::generalAllocator, data, start, size } { }
-
-
     static string 
     create(Allocator allocator, const char *format, auto &&... args)
     {
@@ -1284,11 +1303,11 @@ namespace utils
       return ret;
     }
 
-    string(Allocator allocator, size_type reserveSpace) : string{ allocator, nullptr, reserveSpace } { }
+    // preallocating storage or only caching allocator for future use
+    string(Allocator allocator, size_type reserveSpace = 0) : string{ allocator, nullptr, reserveSpace } { }
     template<auto Size>
     string(Allocator allocator, const char(&data)[Size]) : string{ allocator, data, Size } { }
-    string(Allocator allocator, const auto &data, size_type start = 0, size_type size = npos)
-      requires utils::is_same_v<decltype(data.data()), const char *> : 
+    string(Allocator allocator, utils::string_view data, size_type start = 0, size_type size = npos) : 
       string{ allocator, data.data() + utils::min(data.size(), start), utils::min(data.size(), size) - utils::min(data.size(), start) } { }
     // every other constructor calls this one
     string(Allocator allocator, const char *data, size_type size)
@@ -1301,11 +1320,12 @@ namespace utils
       }
     }
 
-    constexpr string() noexcept = default;
+    constexpr string() = default;
     string(const string &other) = delete;
-    string &operator=(const string &other) noexcept = delete;
+    string &operator=(const string &other) = delete;
     constexpr string(string &&other) noexcept { swap(other); }
-    string &operator=(string &&other) noexcept
+    string &
+    operator=(string &&other) noexcept
     {
       if (this == &other)
         return *this;
@@ -1339,10 +1359,22 @@ namespace utils
       return ret;
     }
 
-    constexpr void reserve(usize capacity) { reserve({}, capacity); }
-    constexpr void reserve(Allocator allocator, usize capacity)
+    string &
+    copy(utils::string_view other)
     {
-      constexpr usize kRounding = 16;
+      clear();
+      return append(other);
+    }
+
+    void reserve(usize capacity = minimumCapacity) { reserve({}, capacity); }
+    void reserve(Allocator allocator, usize capacity = minimumCapacity)
+    {
+      // are we caching allocator for future use?
+      if (!capacity_ && !capacity)
+      {
+        allocatorType_ = (usize)allocator.type();
+        data_ = (decltype(data_))allocator.allocator;
+      }
 
       if (!capacity || capacity <= capacity_)
         return;
@@ -1351,9 +1383,18 @@ namespace utils
       capacity = utils::max(2 * capacity_, capacity);
 
       // round capacity but keep null terminator in mind
-      capacity = utils::roundUpToMultiple(capacity + 1, kRounding);
+      capacity = utils::roundUpToMultiple(capacity + 1, minimumCapacity + 1);
 
-      auto oldAllocator = Allocator::fromType((AllocatorType)allocatorType_).fromAllocation(data_);
+      Allocator oldAllocator;
+      // have we cached the arena we want to allocate in?
+      if (!capacity_ && data_)
+      {
+        oldAllocator = Allocator::fromType((AllocatorType)allocatorType_);
+        oldAllocator.allocator = data_;
+      }
+      else
+        oldAllocator = Allocator::fromType((AllocatorType)allocatorType_).fromAllocation(data_);
+
       allocator = (allocator) ? allocator : oldAllocator;
       utils::contiguousReserve(allocator, oldAllocator, capacity, data_, size_, capacity_);
       allocatorType_ = (usize)allocator.type();
@@ -1363,85 +1404,84 @@ namespace utils
       ::zeroset(data_ + size_, capacity_ + 1 - size_);
     }
 
-    constexpr void clear() { size_ = 0; }
+    void clear() { size_ = 0; }
 
-    [[nodiscard]] constexpr size_type size() const noexcept { return size_; }
-    [[nodiscard]] constexpr size_type length() const noexcept { return size_; }
-    [[nodiscard]] constexpr bool empty() const noexcept { return size_ == 0; }
+    [[nodiscard]] size_type size() const { return size_; }
+    [[nodiscard]] size_type capacity() const { return capacity_; }
+    [[nodiscard]] bool empty() const { return size_ == 0; }
 
-    [[nodiscard]] constexpr const char *data() const noexcept { return data_; }
-    [[nodiscard]] constexpr char *data() noexcept { return data_; }
+    [[nodiscard]] const char *data() const { return data_; }
+    [[nodiscard]] char *data() { return data_; }
 
-    [[nodiscard]] constexpr const char &
-    operator[](size_type position) const noexcept
+    [[nodiscard]] const char &
+    operator[](size_type position) const
     {
       COMPLEX_ASSERT(position < size_, "View index out of range");
       return data_[position];
     }
-    [[nodiscard]] constexpr char &
-    operator[](size_type position) noexcept
+    [[nodiscard]] char &
+    operator[](size_type position)
     {
       COMPLEX_ASSERT(position < size_, "View index out of range");
       return data_[position];
     }
-    [[nodiscard]] constexpr const char &
-    front() const noexcept
+    [[nodiscard]] const char &
+    front() const
     {
       COMPLEX_ASSERT(size_ > 0, "Front of empty view");
       return data_[0];
     }
-    [[nodiscard]] constexpr const char & 
-    back() const noexcept
+    [[nodiscard]] const char & 
+    back() const
     {
       COMPLEX_ASSERT(size_ > 0, "Back of empty view");
       return data_[size_ - 1];
     }
 
-    [[nodiscard]] constexpr iterator begin() noexcept { return (size_ == 0) ? iterator{} : iterator(data_); }
-    [[nodiscard]] constexpr const_iterator begin() const noexcept { return (size_ == 0) ? const_iterator{} : const_iterator(data_); }
-    [[nodiscard]] constexpr iterator end() noexcept { return (size_ == 0) ? iterator{} : iterator(data_ + size_); }
-    [[nodiscard]] constexpr const_iterator end() const noexcept { return (size_ == 0) ? const_iterator{} : const_iterator(data_ + size_); }
+    [[nodiscard]] iterator begin() { return (size_ == 0) ? iterator{} : iterator(data_); }
+    [[nodiscard]] const_iterator begin() const { return (size_ == 0) ? const_iterator{} : const_iterator(data_); }
+    [[nodiscard]] iterator end() { return (size_ == 0) ? iterator{} : iterator(data_ + size_); }
+    [[nodiscard]] const_iterator end() const { return (size_ == 0) ? const_iterator{} : const_iterator(data_ + size_); }
 
     // insertions
     
-    template<typename T>
     string &
-    insert(size_type start, const T &other, size_type repetitions = 1) noexcept
+    insert(size_type start, utils::string_view other, size_type repetitions = 1)
     {
-      auto view = utils::string_view{ other };
+      reserve(size_ + repetitions * other.size());
+      utils::contiguousMoveElements(data_ + start + repetitions * other.size(), data_ + start, size_ - start);
+      for (size_type i = 0; i < repetitions; ++i)
+        utils::contiguousMoveElements(data_ + start + i * other.size(), other.data(), other.size());
 
-      reserve(size_ + repetitions * view.size());
-      utils::contiguousMoveElements(data_ + start + repetitions * view.size(), data_ + start, size_ - start);
-      for (usize i = 0; i < repetitions; ++i)
-        utils::contiguousMoveElements(data_ + start + i * view.size(), view.data(), view.size());
+      size_ += repetitions * other.size();
 
       return *this;
     }
     string &
-    append(const auto &other, size_type repetitions = 1) noexcept { return insert(size_, other, repetitions); }
+    append(utils::string_view other, size_type repetitions = 1) { return insert(size_, other, repetitions); }
     string &
-    prepend(const auto &other, size_type repetitions = 1) noexcept { return insert(0, other, repetitions); }
+    prepend(utils::string_view other, size_type repetitions = 1) { return insert(0, other, repetitions); }
     string &
-    appendFormat(const char *format, auto &&... args) noexcept
+    appendFormat(const char *format, auto &&... args)
     {
       reserve(size_ + (size_type)::stbsp_snprintf(nullptr, 0, format, COMPLEX_FWD(args)...));
-      ::stbsp_snprintf(data_ + size_, (int)capacity_ + 1, format, COMPLEX_FWD(args)...);
+      size_ += (size_type)::stbsp_snprintf(data_ + size_, (int)capacity_ + 1, format, COMPLEX_FWD(args)...);
       return *this;
     }
     string &
-    prependFormat(const char *format, auto &&... args) noexcept
+    prependFormat(const char *format, auto &&... args)
     {
-      auto sizeToAdd = (size_type)::stbsp_snprintf(nullptr, 0, format, COMPLEX_FWD(args)...);
+      size_type sizeToAdd = (size_type)::stbsp_snprintf(nullptr, 0, format, COMPLEX_FWD(args)...);
       reserve(size_ + sizeToAdd);
       utils::contiguousMoveElements(data_ + sizeToAdd, data_, size_);
-      ::stbsp_snprintf(data_, (int)capacity_ + 1, format, COMPLEX_FWD(args)...);
+      size_ += (size_type)::stbsp_snprintf(data_, (int)capacity_ + 1, format, COMPLEX_FWD(args)...);
       return *this;
     }
 
     // simple removals
 
     string &
-    remove(size_type index, size_type length) noexcept
+    remove(size_type index, size_type length)
     {
       COMPLEX_ASSERT(size_ >= index + length, "Range is outside of string in string::remove(index, length)");
       utils::contiguousMoveElements(data_ + index, data_ + index + length, size_ - index - length);
@@ -1449,7 +1489,7 @@ namespace utils
       return *this;
     }
     string &
-    removePrefix(size_type length) noexcept
+    removePrefix(size_type length)
     {
       COMPLEX_ASSERT(size_ >= length, "Length out of range in string::remove_prefix(length)");
       size_ -= length;
@@ -1457,7 +1497,7 @@ namespace utils
       return *this;
     }
     string &
-    removeSuffix(size_type length) noexcept
+    removeSuffix(size_type length)
     {
       COMPLEX_ASSERT(size_ >= length, "Length out of range in string::remove_suffix(length)");
       size_ -= length;
@@ -1466,25 +1506,20 @@ namespace utils
 
     // transformations
 
-    template<typename T>
     string &
-    filterOut(const T &characters)
+    filterOut(utils::string_view characters)
     {
-      auto view = utils::string_view{ characters };
-
       for (usize i = size_; i > 0; --i)
-        if (utils::find(view, data_[i - 1]) != view.end())
+        if (utils::find(characters, data_[i - 1]) != characters.end())
           utils::contiguousMoveElements(data_ + i - 1, data_ + i, size_ - i);
+
       return *this;
     }
-    template<typename T>
     string &
-    filterIn(const T &characters)
+    filterIn(utils::string_view characters)
     {
-      auto view = utils::string_view{ characters };
-
       for (usize i = size_; i > 0; --i)
-        if (utils::find(view, data_[i - 1]) == view.end())
+        if (utils::find(characters, data_[i - 1]) == characters.end())
           utils::contiguousMoveElements(data_ + i - 1, data_ + i, size_ - i);
 
       return *this;
@@ -1512,7 +1547,7 @@ namespace utils
 
       return *this;
     }
-    constexpr string &
+    string &
     toLower()
     {
       for (usize i = 0; i < size_; ++i)
@@ -1521,7 +1556,7 @@ namespace utils
 
       return *this;
     }
-    constexpr string &
+    string &
     toUpper()
     {
       for (usize i = 0; i < size_; ++i)
@@ -1533,37 +1568,26 @@ namespace utils
 
     // searches
 
-    [[nodiscard]] constexpr size_type 
-    find(const char *substring, size_type size, size_type position = 0) const noexcept
-    { return string_view{ *this }.find(substring, size, position); }
-    template<typename T>
-    [[nodiscard]] constexpr size_type
-    find(const T &substring, size_type position = 0) const noexcept
-    { return string_view{ *this }.find(utils::string_view{ substring }, position); }
+    [[nodiscard]] size_type
+    find(utils::string_view substring, size_type position = 0) const
+    { return utils::string_view{ *this }.find(substring, position); }
 
-    [[nodiscard]] constexpr size_type 
-    rfind(const char *substring, size_type size, size_type position = npos) const noexcept
-    { return string_view{ *this }.rfind(substring, size, position); }
-    template<typename T>
-    [[nodiscard]] constexpr size_type 
-    rfind(const T &substring, size_type position = npos) const noexcept 
-    { return string_view{ *this }.rfind(utils::string_view{ substring }, position); }
+    [[nodiscard]] size_type 
+    rfind(utils::string_view substring, size_type position = npos) const
+    { return utils::string_view{ *this }.rfind(substring, position); }
     
     // comparisons
 
-    template<typename T>
     [[nodiscard]] constexpr int 
-    compare(const T &other) const noexcept { return string_view{ *this }.compare(utils::string_view{ other }); }
+    compare(utils::string_view other) const { return utils::string_view{ *this }.compare(other); }
 
-    template<typename T>
     [[nodiscard]] constexpr bool 
-    operator==(const T &other) const noexcept { return string_view{ *this } == string_view{ other }; }
+    operator==(utils::string_view other) const { return utils::string_view{ *this } == other; }
 
-    template<typename T>
     [[nodiscard]] constexpr bool 
-    operator<(const T &other) const noexcept { return compare(other) < 0; }
+    operator<(utils::string_view other) const { return compare(other) < 0; }
 
-    constexpr void swap(string &other) noexcept
+    constexpr void swap(string &other)
     {
       COMPLEX_SWAP_MEMBERS(data_, other);
       COMPLEX_SWAP_MEMBERS(allocatorType_, other);
@@ -1586,18 +1610,22 @@ namespace utils
 
     usize size = (usize)::stbsp_snprintf(string, (int)maximumStringLength, format, (int)maximumDecimalLength, value);
 
-    usize i;
-    for (i = size - 1; i > 0; --i)
-      if (string[i] != '0' && string[i] != ' ' && string[i] != '\0')
-        break;
+    if (maximumDecimalLength)
+    {
+      usize i;
+      for (i = size - 1; i > 0; --i)
+        if (string[i] != '0' && string[i] != ' ' && string[i] != '\0')
+          break;
 
-    size -= (size - 1) - i;
-    if (string[size - 1] == '.')
-      --size;
+      size -= (size - 1) - i;
+      if (string[size - 1] == '.')
+        --size;
+    }
     string[size] = '\0';
 
     return size;
   }
+
   inline utils::string
   floatToString(Allocator allocator, double value, 
     usize maximumDecimalLength = 5, bool keepPlus = false)
@@ -1606,6 +1634,13 @@ namespace utils
     usize size = floatToString(value, buffer, sizeof(buffer), maximumDecimalLength, keepPlus);
     return utils::string{ allocator, buffer, size };
   }
+
+  inline void floatToString(utils::string &preallocatedString, double value,
+    usize maximumDecimalLength = 5, bool keepPlus = false)
+  {
+    char buffer[48]{};
+    usize size = floatToString(value, buffer, sizeof(buffer), maximumDecimalLength, keepPlus);
+    preallocatedString.copy({ buffer, size });
+  }
 }
 
-extern thread_local utils::bumpArena *localScratch;

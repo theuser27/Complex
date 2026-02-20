@@ -37,7 +37,7 @@ namespace Interface
     void paint(Graphics &g) override;
     void resized() override;
 
-    void controlValueChanged(BaseControl *control) override;
+    void controlValueChanged(Control *control) override;
 
     void paintHighlightBox(Graphics &g, float lowBoundValue, 
       float highBoundValue, Colour colour, float shiftValue = 0.0f) const;

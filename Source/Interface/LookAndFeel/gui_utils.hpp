@@ -45,7 +45,7 @@ namespace Interface
       T end;
     };
 
-    friend constexpr bool operator==(Area lhs, Area rhs) noexcept 
+    friend constexpr bool operator==(Area lhs, Area rhs) 
     { return lhs.x == rhs.x && lhs.y == rhs.y; };
   };
 
@@ -106,32 +106,32 @@ namespace Interface
   struct Point
   {
     constexpr Point() = default;
-    constexpr Point(T initialX, T initialY) noexcept : x(initialX), y(initialY) { }
+    constexpr Point(T initialX, T initialY) : x(initialX), y(initialY) { }
 
-    friend constexpr bool operator==(Point lhs, Point rhs) noexcept = default;
+    friend constexpr bool operator==(Point lhs, Point rhs) = default;
 
-    constexpr void setXY(T newX, T newY) noexcept { x = newX; y = newY; }
-    constexpr void translate(T xToAdd, T yToAdd) noexcept { x += xToAdd; y += yToAdd; }
-    constexpr void transpose() noexcept { COMPLEX_SWAP(x, y); }
+    constexpr void setXY(T newX, T newY) { x = newX; y = newY; }
+    constexpr void translate(T xToAdd, T yToAdd) { x += xToAdd; y += yToAdd; }
+    constexpr void transpose() { COMPLEX_SWAP(x, y); }
 
-    constexpr Point withX(T newX) const noexcept { return { newX, y }; }
-    constexpr Point withY(T newY) const noexcept { return { x, newY }; }
-    constexpr Point translated(T deltaX, T deltaY) const noexcept { return { x + deltaX, y + deltaY }; }
-    constexpr Point transposed() noexcept { return { y, x }; }
+    constexpr Point withX(T newX) const { return { newX, y }; }
+    constexpr Point withY(T newY) const { return { x, newY }; }
+    constexpr Point translated(T deltaX, T deltaY) const { return { x + deltaX, y + deltaY }; }
+    constexpr Point transposed() { return { y, x }; }
 
-    constexpr Point operator+(Point other) const noexcept { return { x + other.x, y + other.y }; }
-    constexpr Point &operator+=(Point other) noexcept { x += other.x; y += other.y; return *this; }
-    constexpr Point operator-(Point other) const noexcept { return { x - other.x, y - other.y }; }
-    constexpr Point &operator-=(Point other) noexcept { x -= other.x; y -= other.y; return *this; }
-    constexpr Point operator-() const noexcept { return { -x, -y }; }
-    constexpr Point operator*(T multiplier) const noexcept { return { x * multiplier, y * multiplier }; }
-    constexpr Point &operator*=(T multiplier) noexcept { x *= multiplier; y *= multiplier; return *this; }
-    constexpr Point operator/(T multiplier) const noexcept { return { x / multiplier, y / multiplier }; }
-    constexpr Point &operator/=(T multiplier) noexcept { x /= multiplier; y /= multiplier; return *this; }
+    constexpr Point operator+(Point other) const { return { x + other.x, y + other.y }; }
+    constexpr Point &operator+=(Point other) { x += other.x; y += other.y; return *this; }
+    constexpr Point operator-(Point other) const { return { x - other.x, y - other.y }; }
+    constexpr Point &operator-=(Point other) { x -= other.x; y -= other.y; return *this; }
+    constexpr Point operator-() const { return { -x, -y }; }
+    constexpr Point operator*(T multiplier) const { return { x * multiplier, y * multiplier }; }
+    constexpr Point &operator*=(T multiplier) { x *= multiplier; y *= multiplier; return *this; }
+    constexpr Point operator/(T multiplier) const { return { x / multiplier, y / multiplier }; }
+    constexpr Point &operator/=(T multiplier) { x /= multiplier; y /= multiplier; return *this; }
 
-    constexpr Point<int> toInt() const noexcept { return Point<int>{ (int)x, (int)y }; }
-    constexpr Point<float> toFloat() const noexcept { return Point<float>{ (float)x, (float)y }; }
-    constexpr Point<double> toDouble() const noexcept { return Point<double>{ (double)x, (double)y }; }
+    constexpr Point<int> toInt() const { return Point<int>{ (int)x, (int)y }; }
+    constexpr Point<float> toFloat() const { return Point<float>{ (float)x, (float)y }; }
+    constexpr Point<double> toDouble() const { return Point<double>{ (double)x, (double)y }; }
 
     T x{}, y{};
   };
@@ -140,12 +140,12 @@ namespace Interface
   struct Rectangle
   {
     constexpr Rectangle() = default;
-    constexpr Rectangle(Point<T> position, T width, T height) noexcept :
+    constexpr Rectangle(Point<T> position, T width, T height) :
       x(position.x), y(position.y), w(width), h(height) { }
-    constexpr Rectangle(T initialX, T initialY, T width, T height) noexcept :
+    constexpr Rectangle(T initialX, T initialY, T width, T height) :
       x(initialX), y(initialY), w(width), h(height) { }
-    constexpr Rectangle(T width, T height) noexcept : w(width), h(height) { }
-    constexpr Rectangle(Point<T> corner1, Point<T> corner2) noexcept :
+    constexpr Rectangle(T width, T height) : w(width), h(height) { }
+    constexpr Rectangle(Point<T> corner1, Point<T> corner2) :
       x(utils::min(corner1.x, corner2.x)), y(utils::min(corner1.y, corner2.y)),
       w(corner1.x - corner2.x), h(corner1.y - corner2.y)
     {
@@ -153,71 +153,71 @@ namespace Interface
       if (h < T()) h = -h;
     }
 
-    friend constexpr bool operator==(Rectangle lhs, Rectangle rhs) noexcept = default;
+    friend constexpr bool operator==(Rectangle lhs, Rectangle rhs) = default;
 
-    static constexpr Rectangle leftTopRightBottom(T left, T top, T right, T bottom) noexcept
+    static constexpr Rectangle leftTopRightBottom(T left, T top, T right, T bottom)
     {
       return { left, top, right - left, bottom - top };
     }
 
-    constexpr bool isEmpty() const noexcept { return w <= T() || h <= T(); }
-    constexpr T getRight() const noexcept { return x + w; }
-    constexpr T getBottom() const noexcept { return y + h; }
-    constexpr T getCentreX() const noexcept { return x + w / (T)2; }
-    constexpr T getCentreY() const noexcept { return y + h / (T)2; }
-    constexpr Point<T> getCentre() const noexcept { return { x + w / (T)2, y + h / (T)2 }; }
-    constexpr Point<T> getPosition() const noexcept { return { x, y }; }
-    constexpr Point<T> getTopLeft() const noexcept { return getPosition(); }
-    constexpr Point<T> getTopRight() const noexcept { return { x + w, y }; }
-    constexpr Point<T> getBottomLeft() const noexcept { return { x, y + h }; }
-    constexpr Point<T> getBottomRight() const noexcept { return { x + w, y + h }; }
+    constexpr bool isEmpty() const { return w <= T() || h <= T(); }
+    constexpr T getRight() const { return x + w; }
+    constexpr T getBottom() const { return y + h; }
+    constexpr T getCentreX() const { return x + w / (T)2; }
+    constexpr T getCentreY() const { return y + h / (T)2; }
+    constexpr Point<T> getCentre() const { return { x + w / (T)2, y + h / (T)2 }; }
+    constexpr Point<T> getPosition() const { return { x, y }; }
+    constexpr Point<T> getTopLeft() const { return getPosition(); }
+    constexpr Point<T> getTopRight() const { return { x + w, y }; }
+    constexpr Point<T> getBottomLeft() const { return { x, y + h }; }
+    constexpr Point<T> getBottomRight() const { return { x + w, y + h }; }
 
-    constexpr void setPosition(T newX, T newY) noexcept { x = newX; y = newY; }
-    constexpr void setPosition(Point<T> newPosition) noexcept { x = newPosition.x; y = newPosition.y; }
-    constexpr void setSize(T newWidth, T newHeight) noexcept { w = newWidth; h = newHeight; }
-    constexpr void setCentre(T newCentreX, T newCentreY) noexcept
+    constexpr void setPosition(T newX, T newY) { x = newX; y = newY; }
+    constexpr void setPosition(Point<T> newPosition) { x = newPosition.x; y = newPosition.y; }
+    constexpr void setSize(T newWidth, T newHeight) { w = newWidth; h = newHeight; }
+    constexpr void setCentre(T newCentreX, T newCentreY)
     {
       x = newCentreX - w / (T)2; y = newCentreY - h / (T)2;
     }
-    constexpr void setCentre(Point<T> newCentre) noexcept { setCentre(newCentre.x, newCentre.y); }
+    constexpr void setCentre(Point<T> newCentre) { setCentre(newCentre.x, newCentre.y); }
 
-    constexpr Rectangle withX(T newX) const noexcept { return { newX, y, w, h }; }
-    constexpr Rectangle withY(T newY) const noexcept { return { x, newY, w, h }; }
-    constexpr Rectangle withWidth(T newWidth) const noexcept { return { x, y, utils::max(T(), newWidth), h }; }
-    constexpr Rectangle withHeight(T newHeight) const noexcept { return { x, y, w, utils::max(T(), newHeight) }; }
-    constexpr Rectangle withPosition(T newX, T newY) noexcept { return { newX, newY, w, h }; }
-    constexpr Rectangle withPosition(Point<T> newPosition) noexcept { return { newPosition.x, newPosition.y, w, h }; }
-    constexpr Rectangle withSize(T newWidth, T newHeight) const noexcept
+    constexpr Rectangle withX(T newX) const { return { newX, y, w, h }; }
+    constexpr Rectangle withY(T newY) const { return { x, newY, w, h }; }
+    constexpr Rectangle withWidth(T newWidth) const { return { x, y, utils::max(T(), newWidth), h }; }
+    constexpr Rectangle withHeight(T newHeight) const { return { x, y, w, utils::max(T(), newHeight) }; }
+    constexpr Rectangle withPosition(T newX, T newY) { return { newX, newY, w, h }; }
+    constexpr Rectangle withPosition(Point<T> newPosition) { return { newPosition.x, newPosition.y, w, h }; }
+    constexpr Rectangle withSize(T newWidth, T newHeight) const
     {
       return { x, y, utils::max(T(), newWidth), utils::max(T(), newHeight) };
     }
-    constexpr Rectangle withZeroOrigin() const noexcept { return { w, h }; }
+    constexpr Rectangle withZeroOrigin() const { return { w, h }; }
 
-    constexpr void setLeft(T newLeft) noexcept { w = utils::max(T(), x + w - newLeft); x = newLeft; }
-    constexpr void setTop(T newTop) noexcept { h = utils::max(T(), y + h - newTop); y = newTop; }
-    constexpr void setRight(T newRight) noexcept { x = utils::min(x, newRight); w = newRight - x; }
-    constexpr void setBottom(T newBottom) noexcept { y = utils::min(y, newBottom); h = newBottom - y; }
+    constexpr void setLeft(T newLeft) { w = utils::max(T(), x + w - newLeft); x = newLeft; }
+    constexpr void setTop(T newTop) { h = utils::max(T(), y + h - newTop); y = newTop; }
+    constexpr void setRight(T newRight) { x = utils::min(x, newRight); w = newRight - x; }
+    constexpr void setBottom(T newBottom) { y = utils::min(y, newBottom); h = newBottom - y; }
 
-    constexpr Rectangle withLeft(T newLeft) const noexcept { return { newLeft, y, utils::max(T(), x + w - newLeft), h }; }
-    constexpr Rectangle withTop(T newTop) const noexcept { return { x, newTop, w, utils::max(T(), y + h - newTop) }; }
-    constexpr Rectangle withRight(T newRight) const noexcept { return { utils::min(x, newRight), y, utils::max(T(), newRight - x), h }; }
-    constexpr Rectangle withBottom(T newBottom) const noexcept { return { x, utils::min(y, newBottom), w, utils::max(T(), newBottom - y) }; }
+    constexpr Rectangle withLeft(T newLeft) const { return { newLeft, y, utils::max(T(), x + w - newLeft), h }; }
+    constexpr Rectangle withTop(T newTop) const { return { x, newTop, w, utils::max(T(), y + h - newTop) }; }
+    constexpr Rectangle withRight(T newRight) const { return { utils::min(x, newRight), y, utils::max(T(), newRight - x), h }; }
+    constexpr Rectangle withBottom(T newBottom) const { return { x, utils::min(y, newBottom), w, utils::max(T(), newBottom - y) }; }
 
-    constexpr Rectangle withTrimmedLeft(T amountToRemove) const noexcept { return withLeft(x + amountToRemove); }
-    constexpr Rectangle withTrimmedRight(T amountToRemove) const noexcept { return withWidth(w - amountToRemove); }
-    constexpr Rectangle withTrimmedTop(T amountToRemove) const noexcept { return withTop(y + amountToRemove); }
-    constexpr Rectangle withTrimmedBottom(T amountToRemove) const noexcept { return withHeight(h - amountToRemove); }
+    constexpr Rectangle withTrimmedLeft(T amountToRemove) const { return withLeft(x + amountToRemove); }
+    constexpr Rectangle withTrimmedRight(T amountToRemove) const { return withWidth(w - amountToRemove); }
+    constexpr Rectangle withTrimmedTop(T amountToRemove) const { return withTop(y + amountToRemove); }
+    constexpr Rectangle withTrimmedBottom(T amountToRemove) const { return withHeight(h - amountToRemove); }
 
-    constexpr void shift(T deltaX, T deltaY) noexcept { x += deltaX; y += deltaY; }
-    constexpr Rectangle withShift(T deltaX, T deltaY) const noexcept { return { x + deltaX, y + deltaY, w, h }; }
+    constexpr void shift(T deltaX, T deltaY) { x += deltaX; y += deltaY; }
+    constexpr Rectangle withShift(T deltaX, T deltaY) const { return { x + deltaX, y + deltaY, w, h }; }
 
-    constexpr Rectangle operator+(Point<T> deltaPosition) const noexcept { return { x + deltaPosition.x, y + deltaPosition.y, w, h }; }
-    constexpr Rectangle operator-(Point<T> deltaPosition) const noexcept { return { x - deltaPosition.x, y - deltaPosition.y, w, h }; }
+    constexpr Rectangle operator+(Point<T> deltaPosition) const { return { x + deltaPosition.x, y + deltaPosition.y, w, h }; }
+    constexpr Rectangle operator-(Point<T> deltaPosition) const { return { x - deltaPosition.x, y - deltaPosition.y, w, h }; }
 
-    constexpr Rectangle &operator+=(Point<T> deltaPosition) noexcept { x += deltaPosition.x; y += deltaPosition.y; return *this; }
-    constexpr Rectangle &operator-=(Point<T> deltaPosition) noexcept { x -= deltaPosition.x; y -= deltaPosition.y; return *this; }
+    constexpr Rectangle &operator+=(Point<T> deltaPosition) { x += deltaPosition.x; y += deltaPosition.y; return *this; }
+    constexpr Rectangle &operator-=(Point<T> deltaPosition) { x -= deltaPosition.x; y -= deltaPosition.y; return *this; }
 
-    constexpr void expand(T deltaX, T deltaY) noexcept
+    constexpr void expand(T deltaX, T deltaY)
     {
       auto nw = utils::max(T(), w + deltaX * 2);
       auto nh = utils::max(T(), h + deltaY * 2);
@@ -226,32 +226,32 @@ namespace Interface
       w = nw;
       h = nh;
     }
-    constexpr Rectangle expanded(T deltaX, T deltaY) const noexcept
+    constexpr Rectangle expanded(T deltaX, T deltaY) const
     {
       auto nw = utils::max(T(), w + deltaX * 2);
       auto nh = utils::max(T(), h + deltaY * 2);
       return { x - deltaX, y - deltaY, nw, nh };
     }
-    constexpr Rectangle expanded(T delta) const noexcept { return expanded(delta, delta); }
+    constexpr Rectangle expanded(T delta) const { return expanded(delta, delta); }
 
-    constexpr void reduce(T deltaX, T deltaY) noexcept { expand(-deltaX, -deltaY); }
-    constexpr Rectangle reduced(T deltaX, T deltaY) const noexcept { return expanded(-deltaX, -deltaY); }
-    constexpr Rectangle reduced(T delta) const noexcept { return reduced(delta, delta); }
+    constexpr void reduce(T deltaX, T deltaY) { expand(-deltaX, -deltaY); }
+    constexpr Rectangle reduced(T deltaX, T deltaY) const { return expanded(-deltaX, -deltaY); }
+    constexpr Rectangle reduced(T delta) const { return reduced(delta, delta); }
 
-    constexpr void transpose() noexcept { *this = transposed(); }
-    constexpr Rectangle transposed() noexcept { return { y, x, h, w }; }
+    constexpr void transpose() { *this = transposed(); }
+    constexpr Rectangle transposed() { return { y, x, h, w }; }
 
-    constexpr bool contains(T xCoord, T yCoord) const noexcept
+    constexpr bool contains(T xCoord, T yCoord) const
     {
       return xCoord >= x && yCoord >= y && xCoord < x + w && yCoord < y + h;
     }
-    constexpr bool contains(Point<T> point) const noexcept { return contains(point.x, point.y); }
-    constexpr bool contains(Rectangle other) const noexcept
+    constexpr bool contains(Point<T> point) const { return contains(point.x, point.y); }
+    constexpr bool contains(Rectangle other) const
     {
       return x <= other.x && y <= other.y && x + w >= other.x + other.w && y + h >= other.y + other.h;
     }
 
-    constexpr bool intersects(Rectangle other) const noexcept
+    constexpr bool intersects(Rectangle other) const
     {
       return x + w > other.x
         && y + h > other.y
@@ -261,7 +261,7 @@ namespace Interface
         && other.w > T() && other.h > T();
     }
 
-    constexpr Rectangle getIntersection(Rectangle other) const noexcept
+    constexpr Rectangle getIntersection(Rectangle other) const
     {
       auto nx = utils::max(x, other.x);
       auto ny = utils::max(y, other.y);
@@ -278,7 +278,7 @@ namespace Interface
       return {};
     }
 
-    constexpr bool intersectRectangle(T &otherX, T &otherY, T &otherW, T &otherH) const noexcept
+    constexpr bool intersectRectangle(T &otherX, T &otherY, T &otherW, T &otherH) const
     {
       auto maxX = utils::max(otherX, x);
       otherW = utils::min(otherX + otherW, x + w) - maxX;
@@ -298,13 +298,13 @@ namespace Interface
       return false;
     }
 
-    constexpr bool intersectRectangle(Rectangle<T> &rectangleToClip) const noexcept
+    constexpr bool intersectRectangle(Rectangle<T> &rectangleToClip) const
     {
       return intersectRectangle(rectangleToClip.x, rectangleToClip.y,
         rectangleToClip.w, rectangleToClip.h);
     }
 
-    constexpr Rectangle getUnion(Rectangle other) const noexcept
+    constexpr Rectangle getUnion(Rectangle other) const
     {
       if (other.isEmpty())
         return *this;
@@ -318,13 +318,13 @@ namespace Interface
         utils::max(y + h, other.y + other.h) - newY };
     }
 
-    constexpr Point<T> getConstrainedPoint(Point<T> point) const noexcept
+    constexpr Point<T> getConstrainedPoint(Point<T> point) const
     {
       return { utils::clamp(point.x, x, getRight()),
         utils::clamp(point.y, y, getBottom()) };
     }
 
-    constexpr Rectangle constrainedWithin(Rectangle areaToFitWithin) const noexcept
+    constexpr Rectangle constrainedWithin(Rectangle areaToFitWithin) const
     {
       auto newPos = areaToFitWithin.withSize(areaToFitWithin.w - w,
         areaToFitWithin.h - h).getConstrainedPoint({ x, y });
@@ -333,11 +333,11 @@ namespace Interface
         utils::min(h, areaToFitWithin.h) };
     }
 
-    constexpr Rectangle<int> toInt() const noexcept 
+    constexpr Rectangle<int> toInt() const 
     { return Rectangle<int>{ (int)x, (int)y, (int)w, (int)h }; }
-    constexpr Rectangle<float> toFloat() const noexcept 
+    constexpr Rectangle<float> toFloat() const 
     { return Rectangle<float>{ (float)x, (float)y, (float)w, (float)h }; }
-    constexpr Rectangle<double> toDouble() const noexcept 
+    constexpr Rectangle<double> toDouble() const 
     { return Rectangle<double>{ (double)x, (double)y, (double)w, (double)h }; }
 
     T x{}, y{}, w{}, h{};
@@ -346,39 +346,39 @@ namespace Interface
   struct alignas(u32) Colour
   {
     constexpr Colour() = default;
-    explicit constexpr Colour(u32 argb) noexcept : a{ u8((argb >> 24) & 0xff) },
+    explicit constexpr Colour(u32 argb) : a{ u8((argb >> 24) & 0xff) },
       r { u8((argb >> 16) & 0xff) }, g{ u8((argb >> 8) & 0xff) }, b{ u8(argb & 0xff) } { }
-    constexpr Colour(u8 red, u8 green, u8 blue, u8 alpha = 255) noexcept :
+    constexpr Colour(u8 red, u8 green, u8 blue, u8 alpha = 255) :
       a{ alpha }, r{ red }, g{ green }, b{ blue } {  }
-    constexpr Colour(u8 red, u8 green, u8 blue, float alpha) noexcept :
+    constexpr Colour(u8 red, u8 green, u8 blue, float alpha) :
       a{ u8(alpha * 255.0f) }, r{ red }, g{ green }, b{ blue } { }
-    constexpr Colour(float red, float green, float blue, u8 alpha = 255) noexcept :
+    constexpr Colour(float red, float green, float blue, u8 alpha = 255) :
       a{ alpha }, r{ u8(red * 255.0f) }, g{ u8(green * 255.0f) }, b{ u8(blue * 255.0f) } { }
-    constexpr Colour(float red, float green, float blue, float alpha) noexcept :
+    constexpr Colour(float red, float green, float blue, float alpha) :
       a{ u8(alpha * 255.0f) }, r{ u8(red * 255.0f) }, g{ u8(green * 255.0f) }, b{ u8(blue * 255.0f) } { }
 
     constexpr Colour(const Colour &) = default;
     constexpr Colour &operator=(const Colour &) = default;
 
 
-    constexpr u32 getARGB() const noexcept { return ((u32)a << 24) | ((u32)r << 16) | ((u32)g << 8) | b; }
+    constexpr u32 getARGB() const { return ((u32)a << 24) | ((u32)r << 16) | ((u32)g << 8) | b; }
     constexpr utils::array<float, 4> 
-    getNormalisedARGB() const noexcept
+    getNormalisedARGB() const
     { return utils::array{ a / 255.0f, r / 255.0f, g / 255.0f, b / 255.0f }; }
     constexpr utils::array<float, 4>
-    getNormalisedRGBA() const noexcept
+    getNormalisedRGBA() const
     { return utils::array{ r / 255.0f, g / 255.0f, b / 255.0f, a / 255.0f }; }
 
-    constexpr Colour withAlpha(u8 newAlpha) const noexcept { return { r, g, b, newAlpha }; }
-    constexpr Colour withAlpha(float newAlpha) const noexcept { return { r, g, b, u8(newAlpha * 255.0f) }; }
-    constexpr Colour withMultipliedAlpha(float alphaMultiplier) const noexcept { return { r, g, b, u8((float)a * alphaMultiplier) }; }
-    Colour overlaidWith(Colour foregroundColour) const noexcept;
-    Colour interpolatedWith(Colour other, float t) const noexcept;
-    Colour withBrightness(float newBrightness) const noexcept;
-    Colour withRotatedHue(float amountToRotate) const noexcept;
+    constexpr Colour withAlpha(u8 newAlpha) const { return { r, g, b, newAlpha }; }
+    constexpr Colour withAlpha(float newAlpha) const { return { r, g, b, u8(newAlpha * 255.0f) }; }
+    constexpr Colour withMultipliedAlpha(float alphaMultiplier) const { return { r, g, b, u8((float)a * alphaMultiplier) }; }
+    Colour overlaidWith(Colour foregroundColour) const;
+    Colour interpolatedWith(Colour other, float t) const;
+    Colour withBrightness(float newBrightness) const;
+    Colour withRotatedHue(float amountToRotate) const;
 
     constexpr Colour
-    brighter(float amount) const noexcept
+    brighter(float amount) const
     {
       COMPLEX_ASSERT(amount >= 0.0f);
       amount = 1.0f / (1.0f + amount);
@@ -393,7 +393,7 @@ namespace Interface
     }
 
     constexpr Colour
-    darker(float amount) const noexcept
+    darker(float amount) const
     {
       COMPLEX_ASSERT(amount >= 0.0f);
       amount = 1.0f / (1.0f + amount);
@@ -408,10 +408,10 @@ namespace Interface
     }
 
     utils::string toString() const;
-    static Colour fromString(char *integer);
+    static Colour fromString(const char *integer, int base = 16);
 
-    operator NVGcolor() const noexcept { return nvgRGBA(r, g, b, a); }
-    friend constexpr bool operator==(Colour lhs, Colour rhs) noexcept = default;
+    operator NVGcolor() const { return nvgRGBA(r, g, b, a); }
+    friend constexpr bool operator==(Colour lhs, Colour rhs) = default;
 
     u8 b{}, g{}, r{}, a{};
   };
@@ -458,15 +458,15 @@ namespace Interface
     constexpr ModifierKeys(decltype(flags) flags) : flags{ flags } { }
     constexpr ModifierKeys(Flags flags) : flags{ flags } { }
 
-    constexpr bool operator==(const ModifierKeys &other) const noexcept = default;
-    constexpr bool operator==(Flags other) const noexcept { return flags == other; }
+    constexpr bool operator==(const ModifierKeys &other) const = default;
+    constexpr bool operator==(Flags other) const { return flags == other; }
 
-    constexpr ModifierKeys withoutFlags(decltype(flags) rawFlagsToClear) const noexcept { return ModifierKeys(flags & ~rawFlagsToClear); }
-    constexpr ModifierKeys withFlags(decltype(flags) rawFlagsToSet) const noexcept { return ModifierKeys(flags | rawFlagsToSet); }
+    constexpr ModifierKeys withoutFlags(decltype(flags) rawFlagsToClear) const { return ModifierKeys(flags & ~rawFlagsToClear); }
+    constexpr ModifierKeys withFlags(decltype(flags) rawFlagsToSet) const { return ModifierKeys(flags | rawFlagsToSet); }
 
-    constexpr bool test(decltype(flags) flagsToTest) const noexcept { return (flags & flagsToTest) != 0; }
+    constexpr bool test(decltype(flags) flagsToTest) const { return (flags & flagsToTest) != 0; }
 
-    constexpr u8 getMouseButtonsDownCount() const noexcept
+    constexpr u8 getMouseButtonsDownCount() const
     {
       u8 num = 0;
 
@@ -484,9 +484,9 @@ namespace Interface
     constexpr operator decltype(flags)() { return flags; }
 
     // last known state, won't query OS
-    //static ModifierKeys getCurrentModifiers() noexcept;
+    //static ModifierKeys getCurrentModifiers();
     // queries for mouse buttons at this point in time
-    //static ModifierKeys getCurrentModifiersRealtime() noexcept;
+    //static ModifierKeys getCurrentModifiersRealtime();
   };
 
   enum class MouseCursorTypes
@@ -537,8 +537,8 @@ namespace Interface
 
     u8 numberOfClicks = 0;
 
-    MouseEvent getEventRelativeTo(Component *otherComponent) const noexcept;
-    Point<int> getOffsetFromDragStart() const noexcept 
+    MouseEvent getEventRelativeTo(Component *otherComponent) const;
+    Point<int> getOffsetFromDragStart() const 
     { return { x - mouseDownPosition.x, y - mouseDownPosition.y }; }
   };
 
@@ -562,7 +562,7 @@ namespace Interface
     u32 textCharacter = 0;
 
     // Returns true if this keypress is for the given keycode without any modifiers.
-    constexpr bool operator==(i32 code) const noexcept
+    constexpr bool operator==(i32 code) const
     { return keyCode == code && !mods.test(ModifierKeys::allKeyboardModifiers); }
 
     //==============================================================================
@@ -571,7 +571,7 @@ namespace Interface
         A null keypress can be created by the default constructor, in case it's
         needed.
     */
-    constexpr bool isValid() const noexcept { return keyCode != 0; }
+    constexpr bool isValid() const { return keyCode != 0; }
 
     //==============================================================================
     /** Checks whether the user is currently holding down the keys that make up this
@@ -595,7 +595,7 @@ namespace Interface
   {
     enum EventType { Hover, Click };
 
-    void tick(bool isHovered, bool isClicked, float hoverIncrement, float clickIncrement) noexcept
+    void tick(bool isHovered, bool isClicked, float hoverIncrement, float clickIncrement)
     {
       if (isHovered)
         hoverValue = utils::min(1.0f, hoverValue + hoverIncrement);
@@ -607,7 +607,7 @@ namespace Interface
       else
         clickValue = utils::max(0.0f, clickValue - clickIncrement);
     }
-    float getValue(EventType type, float min = 0.0f, float max = 1.0f) const noexcept
+    float getValue(EventType type, float min = 0.0f, float max = 1.0f) const
     {
       float value;
       switch (type)

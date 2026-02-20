@@ -571,9 +571,10 @@ namespace utils
 
     // we exp2 whatever decimal number is left with the taylor series
     // the domain we're in is [0.0f, 0.5f], we don't expect negative numbers
-    simd_float interpolate = simd_float::mulAdd(kCoefficient2, t, simd_float::mulAdd(kCoefficient3,
-      t, simd_float::mulAdd(kCoefficient4, t, kCoefficient5)));
-    interpolate = simd_float::mulAdd(kCoefficient0, t, simd_float::mulAdd(kCoefficient1, t, interpolate));
+    simd_float interpolate = simd_float::mulAdd(kCoefficient0, t, 
+      simd_float::mulAdd(kCoefficient1, t, simd_float::mulAdd(kCoefficient2, t, 
+        simd_float::mulAdd(kCoefficient3, t, simd_float::mulAdd(kCoefficient4, t, kCoefficient5)))));
+
     return power * interpolate;
   }
 

@@ -8,7 +8,8 @@
 
 namespace Interface
 {
-  MouseEvent MouseEvent::getEventRelativeTo(Component *otherComponent) const noexcept
+  MouseEvent 
+  MouseEvent::getEventRelativeTo(Component *otherComponent) const
   {
     MouseEvent ret = *this;
     ret.eventComponent = otherComponent;
@@ -20,7 +21,8 @@ namespace Interface
     return ret;
   }
 
-  Colour Colour::overlaidWith(Colour foregroundColour) const noexcept
+  Colour 
+  Colour::overlaidWith(Colour foregroundColour) const
   {
     auto destAlpha = a;
 
@@ -89,7 +91,7 @@ namespace Interface
   }
 
   static strict_inline Colour 
-  tween(Colour one, Colour two, u32 amount) noexcept
+  tween(Colour one, Colour two, u32 amount)
   {
     u32 c1 = utils::bit_cast<u32>(one);
     u32 c2 = utils::bit_cast<u32>(two);
@@ -105,7 +107,8 @@ namespace Interface
     return utils::bit_cast<Colour>((dOddBytes << 8) | dEvenBytes);
   }
 
-  Colour Colour::interpolatedWith(Colour other, float t) const noexcept
+  Colour 
+  Colour::interpolatedWith(Colour other, float t) const
   {
     if (t <= 0.0f)
       return *this;
@@ -121,7 +124,8 @@ namespace Interface
     return unpremultiply(c1);
   }
 
-  Colour Colour::withBrightness(float newBrightness) const noexcept
+  Colour 
+  Colour::withBrightness(float newBrightness) const
   {
     auto hsb = nvgHSB(*this);
     hsb.b = newBrightness;
@@ -130,7 +134,8 @@ namespace Interface
     return { hsb.r, hsb.g, hsb.b, a };
   }
 
-  Colour Colour::withRotatedHue(float amountToRotate) const noexcept
+  Colour 
+  Colour::withRotatedHue(float amountToRotate) const
   {
     auto hsb = nvgHSB(*this);
     hsb.r += amountToRotate;
@@ -139,7 +144,8 @@ namespace Interface
     return { hsb.r, hsb.g, hsb.b, a };
   }
 
-  utils::string Colour::toString() const
+  utils::string 
+  Colour::toString() const
   {
     char temp[30]{};
     u32 colour = getARGB();
@@ -148,9 +154,10 @@ namespace Interface
     return utils::string{ utils::generalAllocator, temp, size };
   }
 
-  Colour Colour::fromString(char *integer)
+  Colour 
+  Colour::fromString(const char *integer, int base)
   {
-    long colour = ::strtol(integer, nullptr, 0);
+    long colour = ::strtol(integer, nullptr, base);
     return Colour{ (u32)colour };
   }
 }

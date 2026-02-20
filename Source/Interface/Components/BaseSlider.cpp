@@ -1,16 +1,8 @@
-﻿/*
-  ==============================================================================
-
-    BaseSlider.cpp
-    Created: 14 Dec 2022 6:59:59am
-    Author:  theuser27
-
-  ==============================================================================
-*/
+﻿
+// Created: 2022-12-14 06:59:59
 
 #include "BaseControl.hpp"
 
-#include "Framework/update_types.hpp"
 #include "Framework/parameter_value.hpp"
 #include "Framework/parameter_bridge.hpp"
 #include "Plugin/Complex.hpp"
@@ -23,10 +15,8 @@
 
 namespace Interface
 {
-  static float getSampleRate() noexcept { return getPlugin(uiRelated.renderer).getSampleRate(); }
-
   bool 
-  BaseSlider::mouseDown(const MouseEvent &e)
+  Slider::mouseDown(const MouseEvent &e)
   {
     lastMouseDragPosition = { e.x, e.y };
 
@@ -70,14 +60,11 @@ namespace Interface
 
     mouseDrag(e);
 
-    for (auto *listener : controlListeners)
-      listener->mouseDown(this, e);
-
     return true;
   }
 
   bool 
-  BaseSlider::mouseDrag(const MouseEvent &e)
+  Slider::mouseDrag(const MouseEvent &e)
   {
     if (!componentFlags.isClicked)
       return false;
@@ -96,7 +83,7 @@ namespace Interface
   }
 
   bool 
-  BaseSlider::mouseUp(const MouseEvent &e)
+  Slider::mouseUp(const MouseEvent &e)
   {
     if (!componentFlags.isClicked)
       return false;
@@ -117,18 +104,12 @@ namespace Interface
       return true;
     }
 
-    for (auto *listener : controlListeners)
-      listener->mouseUp(this, e);
-
     return true;
   }
 
   bool 
-  BaseSlider::mouseEnter(const MouseEvent &e)
+  Slider::mouseEnter(const MouseEvent &)
   {
-    for (auto *listener : controlListeners)
-      listener->hoverStarted(this, e);
-
     if (controlFlags.showPopupOnHover)
       showPopup();
 
@@ -136,18 +117,15 @@ namespace Interface
   }
 
   bool 
-  BaseSlider::mouseExit(const MouseEvent &e)
+  Slider::mouseExit(const MouseEvent &)
   {
-    for (auto *listener : controlListeners)
-      listener->hoverEnded(this, e);
-
     hidePopup();
 
     return true;
   }
 
   bool 
-  BaseSlider::mouseWheelMove(const MouseEvent &e)
+  Slider::mouseWheelMove(const MouseEvent &e)
   {
     if (!controlFlags.canUseScrollWheel)
       return false;
@@ -171,6 +149,10 @@ namespace Interface
     if (valueDelta == 0.0)
       return true;
     
+    double valueInterval = 0.0;
+    if (details.scale == Framework::ParameterScale::Indexed)
+      valueInterval = 1.0 / (details.options->count - 1);
+
     auto newValue = currentValue + utils::max(valueInterval, ::fabs(valueDelta)) * (valueDelta < 0.0 ? -1.0 : 1.0);
 
     bool isMapped = parameterLink && parameterLink->hostControl;
@@ -203,16 +185,11 @@ namespace Interface
   //        |_|                                                           //
   //////////////////////////////////////////////////////////////////////////
 
-  RotarySlider::RotarySlider(Framework::ParameterValue *parameter) : BaseSlider{ parameter }
+  RotarySlider::RotarySlider()
   {
-    // yes i know this is dumb but it works for now
-    if (details.minValue == -details.maxValue)
-    {
-      controlFlags.isBipolar = true;
-      controlFlags.shouldUsePlusMinusPrefix = true;
-    }
+    controlFlags.canUseScrollWheel = true;
   }
-
+  
   bool 
   RotarySlider::render(OpenGlWrapper &openGl)
   {
@@ -237,7 +214,7 @@ namespace Interface
     if (controlFlags.isInSensitiveMode)
       sensitivity = kDefaultRotaryDragLength / (sensitivity * kSlowDragMultiplier);
 
-    auto result = BaseSlider::mouseDrag(e);
+    auto result = Slider::mouseDrag(e);
 
     sensitivity = oldSensitivity;
     return result;
@@ -304,7 +281,7 @@ namespace Interface
     //}
   }
 
-  PinSlider::PinSlider(Framework::ParameterValue *parameter) : BaseSlider(parameter)
+  PinSlider::PinSlider()
   {
     controlFlags.shouldShowPopup = true;
   }
@@ -368,13 +345,13 @@ namespace Interface
   PinSlider::mouseDown(const MouseEvent &e)
   {
     if (e.mods.test(ModifierKeys::popupMenuClickModifier))
-      return BaseSlider::mouseDown(e);
+      return Slider::mouseDown(e);
 
     auto mouseEvent = e.getEventRelativeTo(parent);
     lastMouseDragPosition = { mouseEvent.x, mouseEvent.y };
     runningTotal = getValue();
 
-    return BaseSlider::mouseDown(mouseEvent);
+    return Slider::mouseDown(mouseEvent);
   }
 
   bool 
@@ -399,10 +376,11 @@ namespace Interface
     return true;
   }
 
-  TextSelector::TextSelector(Framework::ParameterValue *parameter) : BaseSlider(parameter)
+  TextSelector::TextSelector()
   {
-    COMPLEX_ASSERT(details.scale == Framework::ParameterScale::Indexed);
+    controlFlags.canUseScrollWheel = true;
 
+    text.control = this;
     addChildComponent(&text);
 
     downArrow.margin = { 6, 0, 0, 0 };
@@ -444,6 +422,49 @@ namespace Interface
 
   struct TextSelectorItem : PopupItem
   {
+    TextSelectorItem()
+    {
+      getDimensions = [](Component *c, i32 *availableWidth)
+      {
+        auto *item = (TextSelectorItem *)c;
+
+        i32 minSize{}, maxSize{};
+        bool canTextWrap = false;
+        utils::string_view text;
+        float height = kSecondaryTextLineHeight;
+
+        if (item->id)
+        {
+          // label whose extra data is a string
+
+          canTextWrap = true;
+          text = *((utils::stringnd *)item->extraData);
+        }
+        else
+        {
+          auto *option = (Framework::IndexedData *)item->extraData;
+          canTextWrap = !option->id;
+          height = !option->id ? height : kPrimaryTextLineHeight;
+          text = option->displayName;
+        }
+
+        uiRelated.cache->setFont(Graphics::InterType, scaleValue(height));
+
+        if (!availableWidth)
+        {
+          maxSize = (i32)::ceilf(uiRelated.cache->getStringWidthFloat(text));
+          minSize = (canTextWrap) ? 0 : maxSize;
+        }
+        else
+        {
+          auto area = uiRelated.cache->getStringBoundsMultiline(text, (float)(*availableWidth));
+          minSize = maxSize = (i32)area.h;
+        }
+
+        return Range<i32>{ minSize, maxSize };
+      };
+    }
+
     bool 
     render(OpenGlWrapper &openGl) override
     {
@@ -455,56 +476,17 @@ namespace Interface
     }
   };
 
-  static Range<i32>
-  getTextSelectorItemTextMetrics(Component *c, i32 *availableWidth)
-  {
-    auto *item = (TextSelectorItem *)c;
-
-    i32 minSize{}, maxSize{};
-    bool canTextWrap = false;
-    utils::string_view text;
-    float height = BaseControl::kPopupSecondaryFontHeight;
-
-    if (item->id)
-    {
-      // label whose extra data is a string
-
-      canTextWrap = true;
-      text = *((utils::stringnd *)item->extraData);
-    }
-    else
-    {
-      auto *option = (Framework::IndexedData *)item->extraData;
-      canTextWrap = !option->id;
-      height = !option->id ? height : BaseControl::kPopupPrimaryFontHeight;
-      text = option->displayName;
-    }
-
-    uiRelated.cache->setFont(uiRelated.cache->getFont(
-      uiRelated.cache->InterFontId, scaleValue(height)));
-
-    if (!availableWidth)
-    {
-      maxSize = (i32)::ceilf(uiRelated.cache->getStringWidthFloat(text));
-      minSize = (canTextWrap) ? 0 : maxSize;
-    }
-    else
-    {
-      auto area = uiRelated.cache->getStringBoundsMultiline(text, (float)(*availableWidth));
-      minSize = maxSize = (i32)area.h;
-    }
-
-    return { minSize, maxSize };
-  }
-  
   bool 
   TextSelector::mouseDown(const MouseEvent &e)
   {
+    // probably unnecessary but just in case
+    COMPLEX_ASSERT(details.scale == Framework::ParameterScale::Indexed);
+
     if (e.mods.test(ModifierKeys::altModifier))
       return true;
 
     if (e.mods.test(ModifierKeys::popupMenuClickModifier))
-      return BaseSlider::mouseDown(e);
+      return Slider::mouseDown(e);
 
     // idk when this would happen but just to be sure
     if (!details.options)
@@ -535,7 +517,6 @@ namespace Interface
     name->canBeChosen = false;
     name->extraData = anew(itemArena, utils::stringnd, { itemArena, (!dropdownTitle.empty()) ?
       utils::string_view{ dropdownTitle } : details.displayName });
-    name->desiredSize.getDimensions = getTextSelectorItemTextMetrics;
     options->addChildComponent(name);
 
     bool exitedChild = false;
@@ -551,7 +532,6 @@ namespace Interface
         item->extraData = option;
         item->canBeChosen = option->id;
         item->sizingFlags = (Component::SizingFlags)(Component::CustomDimensions | Component::SameAsSiblingsX);
-        item->desiredSize.getDimensions = getTextSelectorItemTextMetrics;
         options->addChildComponent(item);
       }
 
@@ -594,7 +574,8 @@ namespace Interface
       auto *option = (Framework::IndexedData *)selectedItem->extraData;
 
       beginChange(getValue());
-      auto unscaledValue = unscaleValue(Framework::getValueFromOptionId(option->id, details), details, getSampleRate());
+      auto unscaledValue = unscaleValue(Framework::getValueFromOptionId(option->id, details), 
+        details, getPlugin(uiRelated.renderer).getSampleRate());
       setValue(unscaledValue, true);
       setValueToHost();
       endChange();
@@ -615,7 +596,7 @@ namespace Interface
   TextSelector::mouseUp(const MouseEvent &e)
   {
     if (e.mods.test(ModifierKeys::popupMenuClickModifier))
-      return BaseSlider::mouseUp(e);
+      return Slider::mouseUp(e);
     return true;
   }
 
@@ -626,42 +607,38 @@ namespace Interface
     auto newEvent = e;
     newEvent.wheelIsReversed = !e.wheelIsReversed;
 
-    return BaseSlider::mouseWheelMove(newEvent);
+    return Slider::mouseWheelMove(newEvent);
   }
 
   void TextSelector::setExtraIcon(Paths::DrawingFn *drawFn)
   {
     (void)drawFn;
+    // TODO:
   }
 
-  Numberbox::Numberbox(Framework::ParameterValue *parameter) : BaseSlider{ parameter }
+  Numberbox::Numberbox()
   {
+    controlFlags.canUseScrollWheel = true;
     sizingFlags |= Component::CustomDimensions;
-    desiredSize.getDimensions = [](Component *c, i32 *availablePrimarySize)
+    getDimensions = [](Component *c, i32 *availableWidth)
     {
-      i32 max{};
       auto *self = (Numberbox *)c;
+      i32 max = self->editor.bounds.h;
 
-      if (availablePrimarySize)
-      {
-        auto [fontId, fontHeight, _] = self->editor.font;
-        max = (i32)::ceilf(uiRelated.cache->getFontAscentFromHeight(fontId, scaleValue(fontHeight)));
-      }
-      else
+      if (!availableWidth)
       {
         max = self->editor.bounds.w;
 
-        auto [fontId, fontHeight, _] = self->editor.font;
-        float height = uiRelated.cache->getFontAscentFromHeight(fontId, scaleValue(fontHeight));
+        float height = (float)self->editor.desiredSize.y;
 
         if (self->drawBackgroundArrow)
         {
-          self->padding.x = (u8)::ceilf(height * (kTriangleWidthRatio + kTriangleToValueMarginRatio));
-          self->padding.w = (u8)::ceilf(kValueToEndMarginRatio * height);
+          self->padding.x = (u16)::ceilf(height * (kTriangleWidthRatio + kTriangleToValueMarginRatio));
+          self->padding.w = (u16)::ceilf(kValueToEndMarginRatio * height);
         }
         else
         {
-          self->padding.x = (u8)::ceilf(height * 0.5f);
+          self->padding.x = (u16)::ceilf(height * 0.5f);
           self->padding.w = self->padding.x;
         }
       }
@@ -669,31 +646,13 @@ namespace Interface
       return Range<i32>{ max, max };
     };
 
-    editor.font.id = uiRelated.cache->DDinFontId;
-    editor.callback = [](Component *c, TextEditor::CallbackFlags flags, TextEditor &)
-    {
-      auto *self = (Numberbox *)c;
-
-      // TODO:
-      switch (flags)
-      {
-      case Interface::TextEditor::EnterPressed:
-        self->updateValueFromTextEntry();
-
-        [[fallthrough]];
-      default:
-      case Interface::TextEditor::FocusLost:
-      case Interface::TextEditor::EscapePressed:
-        self->controlFlags.isInModalState = false;
-
-        break;
-      }
-    };
+    editor.control = this;
     textEntry = &editor;
-    addChildComponent(textEntry);
+    addChildComponent(&editor);
   }
 
-  bool Numberbox::render(OpenGlWrapper &openGl)
+  bool 
+  Numberbox::render(OpenGlWrapper &openGl)
   {
     static constexpr float kHoverIncrement = 0.2f;
 
@@ -715,33 +674,33 @@ namespace Interface
       static constexpr float edgeControlPointXOffset = edgeControlPointAbsoluteOffset * const_math::cos(kRotatedSideAngle);
       static constexpr float edgeControlPointYOffset = edgeControlPointAbsoluteOffset * const_math::sin(kRotatedSideAngle);
 
-      //auto width = (float)drawBounds_.getWidth();
-      //auto height = (float)drawBounds_.getHeight();
-      //auto triangleXLength = height * 0.5f;
+      nvgBeginPath(openGl.g);
+      
+      float width = (float)bounds.w;
+      float height = (float)bounds.h;
+      float triangleXLength = height * 0.5f;
 
-      //// right
-      //box.startNewSubPath(width - kCornerRounding, 0.0f);
-      //box.quadraticTo(width, 0.0f, width, kCornerRounding);
-      //box.lineTo(width, height - kCornerRounding);
+      // right
+      nvgMoveTo(openGl.g, width - kCornerRounding, 0.0f);
+      nvgQuadTo(openGl.g, width, 0.0f, width, kCornerRounding);
+      nvgLineTo(openGl.g, width, height - kCornerRounding);
 
-      //// bottom
-      //box.quadraticTo(width, height, width - kCornerRounding, height);
-      //box.lineTo(triangleXLength + controlPoint1XOffset, height);
+      // bottom
+      nvgQuadTo(openGl.g, width, height, width - kCornerRounding, height);
+      nvgLineTo(openGl.g, triangleXLength + controlPoint1XOffset, height);
 
-      //// triangle bottom side
-      //box.quadraticTo(triangleXLength, height, triangleXLength - controlPoint2XOffset, height - controlPoint2YOffset);
-      //box.lineTo(edgeControlPointXOffset, height / 2.0f + edgeControlPointYOffset);
+      // triangle bottom side
+      nvgQuadTo(openGl.g, triangleXLength, height, triangleXLength - controlPoint2XOffset, height - controlPoint2YOffset);
+      nvgLineTo(openGl.g, edgeControlPointXOffset, height / 2.0f + edgeControlPointYOffset);
 
-      //// triangle top side
-      //box.quadraticTo(0.0f, height * 0.5f, edgeControlPointXOffset, height * 0.5f - edgeControlPointYOffset);
-      //box.lineTo(triangleXLength - controlPoint2XOffset, controlPoint2YOffset);
+      // triangle top side
+      nvgQuadTo(openGl.g, 0.0f, height * 0.5f, edgeControlPointXOffset, height * 0.5f - edgeControlPointYOffset);
+      nvgLineTo(openGl.g, triangleXLength - controlPoint2XOffset, controlPoint2YOffset);
 
-      //// top
-      //box.quadraticTo(triangleXLength, 0.0f, triangleXLength + controlPoint2XOffset, 0.0f);
-      //box.closeSubPath();
-
-      //g.setColour(getColour(Skin::kWidgetBackground1));
-      //g.fillPath(box);
+      // top
+      nvgQuadTo(openGl.g, triangleXLength, 0.0f, triangleXLength + controlPoint2XOffset, 0.0f);
+      nvgFillColor(openGl.g, getColour(Skin::kWidgetBackground1));
+      nvgFill(openGl.g);
     }
     else if (auto alpha = animator.getValue(Animator::Hover); alpha != 0.0f)
     {
@@ -767,9 +726,7 @@ namespace Interface
     auto oldSensitivity = sensitivity;
     sensitivity = (float)utils::max(bounds.w, bounds.h) / (sensitivity * multiply);
 
-    //setImmediateSensitivity((int)sensitivity);
-
-    auto result = BaseSlider::mouseDrag(e);
+    auto result = Slider::mouseDrag(e);
 
     sensitivity = oldSensitivity;
 

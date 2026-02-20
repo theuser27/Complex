@@ -24,6 +24,19 @@
   #define NOCRYPT
   #define NOOPENFILE
   #define NOSCROLL
+  #define NOSOUND
+  #define NOCOMM
+  #define NOKANJI
+  #define NORPC
+  #define NOPROXYSTUB
+  #define NOIMAGE
+  #define NOTAPE
+  #define NORASTEROPS
+  #define NOSYSCOMMANDS
+  #define NOTEXTMETRIC
+  #define NODEFERWINDOWPOS
+  #define NOGDICAPMASKS
+  #define NOSYSMETRICS
 #endif
 
 #include "cplug/config.h"

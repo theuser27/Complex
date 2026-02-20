@@ -29,66 +29,99 @@ namespace Framework
   class ParameterValue;
   class ParameterModulator;
   class ParameterBridge;
-  class WaitingUpdate;
 
-  class UndoableAction
+  struct UndoAction
   {
-  public:
-    u32 type{};
-    virtual ~UndoableAction() = default;
+    // mandatory to implement
+    void (*redo)(UndoAction *) = nullptr;
+    void (*undo)(UndoAction *) = nullptr;
 
-    virtual bool perform() = 0;
-    virtual bool undo() = 0;
+    // free to implement or not
+    void (*destructor)(UndoAction *) = nullptr;
+    // Allows multiple actions to be coalesced into a single action object, to reduce storage space.
+    // The combined action can be the current, next or an entire new action
+    UndoAction *(*combineActions)(utils::bumpArena *transaction,
+      UndoAction *currentAction, UndoAction *nextAction) = nullptr;
 
-    /// Allows multiple actions to be coalesced into a single action object, to reduce storage space.
-    /// The combined action can be the current, next or an entire new action
-    virtual UndoableAction *combineActions([[maybe_unused]] UndoableAction *nextAction) { return nullptr; }
+  private:
+    UndoAction *next{};
+    friend class UndoManager;
+  };
+
+  struct AddProcessorUpdate : public Framework::UndoAction
+  {
+    AddProcessorUpdate(Plugin::State &state, u64 destinationStateId,
+      usize destinationSubProcessorIndex, Generation::BaseProcessor &newProcessor);
+
+    Plugin::State &state_;
+    Generation::BaseProcessor *addedProcessor_;
+    u64 destinationStateId_;
+    usize destinationSubProcessorIndex_;
+  };
+
+  struct MoveProcessorUpdate final : public Framework::UndoAction
+  {
+    MoveProcessorUpdate(Plugin::State &state, u64 destinationStateId,
+      usize destinationSubProcessorIndex, u64 sourceStateId, usize sourceSubProcessorIndex);
+
+    Plugin::State &state_;
+
+    u64 destinationStateId_;
+    usize destinationSubProcessorIndex_;
+    u64 sourceStateId_;
+    usize sourceSubProcessorIndex_;
+  };
+  
+  struct DeleteProcessorUpdate final : public UndoAction
+  {
+    DeleteProcessorUpdate(Plugin::State &state, u64 destinationStateId,
+      usize destinationSubProcessorIndex);
+
+    Plugin::State &state_;
+
+    Generation::BaseProcessor *deletedProcessor_ = nullptr;
+
+    u64 destinationStateId_;
+    usize destinationSubProcessorIndex_;
   };
 
   class UndoManager
   {
   public:
-    UndoManager(usize transactionsToKeep);
-
     ~UndoManager();
 
-    void clearUndoHistory();
+    UndoManager(usize transactionsToKeep);
+
+    void clear();
     void setTransationStorage(usize transactionsToKeep);
 
-    /// Performs an action and adds it to the undo history list.
-    bool perform(UndoableAction *action);
+    // Performs an action and adds it to the undo history list.
+    bool perform(UndoAction *action, bool performOnAdd = true);
 
-    /// Starts a new group of actions that together will be treated as a single transaction.
-    void beginNewTransaction();
+    // Starts a new group of actions that together will be treated as a single transaction.
+    [[nodiscard]] utils::bumpArena *beginNewTransaction();
+    [[nodiscard]] utils::bumpArena *getCurrentTransaction() { return transactions[currentIndex].first; }
 
-    // Returns true if there's at least one action in the list to undo.
     bool canUndo() const { return undoActionsCount; }
-
-    /// Tries to roll-back the last transaction, 
-    /// returns true if the transaction can be undone, and false if it fails, or
-    /// if there aren't any transactions to undo
-    /// 
-    /// if undoCurrentTransactionOnly == true, then the transaction index won't be changed
-    /// when undone and things can immediately be added to the current transaction
-    bool undo(bool undoCurrentTransactionOnly = false);
-
-    /// Returns the number of UndoableAction objects that have been performed during the
-    /// transaction that is currently open.
-    usize getNumActionsInCurrentTransaction() const { return transactions[currentIndex].size(); }
-
-    /// Returns true if there's at least one action in the list to redo.
     bool canRedo() const { return redoActionsCount; }
 
-    /// Tries to redo the last transaction that was undone.
-    /// returns true if the transaction can be redone, and false if it fails, or
-    /// if there aren't any transactions to redo
+    // Tries to roll-back the last transaction, 
+    // returns false if there aren't any transactions to undo
+    // 
+    // if undoCurrentTransactionOnly == true, then the transaction index won't be changed
+    // when undone and things can immediately be added to the current transaction
+    bool undo(bool undoCurrentTransactionOnly = false);
+
+    // Tries to redo the last transaction that was undone.
+    // returns false if there aren't any transactions to redo
     bool redo();
 
-    /// Returns true if the caller code is in the middle of an undo or redo action.
+    // Returns true if the caller code is in the middle of an undo or redo action.
     bool isPerformingUndoRedo() const noexcept { return isInsideUndoRedoCall; }
 
   private:
-    utils::vector<utils::vector<utils::up<UndoableAction>>> transactions{};
+    utils::bumpArena *storage{};
+    utils::span<utils::pair<utils::bumpArena *, UndoAction *>> transactions{};
     usize currentIndex = 0, undoActionsCount = 0, redoActionsCount = 0;
     bool isInsideUndoRedoCall = false;
   };
@@ -117,10 +150,9 @@ namespace Plugin
 
     void rescanLatency();
 
-    float getSampleRate() const noexcept { return sampleRate_.load(satomi::memory_order_acquire); }
-    u32 getSamplesPerBlock() const noexcept { return samplesPerBlock_.load(satomi::memory_order_acquire); }
+    float getSampleRate() const noexcept { return sampleRate.load(satomi::memory_order_acquire); }
+    u32 getSamplesPerBlock() const noexcept { return samplesPerBlock.load(satomi::memory_order_acquire); }
 
-    void pushUndo(Framework::WaitingUpdate *action, bool isNewTransaction = true);
     void undo();
     void redo();
 
@@ -135,11 +167,11 @@ namespace Plugin
     }
 
     // quick and dirty spinlock to ensure things are executed outside of an audio callback
-    utils::ScopedLock acquireProcessingLock(bool isExclusive)
+    utils::ScopedLock acquireProcessingLock(bool isExclusive = true)
     {
-      while (processingLock_.lock.load(satomi::memory_order_relaxed) != 0)
+      while (processingLock.lock.load(satomi::memory_order_relaxed) != 0)
         utils::millisleep();
-      return utils::ScopedLock{ processingLock_, isExclusive, utils::WaitMechanism::Spin };
+      return utils::ScopedLock{ processingLock, isExclusive, utils::WaitMechanism::Spin };
     }
 
     // not atomic because these are only set at plugin instantiation
@@ -148,11 +180,11 @@ namespace Plugin
     const usize parameterCount = 0;
 
     // might be updated on any thread hence atomic
-    satomi::atomic<u32> samplesPerBlock_ = 0;
-    satomi::atomic<float> sampleRate_ = kDefaultSampleRate;
+    satomi::atomic<u32> samplesPerBlock = 0;
+    satomi::atomic<float> sampleRate = kDefaultSampleRate;
     // if any updates are supposed to happen to the processing tree/undoManager
     // the thread needs to acquire this lock after checking that the updateFlag is set to AfterProcess
-    mutable utils::ReentrantLock<i32> processingLock_{ 0, {} };
+    mutable utils::ReentrantLock<i32> processingLock{ 0, {} };
     satomi::atomic<u32> latency{};
     satomi::atomic<bool> hasLatencyChanged{};
     bool wasStateInitialised{};
@@ -160,12 +192,12 @@ namespace Plugin
     Framework::FFT fft{};
     utils::sp<State> state_;
     
-    Framework::UndoManager undoManager_;
+    Framework::UndoManager undoManager;
 
     CplugHostContext *hostContext;
 
     // pointer to the main processing engine
-    Interface::Renderer *rendererInstance_ = nullptr;
+    Interface::Renderer *rendererInstance = nullptr;
   };
 }
 

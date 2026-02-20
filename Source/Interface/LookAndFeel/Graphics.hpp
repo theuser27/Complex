@@ -16,18 +16,13 @@ extern "C"
 
 namespace Interface
 {
-  using FontId = int;
-
-  struct Font
-  {
-    FontId id;
-    float height;
-    float kerning;
-  };
+  using FontId = u8;
 
   class Graphics
   {
   public:
+    enum FontType : FontId { DDinType, InterType };
+
     static constexpr float kDDinDefaultHeight = 11.5f;
     static constexpr float kInterVDefaultHeight = 12.0f;
 
@@ -37,51 +32,19 @@ namespace Interface
     Graphics();
     ~Graphics();
 
-    Font getDDinFont(float height = kDDinDefaultHeight) const 
-    {
-      height = scaleValue(height);
-      return Font{ .id = DDinFontId, .height = height,
-        .kerning = getKerningForHeight(DDinFontId, height) };
-    }
-    Font getInterFont(float height = kDDinDefaultHeight) const 
-    {
-      height = scaleValue(height);
-      return Font{ .id = InterFontId, .height = kInterVDefaultHeight, 
-        .kerning = getKerningForHeight(InterFontId, height) };
-    }
+    static float getFontKerningFromFontHeight(FontId fontId, float height);
+    static float getFontLineHeightFromFontHeight(FontId fontId, float height);
+    static float getFontHeightFromLineHeight(FontId fontId, float lineHeight);
 
-    float getKerningForHeight(int fontId, float height) const noexcept
-    {
-      if (fontId == DDinFontId)
-        return height / kDDinDefaultHeight * kDDinDefaultKerning;
-      else if (fontId == InterFontId)
-        return height / kInterVDefaultHeight * kInterVDefaultKerning / 8.0f;
-
-      COMPLEX_ASSERT_FALSE("Unknown font to get kerning for");
-
-      return kDDinDefaultKerning;
-    }
-
-    Font getFont(FontId fontId, float height) const
-    {
-      Font font{ fontId, scaleValue(height) };
-      font.kerning = getKerningForHeight(font.id, font.height);
-      return font;
-    }
-
-    float getFontAscentFromHeight(int fontId, float height) const noexcept;
-    float getFontHeightFromAscent(int fontId, float ascent) const noexcept;
-
-    void setFontHeight(float height) const;
-    void setFontHeightFromAscent(float ascent) const;
-
-    float getStringWidthFloat(utils::string_view string)
+    float 
+    getStringWidthFloat(utils::string_view string)
     {
       return nvgTextBounds(context, 0.0f, 0.0f, string.data(), 
         string.data() + string.size(), nullptr);
     }
 
-    Area<float> getStringBounds(utils::string_view string)
+    Area<float> 
+    getStringBounds(utils::string_view string)
     {
       float bounds[4];
       (void)nvgTextBounds(context, 0.0f, 0.0f, string.data(), 
@@ -90,7 +53,8 @@ namespace Interface
       return { bounds[2] - bounds[0], bounds[3] - bounds[1] };
     }
 
-    Area<float> getStringBoundsMultiline(utils::string_view string, float breakRowWidth)
+    Area<float> 
+    getStringBoundsMultiline(utils::string_view string, float breakRowWidth)
     {
       float bounds[4];
       (void)nvgTextBoxBounds(context, 0.0f, 0.0f, breakRowWidth, 
@@ -99,19 +63,16 @@ namespace Interface
       return { bounds[2] - bounds[0], bounds[3] - bounds[1] };
     }
 
-    void setFont(Font font)
-    {
-      nvgFontFaceId(context, font.id);
-      nvgFontSize(context, font.height);
-      nvgTextLetterSpacing(context, font.kerning);
-    }
+    void setFont(FontId fontid, float lineHeight);
+    void setFontHeight(float height) const;
 
     void bindTextureFramebuffer();
     void unbindTextureFramebuffer();
 
     Rectangle<i32> reserveSlotForTexture(u64 id, Area<i32> desiredArea);
 
-    Rectangle<i32> getTextureWithArea(u64 id, Area<i32> area)
+    Rectangle<i32> 
+    getTextureWithArea(u64 id, Area<i32> area)
     {
       auto iter = textureBounds.get_first_of(id);
       while (iter != textureBounds.data.end() && iter->first == id)
@@ -123,8 +84,9 @@ namespace Interface
 
       return Rectangle<i32>{};
     }
-    Rectangle<i32> resizeTexture(u64 id,
-      Rectangle<i32> currentBounds, Area<i32> desiredArea)
+
+    Rectangle<i32> 
+    resizeTexture(u64 id, Rectangle<i32> currentBounds, Area<i32> desiredArea)
     {
       auto iter = textureBounds.binary_search({ id, currentBounds });
       if (iter == textureBounds.data.end())
@@ -133,7 +95,8 @@ namespace Interface
       return (iter == textureBounds.data.end()) ? Rectangle<i32>{} : iter->second;
     }
 
-    u64 getStaticTextureId(utils::typeInfo staticId)
+    u64 
+    getStaticTextureId(utils::typeInfo staticId)
     {
       auto iter = staticTextureIds.get_first_of(staticId);
       if (iter == staticTextureIds.data.end())
@@ -152,7 +115,9 @@ namespace Interface
 
     NVGcontext *context = nullptr;
     NVGLUframebuffer *textureFBO = nullptr;
-    FontId DDinFontId;
-    FontId InterFontId;
+    
+  private:
+    int DDinFontId;
+    int InterFontId;
   };
 }

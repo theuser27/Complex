@@ -110,6 +110,7 @@ namespace Interface
 
 	}
 
+
 	void EffectsStateSection::releaseComponent(EffectModuleSection *movedModule, const MouseEvent &)
 	{
 		auto newIndices = [&]() -> utils::pair<usize, usize>

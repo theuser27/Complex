@@ -418,7 +418,8 @@ namespace Generation
     if (children)
     {
       auto childMetadata = state->findProcessorMetadata(Processors::EffectsState);
-      auto string = utils::string::create("Attempted insert of more than one %v(id: %zu) inside an %v(id: %zu), \
+      auto string = utils::string::create(localScratch,
+        "Attempted insert of more than one %v(id: %zu) inside an %v(id: %zu), \
         but processor supports only one of such subprocessors. If this shows to you as a user, report it to the dev.",
         childMetadata->name, childMetadata->id, metadata->name, metadata->id
       );
@@ -481,7 +482,7 @@ initialiseTypeStructure<Generation::SoundEngine>(void *, Framework::PluginStruct
     COMPLEX_STRUCTURE_PARAMETER("Block Size", SoundEngine::BlockSize, kMinFFTOrder, kMaxFFTOrder, kDefaultFFTOrder,
       (float)(kDefaultFFTOrder - kMinFFTOrder) / (float)(kMaxFFTOrder - kMinFFTOrder),
       ParameterScale::Linear, {}, ParameterDetails::Automatable | ParameterDetails::Extensible, UpdateFlag::BeforeProcess,
-      [](char *string, usize size, float value, const ParameterDetails &) { ::stbsp_snprintf(string, (int)size, "%zu", ((usize)1 << (usize)::roundf(value))); }),
+      [](char *string, usize size, double value, const ParameterDetails &) { return (usize)::stbsp_snprintf(string, (int)size, "%zu", ((usize)1 << (usize)::round(value))); }),
     COMPLEX_STRUCTURE_PARAMETER("Overlap", SoundEngine::Overlap, kMinWindowOverlap, kMaxWindowOverlap, kDefaultWindowOverlap,
       kDefaultWindowOverlap, ParameterScale::Clamp, "%", ParameterDetails::Automatable),
     COMPLEX_STRUCTURE_PARAMETER("Window", SoundEngine::WindowType,

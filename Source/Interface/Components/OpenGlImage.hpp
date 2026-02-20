@@ -65,16 +65,6 @@ namespace Interface
     bool clearOnRedraw = true;
   };
 
-  class PlainTextComponent final : public OpenGlImage
-  {
-  public:
-    PlainTextComponent(utils::string text = {});
-
-    utils::string text;
-    Colour textColour = Colours::white;
-    Font font;
-  };
-
   struct PlainShapeComponent final : public Component
   {
     void (*draw)(OpenGlWrapper &openGl, Component *reference, Component *self) = nullptr;

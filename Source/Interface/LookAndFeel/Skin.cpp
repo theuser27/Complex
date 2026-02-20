@@ -176,7 +176,7 @@ namespace Interface
       }
     }
 
-    auto defaultSkin = utils::string_view{ BinaryData::Complex_skin, BinaryData::Complex_skinSize };
+    auto defaultSkin = utils::string_view{ (const char *)BinaryData::Complex_skin, BinaryData::Complex_skinSize };
     if (stringToState(defaultSkin))
     {
       xfiles_write(skinFile.data(), defaultSkin.data(), defaultSkin.size());
@@ -186,26 +186,29 @@ namespace Interface
     COMPLEX_HARD_ASSERT_FALSE("Couldn't parse default skin");
   }
 
-  Colour Skin::getColour(ColourId colorId, const Component *component) const
+  static usize getSkinOverrideIndex(const Component *component)
   {
-    while (component->skinOverride == kUseParentOverride)
+    while (component->skinOverride == Skin::kUseParentOverride && component->parent)
       component = component->parent;
 
-    COMPLEX_ASSERT(component->skinOverride < kSectionsCount);
-    COMPLEX_ASSERT(colorId < kColorIdCount);
+    COMPLEX_ASSERT(component->skinOverride <= Skin::kUseParentOverride);
 
-    return colours[component->skinOverride][colorId];
+    return (component->skinOverride == Skin::kUseParentOverride) ? 
+      Skin::kNone : component->skinOverride;
+  }
+  
+  Colour 
+  Skin::getColour(ColourId colorId, const Component *component) const
+  {
+    COMPLEX_ASSERT(colorId < kColorIdCount);
+    return colours[getSkinOverrideIndex(component)][colorId];
   }
 
-  float Skin::getValue(ValueId valueId, const Component *component) const
+  float 
+  Skin::getValue(ValueId valueId, const Component *component) const
   {
-    while (component->skinOverride == kUseParentOverride)
-      component = component->parent;
-
-    COMPLEX_ASSERT(component->skinOverride < kSectionsCount);
     COMPLEX_ASSERT(valueId < kValueIdCount);
-
-    return values[component->skinOverride][valueId];
+    return values[getSkinOverrideIndex(component)][valueId];
   }
 
   void Skin::saveToFile(char *saveFile)

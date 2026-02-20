@@ -800,7 +800,7 @@ namespace utils
 
     static_assert(((MaxSize - sizeof(vtable_t)) % alignment == 0) || isOnHeap);
 
-    using storage_t = conditional_t<isOnHeap, void *, byte[MaxSize - sizeof(vtable_t *)]>;
+    using storage_t = conditional_t<isOnHeap, void *, byte[MaxSize]>;
 
     void allocate(const vtable_t *newVtable)
     {
@@ -871,7 +871,7 @@ namespace utils
   template<typename Signature>
   using dynFn = fn<Signature, heapAllocatedTag>;
 
-  template<typename Signature, usize MaxSize = 32>
+  template<typename Signature, usize MaxSize = 16>
   using smallFn = fn<Signature, MaxSize>;
 
 
@@ -891,7 +891,7 @@ namespace utils
       explicit operator bool() { return nativeId; }
     } threadId{};
 
-    static id getCurrentId();
+    inline static thread_local id currentId = {};
     [[noreturn]] static void exit(int result);
 
     ~thread();

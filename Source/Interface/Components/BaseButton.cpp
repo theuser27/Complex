@@ -11,7 +11,7 @@
 namespace Interface
 {
   bool 
-  BaseButton::mouseDown(const MouseEvent &e)
+  Button::mouseDown(const MouseEvent &e)
   {
     if (e.mods.test(ModifierKeys::popupMenuClickModifier))
     {
@@ -30,7 +30,7 @@ namespace Interface
   }
 
   bool 
-  BaseButton::mouseUp(const MouseEvent &e)
+  Button::mouseUp(const MouseEvent &e)
   {
     if (e.mods.test(ModifierKeys::popupMenuClickModifier))
       return true;
@@ -54,9 +54,9 @@ namespace Interface
     return true;
   }
 
-  PowerButton::PowerButton(Framework::ParameterValue *parameter) : BaseButton{ parameter }
+  PowerButton::PowerButton()
   {
-    addedHitbox = { kAddedMargin, kAddedMargin, kAddedMargin, kAddedMargin };
+    padding = { kAddedMargin, kAddedMargin, kAddedMargin, kAddedMargin };
   }
 
   bool PowerButton::render(OpenGlWrapper &openGl)
@@ -84,9 +84,9 @@ namespace Interface
   }
 
 
-  RadioButton::RadioButton(Framework::ParameterValue *parameter) : BaseButton{ parameter }
+  RadioButton::RadioButton()
   {
-    addedHitbox = { kAddedMargin, kAddedMargin, kAddedMargin, kAddedMargin };
+    padding = { kAddedMargin, kAddedMargin, kAddedMargin, kAddedMargin };
   }
 
   bool RadioButton::render(OpenGlWrapper &openGl)

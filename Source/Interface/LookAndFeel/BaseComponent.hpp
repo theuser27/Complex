@@ -32,8 +32,8 @@ namespace Interface
     Realtime
   };
 
-  void calculateSizes(utils::span<Component *> children, Component *component);
-  void calculatePositions(utils::span<Component *> children,
+  void calculateSizes(Component *children, Component *component);
+  void calculatePositions(Component *children,
     Component *component, Rectangle<i32> boundsInComponent = {});
 
   PopupDisplay *getPopupDisplay(bool primary);
@@ -50,11 +50,11 @@ namespace Interface
       HandleCustomPosition = 1,
     };
 
-    enum SizingFlags : u16
+    enum SizingFlags : u8
     {
       None = 0,
 
-      // the size of the component will whatever is set in desiredSize
+      // the size of the component will be whatever is set in desiredSize
       Fixed = 1 << 0,
 
       // maximum size will optimistically grow as the parent grows
@@ -72,19 +72,12 @@ namespace Interface
       ScrollableY = 1 << 6,
 
       // adds an extra scrollbar to the off-axis' size
-      HasScrollbarX = 1 << 7,
-      HasScrollbarY = 1 << 8,
+      ScrollableWithBarX = ScrollableX | GrowableX,
+      ScrollableWithBarY = ScrollableY | GrowableY,
 
-      ScrollableWithBarX = ScrollableX | HasScrollbarX,
-      ScrollableWithBarY = ScrollableY | HasScrollbarY,
-
-      ScrollIsPartOfPadding = 1 << 9,
-
-      // will use desiredSize.getDimensions to calculate dimensions
+      // will use getDimensions to calculate dimensions
       // mainly used to get text sizes but can be used for anything
-      CustomDimensions = 1 << 10,
-      // controls the children stack direction
-      IsVertical = 1 << 11,
+      CustomDimensions = 1 << 7,
     };
 
     // all mouse events return true/false if they have/have not consumed the event
@@ -94,13 +87,13 @@ namespace Interface
     virtual bool mouseExit([[maybe_unused]] const MouseEvent &event) { return false; }
     virtual bool mouseDown([[maybe_unused]] const MouseEvent &event) { return false; }
     virtual bool mouseDrag([[maybe_unused]] const MouseEvent &event) { return false; }
-    virtual bool mouseUp([[maybe_unused]] const MouseEvent &event) { return false; }
+    virtual bool mouseUp([[maybe_unused]] const MouseEvent &event) { return true; }
     virtual bool mouseWheelMove(const MouseEvent &event);
 
-    Rectangle<i32> getLocalBounds() const noexcept { return bounds.withZeroOrigin(); }
-    Point<i32> getPosition() const noexcept { return bounds.getPosition(); }
+    Rectangle<i32> getLocalBounds() const { return bounds.withZeroOrigin(); }
+    Point<i32> getPosition() const { return bounds.getPosition(); }
     Point<i32> 
-    getPositionInWindow() const noexcept
+    getPositionInWindow() const
     {
       Point relativePosition = getPosition();
       auto *component = parent;
@@ -114,7 +107,7 @@ namespace Interface
 
     Point<i32> 
     getRelativePoint(const Component *source,
-      Point<i32> pointRelativeToSource = {}) const noexcept
+      Point<i32> pointRelativeToSource = {}) const
     {
       if (source->parent == parent)
         return pointRelativeToSource;
@@ -127,14 +120,14 @@ namespace Interface
     }
     Rectangle<i32> 
     getRelativeArea(const Component *source,
-      Rectangle<i32> areaRelativeToSource = {}) const noexcept
+      Rectangle<i32> areaRelativeToSource = {}) const
     {
       return Rectangle{ getRelativePoint(source, areaRelativeToSource.getPosition()),
         areaRelativeToSource.w, areaRelativeToSource.y };
     }
 
-    bool contains(Point<i32> parentPoint) { return bounds.contains(parentPoint); }
-    bool contains(Point<float> parentPoint) { return contains(parentPoint.toInt()); }
+    bool contains(Point<i32> parentPoint) const { return bounds.contains(parentPoint); }
+    bool contains(Point<float> parentPoint) const { return contains(parentPoint.toInt()); }
 
     Component *getComponentAt(i32 x, i32 y, bool onlyClickable = false);
     Component *
@@ -142,7 +135,7 @@ namespace Interface
     { return getComponentAt(position.x, position.y, onlyClickable); }
 
     bool 
-    isParentOf(const Component *possibleChild) const noexcept
+    isParentOf(const Component *possibleChild) const
     {
       while (possibleChild != nullptr)
       {
@@ -152,7 +145,7 @@ namespace Interface
       }
       return false;
     }
-    void addChildComponent(Component *child, i8 layerIndex = 0);
+    void addChildComponent(Component *childToAdd);
     // keepFocus will let the UI system continue focus on childToRemove
     // but you MUST NOT delete the object after removal,
     // otherwise the UI system will be reading into "freed" arena memory
@@ -163,7 +156,7 @@ namespace Interface
     // this one removes and frees component from arena
     void deleteChildComponent(Component *childToDelete, bool freeArena = true);
     void deleteChildComponent(usize childIndexToDelete, bool freeArena = true);
-    void deleteAllChildComponents(bool freeArena = true);
+    void deleteAllChildComponents(bool freeArenas = true);
 
     bool hasFocus(bool trueIfChildIsFocused) const;
     void grabFocus();
@@ -191,12 +184,13 @@ namespace Interface
 
     utils::bumpArena *arena{};
 
-    Rectangle<i32> previousBounds{};
     Rectangle<i32> bounds{};
-    Rectangle<u16> addedHitbox{};
 
     Component *parent = nullptr;
-    utils::vector<Component *> childComponents{};
+    Component *children = nullptr;
+    Component *previous = nullptr;
+    Component *next = nullptr;
+
     i8 layerIndex = 0;
     Skin::Override skinOverride = Skin::kUseParentOverride;
     struct
@@ -207,6 +201,7 @@ namespace Interface
       bool wantsFocus : 1 = false;
       bool focusOnMouseClick : 1 = false;
       bool acceptsOrphanedMouseEvents : 1 = false;
+      bool isVertical : 1 = false;                    // controls the children stack direction
 
       // state flags
       bool isVisible : 1 = true;
@@ -220,20 +215,18 @@ namespace Interface
     
     Range<u8> scrollWidths{};
 
+    Placement placement{};
     SizingFlags sizingFlags = None;
 
     // margin in parent
     Rectangle<i16> margin{};
     // padding for children
-    Rectangle<u8> padding{};
-    Placement placement{};
-    union
-    {
-      Rectangle<i32> minMax{};
-      // CustomDimensions
-      // returns primary/secondary axis min and max size if availablePrimarySize ==/!= nullptr
-      Range<i32> (*getDimensions)(Component *c, i32 *availablePrimarySize);
-    } desiredSize{ { 0, 0, utils::max_limit<i32>, utils::max_limit<i32> } };
+    Rectangle<u16> padding{};
+    Rectangle<i32> desiredSize{ 0, 0, utils::max_limit<i32>, utils::max_limit<i32> };
+
+    // CustomDimensions
+    // returns width/height min and max sizes if availableWidth ==/!= nullptr
+    Range<i32> (*getDimensions)(Component *c, i32 *availableWidth);
 
     Point<i32> scrollOffset{};
     Area<i32> scrollableArea{};
@@ -243,31 +236,18 @@ namespace Interface
   COMPLEX_DEFINE_ENUM_OPERATION(Component::SizingFlags, &, u16)
 
 
-  class BaseControl;
-  class BaseSection : public Component, public ControlListener
-  {
-  public:
-    void controlValueChanged(BaseControl *) override { }
-
-    void addControl(BaseControl *control, bool addChild = true);
-    void removeControl(BaseControl *control);
-    BaseControl *getControl(uuid id) { return controls_.find(id)->second; }
-
-    utils::vector_map<uuid, BaseControl *> controls_{};
-  };
-
-  class PowerButton;
-  class ProcessorSection : public BaseSection
+  class Control;
+  class ProcessorSection : public Component
   {
   public:
     static constexpr int kDefaultActivatorSize = 12;
 
-    ProcessorSection(Generation::BaseProcessor *processor) : processor{ processor } { }
-
-    void setActivator(PowerButton *activator);
+    void addControl(Control *control, bool addChild = true);
+    void removeControl(Control *control);
+    Control *getControl(uuid id) { return controls_.find(id)->second; }
 
     Generation::BaseProcessor *processor = nullptr;
-    PowerButton *activator = nullptr;
+    utils::vector_map<uuid, Control *> controls_{};
   };
 
   class ScopedBoundsEmplace

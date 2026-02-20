@@ -5,30 +5,23 @@
 
 #include "pugl/pugl.h"
 
-#include "Framework/update_types.hpp"
 #include "Framework/parameter_value.hpp"
 #include "Framework/parameter_bridge.hpp"
 #include "Plugin/Complex.hpp"
 #include "Plugin/Renderer.hpp"
-//#include "../LookAndFeel/Graphics.hpp"
-//#include "TextEditor.hpp"
 #include "../Sections/MainInterface.hpp"
 #include "../Sections/Popups.hpp"
 
 namespace Interface
 {
-  BaseControl::BaseControl(Framework::ParameterValue *parameter)
+  Control::Control()
   {
     componentFlags.clickable = true;
     componentFlags.clickableChildren = false;
-    if (!parameter)
-      return;
-
-    changeLinkedParameter(*parameter, true);
   }
 
   Framework::ParameterLink *
-  BaseControl::setParameterLink(Framework::ParameterLink *newParameterLink)
+  Control::setParameterLink(Framework::ParameterLink *newParameterLink)
   {
     auto replacedLink = parameterLink;
     if (replacedLink)
@@ -43,7 +36,7 @@ namespace Interface
   }
 
   Framework::ParameterValue *
-  BaseControl::changeLinkedParameter(Framework::ParameterValue &parameter, 
+  Control::changeLinkedParameter(Framework::ParameterValue &parameter, 
     bool getValueFromParameter)
   {
     controlFlags.hasParameter = true;
@@ -60,55 +53,31 @@ namespace Interface
       setValue(parameterLink->parameter->getNormalisedValue());
     else
       parameterLink->parameter->updateNormalisedValue();
-
-    if (details.scale == Framework::ParameterScale::Indexed)
-      valueInterval = 1.0 / (details.options->count - 1);
-    else
-      valueInterval = 0.0;
-
+    
     return replacedParameter;
   }
 
-  bool 
-  BaseControl::setValueFromHost(double newValue, 
-    Framework::ParameterBridge *notifyingBridge)
-  {
-    if (!parameterLink || parameterLink->hostControl != notifyingBridge)
-      return false;
-
-    double currentValue = getValue();
-    if (newValue == currentValue)
-      return false;
-
-    value.store(newValue, satomi::memory_order_release);
-
-    // checking effective value for discrete parameters
-    if (details.scale == Framework::ParameterScale::Toggle ||
-      details.scale == Framework::ParameterScale::Indexed)
-    {
-      if (Framework::scaleValue(newValue, details) ==
-        Framework::scaleValue(currentValue, details))
-        return false;
-    }
-
-    return true;
-  }
-
-  void BaseControl::setValueToHost() const
+  void Control::setValueToHost() const
   {
     if (parameterLink && parameterLink->hostControl)
       parameterLink->hostControl->setValueFromUI((float)getValue());
   }
 
   bool 
-  BaseControl::setValue(double newValue, bool notify)
+  Control::setValue(double newValue, bool notify)
   {
     newValue = utils::clamp(newValue, 0.0, 1.0);
     auto oldValue = value.exchange(newValue, satomi::memory_order_relaxed);
     if (newValue == oldValue)
       return false;
 
-    if (details.scale == Framework::ParameterScale::Indexed)
+    if (details.scale == Framework::ParameterScale::Toggle)
+    {
+      if (Framework::scaleValue(newValue, details) ==
+        Framework::scaleValue(oldValue, details))
+        return false;
+    }
+    else if (details.scale == Framework::ParameterScale::Indexed)
     {
       auto oldScaled = Framework::scaleValue(oldValue, details);
       auto newScaled = Framework::scaleValue(newValue, details);
@@ -118,35 +87,70 @@ namespace Interface
         return false;
     }
 
-    if (textEntry)
-      textEntry->enteredText = getScaledValueString(arena, getValue());
-
-    if (notify)
-      valueChanged();
+    if (notify && valueChangedCallback)
+      valueChangedCallback(this, newValue, oldValue);
 
     return true;
   }
 
-  void BaseControl::valueChanged()
-  {
-    for (auto *listener : controlListeners)
-      listener->controlValueChanged(this);
-  }
-
-  void BaseControl::beginChange(double oldValue)
+  void Control::beginChange(double oldValue)
   {
     valueBeforeChange = oldValue;
     controlFlags.hasBegunChange = true;
   }
 
-  void BaseControl::endChange()
+  struct ParameterUpdate final : public Framework::UndoAction
+  {
+    ParameterUpdate(Interface::Control *control, double oldValue, double newValue) :
+      control(control), oldValue(oldValue), newValue(newValue)
+    {
+      redo = [](UndoAction *a)
+      {
+        auto *self = (ParameterUpdate *)a;
+
+        self->control->setValue(self->newValue, false);
+        self->control->setValueToHost();
+      };
+
+      undo = [](UndoAction *a)
+      {
+        auto *self = (ParameterUpdate *)a;
+
+        self->control->setValue(self->oldValue, false);
+        self->control->setValueToHost();
+      };
+
+      combineActions = [](utils::bumpArena *,
+        UndoAction *currentAction, UndoAction *nextAction) -> UndoAction *
+      {
+        if (currentAction->redo == nextAction->redo &&
+          currentAction->undo == nextAction->undo)
+        {
+          ((ParameterUpdate *)currentAction)->newValue =
+            ((ParameterUpdate *)nextAction)->newValue;
+
+          return currentAction;
+        }
+
+        return nullptr;
+      };
+    }
+
+    Interface::Control *control;
+    double oldValue;
+    double newValue;
+  };
+
+  void Control::endChange()
   {
     controlFlags.hasBegunChange = false;
-    getPlugin(uiRelated.renderer).pushUndo(
-      new Framework::ParameterUpdate(this, valueBeforeChange, getValue()));
+    auto &plugin = getPlugin(uiRelated.renderer);
+    auto *storage = plugin.undoManager.beginNewTransaction();
+    plugin.undoManager.perform(anew(storage, ParameterUpdate, 
+      { this, valueBeforeChange, getValue() }), false);
   }
 
-  void BaseControl::resetValue()
+  void Control::resetValue()
   {
     bool isMapped = parameterLink && parameterLink->hostControl;
     if (isMapped)
@@ -206,13 +210,13 @@ namespace Interface
     utils::string_view text{};
     utils::string savedText{};
     bool canTextWrap = false;
-    float height = BaseControl::kPopupPrimaryFontHeight;
+    float height = kPrimaryTextLineHeight;
 
     switch (item->id)
     {
     case kName:
-      text = ((BaseControl *)item->extraData)->details.displayName;
-      height = BaseControl::kPopupSecondaryFontHeight;
+      text = ((Control *)item->extraData)->details.displayName;
+      height = kSecondaryTextLineHeight;
       canTextWrap = true;
       break;
 
@@ -230,7 +234,7 @@ namespace Interface
 
     case kMapFirstSlotSubtitle:
       text = "Assign to first free Automation Slot";
-      height = BaseControl::kPopupSecondaryFontHeight;
+      height = kSecondaryTextLineHeight;
       canTextWrap = true;
       break;
 
@@ -240,14 +244,14 @@ namespace Interface
 
     case kValueDisplayText:
       text = "Value";
-      height = BaseControl::kPopupSecondaryFontHeight;
+      height = kSecondaryTextLineHeight;
       break;
 
     case kValueDisplay:
     {
-      auto *control = (BaseControl *)item->extraData;
-      savedText = control->getScaledValueString(
-        utils::bumpArena::fromAllocation(item), control->getValue(), false);
+      auto *control = (Control *)item->extraData;
+      savedText.reserve(utils::bumpArena::fromAllocation(item));
+      control->getScaledValueString(savedText, control->getValue(), false);
 
       char unscaledValueStringBuffer[64];
       usize stringSize = utils::floatToString(control->getValue(), 
@@ -256,7 +260,7 @@ namespace Interface
       savedText.appendFormat(" " COMPLEX_MIDDLE_DOT_LITERAL " %v",
         utils::string_view{ unscaledValueStringBuffer, stringSize });
       text = savedText;
-      height = BaseControl::kPopupSecondaryFontHeight;
+      height = Control::kPopupSecondaryFontHeight;
       break;
     }
     default:
@@ -266,8 +270,7 @@ namespace Interface
     
     i32 minSize{}, maxSize{};
 
-    uiRelated.cache->setFont(uiRelated.cache->getFont(
-      uiRelated.cache->InterFontId, scaleValue(height)));
+    uiRelated.cache->setFont(Graphics::InterType, scaleValue(height));
 
     if (!availableWidth)
     {
@@ -283,29 +286,23 @@ namespace Interface
     return { minSize, maxSize };
   }
 
-  void handleControlPopupResult(BaseControl *control, PopupItem *selectedItem);
+  void handleControlPopupResult(Control *control, PopupItem *selectedItem);
 
-  void BaseControl::createPopupMenu(PopupSelector *selector, Point<i32> position)
+  void Control::createPopupMenu(PopupSelector *selector, Point<i32> position)
   {
     auto *itemArena = selector->arena;
   
   #define ITEM(idNumber, ...) (&with_val(*anew(itemArena, ControlPopupItem, {}), \
     .arena = itemArena, .id = idNumber, __VA_OPT__(,) __VA_ARGS__))
   #define TEXT_ITEM(idNumber, ...) ITEM(idNumber, \
-    .desiredSize.getDimensions = getControlPopupItemTextMetrics, .sizingFlags = Component::CustomDimensions)
+    .getDimensions = getControlPopupItemTextMetrics, .sizingFlags = Component::CustomDimensions)
 
     ControlPopupItem &options = *ITEM(kTopLevel);
-    options.sizingFlags = Component::IsVertical;
+    options.componentFlags.isVertical = true;
     options.sublistMinSize = { kPopupMinWidth, 0 };
 
     options.addChildComponent(TEXT_ITEM(kName, .sizingFlags |= Component::SameAsSiblingsX, .extraData = this));
     options.addChildComponent(TEXT_ITEM(kDefaultValue, .shortcutKeyCode = 'D', .sizingFlags |= Component::SameAsSiblingsX));
-
-    //if (hasParameterAssignment_)
-    //  options.addItem(kArmMidiLearn, "Learn MIDI Assignment");
-
-    //if (hasParameterAssignment_ && interfaceEngineLink_->getPlugin()->isMidiMapped(getName().toStdString()))
-    //  options.addItem(kClearMidiLearn, "Clear MIDI Assignment");
 
     if (details.flags & Framework::ParameterDetails::Automatable)
     {
@@ -317,7 +314,7 @@ namespace Interface
       else
       {
         ControlPopupItem &mapFirstSlot = *ITEM(kMapFirstSlot, .shortcutKeyCode = 'A',
-          .sizingFlags |= Component::SameAsSiblingsX | Component::IsVertical);
+          .sizingFlags |= Component::SameAsSiblingsX, .componentFlags.isVertical = true);
         options.addChildComponent(&mapFirstSlot);
         mapFirstSlot.addChildComponent(TEXT_ITEM(kMapFirstSlot));
         mapFirstSlot.addChildComponent(TEXT_ITEM(kMapFirstSlotSubtitle,
@@ -349,7 +346,7 @@ namespace Interface
 
     static constexpr auto iconWidthHeight = 16;
   #define ICON(idNumber) ITEM(idNumber, .sizingFlags |= GrowableX | GrowableY, \
-    .desiredSize.minMax = (Rectangle<i32>{ iconWidthHeight, iconWidthHeight, iconWidthHeight, iconWidthHeight }))
+    .desiredSize = (Rectangle<i32>{ iconWidthHeight, iconWidthHeight, iconWidthHeight, iconWidthHeight }))
 
     inlineGroup.addChildComponent(ICON(kCopyNormalisedValue));
     inlineGroup.addChildComponent(ICON(kCopyValue));
@@ -373,44 +370,58 @@ namespace Interface
 
 
   float 
-  BaseControl::getNumericTextMaxWidth(const Font &usedFont) const
+  Control::getNumericTextMaxWidth(FontId usedFont, float lineHeight) const
   {
-    usize integerPlaces = utils::max(maxTotalCharacters - maxDecimalCharacters, 0U);
-    // for the separating '.' between integer and decimal parts
-    if (maxDecimalCharacters)
-      integerPlaces--;
+    COMPLEX_ASSERT(details.scale != Framework::ParameterScale::Indexed);
 
-    utils::string maxStringLength;
-    if (controlFlags.shouldUsePlusMinusPrefix || details.minValue < 0.0f)
-      maxStringLength.append("+");
+    auto sampleRate = getPlugin(uiRelated.renderer).getSampleRate();
+    double lowestValue = Framework::scaleValue(details.minValue, details, sampleRate, true);
+    double highestValue = Framework::scaleValue(details.maxValue, details, sampleRate, true);
 
-    // figured out that 8s take up the most space in DDin
-    for (usize i = 0; i < integerPlaces; i++)
-      maxStringLength.append("8");
+    double probablyLongestValue = (::fabs(lowestValue) < ::fabs(highestValue)) ? highestValue : lowestValue;
+    // we have nextafter at home
+    probablyLongestValue = utils::bit_cast<double>(utils::bit_cast<u64>(probablyLongestValue) - 1);
 
-    if (maxDecimalCharacters)
+    char buffer[64]{};
+    usize size{};
+
+    if (details.generateNumeric)
     {
-      maxStringLength.append(".");
-
-      for (usize i = 0; i < maxDecimalCharacters; i++)
-        maxStringLength.append("8");
+      size = details.generateNumeric(buffer, sizeof(buffer), probablyLongestValue, details);
+    }
+    else
+    {
+      size = utils::floatToString(probablyLongestValue, buffer, sizeof(buffer), maxDecimalCharacters,
+        controlFlags.shouldUsePlusMinusPrefix || details.minValue < 0.0f);
     }
 
-    maxStringLength.append(details.displayUnits);
+    auto maxStringLength = utils::string::create(localScratch, "%v%v%v", 
+      utils::string_view{ popupPrefix }, utils::string_view{ buffer, size }, details.displayUnits);
 
-    uiRelated.cache->setFont(usedFont);
+    uiRelated.cache->setFont(usedFont, lineHeight);
     return uiRelated.cache->getStringWidthFloat(maxStringLength);
   }
 
-  utils::string 
-  BaseControl::getScaledValueString(utils::Allocator allocator,
+  void Control::getScaledValueString(utils::string &outString,
     double valueToConvert, bool addPrefix) const
   {
+    // if the string doesn't have an allocated capacity, 
+    // provide it through the control's arena
+    if (!outString.capacity())
+      outString = { arena };
+    
     if (!controlFlags.hasParameter)
-      return utils::floatToString(allocator, valueToConvert);
+    {
+      utils::floatToString(outString, valueToConvert);
+      return;
+    }
 
     if (details.scale == Framework::ParameterScale::Toggle)
-      return utils::floatToString(allocator, ::round(valueToConvert));
+    {
+      bool boolean = ::round(valueToConvert) != 0.0;
+      outString.copy({ (boolean) ? "On" : "Off", (boolean) ? sizeof("On") : sizeof("Off") });
+      return;
+    }
 
     double scaledValue = Framework::scaleValue(valueToConvert, details,
       getPlugin(uiRelated.renderer).getSampleRate(), true);
@@ -419,75 +430,44 @@ namespace Interface
     {
       auto [option, index] = Framework::getIndexedData(scaledValue, details);
 
-      utils::string string{ allocator, option->displayName };
-      if (option->count > 1)
-        string.appendFormat(" %zu", (index + 1));
+      outString.copy(option->displayName);
 
-      if (addPrefix)
-        string.prepend(popupPrefix);
-
-      return string;
+      if (index > 1)
+        outString.appendFormat(" %zu", (index + 1));
     }
-    
-    auto formatValue = [&]()
+    else if (details.generateNumeric)
     {
-      if ((details.scale == Framework::ParameterScale::SymmetricLoudness || 
-          details.scale == Framework::ParameterScale::Loudness || controlFlags.shouldCheckDbInfinities) &&
-        (utils::closeTo(kMinusInfDb, scaledValue) || utils::closeTo(kInfDb, scaledValue)))
-      {
-        utils::string format = "+inf";
-        if (scaledValue < 0.0)
-          format[0] = '-';
-        else if (!controlFlags.shouldUsePlusMinusPrefix)
-          format.removePrefix(1);
+      char buffer[64]{};
+      usize size = details.generateNumeric(buffer, sizeof(buffer), scaledValue, details);
+      outString.copy({ buffer, size });
+    }
+    else if ((details.scale == Framework::ParameterScale::SymmetricLoudness ||
+      details.scale == Framework::ParameterScale::Loudness || controlFlags.shouldCheckDbInfinities) &&
+      (utils::closeTo(kMinusInfDb, scaledValue) || utils::closeTo(kInfDb, scaledValue)))
+    {
+      outString.copy("+inf");
+      if (scaledValue < 0.0)
+        outString[0] = '-';
+      else if (!controlFlags.shouldUsePlusMinusPrefix)
+        outString.removePrefix(1);
+    }
+    else
+    {
+      utils::floatToString(outString, scaledValue,
+        ::round(scaledValue) != scaledValue ? maxDecimalCharacters : 0,
+        controlFlags.shouldUsePlusMinusPrefix);
+    }
 
-        return format;
-      }
+    if (addPrefix)
+      outString.prepend(popupPrefix);
 
-      utils::string format;
-
-      usize integerCharacters = maxTotalCharacters;
-      if (maxDecimalCharacters == 0)
-        format = utils::floatToString(allocator, ::round(scaledValue));
-      else
-      {
-        format = utils::floatToString(allocator, scaledValue, maxDecimalCharacters,
-          controlFlags.shouldUsePlusMinusPrefix);
-        // +1 because of the dot
-        integerCharacters -= maxDecimalCharacters + 1;
-      }
-
-      usize numberOfIntegers = format.find(".");
-      usize insertIndex = 0;
-      usize displayCharacters = maxTotalCharacters;
-      if (format[0] == '+' || format[0] == '-')
-      {
-        insertIndex++;
-        numberOfIntegers--;
-        displayCharacters += 1;
-      }
-
-      // insert leading zeroes
-      if (integerCharacters > numberOfIntegers)
-        format.insert(insertIndex, "0", integerCharacters - numberOfIntegers);
-
-      // truncating string to fit
-      format = format.clone(0, displayCharacters);
-      if (format.back() == '.')
-        format.removeSuffix(1);
-
-      return format;
-    };
-
-    auto format = formatValue();
-    format.prepend(popupPrefix).append(details.displayUnits);
-    return format;
+    outString.append(details.displayUnits);
   }
 
   double 
-  BaseControl::getValueFromText(utils::string_view text) const
+  Control::getValueFromText(utils::string_view text) const
   {
-    utils::string trimmed = text;
+    utils::string trimmed{ localScratch, text };
     trimmed.trim().toLower();
 
     if (text.back() == '%' && details.displayUnits != "%")
@@ -506,7 +486,7 @@ namespace Interface
     return Framework::unscaleValue(parsedValue, details, true);
   }
 
-  void handleControlPopupResult(BaseControl *control, PopupItem *selectedItem)
+  void handleControlPopupResult(Control *control, PopupItem *selectedItem)
   {
     auto &plugin = getPlugin(uiRelated.renderer);
 
@@ -520,7 +500,7 @@ namespace Interface
     }
     else if (result == kManualEntry)
     {
-      auto font = uiRelated.cache->getInterFont();
+      //auto font = uiRelated.cache->getInterFont();
       control->showTextEntry();
     }
     else if (result == kCopyValue || result == kCopyNormalisedValue)
@@ -554,8 +534,8 @@ namespace Interface
 
       control->parameterLink->hostControl->resetParameterLink(nullptr);
       Framework::ParameterBridge::notifyParameterChange();
-      for (auto &listener : control->controlListeners)
-        listener->automationMappingChanged(control, true);
+      if (control->automationMappingChangedCallback)
+        control->automationMappingChangedCallback(control, true);
     }
     else if (result == kMapFirstSlot)
     {
@@ -565,8 +545,8 @@ namespace Interface
         {
           parameter.resetParameterLink(control->parameterLink);
           Framework::ParameterBridge::notifyParameterChange();
-          for (auto &listener : control->controlListeners)
-            listener->automationMappingChanged(control, false);
+          if (control->automationMappingChangedCallback)
+            control->automationMappingChangedCallback(control, false);
           break;
         }
       }
@@ -583,9 +563,8 @@ namespace Interface
         auto *link = bridge.getParameterLink();
         bridge.resetParameterLink(nullptr);
         Framework::ParameterBridge::notifyParameterChange();
-        if (link && link->UIControl)
-          for (auto *listener : link->UIControl->controlListeners)
-            listener->automationMappingChanged(link->UIControl, true);
+        if (link && link->UIControl && link->UIControl->automationMappingChangedCallback)
+          link->UIControl->automationMappingChangedCallback(link->UIControl, true);
       }
       else
       {
@@ -595,8 +574,8 @@ namespace Interface
         auto &bridge = plugin.state_->parameterBridges[index];
         bridge.resetParameterLink(control->parameterLink);
         Framework::ParameterBridge::notifyParameterChange();
-        for (auto &listener : control->controlListeners)
-          listener->automationMappingChanged(control, false);
+        if (control->automationMappingChangedCallback)
+          control->automationMappingChangedCallback(control, false);
       }
     }
   }
@@ -605,7 +584,7 @@ namespace Interface
   //{
   //  editor.componentFlags.isVisible = false;
 
-  //  auto *control = (BaseControl *)component;
+  //  auto *control = (Control *)component;
   //  if (!control || !control->controlFlags.canInputValue)
   //    return;
 
@@ -618,7 +597,7 @@ namespace Interface
   //  }
   //}
 
-  void BaseControl::showTextEntry()
+  void Control::showTextEntry()
   {
     if (!controlFlags.canInputValue)
       return;
@@ -635,19 +614,7 @@ namespace Interface
     //textEntry_->setVisible(true);
   }
 
-  void BaseControl::updateValueFromTextEntry()
-  {
-    if (!controlFlags.canInputValue || 
-      !textEntry || textEntry->enteredText.empty())
-      return;
-
-    auto newValue = getValueFromText(textEntry->enteredText);
-    setValue(newValue, true);
-    if (auto hostControl = parameterLink->hostControl)
-      hostControl->setValueFromUI((float)newValue);
-  }
-
-  void BaseControl::showPopup(bool primary)
+  void Control::showPopup(bool primary)
   {
     if (!controlFlags.shouldShowPopup)
       return;
@@ -658,7 +625,7 @@ namespace Interface
     //popupDisplay->componentFlags.isVisible = true;
   }
 
-  void BaseControl::hidePopup(bool primary)
+  void Control::hidePopup(bool primary)
   {
     if (!controlFlags.shouldShowPopup)
       return;
@@ -668,46 +635,4 @@ namespace Interface
     //popupDisplay->componentFlags.isVisible = false;
   }
 
-  Label::Label()
-  {
-    sizingFlags |= Component::CustomDimensions;
-    desiredSize.getDimensions = [](Component *c, i32 *availablePrimarySize)
-    {
-      if (!availablePrimarySize)
-      {
-        auto *label = (Label *)c;
-        auto *control = label->control;
-
-        COMPLEX_ASSERT(control, "Forgot to set reference to control in label");
-
-        label->currentString = label->getString(control);
-
-        uiRelated.cache->setFont(label->font);
-        auto max = (i32)::ceilf(uiRelated.cache->getStringWidthFloat(label->currentString));
-        return Range<i32>{ 0, max };
-      }
-      else
-      {
-        auto height = (i32)::roundf(uiRelated.cache->getFontAscentFromHeight(
-          uiRelated.cache->InterFontId, scaleValue(Graphics::kInterVDefaultHeight)));
-
-        // labels are always a single line
-        return Range<i32>{ height, height };
-      }
-    };
-  }
-
-  bool
-  Label::render(OpenGlWrapper &openGl)
-  {
-    (void)openGl;
-    //nvgSave(openGl.g);
-
-    //openGl.cache->setFont(openGl.cache->getInterFont());
-    //nvgText(openGl.g, )
-
-    //nvgRestore(openGl.g);
-
-    return true;
-  }
 }

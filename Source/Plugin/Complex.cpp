@@ -8,7 +8,6 @@
 #include "Framework/load_save.hpp"
 #include "Framework/parameter_bridge.hpp"
 #include "Framework/parameter_value.hpp"
-#include "Framework/update_types.hpp"
 #include "Generation/EffectsState.hpp"
 #include "Generation/SoundEngine.hpp"
 #include "Renderer.hpp"
@@ -167,7 +166,7 @@ namespace Framework
 
   void ParameterBridge::beginChangeGesture()
   {
-    if (!state->plugin->rendererInstance_)
+    if (!state->plugin->rendererInstance)
       return;
 
     auto event = CplugEvent{ .parameter = { .type = CPLUG_EVENT_PARAM_CHANGE_BEGIN, .id = (uint32_t)parameterIndex } };
@@ -178,7 +177,7 @@ namespace Framework
   {
     value_.store(newValue, satomi::memory_order_release);
 
-    if (!state->plugin->rendererInstance_)
+    if (!state->plugin->rendererInstance)
       return;
 
     auto event = CplugEvent{ .parameter = { .type = CPLUG_EVENT_PARAM_CHANGE_UPDATE,
@@ -188,7 +187,7 @@ namespace Framework
 
   void ParameterBridge::endChangeGesture()
   {
-    if (!state->plugin->rendererInstance_)
+    if (!state->plugin->rendererInstance)
       return;
 
     auto event = CplugEvent{ .parameter = {.type = CPLUG_EVENT_PARAM_CHANGE_END, .id = (uint32_t)parameterIndex } };
@@ -350,7 +349,7 @@ namespace Plugin
   ComplexPlugin::ComplexPlugin(usize parameterMappings, u32 inSidechains, 
     u32 outSidechains, usize undoSteps, CplugHostContext *hostContext) : 
     inSidechains{ inSidechains }, outSidechains{ outSidechains },
-    parameterCount{ parameterMappings }, undoManager_{ undoSteps },
+    parameterCount{ parameterMappings }, undoManager{ undoSteps },
     hostContext{ hostContext }
   {
     loadState(this, {});
@@ -363,14 +362,14 @@ namespace Plugin
   {
   }
 
-  void ComplexPlugin::initialise(float sampleRate, u32 samplesPerBlock)
+  void ComplexPlugin::initialise(float newSampleRate, u32 newSamplesPerBlock)
   {
-    if (sampleRate != getSampleRate())
-      sampleRate_.store(sampleRate, satomi::memory_order_release);
+    if (newSampleRate != getSampleRate())
+      sampleRate.store(newSampleRate, satomi::memory_order_release);
 
-    if (samplesPerBlock != getSamplesPerBlock())
+    if (newSamplesPerBlock != getSamplesPerBlock())
     {
-      samplesPerBlock_.store(samplesPerBlock, satomi::memory_order_release);
+      samplesPerBlock.store(newSamplesPerBlock, satomi::memory_order_release);
 
       auto lock = acquireProcessingLock(true);
 
@@ -400,18 +399,18 @@ namespace Plugin
   Interface::Renderer &
   ComplexPlugin::getRenderer()
   {
-    if (!rendererInstance_)
+    if (!rendererInstance)
     {
-      rendererInstance_ = Interface::createRenderer(*this);
-      return *rendererInstance_;
+      rendererInstance = Interface::createRenderer(*this);
+      return *rendererInstance;
     }
 
     // setting these once more because i don't know if the message thread 
     // might have been shut down and started up again
-    Interface::uiRelated.renderer = rendererInstance_;
-    Interface::uiRelated.skin = Interface::getSkin(rendererInstance_);
+    Interface::uiRelated.renderer = rendererInstance;
+    Interface::uiRelated.skin = Interface::getSkin(rendererInstance);
     
-    return *rendererInstance_;
+    return *rendererInstance;
   }
 
   void ComplexPlugin::rescanLatency()
@@ -423,12 +422,13 @@ namespace Plugin
   void ComplexPlugin::process(float *const *in, float *const *out, 
     u32 numSamples, u32 numInputs, u32 numOutputs) noexcept
   {
-    float sampleRate = getSampleRate();
+    float currentSampleRate = getSampleRate();
 
-    utils::ScopedLock g{ processingLock_, false, utils::WaitMechanism::Spin };
+    utils::ScopedLock g{ processingLock, false, utils::WaitMechanism::Spin };
 
     auto state = state_;
-    state->soundEngine->updateParameters(UpdateFlag::BeforeProcess, sampleRate, true);
+    state->soundEngine->updateParameters(UpdateFlag::BeforeProcess,
+      currentSampleRate, true);
     
     if (auto latency_ = state->soundEngine->getProcessingDelay();
       latency_ != latency.load(satomi::memory_order_relaxed))
@@ -438,36 +438,35 @@ namespace Plugin
     }
 
     state->soundEngine->process(in, out, numSamples, 
-      sampleRate, numInputs, numOutputs, *state->fft);
+      currentSampleRate, numInputs, numOutputs, *state->fft);
 
-    state->soundEngine->updateParameters(UpdateFlag::AfterProcess, sampleRate, true);
+    state->soundEngine->updateParameters(UpdateFlag::AfterProcess,
+      currentSampleRate, true);
   }
 
-  void ComplexPlugin::pushUndo(Framework::WaitingUpdate *action, bool isNewTransaction)
-  {
-    action->wait = [this]() { return acquireProcessingLock(true); };
-    if (isNewTransaction)
-      undoManager_.beginNewTransaction();
-    undoManager_.perform(action);
-  }
-
-  void ComplexPlugin::undo() { undoManager_.undo(); }
-  void ComplexPlugin::redo() { undoManager_.redo(); }
+  void ComplexPlugin::undo() { undoManager.undo(); }
+  void ComplexPlugin::redo() { undoManager.redo(); }
 }
 
-namespace utils { void at_program_load(); }
+namespace utils { void atLoad(); }
 void initialiseCJSONHooks();
 constinit thread_local utils::bumpArena *localScratch = nullptr;
+constinit utils::bumpArena *globalArena = nullptr;
 
 void cplug_libraryLoad()
 {
-  utils::at_program_load();
+  utils::atLoad();
+
+  globalArena = utils::bumpArena::create(COMPLEX_MB(128), COMPLEX_MB(1));
+
   initialisePluginStructure();
   initialiseCJSONHooks();
 }
 void cplug_libraryUnload()
 {
   deinitialisePluginStructure();
+
+  utils::bumpArena::destroy(globalArena);
 }
 
 void *cplug_createPlugin(CplugHostContext *ctx)

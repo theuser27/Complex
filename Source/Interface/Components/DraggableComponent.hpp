@@ -22,7 +22,6 @@ namespace Interface
     class Listener
     {
     public:
-      virtual ~Listener() = default;
       virtual EffectModuleSection *prepareToMove(EffectModuleSection *component, const MouseEvent &e, bool isCopying) = 0;
       virtual void draggingComponent([[maybe_unused]] EffectModuleSection *component, [[maybe_unused]] const MouseEvent &e) { }
       virtual void releaseComponent(EffectModuleSection *component, const MouseEvent &e) = 0;

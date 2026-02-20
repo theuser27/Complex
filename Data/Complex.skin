@@ -1,0 +1,152 @@
+{
+  "Background": "0xff141414",
+  "Body": "0xff262626",
+  "Background Element": "0xff4c4c4c",
+  "Heading Text": "0xff00ffff",
+  "Normal Text": "0xffa8a8a8",
+  "Border": "0x8ffffff",
+  "Body Rounding Top": 4.0,
+  "Body Rounding Bottom": 4.0,
+
+  "Widget Primary 1": "0xff00ffff",
+  "Widget Primary 2": "0xffaa88ff",
+  "Widget Primary Disabled": "0xff4c4f52",
+  "Widget Secondary 1": "0x669f88ff",
+  "Widget Secondary 2": "0x669f88ff",
+  "Widget Secondary Disabled": "0x22666666",
+  "Widget Accent 1": "0xff00ffff",
+  "Widget Accent 2": "0x19aa88ff",
+  "Widget Background 1": "0xff2b2b2b",
+  "Widget Background 2": "0xff373737",
+  "Widget Center Line": "0xffffffff",
+
+  "Widget Fill Boost": 1.600000023841858,
+  "Widget Fill Center": 0.0,
+  "Widget Fill Fade": 0.30000001192092896,
+  "Widget Line Boost": 1.0,
+  "Widget Line Width": 2.0,
+  "Widget Margin": 5.5,
+  "Widget Rounded Corner": 4.0,
+
+  "Icon Button Off": "0xff848789",
+  "Icon Button Off Hover": "0xffaaacad",
+  "Icon Button Off Pressed": "0xff848789",
+  "Icon Button On": "0xff00ffff",
+  "Icon Button On Hover": "0xffbda3ff",
+  "Icon Button On Pressed": "0xff906de9",
+  "Icon Selector Icon": "0xff848789",
+
+  "Knob Arc Size": 34.0,
+  "Knob Arc Thickness": 2.0,
+  "Knob Body Size": 22.0,
+  "Knob Handle Length": 0.21,
+  "Knob Shadow Width": 8.0,
+  "Knob Shadow Offset": 4.0,
+
+  "Label Background": "0x00000000",
+  "Label Background Height": 18.0,
+  "Label Height": 11.0,
+  "Label Offset": 0.0,
+  "Label Rounding": 9.0,
+
+  "Linear Slider": "0xff848789",
+  "Linear Slider Disabled": "0xff848686",
+  "Linear Slider Thumb": "0xffffffff",
+  "Linear Slider Thumb Disabled": "0xffffffff",
+  "Linear Slider Unselected": "0xff262a2e",
+
+  "Modulation Meter": "0xff1de9b6",
+  "Modulation Meter Control": "0xff64ffda",
+  "Modulation Meter Left": "0xff1de952",
+  "Modulation Meter Right": "0xff1dc2e9",
+
+  "Overlay Screen": "0x22000000",
+  "Lighten Screen": "0x22ffffff",
+  "Shadow": "0x66000000",
+
+  "Scroll Minimum Width": 4.0,
+  "Scroll Maximum Width": 8.0,
+
+  "Lighten Rate": 0.2,
+
+  "Popup Display Background": "0xff262626",
+  "Popup Display Border": "0x8ffffff",
+  "Popup Selector Background": "0xff262626",
+  "Popup Selector Delimiter": "0xff2d2d2d",
+
+  "Rotary Arc": "0xffaa88ff",
+  "Rotary Arc Disabled": "0xff848789",
+  "Rotary Arc Unselected": "0xff343434",
+  "Rotary Arc Unselected Disabled": "0xff343434",
+  "Rotary Body": "0xff2e2e2e",
+  "Rotary Body Border": "0xff4c4f52",
+  "Rotary Hand": "0xffababab",
+
+  "Text Component Background": "0xff2c3033",
+  "Text Component Text 1": "0xffffffff",
+  "Text Component Text 2": "0xffa8a8a8",
+  "Text Editor Background": "0xff2c3033",
+  "Text Editor Border": "0xffffff",
+  "Text Editor Caret": "0xffaaacad",
+  "Text Editor Selection": "0x1faaabab",
+
+  "Action Button Primary": "0xffaa88ff",
+  "Action Button Primary Hover": "0xffba9fff",
+  "Action Button Primary Press": "0xff906de9",
+  "Action Button Secondary": "0xff848789",
+  "Action Button Secondary Hover": "0xff939699",
+  "Action Button Secondary Press": "0xff606265",
+  "Action Button Text": "ff111111",
+
+  "overrides": {
+    "All": null,
+    "Effects Lane": {
+      "Widget Primary 1": "0xffa8a8a8"
+    },
+    "Dynamics Module": {
+      "Background": "0xff151515",
+      "Body": "0xff1f1f1f",
+      "Background Element": "0xff313131",
+      "Widget Primary 1": "0xffc67dff",
+      "Widget Secondary 1": "0xff4c4c4c",
+      "Widget Accent 1": "0xffc67dff",
+      "Widget Background 1": "0xff353535"
+    },
+    "Filter Module": {
+      "Background": "0xff151515",
+      "Body": "ff1f1f1f",
+      "Background Element": "0xff313131",
+      "Widget Primary 1": "0xff7bf087",
+      "Widget Secondary 1": "0xff4c4c4c",
+      "Widget Accent 1": "0xff7bf087",
+      "Widget Background 1": "0xff353535"
+    },
+    "Phase Module": {
+      "Background": "0xff151515",
+      "Body": "0xff1f1f1f",
+      "Background Element": "0xff313131",
+      "Widget Primary 1": "0xff59c4f2",
+      "Widget Secondary 1": "0xff4c4c4c",
+      "Widget Accent 1": "0xff59c4f2",
+      "Widget Background 1": "0xff353535"
+    },
+    "Pitch Module": {
+      "Background": "0xff151515",
+      "Body": "0xff1f1f1f",
+      "Background Element": "0xff313131",
+      "Widget Primary 1": "0xffff6b00",
+      "Widget Secondary 1": "0xff4c4c4c",
+      "Widget Accent 1": "0xffff6b00",
+      "Widget Background 1": "0xff353535"
+    },
+    "Destroy Module": {
+      "Background": "0xff151515",
+      "Body": "0xff1f1f1f",
+      "Background Element": "0xff313131",
+      "Widget Primary 1": "0xffeb5353",
+      "Widget Secondary 1": "0xff4c4c4c",
+      "Widget Accent 1": "0xffeb5353",
+      "Widget Background 1": "0xff353535"
+    }
+  }
+}

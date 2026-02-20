@@ -14,6 +14,7 @@
 #include "Interface/Components/BaseButton.cpp"
 #include "Interface/Components/BaseSlider.cpp"
 #include "Interface/Components/OpenGlQuad.cpp"
+#include "Interface/Components/TextEditor.cpp"
 
 #include "Interface/LookAndFeel/BaseComponent.cpp"
 #include "Interface/LookAndFeel/Graphics.cpp"

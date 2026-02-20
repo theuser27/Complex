@@ -1089,7 +1089,7 @@ namespace utils
   }
 
   // malloc replacement
-  byte *allocate(usize size, usize alignment = alignof(void *));
+  byte *allocate(usize size, usize alignment = alignof(void *), bool clean = false);
   // free replacement
   void deallocate(const void *memory);
 

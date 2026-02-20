@@ -23,7 +23,7 @@ namespace Interface
   class PlainTextComponent;
   class BaseSection;
 
-  class BaseControl : public Component
+  class Control : public Component
   {
   public:
     static constexpr int kDefaultMaxTotalCharacters = 5;
@@ -34,7 +34,7 @@ namespace Interface
     static constexpr float kPopupSecondaryFontHeight = 11.0f;
     static constexpr int kPopupMinWidth = 150;
 
-    BaseControl(Framework::ParameterValue *parameter);
+    Control();
 
     // returns the replaced link
     Framework::ParameterLink *setParameterLink(Framework::ParameterLink *parameterLink);
@@ -42,36 +42,28 @@ namespace Interface
     Framework::ParameterValue *changeLinkedParameter(Framework::ParameterValue &parameter,
       bool getValueFromParameter = true);
 
-    bool setValueFromHost(double value, Framework::ParameterBridge *notifyingBridge);
-    void setValueToHost() const;
-
     double getValue() const { return value.load(satomi::memory_order_relaxed); }
     bool setValue(double newValue, bool notify = true);
     void resetValue();
-    virtual void valueChanged();
+    void setValueToHost() const;
 
-    utils::string getScaledValueString(utils::Allocator allocator, 
+    void getScaledValueString(utils::string &outString,
       double value, bool addPrefix = true) const;
     double getValueFromText(utils::string_view text) const;
 
     void beginChange(double oldValue);
     void endChange();
 
-    void addListener(ControlListener *listener) { controlListeners.emplace_back(listener); }
-    void removeListener(ControlListener *listener) { controlListeners.erase(listener); }
-
     void createPopupMenu(PopupSelector *selector, Point<i32> position);
 
     void showTextEntry();
-    void updateValueFromTextEntry();
-    float getNumericTextMaxWidth(const Font &usedFont) const;
+    float getNumericTextMaxWidth(FontId usedFont, float lineHeight) const;
 
     void showPopup(bool primary = true);
     void hidePopup(bool primary = true);
 
     satomi::atomic<double> value = 0.0;
     double valueBeforeChange = 0.0;
-    double valueInterval = 0.0;
     float sensitivity = kDefaultSensitivity;
     ModifierKeys resetValueModifiers;
 
@@ -104,47 +96,48 @@ namespace Interface
       bool isInModalState : 1 = false;
     } controlFlags{};
 
-    Animator animator{};
-
-    u32 maxTotalCharacters = kDefaultMaxTotalCharacters;
     u32 maxDecimalCharacters = kDefaultMaxDecimalCharacters;
     Point<i32> lastMouseDragPosition{};
+
+    Animator animator{};
 
     Framework::ParameterLink *parameterLink = nullptr;
     Framework::ParameterDetails details{};
 
     TextEditor *textEntry = nullptr;
 
-    utils::vector<ControlListener *> controlListeners{};
+    void (*valueChangedCallback)(Control *control,
+      double newValue, double oldValue) = nullptr;
+    void (*automationMappingChangedCallback)(Control *control, 
+      bool isUnmapping) = nullptr;
   };
 
-  class Label final : public Component
+  class Label : public TextEditor
   {
   public:
     Label();
 
-    bool render(OpenGlWrapper &openGl) override;
-
-    BaseControl *control{};
-    utils::string currentString{};
-    // default implementation to get the human readable value
-    // but it can be exchanged for anything
-    utils::string (*getString)(BaseControl *control) = [](BaseControl *control)
+    Control *control{};
+    void (*cacheString)(TextEditor *self, Control *control) =
+      [](TextEditor *self, Control *control)
     {
-      return control->getScaledValueString(control->arena, control->getValue());
+      self->text.copy(control->details.displayName);
     };
-    // colour id to use from control when rendering
-    Skin::ColourId textColour = Skin::kNormalText;
-    Font font = uiRelated.cache->getInterFont();
   };
 
-  class BaseButton : public BaseControl
+  class SliderValueEditor final : public Label
+  {
+  public:
+    SliderValueEditor();
+
+    double cachedValue = 0.0;
+  };
+
+  class Button : public Control
   {
   public:
     static constexpr int kLabelOffset = 8;
     static constexpr float kHoverIncrement = 0.1f;
-
-    BaseButton(Framework::ParameterValue *parameter) : BaseControl{ parameter } { }
 
     bool mouseDown(const MouseEvent &e) override;
     bool mouseUp(const MouseEvent &e) override;
@@ -152,43 +145,40 @@ namespace Interface
     bool isOn() const { return ::round(getValue()) != 0.0; }
   };
 
-  class PowerButton final : public BaseButton
+  class PowerButton final : public Button
   {
   public:
     static constexpr int kAddedMargin = 4;
 
-    PowerButton(Framework::ParameterValue *parameter);
+    PowerButton();
 
     bool render(OpenGlWrapper &openGl) override;
   };
 
-  class RadioButton final : public BaseButton
+  class RadioButton final : public Button
   {
   public:
     static constexpr int kAddedMargin = 4;
 
-    RadioButton(Framework::ParameterValue *parameter);
+    RadioButton();
 
     bool render(OpenGlWrapper &openGl) override;
-
 
     float rounding = 0.0f;
   };
 
-  class BaseSlider : public BaseControl
+  class Slider : public Control
   {
   public:
-    BaseSlider(Framework::ParameterValue *parameter) : BaseControl{ parameter } { }
-    
-    bool mouseDown(const MouseEvent &e) override;
-    bool mouseDrag(const MouseEvent &e) override;
     bool mouseEnter(const MouseEvent &e) override;
     bool mouseExit(const MouseEvent &e) override;
+    bool mouseDown(const MouseEvent &e) override;
+    bool mouseDrag(const MouseEvent &e) override;
     bool mouseUp(const MouseEvent &e) override;
     bool mouseWheelMove(const MouseEvent &e) override;
   };
 
-  class RotarySlider final : public BaseSlider
+  class RotarySlider final : public Slider
   {
   public:
     static constexpr float kRotaryAngle = 0.75f * kPi;
@@ -199,7 +189,7 @@ namespace Interface
     static constexpr int kLabelOffset = 6;
     static constexpr int kLabelVerticalPadding = 3;
 
-    RotarySlider(Framework::ParameterValue *parameter);
+    RotarySlider();
 
     bool render(OpenGlWrapper &openGl) override;
     bool mouseDrag(const MouseEvent &e) override;
@@ -209,12 +199,12 @@ namespace Interface
     float knobSizeScale = 1.0f;
   };
 
-  class PinSlider : public BaseSlider
+  class PinSlider : public Slider
   {
   public:
     static constexpr int kDefaultPinSliderWidth = 10;
 
-    PinSlider(Framework::ParameterValue *parameter);
+    PinSlider();
 
     bool render(OpenGlWrapper &openGl) override;
 
@@ -225,7 +215,7 @@ namespace Interface
     double runningTotal = 0.0;
   };
 
-  class TextSelector final : public BaseSlider
+  class TextSelector final : public Slider
   {
   public:
     static constexpr int kDefaultTextSelectorHeight = 16;
@@ -239,7 +229,7 @@ namespace Interface
     static constexpr float kHeightToArrowWidthRatio = 5.0f / 16.0f;
     static constexpr float kArrowWidthHeightRatio = 0.5f;
 
-    TextSelector(Framework::ParameterValue *parameter);
+    TextSelector();
 
     bool render(OpenGlWrapper &openGl) override;
 
@@ -259,7 +249,7 @@ namespace Interface
     PlainShapeComponent *extraIcon = nullptr;
   };
 
-  class Numberbox final : public BaseSlider
+  class Numberbox final : public Slider
   {
   public:
     static constexpr int kDefaultNumberBoxHeight = 16;
@@ -269,18 +259,13 @@ namespace Interface
     static constexpr float kTriangleToValueMarginRatio = 2.0f / 16.0f;
     static constexpr float kValueToEndMarginRatio = 5.0f / 16.0f;
 
-    Numberbox(Framework::ParameterValue *parameter);
+    Numberbox();
 
     bool render(OpenGlWrapper &openGl) override;
 
     bool mouseDrag(const MouseEvent &e) override;
 
-    void setHeight(i32 newHeight)
-    {
-      editor.font.height = (float)newHeight * 0.5f;
-    }
-
-    TextEditor editor{};
+    SliderValueEditor editor{};
 
     float backgroundRounding = 4.0f;
     bool drawBackgroundArrow = true;
@@ -293,25 +278,24 @@ namespace Interface
     TextSelector *modifier{};
 
   public:
-    RotarySlider *rotary{};
+    RotarySlider rotary{};
     Component infoSection{};
     Label label{};
-    TextEditor valueEditor{};
+    SliderValueEditor valueEditor{};
 
-    CombinationRotarySlider(RotarySlider *rotary, utils::bumpArena *arenaToUse) : rotary{ rotary }
+    CombinationRotarySlider()
     {
-      arena = arenaToUse;
-      
-      addChildComponent(rotary);
+      addChildComponent(&rotary);
 
-      infoSection.arena = arenaToUse;
-      infoSection.sizingFlags |= Component::IsVertical;
+      infoSection.componentFlags.isVertical = true;
       addChildComponent(&infoSection);
 
       label.sizingFlags |= Component::SameAsSiblingsX;
+      label.control = &rotary;
       infoSection.addChildComponent(&label);
 
       valueEditor.sizingFlags |= Component::SameAsSiblingsX;
+      valueEditor.control = &rotary;
       infoSection.addChildComponent(&valueEditor);
     }
 
@@ -321,7 +305,7 @@ namespace Interface
         removeChildComponent(modifier);
 
       modifier = newModifier;
-      rotary->controlFlags.shouldShowPopup = modifier;
+      rotary.controlFlags.shouldShowPopup = modifier;
       valueEditor.componentFlags.isVisible = !modifier;
 
       if (modifier)

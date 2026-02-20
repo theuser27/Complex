@@ -79,7 +79,7 @@ namespace Interface
   {
   public:
     static constexpr double kMinOpenGlVersion = 1.4;
-    enum TimerTypes { kTimerParameterUpdate };
+    enum TimerTypes { kTimerRefreshRate };
 
     Area<u32> area{};
     float scale = 1.0f;
@@ -115,7 +115,6 @@ namespace Interface
     utils::bumpArena *arena{};
 
 
-
     void startUI();
     void stopUI();
 
@@ -145,7 +144,7 @@ namespace Interface
             "Didn't reset initialisation flag after opengl resource destruction");
           c->componentFlags.destroyOpenGl = false;
         }
-        for (auto child : c->childComponents)
+        for (auto child = c->children; child; child = child->next)
           self(self, child);
       };
 
@@ -176,6 +175,50 @@ namespace Interface
         }
         next = next->parent;
       }
+    }
+
+    void renderLoop(PuglView *view)
+    {
+      auto state = plugin.state_;
+      for (usize i = 0; i < state->parameterBridges.size(); ++i)
+        state->parameterBridges[i].updateUIParameter();
+
+
+      gui->desiredSize = { (i32)area.w, (i32)area.h, (i32)area.w, (i32)area.h };
+
+      utils::vector<Component *> customPlacement_{ localScratch, 32 };
+      customPlacement = &customPlacement_;
+
+      calculateSizes(gui->children, gui);
+      gui->bounds.setPosition({});
+      calculatePositions(gui->children, gui, gui->bounds);
+
+      for (auto *c : *customPlacement)
+        c->handleCommandMessage(Component::HandleCustomPosition);
+      customPlacement->clear();
+
+      checkFocusedComponent();
+
+      // Reset viewport
+      glViewport(0, 0, area.w, area.h);
+      glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+      glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
+
+      nvgBeginFrame(openGl.g, (float)area.w, (float)area.h, 1.0f);
+
+      openGl.parentStack.emplace_back(gui, gui->bounds, true);
+      openGl.parentStack.emplace_back(ScopedBoundsEmplace::doNotAddFlag);
+      gui->doRender(openGl);
+
+      nvgEndFrame(openGl.g);
+
+      // calling swapBuffers inside the critical section in case 
+      // we're resizing because a glFinish is necessary in order to
+      // not get frame tearing/overlap with previous frames
+      // https://community.khronos.org/t/swapbuffers-and-synchronization/107667/5
+      puglSwapBuffers(view);
+      if (isResizing)
+        glFinish();
     }
   };
 
@@ -227,7 +270,8 @@ namespace Interface
       renderer->openGl.cache = renderer->graphics;
       renderer->openGl.g = renderer->graphics->context;
       renderer->isInitialised = true;
-      uiRelated.renderer = renderer;
+
+      uiRelated.cache = renderer->graphics;
 
       break;
     }
@@ -254,6 +298,8 @@ namespace Interface
       renderer->resizeChange((event->configure.style & PUGL_VIEW_STYLE_RESIZING) != 0);
       renderer->area = { event->configure.width, event->configure.height };
 
+      renderer->renderLoop(view);
+
       break;
     }
     case PUGL_DPI_CHANGE:
@@ -261,37 +307,8 @@ namespace Interface
       break;
 
     case PUGL_EXPOSE:
-    {
-      renderer->gui->desiredSize = { { (i32)renderer->area.w, (i32)renderer->area.h, 
-        (i32)renderer->area.w, (i32)renderer->area.h } };
-
-      utils::vector<Component *> customPlacement_{ localScratch, 8 };
-      customPlacement = &customPlacement_;
-
-      calculateSizes(renderer->gui->childComponents, renderer->gui);
-      renderer->gui->bounds.setPosition({});
-      calculatePositions(renderer->gui->childComponents, renderer->gui, renderer->gui->bounds);
-
-      for (auto *c : *customPlacement)
-        c->handleCommandMessage(Component::HandleCustomPosition);
-      customPlacement->clear();
-
-      renderer->checkFocusedComponent();
-
-      renderer->openGl.parentStack.emplace_back(renderer->gui, renderer->gui->bounds, true);
-      renderer->openGl.parentStack.emplace_back(ScopedBoundsEmplace::doNotAddFlag);
-      renderer->gui->doRender(renderer->openGl);
-
-      // calling swapBuffers inside the critical section in case 
-      // we're resizing because a glFinish is necessary in order to
-      // not get frame tearing/overlap with previous frames
-      // https://community.khronos.org/t/swapbuffers-and-synchronization/107667/5
-      puglSwapBuffers(view);
-      if (renderer->isResizing)
-        glFinish();
-      
       break;
-    }
+    
     case PUGL_UPDATE: break;
     case PUGL_LOOP_ENTER: break;
     case PUGL_LOOP_LEAVE: break;
@@ -415,11 +432,9 @@ namespace Interface
     }
     case PUGL_TIMER:
     {
-      if (event->timer.id == Renderer::kTimerParameterUpdate)
+      if (event->timer.id == Renderer::kTimerRefreshRate)
       {
-        auto state = renderer->plugin.state_;
-        for (usize i = 0; i < state->parameterBridges.size(); ++i)
-          state->parameterBridges[i].updateUIParameter();
+        renderer->renderLoop(view);
       }
 
       break;
@@ -534,8 +549,6 @@ namespace Interface
     puglSetViewHint(view_, PUGL_DARK_FRAME, PUGL_TRUE);
     puglSetHandle(view_, this);
     puglSetEventFunc(view_, runThread);
-
-    puglStartTimer(view_, kTimerParameterUpdate, 1.0 / kParameterUpdateIntervalHz);
   }
 
   void Renderer::stopUI()
@@ -543,7 +556,7 @@ namespace Interface
     if (view_ == nullptr)
       return;
 
-    puglStopTimer(view_, kTimerParameterUpdate);
+    puglStopTimer(view_, kTimerRefreshRate);
 
     puglUnrealize(view_);
     puglFreeView(view_);
@@ -674,7 +687,7 @@ namespace Interface
     // if the component has decided to not handle further mouse events
     // this makes the upcoming mouse events orphaned, 
     // which can be handled by other components if acceptsOrphanedMouseEvents == true
-    if (!mouseDownComponent_->componentFlags.isClicked)
+    if (mouseDownComponent_ && !mouseDownComponent_->componentFlags.isClicked)
     {
       mouseDownComponent_ = nullptr;
       isHandlingOrphanedMouseEvents = true;
@@ -757,6 +770,7 @@ extern "C"
 
     if (puglGetParent(renderer->view_))
     {
+      puglStopTimer(renderer->view_, Interface::Renderer::kTimerRefreshRate);
       puglSetParent(renderer->view_, (PuglNativeView)nullptr);
       puglUnrealize(renderer->view_);
     }
@@ -766,6 +780,7 @@ extern "C"
       puglSetParent(renderer->view_, (PuglNativeView)newParent);
       [[maybe_unused]] PuglStatus status = puglRealize(renderer->view_);
       COMPLEX_ASSERT(status == PUGL_SUCCESS);
+      puglStartTimer(renderer->view_, Interface::Renderer::kTimerRefreshRate, 1.0 / kParameterUpdateIntervalHz);
     }
   }
 

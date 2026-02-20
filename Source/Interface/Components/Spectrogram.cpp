@@ -167,6 +167,16 @@ namespace Interface
 		// convert data to polar form
 		if (shouldDisplayPhases)
 		{
+			// TODO: look into computing unwrapped phase
+			// The cepstrum: A guide to processing, page 5
+			// Echo removal by discrete generalized linear filtering, page 54
+			// 
+			// linear phase component caused by normal oscillation can be subtracted by:
+			// phase -= k2Pi / FFTSize * binIndex * sampleShift (samples since beginning)
+			// might be able to do sampleShift = sampleShift % FFTSize?
+			// 
+			// 
+			// 
 			// only for TESTING, don't use otherwise
 			/*simd_float blockPhase = (float)((double)bufferPosition / (double)(binCount * 2));
 			auto data = scratchBuffer.get();

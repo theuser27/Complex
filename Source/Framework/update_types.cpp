@@ -1,8 +1,6 @@
 
 // Created: 2022-11-16 02:11:06
 
-#include "update_types.hpp"
-
 #include "Generation/BaseProcessor.hpp"
 #include "Plugin/Complex.hpp"
 #include "Framework/parameter_value.hpp"
@@ -12,9 +10,14 @@ namespace Framework
 {
   UndoManager::UndoManager(usize transactionsToKeep)
   {
+    storage = utils::bumpArena::create(COMPLEX_MB(64), transactionsToKeep * 512);
     setTransationStorage(transactionsToKeep);
   }
-  UndoManager::~UndoManager() = default;
+
+  UndoManager::~UndoManager()
+  {
+    utils::bumpArena::destroy(storage);
+  }
 
   void UndoManager::setTransationStorage(usize transactionsToKeep)
   {
@@ -22,11 +25,13 @@ namespace Framework
     if (transactions.size() == transactionsToKeep)
       return;
 
-    auto newTransactions = decltype(transactions){ utils::generalAllocator, transactionsToKeep };
+    auto *newTransactions = arranew(storage, decltype(transactions)::value_type,
+      transactionsToKeep, {});
+
     if (!transactions.size())
     {
-      clearUndoHistory();
-      transactions = COMPLEX_MOVE(newTransactions);
+      clear();
+      transactions = { newTransactions, transactionsToKeep };
       return;
     }
 
@@ -51,19 +56,19 @@ namespace Framework
 
     currentIndex = undoActionsCount - 1;
     for (usize i = 0; i < copySize; ++i)
-      newTransactions[i] = COMPLEX_MOVE(transactions[(begin + i) % transactions.size()]);
-    transactions = COMPLEX_MOVE(newTransactions);
+      newTransactions[i] = transactions[(begin + i) % transactions.size()];
+    transactions = { newTransactions, transactionsToKeep };
   }
 
-  void UndoManager::clearUndoHistory()
+  void UndoManager::clear()
   {
-    transactions.clear();
+    storage->clear(storage);
     currentIndex = 0;
     undoActionsCount = 1; // for the currentIndex
     redoActionsCount = 0;
   }
 
-  bool UndoManager::perform(UndoableAction *newAction)
+  bool UndoManager::perform(UndoAction *newAction, bool performOnAdd)
   {
     if (newAction == nullptr)
       return false;
@@ -72,49 +77,73 @@ namespace Framework
 
     if (isPerformingUndoRedo())
     {
-      COMPLEX_ASSERT_FALSE("Don't call perform() recursively from the UndoableAction::perform() \
+      COMPLEX_ASSERT_FALSE("Don't call perform() recursively from the UndoAction::perform() \
         or undo() methods, or else these actions will be discarded!");
       return false;
     }
 
-    if (!action->perform())
-      return false;
+    if (performOnAdd)
+      newAction->redo(newAction);
 
     COMPLEX_ASSERT(redoActionsCount == 0, "You need to call beginNewTransaction() \
       if you want to overwrite undone actions");
 
-    auto &actionSet = transactions[currentIndex];
-    if (!actionSet.size())
-      actionSet.emplace_back(COMPLEX_MOVE(action));
+    auto &transaction = transactions[currentIndex];
+    if (!transaction.second)
+      transaction.second = newAction;
+    else if (!transaction.second->combineActions)
+    {
+      newAction->next = transaction.second;
+      transaction.second = newAction->next;
+    }
     else
     {
-      auto &lastAction = actionSet.back();
-      auto coalescedAction = lastAction->combineActions(action.get());
-      if (coalescedAction != lastAction.get())
+      auto *lastAction = transaction.second;
+      auto coalescedAction = lastAction->combineActions(
+        transaction.first, lastAction, newAction);
+
+      if (!coalescedAction)
       {
-        if (coalescedAction && coalescedAction != action.get())
-        {
-          action.reset(coalescedAction);
-          actionSet.pop_back();
-        }
-        
-        actionSet.emplace_back(COMPLEX_MOVE(action));
+        newAction->next = lastAction;
+        transaction.second = newAction;
+      }
+      else
+      {
+        coalescedAction->next = lastAction->next;
+        transaction.second = coalescedAction;
+
+        if (coalescedAction != newAction)
+          utils::bumpArena::remove(newAction);
+        if (coalescedAction != lastAction)
+          utils::bumpArena::remove(lastAction);
       }
     }
 
     return true;
   }
 
-  void UndoManager::beginNewTransaction()
+  utils::bumpArena *
+  UndoManager::beginNewTransaction()
   {
     // skip making a new action set if current one is empty
-    if (!transactions[currentIndex].size())
-      return;
+    if (!transactions[currentIndex].second)
+      return transactions[currentIndex].first;
+
     currentIndex = (currentIndex + 1) % transactions.size();
-    transactions[currentIndex] = decltype(transactions)::value_type{};
+
+    // destroy transaction to be replaced
+    for (auto *action = transactions[currentIndex].second; action; action = action->next)
+      if (action->destructor)
+        action->destructor(action);
+
+    transactions[currentIndex].second = {};
+    if (!transactions[currentIndex].first)
+      transactions[currentIndex].first = utils::bumpArena::createNested(storage, 512);
 
     undoActionsCount = utils::min(undoActionsCount + 1, transactions.size());
     redoActionsCount = 0;
+
+    return transactions[currentIndex].first;
   }
 
   bool UndoManager::undo(bool undoCurrentTransactionOnly)
@@ -124,226 +153,175 @@ namespace Framework
     
     isInsideUndoRedoCall = true;
 
-    bool success = [](auto &actions)
+    COMPLEX_FOREACH_AND_REVERSE_SLL(action, transactions[currentIndex].second)
     {
-      for (usize i = actions.size(); i > 0; --i)
-        if (!actions[i - 1]->undo())
-          return false;
-
-      return true;
-    }(transactions[currentIndex]);
-
-    if (success)
-    {
-      if (!undoCurrentTransactionOnly)
-      {
-        currentIndex = (currentIndex - 1 + transactions.size()) % transactions.size();
-        --undoActionsCount;
-        ++redoActionsCount;
-      }
+      action->undo(action);
+      transactions[currentIndex].second = action;
     }
-    else
-      clearUndoHistory(); // very severe edge case, shouldn't happen
 
-    //sendChangeMessage();
+    if (!undoCurrentTransactionOnly)
+    {
+      currentIndex = (currentIndex - 1 + transactions.size()) % transactions.size();
+      --undoActionsCount;
+      ++redoActionsCount;
+    }
+
     isInsideUndoRedoCall = false;
     return true;
   }
 
   bool UndoManager::redo()
   {
-    if (redoActionsCount == 0)
+    if (!redoActionsCount)
       return false;
 
     isInsideUndoRedoCall = true;
 
-    bool success = [](auto &actions)
+    COMPLEX_FOREACH_AND_REVERSE_SLL(action, transactions[(currentIndex + 1) % transactions.size()].second)
     {
-      for (usize i = actions.size(); i > 0; --i)
-        if (!actions[i - 1]->undo())
-          return false;
-
-      return true;
-    }(transactions[(currentIndex + 1) % transactions.size()]);
-
-    if (success)
-    {
-      currentIndex = (currentIndex + 1) % transactions.size();
-      --redoActionsCount;
-      ++undoActionsCount;
+      action->redo(action);
+      transactions[currentIndex].second = action;
     }
-    else
-      clearUndoHistory(); // very severe edge case, shouldn't happen
+    
+    currentIndex = (currentIndex + 1) % transactions.size();
+    --redoActionsCount;
+    ++undoActionsCount;
 
-    //sendChangeMessage();
     isInsideUndoRedoCall = false;
     return true;
   }
 
-  AddProcessorUpdate::~AddProcessorUpdate()
+  AddProcessorUpdate::AddProcessorUpdate(Plugin::State &state, u64 destinationStateId, 
+    usize destinationSubProcessorIndex, Generation::BaseProcessor &newProcessor) :
+    state_(state), addedProcessor_(&newProcessor), destinationStateId_(destinationStateId),
+    destinationSubProcessorIndex_(destinationSubProcessorIndex)
   {
-    if (addedProcessor_)
-      state_.deleteProcessor(addedProcessor_);
-  }
-
-  bool AddProcessorUpdate::perform()
-  {
-    auto destinationPointer = state_.getProcessor(destinationStateId_);
-    
-    auto g = wait();
-    destinationPointer->insertSubProcessor(destinationSubProcessorIndex_, *addedProcessor_);
-
-    addedProcessor_ = nullptr;
-
-    return true;
-  }
-
-  bool AddProcessorUpdate::undo()
-  {
-    auto destinationPointer = state_.getProcessor(destinationStateId_);
-
-    auto g = wait();
-    addedProcessor_ = &destinationPointer->deleteSubProcessor(destinationSubProcessorIndex_);
-
-    return true;
-  }
-
-  bool MoveProcessorUpdate::perform()
-  {
-    auto destinationPointer = state_.getProcessor(destinationStateId_);
-    auto sourcePointer = state_.getProcessor(sourceStateId_);
-
-    auto g = wait();
-    auto &movedProcessor = sourcePointer->deleteSubProcessor(sourceSubProcessorIndex_, false);
-    destinationPointer->insertSubProcessor(destinationSubProcessorIndex_, movedProcessor, false);
-
-    //if (sourcePointer != destinationPointer)
-    //  for (auto listener : sourcePointer->listeners_)
-    //    listener->movedSubProcessor(movedProcessor, *sourcePointer, 
-    //      sourceSubProcessorIndex_, *destinationPointer, destinationSubProcessorIndex_);
-    //
-    //for (auto listener : destinationPointer->listeners_)
-    //  listener->movedSubProcessor(movedProcessor, *sourcePointer, 
-    //    sourceSubProcessorIndex_, *destinationPointer, destinationSubProcessorIndex_);
-
-    return true;
-  }
-
-  bool MoveProcessorUpdate::undo()
-  {
-    auto destinationPointer = state_.getProcessor(destinationStateId_);
-    auto sourcePointer = state_.getProcessor(sourceStateId_);
-
-    auto g = wait();
-    auto &movedProcessor = destinationPointer->deleteSubProcessor(destinationSubProcessorIndex_, false);
-    sourcePointer->insertSubProcessor(sourceSubProcessorIndex_, movedProcessor, false);
-
-    //if (sourcePointer != destinationPointer)
-    //  for (auto listener : sourcePointer->listeners_)
-    //    listener->movedSubProcessor(movedProcessor, *destinationPointer, 
-    //      destinationSubProcessorIndex_, *sourcePointer, sourceSubProcessorIndex_);
-
-    //for (auto listener : destinationPointer->listeners_)
-    //  listener->movedSubProcessor(movedProcessor, *destinationPointer, 
-    //    destinationSubProcessorIndex_, *sourcePointer, sourceSubProcessorIndex_);
-
-    return true;
-  }
-
-  DeleteProcessorUpdate::~DeleteProcessorUpdate()
-  {
-    if (deletedProcessor_)
-      state_.deleteProcessor(deletedProcessor_);
-  }
-
-  bool DeleteProcessorUpdate::perform()
-  {
-    auto destinationPointer = state_.getProcessor(destinationStateId_);
-
-    auto g = wait();
-    deletedProcessor_ = &destinationPointer->deleteSubProcessor(destinationSubProcessorIndex_);
-    auto recurseParameters = [](const auto &self, Generation::BaseProcessor *processor) -> void
+    destructor = [](UndoAction *a)
     {
-      processor->remapParameters({}, true, true);
-      auto child = processor->children;
-      for (usize i = 0; i < processor->childrenCount; (++i), (child = child->next))
-        self(self, child);
+      auto *self = (AddProcessorUpdate *)a;
+      if (self->addedProcessor_)
+        self->state_.deleteProcessor(self->addedProcessor_);
     };
-    recurseParameters(recurseParameters, deletedProcessor_);
 
-    return true;
-  }
-
-  bool DeleteProcessorUpdate::undo()
-  {
-    auto destinationPointer = state_.getProcessor(destinationStateId_);
-
-    auto g = wait();
-    destinationPointer->insertSubProcessor(destinationSubProcessorIndex_, *deletedProcessor_);
-    auto recurseParameters = [](const auto &self, Generation::BaseProcessor *processor) -> void
+    redo = [](UndoAction *a)
     {
-      processor->remapParameters({}, true, true);
-      auto child = processor->children;
-      for (usize i = 0; i < processor->childrenCount; (++i), (child = child->next))
-        self(self, child);
+      auto *self = (AddProcessorUpdate *)a;
+      auto destinationPointer = self->state_.getProcessor(self->destinationStateId_);
+
+      auto g = self->state_.plugin->acquireProcessingLock();
+      destinationPointer->insertSubProcessor(
+        self->destinationSubProcessorIndex_, *self->addedProcessor_);
+
+      self->addedProcessor_ = nullptr;
     };
-    recurseParameters(recurseParameters, deletedProcessor_);
 
-    deletedProcessor_ = nullptr;
+    undo = [](UndoAction *a)
+    {
+      auto *self = (AddProcessorUpdate *)a;
+      auto destinationPointer = self->state_.getProcessor(self->destinationStateId_);
 
-    return true;
+      auto g = self->state_.plugin->acquireProcessingLock();
+      self->addedProcessor_ = &destinationPointer->deleteSubProcessor(self->destinationSubProcessorIndex_);
+
+    };
   }
 
-  bool ParameterUpdate::perform()
+  MoveProcessorUpdate::MoveProcessorUpdate(Plugin::State &state, u64 destinationStateId,
+    usize destinationSubProcessorIndex, u64 sourceStateId, usize sourceSubProcessorIndex) :
+    state_(state), destinationStateId_(destinationStateId),
+    destinationSubProcessorIndex_(destinationSubProcessorIndex), sourceStateId_(sourceStateId),
+    sourceSubProcessorIndex_(sourceSubProcessorIndex)
   {
-    // if this is being performed right after being added to the UndoManager, then the value change was already made
-    // on the other hand, if this is being called on a redo, we need to change the value appropriately
-    if (!firstTime_)
+    redo = [](UndoAction *a)
     {
-      if (hasDetails_)
+      auto *self = (MoveProcessorUpdate *)a;
+
+      auto destinationPointer = self->state_.getProcessor(self->destinationStateId_);
+      auto sourcePointer = self->state_.getProcessor(self->sourceStateId_);
+
+      auto g = self->state_.plugin->acquireProcessingLock();
+      auto &movedProcessor = sourcePointer->deleteSubProcessor(self->sourceSubProcessorIndex_, false);
+      destinationPointer->insertSubProcessor(self->destinationSubProcessorIndex_, movedProcessor, false);
+
+      //if (sourcePointer != destinationPointer)
+      //  for (auto listener : sourcePointer->listeners_)
+      //    listener->movedSubProcessor(movedProcessor, *sourcePointer, 
+      //      sourceSubProcessorIndex_, *destinationPointer, destinationSubProcessorIndex_);
+      //
+      //for (auto listener : destinationPointer->listeners_)
+      //  listener->movedSubProcessor(movedProcessor, *sourcePointer, 
+      //    sourceSubProcessorIndex_, *destinationPointer, destinationSubProcessorIndex_);
+    };
+
+    undo = [](UndoAction *a)
+    {
+      auto *self = (MoveProcessorUpdate *)a;
+
+      auto destinationPointer = self->state_.getProcessor(self->destinationStateId_);
+      auto sourcePointer = self->state_.getProcessor(self->sourceStateId_);
+
+      auto g = self->state_.plugin->acquireProcessingLock();
+      auto &movedProcessor = destinationPointer->deleteSubProcessor(self->destinationSubProcessorIndex_, false);
+      sourcePointer->insertSubProcessor(self->sourceSubProcessorIndex_, movedProcessor, false);
+
+      //if (sourcePointer != destinationPointer)
+      //  for (auto listener : sourcePointer->listeners_)
+      //    listener->movedSubProcessor(movedProcessor, *destinationPointer, 
+      //      destinationSubProcessorIndex_, *sourcePointer, sourceSubProcessorIndex_);
+
+      //for (auto listener : destinationPointer->listeners_)
+      //  listener->movedSubProcessor(movedProcessor, *destinationPointer, 
+      //    destinationSubProcessorIndex_, *sourcePointer, sourceSubProcessorIndex_);
+
+    };
+  }
+
+  DeleteProcessorUpdate::DeleteProcessorUpdate(Plugin::State &state, 
+    u64 destinationStateId, usize destinationSubProcessorIndex) : state_(state),
+    destinationStateId_(destinationStateId),
+    destinationSubProcessorIndex_(destinationSubProcessorIndex)
+  {
+    destructor = [](UndoAction *a)
+    {
+      auto *self = (DeleteProcessorUpdate *)a;
+      if (self->deletedProcessor_)
+        self->state_.deleteProcessor(self->deletedProcessor_);
+    };
+
+    redo = [](UndoAction *a)
+    {
+      auto *self = (DeleteProcessorUpdate *)a;
+      auto destinationPointer = self->state_.getProcessor(self->destinationStateId_);
+
+      auto g = self->state_.plugin->acquireProcessingLock();
+      self->deletedProcessor_ = &destinationPointer->deleteSubProcessor(self->destinationSubProcessorIndex_);
+      auto recurseParameters = [](const auto &self, Generation::BaseProcessor *processor) -> void
       {
-        auto details = baseParameter_->details;
-        // TODO: currently  no BaseControl implements setParameterDetails correctly
-        baseParameter_->details = details_;
-        details_ = details;
-      }
-      baseParameter_->setValue(newValue_, false);
-      baseParameter_->setValueToHost();
-    }
-    
-    firstTime_ = false;
-    return true;
-  }
+        processor->remapParameters({}, true, true);
+        auto child = processor->children;
+        for (usize i = 0; i < processor->childrenCount; (++i), (child = child->next))
+          self(self, child);
+      };
+      recurseParameters(recurseParameters, self->deletedProcessor_);
+    };
 
-  bool ParameterUpdate::undo()
-  {
-    if (hasDetails_)
+    undo = [](UndoAction *a)
     {
-      auto details = baseParameter_->details;
-      baseParameter_->details = details_;
-      details_ = details;
-    }
-    
-    baseParameter_->setValue(oldValue_, false);
-    baseParameter_->setValueToHost();
-    return true;
-  }
+      auto *self = (DeleteProcessorUpdate *)a;
+      auto destinationPointer = self->state_.getProcessor(self->destinationStateId_);
 
-  bool PresetUpdate::perform()
-  {
-    auto g = wait();
-    auto oldState = plugin_.exchangeStates(COMPLEX_MOVE(state));
-    state = COMPLEX_MOVE(oldState);
+      auto g = self->state_.plugin->acquireProcessingLock();
+      destinationPointer->insertSubProcessor(self->destinationSubProcessorIndex_, *self->deletedProcessor_);
+      auto recurseParameters = [](const auto &self, Generation::BaseProcessor *processor) -> void
+      {
+        processor->remapParameters({}, true, true);
+        auto child = processor->children;
+        for (usize i = 0; i < processor->childrenCount; (++i), (child = child->next))
+          self(self, child);
+      };
+      recurseParameters(recurseParameters, self->deletedProcessor_);
 
-    return true;
-  }
-
-  bool PresetUpdate::undo()
-  {
-    auto g = wait();
-    auto newState = plugin_.exchangeStates(COMPLEX_MOVE(state));
-    state = COMPLEX_MOVE(newState);
-
-    return true;
+      self->deletedProcessor_ = nullptr;
+    };
   }
 }

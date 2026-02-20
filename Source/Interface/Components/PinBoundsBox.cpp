@@ -88,7 +88,7 @@ namespace Interface
     repaintBackground();
   }
 
-  void PinBoundsBox::controlValueChanged(BaseControl *control)
+  void PinBoundsBox::controlValueChanged(Control *control)
   {
     if (lowBound_.get() == control || highBound_.get() == control)
       positionSliders();

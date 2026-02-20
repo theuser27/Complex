@@ -19,7 +19,7 @@ namespace utils
   // layout of complex cartesian and polar vectors is assumed to be
   // { real, imaginary, real, imaginary } and { magnitude, phase, magnitude, phase } respectively
 
-  // [cos, sin]
+  // cos and sin
   strict_inline utils::pair<simd_float, simd_float> vector_call cossin(simd_float radians)
   {
     // split pi / 2 into multiple parts to take advantage of the
@@ -71,6 +71,7 @@ namespace utils
       merge(sin, cos, hasLowestBitMask) ^ sinSign };
   }
 
+  // [cos(angle[0]), sin(angle[1]), cos(angle[2]), sin(angle[3])]
   strict_inline simd_float vector_call cis(simd_float angle)
   {
     // split pi / 2 into multiple parts to take advantage of the
@@ -155,43 +156,7 @@ namespace utils
   #endif
   }
 
-  // [cos, sin]
-  strict_inline utils::pair<simd_float, simd_float> vector_call cisFast(simd_float radians)
-  {
-    // TODO: implement bhaskara's algo again
-
-    // pade approximants of sine
-    // max error ~= 3.00438 * 10^(-6)
-    // https://www.desmos.com/calculator/oit7uxh1wm
-    static constexpr simd_float kNum1 = 166320.0f * kPi;
-    static constexpr simd_float kNum2 = -22260.0f * kPi * kPi * kPi;
-    static constexpr simd_float kNum3 = 551.0f * kPi * kPi * kPi * kPi * kPi;
-    static constexpr simd_float kDen1 = 166320.0f;
-    static constexpr simd_float kDen2 = 5460.0f * kPi * kPi;
-    static constexpr simd_float kDen3 = 75.0f * kPi * kPi * kPi * kPi;
-
-    // correction for angles after +/-pi, normalises to +/-1
-    radians *= kInvPi;
-    radians -= simd_float::round(radians * 0.5f) * 2.0f;
-
-    simd_mask cosSign = simd_float::greaterThanOrEqual(radians, 0.0f);
-    simd_mask sinSign = simd_float::greaterThan(simd_float::abs(radians), 0.5f);
-
-    simd_float cosPosition = radians + 0.5f - (simd_float{ 1.0f } & cosSign);
-    simd_float sinPosition = radians - ((simd_float{ 1.0f } & sinSign) ^ getSign(radians));
-
-    simd_float cosPosition2 = cosPosition * cosPosition;
-    simd_float sinPosition2 = sinPosition * sinPosition;
-
-    simd_float cos = (cosPosition * simd_float::mulAdd(kNum1, cosPosition2, simd_float::mulAdd(kNum2, cosPosition2, kNum3))) /
-                                    simd_float::mulAdd(kDen1, cosPosition2, simd_float::mulAdd(kDen2, cosPosition2, kDen3));
-    simd_float sin = (sinPosition * simd_float::mulAdd(kNum1, sinPosition2, simd_float::mulAdd(kNum2, sinPosition2, kNum3))) /
-                                    simd_float::mulAdd(kDen1, sinPosition2, simd_float::mulAdd(kDen2, sinPosition2, kDen3));
-
-    return { cos ^ (cosSign & kSignMask), sin ^ (sinSign & kSignMask) };
-  }
-
-  // [magnitude, phase]
+  // magnitude and phase
   strict_inline utils::pair<simd_float, simd_float> vector_call phasor(simd_float real, simd_float imaginary)
   {
     auto magnitude = simd_float::sqrt(simd_float::mulAdd(real * real, imaginary, imaginary));

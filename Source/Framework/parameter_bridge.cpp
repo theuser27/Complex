@@ -58,7 +58,7 @@ namespace Framework
           value_.store(newValue, satomi::memory_order_release);
         }
         else if (link->UIControl)
-          link->UIControl->setValueFromHost(value_.load(satomi::memory_order_relaxed), this);
+          link->UIControl->setValue(value_.load(satomi::memory_order_relaxed));
 
         auto name = link->parameter->getParameterDetails().displayName;
         name_.second = utils::string::create(state->miscStorage, "%zu > %s", parameterIndex + 1, name.data());
@@ -84,14 +84,10 @@ namespace Framework
       // this method is only called from the UI thread
       // which is the only one that touches the UI
       auto link = parameterLinkPointer_.load(satomi::memory_order_relaxed);
-      if (!link || !link->UIControl)
+      if (!link || !link->UIControl || link->hostControl != this)
         return;
 
-      bool shouldUpdate = link->UIControl->setValueFromHost(
-        value_.load(satomi::memory_order_relaxed), this);
-
-      if (shouldUpdate)
-        link->UIControl->valueChanged();
+      link->UIControl->setValue(value_.load(satomi::memory_order_relaxed));
     }
   }
 

@@ -29,9 +29,9 @@ namespace Interface
     }
 
     DDinFontId = nvgCreateFontMem(context, "DDin",
-      (unsigned char *)BinaryData::DDINBold_ttf, BinaryData::DDINBold_ttfSize, false);
+      (unsigned char *)BinaryData::D_DIN_Bold_ttf, (int)BinaryData::D_DIN_Bold_ttfSize, false);
     InterFontId = nvgCreateFontMem(context, "DDin",
-      (unsigned char *)BinaryData::InterMedium_ttf, BinaryData::InterMedium_ttfSize, false);
+      (unsigned char *)BinaryData::Inter_Medium_ttf, (int)BinaryData::Inter_Medium_ttfSize, false);
 
     // TODO: how big should the framebuffer be
     planeArea = { 640, 480 };
@@ -44,23 +44,38 @@ namespace Interface
     nvgDeleteGL3(context);
   }
 
-  float Graphics::getFontAscentFromHeight(int fontId, float height) const noexcept
+  float 
+  Graphics::getFontLineHeightFromFontHeight(FontId fontId, float height)
   {
-    if (fontId == DDinFontId)
+    if (fontId == DDinType)
       return height * 8.0f / kDDinDefaultHeight;
-    if (fontId == InterFontId)
+    if (fontId == InterType)
       return height * 8.0f / kInterVDefaultHeight;
 
     COMPLEX_ASSERT_FALSE("Unknown font was provided to get ascent for");
     return 1.0f;
   }
 
-  float Graphics::getFontHeightFromAscent(int fontId, float ascent) const noexcept
+  float
+  Graphics::getFontKerningFromFontHeight(FontId fontId, float height)
   {
-    if (fontId == DDinFontId)
-      return ascent * kDDinDefaultHeight / 8.0f;
-    if (fontId == InterFontId)
-      return ascent * kInterVDefaultHeight / 8.0f;
+    if (fontId == DDinType)
+      return height / kDDinDefaultHeight * kDDinDefaultKerning;
+    else if (fontId == InterType)
+      return height / kInterVDefaultHeight * kInterVDefaultKerning / 8.0f;
+
+    COMPLEX_ASSERT_FALSE("Unknown font to get kerning for");
+
+    return kDDinDefaultKerning;
+  }
+
+  float
+  Graphics::getFontHeightFromLineHeight(FontId fontId, float lineHeight)
+  {
+    if (fontId == DDinType)
+      return lineHeight * kDDinDefaultHeight / 16.0f;
+    if (fontId == InterType)
+      return lineHeight * kInterVDefaultHeight / 16.0f;
 
     COMPLEX_ASSERT_FALSE("Unknown font was provided to get height for");
     return 1.0f;
@@ -82,9 +97,15 @@ namespace Interface
     nvgTextLetterSpacing(context, kerning);
   }
 
-  void Graphics::setFontHeightFromAscent(float ascent) const
+  void Graphics::setFont(FontId fontid, float lineHeight)
   {
-    setFontHeight(getFontHeightFromAscent(nvgGetFontFaceId(context), ascent));
+    float height = getFontHeightFromLineHeight(fontid, lineHeight);
+    float kerning = getFontKerningFromFontHeight(fontid, height);
+
+    int id = (fontid == DDinType) ? DDinFontId : InterFontId;
+    nvgFontFaceId(context, id);
+    nvgFontSize(context, height);
+    nvgTextLetterSpacing(context, kerning);
   }
 
   void Graphics::bindTextureFramebuffer()

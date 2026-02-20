@@ -3,8 +3,10 @@
 
 #pragma once
 
-#include "../LookAndFeel/BaseComponent.hpp"
 #include "Plugin/Renderer.hpp"
+#include "../LookAndFeel/BaseComponent.hpp"
+#include "../Components/BaseControl.hpp"
+#include "../Sections/Popups.hpp"
 
 extern "C" void cplug_checkSize(void *userGUI, u32 *width, u32 *height);
 
@@ -17,6 +19,97 @@ namespace Interface
   class PopupDisplay;
   class PopupSelector;
 
+  struct TopBar final : public Component
+  {
+    void reinitialise();
+
+    bool render(OpenGlWrapper &openGl) override;
+
+    Label gainLabel{};
+    Numberbox gain{};
+    Component gainGroup{};
+
+    Label mixLabel{};
+    Numberbox mix{};
+    Component mixGroup{};
+  };
+
+  struct BottomBar final : public Component
+  {
+    void reinitialise();
+
+    bool render(OpenGlWrapper &openGl) override;
+
+    Label blockSizeLabel{};
+    Numberbox blockSize{};
+    Component blockSizeGroup{};
+
+    Label overlapLabel{};
+    Numberbox overlap{};
+    Component overlapGroup{};
+
+    Label windowLabel{};
+    Numberbox windowAlpha{};
+    TextSelector window{};
+    Component windowGroup{};
+  };
+
+  class ResizeCorner final : public Component
+  {
+  public:
+    static constexpr i32 kWidth = 15;
+    static constexpr i32 kHeight = 15;
+
+    Area<u32> areaAtMouseDown{};
+
+    ResizeCorner()
+    {
+      componentFlags.clickable = true;
+      desiredSize = { kWidth, kHeight, kWidth, kHeight };
+
+      placement = Placement::custom;
+    }
+
+    void handleCommandMessage(u64 commandId, [[maybe_unused]] utils::whatever extraData) override
+    {
+      switch (commandId)
+      {
+      case HandleCustomPosition:
+        bounds = bounds.withPosition(parent->bounds.w - bounds.w, parent->bounds.h - bounds.h);
+        break;
+      }
+    }
+
+    bool
+    mouseEnter(const MouseEvent &) override
+    {
+      Interface::setMouseCursor(uiRelated.renderer, MouseCursorTypes::UpLeftDownRightResize);
+      return true;
+    }
+    bool
+    mouseExit(const MouseEvent &) override
+    {
+      Interface::setMouseCursor(uiRelated.renderer, MouseCursorTypes::Normal);
+      return true;
+    }
+    bool
+    mouseDown(const MouseEvent &) override
+    {
+      areaAtMouseDown = getUISize(uiRelated.renderer);
+      return true;
+    }
+    bool
+    mouseDrag(const MouseEvent &event) override
+    {
+      auto offset = event.getOffsetFromDragStart();
+      u32 w = areaAtMouseDown.w + offset.x;
+      u32 h = areaAtMouseDown.h + offset.y;
+      cplug_checkSize(uiRelated.renderer, &w, &h);
+      setUISize(uiRelated.renderer, w, h);
+      return true;
+    }
+  };
+
   class MainInterface final : public Component
   {
   public:
@@ -25,7 +118,7 @@ namespace Interface
 
     bool render(OpenGlWrapper &openGl) override;
 
-    //void controlValueChanged(BaseControl *control) override;
+    //void controlValueChanged(Control *control) override;
 
     PopupSelector *getPopupSelector() { return nullptr;/* popupSelector_.get();*/ }
     PopupDisplay *getPopupDisplay(bool primary = true)
@@ -33,76 +126,15 @@ namespace Interface
 
     void reinstantiateUI();
 
-  private:
-    class ResizeCorner : public Component
-    {
-    public:
-      Area<u32> areaAtMouseDown{};
-
-      ResizeCorner()
-      {
-        static constexpr i32 resizeCornerWidth = 10;
-        static constexpr i32 resizeCornerHeight = 10;
-
-        desiredSize.minMax = { resizeCornerWidth, resizeCornerHeight,
-          resizeCornerWidth, resizeCornerHeight };
-
-        placement = Placement::custom;
-      }
-
-      void handleCommandMessage(u64 commandId, [[maybe_unused]] utils::whatever extraData) override
-      {
-        switch (commandId)
-        {
-        case HandleCustomPosition:
-          bounds = bounds.withPosition(parent->bounds.w - bounds.w, parent->bounds.h - bounds.h);
-          break;
-        }
-      }
-
-      bool mouseEnter(const MouseEvent &) override
-      {
-        Interface::setMouseCursor(uiRelated.renderer, MouseCursorTypes::UpLeftDownRightResize);
-        return true;
-      }
-      bool mouseExit(const MouseEvent &) override
-      {
-        Interface::setMouseCursor(uiRelated.renderer, MouseCursorTypes::Normal);
-        return true;
-      }
-      bool mouseDown(const MouseEvent &) override
-      {
-        areaAtMouseDown = getUISize(uiRelated.renderer);
-        return true;
-      }
-      bool mouseDrag(const MouseEvent &event) override
-      {
-        auto offset = event.getOffsetFromDragStart();
-        u32 w = areaAtMouseDown.w + offset.x;
-        u32 h = areaAtMouseDown.h + offset.y;
-        cplug_checkSize(uiRelated.renderer, &w, &h);
-        setUISize(uiRelated.renderer, w, h);
-        return true;
-      }
-    } resizeCorner;
+    TopBar topBar{};
+    BottomBar bottomBar{};
+    ResizeCorner resizeCorner{};
 
     //utils::up<EffectsStateSection> effectsStateSection_;
-    //utils::up<PopupSelector> popupSelector_;
-    //utils::up<PopupDisplay> popupDisplay1_;
-    //utils::up<PopupDisplay> popupDisplay2_;
-
-    //Component topBar{};
-    //utils::up<NumberBox> mixNumberBox_;
-    //utils::up<NumberBox> gainNumberBox_;
+    PopupSelector popupSelector{};
+    PopupDisplay popupDisplay1{};
+    PopupDisplay popupDisplay2{};
 
     //utils::up<Spectrogram> spectrogram_;
-
-    //Component bottomBar{};
-    //utils::up<NumberBox> blockSizeNumberBox_;
-    //utils::up<NumberBox> overlapNumberBox_;
-    //utils::up<TextSelector> windowTypeSelector_;
-    //utils::up<NumberBox> windowAlphaNumberBox_;
-
-    Colour backgroundColour_{};
   };
 }

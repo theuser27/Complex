@@ -12,12 +12,31 @@ namespace Interface
   public:
     enum CallbackFlags { FocusLost, EscapePressed, EnterPressed };
 
-    Component *triggeringComponent = nullptr;
-    void (*callback)(Component *component, CallbackFlags flags, TextEditor &editor) = nullptr;
-    utils::string enteredText{};
-    utils::string hintText{};
+    void (*callback)(TextEditor &editor, CallbackFlags flags) = nullptr;
+    utils::string text{};
 
-    Font font{};
+    Skin::ColourId textColour = Skin::kNormalText;
+    FontId font = Graphics::InterType;
+
+    struct
+    {
+      bool multiline            : 1 = false;
+      bool wordWrap             : 1 = false;
+      bool readOnly             : 1 = false;
+      bool selectAllWhenFocused : 1 = true;
+      bool fixedSize            : 1 = true;
+    } editorFlags{};
+
+    TextEditor();
+
+    bool mouseEnter(const MouseEvent &e) override;
+    bool mouseExit(const MouseEvent &e) override;
+    bool mouseDown(const MouseEvent &e) override;
+    bool mouseDrag(const MouseEvent &e) override;
+    bool mouseUp(const MouseEvent &e) override;
+
+    bool render(OpenGlWrapper &openGl) override;
+
   };
 
   // text editor with base implementation taken from juce's

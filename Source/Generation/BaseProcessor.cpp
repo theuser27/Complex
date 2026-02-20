@@ -193,7 +193,8 @@ namespace Generation
   void BaseProcessor::reportUnexpectedProcessorInsert(BaseProcessor &attempedInsert,
     utils::span<const uuid> acceptedProcessorIds)
   {
-    auto string = utils::string::create("Attempted insert of %v(id: %zu) inside an %v(id: %zu). \
+    auto string = utils::string::create(localScratch,
+      "Attempted insert of %v(id: %zu) inside an %v(id: %zu). \
       If this shows to you as a user, report it to the dev. \n\nSupported subprocessors by this type are: ",
       attempedInsert.metadata->name, attempedInsert.metadata->id, metadata->name, metadata->id
     );

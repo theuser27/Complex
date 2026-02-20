@@ -22,7 +22,6 @@ namespace Framework
 		class Listener
 		{
 		public:
-			virtual ~Listener() { }
 			virtual void parameterLinkReset(ParameterBridge *bridge,
 				ParameterLink *newLink, ParameterLink *oldLink) = 0;
 		};
@@ -69,7 +68,6 @@ namespace Framework
 		void getText(float value, char *buffer, usize maximumStringLength) const;
 		float getValueForText(utils::string_view text) const;
 
-		bool isAutomatable() const { return true; }
 		int getNumSteps() const;
 		bool isDiscrete() const;
 		bool isBoolean() const;

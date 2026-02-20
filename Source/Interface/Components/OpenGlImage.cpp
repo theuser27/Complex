@@ -163,19 +163,4 @@ namespace Interface
     glDisable(GL_BLEND);
     glDisable(GL_SCISSOR_TEST);
   }
-
-  PlainTextComponent::PlainTextComponent(utils::string text) : text{ COMPLEX_MOVE(text) }
-  {
-    paintFunction = [this](Graphics &g, Rectangle<i32>)
-    {
-      nvgluBindFramebuffer(g.textureFBO);
-      g.setFont(font);
-      nvgFillColor(g.context, textColour);
-
-      auto [x, y, _, __] = textureBoundsInFramebuffer;
-
-      nvgText(g.context, x, y, this->text.data(), this->text.data() + this->text.size());
-      nvgluBindFramebuffer(nullptr);
-    };
-  }
 }

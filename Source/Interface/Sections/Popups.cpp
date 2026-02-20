@@ -13,18 +13,17 @@
 namespace Interface
 {
   static Range<i32>
-  getPopupDisplayDimensions(Component *c, i32 *availablePrimarySize)
+  getPopupDisplayDimensions(Component *c, i32 *availableWidth)
   {
     const int lineHeight = scaleValueRoundInt(PopupDisplay::kLineHeight);
 
     auto *display = (PopupDisplay *)c;
-    if (!availablePrimarySize)
+    if (!availableWidth)
     {
       if (display->isControl)
       {
-        auto *control = (BaseControl *)display->source;
-        display->text = COMPLEX_MOVE(control->getScaledValueString(
-          display->arena, control->getValue()));
+        auto *control = (Control *)display->source;
+        control->getScaledValueString(display->text, control->getValue());
       }
 
       display->cachedFontWidth = (i32)::ceilf(uiRelated.cache->getStringWidthFloat(display->text));
@@ -32,22 +31,22 @@ namespace Interface
     }
     else
     {
-      auto lineCount = (i32)::ceilf((float)display->cachedFontWidth / (float)(*availablePrimarySize));
+      auto lineCount = (i32)::ceilf((float)display->cachedFontWidth / (float)(*availableWidth));
       return Range<i32>{ lineHeight, lineCount *lineHeight };
     }
   }
 
-  PopupDisplay::PopupDisplay()
+  void PopupDisplay::initialise()
   {
-    arena = utils::bumpArena::createNested(getUIArena(), COMPLEX_KB(8));
+    arena = utils::bumpArena::createNested(parent->arena, COMPLEX_KB(8));
     skinOverride = Skin::kUseParentOverride;
     placement = Placement::custom;
     sizingFlags = Component::CustomDimensions;
     padding = { kLineHeight, kLineHeight, kLineHeight, kLineHeight };
-    desiredSize.getDimensions = getPopupDisplayDimensions;
+    getDimensions = getPopupDisplayDimensions;
 
-    textFontId = uiRelated.cache->InterFontId;
-    numericFontId = uiRelated.cache->DDinFontId;
+    textFontId = Graphics::InterType;
+    numericFontId = Graphics::DDinType;
   }
 
   bool PopupDisplay::render(OpenGlWrapper &openGl)
@@ -62,9 +61,7 @@ namespace Interface
     nvgStroke(openGl.g);
 
     auto usedFontId = (isControl) ? numericFontId : textFontId;
-    auto fontHeight = uiRelated.cache->getFontHeightFromAscent(usedFontId, (float)bounds.h * 0.5f);
-    auto fontKerning = uiRelated.cache->getKerningForHeight(usedFontId, (float)bounds.h * 0.5f);
-    uiRelated.cache->setFont({ .id = usedFontId, .height = fontHeight, .kerning = fontKerning });
+    uiRelated.cache->setFont(usedFontId, (float)bounds.h * 0.5f);
 
     auto textPadding = scaleValue(padding.toFloat());
     float width = scaleValue((float)bounds.w);
@@ -196,36 +193,36 @@ namespace Interface
         else
         {
           // position stays relative to the parent list
-          auto parentItemBounds = getRelativeArea(parentItem, parentItem->bounds);
+          auto associatedItemBounds = getRelativeArea(associatedItem, associatedItem->bounds);
 
-          bounds.x = utils::min(parentItemBounds.getRight(),
+          bounds.x = utils::min(associatedItemBounds.getRight(),
             parent->bounds.getRight() - bounds.w);
 
-          if (parent->bounds.contains(parentItemBounds.x - bounds.w, 0) &&
-            !parent->bounds.contains(parentItemBounds.getRight() + bounds.w, 0))
+          if (parent->bounds.contains(associatedItemBounds.x - bounds.w, 0) &&
+            !parent->bounds.contains(associatedItemBounds.getRight() + bounds.w, 0))
           {
-            bounds.x = parentItemBounds.x - bounds.w;
+            bounds.x = associatedItemBounds.x - bounds.w;
           }
 
-          bounds.y = utils::clamp(parent->bounds.h - bounds.h, 0, parentItemBounds.y);
+          bounds.y = utils::clamp(parent->bounds.h - bounds.h, 0, associatedItemBounds.y);
 
           componentFlags.isVisible = parentList->componentFlags.isVisible;
         }
 
-        calculatePositions(parentItem->childComponents, this, bounds);
+        calculatePositions(associatedItem->children, this, bounds);
 
         break;
       }
     }
 
-    PopupItem *parentItem = nullptr;
+    PopupItem *associatedItem = nullptr;
     PopupList *parentList = nullptr;
     bool isUsed = false;
   };
 
-  PopupSelector::PopupSelector()
+  void PopupSelector::initialise()
   {
-    arena = utils::bumpArena::createNested(getUIArena(), COMPLEX_KB(512));
+    arena = utils::bumpArena::createNested(parent->arena, COMPLEX_KB(512));
     placement = Placement::custom;
     sizingFlags |= GrowableX | GrowableY;
     componentFlags.wantsFocus = true;
@@ -244,10 +241,10 @@ namespace Interface
 
     COMPLEX_ASSERT(selectedList);
 
-    for (usize i = 0; i < selectedList->parentItem->childComponents.size(); ++i)
+    for (auto *child = selectedList->associatedItem->children; child; child = child->next)
     {
       // this is safe because only popup items can be childen
-      auto *item = utils::as<PopupItem>(selectedList->parentItem->childComponents[i]);
+      auto *item = utils::as<PopupItem>(child);
       if (key.keyCode != item->shortcutKeyCode)
         continue;
       

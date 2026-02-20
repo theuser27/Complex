@@ -16,7 +16,7 @@ namespace Plugin
 
 namespace Interface
 {
-  class BaseControl;
+  class Control;
 }
 
 namespace Framework
@@ -47,7 +47,7 @@ namespace Framework
     // the lifetime of the UIControl and parameter are the same, so there's no danger of accessing freed memory
     // as for the hostControl, in the destructor of the UI element, tied to the BaseProcessor,
     // we reset its pointer to the ParameterLink and so it cannot access the parameter/UIControl
-    Interface::BaseControl *UIControl = nullptr;
+    Interface::Control *UIControl = nullptr;
     ParameterBridge *hostControl = nullptr;
     utils::vector<ParameterModulator *> modulators{};
     ParameterValue *parameter = nullptr;
@@ -169,8 +169,8 @@ namespace Framework
       }
     }
 
-    Interface::BaseControl *
-    changeControl(Interface::BaseControl *control) noexcept
+    Interface::Control *
+    changeControl(Interface::Control *control) noexcept
     {
       utils::ScopedLock g{ waitLock_, utils::WaitMechanism::Spin };
 

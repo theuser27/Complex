@@ -12,6 +12,7 @@
 #define COMPLEX_DEPAREN(...) COMPLEX_INTERNAL_ESC(COMPLEX_INTERNAL_ISH __VA_ARGS__)
 
 #define COMPLEX_IGNORE(...)
+#define COMPLEX_DEFAULT_OR(def, ...) COMPLEX_DEPAREN(__VA_OPT__(COMPLEX_IGNORE) (def)) __VA_ARGS__
 #define COMPLEX_PAREN(...) (__VA_ARGS__)
 #define COMPLEX_IDENTITY(...) __VA_ARGS__
 
@@ -44,17 +45,20 @@
 
 #define DEPENDENT_REQUIRES(type, ...) []<typename T = type>() { return requires __VA_ARGS__; }()
 
-#define switch_custom(value) for (struct { bool done; decltype(value) v; } _data___{ false, (value) }; !_data___.done; _data___.done = true) {
-#define case_custom(test) } if(_data___.v == (test)) {
-#define default_custom } else {
-#define switch_custom_end }
+#define COMPLEX_FOREACH_AND_REVERSE_SLL(iteratorName, begin, ... /*nextName*/) \
+  for (decltype(begin) iteratorName = begin, nextList__ = nullptr, temp__ = nullptr; iteratorName; \
+    (temp__ = nextList__), (nextList__ = iteratorName), \
+    (iteratorName = iteratorName->COMPLEX_DEFAULT_OR(next, __VA_ARGS__)), \
+    (nextList__->COMPLEX_DEFAULT_OR(next, __VA_ARGS__) = temp__))
 
 #define COMPLEX_DEFINE_ENUM_OPERATION(T, operation, underlying) \
   constexpr underlying operator operation (T a, auto b) { return (underlying)(a) operation (underlying)(b); }\
-  constexpr T operator operation##=(T a, auto b) { return (T)((underlying)(a) operation (underlying)(b)); }
+  constexpr T &operator operation##=(T &a, auto b) { a = (T)((underlying)(a) operation (underlying)(b)); return a; }
 
 // enabling portable out of order designated initialisers
 #define with(T, ...)\
   ([&]{ T temp________{}; COMPLEX_FOR_EACH(COMPLEX_INTERNAL_ITERATE, COMPLEX_IDENTITY, (temp________, ;), __VA_ARGS__); return temp________; }())
 #define with_val(object, ...) \
   ([&](auto &temp________) -> decltype(auto) { COMPLEX_FOR_EACH(COMPLEX_INTERNAL_ITERATE, COMPLEX_IDENTITY, (temp________, ;), __VA_ARGS__); return temp________; }(object))
+
+#define test_enum(variable, flag) (((variable) & (flag)) == (flag))

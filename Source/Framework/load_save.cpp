@@ -14,7 +14,6 @@
 #include "Generation/EffectsState.hpp"
 #include "Generation/EffectModules.hpp"
 #include "Interface/LookAndFeel/Miscellaneous.hpp"
-#include "update_types.hpp"
 #include "Plugin/Renderer.hpp"
 #include "Plugin/Complex.hpp"
 
@@ -371,7 +370,8 @@ namespace Framework
     {
       if (!cjson_GetObjectItem(data, "options"))
       {
-        auto errorString = utils::string::create("%v\nOptions parameter %v (%zu) is missing its options, replacing with default ones from the plugin.",
+        auto errorString = utils::string::create(localScratch, 
+          "%v\nOptions parameter %v (%zu) is missing its options, replacing with default ones from the plugin.",
           utils::string_view{ *errorPath }, parameter->details_.displayName, parameter->details_.id);
         Interface::showNativeMessageBox("Error opening preset", errorString.data(), Interface::MessageBoxType::Warning);
 
@@ -527,7 +527,8 @@ namespace Generation
 
       if (!parameter)
       {
-        auto errorString = utils::string::create("%v\nMissing Parameter %v (%zu), replacing with a default initialised one. \
+        auto errorString = utils::string::create(localScratch,
+          "%v\nMissing Parameter %v (%zu), replacing with a default initialised one. \
           This should have been handled by the version upgrade routine but it wasn't. \
           If this is the mainline version of the plugin consider reporting it to the developer.",
           utils::string_view{ *errorPath }, expectedParameter->details.displayName, expectedParameter->details.id);
@@ -559,7 +560,8 @@ namespace Generation
         if (!isPresent)
         {
           auto displayName = cjson_GetObjectItem(child, "display_name")->vstring;
-          auto errorString = utils::string::create("%v\nUnexpected parameter %s (%zu).",
+          auto errorString = utils::string::create(localScratch, 
+            "%v\nUnexpected parameter %s (%zu).",
             utils::string_view{ *errorPath }, displayName, id);
           Interface::showNativeMessageBox("Error opening preset", errorString.data(), Interface::MessageBoxType::Warning);
         }
@@ -714,6 +716,34 @@ namespace Plugin
     jsonArena = nullptr;
   }
 
+  struct PresetUpdate final : public Framework::UndoAction
+  {
+    PresetUpdate(Plugin::ComplexPlugin &plugin, utils::sp<Plugin::State> newSavedState) :
+      plugin(plugin), state{ COMPLEX_MOVE(newSavedState) }
+    {
+      redo = [](UndoAction *a)
+      {
+        auto *self = (PresetUpdate *)a;
+
+        auto g = self->state->plugin->acquireProcessingLock();
+        auto oldState = self->plugin.exchangeStates(COMPLEX_MOVE(self->state));
+        self->state = COMPLEX_MOVE(oldState);
+      };
+
+      undo = [](UndoAction *a)
+      {
+        auto *self = (PresetUpdate *)a;
+
+        auto g = self->state->plugin->acquireProcessingLock();
+        auto newState = self->plugin.exchangeStates(COMPLEX_MOVE(self->state));
+        self->state = COMPLEX_MOVE(newState);
+      };
+    }
+
+    Plugin::ComplexPlugin &plugin;
+    utils::sp<Plugin::State> state;
+  };
+
   void loadState(ComplexPlugin *plugin, utils::string_view data)
   {
     bool wasStateInitialised = plugin->wasStateInitialised;
@@ -748,8 +778,14 @@ namespace Plugin
     state->fft = plugin->getFFTConverter(minOrder, maxOrder);
 
     if (wasStateInitialised && plugin->state_.get())
-      plugin->pushUndo(new Framework::PresetUpdate{ *plugin, COMPLEX_MOVE(state) });
+    {
+      auto *storage = plugin->undoManager.beginNewTransaction();
+      plugin->undoManager.perform(anew(storage, PresetUpdate, 
+        { *plugin, COMPLEX_MOVE(state) }));
+    }
     else
       plugin->state_ = COMPLEX_MOVE(state);
+
+    Interface::uiRelated.state = plugin->state_.get();
   }
 }

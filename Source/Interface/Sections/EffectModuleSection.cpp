@@ -87,7 +87,7 @@ namespace Interface
       shiftBounds_.setTotalRange(2 * getWidth());
       PinBoundsBox::resized();
     }
-    void controlValueChanged(BaseControl *control) override
+    void controlValueChanged(Control *control) override
     {
       if (&shiftBounds_ == control)
       {
@@ -323,7 +323,7 @@ namespace Interface
   static constexpr auto kCommonEffectParameters = Framework::Processors::BaseEffect::enum_ids_filter<Framework::kGetParameterPredicate, true>();
   static constexpr auto kEffectModuleParameters = Framework::Processors::EffectModule::enum_ids_filter<Framework::kGetParameterPredicate, true>();
 
-  void EffectModuleSection::controlValueChanged(BaseControl *control)
+  void EffectModuleSection::controlValueChanged(Control *control)
   {
     if (control != effectTypeSelector_.get() && control != effectAlgoSelector_.get())
     {
@@ -432,7 +432,7 @@ namespace Interface
     repaintBackground();
   }
 
-  void EffectModuleSection::automationMappingChanged(BaseControl *control, bool isUnmapping)
+  void EffectModuleSection::automationMappingChanged(Control *control, bool isUnmapping)
   {
     if (!effectModule_ || isUnmapping)
       return;
@@ -472,7 +472,7 @@ namespace Interface
   Generation::BaseEffect *EffectModuleSection::getEffect() noexcept { return effectModule_->getEffect(); }
   TextSelector &EffectModuleSection::getAlgorithmSelector() const noexcept { return *effectAlgoSelector_; }
 
-  BaseControl *EffectModuleSection::getEffectControl(utils::string_view id)
+  Control *EffectModuleSection::getEffectControl(utils::string_view id)
   {
     using namespace Framework;
 
@@ -527,12 +527,12 @@ namespace Interface
 
   namespace
   {
-    std::vector<utils::up<BaseControl>> initFilterParameters(EffectModuleSection *section, utils::string_view type)
+    std::vector<utils::up<Control>> initFilterParameters(EffectModuleSection *section, utils::string_view type)
     {
       using namespace Framework;
 
       auto *baseEffect = section->getEffect();
-      std::vector<utils::up<BaseControl>> parameters;
+      std::vector<utils::up<Control>> parameters;
 
       auto initNormal = [&]()
       {
@@ -663,12 +663,12 @@ namespace Interface
       }
     }
 
-    std::vector<utils::up<BaseControl>> initDynamicsParameters(EffectModuleSection *section, utils::string_view type)
+    std::vector<utils::up<Control>> initDynamicsParameters(EffectModuleSection *section, utils::string_view type)
     {
       using namespace Framework;
 
       auto *baseEffect = section->getEffect();
-      std::vector<utils::up<BaseControl>> parameters;
+      std::vector<utils::up<Control>> parameters;
 
       auto initContrast = [&]()
       {
@@ -752,12 +752,12 @@ namespace Interface
       }
     }
 
-    std::vector<utils::up<BaseControl>> initPhaseParameters(EffectModuleSection *section, utils::string_view type)
+    std::vector<utils::up<Control>> initPhaseParameters(EffectModuleSection *section, utils::string_view type)
     {
       using namespace Framework;
 
       auto *baseEffect = section->getEffect();
-      std::vector<utils::up<BaseControl>> parameters;
+      std::vector<utils::up<Control>> parameters;
 
       auto initShift = [&]()
       {
@@ -831,12 +831,12 @@ namespace Interface
       }
     }
 
-    std::vector<utils::up<BaseControl>> initPitchParameters(EffectModuleSection *section, utils::string_view type)
+    std::vector<utils::up<Control>> initPitchParameters(EffectModuleSection *section, utils::string_view type)
     {
       using namespace Framework;
 
       auto *baseEffect = section->getEffect();
-      std::vector<utils::up<BaseControl>> parameters;
+      std::vector<utils::up<Control>> parameters;
 
       auto initResample = [&]()
       {
@@ -906,12 +906,12 @@ namespace Interface
       }
     }
 
-    std::vector<utils::up<BaseControl>> initDestroyParameters(EffectModuleSection *section, utils::string_view type)
+    std::vector<utils::up<Control>> initDestroyParameters(EffectModuleSection *section, utils::string_view type)
     {
       using namespace Framework;
 
       auto *baseEffect = section->getEffect();
-      std::vector<utils::up<BaseControl>> parameters;
+      std::vector<utils::up<Control>> parameters;
 
       auto initReinterpret = [&]()
       {

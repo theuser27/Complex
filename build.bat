@@ -5,6 +5,7 @@ set release=0
 set vst=1
 set standalone=0
 set clap=0
+set data=0
 
 for %%a in (%*) do set "%%~a=1"
 if "%standalone%"=="1"           echo [standalone build]     && set vst=0 && set clap=0
@@ -23,6 +24,7 @@ set compiler_flags= /I%top_level%\Source\ /std:c++20 /nologo /diagnostics:column
 set linker_flags=   /ERRORREPORT:PROMPT /MANIFEST:EMBED /INCREMENTAL:NO /DEBUG /noexp /nocoffgrpinfo /OPT:REF /OPT:ICF Opengl32.lib Dwmapi.lib kernel32.lib user32.lib Gdi32.lib Ole32.lib Shell32.lib
 
 set build_dir=build_test
+set binary_data_dir=Source\Data
 if not exist %build_dir% mkdir %build_dir%
 
 if "%vst%"=="1" (
@@ -64,6 +66,15 @@ if %ERRORLEVEL% neq 0 (
   echo:
 )
 
+if "%data%"=="1" (
+  call :DataGen
+  goto :EOF
+)
+if not exist .\Source\Data (
+  echo Generating missing binary data
+  call :DataGen
+)
+
 call :StartTimer
 
 if not exist %build_dir% mkdir %build_dir%
@@ -85,9 +96,24 @@ echo:
 call :StopTimer
 call :DisplayTimerResult
 
+goto :EOF
 
+::--------Data Generation--------
 
-::--------Timer stuff--------
+:DataGen
+:: Generates Binary Data
+echo [serialising data]
+pushd helpers
+if not exist build mkdir build
+pushd build
+call cl /nologo /FC /MTd ../serialise_binary.cpp /link /DEBUG kernel32.lib Shell32.lib Shlwapi.lib Ole32.lib > NUL 2> NUL
+serialise_binary.exe ..\..\Source\Data ..\..\Data
+popd
+rd /q /s build
+popd
+goto :EOF
+
+::----------Timer stuff----------
 
 :StartTimer
 :: Store start time

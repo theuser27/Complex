@@ -6,7 +6,7 @@
 namespace utils
 {
   // malloc replacement
-  byte *allocate(usize size, usize alignment);
+  byte *allocate(usize size, usize alignment, bool clean);
   // free replacement
   void deallocate(const void *memory);
 }

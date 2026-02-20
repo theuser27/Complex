@@ -22,6 +22,26 @@
   #define NOCRYPT
   #define NOOPENFILE
   #define NOSCROLL
+  #define NOSOUND
+  #define NOCOMM
+  #define NOKANJI
+  #define NORPC
+  #define NOPROXYSTUB
+  #define NOIMAGE
+  #define NOTAPE
+  #define NONLS
+  #define NOSHOWWINDOW
+  #define NORASTEROPS
+  #define NOSYSCOMMANDS
+  #define NOMSG
+  #define NOTEXTMETRIC
+  #define NOWINOFFSETS
+  #define NODEFERWINDOWPOS
+  #define NOGDICAPMASKS
+  #define NOVIRTUALKEYCODES
+  #define NOWINMESSAGES
+  #define NOWINSTYLES
+  #define NOSYSMETRICS
   #include <windows.h>
   #include <timeapi.h>
   #pragma comment(lib, "winmm.lib")
@@ -236,38 +256,14 @@ namespace utils
   static_assert(offsetof(::String_View, size) == offsetof(utils::string_view, size_));
 
   byte *
-  allocate(usize size, usize alignment)
+  allocate(usize size, usize alignment, bool clean)
   {
-  #ifdef COMPLEX_MSVC
-    byte *memory = (byte *)::_aligned_malloc(size, alignment);
-  #elif COMPLEX_MAC
-    static_assert(alignof(::max_align_t) >= sizeof(void *));
-    byte *memory = nullptr;
-    if (alignment >= sizeof(void *)) // like in the posix docs
-    {
-      void *memory_;
-      // aligned_alloc is broken on mac for me, but posix_memalign seems to work
-      auto success = ::posix_memalign(&memory_, alignment, size);
-      if (success == 0)
-        memory = (byte *)memory_;
-    }
-    else // fall back to regular malloc
-      memory = (byte *)::malloc(size);
-  #else
-    byte *memory = (byte *)::aligned_alloc(alignment, size);
-  #endif
-    COMPLEX_ASSERT(memory, "Memory (%zu) could not be allocated with this alignment (%zu)", size, alignment);
-
-    return memory;
+    return utils::bumpArena::insert(globalArena, size, alignment, clean);
   }
 
   void deallocate(const void *memory)
   {
-  #ifdef COMPLEX_MSVC
-    ::_aligned_free(const_cast<void *>(memory));
-  #else
-    ::free(const_cast<void *>(memory));
-  #endif
+    return utils::bumpArena::remove(memory);
   }
 
   static constinit satomi::atomic<int> pageSize_ = 0;
@@ -488,23 +484,6 @@ namespace utils
   #endif
   }
 
-  static strict_inline usize 
-  getThreadId() noexcept
-  {
-    usize threadId{};
-  #if COMPLEX_WINDOWS
-    auto threadId_ = ::GetCurrentThreadId();
-  #elif COMPLEX_LINUX
-    auto threadId_ = ::gettid();
-  #elif COMPLEX_MAC
-    // https://elliotth.blogspot.com/2012/04/gettid-on-mac-os.html
-    auto threadId_ = ::syscall(SYS_thread_selfid);
-  #endif
-    static_assert(sizeof(usize) >= sizeof(threadId_));
-    ::memcpy(&threadId, &threadId_, sizeof(threadId_));
-    return threadId;
-  }
-
   i32 
   lockAtomic(satomi::atomic<i32> &atomic, bool isExclusive, WaitMechanism mechanism,
     const utils::smallFn<void()> &lambda) noexcept
@@ -617,8 +596,8 @@ namespace utils
   #endif
   }
   
-  thread::id
-  thread::getCurrentId()
+  static thread::id
+  getCurrentThreadId()
   {
   #if COMPLEX_WINDOWS
     return { (decltype(thread::id::nativeId))::GetCurrentThreadId() };
@@ -649,6 +628,8 @@ namespace utils
   {
     utils::dynFn<int()> function = COMPLEX_MOVE(*(utils::dynFn<int()> *)argument);
     utils::deallocate(argument);
+
+    thread::currentId = getCurrentThreadId();
 
     int result = function();
 
@@ -1543,7 +1524,7 @@ namespace utils
 #undef GET_READ_ACCESS
 #undef GET_ARENA_NODE_FROM_END
 
-  void at_program_load()
+  void atLoad()
   {
   #if COMPLEX_WINDOWS
     ::SYSTEM_INFO sysinfo{};
@@ -1556,11 +1537,13 @@ namespace utils
   #else
     pageSize_.store(::sysconf(_SC_PAGE_SIZE), satomi::memory_order_relaxed);
   #endif
+
+    utils::thread::currentId = getCurrentThreadId();
   }
   
 
   usize 
-  bumpArena::getUsedSize(bumpArena *arena) noexcept
+  bumpArena::getUsedSize(bumpArena *arena)
   {
     utils::ScopedLock g{ arena->lock, utils::WaitMechanism::Spin };
     // TODO:
@@ -1568,8 +1551,9 @@ namespace utils
   }
 
   byte *
-  bumpArena::insert(bumpArena *arena, usize size, usize alignment, bool clean, bool threadSafe)
+  bumpArena::insert(bumpArena *arena, usize size, usize alignment, bool clean)
   {
+    COMPLEX_HARD_ASSERT(arena);
     COMPLEX_HARD_ASSERT(utils::isPowerOfTwo(alignment));
 
     size = utils::roundUpToMultiple(size, sizeof(node));
@@ -1579,7 +1563,7 @@ namespace utils
       "Allocations larger than 4GB cannot fit inside this arena");
 
     utils::ScopedLock g{};
-    if (threadSafe)
+    if (arena->threadSafe)
       g = ScopedLock{ arena->lock, utils::WaitMechanism::Spin };
 
     byte *memory{};
@@ -1684,7 +1668,7 @@ namespace utils
       
         auto *nextArena = arena->nextArena;
         g.~ScopedLock();
-        return insert(nextArena, size, alignment, clean, threadSafe);
+        return insert(nextArena, size, alignment, clean);
       }
     }
 
@@ -1719,13 +1703,13 @@ namespace utils
     return memory;
   }
 
-  void bumpArena::remove(const void *data, bool threadSafe)
+  void bumpArena::remove(const void *data)
   {
     auto *toRemove = utils::launder((bumpArena::node *)((byte *)data - sizeof(bumpArena::node))); 
     auto *arena = utils::launder((bumpArena *)((byte *)toRemove - toRemove->offsetToArena));
 
     utils::ScopedLock g{};
-    if (threadSafe)
+    if (arena->threadSafe)
       g = { arena->lock, utils::WaitMechanism::Spin };
 
     node *currentNode{}, *previousNode{};
@@ -1751,11 +1735,11 @@ namespace utils
     ((currentNode) ? currentNode->next : arena->freeNodeStart) = toRemove->offsetToArena;
   }
 
-  void bumpArena::shrinkToFit(bumpArena *arena, bool shrinkToCommitted, bool threadSafe)
+  void bumpArena::shrinkToFit(bumpArena *arena, bool shrinkToCommitted)
   {
     {
       utils::ScopedLock g{};
-      if (threadSafe)
+      if (arena->threadSafe)
         g = { arena->lock, utils::WaitMechanism::Spin };
 
       usize committedSize = (usize)arena->committedSize + 1;
@@ -1793,14 +1777,14 @@ namespace utils
     }
 
     if (arena->nextArena)
-      shrinkToFit(arena->nextArena, shrinkToCommitted, threadSafe);
+      shrinkToFit(arena->nextArena, shrinkToCommitted);
   }
 
-  void bumpArena::clear(bumpArena *arena, bool threadSafe)
+  void bumpArena::clear(bumpArena *arena)
   {
     {
       utils::ScopedLock g{};
-      if (threadSafe)
+      if (arena->threadSafe)
         g = { arena->lock, utils::WaitMechanism::Spin };
 
       arena->freeNodeStart = (u32)sizeof(bumpArena);
@@ -1809,7 +1793,7 @@ namespace utils
     }
 
     if (arena->nextArena)
-      clear(arena->nextArena, threadSafe);
+      clear(arena->nextArena);
   }
 
   void bumpArena::destroy(bumpArena *arena)

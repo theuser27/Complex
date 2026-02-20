@@ -7,17 +7,17 @@
 
 namespace Interface
 {
-  class BaseControl;
+  class Control;
 
   class PopupDisplay final : public Component
   {
   public:
     static constexpr int kLineHeight = 16;
 
-    PopupDisplay();
+    void initialise();
 
     bool render(OpenGlWrapper &openGl) override;
-    virtual void handleCommandMessage(u64 commandId, utils::whatever) override;
+    void handleCommandMessage(u64 commandId, utils::whatever) override;
 
     void setContent(Component *sourceComponent, utils::string displayText, 
       Placement relativePlacement)
@@ -28,7 +28,7 @@ namespace Interface
       text = COMPLEX_MOVE(displayText);
       componentFlags.isVisible = true;
     }
-    void setContentControl(BaseControl *sourceControl, Placement relativePlacement)
+    void setContentControl(Control *sourceControl, Placement relativePlacement)
     {
       source = sourceControl;
       isControl = true;
@@ -69,7 +69,7 @@ namespace Interface
     static constexpr float kPrimaryFontHeight = 13.0f;
     static constexpr float kSecondaryFontHeight = 11.0f;
 
-    PopupSelector();
+    void initialise();
 
     bool keyPressed(const KeyPress &key) override;
     bool handleFocus(bool hasFocus, FocusChange focusChange) override;

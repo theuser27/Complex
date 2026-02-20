@@ -122,7 +122,7 @@ namespace utils
     if (!isExclusive)
       return lockAtomic(lock.lock, isExclusive, mechanism, lambda);
 
-    auto threadId = utils::thread::getCurrentId();
+    auto threadId = utils::thread::currentId;
     if (lock.lastLockId.load(satomi::memory_order_relaxed) == threadId)
     {
       if (isReentrant)
@@ -163,7 +163,7 @@ namespace utils
     ScopedLock(ReentrantLock<bool> &reentrantLock, WaitMechanism mechanism, bool expected = false) noexcept :
       type_(ReentrantBoolEnum), mechanism_(mechanism), reentrantBool_{ &reentrantLock, false, expected }
     {
-      auto threadId = utils::thread::getCurrentId();
+      auto threadId = utils::thread::currentId;
       reentrantBool_.wasLocked = threadId == reentrantLock.lastLockId.load(satomi::memory_order_relaxed);
 
       if (!reentrantBool_.wasLocked)
