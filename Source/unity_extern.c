@@ -89,5 +89,5 @@
 #define STB_SPRINTF_IMPLEMENTATION
 #include "Third Party/stb/stb_sprintf.h"
 
-#define CJSON_IMPLEMENTATION
-#include "Third Party/cjson/cjson.h"
+#include "Third Party/cjson/cjson.c"
+#include "Third Party/pffft/pffft.c"

@@ -1486,6 +1486,7 @@ namespace utils
       COMPLEX_ASSERT(size_ >= index + length, "Range is outside of string in string::remove(index, length)");
       utils::contiguousMoveElements(data_ + index, data_ + index + length, size_ - index - length);
       size_ -= length;
+      data_[size_] = '\0';
       return *this;
     }
     string &
@@ -1501,6 +1502,7 @@ namespace utils
     {
       COMPLEX_ASSERT(size_ >= length, "Length out of range in string::remove_suffix(length)");
       size_ -= length;
+      data_[size_] = '\0';
       return *this;
     }
 
@@ -1610,18 +1612,18 @@ namespace utils
 
     usize size = (usize)::stbsp_snprintf(string, (int)maximumStringLength, format, (int)maximumDecimalLength, value);
 
-    if (maximumDecimalLength)
-    {
-      usize i;
-      for (i = size - 1; i > 0; --i)
-        if (string[i] != '0' && string[i] != ' ' && string[i] != '\0')
-          break;
+    //if (maximumDecimalLength)
+    //{
+    //  usize i;
+    //  for (i = size - 1; i > 0; --i)
+    //    if (string[i] != '0' && string[i] != ' ' && string[i] != '\0')
+    //      break;
 
-      size -= (size - 1) - i;
-      if (string[size - 1] == '.')
-        --size;
-    }
-    string[size] = '\0';
+    //  size -= (size - 1) - i;
+    //  if (string[size - 1] == '.')
+    //    --size;
+    //}
+    //string[size] = '\0';
 
     return size;
   }

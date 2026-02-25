@@ -29,7 +29,7 @@ namespace Interface
     }
 
     DDinFontId = nvgCreateFontMem(context, "DDin",
-      (unsigned char *)BinaryData::D_DIN_Bold_ttf, (int)BinaryData::D_DIN_Bold_ttfSize, false);
+      (unsigned char *)BinaryData::D_DIN_Bold_otf, (int)BinaryData::D_DIN_Bold_otfSize, false);
     InterFontId = nvgCreateFontMem(context, "DDin",
       (unsigned char *)BinaryData::Inter_Medium_ttf, (int)BinaryData::Inter_Medium_ttfSize, false);
 

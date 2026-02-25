@@ -368,19 +368,32 @@ namespace Interface
     selector->summon(this, position);
   }
 
+  static usize getIntegerCharacterLength(utils::string_view string)
+  {
+    usize i = 0;
+    for (; i < string.size(); ++i)
+      if (string[i] >= '0' && string[i] <= '9')
+        break;
+
+    usize j = i;
+    for (; j < string.size(); ++j)
+      if (string[j] < '0' || string[j] > '9')
+        break;
+
+    return j - i;
+  }
 
   float 
-  Control::getNumericTextMaxWidth(FontId usedFont, float lineHeight) const
+  Control::getNumericTextMaxWidth(FontId usedFont, float lineHeight)
   {
     COMPLEX_ASSERT(details.scale != Framework::ParameterScale::Indexed);
 
-    auto sampleRate = getPlugin(uiRelated.renderer).getSampleRate();
-    double lowestValue = Framework::scaleValue(details.minValue, details, sampleRate, true);
-    double highestValue = Framework::scaleValue(details.maxValue, details, sampleRate, true);
+    double lowestValue = details.displayUnits == "%" ? details.minValue * 100.0 : details.minValue;
+    double highestValue = details.displayUnits == "%" ? details.maxValue * 100.0 : details.maxValue;
 
     double probablyLongestValue = (::fabs(lowestValue) < ::fabs(highestValue)) ? highestValue : lowestValue;
     // we have nextafter at home
-    probablyLongestValue = utils::bit_cast<double>(utils::bit_cast<u64>(probablyLongestValue) - (u64(1) << 39));
+    probablyLongestValue = probablyLongestValue - 0.1;// utils::bit_cast<double>(utils::bit_cast<u64>(probablyLongestValue) - ((u64(1) << 38) - 1));
 
     char buffer[64]{};
     usize size{};
@@ -394,6 +407,9 @@ namespace Interface
       size = utils::floatToString(probablyLongestValue, buffer, sizeof(buffer), maxDecimalCharacters,
         controlFlags.shouldUsePlusMinusPrefix || details.minValue < 0.0f);
     }
+
+    // find the number of integer characters
+    controlFlags.maxIntergerCharacters = (u8)getIntegerCharacterLength({ buffer, size });
 
     auto maxStringLength = utils::string{ localScratch, { buffer, size } };
     if (!popupPrefix.empty())
@@ -457,8 +473,17 @@ namespace Interface
     else
     {
       utils::floatToString(outString, scaledValue,
-        ::round(scaledValue) != scaledValue ? maxDecimalCharacters : 0,
+        maxDecimalCharacters,
         controlFlags.shouldUsePlusMinusPrefix);
+
+      if (controlFlags.maxIntergerCharacters)
+      {
+        usize currentIntegerLength = getIntegerCharacterLength(outString);
+        if (currentIntegerLength > controlFlags.maxIntergerCharacters)
+          outString.removeSuffix(currentIntegerLength - controlFlags.maxIntergerCharacters);
+        else if (currentIntegerLength < controlFlags.maxIntergerCharacters)
+          outString.prepend("0", controlFlags.maxIntergerCharacters - currentIntegerLength);
+      }
     }
 
     if (addPrefix)

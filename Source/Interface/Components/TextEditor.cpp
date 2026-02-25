@@ -64,7 +64,8 @@ namespace Interface
       float ascender, lineHeight;
       nvgFillColor(openGl, getColour(textColour, this));
       nvgTextMetrics(openGl.g, &ascender, nullptr, &lineHeight);
-      nvgText(openGl.g, 0.0f, ((float)bounds.h - lineHeight) * 0.5f + ascender,
+      float xOffset = 0.5f * ((float)bounds.w - uiRelated.cache->getStringWidthFloat(text));
+      nvgText(openGl.g, xOffset, ((float)bounds.h - lineHeight) * 0.5f + ascender,
         text.data(), text.data() + text.size());
     }
 

@@ -57,7 +57,7 @@ namespace Interface
     void createPopupMenu(PopupSelector *selector, Point<i32> position);
 
     void showTextEntry();
-    float getNumericTextMaxWidth(FontId usedFont, float lineHeight) const;
+    float getNumericTextMaxWidth(FontId usedFont, float lineHeight);
 
     void showPopup(bool primary = true);
     void hidePopup(bool primary = true);
@@ -94,6 +94,7 @@ namespace Interface
       bool hasBegunChange : 1 = false;
       bool isTextEntryVisible : 1 = false;
       bool isInModalState : 1 = false;
+      u8 maxIntergerCharacters : 5 = 0;
     } controlFlags{};
 
     u32 maxDecimalCharacters = kDefaultMaxDecimalCharacters;
