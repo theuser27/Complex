@@ -13,9 +13,9 @@
 #include "cplug/config.h"
 
 #include "Third Party/cjson/cjson.h"
-#include "Third Party/xhl/files.h"
+#include "Third Party/xhl/xhl_files.h"
 
-#include "Data/BinaryData.h"
+#include "Data/BinaryData.hpp"
 
 #include "Framework/load_save.hpp"
 #include "BaseComponent.hpp"
@@ -193,18 +193,18 @@ namespace Interface
 
     COMPLEX_ASSERT(component->skinOverride <= Skin::kUseParentOverride);
 
-    return (component->skinOverride == Skin::kUseParentOverride) ? 
+    return (component->skinOverride == Skin::kUseParentOverride) ?
       Skin::kNone : component->skinOverride;
   }
-  
-  Colour 
+
+  Colour
   Skin::getColour(ColourId colorId, const Component *component) const
   {
     COMPLEX_ASSERT(colorId < kColorIdCount);
     return colours[getSkinOverrideIndex(component)][colorId];
   }
 
-  float 
+  float
   Skin::getValue(ValueId valueId, const Component *component) const
   {
     COMPLEX_ASSERT(valueId < kValueIdCount);
@@ -304,7 +304,7 @@ namespace Interface
   bool Skin::stringToState(utils::string_view skinString)
   {
     jsonArena = utils::bumpArena::createNested(localScratch, COMPLEX_KB(128));
-    
+
     const char *potentialError = nullptr;
     cjson *data = cjson_ParseWithOpts(skinString.data(), skinString.size(), &potentialError, false);
     if (!data)

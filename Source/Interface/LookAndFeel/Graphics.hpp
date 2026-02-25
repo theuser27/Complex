@@ -16,15 +16,13 @@ extern "C"
 
 namespace Interface
 {
-  using FontId = u8;
+  enum class FontId : u8 { DDinType, InterType };
 
   class Graphics
   {
   public:
-    enum FontType : FontId { DDinType, InterType };
-
     static constexpr float kDDinDefaultHeight = 11.5f;
-    static constexpr float kInterVDefaultHeight = 12.0f;
+    static constexpr float kInterVDefaultHeight = 11.0f;
 
     static constexpr float kDDinDefaultKerning = 0.5f;
     static constexpr float kInterVDefaultKerning = 0.5f;

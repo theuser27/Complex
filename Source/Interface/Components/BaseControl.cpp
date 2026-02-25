@@ -270,7 +270,7 @@ namespace Interface
     
     i32 minSize{}, maxSize{};
 
-    uiRelated.cache->setFont(Graphics::InterType, scaleValue(height));
+    uiRelated.cache->setFont(FontId::InterType, scaleValue(height));
 
     if (!availableWidth)
     {
@@ -380,7 +380,7 @@ namespace Interface
 
     double probablyLongestValue = (::fabs(lowestValue) < ::fabs(highestValue)) ? highestValue : lowestValue;
     // we have nextafter at home
-    probablyLongestValue = utils::bit_cast<double>(utils::bit_cast<u64>(probablyLongestValue) - 1);
+    probablyLongestValue = utils::bit_cast<double>(utils::bit_cast<u64>(probablyLongestValue) - (u64(1) << 39));
 
     char buffer[64]{};
     usize size{};
@@ -395,8 +395,11 @@ namespace Interface
         controlFlags.shouldUsePlusMinusPrefix || details.minValue < 0.0f);
     }
 
-    auto maxStringLength = utils::string::create(localScratch, "%v%v%v", 
-      utils::string_view{ popupPrefix }, utils::string_view{ buffer, size }, details.displayUnits);
+    auto maxStringLength = utils::string{ localScratch, { buffer, size } };
+    if (!popupPrefix.empty())
+      maxStringLength.prepend(popupPrefix);
+    if (!details.displayUnits.empty())
+      maxStringLength.append(details.displayUnits);
 
     uiRelated.cache->setFont(usedFont, lineHeight);
     return uiRelated.cache->getStringWidthFloat(maxStringLength);

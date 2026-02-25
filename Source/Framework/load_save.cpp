@@ -5,7 +5,7 @@
 
 #include "cplug/config.h"
 
-#include "Third Party/xhl/files.h"
+#include "Third Party/xhl/xhl_files.h"
 #include "Third Party/cjson/cjson.h"
 
 #include "Framework/parameter_value.hpp"
@@ -32,7 +32,7 @@ cjsonAllocate(size_t size)
 }
 
 // we free the arena at the end, so it's pointless to deallocate
-static void 
+static void
 #ifdef COMPLEX_WINDOWS
 __cdecl
 #endif
@@ -131,7 +131,7 @@ namespace Framework::LoadSave
     windowWidth = Interface::kMinWidth;
     windowHeight = Interface::kMinHeight;
     windowScale = 1.0f;
-    
+
     useConfigJson([&](cjson *json)
       {
         if (cjson *item = cjson_GetObjectItem(json, "window_width"))
@@ -208,7 +208,7 @@ namespace Framework::LoadSave
 #undef setJsonItem
 }
 
-static void handleIndexedData(utils::bumpArena *arena, [[maybe_unused]] bool isAutomated, 
+static void handleIndexedData(utils::bumpArena *arena, [[maybe_unused]] bool isAutomated,
   Framework::ParameterDetails &details, cjson *indexedData)
 {
   //bool isExtensible = (details.flags & Framework::ParameterDetails::Extensible) != 0;
@@ -320,7 +320,7 @@ namespace Framework
 
           if (child->dynamicUpdateUuid != uuid{})
             cjson_AddTo(childData, "dynamic_update_uuid", cjson_Unsigned, child->dynamicUpdateUuid);
-          
+
           self(self, childData, child);
         }
 
@@ -340,12 +340,12 @@ namespace Framework
       cjson_AddTo(data, "default_value", cjson_Float, (double)details_.defaultValue);
       cjson_AddTo(data, "default_normalised_value", cjson_Float, (double)details_.defaultNormalisedValue);
     }
-    
+
     // TODO: add modulators
   }
 
   utils::dll<ParameterValue> *
-  ParameterValue::deserialiseFromJson(Generation::BaseProcessor *processor, void *jsonData, 
+  ParameterValue::deserialiseFromJson(Generation::BaseProcessor *processor, void *jsonData,
     ParameterDetails &reference, utils::dll<ParameterValue> *memory)
   {
     COMPLEX_ASSERT(memory);
@@ -370,7 +370,7 @@ namespace Framework
     {
       if (!cjson_GetObjectItem(data, "options"))
       {
-        auto errorString = utils::string::create(localScratch, 
+        auto errorString = utils::string::create(localScratch,
           "%v\nOptions parameter %v (%zu) is missing its options, replacing with default ones from the plugin.",
           utils::string_view{ *errorPath }, parameter->details_.displayName, parameter->details_.id);
         Interface::showNativeMessageBox("Error opening preset", errorString.data(), Interface::MessageBoxType::Warning);
@@ -419,7 +419,7 @@ namespace Framework
           maxValue = referenceMax;
         }
 
-        // always set min/max for dynamic indexed parameters, 
+        // always set min/max for dynamic indexed parameters,
         // since it might be possible to check them at this time
         if (parameter->details_.scale == ParameterScale::Indexed &&
           (parameter->details_.flags & ParameterDetails::Extensible) != 0)
@@ -434,11 +434,11 @@ namespace Framework
     // TODO: fit modulation here
 
     float value = utils::clamp((float)cjson_GetObjectItem(data, "value")->vdouble, 0.0f, 1.0f);
-    parameter->normalisedValue_ = value;  
+    parameter->normalisedValue_ = value;
     parameter->isDirty_ = true;
     parameter->updateValue(processor->state->plugin->getSampleRate());
 
-    // paranoid check just in case 
+    // paranoid check just in case
     COMPLEX_ASSERT(parameter->normalisedValue_ == value);
 
     if (automationSlot != u64(-1))
@@ -509,7 +509,7 @@ namespace Generation
       }
     };
 
-    for (auto *expectedParameter = metadata->parameters; 
+    for (auto *expectedParameter = metadata->parameters;
       expectedParameter; expectedParameter = expectedParameter->next)
     {
       utils::dll<Framework::ParameterValue> *parameter{};
@@ -518,7 +518,7 @@ namespace Generation
         uuid id = cjson_GetObjectItem(child, "id")->vuint;
         if (id == expectedParameter->details.id)
         {
-          parameter = Framework::ParameterValue::deserialiseFromJson(processor, 
+          parameter = Framework::ParameterValue::deserialiseFromJson(processor,
             child, expectedParameter->details, memory);
           cjson_Delete(cjson_DetachItemViaPointer(parametersCopy, child));
           break;
@@ -560,7 +560,7 @@ namespace Generation
         if (!isPresent)
         {
           auto displayName = cjson_GetObjectItem(child, "display_name")->vstring;
-          auto errorString = utils::string::create(localScratch, 
+          auto errorString = utils::string::create(localScratch,
             "%v\nUnexpected parameter %s (%zu).",
             utils::string_view{ *errorPath }, displayName, id);
           Interface::showNativeMessageBox("Error opening preset", errorString.data(), Interface::MessageBoxType::Warning);
@@ -633,7 +633,7 @@ namespace Plugin
       Generation::SoundEngine::kParametersValues.size());
     for (usize i = 0; i < min; ++i)
     {
-      auto *parameter = state->getProcessorParameter(state->soundEngine->stateId, 
+      auto *parameter = state->getProcessorParameter(state->soundEngine->stateId,
         Generation::SoundEngine::kParametersValues[i]);
       COMPLEX_ASSERT(parameter);
       state->parameterBridges[i].resetParameterLink(parameter->getParameterLink(), true);
@@ -657,13 +657,13 @@ namespace Plugin
 
     return processor;
   }
-  
+
   utils::sp<State>
   deserialiseFromJson(ComplexPlugin *plugin, void *newSave)
   {
     auto state = utils::sp<State>::create(plugin);
     cjson *newData = (cjson *)newSave;
-    
+
     utils::string errorPath_{};
     errorPath = &errorPath_;
 
@@ -677,7 +677,7 @@ namespace Plugin
     }
 
     cjson *parameters = cjson_GetObjectItem(soundEngineJson, "parameters");
-    
+
     for (auto *parameter = parameters->child; parameter; parameter = parameter->next)
     {
       if (cjson_GetObjectItem(soundEngineJson, "id")->vuint == Generation::SoundEngine::BlockSize)
@@ -780,7 +780,7 @@ namespace Plugin
     if (wasStateInitialised && plugin->state_.get())
     {
       auto *storage = plugin->undoManager.beginNewTransaction();
-      plugin->undoManager.perform(anew(storage, PresetUpdate, 
+      plugin->undoManager.perform(anew(storage, PresetUpdate,
         { *plugin, COMPLEX_MOVE(state) }));
     }
     else

@@ -7,16 +7,15 @@ set standalone=0
 set clap=0
 set data=0
 
+echo:
+
 for %%a in (%*) do set "%%~a=1"
+if "%data%"=="1"                 set vst=0 && set debug=0
 if "%standalone%"=="1"           echo [standalone build]     && set vst=0 && set clap=0
 if "%clap%"=="1"                 echo [clap build]           && set vst=0 && set standalone=0
 if "%vst%"=="1"                  echo [vst build]            && set standalone=0 && set clap=0
-if "%release%"=="1"              echo [release mode]         && set debug=0
-if "%debug%"=="1"                echo [debug mode]           && set release=0
-if "%~1"==""                     echo [assuming `vst` build] && set vst=1
-if "%~1"=="release" if "%~2"=="" echo [assuming `vst` build] && set vst=1
-
-echo:
+if "%release%"=="1"              echo [release mode]         && set debug=0   && echo:
+if "%debug%"=="1"                echo [debug mode]           && set release=0 && echo:
 
 set top_level=..\..\..
 set compiled_files= %top_level%\Source\unity_extern.c %top_level%\Source\unity1.cpp %top_level%\Source\unity2.cpp
@@ -30,19 +29,23 @@ if not exist %build_dir% mkdir %build_dir%
 if "%vst%"=="1" (
   :: VST3 build
   set build_dir=%build_dir%\vst3
+  set out_file=Complex.vst3
   set compiler_flags= /DLL %compiler_flags%
-  set linker_flags= /OUT:"Complex.vst3" /DLL %linker_flags%
+  set linker_flags= /DLL %linker_flags%
 ) else if "%clap%"=="1" (
   :: Clap build
   set build_dir=%build_dir%\clap
+  set out_file=Complex.clap
   set compiler_flags= /D "COMPLEX_CLAP" /DLL %compiler_flags%
   set linker_flags= /OUT:"Complex.clap" /DLL %linker_flags%
 ) else if "%standalone%"=="1" (
   :: Standalone build
   set build_dir=%build_dir%\standalone
+  set out_file=Complex.exe
   set compiler_flags= /D "COMPLEX_STANDALONE" %compiler_flags%
-  set linker_flags= /OUT:"Complex.exe" %linker_flags%
 )
+
+set linker_flags= /OUT:"%out_file%" %linker_flags%
 
 if not exist %build_dir% mkdir %build_dir%
 
@@ -106,11 +109,12 @@ echo [serialising data]
 pushd helpers
 if not exist build mkdir build
 pushd build
-call cl /nologo /FC /MTd ../resource_generator.cpp /link /DEBUG kernel32.lib Shell32.lib Shlwapi.lib Ole32.lib > NUL 2> NUL
-resource_generator.exe ..\..\Source\Data ..\..\Data
+call cl /nologo /FC /MTd ../resource_generator.c /link /DEBUG kernel32.lib Shell32.lib Shlwapi.lib Ole32.lib > NUL 2> NUL
+resource_generator.exe ..\..\Data ..\..\Source\Data
 popd
 rd /q /s build
 popd
+echo:
 goto :EOF
 
 ::----------Timer stuff----------

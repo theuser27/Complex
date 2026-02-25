@@ -3,7 +3,9 @@
 
 #pragma once
 
+#include "../LookAndFeel/Graphics.hpp"
 #include "../LookAndFeel/BaseComponent.hpp"
+#include "../Components/BaseControl.hpp"
 
 namespace Interface
 {

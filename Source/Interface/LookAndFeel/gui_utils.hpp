@@ -204,9 +204,14 @@ namespace Interface
     constexpr Rectangle withBottom(T newBottom) const { return { x, utils::min(y, newBottom), w, utils::max(T(), newBottom - y) }; }
 
     constexpr Rectangle withTrimmedLeft(T amountToRemove) const { return withLeft(x + amountToRemove); }
-    constexpr Rectangle withTrimmedRight(T amountToRemove) const { return withWidth(w - amountToRemove); }
     constexpr Rectangle withTrimmedTop(T amountToRemove) const { return withTop(y + amountToRemove); }
+    constexpr Rectangle withTrimmedRight(T amountToRemove) const { return withWidth(w - amountToRemove); }
     constexpr Rectangle withTrimmedBottom(T amountToRemove) const { return withHeight(h - amountToRemove); }
+
+    constexpr void trimLeft(T amountToRemove) { *this = withTrimmedLeft(amountToRemove); }
+    constexpr void trimTop(T amountToRemove) { *this = withTrimmedTop(amountToRemove); }
+    constexpr void trimRight(T amountToRemove) { *this = withTrimmedRight(amountToRemove); }
+    constexpr void trimBottom(T amountToRemove) { *this = withTrimmedBottom(amountToRemove); }
 
     constexpr void shift(T deltaX, T deltaY) { x += deltaX; y += deltaY; }
     constexpr Rectangle withShift(T deltaX, T deltaY) const { return { x + deltaX, y + deltaY, w, h }; }

@@ -3,6 +3,8 @@
 
 #include "TextEditor.hpp"
 
+#include "Framework/parameter_value.hpp"
+#include "Framework/parameter_bridge.hpp"
 #include "Plugin/Renderer.hpp"
 #include "../LookAndFeel/Miscellaneous.hpp"
 #include "BaseControl.hpp"
@@ -50,11 +52,22 @@ namespace Interface
   bool 
   TextEditor::render(OpenGlWrapper &openGl)
   {
-    openGl.cache->setFont(font, scaleValue((float)bounds.h));
-    float ascender, lineHeight;
-    nvgTextMetrics(openGl.g, &ascender, nullptr, &lineHeight);
-    nvgText(openGl.g, 0.0f, ((float)bounds.h - lineHeight) * 0.5f + ascender,
-      text.data(), text.data() + text.size());
+    //nvgBeginPath(openGl.g);
+    //nvgRect(openGl, 0.0f, 0.0f, (float)bounds.w, (float)bounds.h);
+    //nvgFillColor(openGl, Colours::white);
+    //nvgFill(openGl);
+
+    if (!text.empty())
+    {
+      nvgBeginPath(openGl);
+      openGl.cache->setFont(font, scaleValue((float)bounds.h));
+      float ascender, lineHeight;
+      nvgFillColor(openGl, getColour(textColour, this));
+      nvgTextMetrics(openGl.g, &ascender, nullptr, &lineHeight);
+      nvgText(openGl.g, 0.0f, ((float)bounds.h - lineHeight) * 0.5f + ascender,
+        text.data(), text.data() + text.size());
+    }
+
     return true;
   }
 
@@ -98,7 +111,7 @@ namespace Interface
 
   SliderValueEditor::SliderValueEditor()
   {
-    font = Graphics::DDinType;
+    font = FontId::DDinType;
 
     getDimensions = [](Component *c, i32 *availableWidth)
     {
@@ -111,12 +124,23 @@ namespace Interface
       if (!availableWidth)
         max = (i32)::ceilf(self->control->getNumericTextMaxWidth(self->font, lineHeight));
       else
+      {
         max = (i32)::ceilf(lineHeight);
+        self->cacheString(self, self->control);
+      }
 
       return Range<i32>{ max, max };
     };
 
-    cacheString = [](TextEditor *, Control *) { };
+    cacheString = [](TextEditor *e, Control *c)
+    {
+      auto *self = (SliderValueEditor *)e;
+      if (auto value = c->getValue(); self->text.empty() || self->cachedValue != value)
+      {
+        c->getScaledValueString(self->text, value);
+        self->cachedValue = value;
+      }
+    };
 
     callback = [](TextEditor &editor, CallbackFlags flags)
     {

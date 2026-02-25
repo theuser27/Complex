@@ -45,8 +45,8 @@ namespace Interface
     padding = { kLineHeight, kLineHeight, kLineHeight, kLineHeight };
     getDimensions = getPopupDisplayDimensions;
 
-    textFontId = Graphics::InterType;
-    numericFontId = Graphics::DDinType;
+    textFontId = FontId::InterType;
+    numericFontId = FontId::DDinType;
   }
 
   bool PopupDisplay::render(OpenGlWrapper &openGl)

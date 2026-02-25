@@ -3,7 +3,7 @@
 
 #include "Miscellaneous.hpp"
 
-#include "Data/BinaryData.h"
+#include "Data/BinaryData.hpp"
 
 #include "nanovg/nanosvg.h"
 
@@ -286,8 +286,8 @@ namespace Interface
 
       //  // body outline
       //  strokePath.addRoundedRectangle(bodyX, bodyY, bodyWidth, bodyHeight, 2.0f, 2.0f, false, false, true, true);
-      //  
-      //  // vertical lines 
+      //
+      //  // vertical lines
       //  strokePath.startNewSubPath((width - centerElementWidth + 1.0f) * 0.5f, bodyY + 2.0f);
       //  strokePath.lineTo((width - centerElementWidth + 1.0f) * 0.5f, bodyY + bodyHeight - 2.0f);
       //  strokePath.closeSubPath();
@@ -360,7 +360,7 @@ namespace Interface
     }
   }
 
-  utils::pair<i32, i32> 
+  utils::pair<i32, i32>
   getScrollOffsets(const MouseEvent &e, float singleStepX, float singleStepY)
   {
     auto rescaleMouseWheelDistance = [](float distance, float singleStepSize)

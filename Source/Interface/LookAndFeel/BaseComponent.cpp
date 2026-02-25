@@ -22,21 +22,21 @@ namespace Interface
 #define GET_SECONDARY_FLAG(component, flag) ((flag) << (1 - (!!(component->componentFlags.isVertical))))
 #define TRANSPOSE(component, rect) ((component->componentFlags.isVertical) ? (rect).transposed() : (rect))
 
-  static void calculateFitPrimary(Component *component, Component *children, bool isVertical)
+  static void calculateFit(Component *component, Component *children, bool isCalculatingVertical)
   {
     if (!component->componentFlags.isVisible)
       return;
 
-    if (!isVertical)
+    if (!isCalculatingVertical)
       component->bounds = {};
 
-    auto Rectangle<i32>:: *minMember = (isVertical) ? &Rectangle<i32>::y : &Rectangle<i32>::x;
-    auto Rectangle<i32>:: *maxMember = (isVertical) ? &Rectangle<i32>::h : &Rectangle<i32>::w;
+    auto Rectangle<i32>:: *minMember = (isCalculatingVertical) ? &Rectangle<i32>::y : &Rectangle<i32>::x;
+    auto Rectangle<i32>:: *maxMember = (isCalculatingVertical) ? &Rectangle<i32>::h : &Rectangle<i32>::w;
     
-    i32 minSize = 0;
-    i32 nonPositionedMinSize = 0;
+    Range<i64> sizes{};
+    Range<i64> nonPositionedSizes{};
 
-    i32 sameAsSiblingsMinSize = 0;
+    Range<i32> sameAsSiblingsSizes{};
     utils::vector<Component *> sameAsSiblingsComponents{};
 
     for (auto *child = children; child; child = child->next)
@@ -44,69 +44,66 @@ namespace Interface
       if (!child->componentFlags.isVisible)
         continue;
 
-      calculateFitPrimary(child, child->children, isVertical);
+      calculateFit(child, child->children, isCalculatingVertical);
 
-      auto childBounds = child->bounds;
-      auto childPadding = child->padding.toInt();
-      auto childMargin = child->margin.toInt();
+      auto extra = (isCalculatingVertical) ? child->margin.getBottom() : child->margin.getRight();
 
-      if (component->componentFlags.isVertical ^ isVertical)
+      // when parent has horizontal/vertical orientation but we're calculating vertical/horizontal sizes
+      if (component->componentFlags.isVertical ^ isCalculatingVertical)
       {
-        minSize = utils::max(minSize, childBounds.*minMember +
-          childPadding.*minMember + childPadding.*maxMember +
-          childMargin.*minMember + childMargin.*maxMember);
+        sizes.min = utils::max(sizes.min, (i64)(child->bounds.*minMember) + extra);
+        sizes.max = utils::max(sizes.max, (i64)(child->bounds.*maxMember) + extra);
       }
       else
       {
         if (child->placement == Placement::custom)
         {
-          nonPositionedMinSize = utils::max(nonPositionedMinSize, 
-            childBounds.*maxMember +
-            childPadding.*minMember + childPadding.*maxMember +
-            childMargin.*minMember + childMargin.*maxMember);
+          nonPositionedSizes.min = utils::max(nonPositionedSizes.min, (i64)(child->bounds.*minMember) + extra);
+          nonPositionedSizes.max = utils::max(nonPositionedSizes.max, (i64)(child->bounds.*maxMember) + extra);
         }
         else
         {
-          minSize += childBounds.*maxMember + 
-            childPadding.*minMember + childPadding.*maxMember +
-            childMargin.*minMember + childMargin.*maxMember;
+          sizes.min += (i64)(child->bounds.*minMember) + extra;
+          sizes.max += (i64)(child->bounds.*maxMember) + extra;
         }
 
-        auto sameAsSiblingsTest = (isVertical) ? 
+        auto sameAsSiblingsTest = (isCalculatingVertical) ?
           Component::SameAsSiblingsY : Component::SameAsSiblingsX;
 
         // taking care of children that conform to siblings' primary size
         if (test_enum(child->sizingFlags, sameAsSiblingsTest))
         {
           sameAsSiblingsComponents.emplace_back(child);
-          sameAsSiblingsMinSize = utils::max(sameAsSiblingsMinSize, childBounds.*minMember);
+          sameAsSiblingsSizes.min = utils::max(sameAsSiblingsSizes.min, child->bounds.*minMember);
+          sameAsSiblingsSizes.max = utils::max(sameAsSiblingsSizes.max, child->bounds.*minMember);
         }
       }
     }
 
     for (auto *child : sameAsSiblingsComponents)
     {
-      child->bounds.*maxMember = sameAsSiblingsMinSize;
-
       if (child->placement == Placement::custom)
       {
-        auto childPadding = child->padding.toInt();
-        auto childMargin = child->margin.toInt();
-
-        nonPositionedMinSize = utils::max(nonPositionedMinSize,
-          sameAsSiblingsMinSize + 
-          childPadding.*minMember + childPadding.*maxMember +
-          childMargin.*minMember + childMargin.*maxMember);
+        auto extra = (isCalculatingVertical) ? child->margin.getBottom() : child->margin.getRight();
+        nonPositionedSizes.min = utils::max(nonPositionedSizes.min, (i64)sameAsSiblingsSizes.min + extra);
+        nonPositionedSizes.max = utils::max(nonPositionedSizes.max, (i64)sameAsSiblingsSizes.max + extra);
       }
       else
-        minSize += sameAsSiblingsMinSize;
+      {
+        sizes.min += sameAsSiblingsSizes.min - child->bounds.*minMember;
+        sizes.max += sameAsSiblingsSizes.max - child->bounds.*maxMember;
+      }
+
+      child->bounds.*minMember = (i32)sameAsSiblingsSizes.min;
+      child->bounds.*maxMember = (i32)sameAsSiblingsSizes.max;
     }
 
-    minSize = utils::max(minSize, nonPositionedMinSize);
+    sizes.min = utils::clamp(nonPositionedSizes.min, sizes.min, (i64)utils::max_limit<i32>);
+    sizes.max = utils::clamp(nonPositionedSizes.max, sizes.max, (i64)utils::max_limit<i32>);
 
     if (test_enum(component->sizingFlags, Component::CustomDimensions))
     {
-      i32 *availableSize = (isVertical) ? &component->bounds.w : nullptr;
+      i32 *availableSize = (isCalculatingVertical) ? &component->bounds.w : nullptr;
       auto [min, max] = component->getDimensions(component, availableSize);
       // returned bounds are scaled so we need to unscale them 
       // in order to work with the rest of the values
@@ -120,20 +117,20 @@ namespace Interface
     }
     else
     {
-      component->bounds.*minMember = utils::max(component->desiredSize.*minMember, minSize);
+      component->bounds.*minMember = utils::max(component->desiredSize.*minMember, (i32)sizes.min);
 
-      bool isGrowable = (isVertical) ?
+      bool isGrowable = (isCalculatingVertical) ?
         ((component->sizingFlags & Component::ScrollableWithBarY) == Component::GrowableY) :
         ((component->sizingFlags & Component::ScrollableWithBarX) == Component::GrowableX);
 
       component->bounds.*maxMember = (isGrowable) ? utils::max_limit<i32> : 
         utils::max(component->bounds.*minMember, 
-          utils::min(component->desiredSize.*maxMember, minSize));
+          utils::min(component->desiredSize.*maxMember, (i32)sizes.max));
     }
 
     // alogn the primary   axis SameAsSiblings must be zero, the parent will take care of it
     // along the secondary axis SameAsSiblings acts like Growable
-    if (!isVertical)
+    if (!isCalculatingVertical)
     {
       if (test_enum(component->sizingFlags, Component::SameAsSiblingsX))
         component->bounds.w = (component->componentFlags.isVertical) ? utils::max_limit<i32> : 0;
@@ -143,6 +140,15 @@ namespace Interface
       if (test_enum(component->sizingFlags, Component::SameAsSiblingsY))
         component->bounds.h = (component->componentFlags.isVertical) ? 0 : utils::max_limit<i32>;
     }
+
+    // add this component's padding to the total size
+    auto padding = (isCalculatingVertical) ? 
+      component->padding.getBottom() : component->padding.getRight();
+
+    component->bounds.*minMember = (i32)utils::min((i64)utils::max_limit<i32>,
+      (i64)(component->bounds.*minMember) + padding);
+    component->bounds.*maxMember = (i32)utils::min((i64)utils::max_limit<i32>,
+      (i64)(component->bounds.*maxMember) + padding);
   }
 
   static void calculateFitSecondary(Component *component, Component *children)
@@ -194,8 +200,28 @@ namespace Interface
   constinit utils::vector<Component *> *sortedSizesMin{};
   constinit utils::vector<Component *> *sortedSizesMax{};
   
-  static void calculateGrowPrimary(Component *component, Component *children)
+  static void calculateGrow(Component *component, Component *children, bool isCalculatingVertical)
   {
+    auto Rectangle<i32>:: *minMember = (isCalculatingVertical) ? &Rectangle<i32>::y : &Rectangle<i32>::x;
+    auto Rectangle<i32>:: *maxMember = (isCalculatingVertical) ? &Rectangle<i32>::h : &Rectangle<i32>::w;
+
+    // when parent has horizontal/vertical orientation but we're calculating vertical/horizontal sizes
+    if (component->componentFlags.isVertical ^ isCalculatingVertical)
+    {
+      for (auto *child = children; child; child = child->next)
+      {
+        if (!child->componentFlags.isVisible)
+          continue;
+
+        auto maxSize = utils::min(child->bounds.*maxMember, component->bounds.*maxMember);
+        // scaling the final secondary size
+        child->bounds.*maxMember = scaleValueRoundInt((float)maxSize);
+        calculateGrow(child, child->children, isCalculatingVertical);
+      }
+
+      return;
+    }
+
     if (!children)
       return;
 
@@ -204,24 +230,28 @@ namespace Interface
     sortedMin.clear();
     sortedMax.clear();
 
-    i32 minimumPrimarySize = component->padding.x + component->padding.w;
+    // account for this component's padding from the size we were assigned
+    i32 minSize = (isCalculatingVertical) ? 
+      component->padding.getBottom() : component->padding.getRight();
     for (auto *child = children; child; child = child->next)
     {
       if (!child->componentFlags.isVisible)
         continue;
 
-      minimumPrimarySize += child->bounds.x + child->margin.x + child->margin.w;
+      auto extra = (isCalculatingVertical) ? child->margin.getBottom() : child->margin.getRight();
+
+      minSize += child->bounds.*minMember + extra;
 
       auto iter = utils::find_if(sortedMin, [&](const Interface::Component *c)
-        { return c->bounds.x > child->bounds.x; });
+        { return c->bounds.*minMember > child->bounds.*minMember; });
       sortedMin.emplace(iter, child);
 
       iter = utils::find_if(sortedMax, [&](const Interface::Component *c)
-        { return c->bounds.w > child->bounds.w; });
+        { return c->bounds.*maxMember > child->bounds.*maxMember; });
       sortedMax.emplace(iter, child);
     }
 
-    if (component->bounds.w < minimumPrimarySize &&
+    if (component->bounds.*maxMember < minSize &&
       test_enum(component->sizingFlags, Component::ScrollableX))
     {
       // parent is scrollable so every child is set to their preferred max sizes
@@ -231,15 +261,16 @@ namespace Interface
       // along the same axis, this will fail spectacularly
       // (although does that even make sense?)
 
-      component->scrollableArea.w = minimumPrimarySize;
+      ((isCalculatingVertical) ? 
+        component->scrollableArea.h : component->scrollableArea.w) = minSize;
     }
     else
     {
-      i32 remaining = component->bounds.w - minimumPrimarySize;
+      i32 remaining = component->bounds.*maxMember - minSize;
 
-      i32 smallestMaximum;
-      i32 biggestMinimum;
-      usize componentCount;
+      i32 smallestMax;
+      i32 biggestMin;
+      usize count;
       usize j = 0;
       {
         usize lastJ = 0;
@@ -249,28 +280,28 @@ namespace Interface
         {
           // if the remaining size cannot expand all smaller components to the current minimum, exclude the biggest
           if (i > 1 &&
-            (sortedMin[i - 1]->bounds.x * (i32)(i - j)) > remaining)
+            (sortedMin[i - 1]->bounds.*minMember * (i32)(i - j)) > remaining)
           {
             --i;
           }
           // if the remaining size can now expand all smaller components to the next minimum, include the next biggest
           else if (i < sortedMin.size() &&
-            (sortedMin[i]->bounds.x * (i32)(i - j)) < remaining)
+            (sortedMin[i]->bounds.*minMember * (i32)(i - j)) < remaining)
           {
             ++i;
           }
 
-          i32 currentSize = sortedMin[i - 1]->bounds.x;
+          i32 currentSize = sortedMin[i - 1]->bounds.*minMember;
           if (i < sortedMin.size())
-            currentSize += (remaining - (sortedMin[i]->bounds.x * (i32)(i - j)));
+            currentSize += (remaining - (sortedMin[i]->bounds.*minMember * (i32)(i - j)));
 
           // if the most constrained component's maximum gets surpassed by the current size, 
           // exclude it and update the remainder
-          if (sortedMax[j]->bounds.w < currentSize)
+          if (sortedMax[j]->bounds.*maxMember < currentSize)
           {
             ++j;
             if (j < sortedMax.size())
-              remaining -= sortedMax[j]->bounds.w;
+              remaining -= sortedMax[j]->bounds.*maxMember;
           }
 
           if (i == lastI && j == lastJ)
@@ -280,25 +311,23 @@ namespace Interface
           lastJ = j;
         }
 
-        biggestMinimum = sortedMin[i - 1]->bounds.x;
-        smallestMaximum = sortedMax[j]->bounds.w;
-        componentCount = i - j;
+        biggestMin = sortedMin[i - 1]->bounds.*minMember;
+        smallestMax = sortedMax[j]->bounds.*maxMember;
+        count = i - j;
       }
 
 
-      for (; componentCount; ++j)
+      for (usize k = 0; k < count; ++k)
       {
-        auto *c = sortedMax[j];
-        if (c->bounds.x <= biggestMinimum &&
-          c->bounds.w >= smallestMaximum)
+        auto *c = sortedMax[j + k];
+        if (c->bounds.*minMember <= biggestMin &&
+          c->bounds.*maxMember >= smallestMax)
         {
-          i32 size = remaining / (i32)(componentCount);
+          i32 size = remaining / (i32)(count - k);
 
-          auto minMax = c->desiredSize;
-          c->bounds.w = utils::clamp(size, minMax.x, minMax.w);
+          c->bounds.*maxMember = utils::clamp(size, c->bounds.*minMember, c->bounds.*maxMember);
 
-          remaining -= c->bounds.w;
-          --componentCount;
+          remaining -= c->bounds.*maxMember;
         }
       }
     }
@@ -309,8 +338,8 @@ namespace Interface
         continue;
 
       // scaling the final primary size
-      child->bounds.w = scaleValueRoundInt((float)child->bounds.w);
-      calculateGrowPrimary(child, child->children);
+      child->bounds.*maxMember = scaleValueRoundInt((float)(child->bounds.*maxMember));
+      calculateGrow(child, child->children, isCalculatingVertical);
     }
   }
 
@@ -321,17 +350,9 @@ namespace Interface
       if (!child->componentFlags.isVisible)
         continue;
 
-      auto childBounds = child->bounds;
       child->bounds.h = utils::min(child->bounds.h, component->bounds.h);
       // scaling the final secondary size
       child->bounds.h = scaleValueRoundInt((float)child->bounds.h);
-    }
-
-    for (auto *child = children; child; child = child->next)
-    {
-      if (!child->componentFlags.isVisible)
-        continue;
-
       calculateGrowSecondary(child, child->children);
     }
   }
@@ -343,11 +364,12 @@ namespace Interface
     utils::vector<Component *> sortedSizesMax_{ localScratch, 32 };
     sortedSizesMax = &sortedSizesMax_;
 
-    calculateFitPrimary(component, children, false);
-    calculateGrowPrimary(component, children);
-    calculateFitPrimary(component, children, true);
+    calculateFit(component, children, false);
+    calculateGrow(component, children, false);
+    calculateFit(component, children, true);
+    calculateGrow(component, children, true);
     //calculateFitSecondary(component, children);
-    calculateGrowSecondary(component, children);
+    //calculateGrowSecondary(component, children);
   }
 
   extern utils::vector<Component *> *customPlacement;
@@ -365,7 +387,8 @@ namespace Interface
     if (boundsInTarget.isEmpty())
     {
       boundsInTarget = Rectangle{ padding.x, padding.y,
-        component->bounds.w - padding.w, component->bounds.h - padding.h };
+        component->bounds.w - padding.getRight(),
+        component->bounds.h - padding.getBottom() };
     }
 
     if (test_enum(component->sizingFlags, Component::ScrollableX))
@@ -376,7 +399,7 @@ namespace Interface
     boundsInTarget = TRANSPOSE(component, boundsInTarget);
     padding = TRANSPOSE(component, padding);
 
-    i32 primaryUsed = padding.getRight();
+    i32 primaryUsed = 0;
     i32 groupCount = 0;
     bool isInGroup = false;
     for (auto *child = children; child; child = child->next)
@@ -407,12 +430,12 @@ namespace Interface
 
       // we can calculate secondary position here
       if (IS_SECONDARY_POSITION_FLAG_SET(child, component, Placement::left))
-        bounds.y = boundsInTarget.y + padding.y + margin.y;
+        bounds.y = boundsInTarget.y + margin.y;
       else if (IS_SECONDARY_POSITION_FLAG_SET(child, component, Placement::right))
-        bounds.y = boundsInTarget.h - padding.h - margin.h - bounds.h;
+        bounds.y = boundsInTarget.h - margin.h - bounds.h;
       else
-        bounds.y = utils::max(boundsInTarget.y + padding.y + margin.y, 
-          (boundsInTarget.h - padding.getBottom() - bounds.getBottom()) / 2);
+        bounds.y = utils::max(boundsInTarget.y + margin.y, 
+          (boundsInTarget.getBottom() - bounds.h) / 2);
       
       child->bounds.setPosition(TRANSPOSE(component, bounds.getPosition()));
     }
@@ -478,16 +501,16 @@ namespace Interface
 
             groupChild->bounds = TRANSPOSE(component, bounds);
 
-            // there will be a division by zero here on the last iteration,
-            // but the variables don't get used after that so it's fine
-            offset = size / (i32)(j - 1);
+            // we expect a division by zero on the last iteration
+            offset = size / utils::max((i32)(j - 1), 1);
             size -= offset;
           }
         }
 
         --groupCount;
         primaryUsed += sizeLeftPerGroup;
-        sizeLeftPerGroup = (boundsInTarget.w - primaryUsed) / groupCount;
+        // we expect a division by zero on the last iteration
+        sizeLeftPerGroup = (boundsInTarget.w - primaryUsed) / utils::max(groupCount, 1);
         child = nextChild;
       }
       else
@@ -498,7 +521,7 @@ namespace Interface
         if (IS_PRIMARY_POSITION_FLAG_SET(child, component, Placement::left))
         {
           bounds.x = boundsInTarget.x + margin.x;
-          boundsInTarget.x += bounds.w + margin.getRight();
+          boundsInTarget.trimLeft(bounds.w + margin.getRight());
         }
         else if (IS_PRIMARY_POSITION_FLAG_SET(child, component, Placement::right))
         {

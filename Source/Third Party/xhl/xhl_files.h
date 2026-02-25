@@ -135,8 +135,7 @@ int main()
 }
 #endif // Example program 2: Recursive file searching
 
-#ifndef XHL_FILES_H
-#define XHL_FILES_H
+#pragma once
 
 #include <stdbool.h>
 #include <stddef.h>
@@ -1421,4 +1420,3 @@ bool xfiles_create_directory_recursive(const char* path)
 }
 
 #endif // XHL_FILES_IMPL
-#endif // XHL_FILES_H

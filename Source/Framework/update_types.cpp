@@ -25,13 +25,10 @@ namespace Framework
     if (transactions.size() == transactionsToKeep)
       return;
 
-    auto *newTransactions = arranew(storage, decltype(transactions)::value_type,
-      transactionsToKeep, {});
-
     if (!transactions.size())
     {
+      transactions = { (decltype(transactions)::value_type *)nullptr, transactionsToKeep };
       clear();
-      transactions = { newTransactions, transactionsToKeep };
       return;
     }
 
@@ -55,6 +52,9 @@ namespace Framework
     }
 
     currentIndex = undoActionsCount - 1;
+
+    auto *newTransactions = arranew(storage, decltype(transactions)::value_type,
+      transactionsToKeep, {});
     for (usize i = 0; i < copySize; ++i)
       newTransactions[i] = transactions[(begin + i) % transactions.size()];
     transactions = { newTransactions, transactionsToKeep };
@@ -62,18 +62,22 @@ namespace Framework
 
   void UndoManager::clear()
   {
-    storage->clear(storage);
     currentIndex = 0;
     undoActionsCount = 1; // for the currentIndex
     redoActionsCount = 0;
+
+    // this will also deallocate the transactions buffer, so we need to allocate it again
+    storage->clear(storage);
+
+    auto *newTransactions = arranew(storage, decltype(transactions)::value_type,
+      transactions.size(), {});
+    transactions = { newTransactions, transactions.size() };
   }
 
   bool UndoManager::perform(UndoAction *newAction, bool performOnAdd)
   {
     if (newAction == nullptr)
       return false;
-
-    utils::up action{ newAction };
 
     if (isPerformingUndoRedo())
     {
@@ -125,23 +129,28 @@ namespace Framework
   utils::bumpArena *
   UndoManager::beginNewTransaction()
   {
+    bool currentHasArena = transactions[currentIndex].first;
+
     // skip making a new action set if current one is empty
-    if (!transactions[currentIndex].second)
-      return transactions[currentIndex].first;
+    if (!currentHasArena || transactions[currentIndex].second)
+    {
+      if (currentHasArena)
+      {
+        currentIndex = (currentIndex + 1) % transactions.size();
 
-    currentIndex = (currentIndex + 1) % transactions.size();
+        // destroy transaction to be replaced
+        for (auto *action = transactions[currentIndex].second; action; action = action->next)
+          if (action->destructor)
+            action->destructor(action);
 
-    // destroy transaction to be replaced
-    for (auto *action = transactions[currentIndex].second; action; action = action->next)
-      if (action->destructor)
-        action->destructor(action);
+        undoActionsCount = utils::min(undoActionsCount + 1, transactions.size());
+        redoActionsCount = 0;
+      }
 
-    transactions[currentIndex].second = {};
-    if (!transactions[currentIndex].first)
-      transactions[currentIndex].first = utils::bumpArena::createNested(storage, 512);
-
-    undoActionsCount = utils::min(undoActionsCount + 1, transactions.size());
-    redoActionsCount = 0;
+      transactions[currentIndex].second = {};
+      if (!transactions[currentIndex].first)
+        transactions[currentIndex].first = utils::bumpArena::createNested(storage, 512);
+    }
 
     return transactions[currentIndex].first;
   }

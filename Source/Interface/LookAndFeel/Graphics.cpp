@@ -7,7 +7,7 @@
 #include "nanovg/nanovg_gl.h"
 #include "nanovg/nanovg_gl_utils.h"
 
-#include "Data/BinaryData.h"
+#include "Data/BinaryData.hpp"
 #include "Framework/platform_definitions.hpp"
 #include "Framework/utils.hpp"
 
@@ -23,7 +23,7 @@ namespace Interface
 
     if (!context)
     {
-      showNativeMessageBox("Graphics Initialisation", 
+      showNativeMessageBox("Graphics Initialisation",
         "Couldn't create nanovg context.", MessageBoxType::Error);
       COMPLEX_TRAP();
     }
@@ -44,12 +44,12 @@ namespace Interface
     nvgDeleteGL3(context);
   }
 
-  float 
+  float
   Graphics::getFontLineHeightFromFontHeight(FontId fontId, float height)
   {
-    if (fontId == DDinType)
+    if (fontId == FontId::DDinType)
       return height * 8.0f / kDDinDefaultHeight;
-    if (fontId == InterType)
+    if (fontId == FontId::InterType)
       return height * 8.0f / kInterVDefaultHeight;
 
     COMPLEX_ASSERT_FALSE("Unknown font was provided to get ascent for");
@@ -59,9 +59,9 @@ namespace Interface
   float
   Graphics::getFontKerningFromFontHeight(FontId fontId, float height)
   {
-    if (fontId == DDinType)
+    if (fontId == FontId::DDinType)
       return height / kDDinDefaultHeight * kDDinDefaultKerning;
-    else if (fontId == InterType)
+    else if (fontId == FontId::InterType)
       return height / kInterVDefaultHeight * kInterVDefaultKerning / 8.0f;
 
     COMPLEX_ASSERT_FALSE("Unknown font to get kerning for");
@@ -72,9 +72,9 @@ namespace Interface
   float
   Graphics::getFontHeightFromLineHeight(FontId fontId, float lineHeight)
   {
-    if (fontId == DDinType)
+    if (fontId == FontId::DDinType)
       return lineHeight * kDDinDefaultHeight / 16.0f;
-    if (fontId == InterType)
+    if (fontId == FontId::InterType)
       return lineHeight * kInterVDefaultHeight / 16.0f;
 
     COMPLEX_ASSERT_FALSE("Unknown font was provided to get height for");
@@ -93,7 +93,7 @@ namespace Interface
     else if (id == InterFontId)
       kerning = kInterVDefaultKerning * (height / kInterVDefaultHeight);
     else COMPLEX_ASSERT_FALSE("Unknown font was provided to set");
-    
+
     nvgTextLetterSpacing(context, kerning);
   }
 
@@ -102,7 +102,7 @@ namespace Interface
     float height = getFontHeightFromLineHeight(fontid, lineHeight);
     float kerning = getFontKerningFromFontHeight(fontid, height);
 
-    int id = (fontid == DDinType) ? DDinFontId : InterFontId;
+    int id = (fontid == FontId::DDinType) ? DDinFontId : InterFontId;
     nvgFontFaceId(context, id);
     nvgFontSize(context, height);
     nvgTextLetterSpacing(context, kerning);

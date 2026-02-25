@@ -615,6 +615,9 @@ namespace utils
   public:
     using span<const char>::span;
 
+    template<auto Size>
+    constexpr string_view(const char (&rawArray)[Size]) noexcept : span{ rawArray, Size - 1 } { }
+
     [[nodiscard]] constexpr size_type 
     find(const char *substring, size_type size, size_type position = 0) const noexcept
     {

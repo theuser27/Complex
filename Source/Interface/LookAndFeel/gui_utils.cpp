@@ -157,7 +157,7 @@ namespace Interface
   Colour 
   Colour::fromString(const char *integer, int base)
   {
-    long colour = ::strtol(integer, nullptr, base);
+    long colour = ::strtoul(integer, nullptr, base);
     return Colour{ (u32)colour };
   }
 }

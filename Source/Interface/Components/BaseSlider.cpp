@@ -448,7 +448,7 @@ namespace Interface
           text = option->displayName;
         }
 
-        uiRelated.cache->setFont(Graphics::InterType, scaleValue(height));
+        uiRelated.cache->setFont(FontId::InterType, scaleValue(height));
 
         if (!availableWidth)
         {
@@ -647,6 +647,7 @@ namespace Interface
     };
 
     editor.control = this;
+    editor.textColour = Skin::kWidgetPrimary1;
     textEntry = &editor;
     addChildComponent(&editor);
   }
@@ -659,6 +660,12 @@ namespace Interface
     float rounding = Interface::getValue(Skin::kWidgetRoundedCorner, true, this);
     (void)rounding;
     animator.tick(componentFlags.isHovered, componentFlags.isClicked, kHoverIncrement, 0.0f);
+
+
+    //nvgBeginPath(openGl.g);
+    //nvgRect(openGl, 0.0f, 0.0f, (float)bounds.w, (float)bounds.h);
+    //nvgFillColor(openGl, Colours::white);
+    //nvgFill(openGl);
 
     if (drawBackgroundArrow)
     {
@@ -699,14 +706,14 @@ namespace Interface
 
       // top
       nvgQuadTo(openGl.g, triangleXLength, 0.0f, triangleXLength + controlPoint2XOffset, 0.0f);
-      nvgFillColor(openGl.g, getColour(Skin::kWidgetBackground1));
+      nvgFillColor(openGl.g, getColour(Skin::kWidgetBackground1, this));
       nvgFill(openGl.g);
     }
     else if (auto alpha = animator.getValue(Animator::Hover); alpha != 0.0f)
     {
       auto [x, y, w, h] = bounds.toFloat();
       nvgRoundedRect(openGl.g, x, y, w, h, scaleValue(backgroundRounding));
-      nvgFillColor(openGl.g, getColour(Skin::kWidgetBackground1).withAlpha(alpha));
+      nvgFillColor(openGl.g, getColour(Skin::kWidgetBackground2).withAlpha(alpha));
       nvgFill(openGl.g);
     }
 

@@ -3,6 +3,7 @@
 
 #pragma once
 
+#include "../LookAndFeel/Graphics.hpp"
 #include "../LookAndFeel/BaseComponent.hpp"
 
 namespace Interface
@@ -16,7 +17,7 @@ namespace Interface
     utils::string text{};
 
     Skin::ColourId textColour = Skin::kNormalText;
-    FontId font = Graphics::InterType;
+    FontId font = FontId::InterType;
 
     struct
     {

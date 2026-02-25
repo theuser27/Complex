@@ -61,14 +61,19 @@
 
 #ifndef COMPLEX_INTEL_IPP
 
-#ifdef _MSC_VER
-#  define _USE_MATH_DEFINES
-#endif
-
-#include <stdlib.h>
-#include <stdio.h>
-#include <math.h>
 #include <assert.h>
+
+#define PFFFT_PI 3.14159265358979323846
+#define PFFFT_SQRT2 1.41421356237309504880
+
+float sinf(float x);
+float cosf(float x);
+
+#ifdef _MSC_VER
+__declspec(restrict)
+#endif
+void *malloc(size_t size);
+void free(void *memory);
 
 /* detect compiler flavour */
 #if defined(_MSC_VER)
@@ -193,11 +198,11 @@ typedef union v4sf_union {
   float f[4];
 } v4sf_union;
 
-#include <string.h>
-
+/* detect bugs with the vector support macros */
+#if 0
+#include <stdio.h>
 #define assertv4(v,f0,f1,f2,f3) assert(v.f[0] == (f0) && v.f[1] == (f1) && v.f[2] == (f2) && v.f[3] == (f3))
 
-/* detect bugs with the vector support macros */
 void validate_pffft_simd(void) {
   float f[16] = { 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15 };
   v4sf_union a0, a1, a2, a3, t, u; 
@@ -234,6 +239,7 @@ void validate_pffft_simd(void) {
          a2.f[0], a2.f[1], a2.f[2], a2.f[3], a3.f[0], a3.f[1], a3.f[2], a3.f[3]); 
   assertv4(a0, 0, 4, 8, 12); assertv4(a1, 1, 5, 9, 13); assertv4(a2, 2, 6, 10, 14); assertv4(a3, 3, 7, 11, 15);
 }
+#endif
 
 /* SSE and co like 16-bytes aligned pointers */
 #define MALLOC_V4SF_ALIGNMENT 64 // with a 64-byte alignment, we are even aligned on L2 cache lines...
@@ -1076,7 +1082,6 @@ static int decompose(int fftSize, int *radixStages, const int *factors, int fact
 }
 
 
-
 static int realFFTInit(int fftSize, float *twiddleFactors, int *radixStages)
 {
   static const int factors[] = { 4,2,3,5 };
@@ -1084,7 +1089,7 @@ static int realFFTInit(int fftSize, float *twiddleFactors, int *radixStages)
   // calculate radix stage count and order
   int radixCount = decompose(fftSize, radixStages, factors, sizeof(factors) / sizeof(int));
 
-  float phaseStep = (float)((2.0 * M_PI) / (double)fftSize);
+  float phaseStep = (float)((2.0 * PFFFT_PI) / (double)fftSize);
   int stride = 1;
   int innerStride = 0;
   for (int k1 = 1; k1 < radixCount; ++k1)
@@ -1123,7 +1128,7 @@ void complexFFTInit(int n, float *wa, int *ifac)
   ifac[0] = n;
   ifac[1] = nf;
 
-  float argh = (2.0f * (float)M_PI) / (float)n;
+  float argh = (2.0f * (float)PFFFT_PI) / (float)n;
   int i = 1;
   int l1 = 1;
   for (int k1=1; k1<=nf; k1++) {
@@ -1237,7 +1242,7 @@ PFFFT_Setup *pffft_new_setup(int N, pffft_transform_t transform)
     int j = k % SIMD_SZ;
     for (int m = 0; m < SIMD_SZ - 1; ++m)
     {
-      float A = -2.0f * (float)M_PI * (float)(m + 1) * (float)k / (float)N;
+      float A = -2.0f * (float)PFFFT_PI * (float)(m + 1) * (float)k / (float)N;
       setup->e[(2 * (i * 3 + m) + 0) * SIMD_SZ + j] = cosf(A);
       setup->e[(2 * (i * 3 + m) + 1) * SIMD_SZ + j] = sinf(A);
     }
@@ -1500,7 +1505,7 @@ static NEVER_INLINE(void) pffft_real_finalize(int Ncvec, const v4sf *in, v4sf *o
   v4sf_union cr, ci, *uout = (v4sf_union*)out;
   v4sf save = in[7], zero=VZERO();
   float xr0, xi0, xr1, xi1, xr2, xi2, xr3, xi3;
-  static const float s = (float)M_SQRT2/2;
+  static const float s = (float)PFFFT_SQRT2/2;
 
   cr.v = in[0]; ci.v = in[Ncvec*2-1];
   assert(in != out);
@@ -1592,7 +1597,7 @@ static NEVER_INLINE(void) pffft_real_preprocess(int Ncvec, const v4sf *in, v4sf 
 
   v4sf_union Xr, Xi, *uout = (v4sf_union*)out;
   float cr0, ci0, cr1, ci1, cr2, ci2, cr3, ci3;
-  static const float s = (float)M_SQRT2;
+  static const float s = (float)PFFFT_SQRT2;
   assert(in != out);
   for (k=0; k < 4; ++k) {
     Xr.f[k] = ((float*)in)[8*k];

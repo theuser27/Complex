@@ -84,10 +84,10 @@
 #endif
 
 #define XHL_FILES_IMPL
-#include "Third Party/xhl/files.h"
+#include "Third Party/xhl/xhl_files.h"
 
 #define STB_SPRINTF_IMPLEMENTATION
 #include "Third Party/stb/stb_sprintf.h"
 
-#include "Third Party/cjson/cjson.c"
-#include "Third Party/pffft/pffft.c"
+#define CJSON_IMPLEMENTATION
+#include "Third Party/cjson/cjson.h"

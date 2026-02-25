@@ -29,6 +29,7 @@ namespace Interface
     gain.maxDecimalCharacters = 2;
     gain.changeLinkedParameter(*soundEngine.getParameter(Generation::SoundEngine::OutGain));
     gainGroup.placement = Placement::right;
+    gainGroup.margin = { 12, 0, 0, 0 };
     gainGroup.addChildComponent(&gainLabel);
     gainGroup.addChildComponent(&gain);
     //addChildComponent(&gainGroup);
@@ -42,16 +43,16 @@ namespace Interface
     mixGroup.margin = { 12, 0, 0, 0 };
     mixGroup.addChildComponent(&mixLabel);
     mixGroup.addChildComponent(&mix);
-    //addChildComponent(&mixGroup);
+    addChildComponent(&mixGroup);
   }
 
   bool 
   TopBar::render(OpenGlWrapper &openGl)
   {
-    nvgBeginPath(openGl);
-    nvgRect(openGl, 0.0f, 0.0f, (float)bounds.w, (float)bounds.h);
-    nvgFillColor(openGl, getColour(Skin::kBody, this));
-    nvgFill(openGl);
+    //nvgBeginPath(openGl);
+    //nvgRect(openGl, 0.0f, 0.0f, (float)bounds.w, (float)bounds.h);
+    //nvgFillColor(openGl, Colours::black);
+    //nvgFill(openGl);
 
     return true;
   }
@@ -75,7 +76,7 @@ namespace Interface
     blockSizeGroup.placement = Placement::justifyX;
     blockSizeGroup.addChildComponent(&blockSizeLabel);
     blockSizeGroup.addChildComponent(&blockSize);
-    addChildComponent(&blockSizeGroup);
+    //addChildComponent(&blockSizeGroup);
 
     overlapLabel.margin = { 0, 0, 16, 0 };
     overlapLabel.control = &overlap;
@@ -86,7 +87,7 @@ namespace Interface
     overlapGroup.placement = Placement::justifyX;
     overlapGroup.addChildComponent(&overlapLabel);
     overlapGroup.addChildComponent(&overlap);
-    addChildComponent(&overlapGroup);
+    //addChildComponent(&overlapGroup);
 
     windowLabel.margin = { 0, 0, 16, 0 };
     windowLabel.control = &window;
@@ -101,7 +102,7 @@ namespace Interface
     windowGroup.addChildComponent(&windowAlpha);
     windowGroup.addChildComponent(&window);
     windowGroup.placement = Placement::justifyX;
-    addChildComponent(&windowGroup);
+    //addChildComponent(&windowGroup);
 
     window.valueChangedCallback = [](Control *c, double newValue, double)
     {
@@ -109,13 +110,16 @@ namespace Interface
       bottomBar->windowAlpha.componentFlags.isVisible = Framework::scaleValue(newValue, c->details) >=
         utils::find_index(Framework::Window::kTypesValues, Framework::Window::Exponential);
     };
-    window.valueChangedCallback(&window, window.getValue(), 0.0f);
+    //window.valueChangedCallback(&window, window.getValue(), 0.0f);
   }
 
   bool 
   BottomBar::render(OpenGlWrapper &openGl)
   {
-
+    nvgBeginPath(openGl);
+    nvgRect(openGl, 0.0f, 0.0f, (float)bounds.w, (float)bounds.h);
+    nvgFillColor(openGl, getColour(Skin::kBody));
+    nvgFill(openGl);
 
     return true;
   }
@@ -142,9 +146,9 @@ namespace Interface
   bool MainInterface::render(OpenGlWrapper &openGl)
   {
     nvgBeginPath(openGl);
-    nvgFillColor(openGl, getColour(Skin::kBody));
-    nvgRect(openGl, (float)bottomBar.bounds.x, (float)bottomBar.bounds.y,
-      (float)bottomBar.bounds.w, (float)bottomBar.bounds.h);
+    nvgRect(openGl, (float)bounds.x, (float)bounds.y,
+      (float)bounds.w, (float)bounds.h);
+    nvgFillColor(openGl, getColour(Skin::kBackground));
     nvgFill(openGl);
 
     return true;
@@ -209,14 +213,13 @@ namespace Interface
     //addChildComponent(effectsStateSection_.get());
 
 
-    //bottomBar.placement = Placement::bottom;
-    //bottomBar.sizingFlags |= Component::GrowableX;
-    //bottomBar.desiredSize = { 0, kHeaderHorizontalEdgePadding, 
-    //  utils::max_limit<i32>, kHeaderHorizontalEdgePadding };
-    //bottomBar.margin = { 0, kLaneToBottomSettingsMargin, 0, 0 };
-    //bottomBar.padding = { ResizeCorner::kWidth, 0, ResizeCorner::kWidth, 0 };
-    //addChildComponent(&bottomBar);
-    //bottomBar.reinitialise();
+    bottomBar.placement = Placement::bottom;
+    bottomBar.sizingFlags |= Component::GrowableX;
+    bottomBar.desiredSize = { 0, kFooterHeight, utils::max_limit<i32>, kFooterHeight };
+    bottomBar.margin = { 0, kLaneToBottomSettingsMargin, 0, 0 };
+    bottomBar.padding = { ResizeCorner::kWidth, 0, ResizeCorner::kWidth, 0 };
+    addChildComponent(&bottomBar);
+    bottomBar.reinitialise();
 
 
     popupSelector.componentFlags.isVisible = false;

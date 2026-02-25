@@ -20,8 +20,7 @@
   THE SOFTWARE.
 */
 
-#ifndef cjson__h
-#define cjson__h
+#pragma once
 
 #ifdef __cplusplus
 extern "C"
@@ -191,6 +190,4 @@ void cjson_free(void *object);
 
 #ifdef __cplusplus
 }
-#endif
-
 #endif

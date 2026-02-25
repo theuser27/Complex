@@ -26,8 +26,7 @@
 //
 //   See end of file for license information.
 
-#ifndef STB_SPRINTF_H_INCLUDE
-#define STB_SPRINTF_H_INCLUDE
+#pragma once
 
 /*
 Single file sprintf replacement.
@@ -1894,8 +1893,6 @@ static stbsp__int32 stbsp__real_to_str(char const **start, stbsp__uint32 *len, c
 #undef STBSP__UNALIGNED
 
 #endif // STB_SPRINTF_IMPLEMENTATION
-
-#endif // STB_SPRINTF_H_INCLUDE
 
 /*
 ------------------------------------------------------------------------------

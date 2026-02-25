@@ -238,9 +238,9 @@ extern "C"
   double pow(double base, double exponent);
   double sqrt(double arg);
 
-  long   strtol(const char *string, char **string_end, int base);
-  float  strtof(const char *string, char **string_end);
-  double strtod(const char *string, char **string_end);
+  unsigned long strtoul(const char *string, char **string_end, int base);
+  float         strtof(const char *string, char **string_end);
+  double        strtod(const char *string, char **string_end);
 
   int stbsp_snprintf(char *buffer, int count, const char *format, ...);
 }

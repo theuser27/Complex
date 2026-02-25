@@ -9,6 +9,11 @@
 #include "Miscellaneous.hpp"
 #include "Skin.hpp"
 
+namespace Generation
+{
+  class BaseProcessor;
+}
+
 namespace Interface
 {
   class Component;
