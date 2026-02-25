@@ -473,6 +473,7 @@ namespace utils
       {
         oldAllocator = Allocator::fromType((AllocatorType)allocatorType_);
         oldAllocator.allocator = data_;
+        data_ = nullptr;
       }
       else
         oldAllocator = Allocator::fromType((AllocatorType)allocatorType_).fromAllocation(data_);
@@ -1391,6 +1392,7 @@ namespace utils
       {
         oldAllocator = Allocator::fromType((AllocatorType)allocatorType_);
         oldAllocator.allocator = data_;
+        data_ = nullptr;
       }
       else
         oldAllocator = Allocator::fromType((AllocatorType)allocatorType_).fromAllocation(data_);
@@ -1605,25 +1607,25 @@ namespace utils
 
   inline usize
   floatToString(double value, char *string, usize maximumStringLength,
-    usize maximumDecimalLength = 5, bool keepPlus = false)
+    usize maximumDecimalLength = 5, bool keepPlus = false, bool clearTrailingZeroes = false)
   {
     COMPLEX_ASSERT(maximumStringLength > 0);
     const char *format = keepPlus ? "%+.*f" : "%.*f";
 
     usize size = (usize)::stbsp_snprintf(string, (int)maximumStringLength, format, (int)maximumDecimalLength, value);
 
-    //if (maximumDecimalLength)
-    //{
-    //  usize i;
-    //  for (i = size - 1; i > 0; --i)
-    //    if (string[i] != '0' && string[i] != ' ' && string[i] != '\0')
-    //      break;
+    if (clearTrailingZeroes && maximumDecimalLength)
+    {
+      usize i;
+      for (i = size - 1; i > 0; --i)
+        if (string[i] != '0' && string[i] != ' ' && string[i] != '\0')
+          break;
 
-    //  size -= (size - 1) - i;
-    //  if (string[size - 1] == '.')
-    //    --size;
-    //}
-    //string[size] = '\0';
+      size -= (size - 1) - i;
+      if (string[size - 1] == '.')
+        --size;
+      string[size] = '\0';
+    }
 
     return size;
   }

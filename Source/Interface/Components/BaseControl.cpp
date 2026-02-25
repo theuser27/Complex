@@ -368,7 +368,8 @@ namespace Interface
     selector->summon(this, position);
   }
 
-  static usize getIntegerCharacterLength(utils::string_view string)
+  static utils::string_view
+  getClosestInteger(utils::string_view string)
   {
     usize i = 0;
     for (; i < string.size(); ++i)
@@ -380,7 +381,7 @@ namespace Interface
       if (string[j] < '0' || string[j] > '9')
         break;
 
-    return j - i;
+    return utils::string_view{ string.data() + i, j - i };
   }
 
   float 
@@ -409,7 +410,7 @@ namespace Interface
     }
 
     // find the number of integer characters
-    controlFlags.maxIntergerCharacters = (u8)getIntegerCharacterLength({ buffer, size });
+    controlFlags.maxIntergerCharacters = (u8)getClosestInteger({ buffer, size }).size();
 
     auto maxStringLength = utils::string{ localScratch, { buffer, size } };
     if (!popupPrefix.empty())
@@ -478,11 +479,12 @@ namespace Interface
 
       if (controlFlags.maxIntergerCharacters)
       {
-        usize currentIntegerLength = getIntegerCharacterLength(outString);
-        if (currentIntegerLength > controlFlags.maxIntergerCharacters)
-          outString.removeSuffix(currentIntegerLength - controlFlags.maxIntergerCharacters);
-        else if (currentIntegerLength < controlFlags.maxIntergerCharacters)
-          outString.prepend("0", controlFlags.maxIntergerCharacters - currentIntegerLength);
+        utils::string_view currentInteger = getClosestInteger(outString);
+        if (currentInteger.size() > controlFlags.maxIntergerCharacters)
+          outString.removeSuffix(currentInteger.size() - controlFlags.maxIntergerCharacters);
+        else if (currentInteger.size() < controlFlags.maxIntergerCharacters)
+          outString.insert(outString.find(currentInteger), 
+            "0", controlFlags.maxIntergerCharacters - currentInteger.size());
       }
     }
 

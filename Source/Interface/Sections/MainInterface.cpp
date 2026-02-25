@@ -23,17 +23,6 @@ namespace Interface
       arena = utils::bumpArena::createNested(parent->arena, COMPLEX_KB(16));
     utils::bumpArena::clear(arena);
 
-    gainLabel.margin = { 0, 0, 4, 0 };
-    gainLabel.control = &gain;
-    gain.arena = arena;
-    gain.maxDecimalCharacters = 2;
-    gain.changeLinkedParameter(*soundEngine.getParameter(Generation::SoundEngine::OutGain));
-    gainGroup.placement = Placement::right;
-    gainGroup.margin = { 12, 0, 0, 0 };
-    gainGroup.addChildComponent(&gainLabel);
-    gainGroup.addChildComponent(&gain);
-    //addChildComponent(&gainGroup);
-
     mixLabel.margin = { 0, 0, 4, 0 };
     mixLabel.control = &mix;
     mix.arena = arena;
@@ -44,6 +33,17 @@ namespace Interface
     mixGroup.addChildComponent(&mixLabel);
     mixGroup.addChildComponent(&mix);
     addChildComponent(&mixGroup);
+
+    gainLabel.margin = { 0, 0, 4, 0 };
+    gainLabel.control = &gain;
+    gain.arena = arena;
+    gain.maxDecimalCharacters = 2;
+    gain.changeLinkedParameter(*soundEngine.getParameter(Generation::SoundEngine::OutGain));
+    gainGroup.placement = Placement::right;
+    gainGroup.margin = { 12, 0, 0, 0 };
+    gainGroup.addChildComponent(&gainLabel);
+    gainGroup.addChildComponent(&gain);
+    addChildComponent(&gainGroup);
   }
 
   bool 

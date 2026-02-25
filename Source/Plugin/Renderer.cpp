@@ -78,8 +78,10 @@ namespace Interface
   class Renderer
   {
   public:
-    static constexpr double kMinOpenGlVersion = 1.4;
     enum TimerTypes { kTimerRefreshRate };
+
+    static constexpr double kMinOpenGlVersion = 1.4;
+    static constexpr double kMultiClickTimeout = 0.500; //ms
 
     Area<u32> area{};
     float scale = 1.0f;
@@ -107,6 +109,8 @@ namespace Interface
     ModifierKeys mouseButtonsDown_{};
     ModifierKeys lastKeyboardMods_{};
 
+    u8 numberOfClicks = 0;
+    double lastMouseClickTime = 0.0;
     Point<i32> lastMousePosition_{ 0, 0 };
     Point<i32> lastMouseDownPosition_{ 0, 0 };
 
@@ -219,6 +223,22 @@ namespace Interface
       puglSwapBuffers(view);
       if (isResizing)
         glFinish();
+    }
+
+    void computeMultiClick(double currentTime, MouseEvent &e, bool isClicking)
+    {
+      if (isClicking)
+      {
+        if (currentTime - lastMouseClickTime < Renderer::kMultiClickTimeout)
+          ++numberOfClicks;
+        else
+          numberOfClicks = 1;
+        lastMouseClickTime = currentTime;
+      }
+      else if (currentTime - lastMouseClickTime >= Renderer::kMultiClickTimeout)
+        numberOfClicks = 0;
+
+      e.numberOfClicks = numberOfClicks;
     }
   };
 
@@ -341,6 +361,7 @@ namespace Interface
       e.mods |= ((event->crossing.state & PUGL_MOD_ALT) != 0) ? ModifierKeys::altModifier : 0;
       e.mods |= renderer->mouseButtonsDown_.flags;
       e.mouseDownPosition = renderer->lastMouseDownPosition_;
+      renderer->computeMultiClick(event->crossing.time, e, false);
 
       if (event->type == PUGL_POINTER_IN)
         renderer->handleMouseEnter(COMPLEX_MOVE(e));
@@ -381,11 +402,15 @@ namespace Interface
 
       if (event->type == PUGL_BUTTON_PRESS)
       {
+        renderer->computeMultiClick(event->button.time, e, true);
         renderer->handleMouseDown(COMPLEX_MOVE(e));
         renderer->lastMouseDownPosition_ = { e.x, e.y };
       }
       else
+      {
+        renderer->computeMultiClick(event->button.time, e, false);
         renderer->handleMouseUp(COMPLEX_MOVE(e));
+      }
 
       renderer->lastMousePosition_ = { e.x, e.y };
       renderer->lastKeyboardMods_ = e.mods & ModifierKeys::allKeyboardModifiers;
@@ -403,6 +428,7 @@ namespace Interface
       e.mods |= renderer->mouseButtonsDown_;
       e.mouseDownPosition = { e.x, e.y };
 
+      renderer->computeMultiClick(event->motion.time, e, false);
       renderer->handleMouseMove(COMPLEX_MOVE(e));
 
       renderer->lastMousePosition_ = { e.x, e.y };
@@ -423,6 +449,7 @@ namespace Interface
       e.wheelDeltaX = (float)event->scroll.dx;
       e.wheelDeltaY = (float)event->scroll.dy;
 
+      renderer->computeMultiClick(event->scroll.time, e, false);
       renderer->handleMouseWheel(COMPLEX_MOVE(e));
 
       renderer->lastKeyboardMods_ = e.mods & ModifierKeys::allKeyboardModifiers;

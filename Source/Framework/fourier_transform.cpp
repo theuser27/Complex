@@ -6,7 +6,6 @@
 #ifdef COMPLEX_INTEL_IPP
   #include "ipps.h"
 #else
-  #define PFFFT_IMPLEMENTATION
   #include "Third Party/pffft/pffft.h"
   #include "simd_values.hpp"
 #endif

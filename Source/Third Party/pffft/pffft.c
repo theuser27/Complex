@@ -62,18 +62,13 @@
 #ifndef COMPLEX_INTEL_IPP
 
 #include <assert.h>
+#include <stdlib.h>
 
 #define PFFFT_PI 3.14159265358979323846
 #define PFFFT_SQRT2 1.41421356237309504880
 
 float sinf(float x);
 float cosf(float x);
-
-#ifdef _MSC_VER
-__declspec(restrict)
-#endif
-void *malloc(size_t size);
-void free(void *memory);
 
 /* detect compiler flavour */
 #if defined(_MSC_VER)
