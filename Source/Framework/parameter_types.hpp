@@ -65,6 +65,7 @@ namespace Framework
     u32 count = 1;                              // how many consecutive values are of this indexed type
                                                 //   can be more than the ones currently available
     u32 flags{};
+    u64 userFlags{};
     uuid dynamicUpdateUuid{};                   // this uuid is used to register for in the State
                                                 //   these updates will happen only if the parameter is not mapped/modulated
     IndexedData *parent{};

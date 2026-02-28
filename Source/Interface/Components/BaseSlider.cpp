@@ -73,11 +73,14 @@ namespace Interface
       e.x - lastMouseDragPosition.x : lastMouseDragPosition.y - e.y;
     lastMouseDragPosition = { e.x, e.y };
 
-    double newPos = getValue() + mouseDiff * (1.0 / sensitivity);
-    newPos = (controlFlags.canLoopAround) ? newPos - ::floor(newPos) : utils::clamp(newPos, 0.0, 1.0);
+    if (mouseDiff)
+    {
+      double newPos = getValue() + mouseDiff * (1.0 / sensitivity);
+      newPos = (controlFlags.canLoopAround) ? newPos - ::floor(newPos) : utils::clamp(newPos, 0.0, 1.0);
 
-    setValue(newPos, true);
-    setValueToHost();
+      setValue(newPos, true);
+      setValueToHost();
+    }
 
     return true;
   }
@@ -143,17 +146,20 @@ namespace Interface
     
     auto currentValue = getValue();
     auto mouseWheelDelta = (::fabs(e.wheelDeltaX) > ::fabs(e.wheelDeltaY)) ? -e.wheelDeltaX : e.wheelDeltaY;
-    auto valueDelta = currentValue + 0.15 * mouseWheelDelta * (e.wheelIsReversed ? -1.0 : 1.0);
+    auto valueDelta = currentValue + 0.05 * mouseWheelDelta * (e.wheelIsReversed ? -1.0 : 1.0);
     valueDelta = (controlFlags.canLoopAround) ? valueDelta - ::floor(valueDelta) : utils::clamp(valueDelta, 0.0, 1.0);
     valueDelta -= currentValue;
     if (valueDelta == 0.0)
       return true;
     
-    double valueInterval = 0.0;
+    double newValue = 0.0;
     if (details.scale == Framework::ParameterScale::Indexed)
-      valueInterval = 1.0 / (details.options->count - 1);
-
-    auto newValue = currentValue + utils::max(valueInterval, ::fabs(valueDelta)) * (valueDelta < 0.0 ? -1.0 : 1.0);
+    {
+      auto valueInterval = 1.0 / (details.options->count - 1);
+      newValue = currentValue + valueInterval * (valueDelta < 0.0 ? -1.0 : 1.0);
+    }
+    else
+      newValue = currentValue + ::fabs(valueDelta) * (valueDelta < 0.0 ? -1.0 : 1.0);
 
     bool isMapped = parameterLink && parameterLink->hostControl;
     if (isMapped)
@@ -379,28 +385,39 @@ namespace Interface
   TextSelector::TextSelector()
   {
     controlFlags.canUseScrollWheel = true;
+    overrideDimensions = [](Component *c, bool isCalculatingVertical)
+    {
+      auto *self = (TextSelector *)c;
+
+      if (!isCalculatingVertical)
+      {
+        float height = (float)self->text.desiredSize.y;
+        self->padding.x = self->padding.w = (u16)::ceilf(height * 0.25f);
+      }
+
+      return Range<i32>{ -1, -1 };
+    };
 
     text.control = this;
+    text.textColour = Skin::kWidgetPrimary1;
     addChildComponent(&text);
 
-    downArrow.margin = { 6, 0, 0, 0 };
+    downArrow.margin = { 4, 0, 0, 0 };
+    downArrow.desiredSize = { 5, 0, 5, 0 };
+    downArrow.sizingFlags |= (Component::SizingFlags)(Component::FixedX | Component::SameAsSiblingsY);
+    downArrow.reference = this;
     downArrow.draw = [](OpenGlWrapper &openGl, Component *c, Component *self)
     {
-      (void)openGl;
-      (void)c;
-      (void)self;
-      //nvgStrokeColor(openGl.g, getColour(Skin::kWidgetPrimary1, c));
-      //
-      //auto bounds = self->bounds.toFloat();
-      //float arrowWidth = bounds.h * kHeightToArrowWidthRatio;
-      //float arrowHeight = ::roundf(kArrowWidthHeightRatio * arrowWidth);
+      auto bounds = self->bounds.toFloat();
+      float yCenter = bounds.h * 0.5f;
+      float height = bounds.h * 0.0675f;
 
-      //bounds.y = bounds.h / 2 - arrowHeight / 2;
-      //bounds.w = ::roundf(arrowWidth);
-      //bounds.h = arrowHeight;
-
-      //nvgBeginPath(openGl.g);
-      //nvgMoveTo(openGl.g, );
+      nvgBeginPath(openGl.g);
+      nvgMoveTo(openGl.g, 0.0f, yCenter - height);
+      nvgLineTo(openGl, bounds.w * 0.5f, yCenter + height);
+      nvgLineTo(openGl, bounds.w, yCenter - height);
+      nvgStrokeColor(openGl.g, getColour(Skin::kWidgetPrimary1, c));
+      nvgStroke(openGl);
     };
     addChildComponent(&downArrow);
   }
@@ -411,11 +428,14 @@ namespace Interface
 
     animator.tick(componentFlags.isHovered, componentFlags.isClicked, kHoverIncrement, 0.0f);
 
-    auto backgroundColour = getColour(Skin::kWidgetBackground1, this)
-      .withMultipliedAlpha(animator.getValue(Animator::Hover));
-    nvgFillColor(openGl.g, backgroundColour);
-    nvgRoundedRect(openGl.g, 0.0f, 0.0f, (float)bounds.w, (float)bounds.h, 
-      Interface::getValue(Skin::kWidgetRoundedCorner, true));
+    if (auto alpha = animator.getValue(Animator::Hover); alpha != 0.0f)
+    {
+      nvgBeginPath(openGl);
+      nvgRoundedRect(openGl, 0.0f, 0.0f, (float)bounds.w, (float)bounds.h,
+        Interface::getValue(Skin::kWidgetRoundedCorner, true));
+      nvgFillColor(openGl, getColour(Skin::kWidgetBackground2, this).withAlpha(alpha));
+      nvgFill(openGl);
+    }
 
     return true;
   }
@@ -424,7 +444,7 @@ namespace Interface
   {
     TextSelectorItem()
     {
-      getDimensions = [](Component *c, i32 *availableWidth)
+      overrideDimensions = [](Component *c, bool isCalculatingVertical)
       {
         auto *item = (TextSelectorItem *)c;
 
@@ -450,14 +470,14 @@ namespace Interface
 
         uiRelated.cache->setFont(FontId::InterType, scaleValue(height));
 
-        if (!availableWidth)
+        if (!isCalculatingVertical)
         {
           maxSize = (i32)::ceilf(uiRelated.cache->getStringWidthFloat(text));
           minSize = (canTextWrap) ? 0 : maxSize;
         }
         else
         {
-          auto area = uiRelated.cache->getStringBoundsMultiline(text, (float)(*availableWidth));
+          auto area = uiRelated.cache->getStringBoundsMultiline(text, (float)item->bounds.w);
           minSize = maxSize = (i32)area.h;
         }
 
@@ -531,7 +551,7 @@ namespace Interface
         item->arena = itemArena;
         item->extraData = option;
         item->canBeChosen = option->id;
-        item->sizingFlags = (Component::SizingFlags)(Component::CustomDimensions | Component::SameAsSiblingsX);
+        item->sizingFlags = Component::SameAsSiblingsX;
         options->addChildComponent(item);
       }
 
@@ -555,6 +575,8 @@ namespace Interface
       // going up
       exitedChild = true;
       option = option->parent;
+      if (!option->parent)
+        break;
       size = option->parent->count;
 
       // find the index of the parent again
@@ -590,6 +612,8 @@ namespace Interface
       controlFlags.isInModalState = false;
     };
     selector->summon(this, { e.x, e.y });
+
+    return true;
   }
 
   bool 
@@ -619,16 +643,12 @@ namespace Interface
   Numberbox::Numberbox()
   {
     controlFlags.canUseScrollWheel = true;
-    sizingFlags |= Component::CustomDimensions;
-    getDimensions = [](Component *c, i32 *availableWidth)
+    overrideDimensions = [](Component *c, bool isCalculatingVertical)
     {
       auto *self = (Numberbox *)c;
-      i32 max = self->editor.bounds.h;
 
-      if (!availableWidth)
+      if (!isCalculatingVertical)
       {
-        max = self->editor.bounds.w;
-
         float height = (float)self->editor.desiredSize.y;
 
         if (self->drawBackgroundArrow)
@@ -637,13 +657,10 @@ namespace Interface
           self->padding.w = (u16)::ceilf(kValueToEndMarginRatio * height);
         }
         else
-        {
-          self->padding.x = (u16)::ceilf(height * 0.5f);
-          self->padding.w = self->padding.x;
-        }
+          self->padding.x = self->padding.w = (u16)::ceilf(height * 0.25f);
       }
 
-      return Range<i32>{ max, max };
+      return Range<i32>{ -1, -1 };
     };
 
     editor.control = this;
@@ -660,12 +677,6 @@ namespace Interface
     float rounding = Interface::getValue(Skin::kWidgetRoundedCorner, true, this);
     (void)rounding;
     animator.tick(componentFlags.isHovered, componentFlags.isClicked, kHoverIncrement, 0.0f);
-
-
-    //nvgBeginPath(openGl.g);
-    //nvgRect(openGl, 0.0f, 0.0f, (float)bounds.w, (float)bounds.h);
-    //nvgFillColor(openGl, Colours::white);
-    //nvgFill(openGl);
 
     if (drawBackgroundArrow)
     {
@@ -711,9 +722,9 @@ namespace Interface
     }
     else if (auto alpha = animator.getValue(Animator::Hover); alpha != 0.0f)
     {
-      auto [x, y, w, h] = bounds.toFloat();
-      nvgRoundedRect(openGl.g, x, y, w, h, scaleValue(backgroundRounding));
-      nvgFillColor(openGl.g, getColour(Skin::kWidgetBackground2).withAlpha(alpha));
+      nvgBeginPath(openGl.g);
+      nvgRoundedRect(openGl.g, 0.0f, 0.0f, (float)bounds.w, (float)bounds.h, scaleValue(backgroundRounding));
+      nvgFillColor(openGl.g, getColour(Skin::kWidgetBackground2, this).withAlpha(alpha));
       nvgFill(openGl.g);
     }
 

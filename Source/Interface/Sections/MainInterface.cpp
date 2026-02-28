@@ -23,6 +23,18 @@ namespace Interface
       arena = utils::bumpArena::createNested(parent->arena, COMPLEX_KB(16));
     utils::bumpArena::clear(arena);
 
+    gainLabel.margin = { 0, 0, 4, 0 };
+    gainLabel.control = &gain;
+    gain.arena = arena;
+    gain.maxDecimalCharacters = 2;
+    gain.controlFlags.shouldUsePlusMinusPrefix = true;
+    gain.changeLinkedParameter(*soundEngine.getParameter(Generation::SoundEngine::OutGain));
+    gainGroup.placement = Placement::right;
+    gainGroup.margin = { 12, 0, 0, 0 };
+    gainGroup.addChildComponent(&gainLabel);
+    gainGroup.addChildComponent(&gain);
+    addChildComponent(&gainGroup);
+
     mixLabel.margin = { 0, 0, 4, 0 };
     mixLabel.control = &mix;
     mix.arena = arena;
@@ -33,28 +45,6 @@ namespace Interface
     mixGroup.addChildComponent(&mixLabel);
     mixGroup.addChildComponent(&mix);
     addChildComponent(&mixGroup);
-
-    gainLabel.margin = { 0, 0, 4, 0 };
-    gainLabel.control = &gain;
-    gain.arena = arena;
-    gain.maxDecimalCharacters = 2;
-    gain.changeLinkedParameter(*soundEngine.getParameter(Generation::SoundEngine::OutGain));
-    gainGroup.placement = Placement::right;
-    gainGroup.margin = { 12, 0, 0, 0 };
-    gainGroup.addChildComponent(&gainLabel);
-    gainGroup.addChildComponent(&gain);
-    addChildComponent(&gainGroup);
-  }
-
-  bool 
-  TopBar::render(OpenGlWrapper &openGl)
-  {
-    //nvgBeginPath(openGl);
-    //nvgRect(openGl, 0.0f, 0.0f, (float)bounds.w, (float)bounds.h);
-    //nvgFillColor(openGl, Colours::black);
-    //nvgFill(openGl);
-
-    return true;
   }
 
   void BottomBar::reinitialise()
@@ -67,50 +57,53 @@ namespace Interface
       arena = utils::bumpArena::createNested(parent->arena, COMPLEX_KB(16));
     utils::bumpArena::clear(arena);
 
-    blockSizeLabel.margin = { 0, 0, 16, 0 };
+    blockSizeLabel.margin = { 0, 0, 4, 0 };
     blockSizeLabel.control = &blockSize;
     blockSize.arena = arena;
     blockSize.drawBackgroundArrow = false;
     blockSize.maxDecimalCharacters = 0;
     blockSize.changeLinkedParameter(*soundEngine.getParameter(Generation::SoundEngine::BlockSize));
     blockSizeGroup.placement = Placement::justifyX;
+    blockSizeGroup.componentFlags.animateMovement = true;
     blockSizeGroup.addChildComponent(&blockSizeLabel);
     blockSizeGroup.addChildComponent(&blockSize);
-    //addChildComponent(&blockSizeGroup);
+    addChildComponent(&blockSizeGroup);
 
-    overlapLabel.margin = { 0, 0, 16, 0 };
+    overlapLabel.margin = { 0, 0, 4, 0 };
     overlapLabel.control = &overlap;
     overlap.arena = arena;
     overlap.drawBackgroundArrow = false;
     overlap.maxDecimalCharacters = 2;
     overlap.changeLinkedParameter(*soundEngine.getParameter(Generation::SoundEngine::Overlap));
     overlapGroup.placement = Placement::justifyX;
+    overlapGroup.componentFlags.animateMovement = true;
     overlapGroup.addChildComponent(&overlapLabel);
     overlapGroup.addChildComponent(&overlap);
-    //addChildComponent(&overlapGroup);
+    addChildComponent(&overlapGroup);
 
-    windowLabel.margin = { 0, 0, 16, 0 };
+    windowLabel.margin = { 0, 0, 4, 0 };
     windowLabel.control = &window;
     windowAlpha.arena = arena;
-    windowAlpha.margin = { 0, 0, 16, 0 };
+    windowAlpha.margin = { 0, 0, 4, 0 };
     windowAlpha.drawBackgroundArrow = false;
-    windowAlpha.maxDecimalCharacters = 2;
+    windowAlpha.maxDecimalCharacters = 1;
     windowAlpha.changeLinkedParameter(*soundEngine.getParameter(Generation::SoundEngine::WindowAlpha));
     window.arena = arena;
     window.changeLinkedParameter(*soundEngine.getParameter(Generation::SoundEngine::WindowType));
+    windowGroup.placement = Placement::justifyX;
+    overlapGroup.componentFlags.animateMovement = true;
     windowGroup.addChildComponent(&windowLabel);
     windowGroup.addChildComponent(&windowAlpha);
     windowGroup.addChildComponent(&window);
-    windowGroup.placement = Placement::justifyX;
-    //addChildComponent(&windowGroup);
+    addChildComponent(&windowGroup);
 
     window.valueChangedCallback = [](Control *c, double newValue, double)
     {
       auto *bottomBar = (BottomBar *)c->parent->parent;
-      bottomBar->windowAlpha.componentFlags.isVisible = Framework::scaleValue(newValue, c->details) >=
-        utils::find_index(Framework::Window::kTypesValues, Framework::Window::Exponential);
+      bottomBar->windowAlpha.componentFlags.isVisible = Framework::getIndexedData(
+        Framework::scaleValue(newValue, c->details), c->details).first->userFlags;
     };
-    //window.valueChangedCallback(&window, window.getValue(), 0.0f);
+    window.valueChangedCallback(&window, window.getValue(), 0.0f);
   }
 
   bool 

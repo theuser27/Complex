@@ -962,24 +962,24 @@ namespace Interface
     viewportBounds += positionInViewport;
     scissorBounds += positionInViewport;
 
-    bool isClipping = ignoreClipIncluding == nullptr;
+    bool isNotClipping = ignoreClipIncluding != nullptr;
     for (usize i = openGl.parentStack.size(); i > 0; --i)
     {
       auto [parent, bounds, isClippingFromStack] = openGl.parentStack[i - 1];
 
-      if (isClippingFromStack && isClipping)
+      if (isClippingFromStack && !isNotClipping)
         bounds.withZeroOrigin().intersectRectangle(scissorBounds);
 
       viewportBounds = viewportBounds + bounds.getPosition();
       scissorBounds = scissorBounds + bounds.getPosition();
 
-      isClipping &= parent != ignoreClipIncluding;
+      isNotClipping &= parent != ignoreClipIncluding;
 
-      if (scissorBounds.w <= 0 || scissorBounds.h <= 0)
+      if (scissorBounds.isEmpty())
         return false;
     }
 
-    if (scissorBounds.w <= 0 || scissorBounds.h <= 0)
+    if (scissorBounds.isEmpty())
       return false;
 
     glViewport(viewportBounds.x, openGl.topLevelHeight - viewportBounds.getBottom(),

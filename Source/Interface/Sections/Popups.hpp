@@ -83,6 +83,7 @@ namespace Interface
 
     void resetState();
     void summon(Component *summoningComponent, Point<i32> position);
+    void summon(Component *summoningComponent, Placement placement);
 
     utils::smallFn<void(PopupSelector *, PopupItem *)> callback{};
     utils::smallFn<void(PopupSelector *)> cancel{};
@@ -92,6 +93,7 @@ namespace Interface
     Component *summoner{};
     Point<i32> summoningPoint{};
     Placement lastPlacement = Placement::right;
+    Placement placement = Placement::centered;
     utils::vector<PopupList *> lists{};
     PopupItem *deepestHoveredItem{};
     // TODO: timeout until any of the parents' siblings

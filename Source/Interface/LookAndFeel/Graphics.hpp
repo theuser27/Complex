@@ -21,12 +21,6 @@ namespace Interface
   class Graphics
   {
   public:
-    static constexpr float kDDinDefaultHeight = 11.5f;
-    static constexpr float kInterVDefaultHeight = 11.0f;
-
-    static constexpr float kDDinDefaultKerning = 0.5f;
-    static constexpr float kInterVDefaultKerning = 0.5f;
-
     Graphics();
     ~Graphics();
 
@@ -118,4 +112,13 @@ namespace Interface
     int DDinFontId;
     int InterFontId;
   };
+
+  inline void paintDebugRect(NVGcontext *context, 
+    Rectangle<float> bounds, Colour colour = Colours::white)
+  {
+    nvgBeginPath(context);
+    nvgRect(context, 0.0f, 0.0f, bounds.w, bounds.h);
+    nvgFillColor(context, colour);
+    nvgFill(context);
+  }
 }

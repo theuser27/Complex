@@ -64,16 +64,4 @@ namespace Interface
     bool shouldReloadImage = false;
     bool clearOnRedraw = true;
   };
-
-  struct PlainShapeComponent final : public Component
-  {
-    void (*draw)(OpenGlWrapper &openGl, Component *reference, Component *self) = nullptr;
-    Component *reference = nullptr;
-
-    bool render(OpenGlWrapper &openGl)
-    {
-      draw(openGl, reference, this);
-      return true;
-    }
-  };
 }

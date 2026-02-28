@@ -111,6 +111,7 @@ namespace Interface
 
     u8 numberOfClicks = 0;
     double lastMouseClickTime = 0.0;
+    double lastRenderTime = 0.0f;
     Point<i32> lastMousePosition_{ 0, 0 };
     Point<i32> lastMouseDownPosition_{ 0, 0 };
 
@@ -183,6 +184,9 @@ namespace Interface
 
     void renderLoop(PuglView *view)
     {
+      auto newRenderTime = puglGetTime(puglGetWorld(view));
+      uiRelated.deltaTime = (float)(newRenderTime - lastRenderTime);
+
       auto state = plugin.state_;
       for (usize i = 0; i < state->parameterBridges.size(); ++i)
         state->parameterBridges[i].updateUIParameter();
@@ -223,6 +227,8 @@ namespace Interface
       puglSwapBuffers(view);
       if (isResizing)
         glFinish();
+
+      lastRenderTime = newRenderTime;
     }
 
     void computeMultiClick(double currentTime, MouseEvent &e, bool isClicking)
@@ -651,7 +657,7 @@ namespace Interface
     }
 
     if (!newHoveredComponent)
-      newHoveredComponent = gui->getComponentAt(e.x, e.y);
+      newHoveredComponent = gui->getComponentAt(e.x, e.y, true);
 
     if (newHoveredComponent != mouseHoveredComponent_)
     {
@@ -770,7 +776,7 @@ namespace Interface
 
   void Renderer::handleMouseWheel(MouseEvent e)
   {
-    if (!mouseDownComponent_)
+    if (!mouseDownComponent_ && mouseHoveredComponent_)
       mouseHoveredComponent_->mouseWheelMove(e);
   }
 }

@@ -494,9 +494,9 @@ initialiseTypeStructure<Generation::SoundEngine>(void *, Framework::PluginStruct
           COMPLEX_STRUCTURE_INDEXED_DATA(.displayName = "Triangle", .id = Triangle),
           COMPLEX_STRUCTURE_INDEXED_DATA(.displayName = "Sine", .id = Sine),
           COMPLEX_STRUCTURE_INDEXED_DATA(.displayName = "Rectangle", .id = Rectangle),
-          COMPLEX_STRUCTURE_INDEXED_DATA(.displayName = "Exponential", .id = Exponential),
-          COMPLEX_STRUCTURE_INDEXED_DATA(.displayName = "Hann-Exp", .id = HannExp),
-          COMPLEX_STRUCTURE_INDEXED_DATA(.displayName = "Lanczos", .id = Lanczos)),
+          COMPLEX_STRUCTURE_INDEXED_DATA(.displayName = "Exponential", .id = Exponential, .userFlags = Window::HasAlpha),
+          COMPLEX_STRUCTURE_INDEXED_DATA(.displayName = "Hann-Exp", .id = HannExp, .userFlags = Window::HasAlpha),
+          COMPLEX_STRUCTURE_INDEXED_DATA(.displayName = "Lanczos", .id = Lanczos, .userFlags = Window::HasAlpha)),
         .defaultOptionId = Hann
       }, ParameterScale::Indexed, {}, ParameterDetails::Automatable | ParameterDetails::Extensible, UpdateFlag::BeforeProcess),
     COMPLEX_STRUCTURE_PARAMETER("Alpha", SoundEngine::WindowAlpha, 0.0f, 1.0f, 0.0f, 0.0f, ParameterScale::Linear,

@@ -271,16 +271,9 @@ namespace Interface
       auto nx = utils::max(x, other.x);
       auto ny = utils::max(y, other.y);
       auto nw = utils::min(x + w, other.x + other.w) - nx;
+      auto nh = utils::min(y + h, other.y + other.h) - ny;
 
-      if (nw >= T())
-      {
-        auto nh = utils::min(y + h, other.y + other.h) - ny;
-
-        if (nh >= T())
-          return { nx, ny, nw, nh };
-      }
-
-      return {};
+      return { nx, ny, nw, nh };
     }
 
     constexpr bool intersectRectangle(T &otherX, T &otherY, T &otherW, T &otherH) const
@@ -288,19 +281,13 @@ namespace Interface
       auto maxX = utils::max(otherX, x);
       otherW = utils::min(otherX + otherW, x + w) - maxX;
 
-      if (otherW > T())
-      {
-        auto maxY = utils::max(otherY, y);
-        otherH = utils::min(otherY + otherH, y + h) - maxY;
+      auto maxY = utils::max(otherY, y);
+      otherH = utils::min(otherY + otherH, y + h) - maxY;
 
-        if (otherH > T())
-        {
-          otherX = maxX; otherY = maxY;
-          return true;
-        }
-      }
+      otherX = maxX; 
+      otherY = maxY;
 
-      return false;
+      return otherW > T() && otherH > T();
     }
 
     constexpr bool intersectRectangle(Rectangle<T> &rectangleToClip) const

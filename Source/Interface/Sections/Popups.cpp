@@ -7,18 +7,18 @@
 #include "Plugin/Renderer.hpp"
 #include "Plugin/Complex.hpp"
 #include "../LookAndFeel/Graphics.hpp"
-#include "../Components/OpenGlImage.hpp"
+#include "../LookAndFeel/Shaders.hpp"
 #include "../Components/BaseControl.hpp"
 
 namespace Interface
 {
   static Range<i32>
-  getPopupDisplayDimensions(Component *c, i32 *availableWidth)
+  getPopupDisplayDimensions(Component *c, bool isCalculatingVertical)
   {
     const int lineHeight = scaleValueRoundInt(PopupDisplay::kLineHeight);
 
     auto *display = (PopupDisplay *)c;
-    if (!availableWidth)
+    if (!isCalculatingVertical)
     {
       if (display->isControl)
       {
@@ -31,7 +31,7 @@ namespace Interface
     }
     else
     {
-      auto lineCount = (i32)::ceilf((float)display->cachedFontWidth / (float)(*availableWidth));
+      auto lineCount = (i32)::ceilf((float)display->cachedFontWidth / (float)display->bounds.w);
       return Range<i32>{ lineHeight, lineCount *lineHeight };
     }
   }
@@ -41,9 +41,8 @@ namespace Interface
     arena = utils::bumpArena::createNested(parent->arena, COMPLEX_KB(8));
     skinOverride = Skin::kUseParentOverride;
     placement = Placement::custom;
-    sizingFlags = Component::CustomDimensions;
     padding = { kLineHeight, kLineHeight, kLineHeight, kLineHeight };
-    getDimensions = getPopupDisplayDimensions;
+    overrideDimensions = getPopupDisplayDimensions;
 
     textFontId = FontId::InterType;
     numericFontId = FontId::DDinType;
@@ -393,6 +392,17 @@ namespace Interface
     summoningPoint = position;
     grabFocus();
 
+    componentFlags.isVisible = true;
     // TODO: summon new list
+  }
+
+  void PopupSelector::summon(Component *summoningComponent, Placement newPlacement)
+  {
+    summoner = summoningComponent;
+    placement = newPlacement;
+    grabFocus();
+
+    componentFlags.isVisible = true;
+
   }
 }

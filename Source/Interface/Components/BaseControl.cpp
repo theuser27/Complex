@@ -203,7 +203,7 @@ namespace Interface
   };
 
   static Range<i32>
-  getControlPopupItemTextMetrics(Component *c, i32 *availableWidth)
+  getControlPopupItemTextMetrics(Component *c, bool isCalculatingVertical)
   {
     auto *item = (ControlPopupItem *)c;
 
@@ -272,14 +272,14 @@ namespace Interface
 
     uiRelated.cache->setFont(FontId::InterType, scaleValue(height));
 
-    if (!availableWidth)
+    if (!isCalculatingVertical)
     {
       maxSize = (i32)::ceilf(uiRelated.cache->getStringWidthFloat(text));
       minSize = (canTextWrap) ? 0 : maxSize;
     }
     else
     {
-      auto area = uiRelated.cache->getStringBoundsMultiline(text, (float)(*availableWidth));
+      auto area = uiRelated.cache->getStringBoundsMultiline(text, (float)item->bounds.w);
       minSize = maxSize = (i32)area.h;
     }
 
@@ -294,8 +294,7 @@ namespace Interface
   
   #define ITEM(idNumber, ...) (&with_val(*anew(itemArena, ControlPopupItem, {}), \
     .arena = itemArena, .id = idNumber, __VA_OPT__(,) __VA_ARGS__))
-  #define TEXT_ITEM(idNumber, ...) ITEM(idNumber, \
-    .getDimensions = getControlPopupItemTextMetrics, .sizingFlags = Component::CustomDimensions)
+  #define TEXT_ITEM(idNumber, ...) ITEM(idNumber, .overrideDimensions = getControlPopupItemTextMetrics)
 
     ControlPopupItem &options = *ITEM(kTopLevel);
     options.componentFlags.isVertical = true;
@@ -384,17 +383,26 @@ namespace Interface
     return utils::string_view{ string.data() + i, j - i };
   }
 
-  float 
-  Control::getNumericTextMaxWidth(FontId usedFont, float lineHeight)
+  static double getProbablyLongestParameterValue(const Framework::ParameterDetails &details)
   {
-    COMPLEX_ASSERT(details.scale != Framework::ParameterScale::Indexed);
-
     double lowestValue = details.displayUnits == "%" ? details.minValue * 100.0 : details.minValue;
     double highestValue = details.displayUnits == "%" ? details.maxValue * 100.0 : details.maxValue;
 
     double probablyLongestValue = (::fabs(lowestValue) < ::fabs(highestValue)) ? highestValue : lowestValue;
     // we have nextafter at home
-    probablyLongestValue = probablyLongestValue - 0.1;// utils::bit_cast<double>(utils::bit_cast<u64>(probablyLongestValue) - ((u64(1) << 38) - 1));
+    if (probablyLongestValue < 0.0)
+      probablyLongestValue = probablyLongestValue + 0.1;
+    else
+      probablyLongestValue = probablyLongestValue - 0.1;
+    return probablyLongestValue;
+  }
+
+  float 
+  Control::getNumericTextMaxWidth(FontId usedFont, float lineHeight)
+  {
+    COMPLEX_ASSERT(details.scale != Framework::ParameterScale::Indexed);
+
+    double probablyLongestValue = getProbablyLongestParameterValue(details);
 
     char buffer[64]{};
     usize size{};
@@ -408,9 +416,6 @@ namespace Interface
       size = utils::floatToString(probablyLongestValue, buffer, sizeof(buffer), maxDecimalCharacters,
         controlFlags.shouldUsePlusMinusPrefix || details.minValue < 0.0f);
     }
-
-    // find the number of integer characters
-    controlFlags.maxIntergerCharacters = (u8)getClosestInteger({ buffer, size }).size();
 
     auto maxStringLength = utils::string{ localScratch, { buffer, size } };
     if (!popupPrefix.empty())
@@ -477,15 +482,29 @@ namespace Interface
         maxDecimalCharacters,
         controlFlags.shouldUsePlusMinusPrefix);
 
-      if (controlFlags.maxIntergerCharacters)
+      usize maxIntergerCharacters = 0;
+      double probablyLongestValue = ::fabs(getProbablyLongestParameterValue(details));
+      if (probablyLongestValue < 1.0)
+        maxIntergerCharacters = 1;
+      else
       {
-        utils::string_view currentInteger = getClosestInteger(outString);
-        if (currentInteger.size() > controlFlags.maxIntergerCharacters)
-          outString.removeSuffix(currentInteger.size() - controlFlags.maxIntergerCharacters);
-        else if (currentInteger.size() < controlFlags.maxIntergerCharacters)
-          outString.insert(outString.find(currentInteger), 
-            "0", controlFlags.maxIntergerCharacters - currentInteger.size());
+        while (probablyLongestValue >= 1.0)
+        {
+          probablyLongestValue *= 0.1;
+          ++maxIntergerCharacters;
+        }
       }
+
+      utils::string_view currentInteger = getClosestInteger(outString);
+      if (currentInteger.size() > maxIntergerCharacters)
+      {
+        outString.removeSuffix(currentInteger.size() - maxIntergerCharacters);
+        if (outString.back() == '.')
+          outString.removeSuffix(1);
+      }
+      else if (currentInteger.size() < maxIntergerCharacters)
+        outString.insert(outString.find(currentInteger),
+          "0", maxIntergerCharacters - currentInteger.size());
     }
 
     if (addPrefix)

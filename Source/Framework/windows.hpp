@@ -12,6 +12,8 @@ namespace Framework
 
   struct Window
   {
+    enum WindowFlags { HasAlpha = 1 };
+
     COMPLEX_ENUM_LOCAL(Types,
       (       Lerp, 1757856220258303000),
       (       Hann, 1757856231973283300),

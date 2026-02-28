@@ -7,6 +7,7 @@
 #include "Framework/parameter_bridge.hpp"
 #include "Plugin/Renderer.hpp"
 #include "../LookAndFeel/Miscellaneous.hpp"
+#include "../LookAndFeel/Shaders.hpp"
 #include "BaseControl.hpp"
 
 namespace Interface
@@ -52,20 +53,18 @@ namespace Interface
   bool 
   TextEditor::render(OpenGlWrapper &openGl)
   {
-    //nvgBeginPath(openGl.g);
-    //nvgRect(openGl, 0.0f, 0.0f, (float)bounds.w, (float)bounds.h);
-    //nvgFillColor(openGl, Colours::white);
-    //nvgFill(openGl);
+    //paintDebugRect(openGl, bounds.toFloat());
 
     if (!text.empty())
     {
       nvgBeginPath(openGl);
       openGl.cache->setFont(font, scaleValue((float)bounds.h));
-      float ascender, lineHeight;
+      float ascent, lineHeight;
       nvgFillColor(openGl, getColour(textColour, this));
-      nvgTextMetrics(openGl.g, &ascender, nullptr, &lineHeight);
-      float xOffset = 0.5f * ((float)bounds.w - uiRelated.cache->getStringWidthFloat(text));
-      nvgText(openGl.g, xOffset, ((float)bounds.h - lineHeight) * 0.5f + ascender,
+      nvgTextMetrics(openGl, &ascent, nullptr, &lineHeight);
+      nvgTextAlign(openGl, NVG_ALIGN_CENTER | NVG_ALIGN_BASELINE);
+      nvgText(openGl.g, ((float)bounds.w) * 0.5f,
+        ::ceilf(((float)bounds.h - lineHeight) * 0.5f + ascent),
         text.data(), text.data() + text.size());
     }
 
@@ -73,14 +72,14 @@ namespace Interface
   }
 
   static Range<i32>
-  getLabelTextMetrics(Component *c, i32 *availableWidth)
+  getLabelTextMetrics(Component *c, bool isCalculatingVertical)
   {
     auto *self = (Label *)c;
 
     float lineHeight = scaleValue((float)((self->componentFlags.isVertical) ?
       self->desiredSize.y : self->desiredSize.x));
     
-    if (!availableWidth)
+    if (!isCalculatingVertical)
     {
       COMPLEX_ASSERT(self->control, "Forgot to set reference to control in label");
 
@@ -106,29 +105,35 @@ namespace Interface
   {
     desiredSize.x = kPrimaryTextLineHeight;
     desiredSize.y = desiredSize.x;
-    sizingFlags |= Component::CustomDimensions;
-    getDimensions = getLabelTextMetrics;
+    overrideDimensions = getLabelTextMetrics;
   }
 
   SliderValueEditor::SliderValueEditor()
   {
     font = FontId::DDinType;
 
-    getDimensions = [](Component *c, i32 *availableWidth)
+    overrideDimensions = [](Component *c, bool isCalculatingVertical)
     {
-      i32 max{};
       auto *self = (SliderValueEditor *)c;
 
       float lineHeight = scaleValue((float)((self->componentFlags.isVertical) ?
         self->desiredSize.y : self->desiredSize.x));
-
-      if (!availableWidth)
-        max = (i32)::ceilf(self->control->getNumericTextMaxWidth(self->font, lineHeight));
-      else
+      
+      i32 max{};
+      if (!isCalculatingVertical)
       {
-        max = (i32)::ceilf(lineHeight);
         self->cacheString(self, self->control);
+
+        if (self->control->details.scale == Framework::ParameterScale::Indexed)
+        {
+          uiRelated.cache->setFont(self->font, lineHeight);
+          max = (i32)::ceilf(uiRelated.cache->getStringWidthFloat(self->text));
+        }
+        else
+          max = (i32)::ceilf(self->control->getNumericTextMaxWidth(self->font, lineHeight));
       }
+      else
+        max = (i32)::ceilf(lineHeight);
 
       return Range<i32>{ max, max };
     };

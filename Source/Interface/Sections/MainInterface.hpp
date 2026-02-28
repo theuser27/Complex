@@ -23,8 +23,6 @@ namespace Interface
   {
     void reinitialise();
 
-    bool render(OpenGlWrapper &openGl) override;
-
     Label gainLabel{};
     Numberbox gain{};
     Component gainGroup{};
@@ -120,9 +118,10 @@ namespace Interface
 
     //void controlValueChanged(Control *control) override;
 
-    PopupSelector *getPopupSelector() { return nullptr;/* popupSelector_.get();*/ }
-    PopupDisplay *getPopupDisplay(bool primary = true)
-    { (void)primary; return nullptr; /*(primary) ? popupDisplay1_.get() : popupDisplay2_.get();*/ }
+    PopupSelector *getPopupSelector() { return &popupSelector; }
+    PopupDisplay *
+    getPopupDisplay(bool primary = true)
+    { return (primary) ? &popupDisplay1 : &popupDisplay2; }
 
     void reinstantiateUI();
 

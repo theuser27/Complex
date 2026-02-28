@@ -60,29 +60,26 @@ namespace Interface
       None = 0,
 
       // the size of the component will be whatever is set in desiredSize
-      Fixed = 1 << 0,
+      FixedX = 1 << 0,
+      FixedY = 1 << 1,
 
       // maximum size will optimistically grow as the parent grows
-      GrowableX = 1 << 1,
-      GrowableY = 1 << 2,
+      GrowableX = 1 << 2,
+      GrowableY = 1 << 3,
 
       // maximum size will be matched with siblings
       // unless minimum size is bigger
-      SameAsSiblingsX = 1 << 3,
-      SameAsSiblingsY = 1 << 4,
+      SameAsSiblingsX = 1 << 4,
+      SameAsSiblingsY = 1 << 5,
       
       // the size along the scrollable direction will be unconstrained
       // and will always fit the children
-      ScrollableX = 1 << 5,
-      ScrollableY = 1 << 6,
+      ScrollableX = 1 << 6,
+      ScrollableY = 1 << 7,
 
       // adds an extra scrollbar to the off-axis' size
       ScrollableWithBarX = ScrollableX | GrowableX,
       ScrollableWithBarY = ScrollableY | GrowableY,
-
-      // will use getDimensions to calculate dimensions
-      // mainly used to get text sizes but can be used for anything
-      CustomDimensions = 1 << 7,
     };
 
     // all mouse events return true/false if they have/have not consumed the event
@@ -150,6 +147,16 @@ namespace Interface
       }
       return false;
     }
+    bool 
+    isStillVisible()
+    {
+      if (componentFlags.isVisible)
+        return true;
+
+      return (!componentFlags.animateFadeAway) ? false :
+        fadeawayRatio != utils::max_limit<decltype(fadeawayRatio)>;
+    }
+    bool isObscured(const Component *ignoreClipIncluding = nullptr) const;
     void addChildComponent(Component *childToAdd);
     // keepFocus will let the UI system continue focus on childToRemove
     // but you MUST NOT delete the object after removal,
@@ -207,6 +214,8 @@ namespace Interface
       bool focusOnMouseClick : 1 = false;
       bool acceptsOrphanedMouseEvents : 1 = false;
       bool isVertical : 1 = false;                    // controls the children stack direction
+      bool animateMovement : 1 = false;
+      bool animateFadeAway : 1 = false;
 
       // state flags
       bool isVisible : 1 = true;
@@ -218,7 +227,6 @@ namespace Interface
       bool hasRenderedFeatures : 1 = false;
     } componentFlags{};
     
-    Range<u8> scrollWidths{};
 
     Placement placement{};
     SizingFlags sizingFlags = None;
@@ -229,12 +237,29 @@ namespace Interface
     Rectangle<u16> padding{};
     Rectangle<i32> desiredSize{ 0, 0, utils::max_limit<i32>, utils::max_limit<i32> };
 
-    // CustomDimensions
-    // returns width/height min and max sizes if availableWidth ==/!= nullptr
-    Range<i32> (*getDimensions)(Component *c, i32 *availableWidth);
+    // returns width/height min and max sizes depending on isCalculatingVertical
+    // can return -1 to use the calculations in from the underlying algorithm
+    Range<i32> (*overrideDimensions)(Component *c, bool isCalculatingVertical);
 
     Point<i32> scrollOffset{};
     Area<i32> scrollableArea{};
+
+    // animation related
+    Rectangle<i32> lastBounds{};
+
+    // support for animated positions
+    Point<i32> nextPosition{};
+    Point<i32> previousPosition{ -1, -1 };
+    u16 distanceToNextPositionRatio = 0;
+
+    // support for animated shrinking and alpha fade when made invisible
+    // until it reaches utils::max_limit<u16> the component is in a grace period 
+    // where it will continue to have its size and position calculated 
+    // @see isStillVisible
+    u16 fadeawayRatio = 0;
+
+    // support for animated scroll shrinking when not/hovered
+    Range<u16> scrollWidthsRatio{};
   };
 
   COMPLEX_DEFINE_ENUM_OPERATION(Component::SizingFlags, |, u16)
@@ -253,6 +278,19 @@ namespace Interface
 
     Generation::BaseProcessor *processor = nullptr;
     utils::vector_map<uuid, Control *> controls_{};
+  };
+
+  struct PlainShapeComponent final : public Component
+  {
+    void (*draw)(OpenGlWrapper &openGl, Component *reference, Component *self) = nullptr;
+    Component *reference = nullptr;
+
+    bool 
+    render(OpenGlWrapper &openGl)
+    {
+      draw(openGl, reference, this);
+      return true;
+    }
   };
 
   class ScopedBoundsEmplace

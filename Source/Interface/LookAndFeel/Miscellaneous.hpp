@@ -38,6 +38,7 @@ namespace Interface
     Graphics *cache = nullptr;
     Skin *skin = nullptr;
     float scale = 1.0f;
+    float deltaTime = 0.0f;
   };
 
   // thread_local variable for the message thread so that we don't need to pass pointers around

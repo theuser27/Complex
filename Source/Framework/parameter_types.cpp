@@ -135,7 +135,7 @@ namespace Framework
       result = ::round(value);
       break;
     case ParameterScale::Indexed:
-      result = (!skewOnly) ? ::round(value * details.options->count) : value;
+      result = (!skewOnly) ? ::round(value * (details.options->count - 1)) : value;
       break;
     case ParameterScale::Linear:
       result = (!skewOnly) ? value * (details.maxValue - details.minValue) + details.minValue :

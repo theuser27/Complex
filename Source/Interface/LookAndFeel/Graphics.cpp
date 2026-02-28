@@ -44,13 +44,19 @@ namespace Interface
     nvgDeleteGL3(context);
   }
 
+  static constexpr float kDDinDefaultHeight = 11.5f;
+  static constexpr float kInterDefaultHeight = 10.5f;
+
+  static constexpr float kDDinDefaultKerning = 0.0f;
+  static constexpr float kInterDefaultKerning = 0.0f;
+
   float
   Graphics::getFontLineHeightFromFontHeight(FontId fontId, float height)
   {
     if (fontId == FontId::DDinType)
       return height * 8.0f / kDDinDefaultHeight;
     if (fontId == FontId::InterType)
-      return height * 8.0f / kInterVDefaultHeight;
+      return height * 8.0f / kInterDefaultHeight;
 
     COMPLEX_ASSERT_FALSE("Unknown font was provided to get ascent for");
     return 1.0f;
@@ -62,7 +68,7 @@ namespace Interface
     if (fontId == FontId::DDinType)
       return height / kDDinDefaultHeight * kDDinDefaultKerning;
     else if (fontId == FontId::InterType)
-      return height / kInterVDefaultHeight * kInterVDefaultKerning / 8.0f;
+      return height / kInterDefaultHeight * kInterDefaultKerning;
 
     COMPLEX_ASSERT_FALSE("Unknown font to get kerning for");
 
@@ -75,7 +81,7 @@ namespace Interface
     if (fontId == FontId::DDinType)
       return lineHeight * kDDinDefaultHeight / 16.0f;
     if (fontId == FontId::InterType)
-      return lineHeight * kInterVDefaultHeight / 16.0f;
+      return lineHeight * kInterDefaultHeight / 16.0f;
 
     COMPLEX_ASSERT_FALSE("Unknown font was provided to get height for");
     return 1.0f;
@@ -91,7 +97,7 @@ namespace Interface
     if (id == DDinFontId)
       kerning = kDDinDefaultKerning * (height / kDDinDefaultHeight);
     else if (id == InterFontId)
-      kerning = kInterVDefaultKerning * (height / kInterVDefaultHeight);
+      kerning = kInterDefaultKerning * (height / kInterDefaultHeight);
     else COMPLEX_ASSERT_FALSE("Unknown font was provided to set");
 
     nvgTextLetterSpacing(context, kerning);
@@ -106,6 +112,7 @@ namespace Interface
     nvgFontFaceId(context, id);
     nvgFontSize(context, height);
     nvgTextLetterSpacing(context, kerning);
+    nvgTextAlign(context, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
   }
 
   void Graphics::bindTextureFramebuffer()

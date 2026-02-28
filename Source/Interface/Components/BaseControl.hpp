@@ -8,7 +8,6 @@
 #include "../LookAndFeel/BaseComponent.hpp"
 #include "../LookAndFeel/Graphics.hpp"
 #include "TextEditor.hpp"
-#include "OpenGlImage.hpp"
 
 namespace Framework
 {
@@ -94,7 +93,6 @@ namespace Interface
       bool hasBegunChange : 1 = false;
       bool isTextEntryVisible : 1 = false;
       bool isInModalState : 1 = false;
-      u8 maxIntergerCharacters : 5 = 0;
     } controlFlags{};
 
     u32 maxDecimalCharacters = kDefaultMaxDecimalCharacters;
@@ -240,7 +238,7 @@ namespace Interface
 
     void setExtraIcon(Paths::DrawingFn *drawFn);
 
-    Label text{};
+    SliderValueEditor text{};
     PlainShapeComponent downArrow{};
 
     utils::string dropdownTitle{};
