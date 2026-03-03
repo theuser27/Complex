@@ -13,7 +13,7 @@
 
 namespace Generation
 {
-  EffectsLane::EffectsLane(Plugin::State *state, Framework::ProcessorMetadata *metadata, utils::bumpArena *arena) noexcept :
+  EffectsLane::EffectsLane(Plugin::State *state, Framework::ProcessorMetadata *metadata, utils::bumpArena *arena) :
     BaseProcessor{ state, metadata, arena }
   {
     auto maxInOuts = utils::max(state->plugin->inSidechains, state->plugin->outSidechains) + 1;
@@ -38,7 +38,7 @@ namespace Generation
   }
 
   BaseProcessor &
-  EffectsLane::deleteSubProcessor(usize index, [[maybe_unused]] bool callListeners) noexcept
+  EffectsLane::deleteSubProcessor(usize index, [[maybe_unused]] bool callListeners)
   {
     COMPLEX_ASSERT(index < childrenCount);
 
@@ -55,7 +55,7 @@ namespace Generation
     parameterCount = metadata->parametersCount;
   }
 
-  EffectsState::EffectsState(Plugin::State *state, Framework::ProcessorMetadata *metadata, utils::bumpArena *arena) noexcept :
+  EffectsState::EffectsState(Plugin::State *state, Framework::ProcessorMetadata *metadata, utils::bumpArena *arena) :
     BaseProcessor{ state, metadata, arena }
   {
     auto inSidechains = state->plugin->inSidechains;
@@ -112,7 +112,7 @@ namespace Generation
     parameterCount = metadata->parametersCount;
   }
 
-  utils::span<bool> EffectsState::getUsedInputChannels() noexcept
+  utils::span<bool> EffectsState::getUsedInputChannels()
   {
     using namespace Framework;
 
@@ -141,7 +141,7 @@ namespace Generation
     return usedInputChannels_;
   }
 
-  utils::span<bool> EffectsState::getUsedOutputChannels() noexcept
+  utils::span<bool> EffectsState::getUsedOutputChannels()
   {
     using namespace Framework;
 
@@ -169,7 +169,7 @@ namespace Generation
     return usedOutputChannels_;
   }
 
-  void EffectsState::writeInputData(const Framework::Buffer &inputBuffer) noexcept
+  void EffectsState::writeInputData(const Framework::Buffer &inputBuffer)
   {
     using namespace Framework;
     using namespace utils;
@@ -214,7 +214,7 @@ namespace Generation
     }
   }
 
-  void EffectsState::processLanes() noexcept
+  void EffectsState::processLanes()
   {
     shouldWorkersProcess_.store(true, satomi::memory_order_release);
     // sequential consistency just in case
@@ -253,7 +253,7 @@ namespace Generation
     }
   }
 
-  void EffectsState::distributeWork() const noexcept
+  void EffectsState::distributeWork() const
   {
     for (auto *lane = (EffectsLane *)getChild(children, 0, Processors::EffectsLane); lane;
       lane = (EffectsLane *)getChild(lane, 1, Processors::EffectsLane))
@@ -267,7 +267,7 @@ namespace Generation
     }
   }
 
-  void EffectsState::processIndividualLanes(EffectsLane *thisLane) const noexcept
+  void EffectsState::processIndividualLanes(EffectsLane *thisLane) const
   {
     using namespace Framework;
     using namespace utils;
@@ -407,7 +407,7 @@ namespace Generation
     thisLane->status_.store(EffectsLane::LaneStatus::Finished, satomi::memory_order_release);
   }
 
-  void EffectsState::sumLanesAndWriteOutput(Framework::Buffer &out) noexcept
+  void EffectsState::sumLanesAndWriteOutput(Framework::Buffer &out)
   {
     using namespace Framework;
     using namespace utils;

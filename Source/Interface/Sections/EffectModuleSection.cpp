@@ -125,7 +125,7 @@ namespace Interface
     effectTypeSelector_->setOptionsTitle("Change Module");
     addControl(effectTypeSelector_.get());
 
-    effectTypeIcon_ = utils::up<PlainShapeComponent>::create("Effect Type Icon");
+    effectTypeIcon_ = utils::up<DrawComponent>::create("Effect Type Icon");
     effectTypeIcon_->setJustification(Justification::centred);
     effectTypeIcon_->setAlwaysOnTop(true);
     effectTypeSelector_->setExtraIcon(effectTypeIcon_.get());

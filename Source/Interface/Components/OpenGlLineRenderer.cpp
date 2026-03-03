@@ -11,8 +11,6 @@
 #include "OpenGlLineRenderer.hpp"
 
 #include "Framework/simd_values.hpp"
-#include "Plugin/Renderer.hpp"
-#include "OpenGlQuad.hpp"
 
 namespace
 {
@@ -33,10 +31,6 @@ namespace
 
 namespace Interface
 {
-  OpenGlLineRenderer::OpenGlLineRenderer(int pointCount) { setPointCount(pointCount); }
-
-  OpenGlLineRenderer::~OpenGlLineRenderer() = default;
-
   void OpenGlLineRenderer::init(OpenGlWrapper &openGl)
   {
     glGenBuffers(1, &lineBuffer_);
@@ -58,22 +52,22 @@ namespace Interface
 
     lineShader_ = openGl.shaders->getShaderProgram(Shaders::kLineVertex, Shaders::kLineFragment);
     lineShader_.use();
-    lineColourUniform_ = getUniform(lineShader_, "color");
-    lineScaleUniform_ = getUniform(lineShader_, "scale");
-    lineWidthUniform_ = getUniform(lineShader_, "line_width");
+    lineColourUniform_ = getUniform<float[4]>(lineShader_, "color");
+    lineScaleUniform_ = getUniform<float[2]>(lineShader_, "scale");
+    lineWidthUniform_ = getUniform<float>(lineShader_, "line_width");
     linePosition_ = getAttribute(lineShader_, "position");
 
     fillShader_ = openGl.shaders->getShaderProgram(Shaders::kFillVertex, Shaders::kFillFragment);
     fillShader_.use();
-    fillColourFromUniform_ = getUniform(fillShader_, "color_from");
-    fillColourToUniform_ = getUniform(fillShader_, "color_to");
-    fillCenterUniform_ = getUniform(fillShader_, "center_position");
-    fillBoostAmountUniform_ = getUniform(fillShader_, "boost_amount");
-    fillScaleUniform_ = getUniform(fillShader_, "scale");
+    fillColourFromUniform_ = getUniform<float[4]>(fillShader_, "color_from");
+    fillColourToUniform_ = getUniform<float[4]>(fillShader_, "color_to");
+    fillCenterUniform_ = getUniform<float>(fillShader_, "center_position");
+    fillBoostAmountUniform_ = getUniform<float>(fillShader_, "boost_amount");
+    fillScaleUniform_ = getUniform<float[2]>(fillShader_, "scale");
     fillPosition_ = getAttribute(fillShader_, "position");
   }
 
-  void OpenGlLineRenderer::destroy(Renderer &renderer)
+  void OpenGlLineRenderer::destroy()
   {
     lineShader_ = {};
     linePosition_ = {};
@@ -90,11 +84,11 @@ namespace Interface
     fillPosition_ = {};
 
     if (lineBuffer_)
-      glDeleteBuffers(1, lineBuffer_);
+      glDeleteBuffers(1, &lineBuffer_);
     if (fillBuffer_)
-			glDeleteBuffers(1, fillBuffer_);
+			glDeleteBuffers(1, &fillBuffer_);
     if (indicesBuffer_)
-			glDeleteBuffers(1, indicesBuffer_);
+			glDeleteBuffers(1, &indicesBuffer_);
 
     lineBuffer_ = 0;
     fillBuffer_ = 0;
@@ -131,7 +125,7 @@ namespace Interface
 
   void OpenGlLineRenderer::render(const OpenGlWrapper &openGl, const Component &target, Rectangle<int> bounds)
   {
-    if (!setViewPort(target.getPosition(), bounds, bounds, openGl, nullptr))
+    if (!setViewport(target.getPosition(), bounds, bounds, openGl, nullptr))
       return;
 
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
@@ -213,7 +207,7 @@ namespace Interface
     lineColourUniform_.set(colour_.getFloatRed(), colour_.getFloatGreen(), colour_.getFloatBlue(), colour_.getFloatAlpha());
 
     lineScaleUniform_.set(x_shrink, y_shrink);
-    lineWidthUniform_.set(lineWidth_);
+    lineWidthUniform_.set();
 
     glDrawElements(GL_TRIANGLE_STRIP, lineVerticesCount_, GL_UNSIGNED_INT, nullptr);
 
@@ -244,13 +238,13 @@ namespace Interface
     for (int i = start_index; i != end_index; i = (i + active_points + 1) % active_points)
     {
       val += delta;
-      val = std::min(1.0f, val);
+      val = utils::min(1.0f, val);
       float last_value = boosts[i + buffer_vertices];
-      boosts[i + buffer_vertices] = std::max(last_value, val);
+      boosts[i + buffer_vertices] = utils::max(last_value, val);
     }
 
     float end_value = boosts[end_index + buffer_vertices];
-    boosts[end_index + buffer_vertices] = std::max(end_value, progress * progress);
+    boosts[end_index + buffer_vertices] = utils::max(end_value, progress * progress);
   }
 
   void OpenGlLineRenderer::decayBoosts(float mult)
@@ -324,7 +318,7 @@ namespace Interface
       float radius = line_radius * (1.0f + boostAmount_ * boosts[i]);
       Point<float> point{ x_[i], y_[i] };
       
-      int next_index = std::min(i + 1, pointCount_ - 1);
+      int next_index = utils::min(i + 1, pointCount_ - 1);
       Point<float> delta{ x_[next_index] - point.x, y_[next_index] - point.y };
       if (delta == Point<float>{})
         delta = prev_normalized_delta;
@@ -335,14 +329,14 @@ namespace Interface
 
       Point<float> angle_bisect_delta = normalized_delta - prev_normalized_delta;
       Point<float> bisect_line;
-      bool straight = std::abs(angle_bisect_delta.x) < 0.001f && std::abs(angle_bisect_delta.y) < 0.001f;
+      bool straight = utils::abs(angle_bisect_delta.x) < 0.001f && utils::abs(angle_bisect_delta.y) < 0.001f;
       if (straight)
         bisect_line = delta_normal;
       else
         bisect_line = normalise(angle_bisect_delta);
 
-      next_magnitude = std::min(100'000.0f, next_magnitude);
-      float max_inner_radius = std::max(radius, 0.5f * (next_magnitude + magnitude));
+      next_magnitude = utils::min(100'000.0f, next_magnitude);
+      float max_inner_radius = utils::max(radius, 0.5f * (next_magnitude + magnitude));
       magnitude = next_magnitude;
 
       // dot product

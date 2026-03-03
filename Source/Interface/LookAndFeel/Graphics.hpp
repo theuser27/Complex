@@ -5,6 +5,8 @@
 
 #include "nanovg/nanovg.h"
 
+#include "Framework/simd_values.hpp"
+#include "Framework/simd_utils.hpp"
 #include "Framework/memory.hpp"
 #include "gui_utils.hpp"
 
@@ -12,11 +14,20 @@ extern "C"
 {
   typedef struct NVGLUframebuffer NVGLUframebuffer;
   typedef struct NVGcontext NVGcontext;
+  typedef struct NSVGimage NSVGimage;
+}
+
+namespace Plugin
+{
+  struct State;
 }
 
 namespace Interface
 {
   enum class FontId : u8 { DDinType, InterType };
+
+  class Renderer;
+  class Skin;
 
   class Graphics
   {
@@ -113,12 +124,120 @@ namespace Interface
     int InterFontId;
   };
 
-  inline void paintDebugRect(NVGcontext *context, 
+  struct InterfaceRelated
+  {
+    Plugin::State *state = nullptr;
+    Renderer *renderer = nullptr;
+    Graphics *cache = nullptr;
+    Skin *skin = nullptr;
+    float scale = 1.0f;
+    float deltaTime = 0.0f;
+  };
+
+  // thread_local variable for the message thread so that we don't need to pass pointers around
+  extern thread_local InterfaceRelated uiRelated;
+  strict_inline float scaleValue(float value) { return uiRelated.scale * value; }
+  strict_inline Rectangle<float>
+  scaleValue(Rectangle<float> bounds)
+  {
+    auto values = utils::bit_cast<simd_float>(bounds);
+    values = uiRelated.scale * utils::toFloat(values);
+    return utils::bit_cast<Rectangle<float>>(values);
+  }
+  strict_inline float scaleValueRound(float value) { return ::roundf(uiRelated.scale * value); }
+  strict_inline i32 scaleValueRoundInt(float value) { return (int)::roundf(uiRelated.scale * value); }
+  strict_inline Rectangle<i32> 
+  scaleValueRoundInt(Rectangle<i32> bounds)
+  {
+    auto values = utils::bit_cast<simd_int>(bounds);
+    values = utils::toInt(simd_float::round(uiRelated.scale * utils::toFloat(values)));
+    return utils::bit_cast<Rectangle<i32>>(values);
+  }
+  strict_inline float unscaleValue(float value) { return value / uiRelated.scale; }
+
+  inline void fillRect(NVGcontext *context, 
     Rectangle<float> bounds, Colour colour = Colours::white)
   {
     nvgBeginPath(context);
-    nvgRect(context, 0.0f, 0.0f, bounds.w, bounds.h);
+    nvgRect(context, bounds.x, bounds.y, bounds.w, bounds.h);
     nvgFillColor(context, colour);
     nvgFill(context);
+  }
+
+  inline void renderText(utils::string_view text, FontId font,
+    Rectangle<i32> bounds, Graphics *context, Colour colour)
+  {
+    nvgBeginPath(context->context);
+    context->setFont(font, scaleValue((float)bounds.h));
+    float ascent, lineHeight;
+    nvgFillColor(context->context, colour);
+    nvgTextMetrics(context->context, &ascent, nullptr, &lineHeight);
+    nvgTextAlign(context->context, NVG_ALIGN_CENTER | NVG_ALIGN_BASELINE);
+    nvgText(context->context, (float)bounds.x + ((float)bounds.w) * 0.5f,
+      ::ceilf((float)bounds.x + ((float)bounds.h - lineHeight) * 0.5f + ascent),
+      text.data(), text.data() + text.size());
+  }
+
+  struct ViewportChange
+  {
+    Component *component = nullptr;
+    Rectangle<int> change{};
+    bool isClipping = true;
+
+    constexpr bool operator==(const ViewportChange &) const noexcept = default;
+  };
+
+  class Shaders;
+
+  struct OpenGlWrapper
+  {
+    utils::vector<ViewportChange> parentStack{};
+    Shaders *shaders = nullptr;
+    Graphics *cache = nullptr;
+    NVGcontext *g = nullptr;
+    int topLevelHeight = 0;
+
+    operator NVGcontext *() { return g; }
+  };
+
+  bool setViewport(Point<int> positionInViewport, Rectangle<int> viewportBounds,
+    Rectangle<int> scissorBounds, const OpenGlWrapper &openGl, const Component *ignoreClipIncluding);
+
+#if COMPLEX_DEBUG
+  void checkGLError(const char *file, const int line);
+  #define COMPLEX_CHECK_OPENGL_ERROR() checkGLError(__FILE__, __LINE__)
+#else
+  #define COMPLEX_CHECK_OPENGL_ERROR()
+#endif
+
+  void drawSVG(NSVGimage *image, Graphics &g, Colour colour,
+    Rectangle<float> bounds, float strokeWidth);
+
+  namespace Paths
+  {
+    using DrawingFn = void(Graphics &g, utils::span<Colour> colours,
+      Rectangle<float> bounds, float strokeWidth);
+
+    void pasteValueIcon(Graphics &g, Rectangle<float> bounds,
+      float strokeWidth, utils::span<Colour> colours);
+    void enterValueIcon(Graphics &g, Rectangle<float> bounds,
+      float strokeWidth, utils::span<Colour> colours);
+    void copyNormalisedValueIcon(Graphics &g, Rectangle<float> bounds,
+      float strokeWidth, utils::span<Colour> colours);
+    void copyScaledValueIcon(Graphics &g, Rectangle<float> bounds,
+      float strokeWidth, utils::span<Colour> colours);
+
+    void filterIcon(Graphics &g, Rectangle<float> bounds,
+      float strokeWidth, utils::span<Colour> colours);
+    void dynamicsIcon(Graphics &g, Rectangle<float> bounds,
+      float strokeWidth, utils::span<Colour> colours);
+    void phaseIcon(Graphics &g, Rectangle<float> bounds,
+      float strokeWidth, utils::span<Colour> colours);
+    void pitchIcon(Graphics &g, Rectangle<float> bounds,
+      float strokeWidth, utils::span<Colour> colours);
+    void destroyIcon(Graphics &g, Rectangle<float> bounds,
+      float strokeWidth, utils::span<Colour> colours);
+
+    utils::pair<DrawingFn *, Rectangle<i32>> powerButtonIcon();
   }
 }

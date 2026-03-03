@@ -15,7 +15,6 @@
 #include "Plugin/Complex.hpp"
 #include "Interface/LookAndFeel/Shaders.hpp"
 #include "Interface/LookAndFeel/Graphics.hpp"
-#include "Interface/LookAndFeel/Miscellaneous.hpp"
 #include "Interface/LookAndFeel/BaseComponent.hpp"
 #include "Interface/Sections/MainInterface.hpp"
 
@@ -70,6 +69,30 @@ static void clampScaleWidthHeight(PuglView *view, float &desiredScale, u32 &wind
   windowHeight = utils::clamp(windowHeight, (u32)kMinHeight, (u32)::floorf(displayHeight / desiredScale));
 }
 
+#define GRAPH_HISTORY_COUNT 100
+struct PerfGraph
+{
+  float values[GRAPH_HISTORY_COUNT];
+  int head;
+};
+
+float getGraphAverage(PerfGraph *fps)
+{
+  int i;
+  float avg = 0;
+  for (i = 0; i < GRAPH_HISTORY_COUNT; i++)
+  {
+    avg += fps->values[i];
+  }
+  return avg / (float)GRAPH_HISTORY_COUNT;
+}
+
+void updateGraph(PerfGraph *fps, float frameTime)
+{
+  fps->head = (fps->head + 1) % GRAPH_HISTORY_COUNT;
+  fps->values[fps->head] = frameTime;
+}
+
 namespace Interface
 {
   // deferred components that will set their own position
@@ -90,7 +113,12 @@ namespace Interface
     bool isResizing = false;
     bool isHandlingOrphanedMouseEvents = false;
     bool hasEnteredResizeCorner = false;
-    float fps = 60.0f;
+    float fps =
+    #if COMPLEX_WINDOWS
+      64.0F; // Windows timers are complete ass
+    #elif
+      60.0f;
+    #endif
 
     PuglWorld *world_ = nullptr;
     PuglView *view_ = nullptr;
@@ -119,6 +147,8 @@ namespace Interface
     Shaders shaders;
     utils::bumpArena *arena{};
 
+    PerfGraph graph{};
+    bool renderDebugFps = true;
 
     void startUI();
     void stopUI();
@@ -143,11 +173,11 @@ namespace Interface
       {
         if (c->componentFlags.isOpenGlInitialised)
         {
-          c->componentFlags.destroyOpenGl = true;
+          c->componentFlags.isDestroyingOpenGl = true;
           c->render(openGl);
           COMPLEX_ASSERT(!c->componentFlags.isOpenGlInitialised,
             "Didn't reset initialisation flag after opengl resource destruction");
-          c->componentFlags.destroyOpenGl = false;
+          c->componentFlags.isDestroyingOpenGl = false;
         }
         for (auto child = c->children; child; child = child->next)
           self(self, child);
@@ -186,6 +216,7 @@ namespace Interface
     {
       auto newRenderTime = puglGetTime(puglGetWorld(view));
       uiRelated.deltaTime = (float)(newRenderTime - lastRenderTime);
+      updateGraph(&graph, (float)uiRelated.deltaTime);
 
       auto state = plugin.state_;
       for (usize i = 0; i < state->parameterBridges.size(); ++i)
@@ -212,11 +243,18 @@ namespace Interface
       glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
       glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
 
-      nvgBeginFrame(openGl.g, (float)area.w, (float)area.h, 1.0f);
+      nvgBeginFrame(openGl, (float)area.w, (float)area.h, 1.0f);
 
       openGl.parentStack.emplace_back(gui, gui->bounds, true);
       openGl.parentStack.emplace_back(ScopedBoundsEmplace::doNotAddFlag);
       gui->doRender(openGl);
+
+      if (renderDebugFps)
+      {
+        nvgReset(openGl);
+        auto text = utils::floatToString(localScratch, 1.0f / getGraphAverage(&graph), 2);
+        renderText(text, FontId::InterType, { 12, 24, 24, 24 }, graphics, Colours::white);
+      }
 
       nvgEndFrame(openGl.g);
 
@@ -333,6 +371,7 @@ namespace Interface
       break;
 
     case PUGL_EXPOSE:
+      //renderer->renderLoop(view);
       break;
     
     case PUGL_UPDATE: break;
@@ -580,6 +619,7 @@ namespace Interface
     puglSetViewHint(view_, PUGL_DOUBLE_BUFFER, PUGL_TRUE);
     puglSetViewHint(view_, PUGL_SWAP_INTERVAL, 1);
     puglSetViewHint(view_, PUGL_DARK_FRAME, PUGL_TRUE);
+    //puglSetViewHint(view_, PUGL_REFRESH_RATE, 60);
     puglSetHandle(view_, this);
     puglSetEventFunc(view_, runThread);
   }
@@ -813,7 +853,7 @@ extern "C"
       puglSetParent(renderer->view_, (PuglNativeView)newParent);
       [[maybe_unused]] PuglStatus status = puglRealize(renderer->view_);
       COMPLEX_ASSERT(status == PUGL_SUCCESS);
-      puglStartTimer(renderer->view_, Interface::Renderer::kTimerRefreshRate, 1.0 / kParameterUpdateIntervalHz);
+      puglStartTimer(renderer->view_, Interface::Renderer::kTimerRefreshRate, 1.0 / renderer->fps);
     }
   }
 

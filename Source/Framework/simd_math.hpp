@@ -317,7 +317,7 @@ namespace utils
     auto data = buffer->get();
     usize dataSize = buffer->size;
 
-    for (usize i = 0; i < buffer.getSimdChannels(); i++)
+    for (usize i = 0; i < buffer->getSimdChannels(); i++)
     {
       auto dc = data[dataSize * i];
       // size - 1 to skip nyquist since it doesn't need to change

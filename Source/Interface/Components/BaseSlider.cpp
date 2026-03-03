@@ -7,9 +7,8 @@
 #include "Framework/parameter_bridge.hpp"
 #include "Plugin/Complex.hpp"
 #include "Plugin/Renderer.hpp"
-#include "../LookAndFeel/Miscellaneous.hpp"
+#include "../LookAndFeel/ui_constants.hpp"
 #include "../LookAndFeel/Graphics.hpp"
-#include "../LookAndFeel/Shaders.hpp"
 #include "../LookAndFeel/Skin.hpp"
 #include "../Sections/Popups.hpp"
 

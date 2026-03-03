@@ -13,7 +13,8 @@
 #include "Generation/SoundEngine.hpp"
 #include "Generation/EffectsState.hpp"
 #include "Generation/EffectModules.hpp"
-#include "Interface/LookAndFeel/Miscellaneous.hpp"
+#include "Interface/LookAndFeel/Graphics.hpp"
+#include "Interface/LookAndFeel/ui_constants.hpp"
 #include "Plugin/Renderer.hpp"
 #include "Plugin/Complex.hpp"
 

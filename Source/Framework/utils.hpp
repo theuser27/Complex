@@ -255,124 +255,132 @@ namespace utils
   template<typename T>
   constexpr bool operator==(nullptr_t, const sp<T> &two) { return two.get() == nullptr; }
 
-  // ghetto std::any implementation
+  inline constexpr usize heapAllocatedTag = usize(-1) >> 1;
+
+  // ghetto std::any implementation that can also be stack allocated
+  template<usize MaxSize, usize Alignment = sizeof(void *)>
   class whatever
   {
-  private:
-    template<typename T>
-    static constexpr bool isSmall = alignof(T) <= alignof(void *) && sizeof(T) <= sizeof(void *);
+    static constexpr bool isOnHeap = MaxSize == heapAllocatedTag;
 
-    enum Op { OpAccess, OpClone, OpDestroy, OpMoveOut, OpTransfer, OpTypeId };
+    enum Op { OpClone, OpDestroy, OpMoveOut, OpTransfer, OpTypeId, OpSizeAlignment };
 
     union InOutParams
     {
       void *object{};
+      struct
+      {
+        usize size{};
+        usize alignment{};
+      } sizeAlignment;
       typeInfo typeId;
       whatever *whateverPtr;
     };
 
-    void (*manager_)(Op, const whatever *, InOutParams *) = nullptr;
-    void *storage_{};
+    using Storage = conditional_t<isOnHeap, void *, byte[MaxSize]>;
+
+    void (*manager_)(Op, const whatever *, InOutParams *){};
+    alignas(isOnHeap ? alignof(Storage) : Alignment) Storage data_{};
 
     template<typename T>
-    struct ManagerInternal
+    static void ManageStorage(Op op, const whatever *instance, InOutParams *inOutParams)
     {
-      static void ManageStorage(Op op, const whatever *instance, InOutParams *inOutParams)
+      // The contained object is in the pointer
+      auto objectPtr = utils::launder((T *)instance->data_);
+      switch (op)
       {
-        // The contained object is in the pointer
-        auto objectPtr = utils::launder((const T *)&instance->storage_);
-        switch (op)
+      case OpClone:
+        if constexpr (isOnHeap)
         {
-        case OpAccess:
-          inOutParams->object = const_cast<T *>(objectPtr);
-          break;
-        case OpClone:
-          new(&inOutParams->whateverPtr->storage_) T(*objectPtr);
+          inOutParams->whateverPtr->data_ = new(utils::allocate(sizealignof(T))) T{ *objectPtr };
           inOutParams->whateverPtr->manager_ = instance->manager_;
-          break;
-        case OpDestroy:
-          objectPtr->~T();
-          break;
-        case OpMoveOut:
-          new(inOutParams->object) T{ COMPLEX_MOVE(*const_cast<T *>(objectPtr)) };
-          objectPtr->~T();
-          break;
-        case OpTransfer:
-          new(&inOutParams->whateverPtr->storage_) T{ COMPLEX_MOVE(*const_cast<T *>(objectPtr)) };
-          objectPtr->~T();
+        }
+        else
+        {
+          new(inOutParams->whateverPtr->data_) T{ *objectPtr };
           inOutParams->whateverPtr->manager_ = instance->manager_;
-          const_cast<whatever *>(instance)->manager_ = nullptr;
-          break;
-        case OpTypeId:
-          inOutParams->typeId = typeId(T);
-          break;
+        }
+        break;
+      case OpDestroy:
+        objectPtr->~T();
+        break;
+      case OpMoveOut:
+        new(inOutParams->object) T{ COMPLEX_MOVE(*objectPtr) };
+        objectPtr->~T();
+        break;
+      case OpTransfer:
+        new(inOutParams->whateverPtr->data_) T{ COMPLEX_MOVE(*objectPtr) };
+        objectPtr->~T();
+        inOutParams->whateverPtr->manager_ = instance->manager_;
+        const_cast<whatever *>(instance)->manager_ = {};
+        break;
+      case OpTypeId:
+        inOutParams->typeId = typeId(T);
+        break;
+      case OpSizeAlignment:
+        inOutParams->sizeAlignment = { .size = sizeof(T), .alignment = alignof(T) };
+        break;
+      }
+    }
+
+    void allocate(decltype(manager_) newManager)
+    {
+      InOutParams newParams;
+      newManager(OpSizeAlignment, nullptr, &newParams);
+
+      if constexpr (isOnHeap)
+      {
+        InOutParams params;
+
+        if (manager_ && (manager_(OpSizeAlignment, nullptr, &params),
+          (params.sizeAlignment.alignment >= newParams.sizeAlignment.alignment &&
+           params.sizeAlignment.size >= newParams.sizeAlignment.size)))
+        {
+          COMPLEX_ASSERT(data_);
+          // we already have enough memory, no allocation needed
+          // however we might be losing track of the current amount of memory available 
+          // but we'd need to store this information dynamically otherwise ¯\_(ツ)_/¯
+          manager_(OpDestroy, this, nullptr);
+        }
+        else
+        {
+          // we have (no) memory and it's not enough
+          if (data_)
+          {
+            COMPLEX_ASSERT(manager_);
+            utils::deallocate(data_);
+          }
+
+          data_ = utils::allocate(newParams.sizeAlignment.size, newParams.sizeAlignment.alignment);
         }
       }
-
-      template<typename... Args>
-      static T &
-      CreateStorage(void *&storage, Args&&... args)
+      else
       {
-        return *new (storage) T{ COMPLEX_FWD(args)... };
-      }
-    };
-
-    // Manage external contained object.
-    template<typename T>
-    struct ManagerExternal
-    {
-      static void ManageStorage(Op op, const whatever *instance, InOutParams *inOutParams)
-      {
-        // The contained object is pointed by storage_
-        auto objectPtr = static_cast<const T *>(instance->storage_);
-        switch (op)
-        {
-        case OpAccess:
-          inOutParams->object = const_cast<T *>(objectPtr);
-          break;
-        case OpClone:
-          inOutParams->whateverPtr->storage_ = new T(*objectPtr);
-          inOutParams->whateverPtr->manager_ = instance->manager_;
-          break;
-        case OpDestroy:
-          delete objectPtr;
-          break;
-        case OpMoveOut:
-          (void)new(inOutParams->object) T{ COMPLEX_MOVE(*const_cast<T *>(objectPtr)) };
-          objectPtr->~T();
-          break;
-        case OpTransfer:
-          inOutParams->whateverPtr->storage_ = instance->storage_;
-          inOutParams->whateverPtr->manager_ = instance->manager_;
-          const_cast<whatever *>(instance)->manager_ = nullptr;
-          break;
-        case OpTypeId:
-          inOutParams->typeId = typeId(T);
-          break;
-        }
+        COMPLEX_ASSERT(Alignment >= newParams.sizeAlignment.alignment && 
+          MaxSize >= newParams.sizeAlignment.size);
       }
 
-      template<typename... Args>
-      static constexpr T &
-      CreateStorage(void *&storage, Args&&... args)
-      {
-        auto *object = new T{ COMPLEX_FWD(args)... };
-        storage = object;
-        return *object;
-      }
-    };
-
-    template<typename T>
-    using get_manager = utils::conditional_t<isSmall<T>, ManagerInternal<T>, ManagerExternal<T>>;
+      manager_ = newManager;
+    }
 
   public:
+    constexpr ~whatever()
+    {
+      if (manager_)
+      {
+        COMPLEX_ASSERT(data_);
+        manager_(OpDestroy, this, nullptr);
+        if constexpr (isOnHeap)
+          if (data_)
+            utils::deallocate(data_);
+        manager_ = {};
+      }
+    }
+
     constexpr whatever() = default;
-    ~whatever() { reset(); }
     whatever(const whatever &other)
     {
-      if (!other.hasValue())
-        manager_ = nullptr;
-      else
+      if (other.hasValue())
       {
         InOutParams inOutParams;
         inOutParams.whateverPtr = this;
@@ -381,13 +389,11 @@ namespace utils
     }
     whatever(whatever &&other) noexcept
     {
-      if (!other.hasValue())
-        manager_ = nullptr;
-      else
+      if (other.hasValue())
       {
         InOutParams inOutParams;
         inOutParams.whateverPtr = this;
-        other.manager_(OpTransfer, &other, &inOutParams);
+        other.manager_(OpMoveOut, &other, &inOutParams);
       }
     }
     whatever &
@@ -399,24 +405,25 @@ namespace utils
     whatever &
     operator=(whatever &&other) noexcept
     {
-      if (!other.hasValue())
-        reset();
-      else if (this != &other)
+      if (this != &other)
       {
-        reset();
+        this->~whatever();
         InOutParams inOutParams;
         inOutParams.whateverPtr = this;
         other.manager_(OpTransfer, &other, &inOutParams);
       }
+
       return *this;
     }
 
     template<typename T>
     whatever(T &&object)
     {
-      using Manager = get_manager<utils::remove_cvref_t<T>>;
-      manager_ = &Manager::ManageStorage;
-      (void)Manager::CreateStorage(storage_, COMPLEX_FWD(object));
+      using U = utils::remove_cvref_t<T>;
+      static constexpr auto newManager = &ManageStorage<U>;
+
+      allocate(newManager);
+      (void)new(data_) T{ COMPLEX_FWD(object) };
     }
     template<typename T>
     static whatever 
@@ -430,22 +437,13 @@ namespace utils
     T &
     emplace(auto &&... args)
     {
-      using Manager = get_manager<T>;
-      auto &ret = Manager::CreateStorage(storage_, COMPLEX_FWD(args)...);
-      manager_ = &Manager::ManageStorage;
-      return ret;
+      static constexpr auto newManager = &ManageStorage<T>;
+      allocate(newManager);
+      auto *ret = new(data_) T{ COMPLEX_FWD(args)... };
+      return *ret;
     }
 
     bool hasValue() const { return manager_ != nullptr; }
-
-    void reset()
-    {
-      if (hasValue())
-      {
-        manager_(OpDestroy, this, nullptr);
-        manager_ = nullptr;
-      }
-    }
 
     typeInfo 
     type() const
@@ -459,33 +457,38 @@ namespace utils
 
     void swap(whatever &other)
     {
-      if (!hasValue() && !other.hasValue())
-        return;
-
-      if (hasValue() && other.hasValue())
+      if constexpr (isOnHeap)
       {
-        if (this == &other)
-          return;
-
-        whatever temp;
-        InOutParams inOutParams;
-
-        inOutParams.whateverPtr = &temp;
-        other.manager_(OpTransfer, &other, &inOutParams);
-        inOutParams.whateverPtr = &other;
-
-        manager_(OpTransfer, this, &inOutParams);
-        inOutParams.whateverPtr = this;
-        temp.manager_(OpTransfer, &temp, &inOutParams);
+        COMPLEX_SWAP_MEMBERS(manager_, other);
+        COMPLEX_SWAP_MEMBERS(data_, other);
       }
       else
       {
-        whatever *empty = !hasValue() ? this : &other;
-        whatever *full = !hasValue() ? &other : this;
+        if (hasValue() && other.hasValue())
+        {
+          if (this == &other)
+            return;
 
-        InOutParams inOutParams;
-        inOutParams.whateverPtr = empty;
-        full->manager_(OpTransfer, full, &inOutParams);
+          whatever temp;
+          InOutParams inOutParams;
+
+          inOutParams.whateverPtr = &temp;
+          other.manager_(OpTransfer, &other, &inOutParams);
+          inOutParams.whateverPtr = &other;
+
+          manager_(OpTransfer, this, &inOutParams);
+          inOutParams.whateverPtr = this;
+          temp.manager_(OpTransfer, &temp, &inOutParams);
+        }
+        else if (hasValue() || other.hasValue())
+        {
+          whatever *empty = (hasValue()) ? &other : this;
+          whatever *full = (hasValue()) ? this : &other;
+
+          InOutParams inOutParams;
+          inOutParams.whateverPtr = empty;
+          full->manager_(OpTransfer, full, &inOutParams);
+        }
       }
     }
 
@@ -493,6 +496,9 @@ namespace utils
     usize 
     visit(VisitorFunctions &&... visitors)
     {
+      if (!hasValue())
+        return usize(-1);
+
       usize index = 0;
       auto probe = [this, &index]<typename T>(T &&visitor)
       {
@@ -500,13 +506,9 @@ namespace utils
         using UClean = utils::remove_cvref_t<URef>;
         static_assert(utils::is_lvalue_reference_v<URef>, "Parameter must an lvalue reference");
 
-        if (manager_ == &get_manager<UClean>::ManageStorage)
+        if (manager_ == &ManageStorage<UClean>)
         {
-          InOutParams outParam;
-          manager_(OpAccess, this, &outParam);
-
-          visitor(*static_cast<UClean *>(outParam.object));
-
+          visitor(*utils::launder((T *)data_));
           return true;
         }
         ++index;
@@ -523,13 +525,15 @@ namespace utils
     bool 
     isOneOf()
     {
-      auto matches = (usize(manager_ == &get_manager<Ts>::ManageStorage) + ...);
+      usize matches = 0; 
+      if (hasValue())
+        matches = (usize(manager_ == &ManageStorage<Ts>) + ...);
       return matches > 0;
     }
 
-    template<template<typename...> class VariantLike, typename ... Us>
+    template<template<typename...> class VariantLike, typename ... Ts>
     usize 
-    tryExtract(VariantLike<Us...> &variant)
+    tryExtract(VariantLike<Ts...> &variant)
     {
       if (!hasValue())
         return usize(-1);
@@ -537,12 +541,9 @@ namespace utils
       usize index = 0;
       auto probe = [&]<typename T>()
       {
-        if (manager_ == &get_manager<utils::remove_cvref_t<T>>::ManageStorage)
+        if (manager_ == &ManageStorage<utils::remove_cvref_t<T>>)
         {
-          InOutParams outParam;
-          manager_(OpAccess, this, &outParam);
-
-          auto *object = static_cast<T *>(outParam.object);
+          auto *object = utils::launder((T *)data_);
           variant = T{ COMPLEX_MOVE(*object) };
           object->~T();
 
@@ -552,7 +553,7 @@ namespace utils
         return false;
       };
 
-      bool isFound = (probe.template operator()<Us>() || ...);
+      bool isFound = (probe.template operator()<Ts>() || ...);
       if (!isFound)
         return usize(-1);
       return index;
@@ -562,12 +563,9 @@ namespace utils
     bool 
     tryExtract(T &variable)
     {
-      if (manager_ == &get_manager<utils::remove_cvref_t<T>>::ManageStorage)
+      if (manager_ == &ManageStorage<utils::remove_cvref_t<T>>)
       {
-        InOutParams outParam;
-        manager_(OpAccess, this, &outParam);
-
-        auto *object = static_cast<T *>(outParam.object);
+        auto *object = utils::launder((T *)data_);
         variable = T{ COMPLEX_MOVE(*object) };
         object->~T();
 
@@ -581,12 +579,10 @@ namespace utils
     T *
     tryGet()
     {
-      if (manager_ != &get_manager<utils::remove_cvref_t<T>>::ManageStorage)
-        return nullptr;
+      if (manager_ == &ManageStorage<utils::remove_cvref_t<T>>)
+        return utils::launder((T *)data_);
 
-      InOutParams outParam;
-      manager_(OpAccess, this, &outParam);
-      return static_cast<T *>(outParam.object);
+      return nullptr;
     }
 
     template<typename T>
@@ -665,20 +661,31 @@ namespace utils
     inline constexpr vtable_t<R, Args...> emptyVtable{};
   }
 
-  inline constexpr usize heapAllocatedTag = usize(-1) >> 1;
 
   // ghetto std::function implementation that can also be stack-allocated
   // and go back and forth between the heap and stack if needed
   // based on https://github.com/colugomusic/clog/blob/master/include/clog/small_function.hpp
-  template<typename Signature, usize MaxSize = 32>
+  template<typename Signature, usize MaxSize = 32, usize Alignment = 8>
   class fn;
 
-  template<typename R, typename ... Args, usize MaxSize>
-  class fn<R(Args...), MaxSize>
+  template<typename R, typename ... Args, usize MaxSize, usize Alignment>
+  class fn<R(Args...), MaxSize, Alignment>
   {
   public:
     using fnTag = void;
     static constexpr bool isOnHeap = MaxSize == heapAllocatedTag;
+
+    constexpr ~fn()
+    {
+      if (vtable_ == &detail::emptyVtable<R, Args...>)
+        return;
+
+      vtable_->destroyer(data_);
+      if constexpr (isOnHeap)
+        if (data_)
+          utils::deallocate(data_);
+      vtable_ = &detail::emptyVtable<R, Args...>;
+    }
 
     constexpr fn() = default;
     constexpr fn(nullptr_t) { }
@@ -711,16 +718,7 @@ namespace utils
       !requires{ typename Callable::fnTag; } // necessary to avoid fn & matches
     fn(T &&lambda) { fromCallable(COMPLEX_FWD(lambda)); }
 
-    constexpr ~fn()
-    {
-      if (vtable_ == &detail::emptyVtable<R, Args...>)
-        return;
 
-      vtable_->destroyer(data_);
-      if constexpr (isOnHeap)
-        operator delete[](data_, utils::align_val_t(vtable_->alignment));
-      vtable_ = &detail::emptyVtable<R, Args...>;
-    }
 
     template<usize Size>
     fn &
@@ -795,10 +793,9 @@ namespace utils
     }
 
   private:
-    static constexpr usize alignment = 8;
     using vtable_t = detail::vtable_t<R, Args...>;
 
-    static_assert(((MaxSize - sizeof(vtable_t)) % alignment == 0) || isOnHeap);
+    static_assert(((MaxSize - sizeof(vtable_t)) % Alignment == 0) || isOnHeap);
 
     using storage_t = conditional_t<isOnHeap, void *, byte[MaxSize]>;
 
@@ -819,17 +816,15 @@ namespace utils
           if (data_)
           {
             COMPLEX_ASSERT(vtable_);
-            operator delete[](data_, utils::align_val_t(vtable_->alignment));
+            utils::deallocate(data_);
           }
 
-          // can't use operator new[] the usual way because of a longstanding bug in msvc...
-          // https://developercommunity.visualstudio.com/t/using-c17-new-stdalign-val-tn-syntax-results-in-er/528320
-          data_ = operator new[](newVtable->size, utils::align_val_t(newVtable->alignment));
+          data_ = utils::allocate(newVtable->size, newVtable->alignment);
         }
       }
       else
       {
-        COMPLEX_ASSERT(alignment >= newVtable->alignment && sizeof(storage_t) >= newVtable->size);
+        COMPLEX_ASSERT(Alignment >= newVtable->alignment && MaxSize >= newVtable->size);
       }
 
       vtable_ = newVtable;
@@ -843,13 +838,13 @@ namespace utils
       static_assert(is_copy_constructible_v<fn_t>,
         "fn cannot be constructed from a non-copyable type");
 
-      static_assert(sizeof(fn_t) <= sizeof(storage_t) || isOnHeap,
+      static_assert(sizeof(fn_t) <= MaxSize || isOnHeap,
         "fn is too small to fit this object");
 
-      static_assert((alignment % alignof(fn_t) == 0) || isOnHeap,
+      static_assert((Alignment % alignof(fn_t) == 0) || isOnHeap,
         "fn cannot be constructed from an object of this alignment");
 
-      static_assert(alignment >= alignof(fn_t) || isOnHeap,
+      static_assert(Alignment >= alignof(fn_t) || isOnHeap,
         "fn does not support alignment higher the one defined in the class");
 
       static constexpr auto vtable = vtable_t::template create<fn_t>();
@@ -861,18 +856,18 @@ namespace utils
       vtable_ = &vtable;
     }
 
-    alignas(isOnHeap ? alignof(storage_t) : alignment) storage_t data_{};
+    alignas(isOnHeap ? alignof(storage_t) : Alignment) storage_t data_{};
     const vtable_t *vtable_ = &detail::emptyVtable<R, Args...>;
 
-    template<typename, usize>
+    template<typename, usize, usize>
     friend class fn;
   };
 
   template<typename Signature>
   using dynFn = fn<Signature, heapAllocatedTag>;
 
-  template<typename Signature, usize MaxSize = 16>
-  using smallFn = fn<Signature, MaxSize>;
+  template<typename Signature, usize MaxSize = 16, usize Alignment = 8>
+  using smallFn = fn<Signature, MaxSize, Alignment>;
 
 
   class thread

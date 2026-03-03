@@ -14,12 +14,12 @@
 #include "Interface/Components/BaseButton.cpp"
 #include "Interface/Components/BaseSlider.cpp"
 #include "Interface/Components/OpenGlQuad.cpp"
+#include "Interface/Components/Spectrogram.cpp"
 #include "Interface/Components/TextEditor.cpp"
 
 #include "Interface/LookAndFeel/BaseComponent.cpp"
 #include "Interface/LookAndFeel/Graphics.cpp"
 #include "Interface/LookAndFeel/gui_utils.cpp"
-#include "Interface/LookAndFeel/Miscellaneous.cpp"
 #include "Interface/LookAndFeel/Shaders.cpp"
 #include "Interface/LookAndFeel/Skin.cpp"
 

@@ -3,7 +3,7 @@
 
 #pragma once
 
-#include "platform_definitions.hpp"
+#include "platform.hpp"
 #include "satomi.hpp"
 #include "stl_utils.hpp"
 

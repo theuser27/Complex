@@ -43,10 +43,10 @@ namespace Generation
       (     OutputOptionsNone, 1758157494872876200),
     )
 
-    EffectsLane(Plugin::State *state, Framework::ProcessorMetadata *metadata, utils::bumpArena *arena) noexcept;
-    EffectsLane(const EffectsLane &other, utils::bumpArena *arena) noexcept : BaseProcessor{ other, arena } { }
+    EffectsLane(Plugin::State *state, Framework::ProcessorMetadata *metadata, utils::bumpArena *arena);
+    EffectsLane(const EffectsLane &other, utils::bumpArena *arena) : BaseProcessor{ other, arena } { }
 
-    void initialise() noexcept override
+    void initialise() override
     {
       BaseProcessor::initialise();
       status_.store(LaneStatus::Finished, satomi::memory_order_release);
@@ -55,7 +55,7 @@ namespace Generation
 
     // Inherited via BaseProcessor
     bool insertSubProcessor(usize index, BaseProcessor &newSubProcessor, bool callListeners = true) override;
-    BaseProcessor &deleteSubProcessor(usize index, bool callListeners = true) noexcept override;
+    BaseProcessor &deleteSubProcessor(usize index, bool callListeners = true) override;
     void initialiseParameters() override;
 
     Framework::ComplexDataSource laneDataSource_;
@@ -94,7 +94,7 @@ namespace Generation
       utils::pair<u32, u32> sourceIndex, destinationIndex;
     };
 
-    EffectsState(Plugin::State *state, Framework::ProcessorMetadata *metadata, utils::bumpArena *arena) noexcept;
+    EffectsState(Plugin::State *state, Framework::ProcessorMetadata *metadata, utils::bumpArena *arena);
 
     EffectsState(const EffectsState &) = delete;
 
@@ -103,14 +103,14 @@ namespace Generation
     BaseProcessor &deleteSubProcessor(usize index, bool callListeners = true) override;
     void initialiseParameters() override;
 
-    void writeInputData(const Framework::Buffer &inputBuffer) noexcept;
-    void processLanes() noexcept;
-    void sumLanesAndWriteOutput(Framework::Buffer &outputBuffer) noexcept;
+    void writeInputData(const Framework::Buffer &inputBuffer);
+    void processLanes();
+    void sumLanesAndWriteOutput(Framework::Buffer &outputBuffer);
 
-    utils::span<bool> getUsedInputChannels() noexcept;
-    utils::span<bool> getUsedOutputChannels() noexcept;
+    utils::span<bool> getUsedInputChannels();
+    utils::span<bool> getUsedOutputChannels();
 
-    const Framework::SimdBuffer *getOutputBuffer() const noexcept { return outputBuffer_; }
+    const Framework::SimdBuffer *getOutputBuffer() const { return outputBuffer_; }
 
     // current number of FFT bins (real-imaginary pairs)
     u32 binCount = 0;
@@ -120,8 +120,8 @@ namespace Generation
 
     void checkUsage();
 
-    void distributeWork() const noexcept;
-    void processIndividualLanes(EffectsLane *lane) const noexcept;
+    void distributeWork() const;
+    void processIndividualLanes(EffectsLane *lane) const;
 
     // if an input/output isn't used there's no need to process it at all
     utils::span<bool> usedInputChannels_{};

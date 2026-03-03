@@ -63,9 +63,10 @@ namespace Framework
   // specified by starting channels/indices
   // result is shifted by shiftMask and filtered with mergeMask
   // note: starting channels need to be congruent to kNumChannels
-  strict_inline void applyToThis(SimdBuffer *thisBuffer, const SimdBuffer *otherBuffer, u32 channels, u32 samples,
-    utils::MathOperations operation, simd_mask mergeMask, u32 thisStartChannel = 0, u32 otherStartChannel = 0,
-    u32 thisStartIndex = 0, u32 otherStartIndex = 0) noexcept
+  strict_inline void applyToThis(SimdBuffer *thisBuffer, const SimdBuffer *otherBuffer, 
+    u32 channels, u32 samples, utils::MathOperations operation, 
+    simd_mask mergeMask, u32 thisStartChannel = 0, u32 otherStartChannel = 0,
+    u32 thisStartIndex = 0, u32 otherStartIndex = 0)
   {
     COMPLEX_HARD_ASSERT(thisBuffer->channels >= thisStartChannel + channels);
     COMPLEX_HARD_ASSERT(otherBuffer->channels >= otherStartChannel + channels);
@@ -74,7 +75,7 @@ namespace Framework
     COMPLEX_HARD_ASSERT(thisBuffer != otherBuffer);
 
     // defining the math operations
-    simd_float(*function)(simd_float, simd_float, simd_mask);
+    simd_float (*function)(simd_float, simd_float, simd_mask);
     switch (operation)
     {
     case utils::MathOperations::Add:
@@ -106,7 +107,7 @@ namespace Framework
   template<utils::MathOperations Operation>
   strict_inline void applyToThisNoMask(SimdBuffer *thisBuffer, const SimdBuffer *otherBuffer,
     u32 channels, u32 samples, u32 thisStartChannel = 0, u32 otherStartChannel = 0,
-    u32 thisStartIndex = 0, u32 otherStartIndex = 0, simd_float scaleFactor = 1.0f) noexcept
+    u32 thisStartIndex = 0, u32 otherStartIndex = 0, simd_float scaleFactor = 1.0f)
   {
     COMPLEX_ASSERT(thisBuffer->channels >= thisStartChannel + channels);
     COMPLEX_ASSERT(otherBuffer->channels >= otherStartChannel + channels);

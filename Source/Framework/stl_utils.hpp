@@ -3,7 +3,7 @@
 
 #pragma once
 
-#include "platform_definitions.hpp"
+#include "platform.hpp"
 #include "macro_helpers.hpp"
 
 // collection of utilities i regularly use of but don't want to include the headers of

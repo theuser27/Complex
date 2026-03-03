@@ -7,7 +7,6 @@
 #include "Plugin/Renderer.hpp"
 #include "Plugin/Complex.hpp"
 #include "../LookAndFeel/Graphics.hpp"
-#include "../LookAndFeel/Shaders.hpp"
 #include "../Components/BaseControl.hpp"
 
 namespace Interface
@@ -73,7 +72,8 @@ namespace Interface
     return true;
   }
 
-  void PopupDisplay::handleCommandMessage(u64 commandId, utils::whatever)
+  bool 
+  PopupDisplay::handleCommandMessage(u64 commandId, utils::whatever<64>)
   {
     switch (commandId)
     {
@@ -118,8 +118,11 @@ namespace Interface
 
       bounds.setPosition(getRelativePoint(source, position));
 
-    } break;
+      return true;
     }
+    }
+
+    return false;
   }
 
   bool 
@@ -174,7 +177,8 @@ namespace Interface
       // TODO:
     }
 
-    void handleCommandMessage(u64 commandId, utils::whatever)
+    bool 
+    handleCommandMessage(u64 commandId, utils::whatever<64>) override
     {
       switch (commandId)
       {
@@ -210,8 +214,10 @@ namespace Interface
 
         calculatePositions(associatedItem->children, this, bounds);
 
-        break;
+        return true;
       }
+
+      return false;
     }
 
     PopupItem *associatedItem = nullptr;
@@ -360,15 +366,18 @@ namespace Interface
     return true;
   }
 
-  void PopupSelector::handleCommandMessage(u64 commandId, utils::whatever)
+  bool 
+  PopupSelector::handleCommandMessage(u64 commandId, utils::whatever<64>)
   {
     switch (commandId)
     {
     case Component::HandleCustomPosition:
       // position stays relative to component we're attached to
       bounds.setPosition(parent->bounds.getPosition());
-      break;
+      return true;
     }
+
+    return false;
   }
 
   void PopupSelector::resetState()
@@ -389,6 +398,7 @@ namespace Interface
   void PopupSelector::summon(Component *summoningComponent, Point<i32> position)
   {
     summoner = summoningComponent;
+    placement = Placement::custom;
     summoningPoint = position;
     grabFocus();
 

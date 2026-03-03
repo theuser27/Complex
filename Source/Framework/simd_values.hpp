@@ -3,7 +3,7 @@
 
 #pragma once
 
-#include "platform_definitions.hpp"
+#include "platform.hpp"
 #include "stl_utils.hpp"
 
 // the project cannot run without vectorisation (either x86 SSE4.1 or ARM NEON, however it can run without FMA)

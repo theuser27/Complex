@@ -11,7 +11,7 @@
 #include "Generation/EffectsState.hpp"
 #include "Generation/SoundEngine.hpp"
 #include "Renderer.hpp"
-#include "Interface/LookAndFeel/Miscellaneous.hpp"
+#include "Interface/LookAndFeel/Graphics.hpp"
 
 namespace
 {

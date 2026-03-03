@@ -10,13 +10,10 @@
 
 #pragma once
 
-#include "../LookAndFeel/BaseComponent.hpp"
+#include "../LookAndFeel/Shaders.hpp"
 
 namespace Interface
 {
-	class OpenGlCorners;
-	class Renderer;
-
 	class OpenGlLineRenderer
 	{
 	public:
@@ -29,12 +26,9 @@ namespace Interface
 
 		static constexpr float kDefaultLineWidth = 7.0f;
 
-		OpenGlLineRenderer(int pointCount);
-		~OpenGlLineRenderer();
-
 		void init(OpenGlWrapper &openGl);
 		void render(const OpenGlWrapper &openGl, const Component &target, Rectangle<int> bounds);
-		void destroy(Renderer &renderer);
+		void destroy();
 
 		void setPointCount(int pointCount);
 
@@ -63,39 +57,41 @@ namespace Interface
 		void boostRange(float start, float end, int buffer_vertices, float min);
 		void decayBoosts(float mult);
 
+		utils::bumpArena *arena{};
+
 		Colour colour_;
-		Colour fillColorFrom_;
-		Colour fillColorTo_;
+		Colour fillColourFrom_;
+		Colour fillColourTo_;
 
 		float lineWidth_ = kDefaultLineWidth;
-		bool fill_ = false;
 		float fillCenter_ = 0.0f;
+		bool fill_ = false;
 		bool fit_ = false;
+
+		bool dirty_ = false;
+		bool shouldUpdateBufferSizes_ = true;
 
 		float boostAmount_ = 0.0f;
 		float fillBoostAmount_ = 0.0f;
-
-		bool dirty_ = false;
 
 		int pointCount_ = 0;
 		int lineVerticesCount_;
 		int fillVerticesCount_;
 		int lineFloatsCount_;
 		int fillFloatsCount_;
-		bool shouldUpdateBufferSizes_ = true;
 
 		OpenGlShaderProgram lineShader_;
-		OpenGlUniform lineScaleUniform_;
-		OpenGlUniform lineColourUniform_;
-		OpenGlUniform lineWidthUniform_;
+		OpenGlUniform<float[2]> lineScaleUniform_;
+		OpenGlUniform<float[4]> lineColourUniform_;
+		OpenGlUniform<float> lineWidthUniform_;
 		OpenGlAttribute linePosition_;
 
 		OpenGlShaderProgram fillShader_;
-		OpenGlUniform fillScaleUniform_;
-		OpenGlUniform fillColourFromUniform_;
-		OpenGlUniform fillColourToUniform_;
-		OpenGlUniform fillCenterUniform_;
-		OpenGlUniform fillBoostAmountUniform_;
+		OpenGlUniform<float[2]> fillScaleUniform_;
+		OpenGlUniform<float[4]> fillColourFromUniform_;
+		OpenGlUniform<float[4]> fillColourToUniform_;
+		OpenGlUniform<float> fillCenterUniform_;
+		OpenGlUniform<float> fillBoostAmountUniform_;
 		OpenGlAttribute fillPosition_;
 
 		GLuint lineBuffer_ = 0;

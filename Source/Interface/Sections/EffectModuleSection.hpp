@@ -28,7 +28,7 @@ namespace Generation
 
 namespace Interface
 {
-	class PlainShapeComponent;
+	class DrawComponent;
 	class EmptySlider;
 	class NumberBox;
 	class TextSelector;
@@ -135,7 +135,7 @@ namespace Interface
 		utils::up<SpectralMaskComponent> maskComponent_;
 
 		DraggableComponent draggableBox_{};
-		utils::up<PlainShapeComponent> effectTypeIcon_;
+		utils::up<DrawComponent> effectTypeIcon_;
 		utils::up<TextSelector> effectTypeSelector_;
 		utils::up<TextSelector> effectAlgoSelector_;
 

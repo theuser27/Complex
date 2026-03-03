@@ -3,9 +3,8 @@
 
 #include "BaseComponent.hpp"
 
-#include "Miscellaneous.hpp"
+#include "ui_constants.hpp"
 #include "Graphics.hpp"
-#include "Shaders.hpp"
 #include "Plugin/Renderer.hpp"
 #include "Generation/BaseProcessor.hpp"
 #include "../Components/BaseControl.hpp"
@@ -18,9 +17,9 @@ namespace Interface
   PopupDisplay *getPopupDisplay(bool primary = true) { return getGui(uiRelated.renderer)->getPopupDisplay(primary); }
   utils::bumpArena *getUIArena() { return getGui(uiRelated.renderer)->arena; }
 
-#define GET_PRIMARY_FLAG(component, flag) ((flag) << (i32)(!!(component->componentFlags.isVertical)))
-#define GET_SECONDARY_FLAG(component, flag) ((flag) << (1 - (!!(component->componentFlags.isVertical))))
-#define TRANSPOSE(component, rect) ((component->componentFlags.isVertical) ? (rect).transposed() : (rect))
+#define GET_PRIMARY_FLAG(component, flag) ((flag) << (i32)(!!(component->componentFlags.vertical)))
+#define GET_SECONDARY_FLAG(component, flag) ((flag) << (1 - (!!(component->componentFlags.vertical))))
+#define TRANSPOSE(component, rect) ((component->componentFlags.vertical) ? (rect).transposed() : (rect))
 
   static void calculateFit(Component *component, Component *children, bool isCalculatingVertical)
   {
@@ -60,7 +59,7 @@ namespace Interface
       sameAsSiblingsSizes.max = utils::max(sameAsSiblingsSizes.max, child->bounds.*minMember);
 
       // when parent has horizontal/vertical orientation but we're calculating vertical/horizontal sizes
-      if (component->componentFlags.isVertical ^ isCalculatingVertical)
+      if (component->componentFlags.vertical ^ isCalculatingVertical)
       {
         if (test_enum(child->sizingFlags, (isCalculatingVertical) ? Component::SameAsSiblingsY : Component::SameAsSiblingsX))
           sameAsSiblingsComponents.emplace_back(child);
@@ -93,7 +92,7 @@ namespace Interface
 
     for (auto *child : sameAsSiblingsComponents)
     {
-      if (component->componentFlags.isVertical ^ isCalculatingVertical)
+      if (component->componentFlags.vertical ^ isCalculatingVertical)
       {
         child->bounds.*minMember = (i32)sameAsSiblingsSizes.min;
         child->bounds.*maxMember = (i32)sameAsSiblingsSizes.max;
@@ -173,14 +172,16 @@ namespace Interface
     auto Rectangle<i32>:: *maxMember = (isCalculatingVertical) ? &Rectangle<i32>::h : &Rectangle<i32>::w;
 
     // when parent has horizontal/vertical orientation but we're calculating vertical/horizontal sizes
-    if (component->componentFlags.isVertical ^ isCalculatingVertical)
+    if (component->componentFlags.vertical ^ isCalculatingVertical)
     {
       for (auto *child = children; child; child = child->next)
       {
         if (!child->componentFlags.isVisible)
           continue;
 
-        auto maxSize = utils::min(child->bounds.*maxMember, component->bounds.*maxMember);
+        auto extra = (isCalculatingVertical) ? child->margin.getBottom() : child->margin.getRight();
+
+        auto maxSize = utils::min(child->bounds.*maxMember, component->bounds.*maxMember - extra);
         // scaling the final secondary size
         child->bounds.*maxMember = scaleValueRoundInt((float)maxSize);
         calculateGrow(child, child->children, isCalculatingVertical);
@@ -208,6 +209,7 @@ namespace Interface
 
       auto extra = (isCalculatingVertical) ? child->margin.getBottom() : child->margin.getRight();
 
+      // not adding minMember because we're going to compare against it in the next pass
       minSize += extra;
       maxSize += child->bounds.*maxMember + extra;
 
@@ -353,9 +355,11 @@ namespace Interface
     if (test_enum(component->sizingFlags, Component::ScrollableY))
       boundsInTarget.y -= component->scrollOffset.y;
 
-    auto Point<i32>:: *primary = (component->componentFlags.isVertical) ? &Point<i32>::y : &Point<i32>::x;
-    auto Point<i32>:: *secondary = (component->componentFlags.isVertical) ? &Point<i32>::x : &Point<i32>::y;
+    auto Point<i32>:: *primary = (component->componentFlags.vertical) ? &Point<i32>::y : &Point<i32>::x;
+    auto Point<i32>:: *secondary = (component->componentFlags.vertical) ? &Point<i32>::x : &Point<i32>::y;
 
+    // setting the supposed position and
+    // resetting previous position with current if the supposed position has changed from previous run
     auto setNextPosition = [&](bool isRight, Rectangle<i32> bounds, Component *child, i32 Point<i32>:: *coordinate)
     {
       auto change = child->nextPosition.*coordinate - bounds.getPosition().*coordinate;
@@ -557,25 +561,31 @@ namespace Interface
       }
     }
 
+    bool wasThisResized = component->bounds.withZeroOrigin() != component->lastBounds.withZeroOrigin();
     for (auto *child = children; child; child = child->next)
     {
       static constexpr float kMoveDelay = 0.1f; //s
 
-      if (child->componentFlags.animateMovement && 
-        child->previousPosition != child->nextPosition &&
-        child->lastBounds.getPosition() != child->nextPosition && 
-        child->previousPosition.x >= 0 && child->previousPosition.y >= 0)
+      if (child->componentFlags.animateMovement &&                        // are we animating to begin with?
+        !wasThisResized &&                                                // skip animations if triggered by parent resize
+        child->lastBounds.getPosition() != child->nextPosition &&         // are we already at the destination?
+        child->previousPosition.x >= 0 && child->previousPosition.y >= 0) // did we have a previous position?
       {
+        // we're interpolating between the previous position (animation start) and the supposed position
+
         float distanceToNextPositionRatio = (float)child->distanceToNextPositionRatio / (float)utils::max_limit<u16>;
+        //distanceToNextPositionRatio = utils::smoothStep(distanceToNextPositionRatio);
+        distanceToNextPositionRatio = utils::min(distanceToNextPositionRatio + uiRelated.deltaTime * 1.0f / kMoveDelay, 1.0f);
 
         child->bounds.x = (i32)::roundf(utils::lerp((float)child->previousPosition.x, (float)child->nextPosition.x, distanceToNextPositionRatio));
         child->bounds.y = (i32)::roundf(utils::lerp((float)child->previousPosition.y, (float)child->nextPosition.y, distanceToNextPositionRatio));
 
-        distanceToNextPositionRatio = utils::min(distanceToNextPositionRatio + uiRelated.deltaTime * 1.0f / kMoveDelay, 1.0f);
         child->distanceToNextPositionRatio = (u16)::ceilf(distanceToNextPositionRatio * (float)utils::max_limit<u16>);
       }
       else
       {
+        // we're not animating position and just setting the supposed position directly in
+
         child->previousPosition = child->nextPosition;
         child->bounds.setPosition(child->nextPosition);
         child->distanceToNextPositionRatio = 0;
@@ -591,11 +601,41 @@ namespace Interface
 #undef GET_SECONDARY_FLAG
 #undef GET_PRIMARY_FLAG
 
+  utils::pair<i32, i32>
+  getScrollOffsets(const MouseEvent &e, float singleStepX, float singleStepY)
+  {
+    auto rescaleMouseWheelDistance = [](float distance, float singleStepSize)
+    {
+      if (distance == 0.0f)
+        return 0;
+
+      distance *= 14.0f * singleStepSize;
+
+      return (i32)::roundf(distance < 0 ? utils::min(distance, -1.0f)
+        : utils::max(distance, 1.0f));
+    };
+
+    if (e.mods.test(ModifierKeys::ctrlAltCommandModifiers))
+      return {};
+
+    auto deltaX = rescaleMouseWheelDistance(e.wheelDeltaX, singleStepX);
+    auto deltaY = rescaleMouseWheelDistance(e.wheelDeltaY, singleStepY);
+
+    if (e.mods.test(ModifierKeys::shiftModifier))
+    {
+      auto temp = deltaX;
+      deltaX = -deltaY;
+      deltaY = temp;
+    }
+
+    return { deltaX, deltaY };
+  }
+
   void deleteComponent(Component *component, bool freeArena)
   {
     if (component->componentFlags.isOpenGlInitialised)
     {
-      component->componentFlags.destroyOpenGl = true;
+      component->componentFlags.isDestroyingOpenGl = true;
       component->render(getOpenGlContext(uiRelated.renderer));
     }
     
@@ -638,6 +678,32 @@ namespace Interface
     }
 
     return false;
+  }
+
+  Point<i32> 
+  Component::getPositionInWindow() const
+  {
+    Point relativePosition = getPosition();
+    auto *component = parent;
+    while (component)
+    {
+      relativePosition = relativePosition + component->getPosition();
+      component = component->parent;
+    }
+    return relativePosition;
+  }
+
+  Point<i32>
+  Component::getRelativePoint(const Component *source, Point<i32> pointRelativeToSource) const
+  {
+    if (source->parent == parent)
+      return pointRelativeToSource;
+
+    Point otherPosition = pointRelativeToSource;
+    if (source)
+      otherPosition += source->getPositionInWindow();
+    Point position = getPositionInWindow();
+    return { otherPosition.x - position.x, otherPosition.y - position.y };
   }
 
   Component *
@@ -787,7 +853,7 @@ namespace Interface
     return false;
   }
 
-  void Component::addChildComponent(Component *childToAdd)
+  void Component::addChildComponent(Component *childToAdd, Component *insertBefore)
   {
     COMPLEX_ASSERT(childToAdd->parent != this);
 
@@ -801,12 +867,12 @@ namespace Interface
       return;
     }
 
-    auto *test = children;
-    for (; test; test = test->next)
-      if (test->layerIndex > childToAdd->layerIndex)
-        break;
+    //auto *test = children;
+    //for (; test; test = test->next)
+    //  if (test->layerIndex > childToAdd->layerIndex)
+    //    break;
 
-    if (!test)
+    if (!insertBefore)
     {
       childToAdd->previous = children->previous;
       children->previous->next = childToAdd;
@@ -814,11 +880,11 @@ namespace Interface
     }
     else
     {
-      if (test->previous->next)
-        test->previous->next = childToAdd;
-      childToAdd->previous = test->previous;
-      childToAdd->next = test;
-      test->previous = childToAdd;
+      if (insertBefore->previous->next)
+        insertBefore->previous->next = childToAdd;
+      childToAdd->previous = insertBefore->previous;
+      childToAdd->next = insertBefore;
+      insertBefore->previous = childToAdd;
     }
   }
 
@@ -883,7 +949,7 @@ namespace Interface
     deleteComponent(childToDelete, freeArena);
   }
 
-  void Component::deleteAllChildComponents(bool freeArenas)
+  void Component::deleteAllChildComponents(bool freeChildArenas)
   {
     if (!children)
       return;
@@ -893,7 +959,7 @@ namespace Interface
         focusedComponent->giveAwayFocus();
 
     for (auto *child = children; child; child = child->next)
-      deleteComponent(child, freeArenas);
+      deleteComponent(child, freeChildArenas);
   }
 
   void Component::renderScrollbars(OpenGlWrapper &openGl, float scrollExpandPercent)

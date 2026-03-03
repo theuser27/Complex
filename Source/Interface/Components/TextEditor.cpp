@@ -6,8 +6,7 @@
 #include "Framework/parameter_value.hpp"
 #include "Framework/parameter_bridge.hpp"
 #include "Plugin/Renderer.hpp"
-#include "../LookAndFeel/Miscellaneous.hpp"
-#include "../LookAndFeel/Shaders.hpp"
+#include "../LookAndFeel/ui_constants.hpp"
 #include "BaseControl.hpp"
 
 namespace Interface
@@ -57,15 +56,18 @@ namespace Interface
 
     if (!text.empty())
     {
-      nvgBeginPath(openGl);
-      openGl.cache->setFont(font, scaleValue((float)bounds.h));
-      float ascent, lineHeight;
-      nvgFillColor(openGl, getColour(textColour, this));
-      nvgTextMetrics(openGl, &ascent, nullptr, &lineHeight);
-      nvgTextAlign(openGl, NVG_ALIGN_CENTER | NVG_ALIGN_BASELINE);
-      nvgText(openGl.g, ((float)bounds.w) * 0.5f,
-        ::ceilf(((float)bounds.h - lineHeight) * 0.5f + ascent),
-        text.data(), text.data() + text.size());
+      renderText(text, font, bounds.withZeroOrigin(), 
+        openGl.cache, getColour(textColour, this));
+
+      //nvgBeginPath(openGl);
+      //openGl.cache->setFont(font, scaleValue((float)bounds.h));
+      //float ascent, lineHeight;
+      //nvgFillColor(openGl, getColour(textColour, this));
+      //nvgTextMetrics(openGl, &ascent, nullptr, &lineHeight);
+      //nvgTextAlign(openGl, NVG_ALIGN_CENTER | NVG_ALIGN_BASELINE);
+      //nvgText(openGl.g, ((float)bounds.w) * 0.5f,
+      //  ::ceilf(((float)bounds.h - lineHeight) * 0.5f + ascent),
+      //  text.data(), text.data() + text.size());
     }
 
     return true;
@@ -76,7 +78,7 @@ namespace Interface
   {
     auto *self = (Label *)c;
 
-    float lineHeight = scaleValue((float)((self->componentFlags.isVertical) ?
+    float lineHeight = scaleValue((float)((self->componentFlags.vertical) ?
       self->desiredSize.y : self->desiredSize.x));
     
     if (!isCalculatingVertical)
@@ -116,7 +118,7 @@ namespace Interface
     {
       auto *self = (SliderValueEditor *)c;
 
-      float lineHeight = scaleValue((float)((self->componentFlags.isVertical) ?
+      float lineHeight = scaleValue((float)((self->componentFlags.vertical) ?
         self->desiredSize.y : self->desiredSize.x));
       
       i32 max{};

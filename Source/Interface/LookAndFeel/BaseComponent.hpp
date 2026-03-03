@@ -6,7 +6,7 @@
 #include "Framework/utils.hpp"
 #include "Framework/sync_primitives.hpp"
 #include "gui_utils.hpp"
-#include "Miscellaneous.hpp"
+#include "ui_constants.hpp"
 #include "Skin.hpp"
 
 namespace Generation
@@ -41,6 +41,9 @@ namespace Interface
   void calculatePositions(Component *children,
     Component *component, Rectangle<i32> boundsInComponent = {});
 
+  utils::pair<i32, i32> getScrollOffsets(const MouseEvent &e,
+    float singleStepX = 16, float singleStepY = 16);
+
   PopupDisplay *getPopupDisplay(bool primary);
   PopupSelector *getPopupSelector();
   utils::bumpArena *getUIArena();
@@ -53,6 +56,7 @@ namespace Interface
     enum CommandMessages : u64
     {
       HandleCustomPosition = 1,
+      HandleComponentInsertion,
     };
 
     enum SizingFlags : u8
@@ -94,36 +98,15 @@ namespace Interface
 
     Rectangle<i32> getLocalBounds() const { return bounds.withZeroOrigin(); }
     Point<i32> getPosition() const { return bounds.getPosition(); }
-    Point<i32> 
-    getPositionInWindow() const
-    {
-      Point relativePosition = getPosition();
-      auto *component = parent;
-      while (component)
-      {
-        relativePosition = relativePosition + component->getPosition();
-        component = component->parent;
-      }
-      return relativePosition;
-    }
+    Point<i32> getPositionInWindow() const;
 
-    Point<i32> 
-    getRelativePoint(const Component *source,
-      Point<i32> pointRelativeToSource = {}) const
-    {
-      if (source->parent == parent)
-        return pointRelativeToSource;
-
-      Point otherPosition = pointRelativeToSource;
-      if (source)
-        otherPosition += source->getPositionInWindow();
-      Point position = getPositionInWindow();
-      return { otherPosition.x - position.x, otherPosition.y - position.y };
-    }
+    Point<i32> getRelativePoint(const Component *source, Point<i32> pointRelativeToSource = {}) const;
     Rectangle<i32> 
     getRelativeArea(const Component *source,
       Rectangle<i32> areaRelativeToSource = {}) const
     {
+      areaRelativeToSource = (areaRelativeToSource.isEmpty()) ? 
+        Rectangle{ source->bounds.w, source->bounds.h } : areaRelativeToSource;
       return Rectangle{ getRelativePoint(source, areaRelativeToSource.getPosition()),
         areaRelativeToSource.w, areaRelativeToSource.y };
     }
@@ -157,7 +140,7 @@ namespace Interface
         fadeawayRatio != utils::max_limit<decltype(fadeawayRatio)>;
     }
     bool isObscured(const Component *ignoreClipIncluding = nullptr) const;
-    void addChildComponent(Component *childToAdd);
+    void addChildComponent(Component *childToAdd, Component *insertBefore = nullptr);
     // keepFocus will let the UI system continue focus on childToRemove
     // but you MUST NOT delete the object after removal,
     // otherwise the UI system will be reading into "freed" arena memory
@@ -168,7 +151,7 @@ namespace Interface
     // this one removes and frees component from arena
     void deleteChildComponent(Component *childToDelete, bool freeArena = true);
     void deleteChildComponent(usize childIndexToDelete, bool freeArena = true);
-    void deleteAllChildComponents(bool freeArenas = true);
+    void deleteAllChildComponents(bool freeChildArenas = true);
 
     bool hasFocus(bool trueIfChildIsFocused) const;
     void grabFocus();
@@ -188,7 +171,8 @@ namespace Interface
     virtual bool keyPressed([[maybe_unused]] const KeyPress &key) { return false; }
     virtual bool modifierKeysChanged([[maybe_unused]] const ModifierKeys &modifiers) { return false; }
 
-    virtual void handleCommandMessage([[maybe_unused]] u64 commandId, [[maybe_unused]] utils::whatever extraData = {}) { }
+    virtual bool handleCommandMessage([[maybe_unused]] u64 commandId, 
+      [[maybe_unused]] utils::whatever<64> extraData = {}) { return false; }
 
     void doRender(OpenGlWrapper &openGl);
     void renderScrollbars(OpenGlWrapper &openGl, float scrollHoverIncrement);
@@ -203,7 +187,7 @@ namespace Interface
     Component *previous = nullptr;
     Component *next = nullptr;
 
-    i8 layerIndex = 0;
+    //i8 layerIndex = 0;
     Skin::Override skinOverride = Skin::kUseParentOverride;
     struct
     {
@@ -213,16 +197,17 @@ namespace Interface
       bool wantsFocus : 1 = false;
       bool focusOnMouseClick : 1 = false;
       bool acceptsOrphanedMouseEvents : 1 = false;
-      bool isVertical : 1 = false;                    // controls the children stack direction
+      bool vertical : 1 = false;                    // controls the children stack direction
       bool animateMovement : 1 = false;
       bool animateFadeAway : 1 = false;
+      bool alwaysOnTop : 1 = false;
 
       // state flags
       bool isVisible : 1 = true;
       bool isHovered : 1 = false;
       bool isClicked : 1 = false;
       bool isOpenGlInitialised : 1 = false;
-      bool destroyOpenGl : 1 = false;
+      bool isDestroyingOpenGl : 1 = false;
       RenderFlag renderState : 2 = RenderFlag::Dirty;
       bool hasRenderedFeatures : 1 = false;
     } componentFlags{};
@@ -280,7 +265,7 @@ namespace Interface
     utils::vector_map<uuid, Control *> controls_{};
   };
 
-  struct PlainShapeComponent final : public Component
+  struct DrawComponent final : public Component
   {
     void (*draw)(OpenGlWrapper &openGl, Component *reference, Component *self) = nullptr;
     Component *reference = nullptr;

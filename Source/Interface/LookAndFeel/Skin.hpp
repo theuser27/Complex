@@ -10,10 +10,10 @@
 
 #pragma once
 
-#include "Framework/platform_definitions.hpp"
+#include "Framework/platform.hpp"
 #include "Framework/memory.hpp"
 #include "gui_utils.hpp"
-#include "Miscellaneous.hpp"
+#include "Graphics.hpp"
 
 namespace Interface
 {

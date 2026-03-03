@@ -5,8 +5,7 @@
 
 #include "Framework/parameter_bridge.hpp"
 #include "Framework/parameter_value.hpp"
-#include "../LookAndFeel/Miscellaneous.hpp"
-#include "../LookAndFeel/Shaders.hpp"
+#include "../LookAndFeel/ui_constants.hpp"
 
 namespace Interface
 {

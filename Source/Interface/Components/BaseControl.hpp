@@ -18,10 +18,6 @@ namespace Framework
 
 namespace Interface
 {
-  class ControlListener;
-  class PlainTextComponent;
-  class BaseSection;
-
   class Control : public Component
   {
   public:
@@ -239,13 +235,13 @@ namespace Interface
     void setExtraIcon(Paths::DrawingFn *drawFn);
 
     SliderValueEditor text{};
-    PlainShapeComponent downArrow{};
+    DrawComponent downArrow{};
 
     utils::string dropdownTitle{};
     double lastValue = 0.0;
 
   private:
-    PlainShapeComponent *extraIcon = nullptr;
+    DrawComponent *extraIcon = nullptr;
   };
 
   class Numberbox final : public Slider
@@ -286,7 +282,7 @@ namespace Interface
     {
       addChildComponent(&rotary);
 
-      infoSection.componentFlags.isVertical = true;
+      infoSection.componentFlags.vertical = true;
       addChildComponent(&infoSection);
 
       label.sizingFlags |= Component::SameAsSiblingsX;

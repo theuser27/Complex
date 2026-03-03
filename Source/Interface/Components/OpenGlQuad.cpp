@@ -22,7 +22,7 @@ namespace Interface
 		quad->vertexShader = {};
 
 		quad->componentFlags.isOpenGlInitialised = false;
-		quad->componentFlags.destroyOpenGl = false;
+		quad->componentFlags.isDestroyingOpenGl = false;
 	}
 
 	static void updateDimensions(utils::span<float> data,
@@ -51,7 +51,7 @@ namespace Interface
 
 	bool OpenGlMultiQuad::render(OpenGlWrapper &openGl)
 	{
-		if (componentFlags.isOpenGlInitialised && componentFlags.destroyOpenGl)
+		if (componentFlags.isOpenGlInitialised && componentFlags.isDestroyingOpenGl)
 		{
 			destroyQuad(this);
 			return true;

@@ -3,6 +3,8 @@
 
 #include "Shaders.hpp"
 
+#include "Graphics.hpp"
+
 namespace
 {
   #define CONSTRAIN_AXIS_FUNCTION																								\
@@ -989,5 +991,15 @@ namespace Interface
       scissorBounds.w, scissorBounds.h);
 
     return true;
+  }
+
+  void clearWithColour(OpenGlWrapper &openGl, Colour colour, Rectangle<int> bounds)
+  {
+    glEnable(GL_SCISSOR_TEST);
+    glScissor(bounds.x, openGl.topLevelHeight - bounds.getBottom(), bounds.w, bounds.h);
+    auto normalisedColour = colour.getNormalisedRGBA();
+    glClearColor(normalisedColour[0], normalisedColour[1], normalisedColour[2], normalisedColour[3]);
+    glClear(GL_COLOR_BUFFER_BIT);
+    glDisable(GL_SCISSOR_TEST);
   }
 }

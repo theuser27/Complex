@@ -36,8 +36,8 @@ namespace Generation
   class BaseProcessor
   {
   public:
-    BaseProcessor(Plugin::State *state, Framework::ProcessorMetadata *metadata, utils::bumpArena *arena) noexcept;
-    BaseProcessor(const BaseProcessor &other, utils::bumpArena *arena) noexcept;
+    BaseProcessor(Plugin::State *state, Framework::ProcessorMetadata *metadata, utils::bumpArena *arena);
+    BaseProcessor(const BaseProcessor &other, utils::bumpArena *arena);
     BaseProcessor(BaseProcessor &&) = default;
 
     BaseProcessor() = delete;
@@ -45,7 +45,7 @@ namespace Generation
     BaseProcessor &operator=(const BaseProcessor &) = delete;
     BaseProcessor &operator=(BaseProcessor &&) = delete;
 
-    virtual void initialise() noexcept;
+    virtual void initialise();
     virtual void initialiseParameters() { }
 
     virtual void serialiseToJson(void *jsonData, utils::span<Framework::ParameterValue *> parametersToSerialise = {}) const;
@@ -61,18 +61,18 @@ namespace Generation
     updateSubProcessor(usize index, BaseProcessor &newSubProcessor, bool callListeners = true);
 
     Framework::ParameterValue *
-    getParameter(uuid parameterId) const noexcept;
+    getParameter(uuid parameterId) const;
     utils::dll<Framework::ParameterValue> *
     createParameters(usize count, Framework::ParameterMetadata *metadata,
       utils::dll<Framework::ParameterValue> *copy = nullptr);
 
-    void updateParameters(UpdateFlag flag, float sampleRate, bool updateChildrenParameters = true) noexcept;
+    void updateParameters(UpdateFlag flag, float sampleRate, bool updateChildrenParameters = true);
     // remaps parameters from the current bridges (if they exist) to new ones (if they exist)
     // if no bridges are provided they are assumed to be nullptr
     // if remapOnlyBridges is also provided it will unmap/remap only the bridges from the parameters
     // while the parameters still keep a reference to them
     void remapParameters(utils::span<Framework::ParameterBridge *> bridges,
-      bool bridgeValueFromParameters, bool remapOnlyBridges = false) noexcept;
+      bool bridgeValueFromParameters, bool remapOnlyBridges = false);
 
     //void randomiseParameters();
     //void setAllParametersRandomisation(bool toRandomise = true);

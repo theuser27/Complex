@@ -19,7 +19,7 @@ namespace Interface
     void initialise();
 
     bool render(OpenGlWrapper &openGl) override;
-    void handleCommandMessage(u64 commandId, utils::whatever) override;
+    bool handleCommandMessage(u64 commandId, utils::whatever<64>) override;
 
     void setContent(Component *sourceComponent, utils::string displayText, 
       Placement relativePlacement)
@@ -75,7 +75,7 @@ namespace Interface
 
     bool keyPressed(const KeyPress &key) override;
     bool handleFocus(bool hasFocus, FocusChange focusChange) override;
-    void handleCommandMessage(u64 commandId, utils::whatever extraData) override;
+    bool handleCommandMessage(u64 commandId, utils::whatever<64> extraData) override;
 
     void newSelection(PopupItem *entry);
     void summonNewPopupList(Rectangle<int> sourceBounds, PopupItem *items);

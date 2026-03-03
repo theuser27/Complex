@@ -3,7 +3,7 @@
 
 #pragma once
 
-#include "platform_definitions.hpp"
+#include "platform.hpp"
 
 namespace common
 {

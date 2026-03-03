@@ -11,12 +11,12 @@
 #pragma once
 
 #include "Framework/simd_buffer.hpp"
-#include "OpenGlQuad.hpp"
-#include "OpenGlImage.hpp"
-#include "OpenGlLineRenderer.hpp"
+#include "../LookAndFeel/BaseComponent.hpp"
 
 namespace Interface
 {
+  class OpenGlLineRenderer;
+
   class Spectrogram final : public Component
   {
   public:
@@ -28,29 +28,21 @@ namespace Interface
     static constexpr float kDefaultMaxFrequency = 21000.0f;
     static constexpr float kDbSlopePerOctave = 3.0f;
 
-    Spectrogram();
-    ~Spectrogram() noexcept override;
+    void reinitialise();
 
-    void init(OpenGlWrapper &openGl) override;
     bool render(OpenGlWrapper &openGl) override;
-    void destroy() override;
+    void init(OpenGlWrapper &openGl);
+    void destroy();
 
-    void resized() override;
-    void mouseDown(const MouseEvent &e) override;
-    void mouseDrag(const MouseEvent &e) override;
+    bool mouseDown(const MouseEvent &e) override;
 
-    void setCornerColour(Colour colour) noexcept 
-    { corners_.fragment.uniforms.colour = colour.getNormalisedRGBA(); }
+    utils::vector<OpenGlLineRenderer *> amplitudeRenderers_{};
+    utils::vector<OpenGlLineRenderer *> phaseRenderers_{};
 
-    std::vector<utils::up<OpenGlLineRenderer>> amplitudeRenderers_{};
-    std::vector<utils::up<OpenGlLineRenderer>> phaseRenderers_{};
-    OpenGlCorners corners_;
-    OpenGlImage background_;
+    Framework::SimdBuffer *scratchBuffer_{};
+    Framework::SimdBuffer *resultBuffer_{};
 
-    Framework::SimdBuffer<Framework::complex<float>, simd_float> scratchBuffer_{};
-    Framework::SimdBuffer<Framework::complex<float>, simd_float> resultBuffer_{ kChannelsPerInOut, kResolution };
-
-    Framework::SimdBufferView<Framework::complex<float>, simd_float> bufferView_{};
+    const Framework::SimdBuffer *bufferView_{};
 
     float minFrequency_ = kDefaultMinFrequency;
     float maxFrequency_ = kDefaultMaxFrequency;
@@ -67,8 +59,8 @@ namespace Interface
     u32 binCount_ = 0;
 
   private:
+    void setLineRendererData();
     bool updateAmplitudes(bool shouldDisplayPhases, float startDecade,
       float decadeCount, float decadeSlope);
-    void paintBackground(Graphics &g) const;
   };
 }

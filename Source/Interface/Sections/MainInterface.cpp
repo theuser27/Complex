@@ -7,12 +7,107 @@
 #include "Generation/SoundEngine.hpp"
 #include "Generation/EffectsState.hpp"
 #include "Plugin/Renderer.hpp"
-#include "../LookAndFeel/Shaders.hpp"
-//#include "../Components/Spectrogram.hpp"
-//#include "EffectsStateSection.hpp"
+
 
 namespace Interface
 {
+  InvisibleHoverComponent::InvisibleHoverComponent()
+  {
+    overrideDimensions = [](Component *c, bool isCalculatingVertical)
+    {
+      auto *self = (InvisibleHoverComponent *)c;
+      if (isCalculatingVertical)
+        return Range<i32>{ self->bounds.h, self->bounds.h };
+      else
+        return Range<i32>{ self->bounds.w, self->bounds.w };
+    };
+  }
+
+  bool
+  InvisibleHoverComponent::render(OpenGlWrapper &openGl)
+  {
+    auto offset = scaleValueRoundInt(4);
+    fillRect(openGl, bounds.withZeroOrigin()
+      .withTrimmedTop(offset).withTrimmedLeft(offset).toFloat(),
+      getColour(Skin::kLightenScreen, this));
+
+    return true;
+  }
+
+  void EffectsStateSection::reinitialise()
+  {
+    componentFlags.vertical = true;
+
+    if (!arena)
+      arena = utils::bumpArena::createNested(parent->arena, COMPLEX_MB(1));
+    utils::bumpArena::clear(arena);
+
+    laneSelector.sizingFlags = Component::GrowableX;
+    laneSelector.placement = Placement::top;
+    laneSelector.desiredSize = { 0, kLaneSelectorHeight, 0, kLaneSelectorHeight };
+    laneSelector.margin = { 0, 0, 0, kLaneSelectorToLanesMargin };
+    addChildComponent(&laneSelector);
+
+    laneHolder.sizingFlags = (Component::SizingFlags)(Component::GrowableX | Component::GrowableY);
+    laneHolder.placement = Placement::top;
+    addChildComponent(&laneHolder);
+  }
+
+  bool 
+  EffectsStateSection::render(OpenGlWrapper &openGl)
+  {
+    if (laneSelector.firstVisibleLaneIndex != laneSelector.lastFirstVisibleLaneIndex)
+    {
+      // TODO:
+    }
+
+    return true;
+  }
+
+  struct ComponentInsertionData
+  {
+    Component *component{};
+    utils::typeInfo typeInfo{};
+  };
+
+  bool 
+  EffectsStateSection::handleCommandMessage(u64 commandId, utils::whatever<64> extraData)
+  {
+    switch (commandId)
+    {
+    case Component::HandleComponentInsertion:
+    {
+      ComponentInsertionData metadata{};
+      if (!extraData.tryExtract(metadata))
+        break;
+
+      if (metadata.typeInfo != typeId(ProcessorSection))
+        break;
+
+      auto *processorSection = (ProcessorSection *)metadata.component;
+
+      if (processorSection->processor->metadata->id != Generation::Processors::EffectsLane)
+        break;
+
+      auto centrePoint = getRelativeArea(processorSection).getCentre() - scrollOffset;
+      auto *child = children;
+      for (; child; child = child->next)
+        if (centrePoint.x < child->bounds.getCentre().x)
+          break;
+
+      invisibleHover.source = processorSection;
+      removeChildComponent(&invisibleHover);
+      addChildComponent(&invisibleHover, child);
+
+      return true;
+    }
+    default:
+      break;
+    }
+
+    return false;
+  }
+
   void TopBar::reinitialise()
   {
     removeAllChildComponents();
@@ -109,21 +204,71 @@ namespace Interface
   bool 
   BottomBar::render(OpenGlWrapper &openGl)
   {
-    nvgBeginPath(openGl);
-    nvgRect(openGl, 0.0f, 0.0f, (float)bounds.w, (float)bounds.h);
-    nvgFillColor(openGl, getColour(Skin::kBody));
-    nvgFill(openGl);
+    fillRect(openGl, bounds.withZeroOrigin().toFloat(), getColour(Skin::kBody, this));
 
+    return true;
+  }
+
+  ResizeCorner::ResizeCorner()
+  {
+    componentFlags.clickable = true;
+    desiredSize = { kWidth, kHeight, kWidth, kHeight };
+
+    placement = Placement::custom;
+  }
+
+  bool
+  ResizeCorner::handleCommandMessage(u64 commandId, utils::whatever<64>)
+  {
+    switch (commandId)
+    {
+    case HandleCustomPosition:
+      bounds = bounds.withPosition(parent->bounds.w - bounds.w, parent->bounds.h - bounds.h);
+      return true;
+    }
+
+    return false;
+  }
+
+  bool 
+  ResizeCorner::mouseEnter(const MouseEvent &)
+  {
+    Interface::setMouseCursor(uiRelated.renderer, MouseCursorTypes::UpLeftDownRightResize);
+    return true;
+  }
+
+  bool 
+  ResizeCorner::mouseExit(const MouseEvent &)
+  {
+    Interface::setMouseCursor(uiRelated.renderer, MouseCursorTypes::Normal);
+    return true;
+  }
+
+  bool 
+  ResizeCorner::mouseDown(const MouseEvent &)
+  {
+    areaAtMouseDown = getUISize(uiRelated.renderer);
+    return true;
+  }
+
+  bool 
+  ResizeCorner::mouseDrag(const MouseEvent &event)
+  {
+    auto offset = event.getOffsetFromDragStart();
+    u32 w = areaAtMouseDown.w + offset.x;
+    u32 h = areaAtMouseDown.h + offset.y;
+    cplug_checkSize(uiRelated.renderer, &w, &h);
+    setUISize(uiRelated.renderer, w, h);
     return true;
   }
 
 
   MainInterface::MainInterface()
   {
-    componentFlags.isVertical = true;
-    arena = utils::bumpArena::create(COMPLEX_MB(256), COMPLEX_MB(1));
+    componentFlags.vertical = true;
+    arena = utils::bumpArena::create(COMPLEX_MB(256), COMPLEX_MB(4));
     
-    reinstantiateUI();
+    reinitialise();
 
     popupDisplay1.initialise();
     popupDisplay2.initialise();
@@ -136,13 +281,11 @@ namespace Interface
     utils::bumpArena::destroy(arena);
   }
 
-  bool MainInterface::render(OpenGlWrapper &openGl)
+  bool 
+  MainInterface::render(OpenGlWrapper &openGl)
   {
-    nvgBeginPath(openGl);
-    nvgRect(openGl, (float)bounds.x, (float)bounds.y,
-      (float)bounds.w, (float)bounds.h);
-    nvgFillColor(openGl, getColour(Skin::kBackground));
-    nvgFill(openGl);
+    fillRect(openGl, bounds.withZeroOrigin().toFloat(), 
+      getColour(Skin::kBackground, this));
 
     return true;
   }
@@ -163,10 +306,11 @@ namespace Interface
     Framework::Window::Exponential) / (float)Framework::Window::kTypesValues.size();
 
 
-  void MainInterface::reinstantiateUI()
+  void MainInterface::reinitialise()
   {
     removeChildComponent(&resizeCorner);
     removeChildComponent(&topBar);
+    removeChildComponent(&spectrogram);
     removeChildComponent(&bottomBar);
     removeChildComponent(&popupSelector);
     removeChildComponent(&popupDisplay1);
@@ -180,30 +324,31 @@ namespace Interface
     //controls_ = {};
     //removeAllChildren();
     //
-    //auto &soundEngine = getPlugin(uiRelated.renderer).getSoundEngine();
+    auto &soundEngine = getPlugin(uiRelated.renderer).state_->getSoundEngine();
 
     topBar.placement = Placement::top;
     topBar.sizingFlags |= Component::GrowableX;
     topBar.desiredSize = { 0, kHeaderHeight, utils::max_limit<i32>, kHeaderHeight };
-    topBar.margin = { 0, 0, 0, kHeaderNumberBoxMargin };
     topBar.padding = { ResizeCorner::kWidth, 0, ResizeCorner::kWidth, 0 };
     addChildComponent(&topBar);
     topBar.reinitialise();
 
 
-    //spectrogram_ = utils::up<Spectrogram>::create("Main Spectrum");
-    //spectrogram_->bufferView_ = soundEngine.getEffectsState().getOutputBuffer(kChannelsPerInOut, 0);
-    //spectrogram_->desiredW = { .type = Dimension::Grow, .maxSize = u32(-1), .margin = { kHWindowEdgeMargin, kHWindowEdgeMargin } };
-    //spectrogram_->desiredH = { .type = Dimension::Fixed, .size = kMainVisualiserHeight };
-    //spectrogram_->desiredPosition = { .placement = Placement::top };
-    //addChildComponent(spectrogram_.get());
+    spectrogram.sizingFlags = Component::GrowableX;
+    spectrogram.placement = Placement::top;
+    spectrogram.bufferView_ = soundEngine.getEffectsState().getOutputBuffer();
+    spectrogram.desiredSize = { 0, kMainVisualiserHeight, 0, kMainVisualiserHeight };
+    spectrogram.margin = { kHWindowEdgeMargin, 0, kHWindowEdgeMargin, kVGlobalMargin };
+    addChildComponent(&spectrogram);
 
 
-    //effectsStateSection_ = utils::up<EffectsStateSection>::create(soundEngine.getEffectsState());
-    //effectsStateSection_->desiredW = { .type = Dimension::Fit, .margin = { kHWindowEdgeMargin, kHWindowEdgeMargin } };
-    //effectsStateSection_->desiredH = { .type = Dimension::Grow, .maxSize = u32(-1) };
-    //effectsStateSection_->desiredPosition = { .placement = Placement::top };
-    //addChildComponent(effectsStateSection_.get());
+    effectsStateSection.sizingFlags = GrowableY;
+    effectsStateSection.placement = Placement::top;
+    effectsStateSection.desiredSize = { kEffectsStateMinWidth, 0, kEffectsStateMinWidth, 0 };
+    effectsStateSection.margin = { kHWindowEdgeMargin, 0, kHWindowEdgeMargin, 0 };
+    effectsStateSection.processor = &soundEngine.getEffectsState();
+    addChildComponent(&effectsStateSection);
+    effectsStateSection.reinitialise();
 
 
     bottomBar.placement = Placement::bottom;
@@ -216,16 +361,16 @@ namespace Interface
 
 
     popupSelector.componentFlags.isVisible = false;
-    popupSelector.layerIndex = 1;
+    popupSelector.componentFlags.alwaysOnTop = true;
     popupSelector.componentFlags.wantsFocus = true;
     addChildComponent(&popupSelector);
 
     popupDisplay1.componentFlags.isVisible = false;
-    popupDisplay1.layerIndex = 1;
+    popupDisplay1.componentFlags.alwaysOnTop = true;
     addChildComponent(&popupDisplay1);
 
     popupDisplay2.componentFlags.isVisible = false;
-    popupDisplay2.layerIndex = 1;
+    popupDisplay2.componentFlags.alwaysOnTop = true;
     addChildComponent(&popupDisplay2);
   }
 }

@@ -8,7 +8,7 @@
 #include "Framework/memory.hpp"
 #include "Framework/macro_helpers.hpp"
 #include "gui_utils.hpp"
-#include "Miscellaneous.hpp"
+#include "ui_constants.hpp"
 
 extern "C"
 {
@@ -24,8 +24,11 @@ namespace Interface
     static constexpr bool isFloat = utils::is_floating_point_v<utils::remove_extent_t<T>>;
     static constexpr bool isArray = utils::is_array_v<T>;
 
+    OpenGlUniform &operator=(const OpenGlUniform &) = default;
+
     template<typename U>
-    OpenGlUniform &operator=(U rhs) noexcept
+    OpenGlUniform &
+    operator=(U rhs)
     {
       if constexpr (size == 1)
         data = rhs;
@@ -50,9 +53,11 @@ namespace Interface
         data[2] = three;
         data[3] = four;
       }
+
+      return *this;
     }
 
-    void set()
+    void set() const
     {
       COMPLEX_ASSERT(uniformId >= 0);
 
@@ -89,7 +94,7 @@ namespace Interface
       }
     }
 
-    explicit operator bool() { return uniformId >= 0; }
+    explicit operator bool() const { return uniformId >= 0; }
 
     // If the uniform couldn't be found, this value will be < 0.
     GLint uniformId = -1;
@@ -316,16 +321,6 @@ namespace Interface
     void setUniforms() { setUniformsPointer(object); }
   };
 
-#if COMPLEX_DEBUG
-  void checkGLError(const char *file, const int line);
-  #define COMPLEX_CHECK_OPENGL_ERROR() checkGLError(__FILE__, __LINE__)
-#else
-  #define COMPLEX_CHECK_OPENGL_ERROR()
-#endif
-  
-
-
-
   GLuint createShader(const char *shader, bool isFragment = true);
 
   class Shaders
@@ -431,32 +426,10 @@ namespace Interface
     utils::vector_map<utils::typeInfo, GLuint> vertexShaders;
     utils::vector_map<utils::typeInfo, GLuint> fragmentShaders;
   };
-
-
-
-  struct OpenGlWrapper
-  {
-    utils::vector<ViewportChange> parentStack{};
-    Shaders *shaders = nullptr;
-    Graphics *cache = nullptr;
-    NVGcontext *g = nullptr;
-    int topLevelHeight = 0;
-
-    operator NVGcontext *() { return g; }
-  };
-
-  bool setViewport(Point<int> positionInViewport, Rectangle<int> viewportBounds,
-    Rectangle<int> scissorBounds, const OpenGlWrapper &openGl, const Component *ignoreClipIncluding);
   
-  strict_inline void clearWithColour(OpenGlWrapper &openGl, Colour colour, Rectangle<int> bounds)
-  {
-    glEnable(GL_SCISSOR_TEST);
-    glScissor(bounds.x, openGl.topLevelHeight - bounds.getBottom(), bounds.w, bounds.h);
-    auto normalisedColour = colour.getNormalisedRGBA();
-    glClearColor(normalisedColour[0], normalisedColour[1], normalisedColour[2], normalisedColour[3]);
-    glClear(GL_COLOR_BUFFER_BIT);
-    glDisable(GL_SCISSOR_TEST);
-  }
+  struct OpenGlWrapper;
+
+  void clearWithColour(OpenGlWrapper &openGl, Colour colour, Rectangle<int> bounds);
 
   //auto loadImageAsTexture(juce::OpenGLContext &context, GLuint &textureId,
   //  const juce::Image &image, GLenum texMagFilter = GL_LINEAR)

@@ -10,10 +10,10 @@
 
 namespace Generation
 {
-  BaseProcessor::BaseProcessor(Plugin::State *state, Framework::ProcessorMetadata *metadata, utils::bumpArena *arena) noexcept :
+  BaseProcessor::BaseProcessor(Plugin::State *state, Framework::ProcessorMetadata *metadata, utils::bumpArena *arena) :
     metadata{ metadata }, state{ state }, stateId{ state->stateIdCounter++ }, arena{ arena } { }
 
-  BaseProcessor::BaseProcessor(const BaseProcessor &other, utils::bumpArena *arena) noexcept :
+  BaseProcessor::BaseProcessor(const BaseProcessor &other, utils::bumpArena *arena) :
     metadata{ other.metadata }, state{ other.state }, stateId{ state->stateIdCounter++ }, arena{ arena }
   {
     using T = utils::remove_reference_t<decltype(*parameters)>;
@@ -65,7 +65,7 @@ namespace Generation
     }
   }
 
-  void BaseProcessor::initialise() noexcept
+  void BaseProcessor::initialise()
   {
     for (auto *parameter = parameters; parameter; parameter = parameter->next)
       parameter->object.initialise();
@@ -92,7 +92,7 @@ namespace Generation
   }
 
   Framework::ParameterValue *
-  BaseProcessor::getParameter(uuid parameterId) const noexcept
+  BaseProcessor::getParameter(uuid parameterId) const
   {
     COMPLEX_HARD_ASSERT(parameters, "No parameters contained in processor %v (%zu) to find",
       metadata->name, metadata->id);
@@ -105,7 +105,7 @@ namespace Generation
     return nullptr;
   }
 
-  void BaseProcessor::updateParameters(UpdateFlag flag, float sampleRate, bool updateChildrenParameters) noexcept
+  void BaseProcessor::updateParameters(UpdateFlag flag, float sampleRate, bool updateChildrenParameters)
   {
     if (flag == UpdateFlag::NoUpdates)
       return;
@@ -121,7 +121,7 @@ namespace Generation
   }
 
   void BaseProcessor::remapParameters(utils::span<Framework::ParameterBridge *> bridges,
-    bool bridgeValueFromParameters, bool remapOnlyBridges) noexcept
+    bool bridgeValueFromParameters, bool remapOnlyBridges)
   {
     if (!bridges.size())
     {

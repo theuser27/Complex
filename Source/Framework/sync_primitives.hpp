@@ -10,6 +10,8 @@ namespace utils
 {
   void millisleep() noexcept;
 
+  void setHighResolutionClock(bool isHighResolution);
+
   /// this timer is intended to be used inside a running loop
   /// for accurate dispatch at regular intervals
   /// sleep of <1ms is not guaranteed

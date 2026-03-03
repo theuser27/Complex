@@ -297,7 +297,7 @@ namespace Interface
   #define TEXT_ITEM(idNumber, ...) ITEM(idNumber, .overrideDimensions = getControlPopupItemTextMetrics)
 
     ControlPopupItem &options = *ITEM(kTopLevel);
-    options.componentFlags.isVertical = true;
+    options.componentFlags.vertical = true;
     options.sublistMinSize = { kPopupMinWidth, 0 };
 
     options.addChildComponent(TEXT_ITEM(kName, .sizingFlags |= Component::SameAsSiblingsX, .extraData = this));
@@ -313,7 +313,7 @@ namespace Interface
       else
       {
         ControlPopupItem &mapFirstSlot = *ITEM(kMapFirstSlot, .shortcutKeyCode = 'A',
-          .sizingFlags |= Component::SameAsSiblingsX, .componentFlags.isVertical = true);
+          .sizingFlags |= Component::SameAsSiblingsX, .componentFlags.vertical = true);
         options.addChildComponent(&mapFirstSlot);
         mapFirstSlot.addChildComponent(TEXT_ITEM(kMapFirstSlot));
         mapFirstSlot.addChildComponent(TEXT_ITEM(kMapFirstSlotSubtitle,

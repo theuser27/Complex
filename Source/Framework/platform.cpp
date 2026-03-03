@@ -484,6 +484,14 @@ namespace utils
   #endif
   }
 
+  void setHighResolutionClock(bool isHighResolution)
+  {
+    if (isHighResolution)
+      ::timeBeginPeriod(1);
+    else
+      ::timeEndPeriod(1);
+  }
+
   i32 
   lockAtomic(satomi::atomic<i32> &atomic, bool isExclusive, WaitMechanism mechanism,
     const utils::smallFn<void()> &lambda) noexcept
