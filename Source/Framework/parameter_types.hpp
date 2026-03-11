@@ -12,7 +12,7 @@ namespace Plugin
   struct State;
 }
 
-namespace simd_values
+namespace utils
 {
   struct simd_int;
   struct simd_float;
@@ -31,26 +31,26 @@ namespace Framework
   // all x values are normalised
 
   COMPLEX_ENUM(ParameterScale,
-    (            Toggle, 1757693064462006100),  // round(x)
-    (           Indexed, 1757693075999062000),  // round(x * (max - min))
-    (            Linear, 1757693088052707600),  // x * (max - min) + min
-    (             Clamp, 1757693157266612600),  // clamp(x, min, max)
-    (         Quadratic, 1757693166022104900),  // x ^ 2 * (max - min) + min
-    (  ReverseQuadratic, 1757693171422009600),  // (x - 1) ^ 2 * sgn(x - 1) * (max - min) + max
-    (SymmetricQuadratic, 1757693229769487000),  // ((x - 0.5) ^ 2 * sgn(x - 0.5) + 0.5) * 2 * (max - min) + min
-    (             Cubic, 1757693243184020300),  // x ^ 3
-    (      ReverseCubic, 1757693263245919300),  // (x - 1) ^ 3 * (max - min) + max
-    (    SymmetricCubic, 1757693277746078900),  // (2 * x - 1) ^ 3
-    (          Loudness, 1757693294934436100),  // 20 * log10(x)
-    ( SymmetricLoudness, 1757693297826885200),  // 20 * log10(abs(x)) * sgn(x)
-    (         Frequency, 1757693375693329300),  // (sampleRate / 2 * minFrequency) ^ x
-    (SymmetricFrequency, 1757693385953525000)   // (sampleRate / 2 * minFrequency) ^ (abs(x)) * sgn(x)
+    (            Toggle, 1757693064462),    // round(x)
+    (           Indexed, 1757693075999),    // round(x * (max - min))
+    (            Linear, 1757693088052),    // x * (max - min) + min
+    (             Clamp, 1757693157266),    // clamp(x, min, max)
+    (         Quadratic, 1757693166022),    // x ^ 2 * (max - min) + min
+    (  ReverseQuadratic, 1757693171422),    // (x - 1) ^ 2 * sgn(x - 1) * (max - min) + max
+    (SymmetricQuadratic, 1757693229769),    // ((x - 0.5) ^ 2 * sgn(x - 0.5) + 0.5) * 2 * (max - min) + min
+    (             Cubic, 1757693243184),    // x ^ 3
+    (      ReverseCubic, 1757693263245),    // (x - 1) ^ 3 * (max - min) + max
+    (    SymmetricCubic, 1757693277746),    // (2 * x - 1) ^ 3
+    (          Loudness, 1757693294934),    // 20 * log10(x)
+    ( SymmetricLoudness, 1757693297826),    // 20 * log10(abs(x)) * sgn(x)
+    (         Frequency, 1757693375693),    // (sampleRate / 2 * minFrequency) ^ x
+    (SymmetricFrequency, 1757693385953)     // (sampleRate / 2 * minFrequency) ^ (abs(x)) * sgn(x)
   );
 
   COMPLEX_ENUM(ParameterChangeReason, 
-    ( inputSidechain, 1757682036260828100),
-    (outputSidechain, 1757682033430552800),
-    (      laneCount, 1757682031418305900),
+    ( inputSidechain, 1757682036260),
+    (outputSidechain, 1757682033430),
+    (      laneCount, 1757682031418),
   );
 
   struct ProcessorMetadata;
@@ -60,14 +60,14 @@ namespace Framework
   {
     enum { NoneFlag, VtableFlag, ProcessorFlag, ParameterFlag };
 
-    utils::string_view displayName{};           // user-readable name for given parameter value
-    uuid id{};                                  // uuid for parameter value
-    u32 count = 1;                              // how many consecutive values are of this indexed type
-                                                //   can be more than the ones currently available
+    utils::string_view displayName{};       // user-readable name for given parameter value
+    uuid id{};                              // uuid for parameter value
+    u32 count = 1;                          // how many consecutive values are of this indexed type
+                                            //   can be more than the ones currently available
     u32 flags{};
     u64 userFlags{};
-    uuid dynamicUpdateUuid{};                   // this uuid is used to register for in the State
-                                                //   these updates will happen only if the parameter is not mapped/modulated
+    uuid dynamicUpdateUuid{};               // this uuid is used to register for in the State
+                                            //   these updates will happen only if the parameter is not mapped/modulated
     IndexedData *parent{};
     IndexedData *children{};
     IndexedData *next{};
@@ -79,7 +79,8 @@ namespace Framework
     };
 
     operator IndexedData *() { return this; }
-    IndexedData &operator,(IndexedData &other) 
+    IndexedData &
+    operator,(IndexedData &other) 
     {
       if (next)
         *next, other;
@@ -111,7 +112,8 @@ namespace Framework
       return *this;
     }
 
-    static IndexedData *deepCopy(auto *arena, IndexedData *options)
+    static IndexedData *
+    deepCopy(auto *arena, IndexedData *options)
     {
       auto *newOption = anew(arena, Framework::IndexedData, { *options });
       if (newOption->children)
@@ -138,13 +140,12 @@ namespace Framework
   {
     enum Flags : u8
     { 
-      None        = 0     ,
-      Stereo      = 1 << 0,         // if parameter allows stereo modulation
-      Modulatable = 1 << 1,         // if parameter allows modulation at all
-      Automatable = 1 << 2,         // if parameter allows host automation
-      Extensible  = 1 << 3,         // if parameter's minimum/maximum/default values can change
-      All = Stereo | Modulatable |  
-        Automatable | Extensible,
+             None = 0,
+           Stereo = 1 << 0,                               // if parameter allows stereo modulation
+      Modulatable = 1 << 1,                               // if parameter allows modulation at all
+      Automatable = 1 << 2,                               // if parameter allows host automation
+       Extensible = 1 << 3,                               // if parameter's minimum/maximum/default values can change
+       RoundToInt = 1 << 4,                               // if parameter value must be rounded after scaling
     };
 
     utils::string_view displayName{};                     // name displayed to the user
@@ -175,26 +176,20 @@ namespace Framework
   };
 
 
-  utils::pair<const IndexedData *, usize>
-  getIndexedData(double scaledValue, const ParameterDetails &details) noexcept;
-  double
-  getValueFromOptionText(utils::string_view text, const ParameterDetails &details) noexcept;
-  double
-  getValueFromOptionId(uuid optionId, const ParameterDetails &details) noexcept;
+  utils::pair<const IndexedData *, usize> getIndexedData(double scaledValue, const ParameterDetails &details);
+  double getValueFromOptionText(utils::string_view text, const ParameterDetails &details);
+  double getValueFromOptionId(uuid optionId, const ParameterDetails &details);
 
   // with skewOnly == true a normalised value between [0,1] or [-0.5, 0.5] is returned,
   // depending on whether the parameter is bipolar
-  double
-  scaleValue(double value, const ParameterDetails &details, float sampleRate = kDefaultSampleRate,
-    bool scalePercent = false, bool skewOnly = false) noexcept;
+  double scaleValue(double value, const ParameterDetails &details, 
+    float sampleRate = kDefaultSampleRate, bool scalePercent = false, bool skewOnly = false);
 
-  double
-  unscaleValue(double value, const ParameterDetails &details,
-    float sampleRate = kDefaultSampleRate, bool unscalePercent = true) noexcept;
+  double unscaleValue(double value, const ParameterDetails &details,
+    float sampleRate = kDefaultSampleRate, bool unscalePercent = true);
 
-  simd_values::simd_float
-  scaleValue(simd_values::simd_float value, const ParameterDetails &details,
-    float sampleRate = kDefaultSampleRate) noexcept;
+  utils::simd_float scaleValue(utils::simd_float value, 
+    const ParameterDetails &details, float sampleRate = kDefaultSampleRate);
 
 
 
@@ -203,7 +198,8 @@ namespace Framework
     Framework::ParameterDetails details{};
     ParameterMetadata *next{};
 
-    ParameterMetadata &operator,(ParameterMetadata &other)
+    ParameterMetadata &
+    operator,(ParameterMetadata &other)
     {
       if (next)
         *next, other;
@@ -230,7 +226,8 @@ namespace Framework
     u32 flags{};
     uuid id{};
     utils::string_view name{};
-    Generation::BaseProcessor *(*create)(Plugin::State *, ProcessorMetadata *, const void *){};
+    Generation::BaseProcessor *(*create)(Plugin::State *state,
+      ProcessorMetadata *metadata, const void *toCopy, void *serialisedSave){};
     ProcessorMetadata *parent{};
     ProcessorMetadata *next{};
     ProcessorMetadata *children{};
@@ -248,6 +245,17 @@ namespace Framework
       return *this;
     }
     operator ProcessorMetadata *() { return this; }
+
+    bool 
+    acceptsChild(ProcessorMetadata *potentialChild)
+    {
+      auto *child = children;
+      for (; child; child = child->next)
+        if (potentialChild->id == child->id)
+          break;
+
+      return child;
+    }
 
     ProcessorMetadata &
     computeCounts()
@@ -311,17 +319,77 @@ namespace Framework
 #define COMPLEX_STRUCTURE_PARAMETER_CUSTOM(...) (__VA_ARGS__(*anew(arena, Framework::ParameterMetadata, {})))
 
 #define COMPLEX_STRUCTURE_PROCESSOR(T, nameString, idNumber, ...) (*anew(arena, Framework::ProcessorMetadata, \
-  { .flags = ProcessorMetadata::ProcessorTag, .id = idNumber, .name = { nameString, sizeof(nameString)  }, \
-    .create = (Generation::BaseProcessor *(*)(Plugin::State *, ProcessorMetadata *, const void *))(::createProcessor<T>) __VA_OPT__(,) __VA_ARGS__ }))
+  { .flags = ProcessorMetadata::ProcessorTag, .id = idNumber, .name = nameString, .create = ::createProcessor<T> __VA_OPT__(,) __VA_ARGS__ }))
 #define COMPLEX_STRUCTURE_GROUP(nameString, idNumber, ...) (*anew(arena, Framework::ProcessorMetadata, \
-  { .flags = ProcessorMetadata::GroupTag, .id = idNumber, .name = { nameString, sizeof(nameString) } __VA_OPT__(,) __VA_ARGS__ }))
+  { .flags = ProcessorMetadata::GroupTag, .id = idNumber, .name = nameString __VA_OPT__(,) __VA_ARGS__ }))
 
 // count == 0 if nothing is provided
 #define COMPLEX_STRUCTURE_INDEXED_DATA(...) (*anew(arena, Framework::IndexedData, { COMPLEX_DEFAULT_OR(.count = 0, __VA_ARGS__) }))
 
 template<typename T>
-T *
-createProcessor(Plugin::State *state, Framework::ProcessorMetadata *metadata, const void *copy = nullptr);
+Generation::BaseProcessor *createProcessor(Plugin::State *state, Framework::ProcessorMetadata *metadata,
+  const void *toCopy = nullptr, void *serialisedSave = nullptr);
 template<typename T>
-void *
-initialiseTypeStructure(void *metadata, Framework::PluginStructure &structure);
+void *initialiseTypeStructure(void *metadata, Framework::PluginStructure &structure);
+
+namespace Framework
+{
+  struct UndoAction
+  {
+    // mandatory to implement
+    void (*redo)(UndoAction *){};
+    void (*undo)(UndoAction *){};
+
+    // free to implement or not
+    void (*destructor)(UndoAction *){};
+    // Allows multiple actions to be coalesced into a single action object, to reduce storage space.
+    // The combined action can be the current, next or an entire new action
+    UndoAction *(*combineActions)(utils::bumpArena *transaction,
+      UndoAction *currentAction, UndoAction *nextAction){};
+
+  private:
+    UndoAction *next{};
+    friend class UndoManager;
+  };
+
+  class UndoManager
+  {
+  public:
+    ~UndoManager();
+
+    UndoManager(usize transactionsToKeep);
+
+    void clear();
+    void setTransationStorage(usize transactionsToKeep);
+
+    // Performs an action and adds it to the undo history list.
+    bool perform(UndoAction *action, bool performOnAdd = true);
+
+    // Starts a new group of actions that together will be treated as a single transaction.
+    [[nodiscard]] utils::bumpArena *beginNewTransaction();
+    [[nodiscard]] utils::bumpArena *getCurrentTransaction() { return transactions[currentIndex].first; }
+
+    bool canUndo() const { return undoActionsCount; }
+    bool canRedo() const { return redoActionsCount; }
+
+    // Tries to roll-back the last transaction, 
+    // returns false if there aren't any transactions to undo
+    // 
+    // if undoCurrentTransactionOnly == true, then the transaction index won't be changed
+    // when undone and things can immediately be added to the current transaction
+    bool undo(bool undoCurrentTransactionOnly = false);
+
+    // Tries to redo the last transaction that was undone.
+    // returns false if there aren't any transactions to redo
+    bool redo();
+
+    // Returns true if the caller code is in the middle of an undo or redo action.
+    bool isPerformingUndoRedo() const { return isInsideUndoRedoCall; }
+
+  private:
+    utils::bumpArena *storage{};
+    utils::span<utils::pair<utils::bumpArena *, UndoAction *>> transactions{};
+    usize currentIndex = 0, undoActionsCount = 0, redoActionsCount = 0;
+    bool isInsideUndoRedoCall = false;
+  };
+}

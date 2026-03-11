@@ -50,12 +50,12 @@ namespace Interface
   class PopupSelector;
   class PopupList;
 
-  struct PopupItem : Component
+  struct PopupItem : public Component
   {
     bool render(OpenGlWrapper &openGl) override;
 
     i32 id = 0;
-    i32 shortcutKeyCode = '\0';
+    i32 shortcutKeyCode = 0;
     Area<i32> sublistMinSize{ 0, 0 };
     void *extraData = nullptr;
     bool closesPopup = true;

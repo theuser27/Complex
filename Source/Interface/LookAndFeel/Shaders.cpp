@@ -745,7 +745,7 @@ namespace Interface
 
     if (status == GL_FALSE)
     {
-      utils::vector<GLchar> info{ utils::generalAllocator, 16384 };
+      utils::vector<GLchar> info{ globalArena, COMPLEX_KB(16) };
       glGetShaderInfoLog(shaderId, (GLsizei)info.size(), nullptr, info.data());
       COMPLEX_ASSERT_FALSE("Shader compilation failed\n%s", info.data());
     }
@@ -762,7 +762,7 @@ namespace Interface
     if (programIter != shaderPrograms.data.end())
       return programIter->second;
 
-    auto &[key, program] = shaderPrograms.data.emplace_back();
+    auto &[key, program] = shaderPrograms.data.emplaceBack();
     key = shaderProgramKey;
     program.id = glCreateProgram();
 
@@ -781,7 +781,7 @@ namespace Interface
 
     if (status == (GLint)GL_FALSE)
     {
-      utils::vector<GLchar> info{ utils::generalAllocator, 16384 };
+      utils::vector<GLchar> info{ globalArena, COMPLEX_KB(16) };
       glGetProgramInfoLog(program.id, (GLsizei)info.size(), nullptr, info.data());
       COMPLEX_ASSERT_FALSE("%s", info.data());
     }

@@ -15,12 +15,10 @@ namespace Framework
 {
   namespace LoadSave
   {
-    utils::string
-    getConfigFilePath(utils::string_view file);
+    utils::string getConfigFilePath(utils::string_view file);
     // returns absolute window dimensions
     void getWindowSizeScale(u32 &windowWidth, u32 &windowHeight, float &windowScale);
-    i32
-    getModuleWidth();
+    i32 getModuleWidth();
     void getStartupParameters(usize &parameterMappings, usize &inSidechains, usize &outSidechains, usize &undoSteps);
 
     void saveWindowSizeScale(u32 windowWidth, u32 windowHeight, float windowScale);

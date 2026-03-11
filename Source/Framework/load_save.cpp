@@ -11,7 +11,7 @@
 #include "Framework/parameter_value.hpp"
 #include "Framework/parameter_bridge.hpp"
 #include "Generation/SoundEngine.hpp"
-#include "Generation/EffectsState.hpp"
+#include "Generation/EffectsLane.hpp"
 #include "Generation/EffectModules.hpp"
 #include "Interface/LookAndFeel/Graphics.hpp"
 #include "Interface/LookAndFeel/ui_constants.hpp"
@@ -305,6 +305,7 @@ namespace Framework
     cjson_AddTo(data, "is_stereo", cjson_Bool, (details_.flags & ParameterDetails::Stereo) != 0);
     cjson_AddTo(data, "is_modulatable", cjson_Bool, (details_.flags & ParameterDetails::Modulatable) != 0);
     cjson_AddTo(data, "is_extensible", cjson_Bool, (details_.flags & ParameterDetails::Extensible) != 0);
+    cjson_AddTo(data, "is_rounding_to_int", cjson_Bool, (details_.flags & ParameterDetails::RoundToInt) != 0);
     if (parameterLink_.hostControl)
       cjson_AddTo(data, "automation_slot", cjson_Unsigned, parameterLink_.hostControl->parameterIndex);
     if (details_.scale == ParameterScale::Indexed)
@@ -364,6 +365,10 @@ namespace Framework
     u64 automationSlot = u64(-1);
     if (cjson *slot = cjson_GetObjectItem(data, "automation_slot"))
       automationSlot = slot->vuint;
+
+    parameter->details_.flags &= ~ParameterDetails::RoundToInt;
+    if (cjson *slot = cjson_GetObjectItem(data, "is_rounding_to_int"))
+      parameter->details_.flags |= (slot->vbool) ? ParameterDetails::RoundToInt : 0;
 
     COMPLEX_ASSERT(cjson_GetObjectItem(data, "is_stereo")->vbool == ((parameter->details_.flags & ParameterDetails::Stereo) != 0));
 
@@ -586,7 +591,7 @@ namespace Generation
     {
       uuid subProcessorsId = cjson_GetObjectItem(processor, "id")->vuint;
       Generation::BaseProcessor *subProcessor = state->createProcessor(subProcessorsId, processor);
-      insertSubProcessor(childrenCount, *subProcessor);
+      addChildProcessor(*subProcessor);
     }
 
     errorPath->removeSuffix(newSize - oldSize);
@@ -601,7 +606,7 @@ namespace Plugin
     utils::vector<Generation::BaseProcessor *> topLevelProcessors{};
     for (auto &[id, processor] : state->allProcessors.data)
       if (!processor->parent)
-        topLevelProcessors.emplace_back(processor);
+        topLevelProcessors.emplaceBack(processor);
 
     COMPLEX_ASSERT(!topLevelProcessors.empty());
 
@@ -616,6 +621,15 @@ namespace Plugin
     }
   }
 
+  static void checkForDynamicParameters(Plugin::State *state, Generation::BaseProcessor *processor)
+  {
+    for (auto parameter = processor->parameters; parameter; parameter = parameter->next)
+      state->registerDynamicParameter(&parameter->object);
+
+    for (auto child = processor->children; child; child = child->next)
+      checkForDynamicParameters(state, child);
+  }
+
   utils::sp<State>
   ComplexPlugin::loadDefaultPreset()
   {
@@ -624,14 +638,12 @@ namespace Plugin
     auto state = utils::sp<State>::create(this);
 
     state->soundEngine = utils::as<SoundEngine>(state->createProcessor(Processors::SoundEngine));
-    auto *effectsState = state->createProcessor(Processors::EffectsState);
-    auto *effectsLane = state->createProcessor(Processors::EffectsLane);
+    state->soundEngine->addChildProcessor(*state->createProcessor(Processors::EffectsLane));
 
-    effectsState->insertSubProcessor(0, *effectsLane);
-    state->soundEngine->insertSubProcessor(0, *effectsState);
+    checkForDynamicParameters(state.get(), state->soundEngine);
+    state->updateAllDynamicParameters();
 
-    auto min = utils::min(state->parameterBridges.size(),
-      Generation::SoundEngine::kParametersValues.size());
+    auto min = utils::min(state->parameterBridges.size(), Generation::SoundEngine::kParametersValues.size());
     for (usize i = 0; i < min; ++i)
     {
       auto *parameter = state->getProcessorParameter(state->soundEngine->stateId,
@@ -647,11 +659,7 @@ namespace Plugin
   State::createProcessor(uuid processorId, void *jsonData)
   {
     auto *metadata = findProcessorMetadata(processorId);
-    Generation::BaseProcessor *processor = metadata->create(this, metadata, nullptr);
-    if (jsonData != nullptr)
-      processor->deserialiseFromJson(jsonData);
-    else
-      processor->initialiseParameters();
+    Generation::BaseProcessor *processor = metadata->create(this, metadata, nullptr, jsonData);
 
     allProcessors.add(processor->stateId, processor);
     expandIfNecessary();
@@ -677,20 +685,8 @@ namespace Plugin
       return nullptr;
     }
 
-    cjson *parameters = cjson_GetObjectItem(soundEngineJson, "parameters");
-
-    for (auto *parameter = parameters->child; parameter; parameter = parameter->next)
-    {
-      if (cjson_GetObjectItem(soundEngineJson, "id")->vuint == Generation::SoundEngine::BlockSize)
-      {
-        state->minFFTOrder = (u32)cjson_GetObjectItem(soundEngineJson, "min_value")->vuint;
-        state->maxFFTOrder = (u32)cjson_GetObjectItem(soundEngineJson, "max_value")->vuint;
-        break;
-      }
-    }
-
-    auto soundEngine = state->createProcessor(Generation::Processors::SoundEngine);
-    soundEngine->deserialiseFromJson(soundEngineJson);
+    state->soundEngine = (Generation::SoundEngine *)state->createProcessor(
+      Generation::Processors::SoundEngine, soundEngineJson);
 
     for (auto &id : Framework::ParameterChangeReason::kParameterChangeReasonValues)
       state->updateDynamicParameters(id);

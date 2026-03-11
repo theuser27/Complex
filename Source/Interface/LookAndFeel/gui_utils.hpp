@@ -14,6 +14,7 @@ extern "C"
 
 namespace utils
 {
+  struct Allocator;
   class string;
 }
 
@@ -105,19 +106,15 @@ namespace Interface
   template<typename T>
   struct Point
   {
-    constexpr Point() = default;
-    constexpr Point(T initialX, T initialY) : x(initialX), y(initialY) { }
-
     friend constexpr bool operator==(Point lhs, Point rhs) = default;
-
-    constexpr void setXY(T newX, T newY) { x = newX; y = newY; }
-    constexpr void translate(T xToAdd, T yToAdd) { x += xToAdd; y += yToAdd; }
-    constexpr void transpose() { COMPLEX_SWAP(x, y); }
 
     constexpr Point withX(T newX) const { return { newX, y }; }
     constexpr Point withY(T newY) const { return { x, newY }; }
     constexpr Point translated(T deltaX, T deltaY) const { return { x + deltaX, y + deltaY }; }
     constexpr Point transposed() { return { y, x }; }
+
+    constexpr Point &translate(T deltaX, T deltaY) { return *this = translated(deltaX, deltaY); }
+    constexpr Point &transpose() { return *this = transposed(); }
 
     constexpr Point operator+(Point other) const { return { x + other.x, y + other.y }; }
     constexpr Point &operator+=(Point other) { x += other.x; y += other.y; return *this; }
@@ -155,12 +152,12 @@ namespace Interface
 
     friend constexpr bool operator==(Rectangle lhs, Rectangle rhs) = default;
 
-    static constexpr Rectangle leftTopRightBottom(T left, T top, T right, T bottom)
+    static constexpr Rectangle 
+    leftTopRightBottom(T left, T top, T right, T bottom)
     {
       return { left, top, right - left, bottom - top };
     }
 
-    constexpr bool isEmpty() const { return w <= T() || h <= T(); }
     constexpr T getRight() const { return x + w; }
     constexpr T getBottom() const { return y + h; }
     constexpr T getCentreX() const { return x + w / (T)2; }
@@ -172,49 +169,55 @@ namespace Interface
     constexpr Point<T> getBottomLeft() const { return { x, y + h }; }
     constexpr Point<T> getBottomRight() const { return { x + w, y + h }; }
 
-    constexpr void setPosition(T newX, T newY) { x = newX; y = newY; }
-    constexpr void setPosition(Point<T> newPosition) { x = newPosition.x; y = newPosition.y; }
-    constexpr void setSize(T newWidth, T newHeight) { w = newWidth; h = newHeight; }
-    constexpr void setCentre(T newCentreX, T newCentreY)
-    {
-      x = newCentreX - w / (T)2; y = newCentreY - h / (T)2;
-    }
-    constexpr void setCentre(Point<T> newCentre) { setCentre(newCentre.x, newCentre.y); }
-
     constexpr Rectangle withX(T newX) const { return { newX, y, w, h }; }
     constexpr Rectangle withY(T newY) const { return { x, newY, w, h }; }
     constexpr Rectangle withWidth(T newWidth) const { return { x, y, utils::max(T(), newWidth), h }; }
     constexpr Rectangle withHeight(T newHeight) const { return { x, y, w, utils::max(T(), newHeight) }; }
-    constexpr Rectangle withPosition(T newX, T newY) { return { newX, newY, w, h }; }
-    constexpr Rectangle withPosition(Point<T> newPosition) { return { newPosition.x, newPosition.y, w, h }; }
-    constexpr Rectangle withSize(T newWidth, T newHeight) const
-    {
-      return { x, y, utils::max(T(), newWidth), utils::max(T(), newHeight) };
-    }
-    constexpr Rectangle withZeroOrigin() const { return { w, h }; }
 
-    constexpr void setLeft(T newLeft) { w = utils::max(T(), x + w - newLeft); x = newLeft; }
-    constexpr void setTop(T newTop) { h = utils::max(T(), y + h - newTop); y = newTop; }
-    constexpr void setRight(T newRight) { x = utils::min(x, newRight); w = newRight - x; }
-    constexpr void setBottom(T newBottom) { y = utils::min(y, newBottom); h = newBottom - y; }
+    constexpr Rectangle withPosition(T newX, T newY) const { return { newX, newY, w, h }; }
+    constexpr Rectangle withPosition(Point<T> newPosition) const { return { newPosition.x, newPosition.y, w, h }; }
+    constexpr Rectangle withCentre(T newCentreX, T newCentreY) const { return { newCentreX - w / (T)2, newCentreY - h / (T)2, w, h }; }
+    constexpr Rectangle withSize(T newWidth, T newHeight) const { return { x, y, utils::max(T(), newWidth), utils::max(T(), newHeight) }; }
+    constexpr Rectangle withZeroOrigin() const { return { w, h }; }
+    constexpr Rectangle withShift(T deltaX, T deltaY) const { return { x + deltaX, y + deltaY, w, h }; }
 
     constexpr Rectangle withLeft(T newLeft) const { return { newLeft, y, utils::max(T(), x + w - newLeft), h }; }
     constexpr Rectangle withTop(T newTop) const { return { x, newTop, w, utils::max(T(), y + h - newTop) }; }
     constexpr Rectangle withRight(T newRight) const { return { utils::min(x, newRight), y, utils::max(T(), newRight - x), h }; }
     constexpr Rectangle withBottom(T newBottom) const { return { x, utils::min(y, newBottom), w, utils::max(T(), newBottom - y) }; }
 
-    constexpr Rectangle withTrimmedLeft(T amountToRemove) const { return withLeft(x + amountToRemove); }
-    constexpr Rectangle withTrimmedTop(T amountToRemove) const { return withTop(y + amountToRemove); }
-    constexpr Rectangle withTrimmedRight(T amountToRemove) const { return withWidth(w - amountToRemove); }
-    constexpr Rectangle withTrimmedBottom(T amountToRemove) const { return withHeight(h - amountToRemove); }
+    constexpr Rectangle withExpandedLeft(T delta) const { return withLeft(x - delta); }
+    constexpr Rectangle withExpandedTop(T delta) const { return withTop(y - delta); }
+    constexpr Rectangle withExpandedRight(T delta) const { return withWidth(w + delta); }
+    constexpr Rectangle withExpandedBottom(T delta) const { return withHeight(h + delta); }
 
-    constexpr void trimLeft(T amountToRemove) { *this = withTrimmedLeft(amountToRemove); }
-    constexpr void trimTop(T amountToRemove) { *this = withTrimmedTop(amountToRemove); }
-    constexpr void trimRight(T amountToRemove) { *this = withTrimmedRight(amountToRemove); }
-    constexpr void trimBottom(T amountToRemove) { *this = withTrimmedBottom(amountToRemove); }
+    constexpr Rectangle withTrimmedLeft(T delta) const { return withLeft(x + delta); }
+    constexpr Rectangle withTrimmedTop(T delta) const { return withTop(y + delta); }
+    constexpr Rectangle withTrimmedRight(T delta) const { return withWidth(w - delta); }
+    constexpr Rectangle withTrimmedBottom(T delta) const { return withHeight(h - delta); }
 
-    constexpr void shift(T deltaX, T deltaY) { x += deltaX; y += deltaY; }
-    constexpr Rectangle withShift(T deltaX, T deltaY) const { return { x + deltaX, y + deltaY, w, h }; }
+
+
+    constexpr Rectangle &setPosition(T newX, T newY) { return *this = withPosition(newX, newY); }
+    constexpr Rectangle &setPosition(Point<T> newPosition) { return *this = withPosition(newPosition.x, newPosition.y); }
+    constexpr Rectangle &setSize(T newWidth, T newHeight) { return *this = withSize(newWidth, newHeight); }
+    constexpr Rectangle &setCentre(T newCentreX, T newCentreY) { return *this = withCentre(newCentreX, newCentreY); }
+
+    constexpr Rectangle &setLeft(T newLeft) { return *this = withLeft(newLeft); }
+    constexpr Rectangle &setTop(T newTop) { return *this = withTop(newTop); }
+    constexpr Rectangle &setRight(T newRight) { return *this = withRight(newRight); }
+    constexpr Rectangle &setBottom(T newBottom) { return *this = withBottom(newBottom); }
+    constexpr Rectangle &shift(T deltaX, T deltaY) { return *this = withShift(deltaX, deltaY); }
+
+    constexpr Rectangle &expandLeft(T delta) { return *this = withTrimmedLeft(delta); }
+    constexpr Rectangle &expandTop(T delta) { return *this = withTrimmedTop(delta); }
+    constexpr Rectangle &expandRight(T delta) { return *this = withTrimmedRight(delta); }
+    constexpr Rectangle &expandBottom(T delta) { return *this = withTrimmedBottom(delta); }
+    
+    constexpr Rectangle &trimLeft(T delta) { return *this = withTrimmedLeft(delta); }
+    constexpr Rectangle &trimTop(T delta) { return *this = withTrimmedTop(delta); }
+    constexpr Rectangle &trimRight(T delta) { return *this = withTrimmedRight(delta); }
+    constexpr Rectangle &trimBottom(T delta) { return *this = withTrimmedBottom(delta); }
 
     constexpr Rectangle operator+(Point<T> deltaPosition) const { return { x + deltaPosition.x, y + deltaPosition.y, w, h }; }
     constexpr Rectangle operator-(Point<T> deltaPosition) const { return { x - deltaPosition.x, y - deltaPosition.y, w, h }; }
@@ -222,30 +225,33 @@ namespace Interface
     constexpr Rectangle &operator+=(Point<T> deltaPosition) { x += deltaPosition.x; y += deltaPosition.y; return *this; }
     constexpr Rectangle &operator-=(Point<T> deltaPosition) { x -= deltaPosition.x; y -= deltaPosition.y; return *this; }
 
-    constexpr void expand(T deltaX, T deltaY)
+    constexpr Rectangle expanded(Rectangle<T> delta) const
     {
-      auto nw = utils::max(T(), w + deltaX * 2);
-      auto nh = utils::max(T(), h + deltaY * 2);
-      x -= deltaX;
-      y -= deltaY;
-      w = nw;
-      h = nh;
+      return { x - delta.x, y - delta.y, utils::max(T(), w + delta.x + delta.w),
+        utils::max(T(), h + delta.y + delta.h) };
     }
     constexpr Rectangle expanded(T deltaX, T deltaY) const
     {
-      auto nw = utils::max(T(), w + deltaX * 2);
-      auto nh = utils::max(T(), h + deltaY * 2);
-      return { x - deltaX, y - deltaY, nw, nh };
+      return { x - deltaX, y - deltaY, utils::max(T(), w + deltaX * 2), 
+        utils::max(T(), h + deltaY * 2) };
     }
     constexpr Rectangle expanded(T delta) const { return expanded(delta, delta); }
-
-    constexpr void reduce(T deltaX, T deltaY) { expand(-deltaX, -deltaY); }
-    constexpr Rectangle reduced(T deltaX, T deltaY) const { return expanded(-deltaX, -deltaY); }
-    constexpr Rectangle reduced(T delta) const { return reduced(delta, delta); }
-
-    constexpr void transpose() { *this = transposed(); }
+    constexpr Rectangle trimmed(Rectangle<T> delta) const { return expanded({ -delta.x, -delta.y, -delta.w, -delta.h }); }
+    constexpr Rectangle trimmed(T deltaX, T deltaY) const { return expanded(-deltaX, -deltaY); }
+    constexpr Rectangle trimmed(T delta) const { return expanded(-delta); }
     constexpr Rectangle transposed() { return { y, x, h, w }; }
 
+    constexpr Rectangle &expand(Rectangle<T> delta) { return *this = expanded(delta); }
+    constexpr Rectangle &expand(T deltaX, T deltaY) { return *this = expanded(deltaX, deltaY); }
+    constexpr Rectangle &expand(T delta) { *this = expanded(delta); }
+    constexpr Rectangle &trim(Rectangle<T> delta) { return *this = trimmed(delta); }
+    constexpr Rectangle &trim(T deltaX, T deltaY) { return *this = trimmed(deltaX, deltaY); }
+    constexpr Rectangle &trim(T delta) { return *this = trimmed(delta); }
+    constexpr Rectangle &transpose() { return *this = transposed(); }
+
+
+
+    constexpr bool isEmpty() const { return w <= T() || h <= T(); }
     constexpr bool contains(T xCoord, T yCoord) const
     {
       return xCoord >= x && yCoord >= y && xCoord < x + w && yCoord < y + h;
@@ -399,7 +405,8 @@ namespace Interface
       };
     }
 
-    utils::string toString() const;
+    usize toString(char *buffer, usize bufferSize) const;
+    utils::string toString(utils::Allocator allocator) const;
     static Colour fromString(const char *integer, int base = 16);
 
     operator NVGcolor() const { return nvgRGBA(r, g, b, a); }

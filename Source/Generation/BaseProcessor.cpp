@@ -7,26 +7,28 @@
 #include "Framework/parameter_value.hpp"
 #include "Framework/parameter_bridge.hpp"
 #include "Plugin/Complex.hpp"
+#include "Interface/LookAndFeel/BaseComponent.hpp"
 
 namespace Generation
 {
-  BaseProcessor::BaseProcessor(Plugin::State *state, Framework::ProcessorMetadata *metadata, utils::bumpArena *arena) :
-    metadata{ metadata }, state{ state }, stateId{ state->stateIdCounter++ }, arena{ arena } { }
-
-  BaseProcessor::BaseProcessor(const BaseProcessor &other, utils::bumpArena *arena) :
-    metadata{ other.metadata }, state{ other.state }, stateId{ state->stateIdCounter++ }, arena{ arena }
+  BaseProcessor::BaseProcessor(utils::bumpArena *arena, Plugin::State *state, 
+    Framework::ProcessorMetadata *metadata, const BaseProcessor *other) : metadata{ metadata },
+    state{ state }, stateId{ state->stateIdCounter++ }, arena{ arena } 
   {
+    if (!other)
+      return;
+
     using T = utils::remove_reference_t<decltype(*parameters)>;
 
-    if (other.parameters)
+    if (other->parameters)
     {
-      parameterCount = other.parameterCount;
+      parameterCount = other->parameterCount;
 
       auto *memory = arranew(arena, T, parameterCount);
       parameters = memory;
 
       auto *parameter = parameters;
-      auto *otherParameter = other.parameters;
+      auto *otherParameter = other->parameters;
       for (usize i = 0; i < parameterCount; ++i)
       {
         parameter = new (memory) T{ otherParameter->object };
@@ -42,13 +44,13 @@ namespace Generation
       parameter->next = nullptr;
     }
 
-    if (other.children)
+    if (other->children)
     {
-      childrenCount = other.childrenCount;
+      childrenCount = other->childrenCount;
 
-      children = other.children->createCopy();
+      children = other->children->createCopy();
       children->parent = this;
-      for (auto otherChild = other.children->next, child = children; otherChild;
+      for (auto otherChild = other->children->next, child = children; otherChild;
         (otherChild = otherChild->next), (child = child->next))
       {
         child->next = otherChild->createCopy();
@@ -57,38 +59,84 @@ namespace Generation
       }
     }
 
-    if (other.dataBuffer)
+    if (other->dataBuffer)
     {
-      dataBuffer = Framework::SimdBuffer::create(arena, other.dataBuffer->channels, state->getMaxBinCount());
+      dataBuffer = Framework::SimdBuffer::create(arena, other->dataBuffer->channels, state->getMaxBinCount());
       Framework::applyToThisNoMask<utils::MathOperations::Assign>(dataBuffer,
-        other.dataBuffer, other.dataBuffer->channels, other.dataBuffer->size);
+        other->dataBuffer, other->dataBuffer->channels, other->dataBuffer->size);
     }
   }
 
-  void BaseProcessor::initialise()
+  void BaseProcessor::reset()
   {
     for (auto *parameter = parameters; parameter; parameter = parameter->next)
-      parameter->object.initialise();
+      parameter->object.reset();
   }
 
   // the following functions are to be called outside of processing time
-  bool BaseProcessor::insertSubProcessor([[maybe_unused]] usize index,
-    [[maybe_unused]] BaseProcessor &newSubProcessor, [[maybe_unused]] bool callListeners)
+  bool 
+  BaseProcessor::addChildProcessor(BaseProcessor &newChildProcessor, BaseProcessor *insertBefore)
   {
-    COMPLEX_HARD_ASSERT_FALSE("insertSubProcessor is not implemented for %zu", metadata->id);
+    COMPLEX_ASSERT(!newChildProcessor.parent);
+
+    if (!metadata->acceptsChild(newChildProcessor.metadata))
+    {
+      auto string = utils::string::create(localScratch,
+        "Attempted insert of %v(id: %zu) inside an %v(id: %zu). \
+        If this shows to you as a user, report it to the dev. \n\nSupported subprocessors by this type are: ",
+        newChildProcessor.metadata->name, newChildProcessor.metadata->id, metadata->name, metadata->id
+      );
+
+      for (auto *acceptedChild = metadata->children; acceptedChild; acceptedChild = acceptedChild->next)
+      {
+        auto *format = (acceptedChild->next) ? "%v(id: %zu), " : "%v(id: %zu).";
+        string.appendFormat(format, acceptedChild->name, acceptedChild->id);
+      }
+
+      Interface::showNativeMessageBox("Erroneous processor insert", string.data(), Interface::MessageBoxType::Warning);
+      return false;
+    }
+
+    ++childrenCount;
+    newChildProcessor.parent = this;
+    newChildProcessor.previous = &newChildProcessor;
+    newChildProcessor.next = nullptr;
+
+    if (!children)
+    {
+      children = &newChildProcessor;
+      return true;
+    }
+
+    newChildProcessor.next = insertBefore;
+
+    insertBefore = (insertBefore) ? insertBefore : children;
+    newChildProcessor.previous = insertBefore->previous;
+    insertBefore->previous = &newChildProcessor;
+
+    if (newChildProcessor.previous->next)
+      newChildProcessor.previous->next = &newChildProcessor;
+
+    return true;
   }
 
-  BaseProcessor &
-  BaseProcessor::deleteSubProcessor([[maybe_unused]] usize index, [[maybe_unused]] bool callListeners)
+  void BaseProcessor::removeChildProcessor(BaseProcessor &removedChildProcessor)
   {
-    COMPLEX_HARD_ASSERT_FALSE("deleteSubProcessor is not implemented for %zu", metadata->id);
-  }
+    COMPLEX_ASSERT(removedChildProcessor.parent == this);
 
-  utils::pair<BaseProcessor &, bool>
-  BaseProcessor::updateSubProcessor([[maybe_unused]] usize index,
-    [[maybe_unused]] BaseProcessor &newSubProcessor, [[maybe_unused]] bool callListeners)
-  {
-    COMPLEX_HARD_ASSERT_FALSE("updateSubProcessor is not implemented for %zu", metadata->id);
+    if (removedChildProcessor.previous->next)
+      removedChildProcessor.previous->next = removedChildProcessor.next;
+    if (removedChildProcessor.next)
+      removedChildProcessor.next->previous = removedChildProcessor.previous;
+
+    removedChildProcessor.parent = nullptr;
+    removedChildProcessor.previous = nullptr;
+    removedChildProcessor.next = nullptr;
+
+    if (children == &removedChildProcessor)
+      children = removedChildProcessor.next;
+
+    --childrenCount;
   }
 
   Framework::ParameterValue *
@@ -164,50 +212,6 @@ namespace Generation
     Framework::ParameterBridge::notifyParameterChange();
   }
 
-  void BaseProcessor::insertProcessorAt(BaseProcessor &processor, usize index)
-  {
-    COMPLEX_ASSERT(index <= childrenCount,
-      "You're trying to insert at %zu, when size is %zu", index, childrenCount);
-
-    ++childrenCount;
-    processor.parent = this;
-
-    if (!children)
-    {
-      children = &processor;
-      return;
-    }
-
-    auto childAfter = children;
-    for (usize i = 0; i < index; (++i), (childAfter = childAfter->next)) { }
-
-    processor.previous = childAfter->previous;
-    processor.next = childAfter;
-
-    if (processor.previous)
-      processor.previous->next = &processor;
-    if (processor.next)
-      processor.next->previous = &processor;
-  }
-
-  void BaseProcessor::reportUnexpectedProcessorInsert(BaseProcessor &attempedInsert,
-    utils::span<const uuid> acceptedProcessorIds)
-  {
-    auto string = utils::string::create(localScratch,
-      "Attempted insert of %v(id: %zu) inside an %v(id: %zu). \
-      If this shows to you as a user, report it to the dev. \n\nSupported subprocessors by this type are: ",
-      attempedInsert.metadata->name, attempedInsert.metadata->id, metadata->name, metadata->id
-    );
-
-    for (auto id : acceptedProcessorIds)
-    {
-      auto *acceptedMetadata = state->findProcessorMetadata(id);
-      string.appendFormat("%v(id: %zu), ", acceptedMetadata->name, acceptedMetadata->id);
-    }
-
-    Interface::showNativeMessageBox("Erroneous processor insert", string.data(), Interface::MessageBoxType::Warning);
-  }
-
   utils::dll<Framework::ParameterValue> *
   BaseProcessor::createParameters(usize count, Framework::ParameterMetadata *pararmeterMetadata,
     utils::dll<Framework::ParameterValue> *copy)
@@ -260,5 +264,150 @@ namespace Generation
     memory[count - 1].next = nullptr;
 
     return memory;
+  }
+}
+
+namespace Framework
+{
+  AddProcessorUpdate::AddProcessorUpdate(Generation::BaseProcessor *processorToAdd,
+    u64 destinationParentStateId, usize destinationIndex) : state{ *processorToAdd->state }, processor{ processorToAdd },
+    destinationParentStateId{ destinationParentStateId }, destinationIndex{ destinationIndex }
+  {
+    destructor = [](UndoAction *a)
+    {
+      auto *self = (AddProcessorUpdate *)a;
+      if (self->processor)
+        self->state.deleteProcessor(self->processor);
+    };
+
+    redo = [](UndoAction *a)
+    {
+      auto *self = (AddProcessorUpdate *)a;
+      auto destinationPointer = self->state.getProcessor(self->destinationParentStateId);
+
+      auto g = self->state.plugin->acquireProcessingLock();
+      destinationPointer->addChildProcessor(*self->processor, self->destinationIndex);
+      if (destinationPointer->component)
+      {
+        self->processor->component = self->processor->createUI();
+        destinationPointer->component->addChildComponent(self->processor->component, self->destinationIndex);
+      }
+
+      self->processor = nullptr;
+    };
+
+    undo = [](UndoAction *a)
+    {
+      auto *self = (AddProcessorUpdate *)a;
+      auto destinationPointer = self->state.getProcessor(self->destinationParentStateId);
+
+      auto g = self->state.plugin->acquireProcessingLock();
+      self->processor = &destinationPointer->removeChildProcessor(self->destinationIndex);
+    };
+  }
+
+  MoveProcessorUpdate::MoveProcessorUpdate(Generation::BaseProcessor *processorToMove,
+    u64 destinationParentStateId, usize destinationIndex) : state{ *processorToMove->state },
+    destinationParentStateId{ destinationParentStateId }, destinationIndex{ destinationIndex }
+  {
+    sourceParentStateId = processorToMove->parent->stateId;
+    for (auto child = processorToMove->parent->children; child != processorToMove; child = child->next)
+      ++sourceIndex;
+
+    redo = [](UndoAction *a)
+    {
+      auto *self = (MoveProcessorUpdate *)a;
+
+      auto destinationPointer = self->state.getProcessor(self->destinationParentStateId);
+      auto sourcePointer = self->state.getProcessor(self->sourceParentStateId);
+
+      auto g = self->state.plugin->acquireProcessingLock();
+      auto &movedProcessor = sourcePointer->removeChildProcessor(self->sourceIndex);
+      destinationPointer->addChildProcessor(movedProcessor, self->destinationIndex);
+
+      //if (sourcePointer != destinationPointer)
+      //  for (auto listener : sourcePointer->listeners_)
+      //    listener->movedSubProcessor(movedProcessor, *sourcePointer, 
+      //      sourceSubProcessorIndex_, *destinationPointer, destinationSubProcessorIndex_);
+      //
+      //for (auto listener : destinationPointer->listeners_)
+      //  listener->movedSubProcessor(movedProcessor, *sourcePointer, 
+      //    sourceSubProcessorIndex_, *destinationPointer, destinationSubProcessorIndex_);
+    };
+
+    undo = [](UndoAction *a)
+    {
+      auto *self = (MoveProcessorUpdate *)a;
+
+      auto destinationPointer = self->state.getProcessor(self->destinationParentStateId);
+      auto sourcePointer = self->state.getProcessor(self->sourceParentStateId);
+
+      auto g = self->state.plugin->acquireProcessingLock();
+      auto &movedProcessor = destinationPointer->removeChildProcessor(self->destinationIndex);
+      sourcePointer->addChildProcessor(movedProcessor, self->sourceIndex);
+
+      //if (sourcePointer != destinationPointer)
+      //  for (auto listener : sourcePointer->listeners_)
+      //    listener->movedSubProcessor(movedProcessor, *destinationPointer, 
+      //      destinationSubProcessorIndex_, *sourcePointer, sourceSubProcessorIndex_);
+
+      //for (auto listener : destinationPointer->listeners_)
+      //  listener->movedSubProcessor(movedProcessor, *destinationPointer, 
+      //    destinationSubProcessorIndex_, *sourcePointer, sourceSubProcessorIndex_);
+
+    };
+  }
+
+  DeleteProcessorUpdate::DeleteProcessorUpdate(Generation::BaseProcessor *processorToDelete) : 
+    state{ *processorToDelete->state }
+  {
+    parentStateId = processorToDelete->parent->stateId;
+    for (auto child = processorToDelete->parent->children; child != processorToDelete; child = child->next)
+      ++index;
+
+    destructor = [](UndoAction *a)
+    {
+      auto *self = (DeleteProcessorUpdate *)a;
+      if (self->processor)
+        self->state.deleteProcessor(self->processor);
+    };
+
+    redo = [](UndoAction *a)
+    {
+      auto *self = (DeleteProcessorUpdate *)a;
+      auto parentPointer = self->state.getProcessor(self->parentStateId);
+
+      auto g = self->state.plugin->acquireProcessingLock();
+      self->processor = &parentPointer->removeChildProcessor(self->index);
+      auto recurseParameters = [](const auto &self, Generation::BaseProcessor *processor) -> void
+      {
+        processor->remapParameters({}, true, true);
+        auto child = processor->children;
+        for (usize i = 0; i < processor->childrenCount; (++i), (child = child->next))
+          self(self, child);
+      };
+      recurseParameters(recurseParameters, self->processor);
+      self->processor->component->componentFlags.isVisible = false;
+    };
+
+    undo = [](UndoAction *a)
+    {
+      auto *self = (DeleteProcessorUpdate *)a;
+      auto destinationPointer = self->state.getProcessor(self->parentStateId);
+      self->processor->component->componentFlags.isVisible = true;
+
+      auto g = self->state.plugin->acquireProcessingLock();
+      destinationPointer->addChildProcessor(*self->processor, self->index);
+      auto recurseParameters = [](const auto &self, Generation::BaseProcessor *processor) -> void
+      {
+        processor->remapParameters({}, true, true);
+        auto child = processor->children;
+        for (usize i = 0; i < processor->childrenCount; (++i), (child = child->next))
+          self(self, child);
+      };
+      recurseParameters(recurseParameters, self->processor);
+
+      self->processor = nullptr;
+    };
   }
 }

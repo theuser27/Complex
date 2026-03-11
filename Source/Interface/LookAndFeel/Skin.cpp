@@ -218,10 +218,12 @@ namespace Interface
     cjson *data = cjson_Create(cjson_Object);
     cjson_AddTo(data, "Plugin Version", cjson_String, CPLUG_PLUGIN_VERSION);
 
+    char buffer[48];
+
     for (usize i = 0; i < kColorIdCount; ++i)
     {
-      auto string = colours[0][i].toString();
-      cjson_AddTo(data, kColorNames[i].data(), cjson_String, string.data());
+      (void)colours[0][i].toString(buffer, sizeof(buffer));
+      cjson_AddTo(data, kColorNames[i].data(), cjson_String, buffer);
     }
 
     for (usize i = 0; i < kValueIdCount; ++i)
@@ -235,8 +237,8 @@ namespace Interface
       {
         if (colours[overrideIndex][i] != colours[0][i])
         {
-          auto string = colours[overrideIndex][i].toString();
-          cjson_AddTo(overrideSection, kColorNames[i].data(), cjson_String, string.data());
+          (void)colours[overrideIndex][i].toString(buffer, sizeof(buffer));
+          cjson_AddTo(overrideSection, kColorNames[i].data(), cjson_String, buffer);
         }
       }
 

@@ -1,7 +1,7 @@
 
 // Created: 2021-10-02 20:53:05
 
-#include "EffectsState.hpp"
+#include "EffectsLane.hpp"
 
 #include "Framework/sync_primitives.hpp"
 #include "Framework/circular_buffer.hpp"
@@ -10,166 +10,32 @@
 #include "Framework/parameter_value.hpp"
 #include "Plugin/Complex.hpp"
 #include "EffectModules.hpp"
+#include "SoundEngine.hpp"
 
 namespace Generation
 {
-  EffectsLane::EffectsLane(Plugin::State *state, Framework::ProcessorMetadata *metadata, utils::bumpArena *arena) :
-    BaseProcessor{ state, metadata, arena }
+  EffectsLane::EffectsLane(utils::bumpArena *arena, Plugin::State *state, Framework::ProcessorMetadata *metadata,
+    const EffectsLane *other, void *serialisedSave) : BaseProcessor{ arena, state, metadata, other }
   {
-    auto maxInOuts = utils::max(state->plugin->inSidechains, state->plugin->outSidechains) + 1;
+    if (other)
+      return;
 
-    laneDataSource_.scratchBuffer = Framework::SimdBuffer::create(arena, maxInOuts * kChannelsPerInOut, state->getMaxBinCount());
-    dataBuffer = Framework::SimdBuffer::create(arena, maxInOuts * kChannelsPerInOut, state->getMaxBinCount());
-  }
+    auto maxInOutChannels = utils::kChannelsPerInOut * (utils::max(state->plugin->inSidechains, state->plugin->outSidechains) + 1);
+    auto maxBinCount = state->getMaxBinCount();
+    
+    laneDataSource.scratchBuffer = Framework::SimdBuffer::create(arena, maxInOutChannels, maxBinCount);
+    dataBuffer = Framework::SimdBuffer::create(arena, maxInOutChannels, maxBinCount);
 
-  bool
-  EffectsLane::insertSubProcessor(usize index, BaseProcessor &newSubProcessor, [[maybe_unused]] bool callListeners)
-  {
-    if (newSubProcessor.metadata->id != Processors::EffectModule)
+    if (serialisedSave)
+      deserialiseFromJson(serialisedSave);
+    else
     {
-      static constexpr uuid acceptedProcessorIds[] = { Processors::EffectModule };
-      reportUnexpectedProcessorInsert(newSubProcessor, acceptedProcessorIds);
-
-      return false;
+      parameters = createParameters(metadata->parametersCount, metadata->parameters);
+      parameterCount = metadata->parametersCount;
     }
-
-    insertProcessorAt(newSubProcessor, index);
-    return true;
   }
 
-  BaseProcessor &
-  EffectsLane::deleteSubProcessor(usize index, [[maybe_unused]] bool callListeners)
-  {
-    COMPLEX_ASSERT(index < childrenCount);
-
-    auto *child = getChild(children, index);
-    child->previous->next = child->next;
-    child->next->previous = child->previous;
-
-    return *child;
-  }
-
-  void EffectsLane::initialiseParameters()
-  {
-    parameters = createParameters(metadata->parametersCount, metadata->parameters);
-    parameterCount = metadata->parametersCount;
-  }
-
-  EffectsState::EffectsState(Plugin::State *state, Framework::ProcessorMetadata *metadata, utils::bumpArena *arena) :
-    BaseProcessor{ state, metadata, arena }
-  {
-    auto inSidechains = state->plugin->inSidechains;
-    auto outSidechains = state->plugin->outSidechains;
-
-    usedInputChannels_ = { arranew(arena, bool,
-      (inSidechains + 1) * kChannelsPerInOut, {}), (inSidechains + 1) * kChannelsPerInOut };
-
-    usedOutputChannels_ = { arranew(arena, bool,
-      (outSidechains + 1) * kChannelsPerInOut, {}), (outSidechains + 1) * kChannelsPerInOut };
-
-    outputScaleMultipliers_ = { arranew(arena, float,
-      (outSidechains + 1) * kChannelsPerInOut, {}), (outSidechains + 1) * kChannelsPerInOut };
-
-    // size is half the max because a single SIMD package stores both real and imaginary parts
-
-    dataBuffer = Framework::SimdBuffer::create(arena, (inSidechains + 1) * kChannelsPerInOut, state->getMaxBinCount());
-    outputBuffer_ = Framework::SimdBuffer::create(arena, (outSidechains + 1) * kChannelsPerInOut, state->getMaxBinCount());
-  }
-
-  bool
-  EffectsState::insertSubProcessor(usize index, BaseProcessor &newSubProcessor, [[maybe_unused]] bool callListeners)
-  {
-    if (newSubProcessor.metadata->id != Processors::EffectsLane)
-    {
-      static constexpr uuid acceptedProcessorIds[] = { Processors::EffectsLane };
-      reportUnexpectedProcessorInsert(newSubProcessor, acceptedProcessorIds);
-
-      return false;
-    }
-
-    newSubProcessor.parent = this;
-
-    insertProcessorAt(newSubProcessor, index);
-    return true;
-  }
-
-  BaseProcessor &EffectsState::deleteSubProcessor(usize index, [[maybe_unused]] bool callListeners)
-  {
-    COMPLEX_ASSERT(index < childrenCount);
-
-    auto *child = children;
-    for (usize i = 0; i < index; (++i), (child = child->next)) { }
-
-    child->previous->next = child->next;
-    child->next->previous = child->previous;
-
-    return *child;
-  }
-
-  void EffectsState::initialiseParameters()
-  {
-    parameters = createParameters(metadata->parametersCount, metadata->parameters);
-    parameterCount = metadata->parametersCount;
-  }
-
-  utils::span<bool> EffectsState::getUsedInputChannels()
-  {
-    using namespace Framework;
-
-    ::zeroset(usedInputChannels_.data(), usedInputChannels_.size());
-
-    for (auto *lane = getChild(children, 0, Processors::EffectsLane); lane;
-      lane = getChild(lane, 1, Processors::EffectsLane))
-    {
-      // if the input is not another lane's output and the chain is enabled
-      if (lane->getParameter(EffectsLane::LaneEnabled)->getInternalValue<u32>())
-      {
-        auto [laneIndexedData, index] = lane->getParameter(EffectsLane::Input)->getInternalValue<Framework::IndexedData>();
-        usize startIndex = 0;
-        if (laneIndexedData->id == EffectsLane::InputOptionsMain) { }
-        else if (laneIndexedData->id == EffectsLane::InputOptionsSidechain)
-          startIndex = kChannelsPerInOut * (index + 1);
-        else if (laneIndexedData->id == EffectsLane::InputOptionsLane)
-          continue;
-        else COMPLEX_ASSERT_FALSE("Missing case");
-
-        for (usize i = 0; i < kChannelsPerInOut; ++i)
-          usedInputChannels_[startIndex + i] = true;
-      }
-    }
-
-    return usedInputChannels_;
-  }
-
-  utils::span<bool> EffectsState::getUsedOutputChannels()
-  {
-    using namespace Framework;
-
-    ::zeroset(usedOutputChannels_.data(), usedOutputChannels_.size());
-
-    for (auto *lane = getChild(children, 0, Processors::EffectsLane); lane;
-      lane = getChild(lane, 1, Processors::EffectsLane))
-    {
-      if (lane->getParameter(EffectsLane::LaneEnabled)->getInternalValue<u32>())
-      {
-        auto [laneIndexedData, index] = lane->getParameter(EffectsLane::Output)->getInternalValue<Framework::IndexedData>();
-        usize startIndex = 0;
-        if (laneIndexedData->id == EffectsLane::OutputOptionsMain) { }
-        else if (laneIndexedData->id == EffectsLane::OutputOptionsSidechain)
-          startIndex = kChannelsPerInOut * (index + 1);
-        else if (laneIndexedData->id == EffectsLane::OutputOptionsNone)
-          continue;
-        else COMPLEX_ASSERT_FALSE("Missing case");
-
-        for (usize i = 0; i < kChannelsPerInOut; ++i)
-          usedOutputChannels_[startIndex + i] = true;
-      }
-    }
-
-    return usedOutputChannels_;
-  }
-
-  void EffectsState::writeInputData(const Framework::Buffer &inputBuffer)
+  void SoundEngine::interleaveInputs(const Framework::Buffer &inputBuffer)
   {
     using namespace Framework;
     using namespace utils;
@@ -214,14 +80,14 @@ namespace Generation
     }
   }
 
-  void EffectsState::processLanes()
+  void SoundEngine::processLanes()
   {
     shouldWorkersProcess_.store(true, satomi::memory_order_release);
     // sequential consistency just in case
     // triggers the chains to run again
     for (auto *lane = (EffectsLane *)getChild(children, 0, Processors::EffectsLane); lane;
       lane = (EffectsLane *)getChild(lane, 1, Processors::EffectsLane))
-      lane->status_.store(EffectsLane::LaneStatus::Ready, satomi::memory_order_seq_cst);
+      lane->status.store(EffectsLane::LaneStatus::Ready, satomi::memory_order_seq_cst);
 
     distributeWork();
 
@@ -229,17 +95,17 @@ namespace Generation
     for (auto *lane = (EffectsLane *)getChild(children, 0, Processors::EffectsLane); lane;
       lane = (EffectsLane *)getChild(lane, 1, Processors::EffectsLane))
     {
-      while (lane->status_.load(satomi::memory_order_acquire) != EffectsLane::LaneStatus::Finished)
+      while (lane->status.load(satomi::memory_order_acquire) != EffectsLane::LaneStatus::Finished)
       { utils::longPause<5>(); }
     }
   }
 
-  void EffectsState::checkUsage()
+  void SoundEngine::checkUsage()
   {
     // TODO: decide on a heuristic when to add worker threads
     if (false)
     {
-      auto &worker = state->reserveFreeWorker(typeId(EffectsState));
+      auto &worker = state->reserveFreeWorker(typeId(SoundEngine));
       worker.start([this](satomi::atomic<bool> &shouldStop)
         {
           while (!shouldStop.load(satomi::memory_order_acquire))
@@ -253,30 +119,30 @@ namespace Generation
     }
   }
 
-  void EffectsState::distributeWork() const
+  void SoundEngine::distributeWork() const
   {
     for (auto *lane = (EffectsLane *)getChild(children, 0, Processors::EffectsLane); lane;
       lane = (EffectsLane *)getChild(lane, 1, Processors::EffectsLane))
     {
-      if (lane->status_.load(satomi::memory_order_relaxed) == EffectsLane::LaneStatus::Ready)
+      if (lane->status.load(satomi::memory_order_relaxed) == EffectsLane::LaneStatus::Ready)
       {
         auto expected = EffectsLane::LaneStatus::Ready;
-        if (lane->status_.compare_exchange_strong(expected, EffectsLane::LaneStatus::Running, satomi::memory_order_seq_cst))
+        if (lane->status.compare_exchange_strong(expected, EffectsLane::LaneStatus::Running, satomi::memory_order_seq_cst))
           processIndividualLanes(lane);
       }
     }
   }
 
-  void EffectsState::processIndividualLanes(EffectsLane *thisLane) const
+  void SoundEngine::processIndividualLanes(EffectsLane *thisLane) const
   {
     using namespace Framework;
     using namespace utils;
 
-    thisLane->currentEffectIndex_.store(0, satomi::memory_order_release);
-    thisLane->volumeScale_ = 1.0f;
-    auto &laneDataSource = thisLane->laneDataSource_;
+    thisLane->currentEffectIndex.store(0, satomi::memory_order_release);
+    thisLane->volumeScale.store(1.0f, satomi::memory_order_relaxed);
+    auto &laneDataSource = thisLane->laneDataSource;
     laneDataSource.blockPhase = blockPhase;
-    laneDataSource.blockPosition = blockPosition;
+    laneDataSource.blockPosition = blockPosition_;
     bool isLaneOn = thisLane->getParameter(EffectsLane::LaneEnabled)->getInternalValue<u32>();
     i32 lockValue;
 
@@ -291,7 +157,7 @@ namespace Generation
 
       while (true)
       {
-        auto otherLaneStatus = otherLane->status_.load(satomi::memory_order_acquire);
+        auto otherLaneStatus = otherLane->status.load(satomi::memory_order_acquire);
         if (otherLaneStatus == EffectsLane::LaneStatus::Finished)
           break;
 
@@ -304,14 +170,14 @@ namespace Generation
       if (!isLaneOn)
       {
         // TODO: decide if it's even worth to wait, or we can grab a reference to the other lane's SimdBufferView
-        laneDataSource.sourceBuffer = otherLane->laneDataSource_.sourceBuffer;
+        laneDataSource.sourceBuffer = otherLane->laneDataSource.sourceBuffer;
 
-        thisLane->status_.store(EffectsLane::LaneStatus::Finished, satomi::memory_order_release);
+        thisLane->status.store(EffectsLane::LaneStatus::Finished, satomi::memory_order_release);
         return;
       }
 
-      lockValue = utils::lockAtomic(otherLane->laneDataSource_.sourceBuffer->dataLock, false, false, WaitMechanism::Spin);
-      laneDataSource.sourceBuffer = otherLane->laneDataSource_.sourceBuffer;
+      lockValue = utils::lockAtomic(otherLane->laneDataSource.sourceBuffer->dataLock, false, false, WaitMechanism::Spin);
+      laneDataSource.sourceBuffer = otherLane->laneDataSource.sourceBuffer;
     }
     // input is not from a lane, we can begin processing
     else
@@ -339,7 +205,7 @@ namespace Generation
       }
       else
       {
-        thisLane->status_.store(EffectsLane::LaneStatus::Finished, satomi::memory_order_release);
+        thisLane->status.store(EffectsLane::LaneStatus::Finished, satomi::memory_order_release);
         return;
       }
     }
@@ -373,7 +239,7 @@ namespace Generation
       inputVolume = merge(inputVolume, simd_float(1.0f), simd_float::equal(inputVolume, 0.0f));
     }
     else
-      thisLane->volumeScale_ = 1.0f;
+      thisLane->volumeScale.store(1.0f, satomi::memory_order_relaxed);
 
     // main processing loop
     for (auto *child = thisLane->children; child; child = child->next)
@@ -382,7 +248,7 @@ namespace Generation
       utils::as<EffectModule>(child)->processEffect(laneDataSource, binCount, sampleRate);
 
       // incrementing where we are currently
-      thisLane->currentEffectIndex_.fetch_add(1, satomi::memory_order_acq_rel);
+      thisLane->currentEffectIndex.fetch_add(1, satomi::memory_order_acq_rel);
     }
 
     if (isGainMatching)
@@ -395,7 +261,7 @@ namespace Generation
       scale = merge(scale, simd_float{ 1.0f }, simd_float::greaterThan(scale, 1.0e30f));
       scale = merge(scale, simd_float{ 0.0f }, simd_float::lessThan(scale, 1.0e-30f));
 
-      thisLane->volumeScale_ = simd_float::sqrt(scale);
+      thisLane->volumeScale.store(simd_float::sqrt(scale), satomi::memory_order_relaxed);
     }
 
     // unlocking the last module's buffer
@@ -404,18 +270,18 @@ namespace Generation
     COMPLEX_ASSERT(dataBuffer->dataLock.lock.load() >= 0);
 
     // to let other threads know that the data is in its final state
-    thisLane->status_.store(EffectsLane::LaneStatus::Finished, satomi::memory_order_release);
+    thisLane->status.store(EffectsLane::LaneStatus::Finished, satomi::memory_order_release);
   }
 
-  void EffectsState::sumLanesAndWriteOutput(Framework::Buffer &out)
+  void SoundEngine::sumLanesAndDeinterleaveOutputs(Framework::Buffer &out)
   {
     using namespace Framework;
     using namespace utils;
 
     // TODO: redo when you get to multiple outputs
 
-    ScopedLock g{ outputBuffer_->dataLock, true, WaitMechanism::Spin };
-    outputBuffer_->clear();
+    ScopedLock g{ interleavedOutputBuffer->dataLock, true, WaitMechanism::Spin };
+    interleavedOutputBuffer->clear();
 
     // multipliers for scaling the multiple chains going into the same output
     ::zeroset(outputScaleMultipliers_.data(), outputScaleMultipliers_.size());
@@ -439,12 +305,12 @@ namespace Generation
       if (outputOption->id == EffectsLane::OutputOptionsNone)
         continue;
 
-      ScopedLock g1{ lane->laneDataSource_.sourceBuffer->dataLock, false, WaitMechanism::Spin };
+      ScopedLock g1{ lane->laneDataSource.sourceBuffer->dataLock, false, WaitMechanism::Spin };
 
       simd_float multiplier = simd_float::max(1.0f, outputScaleMultipliers_[index]);
-      Framework::applyToThisNoMask<MathOperations::Add>(outputBuffer_,
-        lane->laneDataSource_.sourceBuffer, kChannelsPerInOut, binCount, (u32)index * kChannelsPerInOut, 0, 0, 0,
-        lane->volumeScale_.get() / multiplier);
+      Framework::applyToThisNoMask<MathOperations::Add>(interleavedOutputBuffer,
+        lane->laneDataSource.sourceBuffer, kChannelsPerInOut, binCount, (u32)index * kChannelsPerInOut, 0, 0, 0,
+        lane->volumeScale.load(satomi::memory_order_relaxed) / multiplier);
     }
 
     auto values = utils::array<simd_float, SimdBuffer::kRelativeSize>{};
@@ -455,7 +321,7 @@ namespace Generation
       if (!usedOutputChannels_[i])
         continue;
 
-      auto data = outputBuffer_->get(i / (u32)valueDestinations.size());
+      auto data = interleavedOutputBuffer->get(i / (u32)valueDestinations.size());
 
       for (u32 k = 0; k < valueDestinations.size(); ++k)
         valueDestinations[k] = out.get((u32)(i + k)).offset(0, 2 * binCount);
@@ -483,14 +349,12 @@ namespace Generation
   }
 }
 
-template<> Generation::EffectsLane *
-createProcessor(Plugin::State *state, Framework::ProcessorMetadata *metadata, const void *copy)
+template<> Generation::BaseProcessor *
+createProcessor<Generation::EffectsLane>(Plugin::State *state, Framework::ProcessorMetadata *metadata, const void *toCopy, void *serialisedSave)
 {
   auto *arena = utils::bumpArena::createNested(state->processorStorage, COMPLEX_MB(1));
-  if (copy)
-    return anew(state->processorStorage, Generation::EffectsLane, { *(const Generation::EffectsLane *)copy, arena });
-  else
-    return anew(state->processorStorage, Generation::EffectsLane, { state, metadata, arena });
+  return anew(state->processorStorage, Generation::EffectsLane, { arena, state, metadata, 
+    (const Generation::EffectsLane *)toCopy, serialisedSave });
 }
 template<> void *
 initialiseTypeStructure<Generation::EffectsLane>(void *, Framework::PluginStructure &structure)
@@ -508,7 +372,7 @@ initialiseTypeStructure<Generation::EffectsLane>(void *, Framework::PluginStruct
     COMPLEX_STRUCTURE_PARAMETER("Input", EffectsLane::Input,
       {
         .options = COMPLEX_STRUCTURE_INDEXED_DATA().addChildren(
-          COMPLEX_STRUCTURE_INDEXED_DATA(.displayName = "Main", .id = EffectsLane::InputOptionsMain),
+          COMPLEX_STRUCTURE_INDEXED_DATA(.displayName = "Main Input", .id = EffectsLane::InputOptionsMain),
           COMPLEX_STRUCTURE_INDEXED_DATA(.displayName = "Sidechain", .id = EffectsLane::InputOptionsSidechain,
             .dynamicUpdateUuid = ParameterChangeReason::inputSidechain),
           COMPLEX_STRUCTURE_INDEXED_DATA(.displayName = "Lane", .id = EffectsLane::InputOptionsLane,
@@ -518,7 +382,7 @@ initialiseTypeStructure<Generation::EffectsLane>(void *, Framework::PluginStruct
     COMPLEX_STRUCTURE_PARAMETER("Output", EffectsLane::Output,
       {
         .options = COMPLEX_STRUCTURE_INDEXED_DATA().addChildren(
-          COMPLEX_STRUCTURE_INDEXED_DATA(.displayName = "Main", .id = EffectsLane::OutputOptionsMain),
+          COMPLEX_STRUCTURE_INDEXED_DATA(.displayName = "Main Output", .id = EffectsLane::OutputOptionsMain),
           COMPLEX_STRUCTURE_INDEXED_DATA(.displayName = "Sidechain", .id = EffectsLane::OutputOptionsSidechain,
             .dynamicUpdateUuid = ParameterChangeReason::outputSidechain),
           COMPLEX_STRUCTURE_INDEXED_DATA(.displayName = "None", .id = EffectsLane::OutputOptionsNone)),
@@ -531,24 +395,4 @@ initialiseTypeStructure<Generation::EffectsLane>(void *, Framework::PluginStruct
   effectsLane.children = (ProcessorMetadata *)initialiseTypeStructure<EffectModule>(&effectsLane, structure);
 
   return &effectsLane.computeCounts();
-}
-
-template<> Generation::EffectsState *
-createProcessor(Plugin::State *state, Framework::ProcessorMetadata *metadata, const void *)
-{
-  auto *arena = utils::bumpArena::createNested(state->processorStorage, COMPLEX_MB(1));
-  return anew(arena, Generation::EffectsState, { state, metadata, arena });
-}
-template<> void *
-initialiseTypeStructure<Generation::EffectsState>(void *, Framework::PluginStructure &structure)
-{
-  using namespace Framework;
-  using namespace Generation;
-
-  auto arena = structure.getNewArena(256);
-
-  ProcessorMetadata &effectsState = COMPLEX_STRUCTURE_PROCESSOR(EffectsState, "Effects State", Processors::EffectsState);
-  effectsState.children = (ProcessorMetadata *)initialiseTypeStructure<EffectsLane>(&effectsState, structure);
-
-  return &effectsState.computeCounts();
 }

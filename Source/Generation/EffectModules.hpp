@@ -14,12 +14,12 @@ namespace Generation
   {
   public:
     COMPLEX_ENUM_LOCAL(Parameters,
-      (ModuleEnabled, 1758553237829855100),
-      (   ModuleType, 1758553260932768000),
-      (    ModuleMix, 1758553272065877400),
-      (     LowBound, 1758553297900505900),
-      (    HighBound, 1758553309533931300),
-      (  ShiftBounds, 1758553325233040900),
+      (ModuleEnabled, 1758553237829),
+      (   ModuleType, 1758553260932),
+      (    ModuleMix, 1758553272065),
+      (     LowBound, 1758553297900),
+      (    HighBound, 1758553309533),
+      (  ShiftBounds, 1758553325233),
     )
 
     enum EffectVtableIndices { CreateVtableIndex, RunVtableIndex, VtableIndexCount };
@@ -34,16 +34,16 @@ namespace Generation
       usize parameterCount{};
     };
 
-    EffectModule(Plugin::State *state, Framework::ProcessorMetadata *metadata, utils::bumpArena *arena) noexcept;
-    EffectModule(const EffectModule &other, utils::bumpArena *arena) noexcept;
+    EffectModule(utils::bumpArena *arena, Plugin::State *state, 
+      Framework::ProcessorMetadata *metadata, const EffectModule *other, void *serialisedSave);
+
+    Interface::Component *createUI() override { return nullptr; }
 
     void processEffect(Framework::ComplexDataSource &source, u32 binCount, float sampleRate) noexcept;
 
     // Inherited via BaseProcessor
     // this method exists only to accomodate loading from save files
     void serialiseToJson(void *jsonData, utils::span<Framework::ParameterValue *> parametersToSerialise = {}) const override;
-    void deserialiseFromJson(void *jsonData) override;
-    void initialiseParameters() override;
 
     EffectData *
     changeEffect(Framework::IndexedData *effectOption);
@@ -56,5 +56,5 @@ namespace Generation
   static_assert(utils::is_trivially_destructible_v<EffectModule>);
 }
 
-extern template Generation::EffectModule *createProcessor<>(Plugin::State *, Framework::ProcessorMetadata *, const void *);
+extern template Generation::BaseProcessor *createProcessor<Generation::EffectModule>(Plugin::State *, Framework::ProcessorMetadata *, const void *, void *);
 extern template void *initialiseTypeStructure<Generation::EffectModule>(void *metadata, Framework::PluginStructure &structure);

@@ -3,11 +3,10 @@
 #include "Framework/load_save.cpp"
 #include "Framework/parameter_bridge.cpp"
 #include "Framework/parameter_types.cpp"
-#include "Framework/update_types.cpp"
 
 #include "Generation/BaseProcessor.cpp"
 #include "Generation/EffectModules.cpp"
-#include "Generation/EffectsState.cpp"
+#include "Generation/EffectsLane.cpp"
 #include "Generation/SoundEngine.cpp"
 
 #include "Interface/Components/BaseControl.cpp"
@@ -23,6 +22,7 @@
 #include "Interface/LookAndFeel/Shaders.cpp"
 #include "Interface/LookAndFeel/Skin.cpp"
 
+#include "Interface/Sections/EffectsLaneSection.cpp"
 #include "Interface/Sections/MainInterface.cpp"
 #include "Interface/Sections/Popups.cpp"
 

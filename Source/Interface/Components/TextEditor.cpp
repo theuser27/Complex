@@ -11,8 +11,35 @@
 
 namespace Interface
 {
+  static Range<i32>
+  getTextEditorTextMetrics(Component *c, bool isCalculatingVertical)
+  {
+    auto *self = (TextEditor *)c;
+
+    float lineHeight = scaleValue((float)((self->componentFlags.vertical) ?
+      self->desiredSize.y : self->desiredSize.x));
+
+    if (!isCalculatingVertical)
+    {
+      uiRelated.cache->setFont(self->font, lineHeight);
+      auto max = (i32)::ceilf(uiRelated.cache->getStringWidthFloat(self->text));
+
+      return Range<i32>{ 0, max };
+    }
+    else
+    {
+      auto height = (i32)::ceilf(lineHeight);
+
+      // labels are always a single line
+      return Range<i32>{ height, height };
+    }
+  }
+  
   TextEditor::TextEditor()
   {
+    desiredSize.x = kPrimaryTextLineHeight;
+    desiredSize.y = desiredSize.x;
+    overrideDimensions = getTextEditorTextMetrics;
   }
 
   bool
@@ -105,8 +132,6 @@ namespace Interface
 
   Label::Label()
   {
-    desiredSize.x = kPrimaryTextLineHeight;
-    desiredSize.y = desiredSize.x;
     overrideDimensions = getLabelTextMetrics;
   }
 

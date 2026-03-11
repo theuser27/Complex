@@ -50,16 +50,34 @@ namespace Interface
 
   void deleteComponent(Component *component, bool freeArena = true);
 
+  namespace CommandMessages
+  {
+    struct ProcessorInsertion
+    {
+      Point<i32> position{};
+      Generation::BaseProcessor *processor{};
+      u32 index{};
+      bool useIndex{};
+      bool insertPlaceholder{};
+    };
+
+    bool handleProcessorInsertion(Generation::BaseProcessor *parent, Component *parentComponent,
+      ProcessorInsertion *metadata, Component *substituteInsert = nullptr);
+    bool tryProcessorInsert(Generation::BaseProcessor *processorToInsert, 
+      Component *treeToInsertInto, ProcessorInsertion &data);
+  }
+
   class Component
   {
   public:
-    enum CommandMessages : u64
+    enum CommandMessage : u64
     {
       HandleCustomPosition = 1,
-      HandleComponentInsertion,
+      HandleProcessorInsertion,
+      HandleReinitialisation,
     };
 
-    enum SizingFlags : u8
+    enum SizingFlags : u16
     {
       None = 0,
 
@@ -82,8 +100,11 @@ namespace Interface
       ScrollableY = 1 << 7,
 
       // adds an extra scrollbar to the off-axis' size
-      ScrollableWithBarX = ScrollableX | GrowableX,
-      ScrollableWithBarY = ScrollableY | GrowableY,
+      ScrollbarX = 1 << 8,
+      ScrollbarY = 1 << 9,
+
+      ScrollableWithBarX = ScrollableX | ScrollbarX,
+      ScrollableWithBarY = ScrollableY | ScrollbarY,
     };
 
     // all mouse events return true/false if they have/have not consumed the event
@@ -141,6 +162,7 @@ namespace Interface
     }
     bool isObscured(const Component *ignoreClipIncluding = nullptr) const;
     void addChildComponent(Component *childToAdd, Component *insertBefore = nullptr);
+    void addChildComponent(Component *childToAdd, usize index);
     // keepFocus will let the UI system continue focus on childToRemove
     // but you MUST NOT delete the object after removal,
     // otherwise the UI system will be reading into "freed" arena memory
@@ -251,20 +273,6 @@ namespace Interface
   COMPLEX_DEFINE_ENUM_OPERATION(Component::SizingFlags, &, u16)
 
 
-  class Control;
-  class ProcessorSection : public Component
-  {
-  public:
-    static constexpr int kDefaultActivatorSize = 12;
-
-    void addControl(Control *control, bool addChild = true);
-    void removeControl(Control *control);
-    Control *getControl(uuid id) { return controls_.find(id)->second; }
-
-    Generation::BaseProcessor *processor = nullptr;
-    utils::vector_map<uuid, Control *> controls_{};
-  };
-
   struct DrawComponent final : public Component
   {
     void (*draw)(OpenGlWrapper &openGl, Component *reference, Component *self) = nullptr;
@@ -296,10 +304,10 @@ namespace Interface
       else if (vector.back() == doNotClipFlag)
         vector.back() = { component, bounds, false };
       else
-        vector.emplace_back(component, bounds, true);
+        vector.emplaceBack(component, bounds, true);
     }
 
-    ~ScopedBoundsEmplace() noexcept { if (shouldAdd_) vector_.pop_back(); }
+    ~ScopedBoundsEmplace() noexcept { if (shouldAdd_) vector_.popBack(); }
   private:
     utils::vector<ViewportChange> &vector_;
     bool shouldAdd_;

@@ -15,6 +15,8 @@
 #define COMPLEX_DEFAULT_OR(def, ...) COMPLEX_DEPAREN(__VA_OPT__(COMPLEX_IGNORE) (def)) __VA_ARGS__
 #define COMPLEX_PAREN(...) (__VA_ARGS__)
 #define COMPLEX_IDENTITY(...) __VA_ARGS__
+#define COMPLEX_CONCAT_FIRST(prefix, ...) prefix##__VA_ARGS__
+#define COMPLEX_CONCAT_LAST(suffix, ...) __VA_ARGS__##suffix
 
 #define COMPLEX_INTERNAL_REPEAT1(...) __VA_ARGS__
 #define COMPLEX_INTERNAL_REPEAT2(...) COMPLEX_INTERNAL_REPEAT1(COMPLEX_INTERNAL_REPEAT1(__VA_ARGS__))
@@ -34,9 +36,9 @@
 #define COMPLEX_INTERNAL_ITERATE_AGAIN() COMPLEX_INTERNAL_ITERATE
 
 #if defined(__GNUC__)
-#define COMPLEX_DEFER(begin, end) _Pragma("GCC diagnostic push") _Pragma("GCC diagnostic ignored \"-Wunused-value\"") _Pragma("GCC diagnostic ignored \"-Wshadow\"") for(int _i___ = ((begin), 0); !_i___; (end), (_i___ += 1)) _Pragma("GCC diagnostic pop")
+  #define COMPLEX_DEFER(begin, end) _Pragma("GCC diagnostic push") _Pragma("GCC diagnostic ignored \"-Wunused-value\"") _Pragma("GCC diagnostic ignored \"-Wshadow\"") for(int _i___ = ((begin), 0); !_i___; (end), (_i___ += 1)) _Pragma("GCC diagnostic pop")
 #else
-#define COMPLEX_DEFER(begin, end) _Pragma("warning(suppress : 4456)") for(int _i___ = ((begin), 0); !_i___; (end), (_i___ += 1))
+  #define COMPLEX_DEFER(begin, end) _Pragma("warning(suppress : 4456)") for(int _i___ = ((begin), 0); !_i___; (end), (_i___ += 1))
 #endif
 
 #define COMPLEX_INTERNAL_GET_1(x, ...) x

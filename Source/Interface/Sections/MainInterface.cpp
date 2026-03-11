@@ -5,7 +5,7 @@
 
 #include "Plugin/Complex.hpp"
 #include "Generation/SoundEngine.hpp"
-#include "Generation/EffectsState.hpp"
+#include "Generation/EffectsLane.hpp"
 #include "Plugin/Renderer.hpp"
 
 
@@ -17,9 +17,9 @@ namespace Interface
     {
       auto *self = (InvisibleHoverComponent *)c;
       if (isCalculatingVertical)
-        return Range<i32>{ self->bounds.h, self->bounds.h };
+        return Range<i32>{ self->lastBounds.h, self->lastBounds.h };
       else
-        return Range<i32>{ self->bounds.w, self->bounds.w };
+        return Range<i32>{ self->lastBounds.w, self->lastBounds.w };
     };
   }
 
@@ -34,13 +34,17 @@ namespace Interface
     return true;
   }
 
-  void EffectsStateSection::reinitialise()
+  bool 
+  SoundEngineSection::EffectsSection::LaneSelector::render(OpenGlWrapper &openGl)
+  {
+    //fillRect(openGl, getLocalBounds().toFloat());
+
+    return true;
+  }
+
+  void SoundEngineSection::EffectsSection::reinitialise()
   {
     componentFlags.vertical = true;
-
-    if (!arena)
-      arena = utils::bumpArena::createNested(parent->arena, COMPLEX_MB(1));
-    utils::bumpArena::clear(arena);
 
     laneSelector.sizingFlags = Component::GrowableX;
     laneSelector.placement = Placement::top;
@@ -54,8 +58,10 @@ namespace Interface
   }
 
   bool 
-  EffectsStateSection::render(OpenGlWrapper &openGl)
+  SoundEngineSection::EffectsSection::render(OpenGlWrapper &openGl)
   {
+    //fillRect(openGl, getLocalBounds().toFloat(), Colours::black);
+    
     if (laneSelector.firstVisibleLaneIndex != laneSelector.lastFirstVisibleLaneIndex)
     {
       // TODO:
@@ -64,66 +70,107 @@ namespace Interface
     return true;
   }
 
-  struct ComponentInsertionData
+  bool
+  CommandMessages::handleProcessorInsertion(Generation::BaseProcessor *parentProcessor, 
+    Component *parentComponent, ProcessorInsertion *metadata, Component *substituteInsert)
   {
-    Component *component{};
-    utils::typeInfo typeInfo{};
-  };
+    auto *processor = metadata->processor;
 
-  bool 
-  EffectsStateSection::handleCommandMessage(u64 commandId, utils::whatever<64> extraData)
-  {
-    switch (commandId)
+    // checking if child can be accepted by this processor
     {
-    case Component::HandleComponentInsertion:
+      auto *acceptedChildren = parentProcessor->metadata->children;
+      for (; acceptedChildren && processor->metadata->id != acceptedChildren->id;
+        acceptedChildren = acceptedChildren->next) { }
+      if (!acceptedChildren)
+        return false;
+    }
+
+    Generation::BaseProcessor *child;
+    metadata->index = utils::min(metadata->index, parentProcessor->childrenCount);
+    if (!metadata->useIndex)
     {
-      ComponentInsertionData metadata{};
-      if (!extraData.tryExtract(metadata))
-        break;
+      auto centrePoint = parentComponent->getRelativePoint(processor->component,
+        metadata->position) - parentComponent->scrollOffset;
 
-      if (metadata.typeInfo != typeId(ProcessorSection))
-        break;
+      auto Point<i32>:: *primary = (parentComponent->componentFlags.vertical) ?
+        &Point<i32>::y : &Point<i32>::x;
 
-      auto *processorSection = (ProcessorSection *)metadata.component;
-
-      if (processorSection->processor->metadata->id != Generation::Processors::EffectsLane)
-        break;
-
-      auto centrePoint = getRelativeArea(processorSection).getCentre() - scrollOffset;
-      auto *child = children;
-      for (; child; child = child->next)
-        if (centrePoint.x < child->bounds.getCentre().x)
+      metadata->index = 0;
+      child = parentProcessor->children;
+      for (; child; (++metadata->index), child = Generation::BaseProcessor::getChild(child, 1))
+        if (child->component && centrePoint.*primary < parentComponent->getRelativePoint(
+          child->component, child->component->bounds.getPosition()).*primary)
           break;
-
-      invisibleHover.source = processorSection;
-      removeChildComponent(&invisibleHover);
-      addChildComponent(&invisibleHover, child);
-
-      return true;
     }
-    default:
-      break;
+    else
+      child = Generation::BaseProcessor::getChild(parentProcessor->children, metadata->index);
+    
+    {
+      auto g = parentProcessor->state->plugin->acquireProcessingLock();
+      if (processor->parent)
+        processor->parent->removeChildProcessor(*processor);
+
+      (void)parentProcessor->addChildProcessor(*processor, metadata->index);
     }
 
-    return false;
+    if (processor->component->parent)
+      processor->component->parent->removeChildComponent(processor->component);
+    if (substituteInsert)
+      parentComponent->removeChildComponent(substituteInsert);
+    auto *newComponent = (metadata->insertPlaceholder && substituteInsert) ? 
+      substituteInsert : processor->component;
+
+    COMPLEX_ASSERT(!child || child->component);
+    parentComponent->addChildComponent(newComponent, (child) ? child->component : nullptr);
+
+    return true;
   }
 
-  void TopBar::reinitialise()
+  bool
+  CommandMessages::tryProcessorInsert(Generation::BaseProcessor *processorToInsert, 
+    Component *treeToInsertInto, ProcessorInsertion &data)
+  {
+    COMPLEX_ASSERT(processorToInsert->component);
+
+    // BFS recursion
+    auto recurseInsertion = [&data](const auto &self, Component *insertComponent) -> bool
+    {
+      for (auto *child = insertComponent->children; child; child = child->next)
+      {
+        auto copy = data;
+        if (child->handleCommandMessage(Component::HandleProcessorInsertion, &copy))
+        {
+          data = copy;
+          return true;
+        }
+      }
+
+      for (auto *child = insertComponent->children; child; child = child->next)
+        if (self(self, child))
+          return true;
+
+      return false;
+    };
+
+    if (!treeToInsertInto->handleCommandMessage(Component::HandleProcessorInsertion, &data))
+      if (!recurseInsertion(recurseInsertion, treeToInsertInto))
+        return false;
+
+    return true;
+  }
+
+  void SoundEngineSection::TopBar::reinitialise()
   {
     removeAllChildComponents();
-
-    auto &soundEngine = getPlugin(uiRelated.renderer).state_->getSoundEngine();
-
-    if (!arena)
-      arena = utils::bumpArena::createNested(parent->arena, COMPLEX_KB(16));
-    utils::bumpArena::clear(arena);
+    gainGroup.removeAllChildComponents();
+    mixGroup.removeAllChildComponents();
 
     gainLabel.margin = { 0, 0, 4, 0 };
     gainLabel.control = &gain;
     gain.arena = arena;
     gain.maxDecimalCharacters = 2;
     gain.controlFlags.shouldUsePlusMinusPrefix = true;
-    gain.changeLinkedParameter(*soundEngine.getParameter(Generation::SoundEngine::OutGain));
+    gain.changeLinkedParameter(*mainSection->soundEngine->getParameter(Generation::SoundEngine::OutGain));
     gainGroup.placement = Placement::right;
     gainGroup.margin = { 12, 0, 0, 0 };
     gainGroup.addChildComponent(&gainLabel);
@@ -134,7 +181,7 @@ namespace Interface
     mixLabel.control = &mix;
     mix.arena = arena;
     mix.maxDecimalCharacters = 2;
-    mix.changeLinkedParameter(*soundEngine.getParameter(Generation::SoundEngine::Mix));
+    mix.changeLinkedParameter(*mainSection->soundEngine->getParameter(Generation::SoundEngine::Mix));
     mixGroup.placement = Placement::right;
     mixGroup.margin = { 12, 0, 0, 0 };
     mixGroup.addChildComponent(&mixLabel);
@@ -142,71 +189,149 @@ namespace Interface
     addChildComponent(&mixGroup);
   }
 
-  void BottomBar::reinitialise()
+  void SoundEngineSection::BottomBar::reinitialise()
   {
     removeAllChildComponents();
+    blockSizeGroup.removeAllChildComponents();
+    overlapGroup.removeAllChildComponents();
+    windowGroup.removeAllChildComponents();
 
-    auto &soundEngine = getPlugin(uiRelated.renderer).state_->getSoundEngine();
-
-    if (!arena)
-      arena = utils::bumpArena::createNested(parent->arena, COMPLEX_KB(16));
-    utils::bumpArena::clear(arena);
-
-    blockSizeLabel.margin = { 0, 0, 4, 0 };
-    blockSizeLabel.control = &blockSize;
-    blockSize.arena = arena;
-    blockSize.drawBackgroundArrow = false;
-    blockSize.maxDecimalCharacters = 0;
-    blockSize.changeLinkedParameter(*soundEngine.getParameter(Generation::SoundEngine::BlockSize));
+    addChildComponent(&blockSizeGroup);
     blockSizeGroup.placement = Placement::justifyX;
     blockSizeGroup.componentFlags.animateMovement = true;
     blockSizeGroup.addChildComponent(&blockSizeLabel);
+    blockSizeLabel.margin = { 0, 0, Control::kLabelMargin, 0 };
+    blockSizeLabel.control = &blockSize;
     blockSizeGroup.addChildComponent(&blockSize);
-    addChildComponent(&blockSizeGroup);
+    blockSize.arena = arena;
+    blockSize.drawBackgroundArrow = false;
+    blockSize.maxDecimalCharacters = 0;
+    blockSize.changeLinkedParameter(*mainSection->soundEngine->getParameter(Generation::SoundEngine::BlockSize));
 
-    overlapLabel.margin = { 0, 0, 4, 0 };
+    addChildComponent(&overlapGroup);
+    overlapGroup.addChildComponent(&overlapLabel);
+    overlapLabel.margin = { 0, 0, Control::kLabelMargin, 0 };
     overlapLabel.control = &overlap;
+    overlapGroup.addChildComponent(&overlap);
     overlap.arena = arena;
     overlap.drawBackgroundArrow = false;
     overlap.maxDecimalCharacters = 2;
-    overlap.changeLinkedParameter(*soundEngine.getParameter(Generation::SoundEngine::Overlap));
+    overlap.changeLinkedParameter(*mainSection->soundEngine->getParameter(Generation::SoundEngine::Overlap));
     overlapGroup.placement = Placement::justifyX;
     overlapGroup.componentFlags.animateMovement = true;
-    overlapGroup.addChildComponent(&overlapLabel);
-    overlapGroup.addChildComponent(&overlap);
-    addChildComponent(&overlapGroup);
 
-    windowLabel.margin = { 0, 0, 4, 0 };
+    addChildComponent(&windowGroup);
+    windowGroup.placement = Placement::justifyX;
+    //windowGroup.componentFlags.animateMovement = true;
+    windowGroup.addChildComponent(&windowLabel);
+    windowLabel.margin = { 0, 0, Control::kLabelMargin, 0 };
     windowLabel.control = &window;
+    windowGroup.addChildComponent(&windowAlpha);
     windowAlpha.arena = arena;
-    windowAlpha.margin = { 0, 0, 4, 0 };
+    windowAlpha.margin = { 0, 0, Control::kLabelMargin, 0 };
     windowAlpha.drawBackgroundArrow = false;
     windowAlpha.maxDecimalCharacters = 1;
-    windowAlpha.changeLinkedParameter(*soundEngine.getParameter(Generation::SoundEngine::WindowAlpha));
-    window.arena = arena;
-    window.changeLinkedParameter(*soundEngine.getParameter(Generation::SoundEngine::WindowType));
-    windowGroup.placement = Placement::justifyX;
-    overlapGroup.componentFlags.animateMovement = true;
-    windowGroup.addChildComponent(&windowLabel);
-    windowGroup.addChildComponent(&windowAlpha);
+    windowAlpha.changeLinkedParameter(*mainSection->soundEngine->getParameter(Generation::SoundEngine::WindowAlpha));
     windowGroup.addChildComponent(&window);
-    addChildComponent(&windowGroup);
-
+    window.arena = arena;
     window.valueChangedCallback = [](Control *c, double newValue, double)
     {
       auto *bottomBar = (BottomBar *)c->parent->parent;
       bottomBar->windowAlpha.componentFlags.isVisible = Framework::getIndexedData(
         Framework::scaleValue(newValue, c->details), c->details).first->userFlags;
     };
+    window.changeLinkedParameter(*mainSection->soundEngine->getParameter(Generation::SoundEngine::WindowType));
+
     window.valueChangedCallback(&window, window.getValue(), 0.0f);
   }
 
   bool 
-  BottomBar::render(OpenGlWrapper &openGl)
+  SoundEngineSection::BottomBar::render(OpenGlWrapper &openGl)
   {
     fillRect(openGl, bounds.withZeroOrigin().toFloat(), getColour(Skin::kBody, this));
 
+    //reinitialise();
+
     return true;
+  }
+
+  void SoundEngineSection::reinitialise()
+  {
+    COMPLEX_ASSERT(soundEngine);
+    
+    removeAllChildComponents();
+    componentFlags.vertical = true;
+    sizingFlags = (Component::SizingFlags)(Component::GrowableX | Component::GrowableY);
+
+    if (!arena)
+      arena = utils::bumpArena::createNested(utils::bumpArena::fromAllocation(this), COMPLEX_KB(16));
+
+    topBar.placement = Placement::top;
+    topBar.sizingFlags |= Component::GrowableX;
+    topBar.desiredSize = { 0, kHeaderHeight, utils::max_limit<i32>, kHeaderHeight };
+    topBar.padding = { ResizeCorner::kWidth, 0, ResizeCorner::kWidth, 0 };
+    topBar.arena = arena;
+    topBar.mainSection = this;
+    addChildComponent(&topBar);
+    topBar.reinitialise();
+
+    spectrogram.sizingFlags = Component::GrowableX;
+    spectrogram.placement = Placement::top;
+    spectrogram.bufferView = soundEngine->getInterleavedOutputBuffer();
+    spectrogram.desiredSize = { 0, kMainVisualiserHeight, 0, kMainVisualiserHeight };
+    spectrogram.margin = { kHWindowEdgeMargin, 0, kHWindowEdgeMargin, kVGlobalMargin };
+    addChildComponent(&spectrogram);
+
+    effectsSection.sizingFlags = (Component::SizingFlags)(Component::GrowableX | Component::GrowableY);
+    effectsSection.placement = Placement::top;
+    effectsSection.desiredSize = { kEffectsStateMinWidth, 0, kEffectsStateMinWidth, 0 };
+    effectsSection.margin = { kHWindowEdgeMargin, 0, kHWindowEdgeMargin, 0 };
+    effectsSection.arena = arena;
+    addChildComponent(&effectsSection);
+    effectsSection.reinitialise();
+
+    bottomBar.placement = Placement::bottom;
+    bottomBar.sizingFlags |= Component::GrowableX;
+    bottomBar.desiredSize = { 0, kFooterHeight, utils::max_limit<i32>, kFooterHeight };
+    bottomBar.margin = { 0, kLaneToBottomSettingsMargin, 0, 0 };
+    bottomBar.padding = { ResizeCorner::kWidth, 0, ResizeCorner::kWidth, 0 };
+    bottomBar.mainSection = this;
+    bottomBar.arena = arena;
+    addChildComponent(&bottomBar);
+    bottomBar.reinitialise();
+  }
+
+  bool 
+  SoundEngineSection::render(OpenGlWrapper &openGl)
+  {
+    fillRect(openGl, bounds.withZeroOrigin().toFloat(), 
+      getColour(Skin::kBackground, this));
+
+    return true;
+  }
+
+  bool SoundEngineSection::handleCommandMessage(u64 commandId, utils::whatever<64> extraData)
+  {
+    switch (commandId)
+    {
+    case Component::HandleProcessorInsertion:
+    {
+      CommandMessages::ProcessorInsertion **metadata{};
+      if (!(metadata = extraData.tryGet<CommandMessages::ProcessorInsertion *>()))
+        return false;
+
+      if (!CommandMessages::handleProcessorInsertion(soundEngine, 
+        &effectsSection.laneHolder, *metadata, &invisibleHover))
+        return false;
+
+      invisibleHover.source = (*metadata)->processor->component;
+      return true;
+    }
+    default:
+      break;
+    }
+
+    return false;
   }
 
   ResizeCorner::ResizeCorner()
@@ -251,6 +376,8 @@ namespace Interface
     return true;
   }
 
+  extern "C" void cplug_checkSize(void *userGUI, u32 *width, u32 *height);
+
   bool 
   ResizeCorner::mouseDrag(const MouseEvent &event)
   {
@@ -263,38 +390,28 @@ namespace Interface
   }
 
 
+  PopupSelector *getPopupSelector() { return &getGui(uiRelated.renderer)->popupSelector; }
+  utils::bumpArena *getUIArena() { return getGui(uiRelated.renderer)->arena; }
+  PopupDisplay *getPopupDisplay(bool primary = true)
+  {
+    auto *gui = getGui(uiRelated.renderer);
+    return (primary) ? &gui->popupDisplay1 : &gui->popupDisplay2;
+  }
+
   MainInterface::MainInterface()
   {
-    componentFlags.vertical = true;
     arena = utils::bumpArena::create(COMPLEX_MB(256), COMPLEX_MB(4));
-    
-    reinitialise();
-
-    popupDisplay1.initialise();
-    popupDisplay2.initialise();
-    popupSelector.initialise();
   }
 
   MainInterface::~MainInterface()
   {
+    removeChildComponent(&popupSelector);
+    removeChildComponent(&popupDisplay1);
+    removeChildComponent(&popupDisplay2);
+
     deleteAllChildComponents();
     utils::bumpArena::destroy(arena);
   }
-
-  bool 
-  MainInterface::render(OpenGlWrapper &openGl)
-  {
-    fillRect(openGl, bounds.withZeroOrigin().toFloat(), 
-      getColour(Skin::kBackground, this));
-
-    return true;
-  }
-
-  //void MainInterface::controlValueChanged(Control *control)
-  //{
-  //  if (control == windowTypeSelector_.get())
-  //    windowAlphaNumberBox_->setVisible(windowTypeSelector_->getValue() >= kDynamicWindowsStart);
-  //}
 
   static constexpr int kHeaderHorizontalEdgePadding = 10;
   static constexpr int kHeaderNumberBoxMargin = 12;
@@ -302,75 +419,71 @@ namespace Interface
   static constexpr int kFooterHPadding = 16;
 
   static constexpr int kLabelToControlMargin = 4;
-  static constexpr float kDynamicWindowsStart = (float)utils::find_index(Framework::Window::kTypesValues, 
-    Framework::Window::Exponential) / (float)Framework::Window::kTypesValues.size();
 
 
-  void MainInterface::reinitialise()
+  void MainInterface::restartUI()
   {
-    removeChildComponent(&resizeCorner);
-    removeChildComponent(&topBar);
-    removeChildComponent(&spectrogram);
-    removeChildComponent(&bottomBar);
+    //removeChildComponent(&resizeCorner);
     removeChildComponent(&popupSelector);
     removeChildComponent(&popupDisplay1);
     removeChildComponent(&popupDisplay2);
+
     deleteAllChildComponents();
 
+    auto state = getPlugin(uiRelated.renderer).state_;
+
+    auto recurseProcessors = [](const auto &self, 
+      Generation::BaseProcessor *processor, Component *parentComponent) -> void
+    {
+      // at this point processor->component will have a dangling reference 
+      // to the old component before the reset (if this is not the 1st time)
+      processor->component = processor->createUI();
+      if (!processor->component)
+        return;
+
+      CommandMessages::ProcessorInsertion data{ .processor = processor, 
+        .index = u32(-1), .useIndex = true };
+
+      // if it fails to insert, just add it to the immediate parent
+      if (!CommandMessages::tryProcessorInsert(processor, parentComponent, data))
+        parentComponent->addChildComponent(processor->component);
+
+      auto *child = processor->children;
+      for (usize i = 0; i < processor->childrenCount; (++i), (child = child->next))
+        self(self, child, processor->component);
+    };
+
+    recurseProcessors(recurseProcessors, state->soundEngine, this);
+
     //addChildComponent(&resizeCorner);
-
-    //using namespace Framework;
-
-    //controls_ = {};
-    //removeAllChildren();
-    //
-    auto &soundEngine = getPlugin(uiRelated.renderer).state_->getSoundEngine();
-
-    topBar.placement = Placement::top;
-    topBar.sizingFlags |= Component::GrowableX;
-    topBar.desiredSize = { 0, kHeaderHeight, utils::max_limit<i32>, kHeaderHeight };
-    topBar.padding = { ResizeCorner::kWidth, 0, ResizeCorner::kWidth, 0 };
-    addChildComponent(&topBar);
-    topBar.reinitialise();
-
-
-    spectrogram.sizingFlags = Component::GrowableX;
-    spectrogram.placement = Placement::top;
-    spectrogram.bufferView_ = soundEngine.getEffectsState().getOutputBuffer();
-    spectrogram.desiredSize = { 0, kMainVisualiserHeight, 0, kMainVisualiserHeight };
-    spectrogram.margin = { kHWindowEdgeMargin, 0, kHWindowEdgeMargin, kVGlobalMargin };
-    addChildComponent(&spectrogram);
-
-
-    effectsStateSection.sizingFlags = GrowableY;
-    effectsStateSection.placement = Placement::top;
-    effectsStateSection.desiredSize = { kEffectsStateMinWidth, 0, kEffectsStateMinWidth, 0 };
-    effectsStateSection.margin = { kHWindowEdgeMargin, 0, kHWindowEdgeMargin, 0 };
-    effectsStateSection.processor = &soundEngine.getEffectsState();
-    addChildComponent(&effectsStateSection);
-    effectsStateSection.reinitialise();
-
-
-    bottomBar.placement = Placement::bottom;
-    bottomBar.sizingFlags |= Component::GrowableX;
-    bottomBar.desiredSize = { 0, kFooterHeight, utils::max_limit<i32>, kFooterHeight };
-    bottomBar.margin = { 0, kLaneToBottomSettingsMargin, 0, 0 };
-    bottomBar.padding = { ResizeCorner::kWidth, 0, ResizeCorner::kWidth, 0 };
-    addChildComponent(&bottomBar);
-    bottomBar.reinitialise();
-
 
     popupSelector.componentFlags.isVisible = false;
     popupSelector.componentFlags.alwaysOnTop = true;
     popupSelector.componentFlags.wantsFocus = true;
     addChildComponent(&popupSelector);
+    popupSelector.initialise();
 
     popupDisplay1.componentFlags.isVisible = false;
     popupDisplay1.componentFlags.alwaysOnTop = true;
     addChildComponent(&popupDisplay1);
+    popupDisplay1.initialise();
 
     popupDisplay2.componentFlags.isVisible = false;
     popupDisplay2.componentFlags.alwaysOnTop = true;
     addChildComponent(&popupDisplay2);
+    popupDisplay2.initialise();
+  }
+}
+
+namespace Generation
+{
+  Interface::Component *
+  SoundEngine::createUI()
+  {
+    auto guiArena = Interface::getGui(Interface::uiRelated.renderer)->arena;
+    auto *soundEngineSection = anew(guiArena, Interface::SoundEngineSection, {});
+    soundEngineSection->soundEngine = this;
+    soundEngineSection->reinitialise();
+    return soundEngineSection;
   }
 }

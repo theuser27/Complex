@@ -462,23 +462,37 @@ namespace Interface
     utils::pair<DrawingFn *, Rectangle<i32>>
     powerButtonIcon()
     {
-      return {};
-      /*static const auto shape = []()
+      static constexpr i32 kWidth = 12;
+      static constexpr i32 kHeight = 12;
+      return 
       {
-        static constexpr float kAngle = 0.8f * k2Pi;
-        static constexpr float kAngleStart = kPi - kAngle * 0.5f;
-        juce::Path path;
+        [](Graphics &g, utils::span<Colour> colours, Rectangle<float> bounds, float strokeWidth)
+        {
+          static constexpr float kAngleStart = -0.25f * kPi;
+          static constexpr float kAngleEnd = -0.75f * kPi;
 
-        path.startNewSubPath(5.5f, 0.0f);
-        path.lineTo(5.5f, 5.0f);
-        path.closeSubPath();
+          float propotionalX = bounds.w / kWidth;
+          float propotionalY = bounds.h / kHeight;
 
-        path.addArc(0.0f, 2.0f, 11.0f, 11.0f, kAngleStart, kAngle + kAngleStart, true);
+          //fillRect(g, bounds);
 
-        Shape result;
-        result.paths.emplace_back(COMPLEX_MOVE(path), Shape::Stroke, juce::Colour{});
-        return result;
-      }();*/
+          nvgStrokeColor(g, colours[0]);
+          nvgStrokeWidth(g, strokeWidth);
+
+          nvgBeginPath(g);
+          nvgMoveTo(g, bounds.x + 5.5f * propotionalX, 0.0f);
+          nvgLineTo(g, bounds.x + 5.5f * propotionalX, bounds.y + 5.0f * propotionalY);
+
+          nvgStroke(g);
+
+          nvgBeginPath(g);
+          nvgArc(g, bounds.x + 5.5f * propotionalX, bounds.y + 7.5f * propotionalY, 
+            5.5f * utils::min(propotionalX, propotionalY), kAngleStart, kAngleEnd, NVG_CW);
+
+          nvgStroke(g);
+        },
+        Rectangle{ kWidth, kHeight }
+      };
     }
   }
 }

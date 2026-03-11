@@ -25,7 +25,7 @@ extern "C"
   #define _mm_undefined_si128 _mm_setzero_si128
 #endif
 
-namespace simd_values
+namespace utils
 {
   inline constexpr u32 kFullMask = u32(-1);
   inline constexpr u32 kNoChangeMask = u32(-1);
@@ -1061,5 +1061,7 @@ namespace simd_values
   inline constexpr simd_mask kPhaseMask = kImaginaryMask;
 }
 
-using namespace simd_values;
+using utils::simd_float;
+using utils::simd_int;
+using utils::simd_mask;
 

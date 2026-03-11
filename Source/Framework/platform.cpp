@@ -94,9 +94,9 @@ static void printVariadic(const char *format, va_list args)
   va_end(argsCopy);
 
   ::stbsp_vsnprintf(buffer, (int)size, format, args);
-  PRINT_SIMPLE("\"");
+  //PRINT_SIMPLE("\"");
   PRINT_SIMPLE(buffer);
-  PRINT_SIMPLE("\"\n\n");
+  //PRINT_SIMPLE("\"\n\n");
 
   ::utils::deallocate(buffer);
 }
@@ -345,6 +345,15 @@ namespace utils
   #else
     [[maybe_unused]] auto result = ::munmap(memory, size);
     COMPLEX_ASSERT(result == 0);
+  #endif
+  }
+
+  void shrinkWorkingSet()
+  {
+  #if COMPLEX_WINDOWS
+    SetProcessWorkingSetSize(GetCurrentProcess(), (SIZE_T)-1, (SIZE_T)-1);
+  #else
+
   #endif
   }
 
@@ -1553,9 +1562,32 @@ namespace utils
   usize 
   bumpArena::getUsedSize(bumpArena *arena)
   {
-    utils::ScopedLock g{ arena->lock, utils::WaitMechanism::Spin };
+    if (arena->threadSafe)
+      utils::ScopedLock g{ arena->lock, utils::WaitMechanism::Spin };
     // TODO:
     return usize();
+  }
+
+  static void insertNewFreeNode(bumpArena *arena, byte *newFreeNodeAdress, usize newFreeNodeSize)
+  {
+    bumpArena::node *currentNode{}, *previousNode{};
+    u32 nodeShift = arena->freeNodeStart;
+    u32 shiftToCurrent = (u32)(newFreeNodeAdress - (byte *)arena);
+
+    while (nodeShift)
+    {
+      if (shiftToCurrent < nodeShift)
+        break;
+
+      currentNode = utils::launder((bumpArena::node *)((byte *)arena + nodeShift));
+      nodeShift = currentNode->next;
+      previousNode = currentNode;
+    }
+
+    ((previousNode) ? previousNode->next : arena->freeNodeStart) = shiftToCurrent;
+
+    COMPLEX_ASSERT(nodeShift != (u32)(newFreeNodeAdress - (byte *)arena));
+    (void)new(newFreeNodeAdress) bumpArena::node{ .size = (u32)newFreeNodeSize, .next = nodeShift };
   }
 
   byte *
@@ -1563,9 +1595,9 @@ namespace utils
   {
     COMPLEX_HARD_ASSERT(arena);
     COMPLEX_HARD_ASSERT(utils::isPowerOfTwo(alignment));
-
-    size = utils::roundUpToMultiple(size, sizeof(node));
-    alignment = utils::max(alignment, alignof(node));
+ 
+    size = utils::roundUpToMultiple(size, sizeof(bumpArena::node));
+    alignment = utils::max(alignment, alignof(bumpArena::node));
 
     COMPLEX_HARD_ASSERT(utils::roundUpToMultiple(sizeof(bumpArena) + size, alignment) <= usize(u32(-1)) + 1, 
       "Allocations larger than 4GB cannot fit inside this arena");
@@ -1573,28 +1605,30 @@ namespace utils
     utils::ScopedLock g{};
     if (arena->threadSafe)
       g = ScopedLock{ arena->lock, utils::WaitMechanism::Spin };
-
+    
     byte *memory{};
-    node *currentNode{}, *previousNode{};
+    bumpArena::node *currentNode{}, *previousNode{};
     u32 nodeShift = arena->freeNodeStart;
 
+    // try to find a free node to fit the allocation
     while (nodeShift)
     {
       previousNode = currentNode;
-      currentNode = utils::launder((node *)((byte *)arena + nodeShift));
+      currentNode = utils::launder((bumpArena::node *)((byte *)arena + nodeShift));
 
       // collapsing nearby free nodes
-      for (auto *nextNode = utils::launder((node *)((byte *)arena + currentNode->next)); currentNode->next;
-        nextNode = utils::launder((node *)((byte *)arena + currentNode->next)))
+      for (; currentNode->next;)
       {
-        if ((byte *)currentNode + currentNode->size + sizeof(node) < (byte *)nextNode)
+        auto *nextNode = utils::launder((bumpArena::node *)((byte *)arena + currentNode->next));
+        if ((byte *)currentNode + currentNode->size < (byte *)nextNode)
           break;
-        currentNode->size = (u32)(((byte *)nextNode + nextNode->next) - (byte *)currentNode);
+        // free nodes form a contiguous block of memory, combine them
+        currentNode->size += nextNode->size;
         currentNode->next = nextNode->next;
       }
 
       // align for object placement
-      byte *test = (byte *)utils::roundUpToMultiple((usize)(currentNode) + sizeof(node), alignment);
+      byte *test = (byte *)utils::roundUpToMultiple((usize)(currentNode) + sizeof(bumpArena::node), alignment);
       if (test + size <= (byte *)currentNode + currentNode->size)
       {
         memory = test;
@@ -1612,7 +1646,7 @@ namespace utils
       // incrementing to get actual sizes
       usize committedSize = (usize)arena->committedSize + 1;
       usize reservedSize = (usize)arena->reservedSize + 1;
-      memory = (byte *)utils::roundUpToMultiple((usize)arena + committedSize + sizeof(node), alignment);
+      memory = (byte *)utils::roundUpToMultiple((usize)arena + committedSize + sizeof(bumpArena::node), alignment);
 
       // have we reached the end of our reserved space?
       if (committedSize != reservedSize)
@@ -1624,7 +1658,7 @@ namespace utils
         if (isLastFreeNodeAtEnd)
         {
           availableSize += currentNode->size;
-          memory = (byte *)utils::roundUpToMultiple((usize)currentNode + sizeof(node), alignment);
+          memory = (byte *)utils::roundUpToMultiple((usize)currentNode + sizeof(bumpArena::node), alignment);
         }
 
         usize commitSize = utils::min(reservedSize - committedSize, 
@@ -1638,12 +1672,8 @@ namespace utils
         else
         {
           previousNode = currentNode;
-          currentNode = new((byte *)arena + committedSize) node{ .size = (u32)commitSize };
-
-          if (previousNode)
-            previousNode->next = (u32)committedSize;
-          else
-            arena->freeNodeStart = (u32)committedSize;
+          currentNode = new((byte *)arena + committedSize) bumpArena::node{ .size = (u32)commitSize };
+          ((previousNode) ? previousNode->next : arena->freeNodeStart) = (u32)committedSize;
         }
       }
 
@@ -1665,50 +1695,100 @@ namespace utils
           //  break;
 
           case AllocatorType::BumpArena:
-            arena->nextArena = createNested(bumpArena::fromAllocation(arena), nextCommittedSize);
+            arena->nextArena = bumpArena::createNested(bumpArena::fromAllocation(arena), nextCommittedSize);
             break;
 
           case AllocatorType::General:
-            arena->nextArena = create(nextReservedSize, nextCommittedSize);
+            arena->nextArena = bumpArena::create(nextReservedSize, nextCommittedSize);
             break;
           }
         }
       
         auto *nextArena = arena->nextArena;
         g.~ScopedLock();
-        return insert(nextArena, size, alignment, clean);
+        return bumpArena::insert(nextArena, size, alignment, clean);
       }
-    }
-
-    // if we can insert a new free node at the end of the range
-    if (memory + size + sizeof(node) < (byte *)currentNode + currentNode->size)
-    {
-      if ((byte *)currentNode + 2 * sizeof(node) < memory)
-      {
-        currentNode->size = (u32)(memory - (byte *)currentNode - sizeof(node));
-        previousNode = currentNode;
-      }
-
-      // shrink node and re-add it in the free list
-      auto newSize = ((byte *)currentNode + currentNode->size) - (memory + size);
-      auto newFreeNodeOffset = (u32)((memory + size) - (byte *)arena);
-
-      // yes you can do this apparently
-      ((previousNode) ? previousNode->next : arena->freeNodeStart) = newFreeNodeOffset;
-
-      (void)new(memory + size) node{ .size = (u32)newSize, .next = currentNode->next };
-    }
-    else
-    {
-      if ((byte *)currentNode + sizeof(node) < memory)
-        currentNode->size = (u32)(memory - (byte *)currentNode - sizeof(node));
-      else
-        ((previousNode) ? previousNode->next : arena->freeNodeStart) = currentNode->next;
     }
 
     byte *nodeAddress = memory - sizeof(bumpArena::node);
-    (void)new(nodeAddress) bumpArena::node{ .size = (u32)size, .offsetToArena = (u32)(nodeAddress - (byte *)arena) };
+
+    // if we can insert a new free node at the end of the range
+    if (memory + size + sizeof(bumpArena::node) < (byte *)currentNode + currentNode->size)
+    {
+      // add the free node at the end
+      auto newSize = ((byte *)currentNode + currentNode->size) - (memory + size);
+      auto newFreeNodeOffset = (u32)((memory + size) - (byte *)arena);
+
+      COMPLEX_ASSERT(currentNode->next != (u32)(memory + size - (byte *)arena));
+      (void)new(memory + size) bumpArena::node{ .size = (u32)newSize, .next = currentNode->next };
+
+      // does the allocation have such high alignment that it leaves enough space for a free node?
+      if ((byte *)currentNode + sizeof(bumpArena::node) <= nodeAddress)
+      {
+        currentNode->size = (u32)(nodeAddress - (byte *)currentNode);
+        previousNode = currentNode;
+      }
+
+      ((previousNode) ? previousNode->next : arena->freeNodeStart) = newFreeNodeOffset;
+    }
+    else
+    {
+      // does the allocation have such high alignment that it leaves enough space for a free node?
+      if ((byte *)currentNode + sizeof(bumpArena::node) <= nodeAddress)
+        currentNode->size = (u32)(nodeAddress - (byte *)currentNode);
+      else
+      {
+        // the current node will be used fully, link the previous node with the next node
+        ((previousNode) ? previousNode->next : arena->freeNodeStart) = currentNode->next;
+      }
+    }
+
+    (void)new(nodeAddress) bumpArena::node{ .size = (u32)(size + sizeof(bumpArena::node)),
+      .offsetToArena = (u32)(nodeAddress - (byte *)arena) };
+
+    if (clean)
+      ::zeroset(memory, size);
+
+  #if COMPLEX_DEBUG
+    if (memoryLogger.contains(arena))
+      logBlocks(arena);
+  #endif
+
     return memory;
+  }
+
+  byte *
+  bumpArena::resize(const void *data, usize newSize, bool cleanNewSpace)
+  {
+    auto *node = utils::launder((bumpArena::node *)((byte *)data - sizeof(bumpArena::node)));
+    auto *arena = utils::launder((bumpArena *)((byte *)node - node->offsetToArena));
+
+    newSize = utils::roundUpToMultiple(newSize, sizeof(bumpArena::node));
+
+    if (newSize + sizeof(bumpArena::node) == node->size)
+      return (byte *)data;
+    else if (newSize + sizeof(bumpArena::node) < node->size)
+    {
+      auto fullSize = newSize + sizeof(bumpArena::node);
+      if (arena->threadSafe)
+        utils::ScopedLock g{ arena->lock, utils::WaitMechanism::Spin };
+
+      insertNewFreeNode(arena, (byte *)node + fullSize, (usize)node->size - fullSize);
+      node->size = (u32)fullSize;
+
+      return (byte *)data;
+    }
+    else
+    {
+      auto *newAllocation = bumpArena::insert(arena, newSize, utils::getAlignment(data));
+      usize copiedBytes = node->size - sizeof(bumpArena::node);
+      valcpy(newAllocation, (byte *)data, copiedBytes);
+      if (cleanNewSpace)
+        zeroset(newAllocation + copiedBytes, newSize - copiedBytes);
+      bumpArena::remove(data);
+
+      return newAllocation;
+    }
   }
 
   void bumpArena::remove(const void *data)
@@ -1720,27 +1800,12 @@ namespace utils
     if (arena->threadSafe)
       g = { arena->lock, utils::WaitMechanism::Spin };
 
-    node *currentNode{}, *previousNode{};
-    u32 nodeShift = arena->freeNodeStart;
+    insertNewFreeNode(arena, (byte *)toRemove, toRemove->size);
 
-    while (nodeShift)
-    {
-      previousNode = currentNode;
-      currentNode = utils::launder((node *)((byte *)arena + nodeShift));
-
-      if ((byte *)toRemove < (byte *)currentNode)
-      {
-        toRemove->next = (u32)((byte *)currentNode - (byte *)arena);
-        ((previousNode) ? previousNode->next : arena->freeNodeStart) = toRemove->offsetToArena;
-
-        return;
-      }
-
-      nodeShift = currentNode->next;
-    }
-
-    toRemove->next = 0;
-    ((currentNode) ? currentNode->next : arena->freeNodeStart) = toRemove->offsetToArena;
+  #if COMPLEX_DEBUG
+    if (memoryLogger.contains(arena))
+      logBlocks(arena);
+  #endif
   }
 
   void bumpArena::shrinkToFit(bumpArena *arena, bool shrinkToCommitted)
@@ -1811,6 +1876,10 @@ namespace utils
 
     auto *nextArena = arena->nextArena;
 
+  #if COMPLEX_DEBUG
+    memoryLogger.erase(arena);
+  #endif
+
     // if arena is nested, we need to free the node
     switch ((AllocatorType)arena->flags)
     {
@@ -1832,5 +1901,48 @@ namespace utils
       destroy(nextArena);
   }
 
-}
+  void bumpArena::logBlocks(bumpArena *arena)
+  {
+    bumpArena::node *currentNode{};
+    usize nodeShift = arena->freeNodeStart;
 
+    usize i = 0;
+    utils::string string{ globalArena, 128 };
+    string.appendFormat("bumpArena @ %p\n", arena);
+
+    // try to find a free node to fit the allocation
+    while (nodeShift)
+    {
+      currentNode = utils::launder((bumpArena::node *)((byte *)arena + nodeShift));
+      nodeShift = currentNode->next;
+
+      string.appendFormat("free list [%zu]{ .address = %zu, .size = %zu, .next = %zu }\n",
+        i, (usize)((byte *)currentNode - (byte *)arena), (usize)currentNode->size, nodeShift);
+
+      ++i;
+    }
+
+    if (string.size())
+      COMPLEX_LOG("%v", utils::string_view{ string });
+  }
+
+  void MemoryLogger::add(void *pointer)
+  {
+    utils::ScopedLock g{ writeLock, true, utils::WaitMechanism::Spin };
+    memoryLogger.toLog.emplaceBack(pointer);
+  }
+
+  void MemoryLogger::erase(void *pointer)
+  {
+    utils::ScopedLock g{ writeLock, false, utils::WaitMechanism::Spin };
+    memoryLogger.toLog.erase(pointer);
+  }
+
+  bool
+  MemoryLogger::contains(void *pointer) const
+  {
+    utils::ScopedLock g{ writeLock, false, utils::WaitMechanism::Spin };
+    auto iter = utils::find_if(memoryLogger.toLog, [pointer](const auto &item) { return item == pointer; });
+    return iter != memoryLogger.toLog.end();
+  }
+}

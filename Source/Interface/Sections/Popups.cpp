@@ -227,7 +227,7 @@ namespace Interface
 
   void PopupSelector::initialise()
   {
-    arena = utils::bumpArena::createNested(parent->arena, COMPLEX_KB(512));
+    arena = utils::bumpArena::createNested(parent->arena, COMPLEX_KB(128));
     placement = Placement::custom;
     sizingFlags |= GrowableX | GrowableY;
     componentFlags.wantsFocus = true;

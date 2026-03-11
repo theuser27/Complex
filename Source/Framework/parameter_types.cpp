@@ -11,7 +11,7 @@
 namespace Framework
 {
   utils::pair<const IndexedData *, usize>
-  getIndexedData(double scaledValue, const ParameterDetails &details) noexcept
+  getIndexedData(double scaledValue, const ParameterDetails &details)
   {
     COMPLEX_ASSERT(details.scale == ParameterScale::Indexed);
 
@@ -22,7 +22,7 @@ namespace Framework
     while (nextIndexedData)
     {
       indexedData = nextIndexedData;
-      // move to next option if we've run out 
+      // move to next option if we've run out
       if (indexedData->count <= i)
       {
         i -= indexedData->count;
@@ -38,7 +38,7 @@ namespace Framework
     return { indexedData, i };
   }
 
-  double getValueFromOptionText(utils::string_view text, const ParameterDetails &details) noexcept
+  double getValueFromOptionText(utils::string_view text, const ParameterDetails &details)
   {
     bool exitedChild = false;
     auto *option = details.options;
@@ -59,7 +59,7 @@ namespace Framework
 
       if (option->displayName.compareCaseInsensitive(text) == 0)
         return (double)value;
-      
+
       // going forward
       if (index < size)
       {
@@ -84,7 +84,7 @@ namespace Framework
     return (double)(value + 1);
   }
 
-  double getValueFromOptionId(uuid optionId, const ParameterDetails &details) noexcept
+  double getValueFromOptionId(uuid optionId, const ParameterDetails &details)
   {
     COMPLEX_ASSERT(details.scale == ParameterScale::Indexed);
 
@@ -122,8 +122,8 @@ namespace Framework
   }
 
   double
-  scaleValue(double value, const ParameterDetails &details, 
-    float sampleRate, bool scalePercent, bool skewOnly) noexcept
+  scaleValue(double value, const ParameterDetails &details,
+    float sampleRate, bool scalePercent, bool skewOnly)
   {
     using namespace utils;
 
@@ -205,12 +205,15 @@ namespace Framework
     if (details.displayUnits == "%" && scalePercent)
       result *= 100.0;
 
+    if (details.flags & ParameterDetails::RoundToInt)
+      result = round(result);
+
     return result;
   }
 
   double
-  unscaleValue(double value, const ParameterDetails &details, 
-    float sampleRate, bool unscalePercent) noexcept
+  unscaleValue(double value, const ParameterDetails &details,
+    float sampleRate, bool unscalePercent)
   {
     using namespace utils;
 
@@ -285,7 +288,7 @@ namespace Framework
   }
 
   simd_float
-  scaleValue(simd_float value, const ParameterDetails &details, float sampleRate) noexcept
+  scaleValue(simd_float value, const ParameterDetails &details, float sampleRate)
   {
     using namespace utils;
 
@@ -341,7 +344,7 @@ namespace Framework
       else
       {
         simd_mask mask = simd_mask::equal(sign, kSignMask);
-        result = merge(normalisedToDb(value, details.maxValue), 
+        result = merge(normalisedToDb(value, details.maxValue),
           normalisedToDb(value, -details.minValue), mask) | sign;
       }
       break;
@@ -360,6 +363,9 @@ namespace Framework
       COMPLEX_ASSERT_FALSE("Unhandled case");
       break;
     }
+
+    if (details.flags & ParameterDetails::RoundToInt)
+      result = simd_float::round(result);
 
     return result;
   }
@@ -396,6 +402,199 @@ namespace Framework
 
     isDirty_ = false;
   }
+
+  UndoManager::UndoManager(usize transactionsToKeep)
+  {
+    storage = utils::bumpArena::create(COMPLEX_MB(64), transactionsToKeep * 512);
+    setTransationStorage(transactionsToKeep);
+  }
+
+  UndoManager::~UndoManager()
+  {
+    utils::bumpArena::destroy(storage);
+  }
+
+  void UndoManager::setTransationStorage(usize transactionsToKeep)
+  {
+    transactionsToKeep = utils::max(transactionsToKeep, (usize)1);
+    if (transactions.size() == transactionsToKeep)
+      return;
+
+    if (!transactions.size())
+    {
+      transactions = { (decltype(transactions)::value_type *)nullptr, transactionsToKeep };
+      clear();
+      return;
+    }
+
+    usize copySize, begin;
+    if ((usize)(undoActionsCount + redoActionsCount) <= transactionsToKeep)
+    {
+      // new buffer can house all currently stored actions
+      copySize = undoActionsCount + redoActionsCount;
+      begin = ((usize)currentIndex + 1 - undoActionsCount +
+        transactions.size()) % transactions.size();
+    }
+    else
+    {
+      // new buffer can't house all currently stored actions
+      // use half the size for undo and redo actions respectively
+      copySize = transactionsToKeep;
+      redoActionsCount = transactionsToKeep / 2;
+      undoActionsCount = transactionsToKeep - redoActionsCount;
+      begin = ((usize)currentIndex + 1 - undoActionsCount +
+        transactions.size()) % transactions.size();
+    }
+
+    currentIndex = undoActionsCount - 1;
+
+    auto *newTransactions = arranew(storage, decltype(transactions)::value_type,
+      transactionsToKeep, {});
+    for (usize i = 0; i < copySize; ++i)
+      newTransactions[i] = transactions[(begin + i) % transactions.size()];
+    transactions = { newTransactions, transactionsToKeep };
+  }
+
+  void UndoManager::clear()
+  {
+    currentIndex = 0;
+    undoActionsCount = 1; // for the currentIndex
+    redoActionsCount = 0;
+
+    // this will also deallocate the transactions buffer, so we need to allocate it again
+    storage->clear(storage);
+
+    auto *newTransactions = arranew(storage, decltype(transactions)::value_type,
+      transactions.size(), {});
+    transactions = { newTransactions, transactions.size() };
+  }
+
+  bool UndoManager::perform(UndoAction *newAction, bool performOnAdd)
+  {
+    if (newAction == nullptr)
+      return false;
+
+    if (isPerformingUndoRedo())
+    {
+      COMPLEX_ASSERT_FALSE("Don't call perform() recursively from the UndoAction::perform() \
+        or undo() methods, or else these actions will be discarded!");
+      return false;
+    }
+
+    if (performOnAdd)
+      newAction->redo(newAction);
+
+    COMPLEX_ASSERT(redoActionsCount == 0, "You need to call beginNewTransaction() \
+      if you want to overwrite undone actions");
+
+    auto &transaction = transactions[currentIndex];
+    if (!transaction.second)
+      transaction.second = newAction;
+    else if (!transaction.second->combineActions)
+    {
+      newAction->next = transaction.second;
+      transaction.second = newAction->next;
+    }
+    else
+    {
+      auto *lastAction = transaction.second;
+      auto coalescedAction = lastAction->combineActions(
+        transaction.first, lastAction, newAction);
+
+      if (!coalescedAction)
+      {
+        newAction->next = lastAction;
+        transaction.second = newAction;
+      }
+      else
+      {
+        coalescedAction->next = lastAction->next;
+        transaction.second = coalescedAction;
+
+        if (coalescedAction != newAction)
+          utils::bumpArena::remove(newAction);
+        if (coalescedAction != lastAction)
+          utils::bumpArena::remove(lastAction);
+      }
+    }
+
+    return true;
+  }
+
+  utils::bumpArena *
+  UndoManager::beginNewTransaction()
+  {
+    bool currentHasArena = transactions[currentIndex].first;
+
+    // skip making a new action set if current one is empty
+    if (!currentHasArena || transactions[currentIndex].second)
+    {
+      if (currentHasArena)
+      {
+        currentIndex = (currentIndex + 1) % transactions.size();
+
+        // destroy transaction to be replaced
+        for (auto *action = transactions[currentIndex].second; action; action = action->next)
+          if (action->destructor)
+            action->destructor(action);
+
+        undoActionsCount = utils::min(undoActionsCount + 1, transactions.size());
+        redoActionsCount = 0;
+      }
+
+      transactions[currentIndex].second = {};
+      if (!transactions[currentIndex].first)
+        transactions[currentIndex].first = utils::bumpArena::createNested(storage, 512);
+    }
+
+    return transactions[currentIndex].first;
+  }
+
+  bool UndoManager::undo(bool undoCurrentTransactionOnly)
+  {
+    if (undoActionsCount == 0)
+      return false;
+
+    isInsideUndoRedoCall = true;
+
+    COMPLEX_FOREACH_AND_REVERSE_SLL(action, transactions[currentIndex].second)
+    {
+      action->undo(action);
+      transactions[currentIndex].second = action;
+    }
+
+    if (!undoCurrentTransactionOnly)
+    {
+      currentIndex = (currentIndex - 1 + transactions.size()) % transactions.size();
+      --undoActionsCount;
+      ++redoActionsCount;
+    }
+
+    isInsideUndoRedoCall = false;
+    return true;
+  }
+
+  bool UndoManager::redo()
+  {
+    if (!redoActionsCount)
+      return false;
+
+    isInsideUndoRedoCall = true;
+
+    COMPLEX_FOREACH_AND_REVERSE_SLL(action, transactions[(currentIndex + 1) % transactions.size()].second)
+    {
+      action->redo(action);
+      transactions[currentIndex].second = action;
+    }
+
+    currentIndex = (currentIndex + 1) % transactions.size();
+    --redoActionsCount;
+    ++undoActionsCount;
+
+    isInsideUndoRedoCall = false;
+    return true;
+  }
+
 }
 
 namespace Plugin
@@ -403,10 +602,10 @@ namespace Plugin
   void State::registerDynamicParameter(Framework::ParameterValue *parameter)
   {
     auto details = parameter->getParameterDetails();
-    
+
     if (details.scale != Framework::ParameterScale::Indexed)
       return;
-    
+
     COMPLEX_ASSERT(details.options != nullptr);
 
     // adding all possible reasons for update
@@ -416,11 +615,72 @@ namespace Plugin
         if (data.dynamicUpdateUuid == uuid{})
           return;
 
-        dynamicParameters.emplace_back(&data, parameter);
+        dynamicParameters.emplaceBack(&data, parameter);
       });
   }
 
-  void State::updateDynamicParameters(uuid reason) noexcept
+  static void updateDynamicParameter(State *state, Framework::ParameterValue *parameter, Framework::IndexedData *indexedData)
+  {
+    using namespace Framework;
+
+    auto *link = parameter->getParameterLink();
+    // if the current parameter is mapped out, we shouldn't change any of the values
+    // if some of them are not valid anymore, it's up to the consumers of said values to handle things properly
+    if (link->hostControl)
+      return;
+
+    u32 newCount = indexedData->count;
+    switch (indexedData->dynamicUpdateUuid)
+    {
+    case ParameterChangeReason::inputSidechain:
+      newCount = state->plugin->inSidechains;
+      break;
+    case ParameterChangeReason::outputSidechain:
+      newCount = state->plugin->outSidechains;
+      break;
+    case ParameterChangeReason::laneCount:
+      newCount = state->getLaneCount();
+      break;
+    default:
+      COMPLEX_ASSERT_FALSE("Missing case");
+      break;
+    }
+
+    if (indexedData->count == newCount)
+      return;
+
+    // changing maxValue and setting normalised value to correspond to the current scaled value
+    // for parameter and UIControl if it exists
+    auto details = parameter->getParameterDetails();
+    auto oldScaled = scaleValue((double)parameter->getNormalisedValue(), details);
+
+    auto difference = indexedData->count - newCount;
+    for (auto *data = indexedData; data; data = data->parent)
+      data->count -= difference;
+
+    auto newNormalised = unscaleValue(oldScaled, details);
+
+    if (link->UIControl)
+    {
+      link->UIControl->details = details;
+      link->UIControl->setValue(newNormalised, true);
+    }
+
+    float value = (float)newNormalised;
+    parameter->setParameterDetails(details, &value);
+  }
+
+  void State::updateAllDynamicParameters()
+  {
+    utils::ScopedLock guard{};
+    if (plugin->state_.get() == this)
+      guard = plugin->acquireProcessingLock(true);
+
+    for (auto [indexedData, currentParameter] : dynamicParameters)
+      updateDynamicParameter(this, currentParameter, indexedData);
+  }
+
+  void State::updateDynamicParameters(uuid reason)
   {
     using namespace Framework;
 
@@ -429,56 +689,7 @@ namespace Plugin
       guard = plugin->acquireProcessingLock(true);
 
     for (auto [indexedData, currentParameter] : dynamicParameters)
-    {
-      if (indexedData->dynamicUpdateUuid != reason)
-        continue;
-
-      auto *link = currentParameter->getParameterLink();
-      // if the current parameter is mapped out, we shouldn't change any of the values
-      // if some of them are not valid anymore, it's up to the consumers of said values to handle things properly
-      if (link->hostControl)
-        continue;
-
-      u32 newCount = indexedData->count;
-      switch (indexedData->dynamicUpdateUuid)
-      {
-      case ParameterChangeReason::inputSidechain:
-        newCount = plugin->inSidechains;
-        break;
-      case ParameterChangeReason::outputSidechain:
-        newCount = plugin->outSidechains;
-        break;
-      case ParameterChangeReason::laneCount:
-        newCount = getLaneCount();
-        break;
-      default:
-        COMPLEX_ASSERT_FALSE("Missing case");
-        break;
-      }
-
-      if (indexedData->count == newCount)
-        continue;
-
-      // changing maxValue and setting normalised value to correspond to the current scaled value
-      // for parameter and UIControl if it exists
-      auto details = currentParameter->getParameterDetails();
-      auto oldScaled = scaleValue((double)currentParameter->getNormalisedValue(), details);
-      // TODO: find which indexed element this scaled value belongs to
-      //       if it's the same one currently being changed, then clamp
-      details.maxValue += (float)newCount - (float)indexedData->count;
-      indexedData->count = newCount;
-      auto newNormalised = unscaleValue(oldScaled, details);
-
-      if (link->UIControl)
-      {
-        // intentionally inhibiting dynamic dispatch because it will try to update/redraw
-        // which we intend to do with setValue
-        link->UIControl->details = details;
-        link->UIControl->setValue(newNormalised, true);
-      }
-
-      float value = (float)newNormalised;
-      currentParameter->setParameterDetails(details, &value);
-    }
+      if (indexedData->dynamicUpdateUuid == reason)
+        updateDynamicParameter(this, currentParameter, indexedData);
   }
 }

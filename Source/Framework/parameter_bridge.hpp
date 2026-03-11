@@ -35,22 +35,22 @@ namespace Framework
 		ParameterBridge &operator=(ParameterBridge &&) = delete;
 
 		ParameterBridge(Plugin::State *state,
-			u64 parameterIndex = u64(-1), ParameterLink *link = nullptr) noexcept;
-		~ParameterBridge() noexcept;
+			u64 parameterIndex = u64(-1), ParameterLink *link = nullptr);
+		~ParameterBridge();
 
-		auto *getParameterLink() const noexcept { return parameterLinkPointer_.load(satomi::memory_order_acquire); }
-		void resetParameterLink(ParameterLink *link, bool getValueFromParameter = true) noexcept;
-		static void notifyParameterChange() noexcept;
+		auto *getParameterLink() const { return parameterLinkPointer_.load(satomi::memory_order_acquire); }
+		void resetParameterLink(ParameterLink *link, bool getValueFromParameter = true);
+		static void notifyParameterChange();
 
 		void beginChangeGesture();
-		void setValueFromUI(float newValue) noexcept;
+		void setValueFromUI(float newValue);
 		void endChangeGesture();
 
-		void updateUIParameter() noexcept;
+		void updateUIParameter();
 
 		void setCustomName(utils::string name);
 
-		bool isMappedToParameter() const noexcept { return parameterLinkPointer_.load(satomi::memory_order_acquire); }
+		bool isMappedToParameter() const { return parameterLinkPointer_.load(satomi::memory_order_acquire); }
 
 		float getValue() const { return value_.load(satomi::memory_order_relaxed); }
 		void setValue(float newValue)
@@ -72,8 +72,8 @@ namespace Framework
 		bool isDiscrete() const;
 		bool isBoolean() const;
 
-		void addListener(Listener *listener) { listeners_.emplace_back(listener); }
-		void removeListener(Listener *listener) noexcept { listeners_.erase(listener); }
+		void addListener(Listener *listener) { listeners_.emplaceBack(listener); }
+		void removeListener(Listener *listener) { listeners_.erase(listener); }
 
 		const u64 parameterIndex;
 	private:

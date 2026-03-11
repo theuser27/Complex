@@ -21,6 +21,7 @@ namespace Interface
   class Control : public Component
   {
   public:
+    static constexpr int kLabelMargin = 4;
     static constexpr int kDefaultMaxTotalCharacters = 5;
     static constexpr int kDefaultMaxDecimalCharacters = 2;
     static constexpr float kSlowDragMultiplier = 0.1f;
@@ -62,7 +63,7 @@ namespace Interface
     float sensitivity = kDefaultSensitivity;
     ModifierKeys resetValueModifiers;
 
-    utils::string popupPrefix{};
+    utils::string prefix{};
     Placement popupPlacement = Placement::bottom;
 
     struct
@@ -154,12 +155,13 @@ namespace Interface
   {
   public:
     static constexpr int kAddedMargin = 4;
+    static constexpr int kDimensions = 16;
 
     RadioButton();
 
     bool render(OpenGlWrapper &openGl) override;
 
-    float rounding = 0.0f;
+    float rounding = kDimensions / 8;
   };
 
   class Slider : public Control

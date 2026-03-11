@@ -11,6 +11,8 @@ namespace Interface
   inline constexpr int kPrimaryTextLineHeight = 16;
   inline constexpr int kSecondaryTextLineHeight = 12;
 
+  inline constexpr int kDefaultActivatorSize = 12;
+
   // HeaderFooter sizes
   inline constexpr int kHeaderHeight = 40;
   inline constexpr int kFooterHeight = 24;

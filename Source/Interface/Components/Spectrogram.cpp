@@ -78,14 +78,14 @@ namespace Interface
 
 		if (!arena)
 		{
-			auto scratchBufferSize = (kChannelsPerInOut * maxBinCount) * sizeof(simd_float);
-			auto resultBufferSize = (kChannelsPerInOut * kResolution) * sizeof(simd_float);
+			auto scratchBufferSize = utils::kChannelsPerInOut * maxBinCount * sizeof(simd_float);
+			auto resultBufferSize = utils::kChannelsPerInOut * kResolution * sizeof(simd_float);
 			arena = utils::bumpArena::createNested(parent->arena, (resultBufferSize + scratchBufferSize) + COMPLEX_MB(2));
 		}
 		utils::bumpArena::clear(arena);
 
-		scratchBuffer_ = Framework::SimdBuffer::create(arena, kChannelsPerInOut, maxBinCount);
-		resultBuffer_ = Framework::SimdBuffer::create(arena, kChannelsPerInOut, kResolution);
+		scratchBuffer = Framework::SimdBuffer::create(arena, utils::kChannelsPerInOut, maxBinCount);
+		resultBuffer = Framework::SimdBuffer::create(arena, utils::kChannelsPerInOut, kResolution);
 
 		//amplitudeRenderers_.reserve(arena, kChannelsPerInOut);
 		//for (size_t i = 0; i < kChannelsPerInOut; ++i)
@@ -111,7 +111,7 @@ namespace Interface
 
 		float fillFade = getValue(Skin::kWidgetFillFade, true);
 
-		for (auto &amplitudeRenderer : amplitudeRenderers_)
+		for (auto &amplitudeRenderer : amplitudeRenderers)
 		{
 			amplitudeRenderer->lineWidth_ = 1.8f;
 			amplitudeRenderer->fillCenter_ = -1.0f;
@@ -123,7 +123,7 @@ namespace Interface
 
 		colour = colour.withRotatedHue(-0.33f);
 
-		for (auto &phaseRenderer : phaseRenderers_)
+		for (auto &phaseRenderer : phaseRenderers)
 		{
 			phaseRenderer->lineWidth_ = 1.5;
 			phaseRenderer->fillCenter_ = -1.0f;
@@ -136,27 +136,26 @@ namespace Interface
 	Spectrogram::mouseDown(const MouseEvent &e)
 	{
 		if (e.mods.test(ModifierKeys::leftButtonModifier))
-			shouldInterpolateLines_ = !shouldInterpolateLines_;
+			shouldInterpolateLines = !shouldInterpolateLines;
 
 		return true;
 	}
 
 	bool 
-	Spectrogram::updateAmplitudes(bool shouldDisplayPhases,
-		float startDecade, float decadeCount, float decadeSlope)
+	Spectrogram::updateAmplitudes(float startDecade, float decadeCount, float decadeSlope)
 	{
 		using namespace utils;
 
-		if (!bufferView_->channels || !bufferView_->size)
+		if (!bufferView->channels || !bufferView->size)
 			return false;
 
-		COMPLEX_ASSERT(scratchBuffer_->getSimdChannels() == bufferView_->getSimdChannels()
+		COMPLEX_ASSERT(scratchBuffer->getSimdChannels() == bufferView->getSimdChannels()
 			&& "Scratch buffer doesn't match the number of channels in memory");
 
 		//u32 bufferPosition;
 		{
-			utils::ScopedLock g{ bufferView_->dataLock, false, WaitMechanism::Sleep };
-			Framework::applyToThisNoMask<utils::MathOperations::Assign>(scratchBuffer_, bufferView_, 0, binCount_);
+			utils::ScopedLock g{ bufferView->dataLock, false, WaitMechanism::Sleep };
+			Framework::applyToThisNoMask<utils::MathOperations::Assign>(scratchBuffer, bufferView, 0, binCount);
 			//bufferPosition = bufferView.getBufferPosition();
 		}
 
@@ -214,31 +213,29 @@ namespace Interface
 			}*/
 		}
 		else
-			utils::convertBufferInPlace<::midSide<::complexMagnitude>>(scratchBuffer_, binCount_);
+			utils::convertBufferInPlace<::midSide<::complexMagnitude>>(scratchBuffer, binCount);
 		
-		auto scratchBufferRaw = scratchBuffer_->get();
+		auto scratchBufferRaw = scratchBuffer->get();
 
 		// handle dc and nyquist separately because the conversion functions wrote garbage there
 		{
 			simd_float dc = scratchBufferRaw[0];
-			simd_float nyquist = scratchBufferRaw[binCount_ - 1];
+			simd_float nyquist = scratchBufferRaw[binCount - 1];
 			::midSide(dc, nyquist);
 			scratchBufferRaw[0] = simd_float::abs(dc);
-			scratchBufferRaw[binCount_ - 1] = simd_float::abs(nyquist);
+			scratchBufferRaw[binCount - 1] = simd_float::abs(nyquist);
 		}
 
 		static constexpr simd_float defaultValue = { 0.001f, 0.0f };
-		const float maxBin = (float)binCount_ - 1.0f;
-		const bool isInterpolating = shouldInterpolateLines_;
-		const simd_float scalingFactor = { 0.5f / (float)binCount_, 1.0f };
-		const float minDb = minDb_;
-		const float maxDb = maxDb_;
+		const float maxBin = (float)binCount - 1.0f;
+		const bool isInterpolating = shouldInterpolateLines;
+		const simd_float scalingFactor = { 0.5f / (float)binCount, 1.0f };
 		const float height = (float)bounds.h;
 		const float width = (float)bounds.w;
 		const float rangeMult = 1.0f / (maxDb - minDb);
 
 		// yes these are magic numbers, change at your own risk
-		const simd_float decay = 0.25f + utils::max(0.0f, 0.05f * ::log2f(2048.0f / (float)binCount_ - 1.0f));
+		const simd_float decay = 0.25f + utils::max(0.0f, 0.05f * ::log2f(2048.0f / (float)binCount - 1.0f));
 
 		constexpr float resolution = 1.0f / (kResolution - 1.0f);
 		const float rangeMultiplier = ::powf(10.0f, decadeCount * resolution);
@@ -248,7 +245,7 @@ namespace Interface
 		const float slopeMultiplier = (float)dbToAmplitude(((decadeCount + startDecade) * decadeSlope) * resolution);
 		float slope = 1.0f;
 
-		auto resultBufferRaw = resultBuffer_->get();
+		auto resultBufferRaw = resultBuffer->get();
 		
 		// current/previous - current/previous bin
 		simd_float currentBin, previousBin;
@@ -339,17 +336,17 @@ namespace Interface
 
 			float x = (float)j * resolution * width;
 			simd_float amplitudeY = (amplitudeToDb(currentBin) - minDb) * rangeMult;
-			for (size_t k = 0; k < amplitudeRenderers_.size(); ++k)
+			for (size_t k = 0; k < amplitudeRenderers.size(); ++k)
 			{
-				amplitudeRenderers_[k]->setXAt((int)j, x);
-				amplitudeRenderers_[k]->setYAt((int)j, height - amplitudeY[k * 2] * height);
+				amplitudeRenderers[k]->setXAt((int)j, x);
+				amplitudeRenderers[k]->setYAt((int)j, height - amplitudeY[k * 2] * height);
 			}
 
 			simd_float phaseY = currentBin / k2Pi + 0.5f;
-			for (size_t k = 0; k < phaseRenderers_.size(); ++k)
+			for (size_t k = 0; k < phaseRenderers.size(); ++k)
 			{
-				phaseRenderers_[k]->setXAt((int)j, x);
-				phaseRenderers_[k]->setYAt((int)j, height - phaseY[k * 2 + 1] * height);
+				phaseRenderers[k]->setXAt((int)j, x);
+				phaseRenderers[k]->setYAt((int)j, height - phaseY[k * 2 + 1] * height);
 			}
 		}
 
@@ -381,7 +378,6 @@ namespace Interface
 
 		auto fillColour = getColour(Skin::kLightenScreen).withMultipliedAlpha(0.5f);
 		nvgFillColor(g.context, fillColour);
-		nvgStrokeColor(g.context, fillColour);
 
 
 		while (frequency < maxFrequency)
@@ -403,10 +399,11 @@ namespace Interface
 			increment *= kLineSpacing;
 		}
 
-		nvgBeginPath(g.context);
-		nvgStrokeWidth(g.context, 1.0f);
-		nvgRoundedRect(g.context, 0.5f, 0.5f, bounds.w - 1.0f, bounds.h - 1.0f, getValue(Skin::kWidgetRoundedCorner, true));
-		nvgStroke(g.context);
+		strokeRect(g.context, bounds, 1.0f, fillColour, getValue(Skin::kWidgetRoundedCorner, true));
+		//nvgBeginPath(g.context);
+		//nvgStrokeWidth(g.context, 1.0f);
+		//nvgRoundedRect(g.context, 0.5f, 0.5f, bounds.w - 1.0f, bounds.h - 1.0f, getValue(Skin::kWidgetRoundedCorner, true));
+		//nvgStroke(g.context);
 	}
 
 	bool 
@@ -414,9 +411,9 @@ namespace Interface
 	{
 		//fillRect(openGl, getLocalBounds().toFloat(), getColour(Skin::kBody, this));
 
-		if (shouldPaintBackgroundLines_)
+		if (shouldPaintBackgroundLines)
 		{
-			paintBackground(*openGl.cache, getLocalBounds().toFloat(), minFrequency_, maxFrequency_);
+			paintBackground(*openGl.cache, getLocalBounds().toFloat(), minFrequency, maxFrequency);
 		}
 
 		//auto bounds = getLocalBounds();
@@ -433,7 +430,7 @@ namespace Interface
 		//float startDecade = ::log10f(minFrequency / sampleHz);
 		//float decadeCount = ::log10f(maxFrequency / minFrequency);
 
-		//if (!updateAmplitudes(shouldDisplayPhases, startDecade, decadeCount, decadeSlope))
+		//if (!updateAmplitudes(startDecade, decadeCount, decadeSlope))
 		//	return true;
 
 		//setLineRendererData();

@@ -11,8 +11,7 @@
 #pragma once
 
 #include "../LookAndFeel/BaseComponent.hpp"
-#include "OpenGlQuad.hpp"
-#include "OpenGlImage.hpp"
+#include "BaseControl.hpp"
 
 namespace Framework
 {
@@ -25,15 +24,14 @@ namespace Interface
   struct OpenGlCorners;
   class PinSlider;
 
-  class PinBoundsBox : public BaseSection
+  class PinBoundsBox : public Component
   {
   public:
     static constexpr int kAdditionalPinWidth = 20;
 
     PinBoundsBox(Framework::ParameterValue *lowBound, Framework::ParameterValue *highBound);
-    ~PinBoundsBox() override;
 
-    void paintBackground(Graphics &g) override;
+    bool render(OpenGlWrapper &openGl) override;
     void paint(Graphics &g) override;
     void resized() override;
 
@@ -49,9 +47,10 @@ namespace Interface
     void setRounding(float topRounding, float bottomRounding) noexcept;
     void setRoundedCornerColour(Colour colour) noexcept;
 
-    utils::up<PinSlider> lowBound_;
-    utils::up<PinSlider> highBound_;
-    OpenGlCorners roundedCorners_{};
+    float rounding[4]{};
+
+    PinSlider lowBound_;
+    PinSlider highBound_;
 
     Colour primaryColour_{};
     Colour secondaryColour_{};

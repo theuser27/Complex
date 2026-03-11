@@ -18,7 +18,7 @@
 #include "Interface/LookAndFeel/BaseComponent.hpp"
 #include "Interface/Sections/MainInterface.hpp"
 
-static auto 
+static auto
 unscaleDimensions(int width, int height, double currentScaling) noexcept
 {
   return utils::pair{ (int)::round((double)width / currentScaling),
@@ -37,7 +37,7 @@ static void clampScaleWidthHeight(PuglView *view, float &desiredScale, u32 &wind
   // the available display area on screen for the window
   Interface::Rectangle<i32> displayArea = info.totalArea;
 
-  desiredScale = ::roundf(utils::clamp(desiredScale, kMinWindowScaleFactor, kMaxWindowScaleFactor) 
+  desiredScale = ::roundf(utils::clamp(desiredScale, kMinWindowScaleFactor, kMaxWindowScaleFactor)
     / kWindowScaleIncrements) * kWindowScaleIncrements;
 
   auto clampScaleToDisplay = [&](float current, float display)
@@ -137,6 +137,8 @@ namespace Interface
     ModifierKeys mouseButtonsDown_{};
     ModifierKeys lastKeyboardMods_{};
 
+    u32 numberOfFrames{};
+
     u8 numberOfClicks = 0;
     double lastMouseClickTime = 0.0;
     double lastRenderTime = 0.0f;
@@ -214,6 +216,12 @@ namespace Interface
 
     void renderLoop(PuglView *view)
     {
+      ++numberOfFrames;
+      if (numberOfFrames == 200)
+      {
+        utils::shrinkWorkingSet();
+      }
+
       auto newRenderTime = puglGetTime(puglGetWorld(view));
       uiRelated.deltaTime = (float)(newRenderTime - lastRenderTime);
       updateGraph(&graph, (float)uiRelated.deltaTime);
@@ -245,8 +253,8 @@ namespace Interface
 
       nvgBeginFrame(openGl, (float)area.w, (float)area.h, 1.0f);
 
-      openGl.parentStack.emplace_back(gui, gui->bounds, true);
-      openGl.parentStack.emplace_back(ScopedBoundsEmplace::doNotAddFlag);
+      openGl.parentStack.emplaceBack(gui, gui->bounds, true);
+      openGl.parentStack.emplaceBack(ScopedBoundsEmplace::doNotAddFlag);
       gui->doRender(openGl);
 
       if (renderDebugFps)
@@ -258,7 +266,7 @@ namespace Interface
 
       nvgEndFrame(openGl.g);
 
-      // calling swapBuffers inside the critical section in case 
+      // calling swapBuffers inside the critical section in case
       // we're resizing because a glFinish is necessary in order to
       // not get frame tearing/overlap with previous frames
       // https://community.khronos.org/t/swapbuffers-and-synchronization/107667/5
@@ -302,7 +310,7 @@ namespace Interface
       if ((!renderer->isInitialised && event->type != PUGL_REALIZE) &&
         ((renderer->area.w == 0 || renderer->area.h == 0) && event->type != PUGL_CONFIGURE))
       {
-        COMPLEX_ASSERT_FALSE("UI initialisation: %d, UI size: { w: %d, h: %d }", 
+        COMPLEX_ASSERT_FALSE("UI initialisation: %d, UI size: { w: %d, h: %d }",
           renderer->isInitialised, (int)renderer->area.w, (int)renderer->area.h);
         return PUGL_FAILURE;
       }
@@ -373,7 +381,7 @@ namespace Interface
     case PUGL_EXPOSE:
       //renderer->renderLoop(view);
       break;
-    
+
     case PUGL_UPDATE: break;
     case PUGL_LOOP_ENTER: break;
     case PUGL_LOOP_LEAVE: break;
@@ -388,11 +396,11 @@ namespace Interface
         e.mouseDownPosition = renderer->lastMouseDownPosition_;
         e.mods = renderer->lastKeyboardMods_;
         e = renderer->getRelativeEvent(e, renderer->mouseDownComponent_);
-        
+
         renderer->mouseDownComponent_->mouseExit(e);
         renderer->mouseDownComponent_ = nullptr;
       }
-      
+
       break;
     }
     case PUGL_POINTER_IN:
@@ -524,14 +532,15 @@ namespace Interface
   Renderer *
   createRenderer(Plugin::ComplexPlugin &plugin)
   {
-    auto *arena = utils::bumpArena::create(COMPLEX_MB(256), COMPLEX_MB(1));
+    auto *arena = utils::bumpArena::create(COMPLEX_MB(8), COMPLEX_MB(1));
 
-    auto *renderer = anew(arena, Renderer, { .plugin = plugin, 
+    auto *renderer = anew(arena, Renderer, { .plugin = plugin,
       .shaders = { arena }, .arena = arena });
     uiRelated.renderer = renderer;
     renderer->skinInstance = anew(arena, Skin, {});
     uiRelated.skin = renderer->skinInstance;
     renderer->gui = anew(arena, MainInterface, {});
+    renderer->gui->restartUI();
 
     return renderer;
   }
@@ -550,7 +559,7 @@ namespace Interface
   OpenGlWrapper &getOpenGlContext(Renderer *renderer) { return renderer->openGl; }
   Area<u32> getUISize(Renderer *renderer) { return renderer->area; }
 
-  bool 
+  bool
   setUISize(Renderer *renderer, u32 width, u32 height)
   {
     return renderer->plugin.hostContext->requestResize(renderer->plugin.hostContext, width, height);
@@ -572,17 +581,17 @@ namespace Interface
     renderer->moveFocusTo(component);
   }
 
-  MouseInteractions 
+  MouseInteractions
   getMouseInteractions(Renderer *renderer)
   {
     return MouseInteractions
-    { 
+    {
       .hovered = renderer->mouseHoveredComponent_,
       .clicked = renderer->mouseDownComponent_,
       .focused = renderer->focusedComponent_,
-      .mouseState = 
+      .mouseState =
       {
-        .x = renderer->lastMousePosition_.x, 
+        .x = renderer->lastMousePosition_.x,
         .y = renderer->lastMousePosition_.y,
         .mouseDownPosition = renderer->lastMouseDownPosition_,
         .mods = renderer->mouseButtonsDown_ | renderer->lastKeyboardMods_
@@ -594,11 +603,11 @@ namespace Interface
   {
     if (view_ != nullptr)
       return;
-    
+
     // Create world and view
     world_ = puglNewWorld(PUGL_MODULE, 0);
     view_ = puglNewView(world_);
-    
+
     // load *some* kind of size until we get a window to check if we stretch outside the screen
     Framework::LoadSave::getWindowSizeScale(area.w, area.h, scale);
 
@@ -657,7 +666,7 @@ namespace Interface
     newWidth = utils::max(newWidth, (u32)kMinWidth);
     newHeight = utils::max(newHeight, (u32)kMinHeight);
 
-    // TODO: make resizing snap horizontally to the width of individual lanes 
+    // TODO: make resizing snap horizontally to the width of individual lanes
   }
 
   void Renderer::moveFocusTo(Component &component)
@@ -670,7 +679,7 @@ namespace Interface
     }
   }
 
-  MouseEvent 
+  MouseEvent
   Renderer::getRelativeEvent(MouseEvent e, Component *component)
   {
     auto componentPosition = component->getPositionInWindow();
@@ -758,7 +767,7 @@ namespace Interface
     }
 
     // if the component has decided to not handle further mouse events
-    // this makes the upcoming mouse events orphaned, 
+    // this makes the upcoming mouse events orphaned,
     // which can be handled by other components if acceptsOrphanedMouseEvents == true
     if (mouseDownComponent_ && !mouseDownComponent_->componentFlags.isClicked)
     {
@@ -875,7 +884,7 @@ extern "C"
 
         clampScaleWidthHeight(renderer->view_, renderer->scale, windowWidth, windowHeight);
         Framework::LoadSave::saveWindowSizeScale(windowWidth, windowHeight, renderer->scale);
-      
+
         renderer->plugin.hostContext->requestResize(renderer->plugin.hostContext, (u32)windowWidth, (u32)windowHeight);
       }
       renderer->isVisible = visible;

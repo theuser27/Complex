@@ -157,6 +157,11 @@ namespace Interface
       auto valueInterval = 1.0 / (details.options->count - 1);
       newValue = currentValue + valueInterval * (valueDelta < 0.0 ? -1.0 : 1.0);
     }
+    else if (details.flags & Framework::ParameterDetails::RoundToInt)
+    {
+      auto valueInterval = 1.0 / (details.maxValue - details.minValue);
+      newValue = currentValue + valueInterval * (valueDelta < 0.0 ? -1.0 : 1.0);
+    }
     else
       newValue = currentValue + ::fabs(valueDelta) * (valueDelta < 0.0 ? -1.0 : 1.0);
 

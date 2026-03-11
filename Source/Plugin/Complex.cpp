@@ -8,10 +8,11 @@
 #include "Framework/load_save.hpp"
 #include "Framework/parameter_bridge.hpp"
 #include "Framework/parameter_value.hpp"
-#include "Generation/EffectsState.hpp"
+#include "Generation/EffectsLane.hpp"
 #include "Generation/SoundEngine.hpp"
 #include "Renderer.hpp"
 #include "Interface/LookAndFeel/Graphics.hpp"
+#include "Interface/LookAndFeel/BaseComponent.hpp"
 
 namespace
 {
@@ -122,7 +123,9 @@ namespace
   }
 }
 
-utils::string_view 
+utils::MemoryLogger memoryLogger{};
+
+utils::string_view
 findOrAddPermanentString(utils::string_view string)
 {
   auto *element = structure.strings;
@@ -150,14 +153,14 @@ findOrAddPermanentString(utils::string_view string)
       structure.strings = node;
     else
       element->next = node;
-    
+
     return node->object;
   }
 }
 
 namespace Framework
 {
-  void ParameterBridge::notifyParameterChange() noexcept
+  void ParameterBridge::notifyParameterChange()
   {
     auto hostContext = Interface::getPlugin(Interface::uiRelated.renderer).hostContext;
     hostContext->rescan(hostContext,
@@ -173,7 +176,7 @@ namespace Framework
     state->plugin->hostContext->sendParamEvent(state->plugin->hostContext, &event);
   }
 
-  void ParameterBridge::setValueFromUI(float newValue) noexcept
+  void ParameterBridge::setValueFromUI(float newValue)
   {
     value_.store(newValue, satomi::memory_order_release);
 
@@ -204,7 +207,11 @@ namespace Plugin
   {
     processorStorage = utils::bumpArena::create(COMPLEX_MB(256), COMPLEX_MB(2));
     miscStorage = utils::bumpArena::createNested(processorStorage, COMPLEX_KB(128));
+
     allProcessors.data.reserve({ miscStorage, false }, 64);
+    parameterModulators = { { miscStorage, false }, 32 };
+    dynamicParameters = { { miscStorage, false }, 32 };
+    workers = { { miscStorage, false }, 16 };
 
     auto count = plugin->parameterCount;
     parameterBridges = utils::span{ (Framework::ParameterBridge *)
@@ -225,6 +232,9 @@ namespace Plugin
 
   State::~State()
   {
+    for (auto &worker : workers)
+      worker.stop();
+
     utils::bumpArena::destroy(processorStorage);
   }
 
@@ -235,12 +245,12 @@ namespace Plugin
 
     if ((float)allProcessors.data.size() / (float)allProcessors.data.capacity() < expandThreshold)
       return;
-    
+
     auto newProcessors = utils::vector_map<u64, Generation::BaseProcessor *>{};
     newProcessors.data.reserve(allProcessors.data.size() * expandAmount);
 
     for (auto pair : allProcessors.data)
-      new(newProcessors.data.push_back()) decltype(pair){ COMPLEX_MOVE(pair) };
+      new(newProcessors.data.pushBack()) decltype(pair){ COMPLEX_MOVE(pair) };
 
     if (this != plugin->state_.get())
     {
@@ -284,23 +294,34 @@ namespace Plugin
 
     return current;
   }
-  
+
   Generation::BaseProcessor *
-  State::getProcessor(u64 processorId) const noexcept
+  State::getProcessor(u64 processorId) const
   {
     auto processorIter = allProcessors.find(processorId);
     return (processorIter != allProcessors.data.end()) ?
       processorIter->second : nullptr;
   }
 
-  void State::deleteProcessor(Generation::BaseProcessor *processor) noexcept
+  void State::deleteProcessor(Generation::BaseProcessor *processor)
   {
-    auto iter = allProcessors.find(processor->stateId);
+    COMPLEX_ASSERT(processor->state == this);
+    COMPLEX_ASSERT(processor->stateId != 0);
+
+    for (auto child = processor->children; child; child = child->next)
+      deleteProcessor(child);
 
     // TODO: free all registered resources
     // TODO: unlink all parameters from their UIs and detach them from the parameter bridges
 
-    allProcessors.data.erase(iter);
+    if (processor->component)
+    {
+      if (processor->component->parent)
+        processor->component->parent->removeChildComponent(processor->component);
+      Interface::deleteComponent(processor->component);
+    }
+
+    allProcessors.data.erase({ processor->stateId, processor });
     utils::bumpArena::remove(processor->arena);
   }
 
@@ -314,8 +335,11 @@ namespace Plugin
     return processor->createCopy();
   }
 
+  utils::pair<u32, u32> State::getMinMaxFFTOrder() const { return soundEngine->getMinMaxFFTOrder(); }
+  u32 State::getMaxBinCount() const { return soundEngine->getMaxBinCount(); }
+
   Framework::ParameterValue *
-  State::getProcessorParameter(u64 parentProcessorId, uuid parameterId) const noexcept
+  State::getProcessorParameter(u64 parentProcessorId, uuid parameterId) const
   {
     auto *processorPointer = getProcessor(parentProcessorId);
     if (!processorPointer)
@@ -325,13 +349,13 @@ namespace Plugin
   }
 
   float
-  State::getOverlap() noexcept { return soundEngine->getOverlap(); }
+  State::getOverlap() { return soundEngine->getOverlap(); }
   u32
-  State::getFFTSize() noexcept { return soundEngine->getFFTSize(); }
+  State::getFFTSize() { return soundEngine->getFFTSize(); }
   u32
-  State::getBlockPosition() noexcept { return soundEngine->getBlockPosition(); }
+  State::getBlockPosition() { return soundEngine->getBlockPosition(); }
   u32
-  State::getLaneCount() const { return soundEngine->getEffectsState().childrenCount; }
+  State::getLaneCount() const { return soundEngine->childrenCount; }
 
 
   State::Thread &
@@ -341,19 +365,19 @@ namespace Plugin
       if (worker.thread == utils::thread{})
         return worker;
 
-    auto &worker = workers.emplace_back();
+    auto &worker = workers.emplaceBack();
     worker.reservationTag = reservationTag;
     return worker;
   }
 
-  ComplexPlugin::ComplexPlugin(usize parameterMappings, u32 inSidechains, 
-    u32 outSidechains, usize undoSteps, CplugHostContext *hostContext) : 
+  ComplexPlugin::ComplexPlugin(usize parameterMappings, u32 inSidechains,
+    u32 outSidechains, usize undoSteps, CplugHostContext *hostContext) :
     inSidechains{ inSidechains }, outSidechains{ outSidechains },
     parameterCount{ parameterMappings }, undoManager{ undoSteps },
     hostContext{ hostContext }
   {
     loadState(this, {});
-    // plugin formats will later call loadState 
+    // plugin formats will later call loadState
     // but in between that other functions get called that will require *some* state
     wasStateInitialised = hostContext->type == CPLUG_PLUGIN_IS_STANDALONE;
   }
@@ -381,7 +405,7 @@ namespace Plugin
     }
   }
 
-  utils::sp<State> 
+  utils::sp<State>
   ComplexPlugin::exchangeStates(utils::sp<State> state)
   {
     {
@@ -390,7 +414,7 @@ namespace Plugin
     }
 
     // refresh all parameters as soon as the states are exchanged
-    hostContext->rescan(hostContext, 
+    hostContext->rescan(hostContext,
       CPLUG_FLAG_RESCAN_PARAM_METADATA | CPLUG_FLAG_RESCAN_PARAM_NAMES | CPLUG_FLAG_RESCAN_PARAM_VALUES);
 
     return state;
@@ -405,11 +429,11 @@ namespace Plugin
       return *rendererInstance;
     }
 
-    // setting these once more because i don't know if the message thread 
+    // setting these once more because i don't know if the message thread
     // might have been shut down and started up again
     Interface::uiRelated.renderer = rendererInstance;
     Interface::uiRelated.skin = Interface::getSkin(rendererInstance);
-    
+
     return *rendererInstance;
   }
 
@@ -419,8 +443,8 @@ namespace Plugin
       hostContext->rescan(hostContext, CPLUG_FLAG_RESCAN_LATENCY);
   }
 
-  void ComplexPlugin::process(float *const *in, float *const *out, 
-    u32 numSamples, u32 numInputs, u32 numOutputs) noexcept
+  void ComplexPlugin::process(float *const *in, float *const *out,
+    u32 numSamples, u32 numInputs, u32 numOutputs)
   {
     float currentSampleRate = getSampleRate();
 
@@ -429,7 +453,7 @@ namespace Plugin
     auto state = state_;
     state->soundEngine->updateParameters(UpdateFlag::BeforeProcess,
       currentSampleRate, true);
-    
+
     if (auto latency_ = state->soundEngine->getProcessingDelay();
       latency_ != latency.load(satomi::memory_order_relaxed))
     {
@@ -437,7 +461,7 @@ namespace Plugin
       hasLatencyChanged.store(true, satomi::memory_order_relaxed);
     }
 
-    state->soundEngine->process(in, out, numSamples, 
+    state->soundEngine->process(in, out, numSamples,
       currentSampleRate, numInputs, numOutputs, *state->fft);
 
     state->soundEngine->updateParameters(UpdateFlag::AfterProcess,
@@ -478,7 +502,7 @@ void *cplug_createPlugin(CplugHostContext *ctx)
 
   auto *plugin = new utils::sll<Plugin::ComplexPlugin>{ { parameterMappings, (u32)inSidechains, (u32)outSidechains, undoSteps, ctx } };
   utils::ScopedLock g{ structure.readWriteLock, true, utils::WaitMechanism::WaitNotify };
-  
+
   if (auto *lastNode = structure.pluginInstances)
   {
     while (lastNode->next)
@@ -508,7 +532,7 @@ void cplug_destroyPlugin(void *ptr)
 
     ((lastNode) ? lastNode->next : structure.pluginInstances) = node->next;
   }
-  
+
   delete plugin;
 
   utils::bumpArena::destroy(localScratch);
@@ -660,7 +684,7 @@ uint32_t cplug_getParameterFlags(void *ptr, uint32_t paramId)
   {
     auto details = link->parameter->getParameterDetails();
     flags |= details.scale == Framework::ParameterScale::Toggle ? CPLUG_FLAG_PARAMETER_IS_BOOL : 0;
-    flags |= details.scale == Framework::ParameterScale::Indexed ? 
+    flags |= details.scale == Framework::ParameterScale::Indexed ?
       CPLUG_FLAG_PARAMETER_IS_INTEGER : 0;
   }
 
@@ -683,28 +707,24 @@ void cplug_saveState(void *userPlugin, const void *stateCtx, cplug_writeProc wri
 
 void cplug_loadState(void *userPlugin, const void *stateCtx, cplug_readProc readProc)
 {
-  usize capacity = COMPLEX_KB(4);
+  static constexpr auto kCapacityIncrease = COMPLEX_KB(4);
+
+  usize capacity = kCapacityIncrease;
   usize size{};
-  char *buffer = (char *)utils::allocate(capacity);
-  while (readProc(stateCtx, buffer + size, COMPLEX_KB(4)) != 0)
+  char *buffer = arranew(globalArena, char, capacity, {});
+  while (readProc(stateCtx, buffer + size, kCapacityIncrease) != 0)
   {
-    usize newCapacity = capacity + COMPLEX_KB(4);
-    char *newBuffer = (char *)utils::allocate(newCapacity);
-
-    ::memcpy(newBuffer, buffer, size * sizeof(char));
-    ::zeroset(newBuffer + size, COMPLEX_KB(4));
-    utils::deallocate(buffer);
-
-    buffer = newBuffer;
-    capacity = newCapacity;
-    size += COMPLEX_KB(4);
+    capacity += kCapacityIncrease;
+    size += kCapacityIncrease;
+    buffer = (char *)utils::bumpArena::resize(buffer, capacity, true);
   }
 
+  // find the end
   usize i = 0;
-  for (; i < COMPLEX_KB(4); ++i)
-    if (buffer[size - COMPLEX_KB(4) + i] != '\0')
+  for (; i < kCapacityIncrease; ++i)
+    if (buffer[size - kCapacityIncrease + i] != '\0')
       break;
-  size = size - COMPLEX_KB(4) + i;
+  size = size - kCapacityIncrease + i;
 
   loadState((Plugin::ComplexPlugin *)userPlugin, { buffer, size });
   utils::deallocate(buffer);
@@ -760,5 +780,3 @@ void cplug_process(void *ptr, CplugProcessContext *ctx)
     }
   }
 }
-
-

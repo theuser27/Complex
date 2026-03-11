@@ -418,8 +418,8 @@ namespace Interface
     }
 
     auto maxStringLength = utils::string{ localScratch, { buffer, size } };
-    if (!popupPrefix.empty())
-      maxStringLength.prepend(popupPrefix);
+    if (!prefix.empty())
+      maxStringLength.prepend(prefix);
     if (!details.displayUnits.empty())
       maxStringLength.append(details.displayUnits);
 
@@ -508,7 +508,7 @@ namespace Interface
     }
 
     if (addPrefix)
-      outString.prepend(popupPrefix);
+      outString.prepend(prefix);
 
     outString.append(details.displayUnits);
   }

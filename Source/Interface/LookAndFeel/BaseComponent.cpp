@@ -5,6 +5,7 @@
 
 #include "ui_constants.hpp"
 #include "Graphics.hpp"
+#include "Plugin/Complex.hpp"
 #include "Plugin/Renderer.hpp"
 #include "Generation/BaseProcessor.hpp"
 #include "../Components/BaseControl.hpp"
@@ -13,10 +14,6 @@
 
 namespace Interface
 {
-  PopupSelector *getPopupSelector() { return getGui(uiRelated.renderer)->getPopupSelector(); }
-  PopupDisplay *getPopupDisplay(bool primary = true) { return getGui(uiRelated.renderer)->getPopupDisplay(primary); }
-  utils::bumpArena *getUIArena() { return getGui(uiRelated.renderer)->arena; }
-
 #define GET_PRIMARY_FLAG(component, flag) ((flag) << (i32)(!!(component->componentFlags.vertical)))
 #define GET_SECONDARY_FLAG(component, flag) ((flag) << (1 - (!!(component->componentFlags.vertical))))
 #define TRANSPOSE(component, rect) ((component->componentFlags.vertical) ? (rect).transposed() : (rect))
@@ -39,7 +36,7 @@ namespace Interface
 
     auto Rectangle<i32>:: *minMember = (isCalculatingVertical) ? &Rectangle<i32>::y : &Rectangle<i32>::x;
     auto Rectangle<i32>:: *maxMember = (isCalculatingVertical) ? &Rectangle<i32>::h : &Rectangle<i32>::w;
-    
+
     Range<i64> sizes{};
     Range<i64> nonPositionedSizes{};
 
@@ -62,7 +59,7 @@ namespace Interface
       if (component->componentFlags.vertical ^ isCalculatingVertical)
       {
         if (test_enum(child->sizingFlags, (isCalculatingVertical) ? Component::SameAsSiblingsY : Component::SameAsSiblingsX))
-          sameAsSiblingsComponents.emplace_back(child);
+          sameAsSiblingsComponents.emplaceBack(child);
         else
         {
           sizes.min = utils::max(sizes.min, (i64)(child->bounds.*minMember) + extra);
@@ -85,7 +82,7 @@ namespace Interface
         // taking care of children that conform to siblings' primary size
         if (test_enum(child->sizingFlags, (isCalculatingVertical) ? Component::SameAsSiblingsY : Component::SameAsSiblingsX))
         {
-          sameAsSiblingsComponents.emplace_back(child);
+          sameAsSiblingsComponents.emplaceBack(child);
         }
       }
     }
@@ -127,12 +124,10 @@ namespace Interface
     {
       component->bounds.*minMember = utils::max(component->desiredSize.*minMember, (i32)sizes.min);
 
-      bool isGrowable = (isCalculatingVertical) ?
-        ((component->sizingFlags & Component::ScrollableWithBarY) == Component::GrowableY) :
-        ((component->sizingFlags & Component::ScrollableWithBarX) == Component::GrowableX);
+      auto growableFlag = (isCalculatingVertical) ? Component::GrowableY : Component::GrowableX;
 
-      component->bounds.*maxMember = (isGrowable) ? utils::max_limit<i32> : 
-        utils::max(component->bounds.*minMember, 
+      component->bounds.*maxMember = (component->sizingFlags & growableFlag) ? utils::max_limit<i32> :
+        utils::max(component->bounds.*minMember,
           utils::min(component->desiredSize.*maxMember, (i32)sizes.max));
     }
 
@@ -140,7 +135,7 @@ namespace Interface
     if (component->overrideDimensions)
     {
       auto [min, max] = component->overrideDimensions(component, isCalculatingVertical);
-      // returned bounds are scaled so we need to unscale them 
+      // returned bounds are scaled so we need to unscale them
       // in order to work with the rest of the values
       if (min >= 0)
         component->bounds.*minMember = (i32)::ceilf(unscaleValue((float)min));
@@ -154,7 +149,7 @@ namespace Interface
     //  component->bounds.*maxMember = (component->componentFlags.isVertical ^ isCalculatingVertical) ? utils::max_limit<i32> : 0;
 
     // add this component's padding to the total size
-    auto padding = (isCalculatingVertical) ? 
+    auto padding = (isCalculatingVertical) ?
       component->padding.getBottom() : component->padding.getRight();
 
     component->bounds.*minMember = (i32)utils::min((i64)utils::max_limit<i32>,
@@ -165,7 +160,7 @@ namespace Interface
 
   constinit utils::vector<Component *> *sortedSizesMin{};
   constinit utils::vector<Component *> *sortedSizesMax{};
-  
+
   static void calculateGrow(Component *component, Component *children, bool isCalculatingVertical)
   {
     auto Rectangle<i32>:: *minMember = (isCalculatingVertical) ? &Rectangle<i32>::y : &Rectangle<i32>::x;
@@ -199,7 +194,7 @@ namespace Interface
     sortedMax.clear();
 
     // account for this component's padding from the size we were assigned
-    i32 minSize = (isCalculatingVertical) ? 
+    i32 minSize = (isCalculatingVertical) ?
       component->padding.getBottom() : component->padding.getRight();
     i32 maxSize = minSize;
     for (auto *child = children; child; child = child->next)
@@ -227,12 +222,12 @@ namespace Interface
     {
       // parent is scrollable so every child is set to their preferred max sizes
       // which is already done, therefore this is a no-op
-      // 
+      //
       // NB: if you have a scrollable parent and a growable child
       // along the same axis, this will fail spectacularly
       // (although does that even make sense?)
 
-      ((isCalculatingVertical) ? 
+      ((isCalculatingVertical) ?
         component->scrollableArea.h : component->scrollableArea.w) = maxSize;
     }
     else
@@ -268,11 +263,11 @@ namespace Interface
           if (i < sortedMin.size())
             currentSize += (remaining - (sortedMin[i]->bounds.*minMember * (i32)(i - j)));
 
-          // if the most constrained component's maximum gets surpassed by the current size, 
+          // if the most constrained component's maximum gets surpassed by the current size,
           // exclude it and update the remainder
           if (sortedMax[j]->bounds.*maxMember < currentSize)
           {
-            // j can only get incremented and because we always assume that minMember <= maxMember 
+            // j can only get incremented and because we always assume that minMember <= maxMember
             // we don't have to erase the skipped component in sortedMin here after incrementing j
             if (j < sortedMax.size())
               remaining -= sortedMax[j]->bounds.*maxMember;
@@ -335,7 +330,7 @@ namespace Interface
 
 #define IS_PRIMARY_POSITION_FLAG_SET(child, parent, flag) (child->placement & GET_PRIMARY_FLAG(parent, flag))
 #define IS_SECONDARY_POSITION_FLAG_SET(child, parent, flag) (child->placement & GET_SECONDARY_FLAG(parent, flag))
-  
+
   void calculatePositions(Component *children,
     Component *component, Rectangle<i32> boundsInTarget)
   {
@@ -397,7 +392,7 @@ namespace Interface
       if (child->placement & Placement::custom)
       {
         // component has decided to take care of its own position
-        customPlacement->emplace_back(child);
+        customPlacement->emplaceBack(child);
         continue;
       }
 
@@ -405,7 +400,7 @@ namespace Interface
       auto margin = scaleValueRoundInt(TRANSPOSE(component, child->margin).toInt());
       primaryUsed += bounds.w + margin.getRight();
 
-      if (auto type = child->placement & GET_PRIMARY_FLAG(component, Placement::justifyX); 
+      if (auto type = child->placement & GET_PRIMARY_FLAG(component, Placement::justifyX);
         type == GET_PRIMARY_FLAG(component, Placement::justifyX) || type == 0)
       {
         if (!isInGroup)
@@ -421,12 +416,12 @@ namespace Interface
       else if (IS_SECONDARY_POSITION_FLAG_SET(child, component, Placement::right))
         bounds.y = boundsInTarget.h - margin.h - bounds.h;
       else
-        bounds.y = utils::max(boundsInTarget.y + margin.y, 
+        bounds.y = utils::max(boundsInTarget.y + margin.y,
           (boundsInTarget.getBottom() - bounds.h) / 2);
 
-      setNextPosition(IS_SECONDARY_POSITION_FLAG_SET(child, component, Placement::right), 
+      setNextPosition(IS_SECONDARY_POSITION_FLAG_SET(child, component, Placement::right),
         TRANSPOSE(component, bounds), child, secondary);
-      
+
       //child->bounds.setPosition(TRANSPOSE(component, bounds.getPosition()));
     }
 
@@ -436,7 +431,7 @@ namespace Interface
     for (auto *child = children; child;)
     {
       // skip if custom or invisible
-      if ((child->placement & Placement::custom) || 
+      if ((child->placement & Placement::custom) ||
         !child->componentFlags.isVisible)
       {
         child = child->next;
@@ -447,7 +442,7 @@ namespace Interface
         type == GET_PRIMARY_FLAG(component, Placement::justifyX) || type == 0)
       {
         auto *nextChild = child;
-        
+
         if (type == 0)
         {
           // centred components
@@ -638,40 +633,41 @@ namespace Interface
       component->componentFlags.isDestroyingOpenGl = true;
       component->render(getOpenGlContext(uiRelated.renderer));
     }
-    
-    auto *gui = getGui(uiRelated.renderer);
-    if (auto *selector = gui->getPopupSelector(); selector->summoner == component)
-    {
-      if (selector->cancel)
-        selector->cancel(selector);
 
-      selector->resetState();
-      component->removeChildComponent(selector);
-    }
-    if (auto *display = gui->getPopupDisplay(true); display->source == component)
+    auto *gui = getGui(uiRelated.renderer);
+    if (gui->popupSelector.summoner == component)
     {
-      display->componentFlags.isVisible = false;
+      if (gui->popupSelector.cancel)
+        gui->popupSelector.cancel(&gui->popupSelector);
+
+      gui->popupSelector.resetState();
+      component->removeChildComponent(&gui->popupSelector);
     }
-    if (auto *display = gui->getPopupDisplay(false); display->source == component)
+    if (gui->popupDisplay1.source == component)
     {
-      display->componentFlags.isVisible = false;
+      gui->popupDisplay1.componentFlags.isVisible = false;
+    }
+    if (gui->popupDisplay2.source == component)
+    {
+      gui->popupDisplay2.componentFlags.isVisible = false;
     }
 
     component->deleteAllChildComponents(false);
-    if (freeArena)
-      utils::bumpArena::remove(component);
+    if (freeArena && component->arena)
+      utils::bumpArena::destroy(component->arena);
+    utils::bumpArena::remove(component);
   }
 
-  bool 
+  bool
   Component::mouseWheelMove(const MouseEvent &event)
   {
-    if ((sizingFlags & Component::ScrollableX) == 0 && event.wheelDeltaX != 0.0f)
+    if ((sizingFlags & Component::ScrollableX) && event.wheelDeltaX != 0.0f)
     {
       // TODO:
       return true;
     }
 
-    if ((sizingFlags & Component::ScrollableY) == 0 && event.wheelDeltaY != 0.0f)
+    if ((sizingFlags & Component::ScrollableY) && event.wheelDeltaY != 0.0f)
     {
       // TODO:
       return true;
@@ -680,7 +676,7 @@ namespace Interface
     return false;
   }
 
-  Point<i32> 
+  Point<i32>
   Component::getPositionInWindow() const
   {
     Point relativePosition = getPosition();
@@ -730,7 +726,7 @@ namespace Interface
     return (onlyClickable && !componentFlags.clickable) ? nullptr : this;
   }
 
-  bool 
+  bool
   Component::hasFocus(bool trueIfChildIsFocused) const
   {
     auto *focusedComponent = getMouseInteractions(uiRelated.renderer).focused;
@@ -740,7 +736,7 @@ namespace Interface
     return isParentOf(focusedComponent);
   }
 
-  static bool 
+  static bool
   isShowingInternal(Component *component)
   {
     while (component)
@@ -754,7 +750,7 @@ namespace Interface
     return true;
   }
 
-  static bool 
+  static bool
   grabFocusInternal(Component *component, Component *origin = nullptr)
   {
     if (!isShowingInternal(component))
@@ -827,7 +823,7 @@ namespace Interface
     }
   }
 
-  bool 
+  bool
   Component::isObscured(const Component *ignoreClipIncluding) const
   {
     auto scissorBounds = bounds;
@@ -859,11 +855,11 @@ namespace Interface
 
     childToAdd->parent = this;
     childToAdd->next = nullptr;
+    childToAdd->previous = childToAdd;
 
     if (!children)
     {
       children = childToAdd;
-      children->previous = childToAdd;
       return;
     }
 
@@ -888,34 +884,54 @@ namespace Interface
     }
   }
 
+  void Component::addChildComponent(Component *childToAdd, usize index)
+  {
+    Component *insertBefore = children;
+    for (; index && insertBefore; (--index), (insertBefore = insertBefore->next)) { }
+    addChildComponent(childToAdd, insertBefore);
+  }
+
   void Component::removeChildComponent(Component *childToRemove, bool keepFocus)
   {
-    if (childToRemove->parent != this)
+    if (!childToRemove || childToRemove->parent != this)
       return;
-
-    childToRemove->parent = nullptr;
-    childToRemove->next->previous = childToRemove->previous;
-    if (childToRemove->previous->next)
-      childToRemove->previous->next = childToRemove->next;
 
     if (!keepFocus)
       childToRemove->giveAwayFocus();
+
+    childToRemove->next->previous = childToRemove->previous;
+    if (childToRemove->previous->next)
+      childToRemove->previous->next = childToRemove->next;
+    else
+      children = childToRemove->next;
+
+    childToRemove->parent = nullptr;
+    childToRemove->previous = nullptr;
+    childToRemove->next = nullptr;
   }
 
   Component *
   Component::removeChildComponent(usize childIndexToRemove, bool keepFocus)
   {
     auto *child = children;
-    for (usize i = 0; i < childIndexToRemove; ++i)
+    for (; child && childIndexToRemove; --childIndexToRemove)
       child = child->next;
 
-    child->parent = nullptr;
-    child->next->previous = child->previous;
-    if (child->previous->next)
-      child->previous->next = child->next;
+    if (!child)
+      return nullptr;
 
     if (!keepFocus)
       child->giveAwayFocus();
+
+    child->next->previous = child->previous;
+    if (child->previous->next)
+      child->previous->next = child->next;
+    else
+      children = child->next;
+
+    child->parent = nullptr;
+    child->previous = nullptr;
+    child->next = nullptr;
 
     return child;
   }
@@ -929,12 +945,15 @@ namespace Interface
       if (isParentOf(focusedComponent))
         focusedComponent->giveAwayFocus();
 
-    for (auto *child = children; child; child = child->next)
+    for (Component *child = children, *nextChild = nullptr; child; child = nextChild)
     {
+      nextChild = child->next;
       child->parent = nullptr;
-      child->previous->next = nullptr;
       child->previous = nullptr;
+      child->next = nullptr;
     }
+
+    children = nullptr;
   }
 
   void Component::deleteChildComponent(Component *childToDelete, bool freeArena)
@@ -977,7 +996,7 @@ namespace Interface
       mousePosition = Point{ interactions.mouseState.x, interactions.mouseState.y } - getPositionInWindow();
     }
 
-    auto calculateScrollWidth = [this, &mousePosition, scrollExpandPercent](Rectangle<i32> bounds, 
+    auto calculateScrollWidth = [this, &mousePosition, scrollExpandPercent](Rectangle<i32> bounds,
       u16 &currentScrollWidth, float &brightness)
     {
       float percentExpand = (float)currentScrollWidth / (float)utils::max_limit<u16>;
@@ -1012,7 +1031,7 @@ namespace Interface
       xScrollBounds = { (float)scrollBounds.x + start, scrollBounds.getBottom() - width, length, width };
     }
 
-    if (test_enum(sizingFlags, Component::ScrollableWithBarX) && scrollableArea.h > bounds.h)
+    if (test_enum(sizingFlags, Component::ScrollableWithBarY) && scrollableArea.h > bounds.h)
     {
       Rectangle<i32> scrollBounds{ bounds.getRight() - scaledPadding.w, scaledPadding.y,
         scaledPadding.w, bounds.h - scaledPadding.y - scaledPadding.h };
@@ -1037,7 +1056,7 @@ namespace Interface
         c = c.brighter(xScrollBrightness);
 
       nvgFillColor(openGl.g, c);
-      nvgRoundedRect(openGl.g, xScrollBounds.x, xScrollBounds.y, 
+      nvgRoundedRect(openGl.g, xScrollBounds.x, xScrollBounds.y,
         xScrollBounds.w, xScrollBounds.h, xScrollBounds.w * 0.5f);
     }
 
@@ -1075,20 +1094,5 @@ namespace Interface
       child->doRender(openGl);
       nvgRestore(openGl);
     }
-  }
-
-  void ProcessorSection::addControl(Control *control, bool addChild)
-  {
-    controls_.add(control->details.id, control);      
-
-    if (addChild)
-      addChildComponent(control);
-  }
-
-  void ProcessorSection::removeControl(Control *control)
-  {
-    removeChildComponent(control);
-
-    controls_.erase(control->details.id);      
   }
 }

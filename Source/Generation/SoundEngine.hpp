@@ -20,21 +20,22 @@ namespace Plugin
 
 namespace Generation
 {
-  class EffectsState;
+  class EffectsLane;
 
   class SoundEngine final : public BaseProcessor
   {
   public:
     COMPLEX_ENUM_LOCAL(Parameters,
-      (        Mix, 1757890335887669700),
-      (  BlockSize, 1757890343009612500),
-      (    Overlap, 1757890352148067900),
-      ( WindowType, 1757856325668537300),
-      (WindowAlpha, 1758060737254466200),
-      (    OutGain, 1758060942415217700),
+      (        Mix, 1757890335887),
+      (  BlockSize, 1757890343009),
+      (    Overlap, 1757890352148),
+      ( WindowType, 1757856325668),
+      (WindowAlpha, 1758060737254),
+      (    OutGain, 1758060942415),
     )
 
-    SoundEngine(Plugin::State *state, Framework::ProcessorMetadata *metadata, utils::bumpArena *arena) noexcept;
+    SoundEngine(utils::bumpArena *arena, Plugin::State *state, 
+      Framework::ProcessorMetadata *metadata, void *serialisedSave);
 
   private:
     //=========================================================================================
@@ -47,8 +48,9 @@ namespace Generation
       u32 blockBegin_ = 0;
       u32 blockEnd_ = 0;
 
-      // except in reserve(), lock must be acquired manually to have access to this struct
-      mutable satomi::atomic<bool> lock{};
+      utils::bumpArena *arena{};
+
+      // lock must be acquired manually to have access to this struct (except in reserve())
 
       enum BeginPoint { LastOutputBlock, BlockBegin, BlockEnd, End };
 
@@ -60,7 +62,7 @@ namespace Generation
         end = 0;
       }
 
-      void reserve(SoundEngine *engine, u32 newChannels, u32 newSize);
+      void reserve(u32 newChannels, u32 newSize);
 
       strict_inline void advanceLastOutputBlock(u32 samples)
       { lastOutputBlock_ = (lastOutputBlock_ + samples) % size; }
@@ -74,7 +76,7 @@ namespace Generation
 
       // returns how many samples in the buffer can be read
       // starting at blockBegin_/blockEnd_until end_
-      strict_inline u32 newSamplesToRead(BeginPoint beginPoint, u32 overlapOffset = 0) const noexcept
+      strict_inline u32 newSamplesToRead(BeginPoint beginPoint, u32 overlapOffset = 0) const
       {
         u32 begin = (beginPoint == BlockBegin) ? blockBegin_ : blockEnd_;
 
@@ -96,15 +98,14 @@ namespace Generation
         return (offset == 0) ? index : (size + index + (u32)offset) % size;
       }
 
-      strict_inline u32 getLastOutputBlockToBlockBegin() const noexcept { return (size + blockBegin_ - lastOutputBlock_) % size; }
-      strict_inline u32 getBlockBeginToBlockEnd() const noexcept { return (size + blockEnd_ - blockBegin_) % size; }
-      strict_inline u32 getBlockEndToEnd() const noexcept { return (size + end - blockEnd_) % size; }
+      strict_inline u32 getLastOutputBlockToBlockBegin() const { return (size + blockBegin_ - lastOutputBlock_) % size; }
+      strict_inline u32 getBlockBeginToBlockEnd() const { return (size + blockEnd_ - blockBegin_) % size; }
+      strict_inline u32 getBlockEndToEnd() const { return (size + end - blockEnd_) % size; }
     } inBuffer{};
     //
     // FFT-ed data buffer, size is double the max FFT block
     // even/odd indices - real/imaginary
     Framework::Buffer FFTBuffer_;
-    satomi::atomic<bool> FFTBufferLock_{};
     //
     // if an input isn't used there's no need to process it at all
     utils::span<bool> usedInputChannels_{};
@@ -122,8 +123,9 @@ namespace Generation
       // index of the first sample of the last add-overlapped block
       u32 addOverlap_ = 0;
 
-      // except in reserve(), lock must be acquired manually to have access to this struct
-      mutable satomi::atomic<bool> lock{};
+      utils::bumpArena *arena{};
+      
+      // lock must be acquired manually to have access to this struct (except in reserve())
 
       void reset()
       {
@@ -133,9 +135,9 @@ namespace Generation
         end = 0;
       }
 
-      void reserve(SoundEngine *engine, u32 newChannels, u32 newSize);
+      void reserve(u32 newChannels, u32 newSize);
 
-      strict_inline void setLatencyOffset(i32 newLatencyOffset) noexcept
+      strict_inline void setLatencyOffset(i32 newLatencyOffset)
       {
         if (latencyOffset_ == newLatencyOffset)
           return;
@@ -150,13 +152,13 @@ namespace Generation
         clear();
       }
 
-      strict_inline void advanceBeginOutput(u32 samples) noexcept { beginOutput_ = (beginOutput_ + samples) % size; }
-      strict_inline void advanceToScaleOutput(u32 samples) noexcept { toScaleOutput_ = (toScaleOutput_ + samples) % size; }
-      strict_inline void advanceAddOverlap(u32 samples) noexcept { addOverlap_ = (addOverlap_ + samples) % size; }
+      strict_inline void advanceBeginOutput(u32 samples) { beginOutput_ = (beginOutput_ + samples) % size; }
+      strict_inline void advanceToScaleOutput(u32 samples) { toScaleOutput_ = (toScaleOutput_ + samples) % size; }
+      strict_inline void advanceAddOverlap(u32 samples) { addOverlap_ = (addOverlap_ + samples) % size; }
 
-      strict_inline u32 getBeginOutputToToScaleOutput() const noexcept { return (size + toScaleOutput_ - beginOutput_) % size; }
-      strict_inline u32 getToScaleOutputToAddOverlap() const noexcept { return (size + addOverlap_ - toScaleOutput_) % size; }
-      strict_inline u32 getAddOverlapToEnd() const noexcept { return (size + end - addOverlap_) % size; }
+      strict_inline u32 getBeginOutputToToScaleOutput() const { return (size + toScaleOutput_ - beginOutput_) % size; }
+      strict_inline u32 getToScaleOutputToAddOverlap() const { return (size + addOverlap_ - toScaleOutput_) % size; }
+      strict_inline u32 getAddOverlapToEnd() const { return (size + end - addOverlap_) % size; }
     } outBuffer{};
     //
     // windows pointer for accessing windowing types
@@ -165,32 +167,37 @@ namespace Generation
     //=========================================================================================
     // Methods
     //
-    void resizeBuffers(u32 maxOrder, u32 maxSidechainInputs, u32 maxSidechainOutputs);
-    void copyBuffers(const float *const *buffer, u32 inputs, u32 samples) noexcept;
-    void isReadyToPerform(u32 samples) noexcept;
-    void doFFT(Framework::FFT &ffts) noexcept;
-    void processFFT(float sampleRate) noexcept;
-    void doIFFT(Framework::FFT &ffts) noexcept;
-    void mixOut(u32 samples) noexcept;
-    void fillOutput(float *const *buffer, u32 outputs, u32 samples) noexcept;
+    void resizeBuffers(u32 maxSidechainInputs, u32 maxSidechainOutputs);
+    void copyBuffers(const float *const *buffer, u32 inputs, u32 samples);
+    void isReadyToPerform(u32 samples);
+    void doFFT(Framework::FFT &ffts);
+    void interleaveInputs(const Framework::Buffer &inputBuffer);
+    void processLanes();
+    void sumLanesAndDeinterleaveOutputs(Framework::Buffer &outputBuffer);
+    void doIFFT(Framework::FFT &ffts);
+    void mixOut(u32 samples);
+    void fillOutput(float *const *buffer, u32 outputs, u32 samples);
+
+    void checkUsage();
+    void distributeWork() const;
+    void processIndividualLanes(EffectsLane *lane) const;
 
   public:
-    // Inherited via BaseProcessor
-    bool insertSubProcessor(usize index, BaseProcessor &newSubProcessor, bool callListeners = true) override;
-    void initialiseParameters() override;
+    Interface::Component *createUI() override;
 
     // initialising pointers and FFT plans
-    void resetBuffers() noexcept;
-    void updateParameters(UpdateFlag flag, float sampleRate, bool updateChildrenParameters = true) noexcept;
+    void resetBuffers();
+    void updateParameters(UpdateFlag flag, float sampleRate, bool updateChildrenParameters = true);
     void process(float *const *in, float *const *out, u32 samples, float sampleRate,
-      u32 numInputs, u32 numOutputs, Framework::FFT &ffts) noexcept;
+      u32 numInputs, u32 numOutputs, Framework::FFT &ffts);
 
-    u32 getProcessingDelay() const noexcept;
-    auto &getEffectsState() const noexcept { return *utils::as<EffectsState>(children); }
-    float getOverlap() const noexcept { return currentOverlap_; }
-    u32 getFFTSize() const noexcept;
+    u32 getProcessingDelay() const;
+    float getOverlap() const { return currentOverlap_; }
+    u32 getFFTSize() const;
+    u32 getMaxBinCount() const;
     utils::pair<u32, u32> getMinMaxFFTOrder();
-    u32 getBlockPosition() const noexcept { return blockPosition_; }
+    u32 getBlockPosition() const { return blockPosition_; }
+    const Framework::SimdBuffer *getInterleavedOutputBuffer() const { return interleavedOutputBuffer; }
   private:
     //=========================================================================================
     // Parameters
@@ -245,10 +252,22 @@ namespace Generation
     //
     //
     bool isInitialised_ = false;
+
+    u32 binCount = 0;
+    float sampleRate = 0.0f;
+    float blockPhase = 0.0f;
+
+    // if an input/output isn't used there's no need to process it at all
+    utils::span<float> outputScaleMultipliers_{};
+
+    Framework::SimdBuffer *interleavedInputBuffer{};
+    Framework::SimdBuffer *interleavedOutputBuffer{};
+
+    satomi::atomic<bool> shouldWorkersProcess_ = false;
   };
 
   static_assert(utils::is_trivially_destructible_v<SoundEngine>);
 }
 
-extern template Generation::SoundEngine *createProcessor<>(Plugin::State *, Framework::ProcessorMetadata *,const void *);
+extern template Generation::BaseProcessor *createProcessor<Generation::SoundEngine>(Plugin::State *, Framework::ProcessorMetadata *, const void *, void *);
 extern template void *initialiseTypeStructure<Generation::SoundEngine>(void *metadata, Framework::PluginStructure &structure);

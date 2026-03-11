@@ -1,12 +1,5 @@
-/*
-	==============================================================================
 
-		EffectModuleSection.hpp
-		Created: 14 Feb 2023 2:29:16am
-		Author:  theuser27
-
-	==============================================================================
-*/
+// Created: 2023-02-14 02:29:16
 
 #pragma once
 
@@ -35,7 +28,7 @@ namespace Interface
 	class SpectralMaskComponent;
 	class EffectsLaneSection;
 
-	class EffectModuleSection final : public ProcessorSection,
+	class EffectModuleSection final : public Component,
 		public Framework::ParameterBridge::Listener
 	{
 	public:
@@ -62,26 +55,13 @@ namespace Interface
 		static constexpr int kInnerPixelRounding = 3;
 
 		EffectModuleSection(Generation::EffectModule *effectModule, EffectsLaneSection *laneSection);
-		~EffectModuleSection() noexcept override;
 		auto createCopy() const -> utils::up<EffectModuleSection>;
 
+		bool render(OpenGlWrapper &openGl) override;
+
 		void resized() override;
-		void renderOpenGlComponents(OpenGlWrapper &openGl) override 
-		{
-			ScopedIgnoreClip ic{ openGl.parentStack, ignoreClipIncluding_ };
-			ProcessorSection::renderOpenGlComponents(openGl);
-		}
 		void mouseDown(const MouseEvent &e) override;
-		void mouseDown([[maybe_unused]] Control *slider) override { }
-		void paintBackground(Graphics &g) override;
 		void controlValueChanged(Control *control) override;
-		auto getPowerButtonBounds() const noexcept -> Rectangle<int> override
-		{
-			auto widthHeight = (int)::roundf(scaleValue(kDefaultActivatorSize));
-			return { getWidth() - scaleValueRoundInt(kPowerButtonPadding) - widthHeight,
-				getYMaskOffset() + utils::centerAxis(widthHeight, scaleValueRoundInt(kTopMenuHeight)),
-				widthHeight, widthHeight };
-		}
 
 		// unfortunately we need both callbacks in order to 
 		// handle unmapping of parameters that don't have a UI control, 
@@ -107,30 +87,11 @@ namespace Interface
 				paintBackgroundFunction_(g, this);
 		}
 
-		auto getDraggableComponent() noexcept -> DraggableComponent & { return draggableBox_; }
-		auto getLaneSection() const noexcept -> EffectsLaneSection * { return laneSection_; }
-		auto getEffect() noexcept -> Generation::BaseEffect *;
-		auto getAlgorithmSelector() const noexcept -> TextSelector &;
-		auto getEffectControl(utils::string_view name) -> Control *;
-
-		auto getUIBounds() const noexcept -> Rectangle<int>
-		{ return getLocalBounds().withTop(getYMaskOffset() + scaleValueRoundInt(kTopMenuHeight) + 1); }
-
 		void handlePopupResult(int result) const noexcept;
-		void setIgnoreClip(Component *ignoreClipIncluding) noexcept { ignoreClipIncluding_ = ignoreClipIncluding; }
-	private:
+
 		auto createPopupMenu() const noexcept -> PopupItem;
 
 		void setEffectType(utils::string_view type);
-
-		auto getYMaskOffset() const noexcept -> int
-		{
-			auto offset = scaleValueRoundInt(kSpectralMaskMargin) + 
-				scaleValueRoundInt(kSpectralMaskContractedHeight);
-			return scaleValueRoundInt((float)offset);
-		}
-
-		utils::shared_value<Component *> ignoreClipIncluding_ = nullptr;
 
 		utils::up<SpectralMaskComponent> maskComponent_;
 
@@ -144,7 +105,7 @@ namespace Interface
 
 		EffectsLaneSection *laneSection_ = nullptr;
 		Generation::EffectModule *effectModule_ = nullptr;
-		std::vector<utils::up<Control>> effectControls_;
+		utils::vector<Control *> effectControls_;
 		utils::vector_map<usize, Framework::ParameterBridge *> parameterMappings{};
 
 		auto (*initialiseParametersFunction_)(EffectModuleSection *section, 

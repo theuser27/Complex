@@ -665,7 +665,7 @@ namespace utils
   // ghetto std::function implementation that can also be stack-allocated
   // and go back and forth between the heap and stack if needed
   // based on https://github.com/colugomusic/clog/blob/master/include/clog/small_function.hpp
-  template<typename Signature, usize MaxSize = 32, usize Alignment = 8>
+  template<typename Signature, usize MaxSize = 16, usize Alignment = 8>
   class fn;
 
   template<typename R, typename ... Args, usize MaxSize, usize Alignment>

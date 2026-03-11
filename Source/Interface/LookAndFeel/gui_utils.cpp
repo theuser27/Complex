@@ -144,14 +144,19 @@ namespace Interface
     return { hsb.r, hsb.g, hsb.b, a };
   }
 
-  utils::string 
-  Colour::toString() const
+  usize 
+  Colour::toString(char *buffer, usize bufferSize) const
+  {
+    u32 colour = getARGB();
+    return (usize)::stbsp_snprintf(buffer, (int)bufferSize, "%x", colour);
+  }
+
+  utils::string
+  Colour::toString(utils::Allocator allocator) const
   {
     char temp[30]{};
-    u32 colour = getARGB();
-    usize size = (usize)::stbsp_snprintf(temp, COMPLEX_ARRAY_SIZE(temp), "%x", colour);
-
-    return utils::string{ utils::generalAllocator, temp, size };
+    usize size = toString(temp, sizeof(temp));
+    return utils::string{ allocator, temp, size };
   }
 
   Colour 

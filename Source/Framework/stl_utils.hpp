@@ -52,6 +52,70 @@ namespace std
 
   template<usize I, typename T>
   struct tuple_element;
+
+  class source_location 
+  {
+  #ifdef _MSC_VER
+
+    u32 line_{};
+    u32 column_{};
+    const char *file_ = "";
+    const char *function_ = "";
+  public:
+    static consteval source_location 
+    current(u32 line = __builtin_LINE(), u32 column = __builtin_COLUMN(),
+      const char *file = __builtin_FILE(), const char *function = __builtin_FUNCSIG()) noexcept
+    {
+      source_location result{};
+      result.line_ = line;
+      result.column_ = column;
+      result.file_ = file;
+      result.function_ = function;
+      return result;
+    }
+
+    constexpr u32 line() const noexcept { return line_; }
+    constexpr u32 column() const noexcept { return column_; }
+    constexpr const char* file_name() const noexcept { return file_; }
+    constexpr const char* function_name() const noexcept { return function_; }
+
+  #else
+
+    // The names source_location::__impl, _M_file_name, _M_function_name, _M_line, and _M_column
+    // are hard-coded in the compiler and must not be changed here.
+    struct __impl 
+    {
+      const char* _M_file_name;
+      const char* _M_function_name;
+      unsigned _M_line;
+      unsigned _M_column;
+    };
+    const __impl* pointer = nullptr;
+    // GCC returns the type 'const void*' from the builtin, while clang returns
+    // `const __impl*`. Per C++ [expr.const], casts from void* are not permitted
+    // in constant evaluation, so we don't want to use `void*` as the argument
+    // type unless the builtin returned that, anyhow, and the invalid cast is
+    // unavoidable.
+    using T = decltype(__builtin_source_location());
+
+  public:
+    // The defaulted pointer argument is necessary so that the builtin is evaluated
+    // in the context of the caller. An explicit value should never be provided.
+    static consteval source_location 
+    current(T pointer = __builtin_source_location()) noexcept 
+    {
+      source_location location;
+      location.pointer = static_cast<const __impl*>(pointer);
+      return location;
+    }
+
+    constexpr u32 line() const noexcept { return pointer != nullptr ? pointer->_M_line : 0; }
+    constexpr u32 column() const noexcept { return pointer != nullptr ? pointer->_M_column : 0; }
+    constexpr const char* file_name() const noexcept { return pointer != nullptr ? pointer->_M_file_name : ""; }
+    constexpr const char* function_name() const noexcept { return pointer != nullptr ? pointer->_M_function_name : ""; }
+
+  #endif
+  };
 }
 
 namespace utils
@@ -693,9 +757,9 @@ namespace utils
     create()
     {
     #ifdef _MSC_VER
-      return typeInfo{ string_view{ __FUNCSIG__ } };
+      return typeInfo{ .p = __FUNCSIG__ };
     #else
-      return typeInfo{ string_view{ __PRETTY_FUNCTION__ } };
+      return typeInfo{ .p = __PRETTY_FUNCTION__ };
     #endif
     }
 
@@ -1022,7 +1086,7 @@ namespace utils
   { return ((i + factor - 1) / factor) * factor; }
 
   strict_inline usize 
-  getAlignment(void *pointer) noexcept
+  getAlignment(const void *pointer) noexcept
   {
     COMPLEX_ASSERT(pointer);
   #if COMPLEX_GCC || COMPLEX_CLANG
@@ -1117,4 +1181,6 @@ namespace utils
   // and size MUST be equal to the size, modified by reserveMemory
   // (because of posix munmap)
   void releaseMemory(void *memory, usize size);
+
+  void shrinkWorkingSet();
 }

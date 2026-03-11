@@ -5,149 +5,142 @@
 
 #include "Framework/fourier_transform.hpp"
 #include "Framework/parameter_value.hpp"
-#include "EffectsState.hpp"
+#include "EffectsLane.hpp"
 #include "Plugin/Complex.hpp"
 
 namespace Generation
 {
-  void SoundEngine::InputBuffer::reserve(SoundEngine *engine, u32 newChannels, u32 newSize)
+  static bool 
+  reserveBuffer(Framework::Buffer &buffer, utils::bumpArena *arena, u32 newChannels, u32 newSize, u32 *end)
   {
-    COMPLEX_ASSERT(newChannels > 0 && newSize > 0);
+    newChannels = newChannels ? newChannels : buffer.channels;
+    newSize = newSize ? newSize : buffer.size;      
 
-    if (newChannels <= channels && newSize <= size)
-      return;
+    if (newChannels <= buffer.channels && newSize <= buffer.size)
+      return false;
 
-    auto *newData = arranew(engine->arena, float, newChannels * newSize);
-    auto *oldData = data;
+    auto *newData = arranew(arena, float, newChannels * newSize);
+    auto *oldData = buffer.data;
+    bool copiedData = buffer.size && end;
 
     {
-      utils::ScopedLock g{ lock, utils::WaitMechanism::Wait };
+      utils::ScopedLock g{ buffer.lock, utils::WaitMechanism::Wait };
 
-      Framework::copyCircular({ .channels = newChannels, .size = newSize, .data = newData }, *this, end);
-
-      if (size)
+      if (copiedData)
       {
-        // recalculating indices based on the new size
-        blockEnd_ = utils::min((newSize - getBlockEndToEnd()) % newSize, newSize - 1);
-        blockBegin_ = utils::min((blockEnd_ - getBlockBeginToBlockEnd()) % newSize, newSize - 1);
-        lastOutputBlock_ = utils::min((blockBegin_ - getLastOutputBlockToBlockBegin()) % newSize, newSize - 1);
-        end = 0;
+        Framework::Buffer newBuffer{ .channels = newChannels, .size = newSize, .data = newData };
+        Framework::copyCircular(newBuffer, buffer, *end);
+        *end = 0;
       }
 
-      data = newData;
-      size = newSize;
-      channels = newChannels;
+      buffer.data = newData;
+      buffer.size = newSize;
+      buffer.channels = newChannels;
     }
 
     if (oldData)
-      engine->arena->remove(oldData);
+      utils::bumpArena::remove(oldData);
+    return copiedData;
+  }
+  
+  void SoundEngine::InputBuffer::reserve(u32 newChannels, u32 newSize)
+  {
+    bool copiedData = reserveBuffer(*this, arena, newChannels, newSize, &end);
+    if (copiedData)
+    {
+      // recalculating indices based on the new size
+      blockEnd_ = utils::min((newSize - getBlockEndToEnd()) % newSize, newSize - 1);
+      blockBegin_ = utils::min((blockEnd_ - getBlockBeginToBlockEnd()) % newSize, newSize - 1);
+      lastOutputBlock_ = utils::min((blockBegin_ - getLastOutputBlockToBlockBegin()) % newSize, newSize - 1);
+    }
   }
 
-  void SoundEngine::OutputBuffer::reserve(SoundEngine *engine, u32 newChannels, u32 newSize)
+  void SoundEngine::OutputBuffer::reserve(u32 newChannels, u32 newSize)
   {
-    COMPLEX_ASSERT(newChannels > 0 && newSize > 0);
-
-    // assumes SPSC relationship, therefore we don't need to lock to access these variables
-    if (newChannels <= channels && newSize <= size)
-      return;
-
-    auto *newData = arranew(engine->arena, float, newChannels * newSize);
-    auto *oldData = data;
-
+    bool copiedData = reserveBuffer(*this, arena, newChannels, newSize, &end);
+    if (copiedData)
     {
-      utils::ScopedLock g{ lock, utils::WaitMechanism::Wait };
-
-      Framework::copyCircular({ .channels = newChannels, .size = newSize, .data = newData }, *this, end);
-
-      if (size)
-      {
-        // recalculating indices based on the new size
-        addOverlap_ = utils::clamp((newSize - getAddOverlapToEnd()) % newSize, 0U, newSize - 1);
-        toScaleOutput_ = utils::clamp((addOverlap_ - getToScaleOutputToAddOverlap()) % newSize, 0U, newSize - 1);
-        beginOutput_ = utils::clamp((toScaleOutput_ - getBeginOutputToToScaleOutput()) % newSize, 0U, newSize - 1);
-        end = 0;
-      }
-
-      data = newData;
-      size = newSize;
-      channels = newChannels;
+      // recalculating indices based on the new size
+      addOverlap_ = utils::clamp((newSize - getAddOverlapToEnd()) % newSize, 0U, newSize - 1);
+      toScaleOutput_ = utils::clamp((addOverlap_ - getToScaleOutputToAddOverlap()) % newSize, 0U, newSize - 1);
+      beginOutput_ = utils::clamp((toScaleOutput_ - getBeginOutputToToScaleOutput()) % newSize, 0U, newSize - 1);
     }
-
-    if (oldData)
-      engine->arena->remove(oldData);
   }
 }
 
-template<> Generation::SoundEngine *
-createProcessor(Plugin::State *state, Framework::ProcessorMetadata *metadata, const void *)
+template<> Generation::BaseProcessor *
+createProcessor<Generation::SoundEngine>(Plugin::State *state, Framework::ProcessorMetadata *metadata, const void *, void *serialisedSave)
 {
-  auto *arena = utils::bumpArena::createNested(state->processorStorage, COMPLEX_MB(1));
-  return anew(arena, Generation::SoundEngine, { state, metadata, arena });
+  auto *arena = utils::bumpArena::createNested(state->processorStorage, COMPLEX_MB(4));
+  return anew(arena, Generation::SoundEngine, { arena, state, metadata, serialisedSave });
 }
 
 namespace Generation
 {
-  SoundEngine::SoundEngine(Plugin::State *state, Framework::ProcessorMetadata *metadata,
-    utils::bumpArena *arena) noexcept : BaseProcessor{ state, metadata, arena }
+  SoundEngine::SoundEngine(utils::bumpArena *arena, Plugin::State *state, 
+    Framework::ProcessorMetadata *metadata, void *serialisedSave) : BaseProcessor{ arena, state, metadata, nullptr }
   {
     using namespace Framework;
 
-    auto [minOrder, maxOrder] = state->getMinMaxFFTOrder();
-
-    resizeBuffers(maxOrder, state->plugin->inSidechains, state->plugin->outSidechains);
+    if (serialisedSave)
+      deserialiseFromJson(serialisedSave);
+    else
+    {
+      parameters = createParameters(metadata->parametersCount, metadata->parameters);
+      parameterCount = metadata->parametersCount;
+    }
+    
+    inBuffer.arena = arena;
+    outBuffer.arena = arena;
+    resizeBuffers(state->plugin->inSidechains, state->plugin->outSidechains);
   }
 
-  void SoundEngine::resizeBuffers(u32 maxOrder, u32 maxSidechainInputs, u32 maxSidechainOutputs)
+  void SoundEngine::resizeBuffers(u32 maxSidechainInputs, u32 maxSidechainOutputs)
   {
-    // input buffer size, kind of arbitrary but it must be longer than kMaxProcessingBufferLength
-    u32 maxInputBufferLength = 1 << (maxOrder + 5);
+    auto maxOrder = (u32)getParameter(Parameters::BlockSize)->getParameterDetails().maxValue;
+    
+    // input buffer size, kind of arbitrary but it must be longer than maxProcessingBufferLength
+    u32 maxInputBufferLength = 1 << (maxOrder + 4);
     // pre- and post-processing FFT buffers size
     // (+ 2 for nyquist real/imaginary parts and then rounded up to next simd size)
     u32 maxProcessingBufferLength = utils::roundUpToMultiple((1U << maxOrder) + 2, (u32)simd_float::size);
-    // output buffer size, must be longer than kMaxProcessingBufferLength
+    // output buffer size, must be longer than maxProcessingBufferLength
     u32 maxOutputBufferLength = (1 << maxOrder) * 2;
 
-    u32 maxInOuts = utils::max(maxSidechainInputs, maxSidechainOutputs) + 1;
+    u32 maxInChannels = utils::kChannelsPerInOut * (maxSidechainInputs + 1);
+    u32 maxOutChannels = utils::kChannelsPerInOut * (maxSidechainOutputs + 1);
+    u32 maxInOutChannels = utils::max(maxInChannels, maxOutChannels);
 
-    inBuffer.reserve(this, maxInOuts * kChannelsPerInOut, maxInputBufferLength);
-    outBuffer.reserve(this, maxInOuts * kChannelsPerInOut, maxOutputBufferLength);
+    inBuffer.reserve(maxInOutChannels, maxInputBufferLength);
+    outBuffer.reserve(maxInOutChannels, maxOutputBufferLength);
+    (void)reserveBuffer(FFTBuffer_, arena, maxInOutChannels, maxProcessingBufferLength, nullptr);
 
-    if (FFTBuffer_.channels < maxInOuts * kChannelsPerInOut || FFTBuffer_.size < maxProcessingBufferLength)
-    {
-      auto newFFTBuffer = Framework::Buffer
-      {
-        .channels = maxInOuts * kChannelsPerInOut,
-        .size = maxProcessingBufferLength,
-        .data = arranew(arena, float, (maxInOuts * kChannelsPerInOut) * maxProcessingBufferLength, {})
-      };
+    usedInputChannels_ = { arranew(arena, bool, maxInChannels, {}), maxInChannels };
+    usedOutputChannels_ = { arranew(arena, bool, maxOutChannels, {}), maxOutChannels };
+    outputScaleMultipliers_ = { arranew(arena, float, maxOutChannels, {}), maxOutChannels };
 
-      auto *oldBuffer = FFTBuffer_.data;
-      {
-        utils::ScopedLock g{ FFTBufferLock_, utils::WaitMechanism::Wait };
-        FFTBuffer_ = newFFTBuffer;
-      }
-
-      if (oldBuffer)
-        arena->remove(oldBuffer);
-    }
+    auto maxBinCount = (1 << (maxOrder - 1)) + 1;
+    interleavedInputBuffer = Framework::SimdBuffer::create(arena, maxInChannels, maxBinCount);
+    interleavedOutputBuffer = Framework::SimdBuffer::create(arena, maxOutChannels, maxBinCount);
   }
 
-  u32 SoundEngine::getProcessingDelay() const noexcept
-  { return FFTSamples_ + state->plugin->getSamplesPerBlock(); }
-
-  u32 SoundEngine::getFFTSize() const noexcept
+  u32 SoundEngine::getProcessingDelay() const { return FFTSamples_ + state->plugin->getSamplesPerBlock(); }
+  u32 SoundEngine::getFFTSize() const { return 1 << getParameter(Parameters::BlockSize)->getInternalValue<u32>(); }
+  u32 
+  SoundEngine::getMaxBinCount() const
   {
-    return 1 << getParameter(Parameters::BlockSize)->getInternalValue<u32>();
+    return (1 << ((u32)getParameter(Parameters::BlockSize)->getParameterDetails().maxValue - 1)) + 1;
   }
 
-  utils::pair<u32, u32> SoundEngine::getMinMaxFFTOrder()
+  utils::pair<u32, u32> 
+  SoundEngine::getMinMaxFFTOrder()
   {
     auto *parameter = getParameter(Parameters::BlockSize);
     auto details = parameter->getParameterDetails();
     return { (u32)details.minValue, (u32)details.maxValue };
   }
 
-  void SoundEngine::resetBuffers() noexcept
+  void SoundEngine::resetBuffers()
   {
     utils::ScopedLock g{ inBuffer.lock, utils::WaitMechanism::Spin };
     utils::ScopedLock gg{ outBuffer.lock, utils::WaitMechanism::Spin };
@@ -159,18 +152,64 @@ namespace Generation
     outBuffer.reset();
   }
 
-  void SoundEngine::copyBuffers(const float *const *buffer, u32 inputs, u32 samples) noexcept
+  void SoundEngine::copyBuffers(const float *const *buffer, u32 inputs, u32 samples)
   {
     // assume that we don't get blocks bigger than our buffer size
     inBuffer.writeAtEnd(buffer, inputs, samples);
 
-    auto &effectsState = getEffectsState();
-    // we update them here because we could get broken up blocks if done inside the loop
-    usedInputChannels_ = effectsState.getUsedInputChannels();
-    usedOutputChannels_ = effectsState.getUsedOutputChannels();
+    // update used in/outputs here because we could get broken up blocks if done inside the loop
+    
+    // update inputs
+    {
+      ::zeroset(usedInputChannels_.data(), usedInputChannels_.size());
+
+      for (auto *lane = getChild(children, 0, Processors::EffectsLane); lane;
+        lane = getChild(lane, 1, Processors::EffectsLane))
+      {
+        // if the input is not another lane's output and the chain is enabled
+        if (lane->getParameter(EffectsLane::LaneEnabled)->getInternalValue<u32>())
+        {
+          auto [laneIndexedData, index] = lane->getParameter(EffectsLane::Input)->getInternalValue<Framework::IndexedData>();
+          usize startIndex = 0;
+          if (laneIndexedData->id == EffectsLane::InputOptionsMain) { }
+          else if (laneIndexedData->id == EffectsLane::InputOptionsSidechain)
+            startIndex = utils::kChannelsPerInOut * (index + 1);
+          else if (laneIndexedData->id == EffectsLane::InputOptionsLane)
+            continue;
+          else COMPLEX_ASSERT_FALSE("Missing case");
+
+          for (usize i = 0; i < utils::kChannelsPerInOut; ++i)
+            usedInputChannels_[startIndex + i] = true;
+        }
+      }
+    }
+
+    // update outputs
+    {
+      ::zeroset(usedOutputChannels_.data(), usedOutputChannels_.size());
+
+      for (auto *lane = getChild(children, 0, Processors::EffectsLane); lane;
+        lane = getChild(lane, 1, Processors::EffectsLane))
+      {
+        if (lane->getParameter(EffectsLane::LaneEnabled)->getInternalValue<u32>())
+        {
+          auto [laneIndexedData, index] = lane->getParameter(EffectsLane::Output)->getInternalValue<Framework::IndexedData>();
+          usize startIndex = 0;
+          if (laneIndexedData->id == EffectsLane::OutputOptionsMain) { }
+          else if (laneIndexedData->id == EffectsLane::OutputOptionsSidechain)
+            startIndex = utils::kChannelsPerInOut * (index + 1);
+          else if (laneIndexedData->id == EffectsLane::OutputOptionsNone)
+            continue;
+          else COMPLEX_ASSERT_FALSE("Missing case");
+
+          for (usize i = 0; i < utils::kChannelsPerInOut; ++i)
+            usedOutputChannels_[startIndex + i] = true;
+        }
+      }
+    }
   }
 
-  void SoundEngine::isReadyToPerform(u32 samples) noexcept
+  void SoundEngine::isReadyToPerform(u32 samples)
   {
     isPerforming_ = false;
     hasEnoughSamples_ = false;
@@ -211,28 +250,28 @@ namespace Generation
     isPerforming_ = true;
   }
 
-  void SoundEngine::updateParameters(UpdateFlag flag, float sampleRate, bool updateChildrenParameters) noexcept
+  void SoundEngine::updateParameters(UpdateFlag flag, float currentSampleRate, bool updateChildrenParameters)
   {
     using namespace Framework;
 
-    BaseProcessor::updateParameters(flag, sampleRate, updateChildrenParameters);
+    BaseProcessor::updateParameters(flag, currentSampleRate, updateChildrenParameters);
 
     switch (flag)
     {
     case UpdateFlag::Realtime:
       currentOverlap_ = nextOverlap_;
-      nextOverlap_ = getParameter(Overlap)->getInternalValue<float>(sampleRate);
-      windowTypeId_ = getParameter(WindowType)->getInternalValue<Framework::IndexedData>(sampleRate).first->id;
-      alpha_ = utils::lerp(kAlphaLowerBound, kAlphaUpperBound, getParameter(WindowAlpha)->getInternalValue<float>(sampleRate));
+      nextOverlap_ = getParameter(Overlap)->getInternalValue<float>(currentSampleRate);
+      windowTypeId_ = getParameter(WindowType)->getInternalValue<Framework::IndexedData>(currentSampleRate).first->id;
+      alpha_ = utils::lerp(kAlphaLowerBound, kAlphaUpperBound, getParameter(WindowAlpha)->getInternalValue<float>(currentSampleRate));
 
       // getting the next overlapOffset
       nextOverlapOffset_ = (u32)::floorf((float)FFTSamples_ * (1.0f - nextOverlap_));
 
       break;
     case UpdateFlag::BeforeProcess:
-      mix_ = getParameter(Mix)->getInternalValue<float>(sampleRate);
-      FFTOrder_ = getParameter(BlockSize)->getInternalValue<u32>(sampleRate);
-      outGain_ = (float)utils::dbToAmplitude(getParameter(OutGain)->getInternalValue<float>(sampleRate));
+      mix_ = getParameter(Mix)->getInternalValue<float>(currentSampleRate);
+      FFTOrder_ = getParameter(BlockSize)->getInternalValue<u32>(currentSampleRate);
+      outGain_ = (float)utils::dbToAmplitude(getParameter(OutGain)->getInternalValue<float>(currentSampleRate));
 
       if (!isInitialised_)
       {
@@ -247,7 +286,7 @@ namespace Generation
     }
   }
 
-  void SoundEngine::doFFT(Framework::FFT &ffts) noexcept
+  void SoundEngine::doFFT(Framework::FFT &ffts)
   {
     // windowing
     windows.applyWindow(FFTBuffer_, FFTBuffer_.channels, usedInputChannels_, FFTSamples_, windowTypeId_, alpha_);
@@ -259,21 +298,7 @@ namespace Generation
         ffts.transformRealForward(FFTOrder_, FFTBuffer_.get(i), i);
   }
 
-  void SoundEngine::processFFT(float sampleRate) noexcept
-  {
-    auto &effectsState = getEffectsState();
-    // + 1 for nyquist
-    effectsState.binCount = FFTSamples_ / 2 + 1;
-    effectsState.sampleRate = sampleRate;
-    effectsState.blockPosition = blockPosition_;
-    effectsState.blockPhase = (float)((double)blockPosition_ / (double)FFTSamples_);
-
-    effectsState.writeInputData(FFTBuffer_);
-    effectsState.processLanes();
-    effectsState.sumLanesAndWriteOutput(FFTBuffer_);
-  }
-
-  void SoundEngine::doIFFT(Framework::FFT &ffts) noexcept
+  void SoundEngine::doIFFT(Framework::FFT &ffts)
   {
     using namespace Framework;
 
@@ -315,7 +340,7 @@ namespace Generation
     }
   }
 
-  void SoundEngine::mixOut(u32 samples) noexcept
+  void SoundEngine::mixOut(u32 samples)
   {
     if (!hasEnoughSamples_)
       return;
@@ -374,7 +399,7 @@ namespace Generation
     inBuffer.advanceLastOutputBlock(samples);
   }
 
-  void SoundEngine::fillOutput(float *const *buffer, u32 outputs, u32 samples) noexcept
+  void SoundEngine::fillOutput(float *const *buffer, u32 outputs, u32 samples)
   {
     // if we don't have enough samples we simply output silence
     // TODO: hasEnoughSamples_ is only for FFT-ing data, not outputting??
@@ -404,42 +429,8 @@ namespace Generation
     outBuffer.advanceBeginOutput(samples);
   }
 
-  bool SoundEngine::insertSubProcessor(usize, BaseProcessor &newSubProcessor, bool)
-  {
-    if (newSubProcessor.metadata->id != Processors::EffectsState)
-    {
-      static constexpr uuid acceptedProcessorIds[] = { Processors::EffectsState };
-      reportUnexpectedProcessorInsert(newSubProcessor, acceptedProcessorIds);
-
-      return false;
-    }
-
-    newSubProcessor.parent = this;
-    if (children)
-    {
-      auto childMetadata = state->findProcessorMetadata(Processors::EffectsState);
-      auto string = utils::string::create(localScratch,
-        "Attempted insert of more than one %v(id: %zu) inside an %v(id: %zu), \
-        but processor supports only one of such subprocessors. If this shows to you as a user, report it to the dev.",
-        childMetadata->name, childMetadata->id, metadata->name, metadata->id
-      );
-
-      Interface::showNativeMessageBox("Erroneous processor insert", string.data(), Interface::MessageBoxType::Warning);
-      return false;
-    }
-
-    children = &newSubProcessor;
-    return true;
-  }
-
-  void SoundEngine::initialiseParameters()
-  {
-    parameters = createParameters(metadata->parametersCount, metadata->parameters);
-    parameterCount = metadata->parametersCount;
-  }
-
   void SoundEngine::process(float *const *in, float *const *out, u32 samples,
-    float sampleRate, u32 numInputs, u32 numOutputs, Framework::FFT &ffts) noexcept
+    float currentSampleRate, u32 numInputs, u32 numOutputs, Framework::FFT &ffts)
   {
     COMPLEX_ASSERT(FFTSamples_ != 0, "Number of fft samples has not been set in advance");
 
@@ -452,9 +443,18 @@ namespace Generation
       if (!isPerforming_)
         break;
 
-      updateParameters(UpdateFlag::Realtime, sampleRate, true);
+      updateParameters(UpdateFlag::Realtime, currentSampleRate, true);
       doFFT(ffts);
-      processFFT(sampleRate);
+      {
+        // + 1 for nyquist
+        binCount = FFTSamples_ / 2 + 1;
+        sampleRate = currentSampleRate;
+        blockPhase = (float)((double)blockPosition_ / (double)FFTSamples_);
+
+        interleaveInputs(FFTBuffer_);
+        processLanes();
+        sumLanesAndDeinterleaveOutputs(FFTBuffer_);
+      }
       doIFFT(ffts);
     }
 
@@ -481,7 +481,7 @@ initialiseTypeStructure<Generation::SoundEngine>(void *, Framework::PluginStruct
       ParameterScale::Linear, "%", ParameterDetails::Modulatable | ParameterDetails::Automatable, UpdateFlag::BeforeProcess),
     COMPLEX_STRUCTURE_PARAMETER("Block Size", SoundEngine::BlockSize, kMinFFTOrder, kMaxFFTOrder, kDefaultFFTOrder,
       (float)(kDefaultFFTOrder - kMinFFTOrder) / (float)(kMaxFFTOrder - kMinFFTOrder),
-      ParameterScale::Linear, {}, ParameterDetails::Automatable | ParameterDetails::Extensible, UpdateFlag::BeforeProcess,
+      ParameterScale::Linear, {}, ParameterDetails::Automatable | ParameterDetails::Extensible | ParameterDetails::RoundToInt, UpdateFlag::BeforeProcess,
       [](char *string, usize size, double value, const ParameterDetails &) { return (usize)::stbsp_snprintf(string, (int)size, "%zu", ((usize)1 << (usize)::round(value))); }),
     COMPLEX_STRUCTURE_PARAMETER("Overlap", SoundEngine::Overlap, kMinWindowOverlap, kMaxWindowOverlap, kDefaultWindowOverlap,
       kDefaultWindowOverlap, ParameterScale::Clamp, "%", ParameterDetails::Automatable),
@@ -505,7 +505,7 @@ initialiseTypeStructure<Generation::SoundEngine>(void *, Framework::PluginStruct
       " dB", ParameterDetails::Modulatable | ParameterDetails::Automatable, UpdateFlag::BeforeProcess)
   );
 
-  soundEngine.children = (ProcessorMetadata *)initialiseTypeStructure<EffectsState>(&soundEngine, structure);
+  soundEngine.children = (ProcessorMetadata *)initialiseTypeStructure<EffectsLane>(&soundEngine, structure);
 
   return &soundEngine.computeCounts();
 }

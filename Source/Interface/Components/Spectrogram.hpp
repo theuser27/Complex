@@ -36,31 +36,30 @@ namespace Interface
 
     bool mouseDown(const MouseEvent &e) override;
 
-    utils::vector<OpenGlLineRenderer *> amplitudeRenderers_{};
-    utils::vector<OpenGlLineRenderer *> phaseRenderers_{};
+    utils::vector<OpenGlLineRenderer *> amplitudeRenderers{};
+    utils::vector<OpenGlLineRenderer *> phaseRenderers{};
 
-    Framework::SimdBuffer *scratchBuffer_{};
-    Framework::SimdBuffer *resultBuffer_{};
+    Framework::SimdBuffer *scratchBuffer{};
+    Framework::SimdBuffer *resultBuffer{};
 
-    const Framework::SimdBuffer *bufferView_{};
+    const Framework::SimdBuffer *bufferView{};
 
-    float minFrequency_ = kDefaultMinFrequency;
-    float maxFrequency_ = kDefaultMaxFrequency;
-    float minDb_ = kDefaultMinDb;
-    float maxDb_ = kDefaultMaxDb;
-    bool shouldDisplayPhases_ = false;
-    float referencePhase_ = 0.0f;
-    bool shouldInterpolateLines_ = true;
-    bool shouldPaintBackgroundLines_ = true;
-    float decayMultiplier_ = kDecayMult;
-    float dbSlope_ = kDbSlopePerOctave;
+    float minFrequency = kDefaultMinFrequency;
+    float maxFrequency = kDefaultMaxFrequency;
+    float minDb = kDefaultMinDb;
+    float maxDb = kDefaultMaxDb;
+    bool shouldDisplayPhases = false;
+    float referencePhase = 0.0f;
+    bool shouldInterpolateLines = true;
+    bool shouldPaintBackgroundLines = true;
+    float decayMultiplier = kDecayMult;
+    float dbSlope = kDbSlopePerOctave;
 
-    float nyquistFreq_ = kDefaultSampleRate * 0.5f;
-    u32 binCount_ = 0;
+    float nyquistFreq = kDefaultSampleRate * 0.5f;
+    u32 binCount = 0;
 
   private:
     void setLineRendererData();
-    bool updateAmplitudes(bool shouldDisplayPhases, float startDecade,
-      float decadeCount, float decadeSlope);
+    bool updateAmplitudes(float startDecade, float decadeCount, float decadeSlope);
   };
 }

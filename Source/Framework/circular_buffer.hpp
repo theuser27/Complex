@@ -13,6 +13,8 @@ namespace Framework
     u32 size = 0;
     const float *data = nullptr;
 
+    mutable satomi::atomic<bool> lock{};
+
     void clear() noexcept { ::zeroset(const_cast<float *>(data), channels * size); }
     void clear(u32 begin, u32 count) noexcept
     {
@@ -37,7 +39,7 @@ namespace Framework
   };
 
   // the oldest sample in destination will be at index 0
-  strict_inline void copyCircular(Buffer destination, const Buffer &other, u32 otherEnd)
+  strict_inline void copyCircular(Buffer &destination, const Buffer &other, u32 otherEnd)
   {
     if (other.channels == 0 || other.size == 0 || 
       destination.channels == 0 || destination.size == 0)

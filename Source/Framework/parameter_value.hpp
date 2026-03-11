@@ -23,7 +23,7 @@ namespace Framework
 {
   template<typename T>
   concept ParameterRepresentation = utils::is_same_v<T, float> || utils::is_same_v<T, u32>
-    || SimdValue<T> || utils::is_same_v<T, Framework::IndexedData>;
+    || utils::SimdValue<T> || utils::is_same_v<T, Framework::IndexedData>;
 
   class ParameterBridge;
   class ParameterValue;
@@ -63,16 +63,16 @@ namespace Framework
     ParameterValue() = default;
 
     ParameterValue(ParameterDetails details) noexcept :
-      details_(COMPLEX_MOVE(details)) { initialise(); }
+      details_(COMPLEX_MOVE(details)) { reset(); }
 
     ParameterValue(const ParameterValue &other) noexcept : 
       details_(other.details_)
     {
       utils::ScopedLock g{ other.waitLock_, utils::WaitMechanism::Spin };
-      initialise(&other.normalisedValue_);
+      reset(&other.normalisedValue_);
     }
 
-    void initialise(const float *value = nullptr, float sampleRate = kDefaultSampleRate)
+    void reset(const float *value = nullptr, float sampleRate = kDefaultSampleRate)
     {
       utils::ScopedLock g{ waitLock_, utils::WaitMechanism::Spin };
 
@@ -193,7 +193,7 @@ namespace Framework
     {
       utils::ScopedLock g{ waitLock_, utils::WaitMechanism::Spin };
 
-      if (index < 0) parameterLink_.modulators.emplace_back(&modulator);
+      if (index < 0) parameterLink_.modulators.emplaceBack(&modulator);
       else parameterLink_.modulators.emplace(parameterLink_.modulators.begin() + index, &modulator);
 
       isDirty_ = true;

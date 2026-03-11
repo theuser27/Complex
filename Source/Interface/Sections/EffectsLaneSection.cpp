@@ -1,349 +1,175 @@
-/*
-	==============================================================================
 
-		EffectsLaneSection.cpp
-		Created: 3 Feb 2023 6:42:55pm
-		Author:  theuser27
-
-	==============================================================================
-*/
+// Created: 2023-02-03 18:42:55
 
 #include "EffectsLaneSection.hpp"
 
-#include "Framework/parameters.hpp"
-#include "Plugin/ProcessorTree.hpp"
-#include "Framework/update_types.hpp"
-#include "Generation/EffectModules.hpp"
-#include "Generation/EffectsState.hpp"
-#include "../LookAndFeel/Graphics.hpp"
-#include "../Components/BaseButton.hpp"
-#include "../Components/BaseSlider.hpp"
-#include "EffectsStateSection.hpp"
-#include "EffectModuleSection.hpp"
+#include "Generation/EffectsLane.hpp"
+#include "Plugin/Complex.hpp"
+#include "Plugin/Renderer.hpp"
+#include "../Components/BaseControl.hpp"
+#include "MainInterface.hpp"
+//#include "EffectModuleSection.hpp"
 
 namespace Interface
 {
-	EffectsLaneSection::EffectsLaneSection(Generation::EffectsLane *effectsLane, EffectsStateSection *parentState, std::string name) :
-		ProcessorSection{ effectsLane }, effectsLane_{ effectsLane }, parentState_{ parentState }
-	{
-		using namespace Framework;
+  bool 
+  EffectsLaneSection::ModuleHolder::render(OpenGlWrapper &openGl)
+  {
+    fillRect(openGl, getLocalBounds().toFloat(), getColour(Skin::kBackground, this), scaleValue(kInsideRouding));
 
-		effectsLane->addListener(this);
+    return true;
+  }
 
-		scrollBar_.addListener(this, [](void *ptr, ScrollBar *, i32 newStart)
-			{
-				((EffectsLaneSection *)(ptr))->container_.bounds.y -= newStart;
-			});
-		// always on top because we're not using a texture to render background
-		scrollBar_.layerIndex = 1;
-		addChildComponent(&scrollBar_);
+  bool 
+  EffectsLaneSection::AddModulesButton::mouseDown(const MouseEvent &e)
+  {
+    // TODO: create popup
 
-		laneActivator_ = utils::up<PowerButton>::create(
-			effectsLane->getParameter(Processors::EffectsLane::LaneEnabled::id().value()));
-		laneActivator_->addListener(this);
-		setActivator(laneActivator_.get());
-		addControl(laneActivator_.get());
+    return true;
+  }
 
-		gainMatchingButton_ = utils::up<RadioButton>::create(
-			effectsLane->getParameter(Processors::EffectsLane::GainMatching::id().value()));
-		addControl(gainMatchingButton_.get());
+  bool 
+  EffectsLaneSection::AddModulesButton::render(OpenGlWrapper &openGl)
+  {
+    strokeRect(openGl, getLocalBounds().toFloat(), 1.0f, getColour(Skin::kBody), scaleValue(kBorderRounding));
 
-		inputSelector_ = utils::up<TextSelector>::create(
-			effectsLane->getParameter(Processors::EffectsLane::Input::id().value()),
-			Fonts::instance()->getInterVFont());
-		inputSelector_->setPopupPrefix("From: ");
-		inputSelector_->setCanUseScrollWheel(true);
-		inputSelector_->removeLabel();
-		inputSelector_->details_.dynamicData->ignoreItemFn = [](Plugin::State *state,
-			Generation::BaseProcessor *processor, const Framework::IndexedData &indexedData, i64 index)
-			{
-				if (indexedData.dynamicUpdateUuid != Framework::kLaneCountChange)
-					return true;
+    //renderText("Add Modules", FontId::InterType, );
 
-				auto parent = state->getProcessor(processor->parentProcessorId);
-				COMPLEX_ASSERT(parent);
+    return true;
+  }
 
-				return utils::find_index(parent->subProcessors_, processor) != (usize)index;
-			};
-		addControl(inputSelector_.get());
+  bool 
+  EffectsLaneSection::AddModulesButton::handleCommandMessage(u64 commandId, utils::whatever<64> extraData)
+  {
+    switch (commandId)
+    {
+    case Component::HandleCustomPosition:
 
-		outputSelector_ = utils::up<TextSelector>::create(
-			effectsLane->getParameter(Processors::EffectsLane::Output::id().value()),
-			Fonts::instance()->getInterVFont());
-		outputSelector_->setPopupPrefix("To: ");
-		outputSelector_->setPopupPlacement(Placement::above);
-		outputSelector_->setCanUseScrollWheel(true);
-		outputSelector_->removeLabel();
-		outputSelector_->setAnchor(Placement::right);
-		addControl(outputSelector_.get());
+      // TODO:
 
-		static constexpr auto moduleOptions = Processors::BaseEffect::
-			enum_names_and_ids_filter<kGetActiveEffectPredicate, true>(true);
+      return true;
+    default:
+      break;
+    }
 
-		addModulesButton_ = utils::up<OptionsButton>::create(nullptr, "Add Modules Button", "Add Modules");
-		addModulesButton_->removeLabel();
-		{
-			PopupItem popupItems{};
-			popupItems.addDelimiter("Choose Module to add");
+    return false;
+  }
 
-			for (size_t i = 0; i < moduleOptions.size(); ++i)
-				popupItems.addEntry((int)i, moduleOptions[i].first.data(), {}, true);
+  void EffectsLaneSection::reinitialise()
+  {
+    moduleHolder.deleteAllChildComponents();
+    header.removeAllChildComponents();
+    footer.removeAllChildComponents();
+    removeAllChildComponents();
 
-			addModulesButton_->setOptions(COMPLEX_MOVE(popupItems));
-		}
-		addModulesButton_->setPopupPlacement(Placement::below);
-		addModulesButton_->setPopupHandler([this](int selection)
-			{
-				COMPLEX_ASSERT(lane_);
-				insertModule(getNumModules(), moduleOptions[(usize)selection].second);
-			});
-		container_.addChildComponent(addModulesButton_.get());
-		container_.skinOverride = Skin::kEffectsLane;
+    componentFlags.vertical = true;
+    sizingFlags = Component::GrowableY;
+    desiredSize = { kEffectsLaneWidth, 0, kEffectsLaneWidth, 0 };
 
-		for (size_t i = 0; i < effectsLane->getEffectModuleCount(); ++i)
-		{
-			auto effectModuleSection = utils::up<EffectModuleSection>::create(effectsLane->getEffectModule(i), this);
-			effectModuleSection->getDraggableComponent().setListener(parentState_);
-			effectModuleSection->getDraggableComponent().setIgnoreClip(parentState_);
-			container_.addSubOpenGlContainer(effectModuleSection.get());
-			effectModules_.emplace_back(COMPLEX_MOVE(effectModuleSection));
-		}
+    if (!arena)
+      arena = utils::bumpArena::createNested(utils::bumpArena::fromAllocation(this), COMPLEX_KB(1));    
 
-		// the show argument is false because we need the container to be a child of the viewport
-		// that is because every time we set its bounds juce::Viewport resets its position to (0,0)??
-		// hence why we nest the container inside the viewport, whose position is where it's supposed to be
-		container_.setLane(this);
-		// always on top because we're not using a texture to render background
-		container_.setAlwaysOnTop(true);
-		addSubOpenGlContainer(&container_, false);
+    addChildComponent(&header);
+    header.desiredSize = { 0, kEffectsLaneTopBarHeight, 0, kEffectsLaneTopBarHeight };
+    header.sizingFlags = Component::GrowableX;
+    header.placement = Placement::top;
+    header.padding = { kLeftEdgePadding, 0, kRightEdgePadding, 0 };
 
-		viewport_.addListener(this);
-		viewport_.setScrollBarsShown(false, false, true, false);
-		viewport_.setSingleStepSizes(12, 12);
-		viewport_.setViewedComponent(&container_, false);
-		viewport_.addAndMakeVisible(&container_);
-		addAndMakeVisible(viewport_);
+    header.addChildComponent(&laneTitle);
+    laneTitle.placement = Placement::left;
+    laneTitle.text = { arena, "Lane A" };
+    laneTitle.textColour = Skin::kWidgetAccent1;
+    header.addChildComponent(&inputSelector);
+    inputSelector.placement = Placement::right;
+    inputSelector.prefix = { arena, "From: " };
+    inputSelector.arena = arena;
+    inputSelector.changeLinkedParameter(*effectsLane->getParameter(Generation::EffectsLane::Input));
+    header.addChildComponent(&laneActivator);
+    laneActivator.placement = Placement::right;
+    laneActivator.margin = { kRightEdgePadding, 0, 0, 0 };
+    laneActivator.changeLinkedParameter(*effectsLane->getParameter(Generation::EffectsLane::LaneEnabled));
 
-		skinOverride = Skin::kEffectsLane;
-	}
 
-	EffectsLaneSection::~EffectsLaneSection() = default;
+    addChildComponent(&moduleHolder);
+    moduleHolder.placement = Placement::top;
+    moduleHolder.margin = { kEffectsLaneOutlineThickness, 0, kEffectsLaneOutlineThickness, 0 };
+    moduleHolder.sizingFlags = (Component::SizingFlags)(Component::GrowableX | Component::GrowableY | Component::ScrollableWithBarY);
+    moduleHolder.padding = { kHVModuleToLaneMargin, kHVModuleToLaneMargin, kHVModuleToLaneMargin, kHVModuleToLaneMargin };
 
-	utils::up<EffectsLaneSection> EffectsLaneSection::createCopy()
-	{
-		auto *newEffectsLane = effectsLane_->state->copyProcessor(effectsLane_);
-		return utils::up<EffectsLaneSection>::create(newEffectsLane, parentState_, laneTitle_.getText() + " - Copy");
-	}
+    addModulesButton.placement = Placement::custom;
+    addModulesButton.sizingFlags = Component::GrowableX;
+    //moduleHolder.addChildComponent(&addModulesButton);
 
-	void EffectsLaneSection::resized()
-	{
-		int topBarHeight = scaleValueRoundInt(kEffectsLaneTopBarHeight);
-		int bottomBarHeight = scaleValueRoundInt(kEffectsLaneBottomBarHeight);
-		float rectangleRounding = scaleValue(kInsideRouding);
-		int outlineThickness = scaleValueRoundInt(kEffectsLaneOutlineThickness);
 
-		outerRectangle_.setColor(getColour(Skin::kBody));
-		outerRectangle_.setRounding(rectangleRounding);
-		outerRectangle_.setBounds(getLocalBounds());
+    addChildComponent(&footer);
+    footer.desiredSize = { 0, kEffectsLaneBottomBarHeight, 0, kEffectsLaneBottomBarHeight };
+    footer.padding = { kLeftEdgePadding, 0, kRightEdgePadding, 0 };
+    footer.sizingFlags = Component::GrowableX;
+    footer.placement = Placement::bottom;
 
-		innerRectangle_.setColor(getColour(Skin::kBackground));
-		innerRectangle_.setRounding(rectangleRounding);
-		innerRectangle_.setBounds(getLocalBounds().withTrimmedLeft(outlineThickness).withTrimmedRight(outlineThickness)
-			.withTrimmedTop(topBarHeight).withTrimmedBottom(bottomBarHeight));
+    footer.addChildComponent(&gainMatchingButton);
+    gainMatchingButton.placement = Placement::left;
+    gainMatchingButton.arena = arena;
+    gainMatchingButton.changeLinkedParameter(*effectsLane->getParameter(Generation::EffectsLane::GainMatching));
+    footer.addChildComponent(&gainMatchingButtonLabel);
+    gainMatchingButtonLabel.placement = Placement::left;
+    gainMatchingButtonLabel.control = &gainMatchingButton;
+    gainMatchingButtonLabel.margin = { Control::kLabelMargin, 0, 0, 0 };
+    footer.addChildComponent(&outputSelector);
+    outputSelector.placement = Placement::right;
+    outputSelector.popupPlacement = Placement::top;
+    outputSelector.prefix = { arena, "To: " };
+    outputSelector.arena = arena;
+    outputSelector.changeLinkedParameter(*effectsLane->getParameter(Generation::EffectsLane::Output));
+  }
 
-		int leftEdgePadding = scaleValueRoundInt(kLeftEdgePadding);
-		int rightEdgePadding = scaleValueRoundInt(kRightEdgePadding);
-		int textSelectorHeight = scaleValueRoundInt(TextSelector::kDefaultTextSelectorHeight);
+  void EffectsLaneSection::destroy()
+  {
+    moduleHolder.deleteAllChildComponents();
+    removeAllChildComponents();
 
-		int inputSelectorWidth = inputSelector_->setSizes(textSelectorHeight).getWidth();
-		inputSelector_->setPosition(Point{ laneActivator_->getX() - rightEdgePadding - inputSelectorWidth,
-			(topBarHeight - textSelectorHeight) / 2 });
+    utils::bumpArena::destroy(arena);
+    arena = nullptr;
 
-		laneTitle_.setTextHeight(Fonts::kInterVDefaultHeight);
-		laneTitle_.setFontType(PlainTextComponent::kTitle);
-		laneTitle_.setJustification(Justification::centredLeft);
-		laneTitle_.setBounds(leftEdgePadding, (topBarHeight - textSelectorHeight) / 2,
-			inputSelector_->getX() - 2 * leftEdgePadding, textSelectorHeight);
+    auto *state = effectsLane->state;
+    auto *transactionArena = state->plugin->undoManager.beginNewTransaction();
+    state->plugin->undoManager.perform(anew(transactionArena, Framework::DeleteProcessorUpdate, { effectsLane }));
+  }
 
-		int gainMatchDimensions = scaleValueRoundInt(kGainMatchButtonDimensions);
-		gainMatchingButton_->setRounding(scaleValue(kGainMatchButtonDimensions / 5.0f));
-		gainMatchingButton_->setSizes(gainMatchDimensions, gainMatchDimensions);
-		gainMatchingButton_->setPosition(Point{ leftEdgePadding, getHeight() - (bottomBarHeight + gainMatchDimensions) / 2 });
+  //EffectsLaneSection *
+  //EffectsLaneSection::createCopy(utils::bumpArena *arenaToUse)
+  //{
+  //	Generation::BaseProcessor *processorCopy;
+  //	{
+  //		auto g = effectsLane->state->plugin->acquireProcessingLock(false);
+  //		processorCopy = effectsLane->createCopy();
+  //	}
+  //	auto *newLaneSection = (EffectsLaneSection *)processorCopy->createUI();
+  //	newLaneSection->laneTitle.text.append(" - Copy");
+  //  
+  //	return newLaneSection;
+  //}
 
-		int outputSelectorWidth = outputSelector_->setSizes(textSelectorHeight).getWidth();
-		outputSelector_->setPosition(Point{ getWidth() - rightEdgePadding - outputSelectorWidth,
-			getHeight() - (bottomBarHeight + textSelectorHeight) / 2 });
+  bool 
+  EffectsLaneSection::render(OpenGlWrapper &openGl)
+  {
+    fillRect(openGl, getLocalBounds().toFloat(), getColour(Skin::kBody, this), scaleValue(kInsideRouding));
+    //reinitialise();
+    //fillRect(openGl, getLocalBounds().toFloat());
+    return true;
+  }
+}
 
-		int viewportX = scaleValueRoundInt(kHVModuleToLaneMargin + kEffectsLaneOutlineThickness);
-		int viewportY = scaleValueRoundInt(kEffectsLaneTopBarHeight);
-		viewport_.setBounds(viewportX, viewportY, getWidth() - 2 * viewportX, 
-			getHeight() - viewportY - bottomBarHeight);
-		container_.setClipBounds(viewport_.getBounds());
-
-		setEffectPositions();
-
-		scrollBar_.setColor(getColour(Skin::kLightenScreen));
-		int scrollBarWidth = scaleValueRoundInt(kHVModuleToLaneMargin);
-		int scrollBarHeight = getHeight() - scaleValueRoundInt(kEffectsLaneTopBarHeight + kEffectsLaneBottomBarHeight + 2 * kHVModuleToLaneMargin);
-		scrollBar_.setRenderInset({ 0, scrollBarWidth / 4, 0, scrollBarWidth / 4 });
-		scrollBar_.setBounds(getWidth() - viewportX, scaleValueRoundInt(kEffectsLaneTopBarHeight + kHVModuleToLaneMargin),
-			scrollBarWidth, scrollBarHeight);
-	}
-
-	bool EffectsLaneSection::mouseWheelMove(const MouseEvent &e)
-	{
-		int viewportX = scaleValueRoundInt(kEffectsLaneOutlineThickness);
-		int viewportY = scaleValueRoundInt(kEffectsLaneTopBarHeight);
-		int bottomBarHeight = scaleValueRoundInt(kEffectsLaneBottomBarHeight);
-		Rectangle area{ viewportX, viewportY, bounds.w - 2 * viewportX, bounds.h - viewportY - bottomBarHeight };
-		if (!area.contains(e.x, e.y))
-			return false;
-
-		auto [x, y] = getScrollLengths(e);
-		container_.bounds.x -= x;
-		container_.bounds.y -= y;
-		
-		return true;
-	}
-
-	//void EffectsLaneSection::insertedSubProcessor(size_t index, Generation::BaseProcessor &newSubProcessor)
-	//{
-	//	utils::up<EffectModuleSection> section = nullptr;
-	//	if (newSubProcessor.savedSection_.get())
-	//		section = COMPLEX_MOVE(newSubProcessor.savedSection_);
-	//	else
-	//		section = utils::up<EffectModuleSection>::create(static_cast<Generation::EffectModule *>(&newSubProcessor), this);
-
-	//	section->getDraggableComponent().setListener(parentState_);
-	//	section->getDraggableComponent().setIgnoreClip(parentState_);
-	//	container_.addSubOpenGlContainer(section.get());
-	//	effectModules_.insert(effectModules_.begin() + (isize)index, COMPLEX_MOVE(section));
-	//	setEffectPositions();
-	//}
-
-	//void EffectsLaneSection::deletedSubProcessor(size_t index, Generation::BaseProcessor &deletedSubProcessor)
-	//{
-	//	utils::up<EffectModuleSection> deletedSection{ COMPLEX_MOVE(effectModules_[index]) };
-	//	container_.removeSubOpenGlContainer(deletedSection.get());
-	//	deletedSubProcessor.savedSection_ = COMPLEX_MOVE(deletedSection);
-	//	effectModules_.erase(effectModules_.begin() + (isize)index);
-	//	setEffectPositions();
-	//}
-
-	//void EffectsLaneSection::movedSubProcessor(Generation::BaseProcessor &,
-	//	Generation::BaseProcessor &sourceProcessor, usize sourceIndex,
-	//	Generation::BaseProcessor &destinationProcessor, usize destinationIndex)
-	//{
-	//	if (&sourceProcessor == &destinationProcessor)
-	//	{
-	//		utils::up<EffectModuleSection> movedSection{ COMPLEX_MOVE(effectModules_[sourceIndex]) };
-	//		effectModules_.erase(effectModules_.begin() + (isize)sourceIndex);
-	//		effectModules_.insert(effectModules_.begin() + (isize)destinationIndex, COMPLEX_MOVE(movedSection));
-	//		setEffectPositions();
-	//	}
-	//	else
-	//	{
-	//		// TODO: handle once multiple lanes are available
-	//	}
-	//}
-
-	void EffectsLaneSection::insertModule(size_t index, utils::string_view newModuleType)
-	{
-		COMPLEX_ASSERT(Framework::Processors::BaseEffect::enum_value_by_id(newModuleType).has_value()
-			&& "An invalid module type was provided to insert");
-
-		auto &plugin = *getPlugin(uiRelated.renderer);
-		auto *effectModule = plugin.createProcessor(Framework::Processors::EffectModule::id().value());
-		effectModule->insertSubProcessor(0, *plugin.createProcessor(newModuleType));
-
-		plugin.pushUndo(new Framework::AddProcessorUpdate{ plugin,
-			effectsLane_->stateId, index, *effectModule });
-	}
-
-	utils::up<EffectModuleSection> EffectsLaneSection::deleteModule(
-		const EffectModuleSection *instance, bool createUpdate)
-	{
-		size_t i = 0;
-		for (; i < effectModules_.size(); ++i)
-			if (effectModules_[i].get() == instance)
-				break;
-
-		if (i >= effectModules_.size())
-			return nullptr;
-
-		if (createUpdate)
-		{
-			effectsLane_->state->pushUndo(new Framework::DeleteProcessorUpdate(
-				*effectsLane_->state, effectsLane_->stateId, i));
-			return nullptr;
-		}
-
-		utils::up<EffectModuleSection> removedModule{ COMPLEX_MOVE(effectModules_[i]) };
-		container_.removeSubOpenGlContainer(removedModule.get());
-		effectModules_.erase(effectModules_.begin() + (std::ptrdiff_t)i);
-		return removedModule;
-	}
-
-	void EffectsLaneSection::setEffectPositions()
-	{
-		if (getWidth() <= 0 || getHeight() <= 0)
-			return;
-
-		int marginBetweenModules = scaleValueRoundInt(kVModuleToModuleMargin);
-		int effectWidth = scaleValueRoundInt(kEffectModuleWidth);
-		int effectHeight = scaleValueRoundInt(kEffectModuleMinHeight);
-		int outerPadding = scaleValueRoundInt(kHVModuleToLaneMargin);
-		int y = outerPadding;
-
-		Point<int> position = viewport_.getViewPosition();
-
-		for (auto &effectModule : effectModules_)
-		{
-			effectModule->setBounds(0, y, effectWidth, effectHeight);
-			y += effectHeight + marginBetweenModules;
-		}
-
-		int addModuleButtonHeight = scaleValueRoundInt(kAddModuleButtonHeight);
-		utils::ignore = container_.addModulesButton_->setSizes(addModuleButtonHeight, effectWidth);
-		container_.addModulesButton_->setPosition(Point{ 0, y });
-		y += addModuleButtonHeight + outerPadding;
-
-		container_.setBounds(0, 0, viewport_.getWidth(), y);
-		viewport_.setViewPosition(position);
-
-		setScrollBarRange();
-	}
-
-	usize EffectsLaneSection::getIndexFromScreenPositionIgnoringSelf(
-		juce::Rectangle<int> bounds, const EffectModuleSection *moduleSection) const noexcept
-	{
-		auto centrePoint = bounds.getCentre();
-		if (auto target = effectModules_.front().get(); target != moduleSection &&
-			centrePoint.y <= getLocalArea(target, target->getLocalBounds()).getCentreY())
-			return 0;
-
-		if (auto target = effectModules_.back().get(); target != moduleSection &&
-			centrePoint.y >= getLocalArea(target, target->getLocalBounds()).getCentreY())
-			return effectModules_.size() - 1;
-
-		usize previousIndex = 0;
-		for (usize i = 0; i < effectModules_.size(); ++i)
-		{
-			if (moduleSection == effectModules_[i].get())
-			{
-				previousIndex = i;
-				continue;
-			}
-
-			auto nextBounds = getLocalArea(effectModules_[i].get(),
-				effectModules_[i]->getLocalBounds());
-
-			if (nextBounds.contains(centrePoint))
-				return i;
-		}
-
-		return previousIndex;
-	}
-
-	void EffectsLaneSection::setLaneName(String newName) { laneTitle_.setText(COMPLEX_MOVE(newName)); }
+namespace Generation
+{
+  Interface::Component *
+  EffectsLane::createUI()
+  {
+    auto guiArena = Interface::getGui(Interface::uiRelated.renderer)->arena;
+    auto *effectsLaneSection = anew(guiArena, Interface::EffectsLaneSection, {});
+    effectsLaneSection->effectsLane = this;
+    effectsLaneSection->reinitialise();
+    return effectsLaneSection;
+    //return nullptr;
+  }
 }

@@ -11,7 +11,7 @@
 namespace Framework
 {
   ParameterBridge::ParameterBridge(Plugin::State *state, u64 parameterIndex,
-    ParameterLink *link) noexcept : parameterIndex{ parameterIndex }, state{ state }
+    ParameterLink *link) : parameterIndex{ parameterIndex }, state{ state }
   {
     if (!link)
     {
@@ -26,13 +26,13 @@ namespace Framework
     value_.store(link->parameter->getNormalisedValue());
   }
 
-  ParameterBridge::~ParameterBridge() noexcept
+  ParameterBridge::~ParameterBridge()
   {
     if (auto link = parameterLinkPointer_.load(satomi::memory_order_acquire); link && link->parameter)
       link->parameter->changeBridge(nullptr);
   }
 
-  void ParameterBridge::resetParameterLink(ParameterLink *link, bool getValueFromParameter) noexcept
+  void ParameterBridge::resetParameterLink(ParameterLink *link, bool getValueFromParameter)
   {
     auto *oldLink = parameterLinkPointer_.load(satomi::memory_order_acquire);
     if (link == oldLink)
@@ -74,7 +74,7 @@ namespace Framework
 
 
   // this function is called on the UI thread
-  void ParameterBridge::updateUIParameter() noexcept
+  void ParameterBridge::updateUIParameter()
   {
     // for wasValueSet_ we only require atomicity, therefore memory_order_relaxed suffices
     bool dummy = true;

@@ -37,7 +37,7 @@ namespace Generation
 
   namespace Utility
   {
-    //static constexpr uuid id = 1759541555994809100;
+    //static constexpr uuid id = 1759541555994;
 
     //// Parameters
     //
@@ -72,11 +72,11 @@ namespace Generation
 
   namespace Filter
   {
-    //static constexpr uuid id = 1759541579349223900;
+    //static constexpr uuid id = 1759541579349;
 
     COMPLEX_ENUM(Types,
-      (Normal, 1758738064349498000),
-      (  Gate, 1758738078894475000),
+      (Normal, 1758738064349),
+      (  Gate, 1758738078894),
     );
 
     // Normal - normal filtering
@@ -93,9 +93,9 @@ namespace Generation
     //    at 1.0f only the center bin is left unaffected
     //
     COMPLEX_ENUM(Normal,
-      (  Gain, 1758735249666771200),
-      (Cutoff, 1758735281753747800),
-      ( Slope, 1758735286827413600),
+      (  Gain, 1758735249666),
+      (Cutoff, 1758735281753),
+      ( Slope, 1758735286827),
     );
 
     void runNormal(EffectModule *effectModule, EffectModule::EffectData *effectData,
@@ -115,16 +115,16 @@ namespace Generation
     //  delta - instead of the absolute loudness it uses the averaged loudness change from the 2 neighbouring bins
     //
     COMPLEX_ENUM(Gate,
-      (InputGain, 1758738170767008600),
-      (     Gain, 1758738189871090300),
-      (Threshold, 1758738202274301800),
-      (     Tilt, 1758738216078618500),
-      (     Mode, 1758738231926723100),
+      (InputGain, 1758738170767),
+      (     Gain, 1758738189871),
+      (Threshold, 1758738202274),
+      (     Tilt, 1758738216078),
+      (     Mode, 1758738231926),
     );
 
     COMPLEX_ENUM(GateMode,
-      (Decibels, 1759681582236601500),
-      (    Rank, 1759681594091286600),
+      (Decibels, 1759681582236),
+      (    Rank, 1759681594091),
     );
 
     void runGate(EffectModule *effectModule, EffectModule::EffectData *effectData,
@@ -190,18 +190,18 @@ namespace Generation
 
   namespace Dynamics
   {
-    //static constexpr uuid id = 1759541589473873300;
+    //static constexpr uuid id = 1759541589473;
 
     COMPLEX_ENUM(Types,
-      (Contrast, 1759688533355766700),
-      (    Clip, 1759688538437588200),
+      (Contrast, 1759688533355),
+      (    Clip, 1759688538437),
     );
 
     static constexpr float kContrastMaxPositiveValue = 4.0f;
     static constexpr float kContrastMaxNegativeValue = -0.5f;
 
     COMPLEX_ENUM(Contrast,
-      (Depth, 1758892756432074300),
+      (Depth, 1758892756432),
     );
 
     // Dtblkfx Contrast
@@ -213,7 +213,7 @@ namespace Generation
 
 
     COMPLEX_ENUM(Clip,
-      (Threshold, 1758894269115524800),
+      (Threshold, 1758894269115),
     );
 
     // Dtblkfx Clip
@@ -269,23 +269,23 @@ namespace Generation
 
   namespace Phase
   {
-    //static constexpr uuid id = 1759541605615040500;
+    //static constexpr uuid id = 1759541605615;
 
     COMPLEX_ENUM(Types,
-      (Shift, 1759688567995948900),
+      (Shift, 1759688567995),
     );
 
     COMPLEX_ENUM(Shift,
-      (PhaseShift, 1758894408955417000),
-      (  Interval, 1758894436267696200),
-      (    Offset, 1758894440849627800),
-      (     Slope, 1758894444857670900),
+      (PhaseShift, 1758894408955),
+      (  Interval, 1758894436267),
+      (    Offset, 1758894440849),
+      (     Slope, 1758894444857),
     );
 
     COMPLEX_ENUM(SlopeOptions,
-      (   Constant, 1758897431173532900),
-      (     Linear, 1758897457186700600),
-      (Exponential, 1758897461956898900),
+      (   Constant, 1758897431173),
+      (     Linear, 1758897457186),
+      (Exponential, 1758897461956),
     );
 
     void runShift(EffectModule *effectModule, EffectModule::EffectData *effectData,
@@ -334,16 +334,16 @@ namespace Generation
 
   namespace Pitch
   {
-    //static constexpr uuid id = 1759541664963033000;
+    //static constexpr uuid id = 1759541664963;
 
     COMPLEX_ENUM(Types,
-      (  Resample, 1759689528336006800),
-      (ConstShift, 1759689536970851100),
+      (  Resample, 1759689528336),
+      (ConstShift, 1759689536970),
     );
 
     COMPLEX_ENUM(Resample,
-      (Shift, 1759183155307420200),
-      ( Wrap, 1759183162433058600),
+      (Shift, 1759183155307),
+      ( Wrap, 1759183162433),
     );
 
     void runResample(EffectModule *effectModule, EffectModule::EffectData *effectData,
@@ -352,7 +352,7 @@ namespace Generation
 
 
     COMPLEX_ENUM(ConstShift,
-      (Shift, 1759183248900862000),
+      (Shift, 1759183248900),
     );
 
     void runConstShift(EffectModule *effectModule, EffectModule::EffectData *effectData,
@@ -398,36 +398,36 @@ namespace Generation
 
   namespace Stretch
   {
-    //static constexpr uuid id = 1759541679484794800;
+    //static constexpr uuid id = 1759541679484;
 
     // specops geometry
   }
 
   namespace Warp
   {
-    //static constexpr uuid id = 1759541685084772400;
+    //static constexpr uuid id = 1759541685084;
 
     // vocode, harmonic match, cross/warp mix
   }
 
   namespace Destroy
   {
-    //static constexpr uuid id = 1759541690760143400;
+    //static constexpr uuid id = 1759541690760;
 
     COMPLEX_ENUM(Types,
-      (Reinterpret, 1759689938250169600),
+      (Reinterpret, 1759689938250),
     );
 
     COMPLEX_ENUM(Reinterpret,
-      (Attenuation, 1759183439582926800),
-      (    Mapping, 1759183450466983800),
+      (Attenuation, 1759183439582),
+      (    Mapping, 1759183450466),
     );
 
     COMPLEX_ENUM(ReinterpretMappingOptions,
-      (     NoMapping, 1759183512424948900),
-      (SwitchRealImag, 1759183528061831600),
-      (   CartToPolar, 1759183533232284100),
-      (   PolarToCart, 1759183546859800500)
+      (     NoMapping, 1759183512424),
+      (SwitchRealImag, 1759183528061),
+      (   CartToPolar, 1759183533232),
+      (   PolarToCart, 1759183546859)
     );
 
     void runReinterpret(EffectModule *effectModule, EffectModule::EffectData *effectData,
@@ -1511,30 +1511,44 @@ namespace Generation
     return effectData;
   }
 
-  EffectModule::EffectModule(Plugin::State *state, Framework::ProcessorMetadata *metadata, utils::bumpArena *arena) noexcept :
-    BaseProcessor{ state, metadata, arena }
+  EffectModule::EffectModule(utils::bumpArena *arena, Plugin::State *state,
+    Framework::ProcessorMetadata *metadata, const EffectModule *other, void *serialisedSave) :
+    BaseProcessor{ arena, state, metadata, other }
   {
-    using namespace Framework;
-
-    dataBuffer = Framework::SimdBuffer::create(arena, kChannelsPerInOut, state->getMaxBinCount());
-    buffer = Framework::SimdBuffer::create(arena, kChannelsPerInOut, state->getMaxBinCount());
-  }
-
-  EffectModule::EffectModule(const EffectModule &other, utils::bumpArena *arena) noexcept : BaseProcessor{ other, arena }
-  {
-    if (other.buffer)
+    auto maxBinCount = state->getMaxBinCount();
+    if (other)
     {
-      buffer = Framework::SimdBuffer::create(arena, other.buffer->channels, state->getMaxBinCount());
-      Framework::applyToThisNoMask<utils::MathOperations::Assign>(buffer,
-        other.buffer, buffer->channels, buffer->size);
+      if (other->buffer)
+      {
+        buffer = Framework::SimdBuffer::create(arena, other->buffer->channels, maxBinCount);
+        Framework::applyToThisNoMask<utils::MathOperations::Assign>(buffer,
+          other->buffer, buffer->channels, buffer->size);
+      }
+
+      auto [effectOption, _] = getParameter(EffectModule::ModuleType)->getInternalValue<Framework::IndexedData>();
+
+      auto *effect = other->effects;
+      for (; effect && effect->metadata->id != effectOption->processorMetadata->id; effect = effect->next) { }
+
+      effects = createEffect(effectOption->processorMetadata, this, effect);
+      currentActiveEffect.store(effects, satomi::memory_order_release);
+
+      return;
+    }
+
+    dataBuffer = Framework::SimdBuffer::create(arena, utils::kChannelsPerInOut, maxBinCount);
+    buffer = Framework::SimdBuffer::create(arena, utils::kChannelsPerInOut, maxBinCount);
+
+    if (serialisedSave)
+      deserialiseFromJson(serialisedSave);
+    else
+    {
+      parameters = createParameters(metadata->parametersCount, metadata->parameters);
+      parameterCount = metadata->parametersCount;
     }
 
     auto [effectOption, _] = getParameter(EffectModule::ModuleType)->getInternalValue<Framework::IndexedData>();
-
-    auto *effect = other.effects;
-    for (; effect && effect->metadata->id != effectOption->processorMetadata->id; effect = effect->next) { }
-
-    effects = createEffect(effectOption->processorMetadata, this, effect);
+    effects = createEffect(effectOption->processorMetadata, this, nullptr, serialisedSave);
     currentActiveEffect.store(effects, satomi::memory_order_release);
   }
 
@@ -1547,30 +1561,13 @@ namespace Generation
 
     auto parameter = parameters;
     for (usize i = 0; i < parameterCount; (++i), (parameter = parameter->next))
-      parametersToSerialise.emplace_back(&parameter->object);
+      parametersToSerialise.emplaceBack(&parameter->object);
 
     auto *effectParameter = effect->parameters;
     for (usize i = 0; i < effect->parameterCount; (++i), (effectParameter = effectParameter->next))
-      parametersToSerialise.emplace_back(&effectParameter->object);
+      parametersToSerialise.emplaceBack(&effectParameter->object);
 
     BaseProcessor::serialiseToJson(jsonData, parametersToSerialise);
-  }
-
-  void EffectModule::initialiseParameters()
-  {
-    parameters = createParameters(metadata->parametersCount, metadata->parameters);
-    parameterCount = metadata->parametersCount;
-    auto [effectOption, _] = getParameter(EffectModule::ModuleType)->getInternalValue<Framework::IndexedData>();
-    effects = createEffect(effectOption->processorMetadata, this);
-    currentActiveEffect.store(effects, satomi::memory_order_release);
-  }
-
-  void EffectModule::deserialiseFromJson(void *jsonData)
-  {
-    BaseProcessor::deserialiseFromJson(jsonData);
-    auto [effectOption, _] = getParameter(EffectModule::ModuleType)->getInternalValue<Framework::IndexedData>();
-    effects = createEffect(effectOption->processorMetadata, this, nullptr, jsonData);
-    currentActiveEffect.store(effects, satomi::memory_order_release);
   }
 
   EffectModule::EffectData *
@@ -1641,15 +1638,12 @@ namespace Generation
   }
 }
 
-template<> Generation::EffectModule *
-createProcessor(Plugin::State *state, Framework::ProcessorMetadata *metadata, const void *copy)
+template<> Generation::BaseProcessor *
+createProcessor<Generation::EffectModule>(Plugin::State *state, Framework::ProcessorMetadata *metadata, const void *copy, void *serialisedSave)
 {
   auto *arena = utils::bumpArena::createNested(state->processorStorage, COMPLEX_MB(1));
-
-  if (copy)
-    return anew(state->processorStorage, Generation::EffectModule, { *(const Generation::EffectModule *)copy, arena });
-  else
-    return anew(state->processorStorage, Generation::EffectModule, { state, metadata, arena });
+  return anew(state->processorStorage, Generation::EffectModule,
+    { arena, state, metadata, (const Generation::EffectModule *)copy, serialisedSave });
 }
 template<> void *
 initialiseTypeStructure<Generation::EffectModule>(void *, Framework::PluginStructure &structure)

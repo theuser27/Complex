@@ -1,17 +1,10 @@
-/*
-  ==============================================================================
 
-    EffectsLaneSection.hpp
-    Created: 3 Feb 2023 6:42:55pm
-    Author:  theuser27
-
-  ==============================================================================
-*/
+// Created: 2023-02-03 18:42:55
 
 #pragma once
 
-#include "../Components/ScrollBar.hpp"
 #include "../LookAndFeel/BaseComponent.hpp"
+#include "../Components/BaseControl.hpp"
 
 namespace Generation
 {
@@ -20,13 +13,9 @@ namespace Generation
 
 namespace Interface
 {
-  class PlainTextComponent;
-  class OptionsButton;
-  class RadioButton;
-  class EffectsStateSection;
-  class EffectModuleSection;
+  struct EffectsSection;
 
-  class EffectsLaneSection final : public ProcessorSection
+  class EffectsLaneSection final : public Component
   {
   public:
     static constexpr int kLeftEdgePadding = 12;
@@ -36,68 +25,42 @@ namespace Interface
 
     static constexpr int kInsideRouding = 4;
 
-    EffectsLaneSection(Generation::EffectsLane *effectsLane, 
-      EffectsStateSection *state, std::string name = {});
-    ~EffectsLaneSection() noexcept override;
-    utils::up<EffectsLaneSection> createCopy();
+    void reinitialise();
+    void destroy();
+
+    //EffectsLaneSection *createCopy(utils::bumpArena *arena);
 
     bool render(OpenGlWrapper &openGl) override;
 
-    void resized() override;
-    bool mouseWheelMove(const MouseEvent &e) override;
+    Generation::EffectsLane *effectsLane{};
+    EffectsSection *parentState{};
 
-    void setScrollBarRange()
+    Component header{};
+    Component footer{};
+
+    struct ModuleHolder : public Component
     {
-      scrollBar_.setRangeLimits(0.0, container_.bounds.h);
-      scrollBar_.setCurrentRange(scrollBar_.getCurrentRangeStart(), 
-        bounds.h, dontSendNotification);
-    }
+      bool render(OpenGlWrapper &openGl) override;
 
-    int scrollLane(const MouseEvent &e)
+    } moduleHolder{};
+
+    TextEditor laneTitle{};
+    PowerButton laneActivator{};
+    RadioButton gainMatchingButton{};
+    Label gainMatchingButtonLabel{};
+    TextSelector inputSelector{};
+    TextSelector outputSelector{};
+
+    struct AddModulesButton : public Component
     {
-      auto start = scrollBar_.getCurrentRangeStart();
-      mouseWheelMove(e);
-      return (int)::round(scrollBar_.getCurrentRangeStart() - start);
-    }
+      static constexpr float kPlusRelativeSize = 7;
+      static constexpr float kBorderRounding = 8.0f;
 
-    //void insertedSubProcessor(size_t index, Generation::BaseProcessor &newSubProcessor) override;
-    //void deletedSubProcessor(size_t index, Generation::BaseProcessor &deletedSubProcessor) override;
-    //void movedSubProcessor(Generation::BaseProcessor &subProcessor, Generation::BaseProcessor &sourceProcessor,
-    //  usize sourceIndex, Generation::BaseProcessor &destinationProcessor, usize destinationIndex) override;
+      bool mouseDown(const MouseEvent &e) override;
+      bool render(OpenGlWrapper &openGl) override;
 
-    void insertModule(size_t index, utils::string_view newModuleType);
-    utils::up<EffectModuleSection> deleteModule(const EffectModuleSection *instance, bool createUpdate = true);
+      bool handleCommandMessage(u64 commandId, utils::whatever<64> extraData = {}) override;
 
-    void setEffectPositions();
-
-    size_t getNumModules() const noexcept { return effectModules_.size(); }
-    std::optional<size_t> getModuleIndex(EffectModuleSection *effectModuleSection) const
-    {
-      auto iter = std::ranges::find_if(effectModules_, [effectModuleSection](const auto &pointer)
-        { return effectModuleSection == pointer.get(); });
-      return (iter != effectModules_.end()) ?
-        (size_t)(iter - effectModules_.begin()) : std::optional<size_t>{};
-    }
-
-    // needs a point local to the EffectsLaneSection
-    usize getIndexFromScreenPositionIgnoringSelf(Rectangle<int> point,
-      const EffectModuleSection *moduleSection) const noexcept;
-
-    void setLaneName(std::string newName);
-
-    Component container_{};
-
-    ScrollBar scrollBar_{ true };
-    std::vector<utils::up<EffectModuleSection>> effectModules_;
-
-    utils::up<PowerButton> laneActivator_;
-    utils::up<RadioButton> gainMatchingButton_;
-    utils::up<TextSelector> inputSelector_;
-    utils::up<TextSelector> outputSelector_;
-
-    utils::up<OptionsButton> addModulesButton_;
-
-    Generation::EffectsLane *effectsLane_ = nullptr;
-    EffectsStateSection *parentState_ = nullptr;
+    } addModulesButton{};
   };
 }

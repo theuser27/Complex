@@ -18,6 +18,9 @@ namespace utils
 {
   enum class AllocatorType : u8 { General, BumpArena };
 
+  template<typename Signature, usize MaxSize, usize Alignment>
+  class fn;
+
   template<typename T>
   concept AllocatorConcept = requires(T *allocator, usize size,
     usize alignment, bool clean, const void *existingAllocation)
@@ -45,10 +48,12 @@ namespace utils
 
     struct node
     {
+      // size of the allocation, including the node in front
       u32 size{};
       union
       {
         u32 offsetToArena{};
+        // next is shift to next free node relative to the arena
         u32 next;
       };
     };
@@ -72,6 +77,12 @@ namespace utils
       auto *node = utils::launder((bumpArena::node *)((byte *)data - sizeof(bumpArena::node)));
       return utils::launder((bumpArena *)((byte *)node - node->offsetToArena));
     }
+    static strict_inline usize
+    getAllocationSize(const void *data)
+    {
+      auto *node = utils::launder((bumpArena::node *)((byte *)data - sizeof(bumpArena::node)));
+      return node->size - sizeof(bumpArena::node);
+    }
 
     [[nodiscard]] static byte *insert(bumpArena *arena, usize size, usize alignment, bool clean = false);
     [[nodiscard]] static strict_inline byte *
@@ -80,6 +91,7 @@ namespace utils
       return insert(fromAllocation(data), size, alignment, clean);
     }
     static void remove(const void *data);
+    [[nodiscard]] static byte *resize(const void *data, usize newSize, bool cleanNewSpace = false);
     static void shrinkToFit(bumpArena *arena, bool shrinkToCommitted);
 
     [[nodiscard]] static strict_inline bumpArena *
@@ -115,6 +127,8 @@ namespace utils
     static void clear(bumpArena *arena);
 
     static void destroy(bumpArena *arena);
+
+    static void logBlocks(bumpArena *arena);
   };
 
   // TODO: archive this arena implementation
@@ -264,18 +278,19 @@ namespace utils
 
     static constexpr AllocatorVtable allocatorTable[] = { generalAllocatorVtable, createVtable<utils::bumpArena>() };
 
+    std::source_location location{};
     const AllocatorVtable *vtable{};
     void *allocator{};
     bool freeingDestructor = true;
 
     constexpr Allocator() = default;
-    template<typename T>
-    constexpr Allocator(T *allocator, bool freeingDestructor = true) :
+    constexpr Allocator(AllocatorConcept auto *allocator, bool freeingDestructor = true, 
+      std::source_location location = std::source_location::current()) : location{ location },
       vtable{ &allocatorTable[(usize)allocator->type] }, allocator{ allocator },
       freeingDestructor{ freeingDestructor } { }
-    constexpr Allocator(const AllocatorVtable *vtable, void *allocator, 
-      bool freeingDestructor = true) : vtable{ vtable }, allocator{ allocator },
-      freeingDestructor{ freeingDestructor } { }
+    constexpr Allocator(const AllocatorVtable *vtable, void *allocator, bool freeingDestructor = true,
+      std::source_location location = std::source_location::current()) : location{ location }, 
+      vtable{ vtable }, allocator{ allocator }, freeingDestructor{ freeingDestructor } { }
 
     [[nodiscard]] strict_inline byte *
     insert(usize size, usize alignment, bool clean = true) const
@@ -311,7 +326,7 @@ namespace utils
   template<typename T>
   constexpr void contiguousDestroy(T *data, usize size)
   {
-    if constexpr (utils::is_constant_evaluated() || !utils::is_trivially_destructible_v<T>)
+    if (utils::is_constant_evaluated() || !utils::is_trivially_destructible_v<T>)
     {
       if (data && size)
         for (usize i = 0; i < size; ++i)
@@ -413,7 +428,7 @@ namespace utils
       capacity_ = 0;
     }
 
-    vector(Allocator allocator, usize reserveSpace) { reserve(allocator, reserveSpace); }
+    vector(Allocator allocator, usize reserveSpace = 0) { reserve(allocator, reserveSpace); }
     vector(Allocator allocator, utils::span<const T> data)
     {
       utils::contiguousClone(allocator, allocator, data.data(), data.size(), data_, size_, capacity_);
@@ -498,7 +513,7 @@ namespace utils
 
     // returning void * in order to force error if someone wants to do assignment at call site
     void *
-    push_back(usize count = 1)
+    pushBack(usize count = 1)
     {
       COMPLEX_HARD_ASSERT(count > 0, "Inserting 0 elements doesn't make sense");
 
@@ -512,7 +527,7 @@ namespace utils
       return &data_[oldSize];
     }
 
-    T &emplace_back(auto &&... args) { return *new(push_back()) T{ COMPLEX_FWD(args)... }; }
+    T &emplaceBack(auto &&... args) { return *new(pushBack()) T{ COMPLEX_FWD(args)... }; }
 
     void *
     insert(iterator iter)
@@ -534,7 +549,7 @@ namespace utils
 
     T &emplace(iterator iter, auto &&... args) { return *new(insert(iter)) T{ COMPLEX_FWD(args)... }; }
 
-    constexpr void pop_back()
+    constexpr void popBack()
     {
       if (!size_)
         return;
@@ -557,9 +572,8 @@ namespace utils
       utils::contiguousMoveElements(start, start + count, data_ + size_ - start);
     }
 
-    void erase(const T &element) 
-    { erase_if([&element](const auto &data) { return element == data; }); }
-    void erase_if(const auto &predicate)
+    void erase(const T &element) { eraseIf([&element](const auto &data) { return element == data; }); }
+    void eraseIf(const auto &predicate)
     {
       usize offset{};
       usize lastShift = usize(-1);
@@ -567,6 +581,8 @@ namespace utils
       {
         if (predicate(data_[i]))
         {
+          utils::contiguousDestroy(&data_[i], 1);
+
           if (lastShift != usize(-1) && (i - lastShift) > 1)
             utils::contiguousMoveElements(data_ + lastShift, data_ + lastShift + offset, i - lastShift);
 
@@ -634,7 +650,7 @@ namespace utils
     constexpr auto find_if(const auto &functor) const  { return utils::find_if(data, functor); }
 
     constexpr void add(Key key, Value value) 
-    { data.emplace_back(COMPLEX_MOVE(key), COMPLEX_MOVE(value)); }
+    { data.emplaceBack(COMPLEX_MOVE(key), COMPLEX_MOVE(value)); }
 
     constexpr void update(const Key &key, utils::pair<Key, Value> updatedEntry) 
     {
@@ -1306,8 +1322,6 @@ namespace utils
 
     // preallocating storage or only caching allocator for future use
     string(Allocator allocator, size_type reserveSpace = 0) : string{ allocator, nullptr, reserveSpace } { }
-    template<auto Size>
-    string(Allocator allocator, const char(&data)[Size]) : string{ allocator, data, Size } { }
     string(Allocator allocator, utils::string_view data, size_type start = 0, size_type size = npos) : 
       string{ allocator, data.data() + utils::min(data.size(), start), utils::min(data.size(), size) - utils::min(data.size(), start) } { }
     // every other constructor calls this one
@@ -1646,5 +1660,16 @@ namespace utils
     usize size = floatToString(value, buffer, sizeof(buffer), maximumDecimalLength, keepPlus);
     preallocatedString.copy({ buffer, size });
   }
+
+  struct MemoryLogger
+  {
+    mutable satomi::atomic<i32> writeLock{};
+    utils::vector<void *> toLog{};
+
+    void add(void *pointer);
+    void erase(void *pointer);
+    bool contains(void *pointer) const;
+  };
 }
 
+extern utils::MemoryLogger memoryLogger;

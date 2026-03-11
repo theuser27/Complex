@@ -155,13 +155,43 @@ namespace Interface
   }
   strict_inline float unscaleValue(float value) { return value / uiRelated.scale; }
 
-  inline void fillRect(NVGcontext *context, 
-    Rectangle<float> bounds, Colour colour = Colours::white)
+  inline void fillRect(NVGcontext *context, Rectangle<float> bounds,
+    Colour colour = Colours::white, float cornerRounding = 0.0f)
   {
     nvgBeginPath(context);
-    nvgRect(context, bounds.x, bounds.y, bounds.w, bounds.h);
+    if (cornerRounding == 0.0f)
+      nvgRect(context, bounds.x, bounds.y, bounds.w, bounds.h);
+    else
+      nvgRoundedRect(context, bounds.x, bounds.y, bounds.w, bounds.h, cornerRounding);
     nvgFillColor(context, colour);
     nvgFill(context);
+  }
+
+  inline void fillRect(NVGcontext *context, Rectangle<float> bounds,
+    Colour colour, float topLeftRounding, float topRightRounding, 
+    float bottomLeftRounding, float bottomRightRounding)
+  {
+    nvgBeginPath(context);
+    nvgRoundedRectVarying(context, bounds.x, bounds.y, bounds.w, bounds.h,
+      topLeftRounding, topRightRounding, bottomRightRounding, bottomLeftRounding);
+    nvgFillColor(context, colour);
+    nvgFill(context);
+  }
+
+  inline void strokeRect(NVGcontext *context, Rectangle<float> bounds,
+    float thickness, Colour colour = Colours::white, float cornerRounding = 0.0f)
+  {
+    bounds.expand(-0.5f, -0.5f);
+
+    nvgBeginPath(context);
+    if (cornerRounding == 0.0f)
+      nvgRect(context, bounds.x, bounds.y, bounds.w, bounds.h);
+    else
+      nvgRoundedRect(context, bounds.x, bounds.y, bounds.w, bounds.h, cornerRounding);
+
+    nvgStrokeWidth(context, thickness);
+    nvgStrokeColor(context, colour);
+    nvgStroke(context);
   }
 
   inline void renderText(utils::string_view text, FontId font,

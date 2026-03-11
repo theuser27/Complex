@@ -56,12 +56,13 @@ namespace Interface
     addOpenGlComponent(&roundedCorners_);
   }
 
-  PinBoundsBox::~PinBoundsBox() = default;
-
-  void PinBoundsBox::paintBackground(Graphics &g)
+  bool 
+  PinBoundsBox::render(OpenGlWrapper &openGl)
   {
-    g.setColour(getColour(Skin::kBody));
-    g.fillRect(getLocalBounds());
+    fillRect(openGl, getLocalBounds().toFloat(), getColour(Skin::kBody, this), 
+      rounding[0], rounding[1], rounding[2], rounding[3]);
+
+    return true;
   }
 
   void PinBoundsBox::paint(Graphics &g)

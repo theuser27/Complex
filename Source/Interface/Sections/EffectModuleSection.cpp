@@ -10,16 +10,12 @@
 
 #include "EffectModuleSection.hpp"
 
-#include "Plugin/ProcessorTree.hpp"
+#include "Plugin/Complex.hpp"
 #include "Framework/parameter_value.hpp"
 #include "Framework/parameter_bridge.hpp"
-#include "Framework/parameters.hpp"
 #include "Generation/EffectModules.hpp"
-#include "../LookAndFeel/Miscellaneous.hpp"
-#include "../LookAndFeel/Fonts.hpp"
 #include "../Components/OpenGlImage.hpp"
-#include "../Components/BaseButton.hpp"
-#include "../Components/BaseSlider.hpp"
+#include "../Components/BaseControl.hpp"
 #include "../Components/PinBoundsBox.hpp"
 #include "EffectsLaneSection.hpp"
 
@@ -164,12 +160,82 @@ namespace Interface
     initialiseParameters();
   }
 
-  EffectModuleSection::~EffectModuleSection() = default;
-
   utils::up<EffectModuleSection> EffectModuleSection::createCopy() const
   {
     auto *copiedModule = effectModule_->state->copyProcessor(effectModule_);
     return utils::up<EffectModuleSection>::create(copiedModule, laneSection_);
+  }
+
+  bool 
+  EffectModuleSection::render(OpenGlWrapper &openGl)
+  {
+    //static constexpr float kIdTextHeight = 7.0f;
+
+    //maskComponent_->setRoundedCornerColour(getColour(Skin::kBackground));
+
+    //// drawing body
+    //int yOffset = getYMaskOffset();
+    //auto rectangleBounds = getLocalBounds().withTop(yOffset).toFloat();
+
+    //float innerRounding = scaleValue(kInnerPixelRounding);
+    //float outerRounding = scaleValue(kOuterPixelRounding);
+
+    //Path rectangle;
+    //rectangle.startNewSubPath(rectangleBounds.getCentreX(), rectangleBounds.getY());
+
+    //rectangle.lineTo(rectangleBounds.getRight() - innerRounding, rectangleBounds.getY());
+    //rectangle.quadraticTo(rectangleBounds.getRight(), rectangleBounds.getY(),
+    //  rectangleBounds.getRight(), rectangleBounds.getY() + innerRounding);
+
+    //rectangle.lineTo(rectangleBounds.getRight(), rectangleBounds.getBottom() - outerRounding);
+    //rectangle.quadraticTo(rectangleBounds.getRight(), rectangleBounds.getBottom(),
+    //  rectangleBounds.getRight() - outerRounding, rectangleBounds.getBottom());
+
+    //rectangle.lineTo(rectangleBounds.getX() + outerRounding, rectangleBounds.getBottom());
+    //rectangle.quadraticTo(rectangleBounds.getX(), rectangleBounds.getBottom(),
+    //  rectangleBounds.getX(), rectangleBounds.getBottom() - outerRounding);
+
+    //rectangle.lineTo(rectangleBounds.getX(), rectangleBounds.getY() + innerRounding);
+    //rectangle.quadraticTo(rectangleBounds.getX(), rectangleBounds.getY(),
+    //  rectangleBounds.getX() + innerRounding, rectangleBounds.getY());
+
+    //rectangle.closeSubPath();
+
+    //g.setColour(getColour(Skin::kBody));
+    //g.fillPath(rectangle);
+
+    //// drawing draggable box
+    //g.saveState();
+    //g.setOrigin(0, yOffset);
+    //draggableBox_.paint(g);
+    //g.restoreState();
+
+    //int topMenuHeight = scaleValueRoundInt(kTopMenuHeight);
+    //int delimiterToTextSelectorMargin = scaleValueRoundInt(kDelimiterToTextSelectorMargin);
+
+    //// drawing separator line between header and main body
+    //g.setColour(getColour(Skin::kBackgroundElement));
+    //g.fillRect(0.0f, rectangleBounds.getY() + (float)topMenuHeight, rectangleBounds.getRight(), 1.0f);
+
+    //// drawing separator line between type and algo
+    //int lineX = effectTypeSelector_->getRight() + delimiterToTextSelectorMargin;
+    //int lineY = (int)rectangleBounds.getY() + utils::centerAxis(topMenuHeight / 2, topMenuHeight);
+    //g.fillRect(lineX, lineY, 1, topMenuHeight / 2);
+
+    //paintUIBackground(g);
+
+    //String idString = "#";
+    //idString += processorId.value();
+    //g.setColour(getColour(Skin::kNormalText));
+    //auto font = Fonts::instance()->getInterVFont().italicised();
+    //Fonts::instance()->setHeightFromAscent(font, scaleValue(kIdTextHeight));
+    //g.setFont(font);
+    //g.drawText(idString, (int)(rectangleBounds.getX() + outerRounding),
+    //  (int)(rectangleBounds.getBottom() - outerRounding - font.getHeight()),
+    //  font.getStringWidth(idString), (int)font.getHeight(),
+    //  juce::Justification::centredLeft, false);
+
+    return true;
   }
 
   void EffectModuleSection::resized()
@@ -253,71 +319,7 @@ namespace Interface
 
   void EffectModuleSection::paintBackground(Graphics &g)
   {
-    static constexpr float kIdTextHeight = 7.0f;
 
-    maskComponent_->setRoundedCornerColour(getColour(Skin::kBackground));
-
-    // drawing body
-    int yOffset = getYMaskOffset();
-    auto rectangleBounds = getLocalBounds().withTop(yOffset).toFloat();
-
-    float innerRounding = scaleValue(kInnerPixelRounding);
-    float outerRounding = scaleValue(kOuterPixelRounding);
-
-    Path rectangle;
-    rectangle.startNewSubPath(rectangleBounds.getCentreX(), rectangleBounds.getY());
-
-    rectangle.lineTo(rectangleBounds.getRight() - innerRounding, rectangleBounds.getY());
-    rectangle.quadraticTo(rectangleBounds.getRight(), rectangleBounds.getY(), 
-      rectangleBounds.getRight(), rectangleBounds.getY() + innerRounding);
-
-    rectangle.lineTo(rectangleBounds.getRight(), rectangleBounds.getBottom() - outerRounding);
-    rectangle.quadraticTo(rectangleBounds.getRight(), rectangleBounds.getBottom(),
-      rectangleBounds.getRight() - outerRounding, rectangleBounds.getBottom());
-
-    rectangle.lineTo(rectangleBounds.getX() + outerRounding, rectangleBounds.getBottom());
-    rectangle.quadraticTo(rectangleBounds.getX(), rectangleBounds.getBottom(),
-      rectangleBounds.getX(), rectangleBounds.getBottom() - outerRounding);
-
-    rectangle.lineTo(rectangleBounds.getX(), rectangleBounds.getY() + innerRounding);
-    rectangle.quadraticTo(rectangleBounds.getX(), rectangleBounds.getY(),
-      rectangleBounds.getX() + innerRounding, rectangleBounds.getY());
-
-    rectangle.closeSubPath();
-
-    g.setColour(getColour(Skin::kBody));
-    g.fillPath(rectangle);
-
-    // drawing draggable box
-    g.saveState();
-    g.setOrigin(0, yOffset);
-    draggableBox_.paint(g);
-    g.restoreState();
-
-    int topMenuHeight = scaleValueRoundInt(kTopMenuHeight);
-    int delimiterToTextSelectorMargin = scaleValueRoundInt(kDelimiterToTextSelectorMargin);
-
-    // drawing separator line between header and main body
-    g.setColour(getColour(Skin::kBackgroundElement));
-    g.fillRect(0.0f, rectangleBounds.getY() + (float)topMenuHeight, rectangleBounds.getRight(), 1.0f);
-
-    // drawing separator line between type and algo
-    int lineX = effectTypeSelector_->getRight() + delimiterToTextSelectorMargin;
-    int lineY = (int)rectangleBounds.getY() + utils::centerAxis(topMenuHeight / 2, topMenuHeight);
-    g.fillRect(lineX, lineY, 1, topMenuHeight / 2);
-
-    paintUIBackground(g);
-
-    String idString = "#";
-    idString += processorId.value();
-    g.setColour(getColour(Skin::kNormalText));
-    auto font = Fonts::instance()->getInterVFont().italicised();
-    Fonts::instance()->setHeightFromAscent(font, scaleValue(kIdTextHeight));
-    g.setFont(font);
-    g.drawText(idString, (int)(rectangleBounds.getX() + outerRounding), 
-      (int)(rectangleBounds.getBottom() - outerRounding - font.getHeight()),
-      font.getStringWidth(idString), (int)font.getHeight(), 
-      juce::Justification::centredLeft, false);
   }
 
   static constexpr auto kCommonEffectParameters = Framework::Processors::BaseEffect::enum_ids_filter<Framework::kGetParameterPredicate, true>();

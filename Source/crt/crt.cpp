@@ -1,7 +1,8 @@
 
-#include "Framework/platform_definitions.hpp"
+#include "Framework/memory.hpp"
 #include "Framework/simd_values.hpp"
 #include "Framework/simd_utils.hpp"
+#include "Framework/simd_math.hpp"
 
 namespace utils
 {
@@ -11,42 +12,12 @@ namespace utils
   void deallocate(const void *memory);
 }
 
-namespace std
-{
-  enum class align_val_t : usize { };
-}
-
-extern "C++"
-{
-  [[nodiscard]] void *__cdecl operator new(usize size) { return utils::allocate(size); }
-  [[nodiscard]] void *__cdecl operator new(usize size, std::align_val_t alignment)
-  { return utils::allocate(size, (usize)alignment); }
-  [[nodiscard]] void *__cdecl operator new[](usize size) { return utils::allocate(size); }
-  [[nodiscard]] void *__cdecl operator new[](usize size, std::align_val_t alignment)
-  { return utils::allocate(size, (usize)alignment); }
-
-  void __cdecl operator delete(void *pointer) noexcept { utils::deallocate(pointer); }
-  void __cdecl operator delete[](void *pointer) noexcept { utils::deallocate(pointer); }
-  void __cdecl operator delete(void *pointer, usize) noexcept { utils::deallocate(pointer); }
-  void __cdecl operator delete[](void *pointer, usize) noexcept { utils::deallocate(pointer); }
-  void __cdecl operator delete(void *pointer, std::align_val_t) noexcept { utils::deallocate(pointer); }
-  void __cdecl operator delete[](void *pointer, std::align_val_t) noexcept { utils::deallocate(pointer); }
-}
-
-
-
 extern "C"
 {
-  void *memset(void *dest, int ch, usize count);
-
-  __declspec(restrict) void *malloc(usize size) { return utils::allocate(size); }
-  __declspec(restrict) void *calloc(usize num, usize size) { return memset(utils::allocate(size * num), 0, size * num); }
-  __declspec(restrict) void *realloc(void *pointer, usize new_size)
-  {
-    return nullptr;
-    //return memset(utils::allocate(size * num), 0, size * num);
-  }
-  void free(void *pointer) { utils::deallocate(pointer); }
+  __declspec(allocator) __declspec(restrict) void *__cdecl malloc(usize size) { return utils::bumpArena::insert(globalArena, size, alignof(void *)); }
+  __declspec(allocator) __declspec(restrict) void *__cdecl calloc(usize count, usize size) { return utils::bumpArena::insert(globalArena, count * size, alignof(void *), true); }
+  __declspec(allocator) __declspec(restrict) void *__cdecl realloc(void *pointer, usize newSize) { return utils::bumpArena::resize(pointer, newSize); }
+  void __cdecl free(void *pointer) { utils::bumpArena::remove(pointer); }
 
   int abs(int x) { return x & utils::max_limit<int>; }
 
