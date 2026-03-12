@@ -1086,7 +1086,7 @@ namespace const_math
       return 1.7976931348623158e+308;
     else
     {
-      // should return but we don't know what the type is
+      // we do not handle other types here
     }
   }
 
@@ -1100,7 +1100,7 @@ namespace const_math
       return __builtin_huge_val();
     else
     {
-      // should return but we don't know what the type is
+      // we do not handle other types here
     }
   }
 

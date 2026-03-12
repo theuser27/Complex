@@ -14,10 +14,6 @@
 
 namespace Interface
 {
-#define GET_PRIMARY_FLAG(component, flag) ((flag) << (i32)(!!(component->componentFlags.vertical)))
-#define GET_SECONDARY_FLAG(component, flag) ((flag) << (1 - (!!(component->componentFlags.vertical))))
-#define TRANSPOSE(component, rect) ((component->componentFlags.vertical) ? (rect).transposed() : (rect))
-
   static void calculateFit(Component *component, Component *children, bool isCalculatingVertical)
   {
     if (!component->componentFlags.isVisible)
@@ -45,6 +41,8 @@ namespace Interface
 
     for (auto *child = children; child; child = child->next)
     {
+      COMPLEX_ASSERT(child->desiredSize.*minMember <= child->desiredSize.*maxMember);
+
       if (!child->componentFlags.isVisible)
         continue;
 
@@ -123,12 +121,20 @@ namespace Interface
     else
     {
       component->bounds.*minMember = utils::max(component->desiredSize.*minMember, (i32)sizes.min);
+      component->bounds.*maxMember = utils::max(component->bounds.*minMember,
+        utils::min(component->desiredSize.*maxMember, (i32)sizes.max));
 
       auto growableFlag = (isCalculatingVertical) ? Component::GrowableY : Component::GrowableX;
+      if (component->sizingFlags & growableFlag)
+      {
+        // if you have a scrollable parent and a growable child
+        // along the same axis, the algorithm will fail spectacularly
+        [[maybe_unused]] auto scrollableFlag = (isCalculatingVertical) ? 
+          Component::ScrollableY : Component::ScrollableX;
+        COMPLEX_ASSERT((component->parent->sizingFlags & scrollableFlag) == 0);
 
-      component->bounds.*maxMember = (component->sizingFlags & growableFlag) ? utils::max_limit<i32> :
-        utils::max(component->bounds.*minMember,
-          utils::min(component->desiredSize.*maxMember, (i32)sizes.max));
+        component->bounds.*maxMember = utils::max_limit<i32>;
+      }
     }
 
     // the user can override the above calculations if they so choose
@@ -165,6 +171,7 @@ namespace Interface
   {
     auto Rectangle<i32>:: *minMember = (isCalculatingVertical) ? &Rectangle<i32>::y : &Rectangle<i32>::x;
     auto Rectangle<i32>:: *maxMember = (isCalculatingVertical) ? &Rectangle<i32>::h : &Rectangle<i32>::w;
+    auto Rectangle<i32>:: *actualSize = maxMember;
 
     // when parent has horizontal/vertical orientation but we're calculating vertical/horizontal sizes
     if (component->componentFlags.vertical ^ isCalculatingVertical)
@@ -177,16 +184,15 @@ namespace Interface
         auto extra = (isCalculatingVertical) ? child->margin.getBottom() : child->margin.getRight();
 
         auto maxSize = utils::min(child->bounds.*maxMember, component->bounds.*maxMember - extra);
-        // scaling the final secondary size
-        child->bounds.*maxMember = scaleValueRoundInt((float)maxSize);
+        child->bounds.*maxMember = maxSize;
         calculateGrow(child, child->children, isCalculatingVertical);
       }
 
+      // scaling the final size
+      component->bounds.*actualSize = scaleValueRoundInt((float)(component->bounds.*actualSize));
+
       return;
     }
-
-    if (!children)
-      return;
 
     auto &sortedMin = *sortedSizesMin;
     auto &sortedMax = *sortedSizesMax;
@@ -194,9 +200,14 @@ namespace Interface
     sortedMax.clear();
 
     // account for this component's padding from the size we were assigned
-    i32 minSize = (isCalculatingVertical) ?
-      component->padding.getBottom() : component->padding.getRight();
-    i32 maxSize = minSize;
+    Range<i64> sizes{};
+    i64 childrenMinSizes{};
+    {
+      sizes.min = (isCalculatingVertical) ?
+        component->padding.getBottom() : component->padding.getRight();
+      sizes.max = sizes.min;
+    }
+
     for (auto *child = children; child; child = child->next)
     {
       if (!child->componentFlags.isVisible)
@@ -205,8 +216,9 @@ namespace Interface
       auto extra = (isCalculatingVertical) ? child->margin.getBottom() : child->margin.getRight();
 
       // not adding minMember because we're going to compare against it in the next pass
-      minSize += extra;
-      maxSize += child->bounds.*maxMember + extra;
+      sizes.min += extra;
+      childrenMinSizes += child->bounds.*minMember;
+      sizes.max += child->bounds.*maxMember + extra;
 
       auto iter = utils::find_if(sortedMin, [&](const Interface::Component *c)
         { return c->bounds.*minMember > child->bounds.*minMember; });
@@ -217,22 +229,23 @@ namespace Interface
       sortedMax.emplace(iter, child);
     }
 
-    if (component->bounds.*maxMember < minSize &&
-      test_enum(component->sizingFlags, Component::ScrollableX))
+    sizes.min = utils::min(sizes.min, (i64)utils::max_limit<i32>);
+    sizes.max = utils::min(sizes.max, (i64)utils::max_limit<i32>);
+
+    auto scrollableFlag = (isCalculatingVertical) ? Component::ScrollableY : Component::ScrollableX;
+
+    if ((i64)(component->bounds.*maxMember) < sizes.min + childrenMinSizes &&
+      test_enum(component->sizingFlags, scrollableFlag))
     {
       // parent is scrollable so every child is set to their preferred max sizes
       // which is already done, therefore this is a no-op
-      //
-      // NB: if you have a scrollable parent and a growable child
-      // along the same axis, this will fail spectacularly
-      // (although does that even make sense?)
 
       ((isCalculatingVertical) ?
-        component->scrollableArea.h : component->scrollableArea.w) = maxSize;
+        component->scrollableArea.h : component->scrollableArea.w) = (i32)sizes.max;
     }
-    else
+    else if (children)
     {
-      i32 remaining = component->bounds.*maxMember - minSize;
+      i32 remaining = component->bounds.*actualSize - (i32)sizes.min;
 
       COMPLEX_ASSERT(remaining >= 0);
 
@@ -308,9 +321,12 @@ namespace Interface
         continue;
 
       // scaling the final primary size
-      child->bounds.*maxMember = scaleValueRoundInt((float)(child->bounds.*maxMember));
+      //child->bounds.*maxMember = scaleValueRoundInt((float)(child->bounds.*maxMember));
       calculateGrow(child, child->children, isCalculatingVertical);
     }
+
+    // scaling the final size
+    component->bounds.*actualSize = scaleValueRoundInt((float)(component->bounds.*actualSize));
   }
 
   void calculateSizes(Component *children, Component *component)
@@ -328,6 +344,9 @@ namespace Interface
 
   extern utils::vector<Component *> *customPlacement;
 
+#define GET_PRIMARY_FLAG(component, flag) ((flag) << (i32)(!!(component->componentFlags.vertical)))
+#define GET_SECONDARY_FLAG(component, flag) ((flag) << (1 - (!!(component->componentFlags.vertical))))
+#define TRANSPOSE(component, rect) ((component->componentFlags.vertical) ? (rect).transposed() : (rect))
 #define IS_PRIMARY_POSITION_FLAG_SET(child, parent, flag) (child->placement & GET_PRIMARY_FLAG(parent, flag))
 #define IS_SECONDARY_POSITION_FLAG_SET(child, parent, flag) (child->placement & GET_SECONDARY_FLAG(parent, flag))
 
@@ -1072,14 +1091,8 @@ namespace Interface
     }
   }
 
-  void Component::doRender(OpenGlWrapper &openGl)
+  void Component::doRenderChildren(OpenGlWrapper &openGl)
   {
-    bool continueRender = render(openGl);
-    COMPLEX_CHECK_OPENGL_ERROR();
-
-    if (!continueRender)
-      return;
-
     for (auto *child = children; child; child = child->next)
     {
       if (!child->componentFlags.isVisible)
@@ -1094,5 +1107,18 @@ namespace Interface
       child->doRender(openGl);
       nvgRestore(openGl);
     }
+  }
+
+  void Component::doRender(OpenGlWrapper &openGl)
+  {
+    bool continueRender = render(openGl);
+    COMPLEX_CHECK_OPENGL_ERROR();
+
+    //strokeRect(openGl, getLocalBounds().toFloat(), 1.0f, Colour{ 128, 128, 128 });
+
+    if (!continueRender)
+      return;
+
+    doRenderChildren(openGl);
   }
 }

@@ -501,9 +501,7 @@ namespace utils
 
     constexpr void clear()
     {
-      for (auto &element : *this)
-        element.~T();
-      
+      contiguousDestroy(data_, size_);
       size_ = 0;
     }
 

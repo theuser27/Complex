@@ -410,7 +410,7 @@ namespace Interface
     downArrow.desiredSize = { 5, 0, 5, 0 };
     downArrow.sizingFlags |= (Component::SizingFlags)(Component::FixedX | Component::SameAsSiblingsY);
     downArrow.reference = this;
-    downArrow.draw = [](OpenGlWrapper &openGl, Component *c, Component *self)
+    downArrow.draw = [](OpenGlWrapper &openGl, Component *c, Component *self, Point<i32>)
     {
       auto bounds = self->bounds.toFloat();
       float yCenter = bounds.h * 0.5f;
@@ -422,6 +422,8 @@ namespace Interface
       nvgLineTo(openGl, bounds.w, yCenter - height);
       nvgStrokeColor(openGl.g, getColour(Skin::kWidgetPrimary1, c));
       nvgStroke(openGl);
+
+      return true;
     };
     addChildComponent(&downArrow);
   }
@@ -654,6 +656,7 @@ namespace Interface
       if (!isCalculatingVertical)
       {
         float height = (float)self->editor.desiredSize.y;
+        self->padding = {};
 
         if (self->drawBackgroundArrow)
         {
@@ -678,8 +681,6 @@ namespace Interface
   {
     static constexpr float kHoverIncrement = 0.2f;
 
-    float rounding = Interface::getValue(Skin::kWidgetRoundedCorner, true, this);
-    (void)rounding;
     animator.tick(componentFlags.isHovered, componentFlags.isClicked, kHoverIncrement, 0.0f);
 
     if (drawBackgroundArrow)

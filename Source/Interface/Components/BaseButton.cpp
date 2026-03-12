@@ -65,11 +65,11 @@ namespace Interface
     Colour activeColour = colour.withBrightness(0.7f);
     Colour hoverColour = colour;
 
-    if (isOn())
-    {
+    //if (isOn())
+    //{
       activeColour = (componentFlags.isClicked) ? activeColour : colour;
       hoverColour = colour.brighter(0.6f);
-    }
+    //}
 
     animator.tick(componentFlags.isHovered, componentFlags.isClicked, kHoverIncrement, 0.0f);
     if (!componentFlags.isClicked)
@@ -77,7 +77,7 @@ namespace Interface
 
     Colour colours[] = { colour };
     auto [fn, iconBounds] = Paths::powerButtonIcon();
-    fn(*openGl.cache, colours, getLocalBounds().toFloat(), 1.0f);
+    fn(*openGl.cache, colours, getLocalBounds().toFloat().trim(scaleValue(padding.toFloat())), scaleValue(1.0f));
 
     return true;
   }
@@ -91,37 +91,36 @@ namespace Interface
 
   bool RadioButton::render(OpenGlWrapper &openGl)
   {
-    (void)openGl;
     auto onNormalColor = getColour(Skin::kWidgetAccent1);
     auto offNormalColor = getColour(Skin::kPowerButtonOff);
     auto backgroundColor = getColour(Skin::kBackground);
-
-    desiredSize = { 16, 16, 16, 16 };
-    rounding = 16 / 8;
     
     animator.tick(componentFlags.isHovered, componentFlags.isClicked, kHoverIncrement, 0.0f);
     auto hoverAmount = animator.getValue(Animator::Hover);
     auto drawBounds = getLocalBounds().toFloat().trimmed(scaleValue(padding.toFloat()));
-    float scaledRounding = scaleValue(rounding);
+    
+    float rounding = utils::min(drawBounds.w, drawBounds.h) * roundingRatio;
 
-    static constexpr float kPowerShrinkRadius = 0.2f;
-    //static constexpr float kPowerHoverRadius = 1.0f;
+    //static constexpr float kPowerShrinkRadius = 0.2f;
+    static constexpr float kPowerHoverRadius = 0.25f;
 
     //auto *backgroundComponent = utils::as<OpenGlQuad>(&target);
     //auto quadData = backgroundComponent->getQuadData();
     //quadData.setQuad(0, -kPowerHoverRadius, -kPowerHoverRadius, 2.0f * kPowerHoverRadius, 2.0f * kPowerHoverRadius);
     if (componentFlags.isClicked || !isOn())
     {
-      //fillRect(openGl, drawBounds, backgroundColor, scaledRounding);
+      //fillRect(openGl, drawBounds.expanded(kPowerHoverRadius * drawBounds.w, 
+      //  kPowerHoverRadius * drawBounds.h), backgroundColor, rounding * kPowerHoverRadius);
     }
     else if (hoverAmount != 0.0f)
     {
-      //fillRect(openGl, drawBounds, backgroundColor.withMultipliedAlpha(hoverAmount), scaledRounding);
+      //fillRect(openGl, drawBounds.expanded(kPowerHoverRadius * drawBounds.w,
+      //  kPowerHoverRadius * drawBounds.h), backgroundColor.withMultipliedAlpha(hoverAmount), 
+      //  rounding + rounding * kPowerHoverRadius);
     }
 
     auto colour = (isOn()) ? onNormalColor : offNormalColor;
-    fillRect(openGl, drawBounds.trimmed(kPowerShrinkRadius * drawBounds.w, 
-      kPowerShrinkRadius * drawBounds.h), colour, scaledRounding);
+    fillRect(openGl, drawBounds, colour, rounding);
 
     //quadData.setQuad(0, -kPowerRadius, -kPowerRadius, 2.0f * kPowerRadius, 2.0f * kPowerRadius);
     //backgroundComponent->render(openGl);

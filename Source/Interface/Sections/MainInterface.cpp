@@ -44,6 +44,7 @@ namespace Interface
 
   void SoundEngineSection::EffectsSection::reinitialise()
   {
+    removeAllChildComponents();
     componentFlags.vertical = true;
 
     laneSelector.sizingFlags = Component::GrowableX;
@@ -306,6 +307,8 @@ namespace Interface
   {
     fillRect(openGl, bounds.withZeroOrigin().toFloat(), 
       getColour(Skin::kBackground, this));
+
+    //reinitialise();
 
     return true;
   }

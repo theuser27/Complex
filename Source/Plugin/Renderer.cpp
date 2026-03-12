@@ -19,10 +19,10 @@
 #include "Interface/Sections/MainInterface.hpp"
 
 static auto
-unscaleDimensions(int width, int height, double currentScaling) noexcept
+unscaleDimensions(u32 width, u32 height, double currentScaling) noexcept
 {
-  return utils::pair{ (int)::round((double)width / currentScaling),
-    (int)::round((double)height / currentScaling) };
+  return utils::pair{ (u32)::round((double)width / currentScaling),
+    (u32)::round((double)height / currentScaling) };
 }
 
 static void clampScaleWidthHeight(PuglView *view, float &desiredScale, u32 &windowWidth, u32 &windowHeight)
@@ -107,7 +107,10 @@ namespace Interface
     static constexpr double kMultiClickTimeout = 0.500; //ms
 
     Area<u32> area{};
-    float scale = 1.0f;
+    Area<u32> unscaledArea{};
+    float pluginScale = 1.0f;
+    float monitorScale = 1.0f;
+    float effectiveScale = 1.0f;
     bool isInitialised = false;
     bool isVisible = false;
     bool isResizing = false;
@@ -168,6 +171,25 @@ namespace Interface
     void handleMouseEnter(MouseEvent e);
     void handleMouseLeave(MouseEvent e);
     void handleMouseWheel(MouseEvent e);
+
+    // snapping to 0.25 scales for better rendering
+    float getEffectiveScale() const { return ::roundf(pluginScale * monitorScale / kWindowScaleIncrements) * kWindowScaleIncrements; }
+
+    void recalculateScale(bool forceResize = false)
+    {
+      auto newEffectiveScale = getEffectiveScale();
+      if (newEffectiveScale == effectiveScale && !forceResize)
+        return;
+      
+      area = { (u32)::roundf((float)area.w * newEffectiveScale / effectiveScale), 
+        (u32)::roundf((float)area.h * newEffectiveScale / effectiveScale) };
+      auto minScaledArea = Area<u32>{ (u32)::roundf((float)kMinWidth * newEffectiveScale),
+        (u32)::roundf((float)kMinHeight * newEffectiveScale) };
+      area = { utils::max(minScaledArea.w, area.w), utils::max(minScaledArea.h, area.h) };
+
+      effectiveScale = newEffectiveScale;
+      plugin.hostContext->requestResize(plugin.hostContext, area.w, area.h);
+    }
 
     void teardownGl()
     {
@@ -230,8 +252,9 @@ namespace Interface
       for (usize i = 0; i < state->parameterBridges.size(); ++i)
         state->parameterBridges[i].updateUIParameter();
 
-
-      gui->desiredSize = { (i32)area.w, (i32)area.h, (i32)area.w, (i32)area.h };
+      uiRelated.scale = effectiveScale;
+      auto [unscaledWidth, unscaledHeight] = unscaleDimensions(area.w, area.h, effectiveScale);
+      gui->desiredSize = { (i32)unscaledWidth, (i32)unscaledHeight, (i32)unscaledWidth, (i32)unscaledHeight };
 
       utils::vector<Component *> customPlacement_{ localScratch, 32 };
       customPlacement = &customPlacement_;
@@ -251,17 +274,18 @@ namespace Interface
       glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
       glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
 
-      nvgBeginFrame(openGl, (float)area.w, (float)area.h, 1.0f);
+      nvgBeginFrame(openGl, (float)area.w, (float)area.h, uiRelated.scale);
 
       openGl.parentStack.emplaceBack(gui, gui->bounds, true);
       openGl.parentStack.emplaceBack(ScopedBoundsEmplace::doNotAddFlag);
       gui->doRender(openGl);
+      openGl.parentStack.clear();
 
       if (renderDebugFps)
       {
         nvgReset(openGl);
         auto text = utils::floatToString(localScratch, 1.0f / getGraphAverage(&graph), 2);
-        renderText(text, FontId::InterType, { 12, 24, 24, 24 }, graphics, Colours::white);
+        renderText(text, FontId::DDinType, scaleValue({ 4.0f, 4.0f, 24.0f, 24.0f }).toInt(), graphics, Colours::white, true);
       }
 
       nvgEndFrame(openGl.g);
@@ -275,6 +299,10 @@ namespace Interface
         glFinish();
 
       lastRenderTime = newRenderTime;
+
+      u32 a, b;
+      Framework::LoadSave::getWindowSizeScale(a, b, pluginScale);
+      recalculateScale();
     }
 
     void computeMultiClick(double currentTime, MouseEvent &e, bool isClicking)
@@ -352,7 +380,6 @@ namespace Interface
       renderer->teardownGl();
       puglLeaveContext(view);
       renderer->isInitialised = false;
-      renderer->area = {};
 
       break;
     }
@@ -361,7 +388,9 @@ namespace Interface
       renderer->teardownGl();
       puglLeaveContext(view);
       renderer->isInitialised = false;
-      renderer->area = {};
+
+      auto [unscaledWidth, unscaledHeight] = unscaleDimensions(renderer->area.w, renderer->area.h, renderer->effectiveScale);
+      Framework::LoadSave::saveWindowSizeScale(unscaledWidth, unscaledHeight, renderer->pluginScale);
 
       break;
     }
@@ -565,6 +594,12 @@ namespace Interface
     return renderer->plugin.hostContext->requestResize(renderer->plugin.hostContext, width, height);
   }
 
+  void setUIScale(Renderer *renderer, float pluginScale)
+  {
+    renderer->pluginScale = pluginScale;
+    renderer->recalculateScale();
+  }
+
   void setMouseCursor(Renderer *renderer, MouseCursorTypes cursorType)
   {
     if (cursorType <= MouseCursorTypes::AllScroll)
@@ -609,7 +644,7 @@ namespace Interface
     view_ = puglNewView(world_);
 
     // load *some* kind of size until we get a window to check if we stretch outside the screen
-    Framework::LoadSave::getWindowSizeScale(area.w, area.h, scale);
+    Framework::LoadSave::getWindowSizeScale(area.w, area.h, pluginScale);
 
     // Set up world and view
     puglSetWorldString(world_, PUGL_CLASS_NAME, "ComplexAudioPlugin");
@@ -651,11 +686,11 @@ namespace Interface
 
   void Renderer::resizeChange(bool resizeChange)
   {
-    if (isResizing && !resizeChange)
-    {
-      auto [unscaledWidth, unscaledHeight] = unscaleDimensions(area.w, area.h, scale);
-      Framework::LoadSave::saveWindowSizeScale(unscaledWidth, unscaledHeight, scale);
-    }
+    //if (isResizing && !resizeChange)
+    //{
+    //  auto [unscaledWidth, unscaledHeight] = unscaleDimensions(area.w, area.h, pluginScale);
+    //  Framework::LoadSave::saveWindowSizeScale(unscaledWidth, unscaledHeight, pluginScale);
+    //}
 
     isResizing = resizeChange;
   }
@@ -663,8 +698,11 @@ namespace Interface
 
   void Renderer::checkBounds(u32 &newWidth, u32 &newHeight)
   {
-    newWidth = utils::max(newWidth, (u32)kMinWidth);
-    newHeight = utils::max(newHeight, (u32)kMinHeight);
+    auto minScaledArea = Area<u32>{ (u32)::roundf((float)kMinWidth * effectiveScale),
+      (u32)::roundf((float)kMinHeight * effectiveScale) };
+
+    newWidth = utils::max(newWidth, minScaledArea.w);
+    newHeight = utils::max(newHeight, minScaledArea.h);
 
     // TODO: make resizing snap horizontally to the width of individual lanes
   }
@@ -863,6 +901,17 @@ extern "C"
       [[maybe_unused]] PuglStatus status = puglRealize(renderer->view_);
       COMPLEX_ASSERT(status == PUGL_SUCCESS);
       puglStartTimer(renderer->view_, Interface::Renderer::kTimerRefreshRate, 1.0 / renderer->fps);
+
+      auto monitorInfo = Interface::getCurrentMonitorInfo(newParent);
+      renderer->monitorScale = monitorInfo.dpiScale;
+
+      Framework::LoadSave::getWindowSizeScale(renderer->area.w, renderer->area.h, renderer->pluginScale);
+      renderer->effectiveScale = 1.0f;
+      renderer->recalculateScale(true);
+
+      //clampScaleWidthHeight(renderer->view_, renderer->effectiveScale, windowWidth, windowHeight);
+
+      //renderer->plugin.hostContext->requestResize(renderer->plugin.hostContext, (u32)windowWidth, (u32)windowHeight);
     }
   }
 
@@ -879,21 +928,15 @@ extern "C"
       // calculate actual sizes when the window first appears
       if (!renderer->isVisible)
       {
-        u32 windowWidth, windowHeight;
-        Framework::LoadSave::getWindowSizeScale(windowWidth, windowHeight, renderer->scale);
 
-        clampScaleWidthHeight(renderer->view_, renderer->scale, windowWidth, windowHeight);
-        Framework::LoadSave::saveWindowSizeScale(windowWidth, windowHeight, renderer->scale);
-
-        renderer->plugin.hostContext->requestResize(renderer->plugin.hostContext, (u32)windowWidth, (u32)windowHeight);
       }
       renderer->isVisible = visible;
       //puglSetSizeHint(renderer->view_, PUGL_DEFAULT_SIZE, (u32)windowWidth, (u32)windowHeight);
     }
     else
     {
-      auto [unscaledWidth, unscaledHeight] = unscaleDimensions(renderer->area.w, renderer->area.h, renderer->scale);
-      Framework::LoadSave::saveWindowSizeScale(unscaledWidth, unscaledHeight, renderer->scale);
+      //auto [unscaledWidth, unscaledHeight] = unscaleDimensions(renderer->area.w, renderer->area.h, renderer->pluginScale);
+      //Framework::LoadSave::saveWindowSizeScale(unscaledWidth, unscaledHeight, renderer->pluginScale);
 
       puglHide(renderer->view_);
     }
@@ -901,18 +944,9 @@ extern "C"
 
   void cplug_setScaleFactor(void *userGUI, float scale)
   {
-    (void)userGUI;
-    (void)scale;
-    //auto *renderer = (Interface::Renderer *)userGUI;
-    //renderer->scale = scale;
-
-    //if (renderer->)
-    //clampScaleWidthHeight(renderer->view_, renderer->scale, renderer->area.w, renderer->area.h);
-
-    //puglSetSizeHint(renderer->view_, PUGL_CURRENT_SIZE,
-    //  (u32)::round(renderer->area.w * scale), (u32)::round(renderer->area.h * scale));
-
-    //Framework::LoadSave::saveWindowSizeScale(renderer->area.w, renderer->area.h, scale);
+    auto *renderer = (Interface::Renderer *)userGUI;
+    renderer->monitorScale = scale;
+    renderer->recalculateScale();
   }
   void cplug_getSize(void *userGUI, uint32_t *width, uint32_t *height)
   {

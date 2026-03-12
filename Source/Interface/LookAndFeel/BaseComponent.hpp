@@ -196,6 +196,7 @@ namespace Interface
     virtual bool handleCommandMessage([[maybe_unused]] u64 commandId, 
       [[maybe_unused]] utils::whatever<64> extraData = {}) { return false; }
 
+    void doRenderChildren(OpenGlWrapper &openGl);
     void doRender(OpenGlWrapper &openGl);
     void renderScrollbars(OpenGlWrapper &openGl, float scrollHoverIncrement);
     virtual bool render([[maybe_unused]] OpenGlWrapper &openGl) { return true; }
@@ -275,14 +276,15 @@ namespace Interface
 
   struct DrawComponent final : public Component
   {
-    void (*draw)(OpenGlWrapper &openGl, Component *reference, Component *self) = nullptr;
+    bool (*draw)(OpenGlWrapper &openGl, Component *reference, 
+      Component *self, Point<i32> relativePoint) = nullptr;
     Component *reference = nullptr;
 
     bool 
     render(OpenGlWrapper &openGl)
     {
-      draw(openGl, reference, this);
-      return true;
+      auto relativePoint = getRelativePoint(reference);
+      return draw(openGl, reference, this, relativePoint);
     }
   };
 

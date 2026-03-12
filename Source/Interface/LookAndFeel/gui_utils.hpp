@@ -143,12 +143,8 @@ namespace Interface
       x(initialX), y(initialY), w(width), h(height) { }
     constexpr Rectangle(T width, T height) : w(width), h(height) { }
     constexpr Rectangle(Point<T> corner1, Point<T> corner2) :
-      x(utils::min(corner1.x, corner2.x)), y(utils::min(corner1.y, corner2.y)),
-      w(corner1.x - corner2.x), h(corner1.y - corner2.y)
-    {
-      if (w < T()) w = -w;
-      if (h < T()) h = -h;
-    }
+      x{ utils::min(corner1.x, corner2.x) }, y{ utils::min(corner1.y, corner2.y) },
+      w{ utils::abs(corner1.x - corner2.x) }, h{ utils::abs(corner1.y - corner2.y) } { }
 
     friend constexpr bool operator==(Rectangle lhs, Rectangle rhs) = default;
 
@@ -346,12 +342,12 @@ namespace Interface
     constexpr Colour() = default;
     explicit constexpr Colour(u32 argb) : a{ u8((argb >> 24) & 0xff) },
       r { u8((argb >> 16) & 0xff) }, g{ u8((argb >> 8) & 0xff) }, b{ u8(argb & 0xff) } { }
-    constexpr Colour(u8 red, u8 green, u8 blue, u8 alpha = 255) :
-      a{ alpha }, r{ red }, g{ green }, b{ blue } {  }
-    constexpr Colour(u8 red, u8 green, u8 blue, float alpha) :
-      a{ u8(alpha * 255.0f) }, r{ red }, g{ green }, b{ blue } { }
-    constexpr Colour(float red, float green, float blue, u8 alpha = 255) :
-      a{ alpha }, r{ u8(red * 255.0f) }, g{ u8(green * 255.0f) }, b{ u8(blue * 255.0f) } { }
+    constexpr Colour(int red, int green, int blue, int alpha = 255) :
+      a{ (u8)alpha }, r{ (u8)red }, g{ (u8)green }, b{ (u8)blue } {  }
+    constexpr Colour(int red, int green, int blue, float alpha) :
+      a{ u8(alpha * 255.0f) }, r{ (u8)red }, g{ (u8)green }, b{ (u8)blue } { }
+    constexpr Colour(float red, float green, float blue, int alpha = 255) :
+      a{ (u8)alpha }, r{ u8(red * 255.0f) }, g{ u8(green * 255.0f) }, b{ u8(blue * 255.0f) } { }
     constexpr Colour(float red, float green, float blue, float alpha) :
       a{ u8(alpha * 255.0f) }, r{ u8(red * 255.0f) }, g{ u8(green * 255.0f) }, b{ u8(blue * 255.0f) } { }
 

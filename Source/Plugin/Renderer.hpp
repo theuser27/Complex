@@ -45,6 +45,7 @@ namespace Interface
 
   Area<u32> getUISize(Renderer *renderer);
   bool setUISize(Renderer *renderer, u32 width, u32 height);
+  void setUIScale(Renderer *renderer, float pluginScale);
 
   void setMouseCursor(Renderer *renderer, MouseCursorTypes cursorType);
 

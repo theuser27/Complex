@@ -195,16 +195,19 @@ namespace Interface
   }
 
   inline void renderText(utils::string_view text, FontId font,
-    Rectangle<i32> bounds, Graphics *context, Colour colour)
+    Rectangle<i32> bounds, Graphics *context, Colour colour, bool alignLeft = false)
   {
     nvgBeginPath(context->context);
-    context->setFont(font, scaleValue((float)bounds.h));
+    context->setFont(font, (float)bounds.h);
     float ascent, lineHeight;
     nvgFillColor(context->context, colour);
     nvgTextMetrics(context->context, &ascent, nullptr, &lineHeight);
-    nvgTextAlign(context->context, NVG_ALIGN_CENTER | NVG_ALIGN_BASELINE);
-    nvgText(context->context, (float)bounds.x + ((float)bounds.w) * 0.5f,
-      ::ceilf((float)bounds.x + ((float)bounds.h - lineHeight) * 0.5f + ascent),
+    int alignmentFlags = NVG_ALIGN_BASELINE | ((alignLeft) ? NVG_ALIGN_LEFT : NVG_ALIGN_CENTER);
+    nvgTextAlign(context->context, alignmentFlags);
+    //[[maybe_unused]] float advanceWidth = context->getStringWidthFloat(text);
+    auto x = (float)bounds.x + ((alignLeft) ? 0.0f : (float)bounds.w * 0.5f);
+    nvgText(context->context, x,
+      ::ceilf((float)bounds.y + ((float)bounds.h - lineHeight) * 0.5f + ascent),
       text.data(), text.data() + text.size());
   }
 

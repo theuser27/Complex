@@ -155,13 +155,13 @@ namespace Interface
   {
   public:
     static constexpr int kAddedMargin = 4;
-    static constexpr int kDimensions = 16;
+    static constexpr int kDimensions = 8;
 
     RadioButton();
 
     bool render(OpenGlWrapper &openGl) override;
 
-    float rounding = kDimensions / 8;
+    float roundingRatio = 0.25f;
   };
 
   class Slider : public Control

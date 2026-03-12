@@ -468,8 +468,8 @@ namespace Interface
       {
         [](Graphics &g, utils::span<Colour> colours, Rectangle<float> bounds, float strokeWidth)
         {
-          static constexpr float kAngleStart = -0.25f * kPi;
-          static constexpr float kAngleEnd = -0.75f * kPi;
+          static constexpr float kAngleStart = -0.30f * kPi;
+          static constexpr float kAngleEnd = -0.70f * kPi;
 
           float propotionalX = bounds.w / kWidth;
           float propotionalY = bounds.h / kHeight;
@@ -480,14 +480,14 @@ namespace Interface
           nvgStrokeWidth(g, strokeWidth);
 
           nvgBeginPath(g);
-          nvgMoveTo(g, bounds.x + 5.5f * propotionalX, 0.0f);
+          nvgMoveTo(g, bounds.x + 5.5f * propotionalX, bounds.y);
           nvgLineTo(g, bounds.x + 5.5f * propotionalX, bounds.y + 5.0f * propotionalY);
 
           nvgStroke(g);
 
           nvgBeginPath(g);
-          nvgArc(g, bounds.x + 5.5f * propotionalX, bounds.y + 7.5f * propotionalY, 
-            5.5f * utils::min(propotionalX, propotionalY), kAngleStart, kAngleEnd, NVG_CW);
+          nvgArc(g, bounds.x + 5.5f * propotionalX, bounds.y + 6.5f * propotionalY, 
+            5.0f * utils::min(propotionalX, propotionalY), kAngleStart, kAngleEnd, NVG_CW);
 
           nvgStroke(g);
         },

@@ -176,10 +176,10 @@ namespace Interface
 
     auto dpi = 0.0;
     UINT dpiX = 0, dpiY = 0;
-    if (SUCCEEDED(GetDpiForMonitor((HMONITOR)ret.nativeHandle, MDT_Default, &dpiX, &dpiY)))
+    if (SUCCEEDED(GetDpiForMonitor((HMONITOR)ret.nativeHandle, MDT_Effective_DPI, &dpiX, &dpiY)))
       dpi = (dpiX + dpiY) / 2.0;
 
-    ret.dpiScale = (float)dpi;
+    ret.dpiScale = (float)dpi / 96.0f;
     return ret;
   }
 

@@ -57,12 +57,17 @@ namespace Interface
 
   void EffectsLaneSection::reinitialise()
   {
+    static constexpr auto kHeaderLeftPadding = 12;
+    static constexpr auto kHeaderRightPadding = 4;
+    static constexpr auto kFooterPadding = 8;
+
     moduleHolder.deleteAllChildComponents();
     header.removeAllChildComponents();
     footer.removeAllChildComponents();
     removeAllChildComponents();
 
     componentFlags.vertical = true;
+    skinOverride = Skin::kEffectsLane;
     sizingFlags = Component::GrowableY;
     desiredSize = { kEffectsLaneWidth, 0, kEffectsLaneWidth, 0 };
 
@@ -73,7 +78,7 @@ namespace Interface
     header.desiredSize = { 0, kEffectsLaneTopBarHeight, 0, kEffectsLaneTopBarHeight };
     header.sizingFlags = Component::GrowableX;
     header.placement = Placement::top;
-    header.padding = { kLeftEdgePadding, 0, kRightEdgePadding, 0 };
+    header.padding = { kHeaderLeftPadding, 0, kHeaderRightPadding, 0 };
 
     header.addChildComponent(&laneTitle);
     laneTitle.placement = Placement::left;
@@ -83,10 +88,12 @@ namespace Interface
     inputSelector.placement = Placement::right;
     inputSelector.prefix = { arena, "From: " };
     inputSelector.arena = arena;
+    inputSelector.text.font = FontId::InterType;
     inputSelector.changeLinkedParameter(*effectsLane->getParameter(Generation::EffectsLane::Input));
     header.addChildComponent(&laneActivator);
     laneActivator.placement = Placement::right;
-    laneActivator.margin = { kRightEdgePadding, 0, 0, 0 };
+    laneActivator.margin = { 4, 0, 0, 0 };
+    laneActivator.desiredSize = { kDefaultActivatorSize, kDefaultActivatorSize, kDefaultActivatorSize, kDefaultActivatorSize };
     laneActivator.changeLinkedParameter(*effectsLane->getParameter(Generation::EffectsLane::LaneEnabled));
 
 
@@ -103,7 +110,7 @@ namespace Interface
 
     addChildComponent(&footer);
     footer.desiredSize = { 0, kEffectsLaneBottomBarHeight, 0, kEffectsLaneBottomBarHeight };
-    footer.padding = { kLeftEdgePadding, 0, kRightEdgePadding, 0 };
+    footer.padding = { kFooterPadding, 0, kFooterPadding, 0 };
     footer.sizingFlags = Component::GrowableX;
     footer.placement = Placement::bottom;
 
@@ -120,6 +127,7 @@ namespace Interface
     outputSelector.popupPlacement = Placement::top;
     outputSelector.prefix = { arena, "To: " };
     outputSelector.arena = arena;
+    outputSelector.text.font = FontId::InterType;
     outputSelector.changeLinkedParameter(*effectsLane->getParameter(Generation::EffectsLane::Output));
   }
 
@@ -156,7 +164,16 @@ namespace Interface
     fillRect(openGl, getLocalBounds().toFloat(), getColour(Skin::kBody, this), scaleValue(kInsideRouding));
     //reinitialise();
     //fillRect(openGl, getLocalBounds().toFloat());
-    return true;
+
+    doRenderChildren(openGl);
+
+    if (!laneActivator.isOn())
+    {
+      fillRect(openGl, getLocalBounds().toFloat(),
+        getColour(Skin::kBackground, this).withMultipliedAlpha(0.8f));
+    }
+
+    return false;
   }
 }
 

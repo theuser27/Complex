@@ -339,7 +339,7 @@ bool xfiles_read(const char* path, void** out, size_t* outlen)
         hFile = CreateFileW(
             FileName,
             GENERIC_READ,
-            FILE_SHARE_READ,
+            FILE_SHARE_READ | FILE_SHARE_WRITE,
             NULL,
             OPEN_EXISTING,
             FILE_ATTRIBUTE_NORMAL | FILE_FLAG_SEQUENTIAL_SCAN,
@@ -389,7 +389,7 @@ bool xfiles_write(const char* path, const void* in, size_t inlen)
         hFile = CreateFileW(
             FilePath,
             GENERIC_READ | GENERIC_WRITE,
-            0,
+            FILE_SHARE_READ,
             NULL,
             CREATE_ALWAYS,
             FILE_ATTRIBUTE_NORMAL | FILE_FLAG_SEQUENTIAL_SCAN,
