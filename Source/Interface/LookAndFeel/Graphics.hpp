@@ -56,6 +56,13 @@ namespace Interface
       return { bounds[2] - bounds[0], bounds[3] - bounds[1] };
     }
 
+    usize 
+    getStringNumberOfLines(utils::string_view string, float breakRowWidth)
+    {
+      return (usize)nvgTextBreakLines(context, string.data(), string.data() + string.size(),
+        breakRowWidth, nullptr, 0);
+    }
+
     Area<float> 
     getStringBoundsMultiline(utils::string_view string, float breakRowWidth)
     {
@@ -132,6 +139,7 @@ namespace Interface
     Skin *skin = nullptr;
     float scale = 1.0f;
     float deltaTime = 0.0f;
+    double steadyTime = 0.0;
   };
 
   // thread_local variable for the message thread so that we don't need to pass pointers around
@@ -195,7 +203,8 @@ namespace Interface
   }
 
   inline void renderText(utils::string_view text, FontId font,
-    Rectangle<i32> bounds, Graphics *context, Colour colour, bool alignLeft = false)
+    Rectangle<i32> bounds, Graphics *context, Colour colour, 
+    bool alignLeft = false, bool wrapText = false)
   {
     nvgBeginPath(context->context);
     context->setFont(font, (float)bounds.h);
@@ -204,11 +213,13 @@ namespace Interface
     nvgTextMetrics(context->context, &ascent, nullptr, &lineHeight);
     int alignmentFlags = NVG_ALIGN_BASELINE | ((alignLeft) ? NVG_ALIGN_LEFT : NVG_ALIGN_CENTER);
     nvgTextAlign(context->context, alignmentFlags);
-    //[[maybe_unused]] float advanceWidth = context->getStringWidthFloat(text);
+
     auto x = (float)bounds.x + ((alignLeft) ? 0.0f : (float)bounds.w * 0.5f);
-    nvgText(context->context, x,
-      ::ceilf((float)bounds.y + ((float)bounds.h - lineHeight) * 0.5f + ascent),
-      text.data(), text.data() + text.size());
+    auto y = ::ceilf((float)bounds.y + ((float)bounds.h - lineHeight) * 0.5f + ascent);
+    if (wrapText)
+      nvgTextBox(context->context, x, y, x + (float)bounds.w, text.data(), text.data() + text.size());
+    else
+      nvgText(context->context, x, y, text.data(), text.data() + text.size());
   }
 
   struct ViewportChange

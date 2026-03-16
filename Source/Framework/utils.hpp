@@ -909,9 +909,6 @@ namespace utils
     thread(thread &&other) noexcept : thread{}
     {
       COMPLEX_SWAP_MEMBERS(threadId, other);
-    #ifdef COMPLEX_WINDOWS
-      COMPLEX_SWAP_MEMBERS(handle_, other);
-    #endif
     }
     thread &operator=(const thread &other) = delete;
     thread &operator=(thread &&other) noexcept
@@ -930,10 +927,6 @@ namespace utils
     void yield();
 
     bool operator==(const thread &other) const = default;
-  private:
-  #ifdef COMPLEX_WINDOWS
-    /*HANDLE*/ void *handle_{};
-  #endif
   };
 }
 

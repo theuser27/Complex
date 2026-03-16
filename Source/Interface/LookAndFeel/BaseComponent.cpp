@@ -51,38 +51,28 @@ namespace Interface
       auto extra = (isCalculatingVertical) ? child->margin.getBottom() : child->margin.getRight();
 
       sameAsSiblingsSizes.min = utils::max(sameAsSiblingsSizes.min, child->bounds.*minMember);
-      sameAsSiblingsSizes.max = utils::max(sameAsSiblingsSizes.max, child->bounds.*minMember);
+      sameAsSiblingsSizes.max = utils::max(sameAsSiblingsSizes.max, child->bounds.*maxMember);
 
       // when parent has horizontal/vertical orientation but we're calculating vertical/horizontal sizes
       if (component->componentFlags.vertical ^ isCalculatingVertical)
       {
-        if (test_enum(child->sizingFlags, (isCalculatingVertical) ? Component::SameAsSiblingsY : Component::SameAsSiblingsX))
-          sameAsSiblingsComponents.emplaceBack(child);
-        else
-        {
-          sizes.min = utils::max(sizes.min, (i64)(child->bounds.*minMember) + extra);
-          sizes.max = utils::max(sizes.max, (i64)(child->bounds.*maxMember) + extra);
-        }
+        sizes.min = utils::max(sizes.min, (i64)(child->bounds.*minMember) + extra);
+        sizes.max = utils::max(sizes.max, (i64)(child->bounds.*maxMember) + extra);
+      }
+      else if (child->placement == Placement::custom)
+      {
+        nonPositionedSizes.min = utils::max(nonPositionedSizes.min, (i64)(child->bounds.*minMember) + extra);
+        nonPositionedSizes.max = utils::max(nonPositionedSizes.max, (i64)(child->bounds.*maxMember) + extra);
       }
       else
       {
-        if (child->placement == Placement::custom)
-        {
-          nonPositionedSizes.min = utils::max(nonPositionedSizes.min, (i64)(child->bounds.*minMember) + extra);
-          nonPositionedSizes.max = utils::max(nonPositionedSizes.max, (i64)(child->bounds.*maxMember) + extra);
-        }
-        else
-        {
-          sizes.min += (i64)(child->bounds.*minMember) + extra;
-          sizes.max += (i64)(child->bounds.*maxMember) + extra;
-        }
-
-        // taking care of children that conform to siblings' primary size
-        if (test_enum(child->sizingFlags, (isCalculatingVertical) ? Component::SameAsSiblingsY : Component::SameAsSiblingsX))
-        {
-          sameAsSiblingsComponents.emplaceBack(child);
-        }
+        sizes.min += (i64)(child->bounds.*minMember) + extra;
+        sizes.max += (i64)(child->bounds.*maxMember) + extra;
       }
+
+      // taking care of children that conform to siblings' size
+      if (test_enum(child->sizingFlags, (isCalculatingVertical) ? Component::SameAsSiblingsY : Component::SameAsSiblingsX))
+        sameAsSiblingsComponents.emplaceBack(child);
     }
 
     for (auto *child : sameAsSiblingsComponents)
@@ -120,9 +110,17 @@ namespace Interface
     }
     else
     {
-      component->bounds.*minMember = utils::max(component->desiredSize.*minMember, (i32)sizes.min);
-      component->bounds.*maxMember = utils::max(component->bounds.*minMember,
-        utils::min(component->desiredSize.*maxMember, (i32)sizes.max));
+      auto snapToMinFlag = (isCalculatingVertical) ? Component::SnapToMinY : Component::SnapToMinX;
+      if (component->sizingFlags & snapToMinFlag)
+      {
+        component->bounds.*minMember = utils::max((i32)sizes.min, component->desiredSize.*minMember);
+        component->bounds.*maxMember = utils::min(component->bounds.*minMember, component->desiredSize.*maxMember);
+      }
+      else
+      {
+        component->bounds.*minMember = utils::max((i32)sizes.min, component->desiredSize.*minMember);
+        component->bounds.*maxMember = utils::clamp((i32)sizes.max, component->bounds.*minMember, component->desiredSize.*maxMember);
+      }
 
       auto growableFlag = (isCalculatingVertical) ? Component::GrowableY : Component::GrowableX;
       if (component->sizingFlags & growableFlag)
@@ -164,8 +162,8 @@ namespace Interface
       (i64)(component->bounds.*maxMember) + padding);
   }
 
-  constinit utils::vector<Component *> *sortedSizesMin{};
-  constinit utils::vector<Component *> *sortedSizesMax{};
+  extern utils::vector<Component *> *sortedSizesMin;
+  extern utils::vector<Component *> *sortedSizesMax;
 
   static void calculateGrow(Component *component, Component *children, bool isCalculatingVertical)
   {
@@ -213,6 +211,14 @@ namespace Interface
       if (!child->componentFlags.isVisible)
         continue;
 
+      if (child->placement == Placement::custom)
+      {
+        child->bounds.*actualSize = utils::clamp(component->bounds.*actualSize,
+          child->bounds.*minMember, child->bounds.*maxMember);
+        
+        continue;
+      }
+
       auto extra = (isCalculatingVertical) ? child->margin.getBottom() : child->margin.getRight();
 
       // not adding minMember because we're going to compare against it in the next pass
@@ -243,7 +249,7 @@ namespace Interface
       ((isCalculatingVertical) ?
         component->scrollableArea.h : component->scrollableArea.w) = (i32)sizes.max;
     }
-    else if (children)
+    else if (!sortedMin.empty() && !sortedMax.empty())
     {
       i32 remaining = component->bounds.*actualSize - (i32)sizes.min;
 
@@ -331,11 +337,6 @@ namespace Interface
 
   void calculateSizes(Component *children, Component *component)
   {
-    utils::vector<Component *> sortedSizesMin_{ localScratch, 32 };
-    sortedSizesMin = &sortedSizesMin_;
-    utils::vector<Component *> sortedSizesMax_{ localScratch, 32 };
-    sortedSizesMax = &sortedSizesMax_;
-
     calculateFit(component, children, false);
     calculateGrow(component, children, false);
     calculateFit(component, children, true);
@@ -578,34 +579,40 @@ namespace Interface
     bool wasThisResized = component->bounds.withZeroOrigin() != component->lastBounds.withZeroOrigin();
     for (auto *child = children; child; child = child->next)
     {
-      static constexpr float kMoveDelay = 0.1f; //s
-
-      if (child->componentFlags.animateMovement &&                        // are we animating to begin with?
-        !wasThisResized &&                                                // skip animations if triggered by parent resize
-        child->lastBounds.getPosition() != child->nextPosition &&         // are we already at the destination?
-        child->previousPosition.x >= 0 && child->previousPosition.y >= 0) // did we have a previous position?
-      {
-        // we're interpolating between the previous position (animation start) and the supposed position
-
-        float distanceToNextPositionRatio = (float)child->distanceToNextPositionRatio / (float)utils::max_limit<u16>;
-        //distanceToNextPositionRatio = utils::smoothStep(distanceToNextPositionRatio);
-        distanceToNextPositionRatio = utils::min(distanceToNextPositionRatio + uiRelated.deltaTime * 1.0f / kMoveDelay, 1.0f);
-
-        child->bounds.x = (i32)::roundf(utils::lerp((float)child->previousPosition.x, (float)child->nextPosition.x, distanceToNextPositionRatio));
-        child->bounds.y = (i32)::roundf(utils::lerp((float)child->previousPosition.y, (float)child->nextPosition.y, distanceToNextPositionRatio));
-
-        child->distanceToNextPositionRatio = (u16)::ceilf(distanceToNextPositionRatio * (float)utils::max_limit<u16>);
-      }
-      else
-      {
-        // we're not animating position and just setting the supposed position directly in
-
-        child->previousPosition = child->nextPosition;
-        child->bounds.setPosition(child->nextPosition);
-        child->distanceToNextPositionRatio = 0;
-      }
-
+      animatePosition(child, wasThisResized);
       calculatePositions(child->children, child);
+    }
+  }
+
+  void animatePosition(Component *component, bool wasParentResized)
+  {
+    static constexpr float kMoveDelay = 1.0f; //s
+
+    if (component->componentFlags.animateMovement &&                            // are we animating to begin with?
+      !wasParentResized &&                                                      // skip animations if triggered by parent resize
+      component->lastBounds.getPosition() != component->nextPosition &&         // are we already at the destination?
+      component->previousPosition.x >= 0 && component->previousPosition.y >= 0) // did we have a previous position?
+    {
+      // we're interpolating between the previous position (animation start) and the supposed position
+
+      float distanceToNextPositionRatio = (float)component->distanceToNextPositionRatio / (float)utils::max_limit<u16>;
+      distanceToNextPositionRatio = utils::min(distanceToNextPositionRatio + uiRelated.deltaTime * 1.0f / kMoveDelay, 1.0f);
+      auto temp = 1.0f - (1.0f - distanceToNextPositionRatio) * (1.0f - distanceToNextPositionRatio);
+      distanceToNextPositionRatio = temp;
+      //distanceToNextPositionRatio = utils::smoothStep(distanceToNextPositionRatio);
+
+      component->bounds.x = (i32)::roundf(utils::lerp((float)component->previousPosition.x, (float)component->nextPosition.x, distanceToNextPositionRatio));
+      component->bounds.y = (i32)::roundf(utils::lerp((float)component->previousPosition.y, (float)component->nextPosition.y, distanceToNextPositionRatio));
+
+      component->distanceToNextPositionRatio = (u16)::ceilf(distanceToNextPositionRatio * (float)utils::max_limit<u16>);
+    }
+    else
+    {
+      // we're not animating position and just setting the supposed position directly in
+
+      component->previousPosition = component->nextPosition;
+      component->bounds.setPosition(component->nextPosition);
+      component->distanceToNextPositionRatio = 0;
     }
   }
 
@@ -729,7 +736,8 @@ namespace Interface
       // the last child doesn't have a next, which is why this works
       for (auto *child = children->previous; ; child = child->previous)
       {
-        if (child->componentFlags.isVisible && child->contains(Point{ x, y }))
+        if (child->componentFlags.isVisible && 
+          child->contains(Point{ x - child->bounds.x, y - child->bounds.y }))
         {
           auto *result = child->getComponentAt(x - child->bounds.x,
             y - child->bounds.y, onlyClickable);
@@ -776,16 +784,13 @@ namespace Interface
       return true;
 
     auto *focusedComponent = getMouseInteractions(uiRelated.renderer).focused;
-    if (component->componentFlags.wantsFocus)
+    if (component == focusedComponent)
+      return true;
+
+    if (!focusedComponent || focusedComponent->handleFocus(false, Component::FocusGrabbed, component))
     {
-      if (component == focusedComponent)
-        return true;
-
       setFocusedComponent(uiRelated.renderer, component);
-      if (focusedComponent)
-        focusedComponent->handleFocus(false, Component::FocusGrabbed);
-
-      component->handleFocus(true, Component::FocusGrabbed);
+      component->handleFocus(true, Component::FocusGrabbed, focusedComponent);
       return true;
     }
 
@@ -797,13 +802,10 @@ namespace Interface
       // shallow search
       for (auto *child = component->children->previous; ; child = child->previous)
       {
-        if (component->componentFlags.wantsFocus && child != origin)
+        if (child != origin && (!focusedComponent || focusedComponent->handleFocus(false, Component::FocusGrabbed, child)))
         {
           setFocusedComponent(uiRelated.renderer, child);
-          if (focusedComponent)
-            focusedComponent->handleFocus(false, Component::FocusGrabbed);
-
-          child->handleFocus(true, Component::FocusGrabbed);
+          child->handleFocus(true, Component::FocusGrabbed, focusedComponent);
           return true;
         }
 
@@ -835,10 +837,10 @@ namespace Interface
   void Component::giveAwayFocus()
   {
     auto *focusedComponent = getMouseInteractions(uiRelated.renderer).focused;
-    if (this == focusedComponent || isParentOf(focusedComponent))
+    if ((this == focusedComponent || isParentOf(focusedComponent)) && 
+      focusedComponent->handleFocus(false, FocusGivenAway, nullptr))
     {
       setFocusedComponent(uiRelated.renderer, nullptr);
-      focusedComponent->handleFocus(false, FocusGivenAway);
     }
   }
 

@@ -278,18 +278,18 @@ namespace utils
 
     static constexpr AllocatorVtable allocatorTable[] = { generalAllocatorVtable, createVtable<utils::bumpArena>() };
 
-    std::source_location location{};
+    sourceLocation location{};
     const AllocatorVtable *vtable{};
     void *allocator{};
     bool freeingDestructor = true;
 
     constexpr Allocator() = default;
     constexpr Allocator(AllocatorConcept auto *allocator, bool freeingDestructor = true, 
-      std::source_location location = std::source_location::current()) : location{ location },
+      utils::sourceLocation location = utils::sourceLocation::current()) : location{ location },
       vtable{ &allocatorTable[(usize)allocator->type] }, allocator{ allocator },
       freeingDestructor{ freeingDestructor } { }
     constexpr Allocator(const AllocatorVtable *vtable, void *allocator, bool freeingDestructor = true,
-      std::source_location location = std::source_location::current()) : location{ location }, 
+      utils::sourceLocation location = utils::sourceLocation::current()) : location{ location },
       vtable{ vtable }, allocator{ allocator }, freeingDestructor{ freeingDestructor } { }
 
     [[nodiscard]] strict_inline byte *

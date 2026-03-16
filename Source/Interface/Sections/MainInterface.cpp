@@ -34,9 +34,10 @@ namespace Interface
     return true;
   }
 
-  bool 
+  bool
   SoundEngineSection::EffectsSection::LaneSelector::render(OpenGlWrapper &openGl)
   {
+    (void)openGl;
     //fillRect(openGl, getLocalBounds().toFloat());
 
     return true;
@@ -58,11 +59,12 @@ namespace Interface
     addChildComponent(&laneHolder);
   }
 
-  bool 
+  bool
   SoundEngineSection::EffectsSection::render(OpenGlWrapper &openGl)
   {
+    (void)openGl;
     //fillRect(openGl, getLocalBounds().toFloat(), Colours::black);
-    
+
     if (laneSelector.firstVisibleLaneIndex != laneSelector.lastFirstVisibleLaneIndex)
     {
       // TODO:
@@ -72,7 +74,7 @@ namespace Interface
   }
 
   bool
-  CommandMessages::handleProcessorInsertion(Generation::BaseProcessor *parentProcessor, 
+  CommandMessages::handleProcessorInsertion(Generation::BaseProcessor *parentProcessor,
     Component *parentComponent, ProcessorInsertion *metadata, Component *substituteInsert)
   {
     auto *processor = metadata->processor;
@@ -105,7 +107,7 @@ namespace Interface
     }
     else
       child = Generation::BaseProcessor::getChild(parentProcessor->children, metadata->index);
-    
+
     {
       auto g = parentProcessor->state->plugin->acquireProcessingLock();
       if (processor->parent)
@@ -118,7 +120,7 @@ namespace Interface
       processor->component->parent->removeChildComponent(processor->component);
     if (substituteInsert)
       parentComponent->removeChildComponent(substituteInsert);
-    auto *newComponent = (metadata->insertPlaceholder && substituteInsert) ? 
+    auto *newComponent = (metadata->insertPlaceholder && substituteInsert) ?
       substituteInsert : processor->component;
 
     COMPLEX_ASSERT(!child || child->component);
@@ -128,7 +130,7 @@ namespace Interface
   }
 
   bool
-  CommandMessages::tryProcessorInsert(Generation::BaseProcessor *processorToInsert, 
+  CommandMessages::tryProcessorInsert(Generation::BaseProcessor *processorToInsert,
     Component *treeToInsertInto, ProcessorInsertion &data)
   {
     COMPLEX_ASSERT(processorToInsert->component);
@@ -246,7 +248,7 @@ namespace Interface
     window.valueChangedCallback(&window, window.getValue(), 0.0f);
   }
 
-  bool 
+  bool
   SoundEngineSection::BottomBar::render(OpenGlWrapper &openGl)
   {
     fillRect(openGl, bounds.withZeroOrigin().toFloat(), getColour(Skin::kBody, this));
@@ -259,7 +261,7 @@ namespace Interface
   void SoundEngineSection::reinitialise()
   {
     COMPLEX_ASSERT(soundEngine);
-    
+
     removeAllChildComponents();
     componentFlags.vertical = true;
     sizingFlags = (Component::SizingFlags)(Component::GrowableX | Component::GrowableY);
@@ -302,10 +304,10 @@ namespace Interface
     bottomBar.reinitialise();
   }
 
-  bool 
+  bool
   SoundEngineSection::render(OpenGlWrapper &openGl)
   {
-    fillRect(openGl, bounds.withZeroOrigin().toFloat(), 
+    fillRect(openGl, bounds.withZeroOrigin().toFloat(),
       getColour(Skin::kBackground, this));
 
     //reinitialise();
@@ -323,7 +325,7 @@ namespace Interface
       if (!(metadata = extraData.tryGet<CommandMessages::ProcessorInsertion *>()))
         return false;
 
-      if (!CommandMessages::handleProcessorInsertion(soundEngine, 
+      if (!CommandMessages::handleProcessorInsertion(soundEngine,
         &effectsSection.laneHolder, *metadata, &invisibleHover))
         return false;
 
@@ -358,21 +360,21 @@ namespace Interface
     return false;
   }
 
-  bool 
+  bool
   ResizeCorner::mouseEnter(const MouseEvent &)
   {
     Interface::setMouseCursor(uiRelated.renderer, MouseCursorTypes::UpLeftDownRightResize);
     return true;
   }
 
-  bool 
+  bool
   ResizeCorner::mouseExit(const MouseEvent &)
   {
     Interface::setMouseCursor(uiRelated.renderer, MouseCursorTypes::Normal);
     return true;
   }
 
-  bool 
+  bool
   ResizeCorner::mouseDown(const MouseEvent &)
   {
     areaAtMouseDown = getUISize(uiRelated.renderer);
@@ -381,7 +383,7 @@ namespace Interface
 
   extern "C" void cplug_checkSize(void *userGUI, u32 *width, u32 *height);
 
-  bool 
+  bool
   ResizeCorner::mouseDrag(const MouseEvent &event)
   {
     auto offset = event.getOffsetFromDragStart();
@@ -435,16 +437,16 @@ namespace Interface
 
     auto state = getPlugin(uiRelated.renderer).state_;
 
-    auto recurseProcessors = [](const auto &self, 
+    auto recurseProcessors = [](const auto &self,
       Generation::BaseProcessor *processor, Component *parentComponent) -> void
     {
-      // at this point processor->component will have a dangling reference 
+      // at this point processor->component will have a dangling reference
       // to the old component before the reset (if this is not the 1st time)
       processor->component = processor->createUI();
       if (!processor->component)
         return;
 
-      CommandMessages::ProcessorInsertion data{ .processor = processor, 
+      CommandMessages::ProcessorInsertion data{ .processor = processor,
         .index = u32(-1), .useIndex = true };
 
       // if it fails to insert, just add it to the immediate parent
@@ -462,19 +464,18 @@ namespace Interface
 
     popupSelector.componentFlags.isVisible = false;
     popupSelector.componentFlags.alwaysOnTop = true;
-    popupSelector.componentFlags.wantsFocus = true;
     addChildComponent(&popupSelector);
-    popupSelector.initialise();
+    popupSelector.reinitialise();
 
     popupDisplay1.componentFlags.isVisible = false;
     popupDisplay1.componentFlags.alwaysOnTop = true;
     addChildComponent(&popupDisplay1);
-    popupDisplay1.initialise();
+    popupDisplay1.reinitialise();
 
     popupDisplay2.componentFlags.isVisible = false;
     popupDisplay2.componentFlags.alwaysOnTop = true;
     addChildComponent(&popupDisplay2);
-    popupDisplay2.initialise();
+    popupDisplay2.reinitialise();
   }
 }
 

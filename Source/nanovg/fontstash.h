@@ -227,7 +227,8 @@ struct FONSglyph
 	int next;
 	short size, blur;
 	short x0,y0,x1,y1;
-	short xadv,xoff,yoff;
+	float xadv;
+	short xoff,yoff;
 };
 typedef struct FONSglyph FONSglyph;
 
@@ -1073,6 +1074,11 @@ static void fons__blur(FONScontext* stash, unsigned char* dst, int w, int h, int
 //	fons__blurcols(dst, w, h, dstStride, alpha);
 }
 
+#define FONS__RESOLUTION 10.0f
+static short fons__getIsize(float size) { return (short)(size * FONS__RESOLUTION); }
+static float fons__getSize(short isize) { return isize / FONS__RESOLUTION; }
+static int fons__isRoughlyEqual(float x, float y) { return fabsf(x - y) <= 0.001f; }
+
 static FONSglyph* fons__getGlyph(FONScontext* stash, FONSfont* font, unsigned int codepoint,
 								 short isize, short iblur, int bitmapOption)
 {
@@ -1080,7 +1086,7 @@ static FONSglyph* fons__getGlyph(FONScontext* stash, FONSfont* font, unsigned in
 	float scale;
 	FONSglyph* glyph = NULL;
 	unsigned int h;
-	float size = isize/10.0f;
+	float size = fons__getState(stash)->size;
 	int pad, added;
 	unsigned char* bdst;
 	unsigned char* dst;
@@ -1162,7 +1168,7 @@ static FONSglyph* fons__getGlyph(FONScontext* stash, FONSfont* font, unsigned in
 	glyph->y0 = (short)gy;
 	glyph->x1 = (short)(glyph->x0+gw);
 	glyph->y1 = (short)(glyph->y0+gh);
-	glyph->xadv = (short)(scale * advance * 10.0f);
+	glyph->xadv = (short)roundf(scale * advance * FONS__RESOLUTION);
 	glyph->xoff = (short)(x0 - pad);
 	glyph->yoff = (short)(y0 - pad);
 
@@ -1260,7 +1266,7 @@ static void fons__getQuad(FONScontext* stash, FONSfont* font,
 		q->t1 = y1 * stash->ith;
 	}
 
-	*x += glyph->xadv / 10.0f;
+	*x += roundf(glyph->xadv / FONS__RESOLUTION);
 }
 
 static void fons__flush(FONScontext* stash)
@@ -1296,25 +1302,28 @@ static __inline void fons__vertex(FONScontext* stash, float x, float y, float s,
 
 static float fons__getVertAlign(FONScontext* stash, FONSfont* font, int align, short isize)
 {
+	(void)isize;
+	float size = fons__getState(stash)->size;
+	//float size = fons__getSize(isize);
 	if (stash->params.flags & FONS_ZERO_TOPLEFT) {
 		if (align & FONS_ALIGN_TOP) {
-			return font->ascender * (float)isize/10.0f;
+			return font->ascender * size;
 		} else if (align & FONS_ALIGN_MIDDLE) {
-			return (font->ascender + font->descender) / 2.0f * (float)isize/10.0f;
+			return (font->ascender + font->descender) / 2.0f * size;
 		} else if (align & FONS_ALIGN_BASELINE) {
 			return 0.0f;
 		} else if (align & FONS_ALIGN_BOTTOM) {
-			return font->descender * (float)isize/10.0f;
+			return font->descender * size;
 		}
 	} else {
 		if (align & FONS_ALIGN_TOP) {
-			return -font->ascender * (float)isize/10.0f;
+			return -font->ascender * size;
 		} else if (align & FONS_ALIGN_MIDDLE) {
-			return -(font->ascender + font->descender) / 2.0f * (float)isize/10.0f;
+			return -(font->ascender + font->descender) / 2.0f * size;
 		} else if (align & FONS_ALIGN_BASELINE) {
 			return 0.0f;
 		} else if (align & FONS_ALIGN_BOTTOM) {
-			return -font->descender * (float)isize/10.0f;
+			return -font->descender * size;
 		}
 	}
 	return 0.0;
@@ -1330,7 +1339,7 @@ float fonsDrawText(FONScontext* stash,
 	FONSglyph* glyph = NULL;
 	FONSquad q;
 	int prevGlyphIndex = -1;
-	short isize = (short)(state->size*10.0f);
+	short isize = fons__getIsize(state->size);
 	short iblur = (short)state->blur;
 	float scale;
 	FONSfont* font;
@@ -1341,7 +1350,7 @@ float fonsDrawText(FONScontext* stash,
 	font = stash->fonts[state->font];
 	if (font->data == NULL) return x;
 
-	scale = fons__tt_getPixelHeightScale(&font->font, (float)isize/10.0f);
+	scale = fons__tt_getPixelHeightScale(&font->font, state->size);
 
 	if (end == NULL)
 		end = str + strlen(str);
@@ -1397,9 +1406,9 @@ int fonsTextIterInit(FONScontext* stash, FONStextIter* iter,
 	iter->font = stash->fonts[state->font];
 	if (iter->font->data == NULL) return 0;
 
-	iter->isize = (short)(state->size*10.0f);
+	iter->isize = fons__getIsize(state->size);
 	iter->iblur = (short)state->blur;
-	iter->scale = fons__tt_getPixelHeightScale(&iter->font->font, (float)iter->isize/10.0f);
+	iter->scale = fons__tt_getPixelHeightScale(&iter->font->font, state->size);
 
 	// Align horizontally
 	if (state->align & FONS_ALIGN_LEFT) {
@@ -1517,7 +1526,7 @@ float fonsTextBounds(FONScontext* stash,
 	FONSquad q;
 	FONSglyph* glyph = NULL;
 	int prevGlyphIndex = -1;
-	short isize = (short)(state->size*10.0f);
+	short isize = fons__getIsize(state->size);
 	short iblur = (short)state->blur;
 	float scale;
 	FONSfont* font;
@@ -1529,7 +1538,7 @@ float fonsTextBounds(FONScontext* stash,
 	font = stash->fonts[state->font];
 	if (font->data == NULL) return 0;
 
-	scale = fons__tt_getPixelHeightScale(&font->font, (float)isize/10.0f);
+	scale = fons__tt_getPixelHeightScale(&font->font, state->size);
 
 	// Align vertically.
 	y += fons__getVertAlign(stash, font, state->align, isize);
@@ -1593,15 +1602,15 @@ void fonsVertMetrics(FONScontext* stash,
 	if (stash == NULL) return;
 	if (state->font < 0 || state->font >= stash->nfonts) return;
 	font = stash->fonts[state->font];
-	isize = (short)(state->size*10.0f);
+	isize = fons__getIsize(state->size);
 	if (font->data == NULL) return;
 
 	if (ascender)
-		*ascender = font->ascender*isize/10.0f;
+		*ascender = font->ascender * state->size;
 	if (descender)
-		*descender = font->descender*isize/10.0f;
+		*descender = font->descender * state->size;
 	if (lineh)
-		*lineh = font->lineh*isize/10.0f;
+		*lineh = font->lineh * state->size;
 }
 
 void fonsLineBounds(FONScontext* stash, float y, float* miny, float* maxy)
@@ -1613,17 +1622,17 @@ void fonsLineBounds(FONScontext* stash, float y, float* miny, float* maxy)
 	if (stash == NULL) return;
 	if (state->font < 0 || state->font >= stash->nfonts) return;
 	font = stash->fonts[state->font];
-	isize = (short)(state->size*10.0f);
+	isize = fons__getIsize(state->size);
 	if (font->data == NULL) return;
 
 	y += fons__getVertAlign(stash, font, state->align, isize);
 
 	if (stash->params.flags & FONS_ZERO_TOPLEFT) {
-		*miny = y - font->ascender * (float)isize/10.0f;
-		*maxy = *miny + font->lineh*isize/10.0f;
+		*miny = y - font->ascender * state->size;
+		*maxy = *miny + font->lineh * state->size;
 	} else {
-		*maxy = y + font->descender * (float)isize/10.0f;
-		*miny = *maxy - font->lineh*isize/10.0f;
+		*maxy = y + font->descender * state->size;
+		*miny = *maxy - font->lineh * state->size;
 	}
 }
 

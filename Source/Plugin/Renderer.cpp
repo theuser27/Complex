@@ -25,49 +25,49 @@ unscaleDimensions(u32 width, u32 height, double currentScaling) noexcept
     (u32)::round((double)height / currentScaling) };
 }
 
-static void clampScaleWidthHeight(PuglView *view, float &desiredScale, u32 &windowWidth, u32 &windowHeight)
-{
-  using namespace Interface;
+// static void clampScaleWidthHeight(PuglView *view, float &desiredScale, u32 &windowWidth, u32 &windowHeight)
+// {
+//   using namespace Interface;
 
-  auto nativeHandle = puglGetNativeView(view);
-  nativeHandle = nativeHandle ? nativeHandle : puglGetParent(view);
+//   auto nativeHandle = puglGetNativeView(view);
+//   nativeHandle = nativeHandle ? nativeHandle : puglGetParent(view);
 
-  auto info = Interface::getCurrentMonitorInfo((void *)nativeHandle);
+//   auto info = Interface::getCurrentMonitorInfo((void *)nativeHandle);
 
-  // the available display area on screen for the window
-  Interface::Rectangle<i32> displayArea = info.totalArea;
+//   // the available display area on screen for the window
+//   Interface::Rectangle<i32> displayArea = info.totalArea;
 
-  desiredScale = ::roundf(utils::clamp(desiredScale, kMinWindowScaleFactor, kMaxWindowScaleFactor)
-    / kWindowScaleIncrements) * kWindowScaleIncrements;
+//   desiredScale = ::roundf(utils::clamp(desiredScale, kMinWindowScaleFactor, kMaxWindowScaleFactor)
+//     / kWindowScaleIncrements) * kWindowScaleIncrements;
 
-  auto clampScaleToDisplay = [&](float current, float display)
-  {
-    while (display > 0.0f && current * desiredScale > display)
-    {
-      if (desiredScale == kMinWindowScaleFactor)
-        break;
-      desiredScale -= kWindowScaleIncrements;
-    }
-  };
+//   auto clampScaleToDisplay = [&](float current, float display)
+//   {
+//     while (display > 0.0f && current * desiredScale > display)
+//     {
+//       if (desiredScale == kMinWindowScaleFactor)
+//         break;
+//       desiredScale -= kWindowScaleIncrements;
+//     }
+//   };
 
-  float displayWidth = (float)displayArea.w;
-  clampScaleToDisplay((float)windowWidth, displayWidth);
+//   float displayWidth = (float)displayArea.w;
+//   clampScaleToDisplay((float)windowWidth, displayWidth);
 
-  while (desiredScale * (float)windowWidth > displayWidth)
-  {
-    if (windowWidth <= kMinWidth)
-    {
-      windowWidth = kMinWidth;
-      break;
-    }
-    windowWidth -= kAddedWidthPerLane;
-  }
+//   while (desiredScale * (float)windowWidth > displayWidth)
+//   {
+//     if (windowWidth <= kMinWidth)
+//     {
+//       windowWidth = kMinWidth;
+//       break;
+//     }
+//     windowWidth -= kAddedWidthPerLane;
+//   }
 
-  float displayHeight = (float)displayArea.h;
-  clampScaleToDisplay((float)windowHeight, displayHeight);
+//   float displayHeight = (float)displayArea.h;
+//   clampScaleToDisplay((float)windowHeight, displayHeight);
 
-  windowHeight = utils::clamp(windowHeight, (u32)kMinHeight, (u32)::floorf(displayHeight / desiredScale));
-}
+//   windowHeight = utils::clamp(windowHeight, (u32)kMinHeight, (u32)::floorf(displayHeight / desiredScale));
+// }
 
 #define GRAPH_HISTORY_COUNT 100
 struct PerfGraph
@@ -97,6 +97,8 @@ namespace Interface
 {
   // deferred components that will set their own position
   constinit utils::vector<Component *> *customPlacement{};
+  constinit utils::vector<Component *> *sortedSizesMin{};
+  constinit utils::vector<Component *> *sortedSizesMax{};
 
   class Renderer
   {
@@ -140,11 +142,10 @@ namespace Interface
     ModifierKeys mouseButtonsDown_{};
     ModifierKeys lastKeyboardMods_{};
 
-    u32 numberOfFrames{};
+    u64 numberOfFrames{};
 
     u8 numberOfClicks = 0;
     double lastMouseClickTime = 0.0;
-    double lastRenderTime = 0.0f;
     Point<i32> lastMousePosition_{ 0, 0 };
     Point<i32> lastMouseDownPosition_{ 0, 0 };
 
@@ -180,8 +181,8 @@ namespace Interface
       auto newEffectiveScale = getEffectiveScale();
       if (newEffectiveScale == effectiveScale && !forceResize)
         return;
-      
-      area = { (u32)::roundf((float)area.w * newEffectiveScale / effectiveScale), 
+
+      area = { (u32)::roundf((float)area.w * newEffectiveScale / effectiveScale),
         (u32)::roundf((float)area.h * newEffectiveScale / effectiveScale) };
       auto minScaledArea = Area<u32>{ (u32)::roundf((float)kMinWidth * newEffectiveScale),
         (u32)::roundf((float)kMinHeight * newEffectiveScale) };
@@ -220,20 +221,21 @@ namespace Interface
       if (!focusedComponent_ || focusedComponent_->componentFlags.isVisible)
         return;
 
-      auto *focusedComponent = focusedComponent_;
-      focusedComponent_ = nullptr;
-      focusedComponent->handleFocus(false, Component::FocusSetInvisible);
-
-      auto next = focusedComponent->parent;
+      auto next = focusedComponent_->parent;
       while (next)
       {
-        if (next->componentFlags.isVisible && next->componentFlags.wantsFocus)
+        // both parties must agree to take over/relinquish focus from/to the other
+        if (next->componentFlags.isVisible &&
+          focusedComponent_->handleFocus(false, Component::FocusSetInvisible, next) &&
+          next->handleFocus(true, Component::FocusSetInvisible, focusedComponent_))
         {
-          next->handleFocus(true, Component::FocusSetInvisible);
-          break;
+          focusedComponent_ = next;
+          return;
         }
         next = next->parent;
       }
+
+      focusedComponent_ = nullptr;
     }
 
     void renderLoop(PuglView *view)
@@ -245,7 +247,8 @@ namespace Interface
       }
 
       auto newRenderTime = puglGetTime(puglGetWorld(view));
-      uiRelated.deltaTime = (float)(newRenderTime - lastRenderTime);
+      uiRelated.deltaTime = (float)(newRenderTime - uiRelated.steadyTime);
+      uiRelated.steadyTime = newRenderTime;
       updateGraph(&graph, (float)uiRelated.deltaTime);
 
       auto state = plugin.state_;
@@ -258,6 +261,10 @@ namespace Interface
 
       utils::vector<Component *> customPlacement_{ localScratch, 32 };
       customPlacement = &customPlacement_;
+      utils::vector<Component *> sortedSizesMin_{ localScratch, 32 };
+      sortedSizesMin = &sortedSizesMin_;
+      utils::vector<Component *> sortedSizesMax_{ localScratch, 32 };
+      sortedSizesMax = &sortedSizesMax_;
 
       calculateSizes(gui->children, gui);
       gui->bounds.setPosition({});
@@ -297,8 +304,6 @@ namespace Interface
       puglSwapBuffers(view);
       if (isResizing)
         glFinish();
-
-      lastRenderTime = newRenderTime;
 
       u32 a, b;
       Framework::LoadSave::getWindowSizeScale(a, b, pluginScale);
@@ -710,10 +715,10 @@ namespace Interface
   void Renderer::moveFocusTo(Component &component)
   {
     if (focusedComponent_ &&
-      focusedComponent_->handleFocus(false, Component::FocusMoved))
+      focusedComponent_->handleFocus(false, Component::FocusMoved, &component) &&
+      component.handleFocus(true, Component::FocusMoved, focusedComponent_))
     {
       focusedComponent_ = &component;
-      component.handleFocus(true, Component::FocusMoved);
     }
   }
 
@@ -734,17 +739,16 @@ namespace Interface
     if (lastMousePosition_ == Point{ e.x, e.y })
       return;
 
-    Component *newHoveredComponent = nullptr;
-    auto eventFunc = &Component::mouseMove;
-
     if (mouseDownComponent_)
     {
-      mouseDownComponent_->mouseDrag(getRelativeEvent(e, mouseDownComponent_));
-      return;
+      auto relativeEvent = getRelativeEvent(e, mouseDownComponent_);
+      mouseDownComponent_->componentFlags.isHovered = 
+        mouseDownComponent_->contains(Point{ relativeEvent.x, relativeEvent.y });
+      if (mouseDownComponent_->mouseDrag(relativeEvent))
+        return;
     }
 
-    if (!newHoveredComponent)
-      newHoveredComponent = gui->getComponentAt(e.x, e.y, true);
+    Component *newHoveredComponent = gui->getComponentAt(e.x, e.y, true);
 
     if (newHoveredComponent != mouseHoveredComponent_)
     {
@@ -765,7 +769,7 @@ namespace Interface
     if (mouseHoveredComponent_)
     {
       auto relativeEvent = getRelativeEvent(e, mouseHoveredComponent_);
-      (mouseHoveredComponent_->*eventFunc)(relativeEvent);
+      mouseHoveredComponent_->mouseMove(relativeEvent);
     }
   }
 
@@ -776,18 +780,17 @@ namespace Interface
     // TODO: handle more than 1 button being pressed
 
     mouseDownComponent_ = gui->getComponentAt(e.x, e.y, true);
-    auto *newKeyboardFocusComponent = mouseDownComponent_;
-    while (newKeyboardFocusComponent && !newKeyboardFocusComponent->componentFlags.wantsFocus)
-      newKeyboardFocusComponent = newKeyboardFocusComponent->parent;
 
-    if (focusedComponent_ && newKeyboardFocusComponent != focusedComponent_ &&
+    if (focusedComponent_ && mouseDownComponent_ != focusedComponent_ &&
       // does the old focused component allow losing focus
-      focusedComponent_->handleFocus(false, Component::FocusClick))
+      focusedComponent_->handleFocus(false, Component::FocusClick, mouseDownComponent_))
     {
-      focusedComponent_ = newKeyboardFocusComponent;
-      // does the newly focused component exist and allow gaining focus
-      if (focusedComponent_ && !focusedComponent_->handleFocus(true, Component::FocusClick))
-        focusedComponent_ = nullptr;
+      auto oldFocused = focusedComponent_;
+      focusedComponent_ = mouseDownComponent_;
+      // does the newly clicked component exist and allow gaining focus
+      if (mouseDownComponent_ && !mouseDownComponent_->handleFocus(true, Component::FocusClick, oldFocused))
+        if (focusedComponent_ == mouseDownComponent_)
+          focusedComponent_ = nullptr;
     }
 
     bool success = false;
@@ -827,8 +830,12 @@ namespace Interface
       auto event = getRelativeEvent(e, mouseDownComponent_);
 
       auto *oldMouseDownComponent = mouseDownComponent_;
-      if (!oldMouseDownComponent->mouseUp(event))
-        return;
+
+      if (oldMouseDownComponent->contains(Point{ event.x, event.y }))
+      {
+        if (!oldMouseDownComponent->mouseUp(event))
+          return;
+      }
 
       mouseDownComponent_ = nullptr;
 
@@ -841,6 +848,11 @@ namespace Interface
     {
       mouseHoveredComponent_->componentFlags.isHovered = true;
       mouseHoveredComponent_->mouseEnter(getRelativeEvent(e, mouseHoveredComponent_));
+      if (isHandlingOrphanedMouseEvents && mouseHoveredComponent_->componentFlags.acceptsOrphanedMouseEvents)
+      {
+        isHandlingOrphanedMouseEvents = false;
+        mouseHoveredComponent_->mouseUp(getRelativeEvent(e, mouseHoveredComponent_));
+      }
     }
   }
 

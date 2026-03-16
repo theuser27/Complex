@@ -55,8 +55,6 @@ namespace Interface
     if (parameterLink && parameterLink->hostControl)
       parameterLink->hostControl->beginChangeGesture();
 
-    beginChange(getValue());
-
     mouseDrag(e);
 
     return true;
@@ -77,8 +75,12 @@ namespace Interface
       double newPos = getValue() + mouseDiff * (1.0 / sensitivity);
       newPos = (controlFlags.canLoopAround) ? newPos - ::floor(newPos) : utils::clamp(newPos, 0.0, 1.0);
 
+      beginChange(getValue());
+
       setValue(newPos, true);
       setValueToHost();
+
+      endChange();
     }
 
     return true;
@@ -90,7 +92,6 @@ namespace Interface
     if (!componentFlags.isClicked)
       return false;
 
-    endChange();
     if (parameterLink && parameterLink->hostControl)
       parameterLink->hostControl->endChangeGesture();
 
@@ -169,11 +170,12 @@ namespace Interface
     if (isMapped)
       parameterLink->hostControl->beginChangeGesture();
 
-    if (!controlFlags.hasBegunChange)
-      beginChange(currentValue);
+    beginChange(currentValue);
 
     setValue(newValue, true);
     setValueToHost();
+
+    endChange();
 
     if (isMapped)
       parameterLink->hostControl->endChangeGesture();
@@ -206,8 +208,8 @@ namespace Interface
     static constexpr float kHoverIncrement = 0.15f;
 
     (void)openGl;
-    animator.tick(componentFlags.isHovered, componentFlags.isClicked, kHoverIncrement, 0.0f);
-    float thickness = knobArcThickness * (1.0f + 0.15f * animator.getValue(Animator::Hover));
+    tickAnimation(animationValues, { { componentFlags.isHovered } }, { { kHoverIncrement } });
+    float thickness = knobArcThickness * (1.0f + 0.15f * animationValues[0]);
     (void)thickness;
 
     // TODO:
@@ -414,8 +416,9 @@ namespace Interface
     {
       auto bounds = self->bounds.toFloat();
       float yCenter = bounds.h * 0.5f;
-      float height = bounds.h * 0.0675f;
+      float height = bounds.w * 0.25f;
 
+      nvgStrokeWidth(openGl, scaleValue(1.0f));
       nvgBeginPath(openGl.g);
       nvgMoveTo(openGl.g, 0.0f, yCenter - height);
       nvgLineTo(openGl, bounds.w * 0.5f, yCenter + height);
@@ -432,9 +435,9 @@ namespace Interface
   {
     static constexpr float kHoverIncrement = 0.2f;
 
-    animator.tick(componentFlags.isHovered, componentFlags.isClicked, kHoverIncrement, 0.0f);
+    tickAnimation(animationValues, { { componentFlags.isHovered } }, { { kHoverIncrement } });
 
-    if (auto alpha = animator.getValue(Animator::Hover); alpha != 0.0f)
+    if (auto alpha = animationValues[0]; alpha != 0.0f)
     {
       nvgBeginPath(openGl);
       nvgRoundedRect(openGl, 0.0f, 0.0f, (float)bounds.w, (float)bounds.h,
@@ -474,17 +477,20 @@ namespace Interface
           text = option->displayName;
         }
 
-        uiRelated.cache->setFont(FontId::InterType, scaleValue(height));
+        height = scaleValue(height);
+        uiRelated.cache->setFont(FontId::InterType, height);
+        nvgTextAlign(uiRelated.cache->context, NVG_ALIGN_LEFT | NVG_ALIGN_CENTER);
 
         if (!isCalculatingVertical)
         {
-          maxSize = (i32)::ceilf(uiRelated.cache->getStringWidthFloat(text));
-          minSize = (canTextWrap) ? 0 : maxSize;
+          minSize = (canTextWrap) ? 0 : (i32)::ceilf(uiRelated.cache->getStringWidthFloat(text));
+          maxSize = -1;
         }
         else
         {
-          auto area = uiRelated.cache->getStringBoundsMultiline(text, (float)item->bounds.w);
-          minSize = maxSize = (i32)area.h;
+          auto lineCount = uiRelated.cache->getStringNumberOfLines(text, (float)item->bounds.w);
+          minSize = utils::max(scaleValueRoundInt((float)item->desiredSize.h), (i32)::roundf(height * (float)lineCount));
+          maxSize = minSize;
         }
 
         return Range<i32>{ minSize, maxSize };
@@ -494,9 +500,38 @@ namespace Interface
     bool 
     render(OpenGlWrapper &openGl) override
     {
-      (void)openGl;
+      PopupItem::render(openGl);
+      
+      bool canTextWrap = false;
+      utils::string_view text;
+      float height = kSecondaryTextLineHeight;
+      Skin::ColourId textColourId = Skin::kTextComponentText1;
 
-      // TODO:
+      if (id)
+      {
+        // label whose extra data is a string
+        canTextWrap = true;
+        text = *((utils::stringnd *)extraData);
+
+        textColourId = Skin::kTextComponentText2;
+        // draw background
+        fillRect(openGl, getLocalBounds().toFloat(), getColour(Skin::kPopupSelectorDelimiter, this));
+      }
+      else
+      {
+        auto *option = (Framework::IndexedData *)extraData;
+        canTextWrap = !option->id;
+        height = !option->id ? height : kPrimaryTextLineHeight;
+        text = option->displayName;
+      }
+
+      int roundedHeight = scaleValueRoundInt(height);
+      auto textBounds = getLocalBounds().trimmed(scaleValueRoundInt(padding.toInt()));
+      textBounds.trimTop((textBounds.h - roundedHeight) / 2);
+      textBounds.h = roundedHeight;
+
+      renderText(text, FontId::InterType, textBounds, openGl.cache,
+        getColour(textColourId, this), true, canTextWrap);
 
       return true;
     }
@@ -526,6 +561,7 @@ namespace Interface
     if (controlFlags.isInModalState)
     {
       selector->resetState();
+      controlFlags.isInModalState = false;
       return true;
     }
 
@@ -534,20 +570,40 @@ namespace Interface
 
     auto *itemArena = selector->arena;
 
-    TextSelectorItem *options = anew(itemArena, TextSelectorItem, {});
-    options->sublistMinSize = { kPopupMinWidth, 0 };
+    PopupList *options = anew(itemArena, PopupList, { selector });
+    options->desiredSize = { kPopupMinWidth, 0, utils::max_limit<i32>, utils::max_limit<i32> };
+    options->padding = { 0, 4, 0, 4 };
+    options->draw = [](OpenGlWrapper &openGl, PopupList *self)
+    {
+      auto topPadding = scaleValue((float)self->padding.y);
+      auto bottomPadding = scaleValue((float)self->padding.h);
+      
+      fillRect(openGl, self->getLocalBounds().toFloat(), getColour(Skin::kBody, self),
+        topPadding, topPadding, bottomPadding, bottomPadding);
+
+      self->doRenderChildren(openGl);
+
+      strokeRect(openGl, self->getLocalBounds().toFloat(), 1.0f, Colour{ 45,45,45 },
+        topPadding);
+
+      return false;
+    };
 
     TextSelectorItem *name = anew(itemArena, TextSelectorItem, {});
     name->arena = itemArena;
     name->id = 1;
     name->canBeChosen = false;
+    name->sizingFlags = (Component::SizingFlags)(Component::SameAsSiblingsX | Component::GrowableX);
     name->extraData = anew(itemArena, utils::stringnd, { itemArena, (!dropdownTitle.empty()) ?
       utils::string_view{ dropdownTitle } : details.displayName });
+    name->associatedList = options;
+    name->padding = { 12, 0, 12, 0 };
+    name->desiredSize = { 0, 20, 0, 20 };
     options->addChildComponent(name);
 
     bool exitedChild = false;
-    auto *option = details.options;
-    u32 size = option->count;
+    auto *option = details.options->children;
+    u32 size = details.options->count;
     u32 index = 0;
 
     while (true)
@@ -556,8 +612,12 @@ namespace Interface
         TextSelectorItem *item = anew(itemArena, TextSelectorItem, {});
         item->arena = itemArena;
         item->extraData = option;
-        item->canBeChosen = option->id;
-        item->sizingFlags = Component::SameAsSiblingsX;
+        item->canBeChosen = option->id && option->count;
+        item->associatedList = options;
+        item->sizingFlags = (Component::SizingFlags)(Component::SameAsSiblingsX | Component::GrowableX);
+        item->componentFlags.acceptsOrphanedMouseEvents = true;
+        item->padding = { 12, 0, 12, 0 };
+        item->desiredSize = { 0, 24, 0, 24 };
         options->addChildComponent(item);
       }
 
@@ -570,10 +630,12 @@ namespace Interface
         continue;
       }
 
+      if (option->count)
+        ++index;
+
       // going forward
       if (index < size)
       {
-        ++index;
         option = option->next;
         continue;
       }
@@ -592,7 +654,7 @@ namespace Interface
           break;
     }
 
-    selector->items = options;
+    selector->list = options;
     selector->skinOverride = skinOverride;
     selector->callback = [this](PopupSelector *, PopupItem *selectedItem)
     {
@@ -617,7 +679,9 @@ namespace Interface
     {
       controlFlags.isInModalState = false;
     };
-    selector->summon(this, { e.x, e.y });
+    selector->summon(this, Placement::bottom);
+
+    componentFlags.isClicked = false;
 
     return true;
   }
@@ -672,7 +736,6 @@ namespace Interface
 
     editor.control = this;
     editor.textColour = Skin::kWidgetPrimary1;
-    textEntry = &editor;
     addChildComponent(&editor);
   }
 
@@ -681,7 +744,10 @@ namespace Interface
   {
     static constexpr float kHoverIncrement = 0.2f;
 
-    animator.tick(componentFlags.isHovered, componentFlags.isClicked, kHoverIncrement, 0.0f);
+    // if we've clicked we still want the hover animator to run
+    tickAnimation(animationValues, 
+      { { componentFlags.isHovered || componentFlags.isClicked } }, 
+      { { kHoverIncrement } });
 
     if (drawBackgroundArrow)
     {
@@ -725,7 +791,7 @@ namespace Interface
       nvgFillColor(openGl.g, getColour(Skin::kWidgetBackground1, this));
       nvgFill(openGl.g);
     }
-    else if (auto alpha = animator.getValue(Animator::Hover); alpha != 0.0f)
+    else if (auto alpha = animationValues[0]; alpha != 0.0f)
     {
       nvgBeginPath(openGl.g);
       nvgRoundedRect(openGl.g, 0.0f, 0.0f, (float)bounds.w, (float)bounds.h, scaleValue(backgroundRounding));

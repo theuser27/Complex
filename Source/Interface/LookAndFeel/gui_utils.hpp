@@ -134,6 +134,9 @@ namespace Interface
   };
 
   template<typename T>
+  Point(T, T) -> Point<T>;
+
+  template<typename T>
   struct Rectangle
   {
     constexpr Rectangle() = default;
@@ -586,45 +589,15 @@ namespace Interface
     static bool isKeyCurrentlyDown(int keyCode);
   };
 
-  struct Animator
+  inline void tickAnimation(utils::span<float> values, 
+    utils::span<const bool> flags, utils::span<const float> increments)
   {
-    enum EventType { Hover, Click };
+    COMPLEX_ASSERT(values.size() == flags.size());
+    COMPLEX_ASSERT(flags.size() == increments.size());
 
-    void tick(bool isHovered, bool isClicked, float hoverIncrement, float clickIncrement)
-    {
-      if (isHovered)
-        hoverValue = utils::min(1.0f, hoverValue + hoverIncrement);
-      else
-        hoverValue = utils::max(0.0f, hoverValue - hoverIncrement);
-
-      if (isClicked)
-        clickValue = utils::min(1.0f, clickValue + clickIncrement);
-      else
-        clickValue = utils::max(0.0f, clickValue - clickIncrement);
-    }
-    float getValue(EventType type, float min = 0.0f, float max = 1.0f) const
-    {
-      float value;
-      switch (type)
-      {
-      case Hover:
-        value = hoverValue;
-        break;
-      case Click:
-        value = clickValue;
-        break;
-      default:
-        value = 1.0f;
-        break;
-      }
-
-      value *= max - min;
-      return value + min;
-    }
-
-    float hoverValue = 0.0f;
-    float clickValue = 0.0f;
-  };
+    for (usize i = 0; i < values.size(); ++i)
+      values[i] = utils::clamp(values[i] + ((flags[i]) ? increments[i] : -increments[i]), 0.0f, 1.0f);
+  }
 
   struct MonitorInfo
   {

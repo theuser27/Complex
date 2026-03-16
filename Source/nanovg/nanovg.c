@@ -2668,7 +2668,7 @@ int nvgTextBreakLines(NVGcontext* ctx, const char* string, const char* end, floa
 	float invscale = 1.0f / scale;
 	FONStextIter iter, prevIter;
 	FONSquad q;
-	int nrows = 0;
+	int nrows = 0, oldNrows = 0;
 	float rowStartX = 0;
 	float rowWidth = 0;
 	float rowMinX = 0;
@@ -2684,7 +2684,6 @@ int nvgTextBreakLines(NVGcontext* ctx, const char* string, const char* end, floa
 	int type = NVG_SPACE, ptype = NVG_SPACE;
 	unsigned int pcodepoint = 0;
 
-	if (maxRows == 0) return 0;
 	if (state->fontId == FONS_INVALID) return 0;
 
 	if (end == NULL)
@@ -2740,15 +2739,18 @@ int nvgTextBreakLines(NVGcontext* ctx, const char* string, const char* end, floa
 
 		if (type == NVG_NEWLINE) {
 			// Always handle new lines.
-			rows[nrows].start = rowStart != NULL ? rowStart : iter.str;
-			rows[nrows].end = rowEnd != NULL ? rowEnd : iter.str;
-			rows[nrows].width = rowWidth * invscale;
-			rows[nrows].minx = rowMinX * invscale;
-			rows[nrows].maxx = rowMaxX * invscale;
-			rows[nrows].next = iter.next;
-			nrows++;
-			if (nrows >= maxRows)
-				return nrows;
+			oldNrows = nrows++;
+			if (rows)
+			{
+				rows[oldNrows].start = rowStart != NULL ? rowStart : iter.str;
+				rows[oldNrows].end = rowEnd != NULL ? rowEnd : iter.str;
+				rows[oldNrows].width = rowWidth * invscale;
+				rows[oldNrows].minx = rowMinX * invscale;
+				rows[oldNrows].maxx = rowMaxX * invscale;
+				rows[oldNrows].next = iter.next;
+				if (nrows >= maxRows)
+					return nrows;
+			}
 			// Set null break point
 			breakEnd = rowStart;
 			breakWidth = 0.0;
@@ -2804,15 +2806,18 @@ int nvgTextBreakLines(NVGcontext* ctx, const char* string, const char* end, floa
 					// The run length is too long, need to break to new line.
 					if (breakEnd == rowStart) {
 						// The current word is longer than the row length, just break it from here.
-						rows[nrows].start = rowStart;
-						rows[nrows].end = iter.str;
-						rows[nrows].width = rowWidth * invscale;
-						rows[nrows].minx = rowMinX * invscale;
-						rows[nrows].maxx = rowMaxX * invscale;
-						rows[nrows].next = iter.str;
-						nrows++;
-						if (nrows >= maxRows)
-							return nrows;
+						oldNrows = nrows++;
+						if (rows)
+						{
+							rows[oldNrows].start = rowStart;
+							rows[oldNrows].end = iter.str;
+							rows[oldNrows].width = rowWidth * invscale;
+							rows[oldNrows].minx = rowMinX * invscale;
+							rows[oldNrows].maxx = rowMaxX * invscale;
+							rows[oldNrows].next = iter.str;
+							if (nrows >= maxRows)
+								return nrows;
+						}
 						rowStartX = iter.x;
 						rowStart = iter.str;
 						rowEnd = iter.next;
@@ -2824,15 +2829,18 @@ int nvgTextBreakLines(NVGcontext* ctx, const char* string, const char* end, floa
 						wordMinX = q.x0 - rowStartX;
 					} else {
 						// Break the line from the end of the last word, and start new line from the beginning of the new.
-						rows[nrows].start = rowStart;
-						rows[nrows].end = breakEnd;
-						rows[nrows].width = breakWidth * invscale;
-						rows[nrows].minx = rowMinX * invscale;
-						rows[nrows].maxx = breakMaxX * invscale;
-						rows[nrows].next = wordStart;
-						nrows++;
-						if (nrows >= maxRows)
-							return nrows;
+						oldNrows = nrows++;
+						if (rows)
+						{
+							rows[oldNrows].start = rowStart;
+							rows[oldNrows].end = breakEnd;
+							rows[oldNrows].width = breakWidth * invscale;
+							rows[oldNrows].minx = rowMinX * invscale;
+							rows[oldNrows].maxx = breakMaxX * invscale;
+							rows[oldNrows].next = wordStart;
+							if (nrows >= maxRows)
+								return nrows;
+						}
 						// Update row
 						rowStartX = wordStartX;
 						rowStart = wordStart;
@@ -2855,13 +2863,16 @@ int nvgTextBreakLines(NVGcontext* ctx, const char* string, const char* end, floa
 
 	// Break the line from the end of the last word, and start new line from the beginning of the new.
 	if (rowStart != NULL) {
-		rows[nrows].start = rowStart;
-		rows[nrows].end = rowEnd;
-		rows[nrows].width = rowWidth * invscale;
-		rows[nrows].minx = rowMinX * invscale;
-		rows[nrows].maxx = rowMaxX * invscale;
-		rows[nrows].next = end;
-		nrows++;
+		oldNrows = nrows++;
+		if (rows)
+		{
+			rows[oldNrows].start = rowStart;
+			rows[oldNrows].end = rowEnd;
+			rows[oldNrows].width = rowWidth * invscale;
+			rows[oldNrows].minx = rowMinX * invscale;
+			rows[oldNrows].maxx = rowMaxX * invscale;
+			rows[oldNrows].next = end;
+		}
 	}
 
 	return nrows;

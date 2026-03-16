@@ -16,18 +16,18 @@ namespace Interface
   public:
     static constexpr int kLineHeight = 16;
 
-    void initialise();
+    void reinitialise();
 
     bool render(OpenGlWrapper &openGl) override;
     bool handleCommandMessage(u64 commandId, utils::whatever<64>) override;
 
-    void setContent(Component *sourceComponent, utils::string displayText, 
-      Placement relativePlacement)
+    void setContent(Component *sourceComponent, 
+      utils::string_view displayText, Placement relativePlacement)
     {
       source = sourceComponent;
       isControl = false;
       placement = relativePlacement;
-      text = COMPLEX_MOVE(displayText);
+      text.copy(displayText);
       componentFlags.isVisible = true;
     }
     void setContentControl(Control *sourceControl, Placement relativePlacement)
@@ -50,19 +50,68 @@ namespace Interface
   class PopupSelector;
   class PopupList;
 
+  class PopupList final : public Component
+  {
+  public:
+    static constexpr float kScrollSensitivity = 150.0f;
+    static constexpr float kAutomationListWidth = 150.0f;
+
+    static constexpr float kIconSize = 16.0f;
+    static constexpr float kScrollBarWidth = 8.0f;
+    static constexpr float kSideArrowWidth = 4.0f;
+    static constexpr float kCrossWidth = 8.0f;
+
+    static constexpr float kPrimaryTextLineHeight = 16.0f;
+    static constexpr float kSecondaryTextLineHeight = 12.0f;
+    static constexpr float kDelimiterHeight = 20.0f;
+    static constexpr float kInlineGroupHeight = 28.0f;	// serves also as minimum width for the elements
+
+    static constexpr float kVPadding = 4.0f;
+    static constexpr float kHEntryPadding = 12.0f;
+    static constexpr float kHEntryToSideArrowMinMargin = 16.0f;
+    static constexpr float kVEntryToHintMargin = 3.0f;
+
+    PopupList(PopupSelector *parentSelector);
+
+    bool render(OpenGlWrapper &openGl) override;
+
+    bool mouseEnter(const MouseEvent &e) override;
+    bool mouseExit(const MouseEvent &e) override;
+    bool handleCommandMessage(u64 commandId, utils::whatever<64>) override;
+
+    void summonChildList(PopupList *childList);
+
+    bool (*draw)(OpenGlWrapper &openGl, PopupList *self){};
+
+    PopupItem *parentItem{};
+    
+    PopupSelector *parentSelector{};
+    PopupList *parentList{};
+    PopupItem *currentSublistItem{};
+  };
+
   struct PopupItem : public Component
   {
+    PopupItem()
+    {
+      componentFlags.clickable = true;
+      componentFlags.clickableChildren = false;
+      componentFlags.acceptsOrphanedMouseEvents = true;
+    }
+    
+    bool mouseUp(const MouseEvent &e) override;
     bool render(OpenGlWrapper &openGl) override;
 
     i32 id = 0;
     i32 shortcutKeyCode = 0;
-    Area<i32> sublistMinSize{ 0, 0 };
-    void *extraData = nullptr;
-    bool closesPopup = true;
-    bool canBeChosen = true;
+    void *extraData = nullptr;          // user pointer
+    bool closesPopup = true;            // if selector should get closed after being chosen
+    bool canBeChosen = true;            // to designate labels/titles
+    bool isActive = true;               // option that exists but isn't currently chooseable
+    bool opensNewList = false;          // should create a new list to show contained items
 
-    bool isActive = true;
-    PopupSelector *selector = nullptr;
+    PopupList *associatedList = nullptr;
+    PopupList *childList = nullptr;
   };
 
   class PopupSelector final : public Component
@@ -71,10 +120,10 @@ namespace Interface
     static constexpr float kPrimaryFontHeight = 13.0f;
     static constexpr float kSecondaryFontHeight = 11.0f;
 
-    void initialise();
+    void reinitialise();
 
     bool keyPressed(const KeyPress &key) override;
-    bool handleFocus(bool hasFocus, FocusChange focusChange) override;
+    bool handleFocus(bool hasFocus, FocusChange focusChange, Component *correspondent) override;
     bool handleCommandMessage(u64 commandId, utils::whatever<64> extraData) override;
 
     void newSelection(PopupItem *entry);
@@ -82,22 +131,20 @@ namespace Interface
     void closeSubList(PopupItem *items);
 
     void resetState();
-    void summon(Component *summoningComponent, Point<i32> position);
-    void summon(Component *summoningComponent, Placement placement);
+    void summon(Component *summoningComponent, 
+      Placement newListPlacement, Point<i32> customPosition = {});
 
     utils::smallFn<void(PopupSelector *, PopupItem *)> callback{};
     utils::smallFn<void(PopupSelector *)> cancel{};
-    PopupItem *items{};
+    PopupList *list{};
 
     // state
     Component *summoner{};
+    Placement listPlacement = Placement::centered;
     Point<i32> summoningPoint{};
     Placement lastPlacement = Placement::right;
-    Placement placement = Placement::centered;
-    utils::vector<PopupList *> lists{};
     PopupItem *deepestHoveredItem{};
-    // TODO: timeout until any of the parents' siblings
-    //       for longer than a specified time
+    PopupList *selectedList{};
   };
 
 }

@@ -47,7 +47,7 @@ namespace Interface
   }
 
   static constexpr float kDDinDefaultHeight = 11.5f;
-  static constexpr float kInterDefaultHeight = 10.5f;
+  static constexpr float kInterDefaultHeight = 11.0f;
 
   static constexpr float kDDinDefaultKerning = 0.0f;
   static constexpr float kInterDefaultKerning = 0.0f;

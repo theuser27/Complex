@@ -30,6 +30,8 @@ namespace Interface
     static constexpr float kPopupSecondaryFontHeight = 11.0f;
     static constexpr int kPopupMinWidth = 150;
 
+    static constexpr double kUndoTimeout = 0.5; //s
+
     Control();
 
     // returns the replaced link
@@ -62,6 +64,7 @@ namespace Interface
     double valueBeforeChange = 0.0;
     float sensitivity = kDefaultSensitivity;
     ModifierKeys resetValueModifiers;
+    double lastEditTime{};
 
     utils::string prefix{};
     Placement popupPlacement = Placement::bottom;
@@ -87,7 +90,6 @@ namespace Interface
       // state flags
       bool hasParameter : 1 = false;
       bool isInSensitiveMode : 1 = false;
-      bool hasBegunChange : 1 = false;
       bool isTextEntryVisible : 1 = false;
       bool isInModalState : 1 = false;
     } controlFlags{};
@@ -95,12 +97,8 @@ namespace Interface
     u32 maxDecimalCharacters = kDefaultMaxDecimalCharacters;
     Point<i32> lastMouseDragPosition{};
 
-    Animator animator{};
-
     Framework::ParameterLink *parameterLink = nullptr;
     Framework::ParameterDetails details{};
-
-    TextEditor *textEntry = nullptr;
 
     void (*valueChangedCallback)(Control *control,
       double newValue, double oldValue) = nullptr;
@@ -149,19 +147,23 @@ namespace Interface
     PowerButton();
 
     bool render(OpenGlWrapper &openGl) override;
+
+    float animationValues[1]{};
   };
 
   class RadioButton final : public Button
   {
   public:
     static constexpr int kAddedMargin = 4;
-    static constexpr int kDimensions = 8;
+    static constexpr int kDimensions = 10;
 
     RadioButton();
 
     bool render(OpenGlWrapper &openGl) override;
 
     float roundingRatio = 0.25f;
+
+    float animationValues[1]{};
   };
 
   class Slider : public Control
@@ -191,6 +193,7 @@ namespace Interface
     bool render(OpenGlWrapper &openGl) override;
     bool mouseDrag(const MouseEvent &e) override;
 
+    float animationValues[1]{};
     float maxArc{};
     float knobArcThickness{};
     float knobSizeScale = 1.0f;
@@ -231,6 +234,7 @@ namespace Interface
     bool render(OpenGlWrapper &openGl) override;
 
     bool mouseDown(const MouseEvent &e) override;
+    bool mouseDrag(const MouseEvent &) override { return false; }
     bool mouseUp(const MouseEvent &e) override;
     bool mouseWheelMove(const MouseEvent &e) override;
 
@@ -242,6 +246,7 @@ namespace Interface
     utils::string dropdownTitle{};
     double lastValue = 0.0;
 
+    float animationValues[1]{};
   private:
     DrawComponent *extraIcon = nullptr;
   };
@@ -264,6 +269,7 @@ namespace Interface
 
     SliderValueEditor editor{};
 
+    float animationValues[1]{};
     float backgroundRounding = 4.0f;
     bool drawBackgroundArrow = true;
     bool isEditing = false;

@@ -10,6 +10,7 @@
 
 namespace std
 {
+  // i hate this type with a passion
   template<typename T>
   class initializer_list
   {
@@ -23,11 +24,15 @@ namespace std
     using const_iterator  = const T *;
 
     constexpr initializer_list() noexcept = default;
+    template<auto Size>
+    constexpr initializer_list(const T (&rawArray)[Size]) noexcept : data_{ rawArray }, size_{ Size } { }
     
     constexpr const_iterator data() const noexcept { return data_; }
     constexpr size_type size() const noexcept { return size_; }
     constexpr const_iterator begin() const noexcept { return data_; }
     constexpr const_iterator end() const noexcept { return begin() + size(); }
+
+    const_reference operator[](usize index) const noexcept { COMPLEX_ASSERT(index < size_); return data_[index]; }
 
   private:
     iterator data_{};
@@ -53,71 +58,31 @@ namespace std
   template<usize I, typename T>
   struct tuple_element;
 
-  class source_location 
+#ifndef _MSC_VER
+
+  // definition for gcc and clang is mandatory because it won't be able to find the __impl type
+  struct source_location
   {
-  #ifdef _MSC_VER
-
-    u32 line_{};
-    u32 column_{};
-    const char *file_ = "";
-    const char *function_ = "";
-  public:
-    static consteval source_location 
-    current(u32 line = __builtin_LINE(), u32 column = __builtin_COLUMN(),
-      const char *file = __builtin_FILE(), const char *function = __builtin_FUNCSIG()) noexcept
-    {
-      source_location result{};
-      result.line_ = line;
-      result.column_ = column;
-      result.file_ = file;
-      result.function_ = function;
-      return result;
-    }
-
-    constexpr u32 line() const noexcept { return line_; }
-    constexpr u32 column() const noexcept { return column_; }
-    constexpr const char* file_name() const noexcept { return file_; }
-    constexpr const char* function_name() const noexcept { return function_; }
-
-  #else
-
     // The names source_location::__impl, _M_file_name, _M_function_name, _M_line, and _M_column
     // are hard-coded in the compiler and must not be changed here.
-    struct __impl 
+    struct __impl
     {
-      const char* _M_file_name;
-      const char* _M_function_name;
+      const char *_M_file_name;
+      const char *_M_function_name;
       unsigned _M_line;
       unsigned _M_column;
     };
-    const __impl* pointer = nullptr;
+
     // GCC returns the type 'const void*' from the builtin, while clang returns
     // `const __impl*`. Per C++ [expr.const], casts from void* are not permitted
     // in constant evaluation, so we don't want to use `void*` as the argument
     // type unless the builtin returned that, anyhow, and the invalid cast is
     // unavoidable.
     using T = decltype(__builtin_source_location());
-
-  public:
-    // The defaulted pointer argument is necessary so that the builtin is evaluated
-    // in the context of the caller. An explicit value should never be provided.
-    static consteval source_location 
-    current(T pointer = __builtin_source_location()) noexcept 
-    {
-      source_location location;
-      location.pointer = static_cast<const __impl*>(pointer);
-      return location;
-    }
-
-    constexpr u32 line() const noexcept { return pointer != nullptr ? pointer->_M_line : 0; }
-    constexpr u32 column() const noexcept { return pointer != nullptr ? pointer->_M_column : 0; }
-    constexpr const char* file_name() const noexcept { return pointer != nullptr ? pointer->_M_file_name : ""; }
-    constexpr const char* function_name() const noexcept { return pointer != nullptr ? pointer->_M_function_name : ""; }
-
-  #endif
   };
-}
 
+#endif
+}
 namespace utils
 {
   using nullptr_t = decltype(nullptr);
@@ -768,6 +733,37 @@ namespace utils
   };
 
   #define typeId(T) ::utils::typeInfo::create<T>()
+
+  struct sourceLocation
+  {
+    // The defaulted arguments are necessary so that the builtins are evaluated
+    // in the context of the caller. Explicit values should never be provided.
+
+  #ifdef _MSC_VER
+
+    static consteval sourceLocation
+    current(u32 line = __builtin_LINE(), u32 column = __builtin_COLUMN(),
+      const char *file = __builtin_FILE(), const char *function = __builtin_FUNCSIG())
+    {
+      return { file, function, line, column };
+    }
+
+  #else
+
+    static consteval sourceLocation
+    current(std::source_location::T pointer = __builtin_source_location()) noexcept
+    {
+      auto *data = static_cast<const std::source_location::__impl *>(pointer);
+      return { data->_M_file_name, data->_M_function_name, data->_M_line, data->_M_column };
+    }
+
+  #endif
+
+    const char *fileName{};
+    const char *functionName{};
+    u32 line{};
+    u32 column{};
+  };
 
   // ghetto unique_ptr implementation
   template<typename T>

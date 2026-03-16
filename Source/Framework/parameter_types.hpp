@@ -347,9 +347,7 @@ namespace Framework
     UndoAction *(*combineActions)(utils::bumpArena *transaction,
       UndoAction *currentAction, UndoAction *nextAction){};
 
-  private:
     UndoAction *next{};
-    friend class UndoManager;
   };
 
   class UndoManager
@@ -367,7 +365,9 @@ namespace Framework
 
     // Starts a new group of actions that together will be treated as a single transaction.
     [[nodiscard]] utils::bumpArena *beginNewTransaction();
+    [[nodiscard]] utils::pair<utils::bumpArena *, UndoAction *> getCurrent() { return transactions[currentIndex]; }
     [[nodiscard]] utils::bumpArena *getCurrentTransaction() { return transactions[currentIndex].first; }
+    [[nodiscard]] UndoAction *getLastAction() { return transactions[currentIndex].second; }
 
     bool canUndo() const { return undoActionsCount; }
     bool canRedo() const { return redoActionsCount; }

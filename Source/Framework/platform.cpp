@@ -74,10 +74,10 @@
 #if COMPLEX_WINDOWS
   #define PRINT_MESSAGE(message, ...) { \
       usize size__ = 1 + ::stbsp_snprintf(nullptr, 0, message, __VA_ARGS__); \
-      auto buffer__ = (char *)::utils::allocate(size__); \
+      auto buffer__ = arranew(localScratch, char, size__); \
       ::stbsp_snprintf(buffer__, (int)size__, message, __VA_ARGS__); \
       ::OutputDebugStringA(buffer__); \
-      ::utils::deallocate(buffer__); \
+      ::utils::bumpArena::remove(buffer__); \
     }
   #define PRINT_SIMPLE(message) ::OutputDebugStringA(message);
 #else
@@ -90,7 +90,7 @@ static void printVariadic(const char *format, va_list args)
   va_list argsCopy;
   va_copy(argsCopy, args);
   usize size = ::stbsp_vsnprintf(nullptr, 0, format, argsCopy) + 1;
-  char *buffer = (char *)::utils::allocate(size);
+  char *buffer = arranew(localScratch, char, size);
   va_end(argsCopy);
 
   ::stbsp_vsnprintf(buffer, (int)size, format, args);
@@ -98,7 +98,7 @@ static void printVariadic(const char *format, va_list args)
   PRINT_SIMPLE(buffer);
   //PRINT_SIMPLE("\"\n\n");
 
-  ::utils::deallocate(buffer);
+  ::utils::bumpArena::remove(buffer);
 }
 
 void common::complexLogMessage(const char *fileName,
@@ -647,6 +647,7 @@ namespace utils
     utils::deallocate(argument);
 
     thread::currentId = getCurrentThreadId();
+    localScratch = utils::bumpArena::create(COMPLEX_MB(4), COMPLEX_KB(128));
 
     int result = function();
 
@@ -660,17 +661,14 @@ namespace utils
   void thread::createThread(utils::dynFn<int()> *procedure)
   {
   #ifdef COMPLEX_WINDOWS
-    static_assert(sizeof(::HANDLE) == sizeof(handle_));
-    handle_ = (decltype(handle_))::CreateThread(
-      nullptr, 0, threadEntry, (LPVOID)procedure, 0, nullptr);
+    static_assert(sizeof(::DWORD) == sizeof(threadId.nativeId));
+    if (!::CreateThread(nullptr, 0, threadEntry, (LPVOID)procedure, 0, (::DWORD *)&threadId.nativeId))
   #else
     static_assert(sizeof(::pthread_t) == sizeof(threadId.nativeId));
     if (pthread_create((::pthread_t *)&threadId.nativeId, nullptr, threadEntry, (void *)procedure) != 0)
-      threadId = {};
   #endif
-
-    if (!threadId)
     {
+      threadId = {};
       utils::deallocate(procedure);
     }
   }
@@ -688,7 +686,7 @@ namespace utils
   {
   #ifdef COMPLEX_WINDOWS
     ::DWORD dwRes;
-    auto handle = (::HANDLE)handle_;
+    auto handle = ::OpenThread(THREAD_ALL_ACCESS, false, (::DWORD)threadId.nativeId);
 
     if (::WaitForSingleObject(handle, INFINITE) == WAIT_FAILED)
       return false;
@@ -714,8 +712,9 @@ namespace utils
   bool thread::detach()
   {
   #ifdef COMPLEX_WINDOWS
+    auto handle = ::OpenThread(THREAD_ALL_ACCESS, false, (::DWORD)threadId.nativeId);
     // https://stackoverflow.com/questions/12744324/how-to-detach-a-thread-on-windows-c#answer-12746081
-    return ::CloseHandle((::HANDLE)handle_) != 0;
+    return ::CloseHandle(handle) != 0;
   #else
     return ::pthread_detach((::pthread_t)threadId.nativeId) == 0;
   #endif

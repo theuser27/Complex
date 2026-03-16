@@ -12,7 +12,7 @@
 
 namespace Interface
 {
-  bool 
+  bool
   EffectsLaneSection::ModuleHolder::render(OpenGlWrapper &openGl)
   {
     fillRect(openGl, getLocalBounds().toFloat(), getColour(Skin::kBackground, this), scaleValue(kInsideRouding));
@@ -20,15 +20,16 @@ namespace Interface
     return true;
   }
 
-  bool 
+  bool
   EffectsLaneSection::AddModulesButton::mouseDown(const MouseEvent &e)
   {
+    (void)e;
     // TODO: create popup
 
     return true;
   }
 
-  bool 
+  bool
   EffectsLaneSection::AddModulesButton::render(OpenGlWrapper &openGl)
   {
     strokeRect(openGl, getLocalBounds().toFloat(), 1.0f, getColour(Skin::kBody), scaleValue(kBorderRounding));
@@ -38,9 +39,10 @@ namespace Interface
     return true;
   }
 
-  bool 
+  bool
   EffectsLaneSection::AddModulesButton::handleCommandMessage(u64 commandId, utils::whatever<64> extraData)
   {
+    (void)extraData;
     switch (commandId)
     {
     case Component::HandleCustomPosition:
@@ -72,7 +74,7 @@ namespace Interface
     desiredSize = { kEffectsLaneWidth, 0, kEffectsLaneWidth, 0 };
 
     if (!arena)
-      arena = utils::bumpArena::createNested(utils::bumpArena::fromAllocation(this), COMPLEX_KB(1));    
+      arena = utils::bumpArena::createNested(utils::bumpArena::fromAllocation(this), COMPLEX_KB(1));
 
     addChildComponent(&header);
     header.desiredSize = { 0, kEffectsLaneTopBarHeight, 0, kEffectsLaneTopBarHeight };
@@ -154,11 +156,11 @@ namespace Interface
   //	}
   //	auto *newLaneSection = (EffectsLaneSection *)processorCopy->createUI();
   //	newLaneSection->laneTitle.text.append(" - Copy");
-  //  
+  //
   //	return newLaneSection;
   //}
 
-  bool 
+  bool
   EffectsLaneSection::render(OpenGlWrapper &openGl)
   {
     fillRect(openGl, getLocalBounds().toFloat(), getColour(Skin::kBody, this), scaleValue(kInsideRouding));

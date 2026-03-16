@@ -228,7 +228,7 @@ namespace Framework
       result = ::round(value);
       break;
     case ParameterScale::Indexed:
-      result = value / details.options->count;
+      result = value / (details.options->count - 1);
       break;
     case ParameterScale::Clamp:
       result = value;
@@ -487,35 +487,42 @@ namespace Framework
     COMPLEX_ASSERT(redoActionsCount == 0, "You need to call beginNewTransaction() \
       if you want to overwrite undone actions");
 
-    auto &transaction = transactions[currentIndex];
-    if (!transaction.second)
-      transaction.second = newAction;
-    else if (!transaction.second->combineActions)
+    UndoAction *previousAction{};
+    auto [arena, action] = transactions[currentIndex];
+    if (!action)
+      transactions[currentIndex].second = newAction;
+    else while (true) // try to coalesce the new action with any one of the current transaction
     {
-      newAction->next = transaction.second;
-      transaction.second = newAction->next;
-    }
-    else
-    {
-      auto *lastAction = transaction.second;
-      auto coalescedAction = lastAction->combineActions(
-        transaction.first, lastAction, newAction);
-
-      if (!coalescedAction)
+      if (!action)
       {
-        newAction->next = lastAction;
-        transaction.second = newAction;
+        newAction->next = transactions[currentIndex].second;
+        transactions[currentIndex].second = newAction;
+        break;
       }
-      else
-      {
-        coalescedAction->next = lastAction->next;
-        transaction.second = coalescedAction;
 
-        if (coalescedAction != newAction)
-          utils::bumpArena::remove(newAction);
-        if (coalescedAction != lastAction)
-          utils::bumpArena::remove(lastAction);
+      if (action->combineActions)
+      {
+        if (auto coalescedAction = action->combineActions(arena, action, newAction))
+        {
+          coalescedAction->next = action->next;
+          if (previousAction)
+            previousAction->next = coalescedAction;
+          else
+            transactions[currentIndex].second = coalescedAction;
+
+          // the coalesced action might be newAction, action or a newly allocated action
+          // therefore we need to clean up afterwards
+          if (coalescedAction != newAction)
+            utils::bumpArena::remove(newAction);
+          if (coalescedAction != action)
+            utils::bumpArena::remove(action);
+
+          break;
+        }
       }
+
+      previousAction = action;
+      action = action->next;
     }
 
     return true;

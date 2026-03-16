@@ -96,7 +96,6 @@ namespace Interface
   void Control::beginChange(double oldValue)
   {
     valueBeforeChange = oldValue;
-    controlFlags.hasBegunChange = true;
   }
 
   struct ParameterUpdate final : public Framework::UndoAction
@@ -104,36 +103,50 @@ namespace Interface
     ParameterUpdate(Interface::Control *control, double oldValue, double newValue) :
       control(control), oldValue(oldValue), newValue(newValue)
     {
-      redo = [](UndoAction *a)
-      {
-        auto *self = (ParameterUpdate *)a;
+      UndoAction::redo = redo;
+      UndoAction::undo = undo;
+      UndoAction::combineActions = combineActions;
+    }
 
-        self->control->setValue(self->newValue, false);
-        self->control->setValueToHost();
-      };
+    static void redo(UndoAction *a)
+    {
+      auto *self = (ParameterUpdate *)a;
 
-      undo = [](UndoAction *a)
-      {
-        auto *self = (ParameterUpdate *)a;
+      self->control->setValue(self->newValue, false);
+      self->control->setValueToHost();
+    }
 
-        self->control->setValue(self->oldValue, false);
-        self->control->setValueToHost();
-      };
+    static void undo(UndoAction *a)
+    {
+      auto *self = (ParameterUpdate *)a;
 
-      combineActions = [](utils::bumpArena *,
-        UndoAction *currentAction, UndoAction *nextAction) -> UndoAction *
-      {
-        if (currentAction->redo == nextAction->redo &&
-          currentAction->undo == nextAction->undo)
-        {
-          ((ParameterUpdate *)currentAction)->newValue =
-            ((ParameterUpdate *)nextAction)->newValue;
+      self->control->setValue(self->oldValue, false);
+      self->control->setValueToHost();
+    }
 
-          return currentAction;
-        }
-
+    static UndoAction *
+    combineActions(utils::bumpArena *, UndoAction *currentAction, UndoAction *nextAction)
+    {
+      if (currentAction->redo != nextAction->redo ||
+        currentAction->undo != nextAction->undo)
         return nullptr;
-      };
+
+      auto *current = (ParameterUpdate *)currentAction;
+      auto *next = (ParameterUpdate *)nextAction;
+
+      if (current->control != next->control)
+        return nullptr;
+
+      current->newValue = next->newValue;
+
+      return currentAction;
+    }
+
+    static bool 
+    isParameterUpdate(Framework::UndoAction *action)
+    {
+      return action->redo == redo && action->undo == undo && 
+        action->combineActions == combineActions;
     }
 
     Interface::Control *control;
@@ -143,10 +156,28 @@ namespace Interface
 
   void Control::endChange()
   {
-    controlFlags.hasBegunChange = false;
     auto &plugin = getPlugin(uiRelated.renderer);
-    auto *storage = plugin.undoManager.beginNewTransaction();
-    plugin.undoManager.perform(anew(storage, ParameterUpdate, 
+    auto [storage, action] = plugin.undoManager.getCurrent();
+
+    auto oldEditTime = lastEditTime;
+    lastEditTime = uiRelated.steadyTime;
+
+    if (uiRelated.steadyTime - oldEditTime <= kUndoTimeout)
+    {
+      while (action)
+      {
+        if (ParameterUpdate::isParameterUpdate(action) && ((ParameterUpdate *)action)->control == this)
+        {
+          ((ParameterUpdate *)action)->newValue = getValue();
+          return;
+        }
+
+        action = action->next;
+      } 
+    }
+
+    storage = plugin.undoManager.beginNewTransaction();
+    plugin.undoManager.perform(anew(storage, ParameterUpdate,
       { this, valueBeforeChange, getValue() }), false);
   }
 
@@ -156,11 +187,12 @@ namespace Interface
     if (isMapped)
       parameterLink->hostControl->beginChangeGesture();
 
-    if (!controlFlags.hasBegunChange)
-      beginChange(getValue());
+    beginChange(getValue());
 
     setValue(details.defaultNormalisedValue, true);
     setValueToHost();
+
+    endChange();
 
     if (isMapped)
       parameterLink->hostControl->endChangeGesture();
@@ -293,12 +325,12 @@ namespace Interface
     auto *itemArena = selector->arena;
   
   #define ITEM(idNumber, ...) (&with_val(*anew(itemArena, ControlPopupItem, {}), \
-    .arena = itemArena, .id = idNumber, __VA_OPT__(,) __VA_ARGS__))
+    .arena = itemArena, .id = idNumber __VA_OPT__(,) __VA_ARGS__))
   #define TEXT_ITEM(idNumber, ...) ITEM(idNumber, .overrideDimensions = getControlPopupItemTextMetrics)
 
-    ControlPopupItem &options = *ITEM(kTopLevel);
+    PopupList &options = *anew(itemArena, PopupList, { selector });
     options.componentFlags.vertical = true;
-    options.sublistMinSize = { kPopupMinWidth, 0 };
+    //options.sublistMinSize = { kPopupMinWidth, 0 };
 
     options.addChildComponent(TEXT_ITEM(kName, .sizingFlags |= Component::SameAsSiblingsX, .extraData = this));
     options.addChildComponent(TEXT_ITEM(kDefaultValue, .shortcutKeyCode = 'D', .sizingFlags |= Component::SameAsSiblingsX));
@@ -359,16 +391,16 @@ namespace Interface
   #undef TEXT_ITEM
   #undef ITEM
 
-    selector->items = &options;
+    selector->list = &options;
     selector->skinOverride = skinOverride;
     selector->callback = [this](PopupSelector *, PopupItem *selectedItem)
     { handleControlPopupResult(this, selectedItem); };
     selector->cancel = {};
-    selector->summon(this, position);
+    selector->summon(this, Placement::custom, position);
   }
 
   static utils::string_view
-  getClosestInteger(utils::string_view string)
+  findClosestInteger(utils::string_view string)
   {
     usize i = 0;
     for (; i < string.size(); ++i)
@@ -457,7 +489,7 @@ namespace Interface
 
       outString.copy(option->displayName);
 
-      if (index > 1)
+      if (option->count > 1 || option->dynamicUpdateUuid)
         outString.appendFormat(" %zu", (index + 1));
     }
     else if (details.generateNumeric)
@@ -495,7 +527,7 @@ namespace Interface
         }
       }
 
-      utils::string_view currentInteger = getClosestInteger(outString);
+      utils::string_view currentInteger = findClosestInteger(outString);
       if (currentInteger.size() > maxIntergerCharacters)
       {
         outString.removeSuffix(currentInteger.size() - maxIntergerCharacters);

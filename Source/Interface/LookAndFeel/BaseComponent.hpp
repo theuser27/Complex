@@ -40,6 +40,7 @@ namespace Interface
   void calculateSizes(Component *children, Component *component);
   void calculatePositions(Component *children,
     Component *component, Rectangle<i32> boundsInComponent = {});
+  void animatePosition(Component *component, bool wasParentResized);
 
   utils::pair<i32, i32> getScrollOffsets(const MouseEvent &e,
     float singleStepX = 16, float singleStepY = 16);
@@ -105,6 +106,10 @@ namespace Interface
 
       ScrollableWithBarX = ScrollableX | ScrollbarX,
       ScrollableWithBarY = ScrollableY | ScrollbarY,
+
+      // the max size will be determined by clamp(childrenMinSize, desiredSize.min, desiredSize.max)
+      SnapToMinX = 1 << 10,
+      SnapToMinY = 1 << 11,
     };
 
     // all mouse events return true/false if they have/have not consumed the event
@@ -129,10 +134,10 @@ namespace Interface
       areaRelativeToSource = (areaRelativeToSource.isEmpty()) ? 
         Rectangle{ source->bounds.w, source->bounds.h } : areaRelativeToSource;
       return Rectangle{ getRelativePoint(source, areaRelativeToSource.getPosition()),
-        areaRelativeToSource.w, areaRelativeToSource.y };
+        areaRelativeToSource.w, areaRelativeToSource.h };
     }
 
-    bool contains(Point<i32> parentPoint) const { return bounds.contains(parentPoint); }
+    bool contains(Point<i32> parentPoint) const { return getLocalBounds().contains(parentPoint); }
     bool contains(Point<float> parentPoint) const { return contains(parentPoint.toInt()); }
 
     Component *getComponentAt(i32 x, i32 y, bool onlyClickable = false);
@@ -188,10 +193,11 @@ namespace Interface
       FocusMoved,         // focus manually moved to (moveFocusTo()),         initiator -->   direct target
       FocusSetInvisible,  // focus changed due to invisibility (isVisible=0), initiator --> indirect target
     };
-    virtual bool handleFocus([[maybe_unused]] bool hasFocus, [[maybe_unused]] FocusChange focusChange) { return true; }
+    virtual bool handleFocus([[maybe_unused]] bool hasFocus, 
+      [[maybe_unused]] FocusChange focusChange, 
+      [[maybe_unused]] Component *correspondent) { return true; }
 
     virtual bool keyPressed([[maybe_unused]] const KeyPress &key) { return false; }
-    virtual bool modifierKeysChanged([[maybe_unused]] const ModifierKeys &modifiers) { return false; }
 
     virtual bool handleCommandMessage([[maybe_unused]] u64 commandId, 
       [[maybe_unused]] utils::whatever<64> extraData = {}) { return false; }
@@ -217,8 +223,6 @@ namespace Interface
       // feature flags
       bool clickable : 1 = false;
       bool clickableChildren : 1 = true;
-      bool wantsFocus : 1 = false;
-      bool focusOnMouseClick : 1 = false;
       bool acceptsOrphanedMouseEvents : 1 = false;
       bool vertical : 1 = false;                    // controls the children stack direction
       bool animateMovement : 1 = false;

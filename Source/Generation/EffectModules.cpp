@@ -1206,7 +1206,7 @@ namespace Generation
 
     bool wrapAround = getParameter(effectData, Pitch::Resample::Wrap)->getInternalValue<u32>(sampleRate);
 
-    utils::array<simd_float, 2 * kNeighbourBins + 1> leakMultipliers;
+    simd_float leakMultipliers[2 * kNeighbourBins + 1];
     simd_float phaseShift = utils::uninitialised;
 
     auto calculateCoefficients = [&](simd_float binFloatingPointShift) mutable
@@ -1223,7 +1223,7 @@ namespace Generation
       // in that case this guard has not done its job and should be increased
       simd_mask numZeroMask = simd_float::lessThan(complexMagnitude(numerator, true), kMultiplierEpsilon);
 
-      for (i32 i = 0; i < leakMultipliers.size(); ++i)
+      for (i32 i = 0; i < COMPLEX_ARRAY_SIZE(leakMultipliers); ++i)
       {
         simd_float fullDenominator = denominator + k2Pi * (float)(i - kNeighbourBins);
         simd_mask denZeroMask = simd_float::lessThan(simd_float::abs(fullDenominator), kMultiplierEpsilon);
@@ -1272,7 +1272,7 @@ namespace Generation
           simd_float wet = complexCartMul(gatherComplex(rawSource.pointer, start) & runNotCompleteMask, phaseShift);
           simd_int destinationIndicesInt = simd_int::minUnsigned(toInt(simd_float::round(destinationIndices)), binCount - 1);
 
-          for (i32 j = 0; j < leakMultipliers.size(); ++j)
+          for (i32 j = 0; j < COMPLEX_ARRAY_SIZE(leakMultipliers); ++j)
           {
             simd_int indices = destinationIndicesInt - kNeighbourBins + j;
             simd_int clampedIndices = simd_int::clampSigned(0, binCount - 1, indices);
@@ -1343,7 +1343,7 @@ namespace Generation
     simd_mask isHighAboveLow = simd_int::greaterThanOrEqualSigned(highBoundIndices, lowBoundIndices);
 
     simd_int binShift = utils::uninitialised;
-    utils::array<simd_float, 2 * kNeighbourBins + 1> leakMultipliers;
+    simd_float leakMultipliers[2 * kNeighbourBins + 1];
     {
       simd_float binFloatingPointShift = getParameter(effectData, Pitch::ConstShift::Shift)
         ->getInternalValue<simd_float>(sampleRate) * 2.0f * (float)(binCount - 1) / sampleRate;
@@ -1364,7 +1364,7 @@ namespace Generation
       // in that case this guard has not done its job and should be increased
       simd_mask numZeroMask = simd_float::lessThan(complexMagnitude(numerator, true), kMultiplierEpsilon);
 
-      for (i32 i = 0; i < leakMultipliers.size(); ++i)
+      for (i32 i = 0; i < COMPLEX_ARRAY_SIZE(leakMultipliers); ++i)
       {
         simd_float fullDenominator = denominator + k2Pi * (float)(i - kNeighbourBins);
         simd_mask denZeroMask = simd_float::lessThan(simd_float::abs(fullDenominator), kMultiplierEpsilon);
@@ -1385,7 +1385,7 @@ namespace Generation
       rawDestination[i] += rawSource[i] & outsideBoundsMask;
       simd_float wet = rawSource[i] & ~outsideBoundsMask;
 
-      for (u32 j = 0; j < leakMultipliers.size(); ++j)
+      for (u32 j = 0; j < COMPLEX_ARRAY_SIZE(leakMultipliers); ++j)
       {
         simd_int indices = simd_int{ (i - (u32)kNeighbourBins + j) } + binShift;
         simd_int clampedIndices = simd_int::clampSigned(0, binCount - 1, indices);

@@ -12,30 +12,96 @@ namespace utils
   void deallocate(const void *memory);
 }
 
+#ifdef COMPLEX_WINDOWS
+  #define CALL_CONV __cdecl
+#else
+  #define CALL_CONV
+#endif
+
+namespace std
+{
+  enum class align_val_t : usize { };
+}
+
+extern "C++"
+{
+  [[nodiscard]] void *CALL_CONV operator new(usize size)
+  {
+    COMPLEX_ASSERT_FALSE("Do not use allocating operator new, use arenas instead");
+    return utils::allocate(size);
+  }
+  [[nodiscard]] void *CALL_CONV operator new(usize size, std::align_val_t alignment)
+  {
+    COMPLEX_ASSERT_FALSE("Do not use allocating operator new, use arenas instead");
+    return utils::allocate(size, (usize)alignment);
+  }
+  [[nodiscard]] void *CALL_CONV operator new[](usize size) 
+  {
+    COMPLEX_ASSERT_FALSE("Do not use allocating operator new, use arenas instead");
+    return utils::allocate(size);
+  }
+  [[nodiscard]] void *CALL_CONV operator new[](usize size, std::align_val_t alignment)
+  {
+    COMPLEX_ASSERT_FALSE("Do not use allocating operator new, use arenas instead");
+    return utils::allocate(size, (usize)alignment);
+  }
+
+  void CALL_CONV operator delete(void *pointer) noexcept 
+  {
+    COMPLEX_ASSERT_FALSE("Do not use deallocating operator delete, use arenas instead");
+    utils::deallocate(pointer);
+  }
+  void CALL_CONV operator delete[](void *pointer) noexcept
+  {
+    COMPLEX_ASSERT_FALSE("Do not use deallocating operator delete, use arenas instead");
+    utils::deallocate(pointer);
+  }
+  void CALL_CONV operator delete(void *pointer, usize) noexcept
+  {
+    COMPLEX_ASSERT_FALSE("Do not use deallocating operator delete, use arenas instead");
+    utils::deallocate(pointer);
+  }
+  void CALL_CONV operator delete[](void *pointer, usize) noexcept
+  {
+    COMPLEX_ASSERT_FALSE("Do not use deallocating operator delete, use arenas instead");
+    utils::deallocate(pointer);
+  }
+  void CALL_CONV operator delete(void *pointer, std::align_val_t) noexcept
+  {
+    COMPLEX_ASSERT_FALSE("Do not use deallocating operator delete, use arenas instead");
+    utils::deallocate(pointer);
+  }
+  void CALL_CONV operator delete[](void *pointer, std::align_val_t) noexcept
+  {
+    COMPLEX_ASSERT_FALSE("Do not use deallocating operator delete, use arenas instead");
+    utils::deallocate(pointer);
+  }
+}
+
 extern "C"
 {
-  __declspec(allocator) __declspec(restrict) void *__cdecl malloc(usize size) { return utils::bumpArena::insert(globalArena, size, alignof(void *)); }
-  __declspec(allocator) __declspec(restrict) void *__cdecl calloc(usize count, usize size) { return utils::bumpArena::insert(globalArena, count * size, alignof(void *), true); }
-  __declspec(allocator) __declspec(restrict) void *__cdecl realloc(void *pointer, usize newSize) { return utils::bumpArena::resize(pointer, newSize); }
-  void __cdecl free(void *pointer) { utils::bumpArena::remove(pointer); }
+  __declspec(allocator) __declspec(restrict) void *CALL_CONV malloc(usize size) { return utils::bumpArena::insert(globalArena, size, alignof(void *)); }
+  __declspec(allocator) __declspec(restrict) void *CALL_CONV calloc(usize count, usize size) { return utils::bumpArena::insert(globalArena, count * size, alignof(void *), true); }
+  __declspec(allocator) __declspec(restrict) void *CALL_CONV realloc(void *pointer, usize newSize) { return utils::bumpArena::resize(pointer, newSize); }
+  void CALL_CONV free(void *pointer) { utils::bumpArena::remove(pointer); }
 
-  int abs(int x) { return x & utils::max_limit<int>; }
+  int CALL_CONV abs(int x) { return x & utils::max_limit<int>; }
 
-  float floorf(float x) { return simd_float::floor(x)[0]; }
-  float ceilf(float x) { return simd_float::ceil(x)[0]; }
-  float roundf(float x) { return simd_float::round(x)[0]; }
+  float CALL_CONV floorf(float x) { return simd_float::floor(x)[0]; }
+  float CALL_CONV ceilf(float x) { return simd_float::ceil(x)[0]; }
+  float CALL_CONV roundf(float x) { return simd_float::round(x)[0]; }
 
-  float sinf(float x) { return utils::cis(x)[1]; }
-  float cosf(float x) { return utils::cis(x)[0]; }
-  float tanf(float x) { return utils::tan(x)[0]; }
-  float atan2f(float y, float x) { return utils::atan2(y, x)[0]; }
+  float CALL_CONV sinf(float x) { return utils::cis(x)[1]; }
+  float CALL_CONV cosf(float x) { return utils::cis(x)[0]; }
+  float CALL_CONV tanf(float x) { return utils::tan(x)[0]; }
+  float CALL_CONV atan2f(float y, float x) { return utils::atan2(y, x)[0]; }
 
-  float sqrtf(float x) { return simd_float::sqrt(x)[0]; }
-  float expf(float x) { return utils::exp(x); }
-  float powf(float x, float y) { return utils::pow(x, y); }
-  float log10f(float x) { return utils::log10(x); }
+  float CALL_CONV sqrtf(float x) { return simd_float::sqrt(x)[0]; }
+  float CALL_CONV expf(float x) { return utils::exp(x); }
+  float CALL_CONV powf(float x, float y) { return utils::pow(x, y); }
+  float CALL_CONV log10f(float x) { return utils::log10(x); }
 
-  int tolower(int c)
+  int CALL_CONV tolower(int c)
   {
     if (c >= 'A' && c <= 'Z')
       return c + 'a' - 'A';

@@ -711,7 +711,7 @@ void cplug_loadState(void *userPlugin, const void *stateCtx, cplug_readProc read
 
   usize capacity = kCapacityIncrease;
   usize size{};
-  char *buffer = arranew(globalArena, char, capacity, {});
+  char *buffer = arranew(localScratch, char, capacity, {});
   while (readProc(stateCtx, buffer + size, kCapacityIncrease) != 0)
   {
     capacity += kCapacityIncrease;
@@ -727,7 +727,7 @@ void cplug_loadState(void *userPlugin, const void *stateCtx, cplug_readProc read
   size = size - kCapacityIncrease + i;
 
   loadState((Plugin::ComplexPlugin *)userPlugin, { buffer, size });
-  utils::deallocate(buffer);
+  utils::bumpArena::remove(buffer);
 }
 
 

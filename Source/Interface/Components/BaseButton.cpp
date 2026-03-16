@@ -65,15 +65,12 @@ namespace Interface
     Colour activeColour = colour.withBrightness(0.7f);
     Colour hoverColour = colour;
 
-    //if (isOn())
-    //{
-      activeColour = (componentFlags.isClicked) ? activeColour : colour;
-      hoverColour = colour.brighter(0.6f);
-    //}
+    activeColour = (componentFlags.isClicked) ? activeColour : colour;
+    hoverColour = colour.brighter(0.6f);
 
-    animator.tick(componentFlags.isHovered, componentFlags.isClicked, kHoverIncrement, 0.0f);
+    tickAnimation(animationValues, { { componentFlags.isHovered || componentFlags.isClicked } }, { { kHoverIncrement} });
     if (!componentFlags.isClicked)
-      colour = activeColour.interpolatedWith(hoverColour, animator.getValue(Animator::Hover));
+      colour = activeColour.interpolatedWith(hoverColour, animationValues[0]);
 
     Colour colours[] = { colour };
     auto [fn, iconBounds] = Paths::powerButtonIcon();
@@ -95,8 +92,8 @@ namespace Interface
     auto offNormalColor = getColour(Skin::kPowerButtonOff);
     auto backgroundColor = getColour(Skin::kBackground);
     
-    animator.tick(componentFlags.isHovered, componentFlags.isClicked, kHoverIncrement, 0.0f);
-    auto hoverAmount = animator.getValue(Animator::Hover);
+    tickAnimation(animationValues, { { componentFlags.isHovered } }, { { kHoverIncrement} });
+    auto hoverAmount = animationValues[0];
     auto drawBounds = getLocalBounds().toFloat().trimmed(scaleValue(padding.toFloat()));
     
     float rounding = utils::min(drawBounds.w, drawBounds.h) * roundingRatio;
