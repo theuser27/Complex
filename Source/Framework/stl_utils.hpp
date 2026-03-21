@@ -561,10 +561,9 @@ namespace utils
       size_{ (size_type)(pastLast - first) } { COMPLEX_ASSERT(pastLast > first); }
 
     template<auto Size>
-    constexpr span(T (&rawArray)[Size]) noexcept :
-      data_{ rawArray }, size_{ (size_type)Size } { }
+    constexpr span(T (&rawArray)[Size]) noexcept : data_{ rawArray }, size_{ (size_type)Size } { }
 
-    constexpr span(auto &range, size_type start = 0, size_type length = npos) 
+    constexpr span(auto &range, size_type start = 0, size_type length = npos) noexcept
       requires requires { range.data(); range.size(); } : data_{ range.data() + start },
       size_{ utils::min((size_type)range.size() - start, length) } { }
 
@@ -1128,14 +1127,6 @@ namespace utils
     int sign = signum(value);
     value *= sign;
     return (T)sign;
-  }
-
-  template<utils::floating_point T>
-  constexpr T 
-  smoothStep(T value) noexcept
-  {
-    T sqr = value * value;
-    return (T(3) * sqr) - (T(2) * sqr * value);
   }
 
   template<typename T, typename U>

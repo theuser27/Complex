@@ -189,7 +189,9 @@ namespace Interface
   inline void strokeRect(NVGcontext *context, Rectangle<float> bounds,
     float thickness, Colour colour = Colours::white, float cornerRounding = 0.0f)
   {
-    bounds.expand(-0.5f, -0.5f);
+    // stroke paints around the specified lines, 
+    // therefore we need to shrink by half the thickess to get the result we need
+    bounds.trim(thickness * 0.5f);
 
     nvgBeginPath(context);
     if (cornerRounding == 0.0f)
@@ -202,19 +204,41 @@ namespace Interface
     nvgStroke(context);
   }
 
+  inline void strokePolygon(NVGcontext *context, float thickness,
+    utils::span<const Point<float>> points, Colour colour = Colours::white)
+  {
+    if (points.size() < 2)
+      return;
+
+    nvgBeginPath(context);
+    nvgMoveTo(context, points[0].x, points[0].y);
+
+    for (usize i = 1; i < points.size(); ++i)
+      nvgLineTo(context, points[i].x, points[i].y);
+    nvgClosePath(context);
+
+    nvgStrokeColor(context, colour);
+    nvgStrokeWidth(context, thickness);
+    nvgStroke(context);
+  }
+
   inline void renderText(utils::string_view text, FontId font,
-    Rectangle<i32> bounds, Graphics *context, Colour colour, 
-    bool alignLeft = false, bool wrapText = false)
+    Rectangle<float> bounds, Graphics *context, Colour colour, 
+    Placement placement = Placement::centered, bool wrapText = false)
   {
     nvgBeginPath(context->context);
     context->setFont(font, (float)bounds.h);
     float ascent, lineHeight;
     nvgFillColor(context->context, colour);
     nvgTextMetrics(context->context, &ascent, nullptr, &lineHeight);
-    int alignmentFlags = NVG_ALIGN_BASELINE | ((alignLeft) ? NVG_ALIGN_LEFT : NVG_ALIGN_CENTER);
+    int alignmentFlags = NVG_ALIGN_BASELINE;
+    alignmentFlags |= ((placement == Placement::left) ? NVG_ALIGN_LEFT : 
+      (placement == Placement::right) ? NVG_ALIGN_RIGHT : NVG_ALIGN_CENTER);
     nvgTextAlign(context->context, alignmentFlags);
 
-    auto x = (float)bounds.x + ((alignLeft) ? 0.0f : (float)bounds.w * 0.5f);
+    auto x = (float)bounds.x;
+    x += ((placement == Placement::left) ? 0.0f :
+      (placement == Placement::right) ? (float)bounds.w : (float)bounds.w * 0.5f);
     auto y = ::ceilf((float)bounds.y + ((float)bounds.h - lineHeight) * 0.5f + ascent);
     if (wrapText)
       nvgTextBox(context->context, x, y, x + (float)bounds.w, text.data(), text.data() + text.size());
@@ -259,16 +283,10 @@ namespace Interface
 
   namespace Paths
   {
-    using DrawingFn = void(Graphics &g, utils::span<Colour> colours,
+    using DrawingFn = void(Graphics &g, utils::span<const Colour> colours,
       Rectangle<float> bounds, float strokeWidth);
 
-    void pasteValueIcon(Graphics &g, Rectangle<float> bounds,
-      float strokeWidth, utils::span<Colour> colours);
     void enterValueIcon(Graphics &g, Rectangle<float> bounds,
-      float strokeWidth, utils::span<Colour> colours);
-    void copyNormalisedValueIcon(Graphics &g, Rectangle<float> bounds,
-      float strokeWidth, utils::span<Colour> colours);
-    void copyScaledValueIcon(Graphics &g, Rectangle<float> bounds,
       float strokeWidth, utils::span<Colour> colours);
 
     void filterIcon(Graphics &g, Rectangle<float> bounds,
@@ -282,6 +300,9 @@ namespace Interface
     void destroyIcon(Graphics &g, Rectangle<float> bounds,
       float strokeWidth, utils::span<Colour> colours);
 
+    utils::pair<DrawingFn *, Rectangle<i32>> copyNormalisedValueIcon();
+    utils::pair<DrawingFn *, Rectangle<i32>> copyScaledValueIcon();
+    utils::pair<DrawingFn *, Rectangle<i32>> pasteValueIcon();
     utils::pair<DrawingFn *, Rectangle<i32>> powerButtonIcon();
   }
 }

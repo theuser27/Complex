@@ -133,6 +133,7 @@ namespace Interface
     placement = Placement::custom;
     sizingFlags |= Component::ScrollableWithBarY | Component::SnapToMinX;
     componentFlags.vertical = true;
+    componentFlags.clickable = true;
   }
 
   bool 
@@ -153,7 +154,34 @@ namespace Interface
     }
 
     if (draw)
-      return draw(openGl, this);
+    {
+      if (draw(openGl, this))
+      {
+        doRenderChildren(openGl);
+      }
+
+      renderScrollbars(openGl, 0.2f);
+
+      auto mouseState = getMouseInteractions(uiRelated.renderer).mouseState.getEventRelativeTo(this);
+      auto *c = contains(Point{ mouseState.x, mouseState.y }) ? lastMouseEvent.eventComponent : currentSublistItem;
+      summonChildList((PopupItem *)c, lastMouseEvent);
+
+      //if (currentSublistItem)
+      //{
+      //  // adjust triangle cone
+      //  auto childListBounds = parentSelector->getRelativeArea(currentSublistItem->childList);
+      //  auto topPoint = (childListBounds.x > bounds.x) ? childListBounds.getTopLeft() : childListBounds.getTopRight();
+      //  auto bottomPoint = (childListBounds.x > bounds.x) ? childListBounds.getBottomLeft() : childListBounds.getBottomRight();
+
+      //  auto A = sublistAnchorPoint - bounds.getPosition();
+      //  auto B = topPoint - bounds.getPosition();
+      //  auto C = bottomPoint - bounds.getPosition();
+
+      //  strokePolygon(openGl, 1.0f, { { A.toFloat(), B.toFloat(), C.toFloat() } });
+      //}
+
+      return false;
+    }
     return true;
   }
 
@@ -173,24 +201,52 @@ namespace Interface
     return true;
   }
 
-  static void positionInitialPopupList(PopupList *list, PopupSelector *selector, Placement placement, Point<i32> extraPosition = {})
+  static void positionInitialPopupList(PopupList *list, PopupSelector *selector,
+    Component *relativeComponent, Placement placement, Point<i32> extraPosition)
   {
+    auto [_, __, width, height] = list->getLocalBounds();
+    i32 windowWidth = selector->bounds.w;
+    i32 windowHeight = selector->bounds.h;
+
     if (placement == Placement::custom)
     {
-      //auto newPosition = getRelativePoint(selector->summoner,
-      //  selector->summoningPoint);
-      //bounds.setPosition(newPosition);
+      auto [x, y] = list->getRelativePoint(relativeComponent, extraPosition);
+
+      // do we have space to the right
+      if (x + width > windowWidth)
+      {
+        // do we have enough space to the left
+        if (x > width)
+          x -= width;
+        else
+        {
+          // neither have enough space, offset and shrink if necessary
+          width = utils::min(width, windowWidth);
+          x = windowWidth - width;
+        }
+      }
+      if (y + height > windowHeight)
+      {
+        if (y > height)
+          y -= height;
+        else
+        {
+          height = utils::min(windowHeight, height);
+          y = windowHeight - height;
+        }
+      }
+
+      list->bounds.setPosition(x, y);
 
       return;
     }
 
 
-    auto sourceBounds = selector->getRelativeArea(selector->summoner);
+    auto sourceBounds = selector->getRelativeArea(relativeComponent);
     auto sourcePosition = sourceBounds.getPosition();
-    auto [_, __, width, height] = list->getLocalBounds();
-    i32 windowWidth = selector->bounds.w;
-    i32 windowHeight = selector->bounds.h;
-    i32 popupToElement = scaleValueRoundInt(kPopupToElement);
+
+    i32 yOffset = scaleValueRoundInt((float)extraPosition.y);
+    i32 xOffset = scaleValueRoundInt((float)extraPosition.x);
 
     auto [finalX, finalY] = sourcePosition;
 
@@ -202,13 +258,13 @@ namespace Interface
       // popup cannot be fit horizontally, find the side with the most width
       if (sourcePosition.x + sourceBounds.w >= windowWidth - sourcePosition.x)
       {
-        width = utils::min(width, sourcePosition.x + sourceBounds.w - offset);
-        finalX = sourcePosition.x + sourceBounds.w - offset - width;
+        // left side
+        finalX = utils::max(0, sourcePosition.x + sourceBounds.w - offset - width);
       }
       else
       {
-        finalX = sourcePosition.x + offset;
-        width = utils::min(width, windowWidth - finalX);
+        // right side
+        finalX = utils::clamp(windowWidth - width, 0, sourcePosition.x + offset);
       }
     };
 
@@ -217,32 +273,32 @@ namespace Interface
       if (finalY + height <= windowHeight)
         return;
 
-      // popup cannot be fit vertically, find the side with the most height
+      // popup cannot be fit vertically, find if the upper or lower side has the most height
       if (sourcePosition.y + sourceBounds.h >= windowHeight - sourcePosition.y)
       {
-        height = utils::min(height, sourcePosition.y + sourceBounds.h - offset);
-        finalY = sourcePosition.y + sourceBounds.h - offset - height;
+        // upper side
+        finalY = utils::max(0, sourcePosition.y + sourceBounds.h - offset - height);
       }
       else
       {
-        finalY = sourcePosition.y + offset;
-        height = utils::min(height, windowHeight - finalY);
+        // lower side
+        finalY = utils::clamp(windowHeight - height, 0, sourcePosition.y + offset);
       }
     };
 
     if (placement == Placement::bottom || placement == Placement::top)
     {
       checkHorizontal();
-      finalY = (placement == Placement::bottom) ? finalY + sourceBounds.h + popupToElement :
-        finalY - height - popupToElement;
-      checkVertical(sourceBounds.h + popupToElement);
+      finalY = (placement == Placement::bottom) ? finalY + sourceBounds.h + yOffset :
+        finalY - height - yOffset;
+      checkVertical(sourceBounds.h + yOffset);
     }
     else if (placement == Placement::left || placement == Placement::right)
     {
       checkVertical();
-      finalX = (placement == Placement::left) ? finalX - width - popupToElement :
-        finalX + sourceBounds.w + popupToElement;
-      checkHorizontal(sourceBounds.w + popupToElement);
+      finalX = (placement == Placement::left) ? finalX - width - xOffset :
+        finalX + sourceBounds.w + xOffset;
+      checkHorizontal(sourceBounds.w + xOffset);
     }
     else
     {
@@ -253,15 +309,7 @@ namespace Interface
     }
 
     list->bounds.setPosition(finalX, finalY);
-    list->componentFlags.isVisible = !selector->summoner->isObscured();
-
-    calculatePositions(list->children, list, list->bounds);
   }
-
-  //static void positionSubsequentPopupList(PopupList *list, PopupSelector *selector, Placement placement, Point<i32> extraPosition = {})
-  //{
-
-  //}
 
   bool
   PopupList::handleCommandMessage(u64 commandId, utils::whatever<64>)
@@ -269,48 +317,129 @@ namespace Interface
     switch (commandId)
     {
     case Component::HandleCustomPosition:
+    {
+      auto *selector = (PopupSelector *)parent;
+      
       if (!parentList)
-      {
-        auto *selector = (PopupSelector *)parent;
-        positionInitialPopupList(this, selector, selector->listPlacement, selector->summoningPoint);
-      }
+        positionInitialPopupList(this, selector, selector->summoner, selector->listPlacement, selector->summoningPoint);
       else
-      {
-        // position stays relative to the parent list
-        auto associatedItemBounds = getRelativeArea(parentItem, parentItem->bounds);
-
-        bounds.x = utils::min(associatedItemBounds.getRight(),
-          parent->bounds.getRight() - bounds.w);
-
-        if (parent->bounds.contains(associatedItemBounds.x - bounds.w, 0) &&
-          !parent->bounds.contains(associatedItemBounds.getRight() + bounds.w, 0))
-        {
-          bounds.x = associatedItemBounds.x - bounds.w;
-        }
-
-        bounds.y = utils::clamp(parent->bounds.h - bounds.h, 0, associatedItemBounds.y);
-
-        componentFlags.isVisible = parentList->componentFlags.isVisible;
-      }
+        positionInitialPopupList(this, selector, parentItem, selector->lastPlacement, { 4, 0 });
 
       calculatePositions(children, this);
 
       return true;
     }
+    }
 
     return false;
   }
 
-  void PopupList::summonChildList(PopupList *childList)
+  static bool 
+  isPointInsideTriangle(Point<float> point, Point<float> A, Point<float> B, Point<float> C)
   {
-    //childList->
+    // https://math.stackexchange.com/a/51459
 
+    auto cross = [](Point<float> a, Point<float> b) { return a.x * b.y - a.y * b.x; };
+    
+    auto crossAB = cross(A, B);
+    auto crossBC = cross(B, C);
+    auto crossCA = cross(C, A);
+
+    float xd = crossAB * crossBC * crossCA;
+    if (utils::abs(xd) <= 1e-13f)
+      return false;
+    
+    float wA = (crossBC + cross(point, B - C)) / xd;
+    float wB = (crossCA + cross(point, C - A)) / xd;
+    float wC = (crossAB + cross(point, A - B)) / xd;
+
+    if (wA < 0 && wB < 0 && wC < 0)
+    {
+      wA = -wA;
+      wB = -wB;
+      wC = -wC;
+    }
+    
+    return (0.0f <= wA && wA <= 1.0f) &&
+      (0.0f <= wB && wB <= 1.0f) && (0.0f <= wC && wC <= 1.0f);
+  }
+
+  void PopupList::summonChildList(PopupItem *summoningItem,
+    const MouseEvent &summoningMouseEvent)
+  {
+    static constexpr double kSublistConeTimeout = 0.25; //s
+
+
+
+    bool shouldCloseSublist = uiRelated.steadyTime - lastSummonTime >= kSublistConeTimeout;
+    auto event = summoningMouseEvent.getEventRelativeTo(parentSelector);
+    if (currentSublistItem)
+    {
+      // adjust triangle cone
+      auto childListBounds = parentSelector->getRelativeArea(currentSublistItem->childList);
+      auto topPoint = (childListBounds.x > bounds.x) ? childListBounds.getTopLeft() : childListBounds.getTopRight();
+      auto bottomPoint = (childListBounds.x > bounds.x) ? childListBounds.getBottomLeft() : childListBounds.getBottomRight();
+
+      //shouldCloseSublist = shouldCloseSublist || !isPointInsideTriangle({ (float)event.x, (float)event.y },
+      //  sublistAnchorPoint.toFloat(), topPoint.toFloat(), bottomPoint.toFloat());
+
+      if (shouldCloseSublist)
+        sublistAnchorPoint = { event.x, event.y };
+    }
+
+    // refreshing the last summon time while we're on the summoning item
+    lastSummonTime = (currentSublistItem != summoningItem && summoningItem && (summoningItem->childList || currentSublistItem) &&
+      summoningItem->contains(Point{ summoningMouseEvent.x, summoningMouseEvent.y })) ?
+      lastSummonTime : uiRelated.steadyTime;
+
+    if (currentSublistItem != summoningItem && shouldCloseSublist)
+    {
+      // hide previous child list if it exists
+      if (currentSublistItem)
+      {
+        parentSelector->removeChildComponent(currentSublistItem->childList);
+        currentSublistItem = {};
+        sublistAnchorPoint = {};
+      }
+      
+      if (summoningItem && summoningItem->childList)
+      {
+        auto newSublist = summoningItem->childList;
+        newSublist->parentSelector = parentSelector;
+        newSublist->parentItem = summoningItem;
+        newSublist->parentList = this;
+        parentSelector->addChildComponent(newSublist);
+        currentSublistItem = summoningItem;
+        sublistAnchorPoint = { event.x, event.y };
+      }
+    }
   }
 
   bool 
-  PopupItem::mouseUp(const MouseEvent &)
+  PopupItem::mouseMove(const MouseEvent &e)
   {
     if (!canBeChosen)
+      return false;
+
+    associatedList->lastMouseEvent = e;
+
+    associatedList->summonChildList(this, e);
+
+    return true;
+  }
+
+  bool
+  PopupItem::mouseDown(const MouseEvent &)
+  {
+    componentFlags.isClicked = false;
+
+    return true;
+  }
+
+  bool
+  PopupItem::mouseUp(const MouseEvent &)
+  {
+    if (!canBeChosen || childList)
       return false;
 
     associatedList->parentSelector->newSelection(this);
@@ -324,7 +453,7 @@ namespace Interface
     if ((componentFlags.isHovered || componentFlags.isClicked) && canBeChosen)
       fillRect(openGl, getLocalBounds().toFloat(), getColour(Skin::kWidgetPrimary1, this).darker(0.8f));
 
-    return false;
+    return true;
   }
 
   void PopupSelector::reinitialise()
@@ -483,6 +612,10 @@ namespace Interface
     case Component::HandleCustomPosition:
       // position stays relative to component we're attached to
       bounds.setPosition(parent->bounds.getPosition());
+
+      for (auto *child = children; child; child = child->next)
+        child->componentFlags.isVisible = !summoner->isObscured();
+
       return true;
     }
 
@@ -494,6 +627,8 @@ namespace Interface
     removeAllChildComponents();
     summoner = {};
     callback = {};
+    if (cancel)
+      cancel(this);
     cancel = {};
     lastPlacement = Placement::right;
     utils::bumpArena::clear(arena);

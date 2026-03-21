@@ -62,6 +62,9 @@ namespace Interface
     kVGlobalMargin + kEffectsStateMinHeight + kLaneToBottomSettingsMargin + kFooterHeight;
 
   inline constexpr int kMinPopupWidth = 150;
-  inline constexpr int kPopupToElement = 4;
+  inline constexpr int kPopupToElement = 8;
+  inline constexpr int kPopupSubwindowArrow = 4;
+  inline constexpr int kPopupSubwindowArrowMargin = 16;
+  inline constexpr int kPopupSubwindowArrowWidth = 4;
 
 }

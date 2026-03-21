@@ -139,23 +139,16 @@ namespace Interface
   template<typename T>
   struct Rectangle
   {
-    constexpr Rectangle() = default;
-    constexpr Rectangle(Point<T> position, T width, T height) :
-      x(position.x), y(position.y), w(width), h(height) { }
-    constexpr Rectangle(T initialX, T initialY, T width, T height) :
-      x(initialX), y(initialY), w(width), h(height) { }
-    constexpr Rectangle(T width, T height) : w(width), h(height) { }
-    constexpr Rectangle(Point<T> corner1, Point<T> corner2) :
-      x{ utils::min(corner1.x, corner2.x) }, y{ utils::min(corner1.y, corner2.y) },
-      w{ utils::abs(corner1.x - corner2.x) }, h{ utils::abs(corner1.y - corner2.y) } { }
+    static constexpr Rectangle
+    fromPoints(Point<T> corner1, Point<T> corner2)
+    {
+      return { utils::min(corner1.x, corner2.x),
+        utils::min(corner1.y, corner2.y),
+        utils::abs(corner1.x - corner2.x),
+        utils::abs(corner1.y - corner2.y) };
+    }
 
     friend constexpr bool operator==(Rectangle lhs, Rectangle rhs) = default;
-
-    static constexpr Rectangle 
-    leftTopRightBottom(T left, T top, T right, T bottom)
-    {
-      return { left, top, right - left, bottom - top };
-    }
 
     constexpr T getRight() const { return x + w; }
     constexpr T getBottom() const { return y + h; }
@@ -176,8 +169,9 @@ namespace Interface
     constexpr Rectangle withPosition(T newX, T newY) const { return { newX, newY, w, h }; }
     constexpr Rectangle withPosition(Point<T> newPosition) const { return { newPosition.x, newPosition.y, w, h }; }
     constexpr Rectangle withCentre(T newCentreX, T newCentreY) const { return { newCentreX - w / (T)2, newCentreY - h / (T)2, w, h }; }
+    constexpr Rectangle withCentre(Point<T> newCentre) const { return withCentre(newCentre.x, newCentre.y); }
     constexpr Rectangle withSize(T newWidth, T newHeight) const { return { x, y, utils::max(T(), newWidth), utils::max(T(), newHeight) }; }
-    constexpr Rectangle withZeroOrigin() const { return { w, h }; }
+    constexpr Rectangle withZeroOrigin() const { return { 0, 0, w, h }; }
     constexpr Rectangle withShift(T deltaX, T deltaY) const { return { x + deltaX, y + deltaY, w, h }; }
 
     constexpr Rectangle withLeft(T newLeft) const { return { newLeft, y, utils::max(T(), x + w - newLeft), h }; }
@@ -330,12 +324,9 @@ namespace Interface
         utils::min(h, areaToFitWithin.h) };
     }
 
-    constexpr Rectangle<int> toInt() const 
-    { return Rectangle<int>{ (int)x, (int)y, (int)w, (int)h }; }
-    constexpr Rectangle<float> toFloat() const 
-    { return Rectangle<float>{ (float)x, (float)y, (float)w, (float)h }; }
-    constexpr Rectangle<double> toDouble() const 
-    { return Rectangle<double>{ (double)x, (double)y, (double)w, (double)h }; }
+    constexpr Rectangle<int> toInt() const { return Rectangle<int>{ (int)x, (int)y, (int)w, (int)h }; }
+    constexpr Rectangle<float> toFloat() const { return Rectangle<float>{ (float)x, (float)y, (float)w, (float)h }; }
+    constexpr Rectangle<double> toDouble() const { return Rectangle<double>{ (double)x, (double)y, (double)w, (double)h }; }
 
     T x{}, y{}, w{}, h{};
   };
@@ -598,6 +589,9 @@ namespace Interface
     for (usize i = 0; i < values.size(); ++i)
       values[i] = utils::clamp(values[i] + ((flags[i]) ? increments[i] : -increments[i]), 0.0f, 1.0f);
   }
+
+  strict_inline float easeOutQuadratic(float x) { return 1.0f - (1.0f - x) * (1.0f - x); }
+  strict_inline float smoothstep(float x) { return (3.0f * x * x) - (2.0f * x * x * x); }
 
   struct MonitorInfo
   {

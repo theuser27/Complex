@@ -64,7 +64,6 @@ namespace Interface
     static constexpr float kPrimaryTextLineHeight = 16.0f;
     static constexpr float kSecondaryTextLineHeight = 12.0f;
     static constexpr float kDelimiterHeight = 20.0f;
-    static constexpr float kInlineGroupHeight = 28.0f;	// serves also as minimum width for the elements
 
     static constexpr float kVPadding = 4.0f;
     static constexpr float kHEntryPadding = 12.0f;
@@ -79,7 +78,8 @@ namespace Interface
     bool mouseExit(const MouseEvent &e) override;
     bool handleCommandMessage(u64 commandId, utils::whatever<64>) override;
 
-    void summonChildList(PopupList *childList);
+    void summonChildList(PopupItem *summoningItem, 
+      const MouseEvent &summoningMouseEvent);
 
     bool (*draw)(OpenGlWrapper &openGl, PopupList *self){};
 
@@ -88,6 +88,10 @@ namespace Interface
     PopupSelector *parentSelector{};
     PopupList *parentList{};
     PopupItem *currentSublistItem{};
+
+    Point<i32> sublistAnchorPoint{};
+    double lastSummonTime{};
+    MouseEvent lastMouseEvent{};
   };
 
   struct PopupItem : public Component
@@ -99,12 +103,14 @@ namespace Interface
       componentFlags.acceptsOrphanedMouseEvents = true;
     }
     
+    bool mouseMove(const MouseEvent &e) override;
+    bool mouseDown(const MouseEvent &e) override;
     bool mouseUp(const MouseEvent &e) override;
     bool render(OpenGlWrapper &openGl) override;
 
     i32 id = 0;
     i32 shortcutKeyCode = 0;
-    void *extraData = nullptr;          // user pointer
+    void *extraData = nullptr;          // user-provided pointer
     bool closesPopup = true;            // if selector should get closed after being chosen
     bool canBeChosen = true;            // to designate labels/titles
     bool isActive = true;               // option that exists but isn't currently chooseable

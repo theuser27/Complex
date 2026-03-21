@@ -61,10 +61,8 @@ namespace Framework
 		}
 		float getDefaultValue() const;
 
-		utils::string getName() const;
-		utils::string getName(int maximumStringLength) const;
+		void getName(utils::string &outString) const;
 		void getName(char *buffer, usize maximumStringLength) const;
-		utils::string getLabel() const;
 		void getText(float value, char *buffer, usize maximumStringLength) const;
 		float getValueForText(utils::string_view text) const;
 
@@ -76,13 +74,14 @@ namespace Framework
 		void removeListener(Listener *listener) { listeners_.erase(listener); }
 
 		const u64 parameterIndex;
+		Plugin::State *state = nullptr;
+
 	private:
 		utils::pair<satomi::atomic<bool>, utils::string> name_{};
 		satomi::atomic<float> value_ = kDefaultParameterValue;
 		satomi::atomic<bool> wasValueSet_ = false;
 		satomi::atomic<ParameterLink *> parameterLinkPointer_ = nullptr;
 
-		Plugin::State *state = nullptr;
 		utils::vector<Listener *> listeners_{};
 	};
 }

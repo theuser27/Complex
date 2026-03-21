@@ -292,7 +292,8 @@ namespace Interface
       {
         nvgReset(openGl);
         auto text = utils::floatToString(localScratch, 1.0f / getGraphAverage(&graph), 2);
-        renderText(text, FontId::DDinType, scaleValue({ 4.0f, 4.0f, 24.0f, 24.0f }).toInt(), graphics, Colours::white, true);
+        renderText(text, FontId::DDinType, scaleValue({ 4.0f, 4.0f, 24.0f, 24.0f }).toInt().toFloat(), 
+          graphics, Colours::white, Placement::left);
       }
 
       nvgEndFrame(openGl.g);
@@ -875,8 +876,23 @@ namespace Interface
 
   void Renderer::handleMouseWheel(MouseEvent e)
   {
-    if (!mouseDownComponent_ && mouseHoveredComponent_)
-      mouseHoveredComponent_->mouseWheelMove(e);
+    utils::vector<Component *> stack{ localScratch, 32 };
+    auto *c = mouseHoveredComponent_;
+    while (c)
+    {
+      stack.emplaceBack(c);
+      c = c->parent;
+    }
+
+    while (!stack.empty())
+    {
+      if (stack.back()->mouseWheelMove(getRelativeEvent(e, stack.back())))
+        break;
+      stack.popBack();
+    }
+
+    //if (!mouseDownComponent_ && mouseHoveredComponent_)
+    //  mouseHoveredComponent_->mouseWheelMove(e);
   }
 }
 

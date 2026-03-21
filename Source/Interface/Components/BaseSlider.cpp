@@ -460,7 +460,6 @@ namespace Interface
         i32 minSize{}, maxSize{};
         bool canTextWrap = false;
         utils::string_view text;
-        float height = kSecondaryTextLineHeight;
 
         if (item->id)
         {
@@ -473,11 +472,10 @@ namespace Interface
         {
           auto *option = (Framework::IndexedData *)item->extraData;
           canTextWrap = !option->id;
-          height = !option->id ? height : kPrimaryTextLineHeight;
           text = option->displayName;
         }
 
-        height = scaleValue(height);
+        float height = scaleValue((float)item->desiredSize.h);
         uiRelated.cache->setFont(FontId::InterType, height);
         nvgTextAlign(uiRelated.cache->context, NVG_ALIGN_LEFT | NVG_ALIGN_CENTER);
 
@@ -489,7 +487,7 @@ namespace Interface
         else
         {
           auto lineCount = uiRelated.cache->getStringNumberOfLines(text, (float)item->bounds.w);
-          minSize = utils::max(scaleValueRoundInt((float)item->desiredSize.h), (i32)::roundf(height * (float)lineCount));
+          minSize = (i32)::roundf(height * (float)lineCount);
           maxSize = minSize;
         }
 
@@ -504,7 +502,6 @@ namespace Interface
       
       bool canTextWrap = false;
       utils::string_view text;
-      float height = kSecondaryTextLineHeight;
       Skin::ColourId textColourId = Skin::kTextComponentText1;
 
       if (id)
@@ -521,17 +518,11 @@ namespace Interface
       {
         auto *option = (Framework::IndexedData *)extraData;
         canTextWrap = !option->id;
-        height = !option->id ? height : kPrimaryTextLineHeight;
         text = option->displayName;
       }
 
-      int roundedHeight = scaleValueRoundInt(height);
-      auto textBounds = getLocalBounds().trimmed(scaleValueRoundInt(padding.toInt()));
-      textBounds.trimTop((textBounds.h - roundedHeight) / 2);
-      textBounds.h = roundedHeight;
-
-      renderText(text, FontId::InterType, textBounds, openGl.cache,
-        getColour(textColourId, this), true, canTextWrap);
+      renderText(text, FontId::InterType, getLocalBounds().trimmed(scaleValueRoundInt(padding.toInt())).toFloat(),
+        openGl.cache, getColour(textColourId, this), Placement::left, canTextWrap);
 
       return true;
     }
@@ -558,15 +549,16 @@ namespace Interface
 
     auto *selector = getPopupSelector();
 
-    if (controlFlags.isInModalState)
+    if (isDropdownOpen)
     {
       selector->resetState();
-      controlFlags.isInModalState = false;
+      isDropdownOpen = false;
       return true;
     }
 
+    selector->resetState();
     lastValue = getValue();
-    controlFlags.isInModalState = true;
+    isDropdownOpen = true;
 
     auto *itemArena = selector->arena;
 
@@ -583,7 +575,7 @@ namespace Interface
 
       self->doRenderChildren(openGl);
 
-      strokeRect(openGl, self->getLocalBounds().toFloat(), 1.0f, Colour{ 45,45,45 },
+      strokeRect(openGl, self->getLocalBounds().toFloat(), scaleValue(1.0f), Colour{ 45,45,45 },
         topPadding);
 
       return false;
@@ -593,12 +585,12 @@ namespace Interface
     name->arena = itemArena;
     name->id = 1;
     name->canBeChosen = false;
-    name->sizingFlags = (Component::SizingFlags)(Component::SameAsSiblingsX | Component::GrowableX);
+    name->sizingFlags = (Component::SizingFlags)(Component::GrowableX);
     name->extraData = anew(itemArena, utils::stringnd, { itemArena, (!dropdownTitle.empty()) ?
       utils::string_view{ dropdownTitle } : details.displayName });
     name->associatedList = options;
-    name->padding = { 12, 0, 12, 0 };
-    name->desiredSize = { 0, 20, 0, 20 };
+    name->padding = { 12, 2, 12, 2 };
+    name->desiredSize = { 0, 14, 0, 14 };
     options->addChildComponent(name);
 
     bool exitedChild = false;
@@ -614,10 +606,10 @@ namespace Interface
         item->extraData = option;
         item->canBeChosen = option->id && option->count;
         item->associatedList = options;
-        item->sizingFlags = (Component::SizingFlags)(Component::SameAsSiblingsX | Component::GrowableX);
+        item->sizingFlags = (Component::SizingFlags)(Component::GrowableX);
         item->componentFlags.acceptsOrphanedMouseEvents = true;
-        item->padding = { 12, 0, 12, 0 };
-        item->desiredSize = { 0, 24, 0, 24 };
+        item->padding = { 12, 4, 12, 4 };
+        item->desiredSize = { 0, kPrimaryTextLineHeight, 0, kPrimaryTextLineHeight };
         options->addChildComponent(item);
       }
 
@@ -655,7 +647,7 @@ namespace Interface
     }
 
     selector->list = options;
-    selector->skinOverride = skinOverride;
+    selector->skinOverride = getSkinOverride();
     selector->callback = [this](PopupSelector *, PopupItem *selectedItem)
     {
       if (parameterLink && parameterLink->hostControl)
@@ -670,16 +662,13 @@ namespace Interface
       setValueToHost();
       endChange();
 
-      controlFlags.isInModalState = false;
+      isDropdownOpen = false;
 
       if (parameterLink && parameterLink->hostControl)
         parameterLink->hostControl->endChangeGesture();
     };
-    selector->cancel = [this](PopupSelector *)
-    {
-      controlFlags.isInModalState = false;
-    };
-    selector->summon(this, Placement::bottom);
+    selector->cancel = [this](PopupSelector *) { isDropdownOpen = false; };
+    selector->summon(this, dropdownPlacement, dropdownOffset.toInt());
 
     componentFlags.isClicked = false;
 

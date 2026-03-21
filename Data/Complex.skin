@@ -98,6 +98,8 @@
   "Action Button Secondary Press": "0xff606265",
   "Action Button Text": "ff111111",
 
+  "Scroll Shrink Percent": 0.5,
+
   "overrides": {
     "All": null,
     "Effects Lane": {

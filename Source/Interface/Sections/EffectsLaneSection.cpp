@@ -164,6 +164,9 @@ namespace Interface
   EffectsLaneSection::render(OpenGlWrapper &openGl)
   {
     fillRect(openGl, getLocalBounds().toFloat(), getColour(Skin::kBody, this), scaleValue(kInsideRouding));
+    strokeRect(openGl, getLocalBounds().toFloat(), scaleValue(kEffectsLaneOutlineThickness),
+      Colour{ 45, 45, 45 }, scaleValue(kInsideRouding));
+
     //reinitialise();
     //fillRect(openGl, getLocalBounds().toFloat());
 

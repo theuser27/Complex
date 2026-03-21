@@ -215,104 +215,222 @@ namespace Interface
     kMapFirstSlot,
     kMapFirstSlotSubtitle,
     kClearMapping,
+    kValueDisplayGroup,
     kValueDisplayText,
     kValueDisplay,
     kControlMenuIdsSize,
     kMappingList = 64,
   };
 
+  static bool isUnmappingParameter(i32 id) { return id % 2 != (kMappingList + 1) % 2; }
+  static usize getParameterIndexFromId(i32 id) { return (id - kMappingList - 1) / 2; }
+
+  struct ControlPopupItem;
+  static utils::string_view getControlPopupItemText(ControlPopupItem *item, utils::string &savedText);
+
+
   struct ControlPopupItem : PopupItem
   {
+    float rounding = 0.0f;
+    bool canTextWrap = false;
+    Skin::ColourId textColourId = Skin::kTextComponentText1;
+    Placement textPlacement = Placement::left;
+    PopupItem *siblingItem{};
+
     bool
     render(OpenGlWrapper &openGl) override
     {
-      (void)openGl;
+      //if (id > kMappingList && isUnmappingParameter(id))
+      //{
+      //  nvg
+      //}
 
-      // TODO:
+      if ((componentFlags.isHovered || componentFlags.isClicked) && canBeChosen)
+        fillRect(openGl, getLocalBounds().toFloat(),
+          getColour(Skin::kWidgetPrimary1, this).darker(0.8f), scaleValue(rounding));
+
+      if (id == kManualEntry || id == kCopyNormalisedValue ||
+        id == kCopyValue || id == kPasteValue)
+      {
+        Colour colours[] = { getColour(Skin::kTextComponentText2, this), getColour(Skin::kWidgetPrimary1, this) };
+
+        switch (id)
+        {
+        case kManualEntry:
+        {
+
+          break;
+        }
+        case kCopyNormalisedValue:
+        {
+          auto [fn, iconSizes] = Paths::copyNormalisedValueIcon();
+
+          fn(*openGl.cache, colours,
+            scaleValue(iconSizes.toFloat()).withCentre(getLocalBounds().toFloat().getCentre()), 
+            scaleValue(1.0f));
+          break;
+        }
+        case kCopyValue:
+        {
+          auto [fn, iconSizes] = Paths::copyScaledValueIcon();
+
+          fn(*openGl.cache, colours,
+            scaleValue(iconSizes.toFloat()).withCentre(getLocalBounds().toFloat().getCentre()),
+            scaleValue(1.0f));
+          break;
+        }
+        case kPasteValue:
+        {
+          auto [fn, iconSizes] = Paths::pasteValueIcon();
+
+          fn(*openGl.cache, colours,
+            scaleValue(iconSizes.toFloat()).withCentre(getLocalBounds().toFloat().getCentre()),
+            scaleValue(1.0f));
+          break;
+        }
+        default:
+          break;
+        }
+
+        return true;
+      }
+
+      utils::string savedText{};
+      utils::string_view text = getControlPopupItemText(this, savedText);
+
+      if (!canBeChosen && id != kMapFirstSlotSubtitle && id <= kMappingList)
+      {
+        fillRect(openGl, getLocalBounds().toFloat(), getColour(Skin::kPopupSelectorDelimiter, this));
+      }
+
+      //strokeRect(openGl, getLocalBounds().trimmed(scaleValueRoundInt(padding.toInt())).toFloat(), 
+      //  1.0f, Colour{ 128, 128, 128 });
+
+      if (id == kMappingList)
+      {
+        float width = scaleValueRound(kPopupSubwindowArrowWidth);
+        float rightOffset = scaleValueRound(kPopupSubwindowArrowMargin);
+        auto arrowBounds = getLocalBounds().trimmed(scaleValueRoundInt(padding.toInt())).toFloat();
+
+        float yCenter = bounds.h * 0.5f;
+        float height = width;
+
+        nvgStrokeWidth(openGl, scaleValue(1.0f));
+        nvgBeginPath(openGl);
+        nvgMoveTo(openGl.g, arrowBounds.getRight() - width, yCenter - height);
+        nvgLineTo(openGl, arrowBounds.getRight(), yCenter);
+        nvgLineTo(openGl, arrowBounds.getRight() - width, yCenter + height);
+        nvgStrokeColor(openGl.g, getColour(Skin::kTextComponentText2, this));
+        nvgStroke(openGl);
+      }
+
+      if (!text.empty())
+      {
+        auto textBounds = getLocalBounds().trimmed(scaleValueRoundInt(padding.toInt())).toFloat();
+        textBounds.h = ::roundf(scaleValue((float)desiredSize.h));
+
+        renderText(text, FontId::InterType, textBounds, openGl.cache,
+          getColour(textColourId, this), textPlacement, canTextWrap);
+      }
 
       return true;
     }
   };
+
+  static utils::string_view
+  getControlPopupItemText(ControlPopupItem *item, utils::string &savedText)
+  {
+    switch (item->id)
+    {
+    case kName:
+      return ((Control *)item->extraData)->details.displayName;
+    case kDefaultValue:
+      return "Set to D" COMPLEX_UNDERSCORE_LITERAL "efault Value";
+    case kClearMapping:
+      return "C" COMPLEX_UNDERSCORE_LITERAL "lear Parameter Mapping";
+    case kMapFirstSlot:
+      return "Make a" COMPLEX_UNDERSCORE_LITERAL "utomatable";
+    case kMapFirstSlotSubtitle:
+      return "Assign to first free Automation Slot";
+    case kMappingList:
+      return "Assign automation slot";
+    case kValueDisplayText:
+      return "Value";
+    case kValueDisplay:
+    {
+      auto *control = (Control *)item->extraData;
+      savedText.reserve(localScratch, 31);
+      control->getScaledValueString(savedText, control->getValue(), false);
+
+      char unscaledValueStringBuffer[64];
+      usize stringSize = utils::floatToString(control->getValue(),
+        unscaledValueStringBuffer, sizeof(unscaledValueStringBuffer) - 1, 3);
+
+      savedText.appendFormat(" " COMPLEX_MIDDLE_DOT_LITERAL " %v",
+        utils::string_view{ unscaledValueStringBuffer, stringSize });
+      return savedText;
+    }
+    }
+
+    if (item->id > kMappingList && !isUnmappingParameter(item->id))
+    {
+      auto index = getParameterIndexFromId(item->id);
+      utils::span parameterBridges = getPlugin(uiRelated.renderer).state_->parameterBridges;
+      
+      if (parameterBridges[index].isMappedToParameter())
+        item->textColourId = Skin::kWidgetPrimary1;
+      else
+      {
+        item->canBeChosen = true;
+        item->textColourId = Skin::kTextComponentText1;
+        if (item->siblingItem)
+          item->siblingItem->componentFlags.isVisible = false;
+      }
+
+      parameterBridges[index].getName(savedText);
+      return savedText;
+    }
+    else if (item->id > kMappingList)
+    {
+      int a = {};
+    }
+
+    // item doesn't have text
+    return {};
+  }
 
   static Range<i32>
   getControlPopupItemTextMetrics(Component *c, bool isCalculatingVertical)
   {
     auto *item = (ControlPopupItem *)c;
 
-    utils::string_view text{};
     utils::string savedText{};
-    bool canTextWrap = false;
-    float height = kPrimaryTextLineHeight;
+    utils::string_view text = getControlPopupItemText(item, savedText);
 
-    switch (item->id)
-    {
-    case kName:
-      text = ((Control *)item->extraData)->details.displayName;
-      height = kSecondaryTextLineHeight;
-      canTextWrap = true;
-      break;
+    if (text.empty())
+      return { -1, -1 };
 
-    case kDefaultValue:
-      text = "Set to D" COMPLEX_UNDERSCORE_LITERAL "efault Value";
-      break;
-
-    case kClearMapping:
-      text = "C" COMPLEX_UNDERSCORE_LITERAL "lear Parameter Mapping";
-      break;
-
-    case kMapFirstSlot:
-      text = "Make a" COMPLEX_UNDERSCORE_LITERAL "utomatable";
-      break;
-
-    case kMapFirstSlotSubtitle:
-      text = "Assign to first free Automation Slot";
-      height = kSecondaryTextLineHeight;
-      canTextWrap = true;
-      break;
-
-    case kMappingList:
-      text = "Assign automation slot";
-      break;
-
-    case kValueDisplayText:
-      text = "Value";
-      height = kSecondaryTextLineHeight;
-      break;
-
-    case kValueDisplay:
-    {
-      auto *control = (Control *)item->extraData;
-      savedText.reserve(utils::bumpArena::fromAllocation(item));
-      control->getScaledValueString(savedText, control->getValue(), false);
-
-      char unscaledValueStringBuffer[64];
-      usize stringSize = utils::floatToString(control->getValue(), 
-        unscaledValueStringBuffer, sizeof(unscaledValueStringBuffer) - 1);
-
-      savedText.appendFormat(" " COMPLEX_MIDDLE_DOT_LITERAL " %v",
-        utils::string_view{ unscaledValueStringBuffer, stringSize });
-      text = savedText;
-      height = Control::kPopupSecondaryFontHeight;
-      break;
-    }
-    default:
-      COMPLEX_ASSERT_FALSE("Unexpected Item");
-      break;
-    }
-    
     i32 minSize{}, maxSize{};
 
-    uiRelated.cache->setFont(FontId::InterType, scaleValue(height));
+    bool canTextWrap = item->canTextWrap;
+    float height = ::roundf(scaleValue((float)item->desiredSize.h));
+    uiRelated.cache->setFont(FontId::InterType, height);
 
     if (!isCalculatingVertical)
     {
-      maxSize = (i32)::ceilf(uiRelated.cache->getStringWidthFloat(text));
-      minSize = (canTextWrap) ? 0 : maxSize;
+      minSize = (canTextWrap) ? 0 : (i32)::ceilf(uiRelated.cache->getStringWidthFloat(text));
+      if (item->id == kMappingList)
+      {
+        minSize += scaleValueRoundInt((float)(kPopupSubwindowArrowMargin + kPopupSubwindowArrowWidth));
+      }
+
+      maxSize = -1;
     }
     else
     {
-      auto area = uiRelated.cache->getStringBoundsMultiline(text, (float)item->bounds.w);
-      minSize = maxSize = (i32)area.h;
+      auto lineCount = uiRelated.cache->getStringNumberOfLines(text, (float)item->bounds.w);
+      minSize = (i32)height * (i32)lineCount;
+      maxSize = minSize;
     }
 
     return { minSize, maxSize };
@@ -322,80 +440,135 @@ namespace Interface
 
   void Control::createPopupMenu(PopupSelector *selector, Point<i32> position)
   {
+    static constexpr auto kInlineGroupHeight = 32;	// serves also as minimum width for the elements
+
+    selector->resetState();
     auto *itemArena = selector->arena;
-  
-  #define ITEM(idNumber, ...) (&with_val(*anew(itemArena, ControlPopupItem, {}), \
-    .arena = itemArena, .id = idNumber __VA_OPT__(,) __VA_ARGS__))
-  #define TEXT_ITEM(idNumber, ...) ITEM(idNumber, .overrideDimensions = getControlPopupItemTextMetrics)
+    auto primaryDesiredSize = Rectangle{ 0, kPrimaryTextLineHeight, 0, kPrimaryTextLineHeight };
+    auto secondaryDesiredSize = Rectangle{ 0, 13, 0, 13 };
+    auto primaryPadding = Rectangle<u16>{ 12, 4, 12, 4 };
+    auto secondaryPadding = Rectangle<u16>{ 12, 4, 12, 4 };
+
+  #define ITEM(idNumber, list, ...) (&with_val(*anew(itemArena, ControlPopupItem, {}), \
+    .id = idNumber, .associatedList = &list __VA_OPT__(,) __VA_ARGS__))
+  #define TEXT_ITEM(idNumber, list, ...) ITEM(idNumber, list, .overrideDimensions = getControlPopupItemTextMetrics, \
+    .sizingFlags = Component::GrowableX, .padding = primaryPadding, .desiredSize = primaryDesiredSize __VA_OPT__(,) __VA_ARGS__)
 
     PopupList &options = *anew(itemArena, PopupList, { selector });
     options.componentFlags.vertical = true;
-    //options.sublistMinSize = { kPopupMinWidth, 0 };
+    options.padding = { 0, 4, 0, 4 };
+    options.desiredSize = { kPopupMinWidth, 0, utils::max_limit<i32>, utils::max_limit<i32> };
+    options.draw = [](OpenGlWrapper &openGl, PopupList *self)
+    {
+      auto topPadding = scaleValue((float)self->padding.y);
+      auto bottomPadding = scaleValue((float)self->padding.h);
 
-    options.addChildComponent(TEXT_ITEM(kName, .sizingFlags |= Component::SameAsSiblingsX, .extraData = this));
-    options.addChildComponent(TEXT_ITEM(kDefaultValue, .shortcutKeyCode = 'D', .sizingFlags |= Component::SameAsSiblingsX));
+      fillRect(openGl, self->getLocalBounds().toFloat(), getColour(Skin::kBody, self),
+        topPadding, topPadding, bottomPadding, bottomPadding);
+
+      self->doRenderChildren(openGl);
+
+      strokeRect(openGl, self->getLocalBounds().toFloat(), scaleValue(1.0f), Colour{ 45,45,45 },
+        topPadding);
+
+      return false;
+    };
+
+    options.addChildComponent(TEXT_ITEM(kName, options, .extraData = this, .canTextWrap = true,
+      .padding = secondaryPadding, .desiredSize = secondaryDesiredSize, .canBeChosen = false, 
+      .textColourId = Skin::kTextComponentText2));
+    options.addChildComponent(TEXT_ITEM(kDefaultValue, options, .shortcutKeyCode = 'D'));
 
     if (details.flags & Framework::ParameterDetails::Automatable)
     {
       if (parameterLink && parameterLink->hostControl)
       {
-        options.addChildComponent(TEXT_ITEM(kClearMapping, 
-          .shortcutKeyCode = 'C', .sizingFlags |= Component::SameAsSiblingsX));
+        options.addChildComponent(TEXT_ITEM(kClearMapping, options, .shortcutKeyCode = 'C'));
       }
       else
       {
-        ControlPopupItem &mapFirstSlot = *ITEM(kMapFirstSlot, .shortcutKeyCode = 'A',
-          .sizingFlags |= Component::SameAsSiblingsX, .componentFlags.vertical = true);
+        PopupItem &mapFirstSlot = with_val(*anew(itemArena, PopupItem, {}), .id = kMapFirstSlot,
+          .associatedList = &options, .shortcutKeyCode = 'A', .padding = (Rectangle<u16>{ 12, 4, 12, 4 }),
+          .componentFlags.vertical = true, .sizingFlags = Component::GrowableX);
         options.addChildComponent(&mapFirstSlot);
-        mapFirstSlot.addChildComponent(TEXT_ITEM(kMapFirstSlot));
-        mapFirstSlot.addChildComponent(TEXT_ITEM(kMapFirstSlotSubtitle,
-          .sizingFlags |= Component::SameAsSiblingsX));
+        mapFirstSlot.addChildComponent(TEXT_ITEM(kMapFirstSlot, options, .placement = Placement::left, .padding = {}));
+        mapFirstSlot.addChildComponent(TEXT_ITEM(kMapFirstSlotSubtitle, options, .canTextWrap = true, .canBeChosen = false,
+          .padding = (Rectangle<u16>{ 0, 2, 0, 0 }), .textColourId = Skin::kTextComponentText2,
+          .desiredSize = secondaryDesiredSize, .placement = Placement::left));
 
-        ControlPopupItem &mappingList = *TEXT_ITEM(kMappingList);
+        ControlPopupItem &mappingList = *TEXT_ITEM(kMappingList, options);
+        mappingList.childList = anew(itemArena, PopupList, { selector });
+        mappingList.childList->draw = options.draw;
+        mappingList.childList->padding = { 0, 4, 8, 4 };
         options.addChildComponent(&mappingList);
         utils::span parameterBridges = getPlugin(uiRelated.renderer).state_->parameterBridges;
         for (usize i = 0; i < parameterBridges.size(); ++i)
         {
-          ControlPopupItem &entry = *TEXT_ITEM(kMappingList + (i32)i + 1);
-          if (parameterBridges[i].isMappedToParameter())
+          if (!parameterBridges[i].isMappedToParameter())
           {
-            entry.addChildComponent(TEXT_ITEM(kMappingList + (i32)i + 1));
+            mappingList.childList->addChildComponent(TEXT_ITEM(kMappingList + 1 + (i32)i * 2, (*mappingList.childList)));
+
+            continue;
           }
 
-          mappingList.addChildComponent(&entry);
+          COMPLEX_ASSERT(parameterBridges[i].getParameterLink()->UIControl);
+          auto useOverride = parameterBridges[i].getParameterLink()->UIControl->getSkinOverride();
+
+          Component &wrapper = with_val(*anew(itemArena, Component, {}), .sizingFlags = Component::GrowableX);
+          ControlPopupItem *parameterMap = TEXT_ITEM(kMappingList + 1 + (i32)i * 2, (*mappingList.childList),
+            .sizingFlags = Component::GrowableX, .placement = Placement::left, .skinOverride = useOverride, 
+            .textColourId = Skin::kWidgetPrimary1, .canBeChosen = false);
+          ControlPopupItem *parameterUnmap = TEXT_ITEM(kMappingList + 1 + (i32)i * 2 + 1, (*mappingList.childList),
+            .sizingFlags = Component::None, .padding = (Rectangle<u16>{ 4, 4, 4, 4 }), .closesPopup = false,
+            .desiredSize = (Rectangle{ kPrimaryTextLineHeight, kPrimaryTextLineHeight, 
+              kPrimaryTextLineHeight, kPrimaryTextLineHeight }), .skinOverride = useOverride);
+          parameterMap->siblingItem = parameterUnmap;
+          wrapper.addChildComponent(parameterMap);
+          wrapper.addChildComponent(parameterUnmap);
+          mappingList.childList->addChildComponent(&wrapper);
         }
       }
     }
 
-    ControlPopupItem &valueDisplay = *ITEM(kValueDisplay, .sizingFlags |= Component::SameAsSiblingsX);
+    ControlPopupItem &valueDisplay = *ITEM(kValueDisplayGroup, options, 
+      .canBeChosen = false, .sizingFlags = Component::GrowableX, .padding = primaryPadding);
     options.addChildComponent(&valueDisplay);
-    options.addChildComponent(TEXT_ITEM(kValueDisplayText, .placement = Placement::left, .margin = Rectangle<i16>{ 0, 0, 8, 0 }));
-    options.addChildComponent(TEXT_ITEM(kValueDisplay, .placement = Placement::right, .extraData = this));
+    valueDisplay.addChildComponent(TEXT_ITEM(kValueDisplayText, options, .placement = Placement::left, 
+      .margin = (Rectangle<i16>{ 0, 0, 8, 0 }), .sizingFlags = Component::GrowableX, .canBeChosen = false,
+      .desiredSize = secondaryDesiredSize, .padding = {}, .textColourId = Skin::kTextComponentText2));
+    valueDisplay.addChildComponent(TEXT_ITEM(kValueDisplay, options, .canBeChosen = false, .textPlacement = Placement::right,
+      .desiredSize = secondaryDesiredSize, .placement = Placement::right, .extraData = this,
+      .sizingFlags = Component::GrowableX, .padding = {}, .textColourId = Skin::kTextComponentText2));
 
-    ControlPopupItem &inlineGroup = *ITEM(kInlineGroup, .sizingFlags |= Component::SameAsSiblingsX);
+    Component &inlineGroup = with_val(*anew(itemArena, Component, {}), .arena = itemArena,
+      .sizingFlags = Component::GrowableX, .padding = (Rectangle<u16>{ 4, 4, 4, 0 }),
+      .desiredSize = (Rectangle{ 0, kInlineGroupHeight, 0, kInlineGroupHeight }));
     options.addChildComponent(&inlineGroup);
 
     static constexpr auto iconWidthHeight = 16;
-  #define ICON(idNumber) ITEM(idNumber, .sizingFlags |= GrowableX | GrowableY, \
-    .desiredSize = (Rectangle<i32>{ iconWidthHeight, iconWidthHeight, iconWidthHeight, iconWidthHeight }))
 
-    inlineGroup.addChildComponent(ICON(kCopyNormalisedValue));
-    inlineGroup.addChildComponent(ICON(kCopyValue));
-    inlineGroup.addChildComponent(ICON(kPasteValue));
+    auto iconDesiredSize = Rectangle{ iconWidthHeight, iconWidthHeight, iconWidthHeight, iconWidthHeight };
+  #define ICON(idNumber, list) ITEM(idNumber, list, .rounding = 2.0f, .desiredSize = iconDesiredSize,\
+    .sizingFlags = (Component::SizingFlags)(Component::GrowableY | Component::GrowableX))
+
+    inlineGroup.addChildComponent(ICON(kCopyNormalisedValue, options));
+    inlineGroup.addChildComponent(ICON(kCopyValue, options));
+    inlineGroup.addChildComponent(ICON(kPasteValue, options));
     if (controlFlags.canInputValue)
     {
-      inlineGroup.addChildComponent(ICON(kManualEntry));
+      inlineGroup.addChildComponent(ICON(kManualEntry, options));
     }
 
   #undef ICON
   #undef TEXT_ITEM
   #undef ITEM
-
+    
+    controlFlags.isInModalState = true;
     selector->list = &options;
-    selector->skinOverride = skinOverride;
+    selector->skinOverride = getSkinOverride();
     selector->callback = [this](PopupSelector *, PopupItem *selectedItem)
-    { handleControlPopupResult(this, selectedItem); };
-    selector->cancel = {};
+    { handleControlPopupResult(this, selectedItem); controlFlags.isInModalState = false; };
+    selector->cancel = [this](PopupSelector *) { controlFlags.isInModalState = false; };
     selector->summon(this, Placement::custom, position);
   }
 
@@ -476,7 +649,7 @@ namespace Interface
     if (details.scale == Framework::ParameterScale::Toggle)
     {
       bool boolean = ::round(valueToConvert) != 0.0;
-      outString.copy({ (boolean) ? "On" : "Off", (boolean) ? sizeof("On") : sizeof("Off") });
+      outString.copy((boolean) ? utils::string_view{ "On" } : utils::string_view{ "Off" });
       return;
     }
 
@@ -634,8 +807,8 @@ namespace Interface
     }
     else if (result >= kMappingList)
     {
-      bool isUnmapping = result % 2 != kMappingList % 2;
-      int index = (result - kMappingList) / 2;
+      bool isUnmapping = isUnmappingParameter(result);
+      usize index = getParameterIndexFromId(result);
 
       // if negative we unmap the current parameter there
       if (isUnmapping)

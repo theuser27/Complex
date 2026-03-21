@@ -132,15 +132,15 @@ namespace Interface
       Rectangle<i32> areaRelativeToSource = {}) const
     {
       areaRelativeToSource = (areaRelativeToSource.isEmpty()) ? 
-        Rectangle{ source->bounds.w, source->bounds.h } : areaRelativeToSource;
-      return Rectangle{ getRelativePoint(source, areaRelativeToSource.getPosition()),
-        areaRelativeToSource.w, areaRelativeToSource.h };
+        Rectangle{ 0, 0, source->bounds.w, source->bounds.h } : areaRelativeToSource;
+      auto [x, y] = getRelativePoint(source, areaRelativeToSource.getPosition());
+      return Rectangle{ x, y, areaRelativeToSource.w, areaRelativeToSource.h };
     }
 
     bool contains(Point<i32> parentPoint) const { return getLocalBounds().contains(parentPoint); }
     bool contains(Point<float> parentPoint) const { return contains(parentPoint.toInt()); }
 
-    Component *getComponentAt(i32 x, i32 y, bool onlyClickable = false);
+    Component *getComponentAt(i32 x, i32 y, bool onlyClickable = false, bool recursive = true);
     Component *
     getComponentAt(Point<i32> position, bool onlyClickable = false) 
     { return getComponentAt(position.x, position.y, onlyClickable); }
@@ -202,6 +202,8 @@ namespace Interface
     virtual bool handleCommandMessage([[maybe_unused]] u64 commandId, 
       [[maybe_unused]] utils::whatever<64> extraData = {}) { return false; }
 
+    Skin::Override getSkinOverride() const;
+
     void doRenderChildren(OpenGlWrapper &openGl);
     void doRender(OpenGlWrapper &openGl);
     void renderScrollbars(OpenGlWrapper &openGl, float scrollHoverIncrement);
@@ -211,10 +213,10 @@ namespace Interface
 
     Rectangle<i32> bounds{};
 
-    Component *parent = nullptr;
-    Component *children = nullptr;
-    Component *previous = nullptr;
-    Component *next = nullptr;
+    Component *parent{};
+    Component *children{};
+    Component *previous{};
+    Component *next{};
 
     //i8 layerIndex = 0;
     Skin::Override skinOverride = Skin::kUseParentOverride;
@@ -251,7 +253,7 @@ namespace Interface
 
     // returns width/height min and max sizes depending on isCalculatingVertical
     // can return -1 to use the calculations in from the underlying algorithm
-    Range<i32> (*overrideDimensions)(Component *c, bool isCalculatingVertical);
+    Range<i32> (*overrideDimensions)(Component *c, bool isCalculatingVertical){};
 
     Point<i32> scrollOffset{};
     Area<i32> scrollableArea{};
@@ -262,13 +264,13 @@ namespace Interface
     // support for animated positions
     Point<i32> nextPosition{};
     Point<i32> previousPosition{ -1, -1 };
-    u16 distanceToNextPositionRatio = 0;
+    u16 distanceToNextPositionRatio{};
 
     // support for animated shrinking and alpha fade when made invisible
     // until it reaches utils::max_limit<u16> the component is in a grace period 
     // where it will continue to have its size and position calculated 
     // @see isStillVisible
-    u16 fadeawayRatio = 0;
+    u16 fadeawayRatio{};
 
     // support for animated scroll shrinking when not/hovered
     Range<u16> scrollWidthsRatio{};

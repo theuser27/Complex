@@ -1415,7 +1415,7 @@ puglGetClipboard(PuglView* const view,
 
 PuglStatus
 puglSetClipboard(PuglView* const   view,
-                 const char* const type,
+                 const char*       type,
                  const void* const data,
                  const size_t      len)
 {
@@ -1425,6 +1425,8 @@ puglSetClipboard(PuglView* const   view,
   if (st) {
     return st;
   }
+
+  type = (type) ? type : "text/plain";
 
   if (!!strcmp(type, "text/plain")) {
     return PUGL_UNSUPPORTED;
@@ -1436,7 +1438,7 @@ puglSetClipboard(PuglView* const   view,
 
   // Measure string and allocate global memory for clipboard
   const char* str  = (const char*)data;
-  const int   wlen = MultiByteToWideChar(CP_UTF8, 0, str, -1, NULL, 0);
+  const int   wlen = MultiByteToWideChar(CP_UTF8, 0, str, -1, NULL, 0) - 1;
   HGLOBAL     mem =
     GlobalAlloc(GMEM_MOVEABLE, (size_t)(wlen + 1) * sizeof(wchar_t));
   if (!mem) {

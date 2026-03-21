@@ -83,7 +83,7 @@ namespace Interface
 
     if (!text.empty())
     {
-      renderText(text, font, bounds.withZeroOrigin(), 
+      renderText(text, font, bounds.withZeroOrigin().toFloat(),
         openGl.cache, getColour(textColour, this));
 
       //nvgBeginPath(openGl);

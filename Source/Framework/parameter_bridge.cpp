@@ -104,28 +104,20 @@ namespace Framework
     return kDefaultParameterValue;
   }
 
-  utils::string ParameterBridge::getName() const
+  void ParameterBridge::getName(utils::string &outString) const
   {
     // this is hacky i know but there's no way to declare the atomic mutable inside the pair
     utils::ScopedLock guard{ const_cast<satomi::atomic<bool> &>(name_.first), utils::WaitMechanism::Spin };
 
     if (parameterLinkPointer_.load(satomi::memory_order_acquire))
-      return name_.second.clone();
-
-    auto index = name_.second.find(" ");
-    return name_.second.clone(0, index);
-  }
-
-  utils::string ParameterBridge::getName(int maximumStringLength) const
-  {
-    // this is hacky i know but there's no way to declare the atomic mutable inside the pair
-    utils::ScopedLock guard{ const_cast<satomi::atomic<bool> &>(name_.first), utils::WaitMechanism::Spin };
-
-    if (parameterLinkPointer_.load(satomi::memory_order_acquire))
-      return name_.second.clone(0, maximumStringLength);
-
-    auto index = name_.second.find(" ");
-    return name_.second.clone(0, (index > maximumStringLength) ? maximumStringLength : index);
+    {
+      outString.copy(name_.second);
+    }
+    else
+    {
+      auto index = name_.second.find(" ");
+      outString.copy({ name_.second, 0, index });
+    }
   }
 
   void ParameterBridge::getName(char *buffer, usize maximumStringLength) const
@@ -136,13 +128,6 @@ namespace Framework
     usize size = utils::min(name_.second.size(), maximumStringLength - 1);
     ::memcpy(buffer, name_.second.data(), size);
     buffer[size] = '\0';
-  }
-
-  utils::string ParameterBridge::getLabel() const
-  {
-    if (auto pointer = parameterLinkPointer_.load(satomi::memory_order_acquire))
-      return utils::string{ state->miscStorage, pointer->parameter->getParameterDetails().displayUnits };
-    return {};
   }
 
   void ParameterBridge::getText(float value, char *buffer, usize maximumStringLength) const

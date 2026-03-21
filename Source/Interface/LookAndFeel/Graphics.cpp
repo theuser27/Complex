@@ -114,6 +114,7 @@ namespace Interface
     nvgFontFaceId(context, id);
     nvgFontSize(context, height);
     nvgTextLetterSpacing(context, kerning);
+    nvgTextLineHeight(context, lineHeight / height);
     nvgTextAlign(context, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
   }
 
@@ -190,37 +191,64 @@ namespace Interface
 
   namespace Paths
   {
-    void pasteValueIcon()
+  #define MOVETO(x, y) nvgMoveTo(g, (x) * proportionalX, (y) * proportionalY)
+  #define LINETO(x, y) nvgLineTo(g, (x) * proportionalX, (y) * proportionalY)
+  #define QUADTO(cx, cy, x, y) nvgQuadTo(g, (cx) * proportionalX, (cy) * proportionalY, (x) * proportionalX, (y) * proportionalY)
+
+    utils::pair<DrawingFn *, Rectangle<i32>>
+    pasteValueIcon()
     {
-      //static const Shape shape = []()
-      //{
-      //  Path one;
-      //  one.startNewSubPath({ 4.5f, 11.5f });
-      //  one.quadraticTo({ 3.0f, 12.0f }, { 3.5f, 10.5f });
-      //  one.lineTo({ 3.5f, 4.5f });
-      //  one.quadraticTo({ 3.0f, 3.0f }, { 4.5f, 3.5f });
-      //  one.lineTo({ 5.5f, 3.5f });
+      static constexpr i32 kWidth = 16;
+      static constexpr i32 kHeight = 16;
 
-      //  one.startNewSubPath({ 6.0f, 4.5f });
-      //  one.quadraticTo({ 5.0f, 5.0f }, { 5.5f, 4.0f });
-      //  one.lineTo({ 5.5f, 3.0f });
-      //  one.quadraticTo({ 5.0f, 2.0f }, { 6.0f, 2.5f });
-      //  one.lineTo({ 8.0f, 2.5f });
-      //  one.quadraticTo({ 9.0f, 2.0f }, { 8.5f, 3.0f });
-      //  one.lineTo({ 8.5f, 4.0f });
-      //  one.quadraticTo({ 9.0f, 5.0f }, { 8.0f, 4.5f });
-      //  one.closeSubPath();
+      return
+      {
+        [](Graphics &g, utils::span<const Colour> colours, Rectangle<float> bounds, float strokeWidth)
+        {
+          COMPLEX_ASSERT(colours.size() >= 1);
+          COMPLEX_ASSERT(bounds.w == bounds.h);
 
-      //  one.startNewSubPath({ 8.5f, 3.5f });
-      //  one.lineTo({ 9.5f, 3.5f });
-      //  one.quadraticTo({ 11.0f, 3.0f }, { 10.5f, 4.5f });
+          float proportionalX = bounds.w / kWidth;
+          float proportionalY = bounds.h / kHeight;
 
-      //  one.addRoundedRectangle(juce::Rectangle{ 6.5f, 6.5f, 6.0f, 7.0f }, 1.5f);
+          nvgTranslate(g, ::floorf(bounds.x), ::floorf(bounds.y));
+          nvgStrokeWidth(g, strokeWidth);
+          nvgStrokeColor(g, colours[0]);
 
-      //  Shape result;
-      //  result.paths.emplace_back(COMPLEX_MOVE(one), Shape::Stroke, juce::Colour{});
-      //  return result;
-      //}();
+          nvgBeginPath(g);
+          MOVETO(4.5f, 11.5f);
+          QUADTO(3.0f, 12.0f, 3.5f, 10.5f);
+          LINETO(3.5f, 4.5f);
+          QUADTO(3.0f, 3.0f, 4.5f, 3.5f);
+          LINETO(5.5f, 3.5f);
+          nvgStroke(g);
+
+          nvgBeginPath(g);
+          MOVETO(6.0f, 4.5f);
+          QUADTO(5.0f, 5.0f, 5.5f, 4.0f);
+          LINETO(5.5f, 3.0f);
+          QUADTO(5.0f, 2.0f, 6.0f, 2.5f);
+          LINETO(8.0f, 2.5f);
+          QUADTO(9.0f, 2.0f, 8.5f, 3.0f);
+          LINETO(8.5f, 4.0f);
+          QUADTO(9.0f, 5.0f, 8.0f, 4.5f);
+          nvgClosePath(g);
+          nvgStroke(g);
+
+          nvgBeginPath(g);
+          MOVETO(8.5f, 3.5f);
+          LINETO(9.5f, 3.5f);
+          QUADTO(11.0f, 3.0f, 10.5f, 4.5f);
+          nvgStroke(g);
+
+          nvgBeginPath(g);
+          nvgRoundedRect(g, 6.5f * proportionalX, 6.5f * proportionalY,
+            6.0f * proportionalX, 7.0f * proportionalY, 1.5f * utils::min(proportionalX, proportionalY));
+
+          nvgStroke(g);
+        },
+        Rectangle{ 0, 0, kWidth, kHeight }
+      };
     }
 
     void enterValueIcon()
@@ -252,45 +280,102 @@ namespace Interface
 
 
 
-    void copyNormalisedValueIcon(Graphics &g, Rectangle<float> bounds,
-      float strokeWidth, utils::span<Colour> colours)
+    utils::pair<DrawingFn *, Rectangle<i32>> 
+    copyNormalisedValueIcon()
     {
-      COMPLEX_ASSERT(colours.size() >= 1);
-      COMPLEX_ASSERT(bounds.w == bounds.y);
+      static constexpr i32 kWidth = 16;
+      static constexpr i32 kHeight = 16;
 
-      static constexpr float size = 16.0f;
+      return
+      {
+        [](Graphics &g, utils::span<const Colour> colours, Rectangle<float> bounds, float strokeWidth)
+        {
+          COMPLEX_ASSERT(colours.size() >= 1);
+          COMPLEX_ASSERT(bounds.w == bounds.h);
 
+          float proportionalX = bounds.w / kWidth;
+          float proportionalY = bounds.h / kHeight;
 
+          nvgTranslate(g, ::floorf(bounds.x) + strokeWidth * 0.5f, ::floorf(bounds.y));
+          nvgStrokeWidth(g, strokeWidth);
+          nvgStrokeColor(g, colours[0]);
 
-      nvgSave(g);
+          nvgBeginPath(g);
+          MOVETO(3.0f, 6.0f);
+          LINETO(3.0f, 11.0f);
+          QUADTO(3.0f, 12.5f, 5.0f, 12.5f);
+          LINETO(9.5f, 12.5f);
+          nvgStroke(g);
 
-      nvgTranslate(g, bounds.x, bounds.y);
-      nvgStrokeWidth(g, scaleValue(strokeWidth));
-      nvgStrokeColor(g, colours[0]);
-
-      nvgBeginPath(g);
-
-      //nvgMoveTo(g, x + scale * path->pts[0], y + scale * path->pts[1]);
-
-      //static const Shape shape = []()
-      //{
-      //  juce::Path path;
-      //  path.startNewSubPath({ 3.5f, 6.0f });
-      //  path.lineTo({ 3.5f, 11.0f });
-      //  path.quadraticTo({ 3.5f, 12.5f }, { 5.0f, 12.5f });
-      //  path.lineTo({ 10.0f, 12.5f });
-
-      //  path.addRoundedRectangle(juce::Rectangle{ 5.5f, 3.5f, 6.0f, 7.0f }, 1.5f);
-      //  Shape result;
-      //  result.paths.emplace_back(COMPLEX_MOVE(path), Shape::Stroke, juce::Colour{});
-      //  return result;
-      //}();
-
-      nvgRestore(g);
+          nvgBeginPath(g);
+          nvgRoundedRect(g, 5.0f * proportionalX, 3.5f * proportionalY, 
+            6.0f * proportionalX, 7.0f * proportionalY, 1.25f * utils::min(proportionalX, proportionalY));
+          nvgStroke(g);
+        },
+        Rectangle{ 0, 0, kWidth, kHeight }
+      };
     }
 
-    void copyScaledValueIcon()
+    utils::pair<DrawingFn *, Rectangle<i32>>
+    copyScaledValueIcon()
     {
+      static constexpr i32 kWidth = 16;
+      static constexpr i32 kHeight = 16;
+
+      return
+      {
+        [](Graphics &g, utils::span<const Colour> colours, Rectangle<float> bounds, float strokeWidth)
+        {
+          static constexpr float fStartX = 9.0f;
+          static constexpr float fStartY = 8.0f;
+          static constexpr float fWidth = 2.5f;
+          static constexpr float fHeight = 4.5f;
+          static constexpr float fRounding = 1.0f;
+
+          COMPLEX_ASSERT(colours.size() >= 2);
+          COMPLEX_ASSERT(bounds.w == bounds.h);
+
+          float proportionalX = bounds.w / kWidth;
+          float proportionalY = bounds.h / kHeight;
+
+          //bounds.x += (::roundf(bounds.x) == bounds.x) ? 0.5f : 0.0f;
+
+          nvgTranslate(g, ::floorf(bounds.x) + strokeWidth * 0.5f, ::floorf(bounds.y));
+          nvgStrokeWidth(g, strokeWidth);
+          nvgStrokeColor(g, colours[0]);
+
+          nvgBeginPath(g);
+          MOVETO(3.0f, 6.0f);
+          LINETO(3.0f, 11.0f);
+          QUADTO(3.0f, 12.5f, 5.0f, 12.5f);
+          LINETO(9.5f, 12.5f);
+          nvgStroke(g);
+
+          nvgBeginPath(g);
+          MOVETO(7.5f, 3.5f);
+          LINETO(6.5f, 3.5f);
+          QUADTO(5.0f, 3.5f, 5.0f, 4.5f);
+          LINETO(5.0f, 9.5f);
+          QUADTO(5.0f, 10.5f, 6.5f, 10.5f);
+          LINETO(10.5f, 10.5f);
+          QUADTO(11.0f, 10.5f, 11.0f, 9.5f);
+          LINETO(11.0f, 8.5f);
+          nvgStroke(g);
+
+          nvgStrokeColor(g, colours[1]);
+
+          nvgBeginPath(g);
+          MOVETO(fStartX, fStartY);
+          LINETO(fStartX, fStartY - (fHeight - fRounding));
+          QUADTO(fStartX, fStartY - fHeight, fStartX + fRounding, fStartY - fHeight);
+          LINETO(fStartX + fWidth, fStartY - fHeight);
+          MOVETO(fStartX, 5.5f);
+          LINETO(fStartX + fWidth, 5.5f);
+          nvgStroke(g);
+        },
+        Rectangle{ 0, 0, kWidth, kHeight }
+      };
+
       //static const Shape shape = []()
       //{
       //  static constexpr float fStartX = 9.5f;
@@ -466,33 +551,33 @@ namespace Interface
       static constexpr i32 kHeight = 12;
       return 
       {
-        [](Graphics &g, utils::span<Colour> colours, Rectangle<float> bounds, float strokeWidth)
+        [](Graphics &g, utils::span<const Colour> colours, Rectangle<float> bounds, float strokeWidth)
         {
           static constexpr float kAngleStart = -0.30f * kPi;
           static constexpr float kAngleEnd = -0.70f * kPi;
 
-          float propotionalX = bounds.w / kWidth;
-          float propotionalY = bounds.h / kHeight;
+          float proportionalX = bounds.w / kWidth;
+          float proportionalY = bounds.h / kHeight;
 
-          //fillRect(g, bounds);
-
+          nvgTranslate(g, bounds.x, bounds.y);
           nvgStrokeColor(g, colours[0]);
           nvgStrokeWidth(g, strokeWidth);
 
           nvgBeginPath(g);
-          nvgMoveTo(g, bounds.x + 5.5f * propotionalX, bounds.y);
-          nvgLineTo(g, bounds.x + 5.5f * propotionalX, bounds.y + 5.0f * propotionalY);
-
+          MOVETO(5.5f, 0.0f);
+          LINETO(5.5f, 5.0f);
           nvgStroke(g);
 
           nvgBeginPath(g);
-          nvgArc(g, bounds.x + 5.5f * propotionalX, bounds.y + 6.5f * propotionalY, 
-            5.0f * utils::min(propotionalX, propotionalY), kAngleStart, kAngleEnd, NVG_CW);
-
+          nvgArc(g, 5.5f * proportionalX, 6.5f * proportionalY, 
+            5.0f * utils::min(proportionalX, proportionalY), kAngleStart, kAngleEnd, NVG_CW);
           nvgStroke(g);
         },
-        Rectangle{ kWidth, kHeight }
+        Rectangle{ 0, 0, kWidth, kHeight }
       };
     }
+
+  #undef LINETO
+  #undef QUADTO
   }
 }
