@@ -12,8 +12,7 @@
 
 #include "../LookAndFeel/shader_types.hpp"
 #include "../LookAndFeel/Graphics.hpp"
-#include "../LookAndFeel/Miscellaneous.hpp"
-#include "../LookAndFeel/BaseComponent.hpp"
+#include "../LookAndFeel/Component.hpp"
 
 namespace Interface
 {

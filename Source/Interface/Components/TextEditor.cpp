@@ -7,7 +7,7 @@
 #include "Framework/parameter_bridge.hpp"
 #include "Plugin/Renderer.hpp"
 #include "../LookAndFeel/ui_constants.hpp"
-#include "BaseControl.hpp"
+#include "Control.hpp"
 
 namespace Interface
 {
@@ -39,7 +39,7 @@ namespace Interface
   {
     desiredSize.x = kPrimaryTextLineHeight;
     desiredSize.y = desiredSize.x;
-    overrideDimensions = getTextEditorTextMetrics;
+    overrideSize = getTextEditorTextMetrics;
   }
 
   bool
@@ -132,14 +132,14 @@ namespace Interface
 
   Label::Label()
   {
-    overrideDimensions = getLabelTextMetrics;
+    overrideSize = getLabelTextMetrics;
   }
 
   SliderValueEditor::SliderValueEditor()
   {
     font = FontId::DDinType;
 
-    overrideDimensions = [](Component *c, bool isCalculatingVertical)
+    overrideSize = [](Component *c, bool isCalculatingVertical)
     {
       auto *self = (SliderValueEditor *)c;
 

@@ -4,7 +4,7 @@
 #pragma once
 
 #include "memory.hpp"
-#include "sync_primitives.hpp"
+#include "utils.hpp"
 #include "simd_utils.hpp"
 
 namespace Framework

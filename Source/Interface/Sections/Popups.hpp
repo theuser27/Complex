@@ -4,8 +4,8 @@
 #pragma once
 
 #include "../LookAndFeel/Graphics.hpp"
-#include "../LookAndFeel/BaseComponent.hpp"
-#include "../Components/BaseControl.hpp"
+#include "../LookAndFeel/Component.hpp"
+#include "../Components/Control.hpp"
 
 namespace Interface
 {
@@ -19,7 +19,6 @@ namespace Interface
     void reinitialise();
 
     bool render(OpenGlWrapper &openGl) override;
-    bool handleCommandMessage(u64 commandId, utils::whatever<64>) override;
 
     void setContent(Component *sourceComponent, 
       utils::string_view displayText, Placement relativePlacement)
@@ -45,6 +44,8 @@ namespace Interface
     bool isControl = false;
     Placement placement{};
     Component *source{};
+
+    utils::sll<CommandMessages::HandleMessageFn *> popupDisplayHandler{};
   };
 
   class PopupSelector;
@@ -76,10 +77,9 @@ namespace Interface
 
     bool mouseEnter(const MouseEvent &e) override;
     bool mouseExit(const MouseEvent &e) override;
-    bool handleCommandMessage(u64 commandId, utils::whatever<64>) override;
 
     void summonChildList(PopupItem *summoningItem, 
-      const MouseEvent &summoningMouseEvent);
+      const MouseEvent &summoningMouseEvent, bool force = false);
 
     bool (*draw)(OpenGlWrapper &openGl, PopupList *self){};
 
@@ -92,6 +92,8 @@ namespace Interface
     Point<i32> sublistAnchorPoint{};
     double lastSummonTime{};
     MouseEvent lastMouseEvent{};
+
+    utils::sll<CommandMessages::HandleMessageFn *> popupListHandler{};
   };
 
   struct PopupItem : public Component
@@ -107,6 +109,8 @@ namespace Interface
     bool mouseDown(const MouseEvent &e) override;
     bool mouseUp(const MouseEvent &e) override;
     bool render(OpenGlWrapper &openGl) override;
+
+    Colour getHighlightColour() { return getColour(Skin::kWidgetPrimary1, this).darker(0.8f); }
 
     i32 id = 0;
     i32 shortcutKeyCode = 0;
@@ -128,13 +132,10 @@ namespace Interface
 
     void reinitialise();
 
-    bool keyPressed(const KeyPress &key) override;
     bool handleFocus(bool hasFocus, FocusChange focusChange, Component *correspondent) override;
-    bool handleCommandMessage(u64 commandId, utils::whatever<64> extraData) override;
+    bool keyPressed(const KeyPress &key) override;
 
     void newSelection(PopupItem *entry);
-    void summonNewPopupList(Rectangle<int> sourceBounds, PopupItem *items);
-    void closeSubList(PopupItem *items);
 
     void resetState();
     void summon(Component *summoningComponent, 
@@ -151,6 +152,19 @@ namespace Interface
     Placement lastPlacement = Placement::right;
     PopupItem *deepestHoveredItem{};
     PopupList *selectedList{};
+
+    utils::sll<CommandMessages::HandleMessageFn *> popupSelectorHandler{};
   };
 
+  struct OptionPopupItem : public PopupItem
+  {
+    OptionPopupItem();
+
+    bool render(OpenGlWrapper &openGl) override;
+
+    utils::pair<utils::string_view, bool> getTextAndWrap();
+
+    static PopupList *createPopupList(PopupSelector *selector,
+      utils::string_view title, Framework::IndexedData *options);
+  };
 }

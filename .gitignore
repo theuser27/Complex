@@ -2,6 +2,6 @@
 .DS_Store
 .ideas
 .clangd
-build_test
 Build
+build
 Source/Data

@@ -9,7 +9,7 @@ namespace Interface
   inline constexpr int kScrollbarMaxThickness = 8;
 
   inline constexpr int kPrimaryTextLineHeight = 16;
-  inline constexpr int kSecondaryTextLineHeight = 12;
+  inline constexpr int kSecondaryTextLineHeight = 14;
 
   inline constexpr int kDefaultActivatorSize = 12;
 
@@ -61,10 +61,15 @@ namespace Interface
   inline constexpr int kMinHeight = kHeaderHeight + kMainVisualiserHeight +
     kVGlobalMargin + kEffectsStateMinHeight + kLaneToBottomSettingsMargin + kFooterHeight;
 
-  inline constexpr int kMinPopupWidth = 150;
+  inline constexpr int kPopupMinWidth = 150;
   inline constexpr int kPopupToElement = 8;
+
   inline constexpr int kPopupSubwindowArrow = 4;
   inline constexpr int kPopupSubwindowArrowMargin = 16;
   inline constexpr int kPopupSubwindowArrowWidth = 4;
+
+  inline constexpr int kPopupHorizontalPadding = 12;
+  inline constexpr int kPopupVerticalPrimaryPadding = 4;
+  inline constexpr int kPopupVerticalSecondaryPadding = 2;
 
 }

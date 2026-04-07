@@ -11,7 +11,7 @@
 #pragma once
 
 #include "Framework/simd_buffer.hpp"
-#include "../LookAndFeel/BaseComponent.hpp"
+#include "../LookAndFeel/Component.hpp"
 
 namespace Interface
 {

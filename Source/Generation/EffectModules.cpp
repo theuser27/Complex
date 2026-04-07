@@ -1,10 +1,11 @@
 
 // Created: 2021-07-27 00:30:19
 
-#include "EffectModules.hpp"
+#include "Effects.hpp"
 
 #include "Framework/simd_math.hpp"
 #include "Framework/parameter_value.hpp"
+#include "Framework/parameter_bridge.hpp"
 #include "Plugin/Complex.hpp"
 
 namespace Generation
@@ -19,9 +20,9 @@ namespace Generation
     return anew(module->arena, EffectModule::EffectData, {});
   }
 
-#define EFFECT_VTABLE(name, creationFunction) static void(*const vtable##name[])() = { (void (*)())creationFunction, (void (*)())run##name }
-#define COMPLEX_STRUCTURE_EFFECT(nameString, idNumber, vtableArray, ...) (*new(arena->insert(arena, sizealignof(Framework::ProcessorMetadata))) \
-  ProcessorMetadata{ .flags = ProcessorMetadata::ProcessorTag, .id = idNumber, .name = nameString __VA_OPT__(,) __VA_ARGS__, .vtable = vtableArray }).computeCounts()
+#define EFFECT_VTABLE(name, creationFunction, createUIFunction) static void(*const vtable##name[])() = { (void (*)())creationFunction, (void (*)())run##name, (void (*)())createUIFunction }
+#define COMPLEX_STRUCTURE_EFFECT(nameString, idNumber, vtableArray, ...) (*anew(arena, Framework::ProcessorMetadata, \
+  { .flags = ProcessorMetadata::ProcessorTag, .id = idNumber, .name = nameString __VA_OPT__(,) __VA_ARGS__, .vtable = vtableArray })).computeCounts()
 
   static Framework::ParameterValue *
   getParameter(EffectModule::EffectData *effectData, uuid id)
@@ -37,7 +38,7 @@ namespace Generation
 
   namespace Utility
   {
-    //static constexpr uuid id = 1759541555994;
+    inline constexpr uuid id = 1759541555994;
 
     //// Parameters
     //
@@ -51,8 +52,10 @@ namespace Generation
     //
     // TODO:
     // idea: mix 2 input signals (left and right/right and left channels)
-    // idea: flip the phases, panning
-    //
+    // idea: flip the phases, panning, LR <-> MS conversion
+    // idea: gain matching instead of it being a lane option
+    //       gain match based on a set db value
+    // 
     //void run(EffectModule *effectModule, EffectModule::EffectData *effectData,
     //  Framework::ComplexDataSource &source,
     //  Framework::SimdBuffer * &destination,
@@ -60,19 +63,19 @@ namespace Generation
     //{
     //}
 
-    static Framework::IndexedData &initialiseTypeStructure(Framework::PluginStructure &structure)
+    static Framework::IndexedData *initialiseTypeStructure(Framework::PluginStructure &structure)
     {
       using namespace Framework;
 
       auto *arena = structure.getNewArena(128);
 
-      return COMPLEX_STRUCTURE_INDEXED_DATA(.displayName = "Utility", .count = 0);
+      return COMPLEX_STRUCTURE_INDEXED_DATA(.displayName = "Utility", .id = id, .valueCount = 0);
     }
   }
 
   namespace Filter
   {
-    //static constexpr uuid id = 1759541579349;
+    inline constexpr uuid id = 1759541579349;
 
     COMPLEX_ENUM(Types,
       (Normal, 1758738064349),
@@ -139,16 +142,16 @@ namespace Generation
     //
     // TODO: write a constexpr generator for all of the weird mask types (triangle, saw, square, etc)
 
-    static Framework::IndexedData &initialiseTypeStructure(Framework::PluginStructure &structure)
+    static Framework::IndexedData *initialiseTypeStructure(Framework::PluginStructure &structure)
     {
       using namespace Framework;
 
-      EFFECT_VTABLE(Normal, createEffectGeneric);
-      EFFECT_VTABLE(Gate, createEffectGeneric);
+      EFFECT_VTABLE(Normal, createEffectGeneric, nullptr);
+      EFFECT_VTABLE(Gate, createEffectGeneric, nullptr);
 
       auto *arena = structure.getNewArena(COMPLEX_KB(4));
 
-      auto &group = COMPLEX_STRUCTURE_INDEXED_DATA(.displayName = "Filter").addChildren(
+      return COMPLEX_STRUCTURE_INDEXED_DATA(.displayName = "Filter", .id = id)->addChildren({{
         COMPLEX_STRUCTURE_INDEXED_DATA(.displayName = "Normal", .id = Types::Normal, .flags = IndexedData::ProcessorFlag,
           .processorMetadata = COMPLEX_STRUCTURE_EFFECT("Normal", Types::Normal, vtableNormal, .parameters =
             (
@@ -174,23 +177,21 @@ namespace Generation
                 " dB", ParameterDetails::Modulatable | ParameterDetails::Automatable | ParameterDetails::Stereo),
               COMPLEX_STRUCTURE_PARAMETER("Mode", Gate::Mode,
                 {
-                  .options = COMPLEX_STRUCTURE_INDEXED_DATA().addChildren(
+                  .options = COMPLEX_STRUCTURE_INDEXED_DATA()->addChildren({{
                     COMPLEX_STRUCTURE_INDEXED_DATA(.displayName = "Decibels", .id = GateMode::Decibels),
-                    COMPLEX_STRUCTURE_INDEXED_DATA(.displayName = "Rank", .id = GateMode::Rank)),
+                    COMPLEX_STRUCTURE_INDEXED_DATA(.displayName = "Rank", .id = GateMode::Rank) }}),
                   .defaultOptionId = GateMode::Decibels
                 }, ParameterScale::Indexed, {}, ParameterDetails::Modulatable | ParameterDetails::Automatable | ParameterDetails::Extensible)
             )
           )
         )
-      );
-
-      return group;
+      }});
     }
   }
 
   namespace Dynamics
   {
-    //static constexpr uuid id = 1759541589473;
+    inline constexpr uuid id = 1759541589473;
 
     COMPLEX_ENUM(Types,
       (Contrast, 1759688533355),
@@ -234,16 +235,16 @@ namespace Generation
     // specops noise filter/focus, thinner
     // spectral compander, gate (threshold), clipping
 
-    static Framework::IndexedData &initialiseTypeStructure(Framework::PluginStructure &structure)
+    static Framework::IndexedData *initialiseTypeStructure(Framework::PluginStructure &structure)
     {
       using namespace Framework;
 
-      EFFECT_VTABLE(Contrast, createEffectGeneric);
-      EFFECT_VTABLE(Clip, createEffectGeneric);
+      EFFECT_VTABLE(Contrast, createEffectGeneric, nullptr);
+      EFFECT_VTABLE(Clip, createEffectGeneric, nullptr);
 
       auto *arena = structure.getNewArena(COMPLEX_KB(1));
 
-      auto &group = COMPLEX_STRUCTURE_INDEXED_DATA(.displayName = "Dynamics").addChildren(
+      return COMPLEX_STRUCTURE_INDEXED_DATA(.displayName = "Dynamics", .id = id)->addChildren({{
         COMPLEX_STRUCTURE_INDEXED_DATA(.displayName = "Contrast", .id = Types::Contrast, .flags = IndexedData::ProcessorFlag,
           .processorMetadata = COMPLEX_STRUCTURE_EFFECT("Contrast", Types::Contrast, vtableContrast, .parameters =
             (
@@ -260,16 +261,14 @@ namespace Generation
             )
           )
         )
-      );
-
-      return group;
+      }});
     }
 
   }
 
   namespace Phase
   {
-    //static constexpr uuid id = 1759541605615;
+    inline constexpr uuid id = 1759541605615;
 
     COMPLEX_ENUM(Types,
       (Shift, 1759688567995),
@@ -297,15 +296,15 @@ namespace Generation
     // phase filter - filtering based on phase
     // mfreeformphase impl
 
-    static Framework::IndexedData &initialiseTypeStructure(Framework::PluginStructure &structure)
+    static Framework::IndexedData *initialiseTypeStructure(Framework::PluginStructure &structure)
     {
       using namespace Framework;
 
-      EFFECT_VTABLE(Shift, createEffectGeneric);
+      EFFECT_VTABLE(Shift, createEffectGeneric, nullptr);
 
       auto *arena = structure.getNewArena(COMPLEX_KB(4));
 
-      auto &group = COMPLEX_STRUCTURE_INDEXED_DATA(.displayName = "Phase").addChildren(
+      return COMPLEX_STRUCTURE_INDEXED_DATA(.displayName = "Phase", .id = id)->addChildren({{
         COMPLEX_STRUCTURE_INDEXED_DATA(.displayName = "Shift", .id = Types::Shift, .flags = IndexedData::ProcessorFlag,
           .processorMetadata = COMPLEX_STRUCTURE_EFFECT("Contrast", Types::Shift, vtableShift, .parameters =
             (
@@ -317,24 +316,22 @@ namespace Generation
                 " hz", ParameterDetails::Modulatable | ParameterDetails::Automatable | ParameterDetails::Stereo),
               COMPLEX_STRUCTURE_PARAMETER("Slope", Shift::Slope,
                 {
-                  .options = COMPLEX_STRUCTURE_INDEXED_DATA().addChildren(
+                  .options = COMPLEX_STRUCTURE_INDEXED_DATA()->addChildren({{
                     COMPLEX_STRUCTURE_INDEXED_DATA(.displayName = "Constant", .id = SlopeOptions::Constant),
                     COMPLEX_STRUCTURE_INDEXED_DATA(.displayName = "Linear", .id = SlopeOptions::Linear),
-                    COMPLEX_STRUCTURE_INDEXED_DATA(.displayName = "Exponential", .id = SlopeOptions::Exponential)),
+                    COMPLEX_STRUCTURE_INDEXED_DATA(.displayName = "Exponential", .id = SlopeOptions::Exponential) }}),
                   .defaultOptionId = SlopeOptions::Constant
                 }, ParameterScale::Indexed, {}, ParameterDetails::Modulatable | ParameterDetails::Automatable | ParameterDetails::Extensible)
             )
           )
         )
-      );
-
-      return group;
+      }});
     }
   }
 
   namespace Pitch
   {
-    //static constexpr uuid id = 1759541664963;
+    inline constexpr uuid id = 1759541664963;
 
     COMPLEX_ENUM(Types,
       (  Resample, 1759689528336),
@@ -361,16 +358,16 @@ namespace Generation
 
     // TODO: shift, harmonic shift, harmonic repitch
 
-    static Framework::IndexedData &initialiseTypeStructure(Framework::PluginStructure &structure)
+    static Framework::IndexedData *initialiseTypeStructure(Framework::PluginStructure &structure)
     {
       using namespace Framework;
 
-      EFFECT_VTABLE(Resample, createEffectGeneric);
-      EFFECT_VTABLE(ConstShift, createEffectGeneric);
+      EFFECT_VTABLE(Resample, createEffectGeneric, nullptr);
+      EFFECT_VTABLE(ConstShift, createEffectGeneric, nullptr);
 
       auto *arena = structure.getNewArena(COMPLEX_KB(1));
 
-      auto &group = COMPLEX_STRUCTURE_INDEXED_DATA(.displayName = "Pitch").addChildren(
+      return COMPLEX_STRUCTURE_INDEXED_DATA(.displayName = "Pitch", .id = id)->addChildren({{
         COMPLEX_STRUCTURE_INDEXED_DATA(.displayName = "Resample", .id = Types::Resample, .flags = IndexedData::ProcessorFlag,
           .processorMetadata = COMPLEX_STRUCTURE_EFFECT("Resample", Types::Resample, vtableResample, .parameters =
             (
@@ -389,30 +386,28 @@ namespace Generation
             )
           )
         )
-      );
-
-      return group;
+      }});
     }
 
   }
 
   namespace Stretch
   {
-    //static constexpr uuid id = 1759541679484;
+    inline constexpr uuid id = 1759541679484;
 
     // specops geometry
   }
 
   namespace Warp
   {
-    //static constexpr uuid id = 1759541685084;
+    inline constexpr uuid id = 1759541685084;
 
     // vocode, harmonic match, cross/warp mix
   }
 
   namespace Destroy
   {
-    //static constexpr uuid id = 1759541690760;
+    inline constexpr uuid id = 1759541690760;
 
     COMPLEX_ENUM(Types,
       (Reinterpret, 1759689938250),
@@ -440,15 +435,15 @@ namespace Generation
     // bin sorting - by amplitude, phase
     // TODO: freezer and glitcher classes
 
-    static Framework::IndexedData &initialiseTypeStructure(Framework::PluginStructure &structure)
+    static Framework::IndexedData *initialiseTypeStructure(Framework::PluginStructure &structure)
     {
       using namespace Framework;
 
-      EFFECT_VTABLE(Reinterpret, createEffectGeneric);
+      EFFECT_VTABLE(Reinterpret, createEffectGeneric, nullptr);
 
       auto *arena = structure.getNewArena(COMPLEX_KB(1));
 
-      auto &group = COMPLEX_STRUCTURE_INDEXED_DATA(.displayName = "Destroy").addChildren(
+      return COMPLEX_STRUCTURE_INDEXED_DATA(.displayName = "Destroy", .id = id)->addChildren({{
         COMPLEX_STRUCTURE_INDEXED_DATA(.displayName = "Reinterpret", .id = Types::Reinterpret, .flags = IndexedData::ProcessorFlag,
           .processorMetadata = COMPLEX_STRUCTURE_EFFECT("Reinterpret", Types::Reinterpret, vtableReinterpret, .parameters =
             (
@@ -456,24 +451,20 @@ namespace Generation
                 ParameterScale::SymmetricLoudness, " dB", ParameterDetails::Modulatable | ParameterDetails::Automatable | ParameterDetails::Stereo),
               COMPLEX_STRUCTURE_PARAMETER("Mapping", Reinterpret::Mapping,
                 {
-                  .options = COMPLEX_STRUCTURE_INDEXED_DATA().addChildren(
+                  .options = COMPLEX_STRUCTURE_INDEXED_DATA()->addChildren({{
                     COMPLEX_STRUCTURE_INDEXED_DATA(.displayName = "No Change", .id = ReinterpretMappingOptions::NoMapping),
                     COMPLEX_STRUCTURE_INDEXED_DATA(.displayName = "Swap Real/Imaginary", .id = ReinterpretMappingOptions::SwitchRealImag),
                     COMPLEX_STRUCTURE_INDEXED_DATA(.displayName = "Cartesian->Polar", .id = ReinterpretMappingOptions::CartToPolar),
-                    COMPLEX_STRUCTURE_INDEXED_DATA(.displayName = "Polar->Cartesian", .id = ReinterpretMappingOptions::PolarToCart)),
+                    COMPLEX_STRUCTURE_INDEXED_DATA(.displayName = "Polar->Cartesian", .id = ReinterpretMappingOptions::PolarToCart) }}),
                   .defaultOptionId = ReinterpretMappingOptions::NoMapping
                 }, ParameterScale::Indexed, {}, ParameterDetails::Modulatable | ParameterDetails::Automatable)
             )
           )
         )
-      );
-
-      return group;
+      }});
     }
   }
 
-#undef COMPLEX_STRUCTURE_GET_MEMORY
-#define COMPLEX_STRUCTURE_GET_MEMORY COMPLEX_STRUCTURE_ARENA_INSERT
 
   ///////////////////////////////////////
   //  _   _ _   _ _ _ _   _            //
@@ -1513,7 +1504,7 @@ namespace Generation
 
   EffectModule::EffectModule(utils::bumpArena *arena, Plugin::State *state,
     Framework::ProcessorMetadata *metadata, const EffectModule *other, void *serialisedSave) :
-    BaseProcessor{ arena, state, metadata, other }
+    Processor{ arena, state, metadata, other }
   {
     auto maxBinCount = state->getMaxBinCount();
     if (other)
@@ -1531,7 +1522,7 @@ namespace Generation
       for (; effect && effect->metadata->id != effectOption->processorMetadata->id; effect = effect->next) { }
 
       effects = createEffect(effectOption->processorMetadata, this, effect);
-      currentActiveEffect.store(effects, satomi::memory_order_release);
+      currentEffect.store(effects, satomi::memory_order_release);
 
       return;
     }
@@ -1549,12 +1540,12 @@ namespace Generation
 
     auto [effectOption, _] = getParameter(EffectModule::ModuleType)->getInternalValue<Framework::IndexedData>();
     effects = createEffect(effectOption->processorMetadata, this, nullptr, serialisedSave);
-    currentActiveEffect.store(effects, satomi::memory_order_release);
+    currentEffect.store(effects, satomi::memory_order_release);
   }
 
   void EffectModule::serialiseToJson(void *jsonData, utils::span<Framework::ParameterValue *>) const
   {
-    auto *effect = currentActiveEffect.load(satomi::memory_order_acquire);
+    auto *effect = currentEffect.load(satomi::memory_order_acquire);
 
     auto parametersToSerialise = utils::vector<Framework::ParameterValue *>{
       localScratch, effect->parameterCount + parameterCount };
@@ -1567,40 +1558,56 @@ namespace Generation
     for (usize i = 0; i < effect->parameterCount; (++i), (effectParameter = effectParameter->next))
       parametersToSerialise.emplaceBack(&effectParameter->object);
 
-    BaseProcessor::serialiseToJson(jsonData, parametersToSerialise);
+    Processor::serialiseToJson(jsonData, parametersToSerialise);
   }
 
   EffectModule::EffectData *
-  EffectModule::changeEffect(Framework::IndexedData *effectOption)
+  EffectModule::changeEffect(const Framework::IndexedData *effectOption)
   {
     using namespace Framework;
 
-    auto *currentEffect = currentActiveEffect.load(satomi::memory_order_acquire);
+    auto *activeEffect = currentEffect.load(satomi::memory_order_acquire);
+    if (activeEffect->metadata->id == effectOption->processorMetadata->id)
+      return activeEffect;
 
-    if (currentEffect->metadata->id == effectOption->processorMetadata->id)
-      return currentEffect;
-
+    // was effect already created?
     auto *effect = effects;
-    while (true)
+    auto *previousEffect = effect;
+    while (effect)
     {
       if (effect->metadata->id == effectOption->processorMetadata->id)
-      {
-        currentActiveEffect.store(effect, satomi::memory_order_release);
-        return effect;
-      }
-
-      if (!effect->next)
         break;
 
+      previousEffect = effect;
       effect = effect->next;
     }
+    
+    // if not, create and link it with the others
+    if (!effect)
+    {
+      effect = createEffect(effectOption->processorMetadata, this);
+      if (previousEffect)
+        previousEffect->next = effect;
+      else
+        effects = effect;
+    }
 
-    auto *newEffect = createEffect(effectOption->processorMetadata, this);
-    effect->next = newEffect;
+    // remap mapped parameters to the new effect
+    usize i = 0;
+    for (decltype(activeEffect->parameters) parameter = activeEffect->parameters, replacementParameter = effect->parameters;
+      parameter && i < activeEffect->parameterCount && i < effect->parameterCount; 
+      (parameter = parameter->next), (replacementParameter = replacementParameter->next), (++i))
+    {
+      auto *parameterLink = parameter->object.getParameterLink();
+      if (!parameterLink->hostControl)
+        continue;
+      
+      parameterLink->hostControl->resetParameterLink(replacementParameter->object.getParameterLink(), false);
+    }
 
-    currentActiveEffect.store(newEffect, satomi::memory_order_release);
+    currentEffect.store(effect, satomi::memory_order_release);
 
-    return newEffect;
+    return effect;
   }
 
   void EffectModule::processEffect(Framework::ComplexDataSource &source, u32 binCount, float sampleRate) noexcept
@@ -1611,7 +1618,7 @@ namespace Generation
     if (!getParameter(ModuleEnabled)->getInternalValue<u32>(sampleRate))
       return;
 
-    auto *effect = currentActiveEffect.load(satomi::memory_order_acquire);
+    auto *effect = currentEffect.load(satomi::memory_order_acquire);
 
     // getting exclusive access to data
     lockAtomic(dataBuffer->dataLock, false, true, WaitMechanism::Spin);
@@ -1638,7 +1645,7 @@ namespace Generation
   }
 }
 
-template<> Generation::BaseProcessor *
+template<> Generation::Processor *
 createProcessor<Generation::EffectModule>(Plugin::State *state, Framework::ProcessorMetadata *metadata, const void *copy, void *serialisedSave)
 {
   auto *arena = utils::bumpArena::createNested(state->processorStorage, COMPLEX_MB(1));
@@ -1659,13 +1666,13 @@ initialiseTypeStructure<Generation::EffectModule>(void *, Framework::PluginStruc
     (
       COMPLEX_STRUCTURE_PARAMETER("Module Type", EffectModule::ModuleType,
         {
-          .options = COMPLEX_STRUCTURE_INDEXED_DATA().addChildren(
+          .options = COMPLEX_STRUCTURE_INDEXED_DATA()->addChildren({{
             Utility::initialiseTypeStructure(structure),
             Filter::initialiseTypeStructure(structure),
             Dynamics::initialiseTypeStructure(structure),
             Phase::initialiseTypeStructure(structure),
             Pitch::initialiseTypeStructure(structure),
-            Destroy::initialiseTypeStructure(structure)),
+            Destroy::initialiseTypeStructure(structure) }}),
           .defaultOptionId = Filter::Types::Normal
         }, ParameterScale::Indexed, {}, ParameterDetails::Automatable | ParameterDetails::Extensible, UpdateFlag::AfterProcess),
       COMPLEX_STRUCTURE_PARAMETER("Module Enabled", EffectModule::ModuleEnabled, 0.0f, 1.0f, 1.0f, 1.0f,

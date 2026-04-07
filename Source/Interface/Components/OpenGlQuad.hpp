@@ -3,7 +3,7 @@
 
 #pragma once
 
-#include "../LookAndFeel/BaseComponent.hpp"
+#include "../LookAndFeel/Component.hpp"
 #include "../LookAndFeel/Shaders.hpp"
 #include "../LookAndFeel/shader_types.hpp"
 

@@ -1,21 +1,19 @@
 
 // Created: 2021-10-02 20:53:05
 
-#include "EffectsLane.hpp"
+#include "Effects.hpp"
 
-#include "Framework/sync_primitives.hpp"
 #include "Framework/circular_buffer.hpp"
 #include "Framework/simd_math.hpp"
 #include "Framework/simd_utils.hpp"
 #include "Framework/parameter_value.hpp"
 #include "Plugin/Complex.hpp"
-#include "EffectModules.hpp"
 #include "SoundEngine.hpp"
 
 namespace Generation
 {
   EffectsLane::EffectsLane(utils::bumpArena *arena, Plugin::State *state, Framework::ProcessorMetadata *metadata,
-    const EffectsLane *other, void *serialisedSave) : BaseProcessor{ arena, state, metadata, other }
+    const EffectsLane *other, void *serialisedSave) : Processor{ arena, state, metadata, other }
   {
     if (other)
       return;
@@ -349,7 +347,7 @@ namespace Generation
   }
 }
 
-template<> Generation::BaseProcessor *
+template<> Generation::Processor *
 createProcessor<Generation::EffectsLane>(Plugin::State *state, Framework::ProcessorMetadata *metadata, const void *toCopy, void *serialisedSave)
 {
   auto *arena = utils::bumpArena::createNested(state->processorStorage, COMPLEX_MB(1));
@@ -371,21 +369,21 @@ initialiseTypeStructure<Generation::EffectsLane>(void *, Framework::PluginStruct
       ParameterDetails::Modulatable | ParameterDetails::Automatable, UpdateFlag::BeforeProcess, Framework::printToggleValues),
     COMPLEX_STRUCTURE_PARAMETER("Input", EffectsLane::Input,
       {
-        .options = COMPLEX_STRUCTURE_INDEXED_DATA().addChildren(
+        .options = COMPLEX_STRUCTURE_INDEXED_DATA()->addChildren({{
           COMPLEX_STRUCTURE_INDEXED_DATA(.displayName = "Main Input", .id = EffectsLane::InputOptionsMain),
           COMPLEX_STRUCTURE_INDEXED_DATA(.displayName = "Sidechain", .id = EffectsLane::InputOptionsSidechain,
-            .dynamicUpdateUuid = ParameterChangeReason::inputSidechain),
-          COMPLEX_STRUCTURE_INDEXED_DATA(.displayName = "Lane", .id = EffectsLane::InputOptionsLane,
-            .dynamicUpdateUuid = ParameterChangeReason::laneCount)),
+            .valueCount = 0, .dynamicUpdateUuid = ParameterChangeReason::inputSidechain),
+          COMPLEX_STRUCTURE_INDEXED_DATA(.displayName = "Lanes", .id = EffectsLane::InputOptionsLane,
+            .valueCount = 0, .dynamicUpdateUuid = ParameterChangeReason::laneSources) }}),
         .defaultOptionId = EffectsLane::InputOptionsMain
       }, ParameterScale::Indexed, {}, ParameterDetails::Modulatable | ParameterDetails::Automatable | ParameterDetails::Extensible, UpdateFlag::BeforeProcess),
     COMPLEX_STRUCTURE_PARAMETER("Output", EffectsLane::Output,
       {
-        .options = COMPLEX_STRUCTURE_INDEXED_DATA().addChildren(
+        .options = COMPLEX_STRUCTURE_INDEXED_DATA()->addChildren({{
           COMPLEX_STRUCTURE_INDEXED_DATA(.displayName = "Main Output", .id = EffectsLane::OutputOptionsMain),
           COMPLEX_STRUCTURE_INDEXED_DATA(.displayName = "Sidechain", .id = EffectsLane::OutputOptionsSidechain,
-            .dynamicUpdateUuid = ParameterChangeReason::outputSidechain),
-          COMPLEX_STRUCTURE_INDEXED_DATA(.displayName = "None", .id = EffectsLane::OutputOptionsNone)),
+            .valueCount = 0, .dynamicUpdateUuid = ParameterChangeReason::outputSidechain),
+          COMPLEX_STRUCTURE_INDEXED_DATA(.displayName = "None", .id = EffectsLane::OutputOptionsNone) }}),
         .defaultOptionId = EffectsLane::OutputOptionsMain
       }, ParameterScale::Indexed, {}, ParameterDetails::Modulatable | ParameterDetails::Automatable | ParameterDetails::Extensible, UpdateFlag::BeforeProcess),
     COMPLEX_STRUCTURE_PARAMETER("Gain Matching", EffectsLane::GainMatching, 0.0f, 1.0f, 1.0f, 1.0f, ParameterScale::Toggle, {},

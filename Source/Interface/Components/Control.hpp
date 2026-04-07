@@ -5,7 +5,7 @@
 
 #include "Framework/memory.hpp"
 #include "Framework/parameter_types.hpp"
-#include "../LookAndFeel/BaseComponent.hpp"
+#include "../LookAndFeel/Component.hpp"
 #include "../LookAndFeel/Graphics.hpp"
 #include "TextEditor.hpp"
 
@@ -28,7 +28,6 @@ namespace Interface
     static constexpr float kDefaultSensitivity = 1.0f;
     static constexpr float kPopupPrimaryFontHeight = 13.0f;
     static constexpr float kPopupSecondaryFontHeight = 11.0f;
-    static constexpr int kPopupMinWidth = 150;
 
     static constexpr double kUndoTimeout = 0.5; //s
 
@@ -206,12 +205,11 @@ namespace Interface
 
     PinSlider();
 
-    bool render(OpenGlWrapper &openGl) override;
-
     bool mouseDown(const MouseEvent &e) override;
     bool mouseDrag(const MouseEvent &e) override;
 
-    double totalRange = 0.0;
+    bool render(OpenGlWrapper &openGl) override;
+
     double runningTotal = 0.0;
   };
 
@@ -235,7 +233,7 @@ namespace Interface
 
     bool mouseDown(const MouseEvent &e) override;
     bool mouseDrag(const MouseEvent &) override { return false; }
-    bool mouseUp(const MouseEvent &e) override;
+    bool mouseUp(const MouseEvent &) override { return true; }
     bool mouseWheelMove(const MouseEvent &e) override;
 
     void setExtraIcon(Paths::DrawingFn *drawFn);
@@ -257,7 +255,6 @@ namespace Interface
   class Numberbox final : public Slider
   {
   public:
-    static constexpr int kDefaultNumberBoxHeight = 16;
     static constexpr int kLabelOffset = 4;
 
     static constexpr float kTriangleWidthRatio = 0.5f;
@@ -317,6 +314,25 @@ namespace Interface
       if (modifier)
         addChildComponent(modifier);
     }
+  };
+
+  struct PinBoundsBox : public Component
+  {
+    static constexpr int kAdditionalPinWidth = 24;
+
+    PinBoundsBox();
+
+    bool render(OpenGlWrapper &openGl) override;
+
+    static void paintHighlightBox(Component *component, Graphics &g, float lowBoundValue,
+      float highBoundValue, Colour colour, Colour backgroundColour);
+
+    float rounding[4]{};
+
+    PinSlider lowBound{};
+    PinSlider highBound{};
+
+    Colour backgroundColour{};
   };
 
 }

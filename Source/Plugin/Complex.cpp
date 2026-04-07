@@ -8,11 +8,11 @@
 #include "Framework/load_save.hpp"
 #include "Framework/parameter_bridge.hpp"
 #include "Framework/parameter_value.hpp"
-#include "Generation/EffectsLane.hpp"
+#include "Generation/Effects.hpp"
 #include "Generation/SoundEngine.hpp"
 #include "Renderer.hpp"
 #include "Interface/LookAndFeel/Graphics.hpp"
-#include "Interface/LookAndFeel/BaseComponent.hpp"
+#include "Interface/LookAndFeel/Component.hpp"
 
 namespace
 {
@@ -208,10 +208,12 @@ namespace Plugin
     processorStorage = utils::bumpArena::create(COMPLEX_MB(256), COMPLEX_MB(2));
     miscStorage = utils::bumpArena::createNested(processorStorage, COMPLEX_KB(128));
 
-    allProcessors.data.reserve({ miscStorage, false }, 64);
+    allProcessors.data = { { miscStorage, false }, 64 };
     parameterModulators = { { miscStorage, false }, 32 };
     dynamicParameters = { { miscStorage, false }, 32 };
     workers = { { miscStorage, false }, 16 };
+    
+    createDynamicParameters();
 
     auto count = plugin->parameterCount;
     parameterBridges = utils::span{ (Framework::ParameterBridge *)
@@ -236,30 +238,6 @@ namespace Plugin
       worker.stop();
 
     utils::bumpArena::destroy(processorStorage);
-  }
-
-  void State::expandIfNecessary()
-  {
-    static constexpr usize expandAmount = 2;
-    static constexpr float expandThreshold = 0.75f;
-
-    if ((float)allProcessors.data.size() / (float)allProcessors.data.capacity() < expandThreshold)
-      return;
-
-    auto newProcessors = utils::vector_map<u64, Generation::BaseProcessor *>{};
-    newProcessors.data.reserve(allProcessors.data.size() * expandAmount);
-
-    for (auto pair : allProcessors.data)
-      new(newProcessors.data.pushBack()) decltype(pair){ COMPLEX_MOVE(pair) };
-
-    if (this != plugin->state_.get())
-    {
-      allProcessors.data.swap(newProcessors.data);
-      return;
-    }
-
-    auto guard = plugin->acquireProcessingLock(true);
-    allProcessors.data.swap(newProcessors.data);
   }
 
   Framework::ProcessorMetadata *
@@ -295,7 +273,7 @@ namespace Plugin
     return current;
   }
 
-  Generation::BaseProcessor *
+  Generation::Processor *
   State::getProcessor(u64 processorId) const
   {
     auto processorIter = allProcessors.find(processorId);
@@ -303,13 +281,82 @@ namespace Plugin
       processorIter->second : nullptr;
   }
 
-  void State::deleteProcessor(Generation::BaseProcessor *processor)
+  static void registerProcessorChangeInDynamicParameters(State *state, 
+    Generation::Processor *processor, bool isDeleted)
+  {
+    using namespace Framework;
+
+    if (isDeleted)
+    {
+      bool needsUpdate = false;
+      // delete all references pointing to this processor
+      for (auto &pair : state->dynamicOptions.data)
+      {
+        IndexedData::visit(pair.second, [&needsUpdate, processor](IndexedData &item, IndexedData *previous)
+          {
+            if (item.id != processor->metadata->id || item.stateId != processor->stateId)
+              return false;
+            
+            needsUpdate = true;
+            --item.parent->childrenCount;
+            for (auto p = item.parent; p; p = p->parent)
+              p->valueCount -= item.valueCount;
+
+            if (!previous)
+              item.parent->children = item.next;
+            else
+              previous->next = item.next;
+
+            utils::bumpArena::remove(&item);
+            return false;
+          });
+      }
+
+      if (needsUpdate)
+        state->updateAllDynamicParameters();
+
+      return;
+    }
+
+    auto *arena = state->miscStorage;
+
+    if (processor->metadata->id == Generation::Processors::EffectsLane)
+    {
+      auto iter = state->dynamicOptions.find(Framework::ParameterChangeReason::laneSources);
+      iter->second->addChildren({{ anew(arena, IndexedData,
+        { .id = processor->metadata->id, .flags = IndexedData::StateIdFlag, .stateId = processor->stateId }) }});
+
+      state->updateDynamicParameters(Framework::ParameterChangeReason::laneSources);
+    }
+  }
+
+  Generation::Processor *
+  State::createProcessor(uuid processorId, void *jsonData)
+  {
+    auto *metadata = findProcessorMetadata(processorId);
+    Generation::Processor *processor = metadata->create(this, metadata, nullptr, jsonData);
+
+    allProcessors.add(processor->stateId, processor);
+
+    // register dynamic parameters 
+    for (auto parameter = processor->parameters; parameter; parameter = parameter->next)
+      registerDynamicParameter(&parameter->object);
+
+    // check if processor creation causes dynamic parameters to change
+    registerProcessorChangeInDynamicParameters(this, processor, false);
+
+    return processor;
+  }
+
+  void State::deleteProcessor(Generation::Processor *processor)
   {
     COMPLEX_ASSERT(processor->state == this);
     COMPLEX_ASSERT(processor->stateId != 0);
 
     for (auto child = processor->children; child; child = child->next)
       deleteProcessor(child);
+
+    registerProcessorChangeInDynamicParameters(this, processor, true);
 
     // TODO: free all registered resources
     // TODO: unlink all parameters from their UIs and detach them from the parameter bridges
@@ -325,8 +372,8 @@ namespace Plugin
     utils::bumpArena::remove(processor->arena);
   }
 
-  Generation::BaseProcessor *
-  State::copyProcessor(Generation::BaseProcessor *processor)
+  Generation::Processor *
+  State::copyProcessor(Generation::Processor *processor)
   {
     utils::ScopedLock guard{};
     if (this == plugin->state_.get())
@@ -663,7 +710,7 @@ void cplug_getParameterRange(void *ptr, uint32_t paramId, double *min, double *m
     if (details.scale == Framework::ParameterScale::Indexed)
     {
       *min = 0.0;
-      *max = details.options->count - 1;
+      *max = details.options->valueCount - 1;
     }
     else
     {

@@ -1,33 +1,15 @@
-/*
-  ==============================================================================
 
-    DraggableComponent.hpp
-    Created: 10 Feb 2023 5:50:16am
-    Author:  theuser27
-
-  ==============================================================================
-*/
+// Created: 2023-02-10 05:50:16
 
 #pragma once
 
-#include "../LookAndFeel/BaseComponent.hpp"
+#include "../LookAndFeel/Component.hpp"
 
 namespace Interface
 {
-  class EffectModuleSection;
-
   class DraggableComponent final : public Component
   {
   public:
-    class Listener
-    {
-    public:
-      virtual EffectModuleSection *prepareToMove(EffectModuleSection *component, const MouseEvent &e, bool isCopying) = 0;
-      virtual void draggingComponent([[maybe_unused]] EffectModuleSection *component, [[maybe_unused]] const MouseEvent &e) { }
-      virtual void releaseComponent(EffectModuleSection *component, const MouseEvent &e) = 0;
-      virtual Point<int> mouseWheelWhileDragging(EffectModuleSection *component, const MouseEvent &e) = 0;
-    };
-
     bool render(OpenGlWrapper &openGl) override;
 
     bool mouseEnter(const MouseEvent &e) override;
@@ -37,10 +19,21 @@ namespace Interface
     bool mouseExit(const MouseEvent &e) override;
     bool mouseWheelMove(const MouseEvent &e) override;
 
-    Component *ignoreClipIncluding_ = nullptr;
-    EffectModuleSection *draggedComponent_ = nullptr;
-    EffectModuleSection *currentlyDraggedComponent_ = nullptr;
-    Point<int> initialPosition_{};
-    Listener *listener_ = nullptr;
+    bool keyPressed(const KeyPress &keyPress) override;
+
+    void insertDraggedComponent(const MouseEvent &e, bool usePlaceholder);
+
+    Component *draggedComponent{};
+    Generation::Processor *processor{};
+    Component *surfaceToLiftTo{};
+    // copy draggedComponent and return the new DraggableComponent inside
+    DraggableComponent *(*copyingDraggedComponent)(Component *c){};
+    
+    Point<i32> initialClickPosition{};
+    void (*previousOverridePosition)(Component *c){};
+    u64 previousParentProcessorStateId{};
+    usize previousIndex{};
+    Placement previousPlacement{};
+    bool isCopying{};
   };
 }

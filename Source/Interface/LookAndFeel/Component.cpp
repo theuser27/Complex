@@ -1,14 +1,14 @@
 
 // Created: 2023-12-11 16:49:17
 
-#include "BaseComponent.hpp"
+#include "Component.hpp"
 
 #include "ui_constants.hpp"
 #include "Graphics.hpp"
 #include "Plugin/Complex.hpp"
 #include "Plugin/Renderer.hpp"
-#include "Generation/BaseProcessor.hpp"
-#include "../Components/BaseControl.hpp"
+#include "Generation/Processor.hpp"
+#include "../Components/Control.hpp"
 #include "../Sections/MainInterface.hpp"
 #include "../Sections/Popups.hpp"
 
@@ -37,7 +37,7 @@ namespace Interface
     Range<i64> nonPositionedSizes{};
 
     Range<i32> sameAsSiblingsSizes{};
-    utils::vector<Component *> sameAsSiblingsComponents{};
+    utils::vector<Component *> sameAsSiblingsComponents{ localScratch };
 
     for (auto *child = children; child; child = child->next)
     {
@@ -138,9 +138,9 @@ namespace Interface
     }
 
     // the user can override the above calculations if they so choose
-    if (component->overrideDimensions)
+    if (component->overrideSize)
     {
-      auto [min, max] = component->overrideDimensions(component, isCalculatingVertical);
+      auto [min, max] = component->overrideSize(component, isCalculatingVertical);
       // returned bounds are scaled so we need to unscale them
       // in order to work with the rest of the values
       if (min >= 0)
@@ -363,6 +363,8 @@ namespace Interface
   void calculatePositions(Component *children,
     Component *component, Rectangle<i32> boundsInTarget)
   {
+    static constexpr float kAutoscrollMultiplier = 2.0f;
+
     if (!component->componentFlags.isVisible)
       return;
 
@@ -374,10 +376,14 @@ namespace Interface
         component->bounds.h - padding.getBottom() };
     }
 
+    component->scrollComponent(
+      component->autoScrollIncrements.x * uiRelated.deltaTime * kAutoscrollMultiplier,
+      component->autoScrollIncrements.y * uiRelated.deltaTime * kAutoscrollMultiplier);
+
     if (test_enum(component->sizingFlags, Component::ScrollableX))
-      boundsInTarget.x -= component->scrollOffset.x;
+      boundsInTarget.x -= (i32)::roundf(component->scrollOffset.x);
     if (test_enum(component->sizingFlags, Component::ScrollableY))
-      boundsInTarget.y -= component->scrollOffset.y;
+      boundsInTarget.y -= (i32)::roundf(component->scrollOffset.y);
 
     auto Point<i32>:: *primary = (component->componentFlags.vertical) ? &Point<i32>::y : &Point<i32>::x;
     auto Point<i32>:: *secondary = (component->componentFlags.vertical) ? &Point<i32>::x : &Point<i32>::y;
@@ -701,21 +707,7 @@ namespace Interface
   Component::mouseWheelMove(const MouseEvent &event)
   {
     auto multiplier = 20.0f * uiRelated.scale;
-    if ((sizingFlags & Component::ScrollableX) && event.wheelDeltaX != 0.0f)
-    {
-      scrollOffset.x = utils::clamp(scrollOffset.x - (i32)::roundf(event.wheelDeltaX * multiplier),
-        0, scrollableArea.w - bounds.w);
-      return true;
-    }
-
-    if ((sizingFlags & Component::ScrollableY) && event.wheelDeltaY != 0.0f)
-    {
-      scrollOffset.y = utils::clamp(scrollOffset.y - (i32)::roundf(event.wheelDeltaY * multiplier),
-        0, scrollableArea.h - bounds.h);
-      return true;
-    }
-
-    return false;
+    return scrollComponent(event.wheelDeltaX * multiplier, event.wheelDeltaY * multiplier);
   }
 
   Point<i32>
@@ -745,12 +737,16 @@ namespace Interface
   }
 
   Component *
-  Component::getComponentAt(i32 x, i32 y, bool onlyClickable, bool recursive)
+  Component::getComponentAt(i32 x, i32 y, bool onlyClickable, 
+    bool recursive, Component *startingAt)
   {
+    COMPLEX_ASSERT(!startingAt || startingAt->parent == this);
+
     if ((!onlyClickable || componentFlags.clickableChildren) && children)
     {
-      // the last child doesn't have a next, which is why this works
-      for (auto *child = children->previous; ; child = child->previous)
+      // reverse iteration over the children, starting at the end or sine user specified component
+      // this is to support getting components that might be overlapping
+      for (auto *child = ((startingAt) ? startingAt : children)->previous; ; child = child->previous)
       {
         if (child->componentFlags.isVisible && 
           child->contains(Point{ x - child->bounds.x, y - child->bounds.y }))
@@ -764,6 +760,7 @@ namespace Interface
             return result;
         }
 
+        // the last child doesn't have a next, which is why this works
         if (!child->previous->next)
           break;
       }
@@ -853,14 +850,21 @@ namespace Interface
 
   void Component::grabFocus() { grabFocusInternal(this); }
 
-  void Component::giveAwayFocus()
+  bool 
+  Component::giveAwayFocusTo(Component *component)
   {
     auto *focusedComponent = getMouseInteractions(uiRelated.renderer).focused;
-    if ((this == focusedComponent || isParentOf(focusedComponent)) && 
-      focusedComponent->handleFocus(false, FocusGivenAway, nullptr))
+    if (focusedComponent != this)
+      return false;
+
+    if (focusedComponent->handleFocus(false, Component::FocusGivenAway, component) &&
+      (!component || component->handleFocus(true, Component::FocusGivenAway, focusedComponent)))
     {
-      setFocusedComponent(uiRelated.renderer, nullptr);
+      setFocusedComponent(uiRelated.renderer, component);
+      return true;
     }
+
+    return false;
   }
 
   bool
@@ -937,7 +941,7 @@ namespace Interface
       return;
 
     if (!keepFocus)
-      childToRemove->giveAwayFocus();
+      childToRemove->giveAwayFocusTo();
 
     if (childToRemove->next)
       childToRemove->next->previous = childToRemove->previous;
@@ -965,7 +969,7 @@ namespace Interface
       return nullptr;
 
     if (!keepFocus)
-      child->giveAwayFocus();
+      child->giveAwayFocusTo();
 
     child->next->previous = child->previous;
     if (child->previous->next)
@@ -987,7 +991,7 @@ namespace Interface
 
     if (auto *focusedComponent = getMouseInteractions(uiRelated.renderer).focused)
       if (isParentOf(focusedComponent))
-        focusedComponent->giveAwayFocus();
+        focusedComponent->giveAwayFocusTo();
 
     for (Component *child = children, *nextChild = nullptr; child; child = nextChild)
     {
@@ -1019,7 +1023,7 @@ namespace Interface
 
     if (auto *focusedComponent = getMouseInteractions(uiRelated.renderer).focused)
       if (isParentOf(focusedComponent))
-        focusedComponent->giveAwayFocus();
+        focusedComponent->giveAwayFocusTo();
 
     for (auto *child = children; child; child = child->next)
       deleteComponent(child, freeChildArenas);
@@ -1063,7 +1067,7 @@ namespace Interface
         bounds.w - scaledPadding.x - scaledPadding.w, scaledPadding.h };
 
       float length = utils::max((float)bounds.w / (float)scrollableArea.w, 0.1f) * (float)scrollBounds.w;
-      float start = ((float)scrollOffset.x / (float)scrollableArea.w) * (float)scrollBounds.w;
+      float start = (scrollOffset.x / (float)scrollableArea.w) * (float)scrollBounds.w;
 
       //if ((sizingFlags & Component::ScrollIsPartOfPadding) == 0)
       //{
@@ -1082,7 +1086,7 @@ namespace Interface
         scaledPadding.w, bounds.h - scaledPadding.y - scaledPadding.h };
 
       float length = utils::max((float)bounds.h / (float)scrollableArea.h, 0.1f) * (float)scrollBounds.h;
-      float start = ((float)scrollOffset.y / (float)scrollableArea.h) * (float)scrollBounds.h;
+      float start = (scrollOffset.y / (float)scrollableArea.h) * (float)scrollBounds.h;
 
       //if ((sizingFlags & Component::ScrollIsPartOfPadding) == 0)
       //{
@@ -1113,8 +1117,74 @@ namespace Interface
       fillRect(openGl, yScrollBounds, c, yScrollBounds.w * 0.5f);
     }
   }
+  
+  void Component::addCommandMessageHandler(utils::sll<CommandMessages::HandleMessageFn *> &handler, 
+    utils::sll<CommandMessages::HandleMessageFn *> *insertBefore)
+  {
+    COMPLEX_ASSERT(!handler.next);
 
-  Skin::Override 
+    if (!commandMessageHandler)
+    {
+      commandMessageHandler = &handler;
+      return;
+    }
+
+    if (insertBefore == commandMessageHandler)
+    {
+      handler.next = commandMessageHandler;
+      commandMessageHandler = &handler;
+      return;
+    }
+
+    auto *nextFreeHandler = commandMessageHandler;
+    for (; nextFreeHandler->next && nextFreeHandler->next != insertBefore; 
+      nextFreeHandler = nextFreeHandler->next) { }
+
+    handler.next = nextFreeHandler->next;
+    nextFreeHandler->next = &handler;
+  }
+
+  void Component::removeCommandMessageHandler(utils::sll<CommandMessages::HandleMessageFn *> &handler)
+  {
+    if (commandMessageHandler == &handler)
+    {
+      commandMessageHandler = commandMessageHandler->next;
+      handler.next = {};
+      return;
+    }
+
+    for (auto *node = commandMessageHandler; node; node = node->next)
+    {
+      if (node == &handler)
+      {
+        node = node->next;
+        handler.next = {};
+        break;
+      }
+    }
+  }
+
+  bool 
+  Component::handleCommandMessage(u64 commandId, void *extraData, bool useFallbackHandler)
+  {
+    for (auto *handler = commandMessageHandler; handler; handler = handler->next)
+      if (handler->object && handler->object(this, commandId, extraData))
+        return true;
+    
+    if (useFallbackHandler && componentHandleCommandMessage(this, commandId, extraData))
+      return true;
+
+    return false;
+  }
+
+  bool 
+  Component::componentHandleCommandMessage([[maybe_unused]] Component *c, 
+    [[maybe_unused]] u64 commandId, [[maybe_unused]] void *extraData)
+  {
+    return false;
+  }
+
+  Skin::Override
   Component::getSkinOverride() const
   {
     auto *c = this;
@@ -1153,5 +1223,24 @@ namespace Interface
       return;
 
     doRenderChildren(openGl);
+  }
+
+  bool Component::scrollComponent(float x, float y)
+  {
+    if ((sizingFlags & Component::ScrollableX) && x != 0.0f)
+    {
+      scrollOffset.x = utils::clamp(scrollOffset.x - x * uiRelated.scale,
+        0.0f, (float)(scrollableArea.w - bounds.w));
+      return true;
+    }
+
+    if ((sizingFlags & Component::ScrollableY) && y != 0.0f)
+    {
+      scrollOffset.y = utils::clamp(scrollOffset.y - y * uiRelated.scale,
+        0.0f, (float)(scrollableArea.h - bounds.h));
+      return true;
+    }
+
+    return false;
   }
 }

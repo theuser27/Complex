@@ -1,7 +1,7 @@
 ﻿
 // Created: 2023-07-31 19:37:43
 
-#include "BaseControl.hpp"
+#include "Control.hpp"
 
 #include "pugl/pugl.h"
 
@@ -82,8 +82,8 @@ namespace Interface
       auto oldScaled = Framework::scaleValue(oldValue, details);
       auto newScaled = Framework::scaleValue(newValue, details);
 
-      if (Framework::getIndexedData(oldScaled, details) ==
-        Framework::getIndexedData(newScaled, details))
+      if (Framework::getOptionFromValue(oldScaled, details) ==
+        Framework::getOptionFromValue(newScaled, details))
         return false;
     }
 
@@ -105,48 +105,47 @@ namespace Interface
     {
       UndoAction::redo = redo;
       UndoAction::undo = undo;
-      UndoAction::combineActions = combineActions;
+      //UndoAction::combineActions = combineActions;
     }
 
     static void redo(UndoAction *a)
     {
       auto *self = (ParameterUpdate *)a;
 
-      self->control->setValue(self->newValue, false);
-      self->control->setValueToHost();
+      if (self->control->setValue(self->newValue, true))
+        self->control->setValueToHost();
     }
 
     static void undo(UndoAction *a)
     {
       auto *self = (ParameterUpdate *)a;
 
-      self->control->setValue(self->oldValue, false);
-      self->control->setValueToHost();
+      if (self->control->setValue(self->oldValue, false))
+        self->control->setValueToHost();
     }
 
-    static UndoAction *
-    combineActions(utils::bumpArena *, UndoAction *currentAction, UndoAction *nextAction)
-    {
-      if (currentAction->redo != nextAction->redo ||
-        currentAction->undo != nextAction->undo)
-        return nullptr;
-
-      auto *current = (ParameterUpdate *)currentAction;
-      auto *next = (ParameterUpdate *)nextAction;
-
-      if (current->control != next->control)
-        return nullptr;
-
-      current->newValue = next->newValue;
-
-      return currentAction;
-    }
+    //static UndoAction *
+    //combineActions(utils::bumpArena *, UndoAction *currentAction, UndoAction *nextAction)
+    //{
+    //  if (currentAction->redo != nextAction->redo ||
+    //    currentAction->undo != nextAction->undo)
+    //    return nullptr;
+    //
+    //  auto *current = (ParameterUpdate *)currentAction;
+    //  auto *next = (ParameterUpdate *)nextAction;
+    //
+    //  if (current->control != next->control)
+    //    return nullptr;
+    //
+    //  current->newValue = next->newValue;
+    //
+    //  return currentAction;
+    //}
 
     static bool 
     isParameterUpdate(Framework::UndoAction *action)
     {
-      return action->redo == redo && action->undo == undo && 
-        action->combineActions == combineActions;
+      return action->redo == redo && action->undo == undo;
     }
 
     Interface::Control *control;
@@ -178,7 +177,7 @@ namespace Interface
 
     storage = plugin.undoManager.beginNewTransaction();
     plugin.undoManager.perform(anew(storage, ParameterUpdate,
-      { this, valueBeforeChange, getValue() }), false);
+      { this, valueBeforeChange, getValue() }));
   }
 
   void Control::resetValue()
@@ -246,8 +245,7 @@ namespace Interface
       //}
 
       if ((componentFlags.isHovered || componentFlags.isClicked) && canBeChosen)
-        fillRect(openGl, getLocalBounds().toFloat(),
-          getColour(Skin::kWidgetPrimary1, this).darker(0.8f), scaleValue(rounding));
+        fillRect(openGl, getLocalBounds().toFloat(), getHighlightColour(), scaleValue(rounding));
 
       if (id == kManualEntry || id == kCopyNormalisedValue ||
         id == kCopyValue || id == kPasteValue)
@@ -309,7 +307,6 @@ namespace Interface
       if (id == kMappingList)
       {
         float width = scaleValueRound(kPopupSubwindowArrowWidth);
-        float rightOffset = scaleValueRound(kPopupSubwindowArrowMargin);
         auto arrowBounds = getLocalBounds().trimmed(scaleValueRoundInt(padding.toInt())).toFloat();
 
         float yCenter = bounds.h * 0.5f;
@@ -390,10 +387,6 @@ namespace Interface
       parameterBridges[index].getName(savedText);
       return savedText;
     }
-    else if (item->id > kMappingList)
-    {
-      int a = {};
-    }
 
     // item doesn't have text
     return {};
@@ -451,7 +444,7 @@ namespace Interface
 
   #define ITEM(idNumber, list, ...) (&with_val(*anew(itemArena, ControlPopupItem, {}), \
     .id = idNumber, .associatedList = &list __VA_OPT__(,) __VA_ARGS__))
-  #define TEXT_ITEM(idNumber, list, ...) ITEM(idNumber, list, .overrideDimensions = getControlPopupItemTextMetrics, \
+  #define TEXT_ITEM(idNumber, list, ...) ITEM(idNumber, list, .overrideSize = getControlPopupItemTextMetrics, \
     .sizingFlags = Component::GrowableX, .padding = primaryPadding, .desiredSize = primaryDesiredSize __VA_OPT__(,) __VA_ARGS__)
 
     PopupList &options = *anew(itemArena, PopupList, { selector });
@@ -658,11 +651,11 @@ namespace Interface
 
     if (details.scale == Framework::ParameterScale::Indexed)
     {
-      auto [option, index] = Framework::getIndexedData(scaledValue, details);
+      auto [option, index] = Framework::getOptionFromValue(scaledValue, details);
 
-      outString.copy(option->displayName);
+      outString.copy(option->getText());
 
-      if (option->count > 1 || option->dynamicUpdateUuid)
+      if (option->valueCount > 1 || option->dynamicUpdateUuid)
         outString.appendFormat(" %zu", (index + 1));
     }
     else if (details.generateNumeric)
@@ -728,7 +721,11 @@ namespace Interface
       return 0.01 * ::strtod(text.data(), nullptr);
 
     if (details.scale == Framework::ParameterScale::Indexed)
-      return Framework::unscaleValue(Framework::getValueFromOptionText(text, details), details);
+    {
+      auto parsedValue = Framework::getValueFromOptionText(text, details);
+      if (parsedValue >= 0.0)
+        return Framework::unscaleValue(parsedValue, details);
+    }
 
     if (!details.displayUnits.empty() && trimmed.rfind(details.displayUnits))
       trimmed.removeSuffix(details.displayUnits.size());
@@ -764,12 +761,12 @@ namespace Interface
       double currentValue = control->getValue();
 
       if (!control->controlFlags.hasParameter || result == kCopyNormalisedValue)
-        stringSize = utils::floatToString(currentValue, stringBuffer, sizeof(stringBuffer) - 1, 6);
+        stringSize = utils::floatToString(currentValue, stringBuffer, sizeof(stringBuffer) - 1, 5);
       else
       {
         stringSize = utils::floatToString(Framework::scaleValue(
           currentValue, control->details, plugin.getSampleRate(), true),
-          stringBuffer, sizeof(stringBuffer) - 1);
+          stringBuffer, sizeof(stringBuffer) - 1, 5);
       }
 
       puglSetClipboard(getPuglView(uiRelated.renderer), nullptr, stringBuffer, stringSize);

@@ -22,7 +22,7 @@ set compiled_files= %top_level%\Source\unity_extern.c %top_level%\Source\unity1.
 set compiler_flags= /I%top_level%\Source\ /std:c++20 /nologo /diagnostics:column /FC /permissive- /MP /Zc:preprocessor /W4 /wd"4201" /sdl- /Zc:inline /fp:precise /D "PUGL_STATIC" /D "_CRT_SECURE_NO_WARNINGS" /D "_MBCS" /errorReport:prompt /GR- /Gd
 set linker_flags=   /ERRORREPORT:PROMPT /MANIFEST:EMBED /INCREMENTAL:NO /DEBUG /noexp /nocoffgrpinfo /OPT:REF /OPT:ICF Opengl32.lib Dwmapi.lib kernel32.lib user32.lib Gdi32.lib Ole32.lib Shell32.lib
 
-set build_dir=build_test
+set build_dir=build
 set binary_data_dir=Source\Data
 if not exist %build_dir% mkdir %build_dir%
 

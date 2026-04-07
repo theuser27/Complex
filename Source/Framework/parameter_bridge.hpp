@@ -18,14 +18,7 @@ namespace Framework
 
 	class ParameterBridge
 	{
-	public:
-		class Listener
-		{
-		public:
-			virtual void parameterLinkReset(ParameterBridge *bridge,
-				ParameterLink *newLink, ParameterLink *oldLink) = 0;
-		};
-		
+	public:		
 		static constexpr float kDefaultParameterValue = 0.5f;
 
 		ParameterBridge() = delete;
@@ -66,12 +59,8 @@ namespace Framework
 		void getText(float value, char *buffer, usize maximumStringLength) const;
 		float getValueForText(utils::string_view text) const;
 
-		int getNumSteps() const;
 		bool isDiscrete() const;
 		bool isBoolean() const;
-
-		void addListener(Listener *listener) { listeners_.emplaceBack(listener); }
-		void removeListener(Listener *listener) { listeners_.erase(listener); }
 
 		const u64 parameterIndex;
 		Plugin::State *state = nullptr;
@@ -81,7 +70,5 @@ namespace Framework
 		satomi::atomic<float> value_ = kDefaultParameterValue;
 		satomi::atomic<bool> wasValueSet_ = false;
 		satomi::atomic<ParameterLink *> parameterLinkPointer_ = nullptr;
-
-		utils::vector<Listener *> listeners_{};
 	};
 }

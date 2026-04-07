@@ -4,7 +4,7 @@
 #pragma once
 
 #include "../LookAndFeel/Graphics.hpp"
-#include "../LookAndFeel/BaseComponent.hpp"
+#include "../LookAndFeel/Component.hpp"
 
 namespace Interface
 {

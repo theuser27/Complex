@@ -6,113 +6,81 @@
 #include "Framework/parameter_value.hpp"
 #include "Framework/parameter_bridge.hpp"
 #include "../Components/DraggableComponent.hpp"
-#include "../Components/BaseControl.hpp"
-
-namespace Framework
-{
-	class ParameterBridge;
-}
+#include "../Components/Control.hpp"
 
 namespace Generation
 {
-	class BaseEffect;
-	class EffectModule;
+  class EffectModule;
 }
 
 namespace Interface
 {
-	class DrawComponent;
-	class EmptySlider;
-	class NumberBox;
-	class TextSelector;
-	class SpectralMaskComponent;
-	class EffectsLaneSection;
+  class EmptySlider;
+  class SpectralMaskComponent;
+  class EffectsLaneSection;
 
-	class EffectModuleSection final : public Component,
-		public Framework::ParameterBridge::Listener
-	{
-	public:
-		enum MenuId
-		{
-			kCancel = 0,
-			kDeleteInstance,
-			kCopyInstance,
-			kInitInstance
-		};
+  class EffectModuleSection final : public Component
+  {
+  public:
+    static constexpr int kSpectralMaskMargin = 2;
+    static constexpr int kTopMenuHeight = 28;
+    static constexpr int kDraggableSectionWidth = 36;
+    static constexpr int kIconSize = 14;
+    static constexpr int kIconToTextSelectorMargin = 4;
+    static constexpr int kDelimiterWidth = 1;
+    static constexpr int kDelimiterToTextSelectorMargin = 2;
+    static constexpr int kNumberBoxToPowerButtonMargin = 6;
+    static constexpr int kLabelToNumberBoxMargin = 4;
+    static constexpr int kPowerButtonPadding = 8;
 
-		static constexpr int kSpectralMaskMargin = 2;
-		static constexpr int kTopMenuHeight = 28;
-		static constexpr int kDraggableSectionWidth = 36;
-		static constexpr int kIconSize = 14;
-		static constexpr int kIconToTextSelectorMargin = 4;
-		static constexpr int kDelimiterWidth = 1;
-		static constexpr int kDelimiterToTextSelectorMargin = 2;
-		static constexpr int kNumberBoxToPowerButtonMargin = 6;
-		static constexpr int kLabelToNumberBoxMargin = 4;
-		static constexpr int kPowerButtonPadding = 8;
+    static constexpr int kOuterPixelRounding = 8;
+    static constexpr int kInnerPixelRounding = 3;
 
-		static constexpr int kOuterPixelRounding = 8;
-		static constexpr int kInnerPixelRounding = 3;
+    void reinitialise();
+    void destroy();
+    void restartEffectUI();
 
-		EffectModuleSection(Generation::EffectModule *effectModule, EffectsLaneSection *laneSection);
-		auto createCopy() const -> utils::up<EffectModuleSection>;
+    bool mouseDown(const MouseEvent &e) override;
 
-		bool render(OpenGlWrapper &openGl) override;
+    Generation::EffectModule *effectModule{};
+    EffectsLaneSection *laneSection{};
+    utils::bumpArena *effectArena{};
+    utils::span<Control *> effectControls{};
 
-		void resized() override;
-		void mouseDown(const MouseEvent &e) override;
-		void controlValueChanged(Control *control) override;
+    struct SpectralMaskComponent final : public PinBoundsBox
+    {
+      struct EmptySlider final : public PinSlider
+      {
+        EmptySlider();
 
-		// unfortunately we need both callbacks in order to 
-		// handle unmapping of parameters that don't have a UI control, 
-		//  automationMappingChanged for mapping
-		//  parameterLinkReset for unmapping
-		void automationMappingChanged(Control *control, bool isUnmapping) override;
-		void parameterLinkReset(Framework::ParameterBridge *bridge,
-			Framework::ParameterLink *newLink, Framework::ParameterLink *oldLink) override;
+        bool mouseDown(const MouseEvent &e) override;
+        bool render(OpenGlWrapper &) override { return false; }
 
-		// (re)initialises parameter to be whatever they need to be for the specific module type/effect mode
-		void initialiseParameters();
+      } shiftBounds{};
 
-		// sets positions and dimensions of the module header
-		void arrangeHeader();
+      SpectralMaskComponent() { addChildComponent(&shiftBounds, children); }
+      bool render(OpenGlWrapper &openGl) override;
 
-		// sets positions and dimensions of contained UI elements for the specific module type/effect mode
-		void arrangeUI();
+    } maskComponent{};
 
-		// paints static/background elements of the specific module
-		void paintUIBackground(Graphics &g)
-		{
-			if (paintBackgroundFunction_)
-				paintBackgroundFunction_(g, this);
-		}
+    struct EffectHolder : public Component
+    {
+      struct Header : public Component
+      {
+        void reinitialise();
 
-		void handlePopupResult(int result) const noexcept;
+        DraggableComponent draggableBox{};
+        DrawComponent effectTypeIcon{};
+        TextSelector effectTypeSelector{};
+        Numberbox mixNumberBox{};
+        PowerButton moduleActivator{};
 
-		auto createPopupMenu() const noexcept -> PopupItem;
+      } header{};
 
-		void setEffectType(utils::string_view type);
+      void reinitialise();
+      
+      bool render(OpenGlWrapper &openGl) override;
 
-		utils::up<SpectralMaskComponent> maskComponent_;
-
-		DraggableComponent draggableBox_{};
-		utils::up<DrawComponent> effectTypeIcon_;
-		utils::up<TextSelector> effectTypeSelector_;
-		utils::up<TextSelector> effectAlgoSelector_;
-
-		utils::up<NumberBox> mixNumberBox_;
-		utils::up<PowerButton> moduleActivator_;
-
-		EffectsLaneSection *laneSection_ = nullptr;
-		Generation::EffectModule *effectModule_ = nullptr;
-		utils::vector<Control *> effectControls_;
-		utils::vector_map<usize, Framework::ParameterBridge *> parameterMappings{};
-
-		auto (*initialiseParametersFunction_)(EffectModuleSection *section, 
-			utils::string_view type) -> std::vector<utils::up<Control>> = nullptr;
-		void (*arrangeUIFunction_)(EffectModuleSection *section, 
-			Rectangle<int> bounds, utils::string_view type) = nullptr;
-		void (*paintBackgroundFunction_)(Graphics &g, EffectModuleSection *section) = nullptr;
-		utils::span<const utils::pair<utils::string_view, usize>> effectParameterCounts_{};
-	};	
+    } effectHolder{};
+  };	
 }

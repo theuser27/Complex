@@ -1,19 +1,9 @@
-/*
-  ==============================================================================
 
-    Skin.hpp
-    Created: 16 Nov 2022 6:55:11am
-    Author:  theuser27
-
-  ==============================================================================
-*/
+// Created: 2022-11-16 06:55:11
 
 #pragma once
 
-#include "Framework/platform.hpp"
-#include "Framework/memory.hpp"
 #include "gui_utils.hpp"
-#include "Graphics.hpp"
 
 namespace Interface
 {
@@ -157,62 +147,12 @@ namespace Interface
     void jsonToState(void *jsonData);
     bool stringToState(utils::string_view skinString);
 
-    static bool shouldScaleValue(ValueId valueId)
-    {
-      return valueId != kWidgetFillFade && valueId != kWidgetFillBoost &&
-        valueId != kWidgetLineBoost && valueId != kWidgetFillCenter;
-    }
-
     Colour colours[kSectionsCount][kColorIdCount]{};
     float values[kSectionsCount][kValueIdCount]{};
   };
 
-  strict_inline float
-  getValue(Skin::ValueId valueId, bool isScaled, Skin::Override skinOverride = Skin::kNone)
-  {
-    if (uiRelated.skin)
-    {
-      COMPLEX_ASSERT(skinOverride < Skin::kSectionsCount);
-      COMPLEX_ASSERT(valueId < Skin::kValueIdCount);
-      auto value = uiRelated.skin->values[skinOverride][valueId];
-      return (isScaled) ? scaleValue(value) : value;
-    }
-
-    return 0.0f;
-  }
-
-  strict_inline float 
-  getValue(Skin::ValueId valueId, bool isScaled, Component *component)
-  {
-    if (uiRelated.skin)
-    {
-      auto value = uiRelated.skin->getValue(valueId, component);
-      return (isScaled) ? scaleValue(value) : value;
-    }
-
-    return 0.0f;
-  }
-
-  strict_inline Colour
-  getColour(Skin::ColourId colorId, Skin::Override skinOverride = Skin::kNone)
-  {
-    if (uiRelated.skin)
-    {
-      COMPLEX_ASSERT(skinOverride < Skin::kSectionsCount);
-      COMPLEX_ASSERT(colorId < Skin::kColorIdCount);
-      return uiRelated.skin->colours[skinOverride][colorId];
-    }
-
-    return Colours::black;
-  }
-
-  strict_inline Colour
-  getColour(Skin::ColourId colorId, Component *component)
-  {
-    if (uiRelated.skin)
-      return uiRelated.skin->getColour(colorId, component);
-
-    return Colours::black;
-  }
-
+  float getValue(Skin::ValueId valueId, bool isScaled, Skin::Override skinOverride = Skin::kNone);
+  float getValue(Skin::ValueId valueId, bool isScaled, Component *component);
+  Colour getColour(Skin::ColourId colorId, Skin::Override skinOverride = Skin::kNone);
+  Colour getColour(Skin::ColourId colorId, Component *component);
 }

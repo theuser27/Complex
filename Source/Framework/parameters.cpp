@@ -6,11 +6,24 @@
 #include "parameter_value.hpp"
 #include "parameter_bridge.hpp"
 #include "Plugin/Complex.hpp"
-#include "Generation/BaseProcessor.hpp"
-#include "Interface/Components/BaseControl.hpp"
+#include "Plugin/Renderer.hpp"
+#include "Generation/Processor.hpp"
+#include "Interface/Components/Control.hpp"
 
 namespace Framework
 {
+  utils::string_view 
+  IndexedData::getText() const
+  {
+    auto text = displayName;
+    if (text.empty() && flags & StateIdFlag)
+    {
+      auto *processor = Interface::getPlugin(Interface::uiRelated.renderer).state_->getProcessor(stateId);
+      text = processor->name;
+    }
+    return text;
+  }
+
   utils::pair<const IndexedData *, usize>
   getOptionFromValue(double scaledValue, const ParameterDetails &details)
   {
@@ -38,7 +51,8 @@ namespace Framework
     return { indexedData, i };
   }
 
-  double getValueFromOptionText(utils::string_view text, const ParameterDetails &details)
+  double 
+  getValueFromOptionText(utils::string_view text, const ParameterDetails &details)
   {
     COMPLEX_ASSERT(details.scale == ParameterScale::Indexed);
     u32 value = 0;
@@ -59,7 +73,8 @@ namespace Framework
     return (success) ? value : -1.0;
   }
 
-  double getValueFromOptionId(uuid optionId, const ParameterDetails &details)
+  double 
+  getValueFromOptionId(uuid optionId, const ParameterDetails &details)
   {
     COMPLEX_ASSERT(details.scale == ParameterScale::Indexed);
     u32 value = 0;
@@ -187,7 +202,8 @@ namespace Framework
       result = ::round(value);
       break;
     case ParameterScale::Indexed:
-      result = value / (details.options->valueCount - 1);
+      result = (details.options->valueCount <= 1) ? 0.0 : 
+        value / (details.options->valueCount - 1);
       break;
     case ParameterScale::Clamp:
       result = value;
@@ -760,7 +776,83 @@ namespace Plugin
       });
   }
 
-  static void updateDynamicParameter(State *state, Framework::ParameterValue *parameter, Framework::IndexedData *indexedData)
+  static void updateDynamicOptionEntries(Framework::IndexedData *target,
+    Framework::IndexedData *reference, utils::bumpArena *arena, bool allowsBreakingChanges = true)
+  {
+    // we've reached a leaf node
+    if (target->canBeChosen())
+    {
+      auto temp = *target;
+      *target = *reference;
+
+      target->parent = temp.parent;
+      target->children = temp.children;
+      target->next = temp.next;
+      target->displayName = temp.displayName;
+      target->userFlags = temp.userFlags;
+
+      return;
+    }
+
+    Framework::IndexedData *endOfUntrackedOptions{}, *endOfTrackedOptions{};
+    u32 i = 0;
+
+    // do a post-order traversal of this function first
+    // and check for erased options
+    for (Framework::IndexedData *targetChild = target->children, *previous = nullptr, *next = nullptr; 
+      targetChild; (targetChild = next), (++i))
+    {
+      bool isPresent = false;
+      for (auto referenceChild = reference->children; referenceChild; referenceChild = referenceChild->next)
+      {
+        isPresent = targetChild->id == referenceChild->id;
+        if (isPresent)
+        {
+          updateDynamicOptionEntries(targetChild, referenceChild, arena, allowsBreakingChanges);
+          break;
+        }
+      }
+
+      next = targetChild->next;
+      previous = (isPresent) ? targetChild : previous;
+      endOfUntrackedOptions = previous;
+      if (i < target->childrenCount)
+        endOfTrackedOptions = endOfUntrackedOptions;
+
+      if (isPresent)
+        continue;
+
+      // removing the option is breaking change but it could crash the program otherwise
+      if (previous)
+        previous->next = next;
+      utils::bumpArena::remove(targetChild);
+    }
+    
+    utils::vector<Framework::IndexedData *> childrenToAdd{ localScratch };
+
+    // check for added options, add them as untracked if breaking changes are not allowed
+    for (auto referenceChild = reference->children; referenceChild; referenceChild = referenceChild->next)
+    {
+      bool isPresent = false;
+      for (auto targetChild = target->children; targetChild; targetChild = targetChild->next)
+      {
+        isPresent = referenceChild->id == targetChild->id;
+        if (isPresent)
+          break;
+      }
+      
+      if (isPresent)
+        continue;
+
+      childrenToAdd.emplaceBack(Framework::IndexedData::deepCopy(arena, referenceChild));
+    }
+
+    if (!childrenToAdd.empty())
+      target->addChildren(childrenToAdd, !allowsBreakingChanges);
+  }
+
+  static void updateDynamicParameter(State *state, 
+    Framework::ParameterValue *parameter, Framework::IndexedData *indexedData)
   {
     using namespace Framework;
 
@@ -770,13 +862,12 @@ namespace Plugin
     if (link->hostControl)
       return;
 
-    // this function assumes no ABA concurrency problems
-    // meaning that no changes are ever missed and 
+    // this function assumes no changes are ever missed and 
     // therefore counts are always a valid method of checking for changes
     // (no situations where 2 changes happen at the same time to cancel each other out)
 
     // getting the most up-to-date counts of the dynamic option
-    auto dynamicOption = state->dynamicOptions.get_first_of(indexedData->dynamicUpdateUuid)->second;
+    auto dynamicOption = state->dynamicOptions.find(indexedData->dynamicUpdateUuid)->second;
     u32 newCount = dynamicOption->valueCount;
 
     if (indexedData->valueCount == newCount)
@@ -785,13 +876,15 @@ namespace Plugin
     // changing maxValue and setting normalised value to correspond to the current scaled value
     // for parameter and UIControl if it exists
     auto details = parameter->getParameterDetails();
-    auto oldScaled = scaleValue((double)parameter->getNormalisedValue(), details);
+    auto [oldOption, oldIndex] = getOptionFromValue(scaleValue((double)parameter->getNormalisedValue(), details), details);
+    auto oldId = oldOption->id;
 
-    auto difference = indexedData->valueCount - newCount;
-    for (auto *data = indexedData; data; data = data->parent)
-      data->valueCount -= difference;
+    updateDynamicOptionEntries(indexedData, dynamicOption,
+      utils::bumpArena::fromAllocation(details.options->children));
 
-    auto newNormalised = unscaleValue(oldScaled, details);
+    auto newNormalised = getValueFromOptionId(oldId, details);
+    newNormalised = unscaleValue((newNormalised < 0.0) ? 0.0 : 
+      newNormalised + (double)oldIndex, details);
 
     if (link->UIControl)
     {
@@ -830,12 +923,12 @@ namespace Plugin
   {
     using namespace Framework;
 
-    for (usize i = 0; i < ParameterChangeReason::kParameterChangeReasonValues.size(); ++i)
+    dynamicOptions.data = { { miscStorage, false }, ParameterChangeReason::kParameterChangeReasonValues.size() };
+    for (auto reason : ParameterChangeReason::kParameterChangeReasonValues)
     {
       auto dynamicOptionsArena = utils::bumpArena::createNested(miscStorage, COMPLEX_KB(1));
 
-      auto reason = ParameterChangeReason::kParameterChangeReasonValues[i];
-      auto iter = dynamicOptions.add_ordered(reason, anew(dynamicOptionsArena, IndexedData, 
+      auto iter = dynamicOptions.add(reason, anew(dynamicOptionsArena, IndexedData, 
         { .dynamicUpdateUuid = reason }));
 
       switch (reason)
@@ -850,13 +943,14 @@ namespace Plugin
 
       case ParameterChangeReason::laneSources:
       {
+        iter->second->valueCount = 0;
         for (auto &pair : allProcessors.data)
         {
           if (pair.second->metadata->id != Generation::Processors::EffectsLane)
             continue;
 
-          iter->second->addChildren(*anew(dynamicOptionsArena, IndexedData, 
-            { .id = pair.second->metadata->id, .flags = IndexedData::StateIdFlag, .stateId = pair.first }));
+          iter->second->addChildren({{ anew(dynamicOptionsArena, IndexedData,
+            {.id = pair.second->metadata->id, .flags = IndexedData::StateIdFlag, .stateId = pair.first }) }});
         }
 
         break;

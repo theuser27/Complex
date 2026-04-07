@@ -1,19 +1,19 @@
 
 // Created: 2022-07-11 03:35:27
 
-#include "BaseProcessor.hpp"
+#include "Processor.hpp"
 
 #include "Framework/parameter_types.hpp"
 #include "Framework/parameter_value.hpp"
 #include "Framework/parameter_bridge.hpp"
 #include "Plugin/Complex.hpp"
-#include "Interface/LookAndFeel/BaseComponent.hpp"
+#include "Interface/LookAndFeel/Component.hpp"
 
 namespace Generation
 {
-  BaseProcessor::BaseProcessor(utils::bumpArena *arena, Plugin::State *state, 
-    Framework::ProcessorMetadata *metadata, const BaseProcessor *other) : metadata{ metadata },
-    state{ state }, stateId{ state->stateIdCounter++ }, arena{ arena } 
+  Processor::Processor(utils::bumpArena *arena, Plugin::State *state, 
+    Framework::ProcessorMetadata *metadata, const Processor *other) : metadata{ metadata },
+    state{ state }, stateId{ ++state->stateIdCounter }, arena{ arena }, name{ arena }
   {
     if (!other)
       return;
@@ -67,7 +67,7 @@ namespace Generation
     }
   }
 
-  void BaseProcessor::reset()
+  void Processor::reset()
   {
     for (auto *parameter = parameters; parameter; parameter = parameter->next)
       parameter->object.reset();
@@ -75,7 +75,7 @@ namespace Generation
 
   // the following functions are to be called outside of processing time
   bool 
-  BaseProcessor::addChildProcessor(BaseProcessor &newChildProcessor, BaseProcessor *insertBefore)
+  Processor::addChildProcessor(Processor &newChildProcessor, Processor *insertBefore)
   {
     COMPLEX_ASSERT(!newChildProcessor.parent);
 
@@ -120,7 +120,7 @@ namespace Generation
     return true;
   }
 
-  void BaseProcessor::removeChildProcessor(BaseProcessor &removedChildProcessor)
+  void Processor::removeChildProcessor(Processor &removedChildProcessor)
   {
     COMPLEX_ASSERT(removedChildProcessor.parent == this);
 
@@ -140,7 +140,7 @@ namespace Generation
   }
 
   Framework::ParameterValue *
-  BaseProcessor::getParameter(uuid parameterId) const
+  Processor::getParameter(uuid parameterId) const
   {
     COMPLEX_HARD_ASSERT(parameters, "No parameters contained in processor %v (%zu) to find",
       metadata->name, metadata->id);
@@ -153,7 +153,7 @@ namespace Generation
     return nullptr;
   }
 
-  void BaseProcessor::updateParameters(UpdateFlag flag, float sampleRate, bool updateChildrenParameters)
+  void Processor::updateParameters(UpdateFlag flag, float sampleRate, bool updateChildrenParameters)
   {
     if (flag == UpdateFlag::NoUpdates)
       return;
@@ -168,7 +168,7 @@ namespace Generation
         child->updateParameters(flag, sampleRate);
   }
 
-  void BaseProcessor::remapParameters(utils::span<Framework::ParameterBridge *> bridges,
+  void Processor::remapParameters(utils::span<Framework::ParameterBridge *> bridges,
     bool bridgeValueFromParameters, bool remapOnlyBridges)
   {
     if (!bridges.size())
@@ -213,7 +213,7 @@ namespace Generation
   }
 
   utils::dll<Framework::ParameterValue> *
-  BaseProcessor::createParameters(usize count, Framework::ParameterMetadata *pararmeterMetadata,
+  Processor::createParameters(usize count, Framework::ParameterMetadata *pararmeterMetadata,
     utils::dll<Framework::ParameterValue> *copy)
   {
     using T = utils::remove_reference_t<decltype(*parameters)>;
@@ -269,7 +269,7 @@ namespace Generation
 
 namespace Framework
 {
-  AddProcessorUpdate::AddProcessorUpdate(Generation::BaseProcessor *processorToAdd,
+  AddProcessorUpdate::AddProcessorUpdate(Generation::Processor *processorToAdd,
     u64 destinationParentStateId, usize destinationIndex) : state{ *processorToAdd->state }, processor{ processorToAdd },
     destinationParentStateId{ destinationParentStateId }, destinationIndex{ destinationIndex }
   {
@@ -285,12 +285,15 @@ namespace Framework
       auto *self = (AddProcessorUpdate *)a;
       auto destinationPointer = self->state.getProcessor(self->destinationParentStateId);
 
-      auto g = self->state.plugin->acquireProcessingLock();
-      destinationPointer->addChildProcessor(*self->processor, self->destinationIndex);
-      if (destinationPointer->component)
+      if (self->processor->parent != destinationPointer)
       {
-        self->processor->component = self->processor->createUI();
-        destinationPointer->component->addChildComponent(self->processor->component, self->destinationIndex);
+        auto g = self->state.plugin->acquireProcessingLock();
+        destinationPointer->addChildProcessor(*self->processor, self->destinationIndex);
+        if (destinationPointer->component)
+        {
+          self->processor->component = self->processor->createUI();
+          destinationPointer->component->addChildComponent(self->processor->component, self->destinationIndex);
+        }
       }
 
       self->processor = nullptr;
@@ -306,64 +309,54 @@ namespace Framework
     };
   }
 
-  MoveProcessorUpdate::MoveProcessorUpdate(Generation::BaseProcessor *processorToMove,
-    u64 destinationParentStateId, usize destinationIndex) : state{ *processorToMove->state },
-    destinationParentStateId{ destinationParentStateId }, destinationIndex{ destinationIndex }
+  MoveProcessorUpdate::MoveProcessorUpdate(Plugin::State *state,
+    u64 sourceParentStateId, usize sourceIndex,
+    u64 destinationParentStateId, usize destinationIndex, bool isDone) : state{ *state },
+    destinationParentStateId{ destinationParentStateId }, destinationIndex{ destinationIndex },
+    sourceParentStateId{ sourceParentStateId }, sourceIndex{ sourceIndex }, isDone{ isDone }
   {
-    sourceParentStateId = processorToMove->parent->stateId;
-    for (auto child = processorToMove->parent->children; child != processorToMove; child = child->next)
-      ++sourceIndex;
-
     redo = [](UndoAction *a)
     {
       auto *self = (MoveProcessorUpdate *)a;
 
-      auto destinationPointer = self->state.getProcessor(self->destinationParentStateId);
-      auto sourcePointer = self->state.getProcessor(self->sourceParentStateId);
+      if (!self->isDone)
+      {
+        auto destinationPointer = self->state.getProcessor(self->destinationParentStateId);
+        auto sourcePointer = self->state.getProcessor(self->sourceParentStateId);
 
-      auto g = self->state.plugin->acquireProcessingLock();
-      auto &movedProcessor = sourcePointer->removeChildProcessor(self->sourceIndex);
-      destinationPointer->addChildProcessor(movedProcessor, self->destinationIndex);
-
-      //if (sourcePointer != destinationPointer)
-      //  for (auto listener : sourcePointer->listeners_)
-      //    listener->movedSubProcessor(movedProcessor, *sourcePointer, 
-      //      sourceSubProcessorIndex_, *destinationPointer, destinationSubProcessorIndex_);
-      //
-      //for (auto listener : destinationPointer->listeners_)
-      //  listener->movedSubProcessor(movedProcessor, *sourcePointer, 
-      //    sourceSubProcessorIndex_, *destinationPointer, destinationSubProcessorIndex_);
+        auto g = self->state.plugin->acquireProcessingLock();
+        auto &movedProcessor = sourcePointer->removeChildProcessor(self->sourceIndex);
+        destinationPointer->addChildProcessor(movedProcessor, self->destinationIndex);
+      }
     };
 
     undo = [](UndoAction *a)
     {
       auto *self = (MoveProcessorUpdate *)a;
 
-      auto destinationPointer = self->state.getProcessor(self->destinationParentStateId);
-      auto sourcePointer = self->state.getProcessor(self->sourceParentStateId);
+      if (self->isDone)
+      {
+        auto destinationPointer = self->state.getProcessor(self->destinationParentStateId);
+        auto sourcePointer = self->state.getProcessor(self->sourceParentStateId);
 
-      auto g = self->state.plugin->acquireProcessingLock();
-      auto &movedProcessor = destinationPointer->removeChildProcessor(self->destinationIndex);
-      sourcePointer->addChildProcessor(movedProcessor, self->sourceIndex);
-
-      //if (sourcePointer != destinationPointer)
-      //  for (auto listener : sourcePointer->listeners_)
-      //    listener->movedSubProcessor(movedProcessor, *destinationPointer, 
-      //      destinationSubProcessorIndex_, *sourcePointer, sourceSubProcessorIndex_);
-
-      //for (auto listener : destinationPointer->listeners_)
-      //  listener->movedSubProcessor(movedProcessor, *destinationPointer, 
-      //    destinationSubProcessorIndex_, *sourcePointer, sourceSubProcessorIndex_);
-
+        auto g = self->state.plugin->acquireProcessingLock();
+        auto &movedProcessor = destinationPointer->removeChildProcessor(self->destinationIndex);
+        sourcePointer->addChildProcessor(movedProcessor, self->sourceIndex);
+      }
     };
   }
 
-  DeleteProcessorUpdate::DeleteProcessorUpdate(Generation::BaseProcessor *processorToDelete) : 
+  DeleteProcessorUpdate::DeleteProcessorUpdate(Generation::Processor *processorToDelete) : 
     state{ *processorToDelete->state }
   {
     parentStateId = processorToDelete->parent->stateId;
     for (auto child = processorToDelete->parent->children; child != processorToDelete; child = child->next)
       ++index;
+
+    // has it already been deleted? 
+    // if so, we need to skip removal in redo
+    if (!processorToDelete->parent)
+      processor = processorToDelete;
 
     destructor = [](UndoAction *a)
     {
@@ -378,8 +371,10 @@ namespace Framework
       auto parentPointer = self->state.getProcessor(self->parentStateId);
 
       auto g = self->state.plugin->acquireProcessingLock();
-      self->processor = &parentPointer->removeChildProcessor(self->index);
-      auto recurseParameters = [](const auto &self, Generation::BaseProcessor *processor) -> void
+      if (!self->processor)
+        self->processor = &parentPointer->removeChildProcessor(self->index);
+      
+      auto recurseParameters = [](const auto &self, Generation::Processor *processor) -> void
       {
         processor->remapParameters({}, true, true);
         auto child = processor->children;
@@ -398,7 +393,7 @@ namespace Framework
 
       auto g = self->state.plugin->acquireProcessingLock();
       destinationPointer->addChildProcessor(*self->processor, self->index);
-      auto recurseParameters = [](const auto &self, Generation::BaseProcessor *processor) -> void
+      auto recurseParameters = [](const auto &self, Generation::Processor *processor) -> void
       {
         processor->remapParameters({}, true, true);
         auto child = processor->children;

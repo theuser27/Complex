@@ -1,7 +1,7 @@
 
 // Created: 2022-12-14 07:01:32
 
-#include "BaseControl.hpp"
+#include "Control.hpp"
 
 #include "Framework/parameter_bridge.hpp"
 #include "Framework/parameter_value.hpp"

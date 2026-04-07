@@ -199,8 +199,12 @@ static inline NVGcolor nvgRGB(unsigned char r, unsigned char g, unsigned char b)
 // Returns a color value from red, green, blue and alpha values.
 static inline NVGcolor nvgRGBAf(float r, float g, float b, float a)
 {
-  NVGcolor color = { .r = r, .g = g, .b = b, .a = a };
-  return color;
+  NVGcolor colour;
+  colour.r = r;
+  colour.g = g;
+  colour.b = b;
+  colour.a = a;
+  return colour;
 }
 // Returns a color value from red, green, blue values. Alpha will be set to 1.0f.
 static inline NVGcolor nvgRGBf(float r, float g, float b) { return nvgRGBAf(r, g, b, 1.0f); }

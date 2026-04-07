@@ -18,7 +18,7 @@
 #include "Data/BinaryData.hpp"
 
 #include "Framework/load_save.hpp"
-#include "BaseComponent.hpp"
+#include "Component.hpp"
 
 namespace
 {
@@ -323,5 +323,53 @@ namespace Interface
     jsonArena = nullptr;
 
     return true;
+  }
+  
+  float 
+  getValue(Skin::ValueId valueId, bool isScaled, Skin::Override skinOverride)
+  {
+    if (uiRelated.skin)
+    {
+      COMPLEX_ASSERT(skinOverride < Skin::kSectionsCount);
+      COMPLEX_ASSERT(valueId < Skin::kValueIdCount);
+      auto value = uiRelated.skin->values[skinOverride][valueId];
+      return (isScaled) ? scaleValue(value) : value;
+    }
+
+    return 0.0f;
+  }
+
+  float 
+  getValue(Skin::ValueId valueId, bool isScaled, Component *component)
+  {
+    if (uiRelated.skin)
+    {
+      auto value = uiRelated.skin->getValue(valueId, component);
+      return (isScaled) ? scaleValue(value) : value;
+    }
+
+    return 0.0f;
+  }
+
+  Colour 
+  getColour(Skin::ColourId colorId, Skin::Override skinOverride)
+  {
+    if (uiRelated.skin)
+    {
+      COMPLEX_ASSERT(skinOverride < Skin::kSectionsCount);
+      COMPLEX_ASSERT(colorId < Skin::kColorIdCount);
+      return uiRelated.skin->colours[skinOverride][colorId];
+    }
+
+    return Colours::black;
+  }
+
+  Colour 
+  getColour(Skin::ColourId colorId, Component *component)
+  {
+    if (uiRelated.skin)
+      return uiRelated.skin->getColour(colorId, component);
+
+    return Colours::black;
   }
 }

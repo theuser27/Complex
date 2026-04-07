@@ -11,11 +11,10 @@
 
 #include "Framework/load_save.hpp"
 #include "Framework/parameter_bridge.hpp"
-#include "Framework/sync_primitives.hpp"
 #include "Plugin/Complex.hpp"
 #include "Interface/LookAndFeel/Shaders.hpp"
 #include "Interface/LookAndFeel/Graphics.hpp"
-#include "Interface/LookAndFeel/BaseComponent.hpp"
+#include "Interface/LookAndFeel/Component.hpp"
 #include "Interface/Sections/MainInterface.hpp"
 
 static auto
@@ -161,7 +160,7 @@ namespace Interface
 
     void checkBounds(u32 &newWidth, u32 &newHeight);
     void resizeChange(bool isResizing);
-    void moveFocusTo(Component &component);
+    void moveFocusTo(Component *component);
     //void beginDragAutoRepeat(int millisecondsBetweenCallbacks);
 
     MouseEvent getRelativeEvent(MouseEvent e, Component *component);
@@ -271,7 +270,7 @@ namespace Interface
       calculatePositions(gui->children, gui, gui->bounds);
 
       for (auto *c : *customPlacement)
-        c->handleCommandMessage(Component::HandleCustomPosition);
+        c->overridePosition(c);
       customPlacement->clear();
 
       checkFocusedComponent();
@@ -612,12 +611,21 @@ namespace Interface
       puglSetCursor(renderer->view_, (PuglCursor)cursorType);
   }
 
+  void setClickedComponent(Renderer *renderer, Component *component)
+  {
+    if (renderer->mouseDownComponent_)
+      renderer->mouseDownComponent_->componentFlags.isClicked = false;
+    renderer->mouseDownComponent_ = component;
+    if (renderer->mouseDownComponent_)
+      renderer->mouseDownComponent_->componentFlags.isClicked = true;
+  }
+
   void setFocusedComponent(Renderer *renderer, Component *component)
   {
     renderer->focusedComponent_ = component;
   }
 
-  void moveFocusTo(Renderer *renderer, Component &component)
+  void moveFocusTo(Renderer *renderer, Component *component)
   {
     renderer->moveFocusTo(component);
   }
@@ -713,13 +721,12 @@ namespace Interface
     // TODO: make resizing snap horizontally to the width of individual lanes
   }
 
-  void Renderer::moveFocusTo(Component &component)
+  void Renderer::moveFocusTo(Component *component)
   {
-    if (focusedComponent_ &&
-      focusedComponent_->handleFocus(false, Component::FocusMoved, &component) &&
-      component.handleFocus(true, Component::FocusMoved, focusedComponent_))
+    if ((!focusedComponent_ || focusedComponent_->handleFocus(false, Component::FocusGivenAway, component)) &&
+      (!component || component->handleFocus(true, Component::FocusGivenAway, focusedComponent_)))
     {
-      focusedComponent_ = &component;
+      focusedComponent_ = component;
     }
   }
 
@@ -799,6 +806,8 @@ namespace Interface
     {
       mouseDownComponent_->componentFlags.isClicked = true;
       success = mouseDownComponent_->mouseDown(getRelativeEvent(e, mouseDownComponent_));
+      // note: mouseDownComponent_ might not be the same as it was before the call
+      //       because setClickedComponent() might have been called
       if (success)
         break;
       mouseDownComponent_->componentFlags.isClicked = false;
@@ -811,7 +820,7 @@ namespace Interface
     // if the component has decided to not handle further mouse events
     // this makes the upcoming mouse events orphaned,
     // which can be handled by other components if acceptsOrphanedMouseEvents == true
-    if (mouseDownComponent_ && !mouseDownComponent_->componentFlags.isClicked)
+    if (success && (!mouseDownComponent_ || !mouseDownComponent_->componentFlags.isClicked))
     {
       mouseDownComponent_ = nullptr;
       isHandlingOrphanedMouseEvents = true;

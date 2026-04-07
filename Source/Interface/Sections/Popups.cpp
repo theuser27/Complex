@@ -7,7 +7,7 @@
 #include "Plugin/Renderer.hpp"
 #include "Plugin/Complex.hpp"
 #include "../LookAndFeel/Graphics.hpp"
-#include "../Components/BaseControl.hpp"
+#include "../Components/Control.hpp"
 
 namespace Interface
 {
@@ -43,11 +43,55 @@ namespace Interface
     skinOverride = Skin::kUseParentOverride;
     placement = Placement::custom;
     padding = { kLineHeight, kLineHeight, kLineHeight, kLineHeight };
-    overrideDimensions = getPopupDisplayDimensions;
+    overrideSize = getPopupDisplayDimensions;
     text = { arena };
 
     textFontId = FontId::InterType;
     numericFontId = FontId::DDinType;
+
+    overridePosition = [](Component *c)
+    {
+      auto *self = (PopupDisplay *)c;
+
+      Point<i32> position{};
+      COMPLEX_ASSERT((self->placement & Placement::custom) == 0);
+      i32 extraOffsetX = self->bounds.w / 2;
+      i32 extraOffsetY = self->bounds.h / 2;
+
+      switch ((Placement)(self->placement & Placement::justifyX))
+      {
+      case Placement::left:
+        position.x -= self->bounds.w + extraOffsetX;
+        break;
+
+      case Placement::right:
+        position.x += self->source->bounds.w + extraOffsetX;
+        break;
+
+      default:
+      case Placement::justifyX:
+        position.x += (self->source->bounds.w - self->bounds.w) / 2;
+        break;
+      }
+
+      switch ((Placement)(self->placement & Placement::justifyY))
+      {
+      case Placement::top:
+        position.y -= self->bounds.h + extraOffsetY;
+        break;
+
+      default:
+      case Placement::bottom:
+        position.y += self->source->bounds.h + extraOffsetY;
+        break;
+
+      case Placement::justifyY:
+        position.y += (self->source->bounds.h - self->bounds.h) / 2;
+        break;
+      }
+
+      self->bounds.setPosition(self->getRelativePoint(self->source, position));
+    };
   }
 
   bool PopupDisplay::render(OpenGlWrapper &openGl)
@@ -75,58 +119,8 @@ namespace Interface
     return true;
   }
 
-  bool 
-  PopupDisplay::handleCommandMessage(u64 commandId, utils::whatever<64>)
-  {
-    switch (commandId)
-    {
-    case Component::HandleCustomPosition:
-    {
-      Point<i32> position{};
-      COMPLEX_ASSERT((placement & Placement::custom) == 0);
-      i32 extraOffsetX = bounds.w / 2;
-      i32 extraOffsetY = bounds.h / 2;
-
-      switch ((Placement)(placement & Placement::justifyX))
-      {
-      case Placement::left:
-        position.x -= bounds.w + extraOffsetX;
-        break;
-
-      case Placement::right:
-        position.x += source->bounds.w + extraOffsetX;
-        break;
-
-      default:
-      case Placement::justifyX:
-        position.x += (source->bounds.w - bounds.w) / 2;
-        break;
-      }
-      
-      switch ((Placement)(placement & Placement::justifyY))
-      {
-      case Placement::top:
-        position.y -= bounds.h + extraOffsetY;
-        break;
-
-      default:
-      case Placement::bottom:
-        position.y += source->bounds.h + extraOffsetY;
-        break;
-
-      case Placement::justifyY:
-        position.y += (source->bounds.h - bounds.h) / 2;
-        break;
-      }
-
-      bounds.setPosition(getRelativePoint(source, position));
-
-      return true;
-    }
-    }
-
-    return false;
-  }
+  static void positionInitialPopupList(PopupList *list, PopupSelector *selector,
+    Component *relativeComponent, Placement placement, Point<i32> extraPosition);
 
   PopupList::PopupList(PopupSelector *parentSelector) : parentSelector{ parentSelector }
   {
@@ -134,6 +128,19 @@ namespace Interface
     sizingFlags |= Component::ScrollableWithBarY | Component::SnapToMinX;
     componentFlags.vertical = true;
     componentFlags.clickable = true;
+
+    overridePosition = [](Component *c)
+    {
+      auto *self = (PopupList *)c;
+      auto *selector = (PopupSelector *)self->parent;
+
+      if (!self->parentList)
+        positionInitialPopupList(self, selector, selector->summoner, selector->listPlacement, selector->summoningPoint);
+      else
+        positionInitialPopupList(self, selector, self->parentItem, selector->lastPlacement, { 4, 0 });
+
+      calculatePositions(self->children, self);
+    };
   }
 
   bool 
@@ -165,20 +172,6 @@ namespace Interface
       auto mouseState = getMouseInteractions(uiRelated.renderer).mouseState.getEventRelativeTo(this);
       auto *c = contains(Point{ mouseState.x, mouseState.y }) ? lastMouseEvent.eventComponent : currentSublistItem;
       summonChildList((PopupItem *)c, lastMouseEvent);
-
-      //if (currentSublistItem)
-      //{
-      //  // adjust triangle cone
-      //  auto childListBounds = parentSelector->getRelativeArea(currentSublistItem->childList);
-      //  auto topPoint = (childListBounds.x > bounds.x) ? childListBounds.getTopLeft() : childListBounds.getTopRight();
-      //  auto bottomPoint = (childListBounds.x > bounds.x) ? childListBounds.getBottomLeft() : childListBounds.getBottomRight();
-
-      //  auto A = sublistAnchorPoint - bounds.getPosition();
-      //  auto B = topPoint - bounds.getPosition();
-      //  auto C = bottomPoint - bounds.getPosition();
-
-      //  strokePolygon(openGl, 1.0f, { { A.toFloat(), B.toFloat(), C.toFloat() } });
-      //}
 
       return false;
     }
@@ -311,67 +304,12 @@ namespace Interface
     list->bounds.setPosition(finalX, finalY);
   }
 
-  bool
-  PopupList::handleCommandMessage(u64 commandId, utils::whatever<64>)
-  {
-    switch (commandId)
-    {
-    case Component::HandleCustomPosition:
-    {
-      auto *selector = (PopupSelector *)parent;
-      
-      if (!parentList)
-        positionInitialPopupList(this, selector, selector->summoner, selector->listPlacement, selector->summoningPoint);
-      else
-        positionInitialPopupList(this, selector, parentItem, selector->lastPlacement, { 4, 0 });
-
-      calculatePositions(children, this);
-
-      return true;
-    }
-    }
-
-    return false;
-  }
-
-  static bool 
-  isPointInsideTriangle(Point<float> point, Point<float> A, Point<float> B, Point<float> C)
-  {
-    // https://math.stackexchange.com/a/51459
-
-    auto cross = [](Point<float> a, Point<float> b) { return a.x * b.y - a.y * b.x; };
-    
-    auto crossAB = cross(A, B);
-    auto crossBC = cross(B, C);
-    auto crossCA = cross(C, A);
-
-    float xd = crossAB * crossBC * crossCA;
-    if (utils::abs(xd) <= 1e-13f)
-      return false;
-    
-    float wA = (crossBC + cross(point, B - C)) / xd;
-    float wB = (crossCA + cross(point, C - A)) / xd;
-    float wC = (crossAB + cross(point, A - B)) / xd;
-
-    if (wA < 0 && wB < 0 && wC < 0)
-    {
-      wA = -wA;
-      wB = -wB;
-      wC = -wC;
-    }
-    
-    return (0.0f <= wA && wA <= 1.0f) &&
-      (0.0f <= wB && wB <= 1.0f) && (0.0f <= wC && wC <= 1.0f);
-  }
-
   void PopupList::summonChildList(PopupItem *summoningItem,
-    const MouseEvent &summoningMouseEvent)
+    const MouseEvent &summoningMouseEvent, bool force)
   {
     static constexpr double kSublistConeTimeout = 0.25; //s
 
-
-
-    bool shouldCloseSublist = uiRelated.steadyTime - lastSummonTime >= kSublistConeTimeout;
+    bool shouldCloseSublist = force || uiRelated.steadyTime - lastSummonTime >= kSublistConeTimeout;
     auto event = summoningMouseEvent.getEventRelativeTo(parentSelector);
     if (currentSublistItem)
     {
@@ -379,9 +317,6 @@ namespace Interface
       auto childListBounds = parentSelector->getRelativeArea(currentSublistItem->childList);
       auto topPoint = (childListBounds.x > bounds.x) ? childListBounds.getTopLeft() : childListBounds.getTopRight();
       auto bottomPoint = (childListBounds.x > bounds.x) ? childListBounds.getBottomLeft() : childListBounds.getBottomRight();
-
-      //shouldCloseSublist = shouldCloseSublist || !isPointInsideTriangle({ (float)event.x, (float)event.y },
-      //  sublistAnchorPoint.toFloat(), topPoint.toFloat(), bottomPoint.toFloat());
 
       if (shouldCloseSublist)
         sublistAnchorPoint = { event.x, event.y };
@@ -429,9 +364,15 @@ namespace Interface
   }
 
   bool
-  PopupItem::mouseDown(const MouseEvent &)
+  PopupItem::mouseDown(const MouseEvent &e)
   {
     componentFlags.isClicked = false;
+    if (childList)
+    {
+      associatedList->lastMouseEvent = e;
+
+      associatedList->summonChildList(this, e, true);
+    }
 
     return true;
   }
@@ -451,7 +392,7 @@ namespace Interface
   PopupItem::render(OpenGlWrapper &openGl)
   {
     if ((componentFlags.isHovered || componentFlags.isClicked) && canBeChosen)
-      fillRect(openGl, getLocalBounds().toFloat(), getColour(Skin::kWidgetPrimary1, this).darker(0.8f));
+      fillRect(openGl, getLocalBounds().toFloat(), getHighlightColour());
 
     return true;
   }
@@ -463,23 +404,18 @@ namespace Interface
 
     placement = Placement::custom;
     sizingFlags |= GrowableX | GrowableY;
-  }
 
-  bool 
-  PopupSelector::keyPressed(const KeyPress &key)
-  {
-    for (auto *child = selectedList->children; child; child = child->next)
+    overridePosition = [](Component *c)
     {
-      // this is safe because only popup items can be childen
-      auto *item = utils::as<PopupItem>(child);
-      if (key.keyCode != item->shortcutKeyCode)
-        continue;
-      
-      newSelection(item);
-      return true;
-    }
+      auto *self = (PopupSelector *)c;
 
-    return false;
+      // position stays relative to component we're attached to
+      self->bounds.setPosition(self->parent->bounds.getPosition());
+
+      for (auto *child = self->children; child; child = child->next)
+        child->componentFlags.isVisible = !self->summoner->isObscured();
+
+    };
   }
 
   void PopupSelector::newSelection(PopupItem *entry)
@@ -501,91 +437,6 @@ namespace Interface
     resetState();
   }
 
-  //void PopupSelector::summonNewPopupList(Rectangle<int> sourceBounds, PopupItem *items)
-  //{
-  //  PopupList *newList = nullptr;
-  //  for (auto *list : lists)
-  //    if (!list->isUsed)
-  //      newList = list;
-
-  //  if (!newList)
-  //    newList = anew(arena, PopupList, {});
-
-  //  newList->associatedItem = items;
-
-  //  newList->recalculateSizes();
-  //  newList->isUsed = true;
-  //}
-
-  /*void PopupSelector::summonNewPopupList(Rectangle<int> sourceBounds, PopupItem *items)
-  {
-
-
-
-
-    // we may have already used it with these items
-    bool isCached = newList->getItems() == items && 
-      items->type != PopupItem::AutomationList;
-    if (!isCached)
-    {
-      newList->setItems(items);
-      newList->recalculateSizes();
-    }
-
-    newList->setIsUsed(true);
-
-    int width = newList->getListWidth();
-    int height = newList->getListHeight() + 2 * commonInfo_.listRounding;
-    auto [_, __, windowWidth, windowHeight] = getLocalBounds();
-
-    int y = sourceBounds.y;
-    if (y + height >= getHeight())
-    {
-      y = utils::max(sourceBounds.getBottom() - height, 0);
-      height = utils::min(height, windowHeight);
-    }
-
-    int x = sourceBounds.getRight();
-    if ((lastPlacement_ == Placement::left || x + width >= windowWidth) 
-      && sourceBounds.x - width > 0)
-    {
-      x = sourceBounds.x - width;
-      lastPlacement_ = Placement::left;
-    }
-    else
-    {
-      x = utils::min(x + width, windowWidth) - width;
-      lastPlacement_ = Placement::right;
-    }
-
-    newList->setBounds(x, y, width, height);
-    if (!isCached)
-      newList->setComponentsBounds();
-    newList->setVisible(true);
-  }
-
-  void PopupSelector::closeSubList(PopupItem *items)
-  {
-    usize index = 0;
-    for (; index < lists_.size(); ++index)
-      if (lists_[index]->getItems() == items)
-        break;
-
-    if (index == lists_.size())
-      return;
-
-    COMPLEX_ASSERT(index > 0);
-
-    lastPlacement_ = ((lists_[index]->getX() - lists_[index - 1]->getX()) > 0) ? 
-      Placement::right : Placement::left;
-
-    for (; index < lists_.size(); ++index)
-    {
-      lists_[index]->setVisible(false);
-      lists_[index]->setIsUsed(false);
-    }
-  }*/
-
   bool 
   PopupSelector::handleFocus(bool hasFocus, FocusChange, Component *correspondent)
   {
@@ -605,17 +456,16 @@ namespace Interface
   }
 
   bool 
-  PopupSelector::handleCommandMessage(u64 commandId, utils::whatever<64>)
+  PopupSelector::keyPressed(const KeyPress &key)
   {
-    switch (commandId)
+    for (auto *child = selectedList->children; child; child = child->next)
     {
-    case Component::HandleCustomPosition:
-      // position stays relative to component we're attached to
-      bounds.setPosition(parent->bounds.getPosition());
+      // this is safe because only popup items can be childen
+      auto *item = utils::as<PopupItem>(child);
+      if (key.keyCode != item->shortcutKeyCode)
+        continue;
 
-      for (auto *child = children; child; child = child->next)
-        child->componentFlags.isVisible = !summoner->isObscured();
-
+      newSelection(item);
       return true;
     }
 
@@ -647,4 +497,133 @@ namespace Interface
     componentFlags.isVisible = true;
     grabFocus();
   }
+  
+  OptionPopupItem::OptionPopupItem()
+  {
+    overrideSize = [](Component *c, bool isCalculatingVertical)
+    {
+      auto *item = (OptionPopupItem *)c;
+
+      i32 minSize{ }, maxSize{ };
+      auto [text, canTextWrap] = item->getTextAndWrap();
+
+      float height = scaleValue((float)item->desiredSize.h);
+      uiRelated.cache->setFont(FontId::InterType, height);
+      nvgTextAlign(uiRelated.cache->context, NVG_ALIGN_LEFT | NVG_ALIGN_CENTER);
+
+      if (!isCalculatingVertical)
+      {
+        minSize = (canTextWrap) ? 0 : (i32)::ceilf(uiRelated.cache->getStringWidthFloat(text));
+        maxSize = -1;
+      }
+      else
+      {
+        auto lineCount = uiRelated.cache->getStringNumberOfLines(text, (float)item->bounds.w);
+        minSize = (i32)::roundf(height * (float)lineCount);
+        maxSize = minSize;
+      }
+
+      return Range<i32>{ minSize, maxSize };
+    };
+  }
+
+  bool 
+  OptionPopupItem::render(OpenGlWrapper &openGl)
+  {
+    PopupItem::render(openGl);
+
+    auto [text, canTextWrap] = getTextAndWrap();
+    Skin::ColourId textColourId = Skin::kTextComponentText1;
+
+    if (!canBeChosen)
+    {
+      textColourId = Skin::kTextComponentText2;
+      // draw background
+      fillRect(openGl, getLocalBounds().toFloat(), getColour(Skin::kPopupSelectorDelimiter, this));
+    }
+
+    renderText(text, FontId::InterType, getLocalBounds().trimmed(scaleValueRoundInt(padding.toInt())).toFloat(),
+      openGl.cache, getColour(textColourId, this), Placement::left, canTextWrap);
+
+    return true;
+  }
+
+  utils::pair<utils::string_view, bool> 
+  OptionPopupItem::getTextAndWrap()
+  {
+    // label whose extra data is a string
+    if (id)
+      return { *((utils::stringnd *)extraData), true };
+
+    auto *option = (Framework::IndexedData *)extraData;
+    return { option->getText(), !option->canBeChosen() };
+  }
+
+  PopupList *
+  OptionPopupItem::createPopupList(PopupSelector *selector, 
+    utils::string_view title, Framework::IndexedData *options)
+  {
+    auto *itemArena = selector->arena;
+
+    PopupList *list = anew(itemArena, PopupList, { selector });
+    list->draw = [](OpenGlWrapper &openGl, PopupList *self)
+    {
+      auto topPadding = scaleValue((float)self->padding.y);
+      auto bottomPadding = scaleValue((float)self->padding.h);
+
+      fillRect(openGl, self->getLocalBounds().toFloat(), getColour(Skin::kBody, self),
+        topPadding, topPadding, bottomPadding, bottomPadding);
+
+      self->doRenderChildren(openGl);
+
+      strokeRect(openGl, self->getLocalBounds().toFloat(), scaleValue(1.0f),
+        Colour{ 45, 45, 45 }, topPadding);
+
+      return false;
+    };
+
+    static constexpr Rectangle<u16> kPrimaryPaddingRect =
+    { kPopupHorizontalPadding, kPopupVerticalPrimaryPadding, kPopupHorizontalPadding, kPopupVerticalPrimaryPadding };
+    static constexpr Rectangle<u16> kSecondaryPaddingRect =
+    { kPopupHorizontalPadding, kPopupVerticalSecondaryPadding, kPopupHorizontalPadding, kPopupVerticalSecondaryPadding };
+    static constexpr Rectangle kPrimarySizeRect = { 0, kPrimaryTextLineHeight, 0, kPrimaryTextLineHeight };
+    static constexpr Rectangle kSecondarySizeRect = { 0, kSecondaryTextLineHeight, 0, kSecondaryTextLineHeight };
+
+    if (!title.empty())
+    {
+      auto *name = anew(itemArena, OptionPopupItem, {});
+      name->arena = itemArena;
+      name->id = 1;
+      name->canBeChosen = false;
+      name->sizingFlags = (Component::SizingFlags)(Component::GrowableX);
+      name->extraData = anew(itemArena, utils::stringnd, { itemArena, title });
+      name->associatedList = list;
+      name->padding = kSecondaryPaddingRect;
+      name->desiredSize = kSecondarySizeRect;
+      list->addChildComponent(name);
+    }
+
+    (void)Framework::iterateOverIndexedData(options,
+      [itemArena, list](Framework::IndexedData &option)
+      {
+        if (!option.childrenCount && !option.canBeChosen())
+          return false;
+
+        auto *item = anew(itemArena, OptionPopupItem, {});
+        item->arena = itemArena;
+        item->extraData = &option;
+        item->canBeChosen = option.canBeChosen();
+        item->associatedList = list;
+        item->sizingFlags = (Component::SizingFlags)(Component::GrowableX);
+        item->componentFlags.acceptsOrphanedMouseEvents = item->canBeChosen;
+        item->padding = (item->canBeChosen) ? kPrimaryPaddingRect : kSecondaryPaddingRect;
+        item->desiredSize = (item->canBeChosen) ? kPrimarySizeRect : kSecondarySizeRect;
+        list->addChildComponent(item);
+
+        return false;
+      });
+
+    return list;
+  }
+
 }

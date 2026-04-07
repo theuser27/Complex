@@ -4,14 +4,15 @@
 #pragma once
 
 #include "Framework/utils.hpp"
-#include "Framework/sync_primitives.hpp"
-#include "gui_utils.hpp"
+#include "Framework/memory.hpp"
 #include "ui_constants.hpp"
+#include "gui_utils.hpp"
 #include "Skin.hpp"
+#include "Graphics.hpp"
 
 namespace Generation
 {
-  class BaseProcessor;
+  class Processor;
 }
 
 namespace Interface
@@ -53,36 +54,43 @@ namespace Interface
 
   namespace CommandMessages
   {
+    enum CommandMessage : u64
+    {
+      HandleAutoscroll = 1,
+      HandleProcessorInsertion,
+      HandleReinitialisation,
+    };
+
+    using HandleMessageFn = bool(Component *self, u64 commandId, void *extraData);
+
+    struct Autoscroll
+    {
+      Point<i32> position{};
+      bool handleX{};
+      bool handleY{};
+    };
+
     struct ProcessorInsertion
     {
       Point<i32> position{};
-      Generation::BaseProcessor *processor{};
+      Generation::Processor *processor{};
       u32 index{};
       bool useIndex{};
       bool insertPlaceholder{};
     };
 
-    bool handleProcessorInsertion(Generation::BaseProcessor *parent, Component *parentComponent,
+    bool handleProcessorInsertion(Generation::Processor *parent, Component *parentComponent,
       ProcessorInsertion *metadata, Component *substituteInsert = nullptr);
-    bool tryProcessorInsert(Generation::BaseProcessor *processorToInsert, 
-      Component *treeToInsertInto, ProcessorInsertion &data);
   }
 
   class Component
   {
   public:
-    enum CommandMessage : u64
-    {
-      HandleCustomPosition = 1,
-      HandleProcessorInsertion,
-      HandleReinitialisation,
-    };
-
     enum SizingFlags : u16
     {
       None = 0,
 
-      // the size of the component will be whatever is set in desiredSize
+      // the size of the component will be whatever is set in desiredSize.min
       FixedX = 1 << 0,
       FixedY = 1 << 1,
 
@@ -140,10 +148,8 @@ namespace Interface
     bool contains(Point<i32> parentPoint) const { return getLocalBounds().contains(parentPoint); }
     bool contains(Point<float> parentPoint) const { return contains(parentPoint.toInt()); }
 
-    Component *getComponentAt(i32 x, i32 y, bool onlyClickable = false, bool recursive = true);
-    Component *
-    getComponentAt(Point<i32> position, bool onlyClickable = false) 
-    { return getComponentAt(position.x, position.y, onlyClickable); }
+    Component *getComponentAt(i32 x, i32 y, bool onlyClickable = false, 
+      bool recursive = true, Component *startingAt = nullptr);
 
     bool 
     isParentOf(const Component *possibleChild) const
@@ -182,16 +188,15 @@ namespace Interface
 
     bool hasFocus(bool trueIfChildIsFocused) const;
     void grabFocus();
-    void giveAwayFocus();
+    bool giveAwayFocusTo(Component *component = nullptr);
 
     // needs wantsFocus=1
-    enum FocusChange
-    {
-      FocusClick,         // focus changed by a click (focusOnMouseClick=1),  initiator <-- indirect target
-      FocusGrabbed,       // focus manually grabbed by (grabFocus()),         initiator <-- indirect target
-      FocusGivenAway,     // focus willingly given away (giveAwayFocus()),    initiator --> indirect target
-      FocusMoved,         // focus manually moved to (moveFocusTo()),         initiator -->   direct target
-      FocusSetInvisible,  // focus changed due to invisibility (isVisible=0), initiator --> indirect target
+    enum FocusChange : u8
+    {                     //                                                     focus transfer direction
+      FocusClick,         // focus changed by a click (clickable=1),          initiator <--  indirect target
+      FocusGrabbed,       // focus manually grabbed by (grabFocus()),         initiator <--  indirect target
+      FocusGivenAway,     // focus willingly given away (giveAwayFocusTo()),  initiator --> no/direct target
+      FocusSetInvisible,  // focus changed due to invisibility (isVisible=0), initiator -->  indirect target
     };
     virtual bool handleFocus([[maybe_unused]] bool hasFocus, 
       [[maybe_unused]] FocusChange focusChange, 
@@ -199,8 +204,11 @@ namespace Interface
 
     virtual bool keyPressed([[maybe_unused]] const KeyPress &key) { return false; }
 
-    virtual bool handleCommandMessage([[maybe_unused]] u64 commandId, 
-      [[maybe_unused]] utils::whatever<64> extraData = {}) { return false; }
+    void addCommandMessageHandler(utils::sll<CommandMessages::HandleMessageFn *> &handler,
+      utils::sll<CommandMessages::HandleMessageFn *> *insertBefore = nullptr);
+    void removeCommandMessageHandler(utils::sll<CommandMessages::HandleMessageFn *> &handler);
+    bool handleCommandMessage(u64 commandId, void *extraData = {}, bool useFallbackHandler = true);
+    static bool componentHandleCommandMessage(Component *c, u64 commandId, void *extraData);
 
     Skin::Override getSkinOverride() const;
 
@@ -208,6 +216,8 @@ namespace Interface
     void doRender(OpenGlWrapper &openGl);
     void renderScrollbars(OpenGlWrapper &openGl, float scrollHoverIncrement);
     virtual bool render([[maybe_unused]] OpenGlWrapper &openGl) { return true; }
+
+    bool scrollComponent(float x, float y);
 
     utils::bumpArena *arena{};
 
@@ -217,6 +227,8 @@ namespace Interface
     Component *children{};
     Component *previous{};
     Component *next{};
+
+    utils::sll<CommandMessages::HandleMessageFn *> *commandMessageHandler{};
 
     //i8 layerIndex = 0;
     Skin::Override skinOverride = Skin::kUseParentOverride;
@@ -238,12 +250,14 @@ namespace Interface
       bool isOpenGlInitialised : 1 = false;
       bool isDestroyingOpenGl : 1 = false;
       RenderFlag renderState : 2 = RenderFlag::Dirty;
-      bool hasRenderedFeatures : 1 = false;
     } componentFlags{};
     
 
     Placement placement{};
     SizingFlags sizingFlags = None;
+
+    // 
+    Point<i8> autoScrollIncrements{};
 
     // margin in parent
     Rectangle<i16> margin{};
@@ -253,9 +267,10 @@ namespace Interface
 
     // returns width/height min and max sizes depending on isCalculatingVertical
     // can return -1 to use the calculations in from the underlying algorithm
-    Range<i32> (*overrideDimensions)(Component *c, bool isCalculatingVertical){};
+    Range<i32> (*overrideSize)(Component *c, bool isCalculatingVertical){};
+    void (*overridePosition)(Component *c){};
 
-    Point<i32> scrollOffset{};
+    Point<float> scrollOffset{};
     Area<i32> scrollableArea{};
 
     // animation related
@@ -293,6 +308,87 @@ namespace Interface
       return draw(openGl, reference, this, relativePoint);
     }
   };
+
+  inline bool preOrderTreeTraversal(Component *tree, const auto &lambda, 
+    bool forward = true, bool includeParent = false)
+  {
+    if (includeParent && lambda(tree))
+      return true;
+
+    if (forward)
+    {
+      for (auto *child = tree->children; child; child = child->next)
+        if (lambda(child))
+          return true;
+    }
+    else if (tree->children)
+    {
+      for (auto *child = tree->children->previous; ; child = child->previous)
+      {
+        if (lambda(child))
+          return true;
+
+        if (!child->previous->next)
+          break;
+      }
+    }
+
+    for (auto *child = tree->children; child; child = child->next)
+      if (preOrderTreeTraversal(child, lambda))
+        return true;
+
+    return false;
+  }
+
+  inline bool preOrderTreeTraversal(Component *tree, const auto &lambda, Point<i32> at,
+    bool onlyClickable = true, Component *startingAt = nullptr, bool includeParent = false)
+  {
+    if (includeParent && lambda(tree))
+      return true;
+
+    Component *originalStartingAt = startingAt;
+
+    Component *child{};
+    while ((child = tree->getComponentAt(at.x, at.y, onlyClickable, false, startingAt)))
+    {
+      if (lambda(child))
+        return true;
+
+      startingAt = child;
+    }
+
+    startingAt = originalStartingAt;
+
+    while ((child = tree->getComponentAt(at.x, at.y, false, false, startingAt)))
+    {
+      if (preOrderTreeTraversal(child, lambda, at - child->getPosition(), onlyClickable))
+        return true;
+
+      startingAt = child;
+    }
+    
+    return false;
+  }
+
+  inline bool dfsUpwardTreeTraversal(Component *tree, const auto &lambda, 
+    Point<i32> at, bool onlyClickable = true, Component *startingAt = nullptr)
+  {
+    Component *deepestComponent{};
+    while (deepestComponent = tree->getComponentAt(at.x, at.y, onlyClickable, true, startingAt))
+    {
+      while (deepestComponent->parent != tree)
+      {
+        if (lambda(deepestComponent))
+          return true;
+
+        deepestComponent = deepestComponent->parent;
+      }
+
+      startingAt = tree->getComponentAt(at.x, at.y, false, false, startingAt);
+    }
+
+    return false;
+  }
 
   class ScopedBoundsEmplace
   {

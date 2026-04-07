@@ -4,8 +4,8 @@
 #pragma once
 
 #include "Plugin/Renderer.hpp"
-#include "../LookAndFeel/BaseComponent.hpp"
-#include "../Components/BaseControl.hpp"
+#include "../LookAndFeel/Component.hpp"
+#include "../Components/Control.hpp"
 #include "../Components/Spectrogram.hpp"
 #include "../Sections/Popups.hpp"
 
@@ -35,7 +35,7 @@ namespace Interface
 
     ResizeCorner();
 
-    bool handleCommandMessage(u64 commandId, utils::whatever<64> extraData) override;
+    //bool handleCommandMessage(u64 commandId, void *extraData) override;
 
     bool mouseEnter(const MouseEvent &) override;
     bool mouseExit(const MouseEvent &) override;
@@ -113,15 +113,14 @@ namespace Interface
     void reinitialise();
 
     bool render(OpenGlWrapper &openGl) override;
-    bool handleCommandMessage(u64 commandId, utils::whatever<64> extraData) override;
 
     Generation::SoundEngine *soundEngine{};
+    utils::sll<CommandMessages::HandleMessageFn *> soundEngineHandler{};
 
     TopBar topBar{};
     Spectrogram spectrogram{};
     EffectsSection effectsSection{};
     BottomBar bottomBar{};
-    InvisibleHoverComponent invisibleHover{};
   };
 
   class MainInterface final : public Component
@@ -134,6 +133,7 @@ namespace Interface
 
     //ResizeCorner resizeCorner{};
 
+    InvisibleHoverComponent invisibleHover{};
     PopupSelector popupSelector{};
     PopupDisplay popupDisplay1{};
     PopupDisplay popupDisplay2{};

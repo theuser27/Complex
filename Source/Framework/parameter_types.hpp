@@ -20,7 +20,7 @@ namespace utils
 
 namespace Generation
 {
-  class BaseProcessor;
+  class Processor;
 }
 
 namespace Framework
@@ -50,7 +50,7 @@ namespace Framework
   COMPLEX_ENUM(ParameterChangeReason, 
     ( inputSidechain, 1757682036260),
     (outputSidechain, 1757682033430),
-    (      laneCount, 1757682031418),
+    (    laneSources, 1757682031418),
   );
 
   struct ProcessorMetadata;
@@ -58,58 +58,89 @@ namespace Framework
 
   struct IndexedData
   {
-    enum { NoneFlag, VtableFlag, ProcessorFlag, ParameterFlag };
+    enum { NoneFlag, ProcessorFlag, ParameterFlag, StateIdFlag };
 
     utils::string_view displayName{};       // user-readable name for given parameter value
     uuid id{};                              // uuid for parameter value
-    u32 count = 1;                          // how many consecutive values are of this indexed type
-                                            //   can be more than the ones currently available
+    
+    IndexedData *parent{};
+    IndexedData *children{};
+    IndexedData *next{};
+    u32 childrenCount{};
+
+    u32 valueCount = 1;                     // how many choosable values are there inside children (or itself if no children)
     u32 flags{};
     u64 userFlags{};
     uuid dynamicUpdateUuid{};               // this uuid is used to register for in the State
                                             //   these updates will happen only if the parameter is not mapped/modulated
-    IndexedData *parent{};
-    IndexedData *children{};
-    IndexedData *next{};
     union
     {
-      utils::span<void(*const)()> vtable{};
       ProcessorMetadata *processorMetadata;
       ParameterMetadata *parameterMetadata;
+      u64 stateId;
     };
 
     operator IndexedData *() { return this; }
+
+    bool canBeChosen() const { return id && valueCount && !children && !childrenCount; }
+    utils::string_view getText() const;
+
     IndexedData &
-    operator,(IndexedData &other) 
-    {
-      if (next)
-        *next, other;
+    addChildren(utils::span<IndexedData *const> childrenToAdd, bool addAsUntracked = false)
+    {      
+      if (!children)
+        valueCount = 0;
+
+      // count all entries from the children to be inserted
+      u32 addedValues = childrenToAdd[0]->valueCount;
+      childrenToAdd[0]->parent = this;
+      for (usize i = 1; i < childrenToAdd.size(); ++i)
+      {
+        COMPLEX_ASSERT(childrenToAdd[i]->id, "Option must have an id");
+        addedValues += childrenToAdd[i]->valueCount;
+        childrenToAdd[i]->parent = this;
+        childrenToAdd[i - 1]->next = childrenToAdd[i];
+      }
+
+      auto *child = children;
+      if (!addAsUntracked)
+      {
+        for (usize i = 0; childrenCount && i < childrenCount - 1; child = child->next) { }
+
+        for (auto *p = this; p; p = p->parent)
+          p->valueCount += addedValues;
+        childrenCount += (u32)childrenToAdd.size();
+      }
+      else
+        for (; child && child->next; child = child->next) { }
+
+      if (!child)
+        children = childrenToAdd[0];
       else
       {
-        next = &other;
-        other.parent = parent;
-        if (parent)
-          parent->count += other.count;
+        childrenToAdd[childrenToAdd.size() - 1]->next = child->next;
+        child->next = childrenToAdd[0];
       }
 
       return *this;
     }
 
-    template<typename ... Args>
-    IndexedData &
-    addChildren(Args &&... args)
+    void removeChild(IndexedData *option)
     {
-      IndexedData *childrenArgs[] = { (&args)... };
-      childrenArgs[0]->parent = this;
-      count += childrenArgs[0]->count;
-      for (usize i = 1; i < sizeof...(Args); ++i)
+      COMPLEX_ASSERT(option->parent == this);
+
+      --childrenCount;
+      for (auto *p = this; p; p = p->parent)
+        p->valueCount -= option->valueCount;
+
+      if (children == option)
+        children = option->next;
+      else
       {
-        childrenArgs[i - 1]->next = childrenArgs[i];
-        childrenArgs[i]->parent = this;
-        count += childrenArgs[i]->count;
+        auto *child = children;
+        for (; child->next != option; child = child->next) { }
+        child->next = option->next;
       }
-      children = childrenArgs[0];
-      return *this;
     }
 
     static IndexedData *
@@ -126,13 +157,27 @@ namespace Framework
       return newOption;
     }
 
-    static void visit(IndexedData *data, const auto &predicate)
+    static bool visit(IndexedData *data, const auto &predicate)
     {
-      for (auto *child = data->children; child; child = child->next)
+      for (IndexedData *child = data->children, *previous = nullptr; child; 
+        (previous = child), (child = child->next))
       {
-        predicate(*child);
-        visit(child, predicate);
+        if constexpr (requires { predicate(*child, previous); })
+        {
+          if (predicate(*child, previous))
+            return true;
+        }
+        else
+        {
+          if (predicate(*child))
+            return true;
+        }
+
+        if (visit(child, predicate))
+          return true;
       }
+
+      return false;
     }
   };
 
@@ -176,9 +221,39 @@ namespace Framework
   };
 
 
-  utils::pair<const IndexedData *, usize> getIndexedData(double scaledValue, const ParameterDetails &details);
+  utils::pair<const IndexedData *, usize> getOptionFromValue(double scaledValue, const ParameterDetails &details);
   double getValueFromOptionText(utils::string_view text, const ParameterDetails &details);
   double getValueFromOptionId(uuid optionId, const ParameterDetails &details);
+
+  bool
+  iterateOverIndexedData(IndexedData *options, const auto &predicate)
+  {
+    auto *option = options->children;
+    u32 size = options->childrenCount;
+    u32 index = 0;
+
+    while (true)
+    {
+      if (predicate(*option))
+        return true;
+
+      // going down
+      if (option->children && option->childrenCount)
+        if (iterateOverIndexedData(option, predicate))
+          return true;
+
+      // going forward
+      if (++index < size)
+      {
+        option = option->next;
+        continue;
+      }
+
+      break;
+    }
+
+    return false;
+  }
 
   // with skewOnly == true a normalised value between [0,1] or [-0.5, 0.5] is returned,
   // depending on whether the parameter is bipolar
@@ -226,7 +301,7 @@ namespace Framework
     u32 flags{};
     uuid id{};
     utils::string_view name{};
-    Generation::BaseProcessor *(*create)(Plugin::State *state,
+    Generation::Processor *(*create)(Plugin::State *state,
       ProcessorMetadata *metadata, const void *toCopy, void *serialisedSave){};
     ProcessorMetadata *parent{};
     ProcessorMetadata *next{};
@@ -245,6 +320,20 @@ namespace Framework
       return *this;
     }
     operator ProcessorMetadata *() { return this; }
+
+    static bool visit(ProcessorMetadata *data, const auto &predicate)
+    {
+      for (auto *child = data->children; child; child = child->next)
+      {
+        if (predicate(*child))
+          return true;
+
+        if (visit(child, predicate))
+          return true;
+      }
+
+      return false;
+    }
 
     bool 
     acceptsChild(ProcessorMetadata *potentialChild)
@@ -297,7 +386,7 @@ namespace Framework
     utils::bumpArena *arena{};
 
     Framework::ProcessorMetadata *metadata{};
-    utils::vectornd<utils::sp<utils::Dylib>> loadedDynamicLibs{};
+    utils::vector<utils::sp<utils::Dylib>> loadedDynamicLibs{};
 
     utils::bumpArena *getNewArena(usize size)
     {
@@ -323,11 +412,10 @@ namespace Framework
 #define COMPLEX_STRUCTURE_GROUP(nameString, idNumber, ...) (*anew(arena, Framework::ProcessorMetadata, \
   { .flags = ProcessorMetadata::GroupTag, .id = idNumber, .name = nameString __VA_OPT__(,) __VA_ARGS__ }))
 
-// count == 0 if nothing is provided
-#define COMPLEX_STRUCTURE_INDEXED_DATA(...) (*anew(arena, Framework::IndexedData, { COMPLEX_DEFAULT_OR(.count = 0, __VA_ARGS__) }))
+#define COMPLEX_STRUCTURE_INDEXED_DATA(...) anew(arena, Framework::IndexedData, { __VA_ARGS__ })
 
 template<typename T>
-Generation::BaseProcessor *createProcessor(Plugin::State *state, Framework::ProcessorMetadata *metadata,
+Generation::Processor *createProcessor(Plugin::State *state, Framework::ProcessorMetadata *metadata,
   const void *toCopy = nullptr, void *serialisedSave = nullptr);
 template<typename T>
 void *initialiseTypeStructure(void *metadata, Framework::PluginStructure &structure);
@@ -361,7 +449,7 @@ namespace Framework
     void setTransationStorage(usize transactionsToKeep);
 
     // Performs an action and adds it to the undo history list.
-    bool perform(UndoAction *action, bool performOnAdd = true);
+    bool perform(UndoAction *action);
 
     // Starts a new group of actions that together will be treated as a single transaction.
     [[nodiscard]] utils::bumpArena *beginNewTransaction();

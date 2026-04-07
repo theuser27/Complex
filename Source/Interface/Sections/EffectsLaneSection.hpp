@@ -3,8 +3,8 @@
 
 #pragma once
 
-#include "../LookAndFeel/BaseComponent.hpp"
-#include "../Components/BaseControl.hpp"
+#include "../LookAndFeel/Component.hpp"
+#include "../Components/Control.hpp"
 
 namespace Generation
 {
@@ -18,6 +18,8 @@ namespace Interface
   class EffectsLaneSection final : public Component
   {
   public:
+    static constexpr int kAutoScrollRegion = 100;
+
     static constexpr int kLeftEdgePadding = 12;
     static constexpr int kRightEdgePadding = 8;
 
@@ -28,21 +30,16 @@ namespace Interface
     void reinitialise();
     void destroy();
 
-    //EffectsLaneSection *createCopy(utils::bumpArena *arena);
-
     bool render(OpenGlWrapper &openGl) override;
 
     Generation::EffectsLane *effectsLane{};
     EffectsSection *parentState{};
+    utils::sll<CommandMessages::HandleMessageFn *> laneHandler{};
 
     Component header{};
     Component footer{};
 
-    struct ModuleHolder : public Component
-    {
-      bool render(OpenGlWrapper &openGl) override;
-
-    } moduleHolder{};
+    DrawComponent moduleHolder{};
 
     TextEditor laneTitle{};
     PowerButton laneActivator{};
@@ -59,7 +56,9 @@ namespace Interface
       bool mouseDown(const MouseEvent &e) override;
       bool render(OpenGlWrapper &openGl) override;
 
-      bool handleCommandMessage(u64 commandId, utils::whatever<64> extraData = {}) override;
+      float animationValues[1]{};
+      bool isDropdownOpen{};
+      EffectsLaneSection *laneSection{};
 
     } addModulesButton{};
   };

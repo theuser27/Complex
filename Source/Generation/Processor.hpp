@@ -32,32 +32,32 @@ namespace Generation
     (EffectModule, 1758070362397),
   )
 
-  class BaseProcessor
+  class Processor
   {
   public:
-    BaseProcessor(utils::bumpArena *arena, Plugin::State *state, 
-      Framework::ProcessorMetadata *metadata, const BaseProcessor *other);
-    BaseProcessor(BaseProcessor &&) = default;
+    Processor(utils::bumpArena *arena, Plugin::State *state, 
+      Framework::ProcessorMetadata *metadata, const Processor *other);
+    Processor(Processor &&) = default;
 
-    BaseProcessor() = delete;
-    BaseProcessor(const BaseProcessor &) = delete;
-    BaseProcessor &operator=(const BaseProcessor &) = delete;
-    BaseProcessor &operator=(BaseProcessor &&) = delete;
+    Processor() = delete;
+    Processor(const Processor &) = delete;
+    Processor &operator=(const Processor &) = delete;
+    Processor &operator=(Processor &&) = delete;
 
     virtual Interface::Component *createUI() = 0;
     virtual void reset();
 
     virtual void serialiseToJson(void *jsonData, utils::span<Framework::ParameterValue *> parametersToSerialise = {}) const;
     void deserialiseFromJson(void *jsonData);
-    BaseProcessor *createCopy() const { return metadata->create(state, metadata, this, nullptr); }
+    Processor *createCopy() const { return metadata->create(state, metadata, this, nullptr); }
 
     // the following functions are to be called outside of processing time
-    bool addChildProcessor(BaseProcessor &newChildProcessor, BaseProcessor *insertBefore = nullptr);
-    void removeChildProcessor(BaseProcessor &removedChildProcessor);
+    bool addChildProcessor(Processor &newChildProcessor, Processor *insertBefore = nullptr);
+    void removeChildProcessor(Processor &removedChildProcessor);
     bool 
-    addChildProcessor(BaseProcessor &newChildProcessor, usize index) 
+    addChildProcessor(Processor &newChildProcessor, usize index) 
     { return addChildProcessor(newChildProcessor, getChild(children, utils::min((usize)childrenCount, index))); }
-    BaseProcessor &
+    Processor &
     removeChildProcessor(usize index)
     {
       auto *child = getChild(children, utils::min((usize)childrenCount, index));
@@ -81,14 +81,22 @@ namespace Generation
     //void setAllParametersRandomisation(bool toRandomise = true);
     //void setParameterRandomisation(utils::string_view name, bool toRandomise = true);
 
-    static BaseProcessor *
-    getChild(BaseProcessor *children, usize index)
+    usize 
+    getIndex() 
+    {
+      usize i = 0;
+      for (auto *child = parent->children; child != this; child = child->next)
+        ++i;
+      return i;
+    }
+    static Processor *
+    getChild(Processor *children, usize index)
     {
       for (; index && children; (--index), (children = children->next)) { }
       return children;
     }
-    static BaseProcessor *
-    getChild(BaseProcessor *children, usize index, uuid id)
+    static Processor *
+    getChild(Processor *children, usize index, uuid id)
     {
       for (usize i = 0; children;)
       {
@@ -109,10 +117,10 @@ namespace Generation
     Plugin::State *state;
     const u64 stateId = 0;
 
-    BaseProcessor *parent = nullptr;
-    BaseProcessor *previous = nullptr;
-    BaseProcessor *next = nullptr;
-    BaseProcessor *children = nullptr;
+    Processor *parent = nullptr;
+    Processor *previous = nullptr;
+    Processor *next = nullptr;
+    Processor *children = nullptr;
     u32 childrenCount{};
 
     u32 parameterCount{};
@@ -122,45 +130,49 @@ namespace Generation
 
     utils::bumpArena *arena = nullptr;
     Interface::Component *component = nullptr;
+
+    utils::stringnd name{};
   };
 
-  static_assert(utils::is_trivially_destructible_v<BaseProcessor>);
+  static_assert(utils::is_trivially_destructible_v<Processor>);
 
   void deserialiseParametersFromJson(void *jsonData, Framework::ProcessorMetadata *metadata,
-    utils::dll<Framework::ParameterValue> *&parameters, BaseProcessor *processor, bool validateParameters);
+    utils::dll<Framework::ParameterValue> *&parameters, Processor *processor, bool validateParameters);
 }
 
 namespace Framework
 {
   struct AddProcessorUpdate : public Framework::UndoAction
   {
-    AddProcessorUpdate(Generation::BaseProcessor *processorToAdd,
+    AddProcessorUpdate(Generation::Processor *processorToAdd,
       u64 destinationParentStateId, usize destinationIndex);
 
     Plugin::State &state;
-    Generation::BaseProcessor *processor;
+    Generation::Processor *processor;
     u64 destinationParentStateId{};
     usize destinationIndex{};
   };
 
   struct MoveProcessorUpdate final : public Framework::UndoAction
   {
-    MoveProcessorUpdate(Generation::BaseProcessor *processorToMove,
-      u64 destinationParentStateId, usize destinationIndex);
+    MoveProcessorUpdate(Plugin::State *state,
+      u64 sourceParentStateId, usize sourceIndex,
+      u64 destinationParentStateId, usize destinationIndex, bool isDone = false);
 
     Plugin::State &state;
     u64 destinationParentStateId{};
     usize destinationIndex{};
     u64 sourceParentStateId{};
     usize sourceIndex{};
+    bool isDone{};
   };
 
   struct DeleteProcessorUpdate final : public UndoAction
   {
-    DeleteProcessorUpdate(Generation::BaseProcessor *processorToDelete);
+    DeleteProcessorUpdate(Generation::Processor *processorToDelete);
 
     Plugin::State &state;
-    Generation::BaseProcessor *processor{};
+    Generation::Processor *processor{};
     u64 parentStateId{};
     usize index{};
   };

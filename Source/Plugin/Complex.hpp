@@ -6,7 +6,6 @@
 #include "Framework/fourier_transform.hpp"
 #include "Framework/utils.hpp"
 #include "Framework/constants.hpp"
-#include "Framework/sync_primitives.hpp"
 #include "Framework/memory.hpp"
 #include "Framework/parameter_types.hpp"
 
@@ -18,7 +17,7 @@ extern "C"
 
 namespace Generation
 {
-  class BaseProcessor;
+  class Processor;
   class SoundEngine;
 }
 
@@ -106,24 +105,18 @@ namespace Plugin
 
 namespace Plugin
 {
-  // 0 is reserved to mean "uninitialised" and
-  // 1 is reserved for the State itself
-  static constexpr u64 kStateId = 1;
-
   struct State
   {
     State(ComplexPlugin *plugin);
     ~State();
 
-    void expandIfNecessary();
-
     Framework::ProcessorMetadata *findProcessorMetadata(uuid id) const;
 
-    Generation::BaseProcessor *getProcessor(u64 processorId) const;
+    Generation::Processor *getProcessor(u64 processorId) const;
     // creates a default processor or loads processor from save if jsonData != nullptr
-    Generation::BaseProcessor *createProcessor(uuid processorId, void *jsonData = nullptr);
-    Generation::BaseProcessor *copyProcessor(Generation::BaseProcessor *processor);
-    void deleteProcessor(Generation::BaseProcessor *processor);
+    Generation::Processor *createProcessor(uuid processorId, void *jsonData = nullptr);
+    Generation::Processor *copyProcessor(Generation::Processor *processor);
+    void deleteProcessor(Generation::Processor *processor);
 
     utils::pair<u32, u32> getMinMaxFFTOrder() const;
     u32 getMaxBinCount() const;
@@ -133,6 +126,7 @@ namespace Plugin
     void registerDynamicParameter(Framework::ParameterValue *parameter);
     void updateDynamicParameters(uuid reason);
     void updateAllDynamicParameters();
+    void createDynamicParameters();
 
     Generation::SoundEngine &getSoundEngine() { return *soundEngine; }
     float getOverlap();
@@ -140,7 +134,6 @@ namespace Plugin
     u32 getBlockPosition();
     u32 getLaneCount() const;
     
-
     struct Thread
     {
       Thread() = default;
@@ -186,7 +179,8 @@ namespace Plugin
     utils::span<Framework::ParameterBridge> parameterBridges{};
 
     // used to give out non-repeating ids for all processors
-    u64 stateIdCounter = kStateId + 1;
+    // 0 is reserved to mean "uninitialised"
+    u64 stateIdCounter{};
 
     Framework::FFT *fft{};
 
@@ -195,7 +189,9 @@ namespace Plugin
     // parameters that receive updates upon various plugin changes
     utils::vector<utils::pair<Framework::IndexedData *, Framework::ParameterValue *>> dynamicParameters{};
     // the processor tree is stored in a flattened map
-    utils::vector_map<u64, Generation::BaseProcessor *> allProcessors{};
+    utils::vector_map<u64, Generation::Processor *> allProcessors{};
+
+    utils::vector_map<uuid, Framework::IndexedData *> dynamicOptions{};
 
     Framework::PluginStructure pluginStructure{};
 

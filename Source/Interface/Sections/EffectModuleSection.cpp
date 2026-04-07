@@ -1,533 +1,236 @@
-/*
-  ==============================================================================
 
-    EffectModuleSection.cpp
-    Created: 14 Feb 2023 2:29:16am
-    Author:  theuser27
-
-  ==============================================================================
-*/
+// Created: 2023=02-14 02:29:16
 
 #include "EffectModuleSection.hpp"
 
 #include "Plugin/Complex.hpp"
 #include "Framework/parameter_value.hpp"
 #include "Framework/parameter_bridge.hpp"
-#include "Generation/EffectModules.hpp"
+#include "Generation/Effects.hpp"
 #include "../Components/OpenGlImage.hpp"
-#include "../Components/BaseControl.hpp"
-#include "../Components/PinBoundsBox.hpp"
+#include "../Components/Control.hpp"
+#include "Popups.hpp"
 #include "EffectsLaneSection.hpp"
 
 namespace Interface
 {
-  class EmptySlider final : public PinSlider
+  EffectModuleSection::SpectralMaskComponent::EmptySlider::EmptySlider()
   {
-  public:
-    EmptySlider(Framework::ParameterValue *parameter) : PinSlider(parameter)
-    {
-      setShouldShowPopup(true);
-      removeAllOpenGlComponents();
-    }
-
-    void mouseDown(const MouseEvent &e) override
-    {
-      // an unfortunate consequence
-      if (e.mods.isCtrlDown() || e.mods.isCommandDown())
-        getParentComponent()->mouseDown(e);
-      else
-        PinSlider::mouseDown(e);
-    }
-
-    void paint(Graphics &) override { }
-    void redoImage() override { }
-    void setComponentsBounds(bool) override { }
-  };
-
-  class SpectralMaskComponent final : public PinBoundsBox
-  {
-  public:
-    SpectralMaskComponent(Framework::ParameterValue *lowBound, Framework::ParameterValue *highBound, 
-      Framework::ParameterValue *shiftBounds) : PinBoundsBox{ "Spectral Mask", lowBound, highBound }, shiftBounds_(shiftBounds)
-    {
-      using namespace Framework;
-
-      /*highlight_->setCustomRenderFunction([this](OpenGlWrapper &openGl, bool animate)
-        {
-          simd_float shiftValues = shiftBounds_->getInternalValue<simd_float>(kDefaultSampleRate);
-          simd_float lowValues = simd_float::clamp(lowBound_->getInternalValue<simd_float>(kDefaultSampleRate, true) + shiftValues, 0.0f, 1.0f);
-          simd_float highValues = simd_float::clamp(highBound_->getInternalValue<simd_float>(kDefaultSampleRate, true) + shiftValues, 0.0f, 1.0f);
-          highlight_->setStaticValues(lowValues[0], 0);
-          highlight_->setStaticValues(lowValues[2], 1);
-          highlight_->setStaticValues(highValues[0], 2);
-          highlight_->setStaticValues(highValues[2], 3);
-
-          highlight_->render(openGl, animate);
-        });*/
-
-      setInterceptsMouseClicks(true, true);
-
-      addControl(&shiftBounds_);
-      shiftBounds_.toBack();
-    }
-
-    void paint(Graphics &g) override
-    {
-      auto shiftValue = Framework::scaleValue(shiftBounds_.getValue(), shiftBounds_.getParameterDetails());
-      paintHighlightBox(g, (float)lowBound_->getValue(), (float)highBound_->getValue(),
-        getColour(Skin::kWidgetPrimary1).withAlpha(0.15f), (float)shiftValue);
-    }
-    void resized() override
-    {
-      shiftBounds_.setBounds(getLocalBounds());
-      shiftBounds_.setTotalRange(2 * getWidth());
-      PinBoundsBox::resized();
-    }
-    void controlValueChanged(Control *control) override
-    {
-      if (&shiftBounds_ == control)
-      {
-        highlight_.redrawImage();
-        //simd_float shiftValues = shiftBounds_->getInternalValue<simd_float>(kDefaultSampleRate);
-        //simd_float lowValues = simd_float::clamp(lowBound_->getInternalValue<simd_float>(kDefaultSampleRate, true) + shiftValues, 0.0f, 1.0f);
-        //simd_float highValues = simd_float::clamp(highBound_->getInternalValue<simd_float>(kDefaultSampleRate, true) + shiftValues, 0.0f, 1.0f);
-        //highlight_->setStaticValues(lowValues[0], 0);
-        //highlight_->setStaticValues(lowValues[2], 1);
-        //highlight_->setStaticValues(highValues[0], 2);
-        //highlight_->setStaticValues(highValues[2], 3);
-        return;
-      }
-
-      PinBoundsBox::controlValueChanged(control);
-    }
-
-  private:
-    EmptySlider shiftBounds_;
-  };
-
-  EffectModuleSection::EffectModuleSection(Generation::EffectModule *effectModule, EffectsLaneSection *laneSection) :
-    ProcessorSection(effectModule), laneSection_(laneSection), effectModule_(effectModule)
-  {
-    using namespace Framework;
-
-    setInterceptsMouseClicks(true, true);
-
-    draggableBox_.setDraggedComponent(this);
-    addAndMakeVisible(draggableBox_);
-
-    effectTypeSelector_ = utils::up<TextSelector>::create(
-      effectModule->getParameter(Processors::EffectModule::ModuleType::id().value()),
-      Fonts::instance()->getInterVFont().withStyle(Font::bold));
-    effectTypeSelector_->setOptionsTitle("Change Module");
-    addControl(effectTypeSelector_.get());
-
-    effectTypeIcon_ = utils::up<DrawComponent>::create("Effect Type Icon");
-    effectTypeIcon_->setJustification(Justification::centred);
-    effectTypeIcon_->setAlwaysOnTop(true);
-    effectTypeSelector_->setExtraIcon(effectTypeIcon_.get());
-    addOpenGlComponent(effectTypeIcon_.get());
-
-    mixNumberBox_ = utils::up<NumberBox>::create(
-      effectModule->getParameter(Processors::EffectModule::ModuleMix::id().value()));
-    mixNumberBox_->setMaxTotalCharacters(5);
-    mixNumberBox_->setMaxDecimalCharacters(2);
-    addControl(mixNumberBox_.get());
-
-    moduleActivator_ = utils::up<PowerButton>::create(
-      effectModule->getParameter(Processors::EffectModule::ModuleEnabled::id().value()));
-    addControl(moduleActivator_.get());
-    setActivator(moduleActivator_.get());
-
-    auto *baseEffect = effectModule->getEffect();
-
-    effectAlgoSelector_ = utils::up<TextSelector>::create(
-      baseEffect->getParameter(Processors::BaseEffect::Algorithm::id().value()),
-      Fonts::instance()->getInterVFont());
-    effectAlgoSelector_->setOptionsTitle("Change Algorithm");
-    addControl(effectAlgoSelector_.get());
-
-    topLeftContainer_.addControl(effectTypeSelector_.get());
-    topLeftContainer_.addControl(effectAlgoSelector_.get());
-    topLeftContainer_.setAnchor(Placement::left);
-
-    maskComponent_ = utils::up<SpectralMaskComponent>::create(
-      baseEffect->getParameter(Processors::BaseEffect::LowBound::id().value()),
-      baseEffect->getParameter(Processors::BaseEffect::HighBound::id().value()),
-      baseEffect->getParameter(Processors::BaseEffect::ShiftBounds::id().value()));
-    addSubOpenGlContainer(maskComponent_.get());
-
-    setEffectType(baseEffect->processorId);
-    initialiseParameters();
+    sizingFlags = (Component::SizingFlags)(Component::GrowableX | Component::GrowableY);
+    controlFlags.shouldShowPopup = true;
+    overridePosition = [](Component *c) { c->bounds.setPosition({}); };
   }
 
-  utils::up<EffectModuleSection> EffectModuleSection::createCopy() const
+  bool
+  EffectModuleSection::SpectralMaskComponent::EmptySlider::mouseDown(const MouseEvent &e)
   {
-    auto *copiedModule = effectModule_->state->copyProcessor(effectModule_);
-    return utils::up<EffectModuleSection>::create(copiedModule, laneSection_);
+    if (e.mods.test(ModifierKeys::ctrlModifier))
+    {
+      auto event = e;
+      event.mods = event.mods.withoutFlags(ModifierKeys::ctrlModifier);
+      return PinSlider::mouseDown(event);
+    }
+
+    return false;
   }
 
   bool 
-  EffectModuleSection::render(OpenGlWrapper &openGl)
+  EffectModuleSection::SpectralMaskComponent::render(OpenGlWrapper &openGl)
   {
-    //static constexpr float kIdTextHeight = 7.0f;
+    fillRect(openGl, getLocalBounds().toFloat(), getColour(Skin::kBody, this),
+      rounding[0], rounding[1], rounding[2], rounding[3]);
 
-    //maskComponent_->setRoundedCornerColour(getColour(Skin::kBackground));
-
-    //// drawing body
-    //int yOffset = getYMaskOffset();
-    //auto rectangleBounds = getLocalBounds().withTop(yOffset).toFloat();
-
-    //float innerRounding = scaleValue(kInnerPixelRounding);
-    //float outerRounding = scaleValue(kOuterPixelRounding);
-
-    //Path rectangle;
-    //rectangle.startNewSubPath(rectangleBounds.getCentreX(), rectangleBounds.getY());
-
-    //rectangle.lineTo(rectangleBounds.getRight() - innerRounding, rectangleBounds.getY());
-    //rectangle.quadraticTo(rectangleBounds.getRight(), rectangleBounds.getY(),
-    //  rectangleBounds.getRight(), rectangleBounds.getY() + innerRounding);
-
-    //rectangle.lineTo(rectangleBounds.getRight(), rectangleBounds.getBottom() - outerRounding);
-    //rectangle.quadraticTo(rectangleBounds.getRight(), rectangleBounds.getBottom(),
-    //  rectangleBounds.getRight() - outerRounding, rectangleBounds.getBottom());
-
-    //rectangle.lineTo(rectangleBounds.getX() + outerRounding, rectangleBounds.getBottom());
-    //rectangle.quadraticTo(rectangleBounds.getX(), rectangleBounds.getBottom(),
-    //  rectangleBounds.getX(), rectangleBounds.getBottom() - outerRounding);
-
-    //rectangle.lineTo(rectangleBounds.getX(), rectangleBounds.getY() + innerRounding);
-    //rectangle.quadraticTo(rectangleBounds.getX(), rectangleBounds.getY(),
-    //  rectangleBounds.getX() + innerRounding, rectangleBounds.getY());
-
-    //rectangle.closeSubPath();
-
-    //g.setColour(getColour(Skin::kBody));
-    //g.fillPath(rectangle);
-
-    //// drawing draggable box
-    //g.saveState();
-    //g.setOrigin(0, yOffset);
-    //draggableBox_.paint(g);
-    //g.restoreState();
-
-    //int topMenuHeight = scaleValueRoundInt(kTopMenuHeight);
-    //int delimiterToTextSelectorMargin = scaleValueRoundInt(kDelimiterToTextSelectorMargin);
-
-    //// drawing separator line between header and main body
-    //g.setColour(getColour(Skin::kBackgroundElement));
-    //g.fillRect(0.0f, rectangleBounds.getY() + (float)topMenuHeight, rectangleBounds.getRight(), 1.0f);
-
-    //// drawing separator line between type and algo
-    //int lineX = effectTypeSelector_->getRight() + delimiterToTextSelectorMargin;
-    //int lineY = (int)rectangleBounds.getY() + utils::centerAxis(topMenuHeight / 2, topMenuHeight);
-    //g.fillRect(lineX, lineY, 1, topMenuHeight / 2);
-
-    //paintUIBackground(g);
-
-    //String idString = "#";
-    //idString += processorId.value();
-    //g.setColour(getColour(Skin::kNormalText));
-    //auto font = Fonts::instance()->getInterVFont().italicised();
-    //Fonts::instance()->setHeightFromAscent(font, scaleValue(kIdTextHeight));
-    //g.setFont(font);
-    //g.drawText(idString, (int)(rectangleBounds.getX() + outerRounding),
-    //  (int)(rectangleBounds.getBottom() - outerRounding - font.getHeight()),
-    //  font.getStringWidth(idString), (int)font.getHeight(),
-    //  juce::Justification::centredLeft, false);
+    auto shiftValue = Framework::scaleValue(shiftBounds.getValue(), shiftBounds.details);
+    paintHighlightBox(this, *openGl.cache, (float)(shiftValue + lowBound.getValue()),
+      (float)(shiftValue + highBound.getValue()),
+      getColour(Skin::kWidgetPrimary1).withAlpha(0.15f), backgroundColour);
 
     return true;
   }
 
-  void EffectModuleSection::resized()
+  void EffectModuleSection::EffectHolder::Header::reinitialise()
   {
-    ProcessorSection::resized();
+    removeAllChildComponents();
 
-    arrangeHeader();
-    arrangeUI();
-    repaintBackground();
-  }
-
-  void EffectModuleSection::mouseDown(const MouseEvent &e)
-  {
-    if (!e.mods.isPopupMenu())
-      return;
-
-    int topMenuHeight = scaleValueRoundInt(kTopMenuHeight);
-    int yOffset = getYMaskOffset();
-    juce::Rectangle dropdownHitbox{ 0, yOffset, getWidth(), topMenuHeight };
-
-    if (!dropdownHitbox.contains(e.getPosition()) && !e.mods.isPopupMenu())
-      return;
-
-    PopupItem options = createPopupMenu();
-    showPopupSelector(this, e.getPosition(), COMPLEX_MOVE(options),
-      [this](int selection) { handlePopupResult(selection); });
-  }
-
-  void EffectModuleSection::initialiseParameters()
-  {
-    COMPLEX_ASSERT(initialiseParametersFunction_ && "No initParametersFunction was provided");
-
-    for (auto &control : effectControls_)
-      removeControl(control.get());
-
-    effectControls_.clear();
-
-    effectControls_ = initialiseParametersFunction_(this, effectAlgoSelector_->getTextValue());
-    for (auto &control : effectControls_)
-      addControl(control.get());
-  }
-
-  void EffectModuleSection::arrangeHeader()
-  {
-    // top
-    int spectralMaskHeight = scaleValueRoundInt(kSpectralMaskContractedHeight);
-    maskComponent_->setBounds({ 0, 0, getWidth(), spectralMaskHeight });
-    maskComponent_->setRounding(scaleValue(kOuterPixelRounding), scaleValue(kInnerPixelRounding));
-
-    int yOffset = getYMaskOffset();
-    int topMenuHeight = scaleValueRoundInt(kTopMenuHeight);
-
-    // right hand side
-    int mixNumberBoxHeight = scaleValueRoundInt(NumberBox::kDefaultNumberBoxHeight);
-    auto mixNumberBoxBounds = mixNumberBox_->setSizes(mixNumberBoxHeight);
-    mixNumberBox_->setPosition(Point{ moduleActivator_->getX() - mixNumberBoxBounds.getRight() - scaleValueRoundInt(kNumberBoxToPowerButtonMargin),
-      yOffset + utils::centerAxis(mixNumberBoxHeight, topMenuHeight) });
-
-    // left hand side
-    draggableBox_.setBounds(Rectangle{ 0, yOffset, scaleValueRoundInt(kDraggableSectionWidth), topMenuHeight });
-
-    int effectTypeSelectorIconDimensions = scaleValueRoundInt(kIconSize);
-    effectTypeIcon_->setColor(getColour(Skin::kWidgetPrimary1));
-    effectTypeIcon_->setSize(effectTypeSelectorIconDimensions, effectTypeSelectorIconDimensions);
-
-    int effectSelectorsHeight = scaleValueRoundInt(TextSelector::kDefaultTextSelectorHeight);
-    topLeftContainer_.setParentAndBounds(this, { draggableBox_.getRight(),
-      yOffset, getWidth() - draggableBox_.getRight(), topMenuHeight });
-    topLeftContainer_.setControlSizes(effectTypeSelector_.get(), effectSelectorsHeight);
-    topLeftContainer_.setControlSizes(effectAlgoSelector_.get(), effectSelectorsHeight);
-    topLeftContainer_.setControlSpacing(scaleValueRoundInt(kDelimiterWidth) +
-      2 * scaleValueRoundInt(kDelimiterToTextSelectorMargin));
-    topLeftContainer_.repositionControls();
-  }
-
-  void EffectModuleSection::arrangeUI()
-  {
-    COMPLEX_ASSERT(arrangeUIFunction_ && "No arrangeUIFunction was provided");
-    arrangeUIFunction_(this, getUIBounds(), effectAlgoSelector_->getTextValue());
-  }
-
-  void EffectModuleSection::paintBackground(Graphics &g)
-  {
-
-  }
-
-  static constexpr auto kCommonEffectParameters = Framework::Processors::BaseEffect::enum_ids_filter<Framework::kGetParameterPredicate, true>();
-  static constexpr auto kEffectModuleParameters = Framework::Processors::EffectModule::enum_ids_filter<Framework::kGetParameterPredicate, true>();
-
-  void EffectModuleSection::controlValueChanged(Control *control)
-  {
-    if (control != effectTypeSelector_.get() && control != effectAlgoSelector_.get())
+    addChildComponent(&draggableBox);
+    draggableBox.placement = Placement::left;
+    addChildComponent(&effectTypeSelector);
+    effectTypeSelector.arena = arena;
+    effectTypeSelector.placement = Placement::left;
+    effectTypeSelector.dropdownTitle = { arena, "Change Module" };
+    effectTypeSelector.valueChangedCallback = [](Control *c, double newValue, double)
     {
-      ProcessorSection::controlValueChanged(control);
-      return;
-    }
+      // selector -> header -> effectHolder -> effectModuleSection
+      auto *section = (EffectModuleSection *)c->parent->parent->parent;
+      (void)section->effectModule->changeEffect(Framework::getOptionFromValue(
+        Framework::scaleValue(newValue, c->details), c->details).first);
+      
+      section->restartEffectUI();
+    };
 
-    if (!effectModule_)
-      return;
+    addChildComponent(&mixNumberBox);
+    mixNumberBox.maxDecimalCharacters = 2;
+    mixNumberBox.arena = arena;
+    mixNumberBox.placement = Placement::right;
 
-    using namespace Framework;
-
-    bool shouldNotifyParameterChanges = false;
-    Generation::BaseEffect *newEffect;
-    if (control == effectAlgoSelector_.get())
-      newEffect = getEffect();
-    else
-    {
-      auto effectType = effectTypeSelector_->getTextValue(false);
-      auto effectIndex = Processors::BaseEffect::enum_value_by_id(effectType);
-      if (!effectIndex.has_value())
-        return;
-
-      newEffect = effectModule_->changeEffect(effectType);
-
-      // resetting UI
-      setEffectType(newEffect->processorId);
-
-      // replacing the parameters for algorithm and mask sliders
-      for (auto &id : kCommonEffectParameters)
-      {
-        auto *effectControl = getEffectControl(id);
-        auto *newEffectParameter = newEffect->getParameter(id);
-
-        if (auto parameterBridge = effectControl->parameterLink_->hostControl)
-        {
-          parameterBridge->resetParameterLink(newEffectParameter->getParameterLink(), false);
-          shouldNotifyParameterChanges = true;
-        }
-
-        effectControl->changeLinkedParameter(*newEffectParameter,
-          id == Processors::BaseEffect::Algorithm::id().value());
-        effectControl->resized();
-      }
-
-      effectTypeSelector_->resized();
-      effectTypeIcon_->setColor(getColour(Skin::kWidgetPrimary1));
-      mixNumberBox_->resized();
-      moduleActivator_->resized();
-      maskComponent_->resized();
-    }
-
-    initialiseParameters();
-
-    // replacing mapped out parameters, if there are any
-    usize parametersCount = 0;
-    usize parametersStart = 0;
-    auto algoId = effectAlgoSelector_->getTextValue();
-    for (auto &[id, count] : effectParameterCounts_)
-    {
-      if (id == algoId)
-      {
-        parametersCount = count;
-        break;
-      }
-      parametersStart += count;
-    }
-
-    static constexpr auto kReservedString = utils::string_view{ " (Reserved)" };
-
-    for (auto &[mappingIndex, parameterBridge] : parameterMappings.data)
-    {
-      if (auto *link = parameterBridge->getParameterLink(); link && link->parameter)
-        link->parameter->changeBridge(nullptr);
-
-      if (mappingIndex >= parametersCount)
-      {
-        String name = parameterBridge->getName();
-        name += { kReservedString.data(), kReservedString.size() };
-        parameterBridge->setCustomName(name);
-        continue;
-      }
-
-      auto newParameterLink = newEffect->processorParameters_[
-        kCommonEffectParameters.size() + parametersStart + mappingIndex]->getParameterLink();
-
-      // if the new parameter is the old one, just add the bridge and fix name
-      if (parameterBridge->getParameterLink() == newParameterLink)
-      {
-        parameterBridge->setCustomName(parameterBridge->getName()
-          .dropLastCharacters((int)kReservedString.size()));
-        newParameterLink->parameter->changeBridge(parameterBridge);
-      }
-      else
-      {
-        parameterBridge->resetParameterLink(newEffect->processorParameters_[
-          kCommonEffectParameters.size() + parametersStart + mappingIndex]->getParameterLink(), false);
-        shouldNotifyParameterChanges = true;
-      }
-    }
-
-    if (shouldNotifyParameterChanges)
-      Framework::ParameterBridge::notifyParameterChange();
-
-    arrangeUI();
-    repaintBackground();
+    addChildComponent(&moduleActivator);
+    moduleActivator.margin = { kNumberBoxToPowerButtonMargin, 0, 0, 0 };
+    moduleActivator.placement = Placement::right;
   }
 
-  void EffectModuleSection::automationMappingChanged(Control *control, bool isUnmapping)
+  void EffectModuleSection::EffectHolder::reinitialise()
   {
-    if (!effectModule_ || isUnmapping)
-      return;
+    removeChildComponent(&header);
+    deleteAllChildComponents();
 
-    if (auto controlId = control->getParameterDetails().id; 
-      std::ranges::find(kCommonEffectParameters, controlId) != kCommonEffectParameters.end() ||
-      std::ranges::find(kEffectModuleParameters, controlId) != kEffectModuleParameters.end())
-      return;
-
-    auto algoId = effectAlgoSelector_->getTextValue();
-    usize parametersStart = 0;
-    for (auto &[id, count] : effectParameterCounts_)
-    {
-      if (id == algoId)
-        break;
-      parametersStart += count;
-    }
-    auto parameterLink = control->getParameterLink();
-    auto index = getEffect()->getParameterIndex(parameterLink->parameter);
-    index -= kCommonEffectParameters.size();
-    index -= parametersStart;
-
-    parameterMappings.add(index, parameterLink->hostControl);
-    parameterLink->hostControl->addListener(this);
+    addChildComponent(&header);
+    header.arena = arena;
+    header.sizingFlags = Component::GrowableX;
+    header.placement = Placement::top;
+    header.desiredSize = { 0, kTopMenuHeight, 0, kTopMenuHeight };
   }
 
-  void EffectModuleSection::parameterLinkReset(Framework::ParameterBridge *bridge,
-    Framework::ParameterLink *newLink, Framework::ParameterLink *)
+  bool 
+  EffectModuleSection::EffectHolder::render(OpenGlWrapper &openGl)
   {
-    if (newLink)
-      return;
+    float topRounding = scaleValue(kInnerPixelRounding);
+    float bottomRounding = scaleValue(kOuterPixelRounding);
 
-    std::erase_if(parameterMappings.data, [&](const auto &element) { return element.second == bridge; });
-    bridge->removeListener(this);
+    fillRect(openGl, getLocalBounds().toFloat(), getColour(Skin::kBody, this),
+      topRounding, topRounding, bottomRounding, bottomRounding);
+
+    nvgBeginPath(openGl);
+    float y = (float)header.bounds.getBottom();
+    nvgMoveTo(openGl, 0.0f, y);
+    nvgLineTo(openGl, (float)bounds.w, y);
+    nvgStrokeWidth(openGl, scaleValue(1.0f));
+    nvgStrokeColor(openGl, getColour(Skin::kBackgroundElement, this));
+    nvgStroke(openGl);
+
+    return true;
   }
 
-  Generation::BaseEffect *EffectModuleSection::getEffect() noexcept { return effectModule_->getEffect(); }
-  TextSelector &EffectModuleSection::getAlgorithmSelector() const noexcept { return *effectAlgoSelector_; }
-
-  Control *EffectModuleSection::getEffectControl(utils::string_view id)
+  void EffectModuleSection::reinitialise()
   {
     using namespace Framework;
 
-    static constexpr auto baseEffectIds = Processors::BaseEffect::enum_ids_filter<kGetParameterPredicate, true>();
-    if (std::ranges::find(baseEffectIds, id) != baseEffectIds.end())
+    removeAllChildComponents();
+
+    componentFlags.vertical = true;
+    componentFlags.clickable = true;
+    sizingFlags = Component::SnapToMinY;
+    desiredSize = { kEffectModuleWidth, 0, kEffectModuleWidth, 0 };
+    laneSection = (EffectsLaneSection *)effectModule->parent->component;
+
+    if (!arena)
+      arena = utils::bumpArena::createNested(utils::bumpArena::fromAllocation(this), COMPLEX_KB(64));
+    if (!effectArena)
+      effectArena = utils::bumpArena::createNested(arena, COMPLEX_KB(32));
+
+
+    addChildComponent(&maskComponent);
+    maskComponent.sizingFlags = Component::GrowableX;
+    maskComponent.desiredSize = { 0, kSpectralMaskContractedHeight, 0, kSpectralMaskContractedHeight };
+    maskComponent.margin = { 0, 0, 0, kSpectralMaskMargin };
+    maskComponent.lowBound.arena = arena;
+    maskComponent.lowBound.changeLinkedParameter(*effectModule->getParameter(Generation::EffectModule::LowBound));
+    maskComponent.highBound.arena = arena;
+    maskComponent.highBound.changeLinkedParameter(*effectModule->getParameter(Generation::EffectModule::HighBound));
+    maskComponent.shiftBounds.arena = arena;
+    maskComponent.shiftBounds.changeLinkedParameter(*effectModule->getParameter(Generation::EffectModule::ShiftBounds));
+
+
+    addChildComponent(&effectHolder);
+    effectHolder.sizingFlags = (Component::SizingFlags)(Component::GrowableX | Component::SnapToMinY);
+    effectHolder.desiredSize = { 0, kEffectModuleMinHeight, 0, utils::max_limit<i32> };
+    effectHolder.reinitialise();
+
+    effectHolder.header.effectTypeSelector.changeLinkedParameter(*effectModule->getParameter(Generation::EffectModule::ModuleType));
+    effectHolder.header.mixNumberBox.changeLinkedParameter(*effectModule->getParameter(Generation::EffectModule::ModuleMix));
+    effectHolder.header.moduleActivator.changeLinkedParameter(*effectModule->getParameter(Generation::EffectModule::ModuleEnabled));
+    effectHolder.header.draggableBox.draggedComponent = this;
+    effectHolder.header.draggableBox.copyingDraggedComponent = [](Component *c)
     {
-      if (id == Processors::BaseEffect::Algorithm::id().value())
-        return effectAlgoSelector_.get();
+      auto *self = (EffectModuleSection *)c;
+      auto *effectModuleCopy = (Generation::EffectModule *)self->effectModule->createCopy();
+      auto *effectModuleSectionCopy = (EffectModuleSection *)effectModuleCopy->createUI();
+      return &effectModuleSectionCopy->effectHolder.header.draggableBox;
+    };
 
-      return maskComponent_->getControl(id);
-    }
-
-    for (auto &control : effectControls_)
-      if (control->getParameterDetails().id == id)
-        return control.get();
-
-    COMPLEX_ASSERT_FALSE("Parameter could not be found");
-    return nullptr;
+    restartEffectUI();
   }
 
-  void EffectModuleSection::handlePopupResult(int result) const noexcept
+
+
+  struct EffectModulePopupItem : public PopupItem
   {
-    if (result == kDeleteInstance)
+    enum MenuId
     {
-      // make sure nothing touches this after the call runs
-      utils::ignore = laneSection_->deleteModule(this, true);
-    }
-    else if (result == kCopyInstance)
-    {
-      // TODO: copy right click option on EffectModuleSection
-    }
-    else if (result == kInitInstance)
-    {
-      // TODO: initialisation right click option on EffectModuleSection
-    }
-  }
+      kCancel = 0,
+      kDeleteInstance,
+      kCopyInstance,
+      kInitInstance
+    };
 
-  PopupItem EffectModuleSection::createPopupMenu() const noexcept
+
+  };
+
+  bool
+  EffectModuleSection::mouseDown(const MouseEvent &e)
   {
-    PopupItem options{};
-    options.addDelimiter("Module Settings");
-    auto &deleteOption = options.addEntry(kDeleteInstance, "D" COMPLEX_UNDERSCORE_LITERAL "elete");
-    deleteOption.shortcut = 'D';
-    auto &copyOption = options.addEntry(kCopyInstance, "C" COMPLEX_UNDERSCORE_LITERAL "opy (TODO)");
-    copyOption.shortcut = 'C';
-    auto &initialiseOption = options.addEntry(kInitInstance, "I" COMPLEX_UNDERSCORE_LITERAL "nitialise");
-    initialiseOption.shortcut = 'I';
+    if (!e.mods.test(ModifierKeys::popupMenuClickModifier))
+      return false;
 
-    return options;
+    //PopupItem options{};
+    //options.addDelimiter("Module Settings");
+    //auto &deleteOption = options.addEntry(kDeleteInstance, "D" COMPLEX_UNDERSCORE_LITERAL "elete");
+    //deleteOption.shortcut = 'D';
+    //auto &copyOption = options.addEntry(kCopyInstance, "C" COMPLEX_UNDERSCORE_LITERAL "opy (TODO)");
+    //copyOption.shortcut = 'C';
+    //auto &initialiseOption = options.addEntry(kInitInstance, "I" COMPLEX_UNDERSCORE_LITERAL "nitialise");
+    //initialiseOption.shortcut = 'I';
+
+    //return options;
+
+    //[](PopupItem *item)
+    //{
+    //  if (item->id == EffectModulePopupItem::kDeleteInstance)
+    //  {
+    //    // make sure nothing touches this after the call runs
+    //    utils::ignore = laneSection_->deleteModule(this, true);
+    //  }
+    //  else if (item->id == EffectModulePopupItem::kCopyInstance)
+    //  {
+    //    // TODO: copy right click option on EffectModuleSection
+    //  }
+    //  else if (item->id == EffectModulePopupItem::kInitInstance)
+    //  {
+    //    // TODO: initialisation right click option on EffectModuleSection
+    //  }
+    //}
+
+    //PopupItem options = createPopupMenu();
+    //showPopupSelector(this, e.getPosition(), COMPLEX_MOVE(options),
+    //  [this](int selection) { handlePopupResult(selection); });
+
+    return true;
+  }
+
+  void EffectModuleSection::restartEffectUI()
+  {
+    utils::bumpArena::clear(effectArena);
+
+    auto activeEffect = effectModule->currentEffect.load(satomi::memory_order_acquire);
+    skinOverride = activeEffect->skinOverride;
+    effectControls = ((Generation::EffectModule::CreateUIFn *)activeEffect->metadata->
+      vtable[Generation::EffectModule::CreateUIVtableIndex])(effectArena, this);
+    
+    // TODO: icon
   }
 
 
-  namespace
+
+  /*namespace
   {
     std::vector<utils::up<Control>> initFilterParameters(EffectModuleSection *section, utils::string_view type)
     {
@@ -975,85 +678,6 @@ namespace Interface
         break;
       }
     }
-  }
+  }*/
 
-  void EffectModuleSection::setEffectType(utils::string_view type)
-  {
-    using namespace Framework;
-
-    auto getEffectParameterCounts = []<nested_enum::NestedEnum Type>()
-    {
-      static constexpr auto typeCounts = []<typename ... Ts>(nested_enum::type_list<Ts...>)
-      {
-        return utils::array{ utils::pair{ Ts::id().value(), Ts::enum_count(nested_enum::All) }... };
-      }(Type::template enum_subtypes_filter<Framework::kGetActiveAlgoPredicate>());
-
-      return utils::span{ typeCounts };
-    };
-
-    paintBackgroundFunction_ = nullptr;
-
-    if (type == Processors::BaseEffect::Utility::id().value())
-    {
-      
-    }
-    else if (type == Processors::BaseEffect::Filter::id().value())
-    {
-      initialiseParametersFunction_ = initFilterParameters;
-      arrangeUIFunction_ = arrangeFilterUI;
-      effectParameterCounts_ = getEffectParameterCounts.template operator()<Processors::BaseEffect::Filter::type>();
-
-      setSkinOverride(Skin::kFilterModule);
-      maskComponent_->setSkinOverride(Skin::kFilterModule);
-      effectTypeIcon_->setShapes(Paths::filterIcon());
-    }
-    else if (type == Processors::BaseEffect::Dynamics::id().value())
-    {
-      initialiseParametersFunction_ = initDynamicsParameters;
-      arrangeUIFunction_ = arrangeDynamicsUI;
-      effectParameterCounts_ = getEffectParameterCounts.template operator()<Processors::BaseEffect::Dynamics::type>();
-
-      setSkinOverride(Skin::kDynamicsModule);
-      maskComponent_->setSkinOverride(Skin::kDynamicsModule);
-      effectTypeIcon_->setShapes(Paths::dynamicsIcon());
-    }
-    else if (type == Processors::BaseEffect::Phase::id().value())
-    {
-      initialiseParametersFunction_ = initPhaseParameters;
-      arrangeUIFunction_ = arrangePhaseUI;
-      effectParameterCounts_ = getEffectParameterCounts.template operator()<Processors::BaseEffect::Phase::type>();
-
-      setSkinOverride(Skin::kPhaseModule);
-      maskComponent_->setSkinOverride(Skin::kPhaseModule);
-      effectTypeIcon_->setShapes(Paths::phaseIcon());
-    }
-    else if (type == Processors::BaseEffect::Pitch::id().value())
-    {
-      initialiseParametersFunction_ = initPitchParameters;
-      arrangeUIFunction_ = arrangePitchUI;
-      effectParameterCounts_ = getEffectParameterCounts.template operator()<Processors::BaseEffect::Pitch::type>();
-
-      setSkinOverride(Skin::kPitchModule);
-      maskComponent_->setSkinOverride(Skin::kPitchModule);
-      effectTypeIcon_->setShapes(Paths::pitchIcon());
-    }
-    else if (type == Processors::BaseEffect::Stretch::id().value())
-    {
-      
-    }
-    else if (type == Processors::BaseEffect::Warp::id().value())
-    {
-      
-    }
-    else if (type == Processors::BaseEffect::Destroy::id().value())
-    {
-      initialiseParametersFunction_ = initDestroyParameters;
-      arrangeUIFunction_ = arrangeDestroyUI;
-      effectParameterCounts_ = getEffectParameterCounts.template operator()<Processors::BaseEffect::Destroy::type>();
-
-      setSkinOverride(Skin::kDestroyModule);
-      maskComponent_->setSkinOverride(Skin::kDestroyModule);
-      effectTypeIcon_->setShapes(Paths::destroyIcon());
-    }
-  }
 }

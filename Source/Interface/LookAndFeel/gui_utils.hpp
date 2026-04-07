@@ -396,7 +396,7 @@ namespace Interface
     }
 
     usize toString(char *buffer, usize bufferSize) const;
-    utils::string toString(utils::Allocator allocator) const;
+    void toString(utils::string &outString) const;
     static Colour fromString(const char *integer, int base = 16);
 
     operator NVGcolor() const { return nvgRGBA(r, g, b, a); }

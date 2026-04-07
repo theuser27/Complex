@@ -36,7 +36,7 @@ namespace std
 
   private:
     iterator data_{};
-    size_type	size_{};
+    size_type size_{};
 
     // private constructors
   #ifdef _MSC_VER
@@ -83,6 +83,7 @@ namespace std
 
 #endif
 }
+
 namespace utils
 {
   using nullptr_t = decltype(nullptr);

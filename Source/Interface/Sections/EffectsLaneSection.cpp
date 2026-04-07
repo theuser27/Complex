@@ -3,28 +3,78 @@
 
 #include "EffectsLaneSection.hpp"
 
-#include "Generation/EffectsLane.hpp"
+#include "Generation/Effects.hpp"
 #include "Plugin/Complex.hpp"
 #include "Plugin/Renderer.hpp"
-#include "../Components/BaseControl.hpp"
+#include "../Components/Control.hpp"
 #include "MainInterface.hpp"
-//#include "EffectModuleSection.hpp"
+#include "EffectModuleSection.hpp"
 
 namespace Interface
 {
   bool
-  EffectsLaneSection::ModuleHolder::render(OpenGlWrapper &openGl)
-  {
-    fillRect(openGl, getLocalBounds().toFloat(), getColour(Skin::kBackground, this), scaleValue(kInsideRouding));
-
-    return true;
-  }
-
-  bool
   EffectsLaneSection::AddModulesButton::mouseDown(const MouseEvent &e)
   {
-    (void)e;
-    // TODO: create popup
+    using namespace Framework;
+
+    if (e.mods.test(ModifierKeys::altModifier) || e.mods.test(ModifierKeys::popupMenuClickModifier))
+      return true;
+
+    auto *selector = getPopupSelector();
+
+    if (isDropdownOpen)
+    {
+      selector->resetState();
+      isDropdownOpen = false;
+      return true;
+    }
+
+    selector->resetState();
+    isDropdownOpen = true;
+
+    // find the module options in the state
+    IndexedData *indexedData{};
+    ProcessorMetadata::visit(laneSection->effectsLane->state->pluginStructure.metadata,
+      [&indexedData](ProcessorMetadata &metadata)
+      {
+        if (metadata.id != Generation::Processors::EffectModule)
+          return false;
+
+        ParameterMetadata *parameter = metadata.parameters;
+        for (usize i = 0; i < metadata.parametersCount; (++i), (parameter = parameter->next))
+          if (parameter->details.id == Generation::EffectModule::ModuleType)
+            break;
+
+        indexedData = parameter->details.options;
+
+        return true;
+      });
+
+    PopupList *options = OptionPopupItem::createPopupList(selector, {}, indexedData);
+    options->desiredSize = { kPopupMinWidth, 0, utils::max_limit<i32>, utils::max_limit<i32> };
+    options->padding = { 0, 4, 0, 4 };
+
+    selector->list = options;
+    selector->skinOverride = getSkinOverride();
+    selector->callback = [this](PopupSelector *, PopupItem *selectedItem)
+    {
+      isDropdownOpen = false;
+      auto *option = (Framework::IndexedData *)selectedItem->extraData;
+      COMPLEX_ASSERT(option->processorMetadata);
+
+      auto *state = laneSection->effectsLane->state;
+      auto *effectModule = (Generation::EffectModule *)state->createProcessor(
+        Generation::Processors::EffectModule);
+      effectModule->changeEffect(option);
+
+      auto *transactionArena = state->plugin->undoManager.beginNewTransaction();
+      state->plugin->undoManager.perform(anew(transactionArena, AddProcessorUpdate, { effectModule,
+        laneSection->effectsLane->stateId, laneSection->effectsLane->childrenCount }));
+    };
+    selector->cancel = [this](PopupSelector *) { isDropdownOpen = false; };
+    selector->summon(this, Placement::bottom, { 0, 4 });
+
+    componentFlags.isClicked = false;
 
     return true;
   }
@@ -32,30 +82,19 @@ namespace Interface
   bool
   EffectsLaneSection::AddModulesButton::render(OpenGlWrapper &openGl)
   {
-    strokeRect(openGl, getLocalBounds().toFloat(), 1.0f, getColour(Skin::kBody), scaleValue(kBorderRounding));
+    static constexpr auto kHoverIncrement = 0.1f;
+    tickAnimation(animationValues,
+      {{ componentFlags.isHovered || isDropdownOpen }}, 
+      {{ kHoverIncrement }});
+    
+    strokeRect(openGl, getLocalBounds().toFloat(), 1.0f, 
+      getColour(Skin::kBody).withAlpha(animationValues[0]), scaleValue(kBorderRounding));
 
     //renderText("Add Modules", FontId::InterType, );
 
     return true;
   }
 
-  bool
-  EffectsLaneSection::AddModulesButton::handleCommandMessage(u64 commandId, utils::whatever<64> extraData)
-  {
-    (void)extraData;
-    switch (commandId)
-    {
-    case Component::HandleCustomPosition:
-
-      // TODO:
-
-      return true;
-    default:
-      break;
-    }
-
-    return false;
-  }
 
   void EffectsLaneSection::reinitialise()
   {
@@ -67,11 +106,37 @@ namespace Interface
     header.removeAllChildComponents();
     footer.removeAllChildComponents();
     removeAllChildComponents();
+    removeCommandMessageHandler(laneHandler);
 
     componentFlags.vertical = true;
     skinOverride = Skin::kEffectsLane;
     sizingFlags = Component::GrowableY;
     desiredSize = { kEffectsLaneWidth, 0, kEffectsLaneWidth, 0 };
+
+    addCommandMessageHandler(laneHandler);
+    laneHandler.object = [](Component *c, u64 commandId, void *extraData)
+    {
+      auto *self = (EffectsLaneSection *)c;
+      switch (commandId)
+      {
+      case CommandMessages::HandleAutoscroll:
+      {
+        auto &data = *(CommandMessages::Autoscroll *)extraData;
+        if (data.handleY)
+        {
+          data.handleY = false;
+
+          Point<i32> position = data.position;
+          auto offset = utils::max(0, kAutoScrollRegion - utils::min(position.y, self->bounds.h - position.y));
+          self->autoScrollIncrements.y = (i8)((position.y < self->bounds.h - position.y) ? -offset : offset);
+        }
+
+        return true;
+      }
+      }
+
+      return false;
+    };
 
     if (!arena)
       arena = utils::bumpArena::createNested(utils::bumpArena::fromAllocation(this), COMPLEX_KB(1));
@@ -85,6 +150,7 @@ namespace Interface
     header.addChildComponent(&laneTitle);
     laneTitle.placement = Placement::left;
     laneTitle.text = { arena, "Lane A" };
+    effectsLane->name.copy(laneTitle.text);
     laneTitle.textColour = Skin::kWidgetAccent1;
     header.addChildComponent(&inputSelector);
     inputSelector.placement = Placement::right;
@@ -104,11 +170,20 @@ namespace Interface
     moduleHolder.margin = { kEffectsLaneOutlineThickness, 0, kEffectsLaneOutlineThickness, 0 };
     moduleHolder.sizingFlags = (Component::SizingFlags)(Component::GrowableX | Component::GrowableY | Component::ScrollableWithBarY);
     moduleHolder.padding = { kHVModuleToLaneMargin, kHVModuleToLaneMargin, kHVModuleToLaneMargin, kHVModuleToLaneMargin };
+    moduleHolder.draw = [](OpenGlWrapper &openGl, Component *, Component *self, Point<i32>)
+    {
+      fillRect(openGl, self->getLocalBounds().toFloat(), 
+        getColour(Skin::kBackground, self), scaleValue(kInsideRouding));
 
-    addModulesButton.placement = Placement::custom;
+      return true;
+    };
+
+    moduleHolder.addChildComponent(&addModulesButton);
+    addModulesButton.componentFlags.clickable = true;
     addModulesButton.sizingFlags = Component::GrowableX;
-    //moduleHolder.addChildComponent(&addModulesButton);
-
+    addModulesButton.placement = Placement::top;
+    addModulesButton.laneSection = this;
+    addModulesButton.desiredSize = { 0, kAddModuleButtonHeight, 0, kAddModuleButtonHeight };
 
     addChildComponent(&footer);
     footer.desiredSize = { 0, kEffectsLaneBottomBarHeight, 0, kEffectsLaneBottomBarHeight };
@@ -146,20 +221,6 @@ namespace Interface
     state->plugin->undoManager.perform(anew(transactionArena, Framework::DeleteProcessorUpdate, { effectsLane }));
   }
 
-  //EffectsLaneSection *
-  //EffectsLaneSection::createCopy(utils::bumpArena *arenaToUse)
-  //{
-  //	Generation::BaseProcessor *processorCopy;
-  //	{
-  //		auto g = effectsLane->state->plugin->acquireProcessingLock(false);
-  //		processorCopy = effectsLane->createCopy();
-  //	}
-  //	auto *newLaneSection = (EffectsLaneSection *)processorCopy->createUI();
-  //	newLaneSection->laneTitle.text.append(" - Copy");
-  //
-  //	return newLaneSection;
-  //}
-
   bool
   EffectsLaneSection::render(OpenGlWrapper &openGl)
   {
@@ -192,6 +253,5 @@ namespace Generation
     effectsLaneSection->effectsLane = this;
     effectsLaneSection->reinitialise();
     return effectsLaneSection;
-    //return nullptr;
   }
 }

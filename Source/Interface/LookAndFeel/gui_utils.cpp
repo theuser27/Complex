@@ -4,7 +4,7 @@
 #include "gui_utils.hpp"
 
 #include "Framework/memory.hpp"
-#include "BaseComponent.hpp"
+#include "Component.hpp"
 
 namespace Interface
 {
@@ -151,12 +151,11 @@ namespace Interface
     return (usize)::stbsp_snprintf(buffer, (int)bufferSize, "%x", colour);
   }
 
-  utils::string
-  Colour::toString(utils::Allocator allocator) const
+  void Colour::toString(utils::string &outString) const
   {
     char temp[30]{};
     usize size = toString(temp, sizeof(temp));
-    return utils::string{ allocator, temp, size };
+    outString.copy({ temp, size });
   }
 
   Colour 

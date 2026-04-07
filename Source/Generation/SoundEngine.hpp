@@ -6,7 +6,7 @@
 #include "Framework/utils.hpp"
 #include "Framework/circular_buffer.hpp"
 #include "Framework/windows.hpp"
-#include "BaseProcessor.hpp"
+#include "Processor.hpp"
 
 namespace Framework
 {
@@ -22,7 +22,7 @@ namespace Generation
 {
   class EffectsLane;
 
-  class SoundEngine final : public BaseProcessor
+  class SoundEngine final : public Processor
   {
   public:
     COMPLEX_ENUM_LOCAL(Parameters,
@@ -192,7 +192,7 @@ namespace Generation
       u32 numInputs, u32 numOutputs, Framework::FFT &ffts);
 
     u32 getProcessingDelay() const;
-    float getOverlap() const { return currentOverlap_; }
+    float getOverlap() const { return currentOverlap_.load(satomi::memory_order_relaxed); }
     u32 getFFTSize() const;
     u32 getMaxBinCount() const;
     utils::pair<u32, u32> getMinMaxFFTOrder();
@@ -220,7 +220,7 @@ namespace Generation
     //
     // amount of overlap with the next block
     float nextOverlap_ = kDefaultWindowOverlap;
-    utils::shared_value<float> currentOverlap_ = kDefaultWindowOverlap;
+    satomi::atomic<float> currentOverlap_ = kDefaultWindowOverlap;
     //
     // window type
     uuid windowTypeId_{};
@@ -269,5 +269,5 @@ namespace Generation
   static_assert(utils::is_trivially_destructible_v<SoundEngine>);
 }
 
-extern template Generation::BaseProcessor *createProcessor<Generation::SoundEngine>(Plugin::State *, Framework::ProcessorMetadata *, const void *, void *);
+extern template Generation::Processor *createProcessor<Generation::SoundEngine>(Plugin::State *, Framework::ProcessorMetadata *, const void *, void *);
 extern template void *initialiseTypeStructure<Generation::SoundEngine>(void *metadata, Framework::PluginStructure &structure);

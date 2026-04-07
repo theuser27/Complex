@@ -1,10 +1,11 @@
 ﻿
 // Created: 2022-12-14 06:59:59
 
-#include "BaseControl.hpp"
+#include "Control.hpp"
 
 #include "Framework/parameter_value.hpp"
 #include "Framework/parameter_bridge.hpp"
+#include "Generation/Processor.hpp"
 #include "Plugin/Complex.hpp"
 #include "Plugin/Renderer.hpp"
 #include "../LookAndFeel/ui_constants.hpp"
@@ -155,7 +156,7 @@ namespace Interface
     double newValue = 0.0;
     if (details.scale == Framework::ParameterScale::Indexed)
     {
-      auto valueInterval = 1.0 / (details.options->count - 1);
+      auto valueInterval = 1.0 / (details.options->valueCount - 1);
       newValue = currentValue + valueInterval * (valueDelta < 0.0 ? -1.0 : 1.0);
     }
     else if (details.flags & Framework::ParameterDetails::RoundToInt)
@@ -208,7 +209,7 @@ namespace Interface
     static constexpr float kHoverIncrement = 0.15f;
 
     (void)openGl;
-    tickAnimation(animationValues, { { componentFlags.isHovered } }, { { kHoverIncrement } });
+    tickAnimation(animationValues, {{ componentFlags.isHovered }}, {{ kHoverIncrement }});
     float thickness = knobArcThickness * (1.0f + 0.15f * animationValues[0]);
     (void)thickness;
 
@@ -296,6 +297,52 @@ namespace Interface
   PinSlider::PinSlider()
   {
     controlFlags.shouldShowPopup = true;
+    placement = Placement::custom;
+    overridePosition = [](Component *c)
+    {
+      auto *self = (PinSlider *)c;
+      auto x = (i32)::round(self->getValue() * (double)self->parent->bounds.w);
+      self->bounds.x = x - self->bounds.w / 2;
+      self->bounds.y = 0;
+    };
+  }
+
+  bool 
+  PinSlider::mouseDown(const MouseEvent &e)
+  {
+    if (e.mods.test(ModifierKeys::popupMenuClickModifier))
+      return Slider::mouseDown(e);
+
+    if (e.mods.test(ModifierKeys::ctrlModifier))
+      return false;
+
+    auto mouseEvent = e.getEventRelativeTo(parent);
+    lastMouseDragPosition = { mouseEvent.x, mouseEvent.y };
+    runningTotal = getValue();
+
+    return Slider::mouseDown(mouseEvent);
+  }
+
+  bool 
+  PinSlider::mouseDrag(const MouseEvent &e)
+  {
+    float multiply = 1.0f;
+
+    controlFlags.isInSensitiveMode = e.mods.test(ModifierKeys::shiftModifier);
+    if (controlFlags.isInSensitiveMode)
+      multiply *= kSlowDragMultiplier;
+
+    auto mouseEvent = e.getEventRelativeTo(parent);
+
+    auto normalisedDiff = ((double)mouseEvent.x - lastMouseDragPosition.x) / (double)parent->bounds.w;
+    runningTotal += multiply * normalisedDiff;
+    setValue(utils::clamp(runningTotal, 0.0, 1.0), true);
+    lastMouseDragPosition = { mouseEvent.x, mouseEvent.y };
+
+    setValue(getValue(), false);
+    setValueToHost();
+
+    return true;
   }
 
   bool PinSlider::render(OpenGlWrapper &openGl)
@@ -353,45 +400,10 @@ namespace Interface
     return false;
   }
 
-  bool 
-  PinSlider::mouseDown(const MouseEvent &e)
-  {
-    if (e.mods.test(ModifierKeys::popupMenuClickModifier))
-      return Slider::mouseDown(e);
-
-    auto mouseEvent = e.getEventRelativeTo(parent);
-    lastMouseDragPosition = { mouseEvent.x, mouseEvent.y };
-    runningTotal = getValue();
-
-    return Slider::mouseDown(mouseEvent);
-  }
-
-  bool 
-  PinSlider::mouseDrag(const MouseEvent &e)
-  {
-    float multiply = 1.0f;
-
-    controlFlags.isInSensitiveMode = e.mods.test(ModifierKeys::shiftModifier);
-    if (controlFlags.isInSensitiveMode)
-      multiply *= kSlowDragMultiplier;
-
-    auto mouseEvent = e.getEventRelativeTo(parent);
-
-    auto normalisedDiff = ((double)mouseEvent.x - lastMouseDragPosition.x) / totalRange;
-    runningTotal += multiply * normalisedDiff;
-    setValue(utils::clamp(runningTotal, 0.0, 1.0), true);
-    lastMouseDragPosition = { mouseEvent.x, mouseEvent.y };
-
-    setValue(getValue(), false);
-    setValueToHost();
-
-    return true;
-  }
-
   TextSelector::TextSelector()
   {
     controlFlags.canUseScrollWheel = true;
-    overrideDimensions = [](Component *c, bool isCalculatingVertical)
+    overrideSize = [](Component *c, bool isCalculatingVertical)
     {
       auto *self = (TextSelector *)c;
 
@@ -435,7 +447,7 @@ namespace Interface
   {
     static constexpr float kHoverIncrement = 0.2f;
 
-    tickAnimation(animationValues, { { componentFlags.isHovered } }, { { kHoverIncrement } });
+    tickAnimation(animationValues, {{ componentFlags.isHovered }}, {{ kHoverIncrement }});
 
     if (auto alpha = animationValues[0]; alpha != 0.0f)
     {
@@ -448,85 +460,6 @@ namespace Interface
 
     return true;
   }
-
-  struct TextSelectorItem : PopupItem
-  {
-    TextSelectorItem()
-    {
-      overrideDimensions = [](Component *c, bool isCalculatingVertical)
-      {
-        auto *item = (TextSelectorItem *)c;
-
-        i32 minSize{}, maxSize{};
-        bool canTextWrap = false;
-        utils::string_view text;
-
-        if (item->id)
-        {
-          // label whose extra data is a string
-
-          canTextWrap = true;
-          text = *((utils::stringnd *)item->extraData);
-        }
-        else
-        {
-          auto *option = (Framework::IndexedData *)item->extraData;
-          canTextWrap = !option->id;
-          text = option->displayName;
-        }
-
-        float height = scaleValue((float)item->desiredSize.h);
-        uiRelated.cache->setFont(FontId::InterType, height);
-        nvgTextAlign(uiRelated.cache->context, NVG_ALIGN_LEFT | NVG_ALIGN_CENTER);
-
-        if (!isCalculatingVertical)
-        {
-          minSize = (canTextWrap) ? 0 : (i32)::ceilf(uiRelated.cache->getStringWidthFloat(text));
-          maxSize = -1;
-        }
-        else
-        {
-          auto lineCount = uiRelated.cache->getStringNumberOfLines(text, (float)item->bounds.w);
-          minSize = (i32)::roundf(height * (float)lineCount);
-          maxSize = minSize;
-        }
-
-        return Range<i32>{ minSize, maxSize };
-      };
-    }
-
-    bool 
-    render(OpenGlWrapper &openGl) override
-    {
-      PopupItem::render(openGl);
-      
-      bool canTextWrap = false;
-      utils::string_view text;
-      Skin::ColourId textColourId = Skin::kTextComponentText1;
-
-      if (id)
-      {
-        // label whose extra data is a string
-        canTextWrap = true;
-        text = *((utils::stringnd *)extraData);
-
-        textColourId = Skin::kTextComponentText2;
-        // draw background
-        fillRect(openGl, getLocalBounds().toFloat(), getColour(Skin::kPopupSelectorDelimiter, this));
-      }
-      else
-      {
-        auto *option = (Framework::IndexedData *)extraData;
-        canTextWrap = !option->id;
-        text = option->displayName;
-      }
-
-      renderText(text, FontId::InterType, getLocalBounds().trimmed(scaleValueRoundInt(padding.toInt())).toFloat(),
-        openGl.cache, getColour(textColourId, this), Placement::left, canTextWrap);
-
-      return true;
-    }
-  };
 
   bool 
   TextSelector::mouseDown(const MouseEvent &e)
@@ -560,91 +493,10 @@ namespace Interface
     lastValue = getValue();
     isDropdownOpen = true;
 
-    auto *itemArena = selector->arena;
-
-    PopupList *options = anew(itemArena, PopupList, { selector });
+    auto *options = OptionPopupItem::createPopupList(selector, (!dropdownTitle.empty()) ?
+      utils::string_view{ dropdownTitle } : details.displayName, details.options);
     options->desiredSize = { kPopupMinWidth, 0, utils::max_limit<i32>, utils::max_limit<i32> };
     options->padding = { 0, 4, 0, 4 };
-    options->draw = [](OpenGlWrapper &openGl, PopupList *self)
-    {
-      auto topPadding = scaleValue((float)self->padding.y);
-      auto bottomPadding = scaleValue((float)self->padding.h);
-      
-      fillRect(openGl, self->getLocalBounds().toFloat(), getColour(Skin::kBody, self),
-        topPadding, topPadding, bottomPadding, bottomPadding);
-
-      self->doRenderChildren(openGl);
-
-      strokeRect(openGl, self->getLocalBounds().toFloat(), scaleValue(1.0f), Colour{ 45,45,45 },
-        topPadding);
-
-      return false;
-    };
-
-    TextSelectorItem *name = anew(itemArena, TextSelectorItem, {});
-    name->arena = itemArena;
-    name->id = 1;
-    name->canBeChosen = false;
-    name->sizingFlags = (Component::SizingFlags)(Component::GrowableX);
-    name->extraData = anew(itemArena, utils::stringnd, { itemArena, (!dropdownTitle.empty()) ?
-      utils::string_view{ dropdownTitle } : details.displayName });
-    name->associatedList = options;
-    name->padding = { 12, 2, 12, 2 };
-    name->desiredSize = { 0, 14, 0, 14 };
-    options->addChildComponent(name);
-
-    bool exitedChild = false;
-    auto *option = details.options->children;
-    u32 size = details.options->count;
-    u32 index = 0;
-
-    while (true)
-    {
-      {
-        TextSelectorItem *item = anew(itemArena, TextSelectorItem, {});
-        item->arena = itemArena;
-        item->extraData = option;
-        item->canBeChosen = option->id && option->count;
-        item->associatedList = options;
-        item->sizingFlags = (Component::SizingFlags)(Component::GrowableX);
-        item->componentFlags.acceptsOrphanedMouseEvents = true;
-        item->padding = { 12, 4, 12, 4 };
-        item->desiredSize = { 0, kPrimaryTextLineHeight, 0, kPrimaryTextLineHeight };
-        options->addChildComponent(item);
-      }
-
-      // going down
-      if (!exitedChild && option->children && option->count)
-      {
-        option = option->children;
-        size = option->count;
-        index = 0;
-        continue;
-      }
-
-      if (option->count)
-        ++index;
-
-      // going forward
-      if (index < size)
-      {
-        option = option->next;
-        continue;
-      }
-
-      // going up
-      exitedChild = true;
-      option = option->parent;
-      if (!option->parent)
-        break;
-      size = option->parent->count;
-
-      // find the index of the parent again
-      index = 0;
-      for (auto *child = option; index < size; ++index)
-        if (child == option)
-          break;
-    }
 
     selector->list = options;
     selector->skinOverride = getSkinOverride();
@@ -675,14 +527,6 @@ namespace Interface
     return true;
   }
 
-  bool 
-  TextSelector::mouseUp(const MouseEvent &e)
-  {
-    if (e.mods.test(ModifierKeys::popupMenuClickModifier))
-      return Slider::mouseUp(e);
-    return true;
-  }
-
   bool
   TextSelector::mouseWheelMove(const MouseEvent &e)
   {
@@ -702,7 +546,7 @@ namespace Interface
   Numberbox::Numberbox()
   {
     controlFlags.canUseScrollWheel = true;
-    overrideDimensions = [](Component *c, bool isCalculatingVertical)
+    overrideSize = [](Component *c, bool isCalculatingVertical)
     {
       auto *self = (Numberbox *)c;
 
@@ -735,8 +579,8 @@ namespace Interface
 
     // if we've clicked we still want the hover animator to run
     tickAnimation(animationValues, 
-      { { componentFlags.isHovered || componentFlags.isClicked } }, 
-      { { kHoverIncrement } });
+      {{ componentFlags.isHovered || componentFlags.isClicked }}, 
+      {{ kHoverIncrement }});
 
     if (drawBackgroundArrow)
     {
@@ -809,5 +653,57 @@ namespace Interface
     sensitivity = oldSensitivity;
 
     return result;
+  }
+
+  PinBoundsBox::PinBoundsBox()
+  {
+    lowBound.padding = { 0, kAdditionalPinWidth / 2, 0, kAdditionalPinWidth / 2 };
+    addChildComponent(&lowBound);
+    highBound.padding = { 0, kAdditionalPinWidth / 2, 0, kAdditionalPinWidth / 2 };
+    addChildComponent(&highBound);
+  }
+
+  bool 
+  PinBoundsBox::render(OpenGlWrapper &openGl)
+  {
+    fillRect(openGl, getLocalBounds().toFloat(), getColour(Skin::kBody, this), 
+      rounding[0], rounding[1], rounding[2], rounding[3]);
+
+    paintHighlightBox(this, *openGl.cache, (float)lowBound.getValue(), (float)highBound.getValue(),
+      getColour(Skin::kWidgetPrimary1).withAlpha(0.15f), backgroundColour);
+
+    return true;
+  }
+
+  void PinBoundsBox::paintHighlightBox(Component *component, Graphics &g, float lowBoundValue,
+    float highBoundValue, Colour colour, Colour backgroundColour)
+  {
+    auto lowBoundShifted = utils::clamp(lowBoundValue, 0.0f, 1.0f);
+    auto highBoundShifted = utils::clamp(highBoundValue, 0.0f, 1.0f);
+
+    if (lowBoundValue < highBoundValue)
+    {
+      auto lowPixel = lowBoundShifted * (float)component->bounds.w;
+      auto highlightWidth = highBoundShifted * (float)component->bounds.w - lowPixel;
+      Rectangle fillBounds{ lowPixel, 0.0f, highlightWidth, (float)component->bounds.h };
+
+      fillRect(g, fillBounds, colour);
+
+    }
+    else if (lowBoundValue > highBoundValue)
+    {
+      auto lowPixel = lowBoundShifted * (float)component->bounds.w;
+      auto upperHighlightWidth = (float)component->bounds.w - lowPixel;
+      auto lowerHighlightWidth = highBoundShifted * (float)component->bounds.w;
+
+      Rectangle upperBounds{ lowPixel, 0.0f, upperHighlightWidth, (float)component->bounds.h };
+      Rectangle lowerBounds{ 0.0f, 0.0f, lowerHighlightWidth, (float)component->bounds.h };
+
+      fillRect(g, upperBounds, colour);
+      fillRect(g, lowerBounds, colour);
+    }
+    
+    (void)backgroundColour;
+    // TODO: rounding at the ends
   }
 }

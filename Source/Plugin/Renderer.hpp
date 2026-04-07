@@ -49,8 +49,9 @@ namespace Interface
 
   void setMouseCursor(Renderer *renderer, MouseCursorTypes cursorType);
 
+  void setClickedComponent(Renderer *renderer, Component *component);
   void setFocusedComponent(Renderer *renderer, Component *component);
-  void moveFocusTo(Renderer *renderer, Component &component);
+  void moveFocusTo(Renderer *renderer, Component *component);
 
   struct MouseInteractions
   {

@@ -131,99 +131,6 @@ namespace utils
     static void logBlocks(bumpArena *arena);
   };
 
-  // TODO: archive this arena implementation
-  struct arena
-  {
-    //static constexpr auto type = AllocatorType::Arena;
-
-    struct node
-    {
-      //static constexpr auto type = AllocatorType::ArenaNode;
-
-      u32 size{};
-      u32 previous{};
-      u32 next{};
-      // -1 is write-exclusive, else read-shared
-      satomi::atomic<i16> lock{};
-
-      u8 alignment{};
-      satomi::atomic<bool> reservedForInsertion{};
-
-      satomi::atomic<node *> previousFree{};
-      satomi::atomic<node *> nextFree{};
-      satomi::atomic<node *> childrenFree{};
-
-      static strict_inline arena::node *
-      fromAllocation(const void *data)
-      { return utils::launder((arena::node *)((byte *)data - sizeof(arena::node))); }
-      // handling accidental identity
-      static strict_inline arena::node *fromAllocation(arena::node *node) { return node; }
-      
-      static strict_inline byte *
-      insert(node *node, usize size, usize alignment, bool clean = false, bool threadSafe = true)
-      { return arena::insert(node, size, alignment, clean, threadSafe); }
-
-      static strict_inline void remove(const void *data, bool threadSafe = true) { arena::removeNode(fromAllocation(data), threadSafe); }
-      static strict_inline void remove(node *node, bool threadSafe = true) { arena::removeNode(node, threadSafe); }
-    };
-
-    node firstNode { .size = sizeof(data) };
-    struct
-    {
-      const usize reservedSize;
-      satomi::atomic<usize> committedSize{};
-      satomi::atomic<node *> lastNode{};
-      satomi::atomic<arena *> nextArena{};
-    } data;
-
-    static_assert(alignof(decltype(data)) <= alignof(node));
-
-    static strict_inline arena::node *
-    fromAllocation(const void *data)
-    { return utils::launder((arena::node *)((byte *)data - sizeof(arena::node))); }
-
-    static byte *insert(arena *arena, usize size, usize alignment, bool clean = false, bool threadSafe = true);
-    static byte *insert(arena::node *node, usize size, usize alignment, bool clean = false, bool threadSafe = true);
-    static strict_inline byte *
-    insert(const void *data, usize size, usize alignment, bool clean = false, bool threadSafe = true)
-    { return insert(fromAllocation(data), size, alignment, clean, threadSafe); }
-
-    static void  removeNode(arena::node *node, bool threadSafe = true);
-    static byte *resizeNode(arena::node *node, usize newSize, bool threadSafe = true);
-
-    static strict_inline void remove(const void *data, bool threadSafe = true) { removeNode(fromAllocation(data), threadSafe); }
-    static strict_inline void resize(void *data, usize newSize, bool threadSafe = true) { resizeNode(fromAllocation(data), newSize, threadSafe); }
-
-
-    static strict_inline arena *
-    create(usize reservedSize = COMPLEX_MB(128), usize commitSize = COMPLEX_KB(512))
-    {
-      COMPLEX_ASSERT(reservedSize > 0);
-      COMPLEX_ASSERT(reservedSize >= commitSize);
-      void *memory = reserveMemory(reservedSize);
-      auto committedSize = utils::max(sizeof(arena), commitSize);
-      commitMemory(memory, committedSize);
-
-      return new(memory) arena{ .data = { .reservedSize = reservedSize,
-        .committedSize = committedSize, .lastNode = (arena::node *)memory } };
-    }
-    template<AllocatorConcept T>
-    static strict_inline arena *
-    createNested(T *differentArena, usize allocateSize)
-    {
-      byte *memory = T::insert(differentArena, allocateSize + sizeof(arena), alignof(arena));
-      arena *result = new(memory) arena{ .data = { .reservedSize = allocateSize + sizeof(arena),
-        .committedSize = allocateSize + sizeof(arena), .lastNode = (arena::node *)memory } };
-      result->firstNode.alignment = (u8)T::type;
-      return result;
-    }
-    static void destroy(arena *arena);
-
-    static void linkDeallocation(const void *parentResource, const void *childResource);
-    static void unlinkDeallocation(const void *childResource);
-    static void relinkDeallocation(const void *oldChildResource, const void *newChildResource);
-  };
-
   // anew, the replacement to operator new (with arenas/allocators)
   // using placement new on memory resource, provided by an arena implementation
 
@@ -419,9 +326,12 @@ namespace utils
 
     ~vector()
     {
-      utils::contiguousDestroy(data_, size_);
-      if (freeingDestructor_)
-        Allocator::fromType((AllocatorType)allocatorType_).remove(data_);
+      if (capacity_)
+      {
+        utils::contiguousDestroy(data_, size_);
+        if (freeingDestructor_)
+          Allocator::fromType((AllocatorType)allocatorType_).remove(data_);
+      }
 
       data_ = {};
       size_ = 0;
@@ -530,7 +440,7 @@ namespace utils
     void *
     insert(iterator iter)
     {
-      usize index = (usize)(iter - data_);
+      usize index = (usize)(iter - begin());
 
       COMPLEX_HARD_ASSERT(index <= size());
 
@@ -559,7 +469,7 @@ namespace utils
     void erase(iterator iter) { erase(iter, 1); }
     void erase(iterator start, usize count)
     {
-      usize index = (usize)(start - data_);
+      usize index = (usize)(start - begin());
 
       COMPLEX_HARD_ASSERT(index < size());
 
@@ -605,27 +515,19 @@ namespace utils
     constexpr T &operator[](usize i) { COMPLEX_HARD_ASSERT(i < size_); return data_[i]; }
     constexpr const T &operator[](usize i) const { COMPLEX_HARD_ASSERT(i < size_); return data_[i]; }
 
-    constexpr T &front() { return data_[0]; }
-    constexpr const T &front() const { return data_[0]; }
-    constexpr T &back() { return data_[size_ - 1]; }
-    constexpr const T &back() const { return data_[size_ - 1]; }
+    constexpr T &front() { COMPLEX_HARD_ASSERT(size_); return data_[0]; }
+    constexpr const T &front() const { COMPLEX_HARD_ASSERT(size_); return data_[0]; }
+    constexpr T &back() { COMPLEX_HARD_ASSERT(size_); return data_[size_ - 1]; }
+    constexpr const T &back() const { COMPLEX_HARD_ASSERT(size_); return data_[size_ - 1]; }
 
-    constexpr T *data() { return data_; }
-    constexpr const T *data() const { return data_; }
+    constexpr T *data() { return (size_) ? data_ : nullptr; }
+    constexpr const T *data() const { return (size_) ? data_ : nullptr; }
 
-    constexpr const iterator begin() const { return data_; }
-    constexpr iterator begin() { return data_; }
+    constexpr const iterator begin() const { return (size_) ? data_ : nullptr; }
+    constexpr iterator begin() { return (size_) ? data_ : nullptr; }
     constexpr const iterator end() const { return begin() + size_; }
     constexpr iterator end() { return begin() + size_; }
   };
-  
-  template<typename Range>
-  vector(Allocator allocator, const Range &) -> vector<remove_pointer_t<decltype(declval<Range>().data())>>;
-
-  // a type alias to signal that the destructor doesn't have to run
-  // to be used in arena context where freeing is automatic
-  template<typename T>
-  using vectornd = vector<T>;
 
   template<typename Key, typename Value>
   struct vector_map
@@ -636,7 +538,7 @@ namespace utils
     Value &operator[](usize index) { return data[index].second; }
 
     //---------------------------------------------------------
-    // the following functions assume keys are unique
+    // the following functions assume keys ARE unique
 
     constexpr auto find(const Key &key) 
     { return utils::find_if(data, [&key](const auto &v) { return v.first == key; }); }
@@ -647,8 +549,11 @@ namespace utils
     constexpr auto find_if(const auto &functor)  { return utils::find_if(data, functor); }
     constexpr auto find_if(const auto &functor) const  { return utils::find_if(data, functor); }
 
-    constexpr void add(Key key, Value value) 
-    { data.emplaceBack(COMPLEX_MOVE(key), COMPLEX_MOVE(value)); }
+    constexpr auto add(Key key, Value value)
+    {
+      data.emplaceBack(COMPLEX_MOVE(key), COMPLEX_MOVE(value));
+      return data.end() - 1;
+    }
 
     constexpr void update(const Key &key, utils::pair<Key, Value> updatedEntry) 
     {
@@ -670,27 +575,31 @@ namespace utils
     static constexpr auto binary_search(auto &container, auto &element, const auto &predicate)
     {
       auto low = container.begin();
-      auto high = container.end() - 1;
+      auto end = container.end();
 
-      while (low <= high)
+      if (low != end)
       {
-        auto mid = low + ((high - low) / 2);
+        auto high = end - 1;      
+        while (low <= high)
+        {
+          auto mid = low + ((high - low) / 2);
 
-        // Check if element is present at mid
-        if (predicate(element, *mid))
-          return utils::pair{ mid, true };
+          // Check if element is present at mid
+          if (predicate(element, *mid))
+            return utils::pair{ mid, true };
 
-        Key key;
-        if constexpr (requires{ element.first; })
-          key = element.first;
-        else
-          key = element;
+          Key key;
+          if constexpr (requires{ element.first; })
+            key = element.first;
+          else
+            key = element;
 
-        // If element greater, ignore left half
-        if ((*mid).first < key)
-          low = mid + 1;
-        else // If element is smaller, ignore right half
-          high = mid - 1;
+          // If element greater, ignore left half
+          if ((*mid).first < key)
+            low = mid + 1;
+          else // If element is smaller, ignore right half
+            high = mid - 1;
+        }
       }
 
       return utils::pair{ low, false };
@@ -816,475 +725,25 @@ namespace utils
     }
   };
 
-  template<typename T>
-  struct stable_vector
-  {
-    static_assert(is_default_constructible_v<T> || 
-      is_trivially_destructible_v<T>, "T must be default constructible or trivially destructible");
-    static constexpr u32 kSegmentsToSkip = 4;
-  private:
-    struct free_list
-    {
-      u32 nextIndex;
-      u32 size;
-    };
-    static_assert(sizeof(T) >= sizeof(free_list));
 
-  #define capacity_for_segments(segmentCount) ((1 << (kSegmentsToSkip + segmentCount)) - (1 << kSegmentsToSkip))
-  #define size_of_segment(segment) (1 << (kSegmentsToSkip + segment))
-  #define segment_for_index(index) (log2((index >> kSegmentsToSkip) + 1))
-
-    strict_inline utils::pair<u32, u32> 
-    getSegmentAndSlot(u32 index)
-    {
-      u32 segment = segment_for_index(index);
-      u32 slot = index - capacity_for_segments(segment);
-      return { segment, slot };
-    }
-  public:
-    u8 usedSegments{};
-    u32 firstFreeSlot = u32(-1);
-    T *segments[sizeof(firstFreeSlot) * 8 - kSegmentsToSkip]{};
-
-    ~stable_vector()
-    {
-      if constexpr (!is_trivially_destructible_v<T>)
-      {
-        u32 size = capacity_for_segments(usedSegments);
-        for (u32 index = 0, nextIndex = firstFreeSlot; index < size;)
-        {
-          auto [segment, slot] = getSegmentAndSlot(index);
-
-          if (nextIndex == index)
-          {
-            free_list list;
-            ::memcpy(&list, segments[segment] + slot, sizeof(list));
-            nextIndex = list.nextIndex;
-
-            index += list.size;
-
-            continue;
-          }
-
-          segments[segment][slot].~T();
-          ++index;
-        }
-      }
-
-      for (u8 i = 0; i < usedSegments; ++i)
-        deallocate(segments[i]);
-    }
-
-    T &
-    operator[](usize index)
-    {
-      auto [segment, slot] = getSegmentAndSlot(index);
-      return segments[segment][slot];
-    }
-
-    void reserve(usize newSize)
-    {
-      COMPLEX_ASSERT(newSize > 0 && newSize < u32(-1));
-      
-      u8 segmentCount = (u8)segment_for_index((u32)newSize) + 1;
-      if (usedSegments >= segmentCount)
-        return;
-
-      free_list list{ firstFreeSlot };
-      u32 lastFreeList = firstFreeSlot;
-      while (list.nextIndex != u32(-1))
-      {
-        lastFreeList = list.nextIndex;
-        auto [segment, slot] = getSegmentAndSlot(lastFreeList);
-        ::memcpy(&list, segments[segment] + slot, sizeof(list));
-      }
-
-      for (u8 i = usedSegments; i < segmentCount; ++i)
-      {
-        u32 segmentSize = size_of_segment(i);
-        segments[i] = (T *)utils::allocate(sizealignof(T, segmentSize));
-
-        auto capacity = capacity_for_segments(i);
-        if (lastFreeList == u32(-1))
-          firstFreeSlot = capacity;
-        else
-        {
-          list.nextIndex = capacity;
-          auto [segment, slot] = getSegmentAndSlot(lastFreeList);
-          ::memcpy(segments[segment] + slot, &list, sizeof(list));
-        }
-
-        list = { u32(-1), segmentSize };
-        lastFreeList = capacity;
-      }
-
-      auto [segment, slot] = getSegmentAndSlot(lastFreeList);
-      ::memcpy(segments[segment] + slot, &list, sizeof(list));
-
-      usedSegments = segmentCount;
-    }
-
-    // using the returned range with insert_at is mandatory
-    usize
-    get_contiguous_range(usize rangeSize)
-    {
-      u32 nextIndex = firstFreeSlot;
-      free_list list{ u32(-1), u32(-1) };
-      u32 indexBeforeBestFitting = firstFreeSlot;
-      free_list bestFittingList{ u32(-1), u32(-1) };
-
-      // search for space in the free list
-      while (true)
-      {
-        if (nextIndex == u32(-1) || rangeSize == bestFittingList.size)
-          break;
-        
-        auto previousIndex = list.nextIndex;
-        auto [segment, slot] = getSegmentAndSlot(nextIndex);
-        ::memcpy(&list, segments[segment] + slot, sizeof(list));
-        
-        {
-          auto temp = list.nextIndex;
-          list.nextIndex = nextIndex;
-          nextIndex = temp;
-        }
-
-        u32 capacity = capacity_for_segments(segment);
-
-        u32 beforeNextSegment = utils::min(capacity - list.nextIndex, list.size);
-        u32 afterNextSegment = list.size - beforeNextSegment;
-
-        if (beforeNextSegment >= rangeSize && beforeNextSegment < bestFittingList.size)
-        {
-          indexBeforeBestFitting = previousIndex;
-          bestFittingList = { list.nextIndex, beforeNextSegment };
-        }
-        else if (afterNextSegment >= rangeSize && afterNextSegment < bestFittingList.size)
-        {
-          indexBeforeBestFitting = previousIndex;
-          bestFittingList = { list.nextIndex, afterNextSegment };
-        }
-      }
-
-      {
-        auto temp = list.nextIndex;
-        list.nextIndex = nextIndex;
-        nextIndex = temp;
-      }
-
-      // insert new segments and find a suitable range
-      while (bestFittingList.nextIndex == u32(-1))
-      {
-        u32 segmentSize = size_of_segment(usedSegments);
-        segments[usedSegments] = (T *)utils::allocate(sizealignof(T, segmentSize));
-        ++usedSegments;
-
-        free_list newList{ list.nextIndex, segmentSize };
-        list.nextIndex = capacity_for_segments(usedSegments - 1);
-        if (segmentSize >= rangeSize)
-        {
-          indexBeforeBestFitting = nextIndex;
-          bestFittingList = { list.nextIndex, (u32)rangeSize };
-        }
-
-        if (nextIndex == u32(-1))
-          firstFreeSlot = list.nextIndex;
-        else
-        {
-          auto [segment, slot] = getSegmentAndSlot(nextIndex);
-          ::memcpy(segments[segment] + slot, &list, sizeof(list));
-        }
-        auto [newSegment, newSlot] = getSegmentAndSlot(list.nextIndex);
-        ::memcpy(segments[newSegment] + newSlot, &newList, sizeof(newList));
-
-        nextIndex = list.nextIndex;
-        list = newList;
-
-        if (segmentSize >= rangeSize)
-          bestFittingList = list;
-      }
-
-      auto newIndex = bestFittingList.nextIndex;
-      free_list storedFreeList;
-      {
-        auto [segment, slot] = getSegmentAndSlot(bestFittingList.nextIndex);
-        ::memcpy(&storedFreeList, segments[segment] + slot, sizeof(storedFreeList));
-        storedFreeList.size -= rangeSize;
-
-        u32 capacity = capacity_for_segments(segment);
-        if (capacity - bestFittingList.nextIndex == bestFittingList.size)
-        {
-          newIndex += rangeSize;
-          segment = segment_for_index(newIndex);
-          slot = newIndex - capacity_for_segments(segment);
-        }
-
-        ::memcpy(segments[segment] + slot, &storedFreeList, sizeof(storedFreeList));
-      }
-
-      if (bestFittingList.nextIndex != newIndex)
-      {
-        auto [segment, slot] = getSegmentAndSlot(indexBeforeBestFitting);
-        free_list previousList;
-        ::memcpy(&previousList, segments[segment] + slot, sizeof(storedFreeList));
-        previousList.nextIndex = newIndex;
-        ::memcpy(segments[segment] + slot, &storedFreeList, sizeof(storedFreeList));
-      }
-
-      return bestFittingList.nextIndex;
-    }
-
-    // only use this in combination with get_contiguous_range
-    void insert_at(usize index, auto &&... args)
-    {
-      auto [segment, slot] = getSegmentAndSlot(index);
-      (void)new(&segments[segment][slot]) T{ COMPLEX_FWD(args)... };
-    }
-
-  private:
-    utils::pair<void *, usize>
-    use_first_free_slot()
-    {
-      u32 index;
-      u32 segment;
-      u32 slot;
-      if (firstFreeSlot != u32(-1))
-      {
-        index = firstFreeSlot;
-        segment = segment_for_index(index);
-        slot = index - capacity_for_segments(segment);
-        free_list list;
-        ::memcpy(&list, segments[segment] + slot, sizeof(list));
-        if (list.size == 1)
-          firstFreeSlot = list.nextIndex;
-        else
-        {
-          firstFreeSlot = index + 1;
-          list.size -= 1;
-          auto [newSegment, newSlot] = getSegmentAndSlot(index + 1);
-          ::memcpy(segments[newSegment] + newSlot, &list, sizeof(list));
-        }
-      }
-      else
-      {
-        index = capacity_for_segments(usedSegments);
-        u32 segmentSize = size_of_segment(usedSegments);
-        segments[usedSegments] = (T *)utils::allocate(sizealignof(T, segmentSize));
-        segment = usedSegments;
-        slot = 0;
-
-        free_list list{ firstFreeSlot, segmentSize - 1 };
-        ::memcpy(segments[usedSegments] + 1, &list, sizeof(list));
-
-        ++usedSegments;
-      }
-
-      return { &segments[segment][slot], index };
-    }
-
-  public:
-    void *
-    insert_wherever() { return use_first_free_slot().first; }
-
-    usize
-    insert_wherever(auto &&... args)
-    {
-      auto [memory, index] = use_first_free_slot();
-      (void)new(memory) T{ COMPLEX_FWD(args)... };
-      return index;
-    }
-  private:
-    u32
-    erase(u32 index)
-    {
-      free_list list{};
-      list.nextIndex = firstFreeSlot;
-      auto lastIndex = firstFreeSlot;
-      u32 lastSegment;
-      u32 lastSlot;
-
-      while (list.nextIndex < index)
-      {
-        lastIndex = list.nextIndex;        
-        lastSegment = segment_for_index(lastIndex);
-        lastSlot = lastIndex - capacity_for_segments(lastSegment);
-        ::memcpy(&list, segments[lastSegment] + lastSlot, sizeof(list));
-      }
-      COMPLEX_HARD_ASSERT((lastIndex + list.size) > index, 
-        "Erasing an already erased element");
-
-      auto [segment, slot] = getSegmentAndSlot(index);
-      segments[segment][slot].~T();
-
-      // coalesce current erased element with previous range
-      if (lastIndex + list.size == index)
-      {
-        ++list.size;
-        ::memcpy(segments[lastSegment] + lastSlot, &list, sizeof(list));
-        segment = lastSegment;
-        slot = lastSlot;
-        index = lastIndex;
-      }
-      else
-      {
-        if (list.nextIndex == firstFreeSlot)
-          firstFreeSlot = index;
-        else
-        {
-          auto nextIndex = list.nextIndex;
-          list.nextIndex = index;
-          ::memcpy(segments[lastSegment] + lastSlot, &list, sizeof(list));
-          list.nextIndex = nextIndex;
-        }
-
-        list.size = 1;
-        ::memcpy(segments[segment] + slot, &list, sizeof(list));
-      }
-
-      // coalesce current erased element with next range
-      if (index + list.size == list.nextIndex)
-      {
-        auto [nextSegment, nextSlot] = getSegmentAndSlot(list.nextIndex);
-
-        free_list nextList;
-        ::memcpy(&nextList, segments[nextSegment] + nextSlot, sizeof(nextList));
-
-        list.nextIndex = nextList.nextIndex;
-        list.size += nextList.size;
-        ::memcpy(segments[segment] + slot, &list, sizeof(list));
-      }
-
-      return index;
-    }
-  public:
-    void erase(usize index) { (void)erase((u32)index); }
-
-    void erase(usize start, usize size)
-    {
-      COMPLEX_ASSERT(size > 0);
-
-      auto index = erase((u32)start);
-      auto [segment, slot] = getSegmentAndSlot(index);
-      
-      free_list list;
-      ::memcpy(&list, segments[segment] + slot, sizeof(list));
-
-      COMPLEX_HARD_ASSERT(list.nextIndex >= u32(start + size),
-        "Erasing an already erased element");
-
-      do 
-      {
-        ++index;
-        ++slot;
-        if (size_of_segment(segment) <= index)
-        {
-          ++segment;
-          slot = 0;
-        }
-
-        segments[segment][slot].~T();
-      } while (index < u32(start + size));
-
-      list.size += size - 1;
-
-      // coalesce current range with next range
-      if (list.nextIndex == u32(start + size))
-      {
-        auto [nextSegment, nextSlot] = getSegmentAndSlot(list.nextIndex);
-
-        free_list nextList;
-        ::memcpy(&nextList, segments[nextSegment] + nextSlot, sizeof(nextList));
-
-        list.nextIndex = nextList.nextIndex;
-        list.size += nextList.size;
-      }
-
-      ::memcpy(segments[segment] + slot, &list, sizeof(list));
-    }
-
-    struct iterator
-    {
-      const stable_vector *vector{};
-      mutable u32 index{};
-      mutable u8 segment{};
-
-      const iterator &operator++() const
-      {
-        ++index;
-        COMPLEX_ASSERT(index < capacity_for_segments(vector->usedSegments));
-        if (size_of_segment(segment) <= index)
-          ++segment;
-
-        return *this;
-      }
-      const iterator &operator--() const
-      {
-        COMPLEX_ASSERT(index > 0);
-
-        --index;
-        if (size_of_segment(segment - 1) > index)
-          --segment;
-
-        return *this;
-      }
-      iterator &operator++()
-      { return const_cast<iterator &>(((const iterator *)this)->operator++()); }
-      iterator &operator--()
-      { return const_cast<iterator &>(((const iterator *)this)->operator--()); }
-      iterator operator++(int) const
-      {
-        iterator old = *this;
-        operator++();
-        return old;
-      }
-      iterator operator--(int) const
-      {
-        iterator old = *this;
-        operator--();
-        return old;
-      }
-      const iterator &operator+=(isize offset) const
-      {
-        index += offset;
-        COMPLEX_ASSERT(index < capacity_for_segments(vector->usedSegments));
-        segment = (u8)log2((index >> kSegmentsToSkip) + 1);
-        
-        return *this;
-      }
-      iterator &operator+=(isize offset)
-      { return const_cast<iterator &>(((const iterator *)this)->operator+=(offset)); }
-      const iterator &operator-=(isize offset) const { return operator+=(-offset); }
-      iterator &operator-=(isize offset) { return operator+=(-offset); }
-
-      const iterator operator+(isize offset) const { auto copy = *this; copy += offset; return copy; }
-      iterator operator+(isize offset) { auto copy = *this; copy += offset; return copy; }
-      const iterator operator-(isize offset) const { return operator+(-offset); }
-      iterator operator-(isize offset) { return operator+(-offset); }
-
-      const T &operator*() const { return vector->segments[segment][index - capacity_for_segments(segment)]; }
-      T &operator*() { return vector->segments[segment][index - capacity_for_segments(segment)]; }
-      const T *operator->() const { return &vector->segments[segment][index - capacity_for_segments(segment)]; }
-      T *operator->() { return &vector->segments[segment][index - capacity_for_segments(segment)]; }
-    };
-
-    const iterator begin() const { return iterator{ this }; }
-    iterator begin() { return iterator{ this }; }
-    const iterator end() const { return begin() + capacity_for_segments(usedSegments); }
-    iterator end() { return begin() + capacity_for_segments(usedSegments); }
-
-  #undef capacity_for_segments
-  #undef size_of_segment
-  #undef segment_for_index
-  };
-
-
-  class string
+  class stringnd
   {
     char *data_{};
     usize	allocatorType_ : 1 = (usize)AllocatorType::General;
     usize	freeingDestructor_ : 1 = true;
     usize size_ : 62 {};
     usize capacity_{};
+  
+  protected:
+    void destructor(bool force = true)
+    {
+      if (capacity_ && (freeingDestructor_ || force))
+        Allocator::fromType((AllocatorType)allocatorType_).remove(data_);
+
+      data_ = {};
+      size_ = {};
+      capacity_ = {};
+    }
 
   public:
     using value_type = char;
@@ -1296,22 +755,10 @@ namespace utils
     static constexpr auto npos = size_type(-1);
     static constexpr auto minimumCapacity = size_type((1 << 4) - 1);
 
-    ~string()
-    {
-      utils::contiguousDestroy(data_, size_);
-      if (freeingDestructor_)
-        Allocator::fromType((AllocatorType)allocatorType_).remove(data_);
-
-      data_ = {};
-      size_ = {};
-      capacity_ = {};
-    }
-
-
-    static string 
+    static stringnd 
     create(Allocator allocator, const char *format, auto &&... args)
     {
-      string ret{};
+      stringnd ret{};
       ret.size_ = (size_type)::stbsp_snprintf(nullptr, 0, format, COMPLEX_FWD(args)...);
       ret.reserve(allocator, ret.size_);
       ::stbsp_snprintf(ret.data_, (int)ret.capacity_ + 1, format, COMPLEX_FWD(args)...);
@@ -1319,11 +766,11 @@ namespace utils
     }
 
     // preallocating storage or only caching allocator for future use
-    string(Allocator allocator, size_type reserveSpace = 0) : string{ allocator, nullptr, reserveSpace } { }
-    string(Allocator allocator, utils::string_view data, size_type start = 0, size_type size = npos) : 
-      string{ allocator, data.data() + utils::min(data.size(), start), utils::min(data.size(), size) - utils::min(data.size(), start) } { }
+    stringnd(Allocator allocator, size_type reserveSpace = 0) : stringnd{ allocator, nullptr, reserveSpace } { }
+    stringnd(Allocator allocator, utils::string_view data, size_type start = 0, size_type size = npos) : 
+      stringnd{ allocator, data.data() + utils::min(data.size(), start), utils::min(data.size(), size) - utils::min(data.size(), start) } { }
     // every other constructor calls this one
-    string(Allocator allocator, const char *data, size_type size)
+    stringnd(Allocator allocator, const char *data, size_type size)
     {
       reserve(allocator, size);
       if (data)
@@ -1333,30 +780,29 @@ namespace utils
       }
     }
 
-    constexpr string() = default;
-    string(const string &other) = delete;
-    string &operator=(const string &other) = delete;
-    constexpr string(string &&other) noexcept { swap(other); }
-    string &
-    operator=(string &&other) noexcept
+    constexpr stringnd() = default;
+    stringnd(const stringnd &other) = delete;
+    stringnd &operator=(const stringnd &other) = delete;
+    constexpr stringnd(stringnd &&other) noexcept { swap(other); }
+    stringnd &
+    operator=(stringnd &&other) noexcept
     {
-      if (this == &other)
-        return *this;
-
-      this->~string();
-      swap(other);
-
+      if (this != &other)
+      {
+        destructor();
+        swap(other);
+      }
       return *this;
     }
 
-    [[nodiscard]] string 
+    [[nodiscard]] stringnd 
     clone(usize position = 0, usize length = npos) const
     {
       COMPLEX_ASSERT(position <= size_, "Position out of range in string::clone(position, length)");
       COMPLEX_ASSERT(length == npos || length <= size_ - position,
         "Length out of range in string::clone(position, length)");
 
-      string ret{};
+      stringnd ret{};
 
       auto oldAllocator = Allocator::fromType((AllocatorType)allocatorType_).fromAllocation(data_);
       auto newSize = utils::min(length, size() - position);
@@ -1372,7 +818,7 @@ namespace utils
       return ret;
     }
 
-    string &
+    stringnd &
     copy(utils::string_view other)
     {
       clear();
@@ -1452,14 +898,14 @@ namespace utils
       return data_[size_ - 1];
     }
 
-    [[nodiscard]] iterator begin() { return (size_ == 0) ? iterator{} : iterator(data_); }
-    [[nodiscard]] const_iterator begin() const { return (size_ == 0) ? const_iterator{} : const_iterator(data_); }
-    [[nodiscard]] iterator end() { return (size_ == 0) ? iterator{} : iterator(data_ + size_); }
-    [[nodiscard]] const_iterator end() const { return (size_ == 0) ? const_iterator{} : const_iterator(data_ + size_); }
+    [[nodiscard]] iterator begin() { return (size_) ? data_ : nullptr; }
+    [[nodiscard]] const_iterator begin() const { return (size_) ? data_ : nullptr; }
+    [[nodiscard]] iterator end() { return (size_) ? (data_ + size_) : nullptr; }
+    [[nodiscard]] const_iterator end() const { return (size_) ? (data_ + size_) : nullptr; }
 
     // insertions
     
-    string &
+    stringnd &
     insert(size_type start, utils::string_view other, size_type repetitions = 1)
     {
       reserve(size_ + repetitions * other.size());
@@ -1471,18 +917,18 @@ namespace utils
 
       return *this;
     }
-    string &
+    stringnd &
     append(utils::string_view other, size_type repetitions = 1) { return insert(size_, other, repetitions); }
-    string &
+    stringnd &
     prepend(utils::string_view other, size_type repetitions = 1) { return insert(0, other, repetitions); }
-    string &
+    stringnd &
     appendFormat(const char *format, auto &&... args)
     {
       reserve(size_ + (size_type)::stbsp_snprintf(nullptr, 0, format, COMPLEX_FWD(args)...));
       size_ += (size_type)::stbsp_snprintf(data_ + size_, (int)capacity_ + 1, format, COMPLEX_FWD(args)...);
       return *this;
     }
-    string &
+    stringnd &
     prependFormat(const char *format, auto &&... args)
     {
       size_type sizeToAdd = (size_type)::stbsp_snprintf(nullptr, 0, format, COMPLEX_FWD(args)...);
@@ -1494,7 +940,7 @@ namespace utils
 
     // simple removals
 
-    string &
+    stringnd &
     remove(size_type index, size_type length)
     {
       COMPLEX_ASSERT(size_ >= index + length, "Range is outside of string in string::remove(index, length)");
@@ -1503,7 +949,7 @@ namespace utils
       data_[size_] = '\0';
       return *this;
     }
-    string &
+    stringnd &
     removePrefix(size_type length)
     {
       COMPLEX_ASSERT(size_ >= length, "Length out of range in string::remove_prefix(length)");
@@ -1511,7 +957,7 @@ namespace utils
       utils::contiguousMoveElements(data_, data_ + length, size_);
       return *this;
     }
-    string &
+    stringnd &
     removeSuffix(size_type length)
     {
       COMPLEX_ASSERT(size_ >= length, "Length out of range in string::remove_suffix(length)");
@@ -1522,7 +968,7 @@ namespace utils
 
     // transformations
 
-    string &
+    stringnd &
     filterOut(utils::string_view characters)
     {
       for (usize i = size_; i > 0; --i)
@@ -1531,7 +977,7 @@ namespace utils
 
       return *this;
     }
-    string &
+    stringnd &
     filterIn(utils::string_view characters)
     {
       for (usize i = size_; i > 0; --i)
@@ -1540,7 +986,7 @@ namespace utils
 
       return *this;
     }
-    string &
+    stringnd &
     trim()
     {
       usize i;
@@ -1563,7 +1009,7 @@ namespace utils
 
       return *this;
     }
-    string &
+    stringnd &
     toLower()
     {
       for (usize i = 0; i < size_; ++i)
@@ -1572,7 +1018,7 @@ namespace utils
 
       return *this;
     }
-    string &
+    stringnd &
     toUpper()
     {
       for (usize i = 0; i < size_; ++i)
@@ -1603,7 +1049,7 @@ namespace utils
     [[nodiscard]] constexpr bool 
     operator<(utils::string_view other) const { return compare(other) < 0; }
 
-    constexpr void swap(string &other)
+    constexpr void swap(stringnd &other)
     {
       COMPLEX_SWAP_MEMBERS(data_, other);
       COMPLEX_SWAP_MEMBERS(allocatorType_, other);
@@ -1613,9 +1059,22 @@ namespace utils
     }
   };
 
-  // a type alias to signal that the destructor doesn't have to run
-  // to be used in arena context where freeing is automatic
-  using stringnd = string;
+  class string : public stringnd
+  {
+  public:
+    ~string() { destructor(false); }
+
+    using stringnd::stringnd;
+
+    constexpr string() = default;
+    constexpr string(stringnd &&other) noexcept { swap(other); }
+    string &
+    operator=(string &&other) noexcept
+    {
+      (void)stringnd::operator=(COMPLEX_MOVE(other));
+      return *this;
+    }
+  };
 
   inline usize
   floatToString(double value, char *string, usize maximumStringLength,

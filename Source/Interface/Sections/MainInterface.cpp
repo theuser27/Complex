@@ -5,7 +5,7 @@
 
 #include "Plugin/Complex.hpp"
 #include "Generation/SoundEngine.hpp"
-#include "Generation/EffectsLane.hpp"
+#include "Generation/Effects.hpp"
 #include "Plugin/Renderer.hpp"
 
 
@@ -13,7 +13,7 @@ namespace Interface
 {
   InvisibleHoverComponent::InvisibleHoverComponent()
   {
-    overrideDimensions = [](Component *c, bool isCalculatingVertical)
+    overrideSize = [](Component *c, bool isCalculatingVertical)
     {
       auto *self = (InvisibleHoverComponent *)c;
       if (isCalculatingVertical)
@@ -74,7 +74,7 @@ namespace Interface
   }
 
   bool
-  CommandMessages::handleProcessorInsertion(Generation::BaseProcessor *parentProcessor,
+  CommandMessages::handleProcessorInsertion(Generation::Processor *parentProcessor,
     Component *parentComponent, ProcessorInsertion *metadata, Component *substituteInsert)
   {
     auto *processor = metadata->processor;
@@ -88,25 +88,26 @@ namespace Interface
         return false;
     }
 
-    Generation::BaseProcessor *child;
+    Generation::Processor *child;
     metadata->index = utils::min(metadata->index, parentProcessor->childrenCount);
     if (!metadata->useIndex)
     {
-      auto centrePoint = parentComponent->getRelativePoint(processor->component,
-        metadata->position) - parentComponent->scrollOffset;
+      auto point = parentComponent->getRelativePoint(processor->component, metadata->position);
+      point.x -= (i32)::roundf(parentComponent->scrollOffset.x);
+      point.y -= (i32)::roundf(parentComponent->scrollOffset.y);
 
       auto Point<i32>:: *primary = (parentComponent->componentFlags.vertical) ?
         &Point<i32>::y : &Point<i32>::x;
 
       metadata->index = 0;
       child = parentProcessor->children;
-      for (; child; (++metadata->index), child = Generation::BaseProcessor::getChild(child, 1))
-        if (child->component && centrePoint.*primary < parentComponent->getRelativePoint(
+      for (; child; (++metadata->index), child = Generation::Processor::getChild(child, 1))
+        if (child->component && point.*primary < parentComponent->getRelativePoint(
           child->component, child->component->bounds.getPosition()).*primary)
           break;
     }
     else
-      child = Generation::BaseProcessor::getChild(parentProcessor->children, metadata->index);
+      child = Generation::Processor::getChild(parentProcessor->children, metadata->index);
 
     {
       auto g = parentProcessor->state->plugin->acquireProcessingLock();
@@ -125,39 +126,6 @@ namespace Interface
 
     COMPLEX_ASSERT(!child || child->component);
     parentComponent->addChildComponent(newComponent, (child) ? child->component : nullptr);
-
-    return true;
-  }
-
-  bool
-  CommandMessages::tryProcessorInsert(Generation::BaseProcessor *processorToInsert,
-    Component *treeToInsertInto, ProcessorInsertion &data)
-  {
-    COMPLEX_ASSERT(processorToInsert->component);
-
-    // BFS recursion
-    auto recurseInsertion = [&data](const auto &self, Component *insertComponent) -> bool
-    {
-      for (auto *child = insertComponent->children; child; child = child->next)
-      {
-        auto copy = data;
-        if (child->handleCommandMessage(Component::HandleProcessorInsertion, &copy))
-        {
-          data = copy;
-          return true;
-        }
-      }
-
-      for (auto *child = insertComponent->children; child; child = child->next)
-        if (self(self, child))
-          return true;
-
-      return false;
-    };
-
-    if (!treeToInsertInto->handleCommandMessage(Component::HandleProcessorInsertion, &data))
-      if (!recurseInsertion(recurseInsertion, treeToInsertInto))
-        return false;
 
     return true;
   }
@@ -240,7 +208,7 @@ namespace Interface
     window.valueChangedCallback = [](Control *c, double newValue, double)
     {
       auto *bottomBar = (BottomBar *)c->parent->parent;
-      bottomBar->windowAlpha.componentFlags.isVisible = Framework::getIndexedData(
+      bottomBar->windowAlpha.componentFlags.isVisible = Framework::getOptionFromValue(
         Framework::scaleValue(newValue, c->details), c->details).first->userFlags;
     };
     window.changeLinkedParameter(*mainSection->soundEngine->getParameter(Generation::SoundEngine::WindowType));
@@ -265,6 +233,32 @@ namespace Interface
     removeAllChildComponents();
     componentFlags.vertical = true;
     sizingFlags = (Component::SizingFlags)(Component::GrowableX | Component::GrowableY);
+    removeCommandMessageHandler(soundEngineHandler);
+    addCommandMessageHandler(soundEngineHandler);
+    soundEngineHandler.object = [](Component *c, u64 commandId, void *extraData)
+    {
+      auto self = (SoundEngineSection *)c;
+      switch (commandId)
+      {
+      case CommandMessages::HandleProcessorInsertion:
+      {
+        auto *metadata = (CommandMessages::ProcessorInsertion *)extraData;
+
+        auto *invisibleHover = &getGui(uiRelated.renderer)->invisibleHover;
+
+        if (!CommandMessages::handleProcessorInsertion(self->soundEngine,
+          &self->effectsSection.laneHolder, metadata, invisibleHover))
+          return false;
+
+        invisibleHover->source = metadata->processor->component;
+        return true;
+      }
+      default:
+        break;
+      }
+
+      return false;
+    };
 
     if (!arena)
       arena = utils::bumpArena::createNested(utils::bumpArena::fromAllocation(this), COMPLEX_KB(16));
@@ -315,30 +309,6 @@ namespace Interface
     return true;
   }
 
-  bool SoundEngineSection::handleCommandMessage(u64 commandId, utils::whatever<64> extraData)
-  {
-    switch (commandId)
-    {
-    case Component::HandleProcessorInsertion:
-    {
-      CommandMessages::ProcessorInsertion **metadata{};
-      if (!(metadata = extraData.tryGet<CommandMessages::ProcessorInsertion *>()))
-        return false;
-
-      if (!CommandMessages::handleProcessorInsertion(soundEngine,
-        &effectsSection.laneHolder, *metadata, &invisibleHover))
-        return false;
-
-      invisibleHover.source = (*metadata)->processor->component;
-      return true;
-    }
-    default:
-      break;
-    }
-
-    return false;
-  }
-
   ResizeCorner::ResizeCorner()
   {
     componentFlags.clickable = true;
@@ -347,18 +317,18 @@ namespace Interface
     placement = Placement::custom;
   }
 
-  bool
-  ResizeCorner::handleCommandMessage(u64 commandId, utils::whatever<64>)
-  {
-    switch (commandId)
-    {
-    case HandleCustomPosition:
-      bounds = bounds.withPosition(parent->bounds.w - bounds.w, parent->bounds.h - bounds.h);
-      return true;
-    }
-
-    return false;
-  }
+  //bool
+  //ResizeCorner::handleCommandMessage(u64 commandId, void *)
+  //{
+  //  switch (commandId)
+  //  {
+  //  case CommandMessages::HandleCustomPosition:
+  //    bounds = bounds.withPosition(parent->bounds.w - bounds.w, parent->bounds.h - bounds.h);
+  //    return true;
+  //  }
+  //
+  //  return false;
+  //}
 
   bool
   ResizeCorner::mouseEnter(const MouseEvent &)
@@ -438,7 +408,7 @@ namespace Interface
     auto state = getPlugin(uiRelated.renderer).state_;
 
     auto recurseProcessors = [](const auto &self,
-      Generation::BaseProcessor *processor, Component *parentComponent) -> void
+      Generation::Processor *processor, Component *parentComponent) -> void
     {
       // at this point processor->component will have a dangling reference
       // to the old component before the reset (if this is not the 1st time)
@@ -449,8 +419,19 @@ namespace Interface
       CommandMessages::ProcessorInsertion data{ .processor = processor,
         .index = u32(-1), .useIndex = true };
 
+      bool success = preOrderTreeTraversal(parentComponent, [&data](Component *c)
+        {
+          auto copy = data;
+          if (c->handleCommandMessage(CommandMessages::HandleProcessorInsertion, &copy))
+          {
+            data = copy;
+            return true;
+          }
+          return false;
+        }, false, true);
+
       // if it fails to insert, just add it to the immediate parent
-      if (!CommandMessages::tryProcessorInsert(processor, parentComponent, data))
+      if (!success)
         parentComponent->addChildComponent(processor->component);
 
       auto *child = processor->children;

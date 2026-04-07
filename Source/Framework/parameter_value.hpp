@@ -5,7 +5,6 @@
 
 #include "utils.hpp"
 #include "memory.hpp"
-#include "sync_primitives.hpp"
 #include "simd_utils.hpp"
 #include "parameter_types.hpp"
 
@@ -65,8 +64,7 @@ namespace Framework
     ParameterValue(ParameterDetails details) noexcept :
       details_(COMPLEX_MOVE(details)) { reset(); }
 
-    ParameterValue(const ParameterValue &other) noexcept : 
-      details_(other.details_)
+    ParameterValue(const ParameterValue &other) noexcept : details_{ other.details_ }
     {
       utils::ScopedLock g{ other.waitLock_, utils::WaitMechanism::Spin };
       reset(&other.normalisedValue_);
@@ -86,6 +84,9 @@ namespace Framework
         normalisedValue_ = (value) ? *value : details_.defaultNormalisedValue;
         internalValue_ = (!value) ? details_.defaultValue : (float)scaleValue(*value, details_, sampleRate);
       }
+
+      COMPLEX_ASSERT(normalisedValue_ <= 1.0f && normalisedValue_ >= 0.0f);
+
       modulations_ = 0.0f;
       normalisedInternalValue_ = normalisedValue_;
 
@@ -94,7 +95,8 @@ namespace Framework
     
     // prefer calling this only once if possible
     template<ParameterRepresentation T>
-    auto getInternalValue(float sampleRate = kDefaultSampleRate, bool isNormalised = false) const noexcept
+    auto
+    getInternalValue(float sampleRate = kDefaultSampleRate, bool isNormalised = false) const noexcept
     {
       utils::ScopedLock g{ waitLock_, utils::WaitMechanism::Spin };
       
@@ -160,7 +162,7 @@ namespace Framework
         COMPLEX_ASSERT((details_.flags & ParameterDetails::Stereo) == 0,
           "Indexed types that support value to string conversion must not be stereo");
 
-        return getIndexedData(internalValue_[0], details_);
+        return getOptionFromValue(internalValue_[0], details_);
       }
       else
       {
@@ -250,8 +252,8 @@ namespace Framework
       utils::ScopedLock g{ waitLock_, utils::WaitMechanism::Spin };
       return details_;
     }
-    uuid // id can't change, so there's no reason to acquire a lock
-    getParameterId() const noexcept { return details_.id; }
+    // id can't change, so there's no reason to acquire a lock
+    uuid getParameterId() const noexcept { return details_.id; }
     utils::string_view
     getParameterName() const noexcept
     {
@@ -270,8 +272,7 @@ namespace Framework
       utils::ScopedLock g{ waitLock_, utils::WaitMechanism::Spin };
       return details_.updateFlag;
     }
-    ParameterLink *
-    getParameterLink() noexcept { return &parameterLink_; }
+    ParameterLink *getParameterLink() noexcept { return &parameterLink_; }
 
     void setParameterDetails(const ParameterDetails &details, float *value = nullptr) noexcept
     {
@@ -284,7 +285,7 @@ namespace Framework
 
     void serialiseToJson(void *jsonData) const;
     static utils::dll<ParameterValue> *
-    deserialiseFromJson(Generation::BaseProcessor *processor, void *jsonData, 
+    deserialiseFromJson(Generation::Processor *processor, void *jsonData, 
       ParameterDetails &reference, utils::dll<ParameterValue> *memory = nullptr);
 
   private:
@@ -301,7 +302,7 @@ namespace Framework
     bool isDirty_ = false;
 
   public:
-    Generation::BaseProcessor *parentProcessor{};
+    Generation::Processor *parentProcessor{};
   private:
 
     ParameterLink parameterLink_{ .parameter = this };

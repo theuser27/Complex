@@ -5,7 +5,7 @@
 
 #include "Framework/fourier_transform.hpp"
 #include "Framework/parameter_value.hpp"
-#include "EffectsLane.hpp"
+#include "Effects.hpp"
 #include "Plugin/Complex.hpp"
 
 namespace Generation
@@ -68,7 +68,7 @@ namespace Generation
   }
 }
 
-template<> Generation::BaseProcessor *
+template<> Generation::Processor *
 createProcessor<Generation::SoundEngine>(Plugin::State *state, Framework::ProcessorMetadata *metadata, const void *, void *serialisedSave)
 {
   auto *arena = utils::bumpArena::createNested(state->processorStorage, COMPLEX_MB(4));
@@ -78,7 +78,7 @@ createProcessor<Generation::SoundEngine>(Plugin::State *state, Framework::Proces
 namespace Generation
 {
   SoundEngine::SoundEngine(utils::bumpArena *arena, Plugin::State *state, 
-    Framework::ProcessorMetadata *metadata, void *serialisedSave) : BaseProcessor{ arena, state, metadata, nullptr }
+    Framework::ProcessorMetadata *metadata, void *serialisedSave) : Processor{ arena, state, metadata, nullptr }
   {
     using namespace Framework;
 
@@ -254,12 +254,12 @@ namespace Generation
   {
     using namespace Framework;
 
-    BaseProcessor::updateParameters(flag, currentSampleRate, updateChildrenParameters);
+    Processor::updateParameters(flag, currentSampleRate, updateChildrenParameters);
 
     switch (flag)
     {
     case UpdateFlag::Realtime:
-      currentOverlap_ = nextOverlap_;
+      currentOverlap_.store(nextOverlap_, satomi::memory_order_relaxed);
       nextOverlap_ = getParameter(Overlap)->getInternalValue<float>(currentSampleRate);
       windowTypeId_ = getParameter(WindowType)->getInternalValue<Framework::IndexedData>(currentSampleRate).first->id;
       alpha_ = utils::lerp(kAlphaLowerBound, kAlphaUpperBound, getParameter(WindowAlpha)->getInternalValue<float>(currentSampleRate));
@@ -368,7 +368,8 @@ namespace Generation
     // when the overlap is more than what the window requires
     // there will be an increase in gain, so we need to offset that
     windows.scaleDown(outBuffer, outBuffer.channels,
-      usedOutputChannels_, start, toScaleSamples, windowTypeId_, currentOverlap_, alpha_);
+      usedOutputChannels_, start, toScaleSamples, windowTypeId_, 
+      currentOverlap_.load(satomi::memory_order_relaxed), alpha_);
 
     // only wet
     if (mix_ == 1.0f)
@@ -487,7 +488,7 @@ initialiseTypeStructure<Generation::SoundEngine>(void *, Framework::PluginStruct
       kDefaultWindowOverlap, ParameterScale::Clamp, "%", ParameterDetails::Automatable),
     COMPLEX_STRUCTURE_PARAMETER("Window", SoundEngine::WindowType,
       {
-        .options = COMPLEX_STRUCTURE_INDEXED_DATA().addChildren(
+        .options = COMPLEX_STRUCTURE_INDEXED_DATA()->addChildren({{
           COMPLEX_STRUCTURE_INDEXED_DATA(.displayName = "Lerp", .id = Lerp),
           COMPLEX_STRUCTURE_INDEXED_DATA(.displayName = "Hann", .id = Hann),
           COMPLEX_STRUCTURE_INDEXED_DATA(.displayName = "Hamming", .id = Hamming),
@@ -496,7 +497,7 @@ initialiseTypeStructure<Generation::SoundEngine>(void *, Framework::PluginStruct
           COMPLEX_STRUCTURE_INDEXED_DATA(.displayName = "Rectangle", .id = Rectangle),
           COMPLEX_STRUCTURE_INDEXED_DATA(.displayName = "Exponential", .id = Exponential, .userFlags = Window::HasAlpha),
           COMPLEX_STRUCTURE_INDEXED_DATA(.displayName = "Hann-Exp", .id = HannExp, .userFlags = Window::HasAlpha),
-          COMPLEX_STRUCTURE_INDEXED_DATA(.displayName = "Lanczos", .id = Lanczos, .userFlags = Window::HasAlpha)),
+          COMPLEX_STRUCTURE_INDEXED_DATA(.displayName = "Lanczos", .id = Lanczos, .userFlags = Window::HasAlpha) }}),
         .defaultOptionId = Hann
       }, ParameterScale::Indexed, {}, ParameterDetails::Automatable | ParameterDetails::Extensible, UpdateFlag::BeforeProcess),
     COMPLEX_STRUCTURE_PARAMETER("Alpha", SoundEngine::WindowAlpha, 0.0f, 1.0f, 0.0f, 0.0f, ParameterScale::Linear,

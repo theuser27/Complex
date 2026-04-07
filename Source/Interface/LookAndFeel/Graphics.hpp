@@ -42,16 +42,21 @@ namespace Interface
     float 
     getStringWidthFloat(utils::string_view string)
     {
-      return nvgTextBounds(context, 0.0f, 0.0f, string.data(), 
-        string.data() + string.size(), nullptr);
+      float width = 0.0f;
+      if (!string.empty())
+        width = nvgTextBounds(context, 0.0f, 0.0f, string.data(), 
+          string.data() + string.size(), nullptr);
+
+      return width;
     }
 
     Area<float> 
     getStringBounds(utils::string_view string)
     {
-      float bounds[4];
-      (void)nvgTextBounds(context, 0.0f, 0.0f, string.data(), 
-        string.data() + string.size(), bounds);
+      float bounds[4]{};
+      if (!string.empty())
+        (void)nvgTextBounds(context, 0.0f, 0.0f, string.data(), 
+          string.data() + string.size(), bounds);
 
       return { bounds[2] - bounds[0], bounds[3] - bounds[1] };
     }
@@ -59,16 +64,21 @@ namespace Interface
     usize 
     getStringNumberOfLines(utils::string_view string, float breakRowWidth)
     {
-      return (usize)nvgTextBreakLines(context, string.data(), string.data() + string.size(),
-        breakRowWidth, nullptr, 0);
+      usize lines = 1;
+      if (!string.empty())
+        lines = (usize)nvgTextBreakLines(context, string.data(), string.data() + string.size(),
+          breakRowWidth, nullptr, 0);
+
+      return lines;
     }
 
     Area<float> 
     getStringBoundsMultiline(utils::string_view string, float breakRowWidth)
     {
-      float bounds[4];
-      (void)nvgTextBoxBounds(context, 0.0f, 0.0f, breakRowWidth, 
-        string.data(), string.data() + string.size(), bounds);
+      float bounds[4]{};
+      if (!string.empty())
+        (void)nvgTextBoxBounds(context, 0.0f, 0.0f, breakRowWidth, 
+          string.data(), string.data() + string.size(), bounds);
 
       return { bounds[2] - bounds[0], bounds[3] - bounds[1] };
     }

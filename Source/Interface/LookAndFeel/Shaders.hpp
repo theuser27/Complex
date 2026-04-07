@@ -257,20 +257,20 @@ namespace Interface
                                                                                                   \
       static constexpr utils::typeInfo key = typeId(name);                                        \
       static constexpr const char *uniformNames[] = { COMPLEX_FOR_EACH(                           \
-        COMPLEX_INTERNAL_ITERATE_EXCLUSIVE, COMPLEX_INTERNAL_NAME_DECLARATION,             \
+        COMPLEX_INTERNAL_ITERATE_EXCLUSIVE, COMPLEX_INTERNAL_NAME_DECLARATION,                    \
         (, (,)), COMPLEX_DEPAREN(uniformsPack)) "" };                                             \
       static constexpr char code[] =                                                              \
         "#version 150\n"                                                                          \
         "out vec4 fragColor;\n"                                                                   \
-        COMPLEX_FOR_EACH(COMPLEX_INTERNAL_ITERATE, COMPLEX_INTERNAL_SHADER_DECLARATION,    \
+        COMPLEX_FOR_EACH(COMPLEX_INTERNAL_ITERATE, COMPLEX_INTERNAL_SHADER_DECLARATION,           \
           ("uniform ", ";\n"), COMPLEX_DEPAREN(uniformsPack))                                     \
-        COMPLEX_FOR_EACH(COMPLEX_INTERNAL_ITERATE, COMPLEX_INTERNAL_SHADER_DECLARATION,    \
+        COMPLEX_FOR_EACH(COMPLEX_INTERNAL_ITERATE, COMPLEX_INTERNAL_SHADER_DECLARATION,           \
           ("in ", ";\n"), COMPLEX_DEPAREN(insPack))                                               \
         __VA_ARGS__;                                                                              \
                                                                                                   \
       struct                                                                                      \
       {                                                                                           \
-        COMPLEX_FOR_EACH(COMPLEX_INTERNAL_ITERATE, COMPLEX_INTERNAL_UNIFORM_DECLARATION,   \
+        COMPLEX_FOR_EACH(COMPLEX_INTERNAL_ITERATE, COMPLEX_INTERNAL_UNIFORM_DECLARATION,          \
           (OpenGlUniform, ;), COMPLEX_DEPAREN(uniformsPack))                                      \
       } uniforms{};                                                                               \
                                                                                                   \
@@ -278,14 +278,14 @@ namespace Interface
       {                                                                                           \
         [[maybe_unused]] usize i = 0;                                                             \
                                                                                                   \
-        COMPLEX_FOR_EACH(COMPLEX_INTERNAL_ITERATE, COMPLEX_INTERNAL_IN_DECLARATION,        \
+        COMPLEX_FOR_EACH(COMPLEX_INTERNAL_ITERATE, COMPLEX_INTERNAL_IN_DECLARATION,               \
           (uniforms., .uniformId = glGetUniformLocation(program.id, uniformNames[i++]);),         \
           COMPLEX_DEPAREN(uniformsPack))                                                          \
       }                                                                                           \
                                                                                                   \
       void setUniforms()                                                                          \
       {                                                                                           \
-        COMPLEX_FOR_EACH(COMPLEX_INTERNAL_ITERATE, COMPLEX_INTERNAL_IN_DECLARATION,        \
+        COMPLEX_FOR_EACH(COMPLEX_INTERNAL_ITERATE, COMPLEX_INTERNAL_IN_DECLARATION,               \
           (uniforms., .set());, COMPLEX_DEPAREN(uniformsPack))                                    \
       }                                                                                           \
                                                                                                   \
