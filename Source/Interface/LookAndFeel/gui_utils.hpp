@@ -236,7 +236,7 @@ namespace Interface
 
     constexpr Rectangle &expand(Rectangle<T> delta) { return *this = expanded(delta); }
     constexpr Rectangle &expand(T deltaX, T deltaY) { return *this = expanded(deltaX, deltaY); }
-    constexpr Rectangle &expand(T delta) { *this = expanded(delta); }
+    constexpr Rectangle &expand(T delta) { return *this = expanded(delta); }
     constexpr Rectangle &trim(Rectangle<T> delta) { return *this = trimmed(delta); }
     constexpr Rectangle &trim(T deltaX, T deltaY) { return *this = trimmed(deltaX, deltaY); }
     constexpr Rectangle &trim(T delta) { return *this = trimmed(delta); }
@@ -407,10 +407,10 @@ namespace Interface
 
   namespace Colours
   {
-    inline constexpr Colour transparentBlack{};
-    inline constexpr Colour black{ 0xff000000 };
-    inline constexpr Colour transparentWhite{ 0x00ffffff };
-    inline constexpr Colour white{ 0xffffffff };
+    inline constexpr auto transparentBlack = Colour{};
+    inline constexpr auto black            = Colour{ 0xff000000 };
+    inline constexpr auto transparentWhite = Colour{ 0x00ffffff };
+    inline constexpr auto white            = Colour{ 0xffffffff };
   }
 
   struct ModifierKeys

@@ -241,6 +241,9 @@ namespace Generation
         slot->object.parentProcessor = this;
         slot->previous = slot - 1;
         slot->next = slot + 1;
+
+        // register dynamic parameters 
+        state->registerDynamicParameter(&slot->object);
       }
     }
     else
@@ -257,6 +260,9 @@ namespace Generation
         slot->object.parentProcessor = this;
         slot->previous = slot - 1;
         slot->next = slot + 1;
+
+        // register dynamic parameters 
+        state->registerDynamicParameter(&slot->object);
       }
     }
 
@@ -287,12 +293,19 @@ namespace Framework
 
       if (self->processor->parent != destinationPointer)
       {
-        auto g = self->state.plugin->acquireProcessingLock();
-        destinationPointer->addChildProcessor(*self->processor, self->destinationIndex);
         if (destinationPointer->component)
         {
-          self->processor->component = self->processor->createUI();
-          destinationPointer->component->addChildComponent(self->processor->component, self->destinationIndex);
+          if (!self->processor->component)
+            self->processor->component = self->processor->createUI();
+
+          Interface::CommandMessages::ProcessorInsertion info{ .processor = self->processor,
+            .index = (u32)self->destinationIndex, .useIndex = true };
+          Interface::CommandMessages::tryProcessorInsertion(destinationPointer->component, info);
+        }
+        else
+        {
+          auto g = self->state.plugin->acquireProcessingLock();
+          destinationPointer->addChildProcessor(*self->processor, self->destinationIndex);
         }
       }
 
@@ -304,8 +317,13 @@ namespace Framework
       auto *self = (AddProcessorUpdate *)a;
       auto destinationPointer = self->state.getProcessor(self->destinationParentStateId);
 
-      auto g = self->state.plugin->acquireProcessingLock();
-      self->processor = &destinationPointer->removeChildProcessor(self->destinationIndex);
+      {
+        auto g = self->state.plugin->acquireProcessingLock();
+        self->processor = &destinationPointer->removeChildProcessor(self->destinationIndex);
+      }
+      
+      if (self->processor->component)
+        self->processor->component->parent->removeChildComponent(self->processor->component);
     };
   }
 
@@ -315,34 +333,59 @@ namespace Framework
     destinationParentStateId{ destinationParentStateId }, destinationIndex{ destinationIndex },
     sourceParentStateId{ sourceParentStateId }, sourceIndex{ sourceIndex }, isDone{ isDone }
   {
+    static constexpr auto insertComponent = [](Generation::Processor *movedProcessor, 
+      Generation::Processor *destinationProcessor, u32 index)
+    {
+      if (movedProcessor->component && movedProcessor->component->parent)
+        movedProcessor->component->parent->removeChildComponent(movedProcessor->component);
+
+      if (destinationProcessor->component)
+      {
+        if (!movedProcessor->component)
+          movedProcessor->component = movedProcessor->createUI();
+
+        Interface::CommandMessages::ProcessorInsertion info{ .processor = movedProcessor,
+          .index = index, .useIndex = true };
+        Interface::CommandMessages::tryProcessorInsertion(destinationProcessor->component, info);
+      }
+      else
+      {
+        auto g = movedProcessor->state->plugin->acquireProcessingLock();
+        (void)movedProcessor->parent->removeChildProcessor(*movedProcessor);
+        destinationProcessor->addChildProcessor(*movedProcessor, index);
+      }
+    };
+
     redo = [](UndoAction *a)
     {
       auto *self = (MoveProcessorUpdate *)a;
 
-      if (!self->isDone)
-      {
-        auto destinationPointer = self->state.getProcessor(self->destinationParentStateId);
-        auto sourcePointer = self->state.getProcessor(self->sourceParentStateId);
+      if (self->isDone)
+        return;
+      self->isDone = !self->isDone;
 
-        auto g = self->state.plugin->acquireProcessingLock();
-        auto &movedProcessor = sourcePointer->removeChildProcessor(self->sourceIndex);
-        destinationPointer->addChildProcessor(movedProcessor, self->destinationIndex);
-      }
+      auto destinationPointer = self->state.getProcessor(self->destinationParentStateId);
+      auto sourcePointer = self->state.getProcessor(self->sourceParentStateId);
+
+      Generation::Processor *movedProcessor = Generation::Processor::getChild(
+        sourcePointer->children, self->sourceIndex);
+      insertComponent(movedProcessor, destinationPointer, (u32)self->destinationIndex);
     };
 
     undo = [](UndoAction *a)
     {
       auto *self = (MoveProcessorUpdate *)a;
 
-      if (self->isDone)
-      {
-        auto destinationPointer = self->state.getProcessor(self->destinationParentStateId);
-        auto sourcePointer = self->state.getProcessor(self->sourceParentStateId);
+      if (!self->isDone)
+        return;
+      self->isDone = !self->isDone;
+      
+      auto destinationPointer = self->state.getProcessor(self->destinationParentStateId);
+      auto sourcePointer = self->state.getProcessor(self->sourceParentStateId);
 
-        auto g = self->state.plugin->acquireProcessingLock();
-        auto &movedProcessor = destinationPointer->removeChildProcessor(self->destinationIndex);
-        sourcePointer->addChildProcessor(movedProcessor, self->sourceIndex);
-      }
+      Generation::Processor *movedProcessor = Generation::Processor::getChild(
+        destinationPointer->children, self->destinationIndex);
+      insertComponent(movedProcessor, sourcePointer, (u32)self->sourceIndex);
     };
   }
 

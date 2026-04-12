@@ -933,8 +933,11 @@ namespace utils
     {
       size_type sizeToAdd = (size_type)::stbsp_snprintf(nullptr, 0, format, COMPLEX_FWD(args)...);
       reserve(size_ + sizeToAdd);
+      char zeroedOutChar = data_[0];
       utils::contiguousMoveElements(data_ + sizeToAdd, data_, size_);
       size_ += (size_type)::stbsp_snprintf(data_, (int)capacity_ + 1, format, COMPLEX_FWD(args)...);
+      // undoing null termination
+      data_[sizeToAdd] = zeroedOutChar;
       return *this;
     }
 

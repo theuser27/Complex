@@ -55,9 +55,6 @@ namespace Plugin
     float getSampleRate() const { return sampleRate.load(satomi::memory_order_acquire); }
     u32 getSamplesPerBlock() const { return samplesPerBlock.load(satomi::memory_order_acquire); }
 
-    void undo();
-    void redo();
-
     utils::sp<State> loadDefaultPreset();
     utils::sp<State> exchangeStates(utils::sp<State> state);
 

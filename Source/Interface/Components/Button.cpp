@@ -60,7 +60,7 @@ namespace Interface
 
   bool PowerButton::render(OpenGlWrapper &openGl)
   {
-    auto colour = getColour(Skin::kWidgetAccent1);
+    auto colour = getColour(Skin::kWidgetAccent1, this);
 
     Colour activeColour = colour.withBrightness(0.7f);
     Colour hoverColour = colour;
@@ -68,7 +68,7 @@ namespace Interface
     activeColour = (componentFlags.isClicked) ? activeColour : colour;
     hoverColour = colour.brighter(0.6f);
 
-    tickAnimation(animationValues, { { componentFlags.isHovered || componentFlags.isClicked } }, { { kHoverIncrement} });
+    tickAnimation(animationValues, {{ componentFlags.isHovered || componentFlags.isClicked }}, {{ kHoverIncrement }});
     if (!componentFlags.isClicked)
       colour = activeColour.interpolatedWith(hoverColour, animationValues[0]);
 
@@ -92,7 +92,7 @@ namespace Interface
     auto offNormalColor = getColour(Skin::kPowerButtonOff);
     auto backgroundColor = getColour(Skin::kBackground);
     
-    tickAnimation(animationValues, { { componentFlags.isHovered } }, { { kHoverIncrement} });
+    tickAnimation(animationValues, {{ componentFlags.isHovered }}, {{ kHoverIncrement }});
     auto hoverAmount = animationValues[0];
     auto drawBounds = getLocalBounds().toFloat().trimmed(scaleValue(padding.toFloat()));
     

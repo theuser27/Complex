@@ -53,6 +53,8 @@ namespace Interface
       static constexpr float kPlusRelativeSize = 7;
       static constexpr float kBorderRounding = 8.0f;
 
+      bool mouseEnter(const MouseEvent &e) override;
+      bool mouseExit(const MouseEvent &e) override;
       bool mouseDown(const MouseEvent &e) override;
       bool render(OpenGlWrapper &openGl) override;
 

@@ -11,6 +11,7 @@
 #include "../Components/Control.hpp"
 #include "Popups.hpp"
 #include "EffectsLaneSection.hpp"
+#include "MainInterface.hpp"
 
 namespace Interface
 {
@@ -54,10 +55,13 @@ namespace Interface
 
     addChildComponent(&draggableBox);
     draggableBox.placement = Placement::left;
+    draggableBox.desiredSize = { kDraggableSectionWidth, kDraggableSectionWidth, 
+      kDraggableSectionWidth, kDraggableSectionWidth };
+    
     addChildComponent(&effectTypeSelector);
     effectTypeSelector.arena = arena;
     effectTypeSelector.placement = Placement::left;
-    effectTypeSelector.dropdownTitle = { arena, "Change Module" };
+    effectTypeSelector.dropdownOffset = { 0, 4 };
     effectTypeSelector.valueChangedCallback = [](Control *c, double newValue, double)
     {
       // selector -> header -> effectHolder -> effectModuleSection
@@ -74,8 +78,10 @@ namespace Interface
     mixNumberBox.placement = Placement::right;
 
     addChildComponent(&moduleActivator);
-    moduleActivator.margin = { kNumberBoxToPowerButtonMargin, 0, 0, 0 };
     moduleActivator.placement = Placement::right;
+    moduleActivator.margin = { kNumberBoxToPowerButtonMargin, 0, 0, 0 };
+    moduleActivator.desiredSize = { kDefaultActivatorSize, kDefaultActivatorSize, 
+      kDefaultActivatorSize, kDefaultActivatorSize };
   }
 
   void EffectModuleSection::EffectHolder::reinitialise()
@@ -88,6 +94,7 @@ namespace Interface
     header.sizingFlags = Component::GrowableX;
     header.placement = Placement::top;
     header.desiredSize = { 0, kTopMenuHeight, 0, kTopMenuHeight };
+    header.reinitialise();
   }
 
   bool 
@@ -118,9 +125,8 @@ namespace Interface
 
     componentFlags.vertical = true;
     componentFlags.clickable = true;
-    sizingFlags = Component::SnapToMinY;
-    desiredSize = { kEffectModuleWidth, 0, kEffectModuleWidth, 0 };
-    laneSection = (EffectsLaneSection *)effectModule->parent->component;
+    //sizingFlags = Component::SnapToMinY;
+    desiredSize = { kEffectModuleWidth, 0, kEffectModuleWidth, utils::max_limit<i32> };
 
     if (!arena)
       arena = utils::bumpArena::createNested(utils::bumpArena::fromAllocation(this), COMPLEX_KB(64));
@@ -142,7 +148,8 @@ namespace Interface
 
     addChildComponent(&effectHolder);
     effectHolder.sizingFlags = (Component::SizingFlags)(Component::GrowableX | Component::SnapToMinY);
-    effectHolder.desiredSize = { 0, kEffectModuleMinHeight, 0, utils::max_limit<i32> };
+    effectHolder.desiredSize = { 0, kEffectModuleMainBodyHeight, 0, utils::max_limit<i32> };
+    effectHolder.arena = arena;
     effectHolder.reinitialise();
 
     effectHolder.header.effectTypeSelector.changeLinkedParameter(*effectModule->getParameter(Generation::EffectModule::ModuleType));
@@ -221,9 +228,9 @@ namespace Interface
     utils::bumpArena::clear(effectArena);
 
     auto activeEffect = effectModule->currentEffect.load(satomi::memory_order_acquire);
-    skinOverride = activeEffect->skinOverride;
-    effectControls = ((Generation::EffectModule::CreateUIFn *)activeEffect->metadata->
-      vtable[Generation::EffectModule::CreateUIVtableIndex])(effectArena, this);
+    skinOverride = (Interface::Skin::Override)activeEffect->metadata->userFlags;
+    //effectControls = ((Generation::EffectModule::CreateUIFn *)activeEffect->metadata->
+    //  vtable[Generation::EffectModule::CreateUIVtableIndex])(effectArena, this);
     
     // TODO: icon
   }
@@ -680,4 +687,17 @@ namespace Interface
     }
   }*/
 
+}
+
+namespace Generation
+{
+  Interface::Component *
+  EffectModule::createUI()
+  {
+    auto guiArena = Interface::getGui(Interface::uiRelated.renderer)->arena;
+    auto *effectModuleSection = anew(guiArena, Interface::EffectModuleSection, {});
+    effectModuleSection->effectModule = this;
+    effectModuleSection->reinitialise();
+    return effectModuleSection;
+  }
 }

@@ -9,6 +9,7 @@
 #include "Framework/parameter_value.hpp"
 #include "Plugin/Complex.hpp"
 #include "SoundEngine.hpp"
+#include "Interface/LookAndFeel/Skin.hpp"
 
 namespace Generation
 {
@@ -362,7 +363,7 @@ initialiseTypeStructure<Generation::EffectsLane>(void *, Framework::PluginStruct
 
   auto arena = structure.getNewArena(COMPLEX_KB(2));
 
-  ProcessorMetadata &effectsLane = COMPLEX_STRUCTURE_PROCESSOR(Generation::EffectsLane, "Effects Lane", Processors::EffectsLane);
+  ProcessorMetadata &effectsLane = COMPLEX_STRUCTURE_PROCESSOR(Generation::EffectsLane, "Effects Lane", Processors::EffectsLane, Interface::Skin::kEffectsLane);
   effectsLane.parameters =
   (
     COMPLEX_STRUCTURE_PARAMETER("Lane Enabled", EffectsLane::LaneEnabled, 0.0f, 1.0f, 1.0f, 1.0f, ParameterScale::Toggle, {},

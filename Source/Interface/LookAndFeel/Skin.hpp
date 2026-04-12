@@ -16,7 +16,6 @@ namespace Interface
     {
       kNone,
       kEffectsLane,
-      kPopupBrowser,
       kFilterModule,
       kDynamicsModule,
       kPhaseModule,

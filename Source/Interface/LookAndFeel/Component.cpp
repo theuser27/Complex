@@ -137,6 +137,9 @@ namespace Interface
       }
     }
 
+    COMPLEX_ASSERT(component->bounds.*minMember >= 0);
+    COMPLEX_ASSERT(component->bounds.*maxMember >= 0);
+
     // the user can override the above calculations if they so choose
     if (component->overrideSize)
     {
@@ -148,6 +151,9 @@ namespace Interface
       if (max >= 0)
         component->bounds.*maxMember = (i32)::ceilf(unscaleValue((float)max));
     }
+
+    COMPLEX_ASSERT(component->bounds.*minMember >= 0);
+    COMPLEX_ASSERT(component->bounds.*maxMember >= 0);
 
     // alogn the primary   axis SameAsSiblings must be zero, the parent will take care of it
     // along the secondary axis SameAsSiblings acts like Growable
@@ -162,6 +168,9 @@ namespace Interface
       (i64)(component->bounds.*minMember) + padding);
     component->bounds.*maxMember = (i32)utils::min((i64)utils::max_limit<i32>,
       (i64)(component->bounds.*maxMember) + padding);
+
+    COMPLEX_ASSERT(component->bounds.*minMember >= 0);
+    COMPLEX_ASSERT(component->bounds.*maxMember >= 0);
   }
 
   extern utils::vector<Component *> *sortedSizesMin;
@@ -193,6 +202,7 @@ namespace Interface
 
       // scaling the final size
       component->bounds.*actualSize = scaleValueRoundInt((float)(component->bounds.*actualSize));
+      COMPLEX_ASSERT(component->bounds.*actualSize >= 0);
 
       return;
     }
@@ -273,23 +283,7 @@ namespace Interface
 
         while (true)
         {
-          // if the remaining size cannot expand all smaller components to the current minimum, exclude the biggest minimum
-          if (i > 1 &&
-            (sortedMin[i - 1]->bounds.*minMember * (i32)(i - j)) > remaining)
-          {
-            --i;
-          }
-
-          // if the remaining size can now expand all smaller components to the next minimum, include the next biggest minimum
-          if (i < sortedMin.size() &&
-            (sortedMin[i]->bounds.*minMember * (i32)(i - j)) < remaining)
-          {
-            ++i;
-          }
-
           i32 currentSize = sortedMin[i - 1]->bounds.*minMember;
-          if (i < sortedMin.size())
-            currentSize += (remaining - (sortedMin[i]->bounds.*minMember * (i32)(i - j)));
 
           // if the most constrained component's maximum gets surpassed by the current size,
           // exclude it and update the remainder
@@ -300,6 +294,13 @@ namespace Interface
             if (j < sortedMax.size())
               remaining -= sortedMax[j]->bounds.*maxMember;
             ++j;
+          }
+          // if the remaining size cannot expand all smaller components to the current minimum, exclude the biggest minimum
+          else if (i > 1 &&
+            (sortedMin[i - 1]->bounds.*minMember * (i32)(i - j)) > remaining)
+          {
+            sortedMin[i - 1]->bounds.*maxMember = sortedMin[i - 1]->bounds.*minMember;
+            --i;
           }
 
           if ((i == lastI && j == lastJ) || j >= sortedMax.size())
@@ -324,6 +325,7 @@ namespace Interface
           i32 size = remaining / (i32)(count - k);
 
           c->bounds.*maxMember = utils::clamp(size, c->bounds.*minMember, c->bounds.*maxMember);
+          COMPLEX_ASSERT(c->bounds.*maxMember >= 0);
 
           remaining -= c->bounds.*maxMember;
         }
@@ -335,13 +337,12 @@ namespace Interface
       if (!child->componentFlags.isVisible)
         continue;
 
-      // scaling the final primary size
-      //child->bounds.*maxMember = scaleValueRoundInt((float)(child->bounds.*maxMember));
       calculateGrow(child, child->children, isCalculatingVertical);
     }
 
     // scaling the final size
     component->bounds.*actualSize = scaleValueRoundInt((float)(component->bounds.*actualSize));
+    COMPLEX_ASSERT(component->bounds.*actualSize >= 0);
   }
 
   void calculateSizes(Component *children, Component *component)
@@ -1230,14 +1231,14 @@ namespace Interface
     if ((sizingFlags & Component::ScrollableX) && x != 0.0f)
     {
       scrollOffset.x = utils::clamp(scrollOffset.x - x * uiRelated.scale,
-        0.0f, (float)(scrollableArea.w - bounds.w));
+        0.0f, utils::max(0.0f, (float)(scrollableArea.w - bounds.w)));
       return true;
     }
 
     if ((sizingFlags & Component::ScrollableY) && y != 0.0f)
     {
       scrollOffset.y = utils::clamp(scrollOffset.y - y * uiRelated.scale,
-        0.0f, (float)(scrollableArea.h - bounds.h));
+        0.0f, utils::max(0.0f, (float)(scrollableArea.h - bounds.h)));
       return true;
     }
 

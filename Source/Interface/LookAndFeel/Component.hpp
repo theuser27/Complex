@@ -81,6 +81,8 @@ namespace Interface
 
     bool handleProcessorInsertion(Generation::Processor *parent, Component *parentComponent,
       ProcessorInsertion *metadata, Component *substituteInsert = nullptr);
+
+    void tryProcessorInsertion(Component *parentComponent, ProcessorInsertion info);
   }
 
   class Component

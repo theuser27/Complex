@@ -12,6 +12,20 @@
 
 namespace Interface
 {
+  bool 
+  EffectsLaneSection::AddModulesButton::mouseEnter(const MouseEvent &)
+  {
+    setMouseCursor(uiRelated.renderer, MouseCursorTypes::PointingHand);
+    return true;
+  }
+
+  bool 
+  EffectsLaneSection::AddModulesButton::mouseExit(const MouseEvent &)
+  {
+    setMouseCursor(uiRelated.renderer, MouseCursorTypes::Normal);
+    return true;
+  }
+
   bool
   EffectsLaneSection::AddModulesButton::mouseDown(const MouseEvent &e)
   {
@@ -67,6 +81,13 @@ namespace Interface
         Generation::Processors::EffectModule);
       effectModule->changeEffect(option);
 
+      {
+        auto *moduleTypeParameter = effectModule->getParameter(Generation::EffectModule::ModuleType);
+        auto details = moduleTypeParameter->getParameterDetails();
+        auto normalisedValue = (float)Framework::unscaleValue(getValueFromOptionId(option->id, details), details);
+        moduleTypeParameter->updateNormalisedValue(&normalisedValue);
+      }      
+
       auto *transactionArena = state->plugin->undoManager.beginNewTransaction();
       state->plugin->undoManager.perform(anew(transactionArena, AddProcessorUpdate, { effectModule,
         laneSection->effectsLane->stateId, laneSection->effectsLane->childrenCount }));
@@ -89,8 +110,6 @@ namespace Interface
     
     strokeRect(openGl, getLocalBounds().toFloat(), 1.0f, 
       getColour(Skin::kBody).withAlpha(animationValues[0]), scaleValue(kBorderRounding));
-
-    //renderText("Add Modules", FontId::InterType, );
 
     return true;
   }
@@ -133,6 +152,27 @@ namespace Interface
 
         return true;
       }
+      case CommandMessages::HandleProcessorInsertion:
+      {
+        auto *metadata = (CommandMessages::ProcessorInsertion *)extraData;
+        auto *invisibleHover = &getGui(uiRelated.renderer)->invisibleHover;
+
+        if (!CommandMessages::handleProcessorInsertion(self->effectsLane, &self->moduleHolder,
+          metadata, metadata->insertPlaceholder ? invisibleHover : nullptr))
+          return false;
+
+        invisibleHover->source = metadata->processor->component;
+
+        ((EffectModuleSection *)metadata->processor->component)->laneSection = self;
+        metadata->processor->component->placement = Placement::top;
+        metadata->processor->component->padding = { 0, 0, 0, kVModuleToModuleMargin };
+        
+        // moving the button to the back
+        self->moduleHolder.removeChildComponent(&self->addModulesButton);
+        self->moduleHolder.addChildComponent(&self->addModulesButton);
+
+        return true;
+      }
       }
 
       return false;
@@ -169,6 +209,7 @@ namespace Interface
     moduleHolder.placement = Placement::top;
     moduleHolder.margin = { kEffectsLaneOutlineThickness, 0, kEffectsLaneOutlineThickness, 0 };
     moduleHolder.sizingFlags = (Component::SizingFlags)(Component::GrowableX | Component::GrowableY | Component::ScrollableWithBarY);
+    moduleHolder.componentFlags.vertical = true;
     moduleHolder.padding = { kHVModuleToLaneMargin, kHVModuleToLaneMargin, kHVModuleToLaneMargin, kHVModuleToLaneMargin };
     moduleHolder.draw = [](OpenGlWrapper &openGl, Component *, Component *self, Point<i32>)
     {

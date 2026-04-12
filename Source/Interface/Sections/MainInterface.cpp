@@ -130,6 +130,24 @@ namespace Interface
     return true;
   }
 
+  void CommandMessages::tryProcessorInsertion(Component *parentComponent, ProcessorInsertion info)
+  {
+    bool success = preOrderTreeTraversal(parentComponent, [&info](Component *c)
+    {
+      auto copy = info;
+      if (c->handleCommandMessage(CommandMessages::HandleProcessorInsertion, &copy))
+      {
+        info = copy;
+        return true;
+      }
+      return false;
+    }, false, true);
+
+    // if it fails to insert, just add it to the immediate parent
+    if (!success)
+      parentComponent->addChildComponent(info.processor->component);
+  }
+
   void SoundEngineSection::TopBar::reinitialise()
   {
     removeAllChildComponents();
@@ -243,11 +261,11 @@ namespace Interface
       case CommandMessages::HandleProcessorInsertion:
       {
         auto *metadata = (CommandMessages::ProcessorInsertion *)extraData;
-
         auto *invisibleHover = &getGui(uiRelated.renderer)->invisibleHover;
 
         if (!CommandMessages::handleProcessorInsertion(self->soundEngine,
-          &self->effectsSection.laneHolder, metadata, invisibleHover))
+          &self->effectsSection.laneHolder, metadata, 
+          metadata->insertPlaceholder ? invisibleHover : nullptr))
           return false;
 
         invisibleHover->source = metadata->processor->component;
@@ -419,20 +437,7 @@ namespace Interface
       CommandMessages::ProcessorInsertion data{ .processor = processor,
         .index = u32(-1), .useIndex = true };
 
-      bool success = preOrderTreeTraversal(parentComponent, [&data](Component *c)
-        {
-          auto copy = data;
-          if (c->handleCommandMessage(CommandMessages::HandleProcessorInsertion, &copy))
-          {
-            data = copy;
-            return true;
-          }
-          return false;
-        }, false, true);
-
-      // if it fails to insert, just add it to the immediate parent
-      if (!success)
-        parentComponent->addChildComponent(processor->component);
+      CommandMessages::tryProcessorInsertion(parentComponent, data);
 
       auto *child = processor->children;
       for (usize i = 0; i < processor->childrenCount; (++i), (child = child->next))

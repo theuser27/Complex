@@ -338,10 +338,6 @@ namespace Plugin
 
     allProcessors.add(processor->stateId, processor);
 
-    // register dynamic parameters 
-    for (auto parameter = processor->parameters; parameter; parameter = parameter->next)
-      registerDynamicParameter(&parameter->object);
-
     // check if processor creation causes dynamic parameters to change
     registerProcessorChangeInDynamicParameters(this, processor, false);
 
@@ -514,9 +510,6 @@ namespace Plugin
     state->soundEngine->updateParameters(UpdateFlag::AfterProcess,
       currentSampleRate, true);
   }
-
-  void ComplexPlugin::undo() { undoManager.undo(); }
-  void ComplexPlugin::redo() { undoManager.redo(); }
 }
 
 namespace utils { void atLoad(); }

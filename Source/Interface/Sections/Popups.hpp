@@ -137,7 +137,7 @@ namespace Interface
 
     void newSelection(PopupItem *entry);
 
-    void resetState();
+    void resetState(bool callCancelFn = true);
     void summon(Component *summoningComponent, 
       Placement newListPlacement, Point<i32> customPosition = {});
 

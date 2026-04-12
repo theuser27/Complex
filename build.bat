@@ -1,8 +1,9 @@
 @echo off
 
+set full=1
 set debug=1
 set release=0
-set vst=1
+set vst=0
 set standalone=0
 set clap=0
 set data=0
@@ -10,12 +11,48 @@ set data=0
 echo:
 
 for %%a in (%*) do set "%%~a=1"
-if "%data%"=="1"                 set vst=0 && set debug=0
-if "%standalone%"=="1"           echo [standalone build]     && set vst=0 && set clap=0
-if "%clap%"=="1"                 echo [clap build]           && set vst=0 && set standalone=0
-if "%vst%"=="1"                  echo [vst build]            && set standalone=0 && set clap=0
-if "%release%"=="1"              echo [release mode]         && set debug=0   && echo:
-if "%debug%"=="1"                echo [debug mode]           && set release=0 && echo:
+if "%data%"=="1"                                                set vst=0        && set debug=0      && set full=0
+if "%standalone%"=="1"           echo [standalone build]     && set vst=0        && set clap=0       && set full=0
+if "%clap%"=="1"                 echo [clap build]           && set vst=0        && set standalone=0 && set full=0
+if "%vst%"=="1"                  echo [vst build]            && set standalone=0 && set clap=0       && set full=0
+
+where cl > NUL 2> NUL
+if %ERRORLEVEL% neq 0 (
+  echo cl.exe wasn't found
+  echo trying to set up native tools cmd
+  call "%VS2022INSTALLDIR%\VC\Auxiliary\Build\vcvarsall.bat" x64
+  echo:
+)
+
+if "%full%"=="1" (
+
+  echo [vst build]
+  echo [clap build]
+  echo [release mode]
+  echo:
+  set debug=0
+
+  set vst=1
+  call :ProjectCompile
+  set vst=0
+  echo:
+
+  set clap=1
+  call :ProjectCompile
+  set clap=0
+  echo:
+
+) else (
+  if "%release%"=="1"              echo [release mode]         && set debug=0   && echo:
+  if "%debug%"=="1"                echo [debug mode]           && set release=0 && echo:
+
+  call :ProjectCompile
+)
+
+goto :EOF
+
+::------Project Compilation------
+:ProjectCompile
 
 set top_level=..\..\..
 set compiled_files= %top_level%\Source\unity_extern.c %top_level%\Source\unity1.cpp %top_level%\Source\unity2.cpp
@@ -50,23 +87,13 @@ set linker_flags= /OUT:"%out_file%" %linker_flags%
 if not exist %build_dir% mkdir %build_dir%
 
 if "%debug%"=="1" (
-  set build_dir=%build_dir%\Debug
+  set build_dir=%build_dir%\debug
   set compiler_flags= /MTd /Od /Ob1 /Zi /RTC1 %compiler_flags%
   REM set linker_flags= /NODEFAULTLIB:libcpmtd.lib %linker_flags%
 ) else (
-  set build_dir=%build_dir%\Release
+  set build_dir=%build_dir%\release
   set compiler_flags= /MT /Ox /GL %compiler_flags%
   REM set linker_flags= /NODEFAULTLIB:libcpmt.lib %linker_flags%
-)
-
-if not exist %build_dir% mkdir %build_dir%
-
-where cl > NUL 2> NUL
-if %ERRORLEVEL% neq 0 (
-  echo cl.exe wasn't found
-  echo trying to set up native tools cmd
-  call "%VS2022INSTALLDIR%\VC\Auxiliary\Build\vcvarsall.bat" x64
-  echo:
 )
 
 if "%data%"=="1" (
@@ -77,6 +104,8 @@ if not exist .\Source\Data (
   echo Generating missing binary data
   call :DataGen
 )
+
+if not exist %build_dir% mkdir %build_dir%
 
 call :StartTimer
 

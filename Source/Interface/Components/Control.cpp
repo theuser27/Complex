@@ -142,11 +142,7 @@ namespace Interface
     //  return currentAction;
     //}
 
-    static bool 
-    isParameterUpdate(Framework::UndoAction *action)
-    {
-      return action->redo == redo && action->undo == undo;
-    }
+    static bool isOfType(Framework::UndoAction *a) { return a->redo == redo && a->undo == undo; }
 
     Interface::Control *control;
     double oldValue;
@@ -165,7 +161,7 @@ namespace Interface
     {
       while (action)
       {
-        if (ParameterUpdate::isParameterUpdate(action) && ((ParameterUpdate *)action)->control == this)
+        if (ParameterUpdate::isOfType(action) && ((ParameterUpdate *)action)->control == this)
         {
           ((ParameterUpdate *)action)->newValue = getValue();
           return;
@@ -239,13 +235,24 @@ namespace Interface
     bool
     render(OpenGlWrapper &openGl) override
     {
-      //if (id > kMappingList && isUnmappingParameter(id))
-      //{
-      //  nvg
-      //}
-
       if ((componentFlags.isHovered || componentFlags.isClicked) && canBeChosen)
         fillRect(openGl, getLocalBounds().toFloat(), getHighlightColour(), scaleValue(rounding));
+
+      if (id > kMappingList && isUnmappingParameter(id))
+      {
+        auto crossBounds = getLocalBounds().toFloat().trimmed(scaleValue(padding.toFloat()));
+        crossBounds.trim(crossBounds.w * 0.25f, crossBounds.h * 0.25f);
+
+        nvgBeginPath(openGl);
+        nvgMoveTo(openGl, crossBounds.x, crossBounds.y);
+        nvgLineTo(openGl, crossBounds.getRight(), crossBounds.getBottom());
+
+        nvgMoveTo(openGl, crossBounds.x, crossBounds.getBottom());
+        nvgLineTo(openGl, crossBounds.getRight(), crossBounds.y);
+
+        nvgStrokeColor(openGl, getColour(Skin::kTextComponentText1, this));
+        nvgStroke(openGl);
+      }
 
       if (id == kManualEntry || id == kCopyNormalisedValue ||
         id == kCopyValue || id == kPasteValue)
@@ -513,8 +520,8 @@ namespace Interface
             .textColourId = Skin::kWidgetPrimary1, .canBeChosen = false);
           ControlPopupItem *parameterUnmap = TEXT_ITEM(kMappingList + 1 + (i32)i * 2 + 1, (*mappingList.childList),
             .sizingFlags = Component::None, .padding = (Rectangle<u16>{ 4, 4, 4, 4 }), .closesPopup = false,
-            .desiredSize = (Rectangle{ kPrimaryTextLineHeight, kPrimaryTextLineHeight, 
-              kPrimaryTextLineHeight, kPrimaryTextLineHeight }), .skinOverride = useOverride);
+            .desiredSize = (Rectangle{ kPrimaryTextLineHeight, kPrimaryTextLineHeight, kPrimaryTextLineHeight, kPrimaryTextLineHeight }), 
+            .skinOverride = useOverride/*, .rounding = padding.x*/);
           parameterMap->siblingItem = parameterUnmap;
           wrapper.addChildComponent(parameterMap);
           wrapper.addChildComponent(parameterUnmap);
@@ -560,7 +567,7 @@ namespace Interface
     selector->list = &options;
     selector->skinOverride = getSkinOverride();
     selector->callback = [this](PopupSelector *, PopupItem *selectedItem)
-    { handleControlPopupResult(this, selectedItem); controlFlags.isInModalState = false; };
+    { handleControlPopupResult(this, selectedItem); if (selectedItem->closesPopup) controlFlags.isInModalState = false; };
     selector->cancel = [this](PopupSelector *) { controlFlags.isInModalState = false; };
     selector->summon(this, Placement::custom, position);
   }
@@ -657,6 +664,13 @@ namespace Interface
 
       if (option->valueCount > 1 || option->dynamicUpdateUuid)
         outString.appendFormat(" %zu", (index + 1));
+
+      while (option->parent)
+      {
+        if (!option->parent->displayName.empty())
+          outString.prependFormat("%v / ", option->parent->displayName);
+        option = option->parent;
+      }
     }
     else if (details.generateNumeric)
     {
@@ -737,9 +751,65 @@ namespace Interface
     return Framework::unscaleValue(parsedValue, details, true);
   }
 
+  struct MappingParameterUpdate : public Framework::UndoAction
+  {
+    MappingParameterUpdate(Framework::ParameterBridge *bridge, 
+      Framework::ParameterLink *link = nullptr) : bridge{ bridge }, link{ link }
+    {
+      // TODO: if you map and unmap the same parameter this transaction will contain both actions 
+      //  instead of self cancelling and freeing the arena
+
+      UndoAction::redo = redo;
+      UndoAction::undo = redo;
+    }
+
+    static void redo(UndoAction *a)
+    {
+      auto *self = (MappingParameterUpdate *)a;
+      
+      if (self->link)
+      {
+        COMPLEX_ASSERT(!self->bridge->getParameterLink());
+        self->bridge->resetParameterLink(self->link);
+
+        Framework::ParameterBridge::notifyParameterChange();
+        if (self->link->UIControl && self->link->UIControl->automationMappingChangedCallback)
+          self->link->UIControl->automationMappingChangedCallback(self->link->UIControl, false);
+
+        self->link = nullptr;
+      }
+      else
+      {
+        self->link = self->bridge->getParameterLink();
+        COMPLEX_ASSERT(self->link);
+
+        //Framework::ParameterBridge::notifyParameterChange();
+        if (self->link->UIControl && self->link->UIControl->automationMappingChangedCallback)
+          self->link->UIControl->automationMappingChangedCallback(self->link->UIControl, true);
+
+        self->bridge->resetParameterLink(nullptr);
+      }
+    }
+
+    static bool isOfType(UndoAction *a) { return a->redo == redo && a->undo == redo; }
+    
+    Framework::ParameterBridge *bridge;
+    Framework::ParameterLink *link;
+  };
+
   void handleControlPopupResult(Control *control, PopupItem *selectedItem)
   {
     auto &plugin = getPlugin(uiRelated.renderer);
+
+    auto createMappingParameterUpdate = [&plugin](Framework::ParameterBridge *bridge, Framework::ParameterLink *link = nullptr)
+    {
+      // combine as many mappings into a single transaction
+      auto *arena = plugin.undoManager.getCurrentTransaction();
+      if (auto lastAction = plugin.undoManager.getLastAction(); !arena || (lastAction && !MappingParameterUpdate::isOfType(lastAction)))
+        arena = plugin.undoManager.beginNewTransaction();
+
+      plugin.undoManager.perform(anew(arena, MappingParameterUpdate, { bridge, link }));
+    };
 
     auto result = selectedItem->id;
 
@@ -783,10 +853,7 @@ namespace Interface
       if (!control->parameterLink || !control->parameterLink->hostControl)
         return;
 
-      control->parameterLink->hostControl->resetParameterLink(nullptr);
-      Framework::ParameterBridge::notifyParameterChange();
-      if (control->automationMappingChangedCallback)
-        control->automationMappingChangedCallback(control, true);
+      createMappingParameterUpdate(control->parameterLink->hostControl);
     }
     else if (result == kMapFirstSlot)
     {
@@ -794,10 +861,7 @@ namespace Interface
       {
         if (!parameter.isMappedToParameter())
         {
-          parameter.resetParameterLink(control->parameterLink);
-          Framework::ParameterBridge::notifyParameterChange();
-          if (control->automationMappingChangedCallback)
-            control->automationMappingChangedCallback(control, false);
+          createMappingParameterUpdate(&parameter, control->parameterLink);
           break;
         }
       }
@@ -810,23 +874,14 @@ namespace Interface
       // if negative we unmap the current parameter there
       if (isUnmapping)
       {
-        auto &bridge = plugin.state_->parameterBridges[index];
-        auto *link = bridge.getParameterLink();
-        bridge.resetParameterLink(nullptr);
-        Framework::ParameterBridge::notifyParameterChange();
-        if (link && link->UIControl && link->UIControl->automationMappingChangedCallback)
-          link->UIControl->automationMappingChangedCallback(link->UIControl, true);
+        createMappingParameterUpdate(&plugin.state_->parameterBridges[index]);
       }
       else
       {
         if (!control->parameterLink)
           return;
 
-        auto &bridge = plugin.state_->parameterBridges[index];
-        bridge.resetParameterLink(control->parameterLink);
-        Framework::ParameterBridge::notifyParameterChange();
-        if (control->automationMappingChangedCallback)
-          control->automationMappingChangedCallback(control, false);
+        createMappingParameterUpdate(&plugin.state_->parameterBridges[index], control->parameterLink);
       }
     }
   }
@@ -834,11 +889,11 @@ namespace Interface
   //static void textEditorCallback(Component *component, TextEditor::CallbackFlags flags, TextEditor &editor)
   //{
   //  editor.componentFlags.isVisible = false;
-
+  //
   //  auto *control = (Control *)component;
   //  if (!control || !control->controlFlags.canInputValue)
   //    return;
-
+  //
   //  if (flags == TextEditor::EnterPressed && !editor.enteredText.empty())
   //  {
   //    auto value = control->getValueFromText(editor.enteredText);

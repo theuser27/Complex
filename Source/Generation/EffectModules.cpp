@@ -7,6 +7,7 @@
 #include "Framework/parameter_value.hpp"
 #include "Framework/parameter_bridge.hpp"
 #include "Plugin/Complex.hpp"
+#include "Interface/LookAndFeel/Skin.hpp"
 
 namespace Generation
 {
@@ -21,8 +22,8 @@ namespace Generation
   }
 
 #define EFFECT_VTABLE(name, creationFunction, createUIFunction) static void(*const vtable##name[])() = { (void (*)())creationFunction, (void (*)())run##name, (void (*)())createUIFunction }
-#define COMPLEX_STRUCTURE_EFFECT(nameString, idNumber, vtableArray, ...) (*anew(arena, Framework::ProcessorMetadata, \
-  { .flags = ProcessorMetadata::ProcessorTag, .id = idNumber, .name = nameString __VA_OPT__(,) __VA_ARGS__, .vtable = vtableArray })).computeCounts()
+#define COMPLEX_STRUCTURE_EFFECT(nameString, idNumber, vtableArray, skinOverride, ...) (*anew(arena, Framework::ProcessorMetadata, \
+  { .flags = ProcessorMetadata::ProcessorTag, .userFlags = skinOverride, .id = idNumber, .name = nameString __VA_OPT__(,) __VA_ARGS__, .vtable = vtableArray })).computeCounts()
 
   static Framework::ParameterValue *
   getParameter(EffectModule::EffectData *effectData, uuid id)
@@ -153,7 +154,7 @@ namespace Generation
 
       return COMPLEX_STRUCTURE_INDEXED_DATA(.displayName = "Filter", .id = id)->addChildren({{
         COMPLEX_STRUCTURE_INDEXED_DATA(.displayName = "Normal", .id = Types::Normal, .flags = IndexedData::ProcessorFlag,
-          .processorMetadata = COMPLEX_STRUCTURE_EFFECT("Normal", Types::Normal, vtableNormal, .parameters =
+          .processorMetadata = COMPLEX_STRUCTURE_EFFECT("Normal", Types::Normal, vtableNormal, Interface::Skin::kFilterModule, .parameters =
             (
               COMPLEX_STRUCTURE_PARAMETER("Gain", Normal::Gain, kMinusInfDb, kInfDb, 0.0f, 0.5f, ParameterScale::SymmetricLoudness,
                 " dB", ParameterDetails::Modulatable | ParameterDetails::Automatable | ParameterDetails::Stereo),
@@ -165,7 +166,7 @@ namespace Generation
           )
         ),
         COMPLEX_STRUCTURE_INDEXED_DATA(.displayName = "Gate", .id = Types::Gate, .flags = IndexedData::ProcessorFlag,
-          .processorMetadata = COMPLEX_STRUCTURE_EFFECT("Gate", Types::Gate, vtableGate, .parameters =
+          .processorMetadata = COMPLEX_STRUCTURE_EFFECT("Gate", Types::Gate, vtableGate, Interface::Skin::kFilterModule, .parameters =
             (
               COMPLEX_STRUCTURE_PARAMETER("Input Gain", Gate::InputGain, kMinusInfDb, kInfDb, 0.0f, 0.5f, ParameterScale::SymmetricLoudness,
                 " dB", ParameterDetails::Modulatable | ParameterDetails::Automatable | ParameterDetails::Stereo),
@@ -246,7 +247,7 @@ namespace Generation
 
       return COMPLEX_STRUCTURE_INDEXED_DATA(.displayName = "Dynamics", .id = id)->addChildren({{
         COMPLEX_STRUCTURE_INDEXED_DATA(.displayName = "Contrast", .id = Types::Contrast, .flags = IndexedData::ProcessorFlag,
-          .processorMetadata = COMPLEX_STRUCTURE_EFFECT("Contrast", Types::Contrast, vtableContrast, .parameters =
+          .processorMetadata = COMPLEX_STRUCTURE_EFFECT("Contrast", Types::Contrast, vtableContrast, Interface::Skin::kDynamicsModule, .parameters =
             (
               COMPLEX_STRUCTURE_PARAMETER("Depth", Contrast::Depth, -1.0f, 1.0f, 0.0f, 0.5f, ParameterScale::Linear,
                 "%", ParameterDetails::Modulatable | ParameterDetails::Automatable | ParameterDetails::Stereo)
@@ -254,7 +255,7 @@ namespace Generation
           )
         ),
         COMPLEX_STRUCTURE_INDEXED_DATA(.displayName = "Clip", .id = Types::Clip, .flags = IndexedData::ProcessorFlag,
-          .processorMetadata = COMPLEX_STRUCTURE_EFFECT("Clip", Types::Clip, vtableClip, .parameters =
+          .processorMetadata = COMPLEX_STRUCTURE_EFFECT("Clip", Types::Clip, vtableClip, Interface::Skin::kDynamicsModule, .parameters =
             (
               COMPLEX_STRUCTURE_PARAMETER("Threshold", Clip::Threshold, 0.0f, 1.0f, 0.0f, 0.0f, ParameterScale::Linear,
                 "%", ParameterDetails::Modulatable | ParameterDetails::Automatable | ParameterDetails::Stereo)
@@ -306,7 +307,7 @@ namespace Generation
 
       return COMPLEX_STRUCTURE_INDEXED_DATA(.displayName = "Phase", .id = id)->addChildren({{
         COMPLEX_STRUCTURE_INDEXED_DATA(.displayName = "Shift", .id = Types::Shift, .flags = IndexedData::ProcessorFlag,
-          .processorMetadata = COMPLEX_STRUCTURE_EFFECT("Contrast", Types::Shift, vtableShift, .parameters =
+          .processorMetadata = COMPLEX_STRUCTURE_EFFECT("Contrast", Types::Shift, vtableShift, Interface::Skin::kPhaseModule, .parameters =
             (
               COMPLEX_STRUCTURE_PARAMETER("Phase Shift", Shift::PhaseShift, -180.0f, 180.0f, 0.0f, 0.5f, ParameterScale::Linear,
                 COMPLEX_DEGREE_SIGN_LITERAL, ParameterDetails::Modulatable | ParameterDetails::Automatable | ParameterDetails::Stereo),
@@ -369,7 +370,7 @@ namespace Generation
 
       return COMPLEX_STRUCTURE_INDEXED_DATA(.displayName = "Pitch", .id = id)->addChildren({{
         COMPLEX_STRUCTURE_INDEXED_DATA(.displayName = "Resample", .id = Types::Resample, .flags = IndexedData::ProcessorFlag,
-          .processorMetadata = COMPLEX_STRUCTURE_EFFECT("Resample", Types::Resample, vtableResample, .parameters =
+          .processorMetadata = COMPLEX_STRUCTURE_EFFECT("Resample", Types::Resample, vtableResample, Interface::Skin::kPitchModule, .parameters =
             (
               COMPLEX_STRUCTURE_PARAMETER("Shift", Resample::Shift, -48.0f, 48.0f, 0.0f, 0.5f, ParameterScale::Linear,
                 " st", ParameterDetails::Modulatable | ParameterDetails::Automatable | ParameterDetails::Stereo),
@@ -379,7 +380,7 @@ namespace Generation
           )
         ),
         COMPLEX_STRUCTURE_INDEXED_DATA(.displayName = "Frequency Shift", .id = Types::ConstShift, .flags = IndexedData::ProcessorFlag,
-          .processorMetadata = COMPLEX_STRUCTURE_EFFECT("Frequency Shift", Types::ConstShift, vtableConstShift, .parameters =
+          .processorMetadata = COMPLEX_STRUCTURE_EFFECT("Frequency Shift", Types::ConstShift, vtableConstShift, Interface::Skin::kPitchModule, .parameters =
             (
               COMPLEX_STRUCTURE_PARAMETER("Shift", Resample::Shift, -20'000.0f, 20'000.0f, 0.0f, 0.5f, ParameterScale::SymmetricCubic,
                 " hz", ParameterDetails::Modulatable | ParameterDetails::Automatable | ParameterDetails::Stereo)
@@ -445,7 +446,7 @@ namespace Generation
 
       return COMPLEX_STRUCTURE_INDEXED_DATA(.displayName = "Destroy", .id = id)->addChildren({{
         COMPLEX_STRUCTURE_INDEXED_DATA(.displayName = "Reinterpret", .id = Types::Reinterpret, .flags = IndexedData::ProcessorFlag,
-          .processorMetadata = COMPLEX_STRUCTURE_EFFECT("Reinterpret", Types::Reinterpret, vtableReinterpret, .parameters =
+          .processorMetadata = COMPLEX_STRUCTURE_EFFECT("Reinterpret", Types::Reinterpret, vtableReinterpret, Interface::Skin::kDestroyModule, .parameters =
             (
               COMPLEX_STRUCTURE_PARAMETER("Real/Imag Atten", Reinterpret::Attenuation, kMinusInfDb, kInfDb, 0.0f, 0.5f,
                 ParameterScale::SymmetricLoudness, " dB", ParameterDetails::Modulatable | ParameterDetails::Automatable | ParameterDetails::Stereo),
@@ -1496,8 +1497,8 @@ namespace Generation
 
     auto previousLast = module->parameters->previous;
     module->parameters->previous = effectData->parameters->previous;
-    effectData->parameters->previous = previousLast->next;
-    effectData->parameters->previous->next = effectData->parameters->previous;
+    effectData->parameters->previous = previousLast;
+    previousLast->next = effectData->parameters;
 
     return effectData;
   }
@@ -1660,7 +1661,7 @@ initialiseTypeStructure<Generation::EffectModule>(void *, Framework::PluginStruc
 
   auto *arena = structure.getNewArena(COMPLEX_KB(2));
 
-  ProcessorMetadata &effectModule = COMPLEX_STRUCTURE_PROCESSOR(EffectModule, "Effect Module", Generation::Processors::EffectModule);
+  ProcessorMetadata &effectModule = COMPLEX_STRUCTURE_PROCESSOR(EffectModule, "Effect Module", Generation::Processors::EffectModule, Interface::Skin::kNone);
   effectModule.flags |= ProcessorMetadata::NoParameterValidationTag;
   effectModule.parameters =
     (

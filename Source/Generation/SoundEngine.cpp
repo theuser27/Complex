@@ -7,6 +7,7 @@
 #include "Framework/parameter_value.hpp"
 #include "Effects.hpp"
 #include "Plugin/Complex.hpp"
+#include "Interface/LookAndFeel/Skin.hpp"
 
 namespace Generation
 {
@@ -475,7 +476,7 @@ initialiseTypeStructure<Generation::SoundEngine>(void *, Framework::PluginStruct
 
   auto *arena = structure.getNewArena(COMPLEX_KB(3));
 
-  ProcessorMetadata &soundEngine = COMPLEX_STRUCTURE_PROCESSOR(SoundEngine, "Sound Engine", Processors::SoundEngine);
+  ProcessorMetadata &soundEngine = COMPLEX_STRUCTURE_PROCESSOR(SoundEngine, "Sound Engine", Processors::SoundEngine, Interface::Skin::kNone);
   soundEngine.parameters =
   (
     COMPLEX_STRUCTURE_PARAMETER("Mix", SoundEngine::Mix, 0.0f, 1.0f, 1.0f, 1.0f,

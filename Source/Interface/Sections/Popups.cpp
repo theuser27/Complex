@@ -434,7 +434,7 @@ namespace Interface
     else if (cancel)
       cancel(this);
 
-    resetState();
+    resetState(false);
   }
 
   bool 
@@ -449,7 +449,7 @@ namespace Interface
       if (cancel)
         cancel(this);
 
-      resetState();
+      resetState(false);
     }
 
     return true;
@@ -472,12 +472,12 @@ namespace Interface
     return false;
   }
 
-  void PopupSelector::resetState()
+  void PopupSelector::resetState(bool callCancelFn)
   {
     removeAllChildComponents();
     summoner = {};
     callback = {};
-    if (cancel)
+    if (cancel && callCancelFn)
       cancel(this);
     cancel = {};
     lastPlacement = Placement::right;

@@ -78,6 +78,7 @@ namespace Framework
       ProcessorMetadata *processorMetadata;
       ParameterMetadata *parameterMetadata;
       u64 stateId;
+      // TODO: add an icon option here
     };
 
     operator IndexedData *() { return this; }
@@ -299,6 +300,7 @@ namespace Framework
     };
 
     u32 flags{};
+    u32 userFlags{};
     uuid id{};
     utils::string_view name{};
     Generation::Processor *(*create)(Plugin::State *state,
@@ -407,8 +409,8 @@ namespace Framework
 #define COMPLEX_STRUCTURE_PARAMETER(...) (*anew(arena, Framework::ParameterMetadata, { .details = { __VA_ARGS__ } }))
 #define COMPLEX_STRUCTURE_PARAMETER_CUSTOM(...) (__VA_ARGS__(*anew(arena, Framework::ParameterMetadata, {})))
 
-#define COMPLEX_STRUCTURE_PROCESSOR(T, nameString, idNumber, ...) (*anew(arena, Framework::ProcessorMetadata, \
-  { .flags = ProcessorMetadata::ProcessorTag, .id = idNumber, .name = nameString, .create = ::createProcessor<T> __VA_OPT__(,) __VA_ARGS__ }))
+#define COMPLEX_STRUCTURE_PROCESSOR(T, nameString, idNumber, skinOverride, ...) (*anew(arena, Framework::ProcessorMetadata, \
+  { .flags = ProcessorMetadata::ProcessorTag, .userFlags = skinOverride, .id = idNumber, .name = nameString, .create = ::createProcessor<T> __VA_OPT__(,) __VA_ARGS__ }))
 #define COMPLEX_STRUCTURE_GROUP(nameString, idNumber, ...) (*anew(arena, Framework::ProcessorMetadata, \
   { .flags = ProcessorMetadata::GroupTag, .id = idNumber, .name = nameString __VA_OPT__(,) __VA_ARGS__ }))
 

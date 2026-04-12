@@ -55,13 +55,12 @@ namespace Generation
       utils::dll<Framework::ParameterValue> *parameters{};
       usize parameterCount{};
       NSVGimage *(*createEffectIcon)(Interface::Graphics &g){};
-      Interface::Skin::Override skinOverride = Interface::Skin::kUseParentOverride;
     };
 
     EffectModule(utils::bumpArena *arena, Plugin::State *state, 
       Framework::ProcessorMetadata *metadata, const EffectModule *other, void *serialisedSave);
 
-    Interface::Component *createUI() override { return nullptr; }
+    Interface::Component *createUI() override;
 
     void processEffect(Framework::ComplexDataSource &source, u32 binCount, float sampleRate) noexcept;
 

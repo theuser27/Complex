@@ -26,7 +26,6 @@ namespace
   {
     "All",
     "Effects Lane",
-    "Popup Browser",
     "Filter Module",
     "Dynamics Module",
     "Phase Module",
