@@ -14,7 +14,6 @@ extern "C"
 
 namespace utils
 {
-  struct Allocator;
   class string;
 }
 
@@ -106,6 +105,8 @@ namespace Interface
   template<typename T>
   struct Point
   {
+    T x{}, y{};
+
     friend constexpr bool operator==(Point lhs, Point rhs) = default;
 
     constexpr Point withX(T newX) const { return { newX, y }; }
@@ -129,16 +130,18 @@ namespace Interface
     constexpr Point<int> toInt() const { return Point<int>{ (int)x, (int)y }; }
     constexpr Point<float> toFloat() const { return Point<float>{ (float)x, (float)y }; }
     constexpr Point<double> toDouble() const { return Point<double>{ (double)x, (double)y }; }
-
-    T x{}, y{};
   };
 
   template<typename T>
   Point(T, T) -> Point<T>;
 
+  inline constexpr auto invalidPosition = Point{ utils::min_limit<i32>, utils::min_limit<i32> };
+
   template<typename T>
   struct Rectangle
   {
+    T x{}, y{}, w{}, h{};
+
     static constexpr Rectangle
     fromPoints(Point<T> corner1, Point<T> corner2)
     {
@@ -327,12 +330,12 @@ namespace Interface
     constexpr Rectangle<int> toInt() const { return Rectangle<int>{ (int)x, (int)y, (int)w, (int)h }; }
     constexpr Rectangle<float> toFloat() const { return Rectangle<float>{ (float)x, (float)y, (float)w, (float)h }; }
     constexpr Rectangle<double> toDouble() const { return Rectangle<double>{ (double)x, (double)y, (double)w, (double)h }; }
-
-    T x{}, y{}, w{}, h{};
   };
 
   struct alignas(u32) Colour
   {
+    u8 b{}, g{}, r{}, a{};
+
     constexpr Colour() = default;
     explicit constexpr Colour(u32 argb) : a{ u8((argb >> 24) & 0xff) },
       r { u8((argb >> 16) & 0xff) }, g{ u8((argb >> 8) & 0xff) }, b{ u8(argb & 0xff) } { }
@@ -395,14 +398,42 @@ namespace Interface
       };
     }
 
+    constexpr Colour
+    lighter(float amount) const
+    {
+      COMPLEX_ASSERT(amount >= 0.0f);
+      amount = 1.0f / (1.0f + amount);
+
+      return Colour
+      {
+        (u8)(255.0f - (amount * (255.0f - r))),
+        (u8)(255.0f - (amount * (255.0f - g))),
+        (u8)(255.0f - (amount * (255.0f - b))),
+        (u8)(255.0f - (amount * (255.0f - a)))
+      };
+    }
+
+    constexpr Colour
+    dimmer(float amount) const
+    {
+      COMPLEX_ASSERT(amount >= 0.0f);
+      amount = 1.0f / (1.0f + amount);
+
+      return Colour
+      {
+        (u8)(amount * r),
+        (u8)(amount * g),
+        (u8)(amount * b),
+        (u8)(amount * a)
+      };
+    }
+
     usize toString(char *buffer, usize bufferSize) const;
     void toString(utils::string &outString) const;
     static Colour fromString(const char *integer, int base = 16);
 
     operator NVGcolor() const { return nvgRGBA(r, g, b, a); }
     friend constexpr bool operator==(Colour lhs, Colour rhs) = default;
-
-    u8 b{}, g{}, r{}, a{};
   };
 
   namespace Colours
@@ -513,18 +544,22 @@ namespace Interface
     // pushed physically upwards/downwards.
     float wheelDeltaY = 0.0f;
 
+    u8 numberOfClicks = 0;
+
     // Indicates whether the user has reversed the direction of the wheel.
     // See deltaX and deltaY for an explanation of the effects of this value.
-    bool wheelIsReversed = false;
+    bool wheelIsReversed : 1 = false;
 
     // If true, then the wheel has continuous, un-stepped motion.
-    bool wheelIsSmooth = false;
+    bool wheelIsSmooth : 1 = false;
 
     // If true, then this event is part of the inertial momentum phase that follows
     // the wheel being released.
-    bool wheelIsInertial = false;
+    bool wheelIsInertial : 1 = false;
 
-    u8 numberOfClicks = 0;
+    // compared to the last mouse event is this one moving up/left, hasn't moved, down/right (-1, 0, 1)
+    i8 directionX : 2 = 0;
+    i8 directionY : 2 = 0;
 
     MouseEvent getEventRelativeTo(Component *otherComponent) const;
     Point<int> getOffsetFromDragStart() const 

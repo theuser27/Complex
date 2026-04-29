@@ -64,11 +64,19 @@ namespace Interface
         return true;
       });
 
-    PopupList *options = OptionPopupItem::createPopupList(selector, {}, indexedData);
-    options->desiredSize = { kPopupMinWidth, 0, utils::max_limit<i32>, utils::max_limit<i32> };
-    options->padding = { 0, 4, 0, 4 };
+    PopupList *list = anew(selector->arena, PopupList, { selector });
+    list->parentSelector = selector;
 
-    selector->list = options;
+    Framework::iterateOverIndexedData(indexedData,
+      [list](Framework::IndexedData &option)
+      {
+        if (option.childrenCount || option.canBeChosen())
+          list->addChildComponent(OptionPopupItem::createOption(list, option));
+
+        return false;
+      });
+
+    selector->list = list;
     selector->skinOverride = getSkinOverride();
     selector->callback = [this](PopupSelector *, PopupItem *selectedItem)
     {
@@ -105,11 +113,12 @@ namespace Interface
   {
     static constexpr auto kHoverIncrement = 0.1f;
     tickAnimation(animationValues,
-      {{ componentFlags.isHovered || isDropdownOpen }}, 
+      {{ true }}, 
       {{ kHoverIncrement }});
     
     strokeRect(openGl, getLocalBounds().toFloat(), 1.0f, 
-      getColour(Skin::kBody).withAlpha(animationValues[0]), scaleValue(kBorderRounding));
+      getColour(Skin::kBody, this).withAlpha(animationValues[0]), 
+      scaleValue(kBorderRounding));
 
     return true;
   }
@@ -155,17 +164,24 @@ namespace Interface
       case CommandMessages::HandleProcessorInsertion:
       {
         auto *metadata = (CommandMessages::ProcessorInsertion *)extraData;
-        auto *invisibleHover = &getGui(uiRelated.renderer)->invisibleHover;
+        auto *placeholderInsert = &getGui(uiRelated.renderer)->placeholderInsert;
 
-        if (!CommandMessages::handleProcessorInsertion(self->effectsLane, &self->moduleHolder,
-          metadata, metadata->insertPlaceholder ? invisibleHover : nullptr))
+        if (!CommandMessages::handleProcessorInsertion(self->effectsLane, 
+          &self->moduleHolder, metadata, Placement::top))
           return false;
 
-        invisibleHover->source = metadata->processor->component;
+        auto section = (EffectModuleSection *)metadata->processor->component;
 
-        ((EffectModuleSection *)metadata->processor->component)->laneSection = self;
-        metadata->processor->component->placement = Placement::top;
-        metadata->processor->component->padding = { 0, 0, 0, kVModuleToModuleMargin };
+        placeholderInsert->source = section;
+
+        section->laneSection = self;
+        section->componentFlags.animateMovement = true;
+        section->previousPosition = invalidPosition;
+        if (metadata->useIndex)
+          section->effectHolder.header.draggableBox.surfaceToLiftTo = 
+            &self->soundEngineSection->effectsSection;
+        (metadata->placeholder ? metadata->placeholder : section)->margin = 
+          { 0, 0, 0, kVModuleToModuleMargin };
         
         // moving the button to the back
         self->moduleHolder.removeChildComponent(&self->addModulesButton);
@@ -210,11 +226,14 @@ namespace Interface
     moduleHolder.margin = { kEffectsLaneOutlineThickness, 0, kEffectsLaneOutlineThickness, 0 };
     moduleHolder.sizingFlags = (Component::SizingFlags)(Component::GrowableX | Component::GrowableY | Component::ScrollableWithBarY);
     moduleHolder.componentFlags.vertical = true;
+    moduleHolder.componentFlags.clickable = true;
     moduleHolder.padding = { kHVModuleToLaneMargin, kHVModuleToLaneMargin, kHVModuleToLaneMargin, kHVModuleToLaneMargin };
     moduleHolder.draw = [](OpenGlWrapper &openGl, Component *, Component *self, Point<i32>)
     {
       fillRect(openGl, self->getLocalBounds().toFloat(), 
         getColour(Skin::kBackground, self), scaleValue(kInsideRouding));
+
+      self->renderScrollbars(openGl, 0.2f);
 
       return true;
     };

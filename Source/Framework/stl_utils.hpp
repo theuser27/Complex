@@ -455,6 +455,57 @@ namespace utils
     dll *next{};
   };
 
+  // half connected - first element is connected to the last but not the other way around
+  template<typename T>
+  constexpr void insertDllHalfConnected(T *toInsert, T *insertBefore, T *&startingElement)
+  {
+    toInsert->next = nullptr;
+    toInsert->previous = toInsert;
+
+    if (!startingElement)
+    {
+      startingElement = toInsert;
+      return;
+    }
+
+    if (!insertBefore)
+    {
+      toInsert->previous = startingElement->previous;
+      startingElement->previous->next = toInsert;
+      startingElement->previous = toInsert;
+    }
+    else
+    {
+      toInsert->previous = insertBefore->previous;
+      toInsert->next = insertBefore;
+
+      if (insertBefore->previous->next)
+        insertBefore->previous->next = toInsert;
+      insertBefore->previous = toInsert;
+
+      if (insertBefore == startingElement)
+        startingElement = toInsert;
+    }
+  }
+
+  // half connected - first element is connected to the last but not the other way around
+  template<typename T>
+  constexpr void removeDllHalfConnected(T *toRemove, T *&startingElement)
+  {
+    if (toRemove->next)
+      toRemove->next->previous = toRemove->previous;
+    else
+      startingElement->previous = toRemove->previous;
+
+    if (toRemove->previous->next)
+      toRemove->previous->next = toRemove->next;
+    else
+      startingElement = toRemove->next;
+
+    toRemove->previous = nullptr;
+    toRemove->next = nullptr;
+  }
+
 #define COMPLEX_INTERNAL_DEFINE_ENUM_MAPPING(name, ...) name = __VA_ARGS__
 #define COMPLEX_ENUM(name, /*valueIdPairs*/...) \
   namespace name { enum Value : uuid { COMPLEX_FOR_EACH(COMPLEX_INTERNAL_ITERATE, COMPLEX_INTERNAL_DEFINE_ENUM_MAPPING, (), (,), __VA_ARGS__) }; \
@@ -638,6 +689,14 @@ namespace utils
   // deduction guide for contiguous containers
   template<typename Range>
   span(Range &) -> span<remove_reference_t<decltype(declval<Range>()[0])>>;
+
+  template<typename T>
+  constexpr void copy(utils::span<T> destination, utils::span<const T> source)
+  {
+    auto length = utils::min(destination.size(), source.size());
+    for (usize i = 0; i < length; ++i)
+      destination[i] = source[i];
+  }
 
   class string_view : public span<const char>
   {
@@ -985,18 +1044,6 @@ namespace utils
     return true;
   }
 
-  template<typename T>
-  constexpr utils::dll<T> *
-  find_if(utils::dll<T> *start, const auto &predicate,
-    utils::dll<T> *sentinel = nullptr)
-  {
-    for (auto *node = start; node != sentinel; node = node->next)
-      if (predicate(node))
-        return node;
-
-    return nullptr;
-  }
-
   constexpr void quicksort(auto &container, usize lower, usize upper, const auto &predicate)
   {
     if (lower >= upper)
@@ -1072,6 +1119,9 @@ namespace utils
   #endif
   }
 
+  float sin(float arg);
+  float cos(float arg);
+
   constexpr bool 
   isPowerOfTwo(utils::integral auto value) noexcept
   { return (value & (value - 1)) == 0; }
@@ -1104,7 +1154,13 @@ namespace utils
   }
 
   template <typename T> 
-  constexpr int signum(T val) noexcept { return (T(0) < val) - (val < T(0)); }
+  constexpr int signum(T val, bool zeroAtCenter = true) noexcept 
+  {
+    if (zeroAtCenter)
+      return (T(0) < val) - (val < T(0));
+    else
+      return (T(0) <= val) - (val < T(0));
+  }
 
   // returns the starting position of the centered element relative to container
   template<typename T>

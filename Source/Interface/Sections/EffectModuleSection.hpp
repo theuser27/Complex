@@ -17,11 +17,10 @@ namespace Interface
 {
   class EmptySlider;
   class SpectralMaskComponent;
-  class EffectsLaneSection;
+  struct EffectsLaneSection;
 
-  class EffectModuleSection final : public Component
+  struct EffectModuleSection final : public Component
   {
-  public:
     static constexpr int kSpectralMaskMargin = 2;
     static constexpr int kTopMenuHeight = 28;
     static constexpr int kDraggableSectionWidth = 36;
@@ -35,6 +34,8 @@ namespace Interface
 
     static constexpr int kOuterPixelRounding = 8;
     static constexpr int kInnerPixelRounding = 3;
+
+    bool render(OpenGlWrapper &openGl) override;
 
     void reinitialise();
     void destroy();
@@ -58,7 +59,7 @@ namespace Interface
 
       } shiftBounds{};
 
-      SpectralMaskComponent() { addChildComponent(&shiftBounds, children); }
+      SpectralMaskComponent();
       bool render(OpenGlWrapper &openGl) override;
 
     } maskComponent{};

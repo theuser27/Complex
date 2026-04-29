@@ -13,11 +13,11 @@ namespace Generation
 
 namespace Interface
 {
-  struct EffectsSection;
+  struct SoundEngineSection;
+  struct EffectModuleSection;
 
-  class EffectsLaneSection final : public Component
+  struct EffectsLaneSection final : public Component
   {
-  public:
     static constexpr int kAutoScrollRegion = 100;
 
     static constexpr int kLeftEdgePadding = 12;
@@ -33,8 +33,7 @@ namespace Interface
     bool render(OpenGlWrapper &openGl) override;
 
     Generation::EffectsLane *effectsLane{};
-    EffectsSection *parentState{};
-    utils::sll<CommandMessages::HandleMessageFn *> laneHandler{};
+    SoundEngineSection *soundEngineSection{};
 
     Component header{};
     Component footer{};
@@ -63,5 +62,7 @@ namespace Interface
       EffectsLaneSection *laneSection{};
 
     } addModulesButton{};
+
+    utils::sll<CommandMessages::HandleMessageFn *> laneHandler{};
   };
 }

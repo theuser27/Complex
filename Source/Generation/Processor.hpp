@@ -56,7 +56,10 @@ namespace Generation
     void removeChildProcessor(Processor &removedChildProcessor);
     bool 
     addChildProcessor(Processor &newChildProcessor, usize index) 
-    { return addChildProcessor(newChildProcessor, getChild(children, utils::min((usize)childrenCount, index))); }
+    {
+      COMPLEX_HARD_ASSERT(index <= childrenCount);
+      return addChildProcessor(newChildProcessor, getChild(children, index));
+    }
     Processor &
     removeChildProcessor(usize index)
     {
@@ -66,8 +69,8 @@ namespace Generation
     }
 
     Framework::ParameterValue *getParameter(uuid parameterId) const;
-    utils::dll<Framework::ParameterValue> *createParameters(usize count, 
-      Framework::ParameterMetadata *metadata, utils::dll<Framework::ParameterValue> *copy = nullptr);
+    Framework::ParameterValue *createParameters(usize count,
+      Framework::ParameterMetadata *metadata, Framework::ParameterValue *copy = nullptr);
 
     void updateParameters(UpdateFlag flag, float sampleRate, bool updateChildrenParameters = true);
     // remaps parameters from the current bridges (if they exist) to new ones (if they exist)
@@ -125,7 +128,7 @@ namespace Generation
 
     u32 parameterCount{};
     // first node's previous points to the last, last node's next is always nullptr
-    utils::dll<Framework::ParameterValue> *parameters{};
+    Framework::ParameterValue *parameters{};
     Framework::SimdBuffer *dataBuffer = nullptr;
 
     utils::bumpArena *arena = nullptr;
@@ -137,7 +140,7 @@ namespace Generation
   static_assert(utils::is_trivially_destructible_v<Processor>);
 
   void deserialiseParametersFromJson(void *jsonData, Framework::ProcessorMetadata *metadata,
-    utils::dll<Framework::ParameterValue> *&parameters, Processor *processor, bool validateParameters);
+    Framework::ParameterValue *&parameters, Processor *processor, bool validateParameters);
 }
 
 namespace Framework

@@ -82,7 +82,6 @@ namespace
     "Widget Accent 2",
     "Widget Background 1",
     "Widget Background 2",
-    "Widget Center Line",
 
     "Overlay Screen",
     "Lighten Screen",
@@ -93,10 +92,6 @@ namespace
     "Popup Selector Background",
     "Popup Selector Delimiter",
 
-    "Text Component Background",
-    "Text Component Text 1",
-    "Text Component Text 2",
-
     "Rotary Arc",
     "Rotary Arc Disabled",
     "Rotary Arc Unselected",
@@ -105,35 +100,12 @@ namespace
     "Rotary Body",
     "Rotary Body Border",
 
-    "Linear Slider",
-    "Linear Slider Disabled",
-    "Linear Slider Unselected",
-    "Linear Slider Thumb",
-    "Linear Slider Thumb Disabled",
-
-    "Modulation Meter",
-    "Modulation Meter Left",
-    "Modulation Meter Right",
-    "Modulation Meter Control",
-
-    "Icon Button Off",
-    "Icon Button Off Hover",
-    "Icon Button Off Pressed",
-    "Icon Button On",
-    "Icon Button On Hover",
-    "Icon Button On Pressed",
-
-    "Action Button Primary",
-    "Action Button Primary Hover",
-    "Action Button Primary Press",
-    "Action Button Secondary",
-    "Action Button Secondary Hover",
-    "Action Button Secondary Press",
-    "Action Button Text",
-
     "Power Button On",
     "Power Button Off",
 
+    "Text Component Background",
+    "Text Component Text 1",
+    "Text Component Text 2",
     "Text Editor Background",
     "Text Editor Border",
     "Text Editor Caret",
@@ -162,23 +134,24 @@ namespace Interface
   {
     auto skinFile = Framework::LoadSave::getConfigFilePath(CPLUG_PLUGIN_NAME ".skin");
 
-    // temporary solution to ensure there's a skin file
-    // if this throws put Complex.skin at Users\(user)\AppData\Roaming\Complex
-    if (xfiles_exists(skinFile.data()))
-    {
-      char *string;
-      usize stringSize;
-      if (xfiles_read(skinFile.data(), (void **)&string, &stringSize))
-      {
-        if (stringToState({ string, stringSize }))
-          return;
-      }
-    }
+    // TODO: remove comment once skin values are stable
+    //// temporary solution to ensure there's a skin file
+    //// if this throws put Complex.skin at Users\(user)\AppData\Roaming\Complex
+    //if (xfiles_exists(skinFile.data()))
+    //{
+    //  char *string;
+    //  usize stringSize;
+    //  if (xfiles_read(skinFile.data(), (void **)&string, &stringSize))
+    //  {
+    //    if (stringToState({ string, stringSize }))
+    //      return;
+    //  }
+    //}
 
     auto defaultSkin = utils::string_view{ (const char *)BinaryData::Complex_skin, BinaryData::Complex_skinSize };
     if (stringToState(defaultSkin))
     {
-      xfiles_write(skinFile.data(), defaultSkin.data(), defaultSkin.size());
+      //xfiles_write(skinFile.data(), defaultSkin.data(), defaultSkin.size());
       return;
     }
 

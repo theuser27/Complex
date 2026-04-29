@@ -137,6 +137,7 @@
   #endif
 
   #define COMPLEX_LOG(format, ...) ::common::complexLogMessage(__FILE__, __func__, __LINE__, format __VA_OPT__(,) __VA_ARGS__)
+  #define COMPLEX_DEBUG_LOG(format, ...) ::common::complexLogMessage(nullptr, nullptr, __LINE__, format __VA_OPT__(,) __VA_ARGS__)
 
   #define COMPLEX_ASSERT(condition, ...) (void)((!!(condition)) || (::common::complexPrintAssertMessage(#condition, \
     __FILE__, __func__, __LINE__ __VA_OPT__(, true,) __VA_ARGS__), COMPLEX_DEBUG_TRAP(), false))

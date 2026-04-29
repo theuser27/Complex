@@ -303,13 +303,28 @@ namespace utils
   }
 
   template<typename T>
-  class vector
+  class vectornd
   {
     T *data_{};
     usize	allocatorType_ : 1 = (usize)AllocatorType::General;
     usize freeingDestructor_ : 1 = true;
     usize	size_ : 62{};
     usize	capacity_{};
+
+  protected:
+    void destructor(bool force = true)
+    {
+      if (capacity_)
+      {
+        utils::contiguousDestroy(data_, size_);
+        if (freeingDestructor_ || force)
+          Allocator::fromType((AllocatorType)allocatorType_).remove(data_);
+      }
+
+      data_ = {};
+      size_ = {};
+      capacity_ = {};
+    }
 
   public:
     using value_type = T;
@@ -324,22 +339,8 @@ namespace utils
 
     static constexpr usize kStartingCapacity = 16;
 
-    ~vector()
-    {
-      if (capacity_)
-      {
-        utils::contiguousDestroy(data_, size_);
-        if (freeingDestructor_)
-          Allocator::fromType((AllocatorType)allocatorType_).remove(data_);
-      }
-
-      data_ = {};
-      size_ = 0;
-      capacity_ = 0;
-    }
-
-    vector(Allocator allocator, usize reserveSpace = 0) { reserve(allocator, reserveSpace); }
-    vector(Allocator allocator, utils::span<const T> data)
+    vectornd(Allocator allocator, usize reserveSpace = 0) { reserve(allocator, reserveSpace); }
+    vectornd(Allocator allocator, utils::span<const T> data)
     {
       utils::contiguousClone(allocator, allocator, data.data(), data.size(), data_, size_, capacity_);
       allocatorType_ = (usize)allocator.type();
@@ -347,25 +348,25 @@ namespace utils
       size_ = data.size();
     }
 
-    constexpr vector() = default;
-    vector(const vector &other) = delete;
-    vector &operator=(const vector &other) = delete;
-    constexpr vector(vector &&other) noexcept { swap(other); }
-    vector &operator=(vector &&other) noexcept
+    constexpr vectornd() = default;
+    vectornd(const vectornd &other) = delete;
+    vectornd &operator=(const vectornd &other) = delete;
+    constexpr vectornd(vectornd &&other) noexcept { swap(other); }
+    vectornd &operator=(vectornd &&other) noexcept
     {
       if (this == &other)
         return *this;
 
-      this->~vector();
+      destructor();
       swap(other);
 
       return *this;
     }
 
-    [[nodiscard]] vector
+    [[nodiscard]] vectornd
     clone() const
     {
-      vector ret{};
+      vectornd ret{};
 
       auto oldAllocator = Allocator::fromType((AllocatorType)allocatorType_).fromAllocation(data_);
       utils::contiguousClone(oldAllocator, oldAllocator, data(), size(), ret.data_, ret.size_, ret.capacity_);
@@ -457,6 +458,15 @@ namespace utils
 
     T &emplace(iterator iter, auto &&... args) { return *new(insert(iter)) T{ COMPLEX_FWD(args)... }; }
 
+    constexpr void popFront()
+    {
+      if (!size_)
+        return;
+
+      front().~T();
+      --size_;
+      utils::contiguousMoveElements(data_, data_ + 1, size_);
+    }
     constexpr void popBack()
     {
       if (!size_)
@@ -503,7 +513,7 @@ namespace utils
         utils::contiguousMoveElements(data_ + lastShift, data_ + lastShift + offset, size_ - lastShift);
     }
 
-    constexpr void swap(vector &other)
+    constexpr void swap(vectornd &other)
     {
       COMPLEX_SWAP_MEMBERS(data_, other);
       COMPLEX_SWAP_MEMBERS(allocatorType_, other);
@@ -527,6 +537,24 @@ namespace utils
     constexpr iterator begin() { return (size_) ? data_ : nullptr; }
     constexpr const iterator end() const { return begin() + size_; }
     constexpr iterator end() { return begin() + size_; }
+  };
+
+  template<typename T>
+  class vector : public vectornd<T>
+  {
+  public:
+    ~vector() { vectornd<T>::destructor(false); }
+
+    using vectornd<T>::vectornd;
+
+    constexpr vector() = default;
+    constexpr vector(vectornd<T> &&other) noexcept { swap(other); }
+    vector &
+    operator=(vector &&other) noexcept
+    {
+      (void)vectornd<T>::operator=(COMPLEX_MOVE(other));
+      return *this;
+    }
   };
 
   template<typename Key, typename Value>

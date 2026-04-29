@@ -18,21 +18,19 @@ namespace Generation
     if (!other)
       return;
 
-    using T = utils::remove_reference_t<decltype(*parameters)>;
-
     if (other->parameters)
     {
       parameterCount = other->parameterCount;
 
-      auto *memory = arranew(arena, T, parameterCount);
+      auto *memory = arranew(arena, Framework::ParameterValue, parameterCount);
       parameters = memory;
 
       auto *parameter = parameters;
       auto *otherParameter = other->parameters;
       for (usize i = 0; i < parameterCount; ++i)
       {
-        parameter = new (memory) T{ otherParameter->object };
-        parameter->object.parentProcessor = this;
+        parameter = new (memory) Framework::ParameterValue{ *otherParameter };
+        parameter->parentProcessor = this;
         parameter->previous = memory - 1;
         parameter->next = memory + 1;
 
@@ -70,7 +68,7 @@ namespace Generation
   void Processor::reset()
   {
     for (auto *parameter = parameters; parameter; parameter = parameter->next)
-      parameter->object.reset();
+      parameter->reset();
   }
 
   // the following functions are to be called outside of processing time
@@ -99,23 +97,7 @@ namespace Generation
 
     ++childrenCount;
     newChildProcessor.parent = this;
-    newChildProcessor.previous = &newChildProcessor;
-    newChildProcessor.next = nullptr;
-
-    if (!children)
-    {
-      children = &newChildProcessor;
-      return true;
-    }
-
-    newChildProcessor.next = insertBefore;
-
-    insertBefore = (insertBefore) ? insertBefore : children;
-    newChildProcessor.previous = insertBefore->previous;
-    insertBefore->previous = &newChildProcessor;
-
-    if (newChildProcessor.previous->next)
-      newChildProcessor.previous->next = &newChildProcessor;
+    utils::insertDllHalfConnected(&newChildProcessor, insertBefore, children);
 
     return true;
   }
@@ -124,19 +106,9 @@ namespace Generation
   {
     COMPLEX_ASSERT(removedChildProcessor.parent == this);
 
-    if (removedChildProcessor.previous->next)
-      removedChildProcessor.previous->next = removedChildProcessor.next;
-    if (removedChildProcessor.next)
-      removedChildProcessor.next->previous = removedChildProcessor.previous;
-
-    removedChildProcessor.parent = nullptr;
-    removedChildProcessor.previous = nullptr;
-    removedChildProcessor.next = nullptr;
-
-    if (children == &removedChildProcessor)
-      children = removedChildProcessor.next;
-
     --childrenCount;
+    removedChildProcessor.parent = nullptr;
+    utils::removeDllHalfConnected(&removedChildProcessor, children);
   }
 
   Framework::ParameterValue *
@@ -146,8 +118,8 @@ namespace Generation
       metadata->name, metadata->id);
 
     for (auto *parameter = parameters; parameter; parameter = parameter->next)
-      if (parameter->object.getParameterId() == parameterId)
-        return &parameter->object;
+      if (parameter->getParameterId() == parameterId)
+        return parameter;
 
     COMPLEX_HARD_ASSERT("Parameter (%zu) was not found", parameterId);
     return nullptr;
@@ -160,8 +132,8 @@ namespace Generation
 
     auto parameter = parameters;
     for (usize i = 0; i < parameterCount; (i++), (parameter = parameter->next))
-      if (parameter->object.getUpdateFlag() == flag)
-        parameter->object.updateValue(sampleRate);
+      if (parameter->getUpdateFlag() == flag)
+        parameter->updateValue(sampleRate);
 
     if (updateChildrenParameters)
       for (auto child = children; child; child = child->next)
@@ -176,7 +148,7 @@ namespace Generation
       auto *parameter = parameters;
       for (usize i = 0; i < parameterCount; (++i), (parameter = parameter->next))
       {
-        auto bridge = parameter->object.getParameterLink()->hostControl;
+        auto bridge = parameter->getParameterLink()->hostControl;
         if (!bridge)
           continue;
 
@@ -185,12 +157,12 @@ namespace Generation
           if (bridge->getParameterLink())
             bridge->resetParameterLink(nullptr);
           else
-            bridge->resetParameterLink(parameter->object.getParameterLink(), bridgeValueFromParameters);
+            bridge->resetParameterLink(parameter->getParameterLink(), bridgeValueFromParameters);
         }
         else
         {
           bridge->resetParameterLink(nullptr);
-          parameter->object.changeBridge(nullptr);
+          parameter->changeBridge(nullptr);
         }
       }
     }
@@ -202,67 +174,65 @@ namespace Generation
       for (usize i = 0; i < parameterCount; (++i), (parameter = parameter->next))
       {
         auto *newBridge = bridges[i];
-        if (auto *oldBridge = parameter->object.changeBridge(newBridge))
+        if (auto *oldBridge = parameter->changeBridge(newBridge))
           oldBridge->resetParameterLink(nullptr);
 
-        newBridge->resetParameterLink(parameter->object.getParameterLink(), bridgeValueFromParameters);
+        newBridge->resetParameterLink(parameter->getParameterLink(), bridgeValueFromParameters);
       }
     }
 
     Framework::ParameterBridge::notifyParameterChange();
   }
 
-  utils::dll<Framework::ParameterValue> *
+  Framework::ParameterValue *
   Processor::createParameters(usize count, Framework::ParameterMetadata *pararmeterMetadata,
-    utils::dll<Framework::ParameterValue> *copy)
+    Framework::ParameterValue *copy)
   {
-    using T = utils::remove_reference_t<decltype(*parameters)>;
-
     if (!count)
       return nullptr;
 
-    auto *memory = arranew(arena, T, count);
+    auto *memory = arranew(arena, Framework::ParameterValue, count);
 
     if (!copy)
     {
       for (usize i = 0; i < count; (++i), (pararmeterMetadata = pararmeterMetadata->next))
       {
-        T *slot;
+        Framework::ParameterValue *slot;
         if (pararmeterMetadata->details.scale == Framework::ParameterScale::Indexed)
         {
           auto details = pararmeterMetadata->details;
           auto *optionStub = Framework::IndexedData::deepCopy(arena, details.options);
           details.options = optionStub;
-          slot = new (memory + i) T{ pararmeterMetadata->details };
+          slot = new (memory + i) Framework::ParameterValue{ pararmeterMetadata->details };
         }
         else
-          slot = new (memory + i) T{ pararmeterMetadata->details };
+          slot = new (memory + i) Framework::ParameterValue{ pararmeterMetadata->details };
 
-        slot->object.parentProcessor = this;
+        slot->parentProcessor = this;
         slot->previous = slot - 1;
         slot->next = slot + 1;
 
         // register dynamic parameters 
-        state->registerDynamicParameter(&slot->object);
+        state->registerDynamicParameter(slot);
       }
     }
     else
     {
       for (usize i = 0; i < count; (++i), (copy = copy->next))
       {
-        auto *slot = new (memory + i) T{ copy->object };
-        if (auto details = slot->object.getParameterDetails(); details.scale == Framework::ParameterScale::Indexed)
+        auto *slot = new (memory + i) Framework::ParameterValue{ *copy };
+        if (auto details = slot->getParameterDetails(); details.scale == Framework::ParameterScale::Indexed)
         {
           auto *optionStub = Framework::IndexedData::deepCopy(arena, details.options);
           details.options = optionStub;
-          slot->object.setParameterDetails(details);
+          slot->setParameterDetails(details);
         }
-        slot->object.parentProcessor = this;
+        slot->parentProcessor = this;
         slot->previous = slot - 1;
         slot->next = slot + 1;
 
         // register dynamic parameters 
-        state->registerDynamicParameter(&slot->object);
+        state->registerDynamicParameter(slot);
       }
     }
 

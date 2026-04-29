@@ -77,7 +77,6 @@ namespace Interface
       kWidgetAccent2,
       kWidgetBackground1,
       kWidgetBackground2,
-      kWidgetCenterLine,
 
       kOverlayScreen,
       kLightenScreen,
@@ -88,10 +87,6 @@ namespace Interface
       kPopupSelectorBackground,
       kPopupSelectorDelimiter,
 
-      kTextComponentBackground,
-      kTextComponentText1,
-      kTextComponentText2,
-
       kRotaryArc,
       kRotaryArcDisabled,
       kRotaryArcUnselected,
@@ -100,35 +95,12 @@ namespace Interface
       kRotaryBody,
       kRotaryBodyBorder,
 
-      kLinearSlider,
-      kLinearSliderDisabled,
-      kLinearSliderUnselected,
-      kLinearSliderThumb,
-      kLinearSliderThumbDisabled,
-
-      kModulationMeter,
-      kModulationMeterLeft,
-      kModulationMeterRight,
-      kModulationMeterControl,
-
-      kIconButtonOff,
-      kIconButtonOffHover,
-      kIconButtonOffPressed,
-      kIconButtonOn,
-      kIconButtonOnHover,
-      kIconButtonOnPressed,
-
-      kActionButtonPrimary,
-      kActionButtonPrimaryHover,
-      kActionButtonPrimaryPressed,
-      kActionButtonSecondary,
-      kActionButtonSecondaryHover,
-      kActionButtonSecondaryPressed,
-      kActionButtonText,
-
       kPowerButtonOn,
       kPowerButtonOff,
-
+      
+      kTextComponentBackground,
+      kTextComponentText1,
+      kTextComponentText2,
       kTextEditorBackground,
       kTextEditorBorder,
       kTextEditorCaret,
@@ -150,8 +122,8 @@ namespace Interface
     float values[kSectionsCount][kValueIdCount]{};
   };
 
-  float getValue(Skin::ValueId valueId, bool isScaled, Skin::Override skinOverride = Skin::kNone);
+  float getValue(Skin::ValueId valueId, bool isScaled, Skin::Override skinOverride);
   float getValue(Skin::ValueId valueId, bool isScaled, Component *component);
-  Colour getColour(Skin::ColourId colorId, Skin::Override skinOverride = Skin::kNone);
+  Colour getColour(Skin::ColourId colorId, Skin::Override skinOverride);
   Colour getColour(Skin::ColourId colorId, Component *component);
 }

@@ -18,6 +18,7 @@ namespace Interface
 
     Skin::ColourId textColour = Skin::kNormalText;
     FontId font = FontId::InterType;
+    Placement textPlacement = Placement::centered;
 
     struct
     {

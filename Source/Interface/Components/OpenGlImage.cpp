@@ -38,7 +38,6 @@ namespace Interface
     image->fragmentShader = {};
 
     image->componentFlags.isOpenGlInitialised = false;
-    image->componentFlags.isDestroyingOpenGl = false;
   }
 
   OpenGlImage::OpenGlImage()
@@ -83,7 +82,7 @@ namespace Interface
 
   bool OpenGlImage::render(OpenGlWrapper &openGl)
   {
-    if (componentFlags.isOpenGlInitialised && componentFlags.isDestroyingOpenGl)
+    if (componentFlags.isOpenGlInitialised && openGl.isDestroyingOpenGl)
     {
       destroyImage(this);
 

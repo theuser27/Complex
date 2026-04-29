@@ -21,31 +21,37 @@ namespace Interface
     bool render(OpenGlWrapper &openGl) override;
 
     void setContent(Component *sourceComponent, 
-      utils::string_view displayText, Placement relativePlacement)
+      utils::string_view displayText, Placement relativeSourcePlacement, 
+      Point<i32> customPosition = {})
     {
       source = sourceComponent;
       isControl = false;
-      placement = relativePlacement;
+      relativePlacement = relativeSourcePlacement;
+      offset = customPosition;
       text.copy(displayText);
       componentFlags.isVisible = true;
     }
-    void setContentControl(Control *sourceControl, Placement relativePlacement)
+    void setContentControl(Control *sourceControl, 
+      Placement relativeSourcePlacement, Point<i32> customPosition = {})
     {
       source = sourceControl;
       isControl = true;
-      placement = relativePlacement;
+      relativePlacement = relativeSourcePlacement;
+      offset = customPosition;
       componentFlags.isVisible = true;
+    }
+    void reset()
+    {
+      source = nullptr;
+      componentFlags.isVisible = false;
     }
 
     utils::string text;
-    FontId textFontId;
-    FontId numericFontId;
     i32 cachedFontWidth{};
     bool isControl = false;
-    Placement placement{};
+    Placement relativePlacement{};
+    Point<i32> offset{};
     Component *source{};
-
-    utils::sll<CommandMessages::HandleMessageFn *> popupDisplayHandler{};
   };
 
   class PopupSelector;
@@ -81,7 +87,9 @@ namespace Interface
     void summonChildList(PopupItem *summoningItem, 
       const MouseEvent &summoningMouseEvent, bool force = false);
 
-    bool (*draw)(OpenGlWrapper &openGl, PopupList *self){};
+    static bool drawV1(OpenGlWrapper &openGl, PopupList *self);
+
+    bool (*draw)(OpenGlWrapper &openGl, PopupList *self) = drawV1;
 
     PopupItem *parentItem{};
     
@@ -102,7 +110,7 @@ namespace Interface
     {
       componentFlags.clickable = true;
       componentFlags.clickableChildren = false;
-      componentFlags.acceptsOrphanedMouseEvents = true;
+      componentFlags.acceptsOrphanMouseEvents = true;
     }
     
     bool mouseMove(const MouseEvent &e) override;
@@ -115,6 +123,7 @@ namespace Interface
     i32 id = 0;
     i32 shortcutKeyCode = 0;
     void *extraData = nullptr;          // user-provided pointer
+    u8 dataTag = 0;                     // tag to differentiate extra data
     bool closesPopup = true;            // if selector should get closed after being chosen
     bool canBeChosen = true;            // to designate labels/titles
     bool isActive = true;               // option that exists but isn't currently chooseable
@@ -144,6 +153,7 @@ namespace Interface
     utils::smallFn<void(PopupSelector *, PopupItem *)> callback{};
     utils::smallFn<void(PopupSelector *)> cancel{};
     PopupList *list{};
+    bool toggleable = true;
 
     // state
     Component *summoner{};
@@ -158,13 +168,24 @@ namespace Interface
 
   struct OptionPopupItem : public PopupItem
   {
+    enum ExtraDataTypes : u8 { StringData, OptionData };
+
+    static constexpr Rectangle<u16> kPrimaryPaddingRect =
+    { kPopupHorizontalPadding, kPopupVerticalPrimaryPadding,
+      kPopupHorizontalPadding, kPopupVerticalPrimaryPadding };
+    static constexpr Rectangle<u16> kSecondaryPaddingRect =
+    { kPopupHorizontalPadding, kPopupVerticalSecondaryPadding,
+      kPopupHorizontalPadding, kPopupVerticalSecondaryPadding };
+    static constexpr Rectangle kPrimarySizeRect = { 0, kPrimaryTextLineHeight, 0, kPrimaryTextLineHeight };
+    static constexpr Rectangle kSecondarySizeRect = { 0, kSecondaryTextLineHeight, 0, kSecondaryTextLineHeight };
+
     OptionPopupItem();
 
     bool render(OpenGlWrapper &openGl) override;
 
     utils::pair<utils::string_view, bool> getTextAndWrap();
 
-    static PopupList *createPopupList(PopupSelector *selector,
-      utils::string_view title, Framework::IndexedData *options);
+    static OptionPopupItem *createTitle(PopupList *list, utils::string_view text);
+    static OptionPopupItem *createOption(PopupList *list, Framework::IndexedData &option);
   };
 }

@@ -16,22 +16,23 @@ namespace Interface
   {
     const int lineHeight = scaleValueRoundInt(PopupDisplay::kLineHeight);
 
-    auto *display = (PopupDisplay *)c;
+    auto *self = (PopupDisplay *)c;
     if (!isCalculatingVertical)
     {
-      if (display->isControl)
+      if (self->isControl)
       {
-        auto *control = (Control *)display->source;
-        control->getScaledValueString(display->text, control->getValue());
+        auto *control = (Control *)self->source;
+        control->getScaledValueString(self->text, control->getValue());
       }
 
-      display->cachedFontWidth = (i32)::ceilf(uiRelated.cache->getStringWidthFloat(display->text));
-      return Range<i32>{ 0, display->cachedFontWidth };
+      uiRelated.cache->setFont((self->isControl) ? FontId::DDinType : FontId::InterType, (float)lineHeight);
+      self->cachedFontWidth = (i32)::ceilf(uiRelated.cache->getStringWidthFloat(self->text));
+      return Range<i32>{ 0, self->cachedFontWidth };
     }
     else
     {
-      auto lineCount = (i32)::ceilf((float)display->cachedFontWidth / (float)display->bounds.w);
-      return Range<i32>{ lineHeight, lineCount *lineHeight };
+      auto lineCount = (i32)::ceilf((float)self->cachedFontWidth / (float)self->bounds.w);
+      return Range<i32>{ lineHeight, lineCount * lineHeight };
     }
   }
 
@@ -40,32 +41,26 @@ namespace Interface
     if (!arena)
       arena = utils::bumpArena::createNested(parent->arena, COMPLEX_KB(8));
 
-    skinOverride = Skin::kUseParentOverride;
     placement = Placement::custom;
-    padding = { kLineHeight, kLineHeight, kLineHeight, kLineHeight };
+    padding = { kLineHeight / 4, 0, kLineHeight / 4, 0 };
     overrideSize = getPopupDisplayDimensions;
     text = { arena };
-
-    textFontId = FontId::InterType;
-    numericFontId = FontId::DDinType;
 
     overridePosition = [](Component *c)
     {
       auto *self = (PopupDisplay *)c;
 
       Point<i32> position{};
-      COMPLEX_ASSERT((self->placement & Placement::custom) == 0);
-      i32 extraOffsetX = self->bounds.w / 2;
-      i32 extraOffsetY = self->bounds.h / 2;
+      COMPLEX_ASSERT((self->relativePlacement & Placement::custom) == 0);
 
-      switch ((Placement)(self->placement & Placement::justifyX))
+      switch ((Placement)(self->relativePlacement & Placement::justifyX))
       {
       case Placement::left:
-        position.x -= self->bounds.w + extraOffsetX;
+        position.x -= self->bounds.w + self->offset.x;
         break;
 
       case Placement::right:
-        position.x += self->source->bounds.w + extraOffsetX;
+        position.x += self->source->bounds.w + self->offset.x;
         break;
 
       default:
@@ -74,15 +69,15 @@ namespace Interface
         break;
       }
 
-      switch ((Placement)(self->placement & Placement::justifyY))
+      switch ((Placement)(self->relativePlacement & Placement::justifyY))
       {
       case Placement::top:
-        position.y -= self->bounds.h + extraOffsetY;
+        position.y -= self->bounds.h + self->offset.y;
         break;
 
       default:
       case Placement::bottom:
-        position.y += self->source->bounds.h + extraOffsetY;
+        position.y += self->source->bounds.h + self->offset.y;
         break;
 
       case Placement::justifyY:
@@ -90,31 +85,31 @@ namespace Interface
         break;
       }
 
-      self->bounds.setPosition(self->getRelativePoint(self->source, position));
+      if (!self->source->componentFlags.isPositionSet)
+        return false;
+
+      self->bounds.setPosition(self->parent->getRelativePoint(self->source, position));
+      self->bounds.x = utils::clamp(self->bounds.x, 0, self->parent->bounds.w - self->bounds.w);
+      self->bounds.y = utils::clamp(self->bounds.y, 0, self->parent->bounds.h - self->bounds.h);
+
+      return true;
     };
   }
 
-  bool PopupDisplay::render(OpenGlWrapper &openGl)
+  bool 
+  PopupDisplay::render(OpenGlWrapper &openGl)
   {
-    float rounding = getValue(Skin::kBodyRoundingTop, true);
-    nvgRoundedRect(openGl.g, 0.0f, 0.0f, (float)bounds.w, (float)bounds.y, rounding);
-    nvgFillColor(openGl.g, getColour(Skin::kPopupDisplayBackground));
-    nvgFill(openGl.g);
+    auto localBounds = getLocalBounds().toFloat();
+    float rounding = getValue(Skin::kBodyRoundingTop, true, this);
+    fillRect(openGl, localBounds, getColour(Skin::kPopupDisplayBackground, this), rounding);
+    strokeRect(openGl, localBounds, scaleValue(1.0f), getColour(Skin::kPopupDisplayBorder, this), rounding);
 
-    nvgRoundedRect(openGl.g, 0.0f, 0.0f, (float)bounds.w, (float)bounds.y, rounding);
-    nvgStrokeColor(openGl.g, getColour(Skin::kPopupDisplayBorder));
-    nvgStroke(openGl.g);
+    auto textBounds = localBounds.trimmed(scaleValue(padding.toFloat()));
+    auto usedFontId = (isControl) ? FontId::DDinType : FontId::InterType;
+    renderText(text, usedFontId, textBounds, openGl, 
+      getColour(Skin::kWidgetPrimary1, source), Placement::left, true);
 
-    auto usedFontId = (isControl) ? numericFontId : textFontId;
-    uiRelated.cache->setFont(usedFontId, (float)bounds.h * 0.5f);
-
-    auto textPadding = scaleValue(padding.toFloat());
-    float width = scaleValue((float)bounds.w);
-
-    nvgStrokeColor(openGl.g, getColour(Skin::kWidgetPrimary1));
-    nvgTextAlign(openGl.g, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
-    nvgTextBox(openGl.g, textPadding.x, textPadding.y, width, text.data(), text.data() + text.size());
-    nvgText(openGl.g, textPadding.x, textPadding.y, text.data(), text.data() + text.size());
+    //reinitialise();
 
     return true;
   }
@@ -128,6 +123,8 @@ namespace Interface
     sizingFlags |= Component::ScrollableWithBarY | Component::SnapToMinX;
     componentFlags.vertical = true;
     componentFlags.clickable = true;
+    desiredSize = { kPopupMinWidth, 0, utils::max_limit<i32>, utils::max_limit<i32> };
+    padding = { 0, 4, 0, 4 };
 
     overridePosition = [](Component *c)
     {
@@ -140,6 +137,8 @@ namespace Interface
         positionInitialPopupList(self, selector, self->parentItem, selector->lastPlacement, { 4, 0 });
 
       calculatePositions(self->children, self);
+
+      return true;
     };
   }
 
@@ -350,6 +349,23 @@ namespace Interface
     }
   }
 
+  bool
+  PopupList::drawV1(OpenGlWrapper &openGl, PopupList *self)
+  {
+    auto topPadding = scaleValue((float)self->padding.y);
+    auto bottomPadding = scaleValue((float)self->padding.h);
+
+    fillRect(openGl, self->getLocalBounds().toFloat(), getColour(Skin::kBody, self),
+      topPadding, topPadding, bottomPadding, bottomPadding);
+
+    self->doRenderChildren(openGl);
+
+    strokeRect(openGl, self->getLocalBounds().toFloat(), scaleValue(1.0f),
+      Colour{ 45, 45, 45 }, topPadding);
+
+    return false;
+  }
+
   bool 
   PopupItem::mouseMove(const MouseEvent &e)
   {
@@ -415,6 +431,7 @@ namespace Interface
       for (auto *child = self->children; child; child = child->next)
         child->componentFlags.isVisible = !self->summoner->isObscured();
 
+      return true;
     };
   }
 
@@ -442,7 +459,7 @@ namespace Interface
   {
     if (!hasFocus)
     {
-      if (correspondent == summoner || isParentOf(correspondent))
+      if ((correspondent == summoner && toggleable) || isParentOf(correspondent))
         return false;
 
       componentFlags.isVisible = false;
@@ -483,6 +500,7 @@ namespace Interface
     lastPlacement = Placement::right;
     utils::bumpArena::clear(arena);
     skinOverride = Skin::kNone;
+    toggleable = true;
     componentFlags.isVisible = false;
   }
 
@@ -500,6 +518,10 @@ namespace Interface
   
   OptionPopupItem::OptionPopupItem()
   {
+    componentFlags.acceptsOrphanMouseEvents = true;
+    sizingFlags = Component::GrowableX;
+    desiredSize = kPrimarySizeRect;
+    padding = kPrimaryPaddingRect;
     overrideSize = [](Component *c, bool isCalculatingVertical)
     {
       auto *item = (OptionPopupItem *)c;
@@ -543,7 +565,7 @@ namespace Interface
     }
 
     renderText(text, FontId::InterType, getLocalBounds().trimmed(scaleValueRoundInt(padding.toInt())).toFloat(),
-      openGl.cache, getColour(textColourId, this), Placement::left, canTextWrap);
+      openGl, getColour(textColourId, this), Placement::left, canTextWrap);
 
     return true;
   }
@@ -552,78 +574,44 @@ namespace Interface
   OptionPopupItem::getTextAndWrap()
   {
     // label whose extra data is a string
-    if (id)
+    if (dataTag == StringData)
       return { *((utils::stringnd *)extraData), true };
-
-    auto *option = (Framework::IndexedData *)extraData;
-    return { option->getText(), !option->canBeChosen() };
-  }
-
-  PopupList *
-  OptionPopupItem::createPopupList(PopupSelector *selector, 
-    utils::string_view title, Framework::IndexedData *options)
-  {
-    auto *itemArena = selector->arena;
-
-    PopupList *list = anew(itemArena, PopupList, { selector });
-    list->draw = [](OpenGlWrapper &openGl, PopupList *self)
+    else if (dataTag == OptionData)
     {
-      auto topPadding = scaleValue((float)self->padding.y);
-      auto bottomPadding = scaleValue((float)self->padding.h);
-
-      fillRect(openGl, self->getLocalBounds().toFloat(), getColour(Skin::kBody, self),
-        topPadding, topPadding, bottomPadding, bottomPadding);
-
-      self->doRenderChildren(openGl);
-
-      strokeRect(openGl, self->getLocalBounds().toFloat(), scaleValue(1.0f),
-        Colour{ 45, 45, 45 }, topPadding);
-
-      return false;
-    };
-
-    static constexpr Rectangle<u16> kPrimaryPaddingRect =
-    { kPopupHorizontalPadding, kPopupVerticalPrimaryPadding, kPopupHorizontalPadding, kPopupVerticalPrimaryPadding };
-    static constexpr Rectangle<u16> kSecondaryPaddingRect =
-    { kPopupHorizontalPadding, kPopupVerticalSecondaryPadding, kPopupHorizontalPadding, kPopupVerticalSecondaryPadding };
-    static constexpr Rectangle kPrimarySizeRect = { 0, kPrimaryTextLineHeight, 0, kPrimaryTextLineHeight };
-    static constexpr Rectangle kSecondarySizeRect = { 0, kSecondaryTextLineHeight, 0, kSecondaryTextLineHeight };
-
-    if (!title.empty())
-    {
-      auto *name = anew(itemArena, OptionPopupItem, {});
-      name->arena = itemArena;
-      name->id = 1;
-      name->canBeChosen = false;
-      name->sizingFlags = (Component::SizingFlags)(Component::GrowableX);
-      name->extraData = anew(itemArena, utils::stringnd, { itemArena, title });
-      name->associatedList = list;
-      name->padding = kSecondaryPaddingRect;
-      name->desiredSize = kSecondarySizeRect;
-      list->addChildComponent(name);
+      auto *option = (Framework::IndexedData *)extraData;
+      return { option->getText(), !option->canBeChosen() };
     }
 
-    (void)Framework::iterateOverIndexedData(options,
-      [itemArena, list](Framework::IndexedData &option)
-      {
-        if (!option.childrenCount && !option.canBeChosen())
-          return false;
-
-        auto *item = anew(itemArena, OptionPopupItem, {});
-        item->arena = itemArena;
-        item->extraData = &option;
-        item->canBeChosen = option.canBeChosen();
-        item->associatedList = list;
-        item->sizingFlags = (Component::SizingFlags)(Component::GrowableX);
-        item->componentFlags.acceptsOrphanedMouseEvents = item->canBeChosen;
-        item->padding = (item->canBeChosen) ? kPrimaryPaddingRect : kSecondaryPaddingRect;
-        item->desiredSize = (item->canBeChosen) ? kPrimarySizeRect : kSecondarySizeRect;
-        list->addChildComponent(item);
-
-        return false;
-      });
-
-    return list;
+    COMPLEX_ASSERT("Unknown tag");
+    return {};
   }
 
+  OptionPopupItem *
+  OptionPopupItem::createTitle(PopupList *list, utils::string_view text)
+  {
+    auto *itemArena = list->parentSelector->arena;
+    auto *item = anew(itemArena, OptionPopupItem, {});
+    item->extraData = anew(itemArena, utils::stringnd, { itemArena, text });
+    item->dataTag = StringData;
+    item->canBeChosen = false;
+    item->associatedList = list;
+    item->padding = kSecondaryPaddingRect;
+    item->desiredSize = kSecondarySizeRect;
+
+    return item;
+  }
+
+  OptionPopupItem *
+  OptionPopupItem::createOption(PopupList *list, Framework::IndexedData &option)
+  {
+    auto *item = anew(list->parentSelector->arena, OptionPopupItem, {});
+    item->extraData = &option;
+    item->dataTag = OptionData;
+    item->canBeChosen = option.canBeChosen();
+    item->associatedList = list;
+    item->padding = (item->canBeChosen) ? item->padding : kSecondaryPaddingRect;
+    item->desiredSize = (item->canBeChosen) ? item->desiredSize : kSecondarySizeRect;
+
+    return item;
+  }
 }

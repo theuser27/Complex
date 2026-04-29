@@ -48,6 +48,18 @@ namespace Interface
       replacedParameter = replacedLink->parameter;
 
     details = parameter.getParameterDetails();
+    {
+      controlFlags.isBipolar = -details.minValue == details.maxValue || 
+        details.scale == Framework::ParameterScale::SymmetricQuadratic ||
+        details.scale == Framework::ParameterScale::SymmetricCubic ||
+        details.scale == Framework::ParameterScale::SymmetricLoudness ||
+        details.scale == Framework::ParameterScale::SymmetricFrequency;
+      controlFlags.shouldCheckDbInfinities =
+        details.scale == Framework::ParameterScale::Loudness ||
+        details.scale == Framework::ParameterScale::SymmetricLoudness;
+      controlFlags.shouldUsePlusMinusPrefix |= 
+        details.scale == Framework::ParameterScale::SymmetricLoudness;
+    }
     
     if (getValueFromParameter)
       setValue(parameterLink->parameter->getNormalisedValue());
@@ -333,7 +345,7 @@ namespace Interface
         auto textBounds = getLocalBounds().trimmed(scaleValueRoundInt(padding.toInt())).toFloat();
         textBounds.h = ::roundf(scaleValue((float)desiredSize.h));
 
-        renderText(text, FontId::InterType, textBounds, openGl.cache,
+        renderText(text, FontId::InterType, textBounds, openGl,
           getColour(textColourId, this), textPlacement, canTextWrap);
       }
 
@@ -588,10 +600,10 @@ namespace Interface
     return utils::string_view{ string.data() + i, j - i };
   }
 
-  static double getProbablyLongestParameterValue(const Framework::ParameterDetails &details)
+  static double getProbablyLongestParameterValue(const Framework::ParameterDetails &details, float sampleRate)
   {
-    double lowestValue = details.displayUnits == "%" ? details.minValue * 100.0 : details.minValue;
-    double highestValue = details.displayUnits == "%" ? details.maxValue * 100.0 : details.maxValue;
+    double lowestValue = Framework::scaleValue(0.0, details, sampleRate, true);
+    double highestValue = Framework::scaleValue(1.0, details, sampleRate, true);
 
     double probablyLongestValue = (::fabs(lowestValue) < ::fabs(highestValue)) ? highestValue : lowestValue;
     // we have nextafter at home
@@ -607,7 +619,8 @@ namespace Interface
   {
     COMPLEX_ASSERT(details.scale != Framework::ParameterScale::Indexed);
 
-    double probablyLongestValue = getProbablyLongestParameterValue(details);
+    double probablyLongestValue = getProbablyLongestParameterValue(details, 
+      getPlugin(uiRelated.renderer).getSampleRate());
 
     char buffer[64]{};
     usize size{};
@@ -653,8 +666,8 @@ namespace Interface
       return;
     }
 
-    double scaledValue = Framework::scaleValue(valueToConvert, details,
-      getPlugin(uiRelated.renderer).getSampleRate(), true);
+    float sampleRate = getPlugin(uiRelated.renderer).getSampleRate();
+    double scaledValue = Framework::scaleValue(valueToConvert, details, sampleRate, true);
 
     if (details.scale == Framework::ParameterScale::Indexed)
     {
@@ -695,7 +708,7 @@ namespace Interface
         controlFlags.shouldUsePlusMinusPrefix);
 
       usize maxIntergerCharacters = 0;
-      double probablyLongestValue = ::fabs(getProbablyLongestParameterValue(details));
+      double probablyLongestValue = ::fabs(getProbablyLongestParameterValue(details, sampleRate));
       if (probablyLongestValue < 1.0)
         maxIntergerCharacters = 1;
       else
@@ -706,6 +719,7 @@ namespace Interface
           ++maxIntergerCharacters;
         }
       }
+      usize necessaryIntegerCharacters = utils::min((usize)preferredIntegerCharacters, maxIntergerCharacters);
 
       utils::string_view currentInteger = findClosestInteger(outString);
       if (currentInteger.size() > maxIntergerCharacters)
@@ -714,9 +728,9 @@ namespace Interface
         if (outString.back() == '.')
           outString.removeSuffix(1);
       }
-      else if (currentInteger.size() < maxIntergerCharacters)
+      else if (currentInteger.size() < necessaryIntegerCharacters)
         outString.insert(outString.find(currentInteger),
-          "0", maxIntergerCharacters - currentInteger.size());
+          "0", necessaryIntegerCharacters - currentInteger.size());
     }
 
     if (addPrefix)
@@ -813,7 +827,7 @@ namespace Interface
 
     auto result = selectedItem->id;
 
-    if (selectedItem->id == kDefaultValue)
+    if (result == kDefaultValue)
     {
       control->beginChange(control->getValue());
       control->resetValue();
@@ -925,10 +939,8 @@ namespace Interface
     if (!controlFlags.shouldShowPopup)
       return;
 
-    (void)primary;
-    //auto *popupDisplay = getGui(uiRelated.renderer)->getPopupDisplay(primary);
-    //popupDisplay->setContentControl(this, popupPlacement_);
-    //popupDisplay->componentFlags.isVisible = true;
+    auto *popupDisplay = getPopupDisplay(primary);
+    popupDisplay->setContentControl(this, popupPlacement, popupOffset.toInt());
   }
 
   void Control::hidePopup(bool primary)
@@ -936,9 +948,8 @@ namespace Interface
     if (!controlFlags.shouldShowPopup)
       return;
 
-    (void)primary;
-    //auto *popupDisplay = getGui(uiRelated.renderer)->getPopupDisplay(primary);
-    //popupDisplay->componentFlags.isVisible = false;
+    auto *popupDisplay = getPopupDisplay(primary);
+    popupDisplay->reset();
   }
 
 }

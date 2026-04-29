@@ -8,6 +8,7 @@
 
 #include "stl_utils.hpp"
 #include "memory.hpp"
+#include "simd_math.hpp"
 #include "Interface/LookAndFeel/gui_utils.hpp"
 #include "Third Party/stb/stb_sprintf.h"
 
@@ -103,7 +104,8 @@ static void printVariadic(const char *format, va_list args)
 void common::complexLogMessage(const char *fileName,
   const char *functionName, int line, const char *format, ...)
 {
-  PRINT_MESSAGE("\nLog: %s, #%d, %s\n", fileName, line, functionName);
+  if (fileName && functionName)
+    PRINT_MESSAGE("\nLog: %s, #%d, %s: ", fileName, line, functionName);
 
   va_list args;
   va_start(args, format);
@@ -253,6 +255,9 @@ namespace utils
   static_assert(sizeof(::String_View) == sizeof(utils::string_view));
   static_assert(offsetof(::String_View, data) == offsetof(utils::string_view, data_));
   static_assert(offsetof(::String_View, size) == offsetof(utils::string_view, size_));
+
+  float sin(float arg) { return sin(simd_float{ arg })[0]; }
+  float cos(float arg) { return cos(simd_float{ arg })[0]; }
 
   byte *
   allocate(usize size, usize alignment, bool clean)

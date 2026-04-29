@@ -163,6 +163,13 @@ namespace Interface
     return utils::bit_cast<Rectangle<float>>(values);
   }
   strict_inline float scaleValueRound(float value) { return ::roundf(uiRelated.scale * value); }
+  strict_inline Rectangle<float>
+  scaleValueRound(Rectangle<float> bounds)
+  {
+    auto values = utils::bit_cast<simd_float>(bounds);
+    values = simd_float::round(uiRelated.scale * utils::toFloat(values));
+    return utils::bit_cast<Rectangle<float>>(values);
+  }
   strict_inline i32 scaleValueRoundInt(float value) { return (int)::roundf(uiRelated.scale * value); }
   strict_inline Rectangle<i32> 
   scaleValueRoundInt(Rectangle<i32> bounds)
@@ -233,27 +240,27 @@ namespace Interface
   }
 
   inline void renderText(utils::string_view text, FontId font,
-    Rectangle<float> bounds, Graphics *context, Colour colour, 
+    Rectangle<float> bounds, Graphics &context, Colour colour, 
     Placement placement = Placement::centered, bool wrapText = false)
   {
-    nvgBeginPath(context->context);
-    context->setFont(font, (float)bounds.h);
+    nvgBeginPath(context.context);
+    context.setFont(font, (float)bounds.h);
     float ascent, lineHeight;
-    nvgFillColor(context->context, colour);
-    nvgTextMetrics(context->context, &ascent, nullptr, &lineHeight);
+    nvgFillColor(context.context, colour);
+    nvgTextMetrics(context.context, &ascent, nullptr, &lineHeight);
     int alignmentFlags = NVG_ALIGN_BASELINE;
     alignmentFlags |= ((placement == Placement::left) ? NVG_ALIGN_LEFT : 
       (placement == Placement::right) ? NVG_ALIGN_RIGHT : NVG_ALIGN_CENTER);
-    nvgTextAlign(context->context, alignmentFlags);
+    nvgTextAlign(context.context, alignmentFlags);
 
     auto x = (float)bounds.x;
     x += ((placement == Placement::left) ? 0.0f :
       (placement == Placement::right) ? (float)bounds.w : (float)bounds.w * 0.5f);
     auto y = ::ceilf((float)bounds.y + ((float)bounds.h - lineHeight) * 0.5f + ascent);
     if (wrapText)
-      nvgTextBox(context->context, x, y, x + (float)bounds.w, text.data(), text.data() + text.size());
+      nvgTextBox(context.context, x, y, x + (float)bounds.w, text.data(), text.data() + text.size());
     else
-      nvgText(context->context, x, y, text.data(), text.data() + text.size());
+      nvgText(context.context, x, y, text.data(), text.data() + text.size());
   }
 
   struct ViewportChange
@@ -274,8 +281,10 @@ namespace Interface
     Graphics *cache = nullptr;
     NVGcontext *g = nullptr;
     int topLevelHeight = 0;
+    bool isDestroyingOpenGl = false;
 
     operator NVGcontext *() { return g; }
+    operator Graphics &() { return *cache; }
   };
 
   bool setViewport(Point<int> positionInViewport, Rectangle<int> viewportBounds,

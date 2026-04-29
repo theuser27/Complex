@@ -28,18 +28,10 @@
   "Widget Margin": 5.5,
   "Widget Rounded Corner": 4.0,
 
-  "Icon Button Off": "0xff848789",
-  "Icon Button Off Hover": "0xffaaacad",
-  "Icon Button Off Pressed": "0xff848789",
-  "Icon Button On": "0xff00ffff",
-  "Icon Button On Hover": "0xffbda3ff",
-  "Icon Button On Pressed": "0xff906de9",
-  "Icon Selector Icon": "0xff848789",
-
   "Knob Arc Size": 34.0,
   "Knob Arc Thickness": 2.0,
   "Knob Body Size": 22.0,
-  "Knob Handle Length": 0.21,
+  "Knob Handle Length": 4.0,
   "Knob Shadow Width": 8.0,
   "Knob Shadow Offset": 4.0,
 
@@ -48,17 +40,6 @@
   "Label Height": 11.0,
   "Label Offset": 0.0,
   "Label Rounding": 9.0,
-
-  "Linear Slider": "0xff848789",
-  "Linear Slider Disabled": "0xff848686",
-  "Linear Slider Thumb": "0xffffffff",
-  "Linear Slider Thumb Disabled": "0xffffffff",
-  "Linear Slider Unselected": "0xff262a2e",
-
-  "Modulation Meter": "0xff1de9b6",
-  "Modulation Meter Control": "0xff64ffda",
-  "Modulation Meter Left": "0xff1de952",
-  "Modulation Meter Right": "0xff1dc2e9",
 
   "Overlay Screen": "0x22000000",
   "Lighten Screen": "0x22ffffff",
@@ -69,7 +50,7 @@
 
   "Lighten Rate": 0.2,
 
-  "Popup Display Background": "0xff262626",
+  "Popup Display Background": "0xff333333",
   "Popup Display Border": "0x8ffffff",
   "Popup Selector Background": "0xff262626",
   "Popup Selector Delimiter": "0xff2d2d2d",
@@ -89,14 +70,6 @@
   "Text Editor Border": "0xffffff",
   "Text Editor Caret": "0xffaaacad",
   "Text Editor Selection": "0x1faaabab",
-
-  "Action Button Primary": "0xffaa88ff",
-  "Action Button Primary Hover": "0xffba9fff",
-  "Action Button Primary Press": "0xff906de9",
-  "Action Button Secondary": "0xff848789",
-  "Action Button Secondary Hover": "0xff939699",
-  "Action Button Secondary Press": "0xff606265",
-  "Action Button Text": "ff111111",
 
   "Scroll Shrink Percent": 0.5,
 

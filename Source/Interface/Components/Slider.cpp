@@ -187,33 +187,93 @@ namespace Interface
   }
 
 
-  //////////////////////////////////////////////////////////////////////////
-  //   _____                 _       _ _           _   _                  //
-  //  / ____|               (_)     | (_)         | | (_)                 //
-  // | (___  _ __   ___  ___ _  __ _| |_ ___  __ _| |_ _  ___  _ __  ___  //
-  //  \___ \| '_ \ / _ \/ __| |/ _` | | / __|/ _` | __| |/ _ \| '_ \/ __| //
-  //  ____) | |_) |  __/ (__| | (_| | | \__ \ (_| | |_| | (_) | | | \__ \ //
-  // |_____/| .__/ \___|\___|_|\__,_|_|_|___/\__,_|\__|_|\___/|_| |_|___/ //
-  //        | |                                                           //
-  //        |_|                                                           //
-  //////////////////////////////////////////////////////////////////////////
 
   RotarySlider::RotarySlider()
   {
     controlFlags.canUseScrollWheel = true;
+    desiredSize = { kDefaultWidthHeight, kDefaultWidthHeight,
+      kDefaultWidthHeight, kDefaultWidthHeight };
   }
   
   bool 
   RotarySlider::render(OpenGlWrapper &openGl)
   {
     static constexpr float kHoverIncrement = 0.15f;
+    static constexpr float kHalfPi = kPi * 0.5f;
+    static constexpr float kThumbRadiusOffset = 2.0f;
 
-    (void)openGl;
-    tickAnimation(animationValues, {{ componentFlags.isHovered }}, {{ kHoverIncrement }});
-    float thickness = knobArcThickness * (1.0f + 0.15f * animationValues[0]);
-    (void)thickness;
+    tickAnimation(animationValues, {{ componentFlags.isHovered || componentFlags.isClicked }}, {{ kHoverIncrement }});
+    float thickness = Interface::getValue(Skin::kKnobArcThickness, true, this) * (1.0f + 0.15f * animationValues[0]);
 
-    // TODO:
+    auto localBounds = getLocalBounds().toFloat().trimmed(scaleValue(padding.toFloat()));
+    float centreX = localBounds.getCentreX();
+    float centreY = localBounds.getCentreY();
+    float fullRadius = (utils::min(localBounds.w, localBounds.h) - thickness) * 0.5f;
+    float bodyRadius = Interface::getValue(Skin::kKnobBodySize, true, this) * 0.5f;
+    auto backgroundColour = getColour(Skin::kRotaryArcUnselected, this);
+    float currentValue = (float)getValue();
+
+    nvgLineCap(openGl, NVG_ROUND);
+
+    // TODO: rotary body shadow
+
+    // body
+    nvgBeginPath(openGl);
+    nvgCircle(openGl, centreX, centreY, bodyRadius);
+    nvgFillColor(openGl, backgroundColour);
+    nvgFill(openGl);
+
+    float outlineWidth = scaleValue(1.0f);
+    float outlineRadius = bodyRadius - outlineWidth;
+    nvgStrokeWidth(openGl, outlineWidth);
+    // outline
+    nvgBeginPath(openGl);
+    nvgCircle(openGl, centreX, centreY - outlineWidth * 0.5f, outlineRadius);
+    auto outlineGradient = nvgLinearGradient(openGl, 
+      0.0f, centreY - bodyRadius + outlineWidth, 0.0f, centreY + bodyRadius - outlineWidth,
+      Colour{ 255, 255, 255, 0.1f }, Colour{ 255, 255, 255, 0.0f });
+    nvgStrokePaint(openGl, outlineGradient);
+    nvgStroke(openGl);
+
+    // thumb
+    float phi = 2 * maxArc * currentValue - maxArc;
+    float thumbX = utils::cos(phi - kHalfPi);
+    float thumbY = utils::sin(phi + kHalfPi);
+    float thumbRadiusOffset = scaleValue(kThumbRadiusOffset);
+    float thumbLength = Interface::getValue(Skin::kKnobHandleLength, true, this);
+
+    nvgBeginPath(openGl);
+    nvgStrokeWidth(openGl, thickness);
+    nvgMoveTo(openGl, centreX + thumbX * (outlineRadius - thumbRadiusOffset - thumbLength),
+      centreY - thumbY * (outlineRadius - thumbRadiusOffset - thumbLength));
+    nvgLineTo(openGl, centreX + thumbX * (outlineRadius - thumbRadiusOffset),
+      centreY - thumbY * (outlineRadius - thumbRadiusOffset));
+    nvgStrokeColor(openGl, getColour(Skin::kRotaryHand, this));
+    nvgStroke(openGl);
+
+    // radial background fill
+    nvgStrokeWidth(openGl, thickness);
+
+    nvgBeginPath(openGl);
+    nvgStrokeColor(openGl, backgroundColour);
+    nvgArc(openGl, centreX, centreY, fullRadius, -maxArc - kHalfPi, maxArc - kHalfPi, NVG_CW);
+    nvgStroke(openGl);
+
+    // radial fill
+    float startingPoint = -maxArc - kHalfPi;
+    float length = 2 * maxArc * utils::max(currentValue, 0.01f);
+    if (controlFlags.isBipolar)
+    {
+      length = 2 * maxArc * (currentValue - 0.5f);
+      startingPoint += utils::min(maxArc + length, maxArc);
+      length = utils::abs(length);
+    }
+
+    nvgBeginPath(openGl);
+    nvgStrokeColor(openGl, getColour(Skin::kWidgetPrimary1, this));
+    nvgArc(openGl, centreX, centreY, fullRadius,
+      startingPoint, startingPoint + length, NVG_CW);
+    nvgStroke(openGl);
 
     return true;
   }
@@ -222,10 +282,11 @@ namespace Interface
   RotarySlider::mouseDrag(const MouseEvent &e)
   {
     auto oldSensitivity = sensitivity;
+    sensitivity *= kDefaultRotaryDragLength;
 
     controlFlags.isInSensitiveMode = e.mods.test(ModifierKeys::shiftModifier);
     if (controlFlags.isInSensitiveMode)
-      sensitivity = kDefaultRotaryDragLength / (sensitivity * kSlowDragMultiplier);
+      sensitivity /= kSlowDragMultiplier;
 
     auto result = Slider::mouseDrag(e);
 
@@ -304,6 +365,8 @@ namespace Interface
       auto x = (i32)::round(self->getValue() * (double)self->parent->bounds.w);
       self->bounds.x = x - self->bounds.w / 2;
       self->bounds.y = 0;
+
+      return true;
     };
   }
 
@@ -326,7 +389,7 @@ namespace Interface
   bool 
   PinSlider::mouseDrag(const MouseEvent &e)
   {
-    float multiply = 1.0f;
+    float multiply = sensitivity;
 
     controlFlags.isInSensitiveMode = e.mods.test(ModifierKeys::shiftModifier);
     if (controlFlags.isInSensitiveMode)
@@ -347,55 +410,61 @@ namespace Interface
 
   bool PinSlider::render(OpenGlWrapper &openGl)
   {
-    (void)openGl;
-    //static constexpr float kWidth = 10.0f;
-    //static constexpr float kHeight = kWidth * 0.9f;
-    //static constexpr float kRounding = 1.0f;
-    //static constexpr float kVerticalSideYLength = 4.0f;
-    //static constexpr float kRotatedSideAngle = kPi * 0.25f;
+    static constexpr float kWidth = 10.0f;
+    static constexpr float kHeight = kWidth * 0.9f;
+    static constexpr float kRounding = 1.0f;
+    static constexpr float kVerticalSideYLength = 4.0f;
+    static constexpr float kRotatedSideAngle = kPi * 0.25f;
 
-    //static constexpr float controlPoint1YOffset = gcem::tan(kRotatedSideAngle / 2.0f) * kRounding;
-    //static constexpr float controlPoint2XOffset = controlPoint1YOffset * gcem::cos(kRotatedSideAngle);
-    //static constexpr float controlPoint2YOffset = controlPoint1YOffset * gcem::sin(kRotatedSideAngle);
+    static constexpr float kControlPoint1OffsetY = const_math::tan(kRotatedSideAngle / 2.0f) * kRounding;
+    static constexpr float kControlPoint2OffsetX = kControlPoint1OffsetY * const_math::cos(kRotatedSideAngle);
+    static constexpr float kControlPoint2OffsetY = kControlPoint1OffsetY * const_math::sin(kRotatedSideAngle);
 
-    //static constexpr float controlPoint3XOffset = controlPoint2XOffset;
-    //static constexpr float controlPoint3YOffset = controlPoint2YOffset;
+    static constexpr float kControlPoint3OffsetX = kControlPoint2OffsetX;
+    static constexpr float kControlPoint3OffsetY = kControlPoint2OffsetY;
 
-    //static const Path pinPentagon = []()
-    //{
-    //  Path shape{};
+    auto colour = getColour(Skin::kWidgetPrimary1, this);
+    auto [x, y, w, h] = getLocalBounds().toFloat().trimmed(scaleValue(padding.toFloat()));
+    float rounding = scaleValue(kRounding);
+    float verticalSideLength = scaleValue(kVerticalSideYLength);
+    float c1OffsetY = scaleValue(kControlPoint1OffsetY);
+    float c2OffsetX = scaleValue(kControlPoint2OffsetX);
+    float c2OffsetY = scaleValue(kControlPoint2OffsetY);
+    float c3OffsetX = scaleValue(kControlPoint3OffsetX);
+    float c3OffsetY = scaleValue(kControlPoint3OffsetY);
+    float pinHeight = w * 0.9f;
 
-    //  // top
-    //  shape.startNewSubPath(kWidth * 0.5f, 0.0f);
-    //  shape.lineTo(kWidth - kRounding, 0.0f);
-    //  shape.quadraticTo(kWidth, 0.0f, kWidth, kRounding);
+    nvgTranslate(openGl, x, y);
+    nvgBeginPath(openGl);
 
-    //  // right vertical
-    //  shape.lineTo(kWidth, kVerticalSideYLength - controlPoint1YOffset);
-    //  shape.quadraticTo(kWidth, kVerticalSideYLength,
-    //    kWidth - controlPoint2XOffset, kVerticalSideYLength + controlPoint2YOffset);
+    // right side
+    nvgMoveTo(openGl, w - rounding, 0.0f);
+    nvgQuadTo(openGl, w, 0.0f, w, rounding);
+    nvgLineTo(openGl, w, verticalSideLength - c1OffsetY);
+    nvgQuadTo(openGl, w, verticalSideLength, w - c2OffsetX, 
+      verticalSideLength + c2OffsetY);
+    nvgLineTo(openGl, w * 0.5f + c3OffsetX, pinHeight - c3OffsetY);
 
-    //  // right sideways
-    //  shape.lineTo(kWidth * 0.5f + controlPoint3XOffset, kHeight - controlPoint3YOffset);
-    //  shape.quadraticTo(kWidth * 0.5f, kHeight,
-    //    kWidth * 0.5f - controlPoint3XOffset, kHeight - controlPoint3YOffset);
+    // bottom
+    nvgQuadTo(openGl, w * 0.5f, pinHeight, w * 0.5f - c3OffsetX, pinHeight - c3OffsetY);
 
-    //  // left sideways
-    //  shape.lineTo(controlPoint2XOffset, kVerticalSideYLength + controlPoint2YOffset);
-    //  shape.quadraticTo(0.0f, kVerticalSideYLength,
-    //    0.0f, kVerticalSideYLength - controlPoint2YOffset);
+    // left side
+    nvgLineTo(openGl, c2OffsetX, verticalSideLength + c2OffsetY);
+    nvgQuadTo(openGl, 0.0f, verticalSideLength, 0.0f, verticalSideLength - c2OffsetY);
+    nvgLineTo(openGl, 0.0f, rounding);
+    nvgQuadTo(openGl, 0.0f, 0.0f, rounding, 0.0f);
 
-    //  // left vertical
-    //  shape.lineTo(0.0f, kRounding);
-    //  shape.quadraticTo(0.0f, 0.0f, kRounding, 0.0f);
+    nvgClosePath(openGl);
+    nvgFillColor(openGl, colour);
+    nvgFill(openGl);
 
-    //  shape.closeSubPath();
-    //  return shape;
-    //}();
-
-    //auto bounds = drawBounds_.withZeroOrigin().toFloat();
-    //g.setColour(getThumbColor());
-    //g.fillPath(pinPentagon, pinPentagon.getTransformToScaleToFit(bounds, true, Justification::top));
+    // line
+    auto gradient = nvgLinearGradient(openGl, 0.0f, pinHeight, 0.0f, h, colour, colour.withAlpha(0.2f));
+    float lineWidth = scaleValue(1.0f);
+    nvgBeginPath(openGl);
+    nvgRect(openGl, (w - lineWidth) * 0.5f, pinHeight - c3OffsetY, lineWidth, h - (pinHeight - c3OffsetY));
+    nvgFillPaint(openGl, gradient);
+    nvgFill(openGl);
 
     return false;
   }
@@ -443,7 +512,8 @@ namespace Interface
     addChildComponent(&downArrow);
   }
 
-  bool TextSelector::render(OpenGlWrapper &openGl)
+  bool 
+  TextSelector::render(OpenGlWrapper &openGl)
   {
     static constexpr float kHoverIncrement = 0.2f;
 
@@ -453,7 +523,7 @@ namespace Interface
     {
       nvgBeginPath(openGl);
       nvgRoundedRect(openGl, 0.0f, 0.0f, (float)bounds.w, (float)bounds.h,
-        Interface::getValue(Skin::kWidgetRoundedCorner, true));
+        Interface::getValue(Skin::kWidgetRoundedCorner, true, this));
       nvgFillColor(openGl, getColour(Skin::kWidgetBackground2, this).withAlpha(alpha));
       nvgFill(openGl);
     }
@@ -493,19 +563,33 @@ namespace Interface
     lastValue = getValue();
     isDropdownOpen = true;
 
-    auto *options = OptionPopupItem::createPopupList(selector, (!dropdownTitle.empty()) ?
-      utils::string_view{ dropdownTitle } : details.displayName, details.options);
-    options->desiredSize = { kPopupMinWidth, 0, utils::max_limit<i32>, utils::max_limit<i32> };
-    options->padding = { 0, 4, 0, 4 };
+    PopupList *list = anew(selector->arena, PopupList, { selector });
+    list->parentSelector = selector;
 
-    selector->list = options;
+    if (auto title = (!dropdownTitle.empty()) ?
+      utils::string_view{ dropdownTitle } : details.displayName; 
+      !title.empty())
+    {
+      list->addChildComponent(OptionPopupItem::createTitle(list, title));
+    }
+
+    Framework::iterateOverIndexedData(details.options,
+      [list](Framework::IndexedData &option)
+      {
+        if (option.childrenCount || option.canBeChosen())
+          list->addChildComponent(OptionPopupItem::createOption(list, option));
+
+        return false;
+      });
+
+    selector->list = list;
     selector->skinOverride = getSkinOverride();
-    selector->callback = [this](PopupSelector *, PopupItem *selectedItem)
+    selector->callback = [this](PopupSelector *, PopupItem *item)
     {
       if (parameterLink && parameterLink->hostControl)
         parameterLink->hostControl->beginChangeGesture();
 
-      auto *option = (Framework::IndexedData *)selectedItem->extraData;
+      auto *option = (Framework::IndexedData *)item->extraData;
 
       beginChange(getValue());
       auto unscaledValue = unscaleValue(Framework::getValueFromOptionId(option->id, details), 
@@ -655,11 +739,48 @@ namespace Interface
     return result;
   }
 
+  CombinationRotarySlider::CombinationRotarySlider()
+  {
+    addChildComponent(&rotary);
+
+    infoSection.margin = { 6, 0, 0, 0 };
+    infoSection.componentFlags.vertical = true;
+    addChildComponent(&infoSection);
+
+    label.sizingFlags |= Component::SameAsSiblingsX;
+    label.control = &rotary;
+    label.textPlacement = Placement::left;
+    infoSection.addChildComponent(&label);
+
+    valueEditor.sizingFlags |= Component::SameAsSiblingsX;
+    valueEditor.control = &rotary;
+    valueEditor.textPlacement = Placement::left;
+    valueEditor.textColour = Skin::kWidgetPrimary1;
+    infoSection.addChildComponent(&valueEditor);
+  }
+
+  void CombinationRotarySlider::setModifier(TextSelector *newModifier)
+  {
+    if (modifier)
+      removeChildComponent(modifier);
+
+    modifier = newModifier;
+    rotary.controlFlags.shouldShowPopup = modifier;
+    valueEditor.componentFlags.isVisible = !modifier;
+
+    if (modifier)
+      addChildComponent(modifier);
+  }
+
   PinBoundsBox::PinBoundsBox()
   {
-    lowBound.padding = { 0, kAdditionalPinWidth / 2, 0, kAdditionalPinWidth / 2 };
+    lowBound.padding = { kAdditionalPinWidth / 2, 0, kAdditionalPinWidth / 2, 0 };
+    lowBound.desiredSize = { PinSlider::kDefaultWidth, 0, PinSlider::kDefaultWidth, 0 };
+    lowBound.sizingFlags = Component::GrowableY;
     addChildComponent(&lowBound);
-    highBound.padding = { 0, kAdditionalPinWidth / 2, 0, kAdditionalPinWidth / 2 };
+    highBound.padding = { kAdditionalPinWidth / 2, 0, kAdditionalPinWidth / 2, 0 };
+    highBound.desiredSize = { PinSlider::kDefaultWidth, 0, PinSlider::kDefaultWidth, 0 };
+    highBound.sizingFlags = Component::GrowableY;
     addChildComponent(&highBound);
   }
 
@@ -667,10 +788,10 @@ namespace Interface
   PinBoundsBox::render(OpenGlWrapper &openGl)
   {
     fillRect(openGl, getLocalBounds().toFloat(), getColour(Skin::kBody, this), 
-      rounding[0], rounding[1], rounding[2], rounding[3]);
+      scaleValue(rounding[0]), scaleValue(rounding[1]), scaleValue(rounding[2]), scaleValue(rounding[3]));
 
-    paintHighlightBox(this, *openGl.cache, (float)lowBound.getValue(), (float)highBound.getValue(),
-      getColour(Skin::kWidgetPrimary1).withAlpha(0.15f), backgroundColour);
+    paintHighlightBox(this, openGl, (float)lowBound.getValue(), (float)highBound.getValue(),
+      getColour(Skin::kWidgetPrimary1, this).withAlpha(0.15f), backgroundColour);
 
     return true;
   }

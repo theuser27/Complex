@@ -4,7 +4,7 @@ Source for the spectral effect plugin I'm working on, directly inspired by DtBlk
 
 ## Compiling
 
-TL;DR If you just want to build the plugin as an end user run `build.bat`/`build.sh` on Windows/Unix-likes respectively. This will build both VST3 and CLAP plugins at `build/(vst/clap)/Release`
+TL;DR If you just want to build the plugin as an end user run `build.bat`/`build.sh` on Windows/Unix-likes respectively. This will build both VST3 and CLAP plugins at `build/(vst/clap)/release`
 
 ---
 

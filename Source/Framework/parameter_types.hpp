@@ -388,7 +388,7 @@ namespace Framework
     utils::bumpArena *arena{};
 
     Framework::ProcessorMetadata *metadata{};
-    utils::vector<utils::sp<utils::Dylib>> loadedDynamicLibs{};
+    utils::vectornd<utils::sp<utils::Dylib>> loadedDynamicLibs{};
 
     utils::bumpArena *getNewArena(usize size)
     {

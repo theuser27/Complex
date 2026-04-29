@@ -16,7 +16,7 @@ namespace Generation
 
 namespace Interface
 {
-  class EffectsLaneSection;
+  struct EffectsLaneSection;
 
   struct InvisibleHoverComponent final : public Component
   {
@@ -133,7 +133,7 @@ namespace Interface
 
     //ResizeCorner resizeCorner{};
 
-    InvisibleHoverComponent invisibleHover{};
+    InvisibleHoverComponent placeholderInsert{};
     PopupSelector popupSelector{};
     PopupDisplay popupDisplay1{};
     PopupDisplay popupDisplay2{};

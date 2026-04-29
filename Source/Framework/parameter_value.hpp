@@ -284,9 +284,9 @@ namespace Framework
     }
 
     void serialiseToJson(void *jsonData) const;
-    static utils::dll<ParameterValue> *
+    static ParameterValue *
     deserialiseFromJson(Generation::Processor *processor, void *jsonData, 
-      ParameterDetails &reference, utils::dll<ParameterValue> *memory = nullptr);
+      ParameterDetails &reference, ParameterValue *memory = nullptr);
 
   private:
     // after adding modulations and scaling
@@ -303,6 +303,8 @@ namespace Framework
 
   public:
     Generation::Processor *parentProcessor{};
+    ParameterValue *previous{};
+    ParameterValue *next{};
   private:
 
     ParameterLink parameterLink_{ .parameter = this };

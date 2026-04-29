@@ -22,7 +22,7 @@ namespace Interface
   {
   public:
     static constexpr int kLabelMargin = 4;
-    static constexpr int kDefaultMaxTotalCharacters = 5;
+    static constexpr int kDefaultPreferredIntegerCharacters = 2;
     static constexpr int kDefaultMaxDecimalCharacters = 2;
     static constexpr float kSlowDragMultiplier = 0.1f;
     static constexpr float kDefaultSensitivity = 1.0f;
@@ -77,8 +77,6 @@ namespace Interface
       bool canUseScrollWheel : 1 = false;
       bool shouldCheckDbInfinities : 1 = false;
       bool canInputValue : 1 = false;
-      bool shouldRepaintOnHover : 1 = false;
-      bool isDraggable : 1 = true;
       bool isHorizotalDraggable : 1 = false;
       bool canLoopAround : 1 = false;
       bool isBipolar : 1 = false;
@@ -93,7 +91,9 @@ namespace Interface
       bool isInModalState : 1 = false;
     } controlFlags{};
 
-    u32 maxDecimalCharacters = kDefaultMaxDecimalCharacters;
+    Point<i8> popupOffset{ 0, kPopupToElement };
+    u8 preferredIntegerCharacters = kDefaultPreferredIntegerCharacters;
+    u8 maxDecimalCharacters = kDefaultMaxDecimalCharacters;
     Point<i32> lastMouseDragPosition{};
 
     Framework::ParameterLink *parameterLink = nullptr;
@@ -182,8 +182,6 @@ namespace Interface
     static constexpr float kRotaryAngle = 0.75f * kPi;
     static constexpr float kDefaultRotaryDragLength = 200.0f;
     static constexpr int kDefaultWidthHeight = 36;
-    static constexpr int kDefaultArcDimensions = 36;
-    static constexpr int kDefaultBodyDimensions = 23;
     static constexpr int kLabelOffset = 6;
     static constexpr int kLabelVerticalPadding = 3;
 
@@ -193,15 +191,15 @@ namespace Interface
     bool mouseDrag(const MouseEvent &e) override;
 
     float animationValues[1]{};
-    float maxArc{};
-    float knobArcThickness{};
+    float maxArc = kRotaryAngle;
+    //float knobArcThickness{};
     float knobSizeScale = 1.0f;
   };
 
   class PinSlider : public Slider
   {
   public:
-    static constexpr int kDefaultPinSliderWidth = 10;
+    static constexpr int kDefaultWidth = 10;
 
     PinSlider();
 
@@ -277,43 +275,17 @@ namespace Interface
 
   struct CombinationRotarySlider final : Component
   {
-  private:
-    TextSelector *modifier{};
+    CombinationRotarySlider();
 
-  public:
+    void setModifier(TextSelector *newModifier);
+
     RotarySlider rotary{};
     Component infoSection{};
     Label label{};
     SliderValueEditor valueEditor{};
 
-    CombinationRotarySlider()
-    {
-      addChildComponent(&rotary);
-
-      infoSection.componentFlags.vertical = true;
-      addChildComponent(&infoSection);
-
-      label.sizingFlags |= Component::SameAsSiblingsX;
-      label.control = &rotary;
-      infoSection.addChildComponent(&label);
-
-      valueEditor.sizingFlags |= Component::SameAsSiblingsX;
-      valueEditor.control = &rotary;
-      infoSection.addChildComponent(&valueEditor);
-    }
-
-    void setModifier(TextSelector *newModifier)
-    {
-      if (modifier)
-        removeChildComponent(modifier);
-
-      modifier = newModifier;
-      rotary.controlFlags.shouldShowPopup = modifier;
-      valueEditor.componentFlags.isVisible = !modifier;
-
-      if (modifier)
-        addChildComponent(modifier);
-    }
+  private:
+    TextSelector *modifier{};
   };
 
   struct PinBoundsBox : public Component

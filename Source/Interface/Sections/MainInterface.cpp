@@ -7,6 +7,7 @@
 #include "Generation/SoundEngine.hpp"
 #include "Generation/Effects.hpp"
 #include "Plugin/Renderer.hpp"
+#include "EffectsLaneSection.hpp"
 
 
 namespace Interface
@@ -17,19 +18,25 @@ namespace Interface
     {
       auto *self = (InvisibleHoverComponent *)c;
       if (isCalculatingVertical)
-        return Range<i32>{ self->lastBounds.h, self->lastBounds.h };
+      {
+        self->margin = self->source->margin;
+        return Range<i32>{ self->source->lastBounds.h, self->source->lastBounds.h };
+      }
       else
-        return Range<i32>{ self->lastBounds.w, self->lastBounds.w };
+        return Range<i32>{ self->source->lastBounds.w, self->source->lastBounds.w };
     };
   }
 
   bool
   InvisibleHoverComponent::render(OpenGlWrapper &openGl)
   {
-    auto offset = scaleValueRoundInt(4);
-    fillRect(openGl, bounds.withZeroOrigin()
-      .withTrimmedTop(offset).withTrimmedLeft(offset).toFloat(),
-      getColour(Skin::kLightenScreen, this));
+    auto colour = getColour(Skin::kLightenScreen, this);
+    fillRect(openGl,
+      getLocalBounds().toFloat().trimmed(scaleValueRound(source->padding.toFloat())),
+      colour.dimmer(0.3f), scaleValue(4.0f));
+    strokeRect(openGl, 
+      getLocalBounds().toFloat().trimmed(scaleValueRound(source->padding.toFloat())), 
+      scaleValue(1.0f), colour, scaleValue(4.0f));
 
     return true;
   }
@@ -75,7 +82,7 @@ namespace Interface
 
   bool
   CommandMessages::handleProcessorInsertion(Generation::Processor *parentProcessor,
-    Component *parentComponent, ProcessorInsertion *metadata, Component *substituteInsert)
+    Component *parentComponent, ProcessorInsertion *metadata, Placement placement)
   {
     auto *processor = metadata->processor;
 
@@ -92,23 +99,54 @@ namespace Interface
     metadata->index = utils::min(metadata->index, parentProcessor->childrenCount);
     if (!metadata->useIndex)
     {
+      // try to find the correct index for a given position
+
       auto point = parentComponent->getRelativePoint(processor->component, metadata->position);
-      point.x -= (i32)::roundf(parentComponent->scrollOffset.x);
-      point.y -= (i32)::roundf(parentComponent->scrollOffset.y);
 
       auto Point<i32>:: *primary = (parentComponent->componentFlags.vertical) ?
         &Point<i32>::y : &Point<i32>::x;
 
       metadata->index = 0;
-      child = parentProcessor->children;
-      for (; child; (++metadata->index), child = Generation::Processor::getChild(child, 1))
-        if (child->component && point.*primary < parentComponent->getRelativePoint(
-          child->component, child->component->bounds.getPosition()).*primary)
+      for (child = parentProcessor->children; child; (++metadata->index), child = Generation::Processor::getChild(child, 1))
+      {
+        auto position = Point{ (metadata->isMovingUpX) ? child->component->bounds.w : 0,
+          (metadata->isMovingUpY) ? child->component->bounds.h : 0 };
+        position = parentComponent->getRelativePoint(child->component, position);
+        const char *format = (child == metadata->processor) ?
+          " > #%d: x: %d, y: %d, w: %d, h: %d\n" : "   #%d: x: %d, y: %d, w: %d, h: %d\n";
+        COMPLEX_DEBUG_LOG(format, metadata->index, position.x, position.y,
+          child->component->bounds.w, child->component->bounds.h);
+      }
+      COMPLEX_DEBUG_LOG("\n");
+
+      metadata->index = 0;
+      for (child = parentProcessor->children; child; 
+        (++metadata->index), child = Generation::Processor::getChild(child, 1))
+      {
+        // skip if we encounter the processor we're moving
+        if (child == metadata->processor)
+        {
+          // if we don't subtract in the processor insertion step 
+          // we will always move down 1 regarless in which position we are
+          --metadata->index;
+          continue;
+        }
+
+        auto position = Point{ (metadata->isMovingUpX) ? child->component->bounds.w : 0,
+          (metadata->isMovingUpY) ? child->component->bounds.h : 0 };
+        position = parentComponent->getRelativePoint(child->component, position);
+        if (child->component && point.*primary < position.*primary)
           break;
+      }
     }
     else
       child = Generation::Processor::getChild(parentProcessor->children, metadata->index);
 
+    COMPLEX_ASSERT(metadata->processor->parent == nullptr || 
+      metadata->processor->parent == parentProcessor);
+
+    // if the processor already exists at the correct index, we skip
+    if (!metadata->processor->parent || metadata->processor->getIndex() != metadata->index)
     {
       auto g = parentProcessor->state->plugin->acquireProcessingLock();
       if (processor->parent)
@@ -117,14 +155,29 @@ namespace Interface
       (void)parentProcessor->addChildProcessor(*processor, metadata->index);
     }
 
-    if (processor->component->parent)
-      processor->component->parent->removeChildComponent(processor->component);
+    Component *newComponent = processor->component;
+    auto *substituteInsert = metadata->placeholder;
     if (substituteInsert)
-      parentComponent->removeChildComponent(substituteInsert);
-    auto *newComponent = (metadata->insertPlaceholder && substituteInsert) ?
-      substituteInsert : processor->component;
+    {
+      if (substituteInsert->parent)
+        substituteInsert->parent->removeChildComponent(substituteInsert);
+      newComponent = substituteInsert;
+    }
+    else if (processor->component->parent)
+    {
+      if (substituteInsert && substituteInsert->parent)
+        substituteInsert->parent->removeChildComponent(substituteInsert);
+      processor->component->parent->removeChildComponent(processor->component);
+    }
 
     COMPLEX_ASSERT(!child || child->component);
+    // if the processor was already inserted before we started
+    // we might try to insert before itself, 
+    // therefore we need to the next element as insertBefore
+    if (child && newComponent == child->component)
+      child = child->next;
+
+    newComponent->placement = placement;
     parentComponent->addChildComponent(newComponent, (child) ? child->component : nullptr);
 
     return true;
@@ -261,14 +314,14 @@ namespace Interface
       case CommandMessages::HandleProcessorInsertion:
       {
         auto *metadata = (CommandMessages::ProcessorInsertion *)extraData;
-        auto *invisibleHover = &getGui(uiRelated.renderer)->invisibleHover;
 
         if (!CommandMessages::handleProcessorInsertion(self->soundEngine,
-          &self->effectsSection.laneHolder, metadata, 
-          metadata->insertPlaceholder ? invisibleHover : nullptr))
+          &self->effectsSection.laneHolder, metadata, Placement::centered))
           return false;
 
-        invisibleHover->source = metadata->processor->component;
+        auto section = (EffectsLaneSection *)metadata->processor->component;
+        section->soundEngineSection = self;
+
         return true;
       }
       default:
@@ -435,7 +488,9 @@ namespace Interface
         return;
 
       CommandMessages::ProcessorInsertion data{ .processor = processor,
-        .index = u32(-1), .useIndex = true };
+        .index = 0, .useIndex = true };
+      if (processor->parent)
+        data.index = (u32)processor->getIndex();
 
       CommandMessages::tryProcessorInsertion(parentComponent, data);
 

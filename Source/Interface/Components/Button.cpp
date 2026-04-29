@@ -74,7 +74,7 @@ namespace Interface
 
     Colour colours[] = { colour };
     auto [fn, iconBounds] = Paths::powerButtonIcon();
-    fn(*openGl.cache, colours, getLocalBounds().toFloat().trim(scaleValue(padding.toFloat())), scaleValue(1.0f));
+    fn(openGl, colours, getLocalBounds().toFloat().trim(scaleValue(padding.toFloat())), scaleValue(1.0f));
 
     return true;
   }
@@ -88,9 +88,9 @@ namespace Interface
 
   bool RadioButton::render(OpenGlWrapper &openGl)
   {
-    auto onNormalColor = getColour(Skin::kWidgetAccent1);
-    auto offNormalColor = getColour(Skin::kPowerButtonOff);
-    auto backgroundColor = getColour(Skin::kBackground);
+    auto onNormalColor = getColour(Skin::kWidgetAccent1, this);
+    auto offNormalColor = getColour(Skin::kPowerButtonOff, this);
+    auto backgroundColor = getColour(Skin::kBackground, this);
     
     tickAnimation(animationValues, {{ componentFlags.isHovered }}, {{ kHoverIncrement }});
     auto hoverAmount = animationValues[0];

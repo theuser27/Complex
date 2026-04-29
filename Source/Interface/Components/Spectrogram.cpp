@@ -106,10 +106,10 @@ namespace Interface
 
 	void Spectrogram::setLineRendererData()
 	{
-		Colour colour = getColour(Skin::kWidgetPrimary1);
-		Colour fillColour = getColour(Skin::kWidgetPrimary2);
+		Colour colour = getColour(Skin::kWidgetPrimary1, this);
+		Colour fillColour = getColour(Skin::kWidgetPrimary2, this);
 
-		float fillFade = getValue(Skin::kWidgetFillFade, true);
+		float fillFade = getValue(Skin::kWidgetFillFade, true, this);
 
 		for (auto &amplitudeRenderer : amplitudeRenderers)
 		{
@@ -376,7 +376,7 @@ namespace Interface
 		float frequency = 0.0f;
 		float increment = 1.0f;
 
-		auto fillColour = getColour(Skin::kLightenScreen).withMultipliedAlpha(0.5f);
+		auto fillColour = getColour(Skin::kLightenScreen, Skin::kNone).withMultipliedAlpha(0.5f);
 		nvgFillColor(g.context, fillColour);
 
 
@@ -399,7 +399,7 @@ namespace Interface
 			increment *= kLineSpacing;
 		}
 
-		strokeRect(g.context, bounds, 1.0f, fillColour, getValue(Skin::kWidgetRoundedCorner, true));
+		strokeRect(g.context, bounds, 1.0f, fillColour, getValue(Skin::kWidgetRoundedCorner, true, Skin::kNone));
 		//nvgBeginPath(g.context);
 		//nvgStrokeWidth(g.context, 1.0f);
 		//nvgRoundedRect(g.context, 0.5f, 0.5f, bounds.w - 1.0f, bounds.h - 1.0f, getValue(Skin::kWidgetRoundedCorner, true));
@@ -413,7 +413,7 @@ namespace Interface
 
 		if (shouldPaintBackgroundLines)
 		{
-			paintBackground(*openGl.cache, getLocalBounds().toFloat(), minFrequency, maxFrequency);
+			paintBackground(openGl, getLocalBounds().toFloat(), minFrequency, maxFrequency);
 		}
 
 		//auto bounds = getLocalBounds();

@@ -28,29 +28,20 @@ namespace Interface
   // 2. Calculate sizes and positions
   // 3. Do rendering
 
-  enum class RenderFlag : u8
-  {
-    // skip rendering on component
-    NoWork, 
-    // render and update flag to NoWork
-    Dirty, 
-    // render every frame
-    Realtime
-  };
-
   void calculateSizes(Component *children, Component *component);
   void calculatePositions(Component *children,
     Component *component, Rectangle<i32> boundsInComponent = {});
-  void animatePosition(Component *component, bool wasParentResized);
-
-  utils::pair<i32, i32> getScrollOffsets(const MouseEvent &e,
-    float singleStepX = 16, float singleStepY = 16);
+  void animatePosition(Component *component, Component *parent, bool wasParentResized);
 
   PopupDisplay *getPopupDisplay(bool primary);
   PopupSelector *getPopupSelector();
   utils::bumpArena *getUIArena();
 
   void deleteComponent(Component *component, bool freeArena = true);
+
+  void checkScrollClick(Component *component, const MouseEvent &e);
+  void dragScroll(Component *component, const MouseEvent &e);
+  bool offsetScroll(Component *component, float deltaX, float deltaY, bool switchDirections);
 
   namespace CommandMessages
   {
@@ -74,13 +65,15 @@ namespace Interface
     {
       Point<i32> position{};
       Generation::Processor *processor{};
+      Component *placeholder{};
       u32 index{};
       bool useIndex{};
-      bool insertPlaceholder{};
+      bool isMovingUpX{};
+      bool isMovingUpY{};
     };
 
-    bool handleProcessorInsertion(Generation::Processor *parent, Component *parentComponent,
-      ProcessorInsertion *metadata, Component *substituteInsert = nullptr);
+    bool handleProcessorInsertion(Generation::Processor *parent, 
+      Component *parentComponent, ProcessorInsertion *metadata, Placement placement);
 
     void tryProcessorInsertion(Component *parentComponent, ProcessorInsertion info);
   }
@@ -127,8 +120,8 @@ namespace Interface
     virtual bool mouseMove([[maybe_unused]] const MouseEvent &event) { return false; }
     virtual bool mouseEnter([[maybe_unused]] const MouseEvent &event) { return false; }
     virtual bool mouseExit([[maybe_unused]] const MouseEvent &event) { return false; }
-    virtual bool mouseDown([[maybe_unused]] const MouseEvent &event) { return false; }
-    virtual bool mouseDrag([[maybe_unused]] const MouseEvent &event) { return false; }
+    virtual bool mouseDown(const MouseEvent &event);
+    virtual bool mouseDrag(const MouseEvent &event);
     virtual bool mouseUp([[maybe_unused]] const MouseEvent &event) { return true; }
     virtual bool mouseWheelMove(const MouseEvent &event);
 
@@ -219,8 +212,6 @@ namespace Interface
     void renderScrollbars(OpenGlWrapper &openGl, float scrollHoverIncrement);
     virtual bool render([[maybe_unused]] OpenGlWrapper &openGl) { return true; }
 
-    bool scrollComponent(float x, float y);
-
     utils::bumpArena *arena{};
 
     Rectangle<i32> bounds{};
@@ -239,19 +230,22 @@ namespace Interface
       // feature flags
       bool clickable : 1 = false;
       bool clickableChildren : 1 = true;
-      bool acceptsOrphanedMouseEvents : 1 = false;
-      bool vertical : 1 = false;                    // controls the children stack direction
+      bool vertical : 1 = false;                  // controls the children stack direction
       bool animateMovement : 1 = false;
       bool animateFadeAway : 1 = false;
       bool alwaysOnTop : 1 = false;
+      bool acceptsOrphanMouseEvents : 1 = false;  // if component can accept mouseUp without mouseDown
+                                                  //  happens if another component gives up on handling mouseUp
 
       // state flags
       bool isVisible : 1 = true;
       bool isHovered : 1 = false;
       bool isClicked : 1 = false;
       bool isOpenGlInitialised : 1 = false;
-      bool isDestroyingOpenGl : 1 = false;
-      RenderFlag renderState : 2 = RenderFlag::Dirty;
+      bool isScrollbarXClicked : 1 = false;
+      bool isScrollbarYClicked : 1 = false;
+      bool isPositionSet : 1 = true;              // to aid components with custom placement 
+                                                  //  depending on other components' position
     } componentFlags{};
     
 
@@ -270,7 +264,9 @@ namespace Interface
     // returns width/height min and max sizes depending on isCalculatingVertical
     // can return -1 to use the calculations in from the underlying algorithm
     Range<i32> (*overrideSize)(Component *c, bool isCalculatingVertical){};
-    void (*overridePosition)(Component *c){};
+    // return false if the component couldn't be positioned, 
+    // so that it can be pushed at the end of the queue
+    bool (*overridePosition)(Component *c){};
 
     Point<float> scrollOffset{};
     Area<i32> scrollableArea{};
@@ -280,13 +276,13 @@ namespace Interface
 
     // support for animated positions
     Point<i32> nextPosition{};
-    Point<i32> previousPosition{ -1, -1 };
+    Point<i32> previousPosition = invalidPosition;
     u16 distanceToNextPositionRatio{};
 
     // support for animated shrinking and alpha fade when made invisible
     // until it reaches utils::max_limit<u16> the component is in a grace period 
     // where it will continue to have its size and position calculated 
-    // @see isStillVisible
+    // @see isStillVisible()
     u16 fadeawayRatio{};
 
     // support for animated scroll shrinking when not/hovered
@@ -342,7 +338,8 @@ namespace Interface
     return false;
   }
 
-  inline bool preOrderTreeTraversal(Component *tree, const auto &lambda, Point<i32> at,
+  inline bool 
+  preOrderTreeTraversal(Component *tree, const auto &lambda, Point<i32> at,
     bool onlyClickable = true, Component *startingAt = nullptr, bool includeParent = false)
   {
     if (includeParent && lambda(tree))
@@ -353,26 +350,41 @@ namespace Interface
     Component *child{};
     while ((child = tree->getComponentAt(at.x, at.y, onlyClickable, false, startingAt)))
     {
+      // if the algorithm resorts to the parent itself, we're done
+      if (child == tree)
+        break;
+
       if (lambda(child))
         return true;
 
       startingAt = child;
+      // if the algorithm reaches the first child it will loop back around, so we're done
+      if (child == tree->children)
+        break;
     }
 
     startingAt = originalStartingAt;
 
     while ((child = tree->getComponentAt(at.x, at.y, false, false, startingAt)))
     {
+      // if the algorithm resorts to the parent itself, we're done
+      if (child == tree)
+        break;
+
       if (preOrderTreeTraversal(child, lambda, at - child->getPosition(), onlyClickable))
         return true;
 
       startingAt = child;
+      // if the algorithm reaches the first child it will loop back around, so we're done
+      if (child == tree->children)
+        break;
     }
     
     return false;
   }
 
-  inline bool dfsUpwardTreeTraversal(Component *tree, const auto &lambda, 
+  inline bool 
+  dfsUpwardTreeTraversal(Component *tree, const auto &lambda, 
     Point<i32> at, bool onlyClickable = true, Component *startingAt = nullptr)
   {
     Component *deepestComponent{};

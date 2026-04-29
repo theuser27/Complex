@@ -19,7 +19,11 @@ namespace Interface
   {
     sizingFlags = (Component::SizingFlags)(Component::GrowableX | Component::GrowableY);
     controlFlags.shouldShowPopup = true;
-    overridePosition = [](Component *c) { c->bounds.setPosition({}); };
+    controlFlags.shouldUsePlusMinusPrefix = true;
+    overridePosition = [](Component *c) { c->bounds.setPosition({}); return true; };
+    // because of the bipolarity we need to lower the sensitivity 
+    // so that the shift follows the mouse exactly
+    sensitivity = 0.5f;
   }
 
   bool
@@ -35,18 +39,26 @@ namespace Interface
     return false;
   }
 
-  bool 
+  EffectModuleSection::SpectralMaskComponent::SpectralMaskComponent()
+  {
+    shiftBounds.sizingFlags = (Component::SizingFlags)(Component::GrowableX | Component::GrowableY);
+    addChildComponent(&shiftBounds, children);
+  }
+
+  bool
   EffectModuleSection::SpectralMaskComponent::render(OpenGlWrapper &openGl)
   {
     fillRect(openGl, getLocalBounds().toFloat(), getColour(Skin::kBody, this),
-      rounding[0], rounding[1], rounding[2], rounding[3]);
+      scaleValue(rounding[0]), scaleValue(rounding[1]), scaleValue(rounding[2]), scaleValue(rounding[3]));
 
     auto shiftValue = Framework::scaleValue(shiftBounds.getValue(), shiftBounds.details);
     paintHighlightBox(this, *openGl.cache, (float)(shiftValue + lowBound.getValue()),
       (float)(shiftValue + highBound.getValue()),
-      getColour(Skin::kWidgetPrimary1).withAlpha(0.15f), backgroundColour);
+      getColour(Skin::kWidgetPrimary1, this).withAlpha(0.15f), backgroundColour);
 
-    return true;
+    doRenderChildren(openGl);
+
+    return false;
   }
 
   void EffectModuleSection::EffectHolder::Header::reinitialise()
@@ -89,6 +101,8 @@ namespace Interface
     removeChildComponent(&header);
     deleteAllChildComponents();
 
+    componentFlags.vertical = true;
+
     addChildComponent(&header);
     header.arena = arena;
     header.sizingFlags = Component::GrowableX;
@@ -117,6 +131,20 @@ namespace Interface
     return true;
   }
 
+  bool 
+  EffectModuleSection::render(OpenGlWrapper &openGl)
+  {
+    doRenderChildren(openGl);
+    
+    if (!effectHolder.header.moduleActivator.isOn())
+    {
+      fillRect(openGl, getLocalBounds().toFloat(),
+        getColour(Skin::kBackground, this).withMultipliedAlpha(0.8f));
+    }
+
+    return false;
+  }
+
   void EffectModuleSection::reinitialise()
   {
     using namespace Framework;
@@ -138,6 +166,8 @@ namespace Interface
     maskComponent.sizingFlags = Component::GrowableX;
     maskComponent.desiredSize = { 0, kSpectralMaskContractedHeight, 0, kSpectralMaskContractedHeight };
     maskComponent.margin = { 0, 0, 0, kSpectralMaskMargin };
+    utils::copy(utils::span{ maskComponent.rounding }, {{ (float)kOuterPixelRounding, (float)kOuterPixelRounding,
+      (float)kInnerPixelRounding, (float)kInnerPixelRounding }});
     maskComponent.lowBound.arena = arena;
     maskComponent.lowBound.changeLinkedParameter(*effectModule->getParameter(Generation::EffectModule::LowBound));
     maskComponent.highBound.arena = arena;
@@ -156,6 +186,7 @@ namespace Interface
     effectHolder.header.mixNumberBox.changeLinkedParameter(*effectModule->getParameter(Generation::EffectModule::ModuleMix));
     effectHolder.header.moduleActivator.changeLinkedParameter(*effectModule->getParameter(Generation::EffectModule::ModuleEnabled));
     effectHolder.header.draggableBox.draggedComponent = this;
+    effectHolder.header.draggableBox.processor = effectModule;
     effectHolder.header.draggableBox.copyingDraggedComponent = [](Component *c)
     {
       auto *self = (EffectModuleSection *)c;
@@ -168,9 +199,12 @@ namespace Interface
   }
 
 
-
-  struct EffectModulePopupItem : public PopupItem
+  bool
+  EffectModuleSection::mouseDown(const MouseEvent &e)
   {
+    if (!e.mods.test(ModifierKeys::popupMenuClickModifier))
+      return false;
+
     enum MenuId
     {
       kCancel = 0,
@@ -179,58 +213,71 @@ namespace Interface
       kInitInstance
     };
 
+    auto *selector = getPopupSelector();
+    auto *itemArena = selector->arena;
+    PopupList *list = anew(itemArena, PopupList, { selector });
+    list->desiredSize = { kPopupMinWidth, 0, utils::max_limit<i32>, utils::max_limit<i32> };
+    list->padding = { 0, 4, 0, 4 };
 
-  };
+    list->addChildComponent(OptionPopupItem::createTitle(list, "Module Options"));
+    auto insertItem = [&](MenuId id, utils::string_view text, i32 shortcutKeyCode)
+    {
+      auto *item = anew(itemArena, OptionPopupItem, {});
+      item->id = id;
+      item->dataTag = OptionPopupItem::StringData;
+      item->extraData = anew(itemArena, utils::stringnd, { itemArena, text });
+      item->associatedList = list;
+      item->shortcutKeyCode = shortcutKeyCode;
+      list->addChildComponent(item);
+    };
 
-  bool
-  EffectModuleSection::mouseDown(const MouseEvent &e)
-  {
-    if (!e.mods.test(ModifierKeys::popupMenuClickModifier))
-      return false;
+    insertItem(kDeleteInstance, "D" COMPLEX_UNDERSCORE_LITERAL "elete", 'D');
+    insertItem(kCopyInstance, "C" COMPLEX_UNDERSCORE_LITERAL "opy (TODO)", 'C');
+    insertItem(kInitInstance, "I" COMPLEX_UNDERSCORE_LITERAL "nitialise", 'I');
 
-    //PopupItem options{};
-    //options.addDelimiter("Module Settings");
-    //auto &deleteOption = options.addEntry(kDeleteInstance, "D" COMPLEX_UNDERSCORE_LITERAL "elete");
-    //deleteOption.shortcut = 'D';
-    //auto &copyOption = options.addEntry(kCopyInstance, "C" COMPLEX_UNDERSCORE_LITERAL "opy (TODO)");
-    //copyOption.shortcut = 'C';
-    //auto &initialiseOption = options.addEntry(kInitInstance, "I" COMPLEX_UNDERSCORE_LITERAL "nitialise");
-    //initialiseOption.shortcut = 'I';
+    selector->list = list;
+    selector->toggleable = false;
+    selector->skinOverride = getSkinOverride();
+    selector->callback = [this](PopupSelector *, PopupItem *item)
+    {
+      if (item->id == kDeleteInstance)
+      {
+        // make sure nothing touches this after the call runs
+        auto *state = effectModule->state;
+        auto *transactionArena = state->plugin->undoManager.beginNewTransaction();
+        state->plugin->undoManager.perform(anew(transactionArena,
+          Framework::DeleteProcessorUpdate, { effectModule }));
+      }
+      else if (item->id == kCopyInstance)
+      {
+        // TODO: copy right click option on EffectModuleSection
+      }
+      else if (item->id == kInitInstance)
+      {
+        // TODO: initialisation right click option on EffectModuleSection
+      }
+    };
+    selector->summon(this, Placement::custom, { e.x, e.y });
 
-    //return options;
-
-    //[](PopupItem *item)
-    //{
-    //  if (item->id == EffectModulePopupItem::kDeleteInstance)
-    //  {
-    //    // make sure nothing touches this after the call runs
-    //    utils::ignore = laneSection_->deleteModule(this, true);
-    //  }
-    //  else if (item->id == EffectModulePopupItem::kCopyInstance)
-    //  {
-    //    // TODO: copy right click option on EffectModuleSection
-    //  }
-    //  else if (item->id == EffectModulePopupItem::kInitInstance)
-    //  {
-    //    // TODO: initialisation right click option on EffectModuleSection
-    //  }
-    //}
-
-    //PopupItem options = createPopupMenu();
-    //showPopupSelector(this, e.getPosition(), COMPLEX_MOVE(options),
-    //  [this](int selection) { handlePopupResult(selection); });
+    componentFlags.isClicked = false;
 
     return true;
   }
 
   void EffectModuleSection::restartEffectUI()
   {
+    effectHolder.removeChildComponent(&effectHolder.header);
+    effectHolder.removeAllChildComponents();
     utils::bumpArena::clear(effectArena);
+    effectHolder.addChildComponent(&effectHolder.header);
+    effectControls = {};
 
     auto activeEffect = effectModule->currentEffect.load(satomi::memory_order_acquire);
     skinOverride = (Interface::Skin::Override)activeEffect->metadata->userFlags;
-    //effectControls = ((Generation::EffectModule::CreateUIFn *)activeEffect->metadata->
-    //  vtable[Generation::EffectModule::CreateUIVtableIndex])(effectArena, this);
+
+    if (auto *createUIPointer = activeEffect->metadata->vtable[Generation::EffectModule::CreateUIVtableIndex])
+      effectControls = ((Generation::EffectModule::CreateUIFn *)createUIPointer)(effectArena, this,
+        effectModule->currentEffect.load(satomi::memory_order_acquire));
     
     // TODO: icon
   }
@@ -687,6 +734,49 @@ namespace Interface
     }
   }*/
 
+}
+
+namespace Generation
+{
+  namespace Filter
+  {
+    utils::span<Interface::Control *> 
+    createUINormal(utils::bumpArena *arena, Interface::EffectModuleSection *section, 
+      EffectModule::EffectData *effectData)
+    {
+      using namespace Interface;
+
+      Component *holder = anew(arena, Component, {});
+      holder->sizingFlags = (Component::SizingFlags)(Component::GrowableX | Component::GrowableY);
+      holder->padding = { 32, 0, 32, 0 };
+
+      utils::vector<Control *> controls{ arena, effectData->parameterCount };
+      auto *parameter = effectData->parameters;
+      for (usize i = 0; i < effectData->parameterCount; (++i), (parameter = parameter->next))
+      {
+        auto *rotary = anew(arena, CombinationRotarySlider, {});
+        rotary->placement = Placement::justifyX;
+        rotary->rotary.arena = arena;
+        rotary->rotary.changeLinkedParameter(*parameter);
+        controls.emplaceBack(&rotary->rotary);
+        holder->addChildComponent(rotary);
+      }
+
+      section->effectHolder.addChildComponent(holder);
+
+      return controls;
+    }
+
+    utils::span<Interface::Control *>
+    createUIGate(utils::bumpArena *arena, Interface::EffectModuleSection *section,
+      EffectModule::EffectData *effectData)
+    {
+      using namespace Interface;
+
+
+      return {};
+    }
+  }
 }
 
 namespace Generation

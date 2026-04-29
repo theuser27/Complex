@@ -197,17 +197,17 @@ namespace Interface
       {
         if (c->componentFlags.isOpenGlInitialised)
         {
-          c->componentFlags.isDestroyingOpenGl = true;
           c->render(openGl);
           COMPLEX_ASSERT(!c->componentFlags.isOpenGlInitialised,
             "Didn't reset initialisation flag after opengl resource destruction");
-          c->componentFlags.isDestroyingOpenGl = false;
         }
         for (auto child = c->children; child; child = child->next)
           self(self, child);
       };
-
+      
+      openGl.isDestroyingOpenGl = true;
       teardownComponent(teardownComponent, gui);
+      openGl.isDestroyingOpenGl = false;
 
       openGl.shaders = nullptr;
       shaders.releaseAll();
@@ -269,8 +269,16 @@ namespace Interface
       gui->bounds.setPosition({});
       calculatePositions(gui->children, gui, gui->bounds);
 
-      for (auto *c : *customPlacement)
-        c->overridePosition(c);
+      // looping until all conflicts are resolved
+      // BEWARE of circular dependencies
+      while (!customPlacement->empty())
+      {
+        auto c = customPlacement->front();
+        customPlacement->popFront();
+        c->componentFlags.isPositionSet = c->overridePosition(c);
+        if (!c->componentFlags.isPositionSet)
+          customPlacement->emplaceBack(c);
+      }
       customPlacement->clear();
 
       checkFocusedComponent();
@@ -292,7 +300,7 @@ namespace Interface
         nvgReset(openGl);
         auto text = utils::floatToString(localScratch, 1.0f / getGraphAverage(&graph), 2);
         renderText(text, FontId::DDinType, scaleValue({ 4.0f, 4.0f, 24.0f, 24.0f }).toInt().toFloat(), 
-          graphics, Colours::white, Placement::left);
+          *graphics, Colours::white, Placement::left);
       }
 
       nvgEndFrame(openGl.g);
@@ -441,8 +449,8 @@ namespace Interface
     case PUGL_POINTER_OUT:
     {
       MouseEvent e;
-      e.x = (int)::round(event->crossing.x);
-      e.y = (int)::round(event->crossing.y);
+      e.x = (i32)::round(event->crossing.x);
+      e.y = (i32)::round(event->crossing.y);
       e.mods |= ((event->crossing.state & PUGL_MOD_SHIFT) != 0) ? ModifierKeys::shiftModifier : 0;
       e.mods |= ((event->crossing.state & PUGL_MOD_CTRL) != 0) ? ModifierKeys::ctrlModifier : 0;
       e.mods |= ((event->crossing.state & PUGL_MOD_ALT) != 0) ? ModifierKeys::altModifier : 0;
@@ -479,13 +487,15 @@ namespace Interface
         renderer->mouseButtonsDown_ = renderer->mouseButtonsDown_.withoutFlags(flag);
 
       MouseEvent e;
-      e.x = (int)::round(event->button.x);
-      e.y = (int)::round(event->button.y);
-      e.mods |= ((event->button.state & PUGL_MOD_SHIFT) != 0) ? ModifierKeys::shiftModifier : 0;
-      e.mods |= ((event->button.state & PUGL_MOD_CTRL) != 0) ? ModifierKeys::ctrlModifier : 0;
-      e.mods |= ((event->button.state & PUGL_MOD_ALT) != 0) ? ModifierKeys::altModifier : 0;
+      e.x = (i32)::round(event->button.x);
+      e.y = (i32)::round(event->button.y);
+      e.mods |= test_enum(event->button.state, PUGL_MOD_SHIFT) ? ModifierKeys::shiftModifier : 0;
+      e.mods |= test_enum(event->button.state, PUGL_MOD_CTRL) ? ModifierKeys::ctrlModifier : 0;
+      e.mods |= test_enum(event->button.state, PUGL_MOD_ALT) ? ModifierKeys::altModifier : 0;
       e.mods |= renderer->mouseButtonsDown_;
       e.mouseDownPosition = { e.x, e.y };
+      e.directionX = (i8)utils::clamp(e.x - renderer->lastMousePosition_.x, -1, 1);
+      e.directionY = (i8)utils::clamp(e.y - renderer->lastMousePosition_.y, -1, 1);
 
       if (event->type == PUGL_BUTTON_PRESS)
       {
@@ -507,13 +517,15 @@ namespace Interface
     case PUGL_MOTION:
     {
       MouseEvent e;
-      e.x = (int)::round(event->motion.x);
-      e.y = (int)::round(event->motion.y);
-      e.mods |= ((event->motion.state & PUGL_MOD_SHIFT) != 0) ? ModifierKeys::shiftModifier : 0;
-      e.mods |= ((event->motion.state & PUGL_MOD_CTRL) != 0) ? ModifierKeys::ctrlModifier : 0;
-      e.mods |= ((event->motion.state & PUGL_MOD_ALT) != 0) ? ModifierKeys::altModifier : 0;
+      e.x = (i32)::round(event->motion.x);
+      e.y = (i32)::round(event->motion.y);
+      e.mods |= test_enum(event->motion.state, PUGL_MOD_SHIFT) ? ModifierKeys::shiftModifier : 0;
+      e.mods |= test_enum(event->motion.state, PUGL_MOD_CTRL) ? ModifierKeys::ctrlModifier : 0;
+      e.mods |= test_enum(event->motion.state, PUGL_MOD_ALT) ? ModifierKeys::altModifier : 0;
       e.mods |= renderer->mouseButtonsDown_;
-      e.mouseDownPosition = { e.x, e.y };
+      e.mouseDownPosition = renderer->lastMouseDownPosition_;
+      e.directionX = (i8)utils::clamp(e.x - renderer->lastMousePosition_.x, -1, 1);
+      e.directionY = (i8)utils::clamp(e.y - renderer->lastMousePosition_.y, -1, 1);
 
       renderer->computeMultiClick(event->motion.time, e, false);
       renderer->handleMouseMove(COMPLEX_MOVE(e));
@@ -526,13 +538,15 @@ namespace Interface
     case PUGL_SCROLL:
     {
       MouseEvent e;
-      e.x = (int)::round(event->scroll.x);
-      e.y = (int)::round(event->scroll.y);
+      e.x = (i32)::round(event->scroll.x);
+      e.y = (i32)::round(event->scroll.y);
       e.mods |= ((event->scroll.state & PUGL_MOD_SHIFT) != 0) ? ModifierKeys::shiftModifier : 0;
       e.mods |= ((event->scroll.state & PUGL_MOD_CTRL) != 0) ? ModifierKeys::ctrlModifier : 0;
       e.mods |= ((event->scroll.state & PUGL_MOD_ALT) != 0) ? ModifierKeys::altModifier : 0;
       e.mods |= renderer->mouseButtonsDown_;
       e.mouseDownPosition = renderer->lastMouseDownPosition_;
+      e.directionX = (i8)utils::clamp(e.x - renderer->lastMousePosition_.x, -1, 1);
+      e.directionY = (i8)utils::clamp(e.y - renderer->lastMousePosition_.y, -1, 1);
       e.wheelDeltaX = (float)event->scroll.dx;
       e.wheelDeltaY = (float)event->scroll.dy;
 
@@ -614,7 +628,11 @@ namespace Interface
   void setClickedComponent(Renderer *renderer, Component *component)
   {
     if (renderer->mouseDownComponent_)
+    {
       renderer->mouseDownComponent_->componentFlags.isClicked = false;
+      renderer->mouseDownComponent_->componentFlags.isScrollbarYClicked = false;
+      renderer->mouseDownComponent_->componentFlags.isScrollbarXClicked = false;
+    }
     renderer->mouseDownComponent_ = component;
     if (renderer->mouseDownComponent_)
       renderer->mouseDownComponent_->componentFlags.isClicked = true;
@@ -819,9 +837,15 @@ namespace Interface
 
     // if the component has decided to not handle further mouse events
     // this makes the upcoming mouse events orphaned,
-    // which can be handled by other components if acceptsOrphanedMouseEvents == true
+    // which can be handled by other components if acceptsOrphanMouseEvents == true
     if (success && (!mouseDownComponent_ || !mouseDownComponent_->componentFlags.isClicked))
     {
+      if (mouseDownComponent_)
+      {
+        mouseDownComponent_->componentFlags.isScrollbarYClicked = false;
+        mouseDownComponent_->componentFlags.isScrollbarXClicked = false;
+      }
+
       mouseDownComponent_ = nullptr;
       isHandlingOrphanedMouseEvents = true;
     }
@@ -841,7 +865,7 @@ namespace Interface
 
       auto *oldMouseDownComponent = mouseDownComponent_;
 
-      if (oldMouseDownComponent->contains(Point{ event.x, event.y }))
+      //if (oldMouseDownComponent->contains(Point{ event.x, event.y }))
       {
         if (!oldMouseDownComponent->mouseUp(event))
           return;
@@ -850,6 +874,8 @@ namespace Interface
       mouseDownComponent_ = nullptr;
 
       oldMouseDownComponent->componentFlags.isClicked = false;
+      oldMouseDownComponent->componentFlags.isScrollbarYClicked = false;
+      oldMouseDownComponent->componentFlags.isScrollbarXClicked = false;
       if (exited)
         oldMouseDownComponent->mouseExit(event);
     }
@@ -858,7 +884,7 @@ namespace Interface
     {
       mouseHoveredComponent_->componentFlags.isHovered = true;
       mouseHoveredComponent_->mouseEnter(getRelativeEvent(e, mouseHoveredComponent_));
-      if (isHandlingOrphanedMouseEvents && mouseHoveredComponent_->componentFlags.acceptsOrphanedMouseEvents)
+      if (isHandlingOrphanedMouseEvents && mouseHoveredComponent_->componentFlags.acceptsOrphanMouseEvents)
       {
         isHandlingOrphanedMouseEvents = false;
         mouseHoveredComponent_->mouseUp(getRelativeEvent(e, mouseHoveredComponent_));

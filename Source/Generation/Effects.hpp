@@ -24,7 +24,7 @@ namespace Interface
 {
   class Graphics;
   class Control;
-  class EffectModuleSection;
+  struct EffectModuleSection;
 }
 
 namespace Generation
@@ -42,20 +42,22 @@ namespace Generation
       (  ShiftBounds, 1758553325233),
     )
 
-    using CreateUIFn = utils::span<Interface::Control *>(utils::bumpArena *arena, Interface::EffectModuleSection *section);
-
-    enum EffectVtableIndices { CreateVtableIndex, RunVtableIndex, CreateUIVtableIndex, VtableIndexCount };
-    enum class BoundRepresentation : u32 { Normalised, Frequency, BinIndex };
-
     struct EffectData
     {
       EffectData *next{};
 
       Framework::ProcessorMetadata *metadata{};
-      utils::dll<Framework::ParameterValue> *parameters{};
+      Framework::ParameterValue *parameters{};
       usize parameterCount{};
-      NSVGimage *(*createEffectIcon)(Interface::Graphics &g){};
+      NSVGimage *(*createEffectIcon)(Interface::Graphics &g) { };
     };
+
+    using CreateUIFn = utils::span<Interface::Control *>(utils::bumpArena *arena, 
+      Interface::EffectModuleSection *section, EffectData *effectData);
+
+    enum EffectVtableIndices { CreateVtableIndex, RunVtableIndex, CreateUIVtableIndex, VtableIndexCount };
+    enum class BoundRepresentation : u32 { Normalised, Frequency, BinIndex };
+
 
     EffectModule(utils::bumpArena *arena, Plugin::State *state, 
       Framework::ProcessorMetadata *metadata, const EffectModule *other, void *serialisedSave);

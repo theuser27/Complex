@@ -390,14 +390,13 @@ namespace Framework
     // TODO: add modulators
   }
 
-  utils::dll<ParameterValue> *
+  ParameterValue *
   ParameterValue::deserialiseFromJson(Generation::Processor *processor, void *jsonData,
-    ParameterDetails &reference, utils::dll<ParameterValue> *memory)
+    ParameterDetails &reference, ParameterValue *memory)
   {
     COMPLEX_ASSERT(memory);
 
-    auto *linkedList = new (memory) utils::dll<ParameterValue>{ reference };
-    auto *parameter = &linkedList->object;
+    auto *parameter = new (memory) ParameterValue{ reference };
     cjson *data = (cjson *)jsonData;
 
     if (parameter->details_.scale != cjson_GetObjectItem(data, "scale")->vuint)
@@ -499,7 +498,7 @@ namespace Framework
         processor->state->parameterBridges[automationSlot].resetParameterLink(parameter->getParameterLink(), true);
     }
 
-    return linkedList;
+    return parameter;
   }
 }
 
@@ -524,7 +523,7 @@ namespace Generation
       for (auto *parameter = parameters; parameter; parameter = parameter->next)
       {
         cjson *parameterData = cjson_AddTo(serialisedParameters, nullptr, cjson_Object);
-        parameter->object.serialiseToJson(parameterData);
+        parameter->serialiseToJson(parameterData);
       }
     }
     else
@@ -538,12 +537,12 @@ namespace Generation
   }
 
   void deserialiseParametersFromJson(void *jsonData, Framework::ProcessorMetadata *metadata,
-    utils::dll<Framework::ParameterValue> *&parameters, Processor *processor, bool validateParameters)
+    Framework::ParameterValue *&parameters, Processor *processor, bool validateParameters)
   {
     cjson *data = (cjson *)jsonData;
     cjson *parametersCopy = cjson_Duplicate(cjson_GetObjectItem(data, "parameters"), true);
 
-    auto *memory = arranew(processor->arena, utils::dll<Framework::ParameterValue>, metadata->parametersCount, {});
+    auto *memory = arranew(processor->arena, Framework::ParameterValue, metadata->parametersCount, {});
 
     auto insertParameter = [&](auto *parameter)
     {
@@ -563,7 +562,7 @@ namespace Generation
     for (auto *expectedParameter = metadata->parameters;
       expectedParameter; expectedParameter = expectedParameter->next)
     {
-      utils::dll<Framework::ParameterValue> *parameter{};
+      Framework::ParameterValue *parameter{};
       for (auto child = parametersCopy->child; child; child = child->next)
       {
         uuid id = cjson_GetObjectItem(child, "id")->vuint;
@@ -585,7 +584,7 @@ namespace Generation
           utils::string_view{ *errorPath }, expectedParameter->details.displayName, expectedParameter->details.id);
         Interface::showNativeMessageBox("Error opening preset", errorString.data(), Interface::MessageBoxType::Warning);
 
-        parameter = new (memory) utils::dll<Framework::ParameterValue>{ expectedParameter->details };
+        parameter = new (memory) Framework::ParameterValue{ expectedParameter->details };
       }
 
       ++memory;
@@ -672,7 +671,7 @@ namespace Plugin
   static void checkForDynamicParameters(Plugin::State *state, Generation::Processor *processor)
   {
     for (auto parameter = processor->parameters; parameter; parameter = parameter->next)
-      state->registerDynamicParameter(&parameter->object);
+      state->registerDynamicParameter(parameter);
 
     for (auto child = processor->children; child; child = child->next)
       checkForDynamicParameters(state, child);

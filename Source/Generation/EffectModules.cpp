@@ -30,8 +30,8 @@ namespace Generation
   {
     auto *parameter = effectData->parameters;
     for (usize i = 0; i < effectData->parameterCount; (++i), (parameter = parameter->next))
-      if (parameter->object.getParameterId() == id)
-        return &parameter->object;
+      if (parameter->getParameterId() == id)
+        return parameter;
 
     COMPLEX_ASSERT_FALSE("Couldn't find parameter with id: %zu", id);
     return nullptr;
@@ -106,6 +106,8 @@ namespace Generation
       Framework::ComplexDataSource &source, Framework::SimdBuffer *destination,
       u32 binCount, float sampleRate) noexcept;
 
+    utils::span<Interface::Control *> createUINormal(utils::bumpArena *arena, 
+      Interface::EffectModuleSection *section, EffectModule::EffectData *effectData);
 
     // Gate - frequency gating
     //  threshold (stereo) - range[0%, 100%]; threshold is relative to the loudest bin in the spectrum
@@ -135,6 +137,8 @@ namespace Generation
       Framework::ComplexDataSource &source, Framework::SimdBuffer *destination,
       u32 binCount, float sampleRate) noexcept;
 
+    utils::span<Interface::Control *> createUIGate(utils::bumpArena *arena, 
+      Interface::EffectModuleSection *section, EffectModule::EffectData *effectData);
 
 
     // Tilt filter
@@ -147,8 +151,8 @@ namespace Generation
     {
       using namespace Framework;
 
-      EFFECT_VTABLE(Normal, createEffectGeneric, nullptr);
-      EFFECT_VTABLE(Gate, createEffectGeneric, nullptr);
+      EFFECT_VTABLE(Normal, createEffectGeneric, createUINormal);
+      EFFECT_VTABLE(Gate, createEffectGeneric, createUIGate);
 
       auto *arena = structure.getNewArena(COMPLEX_KB(4));
 
@@ -1474,7 +1478,7 @@ namespace Generation
     EffectModule::EffectData *effectData = createFn(module, copy);
     effectData->metadata = processorMetadata;
 
-    utils::dll<Framework::ParameterValue> *effectParameters;
+    Framework::ParameterValue *effectParameters;
     usize parameterCount;
     if (copy)
     {
@@ -1553,11 +1557,11 @@ namespace Generation
 
     auto parameter = parameters;
     for (usize i = 0; i < parameterCount; (++i), (parameter = parameter->next))
-      parametersToSerialise.emplaceBack(&parameter->object);
+      parametersToSerialise.emplaceBack(parameter);
 
     auto *effectParameter = effect->parameters;
     for (usize i = 0; i < effect->parameterCount; (++i), (effectParameter = effectParameter->next))
-      parametersToSerialise.emplaceBack(&effectParameter->object);
+      parametersToSerialise.emplaceBack(effectParameter);
 
     Processor::serialiseToJson(jsonData, parametersToSerialise);
   }
@@ -1599,11 +1603,11 @@ namespace Generation
       parameter && i < activeEffect->parameterCount && i < effect->parameterCount; 
       (parameter = parameter->next), (replacementParameter = replacementParameter->next), (++i))
     {
-      auto *parameterLink = parameter->object.getParameterLink();
+      auto *parameterLink = parameter->getParameterLink();
       if (!parameterLink->hostControl)
         continue;
       
-      parameterLink->hostControl->resetParameterLink(replacementParameter->object.getParameterLink(), false);
+      parameterLink->hostControl->resetParameterLink(replacementParameter->getParameterLink(), false);
     }
 
     currentEffect.store(effect, satomi::memory_order_release);

@@ -10,6 +10,11 @@ namespace Interface
   class DraggableComponent final : public Component
   {
   public:
+    DraggableComponent()
+    {
+      componentFlags.clickable = true;
+    }
+
     bool render(OpenGlWrapper &openGl) override;
 
     bool mouseEnter(const MouseEvent &e) override;
@@ -21,8 +26,6 @@ namespace Interface
 
     bool keyPressed(const KeyPress &keyPress) override;
 
-    void insertDraggedComponent(const MouseEvent &e, bool usePlaceholder);
-
     Component *draggedComponent{};
     Generation::Processor *processor{};
     Component *surfaceToLiftTo{};
@@ -30,10 +33,11 @@ namespace Interface
     DraggableComponent *(*copyingDraggedComponent)(Component *c){};
     
     Point<i32> initialClickPosition{};
-    void (*previousOverridePosition)(Component *c){};
+    bool (*previousOverridePosition)(Component *c){};
     u64 previousParentProcessorStateId{};
     usize previousIndex{};
     Placement previousPlacement{};
     bool isCopying{};
+    bool isDragging{};
   };
 }
