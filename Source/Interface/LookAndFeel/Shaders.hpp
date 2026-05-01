@@ -154,29 +154,29 @@ namespace Interface
                                                                                                   \
       static constexpr utils::typeInfo key = typeId(name);                                        \
       static constexpr const char *uniformNames[] = { COMPLEX_FOR_EACH(                           \
-        COMPLEX_INTERNAL_ITERATE_EXCLUSIVE, COMPLEX_INTERNAL_NAME_DECLARATION, (, (,)),    \
+        COMPLEX_INTERNAL_ITERATE_EXCLUSIVE, COMPLEX_INTERNAL_NAME_DECLARATION, (, (,)),           \
         COMPLEX_DEPAREN(uniformsPack)) "" };                                                      \
       static constexpr const char *insNames[] = { COMPLEX_FOR_EACH(                               \
-        COMPLEX_INTERNAL_ITERATE_EXCLUSIVE, COMPLEX_INTERNAL_NAME_DECLARATION, (, (,)),    \
+        COMPLEX_INTERNAL_ITERATE_EXCLUSIVE, COMPLEX_INTERNAL_NAME_DECLARATION, (, (,)),           \
         COMPLEX_DEPAREN(insPack)) "" };                                                           \
       static constexpr char code[] =                                                              \
         "#version 150\n"                                                                          \
-        COMPLEX_FOR_EACH(COMPLEX_INTERNAL_ITERATE, COMPLEX_INTERNAL_SHADER_DECLARATION,    \
+        COMPLEX_FOR_EACH(COMPLEX_INTERNAL_ITERATE, COMPLEX_INTERNAL_SHADER_DECLARATION,           \
           ("uniform ", ";\n"), COMPLEX_DEPAREN(uniformsPack))                                     \
-        COMPLEX_FOR_EACH(COMPLEX_INTERNAL_ITERATE, COMPLEX_INTERNAL_SHADER_DECLARATION,    \
+        COMPLEX_FOR_EACH(COMPLEX_INTERNAL_ITERATE, COMPLEX_INTERNAL_SHADER_DECLARATION,           \
           ("in ", ";\n"), COMPLEX_DEPAREN(insPack))                                               \
-        COMPLEX_FOR_EACH(COMPLEX_INTERNAL_ITERATE, COMPLEX_INTERNAL_SHADER_DECLARATION,    \
+        COMPLEX_FOR_EACH(COMPLEX_INTERNAL_ITERATE, COMPLEX_INTERNAL_SHADER_DECLARATION,           \
           ("out ", ";\n"), COMPLEX_DEPAREN(outsPack))                                             \
         __VA_ARGS__;                                                                              \
                                                                                                   \
       struct                                                                                      \
       {                                                                                           \
-        COMPLEX_FOR_EACH(COMPLEX_INTERNAL_ITERATE, COMPLEX_INTERNAL_UNIFORM_DECLARATION,   \
+        COMPLEX_FOR_EACH(COMPLEX_INTERNAL_ITERATE, COMPLEX_INTERNAL_UNIFORM_DECLARATION,          \
           (OpenGlUniform, ;), COMPLEX_DEPAREN(uniformsPack))                                      \
       } uniforms{};                                                                               \
       struct                                                                                      \
       {                                                                                           \
-        COMPLEX_FOR_EACH(COMPLEX_INTERNAL_ITERATE, COMPLEX_INTERNAL_IN_DECLARATION,        \
+        COMPLEX_FOR_EACH(COMPLEX_INTERNAL_ITERATE, COMPLEX_INTERNAL_IN_DECLARATION,               \
           (OpenGlAttribute, ;), COMPLEX_DEPAREN(insPack))                                         \
       } ins{};                                                                                    \
                                                                                                   \
@@ -184,20 +184,20 @@ namespace Interface
       {                                                                                           \
         [[maybe_unused]] usize i = 0;                                                             \
                                                                                                   \
-        COMPLEX_FOR_EACH(COMPLEX_INTERNAL_ITERATE, COMPLEX_INTERNAL_IN_DECLARATION,        \
+        COMPLEX_FOR_EACH(COMPLEX_INTERNAL_ITERATE, COMPLEX_INTERNAL_IN_DECLARATION,               \
           (uniforms., .uniformId = glGetUniformLocation(program.id, uniformNames[i++]);),         \
           COMPLEX_DEPAREN(uniformsPack))                                                          \
                                                                                                   \
         i = 0;                                                                                    \
                                                                                                   \
-        COMPLEX_FOR_EACH(COMPLEX_INTERNAL_ITERATE, COMPLEX_INTERNAL_IN_DECLARATION, (ins., \
+        COMPLEX_FOR_EACH(COMPLEX_INTERNAL_ITERATE, COMPLEX_INTERNAL_IN_DECLARATION, (ins.,        \
           .attributeId = (GLuint)glGetAttribLocation(program.id, insNames[i++]));,                \
           COMPLEX_DEPAREN(insPack))                                                               \
       }                                                                                           \
                                                                                                   \
       void setUniforms()                                                                          \
       {                                                                                           \
-        COMPLEX_FOR_EACH(COMPLEX_INTERNAL_ITERATE, COMPLEX_INTERNAL_IN_DECLARATION,        \
+        COMPLEX_FOR_EACH(COMPLEX_INTERNAL_ITERATE, COMPLEX_INTERNAL_IN_DECLARATION,               \
           (uniforms., .set());, COMPLEX_DEPAREN(uniformsPack))                                    \
       }                                                                                           \
                                                                                                   \
@@ -228,14 +228,14 @@ namespace Interface
           (function.template operator()<Ts>(args.second), ...);                                   \
         };                                                                                        \
                                                                                                   \
-        iterate(COMPLEX_FOR_EACH(COMPLEX_INTERNAL_ITERATE_EXCLUSIVE,                       \
+        iterate(COMPLEX_FOR_EACH(COMPLEX_INTERNAL_ITERATE_EXCLUSIVE,                              \
           COMPLEX_INTERNAL_IN_PARAMETER, (, (,)), COMPLEX_DEPAREN(insPack)));                     \
       }                                                                                           \
                                                                                                   \
       void disableAttributes()                                                                    \
       {                                                                                           \
         OpenGlAttribute attributes[] = { COMPLEX_FOR_EACH(                                        \
-          COMPLEX_INTERNAL_ITERATE_EXCLUSIVE, COMPLEX_INTERNAL_IN_DECLARATION,             \
+          COMPLEX_INTERNAL_ITERATE_EXCLUSIVE, COMPLEX_INTERNAL_IN_DECLARATION,                    \
           (ins., (,)), COMPLEX_DEPAREN(insPack)) };                                               \
         for (usize i = 0; i < sizeof(attributes) / sizeof(attributes[0]); ++i)                    \
           if (attributes[i])                                                                      \
@@ -331,8 +331,6 @@ namespace Interface
       kImageVertex,
       kPassthroughVertex,
       kScaleVertex,
-      kRotaryModulationVertex,
-      kLinearModulationVertex,
       kGainMeterVertex,
       kLineVertex,
       kFillVertex,
@@ -353,18 +351,11 @@ namespace Interface
       kRingFragment,
       kDiamondFragment,
       kRoundedCornerFragment,
-      kRoundedRectangleFragment,
       kRoundedRectangleBorderFragment,
-      kRotarySliderFragment,
-      kRotaryModulationFragment,
       kHorizontalSliderFragment,
       kVerticalSliderFragment,
-      kPinSliderFragment,
-      kPlusFragment,
       kHighlightFragment,
       kDotSliderFragment,
-      kLinearModulationFragment,
-      kModulationKnobFragment,
       kLineFragment,
       kFillFragment,
       kBarFragment,

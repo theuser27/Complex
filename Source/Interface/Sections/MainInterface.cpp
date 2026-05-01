@@ -106,18 +106,18 @@ namespace Interface
       auto Point<i32>:: *primary = (parentComponent->componentFlags.vertical) ?
         &Point<i32>::y : &Point<i32>::x;
 
-      metadata->index = 0;
-      for (child = parentProcessor->children; child; (++metadata->index), child = Generation::Processor::getChild(child, 1))
-      {
-        auto position = Point{ (metadata->isMovingUpX) ? child->component->bounds.w : 0,
-          (metadata->isMovingUpY) ? child->component->bounds.h : 0 };
-        position = parentComponent->getRelativePoint(child->component, position);
-        const char *format = (child == metadata->processor) ?
-          " > #%d: x: %d, y: %d, w: %d, h: %d\n" : "   #%d: x: %d, y: %d, w: %d, h: %d\n";
-        COMPLEX_DEBUG_LOG(format, metadata->index, position.x, position.y,
-          child->component->bounds.w, child->component->bounds.h);
-      }
-      COMPLEX_DEBUG_LOG("\n");
+      //metadata->index = 0;
+      //for (child = parentProcessor->children; child; (++metadata->index), child = Generation::Processor::getChild(child, 1))
+      //{
+      //  auto position = Point{ (metadata->isMovingUpX) ? child->component->bounds.w : 0,
+      //    (metadata->isMovingUpY) ? child->component->bounds.h : 0 };
+      //  position = parentComponent->getRelativePoint(child->component, position);
+      //  const char *format = (child == metadata->processor) ?
+      //    " > #%d: x: %d, y: %d, w: %d, h: %d\n" : "   #%d: x: %d, y: %d, w: %d, h: %d\n";
+      //  COMPLEX_DEBUG_LOG(format, metadata->index, position.x, position.y,
+      //    child->component->bounds.w, child->component->bounds.h);
+      //}
+      //COMPLEX_DEBUG_LOG("\n");
 
       metadata->index = 0;
       for (child = parentProcessor->children; child; 
@@ -126,8 +126,7 @@ namespace Interface
         // skip if we encounter the processor we're moving
         if (child == metadata->processor)
         {
-          // if we don't subtract in the processor insertion step 
-          // we will always move down 1 regarless in which position we are
+          // if we count ourselves as well we always move down 1 more than we have to
           --metadata->index;
           continue;
         }

@@ -110,6 +110,8 @@ namespace Interface
   public:
     Label();
 
+    static Range<i32> getSizeMetrics(Component *c, bool isCalculatingVertical);
+
     Control *control{};
     void (*cacheString)(TextEditor *self, Control *control) =
       [](TextEditor *self, Control *control)
@@ -245,6 +247,7 @@ namespace Interface
     float animationValues[1]{};
     Placement dropdownPlacement = Placement::bottom;
     Point<i8> dropdownOffset{ 0, kPopupToElement };
+    bool compensatePadding{};
   private:
     bool isDropdownOpen = false;
     DrawComponent *extraIcon = nullptr;
@@ -284,7 +287,6 @@ namespace Interface
     Label label{};
     SliderValueEditor valueEditor{};
 
-  private:
     TextSelector *modifier{};
   };
 

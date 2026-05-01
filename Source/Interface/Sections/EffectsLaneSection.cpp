@@ -113,7 +113,7 @@ namespace Interface
   {
     static constexpr auto kHoverIncrement = 0.1f;
     tickAnimation(animationValues,
-      {{ true }}, 
+      {{ componentFlags.isHovered || isDropdownOpen }},
       {{ kHoverIncrement }});
     
     strokeRect(openGl, getLocalBounds().toFloat(), 1.0f, 

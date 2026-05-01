@@ -31,7 +31,7 @@ namespace Interface
   void calculateSizes(Component *children, Component *component);
   void calculatePositions(Component *children,
     Component *component, Rectangle<i32> boundsInComponent = {});
-  void animatePosition(Component *component, Component *parent, bool wasParentResized);
+  void animatePosition(Component *component, bool wasParentResized);
 
   PopupDisplay *getPopupDisplay(bool primary);
   PopupSelector *getPopupSelector();
@@ -234,6 +234,7 @@ namespace Interface
       bool animateMovement : 1 = false;
       bool animateFadeAway : 1 = false;
       bool alwaysOnTop : 1 = false;
+      bool noclip : 1 = false;                    // parent doesn't clip component
       bool acceptsOrphanMouseEvents : 1 = false;  // if component can accept mouseUp without mouseDown
                                                   //  happens if another component gives up on handling mouseUp
 

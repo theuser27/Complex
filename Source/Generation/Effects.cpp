@@ -7,12 +7,199 @@
 #include "Framework/simd_math.hpp"
 #include "Framework/simd_utils.hpp"
 #include "Framework/parameter_value.hpp"
+#include "Framework/parameter_bridge.hpp"
 #include "Plugin/Complex.hpp"
 #include "SoundEngine.hpp"
 #include "Interface/LookAndFeel/Skin.hpp"
 
 namespace Generation
 {
+  static EffectData *
+  createEffect(Framework::ProcessorMetadata *processorMetadata, EffectModule *module,
+    EffectData *copy = nullptr, void *jsonData = nullptr)
+  {
+    if (copy)
+      processorMetadata = copy->metadata;
+
+    COMPLEX_ASSERT(processorMetadata->parameters);
+    COMPLEX_ASSERT(processorMetadata->vtable[0]);
+
+    auto *createFn = (EffectData::CreateEffectFn *)processorMetadata->vtable[EffectData::CreateVtableIndex];
+
+    EffectData *effectData = createFn(module, copy);
+    effectData->metadata = processorMetadata;
+
+    Framework::ParameterValue *effectParameters;
+    usize parameterCount;
+    if (copy)
+    {
+      parameterCount = copy->parameterCount;
+      effectParameters = module->createParameters(parameterCount, processorMetadata->parameters, copy->parameters);
+    }
+    else if (jsonData)
+    {
+      parameterCount = processorMetadata->parametersCount;
+      deserialiseParametersFromJson(jsonData, processorMetadata, effectParameters, module, true);
+    }
+    else
+    {
+      parameterCount = processorMetadata->parametersCount;
+      effectParameters = module->createParameters(parameterCount, processorMetadata->parameters);
+    }
+
+    effectData->parameters = effectParameters;
+    effectData->parameterCount = parameterCount;
+
+    auto previousLast = module->parameters->previous;
+    module->parameters->previous = effectData->parameters->previous;
+    effectData->parameters->previous = previousLast;
+    previousLast->next = effectData->parameters;
+
+    return effectData;
+  }
+
+  EffectModule::EffectModule(utils::bumpArena *arena, Plugin::State *state,
+    Framework::ProcessorMetadata *metadata, const EffectModule *other, void *serialisedSave) :
+    Processor{ arena, state, metadata, other }
+  {
+    auto maxBinCount = state->getMaxBinCount();
+    if (other)
+    {
+      if (other->buffer)
+      {
+        buffer = Framework::SimdBuffer::create(arena, other->buffer->channels, maxBinCount);
+        Framework::applyToThisNoMask<utils::MathOperations::Assign>(buffer,
+          other->buffer, buffer->channels, buffer->size);
+      }
+
+      auto [effectOption, _] = getParameter(EffectModule::ModuleType)->getInternalValue<Framework::IndexedData>();
+
+      auto *effect = other->effects;
+      for (; effect && effect->metadata->id != effectOption->processorMetadata->id; effect = effect->next) { }
+
+      effects = createEffect(effectOption->processorMetadata, this, effect);
+      currentEffect.store(effects, satomi::memory_order_release);
+
+      return;
+    }
+
+    dataBuffer = Framework::SimdBuffer::create(arena, utils::kChannelsPerInOut, maxBinCount);
+    buffer = Framework::SimdBuffer::create(arena, utils::kChannelsPerInOut, maxBinCount);
+
+    if (serialisedSave)
+      deserialiseFromJson(serialisedSave);
+    else
+    {
+      parameters = createParameters(metadata->parametersCount, metadata->parameters);
+      parameterCount = metadata->parametersCount;
+    }
+
+    auto [effectOption, _] = getParameter(EffectModule::ModuleType)->getInternalValue<Framework::IndexedData>();
+    effects = createEffect(effectOption->processorMetadata, this, nullptr, serialisedSave);
+    currentEffect.store(effects, satomi::memory_order_release);
+  }
+
+  void EffectModule::serialiseToJson(void *jsonData, utils::span<Framework::ParameterValue *>) const
+  {
+    auto *effect = currentEffect.load(satomi::memory_order_acquire);
+
+    auto parametersToSerialise = utils::vector<Framework::ParameterValue *>{
+      localScratch, effect->parameterCount + parameterCount };
+
+    auto parameter = parameters;
+    for (usize i = 0; i < parameterCount; (++i), (parameter = parameter->next))
+      parametersToSerialise.emplaceBack(parameter);
+
+    auto *effectParameter = effect->parameters;
+    for (usize i = 0; i < effect->parameterCount; (++i), (effectParameter = effectParameter->next))
+      parametersToSerialise.emplaceBack(effectParameter);
+
+    Processor::serialiseToJson(jsonData, parametersToSerialise);
+  }
+
+  EffectData *
+  EffectModule::changeEffect(const Framework::IndexedData *effectOption)
+  {
+    using namespace Framework;
+
+    auto *activeEffect = currentEffect.load(satomi::memory_order_acquire);
+    if (activeEffect->metadata->id == effectOption->processorMetadata->id)
+      return activeEffect;
+
+    // was effect already created?
+    auto *effect = effects;
+    auto *previousEffect = effect;
+    while (effect)
+    {
+      if (effect->metadata->id == effectOption->processorMetadata->id)
+        break;
+
+      previousEffect = effect;
+      effect = effect->next;
+    }
+    
+    // if not, create and link it with the others
+    if (!effect)
+    {
+      effect = createEffect(effectOption->processorMetadata, this);
+      if (previousEffect)
+        previousEffect->next = effect;
+      else
+        effects = effect;
+    }
+
+    // remap mapped parameters to the new effect
+    usize i = 0;
+    for (decltype(activeEffect->parameters) parameter = activeEffect->parameters, replacementParameter = effect->parameters;
+      parameter && i < activeEffect->parameterCount && i < effect->parameterCount; 
+      (parameter = parameter->next), (replacementParameter = replacementParameter->next), (++i))
+    {
+      auto *parameterLink = parameter->getParameterLink();
+      if (!parameterLink->hostControl)
+        continue;
+      
+      parameterLink->hostControl->resetParameterLink(replacementParameter->getParameterLink(), false);
+    }
+
+    currentEffect.store(effect, satomi::memory_order_release);
+
+    return effect;
+  }
+
+  void EffectModule::processEffect(Framework::ComplexDataSource &source, u32 binCount, float sampleRate) noexcept
+  {
+    using namespace Framework;
+    using namespace utils;
+
+    if (!getParameter(ModuleEnabled)->getInternalValue<u32>(sampleRate))
+      return;
+
+    auto *effect = currentEffect.load(satomi::memory_order_acquire);
+
+    // getting exclusive access to data
+    lockAtomic(dataBuffer->dataLock, false, true, WaitMechanism::Spin);
+
+    ((EffectData::RunEffectFn *)effect->metadata->vtable[EffectData::RunVtableIndex])(this, effect, source, dataBuffer, binCount, sampleRate);
+
+    // if the mix is 100% for all channels, we can skip mixing entirely
+    simd_float wetMix = getParameter(ModuleMix)->getInternalValue<simd_float>(sampleRate);
+    if (wetMix != 1.0f)
+    {
+      auto sourceData = source.sourceBuffer->get();
+      auto destinationData = dataBuffer->get();
+      simd_float dryMix = 1.0f - wetMix;
+      for (u32 i = 0; i < binCount; i++)
+        destinationData[i] = simd_float::mulAdd(dryMix * sourceData[i], wetMix, destinationData[i]);
+    }
+
+    // switching to being a reader and allowing other readers to participate
+    // seq_cst because the following atomic could be reordered to happen prior to this one
+    dataBuffer->dataLock.lock.store(1, satomi::memory_order_seq_cst);
+    source.sourceBuffer->dataLock.lock.fetch_sub(1, satomi::memory_order_relaxed);
+
+    source.sourceBuffer = dataBuffer;
+  }
+
   EffectsLane::EffectsLane(utils::bumpArena *arena, Plugin::State *state, Framework::ProcessorMetadata *metadata,
     const EffectsLane *other, void *serialisedSave) : Processor{ arena, state, metadata, other }
   {
@@ -346,6 +533,51 @@ namespace Generation
       }
     }
   }
+}
+
+template<> Generation::Processor *
+createProcessor<Generation::EffectModule>(Plugin::State *state, Framework::ProcessorMetadata *metadata, const void *copy, void *serialisedSave)
+{
+  auto *arena = utils::bumpArena::createNested(state->processorStorage, COMPLEX_MB(1));
+  return anew(state->processorStorage, Generation::EffectModule,
+    { arena, state, metadata, (const Generation::EffectModule *)copy, serialisedSave });
+}
+template<> void *
+initialiseTypeStructure<Generation::EffectModule>(void *, Framework::PluginStructure &structure)
+{
+  using namespace Framework;
+  using namespace Generation;
+
+  auto *arena = structure.getNewArena(COMPLEX_KB(2));
+
+  ProcessorMetadata &effectModule = COMPLEX_STRUCTURE_PROCESSOR(EffectModule, "Effect Module", Generation::Processors::EffectModule, Interface::Skin::kNone);
+  effectModule.flags |= ProcessorMetadata::NoParameterValidationTag;
+  effectModule.parameters =
+    (
+      COMPLEX_STRUCTURE_PARAMETER("Module Type", EffectModule::ModuleType,
+        {
+          .options = COMPLEX_STRUCTURE_INDEXED_DATA()->addChildren({{
+            Utility::initialiseTypeStructure(structure),
+            Filter::initialiseTypeStructure(structure),
+            Dynamics::initialiseTypeStructure(structure),
+            Phase::initialiseTypeStructure(structure),
+            Pitch::initialiseTypeStructure(structure),
+            Destroy::initialiseTypeStructure(structure) }}),
+          .defaultOptionId = Filter::Types::Normal
+        }, ParameterScale::Indexed, {}, ParameterDetails::Automatable | ParameterDetails::Extensible, UpdateFlag::AfterProcess),
+      COMPLEX_STRUCTURE_PARAMETER("Module Enabled", EffectModule::ModuleEnabled, 0.0f, 1.0f, 1.0f, 1.0f,
+        ParameterScale::Toggle, {}, ParameterDetails::Modulatable | ParameterDetails::Automatable, UpdateFlag::Realtime, Framework::printToggleValues),
+      COMPLEX_STRUCTURE_PARAMETER("Module Mix", EffectModule::ModuleMix, 0.0f, 1.0f, 1.0f, 1.0f, ParameterScale::Linear, "%",
+        ParameterDetails::Modulatable | ParameterDetails::Automatable | ParameterDetails::Stereo),
+      COMPLEX_STRUCTURE_PARAMETER("Low Bound", EffectModule::LowBound, 0.0f, 1.0f, 0.0f, 0.0f, ParameterScale::Frequency, " hz",
+        ParameterDetails::Modulatable | ParameterDetails::Automatable | ParameterDetails::Stereo),
+      COMPLEX_STRUCTURE_PARAMETER("High Bound", EffectModule::HighBound, 0.0f, 1.0f, 1.0f, 1.0f, ParameterScale::Frequency, " hz",
+        ParameterDetails::Modulatable | ParameterDetails::Automatable | ParameterDetails::Stereo),
+      COMPLEX_STRUCTURE_PARAMETER("Shift Bounds", EffectModule::ShiftBounds, -1.0f, 1.0f, 0.0f, 0.5f, ParameterScale::Linear, "%",
+        ParameterDetails::Modulatable | ParameterDetails::Automatable | ParameterDetails::Stereo)
+    );
+
+  return &effectModule.computeCounts();
 }
 
 template<> Generation::Processor *

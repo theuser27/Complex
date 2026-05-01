@@ -923,8 +923,8 @@ namespace Plugin
   {
     using namespace Framework;
 
-    dynamicOptions.data = { { miscStorage, false }, ParameterChangeReason::kParameterChangeReasonValues.size() };
-    for (auto reason : ParameterChangeReason::kParameterChangeReasonValues)
+    dynamicOptions.data = { { miscStorage, false }, ParameterChangeReason::values.size() };
+    for (auto reason : ParameterChangeReason::values)
     {
       auto dynamicOptionsArena = utils::bumpArena::createNested(miscStorage, COMPLEX_KB(1));
 

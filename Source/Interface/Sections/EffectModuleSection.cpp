@@ -7,6 +7,7 @@
 #include "Framework/parameter_value.hpp"
 #include "Framework/parameter_bridge.hpp"
 #include "Generation/Effects.hpp"
+#include "Generation/Algorithms.hpp"
 #include "../Components/OpenGlImage.hpp"
 #include "../Components/Control.hpp"
 #include "Popups.hpp"
@@ -117,7 +118,7 @@ namespace Interface
     float topRounding = scaleValue(kInnerPixelRounding);
     float bottomRounding = scaleValue(kOuterPixelRounding);
 
-    fillRect(openGl, getLocalBounds().toFloat(), getColour(Skin::kBody, this),
+    fillRect(openGl, getLocalBounds().toFloat(), getColour(Skin::kBackground, this),
       topRounding, topRounding, bottomRounding, bottomRounding);
 
     nvgBeginPath(openGl);
@@ -275,508 +276,200 @@ namespace Interface
     auto activeEffect = effectModule->currentEffect.load(satomi::memory_order_acquire);
     skinOverride = (Interface::Skin::Override)activeEffect->metadata->userFlags;
 
-    if (auto *createUIPointer = activeEffect->metadata->vtable[Generation::EffectModule::CreateUIVtableIndex])
-      effectControls = ((Generation::EffectModule::CreateUIFn *)createUIPointer)(effectArena, this,
+    if (auto *createUIPointer = activeEffect->metadata->vtable[Generation::EffectData::CreateUIVtableIndex])
+      effectControls = ((Generation::EffectData::CreateUIFn *)createUIPointer)(effectArena, this,
         effectModule->currentEffect.load(satomi::memory_order_acquire));
     
     // TODO: icon
   }
-
-
-
-  /*namespace
-  {
-    std::vector<utils::up<Control>> initFilterParameters(EffectModuleSection *section, utils::string_view type)
-    {
-      using namespace Framework;
-
-      auto *baseEffect = section->getEffect();
-      std::vector<utils::up<Control>> parameters;
-
-      auto initNormal = [&]()
-      {
-        parameters.reserve(Processors::BaseEffect::Filter::Normal::enum_count_filter(Framework::kGetParameterPredicate));
-        auto gain = utils::up<RotarySlider>::create(
-          baseEffect->getParameter(Processors::BaseEffect::Filter::Normal::Gain::id().value()));
-        gain->setShouldUsePlusMinusPrefix(true);
-        parameters.emplace_back(COMPLEX_MOVE(gain));
-        auto cutoff = utils::up<RotarySlider>::create(
-          baseEffect->getParameter(Processors::BaseEffect::Filter::Normal::Cutoff::id().value()));
-        cutoff->setMaxTotalCharacters(6);
-        cutoff->setMaxDecimalCharacters(4);
-        parameters.emplace_back(COMPLEX_MOVE(cutoff));
-        parameters.emplace_back(utils::up<RotarySlider>::create(
-          baseEffect->getParameter(Processors::BaseEffect::Filter::Normal::Slope::id().value())));
-      };
-
-      auto initGate = [&]()
-      {
-        parameters.reserve(Processors::BaseEffect::Filter::Gate::enum_count_filter(Framework::kGetParameterPredicate));
-        auto gain = utils::up<RotarySlider>::create(
-          baseEffect->getParameter(Processors::BaseEffect::Filter::Gate::Gain::id().value()));
-        gain->setShouldUsePlusMinusPrefix(true);
-        parameters.emplace_back(COMPLEX_MOVE(gain));
-        auto threshold = utils::up<RotarySlider>::create(
-          baseEffect->getParameter(Processors::BaseEffect::Filter::Gate::Threshold::id().value()));
-        threshold->setMaxTotalCharacters(6);
-        threshold->setMaxDecimalCharacters(4);
-        threshold->setShouldCheckDbInfinities(true);
-        parameters.emplace_back(COMPLEX_MOVE(threshold));
-        auto tilt = utils::up<RotarySlider>::create(
-          baseEffect->getParameter(Processors::BaseEffect::Filter::Gate::Tilt::id().value()));
-        tilt->setShouldUsePlusMinusPrefix(true);
-        parameters.emplace_back(COMPLEX_MOVE(tilt));
-      };
-
-      auto initRegular = [&]() { };
-
-      switch (Processors::BaseEffect::Filter::enum_value_by_id(type).value())
-      {
-      case Processors::BaseEffect::Filter::Normal:
-        initNormal();
-        break;
-      default:
-      case Processors::BaseEffect::Filter::Gate:
-        initGate();
-        break;
-      case Processors::BaseEffect::Filter::Regular:
-        initRegular();
-        break;
-      }
-
-      return parameters;
-    }
-
-    void arrangeFilterUI(EffectModuleSection *section, juce::Rectangle<int> bounds, utils::string_view type)
-    {
-      using namespace Framework;
-
-      auto arrangeNormal = [&]()
-      {
-        int knobEdgeOffset = scaleValueRoundInt(32);
-        int knobTopOffset = scaleValueRoundInt(32);
-
-        int knobsHeight = scaleValueRoundInt(RotarySlider::kDefaultWidthHeight);
-
-        bounds = bounds.withTrimmedLeft(knobEdgeOffset).withTrimmedRight(knobEdgeOffset)
-          .withTrimmedTop(knobTopOffset).withHeight(knobsHeight);
-        int rotaryInterval = (int)std::round((float)bounds.getWidth() / 3.0f);
-
-        // gain rotary
-        auto *gainSlider = section->getEffectControl(Processors::BaseEffect::Filter::Normal::Gain::id().value());
-        utils::ignore = gainSlider->setSizes(knobsHeight);
-        gainSlider->setPosition(Point{ bounds.getX(), bounds.getY() });
-
-        // cutoff rotary
-        auto *cutoffSlider = section->getEffectControl(Processors::BaseEffect::Filter::Normal::Cutoff::id().value());
-        utils::ignore = cutoffSlider->setSizes(knobsHeight);
-        cutoffSlider->setPosition(Point{ bounds.getX() + rotaryInterval, bounds.getY() });
-
-        // slope rotary
-        auto *slopeSlider = section->getEffectControl(Processors::BaseEffect::Filter::Normal::Slope::id().value());
-        utils::ignore = slopeSlider->setSizes(knobsHeight);
-        slopeSlider->setPosition(Point{ bounds.getX() + 2 * rotaryInterval, bounds.getY() });
-      };
-
-      auto arrangeGate = [&]()
-      {
-        int knobEdgeOffset = scaleValueRoundInt(32);
-        int knobTopOffset = scaleValueRoundInt(32);
-
-        int knobsHeight = scaleValueRoundInt(RotarySlider::kDefaultWidthHeight);
-
-        bounds = bounds.withTrimmedLeft(knobEdgeOffset).withTrimmedRight(knobEdgeOffset)
-          .withTrimmedTop(knobTopOffset).withHeight(knobsHeight);
-        int rotaryInterval = (int)std::round((float)bounds.getWidth() / 3.0f);
-
-        // gain rotary
-        auto *gainSlider = section->getEffectControl(Processors::BaseEffect::Filter::Gate::Gain::id().value());
-        utils::ignore = gainSlider->setSizes(knobsHeight);
-        gainSlider->setPosition(Point{ bounds.getX(), bounds.getY() });
-
-        // threshold rotary
-        auto *thresholdSlider = section->getEffectControl(Processors::BaseEffect::Filter::Gate::Threshold::id().value());
-        utils::ignore = thresholdSlider->setSizes(knobsHeight);
-        thresholdSlider->setPosition(Point{ bounds.getX() + rotaryInterval, bounds.getY() });
-
-        // tilt rotary
-        auto *tiltSlider = section->getEffectControl(Processors::BaseEffect::Filter::Gate::Tilt::id().value());
-        utils::ignore = tiltSlider->setSizes(knobsHeight);
-        tiltSlider->setPosition(Point{ bounds.getX() + 2 * rotaryInterval, bounds.getY() });
-      };
-
-      auto arrangeRegular = [&]() { };
-
-      switch (Processors::BaseEffect::Filter::enum_value_by_id(type).value())
-      {
-      case Processors::BaseEffect::Filter::Normal:
-        arrangeNormal();
-        break;
-      default:
-      case Processors::BaseEffect::Filter::Gate:
-        arrangeGate();
-        break;
-      case Processors::BaseEffect::Filter::Regular:
-        arrangeRegular();
-        break;
-      }
-    }
-
-    std::vector<utils::up<Control>> initDynamicsParameters(EffectModuleSection *section, utils::string_view type)
-    {
-      using namespace Framework;
-
-      auto *baseEffect = section->getEffect();
-      std::vector<utils::up<Control>> parameters;
-
-      auto initContrast = [&]()
-      {
-        parameters.emplace_back(utils::up<RotarySlider>::create(
-          baseEffect->getParameter(Processors::BaseEffect::Dynamics::Contrast::Depth::id().value())));
-      };
-
-      auto initClip = [&]()
-      {
-        parameters.emplace_back(utils::up<RotarySlider>::create(
-          baseEffect->getParameter(Processors::BaseEffect::Dynamics::Clip::Threshold::id().value())));
-      };
-      
-      auto initCompressor = [&]() { };
-
-      switch (Processors::BaseEffect::Dynamics::enum_value_by_id(type).value())
-      {
-      case Processors::BaseEffect::Dynamics::Contrast:
-        initContrast();
-        break;
-      case Processors::BaseEffect::Dynamics::Clip:
-        initClip();
-        break;
-      case Processors::BaseEffect::Dynamics::Compressor:
-        initCompressor();
-        break;
-      default:
-        break;
-      }
-
-      return parameters;
-    }
-
-    void arrangeDynamicsUI(EffectModuleSection *section, juce::Rectangle<int> bounds, utils::string_view type)
-    {
-      using namespace Framework;
-
-      auto arrangeContrast = [&]()
-      {
-        // TEST
-        int knobEdgeOffset = scaleValueRoundInt(32);
-        int knobTopOffset = scaleValueRoundInt(32);
-
-        int knobsHeight = scaleValueRoundInt(RotarySlider::kDefaultWidthHeight);
-
-        // depth rotary and label
-        auto *depthSlider = section->getEffectControl(Processors::BaseEffect::Dynamics::Contrast::Depth::id().value());
-        utils::ignore = depthSlider->setSizes(knobsHeight);
-        depthSlider->setPosition(Point{ bounds.getX() + knobEdgeOffset, bounds.getY() + knobTopOffset });
-      };
-
-      auto arrangeClip = [&]()
-      {
-        // TEST
-        int knobEdgeOffset = scaleValueRoundInt(32);
-        int knobTopOffset = scaleValueRoundInt(32);
-
-        int knobsHeight = scaleValueRoundInt(RotarySlider::kDefaultWidthHeight);
-
-        // depth rotary and label
-        auto *thresholdSlider = section->getEffectControl(Processors::BaseEffect::Dynamics::Clip::Threshold::id().value());
-        utils::ignore = thresholdSlider->setSizes(knobsHeight);
-        thresholdSlider->setPosition(Point{ bounds.getX() + knobEdgeOffset, bounds.getY() + knobTopOffset });
-      };
-
-      auto arrangeCompressor = [&]() { };
-
-      switch (Processors::BaseEffect::Dynamics::enum_value_by_id(type).value())
-      {
-      case Processors::BaseEffect::Dynamics::Contrast:
-        arrangeContrast();
-        break;
-      case Processors::BaseEffect::Dynamics::Clip:
-        arrangeClip();
-        break;
-      case Processors::BaseEffect::Dynamics::Compressor:
-        arrangeCompressor();
-        break;
-      default:
-        break;
-      }
-    }
-
-    std::vector<utils::up<Control>> initPhaseParameters(EffectModuleSection *section, utils::string_view type)
-    {
-      using namespace Framework;
-
-      auto *baseEffect = section->getEffect();
-      std::vector<utils::up<Control>> parameters;
-
-      auto initShift = [&]()
-      {
-        parameters.reserve(Processors::BaseEffect::Phase::Shift::enum_count_filter(Framework::kGetParameterPredicate));
-        parameters.emplace_back(utils::up<RotarySlider>::create(
-          baseEffect->getParameter(Processors::BaseEffect::Phase::Shift::PhaseShift::id().value())));
-        parameters.emplace_back(utils::up<TextSelector>::create(
-          baseEffect->getParameter(Processors::BaseEffect::Phase::Shift::Slope::id().value())));
-        parameters.emplace_back(utils::up<RotarySlider>::create(
-          baseEffect->getParameter(Processors::BaseEffect::Phase::Shift::Interval::id().value())));
-        parameters.emplace_back(utils::up<RotarySlider>::create(
-          baseEffect->getParameter(Processors::BaseEffect::Phase::Shift::Offset::id().value())));
-      };
-
-      switch (Processors::BaseEffect::Phase::enum_value_by_id(type).value())
-      {
-      case Processors::BaseEffect::Phase::Shift:
-        initShift();
-        break;
-      default:
-      case Processors::BaseEffect::Phase::Transform:
-        break;
-      }
-
-      return parameters;
-    }
-
-    void arrangePhaseUI(EffectModuleSection *section, juce::Rectangle<int> bounds, utils::string_view type)
-    {
-      using namespace Framework;
-
-      auto arrangeNormal = [&]()
-      {
-        int knobEdgeOffset = scaleValueRoundInt(32);
-        int knobTopOffset = scaleValueRoundInt(32);
-
-        int knobsHeight = scaleValueRoundInt(RotarySlider::kDefaultWidthHeight);
-
-        bounds = bounds.withTrimmedLeft(knobEdgeOffset).withTrimmedRight(knobEdgeOffset)
-          .withTrimmedTop(knobTopOffset).withHeight(knobsHeight);
-        int rotaryInterval = (int)std::round((float)bounds.getWidth() / 3.0f);
-
-        auto *slopeDropdown = utils::as<TextSelector>(section->getEffectControl(Processors::BaseEffect::Phase::Shift::Slope::id().value()));
-        auto *shiftSlider = utils::as<RotarySlider>(section->getEffectControl(Processors::BaseEffect::Phase::Shift::PhaseShift::id().value()));
-        shiftSlider->setModifier(slopeDropdown);
-        shiftSlider->setLabelPlacement(Placement::right);
-        utils::ignore = shiftSlider->setSizes(knobsHeight);
-        shiftSlider->setPosition({ bounds.getX(), bounds.getY() });
-
-
-        auto *intervalSlider = section->getEffectControl(Processors::BaseEffect::Phase::Shift::Interval::id().value());
-        utils::as<RotarySlider>(intervalSlider)->setMaxDecimalCharacters(3);
-        utils::ignore = intervalSlider->setSizes(knobsHeight);
-        intervalSlider->setPosition({ bounds.getX() + rotaryInterval, bounds.getY() });
-
-        auto *offsetSlider = section->getEffectControl(Processors::BaseEffect::Phase::Shift::Offset::id().value());
-        utils::as<RotarySlider>(offsetSlider)->setMaxTotalCharacters(6);
-        utils::as<RotarySlider>(offsetSlider)->setMaxDecimalCharacters(4);
-        utils::ignore = offsetSlider->setSizes(knobsHeight);
-        offsetSlider->setPosition({ bounds.getX() + 2 * rotaryInterval, bounds.getY() });
-      };
-
-      switch (Processors::BaseEffect::Phase::enum_value_by_id(type).value())
-      {
-      case Processors::BaseEffect::Phase::Shift:
-        arrangeNormal();
-        break;
-      default:
-      case Processors::BaseEffect::Phase::Transform:
-        break;
-      }
-    }
-
-    std::vector<utils::up<Control>> initPitchParameters(EffectModuleSection *section, utils::string_view type)
-    {
-      using namespace Framework;
-
-      auto *baseEffect = section->getEffect();
-      std::vector<utils::up<Control>> parameters;
-
-      auto initResample = [&]()
-      {
-        parameters.emplace_back(utils::up<RotarySlider>::create(
-          baseEffect->getParameter(Processors::BaseEffect::Pitch::Resample::Shift::id().value())));
-      };
-
-      auto initConstShift = [&]()
-      {
-        parameters.emplace_back(utils::up<RotarySlider>::create(
-          baseEffect->getParameter(Processors::BaseEffect::Pitch::ConstShift::Shift::id().value())));
-      };
-
-      switch (Processors::BaseEffect::Pitch::enum_value_by_id(type).value())
-      {
-      case Processors::BaseEffect::Pitch::Resample:
-        initResample();
-        break;
-      case Processors::BaseEffect::Pitch::ConstShift:
-        initConstShift();
-        break;
-      default:
-        break;
-      }
-
-      return parameters;
-    }
-
-    void arrangePitchUI(EffectModuleSection *section, juce::Rectangle<int> bounds, utils::string_view type)
-    {
-      using namespace Framework;
-
-      auto arrangeResample = [&]()
-      {
-        int knobEdgeOffset = scaleValueRoundInt(32);
-        int knobTopOffset = scaleValueRoundInt(32);
-
-        int knobsHeight = scaleValueRoundInt(RotarySlider::kDefaultWidthHeight);
-
-        auto *shiftSlider = section->getEffectControl(Processors::BaseEffect::Pitch::Resample::Shift::id().value());
-        utils::ignore = shiftSlider->setSizes(knobsHeight);
-        shiftSlider->setPosition(Point{ bounds.getX() + knobEdgeOffset, bounds.getY() + knobTopOffset });
-      };
-
-      auto arrangeConstShift = [&]()
-      {
-        int knobEdgeOffset = scaleValueRoundInt(32);
-        int knobTopOffset = scaleValueRoundInt(32);
-
-        int knobsHeight = scaleValueRoundInt(RotarySlider::kDefaultWidthHeight);
-
-        auto *shiftSlider = section->getEffectControl(Processors::BaseEffect::Pitch::ConstShift::Shift::id().value());
-        utils::ignore = shiftSlider->setSizes(knobsHeight);
-        shiftSlider->setPosition(Point{ bounds.getX() + knobEdgeOffset, bounds.getY() + knobTopOffset });
-      };
-
-      switch (Processors::BaseEffect::Pitch::enum_value_by_id(type).value())
-      {
-      case Processors::BaseEffect::Pitch::Resample:
-        arrangeResample();
-        break;
-      case Processors::BaseEffect::Pitch::ConstShift:
-        arrangeConstShift();
-        break;
-      default:
-        break;
-      }
-    }
-
-    std::vector<utils::up<Control>> initDestroyParameters(EffectModuleSection *section, utils::string_view type)
-    {
-      using namespace Framework;
-
-      auto *baseEffect = section->getEffect();
-      std::vector<utils::up<Control>> parameters;
-
-      auto initReinterpret = [&]()
-      {
-        parameters.emplace_back(utils::up<RotarySlider>::create(
-          baseEffect->getParameter(Processors::BaseEffect::Destroy::Reinterpret::Attenuation::id().value())));
-        parameters.emplace_back(utils::up<TextSelector>::create(
-          baseEffect->getParameter(Processors::BaseEffect::Destroy::Reinterpret::Mapping::id().value())));
-      };
-
-      switch (Processors::BaseEffect::Destroy::enum_value_by_id(type).value())
-      {
-      case Processors::BaseEffect::Destroy::Reinterpret:
-        initReinterpret();
-        break;
-      default:
-        break;
-      }
-
-      return parameters;
-    }
-
-    void arrangeDestroyUI(EffectModuleSection *section, juce::Rectangle<int> bounds, utils::string_view type)
-    {
-      using namespace Framework;
-
-      auto arrangeReinterpret = [&]()
-      {
-        int knobEdgeOffset = scaleValueRoundInt(32);
-        int knobTopOffset = scaleValueRoundInt(32);
-
-        int knobsHeight = scaleValueRoundInt(RotarySlider::kDefaultWidthHeight);
-        int dropdownHeight = scaleValueRoundInt(TextSelector::kDefaultTextSelectorHeight);
-
-        int sliderToDropdownMargin = scaleValueRoundInt(16);
-
-        bounds = bounds.withTrimmedLeft(knobEdgeOffset).withTrimmedRight(knobEdgeOffset)
-          .withTrimmedTop(knobTopOffset).withHeight(knobsHeight);
-
-        auto *attenuationSlider = utils::as<RotarySlider>(section->getEffectControl(Processors::BaseEffect::Destroy::Reinterpret::Attenuation::id().value()));
-        attenuationSlider->setLabelPlacement(Placement::right);
-        auto sliderBounds = attenuationSlider->setSizes(knobsHeight);
-        attenuationSlider->setPosition({ bounds.getX(), bounds.getY() });
-
-        auto *mappingDropdown = utils::as<TextSelector>(section->getEffectControl(Processors::BaseEffect::Destroy::Reinterpret::Mapping::id().value()));
-        mappingDropdown->setLabelPlacement(Placement::above | Placement::left);
-        mappingDropdown->addLabel();
-        auto dropdownBounds = mappingDropdown->setSizes(dropdownHeight);
-        mappingDropdown->setPosition({ 
-          bounds.getX() + sliderBounds.getRight() - dropdownBounds.getX() + sliderToDropdownMargin,
-          bounds.getY() + sliderBounds.getHeight() / 2 });
-      };
-
-      switch (Processors::BaseEffect::Destroy::enum_value_by_id(type).value())
-      {
-      case Processors::BaseEffect::Destroy::Reinterpret:
-        arrangeReinterpret();
-        break;
-      default:
-        break;
-      }
-    }
-  }*/
-
 }
 
 namespace Generation
 {
-  namespace Filter
+#define findParameterWithId(parameters, id) utils::findIf(parameters, [](Framework::ParameterValue *item) { return item->getParameterId() == id; })
+
+  static Interface::CombinationRotarySlider *
+  createRotary(utils::bumpArena *arena, Framework::ParameterValue *parameter)
   {
-    utils::span<Interface::Control *> 
-    createUINormal(utils::bumpArena *arena, Interface::EffectModuleSection *section, 
-      EffectModule::EffectData *effectData)
-    {
-      using namespace Interface;
+    using namespace Interface;
 
-      Component *holder = anew(arena, Component, {});
-      holder->sizingFlags = (Component::SizingFlags)(Component::GrowableX | Component::GrowableY);
-      holder->padding = { 32, 0, 32, 0 };
-
-      utils::vector<Control *> controls{ arena, effectData->parameterCount };
-      auto *parameter = effectData->parameters;
-      for (usize i = 0; i < effectData->parameterCount; (++i), (parameter = parameter->next))
-      {
-        auto *rotary = anew(arena, CombinationRotarySlider, {});
-        rotary->placement = Placement::justifyX;
-        rotary->rotary.arena = arena;
-        rotary->rotary.changeLinkedParameter(*parameter);
-        controls.emplaceBack(&rotary->rotary);
-        holder->addChildComponent(rotary);
-      }
-
-      section->effectHolder.addChildComponent(holder);
-
-      return controls;
-    }
-
-    utils::span<Interface::Control *>
-    createUIGate(utils::bumpArena *arena, Interface::EffectModuleSection *section,
-      EffectModule::EffectData *effectData)
-    {
-      using namespace Interface;
-
-
-      return {};
-    }
+    auto *rotary = anew(arena, CombinationRotarySlider, {});
+    rotary->placement = Placement::justifyX;
+    rotary->rotary.arena = arena;
+    rotary->rotary.changeLinkedParameter(*parameter);
+    return rotary;
   }
+
+  static utils::span<Interface::Control *>
+  genericKnobUI(utils::bumpArena *arena, Interface::EffectModuleSection *section,
+    EffectData *effectData)
+  {
+    using namespace Interface;
+
+    Component *holder = anew(arena, Component, {});
+    holder->sizingFlags = (Component::SizingFlags)(Component::GrowableX | Component::GrowableY);
+    holder->padding = { 32, 0, 32, 0 };
+
+    utils::vectornd<Control *> controls{ arena, effectData->parameterCount };
+    auto *parameter = effectData->parameters;
+    for (usize i = 0; i < effectData->parameterCount; (++i), (parameter = parameter->next))
+    {
+      auto *rotary = createRotary(arena, parameter);
+      controls.emplaceBack(&rotary->rotary);
+      holder->addChildComponent(rotary);
+    }
+
+    section->effectHolder.addChildComponent(holder);
+
+    return controls;
+  }
+
+
+
+  utils::span<Interface::Control *> 
+  Filter::createUINormal(utils::bumpArena *arena, Interface::EffectModuleSection *section,
+    EffectData *effectData)
+  {
+    return genericKnobUI(arena, section, effectData);
+  }
+
+  utils::span<Interface::Control *>
+  Filter::createUIGate(utils::bumpArena *arena, Interface::EffectModuleSection *section,
+    EffectData *effectData)
+  {
+    using namespace Interface;
+    
+    Component *holder = anew(arena, Component, {});
+    holder->sizingFlags = (Component::SizingFlags)(Component::GrowableX | Component::GrowableY);
+    holder->padding = { 32, 0, 32, 0 };
+
+    auto *gainRotary = createRotary(arena, findParameterWithId(effectData->parameters, Gate::Gain));
+    holder->addChildComponent(gainRotary);
+
+    auto *thresholdRotary = createRotary(arena, findParameterWithId(effectData->parameters, Gate::Threshold));
+    holder->addChildComponent(thresholdRotary);
+
+    auto *tiltRotary = createRotary(arena, findParameterWithId(effectData->parameters, Gate::Tilt));
+    holder->addChildComponent(tiltRotary);
+
+    section->effectHolder.addChildComponent(holder);
+
+    utils::vectornd<Control *> controls{ arena,
+      {{ &gainRotary->rotary, &thresholdRotary->rotary, &tiltRotary->rotary }} };
+    return controls;
+  }
+
+  utils::span<Interface::Control *> 
+  Dynamics::createUIContrast(utils::bumpArena *arena, 
+    Interface::EffectModuleSection *section, EffectData *effectData)
+  {
+    return genericKnobUI(arena, section, effectData);
+  }
+
+  utils::span<Interface::Control *> 
+  Dynamics::createUIClip(utils::bumpArena *arena,
+    Interface::EffectModuleSection *section, EffectData *effectData)
+  {
+    return genericKnobUI(arena, section, effectData);
+  }
+
+  utils::span<Interface::Control *> 
+  Phase::createUIShift(utils::bumpArena *arena, 
+    Interface::EffectModuleSection *section, EffectData *effectData)
+  {
+    using namespace Interface;
+
+    Component *holder = anew(arena, Component, {});
+    holder->sizingFlags = (Component::SizingFlags)(Component::GrowableX | Component::GrowableY);
+    holder->padding = { 32, 0, 32, 0 };
+
+    auto *shiftRotary = createRotary(arena, findParameterWithId(effectData->parameters, Shift::PhaseShift));
+    holder->addChildComponent(shiftRotary);
+
+    auto *intervalRotary = createRotary(arena, findParameterWithId(effectData->parameters, Shift::Interval));
+    holder->addChildComponent(intervalRotary);
+
+    auto *offsetRotary = createRotary(arena, findParameterWithId(effectData->parameters, Shift::Offset));
+    holder->addChildComponent(offsetRotary);
+    
+    auto *selector = anew(arena, TextSelector, {});
+    selector->arena = arena;
+    selector->changeLinkedParameter(*findParameterWithId(effectData->parameters, Shift::Slope));
+    shiftRotary->setModifier(selector);
+
+    section->effectHolder.addChildComponent(holder);
+
+    utils::vectornd<Control *> controls{ arena, 
+      {{ &shiftRotary->rotary, &intervalRotary->rotary, &offsetRotary->rotary, selector }} };
+    return controls;
+  }
+
+  utils::span<Interface::Control *> 
+  Pitch::createUIResample(utils::bumpArena *arena, 
+    Interface::EffectModuleSection *section, EffectData *effectData)
+  {
+    using namespace Interface;
+
+    Component *holder = anew(arena, Component, {});
+    holder->sizingFlags = (Component::SizingFlags)(Component::GrowableX | Component::GrowableY);
+    holder->padding = { 32, 0, 32, 0 };
+
+    auto *shiftRotary = createRotary(arena, findParameterWithId(effectData->parameters, Resample::Shift));
+    holder->addChildComponent(shiftRotary);
+
+    section->effectHolder.addChildComponent(holder);
+
+    utils::vectornd<Control *> controls{ arena, {{ &shiftRotary->rotary }} };
+    return controls;
+  }
+
+  utils::span<Interface::Control *>
+  Pitch::createUIFrequencyShift(utils::bumpArena *arena,
+    Interface::EffectModuleSection *section, EffectData *effectData)
+  {
+    return genericKnobUI(arena, section, effectData);
+  }
+
+  utils::span<Interface::Control *> 
+  Destroy::createUIReinterpret(utils::bumpArena *arena, 
+    Interface::EffectModuleSection *section, EffectData *effectData)
+  {
+    using namespace Interface;
+
+    Component *holder = anew(arena, Component, {});
+    holder->sizingFlags = (Component::SizingFlags)(Component::GrowableX | Component::GrowableY);
+    holder->padding = { 32, 0, 32, 0 };
+
+    auto *attenuationRotary = createRotary(arena, findParameterWithId(effectData->parameters, Reinterpret::Attenuation));
+    holder->addChildComponent(attenuationRotary);
+
+    auto *mappingSelector = anew(arena, TextSelector, {});
+    mappingSelector->changeLinkedParameter(*findParameterWithId(effectData->parameters, Reinterpret::Mapping));
+    mappingSelector->arena = arena;
+    mappingSelector->placement = Placement::left;
+    auto *label = anew(arena, Label, {});
+    label->control = mappingSelector;
+    label->textPlacement = Placement::left;
+    label->placement = Placement::left;
+    label->overrideSize = [](Component *c, bool isCalculatingVertical)
+    {
+      c->padding = c->next->padding;
+      return Label::getSizeMetrics(c, isCalculatingVertical);
+    };
+    Component *mappingHolder = anew(arena, Component, {});
+    mappingHolder->componentFlags.vertical = true;
+    mappingHolder->placement = Placement::justifyX;
+    mappingHolder->addChildComponent(label);
+    mappingHolder->addChildComponent(mappingSelector);
+    holder->addChildComponent(mappingHolder);
+
+    section->effectHolder.addChildComponent(holder);
+
+    utils::vectornd<Control *> controls{ arena, {{ &attenuationRotary->rotary, mappingSelector }} };
+    return controls;
+  }
+
+#undef findParameterWithId
 }
 
 namespace Generation

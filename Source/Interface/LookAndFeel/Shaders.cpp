@@ -88,39 +88,6 @@ namespace
     "    gl_Position.a = 1.0;\n"
     "}\n";
 
-  constexpr char kRotaryModulationVertexShader[] =
-    "#version 150\n"
-    "in vec4 position;\n"
-    "in vec2 coordinates;\n"
-    "in vec4 range;\n"
-    "in float meter_radius;\n"
-    "\n"
-    "out vec2 coordinates_out;\n"
-    "out vec4 range_out;\n"
-    "out float meter_radius_out;\n"
-    "\n"
-    "void main() {\n"
-    "    coordinates_out = coordinates;\n"
-    "    range_out = range;\n"
-    "    meter_radius_out = meter_radius;\n"
-    "    gl_Position = position;\n"
-    "}\n";
-
-  constexpr char kLinearModulationVertexShader[] =
-    "#version 150\n"
-    "in vec4 position;\n"
-    "in vec2 coordinates;\n"
-    "in vec4 range;\n"
-    "\n"
-    "out vec2 coordinates_out;\n"
-    "out vec4 range_out;\n"
-    "\n"
-    "void main() {\n"
-    "    coordinates_out = coordinates;\n"
-    "    range_out = range;\n"
-    "    gl_Position = position;\n"
-    "}\n";
-
   constexpr char kGainMeterVertexShader[] =
     "#version 150\n"
     "in vec4 position;\n"
@@ -228,22 +195,6 @@ namespace
     "    fragColor.a = color.a * alpha;\n"
     "}\n";
 
-  // rounded corners on the outside of sections
-  constexpr char kRoundedRectangleFragmentShader[] =
-    "#version 150\n"
-    "out vec4 fragColor;\n"
-    "uniform vec4 color;\n"
-    "in vec2 dimensions_out;\n"
-    "in vec2 coordinates_out;\n"
-    "uniform float rounding;\n"
-    "void main() {\n"
-    "    vec2 center_offset = abs(coordinates_out) * dimensions_out - dimensions_out;\n"
-    "    float delta_center = length(max(center_offset + vec2(rounding, rounding), vec2(0.0, 0.0)));\n"
-    "    float alpha = clamp((rounding - delta_center) * 0.5 + 0.5, 0.0, 1.0);\n"
-    "    fragColor = color;\n"
-    "    fragColor.a = color.a * alpha;\n"
-    "}\n";
-
   // the border around the popup menus and currently selected modulator
   constexpr char kRoundedRectangleBorderFragmentShader[] =
     "#version 150\n"
@@ -264,85 +215,6 @@ namespace
     "    float alpha = clamp(border_delta + 0.5, 0.0, 1.0) * clamp(-inside_border_delta + 0.5, 0.0, 1.0);\n"
     "    fragColor = color;\n"
     "    fragColor.a = color.a * overall_alpha * alpha;\n"
-    "}\n";
-
-  // overall knob design
-  constexpr char kRotarySliderFragmentShader[] =
-    "#version 150\n"
-    "out vec4 fragColor;\n"
-    "uniform vec4 color;\n"
-    "uniform vec4 alt_color;\n"
-    "uniform vec4 thumb_color;\n"
-    "in vec2 dimensions_out;\n"
-    "uniform float thickness;\n"
-    "uniform float thumb_amount;\n"
-    "uniform float start_pos;\n"
-    "uniform float max_arc;\n"
-    "in vec4 shader_values_out;\n"
-    "in vec2 coordinates_out;\n"
-    "void main() {\n"
-    "    float rads = atan(coordinates_out.x, coordinates_out.y);\n"
-    "    float full_radius = 0.5 * dimensions_out.x;\n"
-    "    float delta_center = length(coordinates_out) * full_radius;\n"
-    "    float center_arc = full_radius - thickness * 0.5 - 0.5;\n"
-    "    float delta_arc = delta_center - center_arc;\n"
-    "    float distance_arc = abs(delta_arc);\n"
-    "    float dist_curve_left = max(center_arc * (rads - max_arc), 0.0);\n"
-    "    float dist_curve = max(center_arc * (-rads - max_arc), dist_curve_left);\n"
-    "    float alpha = clamp(thickness * 0.5 - length(vec2(distance_arc, dist_curve)) + 0.5, 0.0, 1.0);\n"
-    "    float delta_rads = rads - shader_values_out.x;\n"
-    "    float color_step1 = step(0.0, delta_rads);\n"
-    "    float color_step2 = step(0.0, start_pos - rads);\n"
-    "    float color_step = abs(color_step2 - color_step1);\n"
-    "    fragColor = alt_color * color_step + color * (1.0 - color_step);\n"
-    "    fragColor.a = fragColor.a * alpha;\n"
-    "    float thumb_length = full_radius * thumb_amount;\n"
-    "    float thumb_x = sin(delta_rads) * delta_center;\n"
-    "    float thumb_y = cos(delta_rads) * delta_center - (0.5 * center_arc);\n"
-    "    float adjusted_thumb_y = min(thumb_y + thumb_length, 0.0);\n"
-    "    float outside_arc_step = step(0.0, thumb_y);\n"
-    "    float thumb_y_distance = thumb_y * outside_arc_step + adjusted_thumb_y * (1.0 - outside_arc_step);\n"
-    "    float thumb_distance = length(vec2(thumb_x, thumb_y_distance));\n"
-    "    float thumb_alpha = clamp(thickness * 0.5 - thumb_distance + 0.5, 0.0, 1.0);\n"
-    "    fragColor = fragColor * (1.0 - thumb_alpha) + thumb_color * thumb_alpha;\n"
-    "}\n";
-
-  // modulation ring around the knob
-  constexpr char kRotaryModulationFragmentShader[] =
-    "#version 150\n"
-    "out vec4 fragColor;\n"
-    "in vec2 coordinates_out;\n"
-    "in vec2 dimensions_out;\n"
-    "in vec4 shader_values_out;\n"
-    "uniform float thickness;\n"
-    "uniform vec4 color;\n"
-    "uniform vec4 alt_color;\n"
-    "uniform vec4 mod_color;\n"
-    "uniform float overall_alpha;\n"
-    "uniform float start_pos;\n"
-    "const float kPi = 3.14159265359;\n"
-    "\n"
-    "void main() {\n"
-    "    float full_radius = dimensions_out.x * 0.5;\n"
-    "    float dist = length(coordinates_out) * full_radius;\n"
-    "    float inner_radius = full_radius - thickness;\n"
-    "    float dist_outer_amp = clamp((full_radius - dist) * 0.5 + 0.5, 0.0, 1.0);\n"
-    "    float dist_amp = dist_outer_amp * clamp((dist - inner_radius) * 0.5 + 0.5, 0.0, 1.0);\n"
-    "    float rads = mod(atan(coordinates_out.x, coordinates_out.y) + kPi + start_pos, 2.0 * kPi) - kPi;\n"
-    "    float rads_amp_low = clamp(full_radius * 0.5 * (rads - shader_values_out.x) + 1.0, 0.0, 1.0);\n"
-    "    float rads_amp_high = clamp(full_radius * 0.5 * (shader_values_out.y - rads) + 1.0, 0.0, 1.0);\n"
-    "    float rads_amp_low_stereo = clamp(full_radius * 0.5 * (rads - shader_values_out.z) + 0.5, 0.0, 1.0);\n"
-    "    float rads_amp_high_stereo = clamp(full_radius * 0.5 * (shader_values_out.a - rads) + 0.5, 0.0, 1.0);\n"
-    "    float alpha = rads_amp_low * rads_amp_high;\n"
-    "    float alpha_stereo = rads_amp_low_stereo * rads_amp_high_stereo;\n"
-    "    float alpha_center = min(alpha, alpha_stereo);\n"
-    "    vec4 color_left = (alpha - alpha_center) * color;\n"
-    "    vec4 color_right = (alpha_stereo - alpha_center) * alt_color;\n"
-    "    vec4 color_center = alpha_center * mod_color;\n"
-    "    vec4 out_color = color * (1.0 - alpha_stereo) + alt_color * alpha_stereo;\n"
-    "    out_color = out_color * (1.0 - alpha_center) + color_center * alpha_center;\n"
-    "    out_color.a = max(alpha, alpha_stereo) * overall_alpha * dist_amp;\n"
-    "    fragColor = out_color;\n"
     "}\n";
 
   // horizontal slider 
@@ -405,74 +277,6 @@ namespace
     "    fragColor = fragColor * (1.0 - thumb_alpha) + thumb_color * thumb_alpha;\n"
     "}\n";
 
-  // modulation line next to a slider 
-  constexpr char kLinearModulationFragmentShader[] =
-    "#version 150\n"
-    "out vec4 fragColor;\n"
-    "in vec2 coordinates_out;\n"
-    "in vec4 shader_values_out;\n"
-    "uniform vec4 color;\n"
-    "uniform vec4 alt_color;\n"
-    "uniform vec4 mod_color;\n"
-    "\n"
-    "void main() {\n"
-    "    float position = coordinates_out.x * 0.5 + 0.5;\n"
-    "    float dist1 = clamp(200.0 * (position - shader_values_out.x), 0.0, 1.0);\n"
-    "    float dist2 = clamp(200.0 * (shader_values_out.y - position), 0.0, 1.0);\n"
-    "    float stereo_dist1 = clamp(200.0 * (position - shader_values_out.z), 0.0, 1.0);\n"
-    "    float stereo_dist2 = clamp(200.0 * (shader_values_out.a - position), 0.0, 1.0);\n"
-    "    float alpha = dist1 * dist2;\n"
-    "    float alpha_stereo = stereo_dist1 * stereo_dist2;\n"
-    "    float alpha_center = min(alpha, alpha_stereo);\n"
-    "    vec4 color_left = (alpha - alpha_center) * color;\n"
-    "    vec4 color_right = (alpha_stereo - alpha_center) * alt_color;\n"
-    "    vec4 color_center = alpha_center * mod_color;\n"
-    "    vec4 color = color_left + color_right + color_center;\n"
-    "    color.a = max(alpha, alpha_stereo);\n"
-    "    fragColor = color;\n"
-    "}\n";
-
-  // coordinates_out are ndc (the same values as the position in
-  //		except when OpenGlCorners when they are coordinates inside the quad itself)
-  // dimensions_out are the absolute dimensions of the object 
-  //		(almost always act as a uniform but why it isn't one idk)
-  constexpr char kPinSliderFragmentShader[] =
-    "#version 150\n"
-    "out vec4 fragColor;\n"
-    "uniform vec4 color;\n"
-    "in vec2 dimensions_out;\n"
-    "in vec2 coordinates_out;\n"
-    CONSTRAIN_AXIS_FUNCTION
-    "\n"
-    "void main() {\n"
-    "    float pinXAlpha = constrainAxis(coordinates_out.x, 0.2, 0.0);\n"
-    "    float pinYAlpha = clamp((coordinates_out.y + 1.0) * 0.75, 0.05, 1.0);\n"
-    "    float alpha = pinXAlpha * pinYAlpha;\n"
-    "    fragColor = color;\n"
-    "    fragColor.a = color.a * alpha;\n"
-    "}\n";
-
-  // plus thickness is (width / dimensions)
-  constexpr char kPlusFragmentShader[] =
-    "#version 150\n"
-    "out vec4 fragColor;\n"
-    "uniform vec4 color;\n"
-    "uniform float thickness;\n"
-    "in vec2 coordinates_out;\n"
-    CONSTRAIN_AXIS_FUNCTION
-    "\n"
-    "void main() {\n"
-    "    vec2 coordinates_out_norm = (coordinates_out * 0.5) + 0.5;\n"
-    "    float normBound = (1.0 - thickness) * 0.5;\n"
-    "    float xAlpha1 = constrainAxis(coordinates_out_norm.x, normBound, 0.0);\n"
-    "    float xAlpha2 = constrainAxis(-coordinates_out_norm.x, normBound, 1.0);\n"
-    "    float yAlpha1 = constrainAxis(coordinates_out_norm.y, normBound, 0.0);\n"
-    "    float yAlpha2 = constrainAxis(-coordinates_out_norm.y, normBound, 1.0);\n"
-    "    float alpha = (1.0 - xAlpha1 - xAlpha2) + (1.0 - yAlpha1 - yAlpha2);\n"
-    "    fragColor = color;\n"
-    "    fragColor.a = color.a * alpha;\n"
-    "}\n";
-
   constexpr char kHighlightFragmentShader[] =
     "#version 150\n"
     "out vec4 fragColor;\n"
@@ -492,41 +296,6 @@ namespace
     "    float alpha = (areBoundsSwitched + 1.0 - pinXAlpha1 - pinXAlpha2);\n"
     "    fragColor = color;\n"
     "    fragColor.a *= alpha;\n"
-    "}\n";
-
-  // modulation knob when hovered over a control
-  constexpr char kModulationKnobFragmentShader[] =
-    "#version 150\n"
-    "out vec4 fragColor;\n"
-    "uniform vec4 color;\n"
-    "uniform vec4 alt_color;\n"
-    "uniform vec4 mod_color;\n"
-    "uniform vec4 background_color;\n"
-    "uniform vec4 thumb_color;\n"
-    "in vec2 dimensions_out;\n"
-    "uniform float thickness;\n"
-    "uniform float overall_alpha;\n"
-    "in vec4 shader_values_out;\n"
-    "in vec2 coordinates_out;\n"
-    "void main() {\n"
-    "    float rads = atan(coordinates_out.x, -coordinates_out.y);\n"
-    "    float full_radius = 0.5 * dimensions_out.x;\n"
-    "    float delta_center = length(coordinates_out) * full_radius;\n"
-    "    float circle_alpha = clamp(full_radius - delta_center, 0.0, 1.0);\n"
-    "    float delta_rads = rads - shader_values_out.x;\n"
-    "    float color_amount = clamp(delta_rads * max(delta_center, 1.0) * 1.6, 0.0, 1.0);\n"
-    "    fragColor = alt_color * color_amount + color * (1.0 - color_amount);\n"
-    "    fragColor.a = fragColor.a * circle_alpha;\n"
-    "    float center_arc = full_radius - thickness * 0.5 - 0.5;\n"
-    "    float delta_arc = delta_center - center_arc;\n"
-    "    float distance_arc = abs(delta_arc);\n"
-    "    float thumb_alpha = clamp(thickness * 0.5 - distance_arc + 0.5, 0.0, 1.0);\n"
-    "    fragColor = fragColor * (1.0 - thumb_alpha) + thumb_color * thumb_alpha;\n"
-    "    float mod_alpha1 = clamp(full_radius * 0.48 - delta_center, 0.0, 1.0) * mod_color.a;\n"
-    "    float mod_alpha2 = clamp(full_radius * 0.35 - delta_center, 0.0, 1.0) * mod_color.a;\n"
-    "    fragColor = fragColor * (1.0 - mod_alpha1) + background_color * mod_alpha1;\n"
-    "    fragColor = fragColor * (1.0 - mod_alpha2) + mod_color * mod_alpha2;\n"
-    "    fragColor.a = fragColor.a * overall_alpha;\n"
     "}\n";
 
   // coordinates_out are ndc (the same values as the position in
@@ -678,8 +447,6 @@ namespace
     case kImageVertex: return kImageVertexShader;
     case kPassthroughVertex: return kPassthroughVertexShader;
     case kScaleVertex: return kScaleVertexShader;
-    case kRotaryModulationVertex: return kRotaryModulationVertexShader;
-    case kLinearModulationVertex: return kLinearModulationVertexShader;
     case kGainMeterVertex: return kGainMeterVertexShader;
     case kLineVertex: return kLineVertexShader;
     case kFillVertex: return kFillVertexShader;
@@ -710,18 +477,11 @@ namespace
     case kRingFragment: return kRingFragmentShader;
     case kDiamondFragment: return kDiamondFragmentShader;
     case kRoundedCornerFragment: return kRoundedCornerFragmentShader;
-    case kRoundedRectangleFragment: return kRoundedRectangleFragmentShader;
     case kRoundedRectangleBorderFragment: return kRoundedRectangleBorderFragmentShader;
-    case kRotarySliderFragment: return kRotarySliderFragmentShader;
-    case kRotaryModulationFragment: return kRotaryModulationFragmentShader;
     case kHorizontalSliderFragment: return kHorizontalSliderFragmentShader;
     case kVerticalSliderFragment: return kVerticalSliderFragmentShader;
-    case kPinSliderFragment: return kPinSliderFragmentShader;
-    case kPlusFragment: return kPlusFragmentShader;
     case kHighlightFragment: return kHighlightFragmentShader;
     case kDotSliderFragment: return kDotSliderFragmentShader;
-    case kLinearModulationFragment: return kLinearModulationFragmentShader;
-    case kModulationKnobFragment: return kModulationKnobFragmentShader;
     default: break;
     }
 
@@ -970,7 +730,7 @@ namespace Interface
       auto [parent, bounds, isClippingFromStack] = openGl.parentStack[i - 1];
 
       if (isClippingFromStack && !isNotClipping)
-        bounds.withZeroOrigin().intersectRectangle(scissorBounds);
+        scissorBounds = bounds.withZeroOrigin().getIntersection(scissorBounds);
 
       viewportBounds = viewportBounds + bounds.getPosition();
       scissorBounds = scissorBounds + bounds.getPosition();

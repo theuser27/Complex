@@ -317,7 +317,7 @@ static void fixDeserialisedProcessorsStateIds(Plugin::State *state)
 
     while (true)
     {
-      auto iter = utils::find_if(*dynamicOptionFixups, [&oldId](Framework::IndexedData *item) 
+      auto iter = utils::findIf(*dynamicOptionFixups, [&oldId](Framework::IndexedData *item) 
         { return (item->flags & Framework::IndexedData::StateIdFlag) && item->stateId == oldId; });
       if (iter == dynamicOptionFixups->end())
         break;
@@ -689,11 +689,11 @@ namespace Plugin
 
     checkForDynamicParameters(state.get(), state->soundEngine);
 
-    auto min = utils::min(state->parameterBridges.size(), Generation::SoundEngine::kParametersValues.size());
+    auto min = utils::min(state->parameterBridges.size(), Generation::SoundEngine::valuesParameters.size());
     for (usize i = 0; i < min; ++i)
     {
       auto *parameter = state->getProcessorParameter(state->soundEngine->stateId,
-        Generation::SoundEngine::kParametersValues[i]);
+        Generation::SoundEngine::valuesParameters[i]);
       COMPLEX_ASSERT(parameter);
       state->parameterBridges[i].resetParameterLink(parameter->getParameterLink(), true);
     }
@@ -726,7 +726,7 @@ namespace Plugin
     state->soundEngine = (Generation::SoundEngine *)state->createProcessor(
       Generation::Processors::SoundEngine, soundEngineJson);
 
-    for (auto &id : Framework::ParameterChangeReason::kParameterChangeReasonValues)
+    for (auto &id : Framework::ParameterChangeReason::values)
       state->updateDynamicParameters(id);
 
     Framework::ParameterBridge::notifyParameterChange();

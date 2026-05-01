@@ -569,13 +569,13 @@ namespace utils
     // the following functions assume keys ARE unique
 
     constexpr auto find(const Key &key) 
-    { return utils::find_if(data, [&key](const auto &v) { return v.first == key; }); }
+    { return utils::findIf(data, [&key](const auto &v) { return v.first == key; }); }
 
     constexpr auto find(const Key &key) const 
-    { return utils::find_if(data, [&key](const auto &v) { return v.first == key; }); }
+    { return utils::findIf(data, [&key](const auto &v) { return v.first == key; }); }
 
-    constexpr auto find_if(const auto &functor)  { return utils::find_if(data, functor); }
-    constexpr auto find_if(const auto &functor) const  { return utils::find_if(data, functor); }
+    constexpr auto findIf(const auto &functor)  { return utils::findIf(data, functor); }
+    constexpr auto findIf(const auto &functor) const  { return utils::findIf(data, functor); }
 
     constexpr auto add(Key key, Value value)
     {
@@ -594,7 +594,7 @@ namespace utils
 
     constexpr void erase(const Key &key) 
     {
-      auto iter = utils::find_if(data, [&key](const auto &v) { return v.first == key; });
+      auto iter = utils::findIf(data, [&key](const auto &v) { return v.first == key; });
       if (iter != data.end())
         data.erase(iter);
     }

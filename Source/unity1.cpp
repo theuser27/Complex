@@ -4,8 +4,8 @@
 #include "Framework/parameters.cpp"
 
 #include "Generation/Processor.cpp"
-#include "Generation/EffectModules.cpp"
-#include "Generation/EffectsLane.cpp"
+#include "Generation/Algorithms.cpp"
+#include "Generation/Effects.cpp"
 #include "Generation/SoundEngine.cpp"
 
 #include "Interface/Components/Control.cpp"

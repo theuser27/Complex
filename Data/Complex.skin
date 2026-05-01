@@ -79,8 +79,7 @@
       "Widget Primary 1": "0xffa8a8a8"
     },
     "Dynamics Module": {
-      "Background": "0xff151515",
-      "Body": "0xff1f1f1f",
+      "Background": "0xff1f1f1f",
       "Background Element": "0xff313131",
       "Widget Primary 1": "0xffc67dff",
       "Widget Secondary 1": "0xff4c4c4c",
@@ -88,8 +87,7 @@
       "Widget Background 1": "0xff353535"
     },
     "Filter Module": {
-      "Background": "0xff151515",
-      "Body": "ff1f1f1f",
+      "Background": "0xff1f1f1f",
       "Background Element": "0xff313131",
       "Widget Primary 1": "0xff7bf087",
       "Widget Secondary 1": "0xff4c4c4c",
@@ -97,8 +95,7 @@
       "Widget Background 1": "0xff353535"
     },
     "Phase Module": {
-      "Background": "0xff151515",
-      "Body": "0xff1f1f1f",
+      "Background": "0xff1f1f1f",
       "Background Element": "0xff313131",
       "Widget Primary 1": "0xff59c4f2",
       "Widget Secondary 1": "0xff4c4c4c",
@@ -106,8 +103,7 @@
       "Widget Background 1": "0xff353535"
     },
     "Pitch Module": {
-      "Background": "0xff151515",
-      "Body": "0xff1f1f1f",
+      "Background": "0xff1f1f1f",
       "Background Element": "0xff313131",
       "Widget Primary 1": "0xffff6b00",
       "Widget Secondary 1": "0xff4c4c4c",
@@ -115,8 +111,7 @@
       "Widget Background 1": "0xff353535"
     },
     "Destroy Module": {
-      "Background": "0xff151515",
-      "Body": "0xff1f1f1f",
+      "Background": "0xff1f1f1f",
       "Background Element": "0xff313131",
       "Widget Primary 1": "0xffeb5353",
       "Widget Secondary 1": "0xff4c4c4c",

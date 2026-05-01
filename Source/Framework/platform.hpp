@@ -146,6 +146,7 @@
 #else
   #define COMPLEX_DEBUG_TRAP ((void)0)
   #define COMPLEX_LOG(...) ((void)0)
+  #define COMPLEX_DEBUG_LOG(...) ((void)0)
   #define COMPLEX_ASSERT(...) ((void)0)
   #define COMPLEX_ASSERT_FALSE(...) ((void)0)
 #endif

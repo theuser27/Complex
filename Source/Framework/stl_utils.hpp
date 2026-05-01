@@ -132,7 +132,6 @@ namespace utils
   template<typename T> struct underlying_type { using type = __underlying_type(T); };
   template<typename T> using underlying_type_t = typename underlying_type<T>::type;
 
-  #define COMPLEX_ARRAY_SIZE(array) (sizeof(array) / sizeof(array[0]))
   #define COMPLEX_FWD(...) static_cast<decltype(__VA_ARGS__)&&>(__VA_ARGS__)
   #define COMPLEX_MOVE(...) static_cast<::utils::remove_reference_t<decltype(__VA_ARGS__)>&&>(__VA_ARGS__)
   #define COMPLEX_SWAP(x, y) { auto temp_____ = COMPLEX_MOVE(x); (x) = COMPLEX_MOVE(y); y = COMPLEX_MOVE(temp_____); }
@@ -455,6 +454,7 @@ namespace utils
     dll *next{};
   };
 
+  // inserts a node into a doubly-linked list
   // half connected - first element is connected to the last but not the other way around
   template<typename T>
   constexpr void insertDllHalfConnected(T *toInsert, T *insertBefore, T *&startingElement)
@@ -488,6 +488,7 @@ namespace utils
     }
   }
 
+  // removes a node from a doubly-linked list
   // half connected - first element is connected to the last but not the other way around
   template<typename T>
   constexpr void removeDllHalfConnected(T *toRemove, T *&startingElement)
@@ -506,13 +507,30 @@ namespace utils
     toRemove->next = nullptr;
   }
 
+  // indexes a singly/doubly-linked list
+  template<typename T>
+  constexpr T *
+  indexSll(T *start, usize index, T *sentinel = nullptr)
+  {
+    for (usize i = 0; i < index && start != sentinel; (++i), (start = start->next)) { }
+    return start;
+  }
+
+  template<typename T>
+  constexpr T *
+  findIf(T *start, const auto &predicate, T *sentinel = nullptr)
+  {
+    for (; start != sentinel && !predicate(start); start = start->next) { }
+    return start;
+  }
+
 #define COMPLEX_INTERNAL_DEFINE_ENUM_MAPPING(name, ...) name = __VA_ARGS__
 #define COMPLEX_ENUM(name, /*valueIdPairs*/...) \
   namespace name { enum Value : uuid { COMPLEX_FOR_EACH(COMPLEX_INTERNAL_ITERATE, COMPLEX_INTERNAL_DEFINE_ENUM_MAPPING, (), (,), __VA_ARGS__) }; \
-  inline constexpr auto k##name##Values = utils::array{ COMPLEX_FOR_EACH(COMPLEX_INTERNAL_ITERATE_EXCLUSIVE, COMPLEX_INTERNAL_GET_1, (), (,), __VA_ARGS__) }; }
+  inline constexpr auto values = utils::array{ COMPLEX_FOR_EACH(COMPLEX_INTERNAL_ITERATE_EXCLUSIVE, COMPLEX_INTERNAL_GET_1, (), (,), __VA_ARGS__) }; }
 #define COMPLEX_ENUM_LOCAL(name, /*valueIdPairs*/...) \
   enum name : uuid { COMPLEX_FOR_EACH(COMPLEX_INTERNAL_ITERATE, COMPLEX_INTERNAL_DEFINE_ENUM_MAPPING, (), (,), __VA_ARGS__) }; \
-  static constexpr auto k##name##Values = utils::array{ COMPLEX_FOR_EACH(COMPLEX_INTERNAL_ITERATE_EXCLUSIVE, COMPLEX_INTERNAL_GET_1, (name::), (,), __VA_ARGS__) };
+  static constexpr auto values##name = utils::array{ COMPLEX_FOR_EACH(COMPLEX_INTERNAL_ITERATE_EXCLUSIVE, COMPLEX_INTERNAL_GET_1, (name::), (,), __VA_ARGS__) };
 
   template<typename T, usize Size>
   class array
@@ -978,7 +996,7 @@ namespace utils
 
   template<typename T, auto Size>
   constexpr auto 
-  find_if(const T(&array)[Size], const auto &predicate)
+  findIf(const T(&array)[Size], const auto &predicate)
   {
     decltype(Size) i = 0;
     for (; i < Size; ++i)
@@ -1001,7 +1019,7 @@ namespace utils
   }
 
   constexpr auto 
-  find_if(auto &container, const auto &predicate)
+  findIf(auto &container, const auto &predicate)
   {
     auto begin = container.begin();
     auto end = container.end();
@@ -1013,15 +1031,15 @@ namespace utils
   }
 
   constexpr usize 
-  find_index(auto &container, const auto &element)
+  findIndex(auto &container, const auto &element)
   { return (usize)(utils::find(container, element) - container.begin()); }
 
   constexpr usize 
-  find_index_if(auto &container, const auto &predicate)
-  { return (usize)(utils::find_if(container, predicate) - container.begin()); }
+  findIndexIf(auto &container, const auto &predicate)
+  { return (usize)(utils::findIf(container, predicate) - container.begin()); }
 
   constexpr bool 
-  all_of(auto &container, const auto &predicate)
+  allOf(auto &container, const auto &predicate)
   {
     auto begin = container.begin();
     auto end = container.end();
@@ -1033,7 +1051,7 @@ namespace utils
   }
 
   constexpr bool
-  none_of(auto &container, const auto &predicate)
+  noneOf(auto &container, const auto &predicate)
   {
     auto begin = container.begin();
     auto end = container.end();

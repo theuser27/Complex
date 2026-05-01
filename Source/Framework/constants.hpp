@@ -1,4 +1,4 @@
-
+﻿
 // Created: 2023-06-11 03:25:10
 
 #pragma once
@@ -33,6 +33,7 @@ namespace common
   inline constexpr float kLog10ConversionMult = 0.30102999566f;
   static constexpr float kOctaveToDecadeConversionMult = 3.321928095f;
   inline constexpr float kInfDb = 764.616188299f;
+  // 20 * −126 / log2(10)
   inline constexpr float kMinusInfDb = -758.595589072f;
 
   // FFT constants; internal processing relies that sizes be powers of 2

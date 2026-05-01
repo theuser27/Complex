@@ -245,11 +245,11 @@ namespace Interface
       childrenMinSizes += (i64)(child->bounds.*minMember);
       sizes.max += (i64)(child->bounds.*maxMember) + extra;
 
-      auto iter = utils::find_if(sortedMin, [&](const Interface::Component *c)
+      auto iter = utils::findIf(sortedMin, [&](const Interface::Component *c)
         { return c->bounds.*minMember > child->bounds.*minMember; });
       sortedMin.emplace(iter, child);
 
-      iter = utils::find_if(sortedMax, [&](const Interface::Component *c)
+      iter = utils::findIf(sortedMax, [&](const Interface::Component *c)
         { return c->bounds.*maxMember > child->bounds.*maxMember; });
       sortedMax.emplace(iter, child);
     }
@@ -617,12 +617,12 @@ namespace Interface
     bool wasThisResized = component->bounds.withZeroOrigin() != component->lastBounds.withZeroOrigin();
     for (auto *child = children; child; child = child->next)
     {
-      animatePosition(child, component, wasThisResized);
+      animatePosition(child, wasThisResized);
       calculatePositions(child->children, child);
     }
   }
 
-  void animatePosition(Component *component, Component *parent, bool wasParentResized)
+  void animatePosition(Component *component, bool wasParentResized)
   {
     static constexpr float kMoveDelay = 1.0f; //s
 
@@ -725,9 +725,6 @@ namespace Interface
       auto offset = Point{ (i32)::roundf(oldScrollOffset.x) - (i32)::roundf(component->scrollOffset.x),
         (i32)::roundf(oldScrollOffset.y) - (i32)::roundf(component->scrollOffset.y) };
 
-      COMPLEX_DEBUG_LOG("offset: (x, y): (%f, %f)\n", 
-        oldScrollOffset.x - component->scrollOffset.x, oldScrollOffset.y - component->scrollOffset.y);
-
       for (auto child = component->children; child; child = child->next)
       {
         if (child->placement & Placement::custom)
@@ -812,9 +809,16 @@ namespace Interface
   bool
   Component::mouseWheelMove(const MouseEvent &event)
   {
+    if (event.mods.test(ModifierKeys::ctrlModifier))
+      return false;
+
+    bool isHorizontal = event.mods.test(ModifierKeys::shiftModifier);
     auto multiplier = 20.0f * uiRelated.scale;
-    return offsetScroll(this, event.wheelDeltaX * multiplier, 
-      event.wheelDeltaY * multiplier, event.mods.test(ModifierKeys::shiftModifier));
+    offsetScroll(this, event.wheelDeltaX * multiplier, 
+      event.wheelDeltaY * multiplier, isHorizontal);
+
+    return (isHorizontal) ? (sizingFlags & Component::ScrollableX) :
+      (sizingFlags & Component::ScrollableY);
   }
 
   Point<i32>
@@ -985,7 +989,7 @@ namespace Interface
       auto parentBounds = parentComponent->bounds;
 
       if (!isNotClipping)
-        parentBounds.withZeroOrigin().intersectRectangle(scissorBounds);
+        scissorBounds = parentBounds.withZeroOrigin().getIntersection(scissorBounds);
 
       scissorBounds = scissorBounds + parentBounds.getPosition();
       isNotClipping &= parentComponent != ignoreClipIncluding;
@@ -1258,12 +1262,13 @@ namespace Interface
         continue;
 
       // is the child completely outside our bounds
-      if (auto childBounds = child->bounds; !bounds.withZeroOrigin().intersectRectangle(childBounds))
+      if (getLocalBounds().getIntersection(child->bounds).isEmpty())
         continue;
 
       nvgSave(openGl);
-      nvgIntersectScissor(openGl, (float)child->bounds.x, (float)child->bounds.y,
-        (float)child->bounds.w, (float)child->bounds.h);
+      if (!child->componentFlags.noclip)
+        nvgIntersectScissor(openGl, (float)child->bounds.x, (float)child->bounds.y,
+          (float)child->bounds.w, (float)child->bounds.h);
       nvgTranslate(openGl, (float)child->bounds.x, (float)child->bounds.y);
       child->doRender(openGl);
       nvgRestore(openGl);

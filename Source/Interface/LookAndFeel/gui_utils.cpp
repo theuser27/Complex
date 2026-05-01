@@ -164,4 +164,6 @@ namespace Interface
     long colour = ::strtoul(integer, nullptr, base);
     return Colour{ (u32)colour };
   }
+  
+  Colour::operator NVGcolor() const { return nvgRGBA(r, g, b, a); }
 }

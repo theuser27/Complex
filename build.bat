@@ -10,19 +10,31 @@ set data=0
 
 echo:
 
+where cl > NUL 2> NUL
+if %ERRORLEVEL% neq 0 (
+
+  echo Trying to set up Native Tools Command Prompt
+
+  if defined VS2019INSTALLDIR (
+    call "%VS2019INSTALLDIR%\VC\Auxiliary\Build\vcvarsall.bat" x64
+  ) else if defined VS2022INSTALLDIR (
+    call "%VS2022INSTALLDIR%\VC\Auxiliary\Build\vcvarsall.bat" x64
+  ) else if defined VS2026INSTALLDIR (
+    call "%VS2026INSTALLDIR%\VC\Auxiliary\Build\vcvarsall.bat" x64
+  ) else (
+    echo Cannot find Visual Studio install directory
+    echo Please locate it and call vcvarsall.bat in command prompt before running the build
+    echo The path should be something like C:\Program Files\Microsoft Visual Studio\<Year>\<Version>\VC\Auxiliary\Build\vcvarsall.bat
+    goto :EOF
+  )
+  echo:
+)
+
 for %%a in (%*) do set "%%~a=1"
 if "%data%"=="1"                                                set vst=0        && set debug=0      && set full=0
 if "%standalone%"=="1"           echo [standalone build]     && set vst=0        && set clap=0       && set full=0
 if "%clap%"=="1"                 echo [clap build]           && set vst=0        && set standalone=0 && set full=0
 if "%vst%"=="1"                  echo [vst build]            && set standalone=0 && set clap=0       && set full=0
-
-where cl > NUL 2> NUL
-if %ERRORLEVEL% neq 0 (
-  echo cl.exe wasn't found
-  echo trying to set up native tools cmd
-  call "%VS2022INSTALLDIR%\VC\Auxiliary\Build\vcvarsall.bat" x64
-  echo:
-)
 
 if "%full%"=="1" (
 

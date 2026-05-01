@@ -3,8 +3,6 @@
 
 #pragma once
 
-#include "nanovg/nanovg.h"
-
 #include "Framework/stl_utils.hpp"
 
 extern "C"
@@ -95,6 +93,7 @@ namespace Interface
     justifyY = top | bottom,
 
     // leaves user to do manual positioning
+    // doesn't participate in parent's fit sizing
     custom = 1 << 4,
   };
 
@@ -278,26 +277,6 @@ namespace Interface
       return { nx, ny, nw, nh };
     }
 
-    constexpr bool intersectRectangle(T &otherX, T &otherY, T &otherW, T &otherH) const
-    {
-      auto maxX = utils::max(otherX, x);
-      otherW = utils::min(otherX + otherW, x + w) - maxX;
-
-      auto maxY = utils::max(otherY, y);
-      otherH = utils::min(otherY + otherH, y + h) - maxY;
-
-      otherX = maxX; 
-      otherY = maxY;
-
-      return otherW > T() && otherH > T();
-    }
-
-    constexpr bool intersectRectangle(Rectangle<T> &rectangleToClip) const
-    {
-      return intersectRectangle(rectangleToClip.x, rectangleToClip.y,
-        rectangleToClip.w, rectangleToClip.h);
-    }
-
     constexpr Rectangle getUnion(Rectangle other) const
     {
       if (other.isEmpty())
@@ -432,7 +411,7 @@ namespace Interface
     void toString(utils::string &outString) const;
     static Colour fromString(const char *integer, int base = 16);
 
-    operator NVGcolor() const { return nvgRGBA(r, g, b, a); }
+    operator NVGcolor() const;
     friend constexpr bool operator==(Colour lhs, Colour rhs) = default;
   };
 

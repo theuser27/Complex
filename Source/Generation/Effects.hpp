@@ -6,7 +6,7 @@
 #include "Processor.hpp"
 
 #include "Framework/simd_buffer.hpp"
-#include "Interface/LookAndFeel/Skin.hpp"
+#include "Algorithms.hpp"
 
 extern "C" typedef struct NSVGimage NSVGimage;
 
@@ -42,20 +42,6 @@ namespace Generation
       (  ShiftBounds, 1758553325233),
     )
 
-    struct EffectData
-    {
-      EffectData *next{};
-
-      Framework::ProcessorMetadata *metadata{};
-      Framework::ParameterValue *parameters{};
-      usize parameterCount{};
-      NSVGimage *(*createEffectIcon)(Interface::Graphics &g) { };
-    };
-
-    using CreateUIFn = utils::span<Interface::Control *>(utils::bumpArena *arena, 
-      Interface::EffectModuleSection *section, EffectData *effectData);
-
-    enum EffectVtableIndices { CreateVtableIndex, RunVtableIndex, CreateUIVtableIndex, VtableIndexCount };
     enum class BoundRepresentation : u32 { Normalised, Frequency, BinIndex };
 
 

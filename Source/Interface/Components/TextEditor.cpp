@@ -79,29 +79,17 @@ namespace Interface
   bool 
   TextEditor::render(OpenGlWrapper &openGl)
   {
-    //paintDebugRect(openGl, bounds.toFloat());
-
     if (!text.empty())
     {
-      renderText(text, font, getLocalBounds().toFloat(), openGl,
-        getColour(textColour, this), textPlacement, editorFlags.wordWrap);
-
-      //nvgBeginPath(openGl);
-      //openGl.cache->setFont(font, scaleValue((float)bounds.h));
-      //float ascent, lineHeight;
-      //nvgFillColor(openGl, getColour(textColour, this));
-      //nvgTextMetrics(openGl, &ascent, nullptr, &lineHeight);
-      //nvgTextAlign(openGl, NVG_ALIGN_CENTER | NVG_ALIGN_BASELINE);
-      //nvgText(openGl.g, ((float)bounds.w) * 0.5f,
-      //  ::ceilf(((float)bounds.h - lineHeight) * 0.5f + ascent),
-      //  text.data(), text.data() + text.size());
+      auto textBounds = getLocalBounds().toFloat().trimmed(scaleValueRound(padding.toFloat()));
+      renderText(text, font, textBounds, openGl, getColour(textColour, this), textPlacement, editorFlags.wordWrap);
     }
 
     return true;
   }
 
-  static Range<i32>
-  getLabelTextMetrics(Component *c, bool isCalculatingVertical)
+  Range<i32>
+  Label::getSizeMetrics(Component *c, bool isCalculatingVertical)
   {
     auto *self = (Label *)c;
 
@@ -113,7 +101,10 @@ namespace Interface
       COMPLEX_ASSERT(self->control, "Forgot to set reference to control in label");
 
       if (!self->text.capacity())
+      {
+        COMPLEX_ASSERT(self->control, "Forgot to set control arena");
         self->text.reserve(self->control->arena, (1 << 5) - 1);
+      }
 
       self->cacheString(self, self->control);
       uiRelated.cache->setFont(self->font, lineHeight);
@@ -132,7 +123,7 @@ namespace Interface
 
   Label::Label()
   {
-    overrideSize = getLabelTextMetrics;
+    overrideSize = getSizeMetrics;
   }
 
   SliderValueEditor::SliderValueEditor()

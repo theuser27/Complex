@@ -1135,7 +1135,7 @@ namespace utils
   MemoryLogger::contains(void *pointer) const
   {
     utils::ScopedLock g{ writeLock, false, utils::WaitMechanism::Spin };
-    auto iter = utils::find_if(memoryLogger.toLog, [pointer](const auto &item) { return item == pointer; });
+    auto iter = utils::findIf(memoryLogger.toLog, [pointer](const auto &item) { return item == pointer; });
     return iter != memoryLogger.toLog.end();
   }
 }

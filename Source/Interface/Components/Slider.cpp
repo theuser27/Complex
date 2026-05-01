@@ -480,6 +480,14 @@ namespace Interface
       {
         float height = (float)self->text.desiredSize.y;
         self->padding.x = self->padding.w = (u16)::ceilf(height * 0.25f);
+
+        if (self->compensatePadding)
+        {
+          if (self->placement == Placement::left)
+            self->margin.x = -(i16)self->padding.x;
+          else if (self->placement == Placement::right)
+            self->margin.w = -(i16)self->padding.w;
+        }
       }
 
       return Range<i32>{ -1, -1 };
@@ -743,33 +751,45 @@ namespace Interface
   {
     addChildComponent(&rotary);
 
-    infoSection.margin = { 6, 0, 0, 0 };
+    infoSection.padding = { 6, 0, 0, 0 };
     infoSection.componentFlags.vertical = true;
     addChildComponent(&infoSection);
 
-    label.sizingFlags |= Component::SameAsSiblingsX;
     label.control = &rotary;
     label.textPlacement = Placement::left;
+    label.placement = Placement::left;
+    label.overrideSize = [](Component *c, bool isCalculatingVertical)
+    {
+      c->padding = {};
+      auto *combined = (CombinationRotarySlider *)c->parent->parent;
+      if (combined->modifier)
+        c->padding = combined->modifier->padding;
+
+      return Label::getSizeMetrics(c, isCalculatingVertical);
+    };
     infoSection.addChildComponent(&label);
 
-    valueEditor.sizingFlags |= Component::SameAsSiblingsX;
     valueEditor.control = &rotary;
     valueEditor.textPlacement = Placement::left;
     valueEditor.textColour = Skin::kWidgetPrimary1;
+    valueEditor.placement = Placement::left;
     infoSection.addChildComponent(&valueEditor);
   }
 
   void CombinationRotarySlider::setModifier(TextSelector *newModifier)
   {
     if (modifier)
-      removeChildComponent(modifier);
+      infoSection.removeChildComponent(modifier);
 
     modifier = newModifier;
+    modifier->placement = Placement::left;
+    //modifier->compensatePadding = true;
+    //modifier->componentFlags.noclip = true;
     rotary.controlFlags.shouldShowPopup = modifier;
     valueEditor.componentFlags.isVisible = !modifier;
 
     if (modifier)
-      addChildComponent(modifier);
+      infoSection.addChildComponent(modifier);
   }
 
   PinBoundsBox::PinBoundsBox()
