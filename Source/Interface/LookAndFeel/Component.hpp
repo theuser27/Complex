@@ -234,7 +234,6 @@ namespace Interface
       bool animateMovement : 1 = false;
       bool animateFadeAway : 1 = false;
       bool alwaysOnTop : 1 = false;
-      bool noclip : 1 = false;                    // parent doesn't clip component
       bool acceptsOrphanMouseEvents : 1 = false;  // if component can accept mouseUp without mouseDown
                                                   //  happens if another component gives up on handling mouseUp
 

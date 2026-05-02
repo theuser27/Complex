@@ -181,38 +181,29 @@ namespace Interface
     constexpr Rectangle withRight(T newRight) const { return { utils::min(x, newRight), y, utils::max(T(), newRight - x), h }; }
     constexpr Rectangle withBottom(T newBottom) const { return { x, utils::min(y, newBottom), w, utils::max(T(), newBottom - y) }; }
 
-    constexpr Rectangle withExpandedLeft(T delta) const { return withLeft(x - delta); }
-    constexpr Rectangle withExpandedTop(T delta) const { return withTop(y - delta); }
-    constexpr Rectangle withExpandedRight(T delta) const { return withWidth(w + delta); }
-    constexpr Rectangle withExpandedBottom(T delta) const { return withHeight(h + delta); }
+    constexpr Rectangle withExpandLeft(T delta) const { return withLeft(x - delta); }
+    constexpr Rectangle withExpandTop(T delta) const { return withTop(y - delta); }
+    constexpr Rectangle withExpandRight(T delta) const { return withWidth(w + delta); }
+    constexpr Rectangle withExpandBottom(T delta) const { return withHeight(h + delta); }
+    constexpr Rectangle withExpand(Rectangle<T> delta) const
+    {
+      return { x - delta.x, y - delta.y, utils::max(T(), w + delta.x + delta.w),
+        utils::max(T(), h + delta.y + delta.h) };
+    }
+    constexpr Rectangle withExpand(T deltaX, T deltaY) const
+    {
+      return { x - deltaX, y - deltaY, utils::max(T(), w + deltaX * 2),
+        utils::max(T(), h + deltaY * 2) };
+    }
+    constexpr Rectangle withExpand(T delta) const { return withExpand(delta, delta); }
 
-    constexpr Rectangle withTrimmedLeft(T delta) const { return withLeft(x + delta); }
-    constexpr Rectangle withTrimmedTop(T delta) const { return withTop(y + delta); }
-    constexpr Rectangle withTrimmedRight(T delta) const { return withWidth(w - delta); }
-    constexpr Rectangle withTrimmedBottom(T delta) const { return withHeight(h - delta); }
-
-
-
-    constexpr Rectangle &setPosition(T newX, T newY) { return *this = withPosition(newX, newY); }
-    constexpr Rectangle &setPosition(Point<T> newPosition) { return *this = withPosition(newPosition.x, newPosition.y); }
-    constexpr Rectangle &setSize(T newWidth, T newHeight) { return *this = withSize(newWidth, newHeight); }
-    constexpr Rectangle &setCentre(T newCentreX, T newCentreY) { return *this = withCentre(newCentreX, newCentreY); }
-
-    constexpr Rectangle &setLeft(T newLeft) { return *this = withLeft(newLeft); }
-    constexpr Rectangle &setTop(T newTop) { return *this = withTop(newTop); }
-    constexpr Rectangle &setRight(T newRight) { return *this = withRight(newRight); }
-    constexpr Rectangle &setBottom(T newBottom) { return *this = withBottom(newBottom); }
-    constexpr Rectangle &shift(T deltaX, T deltaY) { return *this = withShift(deltaX, deltaY); }
-
-    constexpr Rectangle &expandLeft(T delta) { return *this = withTrimmedLeft(delta); }
-    constexpr Rectangle &expandTop(T delta) { return *this = withTrimmedTop(delta); }
-    constexpr Rectangle &expandRight(T delta) { return *this = withTrimmedRight(delta); }
-    constexpr Rectangle &expandBottom(T delta) { return *this = withTrimmedBottom(delta); }
-    
-    constexpr Rectangle &trimLeft(T delta) { return *this = withTrimmedLeft(delta); }
-    constexpr Rectangle &trimTop(T delta) { return *this = withTrimmedTop(delta); }
-    constexpr Rectangle &trimRight(T delta) { return *this = withTrimmedRight(delta); }
-    constexpr Rectangle &trimBottom(T delta) { return *this = withTrimmedBottom(delta); }
+    constexpr Rectangle withTrimLeft(T delta) const { return withLeft(x + delta); }
+    constexpr Rectangle withTrimTop(T delta) const { return withTop(y + delta); }
+    constexpr Rectangle withTrimRight(T delta) const { return withWidth(w - delta); }
+    constexpr Rectangle withTrimBottom(T delta) const { return withHeight(h - delta); }
+    constexpr Rectangle withTrim(Rectangle<T> delta) const { return withExpand({ -delta.x, -delta.y, -delta.w, -delta.h }); }
+    constexpr Rectangle withTrim(T deltaX, T deltaY) const { return withExpand(-deltaX, -deltaY); }
+    constexpr Rectangle withTrim(T delta) const { return withExpand(-delta); }
 
     constexpr Rectangle operator+(Point<T> deltaPosition) const { return { x + deltaPosition.x, y + deltaPosition.y, w, h }; }
     constexpr Rectangle operator-(Point<T> deltaPosition) const { return { x - deltaPosition.x, y - deltaPosition.y, w, h }; }
@@ -220,31 +211,8 @@ namespace Interface
     constexpr Rectangle &operator+=(Point<T> deltaPosition) { x += deltaPosition.x; y += deltaPosition.y; return *this; }
     constexpr Rectangle &operator-=(Point<T> deltaPosition) { x -= deltaPosition.x; y -= deltaPosition.y; return *this; }
 
-    constexpr Rectangle expanded(Rectangle<T> delta) const
-    {
-      return { x - delta.x, y - delta.y, utils::max(T(), w + delta.x + delta.w),
-        utils::max(T(), h + delta.y + delta.h) };
-    }
-    constexpr Rectangle expanded(T deltaX, T deltaY) const
-    {
-      return { x - deltaX, y - deltaY, utils::max(T(), w + deltaX * 2), 
-        utils::max(T(), h + deltaY * 2) };
-    }
-    constexpr Rectangle expanded(T delta) const { return expanded(delta, delta); }
-    constexpr Rectangle trimmed(Rectangle<T> delta) const { return expanded({ -delta.x, -delta.y, -delta.w, -delta.h }); }
-    constexpr Rectangle trimmed(T deltaX, T deltaY) const { return expanded(-deltaX, -deltaY); }
-    constexpr Rectangle trimmed(T delta) const { return expanded(-delta); }
     constexpr Rectangle transposed() { return { y, x, h, w }; }
-
-    constexpr Rectangle &expand(Rectangle<T> delta) { return *this = expanded(delta); }
-    constexpr Rectangle &expand(T deltaX, T deltaY) { return *this = expanded(deltaX, deltaY); }
-    constexpr Rectangle &expand(T delta) { return *this = expanded(delta); }
-    constexpr Rectangle &trim(Rectangle<T> delta) { return *this = trimmed(delta); }
-    constexpr Rectangle &trim(T deltaX, T deltaY) { return *this = trimmed(deltaX, deltaY); }
-    constexpr Rectangle &trim(T delta) { return *this = trimmed(delta); }
     constexpr Rectangle &transpose() { return *this = transposed(); }
-
-
 
     constexpr bool isEmpty() const { return w <= T() || h <= T(); }
     constexpr bool contains(T xCoord, T yCoord) const

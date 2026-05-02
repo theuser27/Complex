@@ -32,10 +32,10 @@ namespace Interface
   {
     auto colour = getColour(Skin::kLightenScreen, this);
     fillRect(openGl,
-      getLocalBounds().toFloat().trimmed(scaleValueRound(source->padding.toFloat())),
+      getLocalBounds().toFloat().withTrim(scaleValueRound(source->padding.toFloat())),
       colour.dimmer(0.3f), scaleValue(4.0f));
     strokeRect(openGl, 
-      getLocalBounds().toFloat().trimmed(scaleValueRound(source->padding.toFloat())), 
+      getLocalBounds().toFloat().withTrim(scaleValueRound(source->padding.toFloat())),
       scaleValue(1.0f), colour, scaleValue(4.0f));
 
     return true;

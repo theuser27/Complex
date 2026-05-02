@@ -27,6 +27,9 @@ namespace Interface
 
     static constexpr int kInsideRouding = 4;
 
+    static constexpr float kTimeout = 0.1f;
+    static constexpr float kBorderRounding = 8.0f;
+
     void reinitialise();
     void destroy();
 
@@ -38,7 +41,20 @@ namespace Interface
     Component header{};
     Component footer{};
 
-    DrawComponent moduleHolder{};
+    struct ModuleHolder : public Component
+    {
+      bool mouseExit(const MouseEvent &e) override;
+      bool mouseMove(const MouseEvent &e) override;
+      bool mouseDown(const MouseEvent &e) override;
+      bool render(OpenGlWrapper &openGl) override;
+
+      double enterHoverTime{};
+      bool hasEnteredHover{};
+      float animationValues[1]{};
+      Generation::Processor *hoveredBeforeModule{};
+      usize hoveredBeforeModuleIndex{};
+
+    } moduleHolder{};
 
     TextEditor laneTitle{};
     PowerButton laneActivator{};
@@ -47,21 +63,7 @@ namespace Interface
     TextSelector inputSelector{};
     TextSelector outputSelector{};
 
-    struct AddModulesButton : public Component
-    {
-      static constexpr float kPlusRelativeSize = 7;
-      static constexpr float kBorderRounding = 8.0f;
-
-      bool mouseEnter(const MouseEvent &e) override;
-      bool mouseExit(const MouseEvent &e) override;
-      bool mouseDown(const MouseEvent &e) override;
-      bool render(OpenGlWrapper &openGl) override;
-
-      float animationValues[1]{};
-      bool isDropdownOpen{};
-      EffectsLaneSection *laneSection{};
-
-    } addModulesButton{};
+    bool isDropdownOpen{};
 
     utils::sll<CommandMessages::HandleMessageFn *> laneHandler{};
   };

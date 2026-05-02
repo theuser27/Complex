@@ -252,8 +252,8 @@ namespace Interface
 
       if (id > kMappingList && isUnmappingParameter(id))
       {
-        auto crossBounds = getLocalBounds().toFloat().trimmed(scaleValue(padding.toFloat()));
-        crossBounds.trim(crossBounds.w * 0.25f, crossBounds.h * 0.25f);
+        auto crossBounds = getLocalBounds().toFloat().withTrim(scaleValue(padding.toFloat()));
+        crossBounds = crossBounds.withTrim(crossBounds.w * 0.25f, crossBounds.h * 0.25f);
 
         nvgBeginPath(openGl);
         nvgMoveTo(openGl, crossBounds.x, crossBounds.y);
@@ -320,13 +320,13 @@ namespace Interface
         fillRect(openGl, getLocalBounds().toFloat(), getColour(Skin::kPopupSelectorDelimiter, this));
       }
 
-      //strokeRect(openGl, getLocalBounds().trimmed(scaleValueRoundInt(padding.toInt())).toFloat(), 
+      //strokeRect(openGl, getLocalBounds().withTrim(scaleValueRoundInt(padding.toInt())).toFloat(), 
       //  1.0f, Colour{ 128, 128, 128 });
 
       if (id == kMappingList)
       {
         float width = scaleValueRound(kPopupSubwindowArrowWidth);
-        auto arrowBounds = getLocalBounds().trimmed(scaleValueRoundInt(padding.toInt())).toFloat();
+        auto arrowBounds = getLocalBounds().withTrim(scaleValueRoundInt(padding.toInt())).toFloat();
 
         float yCenter = bounds.h * 0.5f;
         float height = width;
@@ -342,7 +342,7 @@ namespace Interface
 
       if (!text.empty())
       {
-        auto textBounds = getLocalBounds().trimmed(scaleValueRoundInt(padding.toInt())).toFloat();
+        auto textBounds = getLocalBounds().withTrim(scaleValueRoundInt(padding.toInt())).toFloat();
         textBounds.h = ::roundf(scaleValue((float)desiredSize.h));
 
         renderText(text, FontId::InterType, textBounds, openGl,

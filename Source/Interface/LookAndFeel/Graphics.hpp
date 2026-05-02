@@ -208,7 +208,7 @@ namespace Interface
   {
     // stroke paints around the specified lines, 
     // therefore we need to shrink by half the thickess to get the result we need
-    bounds.trim(thickness * 0.5f);
+    bounds = bounds.withTrim(thickness * 0.5f);
 
     nvgBeginPath(context);
     if (cornerRounding == 0.0f)

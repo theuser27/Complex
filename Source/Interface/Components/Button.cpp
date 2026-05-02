@@ -74,7 +74,7 @@ namespace Interface
 
     Colour colours[] = { colour };
     auto [fn, iconBounds] = Paths::powerButtonIcon();
-    fn(openGl, colours, getLocalBounds().toFloat().trim(scaleValue(padding.toFloat())), scaleValue(1.0f));
+    fn(openGl, colours, getLocalBounds().toFloat().withTrim(scaleValue(padding.toFloat())), scaleValue(1.0f));
 
     return true;
   }
@@ -94,7 +94,7 @@ namespace Interface
     
     tickAnimation(animationValues, {{ componentFlags.isHovered }}, {{ kHoverIncrement }});
     auto hoverAmount = animationValues[0];
-    auto drawBounds = getLocalBounds().toFloat().trimmed(scaleValue(padding.toFloat()));
+    auto drawBounds = getLocalBounds().toFloat().withTrim(scaleValue(padding.toFloat()));
     
     float rounding = utils::min(drawBounds.w, drawBounds.h) * roundingRatio;
 

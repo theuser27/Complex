@@ -12,39 +12,21 @@
 
 namespace Interface
 {
-  bool 
-  EffectsLaneSection::AddModulesButton::mouseEnter(const MouseEvent &)
-  {
-    setMouseCursor(uiRelated.renderer, MouseCursorTypes::PointingHand);
-    return true;
-  }
-
-  bool 
-  EffectsLaneSection::AddModulesButton::mouseExit(const MouseEvent &)
-  {
-    setMouseCursor(uiRelated.renderer, MouseCursorTypes::Normal);
-    return true;
-  }
-
-  bool
-  EffectsLaneSection::AddModulesButton::mouseDown(const MouseEvent &e)
+  static bool 
+  summonModulePopup(PopupSelector *selector, Component *summoner, 
+    EffectsLaneSection *laneSection, Placement placement, Point<i32> offset, usize insertionIndex)
   {
     using namespace Framework;
 
-    if (e.mods.test(ModifierKeys::altModifier) || e.mods.test(ModifierKeys::popupMenuClickModifier))
-      return true;
-
-    auto *selector = getPopupSelector();
-
-    if (isDropdownOpen)
+    if (laneSection->isDropdownOpen)
     {
       selector->resetState();
-      isDropdownOpen = false;
-      return true;
+      laneSection->isDropdownOpen = false;
+      return false;
     }
 
+    laneSection->isDropdownOpen = true;
     selector->resetState();
-    isDropdownOpen = true;
 
     // find the module options in the state
     IndexedData *indexedData{};
@@ -77,10 +59,10 @@ namespace Interface
       });
 
     selector->list = list;
-    selector->skinOverride = getSkinOverride();
-    selector->callback = [this](PopupSelector *, PopupItem *selectedItem)
+    selector->skinOverride = summoner->getSkinOverride();
+    selector->callback = [laneSection, insertionIndex](PopupSelector *, PopupItem *selectedItem)
     {
-      isDropdownOpen = false;
+      laneSection->isDropdownOpen = false;
       auto *option = (Framework::IndexedData *)selectedItem->extraData;
       COMPLEX_ASSERT(option->processorMetadata);
 
@@ -98,27 +80,12 @@ namespace Interface
 
       auto *transactionArena = state->plugin->undoManager.beginNewTransaction();
       state->plugin->undoManager.perform(anew(transactionArena, AddProcessorUpdate, { effectModule,
-        laneSection->effectsLane->stateId, laneSection->effectsLane->childrenCount }));
+        laneSection->effectsLane->stateId, insertionIndex }));
     };
-    selector->cancel = [this](PopupSelector *) { isDropdownOpen = false; };
-    selector->summon(this, Placement::bottom, { 0, 4 });
+    selector->cancel = [laneSection](PopupSelector *) { laneSection->isDropdownOpen = false; };
+    selector->summon(summoner, placement, offset);
 
-    componentFlags.isClicked = false;
-
-    return true;
-  }
-
-  bool
-  EffectsLaneSection::AddModulesButton::render(OpenGlWrapper &openGl)
-  {
-    static constexpr auto kHoverIncrement = 0.1f;
-    tickAnimation(animationValues,
-      {{ componentFlags.isHovered || isDropdownOpen }},
-      {{ kHoverIncrement }});
-    
-    strokeRect(openGl, getLocalBounds().toFloat(), 1.0f, 
-      getColour(Skin::kBody, this).withAlpha(animationValues[0]), 
-      scaleValue(kBorderRounding));
+    summoner->componentFlags.isClicked = false;
 
     return true;
   }
@@ -180,12 +147,7 @@ namespace Interface
         if (metadata->useIndex)
           section->effectHolder.header.draggableBox.surfaceToLiftTo = 
             &self->soundEngineSection->effectsSection;
-        (metadata->placeholder ? metadata->placeholder : section)->margin = 
-          { 0, 0, 0, kVModuleToModuleMargin };
-        
-        // moving the button to the back
-        self->moduleHolder.removeChildComponent(&self->addModulesButton);
-        self->moduleHolder.addChildComponent(&self->addModulesButton);
+        (metadata->placeholder ? metadata->placeholder : section)->margin = { 0, 0, 0, kVModuleToModuleMargin };
 
         return true;
       }
@@ -228,22 +190,6 @@ namespace Interface
     moduleHolder.componentFlags.vertical = true;
     moduleHolder.componentFlags.clickable = true;
     moduleHolder.padding = { kHVModuleToLaneMargin, kHVModuleToLaneMargin, kHVModuleToLaneMargin, kHVModuleToLaneMargin };
-    moduleHolder.draw = [](OpenGlWrapper &openGl, Component *, Component *self, Point<i32>)
-    {
-      fillRect(openGl, self->getLocalBounds().toFloat(), 
-        getColour(Skin::kBackground, self), scaleValue(kInsideRouding));
-
-      self->renderScrollbars(openGl, 0.2f);
-
-      return true;
-    };
-
-    moduleHolder.addChildComponent(&addModulesButton);
-    addModulesButton.componentFlags.clickable = true;
-    addModulesButton.sizingFlags = Component::GrowableX;
-    addModulesButton.placement = Placement::top;
-    addModulesButton.laneSection = this;
-    addModulesButton.desiredSize = { 0, kAddModuleButtonHeight, 0, kAddModuleButtonHeight };
 
     addChildComponent(&footer);
     footer.desiredSize = { 0, kEffectsLaneBottomBarHeight, 0, kEffectsLaneBottomBarHeight };
@@ -281,15 +227,148 @@ namespace Interface
     state->plugin->undoManager.perform(anew(transactionArena, Framework::DeleteProcessorUpdate, { effectsLane }));
   }
 
+  bool 
+  EffectsLaneSection::ModuleHolder::mouseExit(const MouseEvent &)
+  {
+    setMouseCursor(uiRelated.renderer, MouseCursorTypes::Normal);
+    hasEnteredHover = false;
+
+    return true;
+  }
+
+  bool
+  EffectsLaneSection::ModuleHolder::mouseMove(const MouseEvent &e)
+  {
+    auto laneSection = (EffectsLaneSection *)parent;
+    auto localBounds = getLocalBounds();
+
+    if (auto *lastChild = Generation::Processor::getChild(
+      laneSection->effectsLane->children, laneSection->effectsLane->childrenCount - 1))
+    {
+      auto newBottom = lastChild->component->bounds.getBottom() + 
+        scaleValueRoundInt((float)lastChild->component->margin.h + kEffectModuleMinHeight);
+      localBounds.h = utils::min(newBottom, localBounds.getBottom()) - localBounds.y;
+    }
+    else
+    {
+      localBounds.y = scaleValueRoundInt((float)padding.y);
+      localBounds.h = scaleValueRoundInt(kEffectModuleMinHeight);
+    }
+
+    if (localBounds.contains(Point{ e.x, e.y }))
+    {
+      if (!hasEnteredHover)
+      {
+        enterHoverTime = uiRelated.steadyTime;
+        hasEnteredHover = true;
+      }
+
+      // get the module below cursor
+      auto *laneSeciton = (EffectsLaneSection *)parent;
+      hoveredBeforeModuleIndex = 0;
+      hoveredBeforeModule = laneSeciton->effectsLane->children;
+      for (; hoveredBeforeModule && hoveredBeforeModuleIndex < laneSeciton->effectsLane->childrenCount;
+        (++hoveredBeforeModuleIndex), (hoveredBeforeModule = hoveredBeforeModule->next))
+      {
+        if (hoveredBeforeModule->component->bounds.y > e.y)
+          break;
+      }
+    }
+    else if (hasEnteredHover)
+    {
+      setMouseCursor(uiRelated.renderer, MouseCursorTypes::Normal);
+      hasEnteredHover = false;
+    }
+
+    return true;
+  }
+
+  bool 
+  EffectsLaneSection::ModuleHolder::mouseDown(const MouseEvent &e)
+  {
+    if (Component::mouseDown(e))
+      return true;
+
+    auto laneSection = (EffectsLaneSection *)parent;
+    if (!hasEnteredHover)
+    {
+      if (laneSection->isDropdownOpen)
+        getPopupSelector()->resetState();
+
+      return true;
+    }
+
+    double time = uiRelated.steadyTime;
+    if (time - enterHoverTime < kTimeout)
+      return true;
+
+    if (e.mods.test(ModifierKeys::altModifier) || e.mods.test(ModifierKeys::popupMenuClickModifier))
+      return true;
+
+    summonModulePopup(getPopupSelector(), this, laneSection,
+      Placement::custom, { e.x, e.y }, hoveredBeforeModuleIndex);
+
+    return true;
+  }
+
+  bool 
+  EffectsLaneSection::ModuleHolder::render(OpenGlWrapper &openGl)
+  {
+    static constexpr auto kHoverIncrement = 0.1f;
+
+    fillRect(openGl, getLocalBounds().toFloat(),
+      getColour(Skin::kBackground, this), scaleValue(kInsideRouding));
+
+    renderScrollbars(openGl, 0.2f);
+
+    auto laneSection = (EffectsLaneSection *)parent;
+    tickAnimation(animationValues, 
+      {{ laneSection->isDropdownOpen || (hasEnteredHover && uiRelated.steadyTime - enterHoverTime >= kTimeout) }},
+      {{ kHoverIncrement }});
+
+    if (laneSection->isDropdownOpen || (hasEnteredHover && uiRelated.steadyTime - enterHoverTime >= kTimeout))
+    {
+      if (hasEnteredHover)
+        setMouseCursor(uiRelated.renderer, MouseCursorTypes::PointingHand);
+
+      auto e = getMouseInteractions(uiRelated.renderer).mouseState.getEventRelativeTo(this);
+      auto scaledPadding = scaleValueRoundInt(padding.toInt());
+      auto drawBounds = getLocalBounds().withTrimLeft(scaledPadding.x).withTrimRight(scaledPadding.w);
+      if (hoveredBeforeModule)
+      {
+        if (hoveredBeforeModule->previous->next)
+          drawBounds.y = hoveredBeforeModule->previous->component->bounds.getBottom();
+        drawBounds.h = hoveredBeforeModule->component->bounds.y - drawBounds.y;
+
+        strokeRect(openGl, drawBounds.withY(drawBounds.getCentreY()).withHeight(0).toFloat(),
+          scaleValue(1.0f), getColour(Skin::kBorder, this).withMultipliedAlpha(animationValues[0]), scaleValue(kBorderRounding));
+      }
+      else
+      {
+        drawBounds = drawBounds.withTrimTop(scaledPadding.y).withTrimBottom(scaledPadding.h);
+        if (auto *lastChild = Generation::Processor::getChild(
+          laneSection->effectsLane->children, laneSection->effectsLane->childrenCount - 1))
+        {
+          auto newY = lastChild->component->bounds.getBottom() + scaleValueRoundInt((float)padding.h);
+          drawBounds = drawBounds.withTop(newY);
+        }
+
+        drawBounds.h = utils::min(drawBounds.h, kEffectModuleMinHeight);
+
+        strokeRect(openGl, drawBounds.toFloat(), scaleValue(1.0f),
+          getColour(Skin::kBorder, this).withMultipliedAlpha(animationValues[0]), scaleValue(kBorderRounding));
+      }
+    }
+
+    return true;
+  }
+
   bool
   EffectsLaneSection::render(OpenGlWrapper &openGl)
   {
     fillRect(openGl, getLocalBounds().toFloat(), getColour(Skin::kBody, this), scaleValue(kInsideRouding));
     strokeRect(openGl, getLocalBounds().toFloat(), scaleValue(kEffectsLaneOutlineThickness),
       Colour{ 45, 45, 45 }, scaleValue(kInsideRouding));
-
-    //reinitialise();
-    //fillRect(openGl, getLocalBounds().toFloat());
 
     doRenderChildren(openGl);
 

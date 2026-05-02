@@ -4,7 +4,7 @@
   "Background Element": "0xff4c4c4c",
   "Heading Text": "0xff00ffff",
   "Normal Text": "0xffa8a8a8",
-  "Border": "0x8ffffff",
+  "Border": "0x1affffff",
   "Body Rounding Top": 4.0,
   "Body Rounding Bottom": 4.0,
 

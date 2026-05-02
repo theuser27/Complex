@@ -21,7 +21,7 @@ namespace Interface
     sizingFlags = (Component::SizingFlags)(Component::GrowableX | Component::GrowableY);
     controlFlags.shouldShowPopup = true;
     controlFlags.shouldUsePlusMinusPrefix = true;
-    overridePosition = [](Component *c) { c->bounds.setPosition({}); return true; };
+    overridePosition = [](Component *c) { c->bounds.x = c->bounds.y = 0; return true; };
     // because of the bipolarity we need to lower the sensitivity 
     // so that the shift follows the mouse exactly
     sensitivity = 0.5f;

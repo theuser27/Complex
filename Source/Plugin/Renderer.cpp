@@ -266,7 +266,8 @@ namespace Interface
       sortedSizesMax = &sortedSizesMax_;
 
       calculateSizes(gui->children, gui);
-      gui->bounds.setPosition({});
+      gui->bounds.x = 0;
+      gui->bounds.y = 0;
       calculatePositions(gui->children, gui, gui->bounds);
 
       // looping until all conflicts are resolved

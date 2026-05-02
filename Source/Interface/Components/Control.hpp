@@ -247,7 +247,6 @@ namespace Interface
     float animationValues[1]{};
     Placement dropdownPlacement = Placement::bottom;
     Point<i8> dropdownOffset{ 0, kPopupToElement };
-    bool compensatePadding{};
   private:
     bool isDropdownOpen = false;
     DrawComponent *extraIcon = nullptr;

@@ -88,9 +88,9 @@ namespace Interface
       if (!self->source->componentFlags.isPositionSet)
         return false;
 
-      self->bounds.setPosition(self->parent->getRelativePoint(self->source, position));
-      self->bounds.x = utils::clamp(self->bounds.x, 0, self->parent->bounds.w - self->bounds.w);
-      self->bounds.y = utils::clamp(self->bounds.y, 0, self->parent->bounds.h - self->bounds.h);
+      auto [x, y] = self->parent->getRelativePoint(self->source, position);
+      self->bounds.x = utils::clamp(x, 0, self->parent->bounds.w - self->bounds.w);
+      self->bounds.y = utils::clamp(y, 0, self->parent->bounds.h - self->bounds.h);
 
       return true;
     };
@@ -104,7 +104,7 @@ namespace Interface
     fillRect(openGl, localBounds, getColour(Skin::kPopupDisplayBackground, this), rounding);
     strokeRect(openGl, localBounds, scaleValue(1.0f), getColour(Skin::kPopupDisplayBorder, this), rounding);
 
-    auto textBounds = localBounds.trimmed(scaleValue(padding.toFloat()));
+    auto textBounds = localBounds.withTrim(scaleValue(padding.toFloat()));
     auto usedFontId = (isControl) ? FontId::DDinType : FontId::InterType;
     renderText(text, usedFontId, textBounds, openGl, 
       getColour(Skin::kWidgetPrimary1, source), Placement::left, true);
@@ -228,7 +228,8 @@ namespace Interface
         }
       }
 
-      list->bounds.setPosition(x, y);
+      list->bounds.x = x;
+      list->bounds.y = y;
 
       return;
     }
@@ -300,7 +301,8 @@ namespace Interface
       checkVertical(sourceBounds.h);
     }
 
-    list->bounds.setPosition(finalX, finalY);
+    list->bounds.x = finalX;
+    list->bounds.y = finalY;
   }
 
   void PopupList::summonChildList(PopupItem *summoningItem,
@@ -426,7 +428,7 @@ namespace Interface
       auto *self = (PopupSelector *)c;
 
       // position stays relative to component we're attached to
-      self->bounds.setPosition(self->parent->bounds.getPosition());
+      self->bounds = self->bounds.withPosition(self->parent->bounds.getPosition());
 
       for (auto *child = self->children; child; child = child->next)
         child->componentFlags.isVisible = !self->summoner->isObscured();
@@ -564,7 +566,7 @@ namespace Interface
       fillRect(openGl, getLocalBounds().toFloat(), getColour(Skin::kPopupSelectorDelimiter, this));
     }
 
-    renderText(text, FontId::InterType, getLocalBounds().trimmed(scaleValueRoundInt(padding.toInt())).toFloat(),
+    renderText(text, FontId::InterType, getLocalBounds().withTrim(scaleValueRoundInt(padding.toInt())).toFloat(),
       openGl, getColour(textColourId, this), Placement::left, canTextWrap);
 
     return true;

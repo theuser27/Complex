@@ -574,7 +574,7 @@ namespace Interface
         bounds.x = boundsInTarget.x + margin.x;
 
         setNextPosition(false, TRANSPOSE(component, bounds), child, primary);
-        boundsInTarget.trimLeft(bounds.w + margin.getRight());
+        boundsInTarget = boundsInTarget.withTrimLeft(bounds.w + margin.getRight());
         //child->bounds = TRANSPOSE(component, bounds);
         child = child->next;
       }
@@ -624,7 +624,7 @@ namespace Interface
 
   void animatePosition(Component *component, bool wasParentResized)
   {
-    static constexpr float kMoveDelay = 1.0f; //s
+    static constexpr float kMoveDelay = 0.15f; //s
 
     if (component->componentFlags.animateMovement &&                    // are we animating to begin with?
       !wasParentResized &&                                              // skip animations if triggered by parent resize
@@ -633,23 +633,23 @@ namespace Interface
     {
       // we're interpolating between the previous position (animation start) and the supposed position
 
-      float distanceToNextPositionRatio = (float)component->distanceToNextPositionRatio / (float)utils::max_limit<u16>;
+      float distanceToNextPositionRatio = (float)component->distanceToNextPositionRatio / (float)utils::max_limit<decltype(component->distanceToNextPositionRatio)>;
       distanceToNextPositionRatio = utils::min(distanceToNextPositionRatio + uiRelated.deltaTime * 1.0f / kMoveDelay, 1.0f);
-      auto temp = 1.0f - (1.0f - distanceToNextPositionRatio) * (1.0f - distanceToNextPositionRatio);
-      distanceToNextPositionRatio = temp;
-      //distanceToNextPositionRatio = utils::smoothStep(distanceToNextPositionRatio);
+      //auto t = easeOutQuadratic(distanceToNextPositionRatio);
+      auto t = smoothstep(distanceToNextPositionRatio);
 
-      component->bounds.x = (i32)::roundf(utils::lerp((float)component->previousPosition.x, (float)component->nextPosition.x, distanceToNextPositionRatio));
-      component->bounds.y = (i32)::roundf(utils::lerp((float)component->previousPosition.y, (float)component->nextPosition.y, distanceToNextPositionRatio));
+      component->bounds.x = (i32)::roundf(utils::lerp((float)component->previousPosition.x, (float)component->nextPosition.x, t));
+      component->bounds.y = (i32)::roundf(utils::lerp((float)component->previousPosition.y, (float)component->nextPosition.y, t));
 
-      component->distanceToNextPositionRatio = (u16)::ceilf(distanceToNextPositionRatio * (float)utils::max_limit<u16>);
+      component->distanceToNextPositionRatio = (decltype(component->distanceToNextPositionRatio))::ceilf(distanceToNextPositionRatio *
+        (float)utils::max_limit<decltype(component->distanceToNextPositionRatio)>);
     }
     else
     {
       // we're not animating position and just setting the supposed position directly in
 
       component->previousPosition = component->nextPosition;
-      component->bounds.setPosition(component->nextPosition);
+      component->bounds = component->bounds.withPosition(component->nextPosition);
       component->distanceToNextPositionRatio = 0;
     }
   }
@@ -813,7 +813,7 @@ namespace Interface
       return false;
 
     bool isHorizontal = event.mods.test(ModifierKeys::shiftModifier);
-    auto multiplier = 20.0f * uiRelated.scale;
+    auto multiplier = 25.0f * uiRelated.scale;
     offsetScroll(this, event.wheelDeltaX * multiplier, 
       event.wheelDeltaY * multiplier, isHorizontal);
 
@@ -1106,10 +1106,10 @@ namespace Interface
     }
 
     auto calculateScrollWidth = [this, &mousePosition, scrollExpandPercent](Rectangle<i32> bounds,
-      u16 &currentScrollWidth, float &brightness)
+      u16 &currentScrollWidth, float &brightness, bool isScrollClicked)
     {
       float percentExpand = (float)currentScrollWidth / (float)utils::max_limit<u16>;
-      if (bounds.contains(mousePosition) || componentFlags.isClicked)
+      if (bounds.contains(mousePosition) || isScrollClicked)
       {
         percentExpand += scrollExpandPercent;
         brightness = 0.3f;
@@ -1135,7 +1135,8 @@ namespace Interface
       //  scrollBounds = scrollBounds.withShift(0, scrollWidth).withHeight(scrollWidth);
       //}
 
-      float width = 0.5f * (float)scrollBounds.h * calculateScrollWidth(scrollBounds, scrollWidthsRatio.x, xScrollBrightness);
+      float width = 0.5f * (float)scrollBounds.h * calculateScrollWidth(scrollBounds, 
+        scrollWidthsRatio.x, xScrollBrightness, componentFlags.isScrollbarXClicked);
       xScrollBounds = { (float)scrollBounds.x + start, 
         scrollBounds.getBottom() - width - 0.25f * scrollBounds.h, length, width };
     }
@@ -1154,7 +1155,8 @@ namespace Interface
       //  scrollBounds = scrollBounds.withShift(scrollWidth, 0).withWidth(scrollWidth);
       //}
 
-      float width = 0.5f * (float)scrollBounds.w * calculateScrollWidth(scrollBounds, scrollWidthsRatio.y, yScrollBrightness);
+      float width = 0.5f * (float)scrollBounds.w * calculateScrollWidth(scrollBounds, 
+        scrollWidthsRatio.y, yScrollBrightness, componentFlags.isScrollbarYClicked);
       yScrollBounds = { (float)scrollBounds.getRight() - width - 0.25f * scrollBounds.w,
         (float)scrollBounds.y + start, width, length };
     }
@@ -1266,9 +1268,8 @@ namespace Interface
         continue;
 
       nvgSave(openGl);
-      if (!child->componentFlags.noclip)
-        nvgIntersectScissor(openGl, (float)child->bounds.x, (float)child->bounds.y,
-          (float)child->bounds.w, (float)child->bounds.h);
+      nvgIntersectScissor(openGl, (float)child->bounds.x, (float)child->bounds.y,
+        (float)child->bounds.w, (float)child->bounds.h);
       nvgTranslate(openGl, (float)child->bounds.x, (float)child->bounds.y);
       child->doRender(openGl);
       nvgRestore(openGl);

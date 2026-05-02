@@ -101,7 +101,7 @@ namespace Interface
     draggedComponent->placement = Placement::custom;
     draggedComponent->overridePosition = [](Component *c)
     {
-      c->bounds.setPosition(c->nextPosition.x, c->nextPosition.y);
+      c->bounds = c->bounds.withPosition(c->nextPosition.x, c->nextPosition.y);
       return true;
     };
 

@@ -134,20 +134,16 @@ namespace Interface
     if (!controlFlags.canUseScrollWheel)
       return false;
 
-    // TODO:
-    // sometimes duplicate wheel events seem to be sent, so since we're going to
-    // bump the value by a minimum of the interval, avoid doing this twice..
-    //if (e.eventTime == lastMouseWheelTime_)
-    //	return true;
-    //
-    //lastMouseWheelTime_ = e.eventTime;
-
     if (e.mods.test(ModifierKeys::allMouseButtonModifiers))
       return true;
+
+    double multiplier = 0.05;
+    if (e.mods.test(ModifierKeys::shiftModifier))
+      multiplier *= 0.1;
     
     auto currentValue = getValue();
     auto mouseWheelDelta = (::fabs(e.wheelDeltaX) > ::fabs(e.wheelDeltaY)) ? -e.wheelDeltaX : e.wheelDeltaY;
-    auto valueDelta = currentValue + 0.05 * mouseWheelDelta * (e.wheelIsReversed ? -1.0 : 1.0);
+    auto valueDelta = currentValue + multiplier * mouseWheelDelta * (e.wheelIsReversed ? -1.0 : 1.0);
     valueDelta = (controlFlags.canLoopAround) ? valueDelta - ::floor(valueDelta) : utils::clamp(valueDelta, 0.0, 1.0);
     valueDelta -= currentValue;
     if (valueDelta == 0.0)
@@ -205,7 +201,7 @@ namespace Interface
     tickAnimation(animationValues, {{ componentFlags.isHovered || componentFlags.isClicked }}, {{ kHoverIncrement }});
     float thickness = Interface::getValue(Skin::kKnobArcThickness, true, this) * (1.0f + 0.15f * animationValues[0]);
 
-    auto localBounds = getLocalBounds().toFloat().trimmed(scaleValue(padding.toFloat()));
+    auto localBounds = getLocalBounds().toFloat().withTrim(scaleValue(padding.toFloat()));
     float centreX = localBounds.getCentreX();
     float centreY = localBounds.getCentreY();
     float fullRadius = (utils::min(localBounds.w, localBounds.h) - thickness) * 0.5f;
@@ -424,7 +420,7 @@ namespace Interface
     static constexpr float kControlPoint3OffsetY = kControlPoint2OffsetY;
 
     auto colour = getColour(Skin::kWidgetPrimary1, this);
-    auto [x, y, w, h] = getLocalBounds().toFloat().trimmed(scaleValue(padding.toFloat()));
+    auto [x, y, w, h] = getLocalBounds().toFloat().withTrim(scaleValue(padding.toFloat()));
     float rounding = scaleValue(kRounding);
     float verticalSideLength = scaleValue(kVerticalSideYLength);
     float c1OffsetY = scaleValue(kControlPoint1OffsetY);
@@ -480,14 +476,6 @@ namespace Interface
       {
         float height = (float)self->text.desiredSize.y;
         self->padding.x = self->padding.w = (u16)::ceilf(height * 0.25f);
-
-        if (self->compensatePadding)
-        {
-          if (self->placement == Placement::left)
-            self->margin.x = -(i16)self->padding.x;
-          else if (self->placement == Placement::right)
-            self->margin.w = -(i16)self->padding.w;
-        }
       }
 
       return Range<i32>{ -1, -1 };
@@ -763,7 +751,10 @@ namespace Interface
       c->padding = {};
       auto *combined = (CombinationRotarySlider *)c->parent->parent;
       if (combined->modifier)
+      {
+        combined->modifier->overrideSize(combined->modifier, isCalculatingVertical);
         c->padding = combined->modifier->padding;
+      }
 
       return Label::getSizeMetrics(c, isCalculatingVertical);
     };
@@ -783,8 +774,6 @@ namespace Interface
 
     modifier = newModifier;
     modifier->placement = Placement::left;
-    //modifier->compensatePadding = true;
-    //modifier->componentFlags.noclip = true;
     rotary.controlFlags.shouldShowPopup = modifier;
     valueEditor.componentFlags.isVisible = !modifier;
 

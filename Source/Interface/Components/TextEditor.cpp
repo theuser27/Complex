@@ -81,7 +81,7 @@ namespace Interface
   {
     if (!text.empty())
     {
-      auto textBounds = getLocalBounds().toFloat().trimmed(scaleValueRound(padding.toFloat()));
+      auto textBounds = getLocalBounds().toFloat().withTrim(scaleValueRound(padding.toFloat()));
       renderText(text, font, textBounds, openGl, getColour(textColour, this), textPlacement, editorFlags.wordWrap);
     }
 
