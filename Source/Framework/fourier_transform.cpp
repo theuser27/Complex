@@ -92,8 +92,8 @@ namespace Framework
 
     // clearing out dc and nyquist imaginary parts since they shouldn't exist
     // but you don't know what might have happened during processing
-    output[1] = 0.0f;
-    output[size + 1] = 0.0f;
+    //output[1] = 0.0f;
+    //output[size + 1] = 0.0f;
     ippsFFTInv_CCSToR_32f_I(output, static_cast<IppsFFTSpec_R_32f *>(ippSpecs_[order - minOrder_]), static_cast<Ipp8u *>(buffer_));
   }
 

@@ -10,14 +10,12 @@
 
 #pragma once
 
-#include <atomic>
-
 #include "utils.hpp"
 
 #if COMPLEX_X64
-  #include <immintrin.h>
+  extern "C" void _mm_pause(void);
 #elif COMPLEX_ARM
-  #include <arm_acle.h>
+  extern "C" void __yield(void);
 #endif
 
 namespace utils
@@ -62,19 +60,19 @@ namespace utils
   template<typename T>
   struct LockBlame
   {
-    std::atomic<T> lock{};
-    std::atomic<usize> lastLockId{};
+    utils::atomic<T> lock{};
+    utils::atomic<usize> lastLockId{};
   };
 
   template<typename T>
   struct ReentrantLock
   {
-    std::atomic<T> lock{};
-    std::atomic<usize> lastLockId{};
+    utils::atomic<T> lock{};
+    utils::atomic<usize> lastLockId{};
   };
 
-  void lockAtomic(std::atomic<bool> &atomic, WaitMechanism mechanism, bool expected) noexcept;
-  void unlockAtomic(std::atomic<bool> &atomic, WaitMechanism mechanism, bool expected) noexcept;
+  void lockAtomic(utils::atomic<bool> &atomic, WaitMechanism mechanism, bool expected) noexcept;
+  void unlockAtomic(utils::atomic<bool> &atomic, WaitMechanism mechanism, bool expected) noexcept;
   i32 lockAtomic(LockBlame<i32> &lock, bool isExclusive, WaitMechanism mechanism,
     const utils::small_fn<void()> &lambda = [](){}) noexcept;
   void unlockAtomic(LockBlame<i32> &atomic, bool wasExclusive, WaitMechanism mechanism) noexcept;
@@ -84,7 +82,7 @@ namespace utils
   public:
     ScopedLock(ReentrantLock<bool> &reentrantLock, WaitMechanism mechanism, bool expected = false) noexcept;
 
-    ScopedLock(std::atomic<bool> &atomic, WaitMechanism mechanism, bool expected = false) noexcept :
+    ScopedLock(utils::atomic<bool> &atomic, WaitMechanism mechanism, bool expected = false) noexcept :
       type_(BoolEnum), mechanism_(mechanism), bool_{ &atomic, expected }
     { lockAtomic(atomic, mechanism, expected); }
 
@@ -110,7 +108,7 @@ namespace utils
       else if (type_ == ReentrantBoolEnum && !reentrantBool_.wasLocked)
       {
         unlockAtomic(reentrantBool_.atomic->lock, mechanism_, reentrantBool_.expected);
-        reentrantBool_.atomic->lastLockId.store({}, std::memory_order_relaxed);
+        reentrantBool_.atomic->lastLockId.store<utils::memory_order_relaxed>({});
       }
 
       type_ = Empty;
@@ -120,7 +118,7 @@ namespace utils
     enum { Empty, BoolEnum, I32Enum, ReentrantBoolEnum } type_;
     WaitMechanism mechanism_;
     struct ReentrantBoolType { ReentrantLock<bool> *atomic; bool wasLocked; bool expected; };
-    struct BoolType { std::atomic<bool> *atomic; bool expected; };
+    struct BoolType { utils::atomic<bool> *atomic; bool expected; };
     struct I32Type { LockBlame<i32> *atomic; bool isExclusive; };
     union
     {
@@ -135,10 +133,10 @@ namespace utils
   {
     struct atomic_holder
     {
-      T load() const noexcept { return value.load(std::memory_order_relaxed); }
-      void store(T newValue) noexcept { value.store(newValue, std::memory_order_relaxed); }
+      T load() const noexcept { return value.load<utils::memory_order_relaxed>(); }
+      void store(T newValue) noexcept { value.store<utils::memory_order_relaxed>(newValue); }
 
-      std::atomic<T> value;
+      utils::atomic<T> value;
     };
 
     struct guard_holder
@@ -155,11 +153,11 @@ namespace utils
       }
 
       T value;
-      mutable std::atomic<bool> guard = false;
+      mutable utils::atomic<bool> guard = false;
     };
 
     // if the type cannot fit into an atomic we can have an atomic_bool to guard it
-    using holder = utils::conditional_t<sizeof(T) <= sizeof(std::uintptr_t), atomic_holder, guard_holder>;
+    using holder = utils::conditional_t<sizeof(T) <= sizeof(::uintptr_t), atomic_holder, guard_holder>;
   public:
     shared_value() = default;
     shared_value(const shared_value &other) noexcept : value{ other.value.load() } { }
@@ -182,17 +180,17 @@ namespace utils
     enum Flag : u8 { Unused, Updated, Using };
     up<T[]> data_{};
     usize size_{};
-    mutable std::atomic<Flag> flag_{ Unused };
+    mutable utils::atomic<Flag> flag_{ Unused };
 
     void changeFlag(Flag newFlag) noexcept
     {
       Flag flag = Unused;
-      while (!flag_.compare_exchange_weak(flag, newFlag, std::memory_order_acquire))
+      while (!flag_.compare_exchange_weak<utils::memory_order_acquire>(flag, newFlag))
       {
         while (flag == Using)
         {
           millisleep();
-          flag = flag_.load(std::memory_order_relaxed);
+          flag = flag_.load<utils::memory_order_relaxed>();
         }
       }
     }
@@ -210,10 +208,10 @@ namespace utils
         if (!holder_)
           return;
         
-        COMPLEX_ASSERT(holder_->flag_.load(std::memory_order_relaxed) == Using, 
+        COMPLEX_ASSERT(holder_->flag_.load<utils::memory_order_relaxed>() == Using,
           "A span is given out only if it is the exclusive user of the data");
         auto newFlag = isWriting_ ? Updated : Unused;
-        holder_->flag_.store(newFlag, std::memory_order_release);
+        holder_->flag_.store<utils::memory_order_release>(newFlag);
 
         holder_ = nullptr;
       }
@@ -237,7 +235,7 @@ namespace utils
 
     void update() noexcept { changeFlag(Updated); }
     bool hasUpdate() const noexcept
-    { return flag_.load(std::memory_order_relaxed) == Updated; }
+    { return flag_.load<utils::memory_order_relaxed>() == Updated; }
 
     void resize(usize size)
     {
@@ -251,7 +249,7 @@ namespace utils
       data_ = COMPLEX_MOVE(newData);
       size_ = size;
 
-      flag_.store(Unused, std::memory_order_release);
+      flag_.store<utils::memory_order_release>(Unused);
     }
 
     void copy(T *writee) noexcept
@@ -260,7 +258,7 @@ namespace utils
 
       memcpy(writee, data_.get(), size_ * sizeof(T));
 
-      flag_.store(Unused, std::memory_order_release);
+      flag_.store<utils::memory_order_release>(Unused);
     }
     pair<up<T[]>, usize> copy() noexcept
     {
@@ -270,7 +268,7 @@ namespace utils
       auto newData = up<T[]>::create(size);
       memcpy(newData.get(), data_.get(), size_ * sizeof(T));
 
-      flag_.store(Unused, std::memory_order_release);
+      flag_.store<utils::memory_order_release>(Unused);
       return { COMPLEX_MOVE(newData), size };
     }
 
@@ -325,11 +323,11 @@ namespace utils
 
     void unlock() const noexcept
     {
-      guard.store(false, std::memory_order_release);
+      guard.store<utils::memory_order_release>(false);
       guard.notify_one();
     }
   private:
-    mutable std::atomic<bool> guard = false;
+    mutable utils::atomic<bool> guard = false;
     T value{};
   };
 }

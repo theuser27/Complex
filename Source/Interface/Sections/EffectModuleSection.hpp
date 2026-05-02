@@ -37,7 +37,7 @@ namespace Interface
   class EffectsLaneSection;
 
   class EffectModuleSection final : public ProcessorSection,
-    public Generation::BaseProcessorListener, public Framework::ParameterBridge::Listener
+    public Framework::ParameterBridge::Listener
   {
   public:
     enum MenuId

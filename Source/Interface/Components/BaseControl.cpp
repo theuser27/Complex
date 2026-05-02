@@ -442,7 +442,11 @@ namespace Interface
 
     auto calculateMainSpacing = [&]()
     {
-      std::tuple<int, int, int> total{ 0, 0, 0 };
+      struct
+      {
+        int w = 0, h = 0, controlsActive = 0;
+      } total;
+
       for (auto &[control, sizes] : controls_)
       {
         if (!control->isVisible())
@@ -450,9 +454,9 @@ namespace Interface
 
         COMPLEX_ASSERT(sizes.first || sizes.second);
         auto controlBounds = control->setSizes(sizes.second, sizes.first);
-        std::get<0>(total) += controlBounds.getWidth();
-        std::get<1>(total) += controlBounds.getHeight();
-        std::get<2>(total) += 1;
+        total.w += controlBounds.getWidth();
+        total.h += controlBounds.getHeight();
+        total.controlsActive += 1;
       }
       return total;
     };

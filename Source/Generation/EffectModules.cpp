@@ -1131,7 +1131,7 @@ namespace Generation
       }
     };
 
-    simd_float wet[2]{ utils::uninitialised, utils::uninitialised };
+    simd_float wet[2]{};
     for (u32 i = 0; i < binCount - 1; i += 2)
     {
       wet[0] = rawSource[i] * attenuation;
@@ -1304,8 +1304,8 @@ namespace Generation
     // switching to being a reader and allowing other readers to participate
     // seq_cst because the following atomic could be reordered to happen prior to this one
     dataBuffer_.setBufferPosition(source.blockPosition);
-    dataBuffer_.getLock().lock.store(1, std::memory_order_seq_cst);
-    source.sourceBuffer.getLock().lock.fetch_sub(1, std::memory_order_relaxed);
+    dataBuffer_.getLock().lock.store<utils::memory_order_seq_cst>(1);
+    source.sourceBuffer.getLock().lock.fetch_sub<utils::memory_order_relaxed>(1);
 
     source.sourceBuffer = dataBuffer_;
   }

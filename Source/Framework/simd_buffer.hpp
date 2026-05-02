@@ -55,8 +55,8 @@ namespace Framework
 
       data_.getExtraData()->channels_ = other.getChannels();
       data_.getExtraData()->size_ = other.getSize();
-      data_.getExtraData()->dataLock_.lock.store(0, std::memory_order_relaxed);
-      data_.getExtraData()->dataLock_.lastLockId.store(0, std::memory_order_relaxed);
+      data_.getExtraData()->dataLock_.lock.store<utils::memory_order_relaxed>(0);
+      data_.getExtraData()->dataLock_.lastLockId.store<utils::memory_order_relaxed>(0);
     }
     void copy(const SimdBuffer &other, u64 destination, u64 source, u64 size)
     { data_.copy(other.data_, destination, source, size); }
@@ -94,7 +94,7 @@ namespace Framework
         usize simdChannelsToCopy = (newSimdChannels < oldSimdChannels) ? newSimdChannels : oldSimdChannels;
         usize capacityToCopy = (newSize < size) ? newSize : size;
         for (usize i = 0; i <= simdChannelsToCopy; i++)
-          std::memcpy(&newData[i * newSize], &data_[i * size], capacityToCopy * sizeof(SIMD));
+          ::memcpy(&newData[i * newSize], &data_[i * size], capacityToCopy * sizeof(SIMD));
       }
 
       newData.getExtraData()->channels_ = newChannels;
@@ -365,7 +365,7 @@ namespace Framework
         COMPLEX_ASSERT(thisBuffer.data_ != otherBuffer.dataView_ && 
           "We're copying from a buffer to itself consider using something else if this is intentional");
 
-        std::memcpy(&thisData[thisChannelIndices.first], &otherData[otherChannelIndices.first], samples * sizeof(SIMD));
+        ::memcpy(&thisData[thisChannelIndices.first], &otherData[otherChannelIndices.first], samples * sizeof(SIMD));
       }
     }
   }

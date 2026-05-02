@@ -551,7 +551,8 @@ namespace nested_enum
       }
     }
     // returns the values count inside this enum that satisfy the selection
-    static constexpr auto enum_count_filter(const auto &filterPredicate) noexcept -> detail::size_t
+    static constexpr auto enum_count_filter(
+      [[maybe_unused]] const auto &filterPredicate) noexcept -> detail::size_t
     {
       if constexpr (E::internalEnumValues_.size() == 0)
         return 0;
@@ -763,7 +764,8 @@ namespace nested_enum
       return enum_subtypes_filter<[]<typename T>() { return TEST_INCLUSIVENESS(Selection, T); }>();
     }
 
-    static constexpr detail::size_t enum_count_filter_recursive(const auto &filterPredicate) noexcept
+    static constexpr detail::size_t enum_count_filter_recursive(
+      [[maybe_unused]] const auto &filterPredicate) noexcept
     {
       auto recurse = [&]<typename ... Ts>([[maybe_unused]] const auto &self, type_list<Ts...>)
       {
@@ -907,7 +909,7 @@ namespace nested_enum
       constexpr auto result = []<typename ... Ts>(type_list<Ts...>)
       {
         if constexpr (FlattenTuple)
-          return pack_of_arrays_to_array(Ts::template enum_names<Selection>(Clean)...);
+          return detail::pack_of_arrays_to_array(Ts::template enum_names<Selection>(Clean)...);
         else
           return NESTED_ENUM_TUPLE_TYPE{ Ts::template enum_names<Selection>(Clean)... };
       }(return_recursive_selection<Selection>());
@@ -920,7 +922,7 @@ namespace nested_enum
       constexpr auto result = []<typename ... Ts>(type_list<Ts...>)
       {
         if constexpr (FlattenTuple)
-          return pack_of_arrays_to_array(Ts::template enum_names_filter<FilterPredicate>(Clean)...);
+          return detail::pack_of_arrays_to_array(Ts::template enum_names_filter<FilterPredicate>(Clean)...);
         else
           return NESTED_ENUM_TUPLE_TYPE{ Ts::template enum_names_filter<FilterPredicate>(Clean)... };
       }(return_recursive_internal<[]<typename T>(){ return true; }>());
@@ -936,7 +938,7 @@ namespace nested_enum
       constexpr auto result = []<typename ... Ts>(type_list<Ts...>)
       {
         if constexpr (FlattenTuple)
-          return pack_of_arrays_to_array(Ts::template enum_ids<Selection, UnwrapIds>()...);
+          return detail::pack_of_arrays_to_array(Ts::template enum_ids<Selection, UnwrapIds>()...);
         else
           return NESTED_ENUM_TUPLE_TYPE{ Ts::template enum_ids<Selection, UnwrapIds>()... };
       }(return_recursive_selection<Selection>());
@@ -949,7 +951,7 @@ namespace nested_enum
       constexpr auto result = []<typename ... Ts>(type_list<Ts...>)
       {
         if constexpr (FlattenTuple)
-          return pack_of_arrays_to_array(Ts::template enum_ids_filter<FilterPredicate, UnwrapIds>()...);
+          return detail::pack_of_arrays_to_array(Ts::template enum_ids_filter<FilterPredicate, UnwrapIds>()...);
         else
           return NESTED_ENUM_TUPLE_TYPE{ Ts::template enum_ids_filter<FilterPredicate, UnwrapIds>()... };
       }(return_recursive_internal<[]<typename T>(){ return true; }>());
@@ -965,7 +967,7 @@ namespace nested_enum
       constexpr auto result = []<typename ... Ts>(type_list<Ts...>)
       {
         if constexpr (FlattenTuple)
-          return pack_of_arrays_to_array(Ts::template enum_names_and_ids<Selection, UnwrapIds>(Clean)...);
+          return detail::pack_of_arrays_to_array(Ts::template enum_names_and_ids<Selection, UnwrapIds>(Clean)...);
         else
           return NESTED_ENUM_TUPLE_TYPE{ Ts::template enum_names_and_ids<Selection, UnwrapIds>(Clean)... };
       }(return_recursive_selection<Selection>());
@@ -978,7 +980,7 @@ namespace nested_enum
       constexpr auto result = []<typename ... Ts>(type_list<Ts...>)
       {
         if constexpr (FlattenTuple)
-          return pack_of_arrays_to_array(Ts::template enum_names_and_ids_filter<FilterPredicate, UnwrapIds>(Clean)...);
+          return detail::pack_of_arrays_to_array(Ts::template enum_names_and_ids_filter<FilterPredicate, UnwrapIds>(Clean)...);
         else
           return NESTED_ENUM_TUPLE_TYPE{ Ts::template enum_names_and_ids_filter<FilterPredicate, UnwrapIds>(Clean)... };
       }(return_recursive_internal<[]<typename T>(){ return true; }>());

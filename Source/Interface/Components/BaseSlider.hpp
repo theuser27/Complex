@@ -441,7 +441,6 @@ namespace Interface
     }
 
     void setUsedFont(juce::Font usedFont) noexcept { usedFont_ = COMPLEX_MOVE(usedFont); isDirty_ = true; }
-    void setDrawArrow(bool drawArrow) noexcept { drawArrow_ = drawArrow; isDirty_ = true; }
     void setAnchor(Placement anchor) noexcept { anchor_ = anchor; }
 
     void setExtraIcon(PlainShapeComponent *icon) noexcept;
@@ -463,7 +462,6 @@ namespace Interface
     juce::Font usedFont_{};
     double lastValue_ = 0.0;
     int textWidth_{};
-    bool drawArrow_ = true;
     bool isDirty_ = false;
     bool isDropDownVisible_ = false;
     Placement anchor_ = Placement::left;
@@ -487,7 +485,6 @@ namespace Interface
     NumberBox(Framework::ParameterValue *parameter);
 
     void mouseDrag(const juce::MouseEvent &e) override;
-    void setVisible(bool shouldBeVisible) override;
 
     void textEditorReturnKeyPressed(TextEditor &editor) override;
     void textEditorEscapeKeyPressed(TextEditor &editor) override;

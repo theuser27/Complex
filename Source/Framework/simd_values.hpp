@@ -24,10 +24,10 @@
 
 namespace simd_values
 {
-  inline constexpr u32 kFullMask = UINT32_MAX;
-  inline constexpr u32 kNoChangeMask = UINT32_MAX;
-  inline constexpr u32 kNotSignMask = (u32)INT32_MAX;
-  inline constexpr u32 kSignMask = kNotSignMask + 1U;
+  inline constexpr u32 kFullMask = u32(-1);
+  inline constexpr u32 kNoChangeMask = u32(-1);
+  inline constexpr u32 kSignMask = 1U << 31;
+  inline constexpr u32 kNotSignMask = kSignMask - 1;
 
   struct alignas(COMPLEX_SIMD_ALIGNMENT) simd_int
   {

@@ -10,6 +10,7 @@
 
 #pragma once
 
+#include "BaseSection.hpp"
 #include "../Components/DraggableComponent.hpp"
 #include "../Components/LaneSelector.hpp"
 

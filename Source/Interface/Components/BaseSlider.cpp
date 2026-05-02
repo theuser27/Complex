@@ -111,7 +111,7 @@ namespace Interface
     lastMouseDragPosition_ = e.position;
 
     double newPos = getValueRaw() + mouseDiff * (1.0 / immediateSensitivity_);
-    newPos = (type_ == SliderType::CanLoopAround) ? newPos - std::floor(newPos) : std::clamp(newPos, 0.0, 1.0);
+    newPos = (type_ & SliderType::CanLoopAround) ? newPos - ::floor(newPos) : utils::clamp(newPos, 0.0, 1.0);
 
     setValue(snapValue(newPos, DragMode::absoluteDrag), sendNotificationSync);
     setValueToHost();
@@ -995,9 +995,6 @@ namespace Interface
         g.setFont(usedFont_);
         g.drawText(text, juce::Rectangle{ leftOffset, 0.0f, (float)textWidth_, height }, Justification::centred, false);
 
-        if (!drawArrow_)
-          return;
-
         float arrowOffsetX = std::round(kBetweenElementsMarginHeightRatio * height);
         float arrowOffsetY = height / 2 - 1;
         float arrowWidth = height * kHeightToArrowWidthRatio;
@@ -1276,11 +1273,8 @@ namespace Interface
       textWidth_ = usedFont_.getStringWidth(text);
       float totalDrawWidth = (float)textWidth_;
 
-      if (drawArrow_)
-      {
-        totalDrawWidth += floatHeight * kBetweenElementsMarginHeightRatio;
-        totalDrawWidth += floatHeight * kHeightToArrowWidthRatio;
-      }
+      totalDrawWidth += floatHeight * kBetweenElementsMarginHeightRatio;
+      totalDrawWidth += floatHeight * kHeightToArrowWidthRatio;
 
       if (extraIcon_)
       {
@@ -1441,24 +1435,6 @@ namespace Interface
     setImmediateSensitivity((int)sensitivity);
 
     BaseSlider::mouseDrag(e);
-  }
-
-  void NumberBox::setVisible(bool shouldBeVisible)
-  {
-    if (!shouldBeVisible)
-    {
-      quadComponent_.setActive(false);
-      imageComponent_.setActive(false);
-      textEntry_->setVisible(false);
-    }
-    else
-    {
-      quadComponent_.setActive(!drawBackground_);
-      imageComponent_.setActive(drawBackground_);
-      textEntry_->setVisible(true);
-    }
-
-    BaseSlider::setVisible(shouldBeVisible);
   }
 
   void NumberBox::textEditorReturnKeyPressed(TextEditor &editor)

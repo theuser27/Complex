@@ -135,7 +135,7 @@ namespace Interface
     utils::up<float[]> fillData_;
     utils::up<int[]> indicesData_;
 
-    mutable std::atomic<bool> buffersLock_ = false;
+    mutable utils::atomic<bool> buffersLock_ = false;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(OpenGlLineRenderer)
   };

@@ -62,7 +62,7 @@ namespace Interface
       2, 3, 0
     };
 
-    COMPLEX_ASSERT(!isInitialised_.load(std::memory_order_acquire), "Init method more than once");
+    COMPLEX_ASSERT(!isInitialised_.load<utils::memory_order_acquire>(), "Init method more than once");
 
     glGenBuffers(1, &vertexBuffer_);
     glBindBuffer(GL_ARRAY_BUFFER, vertexBuffer_);
@@ -108,12 +108,12 @@ namespace Interface
     startPositionUniform_ = getUniform(shader_, "start_pos");
     overallAlphaUniform_ = getUniform(shader_, "overall_alpha");
 
-    isInitialised_.store(true, std::memory_order_release);
+    isInitialised_.store<utils::memory_order_release>(true);
   }
 
   void OpenGlMultiQuad::destroy()
   {
-    if (!isInitialised_.load(std::memory_order_acquire))
+    if (!isInitialised_.load<utils::memory_order_acquire>())
       return;
 
     shader_ = {};
@@ -139,7 +139,7 @@ namespace Interface
     vertexBuffer_ = 0;
     indicesBuffer_ = 0;
 
-    isInitialised_.store(false, std::memory_order_release);
+    isInitialised_.store<utils::memory_order_release>(false);
   }
 
   void OpenGlMultiQuad::render(OpenGlWrapper &openGl)

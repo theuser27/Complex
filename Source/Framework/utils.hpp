@@ -11,7 +11,6 @@
 #pragma once
 
 #include <math.h>
-#include <atomic>
 #include <string.h>
 #include <stdlib.h>
 
@@ -21,6 +20,7 @@
   #include <new>
 #endif
 
+#include "satomi.hpp"
 #include "stl_utils.hpp"
 #include "constants.hpp"
 
@@ -190,7 +190,7 @@ namespace utils
     static constexpr u64 isCombinedMask = u64(1) << 63;
     static constexpr u64 refCountMask = ~isCombinedMask;
 
-    std::atomic<u64> refCount = 1;
+    utils::atomic<u64> refCount = 1;
   };
 
   // ghetto shared_ptr implementation with changable control block
@@ -221,7 +221,7 @@ namespace utils
 
       object_ = other.object_;
       refCount_ = other.refCount_;
-      refCount_->refCount.fetch_add(1, std::memory_order_relaxed);
+      refCount_->refCount.fetch_add<utils::memory_order_relaxed>(1);
     }
     template<typename U> requires utils::is_convertible_v<U *, T *>
     constexpr sp(const sp<U, RefCountT> &other) noexcept
@@ -231,7 +231,7 @@ namespace utils
 
       object_ = other.object_;
       refCount_ = other.refCount_;
-      refCount_->refCount.fetch_add(1, std::memory_order_relaxed);
+      refCount_->refCount.fetch_add<utils::memory_order_relaxed>(1);
     }
     constexpr sp(sp &&other) noexcept
     {
@@ -261,7 +261,7 @@ namespace utils
 
       auto *refCount = refCount_;
       refCount_ = nullptr;
-      auto value = refCount->refCount.fetch_sub(1, std::memory_order_acq_rel);
+      auto value = refCount->refCount.fetch_sub<utils::memory_order_acq_rel>(1);
       if ((value & RefCountT::refCountMask) > 1)
         return;
 
@@ -305,7 +305,7 @@ namespace utils
     constexpr T &operator*() const noexcept { return *get(); }
 
     constexpr usize use_count() const noexcept
-    { return (!refCount_) ? 0 : (refCount_->refCount.load(std::memory_order_relaxed) & RefCountT::refCountMask); }
+    { return (!refCount_) ? 0 : (refCount_->refCount.load<utils::memory_order_relaxed>() & RefCountT::refCountMask); }
 
     explicit constexpr operator bool() const noexcept { return get() != nullptr; }
 
@@ -660,14 +660,14 @@ namespace utils
   private:
     struct ControlBlock
     {
-      std::atomic<bool> exists = true;
-      std::atomic<usize> refCount = 1;
+      utils::atomic<bool> exists = true;
+      utils::atomic<usize> refCount = 1;
     } *controlBlock_ = nullptr;
 
     void construct(ControlBlock *controlBlock)
     {
       controlBlock_ = controlBlock;
-      controlBlock_->refCount.fetch_add(1, std::memory_order_relaxed);
+      controlBlock_->refCount.fetch_add<utils::memory_order_relaxed>(1);
     }
   public:
     struct Master
@@ -679,8 +679,8 @@ namespace utils
 
         auto *controlBlock = controlBlock_;
         controlBlock_ = nullptr;
-        controlBlock->exists.store(false, std::memory_order_relaxed);
-        auto value = controlBlock->refCount.fetch_sub(1, std::memory_order_relaxed);
+        controlBlock->exists.store<utils::memory_order_relaxed>(false);
+        auto value = controlBlock->refCount.fetch_sub<utils::memory_order_relaxed>(1);
         COMPLEX_ASSERT(value != 0);
         if (value > 1)
           return;
@@ -707,7 +707,7 @@ namespace utils
       
       auto *controlBlock = controlBlock_;
       controlBlock_ = nullptr;
-      auto value = controlBlock->refCount.fetch_sub(1, std::memory_order_relaxed);
+      auto value = controlBlock->refCount.fetch_sub<utils::memory_order_relaxed>(1);
       COMPLEX_ASSERT(value != 0);
       if (value > 1)
         return;
@@ -732,7 +732,7 @@ namespace utils
     bool isObjectAlive() const noexcept
     {
       return controlBlock_ != nullptr &&
-        controlBlock_->exists.load(std::memory_order_relaxed);
+        controlBlock_->exists.load<utils::memory_order_relaxed>();
     }
   };
 
@@ -790,12 +790,17 @@ namespace utils
         ::abort();
       }
 
+      // you can't just assign lambdas to the fn ptrs because micro soft can't fix their compiler
+      static constexpr void empty_copy([[maybe_unused]] void *, [[maybe_unused]] const void *) { }
+      static constexpr void empty_destroy([[maybe_unused]] void *) { }
+      static constexpr void empty_move([[maybe_unused]] void *, [[maybe_unused]] void *) { }
+
       usize size = 0;
       usize alignment = 0;
-      Copier copier = [](void *, const void *) { };
-      Destroyer destroyer = [](void *) { };
+      Copier copier = &empty_copy;
+      Destroyer destroyer = &empty_destroy;
       Invoker invoker = &empty_invoke;
-      Mover mover = [](void *, void *) { };
+      Mover mover = &empty_move;
     };
 
     // Empty vtable which is used when fn is empty
@@ -828,9 +833,13 @@ namespace utils
     }
 
     // needed because fn & go to the lambda constructor otherwise
+    // and cannot forward to proper copy constructor because uhhh ¯\_(ツ)_/¯
     template<usize Size>
-    constexpr fn(fn<R(Args...), Size> &rhs) :
-      fn{ static_cast<const fn<R(Args...), Size> &>(rhs) } { }
+    constexpr fn(fn<R(Args...), Size> &rhs)
+    {
+      allocate(rhs.vtable_);
+      vtable_->copier(data_, rhs.data_);
+    }
 
     template<usize Size>
     constexpr fn(fn<R(Args...), Size> &&rhs) noexcept

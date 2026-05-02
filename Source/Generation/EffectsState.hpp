@@ -34,16 +34,14 @@ namespace Generation
     EffectsLane(Plugin::ProcessorTree *processorTree) noexcept;
 
     EffectsLane(const EffectsLane &other) noexcept : BaseProcessor{ other } { }
-    EffectsLane &operator=(const EffectsLane &other) noexcept 
-    { BaseProcessor::operator=(other); return *this; }
 
     void deserialiseFromJson(void *jsonData) override;
 
     void initialise() noexcept override
     {
       BaseProcessor::initialise();
-      status_.store(LaneStatus::Finished, std::memory_order_release);
-      currentEffectIndex_.store(0, std::memory_order_release);
+      status_.store<utils::memory_order_release>(LaneStatus::Finished);
+      currentEffectIndex_.store<utils::memory_order_release>(0);
     }
 
     // Inherited via BaseProcessor
@@ -68,7 +66,7 @@ namespace Generation
     // 4. gain match
 
     utils::shared_value<simd_float> volumeScale_{};
-    std::atomic<u32> currentEffectIndex_ = 0;
+    utils::atomic<u32> currentEffectIndex_ = 0;
 
     // Finished - finished all processing
     // Ready - ready for a thread to begin work
@@ -76,7 +74,7 @@ namespace Generation
     // Stopped - temporarily stopped to wait for data from another lane
     enum class LaneStatus : u32 { Finished, Ready, Running, Stopped };
 
-    std::atomic<LaneStatus> status_ = LaneStatus::Finished;
+    utils::atomic<LaneStatus> status_ = LaneStatus::Finished;
 
     friend class EffectsState;
   };
@@ -149,6 +147,6 @@ namespace Generation
     Framework::SimdBuffer<Framework::complex<float>, simd_float> outputBuffer_{};
 
     std::vector<Thread> workerThreads_;
-    std::atomic<bool> shouldWorkersProcess_ = false;
+    utils::atomic<bool> shouldWorkersProcess_ = false;
   };
 }

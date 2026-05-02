@@ -57,7 +57,7 @@ namespace Interface
 
     auto &getPlugin() noexcept { return plugin_; }
     MainInterface *getGui() noexcept;
-    std::atomic<bool> &getRenderLock() noexcept;
+    utils::atomic<bool> &getRenderLock() noexcept;
     Skin *getSkin() noexcept;
 
     void setEditor(juce::AudioProcessorEditor *editor) noexcept { topLevelComponent_ = editor; }

@@ -214,7 +214,7 @@ namespace Plugin
     dynamicParameters_.clear();
 
     allProcessors_.data.clear();
-    processorIdCounter_.store(processorTreeId + 1, std::memory_order_release);
+    processorIdCounter_.store<utils::memory_order_release>(processorTreeId + 1);
   }
 
   void ProcessorTree::serialiseToJson(void *jsonData) const
@@ -255,8 +255,8 @@ namespace Plugin
       {
         if (parameter["id"].get<utils::string_view>() == Framework::Processors::SoundEngine::BlockSize::id().value())
         {
-          minFFTOrder_.store(parameter["min_value"].get<u32>(), std::memory_order_release);
-          maxFFTOrder_.store(parameter["max_value"].get<u32>(), std::memory_order_release);
+          minFFTOrder_.store<utils::memory_order_release>(parameter["min_value"].get<u32>());
+          maxFFTOrder_.store<utils::memory_order_release>(parameter["max_value"].get<u32>());
           break;
         }
       }
@@ -325,7 +325,7 @@ namespace Plugin
       parameterBridges_[i]->resetParameterLink(parameter->getParameterLink(), true);
     }
 
-    isLoaded_.store(true, std::memory_order_release);
+    isLoaded_.store<utils::memory_order_release>(true);
   }
 
   auto ProcessorTree::createProcessor(utils::string_view processorType, void *jsonData)
@@ -806,7 +806,7 @@ namespace Framework
 
 void ComplexAudioProcessor::getStateInformation(juce::MemoryBlock &destinationData)
 {
-  if (!isLoaded_.load(std::memory_order_acquire))
+  if (!isLoaded_.load<utils::memory_order_acquire>())
   {
     loadDefaultPreset();
   }
@@ -844,7 +844,7 @@ void ComplexAudioProcessor::setStateInformation(const void *data, int sizeInByte
 
   suspendProcessing(true);
 
-  if (isLoaded_.load(std::memory_order_acquire))
+  if (isLoaded_.load<utils::memory_order_acquire>())
     pushUndo(new Framework::PresetUpdate{ *this, COMPLEX_MOVE(jsonData) });
   else
     deserialiseFromJson(&jsonData, nullptr);
@@ -854,5 +854,5 @@ void ComplexAudioProcessor::setStateInformation(const void *data, int sizeInByte
 
   suspendProcessing(false);
 
-  isLoaded_.store(true, std::memory_order_release);
+  isLoaded_.store<utils::memory_order_release>(true);
 }

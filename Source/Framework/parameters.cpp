@@ -32,7 +32,8 @@ namespace Framework
     return {};
   }
 
-  auto getIndexedData(double scaledValue, const ParameterDetails &details) noexcept -> utils::pair<const IndexedData *, usize>
+  auto getIndexedData(double scaledValue, const ParameterDetails &details) noexcept 
+    -> utils::pair<const IndexedData *, usize>
   {
     COMPLEX_ASSERT(details.scale == ParameterScale::Indexed ||
       details.scale == ParameterScale::IndexedNumeric ||

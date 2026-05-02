@@ -199,7 +199,6 @@ namespace utils
     {
       [&]<usize ... Is>(const index_sequence<Is...> &)
       {
-
         if constexpr (requires(Fn fn, usize i) { fn(i); })
           [[maybe_unused]] auto dummy = ((fn(Is), Is) + ...);
         else if constexpr (requires(Fn fn) { fn(); })
@@ -691,7 +690,4 @@ namespace utils
 
     return begin;
   }
-
-
-
 }

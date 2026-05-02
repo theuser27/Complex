@@ -78,10 +78,10 @@ namespace Interface
 
   void OpenGlComponent::doWorkOnComponent(OpenGlWrapper &openGl)
   {
-    if (!isInitialised_.load(std::memory_order_acquire))
+    if (!isInitialised_.load<utils::memory_order_acquire>())
     {
       init(openGl);
-      COMPLEX_ASSERT(isInitialised_.load(std::memory_order_relaxed), "Init method didn't set flag");
+      COMPLEX_ASSERT(isInitialised_.load<utils::memory_order_relaxed>(), "Init method didn't set flag");
     }
 
     auto customRenderFunction = renderFunction_.get();

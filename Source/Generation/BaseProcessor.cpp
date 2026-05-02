@@ -38,67 +38,6 @@ namespace Generation
 
     dataBuffer_.copy(other.dataBuffer_);
   }
-
-  BaseProcessor::BaseProcessor(BaseProcessor &&other) noexcept :
-    processorTree_(other.processorTree_), processorType_{ other.processorType_ },
-    processorId_{ processorTree_->generateId() }
-  {
-    processorParameters_.data.reserve(other.processorParameters_.data.size());
-    for (auto &parameterPair : other.processorParameters_.data)
-      processorParameters_.data.emplace_back(parameterPair.first,
-        utils::up<Framework::ParameterValue>::create(*parameterPair.second));
-
-    subProcessors_ = COMPLEX_MOVE(other.subProcessors_);
-    for (auto &subProcessor : subProcessors_)
-      subProcessor->setParentProcessorId(processorId_);
-
-    dataBuffer_.swap(other.dataBuffer_);
-  }
-
-
-  BaseProcessor &BaseProcessor::operator=(const BaseProcessor &other) noexcept
-  {
-    COMPLEX_ASSERT(processorType_ == other.processorType_ && "Object to copy is not of the same type");
-
-    if (this != &other)
-    {
-      processorParameters_.data.reserve(other.processorParameters_.data.size());
-      for (usize i = 0; i < other.processorParameters_.data.size(); i++)
-        processorParameters_.data.emplace_back(other.processorParameters_.data[i].first,
-          utils::up<Framework::ParameterValue>::create(*other.processorParameters_[i]));
-
-      subProcessors_.reserve(other.subProcessors_.size());
-      for (auto &subProcessor : other.subProcessors_)
-      {
-        auto &newInstance = subProcessors_.emplace_back(subProcessor->createCopy());
-        newInstance->setParentProcessorId(processorId_);
-      }
-
-      dataBuffer_.copy(other.dataBuffer_);
-    }
-    return *this;
-  }
-
-  BaseProcessor &BaseProcessor::operator=(BaseProcessor &&other) noexcept
-  {
-    COMPLEX_ASSERT(processorType_ == other.processorType_ && "Object to move is not of the same type");
-
-    if (this != &other)
-    {
-      processorParameters_.data.reserve(other.processorParameters_.data.size());
-      for (usize i = 0; i < other.processorParameters_.data.size(); i++)
-        processorParameters_.data.emplace_back(other.processorParameters_.data[i].first,
-          utils::up<Framework::ParameterValue>::create(*other.processorParameters_[i]));
-
-      subProcessors_ = COMPLEX_MOVE(other.subProcessors_);
-      for (auto &subProcessor : subProcessors_)
-        subProcessor->setParentProcessorId(processorId_);
-
-      dataBuffer_.swap(other.dataBuffer_);
-    }
-    return *this;
-  }
-
   void BaseProcessor::initialise() noexcept
   {
     for (auto &processorParameter : processorParameters_.data)

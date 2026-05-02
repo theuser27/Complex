@@ -57,7 +57,7 @@ namespace Plugin
     {
       // check if we're in the middle of an audio callback
       utils::millisleep([&]()
-        { return updateFlag_.load(std::memory_order_relaxed) != UpdateFlag::AfterProcess; });
+        { return updateFlag_.load<utils::memory_order_relaxed>() != UpdateFlag::AfterProcess; });
 
       return utils::ScopedLock{ processingLock_, utils::WaitMechanism::Spin };
     };

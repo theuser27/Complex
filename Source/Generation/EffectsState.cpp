@@ -11,6 +11,7 @@
 #include "EffectsState.hpp"
 
 #include <thread>
+#include <algorithm>
 
 #include "Interface/LookAndFeel/Miscellaneous.hpp"
 #include "Framework/circular_buffer.hpp"
@@ -75,18 +76,19 @@ namespace Generation
       {
         while (true)
         {
-          if (shouldStop.load(std::memory_order_acquire))
+          if (shouldStop.load<utils::memory_order_acquire>())
             return;
 
-          utils::millisleep([&state]() { return !state.shouldWorkersProcess_.load(std::memory_order_acquire); });
+          utils::millisleep([&state]() { return !state.shouldWorkersProcess_.load<utils::memory_order_acquire>(); });
 
           state.distributeWork();
         }
       }) { }
     Thread(Thread &&other) noexcept : thread{ COMPLEX_MOVE(other.thread) },
-      shouldStop{ other.shouldStop.load(std::memory_order_relaxed) } { }
+      shouldStop{ other.shouldStop.load<utils::memory_order_relaxed>() } { }
+
     std::thread thread{};
-    std::atomic<bool> shouldStop = false;
+    utils::atomic<bool> shouldStop = false;
   };
 
   EffectsState::EffectsState(Plugin::ProcessorTree *processorTree) noexcept :
@@ -263,17 +265,17 @@ namespace Generation
 
   void EffectsState::processLanes() noexcept
   {
-    shouldWorkersProcess_.store(true, std::memory_order_release);
+    shouldWorkersProcess_.store<utils::memory_order_release>(true);
     // sequential consistency just in case
     // triggers the chains to run again
     for (auto &lane : lanes_)
-      lane->status_.store(EffectsLane::LaneStatus::Ready, std::memory_order_seq_cst);
+      lane->status_.store<utils::memory_order_seq_cst>(EffectsLane::LaneStatus::Ready);
 
     distributeWork();
 
     // waiting for chains to finish
     for (auto &lane : lanes_)
-      while (lane->status_.load(std::memory_order_acquire) != EffectsLane::LaneStatus::Finished) { utils::longPause<5>(); }
+      while (lane->status_.load<utils::memory_order_acquire>() != EffectsLane::LaneStatus::Finished) { utils::longPause<5>(); }
   }
 
   void EffectsState::checkUsage()
@@ -286,11 +288,10 @@ namespace Generation
   {
     for (usize i = 0; i < lanes_.size(); ++i)
     {
-      if (lanes_[i]->status_.load(std::memory_order_relaxed) == EffectsLane::LaneStatus::Ready)
+      if (lanes_[i]->status_.load<utils::memory_order_relaxed>() == EffectsLane::LaneStatus::Ready)
       {
         auto expected = EffectsLane::LaneStatus::Ready;
-        if (lanes_[i]->status_.compare_exchange_strong(expected, EffectsLane::LaneStatus::Running,
-          std::memory_order_seq_cst, std::memory_order_relaxed))
+        if (lanes_[i]->status_.compare_exchange_strong<utils::memory_order_seq_cst>(expected, EffectsLane::LaneStatus::Running))
           processIndividualLanes(i);
       }
     }
@@ -303,7 +304,7 @@ namespace Generation
 
     auto *thisLane = lanes_[laneIndex];
 
-    thisLane->currentEffectIndex_.store(0, std::memory_order_release);
+    thisLane->currentEffectIndex_.store<utils::memory_order_release>(0);
     thisLane->volumeScale_ = 1.0f;
     auto &laneDataSource = thisLane->laneDataSource_;
     laneDataSource.blockPhase = blockPhase;
@@ -320,7 +321,7 @@ namespace Generation
       COMPLEX_ASSERT(inputIndex.second != laneIndex && "A lane cannot use its own output as input");
       while (true)
       {
-        auto otherLaneStatus = lanes_[inputIndex.second]->status_.load(std::memory_order_acquire);
+        auto otherLaneStatus = lanes_[inputIndex.second]->status_.load<utils::memory_order_acquire>();
         if (otherLaneStatus == EffectsLane::LaneStatus::Finished)
           break;
 
@@ -335,7 +336,7 @@ namespace Generation
         // TODO: decide if it's even worth to wait, or we can grab a reference to the other lane's SimdBufferView
         laneDataSource.sourceBuffer = lanes_[inputIndex.second]->laneDataSource_.sourceBuffer;
 
-        thisLane->status_.store(EffectsLane::LaneStatus::Finished, std::memory_order_release);
+        thisLane->status_.store<utils::memory_order_release>(EffectsLane::LaneStatus::Finished);
         return;
       }
 
@@ -363,7 +364,7 @@ namespace Generation
       // finish if lane is off
       if (!isLaneOn)
       {
-        thisLane->status_.store(EffectsLane::LaneStatus::Finished, std::memory_order_release);
+        thisLane->status_.store<utils::memory_order_release>(EffectsLane::LaneStatus::Finished);
         return;
       }
     }
@@ -406,7 +407,7 @@ namespace Generation
       as<EffectModule>(effectModule)->processEffect(laneDataSource, binCount, sampleRate);
 
       // incrementing where we are currently
-      thisLane->currentEffectIndex_.fetch_add(1, std::memory_order_acq_rel);
+      thisLane->currentEffectIndex_.fetch_add<utils::memory_order_acq_rel>(1);
     }
 
     if (isGainMatching)
@@ -428,7 +429,7 @@ namespace Generation
     COMPLEX_ASSERT(dataBuffer_.getLock().lock.load() >= 0);
 
     // to let other threads know that the data is in its final state
-    thisLane->status_.store(EffectsLane::LaneStatus::Finished, std::memory_order_release);
+    thisLane->status_.store<utils::memory_order_release>(EffectsLane::LaneStatus::Finished);
   }
 
   void EffectsState::sumLanesAndWriteOutput(Framework::Buffer &outputBuffer) noexcept

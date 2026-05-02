@@ -61,7 +61,7 @@ namespace Framework
 
   private:
     simd_float value = 0.0f;
-    mutable std::atomic<bool> guard = false;
+    mutable utils::atomic<bool> guard = false;
   };
 
   class ParameterBridge;
@@ -351,7 +351,7 @@ namespace Framework
     ParameterDetails details_;
 
     u32 themeColour_ = 0;
-    mutable std::atomic<bool> waitLock_ = false;
+    mutable utils::atomic<bool> waitLock_ = false;
     bool isDirty_ = false;
   };
 }

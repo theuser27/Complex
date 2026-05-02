@@ -58,6 +58,6 @@ namespace Plugin
     // pointer to the main processing engine
     Generation::SoundEngine *soundEngine_ = nullptr;
     utils::up<Interface::Renderer> rendererInstance_;
-    std::atomic<bool> isLoaded_ = false;
+    utils::atomic<bool> isLoaded_ = false;
   };
 }

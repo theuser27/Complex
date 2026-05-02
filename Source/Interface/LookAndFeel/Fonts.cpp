@@ -64,7 +64,7 @@ namespace Interface
 
   Fonts::Fonts() :
     DDinFont_(juce::Typeface::createSystemTypefaceFor(
-      BinaryData::DDINBold_ttf, BinaryData::DDINBold_ttfSize)),
+      BinaryData::DDINBold1_ttf, BinaryData::DDINBold1_ttfSize)),
     InterVFont_(juce::Typeface::createSystemTypefaceFor(
       BinaryData::InterMedium_ttf, BinaryData::InterMedium_ttfSize))
   {

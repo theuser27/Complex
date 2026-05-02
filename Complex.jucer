@@ -14,7 +14,8 @@
       <FILE id="VSP3jA" name="Icon_Phase.svg" compile="0" resource="1" file="Icons/Icon_Phase.svg"/>
     </GROUP>
     <GROUP id="{7DCBD02E-5965-7719-7CD3-51C632FE14C8}" name="Fonts">
-      <FILE id="P00tpO" name="D-DIN-Bold.ttf" compile="0" resource="1" file="Fonts/D-DIN-Bold.ttf"/>
+      <FILE id="P00tpO" name="D-DIN-Bold.ttf" compile="0" resource="0" file="Fonts/D-DIN-Bold.ttf"/>
+      <FILE id="ebyck5" name="D-DIN-Bold1.ttf" compile="0" resource="1" file="Fonts/D-DIN-Bold1.ttf"/>
       <FILE id="tgppxL" name="Inter-Medium.ttf" compile="0" resource="1"
             file="Fonts/Inter-Medium.ttf"/>
     </GROUP>

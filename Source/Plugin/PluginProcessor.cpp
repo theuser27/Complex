@@ -65,7 +65,7 @@ void ComplexAudioProcessor::changeProgramName([[maybe_unused]] int index, [[mayb
 //==============================================================================
 void ComplexAudioProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
 {
-  if (!isLoaded_.load(std::memory_order_acquire))
+  if (!isLoaded_.load<utils::memory_order_acquire>())
     return;
 
   initialise((float)sampleRate, samplesPerBlock);

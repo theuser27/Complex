@@ -56,8 +56,7 @@ namespace Interface
       openGl_.animate = animate_;
 
     #if COMPLEX_MAC
-      if (bool expected = false; !renderLock_.compare_exchange_strong(expected, true,
-        std::memory_order_acq_rel, std::memory_order_relaxed))
+      if (bool expected = false; !renderLock_.compare_exchange_strong<utils::memory_order_acq_rel>(expected, true))
         return;
     #else
       utils::ScopedLock g{ renderLock_, utils::WaitMechanism::WaitNotify };
@@ -70,11 +69,11 @@ namespace Interface
       // not get frame tearing/overlap with previous frames
       // https://community.khronos.org/t/swapbuffers-and-synchronization/107667/5
       openGl_.context.swapBuffers();
-      if (isResizing_.load(std::memory_order_acquire))
+      if (isResizing_.load<utils::memory_order_acquire>())
         juce::gl::glFinish();
 
     #if COMPLEX_MAC
-      renderLock_.store(false, std::memory_order_release);
+      renderLock_.store<utils::memory_order_release>(false);
       renderLock_.notify_all();
     #endif
     }
@@ -116,7 +115,7 @@ namespace Interface
     }
 
     auto &getRenderLock() noexcept { return renderLock_; }
-    void setIsResizing(bool isResizing) noexcept { isResizing_.store(isResizing, std::memory_order_release); }
+    void setIsResizing(bool isResizing) noexcept { isResizing_.store<utils::memory_order_release>(isResizing); }
     
     void pushOpenGlResourceToDelete(OpenGlAllocatedResource type, GLsizei n, GLuint id)
     {
@@ -157,8 +156,8 @@ namespace Interface
     };
     bool unsupported_ = false;
     utils::shared_value<bool> animate_ = true;
-    std::atomic<bool> renderLock_ = false;
-    std::atomic<bool> isResizing_ = false;
+    utils::atomic<bool> renderLock_ = false;
+    utils::atomic<bool> isResizing_ = false;
 
     Renderer &renderer_;
     Plugin::ComplexPlugin &plugin_;
@@ -166,7 +165,7 @@ namespace Interface
     OpenGlWrapper openGl_{ openGlContext_ };
     Shaders shaders_;
     std::vector<CleanupItem> cleanupQueue_{};
-    std::atomic<bool> cleanupQueueLock_{};
+    utils::atomic<bool> cleanupQueueLock_{};
   };
 
   Renderer::Renderer(Plugin::ComplexPlugin &plugin) : 
@@ -274,7 +273,7 @@ namespace Interface
 
   MainInterface *Renderer::getGui() noexcept { return gui_.get(); }
   Skin *Renderer::getSkin() noexcept { return skinInstance_.get(); }
-  std::atomic<bool> &Renderer::getRenderLock() noexcept { return pimpl_->getRenderLock(); }
+  utils::atomic<bool> &Renderer::getRenderLock() noexcept { return pimpl_->getRenderLock(); }
   
   void Renderer::pushOpenGlResourceToDelete(OpenGlAllocatedResource type, GLsizei n, GLuint id)
   { pimpl_->pushOpenGlResourceToDelete(type, n, id); }

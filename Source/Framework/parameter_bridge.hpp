@@ -12,7 +12,8 @@
 
 #include <juce_audio_processors/juce_audio_processors.h>
 
-#include "platform_definitions.hpp"
+#include "satomi.hpp"
+#include "stl_utils.hpp"
 
 namespace Plugin
 {
@@ -46,12 +47,12 @@ namespace Framework
       u64 parameterIndex = UINT64_MAX, ParameterLink *link = nullptr) noexcept;
     ~ParameterBridge() noexcept override;
 
-    auto *getParameterLink() const noexcept { return parameterLinkPointer_.load(std::memory_order_acquire); }
+    auto *getParameterLink() const noexcept { return parameterLinkPointer_.load<utils::memory_order_acquire>(); }
     void resetParameterLink(ParameterLink *link, bool getValueFromParameter = true) noexcept;
 
     void setValueFromUI(float newValue) noexcept
     {
-      value_.store(newValue, std::memory_order_release);
+      value_.store<utils::memory_order_release>(newValue);
       sendValueChangedMessageToListeners(newValue);
     }
 
@@ -60,10 +61,10 @@ namespace Framework
     void setCustomName(const juce::String &name);
 
     u64 getIndex() const noexcept { return parameterIndex_; }
-    bool isMappedToParameter() const noexcept { return parameterLinkPointer_.load(std::memory_order_acquire); }
+    bool isMappedToParameter() const noexcept { return parameterLinkPointer_.load<utils::memory_order_acquire>(); }
 
     // Inherited via AudioProcessorParameter
-    float getValue() const override { return value_.load(std::memory_order_relaxed); }
+    float getValue() const override { return value_.load<utils::memory_order_relaxed>(); }
     void setValue(float newValue) override;
     float getDefaultValue() const override;
 
@@ -83,10 +84,10 @@ namespace Framework
 
   private:
     u64 parameterIndex_ = UINT64_MAX;
-    std::pair<std::atomic<bool>, juce::String> name_{};
-    std::atomic<float> value_ = kDefaultParameterValue;
-    std::atomic<bool> wasValueSet_ = false;
-    std::atomic<ParameterLink *> parameterLinkPointer_ = nullptr;
+    utils::pair<utils::atomic<bool>, juce::String> name_{};
+    utils::atomic<float> value_ = kDefaultParameterValue;
+    utils::atomic<bool> wasValueSet_ = false;
+    utils::atomic<ParameterLink *> parameterLinkPointer_ = nullptr;
 
     Plugin::ComplexPlugin *plugin_ = nullptr;
     std::vector<Listener *> listeners_{};

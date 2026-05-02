@@ -23,11 +23,11 @@ namespace Plugin
   void ComplexPlugin::initialise(float sampleRate, u32 samplesPerBlock)
   {
     if (sampleRate != getSampleRate())
-      sampleRate_.store(sampleRate, std::memory_order_release);
+      sampleRate_.store<utils::memory_order_release>(sampleRate);
 
     if (samplesPerBlock != getSamplesPerBlock())
     {
-      samplesPerBlock_.store(samplesPerBlock, std::memory_order_release);
+      samplesPerBlock_.store<utils::memory_order_release>(samplesPerBlock);
       soundEngine_->resetBuffers();
     }
   }

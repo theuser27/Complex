@@ -28,27 +28,27 @@ namespace Framework
     if (link)
     {
       name_.second += " > ";
-      parameterLinkPointer_.store(link, std::memory_order_release);
+      parameterLinkPointer_.store<utils::memory_order_release>(link);
       auto name = link->parameter->getParameterDetails().displayName;
       name_.second += { name.data(), name.size() };
       link->hostControl = this;
-      value_ = link->parameter->getNormalisedValue();
+      value_.store(link->parameter->getNormalisedValue());
     }
   }
 
   ParameterBridge::~ParameterBridge() noexcept
   {
-    if (auto link = parameterLinkPointer_.load(std::memory_order_acquire); link && link->parameter)
+    if (auto link = parameterLinkPointer_.load<utils::memory_order_acquire>(); link && link->parameter)
       link->parameter->changeBridge(nullptr);
   }
 
   void ParameterBridge::resetParameterLink(ParameterLink *link, bool getValueFromParameter) noexcept
   {
-    auto *oldLink = parameterLinkPointer_.load(std::memory_order_acquire);
+    auto *oldLink = parameterLinkPointer_.load<utils::memory_order_acquire>();
     if (link == oldLink)
       return;
 
-    parameterLinkPointer_.store(link, std::memory_order_release);
+    parameterLinkPointer_.store<utils::memory_order_release>(link);
 
     {
       utils::ScopedLock guard{ name_.first, utils::WaitMechanism::Spin };
@@ -65,11 +65,11 @@ namespace Framework
         if (getValueFromParameter)
         {
           auto newValue = link->parameter->getNormalisedValue();
-          value_.store(newValue, std::memory_order_release);
+          value_.store<utils::memory_order_release>(newValue);
           sendValueChangedMessageToListeners(newValue);
         }
         else if (link->UIControl)
-          link->UIControl->setValueFromHost(value_.load(std::memory_order_relaxed), this);
+          link->UIControl->setValueFromHost(value_.load<utils::memory_order_relaxed>(), this);
 
         auto name = link->parameter->getParameterDetails().displayName;
         juce::String newString{};
@@ -95,17 +95,17 @@ namespace Framework
   {
     // for wasValueSet_ we only require atomicity, therefore memory_order_relaxed suffices
     bool dummy = true;
-    if (wasValueSet_.compare_exchange_strong(dummy, false, std::memory_order_relaxed))
+    if (wasValueSet_.compare_exchange_strong<utils::memory_order_relaxed>(dummy, false))
     {
       // for parameterLinkPointer_ it's fine to use relaxed because
       // this method is only called from the message thread
       // which is the only one that touches the UI
-      auto link = parameterLinkPointer_.load(std::memory_order_relaxed);
+      auto link = parameterLinkPointer_.load<utils::memory_order_relaxed>();
       if (!link || !link->UIControl)
         return;
 
       bool shouldUpdate = link->UIControl->setValueFromHost(
-        value_.load(std::memory_order_relaxed), this);
+        value_.load<utils::memory_order_relaxed>(), this);
 
       if (shouldUpdate)
         link->UIControl->valueChanged();
@@ -120,23 +120,23 @@ namespace Framework
 
   void ParameterBridge::setValue(float newValue)
   {
-    value_.store(newValue, std::memory_order_relaxed);
-    wasValueSet_.store(true, std::memory_order_relaxed);
+    value_.store<utils::memory_order_relaxed>(newValue);
+    wasValueSet_.store<utils::memory_order_relaxed>(true);
   }
 
   float ParameterBridge::getDefaultValue() const
   {
-    if (auto pointer = parameterLinkPointer_.load(std::memory_order_acquire))
-      return std::clamp(pointer->parameter->getParameterDetails().defaultNormalisedValue, 0.0f, 1.0f);
+    if (auto pointer = parameterLinkPointer_.load<utils::memory_order_acquire>())
+      return utils::clamp(pointer->parameter->getParameterDetails().defaultNormalisedValue, 0.0f, 1.0f);
     return kDefaultParameterValue;
   }
 
   juce::String ParameterBridge::getName() const
   {
     // this is hacky i know but there's no way to declare the atomic mutable inside the pair
-    utils::ScopedLock guard{ const_cast<std::atomic<bool>&>(name_.first), utils::WaitMechanism::Spin };
+    utils::ScopedLock guard{ const_cast<utils::atomic<bool> &>(name_.first), utils::WaitMechanism::Spin };
 
-    if (parameterLinkPointer_.load(std::memory_order_acquire))
+    if (parameterLinkPointer_.load<utils::memory_order_acquire>())
       return name_.second;
 
     return name_.second.trim();
@@ -145,9 +145,9 @@ namespace Framework
   juce::String ParameterBridge::getName(int maximumStringLength) const
   {
     // this is hacky i know but there's no way to declare the atomic mutable inside the pair
-    utils::ScopedLock guard{ const_cast<std::atomic<bool>&>(name_.first), utils::WaitMechanism::Spin };
+    utils::ScopedLock guard{ const_cast<utils::atomic<bool> &>(name_.first), utils::WaitMechanism::Spin };
 
-    if (parameterLinkPointer_.load(std::memory_order_acquire))
+    if (parameterLinkPointer_.load<utils::memory_order_acquire>())
       return name_.second.substring(0, maximumStringLength);
 
     auto index = name_.second.indexOfChar(0, ' ');
@@ -156,7 +156,7 @@ namespace Framework
 
   juce::String ParameterBridge::getLabel() const
   {
-    if (auto pointer = parameterLinkPointer_.load(std::memory_order_acquire))
+    if (auto pointer = parameterLinkPointer_.load<utils::memory_order_acquire>())
       return pointer->parameter->getParameterDetails().displayUnits.data();
     return "";
   }
@@ -165,7 +165,7 @@ namespace Framework
   {
     static constexpr auto kMaxDecimals = 6;
     
-    auto pointer = parameterLinkPointer_.load(std::memory_order_acquire);
+    auto pointer = parameterLinkPointer_.load<utils::memory_order_acquire>();
     if (!pointer)
       return { value, std::min(maximumStringLength, kMaxDecimals) };
 
@@ -189,7 +189,7 @@ namespace Framework
 
   float ParameterBridge::getValueForText(const juce::String &text) const
   {
-    if (auto pointer = parameterLinkPointer_.load(std::memory_order_acquire))
+    if (auto pointer = parameterLinkPointer_.load<utils::memory_order_acquire>())
       return (float)unscaleValue(text.getFloatValue(), pointer->parameter->getParameterDetails(), true);
 
     return text.getFloatValue();
@@ -200,14 +200,14 @@ namespace Framework
     if (!isDiscrete())
       return AudioProcessorParameter::getNumSteps();
 
-    auto pointer = parameterLinkPointer_.load(std::memory_order_acquire);
+    auto pointer = parameterLinkPointer_.load<utils::memory_order_acquire>();
     return (int)pointer->parameter->getParameterDetails().maxValue - 
       (int)pointer->parameter->getParameterDetails().minValue + 1;
   }
 
   bool ParameterBridge::isDiscrete() const
   {
-    if (auto pointer = parameterLinkPointer_.load(std::memory_order_acquire))
+    if (auto pointer = parameterLinkPointer_.load<utils::memory_order_acquire>())
       return pointer->parameter->getScale() == ParameterScale::Indexed ||
         pointer->parameter->getScale() == ParameterScale::IndexedNumeric;
     return false;
@@ -215,7 +215,7 @@ namespace Framework
 
   bool ParameterBridge::isBoolean() const
   {
-    if (auto pointer = parameterLinkPointer_.load(std::memory_order_acquire))
+    if (auto pointer = parameterLinkPointer_.load<utils::memory_order_acquire>())
       return pointer->parameter->getScale() == ParameterScale::Toggle;
     return false;
   }

@@ -10,9 +10,6 @@
 
 #pragma once
 
-#include <stdint.h>
-#include <stddef.h>
-
 #if defined (_WIN32) || defined (_WIN64)
   #define COMPLEX_WINDOWS 1
 #elif defined (LINUX) || defined (__linux__)
@@ -136,23 +133,35 @@ namespace common
 {
   // use an actually sane naming scheme
 
-  using u8 = uint8_t;
-  using u16 = uint16_t;
-  using u32 = uint32_t;
-  using u64 = uint64_t;
+#if COMPLEX_MSVC
+  using u8 = unsigned __int8;
+  using u16 = unsigned __int16;
+  using u32 = unsigned __int32;
+  using u64 = unsigned __int64;
 
-  using i8 = int8_t;
-  using i16 = int16_t;
-  using i32 = int32_t;
-  using i64 = int64_t;
+  using i8 = __int8;
+  using i16 = __int16;
+  using i32 = __int32;
+  using i64 = __int64;
+#else
+  using u8 = __UINT8_TYPE__;
+  using u16 = __UINT16_TYPE__;
+  using u32 = __UINT32_TYPE__;
+  using u64 = __UINT64_TYPE__;
 
-  using usize = size_t;
-  using isize = ptrdiff_t;
+  using i8 = __INT8_TYPE__;
+  using i16 = __INT16_TYPE__;
+  using i32 = __INT32_TYPE__;
+  using i64 = __INT64_TYPE__;
+#endif
 
-  // if this fails then we have a big problemo
+  using usize = decltype(sizeof(int));
+  using isize = decltype(static_cast<int *>(nullptr) - static_cast<int *>(nullptr));
+
+  // these asserts ensure u/intptr_t are the same size as size_t and ptrdiff_t
   // should hold true on platforms where rust and zig can run
-  static_assert(sizeof(size_t) == sizeof(uintptr_t));
-  static_assert(sizeof(ptrdiff_t) == sizeof(intptr_t));
+  static_assert(sizeof(usize) == sizeof(void *));
+  static_assert(sizeof(isize) == sizeof(usize));
 }
 
 using namespace common;

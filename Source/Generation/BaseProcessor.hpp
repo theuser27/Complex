@@ -40,9 +40,9 @@ namespace Generation
 
     BaseProcessor(Plugin::ProcessorTree *processorTree, utils::string_view processorType) noexcept;
     BaseProcessor(const BaseProcessor &other) noexcept;
-    BaseProcessor &operator=(const BaseProcessor &other) noexcept;
-    BaseProcessor(BaseProcessor &&other) noexcept;
-    BaseProcessor &operator=(BaseProcessor &&other) noexcept;
+    BaseProcessor &operator=(const BaseProcessor &) = delete;
+    BaseProcessor(BaseProcessor &&) = delete;
+    BaseProcessor &operator=(BaseProcessor &&) = delete;
 
     virtual ~BaseProcessor() noexcept;
 

@@ -32,21 +32,12 @@ namespace Framework
 
     // if there's a set hostControl set, then we're automating this parameter
     if (parameterLink_.hostControl)
-    {
-      auto *control = parameterLink_.hostControl;
-      newNormalisedValue = control->getValue();
-    }
+      newNormalisedValue = parameterLink_.hostControl->getValue();
     else if (parameterLink_.UIControl)
-    {
-      auto *control = parameterLink_.UIControl;
-      newNormalisedValue = (float)control->getValueRaw();
-    }
+      newNormalisedValue = (float)parameterLink_.UIControl->getValueRaw();
 
-    if (normalisedValue_ != newNormalisedValue)
-    {
-      normalisedValue_ = newNormalisedValue;
-      isDirty = true;
-    }
+    isDirty = isDirty || normalisedValue_ != newNormalisedValue;
+    normalisedValue_ = newNormalisedValue;
 
     simd_float newModulations = modulations_;
     for (auto &modulator : parameterLink_.modulators)
@@ -59,11 +50,6 @@ namespace Framework
     if (isDirty || modulations_ != newModulations)
     {
       modulations_ = newModulations;
-      isDirty = true;
-    }
-
-    if (isDirty)
-    {
       normalisedInternalValue_ = simd_float::clamp(newModulations + newNormalisedValue, 0.0f, 1.0f);
       internalValue_ = scaleValue(normalisedInternalValue_, details_, sampleRate);
     }

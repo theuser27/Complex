@@ -57,7 +57,7 @@ namespace Plugin
     virtual bool deserialiseFromJson(void *newSave, void *fallbackSave) = 0;
     
     // gives out a unique id
-    u64 generateId() noexcept { return processorIdCounter_.fetch_add(1, std::memory_order_acq_rel); }
+    u64 generateId() noexcept { return processorIdCounter_.fetch_add<utils::memory_order_acq_rel>(1); }
 
     auto getProcessor(u64 processorId) const noexcept -> Generation::BaseProcessor *;
     // creates a brand new processor
@@ -87,17 +87,17 @@ namespace Plugin
     void registerDynamicParameter(Framework::ParameterValue *parameter);
     void updateDynamicParameters(utils::string_view reason) noexcept;
 
-    auto getUpdateFlag() const noexcept -> UpdateFlag { return updateFlag_.load(std::memory_order_acquire); }
+    auto getUpdateFlag() const noexcept -> UpdateFlag { return updateFlag_.load<utils::memory_order_acquire>(); }
     // only the audio thread changes the updateFlag
     // so we need acq_rel in order for it to see any changes made by the GUI thread
     // because it's only done twice per run i opted for max security with seq_cst just in case
-    void setUpdateFlag(UpdateFlag newFlag) noexcept { updateFlag_.store(newFlag, std::memory_order_seq_cst); }
+    void setUpdateFlag(UpdateFlag newFlag) noexcept { updateFlag_.store<utils::memory_order_seq_cst>(newFlag); }
 
-    auto getSampleRate() const noexcept -> float { return sampleRate_.load(std::memory_order_acquire); }
-    auto getSamplesPerBlock() const noexcept -> u32 { return samplesPerBlock_.load(std::memory_order_acquire); }
+    auto getSampleRate() const noexcept -> float { return sampleRate_.load<utils::memory_order_acquire>(); }
+    auto getSamplesPerBlock() const noexcept -> u32 { return samplesPerBlock_.load<utils::memory_order_acquire>(); }
     auto getMinMaxFFTOrder() const noexcept -> utils::pair<u32, u32>
-    { return { minFFTOrder_.load(std::memory_order_acquire), maxFFTOrder_.load(std::memory_order_acquire) }; }
-    auto getMaxBinCount() const noexcept -> u32 { return (1 << (maxFFTOrder_.load(std::memory_order_acquire) - 1)) + 1; }
+    { return { minFFTOrder_.load<utils::memory_order_acquire>(), maxFFTOrder_.load<utils::memory_order_acquire>() }; }
+    auto getMaxBinCount() const noexcept -> u32 { return (1 << (maxFFTOrder_.load<utils::memory_order_acquire>() - 1)) + 1; }
     auto getInputSidechains() const noexcept -> u32 { return inSidechains_; }
     auto getOutputSidechains() const noexcept -> u32 { return outSidechains_; }
     virtual auto getLaneCount() const -> usize = 0;
@@ -114,13 +114,13 @@ namespace Plugin
     {
       // check if we're in the middle of an audio callback
       utils::millisleep([&]()
-        { return updateFlag_.load(std::memory_order_relaxed) != UpdateFlag::AfterProcess; });
+        { return updateFlag_.load<utils::memory_order_relaxed>() != UpdateFlag::AfterProcess; });
 
       utils::ScopedLock g{ processingLock_, utils::WaitMechanism::Spin };
       return function();
     }
 
-    bool isBeingDestroyed() const noexcept { return isBeingDestroyed_.load(std::memory_order_acquire); }
+    bool isBeingDestroyed() const noexcept { return isBeingDestroyed_.load<utils::memory_order_acquire>(); }
     void clearState();
 
   protected:
@@ -137,19 +137,19 @@ namespace Plugin
     // parameters that receive updates upon various plugin changes
     std::vector<std::pair<Framework::IndexedData *, Framework::ParameterValue *>> dynamicParameters_{};
     // used to give out non-repeating ids for all processors
-    std::atomic<u64> processorIdCounter_ = processorTreeId + 1;
+    utils::atomic<u64> processorIdCounter_ = processorTreeId + 1;
     // used for checking whether it's ok to update parameters/plugin structure
-    std::atomic<UpdateFlag> updateFlag_ = UpdateFlag::AfterProcess;
+    utils::atomic<UpdateFlag> updateFlag_ = UpdateFlag::AfterProcess;
     // if any updates are supposed to happen to the processing tree/undoManager
     // the thread needs to acquire this lock after checking that the updateFlag is set to AfterProcess
     mutable utils::ReentrantLock<bool> processingLock_{ false, {} };
-    std::atomic<bool> isBeingDestroyed_ = false;
+    utils::atomic<bool> isBeingDestroyed_ = false;
 
     // might be updated on any thread hence atomic
-    std::atomic<u32> samplesPerBlock_ = 0;
-    std::atomic<float> sampleRate_ = kDefaultSampleRate;
-    std::atomic<u32> minFFTOrder_ = kMinFFTOrder;
-    std::atomic<u32> maxFFTOrder_ = kMaxFFTOrder;
+    utils::atomic<u32> samplesPerBlock_ = 0;
+    utils::atomic<float> sampleRate_ = kDefaultSampleRate;
+    utils::atomic<u32> minFFTOrder_ = kMinFFTOrder;
+    utils::atomic<u32> maxFFTOrder_ = kMaxFFTOrder;
     // not atomic because these are only set at plugin instantiation
     const u32 inSidechains_ = 0;
     const u32 outSidechains_ = 0;

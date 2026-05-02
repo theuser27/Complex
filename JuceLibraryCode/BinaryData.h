@@ -9,7 +9,7 @@
 namespace BinaryData
 {
     extern const char*   Icon_Pitch_svg;
-    const int            Icon_Pitch_svgSize = 360;
+    const int            Icon_Pitch_svgSize = 324;
 
     extern const char*   Icon_Filter_svg;
     const int            Icon_Filter_svgSize = 295;
@@ -20,8 +20,8 @@ namespace BinaryData
     extern const char*   Icon_Phase_svg;
     const int            Icon_Phase_svgSize = 1106;
 
-    extern const char*   DDINBold_ttf;
-    const int            DDINBold_ttfSize = 52296;
+    extern const char*   DDINBold1_ttf;
+    const int            DDINBold1_ttfSize = 52272;
 
     extern const char*   InterMedium_ttf;
     const int            InterMedium_ttfSize = 454712;

@@ -67,8 +67,8 @@ namespace Interface
     void setValueToHost() const noexcept;
     void setValueToParameter() const noexcept;
 
-    double getValueRaw() const noexcept { return value_.load(std::memory_order_acquire); }
-    void setValueRaw(double newValue) noexcept { value_.store(newValue, std::memory_order_release); }
+    double getValueRaw() const noexcept { return value_.load<utils::memory_order_acquire>(); }
+    void setValueRaw(double newValue) noexcept { value_.store<utils::memory_order_release>(newValue); }
     virtual void setValue(double newValue, 
       juce::NotificationType notification = juce::sendNotificationSync) = 0;
     virtual void valueChanged();
@@ -142,7 +142,7 @@ namespace Interface
     juce::Rectangle<int> getUnionOfAllElements() const noexcept;
 
     // ============================================================== Variables
-    std::atomic<double> value_ = 0.0;
+    utils::atomic<double> value_ = 0.0;
     double valueBeforeChange_ = 0.0;
     double resetValue_ = 0.0;
     bool hasBegunChange_ = false;

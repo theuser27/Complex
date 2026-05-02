@@ -43,7 +43,7 @@ namespace Interface
     void setIsClicked(bool isClicked) noexcept { utils::ScopedLock g{ guard_, utils::WaitMechanism::Spin }; isClicked_ = isClicked; }
 
   private:
-    mutable std::atomic<bool> guard_ = false;
+    mutable utils::atomic<bool> guard_ = false;
 
     float hoverValue_ = 0.0f;
     float clickValue_ = 0.0f;
@@ -89,7 +89,7 @@ namespace Interface
     utils::shared_value<utils::small_fn<void(OpenGlWrapper &, OpenGlComponent &)>> renderFunction_{};
     utils::shared_value<RenderFlag> renderFlag_ = RenderFlag::Dirty;
     utils::shared_value<BaseComponent *> ignoreClipIncluding_ = nullptr;
-    std::atomic<bool> isInitialised_ = false;
+    utils::atomic<bool> isInitialised_ = false;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(OpenGlComponent)
   };

@@ -88,7 +88,7 @@ namespace Interface
 
   void OpenGlImage::init(OpenGlWrapper &openGl)
   {
-    COMPLEX_ASSERT(!isInitialised_.load(std::memory_order_acquire), "Init method more than once");
+    COMPLEX_ASSERT(!isInitialised_.load<utils::memory_order_acquire>(), "Init method more than once");
 
     glGenBuffers(1, &vertexBuffer_);
     glBindBuffer(GL_ARRAY_BUFFER, vertexBuffer_);
@@ -112,7 +112,7 @@ namespace Interface
     imagePosition_ = getAttribute(imageShader_, "position");
     textureCoordinates_ = getAttribute(imageShader_, "tex_coord_in");
 
-    isInitialised_.store(true, std::memory_order_release);
+    isInitialised_.store<utils::memory_order_release>(true);
   }
 
   void OpenGlImage::render(OpenGlWrapper &openGl)
@@ -191,7 +191,7 @@ namespace Interface
 
   void OpenGlImage::destroy()
   {
-    if (!isInitialised_.load(std::memory_order_acquire))
+    if (!isInitialised_.load<utils::memory_order_acquire>())
       return;
 
     // preparing the image for next time if openGl reinitialises this object
@@ -215,7 +215,7 @@ namespace Interface
     vertexBuffer_ = 0;
     triangleBuffer_ = 0;
 
-    isInitialised_.store(false, std::memory_order_release);
+    isInitialised_.store<utils::memory_order_release>(false);
   }
 
   void OpenGlBackground::paintToImage(Graphics &g, [[maybe_unused]] BaseComponent *target)

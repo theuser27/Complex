@@ -14,7 +14,6 @@
 #include <cstdarg>
 #include <vector>
 #include <cstdio>
-#include <cassert>
 
 #ifdef COMPLEX_WINDOWS
   #define WIN32_LEAN_AND_MEAN
@@ -166,10 +165,10 @@ namespace utils
     return threadId;
   }
 
-  void lockAtomic(std::atomic<bool> &atomic, WaitMechanism mechanism, bool expected) noexcept
+  void lockAtomic(utils::atomic<bool> &atomic, WaitMechanism mechanism, bool expected) noexcept
   {
     bool state = expected;
-    while (!atomic.compare_exchange_weak(state, !expected, std::memory_order_acq_rel, std::memory_order_relaxed))
+    while (!atomic.compare_exchange_weak<utils::memory_order_acq_rel>(state, !expected))
     {
       // protecting against spurious failures
       if (state == expected)
@@ -181,11 +180,11 @@ namespace utils
       case WaitMechanism::SpinNotify:
         // taking advantage of the MESI protocol where we only want shared access to read until the value is changed,
         // instead of read/write with exclusive access thereby slowing down other threads trying to read as well
-        while (atomic.load(std::memory_order_relaxed) != expected) { pause(); }
+        while (atomic.load<utils::memory_order_relaxed>() != expected) { pause(); }
         break;
       case WaitMechanism::Wait:
       case WaitMechanism::WaitNotify:
-        atomic.wait(state, std::memory_order_relaxed);
+        atomic.wait<utils::memory_order_relaxed>(state);
         break;
       case WaitMechanism::Sleep:
       case WaitMechanism::SleepNotify:
@@ -210,7 +209,7 @@ namespace utils
       static constexpr i32 expected = 0;
       state = expected;
       desired = state - 1;
-      while (!lock.lock.compare_exchange_weak(state, desired, std::memory_order_acq_rel, std::memory_order_acquire))
+      while (!lock.lock.compare_exchange_weak<utils::memory_order_acq_rel>(state, desired))
       {
         // protecting against spurious failures
         if (state == expected)
@@ -218,14 +217,14 @@ namespace utils
 
         if (state <= expected)
         {          
-          COMPLEX_ASSERT(lock.lastLockId.load(std::memory_order_relaxed) != threadId,
+          COMPLEX_ASSERT(lock.lastLockId.load<utils::memory_order_relaxed>() != threadId,
             "Guess who forgot to unlock this atomic");
         }
 
         lambda();
 
         if (mechanism == WaitMechanism::Spin || mechanism == WaitMechanism::SpinNotify)
-          while (lock.lock.load(std::memory_order_relaxed) != expected) { pause(); }
+          while (lock.lock.load<utils::memory_order_relaxed>() != expected) { pause(); }
         else
         {
           do
@@ -233,17 +232,17 @@ namespace utils
             if (mechanism == WaitMechanism::Sleep || mechanism == WaitMechanism::SleepNotify)
               millisleep();
             else
-              lock.lock.wait(state, std::memory_order_relaxed);
-            state = lock.lock.load(std::memory_order_relaxed);
+              lock.lock.wait<utils::memory_order_relaxed>(state);
+            state = lock.lock.load<utils::memory_order_relaxed>();
           } while (state != expected);
         }
       }
 
-      lock.lastLockId.store(threadId, std::memory_order_relaxed) ;
+      lock.lastLockId.store<utils::memory_order_relaxed>(threadId) ;
     }
     else
     {
-      state = lock.lock.load(std::memory_order_relaxed);
+      state = lock.lock.load<utils::memory_order_relaxed>();
       bool isLambdaRun = false;
 
       while (true)
@@ -260,29 +259,29 @@ namespace utils
           {
           case WaitMechanism::Spin:
           case WaitMechanism::SpinNotify:
-            while (lock.lock.load(std::memory_order_relaxed) < 0) { pause(); }
+            while (lock.lock.load<utils::memory_order_relaxed>() < 0) { pause(); }
             break;
           case WaitMechanism::Wait:
           case WaitMechanism::WaitNotify:
-            lock.lock.wait(state, std::memory_order_relaxed);
+            lock.lock.wait<utils::memory_order_relaxed>(state);
             break;
           case WaitMechanism::Sleep:
           case WaitMechanism::SleepNotify:
-            millisleep([&lock](){ return lock.lock.load(std::memory_order_relaxed) < 0; });
+            millisleep([&lock](){ return lock.lock.load<utils::memory_order_relaxed>() < 0; });
             break;
           default:
             COMPLEX_ASSERT_FALSE("Invalid wait mechanism");
             break;
           }
 
-          state = lock.lock.load(std::memory_order_relaxed);
+          state = lock.lock.load<utils::memory_order_relaxed>();
         }
 
         desired = state + 1;
         
-        if (lock.lock.compare_exchange_weak(state, desired, std::memory_order_acq_rel, std::memory_order_relaxed))
+        if (lock.lock.compare_exchange_weak<utils::memory_order_acq_rel>(state, desired))
         {
-          lock.lastLockId.store({}, std::memory_order_relaxed);
+          lock.lastLockId.store<utils::memory_order_relaxed>({});
           break;
         }
       }
@@ -291,9 +290,9 @@ namespace utils
     return state;
   }
 
-  void unlockAtomic(std::atomic<bool> &atomic, WaitMechanism mechanism, bool expected) noexcept
+  void unlockAtomic(utils::atomic<bool> &atomic, WaitMechanism mechanism, bool expected) noexcept
   {
-    atomic.store(expected, std::memory_order_release);
+    atomic.store<utils::memory_order_release>(expected);
     if ((u32)mechanism & (u32)WaitMechanism::SpinNotify)
       atomic.notify_all();
   }
@@ -302,12 +301,12 @@ namespace utils
   {
     if (wasExclusive)
     {
-      [[maybe_unused]] auto value = atomic.lock.fetch_add(1, std::memory_order_release);
+      [[maybe_unused]] auto value = atomic.lock.fetch_add<utils::memory_order_release>(1);
       COMPLEX_ASSERT(value == -1, "Current value is %d", value);
     }
     else
     {
-      [[maybe_unused]] auto value = atomic.lock.fetch_sub(1, std::memory_order_release);
+      [[maybe_unused]] auto value = atomic.lock.fetch_sub<utils::memory_order_release>(1);
       COMPLEX_ASSERT(value > 0, "Current value is %d", value);
     }
 
@@ -319,12 +318,12 @@ namespace utils
     type_(ReentrantBoolEnum), mechanism_(mechanism), reentrantBool_{ &reentrantLock, false, expected }
   {
     auto threadId = getThreadId();
-    reentrantBool_.wasLocked = threadId == reentrantLock.lastLockId.load(std::memory_order_relaxed);
+    reentrantBool_.wasLocked = threadId == reentrantLock.lastLockId.load<utils::memory_order_relaxed>();
 
     if (!reentrantBool_.wasLocked)
     {
       lockAtomic(reentrantLock.lock, mechanism, expected);
-      reentrantLock.lastLockId.store(threadId, std::memory_order_relaxed);
+      reentrantLock.lastLockId.store<utils::memory_order_relaxed>(threadId);
     }
   }
 }

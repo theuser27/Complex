@@ -62,6 +62,6 @@ namespace Interface
 
     utils::shared_value<Skin::SectionOverride> skinOverride_ = Skin::kNone;
 
-    std::atomic<bool> isRendering_ = false;
+    utils::atomic<bool> isRendering_ = false;
   };
 }

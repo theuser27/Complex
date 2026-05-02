@@ -17,9 +17,8 @@
 #else
   #include <new>
 #endif
-#include <atomic>
 
-#include "platform_definitions.hpp"
+#include "stl_utils.hpp"
 
 namespace Framework
 {
@@ -85,7 +84,7 @@ namespace Framework
       using U = utils::conditional_t<utils::is_same_v<ExtraData, void>, decltype([](){}), ExtraData>;
 
       COMPLEX_NO_UNIQUE_ADDRESS U extraData{};
-      std::atomic<usize> refCount = 1;
+      utils::atomic<usize> refCount = 1;
       usize alignment = 0;
       usize size = 0;
       T *data = nullptr;
@@ -277,7 +276,7 @@ namespace Framework
   private:
     void reset(Header *header)
     {
-      if (!header || header->refCount.fetch_sub(1, std::memory_order_acq_rel) > 1)
+      if (!header || header->refCount.fetch_sub<utils::memory_order_acq_rel>(1) > 1)
         return;
 
     #ifdef COMPLEX_MSVC
@@ -302,7 +301,7 @@ namespace Framework
     {
       block_.header_ = other.block_.header_;
       if (block_.header_)
-        block_.header_->refCount.fetch_add(1, std::memory_order_relaxed);
+        block_.header_->refCount.fetch_add<utils::memory_order_relaxed>(1);
     }
 
     MemoryBlockView &operator=(const MemoryBlockView &other) noexcept
@@ -314,7 +313,7 @@ namespace Framework
 
       block_.header_ = other.block_.header_;
       if (block_.header_)
-        block_.header_->refCount.fetch_add(1, std::memory_order_relaxed);
+        block_.header_->refCount.fetch_add<utils::memory_order_relaxed>(1);
       
       return *this;
     }
@@ -323,7 +322,7 @@ namespace Framework
     {
       block_.header_ = block.header_;
       if (block_.header_)
-        block_.header_->refCount.fetch_add(1, std::memory_order_relaxed);
+        block_.header_->refCount.fetch_add<utils::memory_order_relaxed>(1);
     }
 
     MemoryBlockView &operator=(const MemoryBlock<T, ExtraData> &block) noexcept
@@ -335,7 +334,7 @@ namespace Framework
 
       block_.header_ = block.header_;
       if (block_.header_)
-        block_.header_->refCount.fetch_add(1, std::memory_order_relaxed);
+        block_.header_->refCount.fetch_add<utils::memory_order_relaxed>(1);
 
       return *this;
     }
