@@ -134,7 +134,7 @@ namespace Interface
   template<typename T>
   Point(T, T) -> Point<T>;
 
-  inline constexpr auto invalidPosition = Point{ utils::min_limit<i32>, utils::min_limit<i32> };
+  inline constexpr auto invalidPosition = Point{ utils::int_min<i32>, utils::int_min<i32> };
 
   template<typename T>
   struct Rectangle

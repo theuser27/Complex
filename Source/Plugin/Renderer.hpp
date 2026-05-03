@@ -33,6 +33,8 @@ namespace Interface
 
   class Renderer;
 
+  using PersistentCallback = void(Component *component);
+
   Renderer *createRenderer(Plugin::ComplexPlugin &plugin);
   void destroyRenderer(Renderer *renderer);
 
@@ -49,6 +51,10 @@ namespace Interface
 
   void setMouseCursor(Renderer *renderer, MouseCursorTypes cursorType);
 
+  void registerCallback(Renderer *renderer, Component *component, PersistentCallback *callback);
+  void deregisterCallback(Renderer *renderer, Component *component);
+
+  void setHoveredComponent(Renderer *renderer, Component *component);
   void setClickedComponent(Renderer *renderer, Component *component);
   void setFocusedComponent(Renderer *renderer, Component *component);
   void moveFocusTo(Renderer *renderer, Component *component);

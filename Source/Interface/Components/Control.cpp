@@ -469,7 +469,7 @@ namespace Interface
     PopupList &options = *anew(itemArena, PopupList, { selector });
     options.componentFlags.vertical = true;
     options.padding = { 0, 4, 0, 4 };
-    options.desiredSize = { kPopupMinWidth, 0, utils::max_limit<i32>, utils::max_limit<i32> };
+    options.desiredSize = { kPopupMinWidth, 0, utils::int_max<i32>, utils::int_max<i32> };
     options.draw = [](OpenGlWrapper &openGl, PopupList *self)
     {
       auto topPadding = scaleValue((float)self->padding.y);
@@ -524,16 +524,15 @@ namespace Interface
           }
 
           COMPLEX_ASSERT(parameterBridges[i].getParameterLink()->UIControl);
-          auto useOverride = parameterBridges[i].getParameterLink()->UIControl->getSkinOverride();
 
-          Component &wrapper = with_val(*anew(itemArena, Component, {}), .sizingFlags = Component::GrowableX);
+          Component &wrapper = with_val(*anew(itemArena, Component, {}), .sizingFlags = Component::GrowableX, 
+            .skinOverride = parameterBridges[i].getParameterLink()->UIControl->getSkinOverride());
           ControlPopupItem *parameterMap = TEXT_ITEM(kMappingList + 1 + (i32)i * 2, (*mappingList.childList),
-            .sizingFlags = Component::GrowableX, .placement = Placement::left, .skinOverride = useOverride, 
+            .sizingFlags = Component::GrowableX, .placement = Placement::left, 
             .textColourId = Skin::kWidgetPrimary1, .canBeChosen = false);
           ControlPopupItem *parameterUnmap = TEXT_ITEM(kMappingList + 1 + (i32)i * 2 + 1, (*mappingList.childList),
             .sizingFlags = Component::None, .padding = (Rectangle<u16>{ 4, 4, 4, 4 }), .closesPopup = false,
-            .desiredSize = (Rectangle{ kPrimaryTextLineHeight, kPrimaryTextLineHeight, kPrimaryTextLineHeight, kPrimaryTextLineHeight }), 
-            .skinOverride = useOverride/*, .rounding = padding.x*/);
+            .desiredSize = (Rectangle{ kPrimaryTextLineHeight, kPrimaryTextLineHeight, kPrimaryTextLineHeight, kPrimaryTextLineHeight }));
           parameterMap->siblingItem = parameterUnmap;
           wrapper.addChildComponent(parameterMap);
           wrapper.addChildComponent(parameterUnmap);
@@ -889,6 +888,7 @@ namespace Interface
       if (isUnmapping)
       {
         createMappingParameterUpdate(&plugin.state_->parameterBridges[index]);
+        selectedItem->parent->skinOverride = control->getSkinOverride();
       }
       else
       {

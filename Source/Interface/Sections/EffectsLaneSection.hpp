@@ -43,6 +43,7 @@ namespace Interface
 
     struct ModuleHolder : public Component
     {
+      bool mouseEnter(const MouseEvent &e) override;
       bool mouseExit(const MouseEvent &e) override;
       bool mouseMove(const MouseEvent &e) override;
       bool mouseDown(const MouseEvent &e) override;
@@ -53,6 +54,7 @@ namespace Interface
       float animationValues[1]{};
       Generation::Processor *hoveredBeforeModule{};
       usize hoveredBeforeModuleIndex{};
+      MouseEvent lastMouseMove{};
 
     } moduleHolder{};
 

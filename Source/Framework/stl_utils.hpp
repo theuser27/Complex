@@ -231,10 +231,21 @@ namespace utils
     requires is_same_v<Return, decltype(callable(COMPLEX_FWD(args)...))>;
   };
 
+#ifdef _MSC_VER
+  // msvc throws cast truncation warnings because of integer promotion
+  // but there's no other way to do this for all types
+  #pragma warning (push)
+  #pragma warning (disable : 4310)
+#endif
+
   template<typename T>
-  inline constexpr T min_limit = (T(-1) < T(0)) ? T(T(1) << (sizeof(T) * 8 - 1)) : T(0);
+  inline constexpr T int_min = (T(-1) < T(0)) ? T(T(1) << (sizeof(T) * 8 - 1)) : T(0);
   template<typename T>
-  inline constexpr T max_limit = (T(-1) < T(0)) ? T(T(-1) ^ (T(1) << (sizeof(T) * 8 - 1))) : T(-1);
+  inline constexpr T int_max = (T(-1) < T(0)) ? T(~(T(1) << (sizeof(T) * 8 - 1))) : T(-1);
+
+#ifdef _MSC_VER
+  #pragma warning(pop)
+#endif
 
   template<class T, T ... Is>
   struct integer_sequence
@@ -637,7 +648,7 @@ namespace utils
       requires requires { range.data(); range.size(); } : data_{ range.data() + start },
       size_{ utils::min((size_type)range.size() - start, length) } { }
 
-    template<typename U> requires is_convertible_v<U(*)[], element_type(*)[]>
+    template<typename U> requires is_convertible_v<U(*)[], T(*)[]>
     constexpr span(const span<U> &other) noexcept : data_{ other.data() }, size_{ other.size() } { }
 
     [[nodiscard]] constexpr span 
@@ -663,7 +674,7 @@ namespace utils
     }
 
     [[nodiscard]] constexpr size_type size() const noexcept { return size_; }
-    [[nodiscard]] constexpr size_type sizeBytes() const noexcept { return size_ * sizeof(element_type); }
+    [[nodiscard]] constexpr size_type sizeBytes() const noexcept { return size_ * sizeof(T); }
     [[nodiscard]] constexpr bool empty() const noexcept { return size_ == 0; }
 
     [[nodiscard]] constexpr T *data() const noexcept { return data_; }

@@ -20,7 +20,8 @@ namespace utils
   // { real, imaginary, real, imaginary } and { magnitude, phase, magnitude, phase } respectively
 
   // cos and sin
-  strict_inline utils::pair<simd_float, simd_float> vector_call cossin(simd_float radians)
+  strict_inline utils::pair<simd_float, simd_float> vector_call 
+  cossin(simd_float radians)
   {
     // split pi / 2 into multiple parts to take advantage of the
     // hidden GRS bits during subtraction for more accurate radian wrapping
@@ -72,7 +73,8 @@ namespace utils
   }
 
   // [cos(angle[0]), sin(angle[1]), cos(angle[2]), sin(angle[3])]
-  strict_inline simd_float vector_call cis(simd_float angle)
+  strict_inline simd_float vector_call 
+  cis(simd_float angle)
   {
     // split pi / 2 into multiple parts to take advantage of the
     // hidden GRS bits during subtraction for more accurate radian wrapping
@@ -114,7 +116,8 @@ namespace utils
 
   strict_inline simd_float vector_call sin(simd_float radians) { return cossin(radians).second; }
   strict_inline simd_float vector_call cos(simd_float radians) { return cossin(radians).first; }
-  strict_inline simd_float vector_call tan(simd_float radians)
+  strict_inline simd_float vector_call 
+  tan(simd_float radians)
   {
   #ifdef COMPLEX_INTEL_SVML
     return _mm_tan_ps(radians.value);
@@ -124,7 +127,8 @@ namespace utils
   #endif
   }
 
-  strict_inline simd_float vector_call atan2(simd_float y, simd_float x)
+  strict_inline simd_float vector_call 
+  atan2(simd_float y, simd_float x)
   {
   #ifndef COMPLEX_INTEL_SVML
     // based on "Efficient approximations for the arctangent function"
@@ -157,17 +161,15 @@ namespace utils
   }
 
   // magnitude and phase
-  strict_inline utils::pair<simd_float, simd_float> vector_call phasor(simd_float real, simd_float imaginary)
+  strict_inline utils::pair<simd_float, simd_float> vector_call 
+  phasor(simd_float real, simd_float imaginary)
   {
     auto magnitude = simd_float::sqrt(simd_float::mulAdd(real * real, imaginary, imaginary));
-  #ifdef COMPLEX_INTEL_SVML
-    return { magnitude, simd_float{ _mm_atan2_ps(imaginary.value, real.value) } };
-  #else
     return { magnitude, atan2(imaginary, real) };
-  #endif
   }
 
-  strict_inline simd_float vector_call complexCartMul(simd_float one, simd_float two)
+  strict_inline simd_float vector_call 
+  complexCartMul(simd_float one, simd_float two)
   {
     // [a1c1, a1d1, a2c2, a2d2]
     simd_float sums1 = copyFromEven(one) * two;
@@ -184,18 +186,20 @@ namespace utils
   #endif
   }
 
-  strict_inline simd_float vector_call complexPolarMul(simd_float one, simd_float two)
+  strict_inline simd_float vector_call 
+  complexPolarMul(simd_float one, simd_float two)
   { return merge(one * two, one + two, kPhaseMask); }
 
-  strict_inline simd_float vector_call complexMagnitude(simd_float value, bool toSqrt)
+  strict_inline simd_float vector_call 
+  complexMagnitude(simd_float value, bool toSqrt)
   {
     value *= value;
     value += switchInner(value);
     return (toSqrt) ? simd_float::sqrt(value) : value;
   }
 
-  strict_inline simd_float vector_call complexMagnitude(
-    const utils::array<simd_float, simd_float::complexSize> &values, bool toSqrt)
+  strict_inline simd_float vector_call 
+  complexMagnitude(const utils::array<simd_float, simd_float::complexSize> &values, bool toSqrt)
   {
     simd_float one = values[0] * values[0];
     simd_float two = values[1] * values[1];
@@ -203,7 +207,8 @@ namespace utils
     return (toSqrt) ? simd_float::sqrt(one) : one;
   }
 
-  strict_inline simd_float vector_call complexPhase(simd_float value)
+  strict_inline simd_float vector_call 
+  complexPhase(simd_float value)
   {
     simd_float real = copyFromEven(value);
     simd_float imaginary = copyFromOdd(value);
@@ -211,8 +216,8 @@ namespace utils
     return atan2(imaginary, real);
   }
 
-  strict_inline simd_float vector_call complexPhase(
-    const utils::array<simd_float, simd_float::complexSize> &values)
+  strict_inline simd_float vector_call 
+  complexPhase(const utils::array<simd_float, simd_float::complexSize> &values)
   {
   #if COMPLEX_SSE4_1
     simd_float real = _mm_shuffle_ps(values[0].value, values[1].value, _MM_SHUFFLE(2, 0, 2, 0));
@@ -225,7 +230,8 @@ namespace utils
     return atan2(imaginary, real);
   }
 
-  strict_inline simd_float vector_call complexReal(simd_float value)
+  strict_inline simd_float vector_call 
+  complexReal(simd_float value)
   {
     simd_float magnitude = copyFromEven(value);
     simd_float phase = copyFromOdd(value);
@@ -233,7 +239,8 @@ namespace utils
     return magnitude * cos(phase);
   }
 
-  strict_inline simd_float vector_call complexImaginary(simd_float value)
+  strict_inline simd_float vector_call 
+  complexImaginary(simd_float value)
   {
     simd_float magnitude = copyFromEven(value);
     simd_float phase = copyFromOdd(value);

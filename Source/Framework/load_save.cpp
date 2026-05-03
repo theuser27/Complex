@@ -78,7 +78,10 @@ namespace
     auto filePath = Framework::LoadSave::getConfigFilePath(CPLUG_PLUGIN_NAME ".config");
 
     if (!xfiles_exists(filePath.data()))
-      xfiles_write(filePath.data(), "{}", sizeof("{}"));
+    {
+      auto empty = utils::string_view{ "{}" };
+      xfiles_write(filePath.data(), empty.data(), empty.size());
+    }
 
     char *string;
     usize stringSize;
@@ -90,6 +93,11 @@ namespace
     cjson *json = cjson_Parse(string, stringSize);
     if (json)
       predicate(json);
+    else if (save)
+    {
+      json = cjson_Create(cjson_Object);
+      predicate(json);
+    }
 
     if (save)
     {
@@ -174,7 +182,7 @@ namespace Framework::LoadSave
       cjson_Set(item, type, value);                   \
     else                                              \
     {                                                 \
-      item = cjson_Create(cjson_Object);              \
+      item = cjson_Create(type, value);               \
       cjson_AddExistingTo(data, key, item);           \
     }                                                 \
   }

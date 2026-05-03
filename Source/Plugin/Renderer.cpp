@@ -152,6 +152,8 @@ namespace Interface
     Shaders shaders;
     utils::bumpArena *arena{};
 
+    utils::vector<utils::pair<Component *, PersistentCallback *>> callbacks{};
+
     PerfGraph graph{};
     bool renderDebugFps = true;
 
@@ -165,6 +167,7 @@ namespace Interface
 
     MouseEvent getRelativeEvent(MouseEvent e, Component *component);
 
+    void refreshComponentUnderMouse(MouseEvent e, bool forceMouseMove = true);
     void handleMouseMove(MouseEvent e);
     void handleMouseDown(MouseEvent e);
     void handleMouseUp(MouseEvent e);
@@ -258,6 +261,9 @@ namespace Interface
       auto [unscaledWidth, unscaledHeight] = unscaleDimensions(area.w, area.h, effectiveScale);
       gui->desiredSize = { (i32)unscaledWidth, (i32)unscaledHeight, (i32)unscaledWidth, (i32)unscaledHeight };
 
+      for (auto &[c, callback] : callbacks)
+        callback(c);
+
       utils::vector<Component *> customPlacement_{ localScratch, 32 };
       customPlacement = &customPlacement_;
       utils::vector<Component *> sortedSizesMin_{ localScratch, 32 };
@@ -282,6 +288,37 @@ namespace Interface
       }
       customPlacement->clear();
 
+      //{
+      //  auto e = getMouseInteractions(this).mouseState;
+      //  if (mouseDownComponent_)
+      //    return;
+
+      //  Component *newHoveredComponent = gui->getComponentAt(e.x, e.y, true);
+      //  bool forceMouseMove = newHoveredComponent != mouseHoveredComponent_;
+
+      //  if (newHoveredComponent != mouseHoveredComponent_)
+      //  {
+      //    if (mouseHoveredComponent_)
+      //    {
+      //      mouseHoveredComponent_->componentFlags.isHovered = false;
+      //      mouseHoveredComponent_->mouseExit(getRelativeEvent(e, mouseHoveredComponent_));
+      //    }
+      //    if (newHoveredComponent)
+      //    {
+      //      newHoveredComponent->componentFlags.isHovered = true;
+      //      newHoveredComponent->mouseEnter(getRelativeEvent(e, newHoveredComponent));
+      //    }
+
+      //    mouseHoveredComponent_ = newHoveredComponent;
+      //  }
+
+      //  if (mouseHoveredComponent_ && forceMouseMove)
+      //  {
+      //    auto relativeEvent = getRelativeEvent(e, mouseHoveredComponent_);
+      //    mouseHoveredComponent_->mouseMove(relativeEvent);
+      //  }
+      //}
+      refreshComponentUnderMouse(getMouseInteractions(this).mouseState, false);
       checkFocusedComponent();
 
       // Reset viewport
@@ -584,7 +621,7 @@ namespace Interface
     auto *arena = utils::bumpArena::create(COMPLEX_MB(8), COMPLEX_MB(1));
 
     auto *renderer = anew(arena, Renderer, { .plugin = plugin,
-      .shaders = { arena }, .arena = arena });
+      .shaders = { arena }, .arena = arena, .callbacks = { arena } });
     uiRelated.renderer = renderer;
     renderer->skinInstance = anew(arena, Skin, {});
     uiRelated.skin = renderer->skinInstance;
@@ -626,6 +663,11 @@ namespace Interface
       puglSetCursor(renderer->view_, (PuglCursor)cursorType);
   }
 
+  void setHoveredComponent(Renderer *renderer, Component *component)
+  {
+    renderer->mouseHoveredComponent_ = component;
+  }
+
   void setClickedComponent(Renderer *renderer, Component *component)
   {
     if (renderer->mouseDownComponent_)
@@ -647,6 +689,17 @@ namespace Interface
   void moveFocusTo(Renderer *renderer, Component *component)
   {
     renderer->moveFocusTo(component);
+  }
+
+  void registerCallback(Renderer *renderer, 
+    Component *component, PersistentCallback *callback)
+  {
+    renderer->callbacks.emplaceBack(component, callback);
+  }
+
+  void deregisterCallback(Renderer *renderer, Component *component)
+  {
+    renderer->callbacks.eraseIf([&](const auto &item) { return item.first == component; });
   }
 
   MouseInteractions
@@ -761,21 +814,14 @@ namespace Interface
     return e;
   }
 
-  void Renderer::handleMouseMove(MouseEvent e)
+  void Renderer::refreshComponentUnderMouse(MouseEvent e, bool forceMouseMove)
   {
-    if (lastMousePosition_ == Point{ e.x, e.y })
+    // we don't want to take away mouse focus from clicked components
+    if (mouseDownComponent_)
       return;
 
-    if (mouseDownComponent_)
-    {
-      auto relativeEvent = getRelativeEvent(e, mouseDownComponent_);
-      mouseDownComponent_->componentFlags.isHovered = 
-        mouseDownComponent_->contains(Point{ relativeEvent.x, relativeEvent.y });
-      if (mouseDownComponent_->mouseDrag(relativeEvent))
-        return;
-    }
-
     Component *newHoveredComponent = gui->getComponentAt(e.x, e.y, true);
+    forceMouseMove |= newHoveredComponent != mouseHoveredComponent_;
 
     if (newHoveredComponent != mouseHoveredComponent_)
     {
@@ -793,11 +839,31 @@ namespace Interface
       mouseHoveredComponent_ = newHoveredComponent;
     }
 
-    if (mouseHoveredComponent_)
+    if (mouseHoveredComponent_ && forceMouseMove)
     {
       auto relativeEvent = getRelativeEvent(e, mouseHoveredComponent_);
       mouseHoveredComponent_->mouseMove(relativeEvent);
     }
+  }
+
+  void Renderer::handleMouseMove(MouseEvent e)
+  {
+    // things might disappear without having moved the mouse pointer
+    // therefore we need to check hovered component
+    if (lastMousePosition_ == Point{ e.x, e.y } && 
+      (mouseHoveredComponent_ && mouseHoveredComponent_->isShowing()))
+      return;
+
+    if (mouseDownComponent_)
+    {
+      auto relativeEvent = getRelativeEvent(e, mouseDownComponent_);
+      mouseDownComponent_->componentFlags.isHovered = 
+        mouseDownComponent_->contains(Point{ relativeEvent.x, relativeEvent.y });
+      if (mouseDownComponent_->mouseDrag(relativeEvent))
+        return;
+    }
+
+    refreshComponentUnderMouse(e);
   }
 
   void Renderer::handleMouseDown(MouseEvent e)
@@ -912,6 +978,8 @@ namespace Interface
 
   void Renderer::handleMouseWheel(MouseEvent e)
   {
+    handleMouseMove(e);
+
     utils::vector<Component *> stack{ localScratch, 32 };
     auto *c = mouseHoveredComponent_;
     while (c)

@@ -41,7 +41,7 @@
   "Label Offset": 0.0,
   "Label Rounding": 9.0,
 
-  "Overlay Screen": "0x22000000",
+  "Overlay Screen": "0xb0141414",
   "Lighten Screen": "0x22ffffff",
   "Shadow": "0x66000000",
 

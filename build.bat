@@ -101,11 +101,11 @@ if not exist %build_dir% mkdir %build_dir%
 if "%debug%"=="1" (
   set build_dir=%build_dir%\debug
   set compiler_flags= /MTd /Od /Ob1 /Zi /RTC1 %compiler_flags%
-  REM set linker_flags= /NODEFAULTLIB:libcpmtd.lib %linker_flags%
+  set linker_flags= /NODEFAULTLIB:libcpmtd.lib %linker_flags%
 ) else (
   set build_dir=%build_dir%\release
-  set compiler_flags= /MT /Ox /GL %compiler_flags%
-  REM set linker_flags= /NODEFAULTLIB:libcpmt.lib %linker_flags%
+  set compiler_flags= /MT /Ox /GL /Gy /Oi /Ot %compiler_flags%
+  set linker_flags= /NODEFAULTLIB:libcpmt.lib %linker_flags%
 )
 
 if "%data%"=="1" (

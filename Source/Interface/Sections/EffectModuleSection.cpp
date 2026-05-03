@@ -139,8 +139,7 @@ namespace Interface
     
     if (!effectHolder.header.moduleActivator.isOn())
     {
-      fillRect(openGl, getLocalBounds().toFloat(),
-        getColour(Skin::kBackground, this).withMultipliedAlpha(0.8f));
+      fillRect(openGl, getLocalBounds().toFloat(), getColour(Skin::kOverlayScreen, this));
     }
 
     return false;
@@ -155,7 +154,7 @@ namespace Interface
     componentFlags.vertical = true;
     componentFlags.clickable = true;
     //sizingFlags = Component::SnapToMinY;
-    desiredSize = { kEffectModuleWidth, 0, kEffectModuleWidth, utils::max_limit<i32> };
+    desiredSize = { kEffectModuleWidth, 0, kEffectModuleWidth, utils::int_max<i32> };
 
     if (!arena)
       arena = utils::bumpArena::createNested(utils::bumpArena::fromAllocation(this), COMPLEX_KB(64));
@@ -179,7 +178,7 @@ namespace Interface
 
     addChildComponent(&effectHolder);
     effectHolder.sizingFlags = (Component::SizingFlags)(Component::GrowableX | Component::SnapToMinY);
-    effectHolder.desiredSize = { 0, kEffectModuleMainBodyHeight, 0, utils::max_limit<i32> };
+    effectHolder.desiredSize = { 0, kEffectModuleMainBodyHeight, 0, utils::int_max<i32> };
     effectHolder.arena = arena;
     effectHolder.reinitialise();
 
@@ -193,6 +192,8 @@ namespace Interface
       auto *self = (EffectModuleSection *)c;
       auto *effectModuleCopy = (Generation::EffectModule *)self->effectModule->createCopy();
       auto *effectModuleSectionCopy = (EffectModuleSection *)effectModuleCopy->createUI();
+      effectModuleSectionCopy->margin = self->margin;
+      effectModuleCopy->component = effectModuleSectionCopy;
       return &effectModuleSectionCopy->effectHolder.header.draggableBox;
     };
 
@@ -217,7 +218,7 @@ namespace Interface
     auto *selector = getPopupSelector();
     auto *itemArena = selector->arena;
     PopupList *list = anew(itemArena, PopupList, { selector });
-    list->desiredSize = { kPopupMinWidth, 0, utils::max_limit<i32>, utils::max_limit<i32> };
+    list->desiredSize = { kPopupMinWidth, 0, utils::int_max<i32>, utils::int_max<i32> };
     list->padding = { 0, 4, 0, 4 };
 
     list->addChildComponent(OptionPopupItem::createTitle(list, "Module Options"));
@@ -444,7 +445,7 @@ namespace Generation
     holder->addChildComponent(attenuationRotary);
 
     auto *mappingSelector = anew(arena, TextSelector, {});
-    mappingSelector->changeLinkedParameter(*findParameterWithId(effectData->parameters, Reinterpret::Mapping));
+    mappingSelector->changeLinkedParameter(*findParameterWithId(effectData->parameters, Reinterpret::Transform));
     mappingSelector->arena = arena;
     mappingSelector->placement = Placement::left;
     auto *label = anew(arena, Label, {});
@@ -472,15 +473,12 @@ namespace Generation
 #undef findParameterWithId
 }
 
-namespace Generation
+Interface::Component *
+Generation::EffectModule::createUI()
 {
-  Interface::Component *
-  EffectModule::createUI()
-  {
-    auto guiArena = Interface::getGui(Interface::uiRelated.renderer)->arena;
-    auto *effectModuleSection = anew(guiArena, Interface::EffectModuleSection, {});
-    effectModuleSection->effectModule = this;
-    effectModuleSection->reinitialise();
-    return effectModuleSection;
-  }
+  auto guiArena = Interface::getGui(Interface::uiRelated.renderer)->arena;
+  auto *effectModuleSection = anew(guiArena, Interface::EffectModuleSection, {});
+  effectModuleSection->effectModule = this;
+  effectModuleSection->reinitialise();
+  return effectModuleSection;
 }

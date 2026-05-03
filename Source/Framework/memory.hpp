@@ -99,7 +99,7 @@ namespace utils
     {
       reservedSize = utils::clamp(reservedSize, sizeof(bumpArena), usize(u32(-1)) + 1);
       commitSize = utils::clamp(commitSize, sizeof(bumpArena), reservedSize);
-      
+
       byte *memory = reserveMemory(reservedSize);
       commitMemory(memory, commitSize);
 
@@ -157,7 +157,7 @@ namespace utils
       return { &allocatorTable[(usize)allocator->type], allocator };
     }
     template<AllocatorConcept T>
-    static constexpr AllocatorVtable 
+    static constexpr AllocatorVtable
     createVtable()
     {
       return AllocatorVtable
@@ -191,7 +191,7 @@ namespace utils
     bool freeingDestructor = true;
 
     constexpr Allocator() = default;
-    constexpr Allocator(AllocatorConcept auto *allocator, bool freeingDestructor = true, 
+    constexpr Allocator(AllocatorConcept auto *allocator, bool freeingDestructor = true,
       utils::sourceLocation location = utils::sourceLocation::current()) : location{ location },
       vtable{ &allocatorTable[(usize)allocator->type] }, allocator{ allocator },
       freeingDestructor{ freeingDestructor } { }
@@ -271,7 +271,7 @@ namespace utils
   }
 
   template<typename T>
-  void contiguousClone(Allocator allocator, Allocator previousAllocator, 
+  void contiguousClone(Allocator allocator, Allocator previousAllocator,
     const T *dataToClone, usize dataSize, T *&existingData, usize existingSize, usize &existingCapacity)
   {
     if constexpr (!utils::is_trivially_destructible_v<T>)
@@ -486,31 +486,25 @@ namespace utils
       size_ -= count;
       for (usize i = 0; i < count; ++i)
         (start + (isize)i)->~T();
-      
+
       utils::contiguousMoveElements(start, start + count, data_ + size_ - start);
     }
 
     void erase(const T &element) { eraseIf([&element](const auto &data) { return element == data; }); }
     void eraseIf(const auto &predicate)
     {
-      usize offset{};
-      usize lastShift = usize(-1);
-      for (usize i = 0; i < size_; ++i)
+      for (usize i = size_; i > 0; --i)
       {
-        if (predicate(data_[i]))
-        {
-          utils::contiguousDestroy(&data_[i], 1);
+        if (!predicate(data_[i - 1]))
+          continue;
 
-          if (lastShift != usize(-1) && (i - lastShift) > 1)
-            utils::contiguousMoveElements(data_ + lastShift, data_ + lastShift + offset, i - lastShift);
+        data_[i - 1].~T();
 
-          lastShift = i;
-          ++offset;
-        }
+        if (size_ - i > 0)
+          utils::contiguousMoveElements(data_ + i - 1, data_ + i, size_ - i);
+
+        --size_;
       }
-
-      if (lastShift != usize(-1) && (size_ - lastShift) > 1)
-        utils::contiguousMoveElements(data_ + lastShift, data_ + lastShift + offset, size_ - lastShift);
     }
 
     constexpr void swap(vectornd &other)
@@ -568,10 +562,10 @@ namespace utils
     //---------------------------------------------------------
     // the following functions assume keys ARE unique
 
-    constexpr auto find(const Key &key) 
+    constexpr auto find(const Key &key)
     { return utils::findIf(data, [&key](const auto &v) { return v.first == key; }); }
 
-    constexpr auto find(const Key &key) const 
+    constexpr auto find(const Key &key) const
     { return utils::findIf(data, [&key](const auto &v) { return v.first == key; }); }
 
     constexpr auto findIf(const auto &functor)  { return utils::findIf(data, functor); }
@@ -583,7 +577,7 @@ namespace utils
       return data.end() - 1;
     }
 
-    constexpr void update(const Key &key, utils::pair<Key, Value> updatedEntry) 
+    constexpr void update(const Key &key, utils::pair<Key, Value> updatedEntry)
     {
       auto iter = find(key);
       if (iter == data.end())
@@ -592,7 +586,7 @@ namespace utils
       (*iter) = COMPLEX_MOVE(updatedEntry);
     }
 
-    constexpr void erase(const Key &key) 
+    constexpr void erase(const Key &key)
     {
       auto iter = utils::findIf(data, [&key](const auto &v) { return v.first == key; });
       if (iter != data.end())
@@ -607,7 +601,7 @@ namespace utils
 
       if (low != end)
       {
-        auto high = end - 1;      
+        auto high = end - 1;
         while (low <= high)
         {
           auto mid = low + ((high - low) / 2);
@@ -637,12 +631,12 @@ namespace utils
     //---------------------------------------------------------
     // the following functions assume keys are NOT unique
 
-    constexpr auto binary_search(const utils::pair<Key, Value> &element) const 
+    constexpr auto binary_search(const utils::pair<Key, Value> &element) const
     {
       auto [iter, wasFound] = binary_search(data, element, [](const auto &element, const auto &test) { return element == test; });
       return (wasFound) ? iter : data.end();
     }
-    constexpr auto binary_search(const utils::pair<Key, Value> &element) 
+    constexpr auto binary_search(const utils::pair<Key, Value> &element)
     {
       auto [iter, wasFound] = binary_search(data, element, [](const auto &element, const auto &test) { return element == test; });
       return (wasFound) ? iter : data.end();
@@ -673,7 +667,7 @@ namespace utils
 
     // this will work correctly only if you ever use the ordered functions
     // returns iterator of the added element
-    constexpr auto add_ordered(Key key, Value value) 
+    constexpr auto add_ordered(Key key, Value value)
     {
       // find AN occurance of specified key
       auto [iter, _] = binary_search(data, key, [](const auto &element, const auto &test) { return element == test.first; });
@@ -687,7 +681,7 @@ namespace utils
 
 
     // this will work correctly only if you ever use the ordered functions
-    constexpr void update_ordered(const utils::pair<Key, Value> &entry, utils::pair<Key, Value> updatedEntry) 
+    constexpr void update_ordered(const utils::pair<Key, Value> &entry, utils::pair<Key, Value> updatedEntry)
     {
       auto iter = binary_search(entry);
       if (iter == data.end())
@@ -697,7 +691,7 @@ namespace utils
     }
 
     // this will work correctly only if you ever use the ordered functions
-    constexpr void erase_ordered(const utils::pair<Key, Value> &element) 
+    constexpr void erase_ordered(const utils::pair<Key, Value> &element)
     {
       auto iter = binary_search(element);
       if (iter != data.end())
@@ -718,11 +712,11 @@ namespace utils
         lambda(static_cast<T>(iter->second));
     }
 
-    constexpr auto add_ordered(auto entry) 
+    constexpr auto add_ordered(auto entry)
     { return base::add_ordered(typeId(decltype(entry)), (void *)COMPLEX_MOVE(entry)); }
 
     template<typename T>
-    constexpr void update_ordered(T entry, T updatedEntry) 
+    constexpr void update_ordered(T entry, T updatedEntry)
     {
       auto iter = get_first_of(typeId(T));
       if (iter == data.end())
@@ -737,7 +731,7 @@ namespace utils
       (*iter) = pair{ typeId(T), COMPLEX_MOVE(updatedEntry) };
     }
 
-    constexpr void erase_ordered(auto entry) 
+    constexpr void erase_ordered(auto entry)
     {
       auto iter = get_first_of(typeId(decltype(entry)));
       if (iter == data.end())
@@ -761,7 +755,7 @@ namespace utils
     usize	freeingDestructor_ : 1 = true;
     usize size_ : 62 {};
     usize capacity_{};
-  
+
   protected:
     void destructor(bool force = true)
     {
@@ -783,7 +777,7 @@ namespace utils
     static constexpr auto npos = size_type(-1);
     static constexpr auto minimumCapacity = size_type((1 << 4) - 1);
 
-    static stringnd 
+    static stringnd
     create(Allocator allocator, const char *format, auto &&... args)
     {
       stringnd ret{};
@@ -795,7 +789,7 @@ namespace utils
 
     // preallocating storage or only caching allocator for future use
     stringnd(Allocator allocator, size_type reserveSpace = 0) : stringnd{ allocator, nullptr, reserveSpace } { }
-    stringnd(Allocator allocator, utils::string_view data, size_type start = 0, size_type size = npos) : 
+    stringnd(Allocator allocator, utils::string_view data, size_type start = 0, size_type size = npos) :
       stringnd{ allocator, data.data() + utils::min(data.size(), start), utils::min(data.size(), size) - utils::min(data.size(), start) } { }
     // every other constructor calls this one
     stringnd(Allocator allocator, const char *data, size_type size)
@@ -823,7 +817,7 @@ namespace utils
       return *this;
     }
 
-    [[nodiscard]] stringnd 
+    [[nodiscard]] stringnd
     clone(usize position = 0, usize length = npos) const
     {
       COMPLEX_ASSERT(position <= size_, "Position out of range in string::clone(position, length)");
@@ -834,7 +828,7 @@ namespace utils
 
       auto oldAllocator = Allocator::fromType((AllocatorType)allocatorType_).fromAllocation(data_);
       auto newSize = utils::min(length, size() - position);
-      utils::contiguousClone(oldAllocator, oldAllocator, 
+      utils::contiguousClone(oldAllocator, oldAllocator,
         data() + position, 1 + newSize,
         ret.data_, ret.size_, ret.capacity_);
       ret.allocatorType_ = (usize)oldAllocator.type();
@@ -919,7 +913,7 @@ namespace utils
       COMPLEX_ASSERT(size_ > 0, "Front of empty view");
       return data_[0];
     }
-    [[nodiscard]] const char & 
+    [[nodiscard]] const char &
     back() const
     {
       COMPLEX_ASSERT(size_ > 0, "Back of empty view");
@@ -932,7 +926,7 @@ namespace utils
     [[nodiscard]] const_iterator end() const { return (size_) ? (data_ + size_) : nullptr; }
 
     // insertions
-    
+
     stringnd &
     insert(size_type start, utils::string_view other, size_type repetitions = 1)
     {
@@ -1065,19 +1059,19 @@ namespace utils
     find(utils::string_view substring, size_type position = 0) const
     { return utils::string_view{ *this }.find(substring, position); }
 
-    [[nodiscard]] size_type 
+    [[nodiscard]] size_type
     rfind(utils::string_view substring, size_type position = npos) const
     { return utils::string_view{ *this }.rfind(substring, position); }
-    
+
     // comparisons
 
-    [[nodiscard]] constexpr int 
+    [[nodiscard]] constexpr int
     compare(utils::string_view other) const { return utils::string_view{ *this }.compare(other); }
 
-    [[nodiscard]] constexpr bool 
+    [[nodiscard]] constexpr bool
     operator==(utils::string_view other) const { return utils::string_view{ *this } == other; }
 
-    [[nodiscard]] constexpr bool 
+    [[nodiscard]] constexpr bool
     operator<(utils::string_view other) const { return compare(other) < 0; }
 
     constexpr void swap(stringnd &other)
@@ -1133,7 +1127,7 @@ namespace utils
   }
 
   inline utils::string
-  floatToString(Allocator allocator, double value, 
+  floatToString(Allocator allocator, double value,
     usize maximumDecimalLength = 5, bool keepPlus = false)
   {
     char buffer[48]{};

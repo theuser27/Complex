@@ -200,14 +200,14 @@ namespace Generation
           (
             COMPLEX_STRUCTURE_PARAMETER("Real/Imag Atten", Reinterpret::Attenuation, kMinusInfDb, kInfDb, 0.0f, 0.5f,
               ParameterScale::SymmetricLoudness, " dB", ParameterDetails::Modulatable | ParameterDetails::Automatable | ParameterDetails::Stereo),
-            COMPLEX_STRUCTURE_PARAMETER("Mapping", Reinterpret::Mapping,
+            COMPLEX_STRUCTURE_PARAMETER("Transform", Reinterpret::Transform,
               {
                 .options = COMPLEX_STRUCTURE_INDEXED_DATA()->addChildren({{
-                  COMPLEX_STRUCTURE_INDEXED_DATA(.displayName = "No Change", .id = ReinterpretMappingOptions::NoMapping),
-                  COMPLEX_STRUCTURE_INDEXED_DATA(.displayName = "Swap Real/Imaginary", .id = ReinterpretMappingOptions::SwitchRealImag),
-                  COMPLEX_STRUCTURE_INDEXED_DATA(.displayName = "Cartesian -> Polar", .id = ReinterpretMappingOptions::CartToPolar),
-                  COMPLEX_STRUCTURE_INDEXED_DATA(.displayName = "Polar -> Cartesian", .id = ReinterpretMappingOptions::PolarToCart) }}),
-                .defaultOptionId = ReinterpretMappingOptions::NoMapping
+                  COMPLEX_STRUCTURE_INDEXED_DATA(.displayName = "No Transform", .id = ReinterpretTransformOptions::NoTransform),
+                  COMPLEX_STRUCTURE_INDEXED_DATA(.displayName = "Swap Real/Imaginary", .id = ReinterpretTransformOptions::SwitchRealImag),
+                  COMPLEX_STRUCTURE_INDEXED_DATA(.displayName = "Cartesian => Polar", .id = ReinterpretTransformOptions::CartToPolar),
+                  COMPLEX_STRUCTURE_INDEXED_DATA(.displayName = "Polar => Cartesian", .id = ReinterpretTransformOptions::PolarToCart) }}),
+                .defaultOptionId = ReinterpretTransformOptions::NoTransform
               }, ParameterScale::Indexed, {}, ParameterDetails::Modulatable | ParameterDetails::Automatable)
           )
         )
@@ -1161,17 +1161,17 @@ namespace Generation
     }();
 
     auto mappingType = getParameter(effectData,
-      Destroy::Reinterpret::Mapping)->getInternalValue<IndexedData>().first->id;
+      Destroy::Reinterpret::Transform)->getInternalValue<IndexedData>().first->id;
 
     auto rawDestination = destination->get();
     auto rawSource = source.sourceBuffer->get();
 
     auto operations = [mappingType](simd_float &one, simd_float &two)
     {
-      using enum Destroy::ReinterpretMappingOptions::Value;
+      using enum ReinterpretTransformOptions::Value;
       switch (mappingType)
       {
-      case NoMapping:
+      case NoTransform:
         break;
       case SwitchRealImag:
         one = switchInner(one);

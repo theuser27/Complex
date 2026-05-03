@@ -59,6 +59,8 @@ namespace Interface
       Point<i32> position{};
       bool handleX{};
       bool handleY{};
+      bool stopX{};
+      bool stopY{};
     };
 
     struct ProcessorInsertion
@@ -164,9 +166,10 @@ namespace Interface
         return true;
 
       return (!componentFlags.animateFadeAway) ? false :
-        fadeawayRatio != utils::max_limit<decltype(fadeawayRatio)>;
+        fadeawayRatio != utils::int_max<decltype(fadeawayRatio)>;
     }
     bool isObscured(const Component *ignoreClipIncluding = nullptr) const;
+    bool isShowing() const;
     void addChildComponent(Component *childToAdd, Component *insertBefore = nullptr);
     void addChildComponent(Component *childToAdd, usize index);
     // keepFocus will let the UI system continue focus on childToRemove
@@ -259,7 +262,7 @@ namespace Interface
     Rectangle<i16> margin{};
     // padding for children
     Rectangle<u16> padding{};
-    Rectangle<i32> desiredSize{ 0, 0, utils::max_limit<i32>, utils::max_limit<i32> };
+    Rectangle<i32> desiredSize{ 0, 0, utils::int_max<i32>, utils::int_max<i32> };
 
     // returns width/height min and max sizes depending on isCalculatingVertical
     // can return -1 to use the calculations in from the underlying algorithm
@@ -280,7 +283,7 @@ namespace Interface
     u16 distanceToNextPositionRatio{};
 
     // support for animated shrinking and alpha fade when made invisible
-    // until it reaches utils::max_limit<u16> the component is in a grace period 
+    // until it reaches utils::int_max<u16> the component is in a grace period 
     // where it will continue to have its size and position calculated 
     // @see isStillVisible()
     u16 fadeawayRatio{};

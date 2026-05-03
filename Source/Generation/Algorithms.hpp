@@ -313,11 +313,11 @@ namespace Generation
 
     COMPLEX_ENUM(Reinterpret,
       (Attenuation, 1759183439582),
-      (    Mapping, 1759183450466),
+      (  Transform, 1759183450466),
     );
 
-    COMPLEX_ENUM(ReinterpretMappingOptions,
-      (     NoMapping, 1759183512424),
+    COMPLEX_ENUM(ReinterpretTransformOptions,
+      (   NoTransform, 1759183512424),
       (SwitchRealImag, 1759183528061),
       (   CartToPolar, 1759183533232),
       (   PolarToCart, 1759183546859)

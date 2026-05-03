@@ -80,12 +80,12 @@ extern "C++"
 
 extern "C"
 {
-  __declspec(allocator) __declspec(restrict) void *CALL_CONV malloc(usize size) { return utils::bumpArena::insert(globalArena, size, alignof(void *)); }
-  __declspec(allocator) __declspec(restrict) void *CALL_CONV calloc(usize count, usize size) { return utils::bumpArena::insert(globalArena, count * size, alignof(void *), true); }
-  __declspec(allocator) __declspec(restrict) void *CALL_CONV realloc(void *pointer, usize newSize) { return utils::bumpArena::resize(pointer, newSize); }
-  void CALL_CONV free(void *pointer) { utils::bumpArena::remove(pointer); }
+  __declspec(allocator) __declspec(noalias) __declspec(restrict) void *CALL_CONV malloc(usize size) { return utils::bumpArena::insert(globalArena, size, alignof(void *)); }
+  __declspec(allocator) __declspec(noalias) __declspec(restrict) void *CALL_CONV calloc(usize count, usize size) { return utils::bumpArena::insert(globalArena, count * size, alignof(void *), true); }
+  __declspec(allocator) __declspec(noalias) __declspec(restrict) void *CALL_CONV realloc(void *pointer, usize newSize) { return utils::bumpArena::resize(pointer, newSize); }
+  __declspec(noalias) void CALL_CONV free(void *pointer) { utils::bumpArena::remove(pointer); }
 
-  int CALL_CONV abs(int x) { return x & utils::max_limit<int>; }
+  int CALL_CONV abs(int x) { return x & utils::int_max<int>; }
 
   float CALL_CONV floorf(float x) { return simd_float::floor(x)[0]; }
   float CALL_CONV ceilf(float x) { return simd_float::ceil(x)[0]; }
@@ -108,7 +108,7 @@ extern "C"
     return c;
   }
 
-
+  // msvc specific definitions to make the compiler work without UCRT
 #if COMPLEX_MSVC 
   constinit int _fltused = 0;
 
@@ -138,4 +138,4 @@ extern "C"
 #endif
 }
 
-
+#undef CALL_CONV

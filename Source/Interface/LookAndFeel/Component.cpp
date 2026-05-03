@@ -102,8 +102,8 @@ namespace Interface
 
     sizes.min = utils::max(nonPositionedSizes.min, sizes.min);
     sizes.max = utils::max(nonPositionedSizes.max, sizes.max);
-    sizes.min = utils::min(sizes.min, (i64)utils::max_limit<i32>);
-    sizes.max = utils::min(sizes.max, (i64)utils::max_limit<i32>);
+    sizes.min = utils::min(sizes.min, (i64)utils::int_max<i32>);
+    sizes.max = utils::min(sizes.max, (i64)utils::int_max<i32>);
 
     if (test_enum(component->sizingFlags, ((isCalculatingVertical) ? Component::FixedY : Component::FixedX)))
     {
@@ -133,7 +133,7 @@ namespace Interface
           Component::ScrollableY : Component::ScrollableX;
         COMPLEX_ASSERT((component->parent->sizingFlags & scrollableFlag) == 0);
 
-        component->bounds.*maxMember = utils::max_limit<i32>;
+        component->bounds.*maxMember = utils::int_max<i32>;
       }
 
       auto scrollableFlag = (isCalculatingVertical) ? Component::ScrollableY : Component::ScrollableX;
@@ -162,15 +162,15 @@ namespace Interface
     // alogn the primary   axis SameAsSiblings must be zero, the parent will take care of it
     // along the secondary axis SameAsSiblings acts like Growable
     //if (test_enum(component->sizingFlags, (isCalculatingVertical) ? Component::SameAsSiblingsY : Component::SameAsSiblingsX))
-    //  component->bounds.*maxMember = (component->componentFlags.isVertical ^ isCalculatingVertical) ? utils::max_limit<i32> : 0;
+    //  component->bounds.*maxMember = (component->componentFlags.isVertical ^ isCalculatingVertical) ? utils::int_max<i32> : 0;
 
     // add this component's padding to the total size
     auto padding = (isCalculatingVertical) ?
       component->padding.getBottom() : component->padding.getRight();
 
-    component->bounds.*minMember = (i32)utils::min((i64)utils::max_limit<i32>,
+    component->bounds.*minMember = (i32)utils::min((i64)utils::int_max<i32>,
       (i64)(component->bounds.*minMember) + padding);
-    component->bounds.*maxMember = (i32)utils::min((i64)utils::max_limit<i32>,
+    component->bounds.*maxMember = (i32)utils::min((i64)utils::int_max<i32>,
       (i64)(component->bounds.*maxMember) + padding);
 
     COMPLEX_ASSERT(component->bounds.*minMember >= 0);
@@ -257,8 +257,8 @@ namespace Interface
     COMPLEX_ASSERT(sizes.min >= 0);
     COMPLEX_ASSERT(sizes.max >= 0);
 
-    sizes.min = utils::min(sizes.min, (i64)utils::max_limit<i32>);
-    sizes.max = utils::min(sizes.max, (i64)utils::max_limit<i32>);
+    sizes.min = utils::min(sizes.min, (i64)utils::int_max<i32>);
+    sizes.max = utils::min(sizes.max, (i64)utils::int_max<i32>);
 
     auto scrollableFlag = (isCalculatingVertical) ? Component::ScrollableY : Component::ScrollableX;
 
@@ -348,7 +348,7 @@ namespace Interface
       if (!child->componentFlags.isVisible)
         continue;
 
-      COMPLEX_ASSERT(child->bounds.*actualSize != utils::max_limit<i32>);
+      COMPLEX_ASSERT(child->bounds.*actualSize != utils::int_max<i32>);
       calculateGrow(child, child->children, isCalculatingVertical);
     }
 
@@ -376,7 +376,7 @@ namespace Interface
   void calculatePositions(Component *children,
     Component *component, Rectangle<i32> boundsInTarget)
   {
-    static constexpr float kAutoscrollMultiplier = 2.0f;
+    static constexpr float kAutoscrollMultiplier = 10.0f;
 
     if (!component->componentFlags.isVisible)
       return;
@@ -633,7 +633,7 @@ namespace Interface
     {
       // we're interpolating between the previous position (animation start) and the supposed position
 
-      float distanceToNextPositionRatio = (float)component->distanceToNextPositionRatio / (float)utils::max_limit<decltype(component->distanceToNextPositionRatio)>;
+      float distanceToNextPositionRatio = (float)component->distanceToNextPositionRatio / (float)utils::int_max<decltype(component->distanceToNextPositionRatio)>;
       distanceToNextPositionRatio = utils::min(distanceToNextPositionRatio + uiRelated.deltaTime * 1.0f / kMoveDelay, 1.0f);
       //auto t = easeOutQuadratic(distanceToNextPositionRatio);
       auto t = smoothstep(distanceToNextPositionRatio);
@@ -642,7 +642,7 @@ namespace Interface
       component->bounds.y = (i32)::roundf(utils::lerp((float)component->previousPosition.y, (float)component->nextPosition.y, t));
 
       component->distanceToNextPositionRatio = (decltype(component->distanceToNextPositionRatio))::ceilf(distanceToNextPositionRatio *
-        (float)utils::max_limit<decltype(component->distanceToNextPositionRatio)>);
+        (float)utils::int_max<decltype(component->distanceToNextPositionRatio)>);
     }
     else
     {
@@ -813,7 +813,7 @@ namespace Interface
       return false;
 
     bool isHorizontal = event.mods.test(ModifierKeys::shiftModifier);
-    auto multiplier = 25.0f * uiRelated.scale;
+    auto multiplier = 30.0f * uiRelated.scale;
     offsetScroll(this, event.wheelDeltaX * multiplier, 
       event.wheelDeltaY * multiplier, isHorizontal);
 
@@ -1004,6 +1004,16 @@ namespace Interface
     return false;
   }
 
+  bool 
+  Component::isShowing() const
+  {
+    for (auto c = this; c; c = c->parent)
+      if (!c->componentFlags.isVisible)
+        return false;
+
+    return true;
+  }
+
   void Component::addChildComponent(Component *childToAdd, Component *insertBefore)
   {
     COMPLEX_ASSERT(childToAdd != insertBefore);
@@ -1027,7 +1037,20 @@ namespace Interface
       return;
 
     if (!keepFocus)
-      childToRemove->giveAwayFocusTo();
+    {
+      auto mouseInteractions = getMouseInteractions(uiRelated.renderer);
+      if (auto *focusedComponent = mouseInteractions.focused)
+        if (childToRemove == focusedComponent)
+          focusedComponent->giveAwayFocusTo();
+
+      if (auto *hoveredComponent = mouseInteractions.hovered)
+        if (childToRemove == hoveredComponent)
+          setHoveredComponent(uiRelated.renderer, nullptr);
+
+      if (auto *clickedComponent = mouseInteractions.clicked)
+        if (childToRemove == clickedComponent)
+          setClickedComponent(uiRelated.renderer, nullptr);
+    }
 
     childToRemove->parent = nullptr;
     utils::removeDllHalfConnected(childToRemove, children);
@@ -1050,9 +1073,18 @@ namespace Interface
     if (!children)
       return;
 
-    if (auto *focusedComponent = getMouseInteractions(uiRelated.renderer).focused)
+    auto mouseInteractions = getMouseInteractions(uiRelated.renderer);
+    if (auto *focusedComponent = mouseInteractions.focused)
       if (isParentOf(focusedComponent))
         focusedComponent->giveAwayFocusTo();
+
+    if (auto *hoveredComponent = mouseInteractions.hovered)
+      if (isParentOf(hoveredComponent))
+        setHoveredComponent(uiRelated.renderer, nullptr);
+
+    if (auto *clickedComponent = mouseInteractions.clicked)
+      if (isParentOf(clickedComponent))
+        setClickedComponent(uiRelated.renderer, nullptr);
 
     for (Component *child = children, *nextChild = nullptr; child; child = nextChild)
     {
@@ -1108,7 +1140,7 @@ namespace Interface
     auto calculateScrollWidth = [this, &mousePosition, scrollExpandPercent](Rectangle<i32> bounds,
       u16 &currentScrollWidth, float &brightness, bool isScrollClicked)
     {
-      float percentExpand = (float)currentScrollWidth / (float)utils::max_limit<u16>;
+      float percentExpand = (float)currentScrollWidth / (float)utils::int_max<u16>;
       if (bounds.contains(mousePosition) || isScrollClicked)
       {
         percentExpand += scrollExpandPercent;
@@ -1117,7 +1149,7 @@ namespace Interface
       else
         percentExpand -= scrollExpandPercent;
       percentExpand = utils::clamp(percentExpand, getValue(Skin::kScrollShrinkPercent, false, this), 1.0f);
-      currentScrollWidth = (u16)(percentExpand * utils::max_limit<u16>);
+      currentScrollWidth = (u16)(percentExpand * utils::int_max<u16>);
       return percentExpand;
     };
 

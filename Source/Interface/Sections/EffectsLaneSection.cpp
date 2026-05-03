@@ -90,6 +90,60 @@ namespace Interface
     return true;
   }
 
+  static bool
+  laneMessageHandler(Component *c, u64 commandId, void *extraData)
+  {
+    auto *self = (EffectsLaneSection *)c;
+    switch (commandId)
+    {
+    case CommandMessages::HandleAutoscroll:
+    {
+      auto &data = *(CommandMessages::Autoscroll *)extraData;
+      if (data.handleY)
+      {
+        data.handleY = false;
+
+        Point<i32> position = data.position;
+        i32 offset = utils::max(0, EffectsLaneSection::kAutoScrollRegion - utils::min(position.y, self->bounds.h - position.y));
+        offset = utils::min(offset, (i32)utils::int_max<i8>);
+        self->moduleHolder.autoScrollIncrements.y = (i8)((position.y < self->bounds.h - position.y) ? offset : -offset);
+
+        if (data.stopY)
+          self->moduleHolder.autoScrollIncrements.y = 0;
+      }
+
+      //COMPLEX_DEBUG_LOG("Position: %d, %d\n", data.position.x, data.position.y);
+      //COMPLEX_DEBUG_LOG("Autoscroll: %d\n", (int)self->moduleHolder.autoScrollIncrements.y);
+
+      return true;
+    }
+    case CommandMessages::HandleProcessorInsertion:
+    {
+      auto *metadata = (CommandMessages::ProcessorInsertion *)extraData;
+      auto *placeholderInsert = &getGui(uiRelated.renderer)->placeholderInsert;
+
+      if (!CommandMessages::handleProcessorInsertion(self->effectsLane, 
+        &self->moduleHolder, metadata, Placement::top))
+        return false;
+
+      auto section = (EffectModuleSection *)metadata->processor->component;
+
+      placeholderInsert->source = section;
+
+      section->laneSection = self;
+      section->componentFlags.animateMovement = true;
+      section->previousPosition = invalidPosition;
+      if (metadata->useIndex)
+        section->effectHolder.header.draggableBox.surfaceToLiftTo = 
+          &self->soundEngineSection->effectsSection;
+      (metadata->placeholder ? metadata->placeholder : section)->margin = { 0, 0, 0, kVModuleToModuleMargin };
+
+      return true;
+    }
+    }
+
+    return false;
+  }
 
   void EffectsLaneSection::reinitialise()
   {
@@ -109,52 +163,7 @@ namespace Interface
     desiredSize = { kEffectsLaneWidth, 0, kEffectsLaneWidth, 0 };
 
     addCommandMessageHandler(laneHandler);
-    laneHandler.object = [](Component *c, u64 commandId, void *extraData)
-    {
-      auto *self = (EffectsLaneSection *)c;
-      switch (commandId)
-      {
-      case CommandMessages::HandleAutoscroll:
-      {
-        auto &data = *(CommandMessages::Autoscroll *)extraData;
-        if (data.handleY)
-        {
-          data.handleY = false;
-
-          Point<i32> position = data.position;
-          auto offset = utils::max(0, kAutoScrollRegion - utils::min(position.y, self->bounds.h - position.y));
-          self->autoScrollIncrements.y = (i8)((position.y < self->bounds.h - position.y) ? -offset : offset);
-        }
-
-        return true;
-      }
-      case CommandMessages::HandleProcessorInsertion:
-      {
-        auto *metadata = (CommandMessages::ProcessorInsertion *)extraData;
-        auto *placeholderInsert = &getGui(uiRelated.renderer)->placeholderInsert;
-
-        if (!CommandMessages::handleProcessorInsertion(self->effectsLane, 
-          &self->moduleHolder, metadata, Placement::top))
-          return false;
-
-        auto section = (EffectModuleSection *)metadata->processor->component;
-
-        placeholderInsert->source = section;
-
-        section->laneSection = self;
-        section->componentFlags.animateMovement = true;
-        section->previousPosition = invalidPosition;
-        if (metadata->useIndex)
-          section->effectHolder.header.draggableBox.surfaceToLiftTo = 
-            &self->soundEngineSection->effectsSection;
-        (metadata->placeholder ? metadata->placeholder : section)->margin = { 0, 0, 0, kVModuleToModuleMargin };
-
-        return true;
-      }
-      }
-
-      return false;
-    };
+    laneHandler.object = laneMessageHandler;
 
     if (!arena)
       arena = utils::bumpArena::createNested(utils::bumpArena::fromAllocation(this), COMPLEX_KB(1));
@@ -228,10 +237,74 @@ namespace Interface
   }
 
   bool 
+  EffectsLaneSection::ModuleHolder::mouseEnter(const MouseEvent &)
+  {
+    // this algorithm will ALMOST work in mouseMove 
+    // unfortunately if we add a module and the cursor happens to be where the next add module highlight appears
+    // there is a pseudo race for where the next mouse hover refresh will happen:
+    //  1. if it happens from the rendering procedure, 
+    //      the module's bounds will have been set and everything works or,
+    //  2. the windowing system might send a bogus mouse event before that,
+    //      so the module will have bounds of { 0, 0, 0, 0 },
+    //      meaning that the next highlight bounds will be where they already were 
+    //      and if the user doesn't move the cursor, it will not recheck that
+
+    registerCallback(uiRelated.renderer, this, [](Component *c)
+      {
+        auto self = (EffectsLaneSection::ModuleHolder *)c;
+        auto laneSection = (EffectsLaneSection *)self->parent;
+        auto scaledPadding = scaleValueRoundInt(self->padding.toInt());
+        auto localBounds = self->getLocalBounds().withTrimLeft(scaledPadding.x).withTrimRight(scaledPadding.w);
+
+        if (auto *lastChild = Generation::Processor::getChild(
+          laneSection->effectsLane->children, laneSection->effectsLane->childrenCount - 1))
+        {
+          auto newBottom = lastChild->component->bounds.getBottom() +
+            scaleValueRoundInt((float)lastChild->component->margin.h + kEffectModuleMinHeight);
+          localBounds.h = utils::min(newBottom, localBounds.getBottom()) - localBounds.y;
+        }
+        else
+        {
+          localBounds.y = scaledPadding.y;
+          localBounds.h = scaleValueRoundInt(kEffectModuleMinHeight);
+        }
+
+        if (localBounds.contains(Point{ self->lastMouseMove.x, self->lastMouseMove.y }))
+        {
+          if (!self->hasEnteredHover)
+          {
+            self->enterHoverTime = uiRelated.steadyTime;
+            self->hasEnteredHover = true;
+          }
+
+          // get the module below cursor
+          auto *laneSeciton = (EffectsLaneSection *)self->parent;
+          self->hoveredBeforeModuleIndex = 0;
+          self->hoveredBeforeModule = laneSeciton->effectsLane->children;
+          for (; self->hoveredBeforeModule && self->hoveredBeforeModuleIndex < laneSeciton->effectsLane->childrenCount;
+            (++self->hoveredBeforeModuleIndex), (self->hoveredBeforeModule = self->hoveredBeforeModule->next))
+          {
+            if (self->hoveredBeforeModule->component->bounds.y > self->lastMouseMove.y)
+              break;
+          }
+        }
+        else if (self->hasEnteredHover)
+        {
+          setMouseCursor(uiRelated.renderer, MouseCursorTypes::Normal);
+          self->hasEnteredHover = false;
+        }
+      });
+
+    return true;
+  }
+
+  bool
   EffectsLaneSection::ModuleHolder::mouseExit(const MouseEvent &)
   {
     setMouseCursor(uiRelated.renderer, MouseCursorTypes::Normal);
     hasEnteredHover = false;
+
+    deregisterCallback(uiRelated.renderer, this);
 
     return true;
   }
@@ -239,47 +312,7 @@ namespace Interface
   bool
   EffectsLaneSection::ModuleHolder::mouseMove(const MouseEvent &e)
   {
-    auto laneSection = (EffectsLaneSection *)parent;
-    auto localBounds = getLocalBounds();
-
-    if (auto *lastChild = Generation::Processor::getChild(
-      laneSection->effectsLane->children, laneSection->effectsLane->childrenCount - 1))
-    {
-      auto newBottom = lastChild->component->bounds.getBottom() + 
-        scaleValueRoundInt((float)lastChild->component->margin.h + kEffectModuleMinHeight);
-      localBounds.h = utils::min(newBottom, localBounds.getBottom()) - localBounds.y;
-    }
-    else
-    {
-      localBounds.y = scaleValueRoundInt((float)padding.y);
-      localBounds.h = scaleValueRoundInt(kEffectModuleMinHeight);
-    }
-
-    if (localBounds.contains(Point{ e.x, e.y }))
-    {
-      if (!hasEnteredHover)
-      {
-        enterHoverTime = uiRelated.steadyTime;
-        hasEnteredHover = true;
-      }
-
-      // get the module below cursor
-      auto *laneSeciton = (EffectsLaneSection *)parent;
-      hoveredBeforeModuleIndex = 0;
-      hoveredBeforeModule = laneSeciton->effectsLane->children;
-      for (; hoveredBeforeModule && hoveredBeforeModuleIndex < laneSeciton->effectsLane->childrenCount;
-        (++hoveredBeforeModuleIndex), (hoveredBeforeModule = hoveredBeforeModule->next))
-      {
-        if (hoveredBeforeModule->component->bounds.y > e.y)
-          break;
-      }
-    }
-    else if (hasEnteredHover)
-    {
-      setMouseCursor(uiRelated.renderer, MouseCursorTypes::Normal);
-      hasEnteredHover = false;
-    }
-
+    lastMouseMove = e;
     return true;
   }
 
@@ -311,37 +344,36 @@ namespace Interface
     return true;
   }
 
-  bool 
-  EffectsLaneSection::ModuleHolder::render(OpenGlWrapper &openGl)
+  static void renderInsertHint(EffectsLaneSection::ModuleHolder *holder, OpenGlWrapper &openGl)
   {
     static constexpr auto kHoverIncrement = 0.1f;
 
-    fillRect(openGl, getLocalBounds().toFloat(),
-      getColour(Skin::kBackground, this), scaleValue(kInsideRouding));
+    auto laneSection = (EffectsLaneSection *)holder->parent;
+    bool isEmptyAndHovered = holder->componentFlags.isHovered && laneSection->effectsLane->childrenCount == 0;
+    tickAnimation(holder->animationValues,
+      { { isEmptyAndHovered || laneSection->isDropdownOpen ||
+        (holder->hasEnteredHover && uiRelated.steadyTime - holder->enterHoverTime >= EffectsLaneSection::kTimeout) } },
+      { { kHoverIncrement } });
 
-    renderScrollbars(openGl, 0.2f);
-
-    auto laneSection = (EffectsLaneSection *)parent;
-    tickAnimation(animationValues, 
-      {{ laneSection->isDropdownOpen || (hasEnteredHover && uiRelated.steadyTime - enterHoverTime >= kTimeout) }},
-      {{ kHoverIncrement }});
-
-    if (laneSection->isDropdownOpen || (hasEnteredHover && uiRelated.steadyTime - enterHoverTime >= kTimeout))
+    if (isEmptyAndHovered || laneSection->isDropdownOpen ||
+      (holder->hasEnteredHover && uiRelated.steadyTime - holder->enterHoverTime >= EffectsLaneSection::kTimeout))
     {
-      if (hasEnteredHover)
+      if (holder->hasEnteredHover)
         setMouseCursor(uiRelated.renderer, MouseCursorTypes::PointingHand);
 
-      auto e = getMouseInteractions(uiRelated.renderer).mouseState.getEventRelativeTo(this);
-      auto scaledPadding = scaleValueRoundInt(padding.toInt());
-      auto drawBounds = getLocalBounds().withTrimLeft(scaledPadding.x).withTrimRight(scaledPadding.w);
-      if (hoveredBeforeModule)
-      {
-        if (hoveredBeforeModule->previous->next)
-          drawBounds.y = hoveredBeforeModule->previous->component->bounds.getBottom();
-        drawBounds.h = hoveredBeforeModule->component->bounds.y - drawBounds.y;
+      auto e = getMouseInteractions(uiRelated.renderer).mouseState.getEventRelativeTo(holder);
+      auto scaledPadding = scaleValueRoundInt(holder->padding.toInt());
+      auto drawBounds = holder->getLocalBounds().withTrimLeft(scaledPadding.x).withTrimRight(scaledPadding.w);
 
-        strokeRect(openGl, drawBounds.withY(drawBounds.getCentreY()).withHeight(0).toFloat(),
-          scaleValue(1.0f), getColour(Skin::kBorder, this).withMultipliedAlpha(animationValues[0]), scaleValue(kBorderRounding));
+      // the childrenCount check is necessary because we don't know if have outdated info 
+      // because callback hadn't run since we weren't hovered over
+      if (holder->hoveredBeforeModule && laneSection->effectsLane->childrenCount)
+      {
+        if (holder->hoveredBeforeModule->previous->next)
+          drawBounds.y = holder->hoveredBeforeModule->previous->component->bounds.getBottom();
+        drawBounds.h = holder->hoveredBeforeModule->component->bounds.y - drawBounds.y;
+
+        drawBounds = drawBounds.withY(drawBounds.getCentreY()).withHeight(0);
       }
       else
       {
@@ -349,16 +381,43 @@ namespace Interface
         if (auto *lastChild = Generation::Processor::getChild(
           laneSection->effectsLane->children, laneSection->effectsLane->childrenCount - 1))
         {
-          auto newY = lastChild->component->bounds.getBottom() + scaleValueRoundInt((float)padding.h);
+          auto newY = lastChild->component->bounds.getBottom() + scaleValueRoundInt((float)holder->padding.h);
           drawBounds = drawBounds.withTop(newY);
         }
 
-        drawBounds.h = utils::min(drawBounds.h, kEffectModuleMinHeight);
+        drawBounds.h = utils::min(drawBounds.h, scaleValueRoundInt(kEffectModuleMinHeight));
+      }
 
-        strokeRect(openGl, drawBounds.toFloat(), scaleValue(1.0f),
-          getColour(Skin::kBorder, this).withMultipliedAlpha(animationValues[0]), scaleValue(kBorderRounding));
+      strokeRect(openGl, drawBounds.toFloat(), scaleValue(1.0f),
+        getColour(Skin::kBorder, holder).withMultipliedAlpha(holder->animationValues[0]), 
+        scaleValue(EffectsLaneSection::kBorderRounding));
+
+      static constexpr int kPlusSize = 16;
+      auto plusSize = scaleValueRoundInt(kPlusSize);
+      auto thickness = scaleValue(2.0f);
+
+      if (drawBounds.h >= 2 * plusSize)
+      {
+        nvgStrokeWidth(openGl, thickness);
+        nvgBeginPath(openGl);
+        nvgMoveTo(openGl, (float)drawBounds.getCentreX() - (float)(plusSize / 2), (float)drawBounds.getCentreY());
+        nvgLineTo(openGl, (float)drawBounds.getCentreX() - (float)(plusSize / 2) + (float)plusSize, (float)drawBounds.getCentreY());
+        nvgMoveTo(openGl, (float)drawBounds.getCentreX(), (float)drawBounds.getCentreY() + (float)(plusSize / 2));
+        nvgLineTo(openGl, (float)drawBounds.getCentreX(), (float)drawBounds.getCentreY() + (float)(plusSize / 2) - (float)plusSize);
+        nvgStroke(openGl);
       }
     }
+  }
+
+  bool 
+  EffectsLaneSection::ModuleHolder::render(OpenGlWrapper &openGl)
+  {
+    fillRect(openGl, getLocalBounds().toFloat(),
+      getColour(Skin::kBackground, this), scaleValue(kInsideRouding));
+
+    renderScrollbars(openGl, 0.2f);
+
+    renderInsertHint(this, openGl);
 
     return true;
   }
@@ -374,23 +433,19 @@ namespace Interface
 
     if (!laneActivator.isOn())
     {
-      fillRect(openGl, getLocalBounds().toFloat(),
-        getColour(Skin::kBackground, this).withMultipliedAlpha(0.8f));
+      fillRect(openGl, getLocalBounds().toFloat(), getColour(Skin::kOverlayScreen, this));
     }
 
     return false;
   }
 }
 
-namespace Generation
+Interface::Component *
+Generation::EffectsLane::createUI()
 {
-  Interface::Component *
-  EffectsLane::createUI()
-  {
-    auto guiArena = Interface::getGui(Interface::uiRelated.renderer)->arena;
-    auto *effectsLaneSection = anew(guiArena, Interface::EffectsLaneSection, {});
-    effectsLaneSection->effectsLane = this;
-    effectsLaneSection->reinitialise();
-    return effectsLaneSection;
-  }
+  auto guiArena = Interface::getGui(Interface::uiRelated.renderer)->arena;
+  auto *effectsLaneSection = anew(guiArena, Interface::EffectsLaneSection, {});
+  effectsLaneSection->effectsLane = this;
+  effectsLaneSection->reinitialise();
+  return effectsLaneSection;
 }

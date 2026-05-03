@@ -123,7 +123,7 @@ namespace Interface
     sizingFlags |= Component::ScrollableWithBarY | Component::SnapToMinX;
     componentFlags.vertical = true;
     componentFlags.clickable = true;
-    desiredSize = { kPopupMinWidth, 0, utils::max_limit<i32>, utils::max_limit<i32> };
+    desiredSize = { kPopupMinWidth, 0, utils::int_max<i32>, utils::int_max<i32> };
     padding = { 0, 4, 0, 4 };
 
     overridePosition = [](Component *c)

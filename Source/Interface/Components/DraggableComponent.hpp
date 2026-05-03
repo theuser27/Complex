@@ -37,6 +37,7 @@ namespace Interface
     u64 previousParentProcessorStateId{};
     usize previousIndex{};
     Placement previousPlacement{};
+    MouseEvent lastDragEvent{};
     bool isCopying{};
     bool isDragging{};
   };

@@ -335,7 +335,7 @@ namespace Interface
 
     topBar.placement = Placement::top;
     topBar.sizingFlags |= Component::GrowableX;
-    topBar.desiredSize = { 0, kHeaderHeight, utils::max_limit<i32>, kHeaderHeight };
+    topBar.desiredSize = { 0, kHeaderHeight, utils::int_max<i32>, kHeaderHeight };
     topBar.padding = { ResizeCorner::kWidth, 0, ResizeCorner::kWidth, 0 };
     topBar.arena = arena;
     topBar.mainSection = this;
@@ -359,7 +359,7 @@ namespace Interface
 
     bottomBar.placement = Placement::bottom;
     bottomBar.sizingFlags |= Component::GrowableX;
-    bottomBar.desiredSize = { 0, kFooterHeight, utils::max_limit<i32>, kFooterHeight };
+    bottomBar.desiredSize = { 0, kFooterHeight, utils::int_max<i32>, kFooterHeight };
     bottomBar.margin = { 0, kLaneToBottomSettingsMargin, 0, 0 };
     bottomBar.padding = { ResizeCorner::kWidth, 0, ResizeCorner::kWidth, 0 };
     bottomBar.mainSection = this;
@@ -519,15 +519,12 @@ namespace Interface
   }
 }
 
-namespace Generation
+Interface::Component *
+Generation::SoundEngine::createUI()
 {
-  Interface::Component *
-  SoundEngine::createUI()
-  {
-    auto guiArena = Interface::getGui(Interface::uiRelated.renderer)->arena;
-    auto *soundEngineSection = anew(guiArena, Interface::SoundEngineSection, {});
-    soundEngineSection->soundEngine = this;
-    soundEngineSection->reinitialise();
-    return soundEngineSection;
-  }
+  auto guiArena = Interface::getGui(Interface::uiRelated.renderer)->arena;
+  auto *soundEngineSection = anew(guiArena, Interface::SoundEngineSection, {});
+  soundEngineSection->soundEngine = this;
+  soundEngineSection->reinitialise();
+  return soundEngineSection;
 }
