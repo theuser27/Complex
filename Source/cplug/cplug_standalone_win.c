@@ -1010,6 +1010,12 @@ LRESULT CALLBACK CPWIN_WindowProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lP
         DrawMenuBar(hWnd);
         break;
     }
+    case WM_KEYDOWN:
+    case WM_KEYUP:
+    {
+        HWND child = FindWindowExW(g_hwnd, NULL, NULL, NULL);
+        return SendMessageW(child, uMsg, wParam, lParam);
+    }
     }
     return DefWindowProcW(hWnd, uMsg, wParam, lParam);
 }

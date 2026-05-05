@@ -121,7 +121,7 @@ namespace Interface
     Colour getHighlightColour() { return getColour(Skin::kWidgetPrimary1, this).darker(0.8f); }
 
     i32 id = 0;
-    i32 shortcutKeyCode = 0;
+    u32 shortcutKeyCode = 0;
     void *extraData = nullptr;          // user-provided pointer
     u8 dataTag = 0;                     // tag to differentiate extra data
     bool closesPopup = true;            // if selector should get closed after being chosen
@@ -138,6 +138,8 @@ namespace Interface
   public:
     static constexpr float kPrimaryFontHeight = 13.0f;
     static constexpr float kSecondaryFontHeight = 11.0f;
+    // to prevent accidental clicks due to overlap with the mouse
+    static constexpr double kClickTimeout = 0.15; //s
 
     void reinitialise();
 
@@ -162,6 +164,7 @@ namespace Interface
     Placement lastPlacement = Placement::right;
     PopupItem *deepestHoveredItem{};
     PopupList *selectedList{};
+    double timeOfAppearance{};
 
     utils::sll<CommandMessages::HandleMessageFn *> popupSelectorHandler{};
   };

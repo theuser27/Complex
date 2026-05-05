@@ -175,6 +175,8 @@ namespace Interface
     void handleMouseLeave(MouseEvent e);
     void handleMouseWheel(MouseEvent e);
 
+    void handleKeyPress(KeyPress k);
+
     // snapping to 0.25 scales for better rendering
     float getEffectiveScale() const { return ::roundf(pluginScale * monitorScale / kWindowScaleIncrements) * kWindowScaleIncrements; }
 
@@ -288,36 +290,6 @@ namespace Interface
       }
       customPlacement->clear();
 
-      //{
-      //  auto e = getMouseInteractions(this).mouseState;
-      //  if (mouseDownComponent_)
-      //    return;
-
-      //  Component *newHoveredComponent = gui->getComponentAt(e.x, e.y, true);
-      //  bool forceMouseMove = newHoveredComponent != mouseHoveredComponent_;
-
-      //  if (newHoveredComponent != mouseHoveredComponent_)
-      //  {
-      //    if (mouseHoveredComponent_)
-      //    {
-      //      mouseHoveredComponent_->componentFlags.isHovered = false;
-      //      mouseHoveredComponent_->mouseExit(getRelativeEvent(e, mouseHoveredComponent_));
-      //    }
-      //    if (newHoveredComponent)
-      //    {
-      //      newHoveredComponent->componentFlags.isHovered = true;
-      //      newHoveredComponent->mouseEnter(getRelativeEvent(e, newHoveredComponent));
-      //    }
-
-      //    mouseHoveredComponent_ = newHoveredComponent;
-      //  }
-
-      //  if (mouseHoveredComponent_ && forceMouseMove)
-      //  {
-      //    auto relativeEvent = getRelativeEvent(e, mouseHoveredComponent_);
-      //    mouseHoveredComponent_->mouseMove(relativeEvent);
-      //  }
-      //}
       refreshComponentUnderMouse(getMouseInteractions(this).mouseState, false);
       checkFocusedComponent();
 
@@ -465,7 +437,19 @@ namespace Interface
     case PUGL_UPDATE: break;
     case PUGL_LOOP_ENTER: break;
     case PUGL_LOOP_LEAVE: break;
-    case PUGL_KEY_PRESS: break;
+    case PUGL_KEY_PRESS:
+    {
+      KeyPress k{};
+      k.mods |= ((event->key.state & PUGL_MOD_SHIFT) != 0) ? ModifierKeys::shiftModifier : 0;
+      k.mods |= ((event->key.state & PUGL_MOD_CTRL) != 0) ? ModifierKeys::ctrlModifier : 0;
+      k.mods |= ((event->key.state & PUGL_MOD_ALT) != 0) ? ModifierKeys::altModifier : 0;
+      k.mods |= renderer->mouseButtonsDown_.flags;
+
+      k.keyCode = event->key.key;
+      renderer->handleKeyPress(k);
+
+      break;
+    }
     case PUGL_FOCUS_OUT:
     {
       if (renderer->mouseDownComponent_)
@@ -997,6 +981,16 @@ namespace Interface
 
     //if (!mouseDownComponent_ && mouseHoveredComponent_)
     //  mouseHoveredComponent_->mouseWheelMove(e);
+  }
+
+  void Renderer::handleKeyPress(KeyPress k)
+  {
+    for (auto f = focusedComponent_; f; f = f->parent)
+      if (focusedComponent_->keyPressed(k)) 
+        return;
+
+    // so that no keyboard input is missed
+    gui->keyPressed(k);
   }
 }
 

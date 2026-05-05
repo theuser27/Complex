@@ -115,12 +115,6 @@ namespace Interface
   bool 
   EffectModuleSection::EffectHolder::render(OpenGlWrapper &openGl)
   {
-    float topRounding = scaleValue(kInnerPixelRounding);
-    float bottomRounding = scaleValue(kOuterPixelRounding);
-
-    fillRect(openGl, getLocalBounds().toFloat(), getColour(Skin::kBackground, this),
-      topRounding, topRounding, bottomRounding, bottomRounding);
-
     nvgBeginPath(openGl);
     float y = (float)header.bounds.getBottom();
     nvgMoveTo(openGl, 0.0f, y);
@@ -135,6 +129,10 @@ namespace Interface
   bool 
   EffectModuleSection::render(OpenGlWrapper &openGl)
   {
+    float rounding = scaleValue(kOuterPixelRounding);
+    fillRect(openGl, getLocalBounds().toFloat(), getColour(Skin::kBackground, this),
+      rounding, rounding, rounding, rounding);
+
     doRenderChildren(openGl);
     
     if (!effectHolder.header.moduleActivator.isOn())
@@ -153,7 +151,6 @@ namespace Interface
 
     componentFlags.vertical = true;
     componentFlags.clickable = true;
-    //sizingFlags = Component::SnapToMinY;
     desiredSize = { kEffectModuleWidth, 0, kEffectModuleWidth, utils::int_max<i32> };
 
     if (!arena)
@@ -165,9 +162,7 @@ namespace Interface
     addChildComponent(&maskComponent);
     maskComponent.sizingFlags = Component::GrowableX;
     maskComponent.desiredSize = { 0, kSpectralMaskContractedHeight, 0, kSpectralMaskContractedHeight };
-    maskComponent.margin = { 0, 0, 0, kSpectralMaskMargin };
-    utils::copy(utils::span{ maskComponent.rounding }, {{ (float)kOuterPixelRounding, (float)kOuterPixelRounding,
-      (float)kInnerPixelRounding, (float)kInnerPixelRounding }});
+    utils::copy(utils::span{ maskComponent.rounding }, {{ (float)kOuterPixelRounding, (float)kOuterPixelRounding, 0.0f, 0.0f }});
     maskComponent.lowBound.arena = arena;
     maskComponent.lowBound.changeLinkedParameter(*effectModule->getParameter(Generation::EffectModule::LowBound));
     maskComponent.highBound.arena = arena;
@@ -204,6 +199,15 @@ namespace Interface
   bool
   EffectModuleSection::mouseDown(const MouseEvent &e)
   {
+    if (e.mods.test(ModifierKeys::middleButtonModifier))
+    {
+      effectModule->state->plugin->undoManager.perform(anew(
+        effectModule->state->plugin->undoManager.beginNewTransaction(),
+        Framework::DeleteProcessorUpdate, { effectModule }));
+
+      return true;
+    }
+    
     if (!e.mods.test(ModifierKeys::popupMenuClickModifier))
       return false;
 
@@ -233,9 +237,9 @@ namespace Interface
       list->addChildComponent(item);
     };
 
-    insertItem(kDeleteInstance, "D" COMPLEX_UNDERSCORE_LITERAL "elete", 'D');
-    insertItem(kCopyInstance, "C" COMPLEX_UNDERSCORE_LITERAL "opy (TODO)", 'C');
-    insertItem(kInitInstance, "I" COMPLEX_UNDERSCORE_LITERAL "nitialise", 'I');
+    insertItem(kDeleteInstance, "D" COMPLEX_UNDERSCORE_LITERAL "elete", 'd');
+    insertItem(kCopyInstance, "C" COMPLEX_UNDERSCORE_LITERAL "opy (TODO)", 'c');
+    insertItem(kInitInstance, "I" COMPLEX_UNDERSCORE_LITERAL "nitialise", 'i');
 
     selector->list = list;
     selector->toggleable = false;
@@ -245,9 +249,8 @@ namespace Interface
       if (item->id == kDeleteInstance)
       {
         // make sure nothing touches this after the call runs
-        auto *state = effectModule->state;
-        auto *transactionArena = state->plugin->undoManager.beginNewTransaction();
-        state->plugin->undoManager.perform(anew(transactionArena,
+        effectModule->state->plugin->undoManager.perform(anew(
+          effectModule->state->plugin->undoManager.beginNewTransaction(),
           Framework::DeleteProcessorUpdate, { effectModule }));
       }
       else if (item->id == kCopyInstance)

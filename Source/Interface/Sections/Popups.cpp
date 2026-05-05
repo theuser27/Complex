@@ -114,7 +114,7 @@ namespace Interface
     return true;
   }
 
-  static void positionInitialPopupList(PopupList *list, PopupSelector *selector,
+  static void positionPopupList(PopupList *list, PopupSelector *selector,
     Component *relativeComponent, Placement placement, Point<i32> extraPosition);
 
   PopupList::PopupList(PopupSelector *parentSelector) : parentSelector{ parentSelector }
@@ -124,7 +124,7 @@ namespace Interface
     componentFlags.vertical = true;
     componentFlags.clickable = true;
     desiredSize = { kPopupMinWidth, 0, utils::int_max<i32>, utils::int_max<i32> };
-    padding = { 0, 4, 0, 4 };
+    padding = { 1, 4, 1, 4 };
 
     overridePosition = [](Component *c)
     {
@@ -132,9 +132,9 @@ namespace Interface
       auto *selector = (PopupSelector *)self->parent;
 
       if (!self->parentList)
-        positionInitialPopupList(self, selector, selector->summoner, selector->listPlacement, selector->summoningPoint);
+        positionPopupList(self, selector, selector->summoner, selector->listPlacement, selector->summoningPoint);
       else
-        positionInitialPopupList(self, selector, self->parentItem, selector->lastPlacement, { 4, 0 });
+        positionPopupList(self, selector, self->parentItem, selector->lastPlacement, { 4, 0 });
 
       calculatePositions(self->children, self);
 
@@ -193,7 +193,7 @@ namespace Interface
     return true;
   }
 
-  static void positionInitialPopupList(PopupList *list, PopupSelector *selector,
+  static void positionPopupList(PopupList *list, PopupSelector *selector,
     Component *relativeComponent, Placement placement, Point<i32> extraPosition)
   {
     auto [_, __, width, height] = list->getLocalBounds();
@@ -204,8 +204,11 @@ namespace Interface
     {
       auto [x, y] = list->getRelativePoint(relativeComponent, extraPosition);
 
+      bool fitsHorizontally = x + width <= windowWidth;
+      bool fitsVertically = y + height <= windowHeight;
+
       // do we have space to the right
-      if (x + width > windowWidth)
+      if (!fitsHorizontally)
       {
         // do we have enough space to the left
         if (x > width)
@@ -217,7 +220,7 @@ namespace Interface
           x = windowWidth - width;
         }
       }
-      if (y + height > windowHeight)
+      if (!fitsVertically)
       {
         if (y > height)
           y -= height;
@@ -333,6 +336,7 @@ namespace Interface
       // hide previous child list if it exists
       if (currentSublistItem)
       {
+        parentSelector->selectedList = this;
         parentSelector->removeChildComponent(currentSublistItem->childList);
         currentSublistItem = {};
         sublistAnchorPoint = {};
@@ -345,6 +349,7 @@ namespace Interface
         newSublist->parentItem = summoningItem;
         newSublist->parentList = this;
         parentSelector->addChildComponent(newSublist);
+        parentSelector->selectedList = newSublist;
         currentSublistItem = summoningItem;
         sublistAnchorPoint = { event.x, event.y };
       }
@@ -399,6 +404,9 @@ namespace Interface
   PopupItem::mouseUp(const MouseEvent &)
   {
     if (!canBeChosen || childList)
+      return false;
+
+    if (uiRelated.steadyTime - associatedList->parentSelector->timeOfAppearance <= PopupSelector::kClickTimeout)
       return false;
 
     associatedList->parentSelector->newSelection(this);
@@ -512,6 +520,8 @@ namespace Interface
     summoner = summoningComponent;
     listPlacement = newListPlacement;
     summoningPoint = customPosition;
+    selectedList = list;
+    timeOfAppearance = uiRelated.steadyTime;
     addChildComponent(list);
 
     componentFlags.isVisible = true;

@@ -519,30 +519,12 @@ namespace Interface
     // one of special constants listed in this class, or an
     // 8 - bit character code such as a letter(case is ignored),
     // digit or a simple key like "," or ".". Note that this
-    // isn't the same as the textCharacter parameter, so for example
-    // a keyCode of 'a' and a shift - key modifier should have a
-    // textCharacter value of 'A'.
-    i32 keyCode = 0;
+    // doesn't take modifiers into account. For example, 
+    // 'a' and shift + 'a' will result in the same keyCode of 'a'.
+    u32 keyCode = 0;
 
     // the modifiers to associate with the keystroke
     ModifierKeys mods;
-
-    // the character that would be printed if someone typed
-    // this keypress into a text editor. This value may be
-    // null if the keypress is a non - printing character
-    u32 textCharacter = 0;
-
-    // Returns true if this keypress is for the given keycode without any modifiers.
-    constexpr bool operator==(i32 code) const
-    { return keyCode == code && !mods.test(ModifierKeys::allKeyboardModifiers); }
-
-    //==============================================================================
-    /** Returns true if this is a valid KeyPress.
-
-        A null keypress can be created by the default constructor, in case it's
-        needed.
-    */
-    constexpr bool isValid() const { return keyCode != 0; }
 
     //==============================================================================
     /** Checks whether the user is currently holding down the keys that make up this
