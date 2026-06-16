@@ -95,6 +95,28 @@ namespace Framework
     return (success) ? value : -1.0;
   }
 
+  double 
+  getValueFromOption(IndexedData *option, const ParameterDetails &details)
+  {
+    COMPLEX_ASSERT(details.scale == ParameterScale::Indexed);
+    u32 value = 0;
+
+    bool success = iterateOverIndexedData(details.options, [&value, option](const IndexedData &other)
+    {
+      if (other.canBeChosen())
+      {
+        if (other == *option)
+          return true;
+
+        ++value;
+      }
+
+      return false;
+    });
+
+    return (success) ? value : -1.0;
+  }
+
   double
   scaleValue(double value, const ParameterDetails &details,
     float sampleRate, bool scalePercent, bool skewOnly)
@@ -805,7 +827,7 @@ namespace Plugin
       bool isPresent = false;
       for (auto referenceChild = reference->children; referenceChild; referenceChild = referenceChild->next)
       {
-        isPresent = targetChild->id == referenceChild->id;
+        isPresent = *targetChild == *referenceChild;
         if (isPresent)
         {
           updateDynamicOptionEntries(targetChild, referenceChild, arena, allowsBreakingChanges);
@@ -836,7 +858,7 @@ namespace Plugin
       bool isPresent = false;
       for (auto targetChild = target->children; targetChild; targetChild = targetChild->next)
       {
-        isPresent = referenceChild->id == targetChild->id;
+        isPresent = *referenceChild == *targetChild;
         if (isPresent)
           break;
       }
@@ -862,14 +884,13 @@ namespace Plugin
     if (link->hostControl)
       return;
 
-    // this function assumes no changes are ever missed and 
-    // therefore counts are always a valid method of checking for changes
-    // (no situations where 2 changes happen at the same time to cancel each other out)
-
     // getting the most up-to-date counts of the dynamic option
     auto dynamicOption = state->dynamicOptions.find(indexedData->dynamicUpdateUuid)->second;
     u32 newCount = dynamicOption->valueCount;
 
+    // this function assumes no changes are ever missed and 
+    // therefore counts are always a valid method of checking for changes
+    // (no situations where 2 changes happen at the same time to cancel each other out)
     if (indexedData->valueCount == newCount)
       return;
 

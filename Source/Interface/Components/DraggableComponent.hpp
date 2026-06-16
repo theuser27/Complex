@@ -7,9 +7,8 @@
 
 namespace Interface
 {
-  class DraggableComponent final : public Component
+  struct DraggableComponent : public Component
   {
-  public:
     DraggableComponent()
     {
       componentFlags.clickable = true;
@@ -34,11 +33,16 @@ namespace Interface
     
     Point<i32> initialClickPosition{};
     bool (*previousOverridePosition)(Component *c){};
+    Range<i32> (*previousOverrideSize)(Component *c, bool isCalculatingVertical){};
     u64 previousParentProcessorStateId{};
     usize previousIndex{};
     Placement previousPlacement{};
-    MouseEvent lastDragEvent{};
-    bool isCopying{};
-    bool isDragging{};
+    bool isCopying : 1{};
+    bool isDragging : 1{};
+    bool wasMovingUpX : 1{};
+    bool wasMovingUpY : 1{};
+    bool directionX : 1{};
+    bool directionY : 1{};
+    Point<i32> directionChangePoint{};
   };
 }

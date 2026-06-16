@@ -188,11 +188,15 @@ namespace Interface
 
       area = { (u32)::roundf((float)area.w * newEffectiveScale / effectiveScale),
         (u32)::roundf((float)area.h * newEffectiveScale / effectiveScale) };
-      auto minScaledArea = Area<u32>{ (u32)::roundf((float)kMinWidth * newEffectiveScale),
-        (u32)::roundf((float)kMinHeight * newEffectiveScale) };
-      area = { utils::max(minScaledArea.w, area.w), utils::max(minScaledArea.h, area.h) };
 
       effectiveScale = newEffectiveScale;
+      uiRelated.scale = effectiveScale;
+      // the UI needs to be sized before we can proceed with checking
+      if (gui->bounds.isEmpty())
+        doSizingAndPositioning();
+
+      area = gui->checkResizing(area, true);
+
       plugin.hostContext->requestResize(plugin.hostContext, area.w, area.h);
     }
 
@@ -242,23 +246,8 @@ namespace Interface
       focusedComponent_ = nullptr;
     }
 
-    void renderLoop(PuglView *view)
+    void doSizingAndPositioning()
     {
-      ++numberOfFrames;
-      if (numberOfFrames == 200)
-      {
-        utils::shrinkWorkingSet();
-      }
-
-      auto newRenderTime = puglGetTime(puglGetWorld(view));
-      uiRelated.deltaTime = (float)(newRenderTime - uiRelated.steadyTime);
-      uiRelated.steadyTime = newRenderTime;
-      updateGraph(&graph, (float)uiRelated.deltaTime);
-
-      auto state = plugin.state_;
-      for (usize i = 0; i < state->parameterBridges.size(); ++i)
-        state->parameterBridges[i].updateUIParameter();
-
       uiRelated.scale = effectiveScale;
       auto [unscaledWidth, unscaledHeight] = unscaleDimensions(area.w, area.h, effectiveScale);
       gui->desiredSize = { (i32)unscaledWidth, (i32)unscaledHeight, (i32)unscaledWidth, (i32)unscaledHeight };
@@ -289,6 +278,26 @@ namespace Interface
           customPlacement->emplaceBack(c);
       }
       customPlacement->clear();
+    }
+
+    void renderLoop(PuglView *view)
+    {
+      ++numberOfFrames;
+      if (numberOfFrames == 200)
+      {
+        utils::shrinkWorkingSet();
+      }
+
+      auto newRenderTime = puglGetTime(puglGetWorld(view));
+      uiRelated.deltaTime = (float)(newRenderTime - uiRelated.steadyTime);
+      uiRelated.steadyTime = newRenderTime;
+      updateGraph(&graph, (float)uiRelated.deltaTime);
+
+      auto state = plugin.state_;
+      for (usize i = 0; i < state->parameterBridges.size(); ++i)
+        state->parameterBridges[i].updateUIParameter();
+
+      doSizingAndPositioning();
 
       refreshComponentUnderMouse(getMouseInteractions(this).mouseState, false);
       checkFocusedComponent();
@@ -486,6 +495,8 @@ namespace Interface
         renderer->handleMouseLeave(COMPLEX_MOVE(e));
 
       renderer->lastMousePosition_ = { e.x, e.y };
+      if (event->type == PUGL_POINTER_OUT)
+        renderer->lastMousePosition_ = { -1, -1 };
       renderer->lastKeyboardMods_ = e.mods & ModifierKeys::allKeyboardModifiers;
 
       break;
@@ -768,13 +779,10 @@ namespace Interface
 
   void Renderer::checkBounds(u32 &newWidth, u32 &newHeight)
   {
-    auto minScaledArea = Area<u32>{ (u32)::roundf((float)kMinWidth * effectiveScale),
-      (u32)::roundf((float)kMinHeight * effectiveScale) };
-
-    newWidth = utils::max(newWidth, minScaledArea.w);
-    newHeight = utils::max(newHeight, minScaledArea.h);
-
-    // TODO: make resizing snap horizontally to the width of individual lanes
+    uiRelated.scale = effectiveScale;
+    auto [w, h] = gui->checkResizing({ newWidth, newHeight });
+    newWidth = w;
+    newHeight = h;
   }
 
   void Renderer::moveFocusTo(Component *component)

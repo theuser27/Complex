@@ -131,6 +131,8 @@ namespace Generation
     //  tilt (stereo) - range[-100%, +100%]; tilt relative to the loudest bin in the spectrum
     //    at min/max values the left/right-most part of the masked spectrum will have no threshold
     //
+    //  proportionality
+    // 
     //  delta - instead of the absolute loudness it uses the averaged loudness change from the 2 neighbouring bins
     //
     COMPLEX_ENUM(Gate,
@@ -202,6 +204,18 @@ namespace Generation
 
     utils::span<Interface::Control *> createUIClip(utils::bumpArena *arena,
       Interface::EffectModuleSection *section, EffectData *effectData);
+
+    // Invert the spectrum relative to a specific loudness value
+    //  Threshold (stereo) - range[quietest bin, loudest bin]; centre is the average loudness across the spectrum
+    //  Tilt (stereo) - adds tilt to the threshold
+    //  Proportionality (stereo) - range[0.0f, ?]; default value is 1.0f. 
+    //    This determines how much the gain is being applied. In example, 
+    //    The quieter something is in proportion to the threshold, that many times the gain gets applied
+    //    At 0 proportionality 
+    //  Gain (stereo) - range[-$ db, +$ db] (symmetric loudness);
+    void runInvert(EffectModule *effectModule, EffectData *effectData,
+      Framework::ComplexDataSource &source, Framework::SimdBuffer *destination,
+      u32 binCount, float sampleRate);
 
     // TODO:
     //// Compressor

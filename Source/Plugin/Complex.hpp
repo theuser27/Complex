@@ -146,7 +146,7 @@ namespace Plugin
 
         shouldStop = anew(globalArena, satomi::atomic<bool>, {});
 
-        thread = [this, function]() { function(*shouldStop); };
+        thread = [shouldStop = shouldStop, function]() { function(*shouldStop); };
         return true;
       }
 
@@ -182,9 +182,9 @@ namespace Plugin
     Framework::FFT *fft{};
 
     // modulators inside the plugin
-    utils::vector<Framework::ParameterModulator *> parameterModulators{};
+    utils::vectornd<Framework::ParameterModulator *> parameterModulators{};
     // parameters that receive updates upon various plugin changes
-    utils::vector<utils::pair<Framework::IndexedData *, Framework::ParameterValue *>> dynamicParameters{};
+    utils::vectornd<utils::pair<Framework::IndexedData *, Framework::ParameterValue *>> dynamicParameters{};
     // the processor tree is stored in a flattened map
     utils::vector_map<u64, Generation::Processor *> allProcessors{};
 
@@ -195,6 +195,6 @@ namespace Plugin
     utils::bumpArena *processorStorage{};
     utils::bumpArena *miscStorage{};
 
-    utils::vector<Thread> workers{};
+    utils::vectornd<Thread> workers{};
   };
 }

@@ -103,13 +103,6 @@ namespace Generation
 
     Framework::ComplexDataSource laneDataSource;
 
-    //// Parameters
-    //
-    // 1. lane enabled
-    // 2. input index
-    // 3. output index
-    // 4. gain match
-
     satomi::atomic<u32> currentEffectIndex = 0;
 
     satomi::atomic<LaneStatus> status = LaneStatus::Finished;

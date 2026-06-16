@@ -105,39 +105,32 @@ namespace Interface
     sizes.min = utils::min(sizes.min, (i64)utils::int_max<i32>);
     sizes.max = utils::min(sizes.max, (i64)utils::int_max<i32>);
 
-    if (test_enum(component->sizingFlags, ((isCalculatingVertical) ? Component::FixedY : Component::FixedX)))
+    if (test_enum(component->sizingFlags, (isCalculatingVertical) ? Component::FixedY : Component::FixedX))
     {
       component->bounds.*minMember = component->desiredSize.*minMember;
       component->bounds.*maxMember = component->desiredSize.*maxMember;
     }
     else
     {
-      auto snapToMinFlag = (isCalculatingVertical) ? Component::SnapToMinY : Component::SnapToMinX;
-      if (component->sizingFlags & snapToMinFlag)
-      {
-        component->bounds.*minMember = utils::max((i32)sizes.min, component->desiredSize.*minMember);
-        component->bounds.*maxMember = utils::min(component->bounds.*minMember, component->desiredSize.*maxMember);
-      }
-      else
-      {
-        component->bounds.*minMember = utils::max((i32)sizes.min, component->desiredSize.*minMember);
-        component->bounds.*maxMember = utils::clamp((i32)sizes.max, component->bounds.*minMember, component->desiredSize.*maxMember);
-      }
+      component->bounds.*minMember = utils::max((i32)sizes.min, component->desiredSize.*minMember);
 
-      auto growableFlag = (isCalculatingVertical) ? Component::GrowableY : Component::GrowableX;
-      if (component->sizingFlags & growableFlag)
+      if (test_enum(component->sizingFlags, (isCalculatingVertical) ? Component::SnapToMinY : Component::SnapToMinX))
+        component->bounds.*maxMember = utils::min(component->bounds.*minMember, component->desiredSize.*maxMember);      
+      else
+        component->bounds.*maxMember = utils::clamp((i32)sizes.max, component->bounds.*minMember, component->desiredSize.*maxMember);
+
+      if (test_enum(component->sizingFlags, (isCalculatingVertical) ? Component::GrowableY : Component::GrowableX))
       {
         // if you have a scrollable parent and a growable child
         // along the same axis, the algorithm will fail spectacularly
-        [[maybe_unused]] auto scrollableFlag = (isCalculatingVertical) ? 
-          Component::ScrollableY : Component::ScrollableX;
-        COMPLEX_ASSERT((component->parent->sizingFlags & scrollableFlag) == 0);
+        //[[maybe_unused]] auto scrollableFlag = (isCalculatingVertical) ? 
+        //  Component::ScrollableY : Component::ScrollableX;
+        //COMPLEX_ASSERT((component->parent->sizingFlags & scrollableFlag) == 0);
 
         component->bounds.*maxMember = utils::int_max<i32>;
       }
 
-      auto scrollableFlag = (isCalculatingVertical) ? Component::ScrollableY : Component::ScrollableX;
-      if (component->sizingFlags & scrollableFlag)
+      if (test_enum(component->sizingFlags, (isCalculatingVertical) ? Component::ScrollableY : Component::ScrollableX))
         component->bounds.*minMember = component->desiredSize.*minMember;
     }
 
@@ -207,6 +200,8 @@ namespace Interface
       // scaling the final size
       component->bounds.*actualSize = scaleValueRoundInt((float)(component->bounds.*actualSize));
       COMPLEX_ASSERT(component->bounds.*actualSize >= 0);
+      component->bounds.*actualSize = (component->componentFlags.keepSize) ? 
+        component->lastBounds.*actualSize : component->bounds.*actualSize;
 
       return;
     }
@@ -260,25 +255,10 @@ namespace Interface
     sizes.min = utils::min(sizes.min, (i64)utils::int_max<i32>);
     sizes.max = utils::min(sizes.max, (i64)utils::int_max<i32>);
 
-    auto scrollableFlag = (isCalculatingVertical) ? Component::ScrollableY : Component::ScrollableX;
-
-    if (test_enum(component->sizingFlags, scrollableFlag))
-    {
-      i32 *scrollableDirection = (isCalculatingVertical) ?
-        &component->scrollableArea.h : &component->scrollableArea.w;
-
-      if ((i64)(component->bounds.*maxMember) < sizes.min + childrenMinSizes || 
-        (i64)(*scrollableDirection) != sizes.min + childrenMinSizes)
-      {
-        // parent is scrollable so every child is set to their preferred max sizes
-        // which is already done, therefore we only need to update scrollable size
-        // and update the position in case we've been shrunk
-
-        *scrollableDirection = scaleValueRoundInt((float)sizes.max);
-        //offsetScroll(component, 0.0f, 0.0f, false);
-      }
-    }
-    else if (!sortedMin.empty() && !sortedMax.empty())
+    bool skipResizingChildren = test_enum(component->sizingFlags, (isCalculatingVertical) ? Component::ScrollableY : Component::ScrollableX) &&
+      !test_enum(component->sizingFlags, (isCalculatingVertical) ? Component::SnapToMinY : Component::SnapToMinX);
+    
+    if (!skipResizingChildren && (!sortedMin.empty() && !sortedMax.empty()))
     {
       i32 remaining = component->bounds.*actualSize - (i32)sizes.min;
 
@@ -288,14 +268,23 @@ namespace Interface
       i32 biggestMinSize;
       usize count;
       usize j = 0;
+      if (test_enum(component->sizingFlags, (isCalculatingVertical) ?
+        Component::ScrollableSnapToMinY : Component::ScrollableSnapToMinX))
+      {
+        smallestMaxSize = 0;
+        biggestMinSize = utils::int_max<i32>;
+        count = sortedMax.size();
+      }
+      else
       {
         usize lastJ = 0;
         usize i = sortedMin.size(), lastI = sortedMin.size();
 
+        Component *biggestMin, *smallestMax;
         while (true)
         {
-          auto *biggestMin = sortedMin[i - 1];
-          auto *smallestMax = sortedMax[j];
+          biggestMin = sortedMin[i - 1];
+          smallestMax = sortedMax[j];
 
           // if the most constrained component's maximum gets surpassed by the current size,
           // exclude it and update the remainder
@@ -324,6 +313,10 @@ namespace Interface
         biggestMinSize = sortedMin[i - 1]->bounds.*minMember;
         smallestMaxSize = sortedMax[utils::min(j, sortedMax.size() - 1)]->bounds.*maxMember;
         count = i - j;
+
+        if (j + count != sortedMax.size())
+          for (auto k = j + count; k < sortedMin.size(); ++k)
+            COMPLEX_ASSERT(sortedMin[k]->bounds.*maxMember != utils::int_max<i32>);
       }
 
 
@@ -343,6 +336,27 @@ namespace Interface
       }
     }
 
+    if (test_enum(component->sizingFlags, (isCalculatingVertical) ? Component::ScrollableY : Component::ScrollableX))
+    {
+      i32 *scrollableDirection = (isCalculatingVertical) ?
+        &component->scrollableArea.h : &component->scrollableArea.w;
+
+      if ((i64)(component->bounds.*maxMember) < sizes.min + childrenMinSizes ||
+        (i64)(*scrollableDirection) != sizes.min + childrenMinSizes)
+      {
+        // parent is scrollable so every child is set to their preferred max sizes
+        // which is already done, therefore we only need to update scrollable size
+        // and update the position in case we've been shrunk
+
+        if (test_enum(component->sizingFlags, (isCalculatingVertical) ?
+          Component::ScrollableSnapToMinY : Component::ScrollableSnapToMinX))
+          *scrollableDirection = scaleValueRoundInt((float)(sizes.min + childrenMinSizes));
+        else
+          *scrollableDirection = scaleValueRoundInt((float)sizes.max);
+      }
+      offsetScroll(component, 0.0f, 0.0f, false);
+    }
+
     for (auto *child = children; child; child = child->next)
     {
       if (!child->componentFlags.isVisible)
@@ -355,6 +369,8 @@ namespace Interface
     // scaling the final size
     component->bounds.*actualSize = scaleValueRoundInt((float)(component->bounds.*actualSize));
     COMPLEX_ASSERT(component->bounds.*actualSize >= 0);
+    component->bounds.*actualSize = (component->componentFlags.keepSize) ?
+      component->lastBounds.*actualSize : component->bounds.*actualSize;
   }
 
   void calculateSizes(Component *children, Component *component)
@@ -376,8 +392,6 @@ namespace Interface
   void calculatePositions(Component *children,
     Component *component, Rectangle<i32> boundsInTarget)
   {
-    static constexpr float kAutoscrollMultiplier = 10.0f;
-
     if (!component->componentFlags.isVisible)
       return;
 
@@ -388,10 +402,6 @@ namespace Interface
         component->bounds.w - padding.getRight(),
         component->bounds.h - padding.getBottom() };
     }
-
-    offsetScroll(component,
-      component->autoScrollIncrements.x * uiRelated.deltaTime * kAutoscrollMultiplier,
-      component->autoScrollIncrements.y * uiRelated.deltaTime * kAutoscrollMultiplier, false);
 
     if (test_enum(component->sizingFlags, Component::ScrollableX))
       boundsInTarget.x -= (i32)::roundf(component->scrollOffset.x);
@@ -807,15 +817,15 @@ namespace Interface
   }
 
   bool
-  Component::mouseWheelMove(const MouseEvent &event)
+  Component::mouseWheelMove(const MouseEvent &e)
   {
-    if (event.mods.test(ModifierKeys::ctrlModifier))
+    if (e.mods.test(ModifierKeys::ctrlModifier))
       return false;
 
-    bool isHorizontal = event.mods.test(ModifierKeys::shiftModifier);
+    bool isHorizontal = e.mods.test(ModifierKeys::shiftModifier);
     auto multiplier = 30.0f * uiRelated.scale;
-    offsetScroll(this, event.wheelDeltaX * multiplier, 
-      event.wheelDeltaY * multiplier, isHorizontal);
+    offsetScroll(this, e.wheelDeltaX * multiplier, 
+      e.wheelDeltaY * multiplier, isHorizontal);
 
     return (isHorizontal) ? (sizingFlags & Component::ScrollableX) :
       (sizingFlags & Component::ScrollableY);
@@ -837,7 +847,7 @@ namespace Interface
   Point<i32>
   Component::getRelativePoint(const Component *source, Point<i32> pointRelativeToSource) const
   {
-    if (source && source->parent == parent)
+    if (source == this)
       return pointRelativeToSource;
 
     Point otherPosition = pointRelativeToSource;
@@ -1044,8 +1054,14 @@ namespace Interface
           focusedComponent->giveAwayFocusTo();
 
       if (auto *hoveredComponent = mouseInteractions.hovered)
+      {
         if (childToRemove == hoveredComponent)
+        {
+          // last chance to execute anything from this component (i.e. reset cursor shape)
+          childToRemove->mouseExit(mouseInteractions.mouseState);
           setHoveredComponent(uiRelated.renderer, nullptr);
+        }
+      }
 
       if (auto *clickedComponent = mouseInteractions.clicked)
         if (childToRemove == clickedComponent)

@@ -363,13 +363,7 @@ namespace Framework
     state{ *processorToDelete->state }
   {
     parentStateId = processorToDelete->parent->stateId;
-    for (auto child = processorToDelete->parent->children; child != processorToDelete; child = child->next)
-      ++index;
-
-    // has it already been deleted? 
-    // if so, we need to skip removal in redo
-    if (!processorToDelete->parent)
-      processor = processorToDelete;
+    index = processorToDelete->getIndex();
 
     destructor = [](UndoAction *a)
     {
@@ -395,14 +389,17 @@ namespace Framework
           self(self, child);
       };
       recurseParameters(recurseParameters, self->processor);
-      self->processor->component->componentFlags.isVisible = false;
+
+      self->processor->component->parent->removeChildComponent(self->processor->component);
     };
 
     undo = [](UndoAction *a)
     {
       auto *self = (DeleteProcessorUpdate *)a;
       auto destinationPointer = self->state.getProcessor(self->parentStateId);
-      self->processor->component->componentFlags.isVisible = true;
+      Interface::CommandMessages::ProcessorInsertion info{ .processor = self->processor,
+        .index = (u32)self->index, .useIndex = true };
+      Interface::CommandMessages::tryProcessorInsertion(destinationPointer->component, info);
 
       auto g = self->state.plugin->acquireProcessingLock();
       destinationPointer->addChildProcessor(*self->processor, self->index);

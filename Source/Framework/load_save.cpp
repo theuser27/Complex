@@ -158,7 +158,7 @@ namespace Framework::LoadSave
     parameterMappings = 100;
     inSidechains = 0;
     outSidechains = 0;
-    undoSteps = 500;
+    undoSteps = 100;
 
     useConfigJson([&](cjson *json)
       {
@@ -693,7 +693,9 @@ namespace Plugin
     auto state = utils::sp<State>::create(this);
 
     state->soundEngine = utils::as<SoundEngine>(state->createProcessor(Processors::SoundEngine));
-    state->soundEngine->addChildProcessor(*state->createProcessor(Processors::EffectsLane));
+    auto effectsLane = state->createProcessor(Processors::EffectsLane);
+    effectsLane->name = { effectsLane->arena, "A" };
+    state->soundEngine->addChildProcessor(*effectsLane);
 
     checkForDynamicParameters(state.get(), state->soundEngine);
 

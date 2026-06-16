@@ -101,15 +101,16 @@ namespace Interface
       auto &data = *(CommandMessages::Autoscroll *)extraData;
       if (data.handleY)
       {
+        static constexpr float kAutoscrollMultiplier = 10.0f;
+
         data.handleY = false;
 
         Point<i32> position = data.position;
         i32 offset = utils::max(0, EffectsLaneSection::kAutoScrollRegion - utils::min(position.y, self->bounds.h - position.y));
         offset = utils::min(offset, (i32)utils::int_max<i8>);
-        self->moduleHolder.autoScrollIncrements.y = (i8)((position.y < self->bounds.h - position.y) ? offset : -offset);
+        auto yOffset = (i8)((position.y < self->bounds.h - position.y) ? offset : -offset);
 
-        if (data.stopY)
-          self->moduleHolder.autoScrollIncrements.y = 0;
+        offsetScroll(&self->moduleHolder, 0.0f, yOffset * uiRelated.deltaTime * kAutoscrollMultiplier, false);
       }
 
       //COMPLEX_DEBUG_LOG("Position: %d, %d\n", data.position.x, data.position.y);
@@ -120,16 +121,12 @@ namespace Interface
     case CommandMessages::HandleProcessorInsertion:
     {
       auto *metadata = (CommandMessages::ProcessorInsertion *)extraData;
-      auto *placeholderInsert = &getGui(uiRelated.renderer)->placeholderInsert;
 
       if (!CommandMessages::handleProcessorInsertion(self->effectsLane, 
         &self->moduleHolder, metadata, Placement::top))
         return false;
 
       auto section = (EffectModuleSection *)metadata->processor->component;
-
-      placeholderInsert->source = section;
-
       section->laneSection = self;
       section->componentFlags.animateMovement = true;
       section->previousPosition = invalidPosition;
@@ -158,6 +155,7 @@ namespace Interface
     removeCommandMessageHandler(laneHandler);
 
     componentFlags.vertical = true;
+    componentFlags.animateMovement = true;
     skinOverride = Skin::kEffectsLane;
     sizingFlags = Component::GrowableY;
     desiredSize = { kEffectsLaneWidth, 0, kEffectsLaneWidth, 0 };
@@ -176,7 +174,7 @@ namespace Interface
 
     header.addChildComponent(&laneTitle);
     laneTitle.placement = Placement::left;
-    laneTitle.text = { arena, "Lane A" };
+    laneTitle.text = { arena, effectsLane->name };
     effectsLane->name.copy(laneTitle.text);
     laneTitle.textColour = Skin::kWidgetAccent1;
     header.addChildComponent(&inputSelector);
@@ -221,6 +219,9 @@ namespace Interface
     outputSelector.arena = arena;
     outputSelector.text.font = FontId::InterType;
     outputSelector.changeLinkedParameter(*effectsLane->getParameter(Generation::EffectsLane::Output));
+
+    miniView.processor = effectsLane;
+    miniView.draggedComponent = &miniView;
   }
 
   void EffectsLaneSection::destroy()
@@ -312,7 +313,9 @@ namespace Interface
   bool
   EffectsLaneSection::ModuleHolder::mouseMove(const MouseEvent &e)
   {
-    lastMouseMove = e;
+    auto laneSection = (EffectsLaneSection *)parent;
+    if (!laneSection->isDropdownOpen)
+      lastMouseMove = e;
     return true;
   }
 
@@ -346,7 +349,7 @@ namespace Interface
 
   static void renderInsertHint(EffectsLaneSection::ModuleHolder *holder, OpenGlWrapper &openGl)
   {
-    static constexpr auto kHoverIncrement = 0.1f;
+    static constexpr auto kHoverIncrement = 0.05f;
 
     auto laneSection = (EffectsLaneSection *)holder->parent;
     bool isEmptyAndHovered = holder->componentFlags.isHovered && laneSection->effectsLane->childrenCount == 0;
@@ -388,23 +391,18 @@ namespace Interface
         drawBounds.h = utils::min(drawBounds.h, scaleValueRoundInt(kEffectModuleMinHeight));
       }
 
-      strokeRect(openGl, drawBounds.toFloat(), scaleValue(1.0f),
-        getColour(Skin::kBorder, holder).withMultipliedAlpha(holder->animationValues[0]), 
-        scaleValue(EffectsLaneSection::kBorderRounding));
+      auto colour = getColour(Skin::kBorder, holder).withMultipliedAlpha(holder->animationValues[0]);
+      strokeRect(openGl, drawBounds.toFloat(), scaleValue(1.0f), colour, scaleValue(EffectsLaneSection::kBorderRounding));
 
       static constexpr int kPlusSize = 16;
-      auto plusSize = scaleValueRoundInt(kPlusSize);
-      auto thickness = scaleValue(2.0f);
+      auto plusSize = scaleValueRound(kPlusSize);
 
       if (drawBounds.h >= 2 * plusSize)
       {
-        nvgStrokeWidth(openGl, thickness);
-        nvgBeginPath(openGl);
-        nvgMoveTo(openGl, (float)drawBounds.getCentreX() - (float)(plusSize / 2), (float)drawBounds.getCentreY());
-        nvgLineTo(openGl, (float)drawBounds.getCentreX() - (float)(plusSize / 2) + (float)plusSize, (float)drawBounds.getCentreY());
-        nvgMoveTo(openGl, (float)drawBounds.getCentreX(), (float)drawBounds.getCentreY() + (float)(plusSize / 2));
-        nvgLineTo(openGl, (float)drawBounds.getCentreX(), (float)drawBounds.getCentreY() + (float)(plusSize / 2) - (float)plusSize);
-        nvgStroke(openGl);
+        auto plusBounds = Rectangle{ (float)drawBounds.getCentreX(), 
+          (float)drawBounds.getCentreY(), 0.0f, 0.0f }.withExpand(plusSize * 0.5f);
+
+        strokePlus(openGl, plusBounds, scaleValue(2.0f), colour);
       }
     }
   }
@@ -437,6 +435,43 @@ namespace Interface
     }
 
     return false;
+  }
+
+  EffectsLaneSection::LaneMiniView::LaneMiniView()
+  {
+    sizingFlags = Component::GrowableX;
+    padding = { 4, 0, 4, 0 };
+    desiredSize = { kMinWidth, kMinHeight, utils::int_max<i32>, kMinHeight };
+  }
+
+  bool 
+  EffectsLaneSection::LaneMiniView::mouseDown(const MouseEvent &e)
+  {
+    if (e.mods.test(ModifierKeys::middleButtonModifier))
+    {
+      // LaneSelector -> EffectsSection
+      auto *effectsSection = (EffectsSection *)parent->parent;
+      effectsSection->removeLane((EffectsLaneSection *)processor->component);
+
+      return true;
+    }
+
+    return DraggableComponent::mouseDown(e);
+  }
+
+  bool
+  EffectsLaneSection::LaneMiniView::render(OpenGlWrapper &openGl)
+  {
+    auto localBounds = getLocalBounds().toFloat();
+    fillRect(openGl, localBounds, getColour(Skin::kBody, this), EffectsSection::LaneSelector::kLaneMiniViewRounding);
+
+    auto textBounds = localBounds.withTrim(scaleValueRound(padding.toFloat()))
+      .withY(localBounds.getCentreY()).withHeight(0.0f).withExpand(0.0f, kPrimaryTextLineHeight / 2);
+
+    renderText(((EffectsLaneSection *)processor->component)->laneTitle.text, 
+      FontId::DDinType, textBounds, openGl, getColour(Skin::kHeadingText, this));
+
+    return true;
   }
 }
 

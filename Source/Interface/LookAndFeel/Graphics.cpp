@@ -32,7 +32,7 @@ namespace Interface
 
     DDinFontId = nvgCreateFontMem(context, "DDin",
       (unsigned char *)BinaryData::D_DIN_Bold_otf, (int)BinaryData::D_DIN_Bold_otfSize, false);
-    InterFontId = nvgCreateFontMem(context, "DDin",
+    InterFontId = nvgCreateFontMem(context, "Inter",
       (unsigned char *)BinaryData::Inter_Medium_ttf, (int)BinaryData::Inter_Medium_ttfSize, false);
 
     // TODO: how big should the framebuffer be

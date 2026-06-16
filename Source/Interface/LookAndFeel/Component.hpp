@@ -5,6 +5,7 @@
 
 #include "Framework/utils.hpp"
 #include "Framework/memory.hpp"
+#include "Generation/Processor.hpp"
 #include "ui_constants.hpp"
 #include "gui_utils.hpp"
 #include "Skin.hpp"
@@ -59,8 +60,6 @@ namespace Interface
       Point<i32> position{};
       bool handleX{};
       bool handleY{};
-      bool stopX{};
-      bool stopY{};
     };
 
     struct ProcessorInsertion
@@ -69,13 +68,16 @@ namespace Interface
       Generation::Processor *processor{};
       Component *placeholder{};
       u32 index{};
+      u32 oldIndex{};
       bool useIndex{};
       bool isMovingUpX{};
       bool isMovingUpY{};
     };
 
     bool handleProcessorInsertion(Generation::Processor *parent, 
-      Component *parentComponent, ProcessorInsertion *metadata, Placement placement);
+      Component *parentComponent, ProcessorInsertion *metadata, Placement placement, 
+      Component *(*getRelativeComponent)(Generation::Processor *) = 
+      [](Generation::Processor *processor) { return processor->component; });
 
     void tryProcessorInsertion(Component *parentComponent, ProcessorInsertion info);
   }
@@ -99,7 +101,7 @@ namespace Interface
       // unless minimum size is bigger
       SameAsSiblingsX = 1 << 4,
       SameAsSiblingsY = 1 << 5,
-      
+
       // the size along the scrollable direction will be unconstrained
       // and will always fit the children
       ScrollableX = 1 << 6,
@@ -115,6 +117,9 @@ namespace Interface
       // the max size will be determined by clamp(childrenMinSize, desiredSize.min, desiredSize.max)
       SnapToMinX = 1 << 10,
       SnapToMinY = 1 << 11,
+
+      ScrollableSnapToMinX = ScrollableX | SnapToMinX,
+      ScrollableSnapToMinY = ScrollableY | SnapToMinY,
     };
 
     // all mouse events return true/false if they have/have not consumed the event
@@ -239,6 +244,7 @@ namespace Interface
       bool alwaysOnTop : 1 = false;
       bool acceptsOrphanMouseEvents : 1 = false;  // if component can accept mouseUp without mouseDown
                                                   //  happens if another component gives up on handling mouseUp
+      bool keepSize : 1 = false;
 
       // state flags
       bool isVisible : 1 = true;
@@ -254,9 +260,6 @@ namespace Interface
 
     Placement placement{};
     SizingFlags sizingFlags = None;
-
-    // 
-    Point<i8> autoScrollIncrements{};
 
     // margin in parent
     Rectangle<i16> margin{};

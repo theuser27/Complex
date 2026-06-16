@@ -5,6 +5,7 @@
 
 #include "../LookAndFeel/Component.hpp"
 #include "../Components/Control.hpp"
+#include "../Components/DraggableComponent.hpp"
 
 namespace Generation
 {
@@ -27,7 +28,7 @@ namespace Interface
 
     static constexpr int kInsideRouding = 4;
 
-    static constexpr float kTimeout = 0.1f;
+    static constexpr float kTimeout = 0.05f;
     static constexpr float kBorderRounding = 8.0f;
 
     void reinitialise();
@@ -68,5 +69,18 @@ namespace Interface
     bool isDropdownOpen{};
 
     utils::sll<CommandMessages::HandleMessageFn *> laneHandler{};
+
+    struct LaneMiniView : public DraggableComponent
+    {
+      static constexpr int kMinWidth = 50;
+      static constexpr int kMinHeight = 24;
+
+      LaneMiniView();
+
+      bool mouseDown(const MouseEvent &e) override;
+      bool render(OpenGlWrapper &openGl) override;
+    };
+
+    LaneMiniView miniView{};
   };
 }

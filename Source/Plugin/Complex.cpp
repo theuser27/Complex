@@ -537,7 +537,7 @@ void *cplug_createPlugin(CplugHostContext *ctx)
 {
   localScratch = utils::bumpArena::create(COMPLEX_MB(4), COMPLEX_KB(128));
 
-  usize parameterMappings, inSidechains, outSidechains, undoSteps;
+  usize parameterMappings = 64, inSidechains = 0, outSidechains = 0, undoSteps = 100;
   Framework::LoadSave::getStartupParameters(parameterMappings, inSidechains, outSidechains, undoSteps);
 
   auto *plugin = new utils::sll<Plugin::ComplexPlugin>{ { parameterMappings, (u32)inSidechains, (u32)outSidechains, undoSteps, ctx } };

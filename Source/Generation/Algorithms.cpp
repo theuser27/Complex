@@ -597,7 +597,7 @@ namespace Generation
     gainParameter = -gainParameter;
 
     simd_float slope = 1.0f;
-    simd_float slopeMultiplier = utils::uninitialised;
+    simd_float slopeMultiplier{};
     {
       simd_float tiltParameter = getParameter(effectData, Filter::Gate::Tilt)->getInternalValue<simd_float>(sampleRate);
       simd_float decadeSlope = tiltParameter * kOctaveToDecadeConversionMult;
@@ -948,7 +948,7 @@ namespace Generation
     bool wrapAround = getParameter(effectData, Pitch::Resample::Wrap)->getInternalValue<u32>(sampleRate);
 
     simd_float leakMultipliers[2 * kNeighbourBins + 1];
-    simd_float phaseShift = utils::uninitialised;
+    simd_float phaseShift{};
 
     auto calculateCoefficients = [&](simd_float binFloatingPointShift) mutable
     {
@@ -1083,7 +1083,7 @@ namespace Generation
     }();
     simd_mask isHighAboveLow = simd_int::greaterThanOrEqualSigned(highBoundIndices, lowBoundIndices);
 
-    simd_int binShift = utils::uninitialised;
+    simd_int binShift{};
     simd_float leakMultipliers[2 * kNeighbourBins + 1];
     {
       simd_float binFloatingPointShift = getParameter(effectData, Pitch::FrequencyShift::Shift)
@@ -1091,7 +1091,7 @@ namespace Generation
       simd_float roundedShift = simd_float::round(binFloatingPointShift);
       binShift = toInt(roundedShift);
 
-      simd_float phaseShift = utils::uninitialised;
+      simd_float phaseShift{};
       {
         auto cycle = binFloatingPointShift * source.blockPhase;
         // modding the phase to get more accurate values, not important

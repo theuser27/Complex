@@ -10,6 +10,7 @@
 
 #include "OpenGlLineRenderer.hpp"
 
+#include "../LookAndFeel/Graphics.hpp"
 #include "Framework/simd_values.hpp"
 
 namespace

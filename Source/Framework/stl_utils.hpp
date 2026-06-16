@@ -136,9 +136,9 @@ namespace utils
   #define COMPLEX_MOVE(...) static_cast<::utils::remove_reference_t<decltype(__VA_ARGS__)>&&>(__VA_ARGS__)
   #define COMPLEX_SWAP(x, y) { auto temp_____ = COMPLEX_MOVE(x); (x) = COMPLEX_MOVE(y); y = COMPLEX_MOVE(temp_____); }
   #define COMPLEX_SWAP_MEMBERS(variable, otherObject, /*thisObject*/...) \
-    auto _##variable##__ = (otherObject).variable;                   \
+    { auto _##variable##__ = (otherObject).variable;                   \
     (otherObject).variable = __VA_OPT__((__VA_ARGS__).)variable; \
-    __VA_OPT__((__VA_ARGS__).)variable = _##variable##__;
+    __VA_OPT__((__VA_ARGS__).)variable = _##variable##__; }
 
   template<typename, typename> inline constexpr bool is_same_v = false;
   template<typename T> inline constexpr bool is_same_v<T, T> = true;
@@ -268,9 +268,6 @@ namespace utils
 
   struct ignore_t { constexpr const ignore_t &operator=(const auto &) const noexcept { return *this; } };
   inline constexpr ignore_t ignore{};
-
-  struct uninitialised_t { };
-  inline constexpr uninitialised_t uninitialised{};
 
   struct align_val_t
   {
@@ -516,6 +513,16 @@ namespace utils
 
     toRemove->previous = nullptr;
     toRemove->next = nullptr;
+  }
+
+  // indexes a singly/doubly-linked list
+  template<typename T>
+  constexpr usize
+  findIndexSll(T *start, T *element, T *sentinel = nullptr)
+  {
+    usize i = 0;
+    for (; start != element && start != sentinel; (++i), (start = start->next)) { }
+    return i;
   }
 
   // indexes a singly/doubly-linked list

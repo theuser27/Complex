@@ -27,7 +27,7 @@ namespace Plugin
 namespace Interface
 {
   class Component;
-  class MainInterface;
+  struct MainInterface;
   class Skin;
   struct OpenGlWrapper;
 

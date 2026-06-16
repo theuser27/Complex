@@ -438,8 +438,7 @@ namespace Interface
       // position stays relative to component we're attached to
       self->bounds = self->bounds.withPosition(self->parent->bounds.getPosition());
 
-      for (auto *child = self->children; child; child = child->next)
-        child->componentFlags.isVisible = !self->summoner->isObscured();
+
 
       return true;
     };
@@ -485,6 +484,12 @@ namespace Interface
   bool 
   PopupSelector::keyPressed(const KeyPress &key)
   {
+    if (key.keyCode == PUGL_KEY_ESCAPE)
+    {
+      resetState();
+      return true;
+    }
+
     for (auto *child = selectedList->children; child; child = child->next)
     {
       // this is safe because only popup items can be childen
@@ -512,6 +517,8 @@ namespace Interface
     skinOverride = Skin::kNone;
     toggleable = true;
     componentFlags.isVisible = false;
+
+    deregisterCallback(uiRelated.renderer, this);
   }
 
   void PopupSelector::summon(Component *summoningComponent,
@@ -526,6 +533,13 @@ namespace Interface
 
     componentFlags.isVisible = true;
     grabFocus();
+
+    registerCallback(uiRelated.renderer, this, [](Component *c)
+    {
+      auto *self = (PopupSelector *)c;
+      for (auto *child = self->children; child; child = child->next)
+        child->componentFlags.isVisible = !self->summoner->isObscured();
+    });
   }
   
   OptionPopupItem::OptionPopupItem()

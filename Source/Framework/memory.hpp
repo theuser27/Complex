@@ -175,9 +175,9 @@ namespace utils
     {
       .insert = [](void *, usize size, usize alignment, bool clean)
       {
-        return utils::allocate(size, alignment, clean);
+        return utils::bumpArena::insert(globalArena, size, alignment, clean);
       },
-      .remove = [](const void *allocation) { utils::deallocate(allocation); },
+      .remove = [](const void *allocation) { utils::bumpArena::remove(allocation); },
       .fromAllocation = getGeneralAllocator,
       .type = AllocatorType::General
     };
@@ -403,6 +403,7 @@ namespace utils
       }
       else
         oldAllocator = Allocator::fromType((AllocatorType)allocatorType_).fromAllocation(data_);
+      oldAllocator.freeingDestructor = freeingDestructor_;
 
       allocator = (allocator) ? allocator : oldAllocator;
       utils::contiguousReserve(allocator, oldAllocator, capacity, data_, size_, capacity_);
@@ -876,6 +877,7 @@ namespace utils
       }
       else
         oldAllocator = Allocator::fromType((AllocatorType)allocatorType_).fromAllocation(data_);
+      oldAllocator.freeingDestructor = freeingDestructor_;
 
       allocator = (allocator) ? allocator : oldAllocator;
       utils::contiguousReserve(allocator, oldAllocator, capacity, data_, size_, capacity_);

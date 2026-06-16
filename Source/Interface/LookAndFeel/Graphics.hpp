@@ -133,8 +133,8 @@ namespace Interface
     u64 idGenerator{};
     Area<i32> planeArea{};
 
-    NVGcontext *context = nullptr;
-    NVGLUframebuffer *textureFBO = nullptr;
+    NVGcontext *context{};
+    NVGLUframebuffer *textureFBO{};
     
   private:
     int DDinFontId;
@@ -236,6 +236,22 @@ namespace Interface
 
     nvgStrokeColor(context, colour);
     nvgStrokeWidth(context, thickness);
+    nvgStroke(context);
+  }
+
+  inline void strokePlus(NVGcontext *context, Rectangle<float> bounds,
+    float thickness, Colour colour = Colours::white)
+  {
+    bounds.x = ::roundf(bounds.x + thickness * 0.5f) - thickness * 0.5f;
+    bounds.y = ::roundf(bounds.y + thickness * 0.5f) - thickness * 0.5f;
+
+    nvgBeginPath(context);
+    nvgMoveTo(context, bounds.x, bounds.getCentreY());
+    nvgLineTo(context, bounds.getRight(), bounds.getCentreY());
+    nvgMoveTo(context, bounds.getCentreX(), bounds.getBottom());
+    nvgLineTo(context, bounds.getCentreX(), bounds.y);
+    nvgStrokeWidth(context, thickness);
+    nvgStrokeColor(context, colour);
     nvgStroke(context);
   }
 

@@ -81,6 +81,12 @@ namespace Framework
       // TODO: add an icon option here
     };
 
+    bool 
+    operator==(const IndexedData &other) const
+    {
+      return id == other.id && flags == other.flags && userFlags == other.userFlags &&
+        dynamicUpdateUuid == other.dynamicUpdateUuid && stateId == other.stateId;
+    }
     operator IndexedData *() { return this; }
 
     bool canBeChosen() const { return id && valueCount && !children && !childrenCount; }
@@ -106,7 +112,7 @@ namespace Framework
       auto *child = children;
       if (!addAsUntracked)
       {
-        for (usize i = 0; childrenCount && i < childrenCount - 1; child = child->next) { }
+        for (usize i = 0; childrenCount && i < childrenCount - 1; (++i), (child = child->next)) { }
 
         for (auto *p = this; p; p = p->parent)
           p->valueCount += addedValues;
@@ -225,6 +231,7 @@ namespace Framework
   utils::pair<const IndexedData *, usize> getOptionFromValue(double scaledValue, const ParameterDetails &details);
   double getValueFromOptionText(utils::string_view text, const ParameterDetails &details);
   double getValueFromOptionId(uuid optionId, const ParameterDetails &details);
+  double getValueFromOption(IndexedData *option, const ParameterDetails &details);
 
   bool
   iterateOverIndexedData(IndexedData *options, const auto &predicate)

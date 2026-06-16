@@ -487,7 +487,7 @@ namespace Interface
 
     downArrow.margin = { 4, 0, 0, 0 };
     downArrow.desiredSize = { 5, 0, 5, 0 };
-    downArrow.sizingFlags |= (Component::SizingFlags)(Component::FixedX | Component::SameAsSiblingsY);
+    downArrow.sizingFlags |= (Component::SizingFlags)(Component::SameAsSiblingsY);
     downArrow.reference = this;
     downArrow.draw = [](OpenGlWrapper &openGl, Component *c, Component *self, Point<i32>)
     {
@@ -588,7 +588,7 @@ namespace Interface
       auto *option = (Framework::IndexedData *)item->extraData;
 
       beginChange(getValue());
-      auto unscaledValue = unscaleValue(Framework::getValueFromOptionId(option->id, details), 
+      auto unscaledValue = unscaleValue(Framework::getValueFromOption(option, details),
         details, getPlugin(uiRelated.renderer).getSampleRate());
       setValue(unscaledValue, true);
       setValueToHost();

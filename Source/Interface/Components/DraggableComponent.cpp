@@ -68,11 +68,45 @@ namespace Interface
   }
 
   bool
-  DraggableComponent::mouseExit(const MouseEvent &)
+  DraggableComponent::mouseExit(const MouseEvent &e)
   {
-    if (!componentFlags.isClicked)
+    if (!componentFlags.isClicked || !e.mods.test(ModifierKeys::leftButtonModifier))
       setMouseCursor(uiRelated.renderer, MouseCursorTypes::Normal);
     return true;
+  }
+
+  static Component *
+  tryToInsertDraggableComponent(Component *componentToInsert, Component *lastInsertedInto,
+    Generation::Processor *processor, Component *placeholder, bool isMovingUpX, bool isMovingUpY)
+  {
+    auto position = componentToInsert->getLocalBounds().getCentre();
+    CommandMessages::ProcessorInsertion insertInfo{ .position = position,
+      .processor = processor, .placeholder = placeholder,
+      .isMovingUpX = isMovingUpX,
+      .isMovingUpY = isMovingUpY };
+
+    bool success = preOrderTreeTraversal(componentToInsert->parent, [&](Component *c)
+      {
+        //insertInfo.position = position - c->getRelativePoint(componentToInsert);
+        bool s = c->handleCommandMessage(CommandMessages::HandleProcessorInsertion, &insertInfo);
+        if (s)
+          lastInsertedInto = c;
+        return s;
+      }, position + componentToInsert->bounds.getPosition(), false, componentToInsert, true);
+
+    // if for some reason the dragged component is outside of bounds 
+    // we can fallback on wherever it was already inserted and move up
+    if (!success && lastInsertedInto)
+    {
+      while (lastInsertedInto != componentToInsert->parent)
+      {
+        if (lastInsertedInto->handleCommandMessage(CommandMessages::HandleProcessorInsertion, &insertInfo))
+          break;
+        lastInsertedInto = lastInsertedInto->parent;
+      }      
+    }
+
+    return lastInsertedInto;
   }
 
   bool
@@ -105,16 +139,44 @@ namespace Interface
     isDragging = true;
 
     auto *placeholder = &getGui(uiRelated.renderer)->placeholderInsert;
-    placeholder->source = draggedComponent;
+    placeholder->reference = this;
     placeholder->placement = draggedComponent->placement;
+    placeholder->sizingFlags = draggedComponent->sizingFlags;
+    placeholder->desiredSize = draggedComponent->desiredSize;
+    placeholder->draw = [](OpenGlWrapper &openGl, Component *, Component *self, Point<i32>)
+    {
+      auto colour = getColour(Skin::kLightenScreen, self);
+
+      fillRect(openGl, self->getLocalBounds().toFloat(), colour.dimmer(0.3f), scaleValue(4.0f));
+      strokeRect(openGl, self->getLocalBounds().toFloat(), scaleValue(1.0f), colour, scaleValue(4.0f));
+
+      return true;
+    };
+    placeholder->overrideSize = [](Component *c, bool isCalculatingVertical)
+    {
+      auto *draggableComponent = (DraggableComponent *)((DrawComponent *)c)->reference;
+      auto *draggedComponent = draggableComponent->draggedComponent;
+
+      c->padding = draggedComponent->padding;
+      c->margin = draggedComponent->margin;
+
+      if (!isCalculatingVertical)
+        return Range<i32>{ -1, (draggedComponent->sizingFlags & Component::GrowableX) ? 
+          -1 : draggedComponent->lastBounds.w };
+      else
+        return Range<i32>{ -1, (draggedComponent->sizingFlags & Component::GrowableY) ?
+          -1 : draggedComponent->lastBounds.h };
+    };
     draggedComponent->parent->addChildComponent(placeholder, draggedComponent);
 
     // moving case
     auto event = e.getEventRelativeTo(surfaceToLiftTo);
     initialClickPosition = Point{ event.x, event.y } - draggedComponent->getRelativePoint(this, { e.x, e.y });
     draggedComponent->nextPosition = initialClickPosition;
+    directionChangePoint = initialClickPosition;
 
     previousOverridePosition = draggedComponent->overridePosition;
+    previousOverrideSize = draggedComponent->overrideSize;
     previousPlacement = draggedComponent->placement;
     if (!isCopying)
     {
@@ -128,30 +190,52 @@ namespace Interface
       c->bounds = c->bounds.withPosition(c->nextPosition.x, c->nextPosition.y);
       return true;
     };
+    draggedComponent->componentFlags.keepSize = true;
+    //draggedComponent->overrideSize = [](Component *c, bool isCalculatingVertical)
+    //{
+    //  if (!isCalculatingVertical)
+    //    return Range<i32>{ c->lastBounds.w, c->lastBounds.w };
+    //  else
+    //    return Range<i32>{ c->lastBounds.h, c->lastBounds.h };
+    //};
 
-    draggedComponent->parent->removeChildComponent(draggedComponent);
+    // if this is the draggable component we must keep focus otherwise our click will be discarded
+    draggedComponent->parent->removeChildComponent(draggedComponent, draggedComponent == this);
     surfaceToLiftTo->addChildComponent(draggedComponent);
+    
+    // set the dragged component to its correct position
+    draggedComponent->bounds = draggedComponent->bounds.withPosition(initialClickPosition);
 
-    lastDragEvent = e;
     registerCallback(uiRelated.renderer, this, [](Component *c)
       {
         auto *self = (DraggableComponent *)c;
-        if (self->isDragging)
+        if (!self->isDragging)
+          return;
+
+        COMPLEX_ASSERT(self->processor);
+
+        //draggedComponent->nextPosition = initialClickPosition + lastDragEvent.getOffsetFromDragStart();
+        auto *placeholder = &getGui(uiRelated.renderer)->placeholderInsert;
+        auto *insertedIntoComponent = tryToInsertDraggableComponent(self->draggedComponent, 
+          placeholder->parent, self->processor, placeholder, self->directionX, self->directionY);
+
+        utils::vector<Component *> parentComponentPath{ localScratch, 8 };
+        while (insertedIntoComponent != self->surfaceToLiftTo->parent)
         {
-          COMPLEX_ASSERT(self->processor);
+          parentComponentPath.emplaceBack(insertedIntoComponent);
+          insertedIntoComponent = insertedIntoComponent->parent;
+        }
 
-          //draggedComponent->nextPosition = initialClickPosition + lastDragEvent.getOffsetFromDragStart();
-          auto position = self->draggedComponent->getLocalBounds().getCentre();
-          auto *placeholder = &getGui(uiRelated.renderer)->placeholderInsert;
-
-          CommandMessages::ProcessorInsertion insertInfo{
-            .position = position, .processor = self->processor, .placeholder = placeholder,
-            .isMovingUpX = self->lastDragEvent.directionX < 0, .isMovingUpY = self->lastDragEvent.directionY < 0 };
-
-          preOrderTreeTraversal(self->draggedComponent->parent, [&insertInfo](Component *c)
-          {
-            return c->handleCommandMessage(CommandMessages::HandleProcessorInsertion, &insertInfo);
-          }, position, false, self->draggedComponent);
+        // handle autoscroll
+        auto position = self->draggedComponent->bounds.getCentre();
+        CommandMessages::Autoscroll scrollInfo{ {}, true, true };
+        for (usize i = parentComponentPath.size(); i; --i)
+        {
+          auto *parentComponent = parentComponentPath[i - 1];
+          scrollInfo.position = parentComponent->getRelativePoint(self->draggedComponent->parent, position);
+          parentComponent->handleCommandMessage(CommandMessages::HandleAutoscroll, &scrollInfo);
+          if (!scrollInfo.handleX && !scrollInfo.handleY)
+            break;
         }
       });
 
@@ -161,21 +245,32 @@ namespace Interface
   bool
   DraggableComponent::mouseDrag(const MouseEvent &e)
   {
-    COMPLEX_ASSERT(processor);
+    auto newPosition = initialClickPosition + e.getOffsetFromDragStart();
+    draggedComponent->nextPosition = newPosition;
 
-    lastDragEvent = e;
-    draggedComponent->nextPosition = initialClickPosition + e.getOffsetFromDragStart();
-    auto position = draggedComponent->getLocalBounds().getCentre();
-
-    // handle autoscroll
-    CommandMessages::Autoscroll scrollInfo{ position, true, true };
-
-    preOrderTreeTraversal(draggedComponent->parent, [&](Component *c)
+    if ((wasMovingUpX && e.directionX > 0) || (!wasMovingUpX && e.directionX < 0))
     {
-      scrollInfo.position = c->getRelativePoint(draggedComponent, position);
-      c->handleCommandMessage(CommandMessages::HandleAutoscroll, &scrollInfo);
-      return !scrollInfo.handleX && !scrollInfo.handleY;
-    }, position, false, draggedComponent);
+      wasMovingUpX = !wasMovingUpX;
+      directionChangePoint.x = newPosition.x;
+    }
+    if ((wasMovingUpY && e.directionY > 0) || (!wasMovingUpY && e.directionY < 0))
+    {
+      wasMovingUpY = !wasMovingUpY;
+      directionChangePoint.y = newPosition.y;
+    }
+
+    if (directionX && newPosition.x - directionChangePoint.x > draggedComponent->bounds.w / 4)
+      directionX = false;
+    else if (!directionX && newPosition.x - directionChangePoint.x < -draggedComponent->bounds.w / 4)
+      directionX = true;
+
+    if (directionY && newPosition.y - directionChangePoint.y > draggedComponent->bounds.h / 4)
+      directionY = false;
+    else if (!directionY && newPosition.y - directionChangePoint.y < -draggedComponent->bounds.h / 4)
+      directionY = true;
+
+    //COMPLEX_DEBUG_LOG("wasMovingUpX: %d, wasMovingUpY: %d, new - directionChange: { %d, %d }\n", 
+    //  wasMovingUpX, wasMovingUpY, newPosition.x - directionChangePoint.x, newPosition.y - directionChangePoint.y);
 
     return true;
   }
@@ -185,33 +280,20 @@ namespace Interface
   {
     draggedComponent->placement = previousPlacement;
     draggedComponent->overridePosition = previousOverridePosition;
+    draggedComponent->componentFlags.keepSize = false;
 
     COMPLEX_ASSERT(processor);
 
     deregisterCallback(uiRelated.renderer, this);
 
-    auto position = draggedComponent->getLocalBounds().getCentre();
-
-    // stop autoscroll
-    CommandMessages::Autoscroll scrollInfo{ position, true, true, true, true };
-    preOrderTreeTraversal(draggedComponent->parent, [&](Component *c)
-    {
-      scrollInfo.position = c->getRelativePoint(draggedComponent, position);
-      c->handleCommandMessage(CommandMessages::HandleAutoscroll, &scrollInfo);
-      return !scrollInfo.handleX && !scrollInfo.handleY;
-    }, position, false, draggedComponent);
-
     // finalising placement
     draggedComponent->nextPosition = initialClickPosition + e.getOffsetFromDragStart();
     auto *placeholder = &getGui(uiRelated.renderer)->placeholderInsert;
+    auto finalParentComponent = placeholder->parent;
     placeholder->parent->removeChildComponent(placeholder);
 
-    CommandMessages::ProcessorInsertion insertInfo{ .position = position, .processor = processor,
-      .placeholder = nullptr, .isMovingUpX = e.directionX < 0, .isMovingUpY = e.directionY < 0 };
-    preOrderTreeTraversal(draggedComponent->parent, [&insertInfo](Component *c)
-    {
-      return c->handleCommandMessage(CommandMessages::HandleProcessorInsertion, &insertInfo);
-    }, position, false, draggedComponent);
+    tryToInsertDraggableComponent(draggedComponent, finalParentComponent, 
+      processor, nullptr, directionX, directionY);
 
     auto &plugin = *processor->state->plugin;
     auto *transactionArena = plugin.undoManager.beginNewTransaction();
@@ -241,7 +323,7 @@ namespace Interface
 
     auto success = preOrderTreeTraversal(draggedComponent->parent,
       [&e](Component *c) { return c->mouseWheelMove(e.getEventRelativeTo(c)); },
-      draggedComponent->bounds.getCentre(), true, draggedComponent);
+      draggedComponent->bounds.getCentre(), true, draggedComponent, true);
 
     if (isDragging)
     {
@@ -262,6 +344,7 @@ namespace Interface
 
     draggedComponent->placement = previousPlacement;
     draggedComponent->overridePosition = previousOverridePosition;
+    draggedComponent->componentFlags.keepSize = false;
 
     deregisterCallback(uiRelated.renderer, this);
 
@@ -283,7 +366,7 @@ namespace Interface
             return true;
           }
           return false;
-        }, false);
+        }, false, true);
     }
     else
     {

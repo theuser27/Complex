@@ -34,10 +34,6 @@ namespace utils
 
   struct alignas(COMPLEX_SIMD_ALIGNMENT) simd_int
   {
-    /////////////////////////////
-    // Variables and Constants //
-    /////////////////////////////
-
   #if COMPLEX_SSE4_1
     using simd_type = __m128i;
     static constexpr usize size = 4;
@@ -304,7 +300,6 @@ namespace utils
   public:
   #endif
 
-    constexpr strict_inline simd_int(utils::uninitialised_t) { }
     constexpr strict_inline simd_int() noexcept : simd_int{ 0 } { }
     constexpr strict_inline simd_int(u32 initialValue) noexcept
     {
@@ -370,13 +365,6 @@ namespace utils
     template<typename T> requires ((sizeof(u32) * size) % sizeof(T) == 0)
     strict_inline auto getArrayOfValues() const noexcept
     {	return utils::bit_cast<utils::array<T, ((sizeof(u32) * size) / sizeof(T))>>(value); }
-
-    strict_inline void swap(simd_int &other) noexcept
-    {
-      simd_type temp = other.value;
-      other.value = value;
-      value = temp;
-    }
 
     ///////////////
     // Operators //
@@ -447,34 +435,12 @@ namespace utils
 
     strict_inline simd_int &vector_call operator^=(simd_int other) noexcept
     { value = bitXor(value, other.value); return *this; }
-
-    strict_inline simd_int &vector_call operator+=(simd_type other) noexcept
-    { value = add(value, other); return *this; }
-
-    strict_inline simd_int &vector_call operator-=(simd_type other) noexcept
-    { value = sub(value, other); return *this; }
-
-    strict_inline simd_int &vector_call operator*=(simd_type other) noexcept
-    { value = mul(value, other); return *this; }
-
-    strict_inline simd_int &vector_call operator&=(simd_type other) noexcept
-    { value = bitAnd(value, other); return *this; }
-
-    strict_inline simd_int &vector_call operator|=(simd_type other) noexcept
-    { value = bitOr(value, other); return *this; }
-
-    strict_inline simd_int &vector_call operator^=(simd_type other) noexcept
-    { value = bitXor(value, other); return *this; }
   };
 
   using simd_mask = simd_int;
 
   struct alignas(COMPLEX_SIMD_ALIGNMENT) simd_float
   {
-    /////////////////////////////
-    // Variables and Constants //
-    /////////////////////////////
-
   #if COMPLEX_SSE4_1
     using simd_type = __m128;
     using mask_simd_type = __m128i;
@@ -865,7 +831,6 @@ namespace utils
   public:
   #endif
 
-    constexpr strict_inline simd_float(utils::uninitialised_t) { }
     constexpr strict_inline simd_float() noexcept : simd_float{ 0.0f } { }
     constexpr strict_inline simd_float(float initialValue) noexcept
     {
