@@ -74,6 +74,7 @@
 #if COMPLEX_MSVC
   // strict_inline is used when something absolutely needs to be inlined
   #define strict_inline __forceinline
+  #define no_inline __declspec(noinline)
   #define vector_call __vectorcall
 
   #define COMPLEX_NO_FAST_MATH_BEGIN _Pragma("float_control(precise, on)")
@@ -104,6 +105,7 @@
 #else
   // strict_inline is used when something absolutely needs to be inlined
   #define strict_inline inline __attribute__((always_inline))
+  #define no_inline __attribute__ ((noinline))
   #define vector_call
 
   #define COMPLEX_NO_FAST_MATH_BEGIN _Pragma("GCC push_options") _Pragma("GCC optimize (\"no-fast-math\")")
@@ -156,7 +158,7 @@
 #define COMPLEX_HARD_ASSERT_FALSE(...) (void)(::common::complexPrintAssertMessage(nullptr, \
     __FILE__, __func__, __LINE__ __VA_OPT__(, true,) __VA_ARGS__), COMPLEX_TRAP(), false)
 
-#define sizealignof(T, /*count*/ ...) __VA_OPT__((__VA_ARGS__) *) sizeof(T), alignof(T)
+#define sizealignof(T, /*count*/ ...) (__VA_OPT__((__VA_ARGS__) *) sizeof(T)), alignof(T)
 #define countof(array) (sizeof(array) / sizeof(array[0]))
 
 #define COMPLEX_KB(bytes) (bytes << 10)

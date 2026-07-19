@@ -142,6 +142,57 @@ namespace Interface
     return false;
   }
 
+  static void laneInputChangeCallback(Control *c, double newValue, double oldValue)
+  {
+    auto &selector = *(TextSelector *)c;
+
+    bool direction = oldValue < newValue;
+    double oldScaled = Framework::scaleValue(oldValue, selector.details);
+    double newScaled = Framework::scaleValue(newValue, selector.details);
+
+    if (oldScaled == newScaled)
+      return;
+
+    auto *parentProcessor = selector.parameterLink->parameter->parentProcessor;
+    auto [option, _] = Framework::getOptionFromValue(newScaled, selector.details);
+
+    // disallow feedback until we figure out a good UX for that
+    // TODO: fix lane feedback UX
+    outer: 
+    {
+      auto *next = option;
+      while (true)
+      {
+        // have we reached a primary source? (main or sidechain inputs)
+        if (next->flags != Framework::IndexedData::StateIdFlag)
+          break;
+
+        // if we've reached our starting lane change initial option
+        if (next->stateId == parentProcessor->stateId)
+        {
+          if (direction)
+            --newScaled;
+          else
+            ++newScaled;
+
+          option = Framework::getOptionFromValue(newScaled, selector.details).first;
+          goto outer; // no labelled break in this language...
+        }
+        
+        // continue down the chain until we find a primary source or our starting lane
+        auto *nextControl = parentProcessor->state
+          ->getProcessorParameter(next->stateId, Generation::EffectsLane::Input)
+          ->getParameterLink()->UIControl;
+        next = Framework::getOptionFromValue(Framework::scaleValue(nextControl->getValue(), 
+          nextControl->details), nextControl->details).first;
+      }
+    }
+
+    newValue = Framework::unscaleValue(Framework::getValueFromOption(option, selector.details), selector.details);
+
+    (void)selector.value.exchange(newValue, satomi::memory_order_relaxed);
+  }
+
   void EffectsLaneSection::reinitialise()
   {
     static constexpr auto kHeaderLeftPadding = 12;
@@ -175,7 +226,6 @@ namespace Interface
     header.addChildComponent(&laneTitle);
     laneTitle.placement = Placement::left;
     laneTitle.text = { arena, effectsLane->name };
-    effectsLane->name.copy(laneTitle.text);
     laneTitle.textColour = Skin::kWidgetAccent1;
     header.addChildComponent(&inputSelector);
     inputSelector.placement = Placement::right;
@@ -183,6 +233,8 @@ namespace Interface
     inputSelector.arena = arena;
     inputSelector.text.font = FontId::InterType;
     inputSelector.changeLinkedParameter(*effectsLane->getParameter(Generation::EffectsLane::Input));
+    inputSelector.controlFlags.handleSetValueInCallback = true;
+    inputSelector.valueChangedCallback = laneInputChangeCallback;
     header.addChildComponent(&laneActivator);
     laneActivator.placement = Placement::right;
     laneActivator.margin = { 4, 0, 0, 0 };
@@ -466,7 +518,8 @@ namespace Interface
     fillRect(openGl, localBounds, getColour(Skin::kBody, this), EffectsSection::LaneSelector::kLaneMiniViewRounding);
 
     auto textBounds = localBounds.withTrim(scaleValueRound(padding.toFloat()))
-      .withY(localBounds.getCentreY()).withHeight(0.0f).withExpand(0.0f, kPrimaryTextLineHeight / 2);
+      .withY(localBounds.getCentreY()).withHeight(0.0f)
+      .withExpand(0.0f, scaleValue(kPrimaryTextLineHeight / 2));
 
     renderText(((EffectsLaneSection *)processor->component)->laneTitle.text, 
       FontId::DDinType, textBounds, openGl, getColour(Skin::kHeadingText, this));

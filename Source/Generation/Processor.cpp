@@ -279,6 +279,8 @@ namespace Framework
         }
       }
 
+      self->state.registerProcessorForDynamicParameters(self->processor);
+
       self->processor = nullptr;
     };
 
@@ -294,6 +296,8 @@ namespace Framework
       
       if (self->processor->component)
         self->processor->component->parent->removeChildComponent(self->processor->component);
+
+      self->state.deregisterProcessorForDynamicParameters(self->processor);
     };
   }
 
@@ -390,6 +394,8 @@ namespace Framework
       };
       recurseParameters(recurseParameters, self->processor);
 
+      self->state.deregisterProcessorForDynamicParameters(self->processor);
+
       self->processor->component->parent->removeChildComponent(self->processor->component);
     };
 
@@ -411,6 +417,8 @@ namespace Framework
           self(self, child);
       };
       recurseParameters(recurseParameters, self->processor);
+
+      self->state.registerProcessorForDynamicParameters(self->processor);
 
       self->processor = nullptr;
     };

@@ -3,7 +3,7 @@
 
 #include "Complex.hpp"
 
-#include "cplug/cplug.h"
+#include "Third Party/cplug/cplug.h"
 
 #include "Framework/load_save.hpp"
 #include "Framework/parameter_bridge.hpp"
@@ -13,6 +13,7 @@
 #include "Renderer.hpp"
 #include "Interface/LookAndFeel/Graphics.hpp"
 #include "Interface/LookAndFeel/Component.hpp"
+#include "Interface/Sections/MainInterface.hpp"
 
 namespace
 {
@@ -207,6 +208,10 @@ namespace Plugin
   {
     processorStorage = utils::bumpArena::create(COMPLEX_MB(256), COMPLEX_MB(2));
     miscStorage = utils::bumpArena::createNested(processorStorage, COMPLEX_KB(128));
+    uiStorage = utils::bumpArena::create(COMPLEX_MB(256), COMPLEX_MB(4));
+
+    gui = anew(uiStorage, Interface::MainInterface, {});
+    gui->arena = uiStorage;
 
     allProcessors.data = { { miscStorage, false }, 64 };
     parameterModulators = { { miscStorage, false }, 32 };
@@ -237,6 +242,7 @@ namespace Plugin
     for (auto &worker : workers)
       worker.stop();
 
+    utils::bumpArena::destroy(uiStorage);
     utils::bumpArena::destroy(processorStorage);
   }
 
@@ -281,53 +287,57 @@ namespace Plugin
       processorIter->second : nullptr;
   }
 
-  static void registerProcessorChangeInDynamicParameters(State *state, 
-    Generation::Processor *processor, bool isDeleted)
+  // check if processor creation causes dynamic parameters to change
+  void State::registerProcessorForDynamicParameters(Generation::Processor *processor)
   {
     using namespace Framework;
 
-    if (isDeleted)
-    {
-      bool needsUpdate = false;
-      // delete all references pointing to this processor
-      for (auto &pair : state->dynamicOptions.data)
-      {
-        IndexedData::visit(pair.second, [&needsUpdate, processor](IndexedData &item, IndexedData *previous)
-          {
-            if (item.id != processor->metadata->id || item.stateId != processor->stateId)
-              return false;
-            
-            needsUpdate = true;
-            --item.parent->childrenCount;
-            for (auto p = item.parent; p; p = p->parent)
-              p->valueCount -= item.valueCount;
-
-            if (!previous)
-              item.parent->children = item.next;
-            else
-              previous->next = item.next;
-
-            utils::bumpArena::remove(&item);
-            return false;
-          });
-      }
-
-      if (needsUpdate)
-        state->updateAllDynamicParameters();
-
-      return;
-    }
-
-    auto *arena = state->miscStorage;
+    auto *arena = miscStorage;
 
     if (processor->metadata->id == Generation::Processors::EffectsLane)
     {
-      auto iter = state->dynamicOptions.find(Framework::ParameterChangeReason::laneSources);
-      iter->second->addChildren({{ anew(arena, IndexedData,
-        { .id = processor->metadata->id, .flags = IndexedData::StateIdFlag, .stateId = processor->stateId }) }});
+      auto iter = dynamicOptions.find(Framework::ParameterChangeReason::laneSources);
+      auto alreadyExists = utils::findIf(iter->second, [&](IndexedData *option) { return option->stateId == processor->stateId; });
+      if (!alreadyExists)
+      {
+        iter->second->addChildren({{ anew(arena, IndexedData,
+          { .id = processor->metadata->id, .flags = IndexedData::StateIdFlag, .stateId = processor->stateId }) }});
 
-      state->updateDynamicParameters(Framework::ParameterChangeReason::laneSources);
+        updateDynamicParameters(Framework::ParameterChangeReason::laneSources);
+      }
     }
+  }
+
+  void State::deregisterProcessorForDynamicParameters(Generation::Processor *processor)
+  {
+    using namespace Framework;
+
+    bool needsUpdate = false;
+    // delete all references pointing to this processor
+    for (auto &pair : dynamicOptions.data)
+    {
+      IndexedData::visit(pair.second, [&needsUpdate, processor](IndexedData &item, IndexedData *previous)
+      {
+        if (item.id != processor->metadata->id || item.stateId != processor->stateId)
+          return false;
+
+        needsUpdate = true;
+        --item.parent->childrenCount;
+        for (auto p = item.parent; p; p = p->parent)
+          p->valueCount -= item.valueCount;
+
+        if (!previous)
+          item.parent->children = item.next;
+        else
+          previous->next = item.next;
+
+        utils::bumpArena::remove(&item);
+        return false;
+      });
+    }
+
+    if (needsUpdate)
+      updateAllDynamicParameters();
   }
 
   Generation::Processor *
@@ -337,9 +347,6 @@ namespace Plugin
     Generation::Processor *processor = metadata->create(this, metadata, nullptr, jsonData);
 
     allProcessors.add(processor->stateId, processor);
-
-    // check if processor creation causes dynamic parameters to change
-    registerProcessorChangeInDynamicParameters(this, processor, false);
 
     return processor;
   }
@@ -352,7 +359,7 @@ namespace Plugin
     for (auto child = processor->children; child; child = child->next)
       deleteProcessor(child);
 
-    registerProcessorChangeInDynamicParameters(this, processor, true);
+    deregisterProcessorForDynamicParameters(processor);
 
     // TODO: free all registered resources
     // TODO: unlink all parameters from their UIs and detach them from the parameter bridges
@@ -752,19 +759,19 @@ void cplug_loadState(void *userPlugin, const void *stateCtx, cplug_readProc read
   usize capacity = kCapacityIncrease;
   usize size{};
   char *buffer = arranew(localScratch, char, capacity, {});
-  while (readProc(stateCtx, buffer + size, kCapacityIncrease) != 0)
+  while (true)
   {
-    capacity += kCapacityIncrease;
-    size += kCapacityIncrease;
-    buffer = (char *)utils::bumpArena::resize(buffer, capacity, true);
-  }
-
-  // find the end
-  usize i = 0;
-  for (; i < kCapacityIncrease; ++i)
-    if (buffer[size - kCapacityIncrease + i] != '\0')
+    usize readBytes = readProc(stateCtx, buffer + size, capacity - size);
+    size += readBytes;
+    if (!readBytes)
       break;
-  size = size - kCapacityIncrease + i;
+
+    if (size >= capacity)
+    {
+      capacity += kCapacityIncrease;
+      buffer = (char *)utils::bumpArena::resize(buffer, capacity, true);
+    }
+  }
 
   loadState((Plugin::ComplexPlugin *)userPlugin, { buffer, size });
   utils::bumpArena::remove(buffer);
@@ -801,17 +808,18 @@ void cplug_process(void *ptr, CplugProcessContext *ctx)
       break;
     case CPLUG_EVENT_PROCESS_AUDIO:
     {
-      [[maybe_unused]] float **in = ctx->getAudioInput(ctx, 0);
-      [[maybe_unused]] float **out = ctx->getAudioOutput(ctx, 0);
-      //COMPLEX_ASSERT(in != nullptr);
-      //COMPLEX_ASSERT(in[0] != nullptr);
-      //COMPLEX_ASSERT(in[1] != nullptr);
-      //COMPLEX_ASSERT(out != nullptr);
-      //COMPLEX_ASSERT(out[0] != nullptr);
-      //COMPLEX_ASSERT(out[1] != nullptr);
+    #ifndef COMPLEX_STANDALONE
+      float **in = ctx->getAudioInput(ctx, 0);
+      float **out = ctx->getAudioOutput(ctx, 0);
+      COMPLEX_ASSERT(in != nullptr);
+      COMPLEX_ASSERT(in[0] != nullptr);
+      COMPLEX_ASSERT(in[1] != nullptr);
+      COMPLEX_ASSERT(out != nullptr);
+      COMPLEX_ASSERT(out[0] != nullptr);
+      COMPLEX_ASSERT(out[1] != nullptr);
 
-      //plugin->process(in, out, event.processAudio.endFrame - frame, 2, 2);
-
+      plugin->process(in, out, event.processAudio.endFrame - frame, 2, 2);
+    #endif
       // If your plugin does not require sample accurate processing, use this line below to break the loop
       frame = event.processAudio.endFrame;
     } break;

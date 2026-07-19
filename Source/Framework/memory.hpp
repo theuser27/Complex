@@ -700,54 +700,6 @@ namespace utils
     }
   };
 
-  struct type_map : public vector_map<typeInfo, void *>
-  {
-    using base = vector_map<typeInfo, void *>;
-
-    constexpr void iterate(const auto &lambda)
-    {
-      using T = typename detail::signature<decltype(&remove_cvref_t<decltype(lambda)>::operator())>::type;
-      constexpr auto type = typeId(T);
-      for (auto iter = get_first_of(type);
-        iter != data.end() && iter->first == type; ++iter)
-        lambda(static_cast<T>(iter->second));
-    }
-
-    constexpr auto add_ordered(auto entry)
-    { return base::add_ordered(typeId(decltype(entry)), (void *)COMPLEX_MOVE(entry)); }
-
-    template<typename T>
-    constexpr void update_ordered(T entry, T updatedEntry)
-    {
-      auto iter = get_first_of(typeId(T));
-      if (iter == data.end())
-        return;
-
-      while (iter != data.end() || iter->second != entry)
-        ++iter;
-
-      if (iter == data.end())
-        return;
-
-      (*iter) = pair{ typeId(T), COMPLEX_MOVE(updatedEntry) };
-    }
-
-    constexpr void erase_ordered(auto entry)
-    {
-      auto iter = get_first_of(typeId(decltype(entry)));
-      if (iter == data.end())
-        return;
-
-      while (iter != data.end() || iter->second != entry)
-        ++iter;
-
-      if (iter == data.end())
-        return;
-
-      data.erase(iter);
-    }
-  };
-
 
   class stringnd
   {
@@ -852,7 +804,7 @@ namespace utils
     void reserve(Allocator allocator, usize capacity = minimumCapacity)
     {
       // are we caching allocator for future use?
-      if (!capacity_ && !capacity)
+      if (!capacity_ && !capacity && allocator)
       {
         allocatorType_ = (usize)allocator.type();
         data_ = (decltype(data_))allocator.allocator;
@@ -970,24 +922,24 @@ namespace utils
     stringnd &
     remove(size_type index, size_type length)
     {
-      COMPLEX_ASSERT(size_ >= index + length, "Range is outside of string in string::remove(index, length)");
+      COMPLEX_ASSERT(size_ >= index + length, "Range is outside of string in string::remove()");
       utils::contiguousMoveElements(data_ + index, data_ + index + length, size_ - index - length);
       size_ -= length;
       data_[size_] = '\0';
       return *this;
     }
     stringnd &
-    removePrefix(size_type length)
+    removeFirst(size_type length)
     {
-      COMPLEX_ASSERT(size_ >= length, "Length out of range in string::remove_prefix(length)");
+      COMPLEX_ASSERT(size_ >= length, "Length out of range in string::removeFirst()");
       size_ -= length;
       utils::contiguousMoveElements(data_, data_ + length, size_);
       return *this;
     }
     stringnd &
-    removeSuffix(size_type length)
+    removeLast(size_type length)
     {
-      COMPLEX_ASSERT(size_ >= length, "Length out of range in string::remove_suffix(length)");
+      COMPLEX_ASSERT(size_ >= length, "Length out of range in string::removeLast()");
       size_ -= length;
       data_[size_] = '\0';
       return *this;
@@ -1024,7 +976,7 @@ namespace utils
           (data_[i - 1] >= '\n' && data_[i - 1] <= '\r')))
           break;
       }
-      removeSuffix(size_ - i);
+      removeLast(size_ - i);
 
       for (i = 0; i < size_; ++i)
       {
@@ -1032,7 +984,7 @@ namespace utils
           (data_[i - 1] >= '\n' && data_[i - 1] <= '\r')))
           break;
       }
-      removePrefix(i);
+      removeFirst(i);
 
       return *this;
     }

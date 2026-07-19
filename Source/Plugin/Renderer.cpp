@@ -3,11 +3,11 @@
 
 #include "Renderer.hpp"
 
-#include "cplug/cplug.h"
+#include "Third Party/cplug/cplug.h"
 
 #define PUGL_NO_INCLUDE_GL_H
-#include "pugl/gl.h"
-#include "pugl/src/types.h"
+#include "Third Party/pugl/gl.h"
+#include "Third Party/pugl/src/types.h"
 
 #include "Framework/load_save.hpp"
 #include "Framework/parameter_bridge.hpp"
@@ -160,7 +160,6 @@ namespace Interface
     void startUI();
     void stopUI();
 
-    void checkBounds(u32 &newWidth, u32 &newHeight);
     void resizeChange(bool isResizing);
     void moveFocusTo(Component *component);
     //void beginDragAutoRepeat(int millisecondsBetweenCallbacks);
@@ -195,7 +194,7 @@ namespace Interface
       if (gui->bounds.isEmpty())
         doSizingAndPositioning();
 
-      area = gui->checkResizing(area, true);
+      area = checkResizing(area, true);
 
       plugin.hostContext->requestResize(plugin.hostContext, area.w, area.h);
     }
@@ -337,11 +336,12 @@ namespace Interface
       recalculateScale();
     }
 
-    void computeMultiClick(double currentTime, MouseEvent &e, bool isClicking)
+    no_inline void computeMultiClick(double currentTime, MouseEvent &e, bool isClicking)
     {
       if (isClicking)
       {
-        if (currentTime - lastMouseClickTime < Renderer::kMultiClickTimeout)
+        if (currentTime - lastMouseClickTime < Renderer::kMultiClickTimeout && 
+          lastMouseDownPosition_ == Point{ e.x, e.y })
           ++numberOfClicks;
         else
           numberOfClicks = 1;
@@ -620,8 +620,6 @@ namespace Interface
     uiRelated.renderer = renderer;
     renderer->skinInstance = anew(arena, Skin, {});
     uiRelated.skin = renderer->skinInstance;
-    renderer->gui = anew(arena, MainInterface, {});
-    renderer->gui->restartUI();
 
     return renderer;
   }
@@ -631,6 +629,18 @@ namespace Interface
     customPlacement = {};
     renderer->gui->~MainInterface();
     utils::bumpArena::destroy(renderer->arena);
+  }
+
+  void resetGui(Renderer *renderer, MainInterface *newGui)
+  {
+    if (renderer->gui)
+    {
+      renderer->dragAndDropComponent_ = renderer->focusedComponent_ = 
+        renderer->mouseDownComponent_ = renderer->mouseHoveredComponent_ = nullptr;
+      renderer->callbacks.clear();
+    }
+
+    renderer->gui = newGui;
   }
 
   Plugin::ComplexPlugin &getPlugin(Renderer *renderer) { return renderer->plugin; }
@@ -776,14 +786,6 @@ namespace Interface
     isResizing = resizeChange;
   }
 
-
-  void Renderer::checkBounds(u32 &newWidth, u32 &newHeight)
-  {
-    uiRelated.scale = effectiveScale;
-    auto [w, h] = gui->checkResizing({ newWidth, newHeight });
-    newWidth = w;
-    newHeight = h;
-  }
 
   void Renderer::moveFocusTo(Component *component)
   {
@@ -1095,9 +1097,12 @@ extern "C"
 
     return true;
   }
-
   void cplug_checkSize(void *userGUI, uint32_t *width, uint32_t *height)
   {
-    ((Interface::Renderer *)userGUI)->checkBounds(*width, *height);
+    auto renderer = (Interface::Renderer *)userGUI;
+    Interface::uiRelated.scale = renderer->effectiveScale;
+    auto [w, h] = Interface::checkResizing({ *width, *height });
+    *width = w;
+    *height = h;
   }
 }

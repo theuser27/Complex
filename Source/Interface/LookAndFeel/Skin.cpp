@@ -10,7 +10,7 @@
 
 #include "Skin.hpp"
 
-#include "cplug/config.h"
+#include "Third Party/cplug/config.h"
 
 #include "Third Party/cjson/cjson.h"
 #include "Third Party/xhl/xhl_files.h"

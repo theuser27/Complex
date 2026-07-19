@@ -41,6 +41,8 @@ namespace utils
     static constexpr simd_float kCos4 = 0.000024433157f;
 
     static constexpr simd_float k2InvPi = 2.0f / kPi;
+    // adding this forces the value to get rounded to int (only the lower 23 bits are valid) and
+    // subtracting it again yields the rounded f32 (assuming value is positive)
     static constexpr simd_float kRound = 12582912.0f;
 
     simd_float normalisedInput = radians * k2InvPi;
@@ -54,11 +56,13 @@ namespace utils
     simd_float position = radians - (roundedFloat * kHalfPiPart1) - (roundedFloat * kHalfPiPart2);
     simd_float position2 = position * position;
 
+    // LSB/LSB+1 represents a 90/180 degree rotation
     simd_int lowestMantissaBit = roundedInt & 1;
     simd_mask sinSign = shiftLeft<30>(roundedInt & 2);
     simd_mask cosSign = shiftLeft<30>((roundedInt + lowestMantissaBit) & 2);
-    simd_mask hasLowestBitMask = simd_int::notEqual(lowestMantissaBit, 0);
+    simd_mask quadrantMask = simd_int::equal(lowestMantissaBit, 0);
 
+    // simple taylor series
     simd_float cos = simd_float::mulAdd(kCos0, position2, simd_float::mulAdd(kCos1, position2,
       simd_float::mulAdd(kCos2, position2, simd_float::mulAdd(kCos3, position2, kCos4))));
     simd_float sin = simd_float::mulAdd(position, position, position2 *
@@ -68,8 +72,8 @@ namespace utils
     // equivalent: sin = merge(sin, 0.0f, exactMask);
     sin = sin & ~exactMask;
 
-    return { merge(cos, sin, hasLowestBitMask) ^ cosSign,
-      merge(sin, cos, hasLowestBitMask) ^ sinSign };
+    return { merge(sin, cos, quadrantMask) ^ cosSign,
+      merge(cos, sin, quadrantMask) ^ sinSign };
   }
 
   // [cos(angle[0]), sin(angle[1]), cos(angle[2]), sin(angle[3])]
@@ -89,6 +93,8 @@ namespace utils
     static constexpr simd_float k4 = { 0.000024433157f, -0.0001950085f };
 
     static constexpr simd_float k2InvPi = 2.0f / kPi;
+    // adding this forces the value to get rounded to int (only the lower 23 bits are valid) and
+    // subtracting it again yields the rounded f32 (assuming value is positive)
     static constexpr simd_float kRound = 12582912.0f;
     static constexpr simd_float kExact = { 1.0f, 0.0f };
 
@@ -103,14 +109,16 @@ namespace utils
     simd_float position = angle - (roundedFloat * kHalfPiPart1) - (roundedFloat * kHalfPiPart2);
     simd_float position2 = position * position;
 
+    // LSB/LSB+1 represents a 90/180 degree rotation
     simd_int lowestMantissaBit = roundedInt & 1;
     simd_mask signs = shiftLeft<30>((roundedInt + (lowestMantissaBit & kRealMask)) & 2);
-    simd_mask hasLowestBitMask = simd_int::notEqual(lowestMantissaBit, 0);
+    simd_mask quadrantMask = simd_int::equal(lowestMantissaBit, 0);
 
+    // simple taylor series
     simd_float values = simd_float::mulAdd(k0, merge(position, position2, kRealMask),
       simd_float::mulAdd(k1, position2, simd_float::mulAdd(k2, position2, simd_float::mulAdd(k3, position2, k4))));
     values = merge(values, kExact, exactMask);
-    values = merge(values, switchInner(values), hasLowestBitMask) ^ signs;
+    values = merge(switchInner(values), values, quadrantMask) ^ signs;
     return values;
   }
 

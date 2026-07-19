@@ -134,14 +134,11 @@ namespace Interface
     BottomBar bottomBar{};
   };
 
+  Area<u32> checkResizing(Area<u32> newScaledSize, bool force = false);
+
   struct MainInterface final : public Component
   {
-    MainInterface();
-    ~MainInterface();
-
-    void restartUI();
-
-    Area<u32> checkResizing(Area<u32> newScaledSize, bool force = false);
+    void restartUI(Plugin::State *state);
 
     DrawComponent placeholderInsert{};
     PopupSelector popupSelector{};

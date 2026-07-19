@@ -105,7 +105,7 @@ namespace Framework
   }
 
   template<utils::MathOperations Operation>
-  strict_inline void applyToThisNoMask(SimdBuffer *thisBuffer, const SimdBuffer *otherBuffer,
+  void applyToThisNoMask(SimdBuffer *thisBuffer, const SimdBuffer *otherBuffer,
     u32 channels, u32 samples, u32 thisStartChannel = 0, u32 otherStartChannel = 0,
     u32 thisStartIndex = 0, u32 otherStartIndex = 0, simd_float scaleFactor = 1.0f)
   {

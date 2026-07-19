@@ -2198,7 +2198,7 @@ static cjson * cjson_Duplicate_rec(const cjson *item, size_t depth, bool recurse
     if (!newitem->vstring)
       goto fail;
   }
-  if (!(item->type & cjson_StringIsConst))
+  if (item->name && !(item->type & cjson_StringIsConst))
   {
     newitem->name = cjson_strdup(item->name, &global_hooks);
     if (!newitem->name)

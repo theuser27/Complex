@@ -196,7 +196,7 @@ namespace utils
   inline constexpr bool is_base_of_v = __is_base_of(Base, Derived);
   template<typename From, typename To>
   inline constexpr bool is_convertible_v =
-#if COMPLEX_GCC
+#if defined(__GNUC__) && !defined(__clang__)
     __is_convertible(From, To);
 #else
     __is_convertible_to(From, To);
@@ -343,6 +343,20 @@ namespace utils
       }(make_index_sequence<N>());
     }
   }
+
+  // mum can we have defer
+  // we have defer at home
+  template<typename T>
+  struct deferAtHome
+  {
+    const T &f;
+    deferAtHome(const T &f) : f{ f } { }
+    ~deferAtHome() { f(); }
+  };
+
+  #define defer2(X, Y) X##Y
+  #define defer1(name, counter) defer2(name, counter)
+  #define defer deferAtHome defer1(defer__, __COUNTER__) = [&]()
 
   template<usize Iterations>
   strict_inline void longPause() noexcept
@@ -621,6 +635,25 @@ namespace utils
   template <typename First, typename ... Rest> requires (is_same_v<First, Rest> && ...)
   array(First, Rest...) -> array<First, sizeof...(Rest) + 1>;
 
+  template<usize Index, typename T, usize I>
+  T get(const array<T, I> &a) { return a[Index]; }
+}
+
+namespace std
+{
+  template<typename T, usize I>
+  struct tuple_size<utils::array<T, I>> { static constexpr auto value = I; };
+
+  template<usize Index, typename T, usize I>
+  struct tuple_element<Index, utils::array<T, I>>
+  {
+    using type = T;
+    static_assert(Index < I, "too many structured bindings for Area");
+  };
+}
+
+namespace utils
+{
   template<typename T>
   class span
   {
@@ -661,21 +694,21 @@ namespace utils
     [[nodiscard]] constexpr span 
     removeLast(size_type count) const noexcept
     {
-      COMPLEX_ASSERT(count <= size_, "Count out of range in span::removeLast(count)");
+      COMPLEX_ASSERT(count <= size_, "Count out of range in span::removeLast()");
       return { data_, count };
     }
     [[nodiscard]] constexpr span 
     removeFirst(size_type count) const noexcept
     {
-      COMPLEX_ASSERT(count <= size_, "Count out of range in span::removeFirst(count)");
-      return { data_ + (size_ - count), count };
+      COMPLEX_ASSERT(count <= size_, "Count out of range in span::removeFirst()");
+      return { data_ + count, size_ - count };
     }
     [[nodiscard]] constexpr span 
     subrange(size_type position, size_type count = npos) const noexcept
     {
-      COMPLEX_ASSERT(position <= size_, "Position out of range in span::subrange(position, count)");
+      COMPLEX_ASSERT(position <= size_, "Position out of range in span::subrange()");
       COMPLEX_ASSERT(count == npos || count <= size_ - position,
-        "Count out of range in span::subrange(position, count)");
+        "Count out of range in span::subrange()");
 
       return { data_ + position, utils::min(size_ - position, count) };
     }
@@ -743,37 +776,30 @@ namespace utils
     constexpr string_view(const char (&rawArray)[Size]) noexcept : span{ rawArray, Size - 1 } { }
 
     [[nodiscard]] constexpr size_type 
-    find(const char *substring, size_type size, size_type position = 0) const noexcept
+    find(string_view substring, size_type position = 0) const noexcept
     {
-      COMPLEX_ASSERT(size <= size_, "Size of substring is larger than the searched string in string_view::find(substring, size, position)");
-      COMPLEX_ASSERT(position + size <= size_, "Position out of range in string_view::find(substring, size, position)");
+      COMPLEX_ASSERT(substring.size() <= size_, "Size of substring is larger than the searched string in string_view::find()");
+      COMPLEX_ASSERT(position + substring.size() <= size_, "Position out of range in string_view::find()");
 
-      for (; position + size <= size_; ++position)
-        if (utils::compareStrings(data_ + position, size, substring, size) == 0)
+      for (; position + substring.size() <= size_; ++position)
+        if (utils::compareStrings(data_ + position, substring.size(), substring.data(), substring.size()) == 0)
           return position;
 
       return npos;
     }
-    [[nodiscard]] constexpr size_type 
-    find(string_view substring, size_type position = 0) const noexcept
-    { return find(substring.data(), substring.size(), position); }
-    template<auto Size>
-    [[nodiscard]] constexpr size_type 
-    find(const char(&substring)[Size], size_type position = 0) const noexcept
-    { return find(substring, Size, position); }
 
     [[nodiscard]] constexpr size_type 
-    rfind(const char *substring, size_type size, size_type position = npos) const noexcept
+    rfind(string_view substring, size_type position = npos) const noexcept
     {
-      COMPLEX_ASSERT(size <= size_, "Size of substring is larger than the searched string in string_view::rfind(substring, size, position)");
-      COMPLEX_ASSERT(position + size <= size_, "Position out of range in string_view::rfind(substring, size, position)");
-      
+      COMPLEX_ASSERT(substring.size() <= size_, "Size of substring is larger than the searched string in string_view::rfind()");
+      COMPLEX_ASSERT(position + substring.size() <= size_, "Position out of range in string_view::rfind()");
+
       if (position == npos)
-        position = size_ - size;
+        position = size_ - substring.size();
 
       while (true)
       {
-        if (utils::compareStrings(data_ + position, size, substring, size) == 0)
+        if (utils::compareStrings(data_ + position, substring.size(), substring.data(), substring.size()) == 0)
           return position;
 
         if (position == 0)
@@ -781,15 +807,7 @@ namespace utils
 
         --position;
       }
-    }
-    [[nodiscard]] constexpr size_type 
-    rfind(string_view substring, size_type position = npos) const noexcept
-    { return rfind(substring.data(), substring.size(), position); }
-    template<auto Size>
-    [[nodiscard]] constexpr size_type
-    rfind(const char(&substring)[Size], size_type position = npos) const noexcept
-    { return rfind(substring, Size, position); }
-    
+    }    
 
     [[nodiscard]] constexpr int
     compare(string_view other) const noexcept
@@ -1261,6 +1279,7 @@ namespace utils
   // and size MUST be equal to the size, modified by reserveMemory
   // (because of posix munmap)
   void releaseMemory(void *memory, usize size);
-
+  // tries to lower private memory pages (memory usage) as much as possible
+  // useful for getting rid of pages that are never accessed again (i.e. OpenGl init resources)
   void shrinkWorkingSet();
 }

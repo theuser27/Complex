@@ -83,6 +83,7 @@ namespace Interface
       bool shouldMoveOnValueChange : 1 = false;
       bool resetValueOnDoubleClick : 1 = true;
       bool isEnabled : 1 = true;
+      bool handleSetValueInCallback : 1 = false;
 
       // state flags
       bool hasParameter : 1 = false;

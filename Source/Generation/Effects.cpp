@@ -1,4 +1,4 @@
-
+﻿
 // Created: 2021-10-02 20:53:05
 
 #include "Effects.hpp"
@@ -29,8 +29,8 @@ namespace Generation
     EffectData *effectData = createFn(module, copy);
     effectData->metadata = processorMetadata;
 
-    Framework::ParameterValue *effectParameters;
-    usize parameterCount;
+    Framework::ParameterValue *effectParameters{};
+    u32 parameterCount;
     if (copy)
     {
       parameterCount = copy->parameterCount;
@@ -39,7 +39,7 @@ namespace Generation
     else if (jsonData)
     {
       parameterCount = processorMetadata->parametersCount;
-      deserialiseParametersFromJson(jsonData, processorMetadata, effectParameters, module, true);
+      deserialiseParametersFromJson(jsonData, processorMetadata, effectParameters, module, false);
     }
     else
     {
@@ -49,11 +49,6 @@ namespace Generation
 
     effectData->parameters = effectParameters;
     effectData->parameterCount = parameterCount;
-
-    auto previousLast = module->parameters->previous;
-    module->parameters->previous = effectData->parameters->previous;
-    effectData->parameters->previous = previousLast;
-    previousLast->next = effectData->parameters;
 
     return effectData;
   }
@@ -78,7 +73,7 @@ namespace Generation
       for (; effect && effect->metadata->id != effectOption->processorMetadata->id; effect = effect->next) { }
 
       effects = createEffect(effectOption->processorMetadata, this, effect);
-      currentEffect.store(effects, satomi::memory_order_release);
+      changeEffect(effectOption);
 
       return;
     }
@@ -96,7 +91,7 @@ namespace Generation
 
     auto [effectOption, _] = getParameter(EffectModule::ModuleType)->getInternalValue<Framework::IndexedData>();
     effects = createEffect(effectOption->processorMetadata, this, nullptr, serialisedSave);
-    currentEffect.store(effects, satomi::memory_order_release);
+    changeEffect(effectOption);
   }
 
   void EffectModule::serialiseToJson(void *jsonData, utils::span<Framework::ParameterValue *>) const
@@ -110,9 +105,9 @@ namespace Generation
     for (usize i = 0; i < parameterCount; (++i), (parameter = parameter->next))
       parametersToSerialise.emplaceBack(parameter);
 
-    auto *effectParameter = effect->parameters;
-    for (usize i = 0; i < effect->parameterCount; (++i), (effectParameter = effectParameter->next))
-      parametersToSerialise.emplaceBack(effectParameter);
+    //auto *effectParameter = effect->parameters;
+    //for (usize i = 0; i < effect->parameterCount; (++i), (effectParameter = effectParameter->next))
+    //  parametersToSerialise.emplaceBack(effectParameter);
 
     Processor::serialiseToJson(jsonData, parametersToSerialise);
   }
@@ -123,7 +118,7 @@ namespace Generation
     using namespace Framework;
 
     auto *activeEffect = currentEffect.load(satomi::memory_order_acquire);
-    if (activeEffect->metadata->id == effectOption->processorMetadata->id)
+    if (activeEffect && activeEffect->metadata->id == effectOption->processorMetadata->id)
       return activeEffect;
 
     // was effect already created?
@@ -137,7 +132,7 @@ namespace Generation
       previousEffect = effect;
       effect = effect->next;
     }
-    
+
     // if not, create and link it with the others
     if (!effect)
     {
@@ -149,19 +144,33 @@ namespace Generation
     }
 
     // remap mapped parameters to the new effect
-    usize i = 0;
-    for (decltype(activeEffect->parameters) parameter = activeEffect->parameters, replacementParameter = effect->parameters;
-      parameter && i < activeEffect->parameterCount && i < effect->parameterCount; 
-      (parameter = parameter->next), (replacementParameter = replacementParameter->next), (++i))
+    if (activeEffect)
     {
-      auto *parameterLink = parameter->getParameterLink();
-      if (!parameterLink->hostControl)
-        continue;
-      
-      parameterLink->hostControl->resetParameterLink(replacementParameter->getParameterLink(), false);
+      usize i = 0;
+      for (decltype(activeEffect->parameters) parameter = activeEffect->parameters, replacementParameter = effect->parameters;
+        parameter && i < activeEffect->parameterCount && i < effect->parameterCount;
+        (parameter = parameter->next), (replacementParameter = replacementParameter->next), (++i))
+      {
+        auto *parameterLink = parameter->getParameterLink();
+        if (!parameterLink->hostControl)
+          continue;
+
+        parameterLink->hostControl->resetParameterLink(replacementParameter->getParameterLink(), false);
+      }
     }
 
     currentEffect.store(effect, satomi::memory_order_release);
+
+    auto parametersEnd = parameters;
+    for (usize i = 0; i < metadata->parametersCount - 1; (++i), (parametersEnd = parametersEnd->next)) { }
+
+    auto effectParametersEnd = effect->parameters;
+    for (usize i = 0; i < effect->parameterCount - 1; (++i), (effectParametersEnd = effectParametersEnd->next)) { }
+
+    parameters->previous = effectParametersEnd;
+    effect->parameters->previous = parametersEnd;
+    parametersEnd->next = effect->parameters;
+    parameterCount = metadata->parametersCount + effect->parameterCount;
 
     return effect;
   }
@@ -194,8 +203,8 @@ namespace Generation
 
     // switching to being a reader and allowing other readers to participate
     // seq_cst because the following atomic could be reordered to happen prior to this one
-    dataBuffer->dataLock.lock.store(1, satomi::memory_order_seq_cst);
-    source.sourceBuffer->dataLock.lock.fetch_sub(1, satomi::memory_order_relaxed);
+    dataBuffer->dataLock.lock.store(1, satomi::memory_order_release);
+    source.sourceBuffer->dataLock.lock.fetch_sub(1, satomi::memory_order_acq_rel);
 
     source.sourceBuffer = dataBuffer;
   }
@@ -208,7 +217,7 @@ namespace Generation
 
     auto maxInOutChannels = utils::kChannelsPerInOut * (utils::max(state->plugin->inSidechains, state->plugin->outSidechains) + 1);
     auto maxBinCount = state->getMaxBinCount();
-    
+
     laneDataSource.scratchBuffer = Framework::SimdBuffer::create(arena, maxInOutChannels, maxBinCount);
     dataBuffer = Framework::SimdBuffer::create(arena, maxInOutChannels, maxBinCount);
 
@@ -226,8 +235,8 @@ namespace Generation
     using namespace Framework;
     using namespace utils;
 
-    COMPLEX_ASSERT(dataBuffer->dataLock.lock.load() >= 0);
-    ScopedLock g{ dataBuffer->dataLock, true, WaitMechanism::Spin };
+    COMPLEX_ASSERT(interleavedInputBuffer->dataLock.lock.load() >= 0);
+    ScopedLock g{ interleavedInputBuffer->dataLock, true, WaitMechanism::Spin };
 
     auto values = utils::array<simd_float, SimdBuffer::kRelativeSize>{};
     auto valueSources = utils::array<utils::ca<const float>, decltype(values)::size()>{};
@@ -241,7 +250,7 @@ namespace Generation
       for (u32 k = 0; k < valueSources.size(); ++k)
         valueSources[k] = inputBuffer.get((u32)(i + k)).offset(0, 2 * binCount);
 
-      auto data = dataBuffer->get(i / (u32)valueSources.size());
+      auto data = interleavedInputBuffer->get(i / (u32)valueSources.size());
 
       // skipping every n-th complex pair (currently simd_float can take 2 pairs)
       for (u32 j = 0; j < binCount - 1; j += (u32)values.size())
@@ -330,15 +339,14 @@ namespace Generation
     laneDataSource.blockPhase = blockPhase;
     laneDataSource.blockPosition = blockPosition_;
     bool isLaneOn = thisLane->getParameter(EffectsLane::LaneEnabled)->getInternalValue<u32>();
-    i32 lockValue;
 
     // Lane Input
     // if this lane's input is another's output and that lane can be used,
     // we wait until it is finished and then copy its data
     if (auto inputIndex = thisLane->getParameter(EffectsLane::Input)->getInternalValue<Framework::IndexedData>();
-      inputIndex.first->id == EffectsLane::InputOptionsLane)
+      inputIndex.first->parent && inputIndex.first->parent->id == EffectsLane::InputOptionsLane)
     {
-      auto *otherLane = (EffectsLane *)getChild(children, inputIndex.second, Processors::EffectsLane);
+      auto *otherLane = (EffectsLane *)state->getProcessor(inputIndex.first->stateId);
       COMPLEX_ASSERT(thisLane != otherLane, "A lane cannot use its own output as input");
 
       while (true)
@@ -346,6 +354,15 @@ namespace Generation
         auto otherLaneStatus = otherLane->status.load(satomi::memory_order_acquire);
         if (otherLaneStatus == EffectsLane::LaneStatus::Finished)
           break;
+
+        // process dependent lane if no one else has taken up the work
+        if (otherLaneStatus == EffectsLane::LaneStatus::Ready &&
+          otherLane->status.compare_exchange_strong(otherLaneStatus, 
+            EffectsLane::LaneStatus::Running, satomi::memory_order_seq_cst))
+        {
+          processIndividualLanes(otherLane);
+          continue;
+        }
 
         longPause<40>();
       }
@@ -362,7 +379,8 @@ namespace Generation
         return;
       }
 
-      lockValue = utils::lockAtomic(otherLane->laneDataSource.sourceBuffer->dataLock, false, false, WaitMechanism::Spin);
+      // getting shared access to the lane's output data
+      (void)utils::lockAtomic(otherLane->laneDataSource.sourceBuffer->dataLock, false, false, WaitMechanism::Spin);
       laneDataSource.sourceBuffer = otherLane->laneDataSource.sourceBuffer;
     }
     // input is not from a lane, we can begin processing
@@ -373,12 +391,12 @@ namespace Generation
 
       if (inputIndex.first->id == EffectsLane::InputOptionsMain)
       {
-        laneDataSource.sourceBuffer = dataBuffer;
+        laneDataSource.sourceBuffer = interleavedInputBuffer;
         laneDataSource.simdChannelOffset = 0;
       }
       else if (inputIndex.first->id == EffectsLane::InputOptionsSidechain)
       {
-        laneDataSource.sourceBuffer = dataBuffer;
+        laneDataSource.sourceBuffer = interleavedInputBuffer;
         laneDataSource.simdChannelOffset = (u32)inputIndex.second + 1;
       }
       else COMPLEX_ASSERT_FALSE("Missing case");
@@ -386,8 +404,8 @@ namespace Generation
       if (isLaneOn)
       {
         // getting shared access to the state's transformed data
-        COMPLEX_ASSERT(dataBuffer->dataLock.lock.load() >= 0);
-        lockValue = lockAtomic(dataBuffer->dataLock, false, false, WaitMechanism::Spin);
+        COMPLEX_ASSERT(interleavedInputBuffer->dataLock.lock.load() >= 0);
+        (void)lockAtomic(interleavedInputBuffer->dataLock, false, false, WaitMechanism::Spin);
       }
       else
       {
@@ -450,10 +468,10 @@ namespace Generation
       thisLane->volumeScale.store(simd_float::sqrt(scale), satomi::memory_order_relaxed);
     }
 
-    // unlocking the last module's buffer
-    utils::unlockAtomic(laneDataSource.sourceBuffer->dataLock, false, WaitMechanism::Spin, lockValue);
+    // unlocking the final output of the lane until we need it again (be it a module or the input itself if the lane is empty)
+    laneDataSource.sourceBuffer->dataLock.lock.store(0, satomi::memory_order_seq_cst);
 
-    COMPLEX_ASSERT(dataBuffer->dataLock.lock.load() >= 0);
+    COMPLEX_ASSERT(interleavedInputBuffer->dataLock.lock.load() >= 0);
 
     // to let other threads know that the data is in its final state
     thisLane->status.store(EffectsLane::LaneStatus::Finished, satomi::memory_order_release);
@@ -584,7 +602,7 @@ template<> Generation::Processor *
 createProcessor<Generation::EffectsLane>(Plugin::State *state, Framework::ProcessorMetadata *metadata, const void *toCopy, void *serialisedSave)
 {
   auto *arena = utils::bumpArena::createNested(state->processorStorage, COMPLEX_MB(1));
-  return anew(state->processorStorage, Generation::EffectsLane, { arena, state, metadata, 
+  return anew(state->processorStorage, Generation::EffectsLane, { arena, state, metadata,
     (const Generation::EffectsLane *)toCopy, serialisedSave });
 }
 template<> void *
@@ -609,7 +627,7 @@ initialiseTypeStructure<Generation::EffectsLane>(void *, Framework::PluginStruct
           COMPLEX_STRUCTURE_INDEXED_DATA(.displayName = "Lanes", .id = EffectsLane::InputOptionsLane,
             .valueCount = 0, .dynamicUpdateUuid = ParameterChangeReason::laneSources) }}),
         .defaultOptionId = EffectsLane::InputOptionsMain
-      }, ParameterScale::Indexed, {}, ParameterDetails::Modulatable | ParameterDetails::Automatable | ParameterDetails::Extensible, UpdateFlag::BeforeProcess),
+      }, ParameterScale::Indexed, {}, ParameterDetails::AlwaysFromControl | ParameterDetails::Automatable | ParameterDetails::Extensible, UpdateFlag::BeforeProcess),
     COMPLEX_STRUCTURE_PARAMETER("Output", EffectsLane::Output,
       {
         .options = COMPLEX_STRUCTURE_INDEXED_DATA()->addChildren({{
@@ -618,7 +636,7 @@ initialiseTypeStructure<Generation::EffectsLane>(void *, Framework::PluginStruct
             .valueCount = 0, .dynamicUpdateUuid = ParameterChangeReason::outputSidechain),
           COMPLEX_STRUCTURE_INDEXED_DATA(.displayName = "None", .id = EffectsLane::OutputOptionsNone) }}),
         .defaultOptionId = EffectsLane::OutputOptionsMain
-      }, ParameterScale::Indexed, {}, ParameterDetails::Modulatable | ParameterDetails::Automatable | ParameterDetails::Extensible, UpdateFlag::BeforeProcess),
+      }, ParameterScale::Indexed, {}, ParameterDetails::Automatable | ParameterDetails::Extensible, UpdateFlag::BeforeProcess),
     COMPLEX_STRUCTURE_PARAMETER("Gain Matching", EffectsLane::GainMatching, 0.0f, 1.0f, 1.0f, 1.0f, ParameterScale::Toggle, {},
       ParameterDetails::Modulatable | ParameterDetails::Automatable, UpdateFlag::BeforeProcess, Framework::printToggleValues)
   );

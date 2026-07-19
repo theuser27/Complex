@@ -43,7 +43,8 @@ namespace Interface
       T end;
     };
 
-    friend constexpr bool operator==(Area lhs, Area rhs) 
+    friend constexpr bool 
+    operator==(Area lhs, Area rhs) 
     { return lhs.x == rhs.x && lhs.y == rhs.y; };
   };
 
@@ -54,13 +55,7 @@ namespace Interface
   using Range = Area<T>;
 
   template<usize I, typename T> 
-  T get(const Area<T> &p)
-  {
-    if constexpr (I == 0)
-      return p.x;
-    else
-      return p.y;
-  }
+  T get(const Area<T> &p) { return (I == 0) ? p.x : p.y; }
 }
 
 namespace std

@@ -3,7 +3,7 @@
 
 #pragma once
 
-#include "pugl/pugl.h"
+#include "Third Party/pugl/pugl.h"
 #include "Interface/LookAndFeel/gui_utils.hpp"
 
 extern "C"
@@ -37,6 +37,7 @@ namespace Interface
 
   Renderer *createRenderer(Plugin::ComplexPlugin &plugin);
   void destroyRenderer(Renderer *renderer);
+  void resetGui(Renderer *renderer, MainInterface *newGui);
 
   Plugin::ComplexPlugin &getPlugin(Renderer *renderer);
   MainInterface *getGui(Renderer *renderer);

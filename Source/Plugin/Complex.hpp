@@ -32,6 +32,7 @@ namespace Framework
 namespace Interface
 {
   class Renderer;
+  struct MainInterface;
 }
 
 namespace Plugin
@@ -66,11 +67,10 @@ namespace Plugin
     }
 
     // quick and dirty spinlock to ensure things are executed outside of an audio callback
-    utils::ScopedLock acquireProcessingLock(bool isExclusive = true)
+    utils::ScopedLock 
+    acquireProcessingLock(bool isExclusive = true)
     {
-      while (processingLock.lock.load(satomi::memory_order_relaxed) != 0)
-        utils::millisleep();
-      return utils::ScopedLock{ processingLock, isExclusive, utils::WaitMechanism::Spin };
+      return utils::ScopedLock{ processingLock, isExclusive, utils::WaitMechanism::Sleep };
     }
 
     // not atomic because these are only set at plugin instantiation
@@ -124,6 +124,9 @@ namespace Plugin
     void updateDynamicParameters(uuid reason);
     void updateAllDynamicParameters();
     void createDynamicParameters();
+
+    void registerProcessorForDynamicParameters(Generation::Processor *processor);
+    void deregisterProcessorForDynamicParameters(Generation::Processor *processor);
 
     Generation::SoundEngine &getSoundEngine() { return *soundEngine; }
     float getOverlap();
@@ -181,6 +184,8 @@ namespace Plugin
 
     Framework::FFT *fft{};
 
+    Interface::MainInterface *gui{};
+
     // modulators inside the plugin
     utils::vectornd<Framework::ParameterModulator *> parameterModulators{};
     // parameters that receive updates upon various plugin changes
@@ -193,6 +198,7 @@ namespace Plugin
     Framework::PluginStructure pluginStructure{};
 
     utils::bumpArena *processorStorage{};
+    utils::bumpArena *uiStorage{};
     utils::bumpArena *miscStorage{};
 
     utils::vectornd<Thread> workers{};

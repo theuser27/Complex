@@ -175,7 +175,8 @@ namespace Generation
           if (laneIndexedData->id == EffectsLane::InputOptionsMain) { }
           else if (laneIndexedData->id == EffectsLane::InputOptionsSidechain)
             startIndex = utils::kChannelsPerInOut * (index + 1);
-          else if (laneIndexedData->id == EffectsLane::InputOptionsLane)
+          // input coming from other processors is readily available
+          else if (laneIndexedData->flags == Framework::IndexedData::StateIdFlag)
             continue;
           else COMPLEX_ASSERT_FALSE("Missing case");
 

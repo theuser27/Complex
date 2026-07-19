@@ -634,6 +634,7 @@ namespace Interface
     spectrogram.desiredSize = { 0, kMainVisualiserHeight, 0, kMainVisualiserHeight };
     spectrogram.margin = { kHWindowEdgeMargin, 0, kHWindowEdgeMargin, kVGlobalMargin };
     addChildComponent(&spectrogram);
+    spectrogram.reinitialise();
 
     effectsSection.sizingFlags = (Component::SizingFlags)(Component::GrowableX | Component::GrowableY);
     effectsSection.placement = Placement::top;
@@ -681,39 +682,13 @@ namespace Interface
     return (primary) ? &gui->popupDisplay1 : &gui->popupDisplay2;
   }
 
-  MainInterface::MainInterface()
-  {
-    arena = utils::bumpArena::create(COMPLEX_MB(256), COMPLEX_MB(4));
-  }
-
-  MainInterface::~MainInterface()
+  void MainInterface::restartUI(Plugin::State *state)
   {
     removeChildComponent(&popupSelector);
     removeChildComponent(&popupDisplay1);
     removeChildComponent(&popupDisplay2);
 
     deleteAllChildComponents();
-    utils::bumpArena::destroy(arena);
-  }
-
-  static constexpr int kHeaderHorizontalEdgePadding = 10;
-  static constexpr int kHeaderNumberBoxMargin = 12;
-
-  static constexpr int kFooterHPadding = 16;
-
-  static constexpr int kLabelToControlMargin = 4;
-
-
-  void MainInterface::restartUI()
-  {
-    //removeChildComponent(&resizeCorner);
-    removeChildComponent(&popupSelector);
-    removeChildComponent(&popupDisplay1);
-    removeChildComponent(&popupDisplay2);
-
-    deleteAllChildComponents();
-
-    auto state = getPlugin(uiRelated.renderer).state_;
 
     auto recurseProcessors = [](const auto &self,
       Generation::Processor *processor, Component *parentComponent) -> void
@@ -738,8 +713,6 @@ namespace Interface
 
     recurseProcessors(recurseProcessors, state->soundEngine, this);
 
-    //addChildComponent(&resizeCorner);
-
     popupSelector.componentFlags.isVisible = false;
     popupSelector.componentFlags.alwaysOnTop = true;
     addChildComponent(&popupSelector);
@@ -757,7 +730,7 @@ namespace Interface
   }
 
   Area<u32>
-  MainInterface::checkResizing(Area<u32> newScaledSize, bool force)
+  checkResizing(Area<u32> newScaledSize, bool force)
   {
     auto minScaledArea = Area<u32>{ (u32)scaleValueRoundInt(kMinWidth), (u32)scaleValueRoundInt(kMinHeight) };
 
@@ -765,8 +738,11 @@ namespace Interface
     newScaledSize.h = utils::max(newScaledSize.h, minScaledArea.h);
 
     auto state = getPlugin(uiRelated.renderer).state_;
-    auto soundEngineSection = (SoundEngineSection *)state->soundEngine->component;
-    newScaledSize = soundEngineSection->checkResizing(newScaledSize, force);
+    if (state)
+    {
+      auto soundEngineSection = (SoundEngineSection *)state->soundEngine->component;
+      newScaledSize = soundEngineSection->checkResizing(newScaledSize, force);
+    }
 
     return newScaledSize;
   }

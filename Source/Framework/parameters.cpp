@@ -16,7 +16,7 @@ namespace Framework
   IndexedData::getText() const
   {
     auto text = displayName;
-    if (text.empty() && flags & StateIdFlag)
+    if (text.empty() && flags == StateIdFlag)
     {
       auto *processor = Interface::getPlugin(Interface::uiRelated.renderer).state_->getProcessor(stateId);
       text = processor->name;
@@ -31,6 +31,8 @@ namespace Framework
 
     usize i = (usize)scaledValue;
     IndexedData *nextIndexedData = details.options, *indexedData = nullptr;
+
+    COMPLEX_ASSERT(details.options->valueCount > i);
 
     while (nextIndexedData)
     {
@@ -96,7 +98,7 @@ namespace Framework
   }
 
   double 
-  getValueFromOption(IndexedData *option, const ParameterDetails &details)
+  getValueFromOption(const IndexedData *option, const ParameterDetails &details)
   {
     COMPLEX_ASSERT(details.scale == ParameterScale::Indexed);
     u32 value = 0;
@@ -294,10 +296,10 @@ namespace Framework
     switch (details.scale)
     {
     case ParameterScale::Toggle:
-      result = reinterpretToFloat(simd_float::notEqual(simd_float::round(value), 0.0f));
+      result = simd_float::round(value);
       break;
     case ParameterScale::Indexed:
-      result = simd_float::round(value * (float)details.options->valueCount);
+      result = simd_float::round(value * (float)(details.options->valueCount - 1));
       break;
     case ParameterScale::Linear:
       result = value * (details.maxValue - details.minValue) + details.minValue;
@@ -551,7 +553,7 @@ namespace Framework
     float newNormalisedValue = normalisedValue_;
 
     // if there's a set hostControl set, then we're automating this parameter
-    if (parameterLink_.hostControl)
+    if (!test_enum(details_.flags, ParameterDetails::AlwaysFromControl) && parameterLink_.hostControl)
       newNormalisedValue = parameterLink_.hostControl->getValue();
     else if (parameterLink_.UIControl)
       newNormalisedValue = (float)parameterLink_.UIControl->getValue();
@@ -845,8 +847,7 @@ namespace Plugin
         continue;
 
       // removing the option is breaking change but it could crash the program otherwise
-      if (previous)
-        previous->next = next;
+      target->removeChild(targetChild);
       utils::bumpArena::remove(targetChild);
     }
     

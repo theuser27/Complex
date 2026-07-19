@@ -4,10 +4,10 @@
 #include "Graphics.hpp"
 
 #define NANOVG_GL3
-#include "nanovg/nanovg_gl.h"
-#include "nanovg/nanovg_gl_utils.h"
+#include "Third Party/nanovg/nanovg_gl.h"
+#include "Third Party/nanovg/nanovg_gl_utils.h"
 
-#include "nanovg/nanosvg.h"
+#include "Third Party/nanovg/nanosvg.h"
 
 #include "Data/BinaryData.hpp"
 #include "Framework/platform.hpp"

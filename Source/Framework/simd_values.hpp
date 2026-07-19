@@ -255,7 +255,11 @@ namespace utils
     {	return equal(one.value, two.value); }
 
     static strict_inline simd_int vector_call notEqual(simd_int one, simd_int two)
-    { return ~equal(one, two); }
+    {
+      // DO NOT try to optimise this by using the fp version on intel
+      // because that one is subject to FTZ and DAZ flags
+      return ~equal(one, two);
+    }
 
     static strict_inline simd_int vector_call greaterThanSigned(simd_int one, simd_int two)
     {	return greaterThanSigned(one.value, two.value); }

@@ -3,7 +3,7 @@
 
 #include "load_save.hpp"
 
-#include "cplug/config.h"
+#include "Third Party/cplug/config.h"
 
 #include "Third Party/xhl/xhl_files.h"
 #include "Third Party/cjson/cjson.h"
@@ -14,6 +14,7 @@
 #include "Generation/Effects.hpp"
 #include "Interface/LookAndFeel/Graphics.hpp"
 #include "Interface/LookAndFeel/ui_constants.hpp"
+#include "Interface/Sections/MainInterface.hpp"
 #include "Plugin/Renderer.hpp"
 #include "Plugin/Complex.hpp"
 
@@ -221,91 +222,91 @@ thread_local utils::vector<Framework::IndexedData *> *dynamicOptionFixups{};
 static void handleIndexedData(utils::bumpArena *arena, bool isAutomated,
   Framework::ParameterDetails &details, cjson *indexedData)
 {
+  // TODO: this adds duplicate options to IndexedData
   auto processSingle = [&](const auto &self, Framework::IndexedData &option, cjson *data) -> Framework::IndexedData *
   {
     auto *newOption = anew(arena, Framework::IndexedData, { option });
-    cjson *children = cjson_GetObjectItem(data, "options");
-    if (!children)
-      return *newOption;
+    // lose the reference to the original children because we'll add copies of them back in
+    newOption->children = nullptr;
+    // break up child connecitons otherwise we will be duplicating everything after the first entry
+    newOption->next = nullptr;
 
-    for (cjson *value = children->child; value; value = value->next)
+    cjson *children = cjson_GetObjectItem(data, "options");
+    if (children)
     {
-      bool isPresent = false;
-      auto *child = option.children;
-      for (; child; child = child->next)
+      for (cjson *value = children->child; value; value = value->next)
       {
+        bool isPresent = false;
+        auto *child = option.children;
         auto savedId = cjson_GetObjectItem(value, "id")->vuint;
         COMPLEX_ASSERT(savedId, "Option doesn't have an id so there's no way to identify it (this is really bad)");
-        if (child->id == savedId)
+
+        for (; child; child = child->next)
+          if ((isPresent = (child->id == savedId)))
+            break;
+
+        if (isPresent)
         {
-          isPresent = true;
-          break;
+          auto *newChildOption = self(self, *child, value);
+
+          if (auto *nameItem = cjson_GetObjectItem(value, "display_name"))
+          {
+            char *string = nameItem->vstring;
+            utils::string_view dataName{ string, utils::getStringSize(string) };
+            if (dataName != newChildOption->displayName)
+            {
+              dataName = findOrAddPermanentString(dataName);
+              newChildOption->displayName = dataName;
+            }
+          }
+
+          newChildOption->valueCount = (u32)cjson_GetObjectItem(value, "value_count")->vuint;
+          if ([[maybe_unused]] cjson *dataUuid = cjson_GetObjectItem(value, "dynamic_update_uuid"))
+          {
+            COMPLEX_ASSERT(newChildOption->dynamicUpdateUuid = dataUuid->vuint);
+          }
+
+          newOption->addChildren({{ newChildOption }});
+
+          continue;
         }
-      }
 
-      if (isPresent)
-      {
-        auto *newChildOption = self(self, *child, value);
-        newOption->addChildren({{ newChildOption }});
-
-        char *string = cjson_GetObjectItem(value, "display_name")->vstring;
-        utils::string_view dataName{ string, utils::getStringSize(string) };
-        if (dataName != newChildOption->displayName)
+        // usually the option would not be present if it points to a processor (IndexedData::StateIdFlag)
+        if (auto *stateIdEntry = cjson_GetObjectItem(value, "state_id"))
         {
-          dataName = findOrAddPermanentString(dataName);
-          newChildOption->displayName = dataName;
+          // this option points to some processor defined in the save file
+          // but because we haven't finished deserialising it might not exist yet
+          // for now we just copy the state_id defined in the save file
+          // and add this option to a list for a later fixup 
+          // when the id of the deserialised processor in the current state will be assigned
+
+          auto *newChildOption = anew(arena, Framework::IndexedData, {});
+          newChildOption->id = savedId;
+          newChildOption->stateId = stateIdEntry->vuint;
+          newChildOption->flags = Framework::IndexedData::StateIdFlag;
+          newOption->addChildren({{ newChildOption }});
+
+          dynamicOptionFixups->emplaceBack(newChildOption);
+
+          continue;
         }
 
-        newChildOption->valueCount = (u32)cjson_GetObjectItem(value, "value_count")->vuint;
-        if ([[maybe_unused]] cjson *dataUuid = cjson_GetObjectItem(value, "dynamic_update_uuid"))
-        {
-          COMPLEX_ASSERT(newChildOption->dynamicUpdateUuid = dataUuid->vuint);
-        }
-
-        continue;
+        COMPLEX_ASSERT_FALSE("Unhandled child option");
       }
-
-      // usually the option would not be present if it points to a processor (IndexedData::StateIdFlag)
-      if (cjson_GetObjectItem(value, "state_id"))
-      {
-        // this option points to some processor defined in the save file
-        // but because we haven't finished deserialising it might not exist yet
-        // for now we just copy the state_id defined in the save file
-        // and add this option to a list for a later fixup 
-        // when the id of the deserialised processor in the current state will be assigned
-
-        auto *newChildOption = anew(arena, Framework::IndexedData, {});
-        newChildOption->id = cjson_GetObjectItem(value, "id")->vuint;
-        newChildOption->stateId = cjson_GetObjectItem(value, "state_id")->vuint;
-        newChildOption->flags |= Framework::IndexedData::StateIdFlag;
-        newOption->addChildren({{ newChildOption }});
-
-        dynamicOptionFixups->emplaceBack(newChildOption);
-
-        continue;
-      }
-
-      COMPLEX_ASSERT_FALSE("Unhandled child option");
     }
 
     // second loop to add new/missing options from the save
-    for (auto child = option.children; child; child = child->next)
+    for (auto missingChild = option.children; missingChild; missingChild = missingChild->next)
     {
       bool isPresent = false;
       for (auto newChild = newOption->children; newChild; newChild = newChild->next)
-      {
-        if (newChild->id == child->id)
-        {
-          isPresent = true;
+        if ((isPresent = (newChild->id == missingChild->id)))
           break;
-        }
-      }
 
       if (!isPresent)
       {
-        // if the parameter is automated we don't want to mess up the options
-        // so we add them as untracked
-        newOption->addChildren({{ Framework::IndexedData::deepCopy(arena, child) }}, isAutomated);
+        // if the parameter is automated we don't want to mess up the options, so we add them as untracked
+        newOption->addChildren({{ Framework::IndexedData::deepCopy(arena, missingChild) }}, isAutomated);
       }
     }
 
@@ -326,7 +327,7 @@ static void fixDeserialisedProcessorsStateIds(Plugin::State *state)
     while (true)
     {
       auto iter = utils::findIf(*dynamicOptionFixups, [&oldId](Framework::IndexedData *item) 
-        { return (item->flags & Framework::IndexedData::StateIdFlag) && item->stateId == oldId; });
+        { return item->flags == Framework::IndexedData::StateIdFlag && item->stateId == oldId; });
       if (iter == dynamicOptionFixups->end())
         break;
 
@@ -357,6 +358,7 @@ namespace Framework
     {
       auto recurseOptions = [&](const auto &self, cjson *optionData, IndexedData *option) -> void
       {
+        // this line is leaking technically at leaf nodes but because 
         cjson *children = cjson_Create(cjson_Array);
         for (auto *child = option->children; child; child = child->next)
         {
@@ -372,14 +374,15 @@ namespace Framework
           if (child->userFlags)
             cjson_AddTo(childData, "user_flags", cjson_Unsigned, child->userFlags);
 
-          if (child->flags & IndexedData::StateIdFlag)
-            cjson_AddTo(childData, "state_id", cjson_Unsigned, child->dynamicUpdateUuid);
+          if (child->flags == IndexedData::StateIdFlag)
+            cjson_AddTo(childData, "state_id", cjson_Unsigned, child->stateId);
 
-          self(self, childData, child);
+          if (child->children)
+            self(self, childData, child);
         }
 
-        if (option->children)
-          cjson_AddExistingTo(optionData, "options", children);
+        COMPLEX_ASSERT(option->children);
+        cjson_AddExistingTo(optionData, "options", children);
       };
 
       cjson_AddTo(data, "min_value", cjson_Unsigned, (u64)0);
@@ -454,7 +457,8 @@ namespace Framework
       if ((referenceMin > minValue || referenceMax < maxValue) &&
         (parameter->details_.flags & ParameterDetails::Extensible) == 0)
       {
-        COMPLEX_ASSERT_FALSE();
+        //COMPLEX_ASSERT_FALSE();
+        // TODO: -inf db gets picked up by this condition which shouldn't happen
         // TODO: log this
       }
 
@@ -517,6 +521,8 @@ namespace Generation
     cjson *processorInfo = (cjson *)jsonData;
     cjson_AddTo(processorInfo, "id", cjson_Unsigned, metadata->id);
     cjson_AddTo(processorInfo, "state_id", cjson_Unsigned, stateId);
+    if (!name.empty())
+      cjson_AddTo(processorInfo, "name", cjson_String, name.data());
 
     cjson *serialisedChildren = cjson_AddTo(processorInfo, "processors", cjson_Array);
     for (auto *child = children; child; child = child->next)
@@ -549,6 +555,7 @@ namespace Generation
   {
     cjson *data = (cjson *)jsonData;
     cjson *parametersCopy = cjson_Duplicate(cjson_GetObjectItem(data, "parameters"), true);
+    COMPLEX_ASSERT(parametersCopy, "Missing parameters for %v (%zu)", metadata->name, metadata->id);
 
     auto *memory = arranew(processor->arena, Framework::ParameterValue, metadata->parametersCount, {});
 
@@ -586,9 +593,9 @@ namespace Generation
       if (!parameter)
       {
         auto errorString = utils::string::create(localScratch,
-          "%v\nMissing Parameter %v (%zu), replacing with a default initialised one. \
-          This should have been handled by the version upgrade routine but it wasn't. \
-          If this is the mainline version of the plugin consider reporting it to the developer.",
+          "%v\nMissing Parameter %v (%zu), replacing with a default initialised one. "
+          "This should have been handled by the version upgrade routine but it wasn't. "
+          "If this is the mainline version of the plugin consider reporting it to the developer.",
           utils::string_view{ *errorPath }, expectedParameter->details.displayName, expectedParameter->details.id);
         Interface::showNativeMessageBox("Error opening preset", errorString.data(), Interface::MessageBoxType::Warning);
 
@@ -627,6 +634,26 @@ namespace Generation
     }
   }
 
+  void deserialiseProcessorChildren(void *jsonData, Processor *parent)
+  {
+    auto oldSize = errorPath->size();
+    errorPath->appendFormat("Inside processor %v (%zu):\n", parent->metadata->name, parent->metadata->id);
+    auto newSize = errorPath->size();
+
+    cjson *data = (cjson *)jsonData;
+    cjson *processors = cjson_GetObjectItem(data, "processors");
+    for (auto *processorData = processors->child; processorData; processorData = processorData->next)
+    {
+      uuid subProcessorsId = cjson_GetObjectItem(processorData, "id")->vuint;
+      Generation::Processor *subProcessor = parent->state->createProcessor(subProcessorsId, processorData);
+      parent->addChildProcessor(*subProcessor);
+      parent->state->registerProcessorForDynamicParameters(subProcessor);
+      deserialiseProcessorChildren(processorData, subProcessor);
+    }
+
+    errorPath->removeLast(newSize - oldSize);
+  }
+
   void Processor::deserialiseFromJson(void *jsonData)
   {
     auto oldSize = errorPath->size();
@@ -636,20 +663,14 @@ namespace Generation
     cjson *data = (cjson *)jsonData;
     // id fixup will happen later when deserialisation has finished
     const_cast<u64 &>(stateId) = cjson_GetObjectItem(data, "state_id")->vuint;
+    if (auto *nameItem = cjson_GetObjectItem(data, "name"))
+      name = { arena, nameItem->vstring, utils::getStringSize(nameItem->vstring) };
 
     parameterCount = (u32)metadata->parametersCount;
     deserialiseParametersFromJson(jsonData, metadata, parameters, this,
       (metadata->flags & Framework::ProcessorMetadata::NoParameterValidationTag) == 0);
 
-    cjson *processors = cjson_GetObjectItem(data, "processors");
-    for (auto *processor = processors->child; processor; processor = processor->next)
-    {
-      uuid subProcessorsId = cjson_GetObjectItem(processor, "id")->vuint;
-      Generation::Processor *subProcessor = state->createProcessor(subProcessorsId, processor);
-      addChildProcessor(*subProcessor);
-    }
-
-    errorPath->removeSuffix(newSize - oldSize);
+    errorPath->removeLast(newSize - oldSize);
   }
 }
 
@@ -693,9 +714,11 @@ namespace Plugin
     auto state = utils::sp<State>::create(this);
 
     state->soundEngine = utils::as<SoundEngine>(state->createProcessor(Processors::SoundEngine));
+    state->registerProcessorForDynamicParameters(state->soundEngine);
     auto effectsLane = state->createProcessor(Processors::EffectsLane);
     effectsLane->name = { effectsLane->arena, "A" };
     state->soundEngine->addChildProcessor(*effectsLane);
+    state->registerProcessorForDynamicParameters(effectsLane);
 
     checkForDynamicParameters(state.get(), state->soundEngine);
 
@@ -732,10 +755,12 @@ namespace Plugin
       return nullptr;
     }
 
-    fixDeserialisedProcessorsStateIds(state.get());
     state->soundEngine = (Generation::SoundEngine *)state->createProcessor(
       Generation::Processors::SoundEngine, soundEngineJson);
+    state->registerProcessorForDynamicParameters(state->soundEngine);
+    Generation::deserialiseProcessorChildren(soundEngineJson, state->soundEngine);
 
+    fixDeserialisedProcessorsStateIds(state.get());
     for (auto &id : Framework::ParameterChangeReason::values)
       state->updateDynamicParameters(id);
 
@@ -830,7 +855,9 @@ namespace Plugin
     }
     else
       plugin->state_ = COMPLEX_MOVE(state);
-
-    Interface::uiRelated.state = plugin->state_.get();
+    
+    auto *newGui = plugin->state_->gui;
+    Interface::resetGui(&plugin->getRenderer(), newGui);
+    newGui->restartUI(plugin->state_.get());
   }
 }

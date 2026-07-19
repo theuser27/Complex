@@ -262,53 +262,53 @@ static inline const char* _cplug_getBusDirectionStr(int32_t type)
 // https://github.com/RandyGaul/cute_headers_deprecated/blob/master/cute_utf.h
 const char* _cplug_decode8(const char* text, int* cp)
 {
-	unsigned char c = *text++;
-	int extra = 0, min = 0;
-	*cp = 0;
-    if      (c >= 0xF0) { *cp = c & 0x07; extra = 3; min = 0x10000; }
-	else if (c >= 0xE0) { *cp = c & 0x0F; extra = 2; min = 0x800; }
-	else if (c >= 0xC0) { *cp = c & 0x1F; extra = 1; min = 0x80; }
-	else if (c >= 0x80) { *cp = 0xFFFD; }
-	else                { *cp = c; }
-	while (extra--)
-	{
-		c = *text++;
-		if ((c & 0xC0) != 0x80) { *cp = 0xFFFD; break; }
-		(*cp) = ((*cp) << 6) | (c & 0x3F);
-	}
-	if (*cp < min) *cp = 0xFFFD;
-	return text;
+  unsigned char c = *text++;
+  int extra = 0, min = 0;
+  *cp = 0;
+  if      (c >= 0xF0) { *cp = c & 0x07; extra = 3; min = 0x10000; }
+  else if (c >= 0xE0) { *cp = c & 0x0F; extra = 2; min = 0x800; }
+  else if (c >= 0xC0) { *cp = c & 0x1F; extra = 1; min = 0x80; }
+  else if (c >= 0x80) { *cp = 0xFFFD; }
+  else                { *cp = c; }
+  while (extra--)
+  {
+    c = *text++;
+    if ((c & 0xC0) != 0x80) { *cp = 0xFFFD; break; }
+    (*cp) = ((*cp) << 6) | (c & 0x3F);
+  }
+  if (*cp < min) *cp = 0xFFFD;
+  return text;
 }
 char* _cplug_encode8(char *text, int cp)
 {
-	if (cp < 0 || cp > 0x10FFFF) cp = 0xFFFD;
+  if (cp < 0 || cp > 0x10FFFF) cp = 0xFFFD;
 
 #define CU_EMIT(X, Y, Z) *text++ = X | ((cp >> Y) & Z)
-    if      (cp <    0x80) { CU_EMIT(0x00,0,0x7F); }
-	else if (cp <   0x800) { CU_EMIT(0xC0,6,0x1F); CU_EMIT(0x80, 0,  0x3F); }
-	else if (cp < 0x10000) { CU_EMIT(0xE0,12,0xF); CU_EMIT(0x80, 6,  0x3F); CU_EMIT(0x80, 0, 0x3F); }
-	else                   { CU_EMIT(0xF0,18,0x7); CU_EMIT(0x80, 12, 0x3F); CU_EMIT(0x80, 6, 0x3F); CU_EMIT(0x80, 0, 0x3F); }
+  if      (cp <    0x80) { CU_EMIT(0x00,0,0x7F); }
+  else if (cp <   0x800) { CU_EMIT(0xC0,6,0x1F); CU_EMIT(0x80, 0,  0x3F); }
+  else if (cp < 0x10000) { CU_EMIT(0xE0,12,0xF); CU_EMIT(0x80, 6,  0x3F); CU_EMIT(0x80, 0, 0x3F); }
+  else                   { CU_EMIT(0xF0,18,0x7); CU_EMIT(0x80, 12, 0x3F); CU_EMIT(0x80, 6, 0x3F); CU_EMIT(0x80, 0, 0x3F); }
 #undef CU_EMIT
-	return text;
+  return text;
 }
 char16_t* _cplug_encode16(char16_t* text, int cp)
 {
-	if (cp < 0x10000) *text++ = cp;
-	else
-	{
-		cp -= 0x10000;
-		*text++ = 0xD800 | ((cp >> 10) & 0x03FF);
-		*text++ = 0xDC00 | (cp & 0x03FF);
-	}
-	return text;
+  if (cp < 0x10000) *text++ = cp;
+  else
+  {
+    cp -= 0x10000;
+    *text++ = 0xD800 | ((cp >> 10) & 0x03FF);
+    *text++ = 0xDC00 | (cp & 0x03FF);
+  }
+  return text;
 }
 const char16_t* _cplug_decode16(const char16_t* text, int* cp)
 {
-	int in = *text++;
-	if (in < 0xD800 || in > 0xDFFF) *cp = in;
-	else if (in > 0xD800 && in < 0xDBFF) *cp = ((in & 0x03FF) << 10) | (*text++ & 0x03FF);
-	else *cp = 0xFFFD;
-	return text;
+  int in = *text++;
+  if (in < 0xD800 || in > 0xDFFF) *cp = in;
+  else if (in > 0xD800 && in < 0xDBFF) *cp = ((in & 0x03FF) << 10) | (*text++ & 0x03FF);
+  else *cp = 0xFFFD;
+  return text;
 }
 void _cplug_utf8To16(char16_t* dst, const char* src, int len)
 {
@@ -323,13 +323,13 @@ void _cplug_utf8To16(char16_t* dst, const char* src, int len)
 }
 void _cplug_utf16To8(char* dst, const char16_t* src, int len)
 {
-	char* it = dst;
-	int cp;
-	while (*src && (it < dst + len - 1))
-	{
-		src = _cplug_decode16(src, &cp);
-		it  = _cplug_encode8(it, cp);
-	}
+  char* it = dst;
+  int cp;
+  while (*src && (it < dst + len - 1))
+  {
+    src = _cplug_decode16(src, &cp);
+    it  = _cplug_encode8(it, cp);
+  }
     *it = 0;
 }
 // clang-format on

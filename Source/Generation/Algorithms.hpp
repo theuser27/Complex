@@ -53,7 +53,7 @@ namespace Generation
 
     Framework::ProcessorMetadata *metadata{};
     Framework::ParameterValue *parameters{};
-    usize parameterCount{};
+    u32 parameterCount{};
     NSVGimage *(*createEffectIcon)(Interface::Graphics &g){};
   };
 

@@ -3,7 +3,7 @@
 
 #pragma once
 
-#include "glad/glad.h"
+#include "Third Party/glad/glad.h"
 
 #include "Framework/memory.hpp"
 #include "Framework/macro_helpers.hpp"
@@ -23,6 +23,14 @@ namespace Interface
     static constexpr auto size = sizeof(T) / sizeof(utils::remove_extent_t<T>);
     static constexpr bool isFloat = utils::is_floating_point_v<utils::remove_extent_t<T>>;
     static constexpr bool isArray = utils::is_array_v<T>;
+
+    // If the uniform couldn't be found, this value will be < 0.
+    GLint uniformId = -1;
+    T data{};
+
+    OpenGlUniform() = default;
+    OpenGlUniform(T value) requires (!isArray) : data{ value } { }
+    OpenGlUniform(utils::span<const T> values) requires (isArray) { utils::copy(data, values); }
 
     OpenGlUniform &operator=(const OpenGlUniform &) = default;
 
@@ -95,41 +103,37 @@ namespace Interface
     }
 
     explicit operator bool() const { return uniformId >= 0; }
-
-    // If the uniform couldn't be found, this value will be < 0.
-    GLint uniformId = -1;
-    T data{};
   };
 
   struct OpenGlAttribute
   {
-    explicit operator bool() { return (GLint)attributeId >= 0; }
-
     // If the uniform couldn't be found, this value will be < 0.
     GLuint attributeId = (GLuint)-1;
+
+    explicit operator bool() { return (GLint)attributeId >= 0; }
   };
 
   struct OpenGlBuffer
   {
-    ~OpenGlBuffer() noexcept { if (id) glDeleteBuffers(1, &id); }
     GLuint id = 0;
+    ~OpenGlBuffer() noexcept { if (id) glDeleteBuffers(1, &id); }
   };
 
   struct OpenGlTexture
   {
-    ~OpenGlTexture() noexcept { if (id) glDeleteTextures(1, &id); }
     GLuint id = 0;
+    ~OpenGlTexture() noexcept { if (id) glDeleteTextures(1, &id); }
   };
 
   struct OpenGlShaderProgram
   {
+    GLuint id = 0;
+
     void use() const noexcept
     {
       COMPLEX_ASSERT(id != 0);
       glUseProgram(id);
     }
-
-    GLuint id = 0;
   };
 
 
@@ -323,9 +327,8 @@ namespace Interface
 
   GLuint createShader(const char *shader, bool isFragment = true);
 
-  class Shaders
+  struct Shaders
   {
-  public:
     enum VertexShader
     {
       kImageVertex,
@@ -437,7 +440,11 @@ namespace Interface
 
   template<typename T>
   inline OpenGlUniform<T> getUniform(const OpenGlShaderProgram &program, const char *name)
-  { return OpenGlUniform<T>{ glGetUniformLocation(program.id, name) }; }
+  {
+    OpenGlUniform<T> ret{};
+    ret.uniformId = glGetUniformLocation(program.id, name);
+    return ret;
+  }
   inline OpenGlAttribute getAttribute(const OpenGlShaderProgram &program, const char *name)
   { return OpenGlAttribute{ (GLuint)glGetAttribLocation(program.id, name) }; }
 }

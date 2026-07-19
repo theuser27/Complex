@@ -18,7 +18,7 @@
 #ifndef NANOVG_GL_UTILS_H
 #define NANOVG_GL_UTILS_H
 
-#include "glad/glad.h"
+#include "Third Party/glad/glad.h"
 
 #ifdef __cplusplus
 extern "C" {

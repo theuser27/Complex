@@ -306,7 +306,7 @@ namespace Interface
     Component *reference = nullptr;
 
     bool 
-    render(OpenGlWrapper &openGl)
+    render(OpenGlWrapper &openGl) override
     {
       auto relativePoint = getRelativePoint(reference);
       return draw(openGl, reference, this, relativePoint);

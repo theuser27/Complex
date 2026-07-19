@@ -3,7 +3,7 @@
 
 #include "Control.hpp"
 
-#include "pugl/pugl.h"
+#include "Third Party/pugl/pugl.h"
 
 #include "Framework/parameter_value.hpp"
 #include "Framework/parameter_bridge.hpp"
@@ -79,6 +79,21 @@ namespace Interface
   Control::setValue(double newValue, bool notify)
   {
     newValue = utils::clamp(newValue, 0.0, 1.0);
+    
+    // if the new value requires some processing to run before being set
+    if (controlFlags.handleSetValueInCallback)
+    {
+      COMPLEX_ASSERT(valueChangedCallback);
+      
+      auto oldValue = value.load(satomi::memory_order_relaxed);
+      if (newValue == oldValue)
+        return false;
+
+      valueChangedCallback(this, newValue, oldValue);
+
+      return oldValue != value.load(satomi::memory_order_relaxed);
+    }
+
     auto oldValue = value.exchange(newValue, satomi::memory_order_relaxed);
     if (newValue == oldValue)
       return false;
@@ -698,7 +713,7 @@ namespace Interface
       if (scaledValue < 0.0)
         outString[0] = '-';
       else if (!controlFlags.shouldUsePlusMinusPrefix)
-        outString.removePrefix(1);
+        outString.removeFirst(1);
     }
     else
     {
@@ -723,9 +738,9 @@ namespace Interface
       utils::string_view currentInteger = findClosestInteger(outString);
       if (currentInteger.size() > maxIntergerCharacters)
       {
-        outString.removeSuffix(currentInteger.size() - maxIntergerCharacters);
+        outString.removeLast(currentInteger.size() - maxIntergerCharacters);
         if (outString.back() == '.')
-          outString.removeSuffix(1);
+          outString.removeLast(1);
       }
       else if (currentInteger.size() < necessaryIntegerCharacters)
         outString.insert(outString.find(currentInteger),
@@ -755,10 +770,10 @@ namespace Interface
     }
 
     if (!details.displayUnits.empty() && trimmed.rfind(details.displayUnits))
-      trimmed.removeSuffix(details.displayUnits.size());
+      trimmed.removeLast(details.displayUnits.size());
 
     while (trimmed.front() == '+')
-      trimmed.removePrefix(1).trim();
+      trimmed.removeFirst(1).trim();
 
     double parsedValue = ::strtod(trimmed.filterIn("0123456789.,-").data(), nullptr);
     return Framework::unscaleValue(parsedValue, details, true);

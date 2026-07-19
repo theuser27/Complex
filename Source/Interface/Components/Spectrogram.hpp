@@ -1,12 +1,5 @@
-/*
-  ==============================================================================
 
-    Spectrogram.hpp
-    Created: 3 Feb 2023 6:36:09pm
-    Author:  theuser27
-
-  ==============================================================================
-*/
+// Created: 2023-02-03 18:36:09
 
 #pragma once
 
@@ -15,8 +8,6 @@
 
 namespace Interface
 {
-  class OpenGlLineRenderer;
-
   class Spectrogram final : public Component
   {
   public:
@@ -31,13 +22,8 @@ namespace Interface
     void reinitialise();
 
     bool render(OpenGlWrapper &openGl) override;
-    void init(OpenGlWrapper &openGl);
-    void destroy();
 
     bool mouseDown(const MouseEvent &e) override;
-
-    utils::vector<OpenGlLineRenderer *> amplitudeRenderers{};
-    utils::vector<OpenGlLineRenderer *> phaseRenderers{};
 
     Framework::SimdBuffer *scratchBuffer{};
     Framework::SimdBuffer *resultBuffer{};
@@ -48,8 +34,8 @@ namespace Interface
     float maxFrequency = kDefaultMaxFrequency;
     float minDb = kDefaultMinDb;
     float maxDb = kDefaultMaxDb;
-    bool shouldDisplayPhases = false;
     float referencePhase = 0.0f;
+    bool shouldDisplayPhases = false;
     bool shouldInterpolateLines = true;
     bool shouldPaintBackgroundLines = true;
     float decayMultiplier = kDecayMult;
@@ -58,8 +44,9 @@ namespace Interface
     float nyquistFreq = kDefaultSampleRate * 0.5f;
     u32 binCount = 0;
 
+    float lineData[2][kResolution][2]{};
+
   private:
-    void setLineRendererData();
     bool updateAmplitudes(float startDecade, float decadeCount, float decadeSlope);
   };
 }

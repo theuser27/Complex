@@ -72,25 +72,25 @@
 #endif
 
 #if COMPLEX_WINDOWS
-  #define PRINT_MESSAGE(message, ...) { \
-      usize size__ = 1 + ::stbsp_snprintf(nullptr, 0, message, __VA_ARGS__); \
-      auto buffer__ = arranew(localScratch, char, size__); \
-      ::stbsp_snprintf(buffer__, (int)size__, message, __VA_ARGS__); \
-      ::OutputDebugStringA(buffer__); \
-      ::utils::bumpArena::remove(buffer__); \
-    }
-  #define PRINT_SIMPLE(message) ::OutputDebugStringA(message);
+  #define PRINT_SIMPLE(message) ::OutputDebugStringA(message)
 #else
-  #define PRINT_MESSAGE(message, ...) ::fprintf(stdout, message __VA_OPT__(,) __VA_ARGS__);
-  #define PRINT_SIMPLE(...) PRINT_MESSAGE("%s", __VA_ARGS__)
+  #define PRINT_SIMPLE(message) ::fputs(message, stdout)
 #endif
+
+#define PRINT_MESSAGE(message, ...) do { \
+    usize size__ = 1 + ::stbsp_snprintf(nullptr, 0, message, __VA_ARGS__); \
+    auto buffer__ = arranew(globalArena, char, size__); \
+    ::stbsp_snprintf(buffer__, (int)size__, message, __VA_ARGS__); \
+    PRINT_SIMPLE(buffer__); \
+    ::utils::bumpArena::remove(buffer__); \
+  } while(false)
 
 static void printVariadic(const char *format, va_list args)
 {
   va_list argsCopy;
   va_copy(argsCopy, args);
   usize size = ::stbsp_vsnprintf(nullptr, 0, format, argsCopy) + 1;
-  char *buffer = arranew(localScratch, char, size);
+  char *buffer = arranew(globalArena, char, size);
   va_end(argsCopy);
 
   ::stbsp_vsnprintf(buffer, (int)size, format, args);
@@ -370,10 +370,10 @@ namespace utils
   #elif COMPLEX_ARM
     u64 fpsr;
     u64 mask = (1 << 24 /* FZ */);
-    asm volatile("vmrs %0, fpscr"
+    __asm__ volatile("vmrs %0, fpscr"
       : "=r"(fpsr));
     flags_ = fpsr;
-    asm volatile("vmsr fpscr, %0"
+    __asm__ volatile("vmsr fpscr, %0"
       :
       : "ri"(fpsr | mask));
   #endif
@@ -384,7 +384,7 @@ namespace utils
   #if COMPLEX_X64
     _mm_setcsr((u32)flags_);
   #elif COMPLEX_ARM
-    asm volatile("vmsr fpscr, %0"
+    __asm__ volatile("vmsr fpscr, %0"
       :
       : "ri"(flags_));
   #endif
@@ -632,6 +632,14 @@ namespace utils
   #endif
   }
 
+  thread::id 
+  thread::getCurrentId()
+  {
+    if (!currentId)
+      currentId = getCurrentThreadId();
+    return currentId;
+  }
+
   void thread::exit(int result)
   {
   #ifdef COMPLEX_WINDOWS
@@ -650,7 +658,7 @@ namespace utils
     utils::dynFn<int()> function = COMPLEX_MOVE(*(utils::dynFn<int()> *)argument);
     utils::deallocate(argument);
 
-    thread::currentId = getCurrentThreadId();
+    (void)thread::getCurrentId();
     localScratch = utils::bumpArena::create(COMPLEX_MB(4), COMPLEX_KB(128));
 
     int result = function();
@@ -748,7 +756,7 @@ namespace utils
     pageSize_.store(::sysconf(_SC_PAGE_SIZE), satomi::memory_order_relaxed);
   #endif
 
-    utils::thread::currentId = getCurrentThreadId();
+    (void)utils::thread::getCurrentId();
   }
   
 

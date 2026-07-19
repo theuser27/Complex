@@ -58,7 +58,8 @@ namespace Framework
 
   struct IndexedData
   {
-    enum { NoneFlag, ProcessorFlag, ParameterFlag, StateIdFlag };
+    enum class Flags { NoneFlag, ProcessorFlag, ParameterFlag, StateIdFlag };
+    using enum Flags;
 
     utils::string_view displayName{};       // user-readable name for given parameter value
     uuid id{};                              // uuid for parameter value
@@ -69,7 +70,7 @@ namespace Framework
     u32 childrenCount{};
 
     u32 valueCount = 1;                     // how many choosable values are there inside children (or itself if no children)
-    u32 flags{};
+    Flags flags{};
     u64 userFlags{};
     uuid dynamicUpdateUuid{};               // this uuid is used to register for in the State
                                             //   these updates will happen only if the parameter is not mapped/modulated
@@ -96,7 +97,10 @@ namespace Framework
     addChildren(utils::span<IndexedData *const> childrenToAdd, bool addAsUntracked = false)
     {      
       if (!children)
+      {
         valueCount = 0;
+        childrenCount = 0;
+      }
 
       // count all entries from the children to be inserted
       u32 addedValues = childrenToAdd[0]->valueCount;
@@ -164,7 +168,8 @@ namespace Framework
       return newOption;
     }
 
-    static bool visit(IndexedData *data, const auto &predicate)
+    static bool 
+    visit(IndexedData *data, const auto &predicate)
     {
       for (IndexedData *child = data->children, *previous = nullptr; child; 
         (previous = child), (child = child->next))
@@ -192,12 +197,13 @@ namespace Framework
   {
     enum Flags : u8
     { 
-             None = 0,
-           Stereo = 1 << 0,                               // if parameter allows stereo modulation
-      Modulatable = 1 << 1,                               // if parameter allows modulation at all
-      Automatable = 1 << 2,                               // if parameter allows host automation
-       Extensible = 1 << 3,                               // if parameter's minimum/maximum/default values can change
-       RoundToInt = 1 << 4,                               // if parameter value must be rounded after scaling
+                   None = 0,
+                 Stereo = 1 << 0,                         // if parameter allows stereo modulation
+            Modulatable = 1 << 1,                         // if parameter allows modulation at all
+            Automatable = 1 << 2,                         // if parameter allows host automation
+             Extensible = 1 << 3,                         // if parameter's minimum/maximum/default values can change
+             RoundToInt = 1 << 4,                         // if parameter value must be rounded after scaling
+      AlwaysFromControl = 1 << 5,                         // if parameter value must always acquire its value from the GUI
     };
 
     utils::string_view displayName{};                     // name displayed to the user
@@ -231,7 +237,7 @@ namespace Framework
   utils::pair<const IndexedData *, usize> getOptionFromValue(double scaledValue, const ParameterDetails &details);
   double getValueFromOptionText(utils::string_view text, const ParameterDetails &details);
   double getValueFromOptionId(uuid optionId, const ParameterDetails &details);
-  double getValueFromOption(IndexedData *option, const ParameterDetails &details);
+  double getValueFromOption(const IndexedData *option, const ParameterDetails &details);
 
   bool
   iterateOverIndexedData(IndexedData *options, const auto &predicate)
@@ -320,7 +326,8 @@ namespace Framework
     u32 parametersCount{};
     utils::span<void(*const)()> vtable{};
 
-    ProcessorMetadata &operator,(ProcessorMetadata &other)
+    ProcessorMetadata &
+    operator,(ProcessorMetadata &other)
     {
       if (next)
         *next, other;
@@ -330,7 +337,8 @@ namespace Framework
     }
     operator ProcessorMetadata *() { return this; }
 
-    static bool visit(ProcessorMetadata *data, const auto &predicate)
+    static bool 
+    visit(ProcessorMetadata *data, const auto &predicate)
     {
       for (auto *child = data->children; child; child = child->next)
       {

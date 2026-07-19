@@ -3,7 +3,7 @@
 
 #pragma once
 
-#include "nanovg/nanovg.h"
+#include "Third Party/nanovg/nanovg.h"
 
 #include "Framework/simd_values.hpp"
 #include "Framework/simd_utils.hpp"
@@ -143,7 +143,6 @@ namespace Interface
 
   struct InterfaceRelated
   {
-    Plugin::State *state = nullptr;
     Renderer *renderer = nullptr;
     Graphics *cache = nullptr;
     Skin *skin = nullptr;
@@ -288,7 +287,7 @@ namespace Interface
     constexpr bool operator==(const ViewportChange &) const noexcept = default;
   };
 
-  class Shaders;
+  struct Shaders;
 
   struct OpenGlWrapper
   {

@@ -177,7 +177,7 @@ namespace Generation
       COMPLEX_STRUCTURE_INDEXED_DATA(.displayName = "Frequency Shift", .id = Types::FrequencyShift, .flags = IndexedData::ProcessorFlag,
         .processorMetadata = COMPLEX_STRUCTURE_EFFECT("Frequency Shift", Types::FrequencyShift, vtableFrequencyShift, Interface::Skin::kPitchModule, .parameters =
           (
-            COMPLEX_STRUCTURE_PARAMETER("Shift", Resample::Shift, -20'000.0f, 20'000.0f, 0.0f, 0.5f, ParameterScale::SymmetricCubic,
+            COMPLEX_STRUCTURE_PARAMETER("Shift", FrequencyShift::Shift, -20'000.0f, 20'000.0f, 0.0f, 0.5f, ParameterScale::SymmetricCubic,
               " hz", ParameterDetails::Modulatable | ParameterDetails::Automatable | ParameterDetails::Stereo)
           )
         )
@@ -237,7 +237,8 @@ namespace Generation
       lambda(start + length);
   }
 
-  static strict_inline simd_mask vector_call isOutsideBounds(simd_int positionIndices,
+  static simd_mask vector_call 
+  isOutsideBounds(simd_int positionIndices,
     simd_int lowBoundIndices, simd_int highBoundIndices, simd_mask isHighAboveLow)
   {
     simd_mask belowLowBounds = simd_int::lessThanSigned(positionIndices, lowBoundIndices);
@@ -246,7 +247,7 @@ namespace Generation
     // 1st case examples: |   *  [    ]     | or
     //                    |      [    ]  *  |
     // 2nd case example:  |     ]   *  [    |
-    return isHighAboveLow ^ belowLowBounds ^ aboveHighBounds;
+    return (belowLowBounds | aboveHighBounds) & ((belowLowBounds & aboveHighBounds) ^ isHighAboveLow);
   }
 
   static strict_inline simd_mask vector_call isOutsideBounds(
@@ -789,7 +790,7 @@ namespace Generation
     auto slopeFunction = [&]() -> simd_float(*)(simd_float, simd_float)
     {
       auto [slopeId, _] = getParameter(effectData, Phase::Shift::Slope)->getInternalValue<IndexedData>(sampleRate);
-      if (slopeId->id == Phase::Shift::Slope)
+      if (slopeId->id == Phase::SlopeOptions::Constant)
         return [](simd_float x, simd_float) { return x; };
       else if (slopeId->id == Phase::SlopeOptions::Linear)
       {

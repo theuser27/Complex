@@ -886,7 +886,12 @@ namespace utils
       explicit operator bool() { return nativeId; }
     } threadId{};
 
+  private:
     inline static thread_local id currentId = {};
+  public:
+    // the necessity for this function instead of just getting the value directly
+    // is because the thread might have been started 
+    static id getCurrentId();
     [[noreturn]] static void exit(int result);
 
     ~thread();
@@ -996,8 +1001,7 @@ namespace utils
   template<typename T>
   struct ReentrantLock : LockBlame<T> { };
 
-  strict_inline void 
-  lockAtomic(satomi::atomic<bool> &atomic, WaitMechanism mechanism, bool expected = false)
+  inline void lockAtomic(satomi::atomic<bool> &atomic, WaitMechanism mechanism, bool expected = false)
   {
     bool state = expected;
     while (!atomic.compare_exchange_weak(state, !expected, satomi::memory_order_acq_rel))
@@ -1031,7 +1035,7 @@ namespace utils
       state = expected;
     }
   }
-  strict_inline void unlockAtomic(satomi::atomic<bool> &atomic, WaitMechanism mechanism, bool expected = false)
+  inline void unlockAtomic(satomi::atomic<bool> &atomic, WaitMechanism mechanism, bool expected = false)
   {
     atomic.store(expected, satomi::memory_order_release);
     if ((u32)mechanism & (u32)WaitMechanism::SpinNotify)
@@ -1039,15 +1043,16 @@ namespace utils
   }
   i32 lockAtomic(satomi::atomic<i32> &atomic, bool isExclusive, WaitMechanism mechanism,
     const utils::smallFn<void()> &lambda = [](){}) noexcept;
-  strict_inline i32 
+  inline i32 
   lockAtomic(LockBlame<i32> &lock, bool isReentrant, bool isExclusive, WaitMechanism mechanism,
     const utils::smallFn<void()> &lambda = [](){}) noexcept
   {
     if (!isExclusive)
       return lockAtomic(lock.lock, isExclusive, mechanism, lambda);
 
-    auto threadId = utils::thread::currentId;
-    if (lock.lastLockId.load(satomi::memory_order_relaxed) == threadId)
+    auto threadId = utils::thread::getCurrentId();
+    if (lock.lock.load(satomi::memory_order_relaxed) < 0 && 
+      lock.lastLockId.load(satomi::memory_order_relaxed) == threadId)
     {
       if (isReentrant)
         return -1;
@@ -1062,8 +1067,7 @@ namespace utils
     return ret;
   }
   void unlockAtomic(satomi::atomic<i32> &atomic, bool wasExclusive, WaitMechanism mechanism) noexcept;
-  strict_inline void
-  unlockAtomic(LockBlame<i32> &lock, bool wasExclusive, 
+  inline void unlockAtomic(LockBlame<i32> &lock, bool wasExclusive, 
     WaitMechanism mechanism, i32 previousValue) noexcept
   {
     if (wasExclusive && previousValue == -1)
@@ -1087,7 +1091,7 @@ namespace utils
     ScopedLock(ReentrantLock<bool> &reentrantLock, WaitMechanism mechanism, bool expected = false) noexcept :
       type_(ReentrantBoolEnum), mechanism_(mechanism), reentrantBool_{ &reentrantLock, false, expected }
     {
-      auto threadId = utils::thread::currentId;
+      auto threadId = utils::thread::getCurrentId();
       reentrantBool_.wasLocked = threadId == reentrantLock.lastLockId.load(satomi::memory_order_relaxed);
 
       if (!reentrantBool_.wasLocked)

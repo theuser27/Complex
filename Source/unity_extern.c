@@ -39,20 +39,20 @@
   #define NOSYSMETRICS
 #endif
 
-#include "cplug/config.h"
+#include "Third Party/cplug/config.h"
 
 #ifdef COMPLEX_STANDALONE
   #if COMPLEX_WINDOWS
-    #include "cplug/cplug_standalone_win.c"
+    #include "Third Party/cplug/cplug_standalone_win.c"
   #elif COMPLEX_LINUX
     #error No Standalone Version for Linux
   #else
-    #include "cplug/cplug_standalone_osx.m"
+    #include "Third Party/cplug/cplug_standalone_osx.m"
   #endif
 #elif COMPLEX_CLAP
-  #include "cplug/cplug_clap.c"
+  #include "Third Party/cplug/cplug_clap.c"
 #else
-  #include "cplug/cplug_vst3.c"
+  #include "Third Party/cplug/cplug_vst3.c"
 #endif
 
 #ifdef _MSC_VER
@@ -61,26 +61,26 @@
 
 #endif
 
-#include "glad/glad.c"
+#include "Third Party/glad/glad.c"
 
-#include "nanovg/nanovg.c"
+#include "Third Party/nanovg/nanovg.c"
 #define NANOVG_GL3_IMPLEMENTATION
-#include "nanovg/nanovg_gl.h"
-#include "nanovg/nanovg_gl_utils.h"
+#include "Third Party/nanovg/nanovg_gl.h"
+#include "Third Party/nanovg/nanovg_gl_utils.h"
 #define NANOSVG_IMPLEMENTATION
-#include "nanovg/nanosvg.h"
+#include "Third Party/nanovg/nanosvg.h"
 
-#include "pugl/src/common.c"
-#include "pugl/src/internal.c"
+#include "Third Party/pugl/src/common.c"
+#include "Third Party/pugl/src/internal.c"
 #if COMPLEX_WINDOWS
-  #include "pugl/src/win.c"
-  #include "pugl/src/win_gl.c"
+  #include "Third Party/pugl/src/win.c"
+  #include "Third Party/pugl/src/win_gl.c"
 #elif COMPLEX_LINUX
-  #include "pugl/src/x11.c"
-  #include "pugl/src/x11_gl.c"
+  #include "Third Party/pugl/src/x11.c"
+  #include "Third Party/pugl/src/x11_gl.c"
 #else
-  #include "pugl/src/mac.m"
-  #include "pugl/src/mac_gl.m"
+  #include "Third Party/pugl/src/mac.m"
+  #include "Third Party/pugl/src/mac_gl.m"
 #endif
 
 #define XHL_FILES_IMPL
