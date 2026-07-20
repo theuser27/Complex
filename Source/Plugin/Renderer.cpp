@@ -4,6 +4,7 @@
 #include "Renderer.hpp"
 
 #include "Third Party/cplug/cplug.h"
+#include "Third Party/glad/glad.h"
 
 #define PUGL_NO_INCLUDE_GL_H
 #include "Third Party/pugl/gl.h"
@@ -12,7 +13,6 @@
 #include "Framework/load_save.hpp"
 #include "Framework/parameter_bridge.hpp"
 #include "Plugin/Complex.hpp"
-#include "Interface/LookAndFeel/Shaders.hpp"
 #include "Interface/LookAndFeel/Graphics.hpp"
 #include "Interface/LookAndFeel/Component.hpp"
 #include "Interface/Sections/MainInterface.hpp"
@@ -149,7 +149,6 @@ namespace Interface
     Point<i32> lastMouseDownPosition_{ 0, 0 };
 
     OpenGlWrapper openGl{};
-    Shaders shaders;
     utils::bumpArena *arena{};
 
     utils::vector<utils::pair<Component *, PersistentCallback *>> callbacks{};
@@ -217,8 +216,6 @@ namespace Interface
       teardownComponent(teardownComponent, gui);
       openGl.isDestroyingOpenGl = false;
 
-      openGl.shaders = nullptr;
-      shaders.releaseAll();
       graphics->~Graphics();
       graphics = nullptr;
     }
@@ -397,7 +394,6 @@ namespace Interface
       //	return false;
       //}
 
-      renderer->openGl.shaders = &renderer->shaders;
       renderer->graphics = anew(renderer->arena, Graphics, {});
       renderer->openGl.cache = renderer->graphics;
       renderer->openGl.g = renderer->graphics->context;
@@ -616,7 +612,7 @@ namespace Interface
     auto *arena = utils::bumpArena::create(COMPLEX_MB(8), COMPLEX_MB(1));
 
     auto *renderer = anew(arena, Renderer, { .plugin = plugin,
-      .shaders = { arena }, .arena = arena, .callbacks = { arena } });
+      .arena = arena, .callbacks = { arena } });
     uiRelated.renderer = renderer;
     renderer->skinInstance = anew(arena, Skin, {});
     uiRelated.skin = renderer->skinInstance;

@@ -8,7 +8,6 @@
 #include "Framework/parameter_bridge.hpp"
 #include "Generation/Effects.hpp"
 #include "Generation/Algorithms.hpp"
-#include "../Components/OpenGlImage.hpp"
 #include "../Components/Control.hpp"
 #include "Popups.hpp"
 #include "EffectsLaneSection.hpp"

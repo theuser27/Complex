@@ -1327,7 +1327,6 @@ namespace Interface
   void Component::doRender(OpenGlWrapper &openGl)
   {
     bool continueRender = render(openGl);
-    COMPLEX_CHECK_OPENGL_ERROR();
 
     if (!continueRender)
       return;

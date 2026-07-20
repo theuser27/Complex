@@ -287,12 +287,9 @@ namespace Interface
     constexpr bool operator==(const ViewportChange &) const noexcept = default;
   };
 
-  struct Shaders;
-
   struct OpenGlWrapper
   {
     utils::vector<ViewportChange> parentStack{};
-    Shaders *shaders = nullptr;
     Graphics *cache = nullptr;
     NVGcontext *g = nullptr;
     int topLevelHeight = 0;
@@ -304,13 +301,6 @@ namespace Interface
 
   bool setViewport(Point<int> positionInViewport, Rectangle<int> viewportBounds,
     Rectangle<int> scissorBounds, const OpenGlWrapper &openGl, const Component *ignoreClipIncluding);
-
-#if COMPLEX_DEBUG
-  void checkGLError(const char *file, const int line);
-  #define COMPLEX_CHECK_OPENGL_ERROR() checkGLError(__FILE__, __LINE__)
-#else
-  #define COMPLEX_CHECK_OPENGL_ERROR()
-#endif
 
   void drawSVG(NSVGimage *image, Graphics &g, Colour colour,
     Rectangle<float> bounds, float strokeWidth);
