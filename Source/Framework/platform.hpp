@@ -29,7 +29,7 @@
 
   #if defined (__x86_64__)
     #define COMPLEX_X64 1
-  #elif defined (__aarch64__) 
+  #elif defined (__aarch64__)
     #define COMPLEX_ARM 1
   #endif
 #elif defined (_MSC_VER)
@@ -113,7 +113,7 @@
 
   #define COMPLEX_FAM
 
-  #define COMPLEX_TRAP() __builtin_trap()	
+  #define COMPLEX_TRAP() __builtin_trap()
 
   #if COMPLEX_X64
     #define COMPLEX_PAUSE() __asm__ __volatile__ ("pause")
@@ -208,7 +208,7 @@ namespace common
   void complexPrintAssertMessage(const char *conditionString, const char *fileName,
     const char *functionName, int line, int hasMoreArgs = false, ...);
 
-  void complexLogMessage(const char *fileName, const char *functionName, 
+  void complexLogMessage(const char *fileName, const char *functionName,
     int line, const char *format, ...);
 }
 
@@ -265,11 +265,11 @@ extern "C"
 // if these cause ODR errors, then we're including headers from C++ which shouldn't be happening
 // track down the included headers causing the issues and remove them
 
-[[nodiscard]] PLACEMENT_NEW_CONSTEXPR void *MSVC_CDECL operator new(decltype(sizeof(0)), void *pointer) noexcept { return pointer; }
-PLACEMENT_NEW_CONSTEXPR void MSVC_CDECL operator delete(void *, void *) noexcept { }
+[[nodiscard]] PLACEMENT_NEW_CONSTEXPR inline void *MSVC_CDECL operator new(decltype(sizeof(0)), void *pointer) noexcept { return pointer; }
+PLACEMENT_NEW_CONSTEXPR inline void MSVC_CDECL operator delete(void *, void *) noexcept { }
 
-[[nodiscard]] PLACEMENT_NEW_CONSTEXPR void *MSVC_CDECL operator new[](decltype(sizeof(0)), void *pointer) noexcept { return pointer; }
-PLACEMENT_NEW_CONSTEXPR void MSVC_CDECL operator delete[](void *, void *) noexcept { }
+[[nodiscard]] PLACEMENT_NEW_CONSTEXPR inline void *MSVC_CDECL operator new[](decltype(sizeof(0)), void *pointer) noexcept { return pointer; }
+PLACEMENT_NEW_CONSTEXPR inline void MSVC_CDECL operator delete[](void *, void *) noexcept { }
 
 
 #undef MSVC_CDECL

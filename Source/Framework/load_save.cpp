@@ -226,6 +226,8 @@ static void handleIndexedData(utils::bumpArena *arena, bool isAutomated,
   auto processSingle = [&](const auto &self, Framework::IndexedData &option, cjson *data) -> Framework::IndexedData *
   {
     auto *newOption = anew(arena, Framework::IndexedData, { option });
+    // lose the reference to the original parent so that we don't increment its count
+    newOption->parent = nullptr;
     // lose the reference to the original children because we'll add copies of them back in
     newOption->children = nullptr;
     // break up child connecitons otherwise we will be duplicating everything after the first entry

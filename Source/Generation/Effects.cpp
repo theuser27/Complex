@@ -357,7 +357,7 @@ namespace Generation
 
         // process dependent lane if no one else has taken up the work
         if (otherLaneStatus == EffectsLane::LaneStatus::Ready &&
-          otherLane->status.compare_exchange_strong(otherLaneStatus, 
+          otherLane->status.compare_exchange_strong(otherLaneStatus,
             EffectsLane::LaneStatus::Running, satomi::memory_order_seq_cst))
         {
           processIndividualLanes(otherLane);

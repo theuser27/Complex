@@ -325,7 +325,7 @@ namespace Generation
       u32 start;
       u32 distance;
       bool isStereoRange;
-    } ret{ 0, binCount, true };
+    } ret;
 
     // 1.
     ret = { 0, binCount, true };
@@ -723,7 +723,7 @@ namespace Generation
       // while calculating the power min-max we can copy over data
       rawDestination[j] = rawSource[j];
 
-      simd_float magnitude = simd_float::max(kSilenceThreshold, complexMagnitude(rawDestination[j], false));
+      simd_float magnitude = complexMagnitude(rawDestination[j], false);
       simd_mask isIndexOutside = isOutsideBounds(j, lowBoundIndices, highBoundIndices, isHighAboveLowMask);
       powerMinMax.first  = merge(simd_float::min(powerMinMax.first , magnitude), powerMinMax.first , isIndexOutside);
       powerMinMax.second = merge(simd_float::max(powerMinMax.second, magnitude), powerMinMax.second, isIndexOutside);
@@ -732,6 +732,7 @@ namespace Generation
     // calculating clipping
     simd_float thresholdParameter = getParameter(effectData, Dynamics::Clip::Threshold)
       ->getInternalValue<simd_float>(sampleRate);
+    thresholdParameter = thresholdParameter * thresholdParameter * thresholdParameter;
     simd_float threshold = exp(lerp(log(simd_float::max(powerMinMax.first, 1e-36f)),
                                     log(simd_float::max(powerMinMax.second, 1e-36f)),
                                     simd_float{ 1.0f } - thresholdParameter));

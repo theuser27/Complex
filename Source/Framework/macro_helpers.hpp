@@ -63,4 +63,4 @@
 #define with_val(object, ...) \
   ([&](auto &temp________) -> decltype(auto) { COMPLEX_FOR_EACH(COMPLEX_INTERNAL_ITERATE, COMPLEX_IDENTITY, (temp________, ;), __VA_ARGS__); return temp________; }(object))
 
-#define test_enum(variable, flag) (((variable) & (flag)) == (flag))
+#define test_flag(variable, flag) (((variable) & (flag)) == (flag))

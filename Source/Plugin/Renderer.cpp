@@ -522,9 +522,9 @@ namespace Interface
       MouseEvent e;
       e.x = (i32)::round(event->button.x);
       e.y = (i32)::round(event->button.y);
-      e.mods |= test_enum(event->button.state, PUGL_MOD_SHIFT) ? ModifierKeys::shiftModifier : 0;
-      e.mods |= test_enum(event->button.state, PUGL_MOD_CTRL) ? ModifierKeys::ctrlModifier : 0;
-      e.mods |= test_enum(event->button.state, PUGL_MOD_ALT) ? ModifierKeys::altModifier : 0;
+      e.mods |= test_flag(event->button.state, PUGL_MOD_SHIFT) ? ModifierKeys::shiftModifier : 0;
+      e.mods |= test_flag(event->button.state, PUGL_MOD_CTRL) ? ModifierKeys::ctrlModifier : 0;
+      e.mods |= test_flag(event->button.state, PUGL_MOD_ALT) ? ModifierKeys::altModifier : 0;
       e.mods |= renderer->mouseButtonsDown_;
       e.mouseDownPosition = { e.x, e.y };
       e.directionX = (i8)utils::clamp(e.x - renderer->lastMousePosition_.x, -1, 1);
@@ -552,9 +552,9 @@ namespace Interface
       MouseEvent e;
       e.x = (i32)::round(event->motion.x);
       e.y = (i32)::round(event->motion.y);
-      e.mods |= test_enum(event->motion.state, PUGL_MOD_SHIFT) ? ModifierKeys::shiftModifier : 0;
-      e.mods |= test_enum(event->motion.state, PUGL_MOD_CTRL) ? ModifierKeys::ctrlModifier : 0;
-      e.mods |= test_enum(event->motion.state, PUGL_MOD_ALT) ? ModifierKeys::altModifier : 0;
+      e.mods |= test_flag(event->motion.state, PUGL_MOD_SHIFT) ? ModifierKeys::shiftModifier : 0;
+      e.mods |= test_flag(event->motion.state, PUGL_MOD_CTRL) ? ModifierKeys::ctrlModifier : 0;
+      e.mods |= test_flag(event->motion.state, PUGL_MOD_ALT) ? ModifierKeys::altModifier : 0;
       e.mods |= renderer->mouseButtonsDown_;
       e.mouseDownPosition = renderer->lastMouseDownPosition_;
       e.directionX = (i8)utils::clamp(e.x - renderer->lastMousePosition_.x, -1, 1);

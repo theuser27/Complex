@@ -553,7 +553,7 @@ namespace Framework
     float newNormalisedValue = normalisedValue_;
 
     // if there's a set hostControl set, then we're automating this parameter
-    if (!test_enum(details_.flags, ParameterDetails::AlwaysFromControl) && parameterLink_.hostControl)
+    if (!test_flag(details_.flags, ParameterDetails::AlwaysFromControl) && parameterLink_.hostControl)
       newNormalisedValue = parameterLink_.hostControl->getValue();
     else if (parameterLink_.UIControl)
       newNormalisedValue = (float)parameterLink_.UIControl->getValue();

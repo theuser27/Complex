@@ -71,7 +71,7 @@ namespace Interface
       }
 
       // taking care of children that conform to siblings' size
-      if (test_enum(child->sizingFlags, (isCalculatingVertical) ? Component::SameAsSiblingsY : Component::SameAsSiblingsX))
+      if (test_flag(child->sizingFlags, (isCalculatingVertical) ? Component::SameAsSiblingsY : Component::SameAsSiblingsX))
         sameAsSiblingsComponents.emplaceBack(child);
     }
 
@@ -105,7 +105,7 @@ namespace Interface
     sizes.min = utils::min(sizes.min, (i64)utils::int_max<i32>);
     sizes.max = utils::min(sizes.max, (i64)utils::int_max<i32>);
 
-    if (test_enum(component->sizingFlags, (isCalculatingVertical) ? Component::FixedY : Component::FixedX))
+    if (test_flag(component->sizingFlags, (isCalculatingVertical) ? Component::FixedY : Component::FixedX))
     {
       component->bounds.*minMember = component->desiredSize.*minMember;
       component->bounds.*maxMember = component->desiredSize.*maxMember;
@@ -114,12 +114,12 @@ namespace Interface
     {
       component->bounds.*minMember = utils::max((i32)sizes.min, component->desiredSize.*minMember);
 
-      if (test_enum(component->sizingFlags, (isCalculatingVertical) ? Component::SnapToMinY : Component::SnapToMinX))
+      if (test_flag(component->sizingFlags, (isCalculatingVertical) ? Component::SnapToMinY : Component::SnapToMinX))
         component->bounds.*maxMember = utils::min(component->bounds.*minMember, component->desiredSize.*maxMember);      
       else
         component->bounds.*maxMember = utils::clamp((i32)sizes.max, component->bounds.*minMember, component->desiredSize.*maxMember);
 
-      if (test_enum(component->sizingFlags, (isCalculatingVertical) ? Component::GrowableY : Component::GrowableX))
+      if (test_flag(component->sizingFlags, (isCalculatingVertical) ? Component::GrowableY : Component::GrowableX))
       {
         // if you have a scrollable parent and a growable child
         // along the same axis, the algorithm will fail spectacularly
@@ -130,7 +130,7 @@ namespace Interface
         component->bounds.*maxMember = utils::int_max<i32>;
       }
 
-      if (test_enum(component->sizingFlags, (isCalculatingVertical) ? Component::ScrollableY : Component::ScrollableX))
+      if (test_flag(component->sizingFlags, (isCalculatingVertical) ? Component::ScrollableY : Component::ScrollableX))
         component->bounds.*minMember = component->desiredSize.*minMember;
     }
 
@@ -154,7 +154,7 @@ namespace Interface
 
     // alogn the primary   axis SameAsSiblings must be zero, the parent will take care of it
     // along the secondary axis SameAsSiblings acts like Growable
-    //if (test_enum(component->sizingFlags, (isCalculatingVertical) ? Component::SameAsSiblingsY : Component::SameAsSiblingsX))
+    //if (test_flag(component->sizingFlags, (isCalculatingVertical) ? Component::SameAsSiblingsY : Component::SameAsSiblingsX))
     //  component->bounds.*maxMember = (component->componentFlags.isVertical ^ isCalculatingVertical) ? utils::int_max<i32> : 0;
 
     // add this component's padding to the total size
@@ -255,8 +255,8 @@ namespace Interface
     sizes.min = utils::min(sizes.min, (i64)utils::int_max<i32>);
     sizes.max = utils::min(sizes.max, (i64)utils::int_max<i32>);
 
-    bool skipResizingChildren = test_enum(component->sizingFlags, (isCalculatingVertical) ? Component::ScrollableY : Component::ScrollableX) &&
-      !test_enum(component->sizingFlags, (isCalculatingVertical) ? Component::SnapToMinY : Component::SnapToMinX);
+    bool skipResizingChildren = test_flag(component->sizingFlags, (isCalculatingVertical) ? Component::ScrollableY : Component::ScrollableX) &&
+      !test_flag(component->sizingFlags, (isCalculatingVertical) ? Component::SnapToMinY : Component::SnapToMinX);
     
     if (!skipResizingChildren && (!sortedMin.empty() && !sortedMax.empty()))
     {
@@ -268,7 +268,7 @@ namespace Interface
       i32 biggestMinSize;
       usize count;
       usize j = 0;
-      if (test_enum(component->sizingFlags, (isCalculatingVertical) ?
+      if (test_flag(component->sizingFlags, (isCalculatingVertical) ?
         Component::ScrollableSnapToMinY : Component::ScrollableSnapToMinX))
       {
         smallestMaxSize = 0;
@@ -336,7 +336,7 @@ namespace Interface
       }
     }
 
-    if (test_enum(component->sizingFlags, (isCalculatingVertical) ? Component::ScrollableY : Component::ScrollableX))
+    if (test_flag(component->sizingFlags, (isCalculatingVertical) ? Component::ScrollableY : Component::ScrollableX))
     {
       i32 *scrollableDirection = (isCalculatingVertical) ?
         &component->scrollableArea.h : &component->scrollableArea.w;
@@ -348,7 +348,7 @@ namespace Interface
         // which is already done, therefore we only need to update scrollable size
         // and update the position in case we've been shrunk
 
-        if (test_enum(component->sizingFlags, (isCalculatingVertical) ?
+        if (test_flag(component->sizingFlags, (isCalculatingVertical) ?
           Component::ScrollableSnapToMinY : Component::ScrollableSnapToMinX))
           *scrollableDirection = scaleValueRoundInt((float)(sizes.min + childrenMinSizes));
         else
@@ -403,9 +403,9 @@ namespace Interface
         component->bounds.h - padding.getBottom() };
     }
 
-    if (test_enum(component->sizingFlags, Component::ScrollableX))
+    if (test_flag(component->sizingFlags, Component::ScrollableX))
       boundsInTarget.x -= (i32)::roundf(component->scrollOffset.x);
-    if (test_enum(component->sizingFlags, Component::ScrollableY))
+    if (test_flag(component->sizingFlags, Component::ScrollableY))
       boundsInTarget.y -= (i32)::roundf(component->scrollOffset.y);
 
     auto Point<i32>:: *primary = (component->componentFlags.vertical) ? &Point<i32>::y : &Point<i32>::x;
@@ -718,11 +718,11 @@ namespace Interface
       scaledPadding.w, component->bounds.h - scaledPadding.getBottom() };
 
     component->componentFlags.isScrollbarXClicked = 
-      test_enum(component->sizingFlags, Component::ScrollableWithBarX) &&
+      test_flag(component->sizingFlags, Component::ScrollableWithBarX) &&
       component->scrollableArea.w > component->bounds.w && scrollBoundsX.contains(e.x, e.y);
 
     component->componentFlags.isScrollbarYClicked = 
-      test_enum(component->sizingFlags, Component::ScrollableWithBarY) &&
+      test_flag(component->sizingFlags, Component::ScrollableWithBarY) &&
       component->scrollableArea.h > component->bounds.h && scrollBoundsY.contains(e.x, e.y);
 
     initialScrollOffset = component->scrollOffset;
@@ -1169,7 +1169,7 @@ namespace Interface
       return percentExpand;
     };
 
-    if (test_enum(sizingFlags, Component::ScrollableWithBarX) && scrollableArea.w > bounds.w)
+    if (test_flag(sizingFlags, Component::ScrollableWithBarX) && scrollableArea.w > bounds.w)
     {
       Rectangle scrollBounds{ scaledPadding.x, bounds.h - scaledPadding.h,
         bounds.w - scaledPadding.getRight(), scaledPadding.h };
@@ -1189,7 +1189,7 @@ namespace Interface
         scrollBounds.getBottom() - width - 0.25f * scrollBounds.h, length, width };
     }
 
-    if (test_enum(sizingFlags, Component::ScrollableWithBarY) && scrollableArea.h > bounds.h)
+    if (test_flag(sizingFlags, Component::ScrollableWithBarY) && scrollableArea.h > bounds.h)
     {
       Rectangle scrollBounds{ bounds.w - scaledPadding.w, scaledPadding.y,
         scaledPadding.w, bounds.h - scaledPadding.getBottom() };

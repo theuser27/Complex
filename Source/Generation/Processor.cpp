@@ -34,7 +34,7 @@ namespace Generation
         parameter->previous = memory - 1;
         parameter->next = memory + 1;
 
-        ++otherParameter;
+        otherParameter = otherParameter->next;
         ++memory;
       }
 
