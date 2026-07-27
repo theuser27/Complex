@@ -172,6 +172,8 @@ namespace Plugin
 
     Thread &reserveFreeWorker(utils::typeInfo reservationTag);
 
+    void *getHotreloadSymbol(utils::string_view decoratedName);
+
     ComplexPlugin *plugin;
     Generation::SoundEngine *soundEngine = nullptr;
 
@@ -195,6 +197,7 @@ namespace Plugin
 
     utils::vector_map<uuid, Framework::IndexedData *> dynamicOptions{};
 
+    utils::vector_map<utils::string_view, void *> cachedHotreloadSymbols{};
     Framework::PluginStructure pluginStructure{};
 
     utils::bumpArena *processorStorage{};
@@ -203,4 +206,16 @@ namespace Plugin
 
     utils::vectornd<Thread> workers{};
   };
+
+#if COMPLEX_MSVC
+  #define COMPLEX_CHECK_HOTRELOAD(state, functionName, ...)         \
+    if (auto *symbol = (state)->getHotreloadSymbol(__FUNCDNAME__);  \
+      symbol && symbol != ((void *)&functionName))                  \
+    { return ((decltype(functionName) *)symbol)(__VA_ARGS__); }
+#else
+  #define COMPLEX_CHECK_HOTRELOAD(state, functionName, ...)         \
+    if (auto *symbol = (state)->getHotreloadSymbol(__func__);       \
+      symbol && symbol != ((void *)&functionName))                  \
+    { return ((decltype(functionName) *)symbol)(__VA_ARGS__); }
+#endif
 }

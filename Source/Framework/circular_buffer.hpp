@@ -39,7 +39,7 @@ namespace Framework
   };
 
   // the oldest sample in destination will be at index 0
-  strict_inline void copyCircular(Buffer &destination, const Buffer &other, u32 otherEnd)
+  forceinline void copyCircular(Buffer &destination, const Buffer &other, u32 otherEnd)
   {
     if (other.channels == 0 || other.size == 0 || 
       destination.channels == 0 || destination.size == 0)

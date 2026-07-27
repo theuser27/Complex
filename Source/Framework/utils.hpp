@@ -29,41 +29,41 @@ namespace utils
       return (size + upper - lower) % size;
   }
 
-  strict_inline double 
+  forceinline double 
   amplitudeToDb(double amplitude)
   { return 20.0 * ::log10(amplitude); }
 
-  strict_inline double 
+  forceinline double 
   dbToAmplitude(double decibels) 
   { return ::pow(10.0, decibels / 20.0); }
 
-  strict_inline double 
+  forceinline double 
   normalisedToDb(double normalised, double maxDb) 
   { return ::pow(maxDb + 1.0, normalised) - 1.0; }
 
-  strict_inline double 
+  forceinline double 
   dbToNormalised(double db, double maxDb) 
   { return ::log2(db + 1.0) / ::log2(maxDb + 1.0); }
 
-  strict_inline double 
+  forceinline double 
   normalisedToFrequency(double normalised, double sampleRate) 
   { return ::pow(sampleRate * 0.5 / kMinFrequency, normalised) * kMinFrequency; }
 
-  strict_inline double 
+  forceinline double 
   frequencyToNormalised(double frequency, double sampleRate) 
   { return ::log2(frequency / kMinFrequency) / ::log2(sampleRate * 0.5 / kMinFrequency); }
 
   // returns the proper bin which may also be nyquist, which is outside a power-of-2 
-  strict_inline double 
+  forceinline double 
   normalisedToBinUnsafe(double normalised, u32 FFTSize, double sampleRate) 
   { return ::round(normalisedToFrequency(normalised, sampleRate) / sampleRate * (double)FFTSize); }
 
   // always returns a bin < FFTSize, therefore cannot return nyquist
-  strict_inline double 
+  forceinline double 
   normalisedToBinSafe(double normalised, u32 FFTSize, double sampleRate) 
   { return min(normalisedToBinUnsafe(normalised, FFTSize, sampleRate), (double)FFTSize / 2.0 - 1.0); }
 
-  strict_inline double 
+  forceinline double 
   binToNormalised(double bin, u32 FFTSize, double sampleRate) 
   {
     // at 0 logarithm doesn't produce valid values
@@ -72,31 +72,31 @@ namespace utils
     return frequencyToNormalised(bin * sampleRate / (double)FFTSize, sampleRate);
   }
 
-  strict_inline double 
+  forceinline double 
   centsToRatio(double cents) 
   { return ::pow(2.0, cents / (double)kCentsPerOctave); }
 
-  strict_inline double 
+  forceinline double 
   midiCentsToFrequency(double cents) 
   { return kMidi0Frequency * centsToRatio(cents); }
 
-  strict_inline double 
+  forceinline double 
   midiNoteToFrequency(double note) 
   { return midiCentsToFrequency(note * kCentsPerNote); }
 
-  strict_inline double 
+  forceinline double 
   frequencyToMidiNote(double frequency) 
   { return (double)kNotesPerOctave * ::log(frequency / kMidi0Frequency) * kExpConversionMult; }
 
-  strict_inline double 
+  forceinline double 
   frequencyToMidiCents(double frequency) 
   { return kCentsPerNote * frequencyToMidiNote(frequency); }
 
-  strict_inline float 
+  forceinline float 
   nextPowerOfTwo(float value) 
   { return ::roundf(::powf(2.0f, ::ceilf(::logf(value) * kExpConversionMult))); }
 
-  strict_inline i32 
+  forceinline i32 
   prbs32(i32 x) 
   {
     // maximal length, taps 32 31 29 1, from wikipedia
@@ -136,6 +136,9 @@ namespace utils
   public:
     Dylib(const char *fullPath);
     ~Dylib();
+
+    void *getSymbol(utils::string_view decoratedName) const;
+
     void *handle;
   };
 
@@ -1195,6 +1198,86 @@ namespace const_math
   template<typename T>
   inline constexpr auto EPSILON = T(0.001);
 
+  template<typename T>
+  constexpr T
+  abs(T x)
+  {
+    if (x == T(0))
+      return T(0);
+    return (x < T(0)) ? -x : x;
+  }
+
+  template<typename T>
+  constexpr T 
+  min()
+  {
+    if constexpr (utils::is_same_v<T, float>)
+      return 1.175494351e-38F;
+    else if constexpr (utils::is_same_v<T, double>)
+      return 2.2250738585072014e-308;
+    else
+    {
+      // we do not handle other types here
+    }
+  }
+
+  template<typename T>
+  constexpr T 
+  max()
+  {
+    if constexpr (utils::is_same_v<T, float>)
+      return 3.402823466e+38F;
+    else if constexpr (utils::is_same_v<T, double>)
+      return 1.7976931348623158e+308;
+    else
+    {
+      // we do not handle other types here
+    }
+  }
+
+  template<typename T>
+  constexpr T 
+  infinity()
+  {
+    if constexpr (utils::is_same_v<T, float>)
+      return __builtin_huge_valf();
+    else if constexpr (utils::is_same_v<T, double>)
+      return __builtin_huge_val();
+    else
+    {
+      // we do not handle other types here
+    }
+  }
+
+  template<typename T>
+  constexpr bool is_nan(const T x) { return x != x; }
+
+
+  template<typename T>
+  constexpr T 
+  quiet_nan()
+  {
+    if constexpr (utils::is_same_v<T, float>)
+      return __builtin_nanf("0");
+    else if constexpr (utils::is_same_v<T, double>)
+      return __builtin_nan("0");
+    else
+    {
+      // we do not handle other types here
+    }
+  }
+
+  template<typename T> 
+  constexpr T 
+  sqrt(T x)
+  {
+    auto g = T(1);
+    while (abs(g - x / g) >= EPSILON<T>)
+      g = (g + x / g) / 2;
+
+    return g;
+  }
+
   template<typename T> 
   constexpr T
   sin(T x) 
@@ -1261,71 +1344,44 @@ namespace const_math
   }
 
   template<typename T>
-  constexpr bool is_nan(const T x) { return x != x; }
-
-
-  template<typename T>
-  constexpr T quiet_nan()
-  {
-    if constexpr (utils::is_same_v<T, float>)
-      return __builtin_nanf("0");
-    else if constexpr (utils::is_same_v<T, double>)
-      return __builtin_nan("0");
-    else
-    {
-      // we do not handle other types here
-    }
-  }
-
-  template<typename T>
   constexpr T
-  abs(T x)
+  log_helper(T x)
   {
-    if (x == T(0))
-      return T(0);
-    return (x < T(0)) ? -x : x;
+    auto y = (x - 1) / (x + 1);
+    return T(2) * (y + pow(y, 3) / 3 + pow(y, 5) / 5 + pow(y, 7) / 7 + pow(y, 9) / 9 + pow(y, 11) / 11);
   }
 
-  template<typename T>
+  template <typename T>
   constexpr T 
-  min()
+  log(T x)
   {
-    if constexpr (utils::is_same_v<T, float>)
-      return 1.175494351e-38F;
-    else if constexpr (utils::is_same_v<T, double>)
-      return 2.2250738585072014e-308;
-    else
-    {
-      // we do not handle other types here
-    }
-  }
+    if (x == 0)
+      return -infinity<T>();
+    if (x < 0)
+      return quiet_nan<T>();
 
-  template<typename T>
-  constexpr T 
-  max()
-  {
-    if constexpr (utils::is_same_v<T, float>)
-      return 3.402823466e+38F;
-    else if constexpr (utils::is_same_v<T, double>)
-      return 1.7976931348623158e+308;
-    else
+    int exponent = 0;
+    while (true)
     {
-      // we do not handle other types here
+      if (x >= 10)
+      {
+        x /= 10;
+        ++exponent;
+      }
+      else if (x < 1)
+      {
+        x *= 10;
+        --exponent;
+      }
+      else 
+        break;
     }
-  }
 
-  template<typename T>
-  constexpr T 
-  infinity()
-  {
-    if constexpr (utils::is_same_v<T, float>)
-      return __builtin_huge_valf();
-    else if constexpr (utils::is_same_v<T, double>)
-      return __builtin_huge_val();
-    else
-    {
-      // we do not handle other types here
-    }
+    x = sqrt(x);
+    x = (x - 1) / (x + 1);
+    x = T(2) * (x + pow(x, 3) / 3 + pow(x, 5) / 5 + pow(x, 7) / 7 + pow(x, 9) / 9 + pow(x, 11) / 11);
+
+	  return T(2) * x + T(2.3025851) * T(exponent);
   }
 
   template<typename T>

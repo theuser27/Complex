@@ -20,7 +20,7 @@ namespace utils
   // { real, imaginary, real, imaginary } and { magnitude, phase, magnitude, phase } respectively
 
   // cos and sin
-  strict_inline utils::pair<simd_float, simd_float> vector_call 
+  forceinline utils::pair<simd_float, simd_float> vectorcall 
   cossin(simd_float radians)
   {
     // split pi / 2 into multiple parts to take advantage of the
@@ -77,7 +77,7 @@ namespace utils
   }
 
   // [cos(angle[0]), sin(angle[1]), cos(angle[2]), sin(angle[3])]
-  strict_inline simd_float vector_call 
+  forceinline simd_float vectorcall 
   cis(simd_float angle)
   {
     // split pi / 2 into multiple parts to take advantage of the
@@ -122,9 +122,9 @@ namespace utils
     return values;
   }
 
-  strict_inline simd_float vector_call sin(simd_float radians) { return cossin(radians).second; }
-  strict_inline simd_float vector_call cos(simd_float radians) { return cossin(radians).first; }
-  strict_inline simd_float vector_call 
+  forceinline simd_float vectorcall sin(simd_float radians) { return cossin(radians).second; }
+  forceinline simd_float vectorcall cos(simd_float radians) { return cossin(radians).first; }
+  forceinline simd_float vectorcall 
   tan(simd_float radians)
   {
   #ifdef COMPLEX_INTEL_SVML
@@ -135,7 +135,7 @@ namespace utils
   #endif
   }
 
-  strict_inline simd_float vector_call 
+  forceinline simd_float vectorcall 
   atan2(simd_float y, simd_float x)
   {
   #ifndef COMPLEX_INTEL_SVML
@@ -169,14 +169,14 @@ namespace utils
   }
 
   // magnitude and phase
-  strict_inline utils::pair<simd_float, simd_float> vector_call 
+  forceinline utils::pair<simd_float, simd_float> vectorcall 
   phasor(simd_float real, simd_float imaginary)
   {
     auto magnitude = simd_float::sqrt(simd_float::mulAdd(real * real, imaginary, imaginary));
     return { magnitude, atan2(imaginary, real) };
   }
 
-  strict_inline simd_float vector_call 
+  forceinline simd_float vectorcall 
   complexCartMul(simd_float one, simd_float two)
   {
     // [a1c1, a1d1, a2c2, a2d2]
@@ -194,11 +194,11 @@ namespace utils
   #endif
   }
 
-  strict_inline simd_float vector_call 
+  forceinline simd_float vectorcall 
   complexPolarMul(simd_float one, simd_float two)
   { return merge(one * two, one + two, kPhaseMask); }
 
-  strict_inline simd_float vector_call 
+  forceinline simd_float vectorcall 
   complexMagnitude(simd_float value, bool toSqrt)
   {
     value *= value;
@@ -206,7 +206,7 @@ namespace utils
     return (toSqrt) ? simd_float::sqrt(value) : value;
   }
 
-  strict_inline simd_float vector_call 
+  forceinline simd_float vectorcall 
   complexMagnitude(const utils::array<simd_float, simd_float::complexSize> &values, bool toSqrt)
   {
     simd_float one = values[0] * values[0];
@@ -215,7 +215,7 @@ namespace utils
     return (toSqrt) ? simd_float::sqrt(one) : one;
   }
 
-  strict_inline simd_float vector_call 
+  forceinline simd_float vectorcall 
   complexPhase(simd_float value)
   {
     simd_float real = copyFromEven(value);
@@ -224,7 +224,7 @@ namespace utils
     return atan2(imaginary, real);
   }
 
-  strict_inline simd_float vector_call 
+  forceinline simd_float vectorcall 
   complexPhase(const utils::array<simd_float, simd_float::complexSize> &values)
   {
   #if COMPLEX_SSE4_1
@@ -238,7 +238,7 @@ namespace utils
     return atan2(imaginary, real);
   }
 
-  strict_inline simd_float vector_call 
+  forceinline simd_float vectorcall 
   complexReal(simd_float value)
   {
     simd_float magnitude = copyFromEven(value);
@@ -247,7 +247,7 @@ namespace utils
     return magnitude * cos(phase);
   }
 
-  strict_inline simd_float vector_call 
+  forceinline simd_float vectorcall 
   complexImaginary(simd_float value)
   {
     simd_float magnitude = copyFromEven(value);
@@ -256,7 +256,7 @@ namespace utils
     return magnitude * sin(phase);
   }
 
-  strict_inline void vector_call complexValueMerge(simd_float &one, simd_float &two)
+  forceinline void vectorcall complexValueMerge(simd_float &one, simd_float &two)
   {
   #if COMPLEX_SSE4_1
     auto one_ = _mm_unpacklo_ps(one.value, two.value);
@@ -269,7 +269,7 @@ namespace utils
   #endif
   }
 
-  strict_inline void vector_call complexCartToPolar(simd_float &one, simd_float &two)
+  forceinline void vectorcall complexCartToPolar(simd_float &one, simd_float &two)
   {
   #if COMPLEX_SSE4_1
     simd_float real = _mm_shuffle_ps(one.value, two.value, _MM_SHUFFLE(2, 0, 2, 0));
@@ -284,7 +284,7 @@ namespace utils
     two = phase;
   }
 
-  strict_inline void vector_call complexPolarToCart(simd_float &one, simd_float &two)
+  forceinline void vectorcall complexPolarToCart(simd_float &one, simd_float &two)
   {
   #if COMPLEX_SSE4_1
     simd_float phases = _mm_shuffle_ps(one.value, two.value, _MM_SHUFFLE(3, 1, 3, 1));
@@ -300,7 +300,7 @@ namespace utils
   }
 
   template<auto ConversionFunction>
-  strict_inline void convertBuffer(const Framework::SimdBuffer *source,
+  forceinline void convertBuffer(const Framework::SimdBuffer *source,
     Framework::SimdBuffer *destination, usize size)
   {
     auto rawSource = source->get();
@@ -327,24 +327,23 @@ namespace utils
   }
 
   template<auto ConversionFunction>
-  strict_inline void convertBufferInPlace(Framework::SimdBuffer *buffer, usize size)
+  forceinline void convertBufferInPlace(Framework::SimdBuffer *buffer, usize size)
   {
-    auto data = buffer->get();
-    usize dataSize = buffer->size;
-
-    for (usize i = 0; i < buffer->getSimdChannels(); i++)
+    for (u32 i = 0; i < buffer->getSimdChannels(); ++i)
     {
-      auto dc = data[dataSize * i];
-      // size - 1 to skip nyquist since it doesn't need to change
+      auto data = buffer->get(i);
       for (usize j = 0; j < size - 1; j += 2)
       {
-        simd_float one = data[dataSize * i + j];
-        simd_float two = data[dataSize * i + j + 1];
+        simd_float one = data[j];
+        simd_float two = data[j + 1];
         ConversionFunction(one, two);
-        data[dataSize * i + j] = one;
-        data[dataSize * i + j + 1] = two;
+        data[j] = one;
+        data[j + 1] = two;
       }
-      data[dataSize * i] = dc;
+      simd_float nyquist = data[size - 1];
+      simd_float dummy{};
+      ConversionFunction(nyquist, dummy);
+      data[size - 1] = nyquist;
     }
   }
 }

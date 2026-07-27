@@ -46,7 +46,7 @@ namespace Interface
     };
   }
 
-  static strict_inline Colour
+  static forceinline Colour
   premultiply(Colour c)
   {
     if (c.a < 0xff)
@@ -68,7 +68,7 @@ namespace Interface
     return c;
   }
 
-  static strict_inline Colour
+  static forceinline Colour
   unpremultiply(Colour c)
   {
     if (c.a < 0xff)
@@ -90,7 +90,7 @@ namespace Interface
     return c;
   }
 
-  static strict_inline Colour 
+  static forceinline Colour 
   tween(Colour one, Colour two, u32 amount)
   {
     u32 c1 = utils::bit_cast<u32>(one);

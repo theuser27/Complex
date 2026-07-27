@@ -16,6 +16,12 @@ namespace common
   inline constexpr u32 kFloatExponentMask = 0x7f800000U;
   inline constexpr u32 kFloatExponentUnit = 1 << 23;
   inline constexpr u32 kNotFloatExponentMask = ~kFloatExponentMask;
+  inline constexpr float kFloatInf =
+  #if COMPLEX_MSVC
+    __builtin_huge_valf();
+  #else
+    __builtin_inff();
+  #endif
   inline constexpr float kInvPi = 1.0f / kPi;
   inline constexpr float kInv2Pi = 1.0f / k2Pi;
   inline constexpr double kDefaultSampleRate = 44100.0;
@@ -53,7 +59,7 @@ namespace common
 
   // GUI constants
   inline constexpr float kWindowScaleIncrements = 0.25f;
-  inline constexpr float kMinWindowScaleFactor = 0.5f;
+  inline constexpr float kMinWindowScaleFactor = 1.0f;
   inline constexpr float kMaxWindowScaleFactor = 3.0f;
   inline constexpr int kParameterUpdateIntervalHz = 60;
 

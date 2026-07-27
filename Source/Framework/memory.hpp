@@ -71,13 +71,13 @@ namespace utils
     bumpArena *nextArena{};
 
     static usize getUsedSize(bumpArena *arena);
-    static strict_inline bumpArena *
+    static forceinline bumpArena *
     fromAllocation(const void *data)
     {
       auto *node = utils::launder((bumpArena::node *)((byte *)data - sizeof(bumpArena::node)));
       return utils::launder((bumpArena *)((byte *)node - node->offsetToArena));
     }
-    static strict_inline usize
+    static forceinline usize
     getAllocationSize(const void *data)
     {
       auto *node = utils::launder((bumpArena::node *)((byte *)data - sizeof(bumpArena::node)));
@@ -85,7 +85,7 @@ namespace utils
     }
 
     [[nodiscard]] static byte *insert(bumpArena *arena, usize size, usize alignment, bool clean = false);
-    [[nodiscard]] static strict_inline byte *
+    [[nodiscard]] static forceinline byte *
     insert(const void *data, usize size, usize alignment, bool clean = false)
     {
       return insert(fromAllocation(data), size, alignment, clean);
@@ -94,7 +94,7 @@ namespace utils
     [[nodiscard]] static byte *resize(const void *data, usize newSize, bool cleanNewSpace = false);
     static void shrinkToFit(bumpArena *arena, bool shrinkToCommitted);
 
-    [[nodiscard]] static strict_inline bumpArena *
+    [[nodiscard]] static forceinline bumpArena *
     create(usize reservedSize = COMPLEX_MB(64), usize commitSize = COMPLEX_KB(64))
     {
       reservedSize = utils::clamp(reservedSize, sizeof(bumpArena), usize(u32(-1)) + 1);
@@ -109,7 +109,7 @@ namespace utils
         .committedSize = (u32)(commitSize - 1), .freeNodeStart = (u32)sizeof(bumpArena) };
     }
     template<typename T>
-    [[nodiscard]] static strict_inline bumpArena *
+    [[nodiscard]] static forceinline bumpArena *
     createNested(T *differentArena, usize allocateSize) requires requires { T::insert(differentArena, usize(0), usize(0)); }
     {
       allocateSize = utils::min(allocateSize + sizeof(bumpArena), usize(u32(-1)) + 1);
@@ -199,12 +199,12 @@ namespace utils
       utils::sourceLocation location = utils::sourceLocation::current()) : location{ location },
       vtable{ vtable }, allocator{ allocator }, freeingDestructor{ freeingDestructor } { }
 
-    [[nodiscard]] strict_inline byte *
+    [[nodiscard]] forceinline byte *
     insert(usize size, usize alignment, bool clean = true) const
     { return vtable->insert(allocator, size, alignment, clean); }
-    strict_inline void remove(const void *allocation) const { if (allocation) vtable->remove(allocation); }
-    strict_inline Allocator fromAllocation(const void *allocation) const { return vtable->fromAllocation(allocation); }
-    strict_inline AllocatorType type() const { return vtable->type; }
+    forceinline void remove(const void *allocation) const { if (allocation) vtable->remove(allocation); }
+    forceinline Allocator fromAllocation(const void *allocation) const { return vtable->fromAllocation(allocation); }
+    forceinline AllocatorType type() const { return vtable->type; }
 
     static constexpr Allocator fromType(AllocatorType type) { return { &allocatorTable[(usize)type], nullptr }; }
 
@@ -648,9 +648,10 @@ namespace utils
       auto [iter, wasFound] = binary_search(data, key, [](const auto &element, const auto &test) { return element == test.first; });
       if (wasFound)
       {
-        // find the last element with this key and insert the new element thereafter
-        while (iter != data.begin() && iter->first == key)
-          --iter;
+        for (auto nextIter = iter - 1; 
+          nextIter != data.end() && nextIter->first == key; 
+          (iter = nextIter), (--nextIter)) { }
+
         if (iter->first == key)
           return iter;
       }
@@ -659,10 +660,14 @@ namespace utils
 
     constexpr auto get_last_of(const Key &key)
     {
-      auto [iter, _] = binary_search(data, key, [](const auto &element, const auto &test) { return element == test.first; });
-      // find the last element with this key and insert the new element thereafter
-      while (iter != data.end() && iter->first == key)
-        ++iter;
+      auto [iter, wasFound] = binary_search(data, key, [](const auto &element, const auto &test) { return element == test.first; });
+      if (wasFound)
+      {
+        for (auto nextIter = iter + 1; 
+          nextIter != data.end() && nextIter->first == key; 
+          (iter = nextIter), (++nextIter)) { }
+      }
+
       return iter;
     }
 

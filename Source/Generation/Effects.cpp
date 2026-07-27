@@ -192,7 +192,7 @@ namespace Generation
 
     // if the mix is 100% for all channels, we can skip mixing entirely
     simd_float wetMix = getParameter(ModuleMix)->getInternalValue<simd_float>(sampleRate);
-    if (wetMix != 1.0f)
+    if (!simd_float::allEqual(wetMix, 1.0f))
     {
       auto sourceData = source.sourceBuffer->get();
       auto destinationData = dataBuffer->get();

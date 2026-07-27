@@ -55,6 +55,9 @@
   #include "Third Party/cplug/cplug_vst3.c"
 #endif
 
+#define XHL_FILES_IMPL
+#include "Third Party/xhl/xhl_files.h"
+
 #ifdef _MSC_VER
   #pragma warning (pop)
 #else
@@ -82,9 +85,6 @@
   #include "Third Party/pugl/src/mac.m"
   #include "Third Party/pugl/src/mac_gl.m"
 #endif
-
-#define XHL_FILES_IMPL
-#include "Third Party/xhl/xhl_files.h"
 
 #define STB_SPRINTF_IMPLEMENTATION
 #include "Third Party/stb/stb_sprintf.h"

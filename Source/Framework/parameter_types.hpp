@@ -10,6 +10,7 @@
 namespace Plugin
 {
   struct State;
+  struct ComplexPlugin;
 }
 
 namespace utils
@@ -411,6 +412,15 @@ namespace Framework
     }
   };
 
+  struct ExecutableStaticData
+  {
+    utils::LockBlame<i32> readWriteLock{};
+    Framework::PluginStructure structure{};
+    utils::bumpArena *stringArena{};
+    utils::sll<utils::string_view> *strings{};
+    utils::sll<Plugin::ComplexPlugin> *pluginInstances{};
+  };
+
   inline usize printToggleValues(char *string, usize size, double value, const ParameterDetails &)
   {
     static constexpr utils::string_view toggleStrings[] = { "Off", "On" };
@@ -420,6 +430,8 @@ namespace Framework
     return size;
   }
 }
+
+extern Framework::ExecutableStaticData executableStaticData;
 
 #define COMPLEX_STRUCTURE_PARAMETER(...) (*anew(arena, Framework::ParameterMetadata, { .details = { __VA_ARGS__ } }))
 #define COMPLEX_STRUCTURE_PARAMETER_CUSTOM(...) (__VA_ARGS__(*anew(arena, Framework::ParameterMetadata, {})))

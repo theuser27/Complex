@@ -72,10 +72,10 @@
 
 
 #if COMPLEX_MSVC
-  // strict_inline is used when something absolutely needs to be inlined
-  #define strict_inline __forceinline
-  #define no_inline __declspec(noinline)
-  #define vector_call __vectorcall
+  #define forceinline __forceinline
+  #define noinline __declspec(noinline)
+  #define vectorcall __vectorcall
+  #define hotreloadable __declspec(dllexport)
 
   #define COMPLEX_NO_FAST_MATH_BEGIN _Pragma("float_control(precise, on)")
   #define COMPLEX_NO_FAST_MATH_END _Pragma("float_control(precise, off)")
@@ -88,7 +88,7 @@
   extern "C" __declspec(noreturn) void __fastfail(unsigned int code);
   #pragma intrinsic(__fastfail)
 
-  namespace common { [[noreturn]] strict_inline void fail_fast() { ::__fastfail(7 /*FAST_FAIL_FATAL_APP_EXIT*/); } }
+  namespace common { [[noreturn]] forceinline void fail_fast() { ::__fastfail(7 /*FAST_FAIL_FATAL_APP_EXIT*/); } }
   #define COMPLEX_TRAP() ::common::fail_fast()
 
   #if COMPLEX_X64
@@ -103,10 +103,10 @@
     #define COMPLEX_INTEL_SVML
   #endif
 #else
-  // strict_inline is used when something absolutely needs to be inlined
-  #define strict_inline inline __attribute__((always_inline))
-  #define no_inline __attribute__ ((noinline))
-  #define vector_call
+  #define forceinline inline __attribute__((always_inline))
+  #define noinline __attribute__ ((noinline))
+  #define vectorcall
+  #define hotreloadable extern "C" __attribute__((visibility("default")))
 
   #define COMPLEX_NO_FAST_MATH_BEGIN _Pragma("GCC push_options") _Pragma("GCC optimize (\"no-fast-math\")")
   #define COMPLEX_NO_FAST_MATH_END _Pragma("GCC pop_options")
@@ -125,6 +125,9 @@
 
 
 #if COMPLEX_DEBUG
+  #undef forceinline
+  #define forceinline inline
+
   #if COMPLEX_MSVC
     extern "C" void __cdecl __debugbreak(void);
     #define COMPLEX_DEBUG_TRAP() __debugbreak()
@@ -146,7 +149,7 @@
   #define COMPLEX_ASSERT_FALSE(...) (void)(::common::complexPrintAssertMessage(nullptr, \
     __FILE__, __func__, __LINE__ __VA_OPT__(, true,) __VA_ARGS__), COMPLEX_DEBUG_TRAP(), false)
 #else
-  #define COMPLEX_DEBUG_TRAP ((void)0)
+  #define COMPLEX_DEBUG_TRAP() ((void)0)
   #define COMPLEX_LOG(...) ((void)0)
   #define COMPLEX_DEBUG_LOG(...) ((void)0)
   #define COMPLEX_ASSERT(...) ((void)0)

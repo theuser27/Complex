@@ -62,7 +62,7 @@ void ctrl_c_callback(int code)
     g_running = 0;
 }
 
-void my_cb(enum XFILES_WATCH_TYPE type, const char* path, void* udata)
+void cb_onfilechange(enum XFILES_WATCH_TYPE type, const char* path, void* udata)
 {
     switch (type)
     {
@@ -89,10 +89,10 @@ int main()
     g_running = 1;
     signal(SIGINT, ctrl_c_callback);
     // setup event queue
-    xfiles_watch_context_t ctx = xfiles_watch_create("/path/to/directory", NULL, my_cb);
+    xfiles_watch_context_t ctx = xfiles_watch_create("/path/to/directory", NULL, cb_onfilechange);
     while (g_running)
     {
-        xfiles_watch_flush(ctx); // poll for items in queue, trigger my_cb()
+        xfiles_watch_flush(ctx); // poll for items in queue, trigger cb_onfilechange()
         Sleep(50); // Windows, sleep 50ms
         usleep(50000) // Unix, sleep 50ms
     }
@@ -108,7 +108,7 @@ int main()
 #include <stdio.h>
 #include <xhl/files.h>
 
-void my_cb(void* data, const xfiles_list_item_t* item)
+void cb_onfile(void* data, const xfiles_list_item_t* item)
 {
     const char* name = item->path + item->name_idx;
     if (strcmp(name, ".") == 0 || strcmp(name, "..") == 0)
@@ -117,7 +117,7 @@ void my_cb(void* data, const xfiles_list_item_t* item)
     fprintf(stderr, "Entry: %s\n", item->path);
     if (item->is_dir)
     {
-        xfiles_list(item->path, data, my_cb);
+        xfiles_list(item->path, data, cb_onfile);
     }
     else
     {
@@ -129,16 +129,18 @@ void my_cb(void* data, const xfiles_list_item_t* item)
 int main()
 {
     int file_counter = 0;
-    xfiles_list("/path/to/directory", &file_counter, my_cb);
+    xfiles_list("/path/to/directory", &file_counter, cb_onfile);
     fprintf(stderr, "Found %d files\n", file_counter);
     return 0;
 }
 #endif // Example program 2: Recursive file searching
 
-#pragma once
+#ifndef XHL_FILES_H
+#define XHL_FILES_H
 
 #include <stdbool.h>
 #include <stddef.h>
+#include <stdint.h>
 
 #ifdef _WIN32
 #define XFILES_DIR_STR      "\\"
@@ -186,7 +188,9 @@ const char* xfiles_get_extension(const char* name);
 
 // Returns true if directory or file exists
 bool xfiles_exists(const char* path);
-// Returns true if directory was created
+// Returns true if directory, false in any other case
+bool xfiles_is_directory(const char* path);
+// Returns true if directory was created, or if it already exists
 bool xfiles_create_directory(const char* path);
 // Creates directory and any required parent directories, then returns true if the exists or was craeted.
 bool xfiles_create_directory_recursive(const char* path);
@@ -219,7 +223,7 @@ bool xfiles_open_file_explorer(const char* path);
 // OSX: Finder
 bool xfiles_select_in_file_explorer(const char* path);
 
-enum XFILES_USER_DIRECTORY
+typedef enum XFilesUserDirectory
 {
     // Windows: {letter}:\\Users\\{username}
     // macOS: /Users/{username}
@@ -234,10 +238,66 @@ enum XFILES_USER_DIRECTORY
     XFILES_USER_DIRECTORY_PICTURES,
     XFILES_USER_DIRECTORY_VIDEOS,
     XFILES_USER_DIRECTORY_COUNT,
-};
+} XFilesUserDirectory;
 
 // Returns number of bytes written to 'char* out', excluding the null terminating byte
-int xfiles_get_user_directory(char* out, size_t outlen, enum XFILES_USER_DIRECTORY loc);
+int xfiles_get_user_directory(char* out, size_t outlen, XFilesUserDirectory loc);
+
+typedef enum XFilesMetadataType
+{
+    XFILES_METADATA_TYPE_UNKNOWN = 0,
+    XFILES_METADATA_TYPE_FILE,
+    XFILES_METADATA_TYPE_DIRECTORY,
+    XFILES_METADATA_TYPE_SYMLINK,
+    XFILES_METADATA_TYPE_BLOCK_DEVICE,
+    XFILES_METADATA_TYPE_CHAR_DEVICE,
+    XFILES_METADATA_TYPE_FIFO,
+    XFILES_METADATA_TYPE_SOCKET
+} XFilesMetadataType;
+
+typedef struct XFilesMetadata
+{
+    int                last_error; // errno on macOS, GetLastError() on Windows
+    XFilesMetadataType type;
+
+    uint64_t size_bytes;
+
+    // Convenience
+    bool is_readonly;
+    bool is_hidden;
+    bool is_system;
+    bool is_archive;    // Windows only, its for backing up files
+    bool is_compressed; // (UF_COMPRESSED, FILE_ATTRIBUTE_COMPRESSED). Not to be confused with zip/7z/tar/gz/rar
+    bool is_encrypted;
+    bool is_executable; // +x user permissions on posix. Lazy extension checking on Windwos
+    bool is_symlink;
+
+    // Unix epoch times in nanoseconds
+    uint64_t creation_time_ns;      // File creation time (birthtime / CreationTime)
+    uint64_t modification_time_ns;  // Last write time (mtime / LastWriteTime)
+    uint64_t access_time_ns;        // Last access time (atime / LastAccessTime)
+    uint64_t status_change_time_ns; // POSIX ctime (macOS only, 0 on Windows)
+
+    // Stuff you probably dont want
+
+    // Might get rid of this. Can't imagine a use for it
+    uint64_t file_index;           // (st_ino / (nFileIndexHigh << 32 | nFileSizeLow))
+    uint32_t num_links;            // (st_nlink / nNumberOfLinks)
+    uint32_t volume_serial_number; // (st_dev / dwVolumeSerialNumber)
+
+    // Windows fields you might want
+    uint32_t _dwFileAttributes; // BY_HANDLE_FILE_INFORMATION.dwFileAttributes
+    uint32_t _dwReparseTag;     // FILE_ATTRIBUTE_TAG_INFO.ReparseTag
+
+    // POSIX fields (stat64) you might want
+    uint32_t _st_mode;    // File mode bits (POSIX)
+    uint32_t _st_blksize; // Preferred I/O block size
+    uint64_t _st_blocks;  // Number of 512-byte blocks allocated
+    uint32_t _st_flags;   // User-defined flags (macOS BSD flags)
+    uint32_t _st_gen;     // File generation number (macOS)
+} XFilesMetadata;
+
+XFilesMetadata xfiles_get_metadata(const char* path);
 
 typedef struct xfiles_list_item_t
 {
@@ -275,13 +335,6 @@ void xfiles_watch_destroy(xfiles_watch_context_t ctx);
 #ifdef XHL_FILES_IMPL
 
 #ifdef _WIN32
-
-#define WIN32_LEAN_AND_MEAN
-#define NOMINMAX
-#define NOMCX
-#define NOIME
-#define NOSERVICE
-#define NOCRYPT
 #include <Windows.h>
 
 #include <Shlobj.h>
@@ -305,6 +358,22 @@ bool xfiles_exists(const char* path)
     return false;
 }
 
+bool xfiles_is_directory(const char* path)
+{
+    bool  is_directory = false;
+    DWORD attr         = 0;
+    WCHAR WPath[MAX_PATH];
+    int   num = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, path, -1, WPath, ARRAYSIZE(WPath));
+    if (num)
+    {
+        // https://learn.microsoft.com/en-us/windows/win32/api/fileapi/nf-fileapi-getfileattributesw
+        attr = GetFileAttributesW(WPath);
+    }
+    if ((attr & FILE_ATTRIBUTE_DIRECTORY) && attr != INVALID_FILE_ATTRIBUTES)
+        is_directory = true;
+    return is_directory;
+}
+
 bool xfiles_create_directory(const char* path)
 {
     // https://learn.microsoft.com/en-us/windows/win32/api/fileapi/nf-fileapi-createdirectoryw
@@ -313,9 +382,20 @@ bool xfiles_create_directory(const char* path)
     XFILES_ASSERT(num);
     if (num)
     {
-        BOOL ok = CreateDirectoryW(DirPath, 0);
-        XFILES_ASSERT(ok);
-        return ok;
+        BOOL ret = CreateDirectoryW(DirPath, 0);
+
+        if (ret) // any non-zero is a success
+        {
+            return true;
+        }
+        else
+        {
+            DWORD err = GetLastError();
+            if (err == ERROR_ALREADY_EXISTS)
+                return true; // close enough to "created a directory"
+            if (err == ERROR_PATH_NOT_FOUND)
+                return false;
+        }
     }
     return false;
 }
@@ -339,12 +419,21 @@ bool xfiles_read(const char* path, void** out, size_t* outlen)
         hFile = CreateFileW(
             FileName,
             GENERIC_READ,
-            FILE_SHARE_READ | FILE_SHARE_WRITE,
+            FILE_SHARE_READ,
             NULL,
             OPEN_EXISTING,
             FILE_ATTRIBUTE_NORMAL | FILE_FLAG_SEQUENTIAL_SCAN,
             NULL);
-        XFILES_ASSERT(hFile != INVALID_HANDLE_VALUE);
+        if (hFile == INVALID_HANDLE_VALUE)
+        {
+            int err = GetLastError();
+            if (err == ERROR_ACCESS_DENIED)
+            {
+                // NOTE: you may get this error when trying to "read" a directory. Check if a directory already exists
+                // at this path
+            }
+            XFILES_ASSERT(hFile != INVALID_HANDLE_VALUE);
+        }
         if (hFile != INVALID_HANDLE_VALUE)
         {
             ok = GetFileSizeEx(hFile, &FileSize);
@@ -352,7 +441,7 @@ bool xfiles_read(const char* path, void** out, size_t* outlen)
             if (ok)
             {
                 data = XFILES_MALLOC(FileSize.QuadPart);
-                ok   = ReadFile(hFile, data, (DWORD)FileSize.QuadPart, NULL, NULL);
+                ok   = ReadFile(hFile, data, FileSize.QuadPart, NULL, NULL);
                 XFILES_ASSERT(ok);
                 if (ok)
                 {
@@ -366,7 +455,7 @@ bool xfiles_read(const char* path, void** out, size_t* outlen)
                     FileSize.QuadPart = 0;
                 }
             }
-            ok = ok && CloseHandle(hFile);
+            ok &= CloseHandle(hFile);
             XFILES_ASSERT(ok);
         }
     }
@@ -394,12 +483,21 @@ bool xfiles_write(const char* path, const void* in, size_t inlen)
             CREATE_ALWAYS,
             FILE_ATTRIBUTE_NORMAL | FILE_FLAG_SEQUENTIAL_SCAN,
             NULL);
-        XFILES_ASSERT(hFile != INVALID_HANDLE_VALUE);
+        if (hFile == INVALID_HANDLE_VALUE)
+        {
+            int err = GetLastError();
+            if (err == ERROR_ACCESS_DENIED)
+            {
+                // NOTE: you may get this error when trying to "write" to a directory. Check if a directory already
+                // exists at this path
+            }
+            XFILES_ASSERT(hFile != INVALID_HANDLE_VALUE);
+        }
         if (hFile != INVALID_HANDLE_VALUE)
         {
-            ok = WriteFile(hFile, in, (DWORD)inlen, &nBytesWritten, NULL);
+            ok = WriteFile(hFile, in, inlen, &nBytesWritten, NULL);
             XFILES_ASSERT(ok);
-            ok = ok && CloseHandle(hFile);
+            ok &= CloseHandle(hFile);
             XFILES_ASSERT(ok);
         }
     }
@@ -422,9 +520,9 @@ bool xfiles_append(const char* path, const char* in, size_t inlen)
         XFILES_ASSERT(hFile != INVALID_HANDLE_VALUE);
         if (hFile != INVALID_HANDLE_VALUE)
         {
-            ok = WriteFile(hFile, in, (DWORD)inlen, &nBytesWritten, NULL);
+            ok = WriteFile(hFile, in, inlen, &nBytesWritten, NULL);
             XFILES_ASSERT(ok);
-            ok = ok && CloseHandle(hFile);
+            ok &= CloseHandle(hFile);
             XFILES_ASSERT(ok);
         }
     }
@@ -485,23 +583,38 @@ bool xfiles_delete(const char* path)
 
 bool xfiles_open_file_explorer(const char* path)
 {
-    // https://learn.microsoft.com/en-us/windows/win32/api/shellapi/nf-shellapi-shellexecutew
     WCHAR FilePath[MAX_PATH];
     int   num = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, path, -1, FilePath, XFILES_ARRLEN(FilePath));
     XFILES_ASSERT(num);
     if (num)
     {
+        // ShellExecuteW depends on Windows registry to find what application to use to with the verb "open"
+        // It's possible for the registry to be poisened by 3rd party software or manual tweaking
+        // This happened to me after downloading FilePilot, setting it as the default file browser, then uninstalling
+        // it. After doing this ShellExecuteW would always return 'SE_ERR_NOASSOC'
+        // https://learn.microsoft.com/en-us/windows/win32/api/shellapi/nf-shellapi-shellexecutew
         INT_PTR ret = (INT_PTR)ShellExecuteW(NULL, L"open", FilePath, NULL, NULL, SW_SHOWDEFAULT);
-        XFILES_ASSERT(ret > 32);
-        return ret > 32;
 
-        // https://learn.microsoft.com/en-us/windows/win32/api/shlobj_core/nf-shlobj_core-shopenfolderandselectitems
-        //LPITEMIDLIST pItemList = ILCreateFromPathW(FilePath);
-        //if (pItemList)
-        //{
-        //    SHOpenFolderAndSelectItems(pItemList, 0, 0, 0);
-        //    ILFree(pItemList);
-        //}
+        if (ret == SE_ERR_NOASSOC) // Oh dear, Windows can't figure out what application to use!?
+        {
+            // https://learn.microsoft.com/en-us/windows/win32/api/shellapi/nf-shellapi-shellexecuteexw
+            // https://learn.microsoft.com/en-us/windows/win32/api/shellapi/ns-shellapi-shellexecuteinfow
+            // https://learn.microsoft.com/en-us/windows/win32/shell/launch
+            SHELLEXECUTEINFOW sei = {0};
+            sei.cbSize            = sizeof(SHELLEXECUTEINFOW);
+            sei.fMask             = 0;
+            sei.lpVerb            = L"open";
+            sei.lpFile            = L"explorer.exe"; // Explicitly use File Explorer
+            sei.lpParameters      = FilePath;
+            sei.nShow             = SW_SHOW;
+
+            BOOL ok = ShellExecuteExW(&sei);
+
+            ret = (INT_PTR)sei.hInstApp;
+        }
+        XFILES_ASSERT(ret > 32);
+
+        return ret > 32;
     }
     return false;
 }
@@ -530,7 +643,7 @@ bool xfiles_select_in_file_explorer(const char* path)
     return false;
 }
 
-int xfiles_get_user_directory(char* out, size_t outlen, enum XFILES_USER_DIRECTORY loc)
+int xfiles_get_user_directory(char* out, size_t outlen, XFilesUserDirectory loc)
 {
     // https://learn.microsoft.com/en-us/windows/win32/api/shlobj_core/nf-shlobj_core-shgetknownfolderpath
     // https://learn.microsoft.com/en-us/windows/win32/shell/knownfolderid
@@ -560,12 +673,12 @@ int xfiles_get_user_directory(char* out, size_t outlen, enum XFILES_USER_DIRECTO
     int   num  = 0;
     PWSTR Path = NULL;
     if (loc < 0)
-        loc = (enum XFILES_USER_DIRECTORY)0;
+        loc = (XFilesUserDirectory)0;
     if (loc >= XFILES_USER_DIRECTORY_COUNT)
-        loc = (enum XFILES_USER_DIRECTORY)(ARRAYSIZE(FOLDER_IDS) - 1);
+        loc = (XFilesUserDirectory)(ARRAYSIZE(FOLDER_IDS) - 1);
     if (S_OK == SHGetKnownFolderPath(XFILES_REF(FOLDER_IDS[loc]), 0, NULL, &Path))
     {
-        num = WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, Path, -1, out, (int)outlen, NULL, NULL);
+        num = WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, Path, -1, out, outlen, NULL, NULL);
         if (num)
             num--; // remove count of null byte
         XFILES_ASSERT(num == strlen(out));
@@ -573,6 +686,139 @@ int xfiles_get_user_directory(char* out, size_t outlen, enum XFILES_USER_DIRECTO
     }
 
     return num;
+}
+
+// Mostly LLM generated. GLWTS
+XFilesMetadata xfiles_get_metadata(const char* path)
+{
+    XFilesMetadata meta = {0};
+
+    if (path == NULL || path[0] == '\0')
+    {
+        meta.last_error = -1;
+        return meta;
+    }
+
+    // Open file
+    HANDLE hFile = INVALID_HANDLE_VALUE;
+    {
+        WCHAR WPath[MAX_PATH] = {0};
+        int   wlen            = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, path, -1, WPath, ARRAYSIZE(WPath));
+        if (wlen == 0)
+        {
+            meta.last_error = (int)GetLastError();
+            return meta;
+        }
+        // Open with FILE_FLAG_BACKUP_SEMANTICS so directories also work,
+        // and FILE_FLAG_OPEN_REPARSE_POINT so we stat the symlink itself.
+        // https://learn.microsoft.com/en-us/windows/win32/api/fileapi/nf-fileapi-createfilew
+        hFile = CreateFileW(
+            WPath,
+            FILE_READ_ATTRIBUTES,
+            FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+            NULL,
+            OPEN_EXISTING,
+            FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OPEN_REPARSE_POINT,
+            NULL);
+    }
+
+    if (hFile == INVALID_HANDLE_VALUE)
+    {
+        meta.last_error = (int32_t)GetLastError();
+        return meta;
+    }
+
+    BY_HANDLE_FILE_INFORMATION info;
+    BOOL                       ok = GetFileInformationByHandle(hFile, &info);
+    if (!ok)
+    {
+        meta.last_error = (int32_t)GetLastError();
+        CloseHandle(hFile);
+        return meta;
+    }
+
+    meta.size_bytes = ((uint64_t)info.nFileSizeHigh << 32) | (uint64_t)info.nFileSizeLow;
+
+    // Convert FILETIME (100-ns intervals since 1601-01-01 UTC) to ns since 1970-01-01 UTC
+    {
+        // 116444736000000000 = number of 100ns ticks between 1601-01-01 and 1970-01-01
+        const uint64_t EPOCH_DIFF_100NS = 116444736000000000ULL;
+
+        ULARGE_INTEGER c, m, a;
+        c.LowPart  = info.ftCreationTime.dwLowDateTime;
+        c.HighPart = info.ftCreationTime.dwHighDateTime;
+        m.LowPart  = info.ftLastWriteTime.dwLowDateTime;
+        m.HighPart = info.ftLastWriteTime.dwHighDateTime;
+        a.LowPart  = info.ftLastAccessTime.dwLowDateTime;
+        a.HighPart = info.ftLastAccessTime.dwHighDateTime;
+
+        meta.creation_time_ns      = (uint64_t)((c.QuadPart - EPOCH_DIFF_100NS) * 100ULL);
+        meta.modification_time_ns  = (uint64_t)((m.QuadPart - EPOCH_DIFF_100NS) * 100ULL);
+        meta.access_time_ns        = (uint64_t)((a.QuadPart - EPOCH_DIFF_100NS) * 100ULL);
+        meta.status_change_time_ns = 0; // no direct POSIX ctime equivalent on Windows
+    }
+
+    meta.file_index           = ((uint64_t)info.nFileIndexHigh << 32) | (uint64_t)info.nFileIndexLow;
+    meta.num_links            = info.nNumberOfLinks;
+    meta.volume_serial_number = info.dwVolumeSerialNumber;
+    meta._dwFileAttributes    = info.dwFileAttributes;
+
+    // https://learn.microsoft.com/en-us/windows/win32/fileio/reparse-points
+    if (info.dwFileAttributes & FILE_ATTRIBUTE_REPARSE_POINT)
+    {
+        // Get the reparse tag to decide if it is really a symlink
+        // https://learn.microsoft.com/en-us/windows/win32/api/winbase/nf-winbase-getfileinformationbyhandleex
+        // https://learn.microsoft.com/en-us/windows/win32/api/minwinbase/ne-minwinbase-file_info_by_handle_class
+        FILE_ATTRIBUTE_TAG_INFO tag_info;
+        ok = GetFileInformationByHandleEx(hFile, FileAttributeTagInfo, &tag_info, sizeof(tag_info));
+        if (ok)
+        {
+            meta._dwReparseTag = tag_info.ReparseTag;
+            if (tag_info.ReparseTag == IO_REPARSE_TAG_SYMLINK || tag_info.ReparseTag == IO_REPARSE_TAG_MOUNT_POINT)
+            {
+                meta.type       = XFILES_METADATA_TYPE_SYMLINK;
+                meta.is_symlink = true;
+            }
+            else
+            {
+                meta.type = (info.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) ? XFILES_METADATA_TYPE_DIRECTORY
+                                                                               : XFILES_METADATA_TYPE_FILE;
+            }
+        }
+    }
+    else if (info.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)
+    {
+        meta.type = XFILES_METADATA_TYPE_DIRECTORY;
+    }
+    else
+    {
+        meta.type = XFILES_METADATA_TYPE_FILE;
+    }
+
+    meta.is_readonly   = (info.dwFileAttributes & FILE_ATTRIBUTE_READONLY) != 0;
+    meta.is_hidden     = (info.dwFileAttributes & FILE_ATTRIBUTE_HIDDEN) != 0;
+    meta.is_system     = (info.dwFileAttributes & FILE_ATTRIBUTE_SYSTEM) != 0;
+    meta.is_archive    = (info.dwFileAttributes & FILE_ATTRIBUTE_ARCHIVE) != 0;
+    meta.is_compressed = (info.dwFileAttributes & FILE_ATTRIBUTE_COMPRESSED) != 0;
+    meta.is_encrypted  = (info.dwFileAttributes & FILE_ATTRIBUTE_ENCRYPTED) != 0;
+    meta.is_executable = false; // Windows uses ACLs, not a simple bit; best-effort below
+    {
+        // Treat .exe/.bat/.cmd/.com as executable as a convenience heuristic
+        const char* ext = xfiles_get_extension(path);
+        int         c   = ext != NULL ? ext[1] : 0;
+        if (c == 'e' || c == 'E' || c == 'b' || c == 'B' || c == 'c' || c == 'C')
+        {
+            ext++; // increment past "."
+            if (_stricmp(ext, "exe") == 0 || _stricmp(ext, "bat") == 0 || _stricmp(ext, "cmd") == 0 ||
+                _stricmp(ext, "com") == 0)
+            {
+                meta.is_executable = true;
+            }
+        }
+    }
+
+    CloseHandle(hFile);
+    return meta;
 }
 
 void xfiles_list(const char* path, void* data, xfiles_list_callback_t* callback)
@@ -588,7 +834,8 @@ void xfiles_list(const char* path, void* data, xfiles_list_callback_t* callback)
 
     {
         WCHAR PathUnicode[MAX_PATH] = {0};
-        int   n = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, path, -1, PathUnicode, XFILES_ARRLEN(PathUnicode));
+        int   n =
+            MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, path, -1, PathUnicode, XFILES_ARRLEN(PathUnicode) - 3);
         if (n)
         {
             PathUnicode[n] = 0;
@@ -681,7 +928,7 @@ xfiles_watch_context_t xfiles_watch_create(const char* path, void* udata, xfiles
 
     memset(ctx, 0, sizeof(*ctx));
 
-    ctx->pathlen  = (int)strlen(path);
+    ctx->pathlen  = strlen(path);
     ctx->udata    = udata;
     ctx->callback = cb;
 
@@ -738,7 +985,7 @@ void xfiles_watch_flush(xfiles_watch_context_t _ctx)
         DWORD dwOffset                   = 0;
 
         // https://learn.microsoft.com/en-us/windows/win32/api/ioapiset/nf-ioapiset-getoverlappedresult
-        BOOL bWait = FALSE;
+        BOOL bWait   = FALSE;
         BOOL success = GetOverlappedResult(ctx->hDirectory, &ctx->overlapped, &dwNumberOfBytesTransferred, bWait);
 
         while (success && dwOffset < dwNumberOfBytesTransferred)
@@ -795,6 +1042,7 @@ void xfiles_watch_destroy(xfiles_watch_context_t _ctx)
 
 #ifdef __APPLE__
 #include <dirent.h>
+#include <errno.h>
 #include <fcntl.h>
 #include <stdio.h>
 #include <string.h>
@@ -804,8 +1052,32 @@ void xfiles_watch_destroy(xfiles_watch_context_t _ctx)
 
 // https://developer.apple.com/library/archive/documentation/System/Conceptual/ManPages_iPhoneOS/man2/access.2.html
 bool xfiles_exists(const char* path) { return access(path, F_OK) == 0; }
+
+bool xfiles_is_directory(const char* path)
+{
+    bool is_directory = false;
+
+    // https://developer.apple.com/library/archive/documentation/System/Conceptual/ManPages_iPhoneOS/man2/stat.2.html
+    struct stat st = {0};
+    lstat(path, &st);
+    if (S_ISDIR(st.st_mode))
+        is_directory = true;
+    return is_directory;
+}
+
 // https://developer.apple.com/library/archive/documentation/System/Conceptual/ManPages_iPhoneOS/man2/mkdir.2.html
-bool xfiles_create_directory(const char* path) { return mkdir(path, 0777) == 0; }
+bool xfiles_create_directory(const char* path)
+{
+    int ret = mkdir(path, 0777);
+    if (ret != 0)
+    {
+        int err = errno;
+        XFILES_ASSERT(err == EEXIST);
+        if (err == EEXIST)
+            return true;
+    }
+    return ret == 0;
+}
 
 bool xfiles_read(const char* path, void** out, size_t* outlen)
 {
@@ -886,6 +1158,85 @@ bool xfiles_move(const char* from, const char* to) { return 0 == rename(from, to
 
 // https://developer.apple.com/library/archive/documentation/System/Conceptual/ManPages_iPhoneOS/man2/unlink.2.html
 bool xfiles_delete(const char* path) { return unlink(path) == 0; }
+
+XFilesMetadata xfiles_get_metadata(const char* path)
+{
+    XFilesMetadata meta = {0};
+
+    if (path == NULL || path[0] == '\0')
+    {
+        meta.last_error = -1;
+        return meta;
+    }
+
+    // https://developer.apple.com/library/archive/documentation/System/Conceptual/ManPages_iPhoneOS/man2/stat.2.html
+    struct stat st;
+    // lstat so symlinks are reported as symlinks
+    if (lstat(path, &st) != 0)
+    {
+        meta.last_error = (int32_t)errno;
+        return meta;
+    }
+
+    // Unified fields
+    meta.size_bytes       = (uint64_t)st.st_size;
+    meta.creation_time_ns = (uint64_t)st.st_birthtimespec.tv_sec * 1000000000LL + (uint64_t)st.st_birthtimespec.tv_nsec;
+    meta.modification_time_ns  = (uint64_t)st.st_mtimespec.tv_sec * 1000000000LL + (uint64_t)st.st_mtimespec.tv_nsec;
+    meta.access_time_ns        = (uint64_t)st.st_atimespec.tv_sec * 1000000000LL + (uint64_t)st.st_atimespec.tv_nsec;
+    meta.status_change_time_ns = (uint64_t)st.st_ctimespec.tv_sec * 1000000000LL + (uint64_t)st.st_ctimespec.tv_nsec;
+    meta.file_index            = st.st_ino;
+    meta.num_links             = st.st_nlink;
+    meta.volume_serial_number  = st.st_dev;
+
+    meta._st_mode    = st.st_mode;
+    meta._st_blksize = st.st_blksize;
+    meta._st_blocks  = st.st_blocks;
+    meta._st_flags   = st.st_flags;
+    meta._st_gen     = st.st_gen;
+
+    // Determine type
+    if (S_ISREG(st.st_mode))
+    {
+        meta.type = XFILES_METADATA_TYPE_FILE;
+    }
+    else if (S_ISDIR(st.st_mode))
+    {
+        meta.type = XFILES_METADATA_TYPE_DIRECTORY;
+    }
+    else if (S_ISLNK(st.st_mode))
+    {
+        meta.type = XFILES_METADATA_TYPE_SYMLINK;
+    }
+    else if (S_ISBLK(st.st_mode))
+    {
+        meta.type = XFILES_METADATA_TYPE_BLOCK_DEVICE;
+    }
+    else if (S_ISCHR(st.st_mode))
+    {
+        meta.type = XFILES_METADATA_TYPE_CHAR_DEVICE;
+    }
+    else if (S_ISFIFO(st.st_mode))
+    {
+        meta.type = XFILES_METADATA_TYPE_FIFO;
+    }
+    else if (S_ISSOCK(st.st_mode))
+    {
+        meta.type = XFILES_METADATA_TYPE_SOCKET;
+    }
+
+    // Convenience boolean flags (BSD-style)
+    // st_flags on macOS: UF_HIDDEN, UF_IMMUTABLE, UF_COMPRESSED, etc.
+    meta.is_readonly   = ((st.st_mode & 0222) == 0);       // no write bits for anyone
+    meta.is_hidden     = (st.st_flags & 0x00008000u) != 0; // UF_HIDDEN
+    meta.is_system     = (st.st_flags & 0x00080000u) != 0; // SF_RESTRICTED, rough analogue
+    meta.is_archive    = false;                            // No direct analogue on macOS
+    meta.is_compressed = (st.st_flags & 0x00000020u) != 0; // UF_COMPRESSED
+    meta.is_encrypted  = false;                            // FileVault is volume-level; per-file is not stable here
+    meta.is_executable = (st.st_mode & 0111) != 0;
+    meta.is_symlink    = S_ISLNK(st.st_mode) ? true : false;
+
+    return meta;
+}
 
 void xfiles_list(const char* path, void* data, xfiles_list_callback_t* callback)
 {
@@ -1284,6 +1635,7 @@ void xfiles_watch_destroy(void* _ctx_nb)
 
 #ifdef __OBJC__
 #import <AppKit/NSWorkspace.h>
+#import <Foundation/Foundation.h>
 
 bool xfiles_trash(const char* path)
 {
@@ -1323,7 +1675,7 @@ bool xfiles_select_in_file_explorer(const char* path)
     return true;
 }
 
-int xfiles_get_user_directory(char* out, size_t outlen, enum XFILES_USER_DIRECTORY loc)
+int xfiles_get_user_directory(char* out, size_t outlen, XFilesUserDirectory loc)
 {
     static const char* PATHS[] = {
         "",                             // XFILES_USER_DIRECTORY_HOME,
@@ -1420,3 +1772,4 @@ bool xfiles_create_directory_recursive(const char* path)
 }
 
 #endif // XHL_FILES_IMPL
+#endif // XHL_FILES_H

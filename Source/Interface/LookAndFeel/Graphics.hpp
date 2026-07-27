@@ -153,31 +153,31 @@ namespace Interface
 
   // thread_local variable for the message thread so that we don't need to pass pointers around
   extern thread_local InterfaceRelated uiRelated;
-  strict_inline float scaleValue(float value) { return uiRelated.scale * value; }
-  strict_inline Rectangle<float>
+  forceinline float scaleValue(float value) { return uiRelated.scale * value; }
+  forceinline Rectangle<float>
   scaleValue(Rectangle<float> bounds)
   {
     auto values = utils::bit_cast<simd_float>(bounds);
     values = uiRelated.scale * utils::toFloat(values);
     return utils::bit_cast<Rectangle<float>>(values);
   }
-  strict_inline float scaleValueRound(float value) { return ::roundf(uiRelated.scale * value); }
-  strict_inline Rectangle<float>
+  forceinline float scaleValueRound(float value) { return ::roundf(uiRelated.scale * value); }
+  forceinline Rectangle<float>
   scaleValueRound(Rectangle<float> bounds)
   {
     auto values = utils::bit_cast<simd_float>(bounds);
     values = simd_float::round(uiRelated.scale * utils::toFloat(values));
     return utils::bit_cast<Rectangle<float>>(values);
   }
-  strict_inline i32 scaleValueRoundInt(float value) { return (int)::roundf(uiRelated.scale * value); }
-  strict_inline Rectangle<i32> 
+  forceinline i32 scaleValueRoundInt(float value) { return (int)::roundf(uiRelated.scale * value); }
+  forceinline Rectangle<i32> 
   scaleValueRoundInt(Rectangle<i32> bounds)
   {
     auto values = utils::bit_cast<simd_int>(bounds);
     values = utils::toInt(simd_float::round(uiRelated.scale * utils::toFloat(values)));
     return utils::bit_cast<Rectangle<i32>>(values);
   }
-  strict_inline float unscaleValue(float value) { return value / uiRelated.scale; }
+  forceinline float unscaleValue(float value) { return value / uiRelated.scale; }
 
   inline void fillRect(NVGcontext *context, Rectangle<float> bounds,
     Colour colour = Colours::white, float cornerRounding = 0.0f)
@@ -278,18 +278,8 @@ namespace Interface
       nvgText(context.context, x, y, text.data(), text.data() + text.size());
   }
 
-  struct ViewportChange
-  {
-    Component *component = nullptr;
-    Rectangle<int> change{};
-    bool isClipping = true;
-
-    constexpr bool operator==(const ViewportChange &) const noexcept = default;
-  };
-
   struct OpenGlWrapper
   {
-    utils::vector<ViewportChange> parentStack{};
     Graphics *cache = nullptr;
     NVGcontext *g = nullptr;
     int topLevelHeight = 0;

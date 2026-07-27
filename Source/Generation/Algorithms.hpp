@@ -179,6 +179,8 @@ namespace Generation
 
     COMPLEX_ENUM(Contrast,
       (Depth, 1758892756432),
+      (Range, 1784914339837),
+      ( Tilt, 1784904490245),
     );
 
     // Dtblkfx Contrast
@@ -193,6 +195,7 @@ namespace Generation
 
     COMPLEX_ENUM(Clip,
       (Threshold, 1758894269115),
+      (     Tilt, 1784558691555),
     );
 
     // Dtblkfx Clip

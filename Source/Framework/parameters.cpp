@@ -335,7 +335,7 @@ namespace Framework
     case ParameterScale::SymmetricLoudness:
       value = (value * 2.0f - 1.0f);
       sign = unsignSimd(value);
-      if (sign.allSame())
+      if (simd_mask::allSame(sign))
       {
         float extremum = (sign[0]) ? -details.minValue : details.maxValue;
         result = normalisedToDb(value, extremum) | sign;
@@ -568,7 +568,7 @@ namespace Framework
       newModulations += modulator->getDeltaValue();
     }
 
-    if (isDirty || modulations_ != newModulations)
+    if (isDirty || !simd_float::allEqual(modulations_, newModulations))
     {
       modulations_ = newModulations;
       normalisedInternalValue_ = simd_float::clamp(newModulations + newNormalisedValue, 0.0f, 1.0f);

@@ -8,7 +8,7 @@
 
 namespace utils
 {
-  strict_inline simd_float vector_call toFloat(simd_int value) noexcept
+  forceinline simd_float vectorcall toFloat(simd_int value) noexcept
   {
   #if COMPLEX_SSE4_1
     return _mm_cvtepi32_ps(value.value);
@@ -16,9 +16,9 @@ namespace utils
     return vcvtq_f32_s32(vreinterpretq_s32_u32(value.value));
   #endif
   }
-  constexpr strict_inline simd_float vector_call toFloat(simd_float value) noexcept { return value; }
+  constexpr forceinline simd_float vectorcall toFloat(simd_float value) noexcept { return value; }
 
-  strict_inline simd_int vector_call toInt(simd_float value) noexcept
+  forceinline simd_int vectorcall toInt(simd_float value) noexcept
   {
   #if COMPLEX_SSE4_1
     return _mm_cvtps_epi32(value.value);
@@ -26,9 +26,9 @@ namespace utils
     return vreinterpretq_u32_s32(vcvtq_s32_f32(value.value));
   #endif
   }
-  constexpr strict_inline simd_int vector_call toInt(simd_int value) noexcept { return value; }
+  constexpr forceinline simd_int vectorcall toInt(simd_int value) noexcept { return value; }
 
-  strict_inline simd_float vector_call reinterpretToFloat(simd_int value) noexcept
+  forceinline simd_float vectorcall reinterpretToFloat(simd_int value) noexcept
   {
   #if COMPLEX_SSE4_1
     return _mm_castsi128_ps(value.value);
@@ -36,9 +36,9 @@ namespace utils
     return vreinterpretq_f32_u32(value.value);
   #endif
   }
-  constexpr strict_inline simd_float vector_call reinterpretToFloat(simd_float value) noexcept { return value; }
+  constexpr forceinline simd_float vectorcall reinterpretToFloat(simd_float value) noexcept { return value; }
 
-  strict_inline simd_int vector_call reinterpretToInt(simd_float value) noexcept
+  forceinline simd_int vectorcall reinterpretToInt(simd_float value) noexcept
   {
   #if COMPLEX_SSE4_1
     return _mm_castps_si128(value.value);
@@ -46,9 +46,9 @@ namespace utils
     return vreinterpretq_u32_f32(value.value);
   #endif
   }
-  constexpr strict_inline simd_int vector_call reinterpretToInt(simd_int value) noexcept { return value; }
+  constexpr forceinline simd_int vectorcall reinterpretToInt(simd_int value) noexcept { return value; }
 
-  strict_inline simd_float vector_call toSimdFloatFromUnaligned(const float *unaligned) noexcept
+  forceinline simd_float vectorcall toSimdFloatFromUnaligned(const float *unaligned) noexcept
   {
   #if COMPLEX_SSE4_1
     return _mm_loadu_ps(unaligned);
@@ -57,7 +57,7 @@ namespace utils
   #endif
   }
 
-  strict_inline void vector_call transpose(utils::array<simd_float, simd_float::size> &rows)
+  forceinline void vectorcall transpose(utils::array<simd_float, simd_float::size> &rows)
   {
   #if COMPLEX_SSE4_1
     auto low0 = _mm_unpacklo_ps(rows[0].value, rows[1].value);
@@ -78,7 +78,7 @@ namespace utils
   #endif
   }
 
-  strict_inline void vector_call complexTranspose(utils::array<simd_float, simd_float::complexSize> &rows)
+  forceinline void vectorcall complexTranspose(utils::array<simd_float, simd_float::complexSize> &rows)
   {
   #if COMPLEX_SSE4_1
     auto low = _mm_movelh_ps(rows[0].value, rows[1].value);
@@ -93,7 +93,7 @@ namespace utils
     rows[1].value = high;
   }
 
-  strict_inline simd_float vector_call merge(simd_float falseValue, simd_float trueValue, simd_mask mask) noexcept
+  forceinline simd_float vectorcall merge(simd_float falseValue, simd_float trueValue, simd_mask mask) noexcept
   {
   #ifdef COMPLEX_SSE4_1
     return _mm_blendv_ps(falseValue.value, trueValue.value, reinterpretToFloat(mask).value);
@@ -102,7 +102,7 @@ namespace utils
   #endif
   }
 
-  strict_inline simd_int vector_call merge(simd_int falseValue, simd_int trueValue, simd_mask mask) noexcept
+  forceinline simd_int vectorcall merge(simd_int falseValue, simd_int trueValue, simd_mask mask) noexcept
   {
   #ifdef COMPLEX_SSE4_1
     return reinterpretToInt(simd_float{ _mm_blendv_ps(reinterpretToFloat(falseValue).value,
@@ -112,20 +112,20 @@ namespace utils
   #endif
   }
 
-  strict_inline simd_float vector_call lerp(simd_float from, simd_float to, simd_float t) noexcept
+  forceinline simd_float vectorcall lerp(simd_float from, simd_float to, simd_float t) noexcept
   { return simd_float::mulAdd(from, to - from, t); }
 
-  strict_inline simd_float vector_call getDecimalPlaces(simd_float value) noexcept
+  forceinline simd_float vectorcall getDecimalPlaces(simd_float value) noexcept
   { return value - simd_float::floor(value); }
 
-  strict_inline simd_mask vector_call getSign(simd_int value) noexcept
+  forceinline simd_mask vectorcall getSign(simd_int value) noexcept
   { return value & kSignMask; }
 
-  strict_inline simd_mask vector_call getSign(simd_float value) noexcept
+  forceinline simd_mask vectorcall getSign(simd_float value) noexcept
   { return reinterpretToInt(value) & kSignMask; }
 
   // lerps between the closest range of from and to inside [0; range]
-  strict_inline simd_float vector_call circularLerp(simd_float from, simd_float to, simd_float t, simd_float range) noexcept
+  forceinline simd_float vectorcall circularLerp(simd_float from, simd_float to, simd_float t, simd_float range) noexcept
   {
     simd_float fromTo = to - from;
     simd_float toFrom = (range ^ getSign(fromTo)) - fromTo;
@@ -139,14 +139,14 @@ namespace utils
   }
 
   // lerps between the closest range of from and to inside +/- range
-  strict_inline simd_float vector_call circularLerpSymmetric(simd_float from, 
+  forceinline simd_float vectorcall circularLerpSymmetric(simd_float from, 
     simd_float to, simd_float t, simd_float range) noexcept
   { return circularLerp(from + range, to + range, t, range * 2.0f) - range; }
 
-  strict_inline auto vector_call getLinearInterpolationMatrix(simd_float t) noexcept
+  forceinline auto vectorcall getLinearInterpolationMatrix(simd_float t) noexcept
   { return utils::array{ simd_float{ 0.0f }, simd_float{ 1.0f } - t, t, simd_float{ 0.0f } }; }
 
-  strict_inline auto vector_call getCatmullInterpolationMatrix(simd_float t) noexcept
+  forceinline auto vectorcall getCatmullInterpolationMatrix(simd_float t) noexcept
   {
     simd_float halfT = t * 0.5f;
     simd_float halfT2 = t * halfT;
@@ -161,7 +161,7 @@ namespace utils
     };
   }
 
-  strict_inline auto vector_call getValueMatrix(const float *buffer, simd_int indices) noexcept
+  forceinline auto vectorcall getValueMatrix(const float *buffer, simd_int indices) noexcept
   {
     utils::array<simd_float, simd_float::size> values;
     for (u32 i = 0; i < values.size(); i++)
@@ -170,7 +170,7 @@ namespace utils
   }
 
   template<auto N>
-  strict_inline simd_float multiplyAndSumRows(const utils::array<simd_float, N> &one,
+  forceinline simd_float multiplyAndSumRows(const utils::array<simd_float, N> &one,
     const utils::array<simd_float, N> &two) noexcept
   {
     simd_float summedVector = 0;
@@ -179,7 +179,7 @@ namespace utils
     return summedVector;
   }
 
-  strict_inline simd_float vector_call copyFromEven(simd_float value) noexcept
+  forceinline simd_float vectorcall copyFromEven(simd_float value) noexcept
   {
   #if COMPLEX_SSE4_1
     return _mm_shuffle_ps(value.value, value.value, _MM_SHUFFLE(2, 2, 0, 0));
@@ -190,7 +190,7 @@ namespace utils
   #endif
   }
 
-  strict_inline simd_int vector_call copyFromEven(simd_int value) noexcept
+  forceinline simd_int vectorcall copyFromEven(simd_int value) noexcept
   {
   #if COMPLEX_SSE4_1
     return _mm_shuffle_epi32(value.value, _MM_SHUFFLE(2, 2, 0, 0));
@@ -201,7 +201,7 @@ namespace utils
   #endif
   }
 
-  strict_inline simd_float vector_call copyFromOdd(simd_float value) noexcept
+  forceinline simd_float vectorcall copyFromOdd(simd_float value) noexcept
   {
   #if COMPLEX_SSE4_1
     return _mm_shuffle_ps(value.value, value.value, _MM_SHUFFLE(3, 3, 1, 1));
@@ -212,7 +212,7 @@ namespace utils
   #endif
   }
 
-  strict_inline simd_int vector_call copyFromOdd(simd_int value) noexcept
+  forceinline simd_int vectorcall copyFromOdd(simd_int value) noexcept
   {
   #if COMPLEX_SSE4_1
     return _mm_shuffle_epi32(value.value, _MM_SHUFFLE(3, 3, 1, 1));
@@ -223,7 +223,7 @@ namespace utils
   #endif
   }
 
-  strict_inline simd_float vector_call groupEven(simd_float value) noexcept
+  forceinline simd_float vectorcall groupEven(simd_float value) noexcept
   {
   #if COMPLEX_SSE4_1
     return _mm_shuffle_ps(value.value, value.value, _MM_SHUFFLE(3, 1, 2, 0));
@@ -232,7 +232,7 @@ namespace utils
   #endif
   }
 
-  strict_inline simd_float vector_call groupEvenReverse(simd_float value) noexcept
+  forceinline simd_float vectorcall groupEvenReverse(simd_float value) noexcept
   {
   #if COMPLEX_SSE4_1
     return _mm_shuffle_ps(value.value, value.value, _MM_SHUFFLE(1, 3, 0, 2));
@@ -248,7 +248,7 @@ namespace utils
   #endif
   }
 
-  strict_inline simd_float vector_call groupOdd(simd_float value) noexcept
+  forceinline simd_float vectorcall groupOdd(simd_float value) noexcept
   {
   #if COMPLEX_SSE4_1
     return _mm_shuffle_ps(value.value, value.value, _MM_SHUFFLE(2, 0, 3, 1));
@@ -257,7 +257,7 @@ namespace utils
   #endif
   }
 
-  strict_inline simd_float vector_call groupOddReverse(simd_float value) noexcept
+  forceinline simd_float vectorcall groupOddReverse(simd_float value) noexcept
   {
   #if COMPLEX_SSE4_1
     return _mm_shuffle_ps(value.value, value.value, _MM_SHUFFLE(0, 2, 1, 3));
@@ -266,7 +266,7 @@ namespace utils
   #endif
   }
 
-  strict_inline simd_float vector_call switchInner(simd_float value) noexcept
+  forceinline simd_float vectorcall switchInner(simd_float value) noexcept
   {
   #if COMPLEX_SSE4_1
     return _mm_shuffle_ps(value.value, value.value, _MM_SHUFFLE(2, 3, 0, 1));
@@ -276,7 +276,7 @@ namespace utils
   #endif
   }
 
-  strict_inline simd_float vector_call switchOuter(simd_float value) noexcept
+  forceinline simd_float vectorcall switchOuter(simd_float value) noexcept
   {
   #if COMPLEX_SSE4_1
     return _mm_shuffle_ps(value.value, value.value, _MM_SHUFFLE(1, 0, 3, 2));
@@ -287,7 +287,7 @@ namespace utils
 
 
   template<SimdValue SIMD>
-  strict_inline SIMD vector_call gather(const SIMD *values, simd_int indices) noexcept
+  forceinline SIMD vectorcall gather(const SIMD *values, simd_int indices) noexcept
   {
     auto array = indices.getArrayOfValues();
   #if COMPLEX_SSE4_1
@@ -316,7 +316,7 @@ namespace utils
   }
 
   template<SimdValue SIMD>
-  strict_inline void vector_call scatter(SIMD *values, SIMD value, simd_int indices) noexcept
+  forceinline void vectorcall scatter(SIMD *values, SIMD value, simd_int indices) noexcept
   {
     auto array = indices.getArrayOfValues();
   #if COMPLEX_SSE4_1
@@ -355,7 +355,7 @@ namespace utils
   }
 
   template<SimdValue SIMD>
-  strict_inline SIMD vector_call gatherComplex(const SIMD *values, simd_int indices) noexcept
+  forceinline SIMD vectorcall gatherComplex(const SIMD *values, simd_int indices) noexcept
   {
     auto array = indices.getArrayOfValues();
     SIMD result = values[array[0]];
@@ -365,28 +365,28 @@ namespace utils
   }
 
   template<SimdValue SIMD>
-  strict_inline void vector_call scatterComplex(SIMD *values, simd_int indices, SIMD value, simd_mask mask) noexcept
+  forceinline void vectorcall scatterComplex(SIMD *values, simd_int indices, SIMD value, simd_mask mask) noexcept
   {
     auto array = indices.getArrayOfValues();
     for (usize i = 0; i < kChannelsPerInOut; ++i)
       values[array[2 * i]] = merge(values[array[2 * i]], value, kChannelMasks[i] & mask);
   }
   template<SimdValue SIMD>
-  strict_inline void vector_call scatterComplex(SIMD *values, simd_int indices, SIMD value) noexcept
+  forceinline void vectorcall scatterComplex(SIMD *values, simd_int indices, SIMD value) noexcept
   {
     auto array = indices.getArrayOfValues();
     for (usize i = 0; i < kChannelsPerInOut; ++i)
       values[array[2 * i]] = merge(values[array[2 * i]], value, kChannelMasks[i]);
   }
   template<SimdValue SIMD>
-  strict_inline void vector_call scatterAddComplex(SIMD *values, simd_int indices, SIMD value, simd_mask mask) noexcept
+  forceinline void vectorcall scatterAddComplex(SIMD *values, simd_int indices, SIMD value, simd_mask mask) noexcept
   {
     auto array = indices.getArrayOfValues();
     for (usize i = 0; i < kChannelsPerInOut; ++i)
       values[array[2 * i]] = merge(values[array[2 * i]], values[array[2 * i]] + value, kChannelMasks[i] & mask);
   }
   template<SimdValue SIMD>
-  strict_inline void vector_call scatterAddComplex(SIMD *values, simd_int indices, SIMD value) noexcept
+  forceinline void vectorcall scatterAddComplex(SIMD *values, simd_int indices, SIMD value) noexcept
   {
     auto array = indices.getArrayOfValues();
     for (usize i = 0; i < kChannelsPerInOut; ++i)
@@ -399,7 +399,7 @@ namespace utils
   // returns a mask which can be used to xor the value restore the sign
   // if flag is set, a full mask where values are negative
   template<bool ReturnFullMask = false>
-  strict_inline simd_mask vector_call unsignSimd(simd_int &value) noexcept
+  forceinline simd_mask vectorcall unsignSimd(simd_int &value) noexcept
   {
     static constexpr simd_mask signMask = kSignMask;
     simd_mask mask = simd_mask::equal(value & signMask, signMask);
@@ -420,7 +420,7 @@ namespace utils
 
   // conditionally unsigns floats if they are negative and returns full mask where values are negative
   template<bool ReturnFullMask = false>
-  strict_inline simd_mask vector_call unsignSimd(simd_float &value) noexcept
+  forceinline simd_mask vectorcall unsignSimd(simd_float &value) noexcept
   {
     static constexpr simd_mask signMask = kSignMask;
     simd_mask mask = reinterpretToInt(value) & signMask;
@@ -432,7 +432,7 @@ namespace utils
   }
 
   // if equalsWrap == true/false, then the value will wrap around when it reaches/when it is greater than the modulo
-  strict_inline simd_int vector_call modOnce(simd_int value, simd_int mod, bool equalsWrap = true) noexcept
+  forceinline simd_int vectorcall modOnce(simd_int value, simd_int mod, bool equalsWrap = true) noexcept
   {
     simd_mask lessMask = (equalsWrap) ? simd_int::lessThanSigned(value, mod) :
       simd_int::lessThanOrEqualSigned(value, mod);
@@ -441,7 +441,7 @@ namespace utils
   }
 
   // if equalsWrap == true/false, then the value will wrap around when it reaches/when it is greater than the modulo
-  strict_inline simd_float vector_call modOnce(simd_float value, simd_float mod, bool equalsWrap = true) noexcept
+  forceinline simd_float vectorcall modOnce(simd_float value, simd_float mod, bool equalsWrap = true) noexcept
   {
     simd_mask lessMask = (equalsWrap) ? simd_float::lessThan(value, mod) : 
       simd_float::lessThanOrEqual(value, mod);
@@ -449,7 +449,7 @@ namespace utils
     return merge(lower, value, lessMask);
   }
 
-  strict_inline simd_float vector_call modOnceSymmetric(simd_float value, simd_float mod, bool equalsWrap = true) noexcept
+  forceinline simd_float vectorcall modOnceSymmetric(simd_float value, simd_float mod, bool equalsWrap = true) noexcept
   {
     simd_mask signMask = unsignSimd(value);
     simd_mask lessMask = (equalsWrap) ? simd_float::lessThan(value, mod) : 
@@ -458,7 +458,7 @@ namespace utils
     return merge(lower, value, lessMask) ^ signMask;
   }
 
-  strict_inline simd_float vector_call modSymmetric(simd_float value, simd_float mod) noexcept
+  forceinline simd_float vectorcall modSymmetric(simd_float value, simd_float mod) noexcept
   {
     value /= mod;
     value -= simd_float::round(value * 0.5f) * 2.0f;
@@ -466,7 +466,7 @@ namespace utils
   }
 
 
-  strict_inline simd_float vector_call horizontalAdd(simd_float one, simd_float two) noexcept
+  forceinline simd_float vectorcall horizontalAdd(simd_float one, simd_float two) noexcept
   {
   #if COMPLEX_SSE4_1
     return _mm_hadd_ps(one.value, two.value);
@@ -475,7 +475,7 @@ namespace utils
   #endif
   }
 
-  strict_inline simd_float vector_call horizontalSub(simd_float one, simd_float two) noexcept
+  forceinline simd_float vectorcall horizontalSub(simd_float one, simd_float two) noexcept
   {
   #if COMPLEX_SSE4_1
     return _mm_hsub_ps(one.value, two.value);
@@ -485,7 +485,7 @@ namespace utils
   #endif
   }
 
-  strict_inline simd_int vector_call horizontalMin(simd_int value) noexcept
+  forceinline simd_int vectorcall horizontalMin(simd_int value) noexcept
   {
   #if COMPLEX_SSE4_1
     auto reversed = _mm_shuffle_epi32(value.value, _MM_SHUFFLE(0, 1, 2, 3));
@@ -497,7 +497,7 @@ namespace utils
   #endif
   }
 
-  strict_inline simd_float vector_call horizontalMin(simd_float value) noexcept
+  forceinline simd_float vectorcall horizontalMin(simd_float value) noexcept
   {
   #if COMPLEX_SSE4_1
     return reinterpretToFloat(horizontalMin(reinterpretToInt(value)));
@@ -506,7 +506,7 @@ namespace utils
   #endif
   }
 
-  strict_inline simd_float vector_call reciprocal(simd_float value) noexcept
+  forceinline simd_float vectorcall reciprocal(simd_float value) noexcept
   {
   #if COMPLEX_SSE4_1
     return _mm_rcp_ps(value.value);
@@ -516,7 +516,7 @@ namespace utils
   }
 
   template<u32 Shift>
-  strict_inline simd_int vector_call shiftRight(simd_int values) noexcept
+  forceinline simd_int vectorcall shiftRight(simd_int values) noexcept
   {
   #if COMPLEX_SSE4_1
     return _mm_srli_epi32(values.value, Shift);
@@ -526,7 +526,7 @@ namespace utils
   }
 
   template<u32 Shift>
-  strict_inline simd_int vector_call shiftLeft(simd_int values) noexcept
+  forceinline simd_int vectorcall shiftLeft(simd_int values) noexcept
   {
   #if COMPLEX_SSE4_1
     return _mm_slli_epi32(values.value, Shift);
@@ -536,14 +536,14 @@ namespace utils
   }
 
   template<u32 Shift>
-  strict_inline simd_float vector_call shiftRight(simd_float value) noexcept
+  forceinline simd_float vectorcall shiftRight(simd_float value) noexcept
   {
     static constexpr auto decrement = kFloatExponentUnit * Shift;
     return reinterpretToFloat(reinterpretToInt(value) - decrement);
   }
 
   template<u32 Shift>
-  strict_inline simd_float vector_call shiftLeft(simd_float value) noexcept
+  forceinline simd_float vectorcall shiftLeft(simd_float value) noexcept
   {
     static constexpr auto increment = kFloatExponentUnit * Shift;
     return reinterpretToFloat(reinterpretToInt(value) + increment);
@@ -551,7 +551,7 @@ namespace utils
 
 
 
-  strict_inline simd_float vector_call exp2(simd_float exponent) noexcept
+  forceinline simd_float vectorcall exp2(simd_float exponent) noexcept
   {
     // taylor expansion of 2^x at 0
     // coefficients are (ln(2)^n) / n!
@@ -578,7 +578,7 @@ namespace utils
     return power * interpolate;
   }
 
-  strict_inline simd_float vector_call log2(simd_float value) noexcept
+  forceinline simd_float vectorcall log2(simd_float value) noexcept
   {
     // i have no idea how these coefficients were derived
     static constexpr simd_float kCoefficient0 = -1819.0f / 651.0f;
@@ -588,7 +588,7 @@ namespace utils
     static constexpr simd_float kCoefficient4 = -1.0f / 3.0f;
     static constexpr simd_float kCoefficient5 = 1.0f / 31.0f;
 
-    static constexpr simd_mask mantissaMask = 0x7fffff;
+    static constexpr simd_mask mantissaMask = kFloatMantissaMask;
     static constexpr simd_mask exponentOffset = 0x7f << 23;
 
     // effectively log2s only the exponent; gets it in terms an int
@@ -606,49 +606,49 @@ namespace utils
     return toFloat(flooredLog2) + interpolate;
   }
 
-  strict_inline simd_float vector_call exp(simd_float exponent) noexcept
+  forceinline simd_float vectorcall exp(simd_float exponent) noexcept
   { return exp2(exponent * kExpConversionMult); }
 
-  strict_inline simd_float vector_call log(simd_float value) noexcept
+  forceinline simd_float vectorcall log(simd_float value) noexcept
   { return log2(value) * kLogConversionMult; }
 
-  strict_inline simd_float vector_call pow(simd_float base, simd_float exponent) noexcept
+  forceinline simd_float vectorcall pow(simd_float base, simd_float exponent) noexcept
   { return exp2(log2(base) * exponent); }
 
-  strict_inline simd_float vector_call midiOffsetToRatio(simd_float note_offset) noexcept
+  forceinline simd_float vectorcall midiOffsetToRatio(simd_float note_offset) noexcept
   { return exp2(note_offset * (1.0f / kNotesPerOctave)); }
 
-  strict_inline simd_float vector_call midiNoteToFrequency(simd_float note) noexcept
+  forceinline simd_float vectorcall midiNoteToFrequency(simd_float note) noexcept
   { return midiOffsetToRatio(note) * kMidi0Frequency; }
 
   // fast approximation of the original equation
-  strict_inline simd_float vector_call amplitudeToDb(simd_float magnitude) noexcept
+  forceinline simd_float vectorcall amplitudeToDb(simd_float magnitude) noexcept
   { return log2(magnitude) * kAmplitudeToDbConversionMult; }
 
   // fast approximation of the original equation
-  strict_inline simd_float vector_call dbToAmplitude(simd_float decibels) noexcept
+  forceinline simd_float vectorcall dbToAmplitude(simd_float decibels) noexcept
   { return exp2(decibels * kDbToAmplitudeConversionMult); }
 
-  strict_inline simd_float vector_call normalisedToDb(simd_float normalised, float maxDb) noexcept
+  forceinline simd_float vectorcall normalisedToDb(simd_float normalised, float maxDb) noexcept
   { return pow(maxDb + 1.0f, normalised) - 1.0f; }
 
-  strict_inline simd_float vector_call dbToNormalised(simd_float db, float maxDb) noexcept
+  forceinline simd_float vectorcall dbToNormalised(simd_float db, float maxDb) noexcept
   { return log2(db + 1.0f) / log2(simd_float{ maxDb + 1.0f }); }
 
-  strict_inline simd_float vector_call normalisedToFrequency(simd_float normalised, float sampleRate, float minFrequency = kMinFrequency) noexcept
+  forceinline simd_float vectorcall normalisedToFrequency(simd_float normalised, float sampleRate, float minFrequency = kMinFrequency) noexcept
   { return pow(sampleRate * 0.5f / minFrequency, normalised) * minFrequency; }
 
-  strict_inline simd_float vector_call frequencyToNormalised(simd_float frequency, float sampleRate, float minFrequency = kMinFrequency) noexcept
+  forceinline simd_float vectorcall frequencyToNormalised(simd_float frequency, float sampleRate, float minFrequency = kMinFrequency) noexcept
   { return log2(frequency / minFrequency) / log2(simd_float{ sampleRate * 0.5f / minFrequency }); }
 
   // returns the proper bin which may also be nyquist, which is outside a power-of-2
-  strict_inline simd_float vector_call normalisedToBin(simd_float normalised, u32 FFTSize, float sampleRate) noexcept
+  forceinline simd_float vectorcall normalisedToBin(simd_float normalised, u32 FFTSize, float sampleRate) noexcept
   {
     simd_mask zeroMask = simd_float::notEqual(normalised, 0.0f);
     return simd_float::round(normalisedToFrequency(normalised, sampleRate) / sampleRate * (float)FFTSize) & zeroMask;
   }
 
-  strict_inline simd_float vector_call binToNormalised(simd_float bin, u32 FFTSize, float sampleRate) noexcept
+  forceinline simd_float vectorcall binToNormalised(simd_float bin, u32 FFTSize, float sampleRate) noexcept
   {
     // for 0 logarithm doesn't produce valid values
     // so we mask that with dummy values to not get errors
@@ -656,36 +656,36 @@ namespace utils
     return frequencyToNormalised(bin * sampleRate / (float)FFTSize, sampleRate) & zeroMask;
   }
 
-  strict_inline float exp2(float value) noexcept
+  forceinline float exp2(float value) noexcept
   {
     simd_float input = value;
     simd_float result = exp2(input);
     return result[0];
   }
 
-  strict_inline float log2(float value) noexcept
+  forceinline float log2(float value) noexcept
   {
     simd_float input = value;
     simd_float result = log2(input);
     return result[0];
   }
 
-  strict_inline float pow(float base, float exponent) noexcept
+  forceinline float pow(float base, float exponent) noexcept
   { return exp2(log2(base) * exponent); }
 
-  strict_inline float exp(float exponent) noexcept
+  forceinline float exp(float exponent) noexcept
   { return exp2(exponent * kExpConversionMult); }
 
-  strict_inline float log(float value) noexcept
+  forceinline float log(float value) noexcept
   { return log2(value) * kLogConversionMult; }
 
-  strict_inline float exp10(float exponent) noexcept
+  forceinline float exp10(float exponent) noexcept
   { return exp2(exponent * kExp10ConversionMult); }
 
-  strict_inline float log10(float exponent) noexcept
+  forceinline float log10(float exponent) noexcept
   { return log2(exponent * kLog10ConversionMult); }
 
-  strict_inline simd_float powerScale(simd_float value, simd_float power)
+  forceinline simd_float powerScale(simd_float value, simd_float power)
   {
     static constexpr float kMinPowerMag = 0.005f;
     simd_mask zeroMask = simd_float::lessThan(power, kMinPowerMag) & simd_float::lessThan(-power, kMinPowerMag);
@@ -695,7 +695,7 @@ namespace utils
     return merge(result, value, zeroMask);
   }
 
-  strict_inline float powerScale(float value, float power)
+  forceinline float powerScale(float value, float power)
   {
     static constexpr float kMinPower = 0.01f;
 
@@ -707,13 +707,13 @@ namespace utils
     return numerator / denominator;
   }
 
-  strict_inline simd_float vector_call getStereoDifference(simd_float value) noexcept
+  forceinline simd_float vectorcall getStereoDifference(simd_float value) noexcept
   {
     return (value - switchInner(value)) * 0.5f;
   }
 
   // assumes value is signed
-  strict_inline simd_int vector_call getStereoDifference(simd_int value) noexcept
+  forceinline simd_int vectorcall getStereoDifference(simd_int value) noexcept
   {
     simd_int highestBit = value & kSignMask;
     return highestBit | shiftRight<1>(value - reinterpretToInt(switchInner(reinterpretToFloat(value))));
@@ -741,8 +741,8 @@ namespace utils
     // gets catmull-rom spline interpolated y-values at their corresponding x-values
     simd_float cubicLookup(simd_float x) const noexcept
     {
-      COMPLEX_ASSERT(simd_float::lessThan(x, 0.0f).anyMask() == 0 &&
-        simd_float::greaterThan(x, 1.0f).anyMask() == 0);
+      COMPLEX_ASSERT(simd_mask::anyMask(simd_float::lessThan(x, 0.0f)) == 0 &&
+        simd_mask::anyMask(simd_float::greaterThan(x, 1.0f)) == 0);
 
       simd_float boost = (x * scale_) + 1.0f;
       simd_int indices = simd_int::clampUnsigned(utils::toInt(boost), simd_int(1), simd_int(Resolution));
@@ -758,8 +758,8 @@ namespace utils
     // gets linearly interpolated y-values at their corresponding x-values
     simd_float linearLookup(simd_float x) const noexcept
     {
-      COMPLEX_ASSERT(simd_float::lessThan(x, 0.0f).anyMask() == 0 &&
-        simd_float::greaterThan(x, 1.0f).anyMask() == 0);
+      COMPLEX_ASSERT(simd_mask::anyMask(simd_float::lessThan(x, 0.0f)) == 0 &&
+        simd_mask::anyMask(simd_float::greaterThan(x, 1.0f)) == 0);
 
       simd_float boost = (x * scale_) + 1.0f;
       simd_int indices = simd_int::clampUnsigned(utils::toInt(boost), simd_int(1), simd_int(Resolution));

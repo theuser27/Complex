@@ -180,12 +180,14 @@ namespace Interface
     constexpr Rectangle withExpandTop(T delta) const { return withTop(y - delta); }
     constexpr Rectangle withExpandRight(T delta) const { return withWidth(w + delta); }
     constexpr Rectangle withExpandBottom(T delta) const { return withHeight(h + delta); }
-    constexpr Rectangle withExpand(Rectangle<T> delta) const
+    constexpr Rectangle 
+    withExpand(Rectangle<T> delta) const
     {
       return { x - delta.x, y - delta.y, utils::max(T(), w + delta.x + delta.w),
         utils::max(T(), h + delta.y + delta.h) };
     }
-    constexpr Rectangle withExpand(T deltaX, T deltaY) const
+    constexpr Rectangle 
+    withExpand(T deltaX, T deltaY) const
     {
       return { x - deltaX, y - deltaY, utils::max(T(), w + deltaX * 2),
         utils::max(T(), h + deltaY * 2) };
@@ -210,17 +212,20 @@ namespace Interface
     constexpr Rectangle &transpose() { return *this = transposed(); }
 
     constexpr bool isEmpty() const { return w <= T() || h <= T(); }
-    constexpr bool contains(T xCoord, T yCoord) const
+    constexpr bool 
+    contains(T xCoord, T yCoord) const
     {
       return xCoord >= x && yCoord >= y && xCoord < x + w && yCoord < y + h;
     }
     constexpr bool contains(Point<T> point) const { return contains(point.x, point.y); }
-    constexpr bool contains(Rectangle other) const
+    constexpr bool 
+    contains(Rectangle other) const
     {
       return x <= other.x && y <= other.y && x + w >= other.x + other.w && y + h >= other.y + other.h;
     }
 
-    constexpr bool intersects(Rectangle other) const
+    constexpr bool 
+    intersects(Rectangle other) const
     {
       return x + w > other.x
         && y + h > other.y
@@ -230,7 +235,8 @@ namespace Interface
         && other.w > T() && other.h > T();
     }
 
-    constexpr Rectangle getIntersection(Rectangle other) const
+    constexpr Rectangle 
+    getIntersection(Rectangle other) const
     {
       auto nx = utils::max(x, other.x);
       auto ny = utils::max(y, other.y);
@@ -240,7 +246,8 @@ namespace Interface
       return { nx, ny, nw, nh };
     }
 
-    constexpr Rectangle getUnion(Rectangle other) const
+    constexpr Rectangle 
+    getUnion(Rectangle other) const
     {
       if (other.isEmpty())
         return *this;
@@ -254,13 +261,15 @@ namespace Interface
         utils::max(y + h, other.y + other.h) - newY };
     }
 
-    constexpr Point<T> getConstrainedPoint(Point<T> point) const
+    constexpr Point<T> 
+    getConstrainedPoint(Point<T> point) const
     {
       return { utils::clamp(point.x, x, getRight()),
         utils::clamp(point.y, y, getBottom()) };
     }
 
-    constexpr Rectangle constrainedWithin(Rectangle areaToFitWithin) const
+    constexpr Rectangle 
+    constrainedWithin(Rectangle areaToFitWithin) const
     {
       auto newPos = areaToFitWithin.withSize(areaToFitWithin.w - w,
         areaToFitWithin.h - h).getConstrainedPoint({ x, y });
@@ -428,7 +437,8 @@ namespace Interface
 
     constexpr bool test(decltype(flags) flagsToTest) const { return (flags & flagsToTest) != 0; }
 
-    constexpr u8 getMouseButtonsDownCount() const
+    constexpr u8 
+    getMouseButtonsDownCount() const
     {
       u8 num = 0;
 
@@ -504,8 +514,7 @@ namespace Interface
     i8 directionY : 2 = 0;
 
     MouseEvent getEventRelativeTo(Component *otherComponent) const;
-    Point<int> getOffsetFromDragStart() const 
-    { return { x - mouseDownPosition.x, y - mouseDownPosition.y }; }
+    Point<int> getOffsetFromDragStart() const { return { x - mouseDownPosition.x, y - mouseDownPosition.y }; }
   };
 
   struct KeyPress
@@ -549,8 +558,8 @@ namespace Interface
       values[i] = utils::clamp(values[i] + ((flags[i]) ? increments[i] : -increments[i]), 0.0f, 1.0f);
   }
 
-  strict_inline float easeOutQuadratic(float x) { return 1.0f - (1.0f - x) * (1.0f - x); }
-  strict_inline float smoothstep(float x) { return (3.0f * x * x) - (2.0f * x * x * x); }
+  forceinline float easeOutQuadratic(float x) { return 1.0f - (1.0f - x) * (1.0f - x); }
+  forceinline float smoothstep(float x) { return (3.0f * x * x) - (2.0f * x * x * x); }
 
   struct MonitorInfo
   {

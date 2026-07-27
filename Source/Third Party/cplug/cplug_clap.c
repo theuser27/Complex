@@ -5,7 +5,7 @@
 #include <string.h>
 
 #include "clap/clap.h"
-#include "cplug/cplug.h"
+#include "cplug.h"
 
 typedef struct CLAPPlugin
 {

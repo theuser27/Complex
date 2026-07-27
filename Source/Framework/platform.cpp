@@ -393,7 +393,20 @@ namespace utils
   Dylib::Dylib(const char *fullPath)
   {
   #if COMPLEX_WINDOWS
-    handle = ::LoadLibraryA(fullPath);
+    // spinning when loading a library 
+    // since it might not have finished being built
+    for (usize i = 0; i < 100; ++i) // up to ~10 seconds
+    {
+      handle = ::LoadLibraryA(fullPath);
+      if (handle)
+        break;
+
+      if (::GetLastError() != ERROR_SHARING_VIOLATION)
+        break;
+
+      ::Sleep(100);
+    }
+
     COMPLEX_ASSERT(handle, "Couldn't load library");
   #else
 
@@ -408,6 +421,19 @@ namespace utils
   #else
 
   #endif
+  }
+
+  void *
+  Dylib::getSymbol(utils::string_view decoratedName) const
+  {
+  #if COMPLEX_WINDOWS
+    if (handle)
+      return ::GetProcAddress((::HMODULE)handle, decoratedName.data());
+  #else
+
+  #endif
+
+    return nullptr;
   }
 
   static constinit u64 systemFrequency = 10'000'000;

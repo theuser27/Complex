@@ -105,7 +105,11 @@ namespace Generation
         .processorMetadata = COMPLEX_STRUCTURE_EFFECT("Contrast", Types::Contrast, vtableContrast, Interface::Skin::kDynamicsModule, .parameters =
           (
             COMPLEX_STRUCTURE_PARAMETER("Depth", Contrast::Depth, -1.0f, 1.0f, 0.0f, 0.5f, ParameterScale::Linear,
-              "%", ParameterDetails::Modulatable | ParameterDetails::Automatable | ParameterDetails::Stereo)
+              "%", ParameterDetails::Modulatable | ParameterDetails::Automatable | ParameterDetails::Stereo),
+            COMPLEX_STRUCTURE_PARAMETER("Range", Contrast::Range, 0.0f, 1.0f, 1.0f, 1.0f, ParameterScale::Cubic,
+              "%", ParameterDetails::Modulatable | ParameterDetails::Automatable | ParameterDetails::Stereo),
+            COMPLEX_STRUCTURE_PARAMETER("Tilt", Contrast::Tilt, -24.0f, 24.0f, 0.0f, 0.5f, ParameterScale::SymmetricQuadratic,
+              " dB", ParameterDetails::Modulatable | ParameterDetails::Automatable | ParameterDetails::Stereo)
           )
         )
       ),
@@ -113,7 +117,9 @@ namespace Generation
         .processorMetadata = COMPLEX_STRUCTURE_EFFECT("Clip", Types::Clip, vtableClip, Interface::Skin::kDynamicsModule, .parameters =
           (
             COMPLEX_STRUCTURE_PARAMETER("Threshold", Clip::Threshold, 0.0f, 1.0f, 0.0f, 0.0f, ParameterScale::Linear,
-              "%", ParameterDetails::Modulatable | ParameterDetails::Automatable | ParameterDetails::Stereo)
+              "%", ParameterDetails::Modulatable | ParameterDetails::Automatable | ParameterDetails::Stereo),
+            COMPLEX_STRUCTURE_PARAMETER("Tilt", Clip::Tilt, -24.0f, 24.0f, 0.0f, 0.5f, ParameterScale::SymmetricQuadratic,
+              " dB", ParameterDetails::Modulatable | ParameterDetails::Automatable | ParameterDetails::Stereo)
           )
         )
       )
@@ -226,6 +232,8 @@ namespace Generation
 
   static void circularLoop(const auto &lambda, u32 start, u32 length, u32 binCount)
   {
+    COMPLEX_ASSERT(utils::isPowerOfTwo(binCount - 1));
+
     for (u32 i = 0; i < length - 1; i++)
       lambda((start + i) & (binCount - 2));
 
@@ -237,7 +245,7 @@ namespace Generation
       lambda(start + length);
   }
 
-  static simd_mask vector_call 
+  static simd_mask vectorcall 
   isOutsideBounds(simd_int positionIndices,
     simd_int lowBoundIndices, simd_int highBoundIndices, simd_mask isHighAboveLow)
   {
@@ -250,18 +258,18 @@ namespace Generation
     return (belowLowBounds | aboveHighBounds) & ((belowLowBounds & aboveHighBounds) ^ isHighAboveLow);
   }
 
-  static strict_inline simd_mask vector_call isOutsideBounds(
+  static forceinline simd_mask vectorcall isOutsideBounds(
     simd_int positionIndices, simd_int lowBoundIndices, simd_int highBoundIndices)
   {
     return isOutsideBounds(positionIndices, lowBoundIndices, highBoundIndices,
       simd_int::greaterThanOrEqualSigned(highBoundIndices, lowBoundIndices));
   }
 
-  static strict_inline simd_mask vector_call isInsideBounds(simd_int positionIndices,
+  static forceinline simd_mask vectorcall isInsideBounds(simd_int positionIndices,
       simd_int lowBoundIndices, simd_int highBoundIndices, simd_mask isHighAboveLow)
   { return ~isOutsideBounds(positionIndices, lowBoundIndices, highBoundIndices, isHighAboveLow); }
 
-  static strict_inline simd_mask vector_call isInsideBounds(
+  static forceinline simd_mask vectorcall isInsideBounds(
     simd_int positionIndices, simd_int lowBoundIndices, simd_int highBoundIndices)
   { return ~isOutsideBounds(positionIndices, lowBoundIndices, highBoundIndices); }
 
@@ -312,7 +320,7 @@ namespace Generation
   }
 
   // returns starting point, distance to end of processed/unprocessed range, and if the range is stereo
-  static auto vector_call
+  static auto vectorcall
   minimiseRange(simd_int lowIndices, simd_int highIndices, u32 binCount, bool isProcessedRange)
   {
     COMPLEX_ASSERT(utils::isPowerOfTwo(binCount - 1), "Bin count is not power-of-2 + 1, but instead %d", binCount);
@@ -331,7 +339,7 @@ namespace Generation
     ret = { 0, binCount, true };
 
     // 2.
-    if (lowIndices.allSame() && highIndices.allSame())
+    if (simd_int::allSame(lowIndices) && simd_int::allSame(highIndices))
     {
       u32 start = lowIndices[0];
       u32 end = highIndices[0];
@@ -392,7 +400,7 @@ namespace Generation
           {
             simd_mask runNotCompleteMask = simd_mask::greaterThanSigned(length, 0);
             // if all lengths are 0 or negative then we've completed all runs
-            if (runNotCompleteMask.anyMask() == 0)
+            if (simd_mask::anyMask(runNotCompleteMask) == 0)
               break;
 
             utils::scatterComplex(destinationChannel.pointer, start,
@@ -426,7 +434,8 @@ namespace Generation
     }
   }
 
-  static simd_float vector_call matchPower(simd_float target, simd_float current) noexcept
+  static simd_float vectorcall 
+  matchPower(simd_float target, simd_float current)
   {
     simd_float result = 1.0f;
     result = result & simd_float::greaterThan(target, 0.0f);
@@ -435,6 +444,18 @@ namespace Generation
     result = utils::merge(result, simd_float{ 1.0f }, simd_float::greaterThan(result, 1e30f));
     result = result & simd_float::lessThanOrEqual(1e-37f, result);
     return result;
+  }
+
+  static simd_float vectorcall 
+  getTiltSlopeMultiplier(simd_float tiltDb, float sampleRate,
+    u32 binCount, float minFrequency = (float)kMinFrequency)
+  {
+    simd_float decadeSlope = tiltDb * kOctaveToDecadeConversionMult;
+    float sampleHz = sampleRate / (float)(2 * binCount);
+    float startDecade = ::log10f(minFrequency / sampleHz);
+    float decadeCount = ::log10f(sampleRate / (2.0f * minFrequency));
+    float resolution = 1.0f / ((float)binCount - 1.0f);
+    return dbToAmplitude(((decadeCount + startDecade) * decadeSlope) * resolution);
   }
 
   /////////////////////////////////////////////////////////////
@@ -461,6 +482,7 @@ namespace Generation
   //
   // 1. When dealing with nyquist it's best to have a small section after your main algorithm to process it separately.
   // 2. Whenever in doubt, look at other algorithm implementations for ideas
+  // 3. If no output/no unprocessed ranges or only dry/wet signal can be heard, be sure to check masking logic
 
   void Filter::runNormal(EffectModule *effectModule, EffectData *effectData,
     Framework::ComplexDataSource &source, Framework::SimdBuffer *destination,
@@ -598,16 +620,9 @@ namespace Generation
     gainParameter = -gainParameter;
 
     simd_float slope = 1.0f;
-    simd_float slopeMultiplier{};
-    {
-      simd_float tiltParameter = getParameter(effectData, Filter::Gate::Tilt)->getInternalValue<simd_float>(sampleRate);
-      simd_float decadeSlope = tiltParameter * kOctaveToDecadeConversionMult;
-      float sampleHz = sampleRate / (float)(2 * binCount);
-      float startDecade = ::log10f((float)kMinFrequency / sampleHz);
-      float decadeCount = ::log10f(sampleRate / (2.0f * (float)kMinFrequency));
-      float resolution = 1.0f / ((float)binCount - 1.0f);
-      slopeMultiplier = dbToAmplitude(((decadeCount + startDecade) * decadeSlope) * resolution);
-    }
+    simd_float slopeMultiplier = getTiltSlopeMultiplier(
+      getParameter(effectData, Filter::Gate::Tilt)->getInternalValue<simd_float>(sampleRate),
+      sampleRate, binCount);
 
     auto rawSource = source.sourceBuffer->get();
     auto rawDestination = destination->get();
@@ -643,54 +658,129 @@ namespace Generation
     }();
     simd_mask isHighAboveLowMask = simd_int::greaterThanOrEqualSigned(highBoundIndices, lowBoundIndices);
 
+    simd_float slopeMultiplier = getTiltSlopeMultiplier(
+      getParameter(effectData, Dynamics::Contrast::Tilt)->getInternalValue<simd_float>(sampleRate),
+      sampleRate, binCount);
+    
+    auto rawSource = source.sourceBuffer->get();
+    auto rawScratch = source.scratchBuffer->get();
+    auto rawDestination = destination->get();
+
+    // starting point is the weighted average
+    // 
+    // weights should be determined based on human perception (e^(-index) or 2^(-index)?)
+    // because we're basing things on human perception 
+    // we can take a subset of the entire spectrum to compute the average 
+    // skip some high frequency content entirely, which is where the bulk of the bins are
+    // if we want XY% coverage we need to take the first 
+    // `(kMinFrequency * (sampleRate / (2 * kMinFrequency))^XY) / (sampleRate / (2 * binCount))` number of bins
+    // then weighted avg = sum(magnitude[i] * weight[i]) / sum(weight[i])
+    // where the sum of all the weights is 1 / (log(base) * base^x)
+    //  
+    // range is percentage of the all bins (determined by parameter)
+    // only the bins in that range participate
+
+    simd_float maxMagnitude = 0.0f;
+    simd_float minMagnitude = kFloatInf;
+    simd_float avg = 0.0f;
+    simd_float slope = 1.0f;
+    // 2^(-i)
+    simd_float weight = 1.0f;
+    for (u32 i = 0; i < binCount; ++i)
+    {
+      // copy both un/processed data
+      rawDestination[i] = rawSource[i];
+      simd_mask isInsideBoundsMask = isInsideBounds(i, lowBoundIndices, highBoundIndices, isHighAboveLowMask);
+      rawScratch[i] = reinterpretToFloat(isInsideBoundsMask);
+      simd_float magnitude = slope * complexMagnitude(rawSource[i], true);
+      avg = merge(avg, avg + magnitude, isInsideBoundsMask);
+      maxMagnitude = merge(maxMagnitude, magnitude, simd_float::greaterThan(magnitude, maxMagnitude) & isInsideBoundsMask);
+      minMagnitude = merge(minMagnitude, magnitude, simd_float::lessThan(magnitude, minMagnitude) & isInsideBoundsMask);
+
+      weight *= 0.5f;
+      slope *= slopeMultiplier;
+    }
+
+    {
+      // integral(0, inf, 2^(-i)), sum of all the weights
+      static constexpr simd_float kWeightSum = 1.0f / const_math::log(2.0f);
+      avg /= kWeightSum * (float)binCount;
+
+      simd_float avgDb = utils::amplitudeToDb(avg);
+      simd_float minDb = utils::amplitudeToDb(minMagnitude);
+      simd_float maxDb = utils::amplitudeToDb(maxMagnitude);
+
+      COMPLEX_ASSERT(simd_mask::anyMask(simd_float::greaterThan(avgDb, maxDb)) == 0);
+      COMPLEX_ASSERT(simd_mask::anyMask(simd_float::lessThan(avgDb, minDb)) == 0);
+
+      simd_float rangeParameter = getParameter(effectData, Dynamics::Contrast::Range)->getInternalValue<simd_float>(sampleRate);
+      simd_float dbRange = (maxDb - minDb) * rangeParameter;
+      simd_float newMinDb = simd_float::max(minDb, avgDb - dbRange * 0.5f);
+      maxDb = simd_float::min(newMinDb + dbRange, maxDb);
+      minDb = maxDb - dbRange;
+
+      minMagnitude = utils::dbToAmplitude(minDb);
+      maxMagnitude = utils::dbToAmplitude(maxDb);
+
+      // squaring the magnitudes because we use squared norms in the processing below
+      minMagnitude *= minMagnitude;
+      maxMagnitude *= maxMagnitude;
+    }
+
     // minimising the bins to iterate on
     auto [start, processedCount, _] = minimiseRange(lowBoundIndices, highBoundIndices, binCount, true);
+    slope = utils::pow(slopeMultiplier, (float)start);
+
+    simd_float inPower = 0.0f;
+    circularLoop([&](u32 index)
+      {
+        simd_float magnitude = slope * complexMagnitude(rawDestination[index], false);
+        rawScratch[index] &= simd_float::greaterThanOrEqual(magnitude, minMagnitude) &
+          simd_float::lessThanOrEqual(magnitude, maxMagnitude);
+        inPower += magnitude & rawScratch[index];
+        slope *= slopeMultiplier;
+      }, start, processedCount, binCount);
 
     // calculating contrast
     simd_float depthParameter = getParameter(effectData, Dynamics::Contrast::Depth)
       ->getInternalValue<simd_float>(sampleRate);
     simd_float contrast = depthParameter * depthParameter;
-    contrast = merge(simd_float(kContrastMaxNegativeValue) * contrast,
-      simd_float(kContrastMaxPositiveValue) * contrast, simd_float::greaterThanOrEqual(depthParameter, 0.0f));
+    contrast = merge(kContrastMaxNegativeValue * contrast,
+      kContrastMaxPositiveValue * contrast, 
+      simd_float::greaterThanOrEqual(depthParameter, 0.0f));
 
-    simd_float min = exp(simd_float(-80.0f) / (contrast * 2.0f + 1.0f));
-    simd_float max = exp(simd_float(80.0f) / (contrast * 2.0f + 1.0f));
-    min = merge(simd_float(1e-30f), min, simd_float::greaterThan(contrast, 0.0f));
-    max = merge(simd_float(1e30f), max, simd_float::greaterThan(contrast, 0.0f));
+    simd_float min = exp(-80.0f / (contrast * 2.0f + 1.0f));
+    simd_float max = exp( 80.0f / (contrast * 2.0f + 1.0f));
+    min = merge(1e-30f, min, simd_float::greaterThan(contrast, 0.0f));
+    max = merge(1e+30f, max, simd_float::greaterThan(contrast, 0.0f));
 
-    // copy both un/processed data
-    applyToThisNoMask<MathOperations::Assign>(
-      destination, source.sourceBuffer, destination->channels, binCount);
-
-    auto rawDestination = destination->get();
-    simd_float inPower = 0.0f;
-    circularLoop([&](u32 index)
-      {
-        inPower += complexMagnitude(rawDestination[index], false) &
-          isInsideBounds(index, lowBoundIndices, highBoundIndices, isHighAboveLowMask);
-      }, start, processedCount, binCount);
-
-    simd_int boundDistanceCount = (modOnce(simd_int{ binCount } + highBoundIndices - lowBoundIndices, simd_int{ binCount }) + 1)
+    simd_int boundDistanceCount = (modOnce(binCount + highBoundIndices - lowBoundIndices, binCount) + 1)
       & simd_int::notEqual(lowBoundIndices, highBoundIndices);
     simd_float inScale = matchPower(toFloat(boundDistanceCount), inPower);
+
+    slope = utils::pow(slopeMultiplier, (float)start);
 
     // applying gain and calculating outPower
     simd_float outPower = 0.0f;
     circularLoop([&](u32 index)
       {
-        simd_float bin = inScale * rawDestination[index];
+        simd_float bin = slope * inScale * rawDestination[index];
         simd_float magnitude = complexMagnitude(bin, true);
 
         bin &= simd_float::lessThanOrEqual(min, magnitude);
         bin = merge(bin, bin * pow(magnitude, contrast), simd_float::greaterThan(max, magnitude));
 
-        outPower += complexMagnitude(bin, false);
-        rawDestination[index] = bin;
+        outPower += complexMagnitude(bin, false) & reinterpretToInt(rawScratch[index]);
+        rawDestination[index] = merge(rawDestination[index], bin / slope, reinterpretToInt(rawScratch[index]));
+        slope *= slopeMultiplier;
       }, start, processedCount, binCount);
 
     // normalising
     simd_float outScale = matchPower(inPower, outPower);
-    circularLoop([&](u32 index) { rawDestination[index] *= outScale; }, start, processedCount, binCount);
+    circularLoop([&](u32 index) 
+      {
+        rawDestination[index] *= merge(1.0f, outScale, reinterpretToInt(rawScratch[index]));
+      }, start, processedCount, binCount);
   }
 
   void Dynamics::runClip(EffectModule *effectModule, EffectData *effectData,
@@ -701,7 +791,7 @@ namespace Generation
     using namespace Framework;
 
     static constexpr float kSilenceThreshold = 1e-30f;
-    static constexpr float kLoudestThreshold = 1e30f;
+    static constexpr float kLoudestThreshold = 1e+30f;
 
     // getting the boundaries in terms of bin position
     auto [lowBoundIndices, highBoundIndices] = [&]()
@@ -729,6 +819,94 @@ namespace Generation
       powerMinMax.second = merge(simd_float::max(powerMinMax.second, magnitude), powerMinMax.second, isIndexOutside);
     }
 
+    // minimising the bins to iterate on
+    auto [start, processedCount, _] = minimiseRange(lowBoundIndices, highBoundIndices, binCount, true);
+
+    // calculating clipping
+    simd_float thresholdParameter = getParameter(effectData, Dynamics::Clip::Threshold)
+      ->getInternalValue<simd_float>(sampleRate);
+    thresholdParameter = thresholdParameter * thresholdParameter * thresholdParameter;
+    simd_float threshold = exp(lerp(log(simd_float::max(powerMinMax.first, 1e-36f)),
+                                    log(simd_float::max(powerMinMax.second, 1e-36f)),
+                                    simd_float{ 1.0f } - thresholdParameter));
+    simd_float slopeMultiplier = getTiltSlopeMultiplier(-3.0f +
+      -getParameter(effectData, Dynamics::Clip::Tilt)->getInternalValue<simd_float>(sampleRate),
+      sampleRate, binCount);
+    // reset slope to the start of the covered range
+    threshold *= utils::pow(slopeMultiplier, (float)start);
+
+    // doing clipping
+    simd_float inPower = 0.0f;
+    simd_float outPower = 0.0f;
+    circularLoop([&](u32 index)
+      {
+        simd_mask isIndexInside = isInsideBounds(index, lowBoundIndices, highBoundIndices, isHighAboveLowMask);
+        simd_float magnitude = complexMagnitude(rawDestination[index], false);
+
+        // 0/0 and >0/0 masking, prevents NaN and Inf respectively
+        simd_float rescale = simd_float::sqrt(threshold / magnitude) & 
+          simd_float::notEqual(threshold, 0.0f) & simd_float::notEqual(magnitude, 0.0f);
+        rawDestination[index] *= merge(1.0f, rescale,
+          simd_float::greaterThanOrEqual(magnitude, threshold) & isIndexInside);
+
+        inPower += magnitude & isIndexInside;
+        outPower += simd_float::min(magnitude, threshold) & isIndexInside;
+        threshold *= slopeMultiplier;
+      }, start, processedCount, binCount);
+
+    // normalising
+    simd_float outScale = matchPower(inPower, outPower);
+    outScale = merge(outScale, 1.0f, simd_float::isNan(outScale));
+    circularLoop([&](u32 index)
+      {
+        rawDestination[index] = merge(rawDestination[index] * outScale, rawDestination[index],
+          isOutsideBounds(index, lowBoundIndices, highBoundIndices, isHighAboveLowMask));
+      }, start, processedCount, binCount);
+  }
+  
+  // TODO: broken version but makes cool artifacts
+  /*void Dynamics::runClip(EffectModule *effectModule, EffectData *effectData,
+    Framework::ComplexDataSource &source, Framework::SimdBuffer *destination,
+    u32 binCount, float sampleRate) noexcept
+  {
+    using namespace utils;
+    using namespace Framework;
+
+    static constexpr float kSilenceThreshold = 1e-30f;
+    static constexpr float kLoudestThreshold = 1e30f;
+
+    // getting the boundaries in terms of bin position
+    auto [lowBoundIndices, highBoundIndices] = [&]()
+    {
+      auto shiftedBoundsIndices = getShiftedBounds(effectModule, EffectModule::BoundRepresentation::BinIndex, sampleRate, binCount);
+      return utils::pair{ toInt(shiftedBoundsIndices.first), toInt(shiftedBoundsIndices.second) };
+    }();
+    simd_mask isHighAboveLowMask = simd_int::greaterThanOrEqualSigned(highBoundIndices, lowBoundIndices);
+
+    COMPLEX_ASSERT(source.sourceBuffer->size == destination->size);
+
+    auto rawSource = source.sourceBuffer->get();
+    auto rawDestination = destination->get();
+
+    // getting the min/max power in the range selected
+    utils::pair<simd_float, simd_float> powerMinMax{ kLoudestThreshold, kSilenceThreshold };
+    simd_float slope = 1.0f;
+    simd_float slopeMultiplier = getTiltSlopeMultiplier(
+      getParameter(effectData, Dynamics::Clip::Tilt)->getInternalValue<simd_float>(sampleRate),
+      sampleRate, binCount);
+
+    for (u32 j = 0; j < binCount; j++)
+    {
+      // while calculating the power min-max we can copy over data
+      rawDestination[j] = rawSource[j];
+
+      simd_float magnitude = slope * complexMagnitude(rawDestination[j], false);
+      simd_mask isIndexOutside = isOutsideBounds(j, lowBoundIndices, highBoundIndices, isHighAboveLowMask);
+      powerMinMax.first  = merge(simd_float::min(powerMinMax.first , magnitude), powerMinMax.first , isIndexOutside);
+      powerMinMax.second = merge(simd_float::max(powerMinMax.second, magnitude), powerMinMax.second, isIndexOutside);
+      slope *= slopeMultiplier;
+    }
+
     // calculating clipping
     simd_float thresholdParameter = getParameter(effectData, Dynamics::Clip::Threshold)
       ->getInternalValue<simd_float>(sampleRate);
@@ -741,13 +919,16 @@ namespace Generation
     // minimising the bins to iterate on
     auto [start, processedCount, _] = minimiseRange(lowBoundIndices, highBoundIndices, binCount, true);
 
+    // reset slope to the start of the covered range
+    slope = utils::pow(slopeMultiplier, (float)start);
+
     // doing clipping
     simd_float inPower = 0.0f;
     simd_float outPower = 0.0f;
     circularLoop([&](u32 index)
       {
         simd_mask isIndexInside = isInsideBounds(index, lowBoundIndices, highBoundIndices, isHighAboveLowMask);
-        simd_float magnitude = complexMagnitude(rawDestination[index], false);
+        simd_float magnitude = slope * complexMagnitude(rawDestination[index], false);
 
         rawDestination[index] = merge(rawDestination[index],
           rawDestination[index] * sqrtThreshold / simd_float::sqrt(magnitude),
@@ -755,16 +936,18 @@ namespace Generation
 
         inPower += magnitude & isIndexInside;
         outPower += simd_float::min(magnitude, threshold) & isIndexInside;
+        slope *= slopeMultiplier;
       }, start, processedCount, binCount);
 
     // normalising
     simd_float outScale = matchPower(inPower, outPower);
     circularLoop([&](u32 index)
       {
-        rawDestination[index] = merge(rawDestination[index] * outScale, rawDestination[index],
+        auto result = rawDestination[index] * outScale;
+        rawDestination[index] = merge(result / outScale, rawDestination[index],
           isOutsideBounds(index, lowBoundIndices, highBoundIndices, isHighAboveLowMask));
       }, start, processedCount, binCount);
-  }
+  }*/
 
   void Phase::runShift(EffectModule *effectModule, EffectData *effectData,
     Framework::ComplexDataSource &source, Framework::SimdBuffer *destination,
@@ -822,7 +1005,7 @@ namespace Generation
     auto rawDestination = destination->get();
 
     // if interval between bins is 0 this means every bin is affected
-    if (interval == simd_float{ 0.0f })
+    if (simd_float::allEqual(interval, 0.0f))
     {
       simd_int offsetBin = toInt(normalisedToBin(getParameter(effectData, Phase::Shift::Offset)
         ->getInternalValue<simd_float>(sampleRate, true), 2 * (binCount - 1), sampleRate));
@@ -854,7 +1037,7 @@ namespace Generation
       ->getInternalValue<simd_float>(sampleRate) * 2.0f / sampleRate;
     simd_float binStep = 1.0f / (float)(binCount - 1);
     simd_float logBase = log2(interval + 1.0f);
-    COMPLEX_ASSERT(simd_float::lessThanOrEqual(logBase, 0.0f).anyMask() == 0);
+    COMPLEX_ASSERT(simd_mask::anyMask(simd_float::lessThanOrEqual(logBase, 0.0f)) == 0);
 
     // if offset is 0 we need to give it a starting value based on interval
     // and shift dc component's amplitude
@@ -864,7 +1047,7 @@ namespace Generation
       shift = merge(shift, slopeFunction(shift, shiftIncrement), zeroMask);
 
       simd_float startOffset = interval * binStep;
-      COMPLEX_ASSERT(simd_float::lessThanOrEqual(startOffset, 0.0f).anyMask() == 0);
+      COMPLEX_ASSERT(simd_mask::anyMask(simd_float::lessThanOrEqual(startOffset, 0.0f)) == 0);
 
       // this is derived below, the next 2 lines get the next bin after dc in case any channels started there
       simd_float multiple = simd_float::ceil(log2(binStep / startOffset) / logBase);
@@ -879,7 +1062,7 @@ namespace Generation
       simd_mask lessMask = simd_int::lessThanSigned(indices, binCount);
 
       // have all indices gone above nyquist?
-      if (lessMask.anyMask() == 0)
+      if (simd_mask::anyMask(lessMask) == 0)
         return false;
 
       simd_float values = gatherComplex(rawDestination.pointer, indices & lessMask);
@@ -897,7 +1080,7 @@ namespace Generation
       simd_float increment = interval * offsetNorm;
       simd_float nextBin = (simd_float::round(offsetNorm * (float)binCount) + 1.0f) / (float)binCount;
       // repeat this until all increments are bigger than a single bin step
-      while (simd_float::lessThan(increment, binStep).anyMask())
+      while (simd_mask::anyMask(simd_float::lessThan(increment, binStep)))
       {
         if (!algorithm())
           break;
@@ -1007,7 +1190,7 @@ namespace Generation
         {
           simd_mask runNotCompleteMask = simd_mask::greaterThanSigned(length, 0);
           // if all lengths are 0 or negative then we've completed all runs
-          if (runNotCompleteMask.anyMask() == 0)
+          if (simd_mask::anyMask(runNotCompleteMask) == 0)
             break;
 
           calculateCoefficients(destinationIndices - toFloat(start));

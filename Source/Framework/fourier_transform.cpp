@@ -108,7 +108,7 @@ namespace Framework
 
   // pffft requires all inputs and outputs be aligned to the simd type at use
   // so we can safely use aligned loads and stores
-  strict_inline simd_float vector_call toSimdFloat(const float *aligned) noexcept
+  forceinline simd_float vectorcall toSimdFloat(const float *aligned) noexcept
   {
   #if COMPLEX_SSE4_1
     return _mm_load_ps(aligned);
@@ -117,7 +117,7 @@ namespace Framework
   #endif
   }
 
-  strict_inline void vector_call fromSimdFloat(float *aligned, simd_float value) noexcept
+  forceinline void vectorcall fromSimdFloat(float *aligned, simd_float value) noexcept
   {
   #if COMPLEX_SSE4_1
     _mm_store_ps(aligned, value.value);
@@ -165,6 +165,7 @@ namespace Framework
 
     // zeroing out nyquist from previous transforms
     input[size] = 0.0f;
+    input[size + 1] = 0.0f;
     pffft_transform_ordered(plan, input, input, scratch, PFFFT_FORWARD);
   }
 

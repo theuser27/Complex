@@ -5,6 +5,7 @@
 
 #include "Third Party/cplug/cplug.h"
 #include "Third Party/glad/glad.h"
+#include "Third Party/xhl/xhl_files.h"
 
 #define PUGL_NO_INCLUDE_GL_H
 #include "Third Party/pugl/gl.h"
@@ -124,6 +125,10 @@ namespace Interface
       60.0f;
     #endif
 
+  #ifdef COMPLEX_HOTRELOAD_DIR
+    xfiles_watch_context_t watchFileContext{};
+  #endif
+
     PuglWorld *world_ = nullptr;
     PuglView *view_ = nullptr;
 
@@ -211,7 +216,7 @@ namespace Interface
         for (auto child = c->children; child; child = child->next)
           self(self, child);
       };
-      
+
       openGl.isDestroyingOpenGl = true;
       teardownComponent(teardownComponent, gui);
       openGl.isDestroyingOpenGl = false;
@@ -278,6 +283,10 @@ namespace Interface
 
     void renderLoop(PuglView *view)
     {
+    #ifdef COMPLEX_HOTRELOAD_DIR
+      xfiles_watch_flush(watchFileContext);
+    #endif
+
       ++numberOfFrames;
       if (numberOfFrames == 200)
       {
@@ -305,16 +314,13 @@ namespace Interface
 
       nvgBeginFrame(openGl, (float)area.w, (float)area.h, uiRelated.scale);
 
-      openGl.parentStack.emplaceBack(gui, gui->bounds, true);
-      openGl.parentStack.emplaceBack(ScopedBoundsEmplace::doNotAddFlag);
       gui->doRender(openGl);
-      openGl.parentStack.clear();
 
       if (renderDebugFps)
       {
         nvgReset(openGl);
         auto text = utils::floatToString(localScratch, 1.0f / getGraphAverage(&graph), 2);
-        renderText(text, FontId::DDinType, scaleValue({ 4.0f, 4.0f, 24.0f, 24.0f }).toInt().toFloat(), 
+        renderText(text, FontId::DDinType, scaleValue({ 4.0f, 4.0f, 24.0f, 24.0f }).toInt().toFloat(),
           *graphics, Colours::white, Placement::left);
       }
 
@@ -333,11 +339,11 @@ namespace Interface
       recalculateScale();
     }
 
-    no_inline void computeMultiClick(double currentTime, MouseEvent &e, bool isClicking)
+    void computeMultiClick(double currentTime, MouseEvent &e, bool isClicking)
     {
       if (isClicking)
       {
-        if (currentTime - lastMouseClickTime < Renderer::kMultiClickTimeout && 
+        if (currentTime - lastMouseClickTime < Renderer::kMultiClickTimeout &&
           lastMouseDownPosition_ == Point{ e.x, e.y })
           ++numberOfClicks;
         else
@@ -606,6 +612,38 @@ namespace Interface
     return PUGL_SUCCESS;
   }
 
+  void hotreloadCallback(XFILES_WATCH_TYPE type, const char *path, void *udata)
+  {
+    switch (type)
+    {
+    case XFILES_WATCH_CREATED:
+    {
+      auto s = utils::string_view{ path, utils::getStringSize(path) };
+      // filter out non-DLL files
+      if (s.rfind(".dll") == utils::string_view::npos)
+        return;
+
+      auto newLib = utils::sp<utils::Dylib>::create(path);
+      if (!newLib->handle)
+        return;
+
+      executableStaticData.structure.loadedDynamicLibs.emplaceBack(newLib);
+
+      auto *renderer = (Renderer *)udata;
+      auto g = renderer->plugin.acquireProcessingLock();
+      auto *state = renderer->plugin.state_.get();
+      state->pluginStructure.loadedDynamicLibs.emplaceBack(COMPLEX_MOVE(newLib));
+
+      // invalidate cached symbols
+      state->cachedHotreloadSymbols.data.clear();
+    } break;
+    case XFILES_WATCH_DELETED:
+    case XFILES_WATCH_MODIFIED:
+    default:
+      break;
+    }
+  }
+
   Renderer *
   createRenderer(Plugin::ComplexPlugin &plugin)
   {
@@ -613,6 +651,9 @@ namespace Interface
 
     auto *renderer = anew(arena, Renderer, { .plugin = plugin,
       .arena = arena, .callbacks = { arena } });
+  #ifdef COMPLEX_HOTRELOAD_DIR
+    renderer->watchFileContext = xfiles_watch_create(COMPLEX_HOTRELOAD_DIR, renderer, hotreloadCallback);
+  #endif
     uiRelated.renderer = renderer;
     renderer->skinInstance = anew(arena, Skin, {});
     uiRelated.skin = renderer->skinInstance;
@@ -624,6 +665,9 @@ namespace Interface
   {
     customPlacement = {};
     renderer->gui->~MainInterface();
+  #ifdef COMPLEX_HOTRELOAD_DIR
+    xfiles_watch_destroy(renderer->watchFileContext);
+  #endif
     utils::bumpArena::destroy(renderer->arena);
   }
 
@@ -631,7 +675,7 @@ namespace Interface
   {
     if (renderer->gui)
     {
-      renderer->dragAndDropComponent_ = renderer->focusedComponent_ = 
+      renderer->dragAndDropComponent_ = renderer->focusedComponent_ =
         renderer->mouseDownComponent_ = renderer->mouseHoveredComponent_ = nullptr;
       renderer->callbacks.clear();
     }
@@ -692,7 +736,7 @@ namespace Interface
     renderer->moveFocusTo(component);
   }
 
-  void registerCallback(Renderer *renderer, 
+  void registerCallback(Renderer *renderer,
     Component *component, PersistentCallback *callback)
   {
     renderer->callbacks.emplaceBack(component, callback);
@@ -840,14 +884,14 @@ namespace Interface
   {
     // things might disappear without having moved the mouse pointer
     // therefore we need to check hovered component
-    if (lastMousePosition_ == Point{ e.x, e.y } && 
+    if (lastMousePosition_ == Point{ e.x, e.y } &&
       (mouseHoveredComponent_ && mouseHoveredComponent_->isShowing()))
       return;
 
     if (mouseDownComponent_)
     {
       auto relativeEvent = getRelativeEvent(e, mouseDownComponent_);
-      mouseDownComponent_->componentFlags.isHovered = 
+      mouseDownComponent_->componentFlags.isHovered =
         mouseDownComponent_->contains(Point{ relativeEvent.x, relativeEvent.y });
       if (mouseDownComponent_->mouseDrag(relativeEvent))
         return;
@@ -992,7 +1036,7 @@ namespace Interface
   void Renderer::handleKeyPress(KeyPress k)
   {
     for (auto f = focusedComponent_; f; f = f->parent)
-      if (focusedComponent_->keyPressed(k)) 
+      if (focusedComponent_->keyPressed(k))
         return;
 
     // so that no keyboard input is missed

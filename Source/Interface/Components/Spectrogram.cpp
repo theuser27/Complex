@@ -11,8 +11,13 @@
 
 namespace
 {
-  strict_inline void vector_call complexMagnitude(simd_float &one, simd_float &two)
+  #define CHECK_NAN(x) //if (simd_mask::anyMask(simd_float::isNan(x)) != 0) COMPLEX_DEBUG_TRAP();
+
+  forceinline simd_float vectorcall clearNan(simd_float value) { return value & simd_mask{ ~kFloatMantissaMask }; }
+  forceinline void vectorcall complexMagnitude(simd_float &one, simd_float &two)
   {
+    static constexpr simd_mask exponentMask = kFloatExponentMask;
+
   #if COMPLEX_SSE4_1
     simd_float real = _mm_shuffle_ps(one.value, two.value, _MM_SHUFFLE(2, 0, 2, 0));
     simd_float imaginary = _mm_shuffle_ps(one.value, two.value, _MM_SHUFFLE(3, 1, 3, 1));
@@ -21,6 +26,8 @@ namespace
     simd_float imaginary = vuzp2q_f32(one.value, two.value);
   #endif
     auto magnitude = simd_float::sqrt(simd_float::mulAdd(real * real, imaginary, imaginary));
+    //CHECK_NAN(magnitude);
+    magnitude = merge(magnitude, clearNan(magnitude), simd_float::isNan(magnitude));
     static constexpr simd_float zeroes = 0.0f;
   #if COMPLEX_SSE4_1
     one.value = _mm_unpacklo_ps(magnitude.value, zeroes.value);
@@ -31,8 +38,7 @@ namespace
   #endif
   }
 
-  template<auto function = [](simd_float &, simd_float &) { }>
-  strict_inline void vector_call midSide(simd_float &one, simd_float &two)
+  forceinline void vectorcall midSide(simd_float &one, simd_float &two)
   {
   #if COMPLEX_SSE4_1
     auto lowerOne = _mm_unpacklo_ps(one.value, one.value);
@@ -54,8 +60,12 @@ namespace
   #endif
     one = utils::groupOdd(addSubOne);
     two = utils::groupOdd(addSubTwo);
+  }
 
-    function(one, two);
+  forceinline void vectorcall convert(simd_float &one, simd_float &two)
+  {
+    midSide(one, two);
+    complexMagnitude(one, two);
   }
 }
 
@@ -107,7 +117,8 @@ namespace Interface
         utils::min(scratchBuffer->channels, bufferView->channels), binCount);
       //bufferPosition = bufferView.getBufferPosition();
     }
-
+    
+    //CHECK_NAN(scratchBuffer->data[0]);
     // convert data to polar form
     if (shouldDisplayPhases)
     {
@@ -162,18 +173,9 @@ namespace Interface
       }*/
     }
     else
-      utils::convertBufferInPlace<::midSide<::complexMagnitude>>(scratchBuffer, binCount);
+      utils::convertBufferInPlace<::convert>(scratchBuffer, binCount);
     
     auto scratchBufferRaw = scratchBuffer->get();
-
-    // handle dc and nyquist separately because the conversion functions wrote garbage there
-    {
-      simd_float dc = scratchBufferRaw[0];
-      simd_float nyquist = scratchBufferRaw[binCount - 1];
-      ::midSide(dc, nyquist);
-      scratchBufferRaw[0] = simd_float::abs(dc);
-      scratchBufferRaw[binCount - 1] = simd_float::abs(nyquist);
-    }
 
     static constexpr simd_float defaultValue = { 0.001f, 0.0f };
     const float maxBin = (float)binCount - 1.0f;
@@ -184,7 +186,7 @@ namespace Interface
     const float rangeMult = 1.0f / (maxDb - minDb);
 
     // yes these are magic numbers, change at your own risk
-    const simd_float decay = 0.25f + utils::max(0.0f, 0.05f * ::log2f(2048.0f / (float)binCount - 1.0f));
+    const simd_float decay = 0.25f - 0.02f * ::log2f(utils::max(1.0f, 2048.0f / (float)binCount - 1.0f));
 
     constexpr float resolution = 1.0f / (kResolution - 1.0f);
     const float rangeMultiplier = ::powf(10.0f, decadeCount * resolution);
@@ -216,7 +218,9 @@ namespace Interface
     auto calculateAmplitude = [&]() // scales amplitudes and clamps
     {
       currentBin *= scalingFactor * simd_float{ slope, 1.0f };
+      CHECK_NAN(resultBufferRaw[j]);
       simd_float amplitude = lerp(resultBufferRaw[j], currentBin, decay);
+      amplitude = merge(amplitude, kFloatInf, simd_float::isNan(amplitude));
       currentBin = merge(amplitude, currentBin, kPhaseMask);
       resultBufferRaw[j] = currentBin;
       currentBin = merge(defaultValue, currentBin, copyFromEven(simd_float::greaterThan(currentBin, defaultValue)));
@@ -229,12 +233,14 @@ namespace Interface
         beginIndex = (u32)::floorf(rangeBegin);
         endIndex = (u32)::floorf(rangeEnd);
         currentBin = scratchBufferRaw[beginIndex];
+        CHECK_NAN(currentBin);
 
         if (endIndex - beginIndex <= 1)
         {
           simd_float lower = currentBin;
           u32 nextIndex = (u32)::ceilf(rangeBegin);
           simd_float upper = scratchBufferRaw[nextIndex];
+          CHECK_NAN(upper);
 
           currentBin = dbToAmplitude(lerp(amplitudeToDb(lower), amplitudeToDb(upper), rangeBegin - (float)beginIndex));
           currentBin = merge(currentBin, circularLerpSymmetric(lower, upper, rangeBegin - (float)beginIndex, kPi), kPhaseMask);
@@ -258,6 +264,7 @@ namespace Interface
 
           if (endIndex - beginIndex != 1 && j > 0)
           {
+            CHECK_NAN(currentBin);
             // this is not the first iteration, we can use the value from the previous one
             resultBufferRaw[j] = currentBin;
           }
@@ -265,6 +272,7 @@ namespace Interface
           {
             // the point is entering the next bin, calculate its value
             currentBin = scratchBufferRaw[endIndex];
+            CHECK_NAN(currentBin);
 
             calculateAmplitude();
           }
@@ -272,6 +280,7 @@ namespace Interface
         else
         {
           currentBin = scratchBufferRaw[beginIndex];
+          CHECK_NAN(currentBin);
           findLargestInRange();
           calculateAmplitude();
         }
@@ -289,6 +298,7 @@ namespace Interface
       {
         lineData[k][j][0] = x;
         lineData[k][j][1] = (1.0f - amplitudeY[k * 2]) * height;
+        COMPLEX_ASSERT(lineData[k][j][1] == lineData[k][j][1]);
       }
 
       //simd_float phaseY = currentBin / k2Pi + 0.5f;
@@ -313,7 +323,6 @@ namespace Interface
 
     auto fillColour = getColour(Skin::kLightenScreen, Skin::kNone).withMultipliedAlpha(0.5f);
     nvgFillColor(g.context, fillColour);
-
 
     while (frequency < maxFrequency)
     {
@@ -379,7 +388,7 @@ namespace Interface
       nvgStrokePaint(openGl, nvgLinearGradient(openGl, 
         0.0f, 0.0f, 0.0f, (float)bounds.h, colour, colour.withMultipliedAlpha(0.2f)));
       nvgStroke(openGl);
-      colour = colour.withMultipliedAlpha(0.75f);
+      colour = colour.withMultipliedAlpha(0.65f);
     }
 
     return true;

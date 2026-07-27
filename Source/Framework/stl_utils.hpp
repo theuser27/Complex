@@ -359,7 +359,7 @@ namespace utils
   #define defer deferAtHome defer1(defer__, __COUNTER__) = [&]()
 
   template<usize Iterations>
-  strict_inline void longPause() noexcept
+  forceinline void longPause() noexcept
   {
     unroll<Iterations>([]()
       {
@@ -1136,7 +1136,7 @@ namespace utils
   }
 #endif
 
-  strict_inline u32
+  forceinline u32
   log2(u32 value) noexcept
   {
   #if COMPLEX_GCC || COMPLEX_CLANG
@@ -1154,7 +1154,7 @@ namespace utils
   #endif
   }
 
-  strict_inline usize 
+  forceinline usize 
   log2(usize value) noexcept
   {
     COMPLEX_ASSERT(value != 0);
@@ -1185,7 +1185,7 @@ namespace utils
   roundUpToMultiple(T i, T factor) noexcept
   { return ((i + factor - 1) / factor) * factor; }
 
-  strict_inline usize 
+  forceinline usize 
   getAlignment(const void *pointer) noexcept
   {
     COMPLEX_ASSERT(pointer);

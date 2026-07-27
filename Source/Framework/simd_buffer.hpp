@@ -63,7 +63,7 @@ namespace Framework
   // specified by starting channels/indices
   // result is shifted by shiftMask and filtered with mergeMask
   // note: starting channels need to be congruent to kNumChannels
-  strict_inline void applyToThis(SimdBuffer *thisBuffer, const SimdBuffer *otherBuffer, 
+  forceinline void applyToThis(SimdBuffer *thisBuffer, const SimdBuffer *otherBuffer, 
     u32 channels, u32 samples, utils::MathOperations operation, 
     simd_mask mergeMask, u32 thisStartChannel = 0, u32 otherStartChannel = 0,
     u32 thisStartIndex = 0, u32 otherStartIndex = 0)

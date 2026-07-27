@@ -15,39 +15,32 @@
 #include "Interface/LookAndFeel/Component.hpp"
 #include "Interface/Sections/MainInterface.hpp"
 
+Framework::ExecutableStaticData executableStaticData{};
+
 namespace
 {
-  struct
-  {
-    utils::LockBlame<i32> readWriteLock{};
-    Framework::PluginStructure structure{};
-    utils::bumpArena *stringArena{};
-    utils::sll<utils::string_view> *strings{};
-    utils::sll<Plugin::ComplexPlugin> *pluginInstances{};
-  } structure{};
-
   void initialisePluginStructure()
   {
-    utils::ScopedLock g{ structure.readWriteLock, true, utils::WaitMechanism::WaitNotify };
+    utils::ScopedLock g{ executableStaticData.readWriteLock, true, utils::WaitMechanism::WaitNotify };
 
-    structure.stringArena = utils::bumpArena::create(COMPLEX_MB(1), COMPLEX_KB(64));
-    structure.structure.arena = utils::bumpArena::create(COMPLEX_MB(1), COMPLEX_KB(64));
-    structure.structure.metadata = (Framework::ProcessorMetadata *)initialiseTypeStructure<
-      Generation::SoundEngine>(nullptr, structure.structure);
+    executableStaticData.stringArena = utils::bumpArena::create(COMPLEX_MB(1), COMPLEX_KB(64));
+    executableStaticData.structure.arena = utils::bumpArena::create(COMPLEX_MB(1), COMPLEX_KB(64));
+    executableStaticData.structure.metadata = (Framework::ProcessorMetadata *)initialiseTypeStructure<
+      Generation::SoundEngine>(nullptr, executableStaticData.structure);
 
     auto pushString = [&](utils::string_view string)
     {
       if (string.empty())
         return;
 
-      for (auto *element = structure.strings; element; element = element->next)
+      for (auto *element = executableStaticData.strings; element; element = element->next)
         if (element->object == string)
           return;
 
-      auto *node = anew(structure.stringArena, utils::sll<utils::string_view>, { string });
-      if (structure.strings)
-        node->next = structure.strings;
-      structure.strings = node;
+      auto *node = anew(executableStaticData.stringArena, utils::sll<utils::string_view>, { string });
+      if (executableStaticData.strings)
+        node->next = executableStaticData.strings;
+      executableStaticData.strings = node;
     };
 
     auto recurseParameterStrings = [&](const auto &recurseParameters, const auto &recurseProcessors,
@@ -110,17 +103,17 @@ namespace
       }
     };
 
-    recurseProcessorStrings(recurseProcessorStrings, structure.structure.metadata);
+    recurseProcessorStrings(recurseProcessorStrings, executableStaticData.structure.metadata);
   }
 
   void deinitialisePluginStructure()
   {
-    utils::ScopedLock g{ structure.readWriteLock, true, utils::WaitMechanism::WaitNotify };
+    utils::ScopedLock g{ executableStaticData.readWriteLock, true, utils::WaitMechanism::WaitNotify };
 
-    utils::bumpArena::destroy(structure.structure.arena);
+    utils::bumpArena::destroy(executableStaticData.structure.arena);
 
-    structure.strings = {};
-    utils::bumpArena::destroy(structure.stringArena);
+    executableStaticData.strings = {};
+    utils::bumpArena::destroy(executableStaticData.stringArena);
   }
 }
 
@@ -129,9 +122,9 @@ utils::MemoryLogger memoryLogger{};
 utils::string_view
 findOrAddPermanentString(utils::string_view string)
 {
-  auto *element = structure.strings;
+  auto *element = executableStaticData.strings;
   {
-    utils::ScopedLock g{ structure.readWriteLock, false, utils::WaitMechanism::WaitNotify };
+    utils::ScopedLock g{ executableStaticData.readWriteLock, false, utils::WaitMechanism::WaitNotify };
 
     auto *previousElement = element;
     for (; element; (previousElement = element), (element = element->next))
@@ -141,17 +134,17 @@ findOrAddPermanentString(utils::string_view string)
   }
 
   {
-    utils::ScopedLock g{ structure.readWriteLock, true, utils::WaitMechanism::WaitNotify };
+    utils::ScopedLock g{ executableStaticData.readWriteLock, true, utils::WaitMechanism::WaitNotify };
 
-    auto *memory = utils::bumpArena::insert(structure.stringArena, sizeof(utils::sll<utils::string_view>) +
+    auto *memory = utils::bumpArena::insert(executableStaticData.stringArena, sizeof(utils::sll<utils::string_view>) +
       1 + string.size(), alignof(utils::sll<utils::string_view>));
     auto stringStart = memory + sizeof(utils::sll<utils::string_view>);
     ::memcpy(stringStart, string.data(), string.size());
     memory[sizeof(utils::sll<utils::string_view>) + string.size()] = byte('\0');
 
-    auto *node = new(memory) utils::sll<utils::string_view>{ { (char *)(memory + sizeof(*structure.strings)), string.size() } };
-    if (!structure.strings)
-      structure.strings = node;
+    auto *node = new(memory) utils::sll<utils::string_view>{ { (char *)(memory + sizeof(*executableStaticData.strings)), string.size() } };
+    if (!executableStaticData.strings)
+      executableStaticData.strings = node;
     else
       element->next = node;
 
@@ -217,7 +210,8 @@ namespace Plugin
     parameterModulators = { { miscStorage, false }, 32 };
     dynamicParameters = { { miscStorage, false }, 32 };
     workers = { { miscStorage, false }, 16 };
-    
+    cachedHotreloadSymbols.data = { { miscStorage, false }, 16 };
+
     createDynamicParameters();
 
     auto count = plugin->parameterCount;
@@ -234,7 +228,7 @@ namespace Plugin
 
     //pluginStructure.versionNumber = structure.structure.versionNumber;
     //pluginStructure.loadedDynamicLibs = { pluginStructure.arena, structure.structure.loadedDynamicLibs };
-    pluginStructure.metadata = structure.structure.metadata;
+    pluginStructure.metadata = executableStaticData.structure.metadata;
   }
 
   State::~State()
@@ -420,6 +414,24 @@ namespace Plugin
     return worker;
   }
 
+  void *
+  State::getHotreloadSymbol(utils::string_view decoratedName)
+  {
+    if (auto iter = cachedHotreloadSymbols.get_last_of(decoratedName); 
+      iter != cachedHotreloadSymbols.data.end())
+      return iter->second;
+
+    if (!pluginStructure.loadedDynamicLibs.empty())
+    {
+      void *symbol = pluginStructure.loadedDynamicLibs.back()->getSymbol(decoratedName);
+      if (symbol)
+        cachedHotreloadSymbols.add_ordered(decoratedName, symbol);
+      return symbol;
+    }
+
+    return nullptr;
+  }
+
   ComplexPlugin::ComplexPlugin(usize parameterMappings, u32 inSidechains,
     u32 outSidechains, usize undoSteps, CplugHostContext *hostContext) :
     inSidechains{ inSidechains }, outSidechains{ outSidechains },
@@ -548,16 +560,16 @@ void *cplug_createPlugin(CplugHostContext *ctx)
   Framework::LoadSave::getStartupParameters(parameterMappings, inSidechains, outSidechains, undoSteps);
 
   auto *plugin = new utils::sll<Plugin::ComplexPlugin>{ { parameterMappings, (u32)inSidechains, (u32)outSidechains, undoSteps, ctx } };
-  utils::ScopedLock g{ structure.readWriteLock, true, utils::WaitMechanism::WaitNotify };
+  utils::ScopedLock g{ executableStaticData.readWriteLock, true, utils::WaitMechanism::WaitNotify };
 
-  if (auto *lastNode = structure.pluginInstances)
+  if (auto *lastNode = executableStaticData.pluginInstances)
   {
     while (lastNode->next)
       lastNode = lastNode->next;
     lastNode->next = plugin;
   }
   else
-    structure.pluginInstances = plugin;
+    executableStaticData.pluginInstances = plugin;
 
   return &plugin->object;
 }
@@ -567,9 +579,9 @@ void cplug_destroyPlugin(void *ptr)
   auto *plugin = (Plugin::ComplexPlugin *)ptr;
 
   {
-    utils::ScopedLock g{ structure.readWriteLock, true, utils::WaitMechanism::WaitNotify };
+    utils::ScopedLock g{ executableStaticData.readWriteLock, true, utils::WaitMechanism::WaitNotify };
 
-    utils::sll<Plugin::ComplexPlugin> *node = structure.pluginInstances, *lastNode = nullptr;
+    utils::sll<Plugin::ComplexPlugin> *node = executableStaticData.pluginInstances, *lastNode = nullptr;
 
     while (&node->object != plugin)
     {
@@ -577,7 +589,7 @@ void cplug_destroyPlugin(void *ptr)
       node = node->next;
     }
 
-    ((lastNode) ? lastNode->next : structure.pluginInstances) = node->next;
+    ((lastNode) ? lastNode->next : executableStaticData.pluginInstances) = node->next;
   }
 
   delete plugin;

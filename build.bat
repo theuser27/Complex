@@ -7,6 +7,8 @@ set vst=0
 set standalone=0
 set clap=0
 set data=0
+set hotreload=0
+set reloadable=0
 
 echo:
 
@@ -35,6 +37,8 @@ if "%data%"=="1"                                                set vst=0       
 if "%standalone%"=="1"           echo [standalone build]     && set vst=0        && set clap=0       && set full=0
 if "%clap%"=="1"                 echo [clap build]           && set vst=0        && set standalone=0 && set full=0
 if "%vst%"=="1"                  echo [vst build]            && set standalone=0 && set clap=0       && set full=0
+if "%hotreload%"=="1"            echo [hotreload build]      && set full=0
+if "%reloadable%"=="1"           echo [reloadble version]
 
 if "%full%"=="1" (
 
@@ -42,6 +46,7 @@ if "%full%"=="1" (
   echo [clap build]
   echo [release mode]
   echo:
+  set reloadable=0
   set debug=0
 
   set vst=1
@@ -54,9 +59,18 @@ if "%full%"=="1" (
   set clap=0
   echo:
 
+) else if "%data%"=="1" (
+  call :ProjectCompile
 ) else (
-  if "%release%"=="1"              echo [release mode]         && set debug=0   && echo:
-  if "%debug%"=="1"                echo [debug mode]           && set release=0 && echo:
+
+  if "%release%"=="1" (
+    echo [release mode]
+    set debug=0
+  ) else (
+    echo [debug mode]
+    set release=0
+  )
+  echo:
 
   call :ProjectCompile
 )
@@ -66,29 +80,44 @@ goto :EOF
 ::------Project Compilation------
 :ProjectCompile
 
-set top_level=..\..\..
-set compiled_files= %top_level%\Source\unity_extern.c %top_level%\Source\unity1.cpp %top_level%\Source\unity2.cpp
-set compiler_flags= /I%top_level%\Source\ /std:c++20 /nologo /diagnostics:column /FC /permissive- /MP /Zc:preprocessor /W4 /wd"4201" /sdl- /Zc:inline /fp:precise /D "PUGL_STATIC" /D "_CRT_SECURE_NO_WARNINGS" /D "_MBCS" /errorReport:prompt /GR- /Gd
-set linker_flags=   /ERRORREPORT:PROMPT /MANIFEST:EMBED /INCREMENTAL:NO /DEBUG /noexp /nocoffgrpinfo /OPT:REF /OPT:ICF Opengl32.lib Dwmapi.lib kernel32.lib user32.lib Gdi32.lib Ole32.lib Shell32.lib
+for /f "tokens=2 delims==" %%I in ('wmic os get localdatetime /format:list') do set datetime=%%I
+set datetime=%datetime:~0,8%-%datetime:~8,6%
 
 set build_dir=build
 set binary_data_dir=Source\Data
 if not exist %build_dir% mkdir %build_dir%
 
-if "%vst%"=="1" (
-  :: VST3 build
+set top_level=%~dp0
+set compiled_files= %top_level%\Source\unity_extern.c %top_level%\Source\unity1.cpp %top_level%\Source\unity2.cpp
+set compiler_flags= /I%top_level%\Source\ /std:c++20 /nologo /diagnostics:column /FC /permissive- /MP /Zc:preprocessor /W4 /wd"4201" /sdl- /Zc:inline /fp:precise /D "PUGL_STATIC" /D "_CRT_SECURE_NO_WARNINGS" /D "_MBCS" /errorReport:prompt /GR- /Gd
+set linker_flags=   /ERRORREPORT:PROMPT /MANIFEST:EMBED /INCREMENTAL:NO /DEBUG /noexp /nocoffgrpinfo /OPT:REF /OPT:ICF Opengl32.lib Dwmapi.lib kernel32.lib user32.lib Gdi32.lib Ole32.lib Shell32.lib
+
+set hotreload_dir=%build_dir%\hotreload
+for %%I in ("%hotreload_dir%") do set "full_hotreload_dir=%%~fI"
+if not exist %hotreload_dir% mkdir %hotreload_dir%
+
+if "%reloadable%"=="1" set compiler_flags= /DCOMPLEX_HOTRELOAD_DIR=R\"(%full_hotreload_dir%)\" %compiler_flags%
+
+
+if "%hotreload%"=="1" (
+  set build_dir=%hotreload_dir%
+  set out_file=Complex_%datetime%.dll
+  set compiler_flags= /DLL %compiler_flags%
+  set linker_flags= /DLL /PDB:Complex_%datetime%.pdb %linker_flags%
+) else if "%vst%"=="1" (
+  del /Q %hotreload_dir%\* > NUL 2> NUL
   set build_dir=%build_dir%\vst3
   set out_file=Complex.vst3
   set compiler_flags= /DLL %compiler_flags%
   set linker_flags= /DLL %linker_flags%
 ) else if "%clap%"=="1" (
-  :: Clap build
+  del /Q %hotreload_dir%\* > NUL 2> NUL
   set build_dir=%build_dir%\clap
   set out_file=Complex.clap
   set compiler_flags= /D "COMPLEX_CLAP" /DLL %compiler_flags%
   set linker_flags= /OUT:"Complex.clap" /DLL %linker_flags%
 ) else if "%standalone%"=="1" (
-  :: Standalone build
+  del /Q %hotreload_dir%\* > NUL 2> NUL
   set build_dir=%build_dir%\standalone
   set out_file=Complex.exe
   set compiler_flags= /D "COMPLEX_STANDALONE" %compiler_flags%
@@ -99,11 +128,11 @@ set linker_flags= /OUT:"%out_file%" %linker_flags%
 if not exist %build_dir% mkdir %build_dir%
 
 if "%debug%"=="1" (
-  set build_dir=%build_dir%\debug
+  if "%hotreload%"=="0" set build_dir=%build_dir%\debug
   set compiler_flags= /MTd /Od /Ob1 /Zi /RTC1 %compiler_flags%
   set linker_flags= /NODEFAULTLIB:libcpmtd.lib %linker_flags%
 ) else (
-  set build_dir=%build_dir%\release
+  if "%hotreload%"=="0" set build_dir=%build_dir%\release
   set compiler_flags= /MT /Ox /GL /Gy /Oi /Ot %compiler_flags%
   set linker_flags= /NODEFAULTLIB:libcpmt.lib %linker_flags%
 )
@@ -124,7 +153,7 @@ call :StartTimer
 if not exist %build_dir% mkdir %build_dir%
 pushd %build_dir%
 
-del /Q * > NUL 2> NUL
+if "%hotreload%"=="0" del /Q * > NUL 2> NUL
 
 call cl %compiler_flags% %compiled_files% /link %linker_flags%
 
