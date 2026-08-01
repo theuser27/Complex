@@ -8,6 +8,8 @@
 #include "Plugin/Complex.hpp"
 #include "Effects.hpp"
 #include "Interface/LookAndFeel/Skin.hpp"
+#include "Data/BinaryData.hpp"
+#include "Third Party/nanovg/nanosvg.h"
 
 namespace Generation
 {
@@ -33,6 +35,18 @@ namespace Generation
     return nullptr;
   }
 
+  static NSVGimage *
+  parseSVG(utils::bumpArena *arena, const unsigned char *data, usize dataSize)
+  {
+    char *svgString = arranew(localScratch, char, 1 + dataSize);
+    defer{ utils::bumpArena::remove(svgString); };
+    valcpy(svgString, data, dataSize);
+    svgString[dataSize] = '\0';
+
+    mallocArena = arena;
+    return nsvgParse(svgString, "px", 96);
+  }
+
   Framework::IndexedData *
   Utility::initialiseTypeStructure(Framework::PluginStructure &structure)
   {
@@ -51,9 +65,10 @@ namespace Generation
     EFFECT_VTABLE(Normal, createEffectGeneric, createUINormal);
     EFFECT_VTABLE(Gate, createEffectGeneric, createUIGate);
 
-    auto *arena = structure.getNewArena(COMPLEX_KB(4));
+    auto *arena = structure.getNewArena(COMPLEX_KB(40));
+    auto *parsedSVG = parseSVG(arena, BinaryData::Icon_Filter_svg, BinaryData::Icon_Filter_svgSize);
 
-    return COMPLEX_STRUCTURE_INDEXED_DATA(.displayName = "Filter", .id = id)->addChildren({{
+    return COMPLEX_STRUCTURE_INDEXED_DATA(.displayName = "Filter", .id = id, .flags = IndexedData::SVGData, .svgData = parsedSVG)->addChildren({{
       COMPLEX_STRUCTURE_INDEXED_DATA(.displayName = "Normal", .id = Types::Normal, .flags = IndexedData::ProcessorFlag,
         .processorMetadata = COMPLEX_STRUCTURE_EFFECT("Normal", Types::Normal, vtableNormal, Interface::Skin::kFilterModule, .parameters =
           (
@@ -98,9 +113,10 @@ namespace Generation
     EFFECT_VTABLE(Contrast, createEffectGeneric, createUIContrast);
     EFFECT_VTABLE(Clip, createEffectGeneric, createUIClip);
 
-    auto *arena = structure.getNewArena(COMPLEX_KB(1));
+    auto *arena = structure.getNewArena(COMPLEX_KB(2));
+    auto *parsedSVG = parseSVG(arena, BinaryData::Icon_Dynamics_svg, BinaryData::Icon_Dynamics_svgSize);
 
-    return COMPLEX_STRUCTURE_INDEXED_DATA(.displayName = "Dynamics", .id = id)->addChildren({{
+    return COMPLEX_STRUCTURE_INDEXED_DATA(.displayName = "Dynamics", .id = id, .flags = IndexedData::SVGData, .svgData = parsedSVG)->addChildren({{
       COMPLEX_STRUCTURE_INDEXED_DATA(.displayName = "Contrast", .id = Types::Contrast, .flags = IndexedData::ProcessorFlag,
         .processorMetadata = COMPLEX_STRUCTURE_EFFECT("Contrast", Types::Contrast, vtableContrast, Interface::Skin::kDynamicsModule, .parameters =
           (
@@ -134,8 +150,9 @@ namespace Generation
     EFFECT_VTABLE(Shift, createEffectGeneric, createUIShift);
 
     auto *arena = structure.getNewArena(COMPLEX_KB(4));
+    auto *parsedSVG = parseSVG(arena, BinaryData::Icon_Phase_svg, BinaryData::Icon_Phase_svgSize);
 
-    return COMPLEX_STRUCTURE_INDEXED_DATA(.displayName = "Phase", .id = id)->addChildren({{
+    return COMPLEX_STRUCTURE_INDEXED_DATA(.displayName = "Phase", .id = id, .flags = IndexedData::SVGData, .svgData = parsedSVG)->addChildren({{
       COMPLEX_STRUCTURE_INDEXED_DATA(.displayName = "Shift", .id = Types::Shift, .flags = IndexedData::ProcessorFlag,
         .processorMetadata = COMPLEX_STRUCTURE_EFFECT("Contrast", Types::Shift, vtableShift, Interface::Skin::kPhaseModule, .parameters =
           (
@@ -167,9 +184,10 @@ namespace Generation
     EFFECT_VTABLE(Resample, createEffectGeneric, createUIResample);
     EFFECT_VTABLE(FrequencyShift, createEffectGeneric, createUIFrequencyShift);
 
-    auto *arena = structure.getNewArena(COMPLEX_KB(1));
+    auto *arena = structure.getNewArena(COMPLEX_KB(2));
+    auto *parsedSVG = parseSVG(arena, BinaryData::Icon_Pitch_svg, BinaryData::Icon_Pitch_svgSize);
 
-    return COMPLEX_STRUCTURE_INDEXED_DATA(.displayName = "Pitch", .id = id)->addChildren({{
+    return COMPLEX_STRUCTURE_INDEXED_DATA(.displayName = "Pitch", .id = id, .flags = IndexedData::SVGData, .svgData = parsedSVG)->addChildren({{
       COMPLEX_STRUCTURE_INDEXED_DATA(.displayName = "Resample", .id = Types::Resample, .flags = IndexedData::ProcessorFlag,
         .processorMetadata = COMPLEX_STRUCTURE_EFFECT("Resample", Types::Resample, vtableResample, Interface::Skin::kPitchModule, .parameters =
           (
@@ -199,8 +217,9 @@ namespace Generation
     EFFECT_VTABLE(Reinterpret, createEffectGeneric, createUIReinterpret);
 
     auto *arena = structure.getNewArena(COMPLEX_KB(1));
+    auto *parsedSVG = parseSVG(arena, BinaryData::Icon_Destroy_svg, BinaryData::Icon_Destroy_svgSize);
 
-    return COMPLEX_STRUCTURE_INDEXED_DATA(.displayName = "Destroy", .id = id)->addChildren({{
+    return COMPLEX_STRUCTURE_INDEXED_DATA(.displayName = "Destroy", .id = id, .flags = IndexedData::SVGData, .svgData = parsedSVG)->addChildren({{
       COMPLEX_STRUCTURE_INDEXED_DATA(.displayName = "Reinterpret", .id = Types::Reinterpret, .flags = IndexedData::ProcessorFlag,
         .processorMetadata = COMPLEX_STRUCTURE_EFFECT("Reinterpret", Types::Reinterpret, vtableReinterpret, Interface::Skin::kDestroyModule, .parameters =
           (
@@ -245,7 +264,7 @@ namespace Generation
       lambda(start + length);
   }
 
-  static simd_mask vectorcall 
+  static simd_mask vectorcall
   isOutsideBounds(simd_int positionIndices,
     simd_int lowBoundIndices, simd_int highBoundIndices, simd_mask isHighAboveLow)
   {
@@ -434,7 +453,7 @@ namespace Generation
     }
   }
 
-  static simd_float vectorcall 
+  static simd_float vectorcall
   matchPower(simd_float target, simd_float current)
   {
     simd_float result = 1.0f;
@@ -446,7 +465,7 @@ namespace Generation
     return result;
   }
 
-  static simd_float vectorcall 
+  static simd_float vectorcall
   getTiltSlopeMultiplier(simd_float tiltDb, float sampleRate,
     u32 binCount, float minFrequency = (float)kMinFrequency)
   {
@@ -661,22 +680,22 @@ namespace Generation
     simd_float slopeMultiplier = getTiltSlopeMultiplier(
       getParameter(effectData, Dynamics::Contrast::Tilt)->getInternalValue<simd_float>(sampleRate),
       sampleRate, binCount);
-    
+
     auto rawSource = source.sourceBuffer->get();
     auto rawScratch = source.scratchBuffer->get();
     auto rawDestination = destination->get();
 
     // starting point is the weighted average
-    // 
+    //
     // weights should be determined based on human perception (e^(-index) or 2^(-index)?)
-    // because we're basing things on human perception 
-    // we can take a subset of the entire spectrum to compute the average 
+    // because we're basing things on human perception
+    // we can take a subset of the entire spectrum to compute the average
     // skip some high frequency content entirely, which is where the bulk of the bins are
-    // if we want XY% coverage we need to take the first 
+    // if we want XY% coverage we need to take the first
     // `(kMinFrequency * (sampleRate / (2 * kMinFrequency))^XY) / (sampleRate / (2 * binCount))` number of bins
     // then weighted avg = sum(magnitude[i] * weight[i]) / sum(weight[i])
     // where the sum of all the weights is 1 / (log(base) * base^x)
-    //  
+    //
     // range is percentage of the all bins (determined by parameter)
     // only the bins in that range participate
 
@@ -746,7 +765,7 @@ namespace Generation
       ->getInternalValue<simd_float>(sampleRate);
     simd_float contrast = depthParameter * depthParameter;
     contrast = merge(kContrastMaxNegativeValue * contrast,
-      kContrastMaxPositiveValue * contrast, 
+      kContrastMaxPositiveValue * contrast,
       simd_float::greaterThanOrEqual(depthParameter, 0.0f));
 
     simd_float min = exp(-80.0f / (contrast * 2.0f + 1.0f));
@@ -777,7 +796,7 @@ namespace Generation
 
     // normalising
     simd_float outScale = matchPower(inPower, outPower);
-    circularLoop([&](u32 index) 
+    circularLoop([&](u32 index)
       {
         rawDestination[index] *= merge(1.0f, outScale, reinterpretToInt(rawScratch[index]));
       }, start, processedCount, binCount);
@@ -829,7 +848,7 @@ namespace Generation
     simd_float threshold = exp(lerp(log(simd_float::max(powerMinMax.first, 1e-36f)),
                                     log(simd_float::max(powerMinMax.second, 1e-36f)),
                                     simd_float{ 1.0f } - thresholdParameter));
-    simd_float slopeMultiplier = getTiltSlopeMultiplier(-3.0f +
+    simd_float slopeMultiplier = getTiltSlopeMultiplier(
       -getParameter(effectData, Dynamics::Clip::Tilt)->getInternalValue<simd_float>(sampleRate),
       sampleRate, binCount);
     // reset slope to the start of the covered range
@@ -844,7 +863,7 @@ namespace Generation
         simd_float magnitude = complexMagnitude(rawDestination[index], false);
 
         // 0/0 and >0/0 masking, prevents NaN and Inf respectively
-        simd_float rescale = simd_float::sqrt(threshold / magnitude) & 
+        simd_float rescale = simd_float::sqrt(threshold / magnitude) &
           simd_float::notEqual(threshold, 0.0f) & simd_float::notEqual(magnitude, 0.0f);
         rawDestination[index] *= merge(1.0f, rescale,
           simd_float::greaterThanOrEqual(magnitude, threshold) & isIndexInside);
@@ -863,7 +882,7 @@ namespace Generation
           isOutsideBounds(index, lowBoundIndices, highBoundIndices, isHighAboveLowMask));
       }, start, processedCount, binCount);
   }
-  
+
   // TODO: broken version but makes cool artifacts
   /*void Dynamics::runClip(EffectModule *effectModule, EffectData *effectData,
     Framework::ComplexDataSource &source, Framework::SimdBuffer *destination,
@@ -1036,8 +1055,8 @@ namespace Generation
     simd_float offsetNorm = getParameter(effectData, Phase::Shift::Offset)
       ->getInternalValue<simd_float>(sampleRate) * 2.0f / sampleRate;
     simd_float binStep = 1.0f / (float)(binCount - 1);
-    simd_float logBase = log2(interval + 1.0f);
-    COMPLEX_ASSERT(simd_mask::anyMask(simd_float::lessThanOrEqual(logBase, 0.0f)) == 0);
+    simd_float log2Base = log2(interval + 1.0f);
+    COMPLEX_ASSERT(simd_mask::anyMask(simd_float::lessThanOrEqual(log2Base, 0.0f)) == 0);
 
     // if offset is 0 we need to give it a starting value based on interval
     // and shift dc component's amplitude
@@ -1050,8 +1069,8 @@ namespace Generation
       COMPLEX_ASSERT(simd_mask::anyMask(simd_float::lessThanOrEqual(startOffset, 0.0f)) == 0);
 
       // this is derived below, the next 2 lines get the next bin after dc in case any channels started there
-      simd_float multiple = simd_float::ceil(log2(binStep / startOffset) / logBase);
-      startOffset *= exp2(logBase * multiple);
+      simd_float multiple = simd_float::ceil(log2(binStep / startOffset) / log2Base);
+      startOffset *= exp2(log2Base * multiple);
       offsetNorm = merge(offsetNorm, startOffset, zeroMask);
     }
 
@@ -1092,10 +1111,10 @@ namespace Generation
         // log(offsetNorm[n+m] / offsetNorm[n]) = m * log(1 + interval)
         // log(offsetNorm[n+m] / offsetNorm[n]) / log(1 + interval) = m
         // we need to do ceil to get the first whole number of intervals
-        simd_float multiple = simd_float::ceil(log2(nextBin / offsetNorm) / logBase);
+        simd_float multiple = simd_float::ceil(log2(nextBin / offsetNorm) / log2Base);
 
         // pow(base, exponent) = exp2(log2(base) * exponent)
-        offsetNorm *= exp2(logBase * multiple);
+        offsetNorm *= exp2(log2Base * multiple);
         increment = interval * offsetNorm;
         nextBin += binStep;
       }

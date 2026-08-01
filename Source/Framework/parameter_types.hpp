@@ -7,6 +7,8 @@
 #include "utils.hpp"
 #include "memory.hpp"
 
+extern "C" typedef struct NSVGimage NSVGimage;
+
 namespace Plugin
 {
   struct State;
@@ -59,7 +61,7 @@ namespace Framework
 
   struct IndexedData
   {
-    enum class Flags { NoneFlag, ProcessorFlag, ParameterFlag, StateIdFlag };
+    enum class Flags { NoneFlag, ProcessorFlag, ParameterFlag, StateIdFlag, SVGData };
     using enum Flags;
 
     utils::string_view displayName{};       // user-readable name for given parameter value
@@ -80,7 +82,7 @@ namespace Framework
       ProcessorMetadata *processorMetadata;
       ParameterMetadata *parameterMetadata;
       u64 stateId;
-      // TODO: add an icon option here
+      NSVGimage *svgData;
     };
 
     bool 
@@ -416,7 +418,7 @@ namespace Framework
   {
     utils::LockBlame<i32> readWriteLock{};
     Framework::PluginStructure structure{};
-    utils::bumpArena *stringArena{};
+    utils::bumpArena *arena{};
     utils::sll<utils::string_view> *strings{};
     utils::sll<Plugin::ComplexPlugin> *pluginInstances{};
   };

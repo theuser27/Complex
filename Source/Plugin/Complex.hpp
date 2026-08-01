@@ -193,11 +193,11 @@ namespace Plugin
     // parameters that receive updates upon various plugin changes
     utils::vectornd<utils::pair<Framework::IndexedData *, Framework::ParameterValue *>> dynamicParameters{};
     // the processor tree is stored in a flattened map
-    utils::vector_map<u64, Generation::Processor *> allProcessors{};
+    utils::vectormap<u64, Generation::Processor *> allProcessors{};
 
-    utils::vector_map<uuid, Framework::IndexedData *> dynamicOptions{};
+    utils::vectormap<uuid, Framework::IndexedData *> dynamicOptions{};
 
-    utils::vector_map<utils::string_view, void *> cachedHotreloadSymbols{};
+    utils::vectormap<utils::string_view, void *> cachedHotreloadSymbols{};
     Framework::PluginStructure pluginStructure{};
 
     utils::bumpArena *processorStorage{};
@@ -207,15 +207,8 @@ namespace Plugin
     utils::vectornd<Thread> workers{};
   };
 
-#if COMPLEX_MSVC
   #define COMPLEX_CHECK_HOTRELOAD(state, functionName, ...)         \
-    if (auto *symbol = (state)->getHotreloadSymbol(__FUNCDNAME__);  \
+    if (auto *symbol = (state)->getHotreloadSymbol(function_symbol);\
       symbol && symbol != ((void *)&functionName))                  \
     { return ((decltype(functionName) *)symbol)(__VA_ARGS__); }
-#else
-  #define COMPLEX_CHECK_HOTRELOAD(state, functionName, ...)         \
-    if (auto *symbol = (state)->getHotreloadSymbol(__func__);       \
-      symbol && symbol != ((void *)&functionName))                  \
-    { return ((decltype(functionName) *)symbol)(__VA_ARGS__); }
-#endif
 }

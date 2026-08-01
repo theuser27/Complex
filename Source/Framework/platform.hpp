@@ -76,6 +76,7 @@
   #define noinline __declspec(noinline)
   #define vectorcall __vectorcall
   #define hotreloadable __declspec(dllexport)
+  #define function_symbol __FUNCDNAME__
 
   #define COMPLEX_NO_FAST_MATH_BEGIN _Pragma("float_control(precise, on)")
   #define COMPLEX_NO_FAST_MATH_END _Pragma("float_control(precise, off)")
@@ -107,6 +108,7 @@
   #define noinline __attribute__ ((noinline))
   #define vectorcall
   #define hotreloadable extern "C" __attribute__((visibility("default")))
+  #define function_symbol __func__
 
   #define COMPLEX_NO_FAST_MATH_BEGIN _Pragma("GCC push_options") _Pragma("GCC optimize (\"no-fast-math\")")
   #define COMPLEX_NO_FAST_MATH_END _Pragma("GCC pop_options")

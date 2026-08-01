@@ -195,7 +195,7 @@ namespace Interface
       effectiveScale = newEffectiveScale;
       uiRelated.scale = effectiveScale;
       // the UI needs to be sized before we can proceed with checking
-      if (gui->bounds.isEmpty())
+      if (isInitialised && !gui->bounds.isEmpty())
         doSizingAndPositioning();
 
       area = checkResizing(area, true);
@@ -284,7 +284,8 @@ namespace Interface
     void renderLoop(PuglView *view)
     {
     #ifdef COMPLEX_HOTRELOAD_DIR
-      xfiles_watch_flush(watchFileContext);
+      if (watchFileContext)
+        xfiles_watch_flush(watchFileContext);
     #endif
 
       ++numberOfFrames;

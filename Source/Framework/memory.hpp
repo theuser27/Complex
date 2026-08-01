@@ -12,6 +12,7 @@ namespace utils
 }
 
 extern thread_local utils::bumpArena *localScratch;
+extern thread_local utils::bumpArena *mallocArena;
 extern utils::bumpArena *globalArena;
 
 namespace utils
@@ -71,6 +72,7 @@ namespace utils
     bumpArena *nextArena{};
 
     static usize getUsedSize(bumpArena *arena);
+    static usize getUnusedSize(bumpArena *arena);
     static forceinline bumpArena *
     fromAllocation(const void *data)
     {
@@ -553,7 +555,7 @@ namespace utils
   };
 
   template<typename Key, typename Value>
-  struct vector_map
+  struct vectormap
   {
     utils::vector<utils::pair<Key, Value>> data{};
 

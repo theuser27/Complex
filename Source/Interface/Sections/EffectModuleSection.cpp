@@ -70,7 +70,30 @@ namespace Interface
     draggableBox.desiredSize = { kDraggableSectionWidth, kDraggableSectionWidth, 
       kDraggableSectionWidth, kDraggableSectionWidth };
     
+    effectTypeIcon.desiredSize = { kIconSize, kIconSize, kIconSize, kIconSize };
+    effectTypeIcon.placement = Placement::left;
+    effectTypeIcon.margin = { 0, 0, 4, 0 };
+    effectTypeIcon.reference = &effectTypeSelector;
+    effectTypeIcon.draw = [](OpenGlWrapper &openGl, Component *reference, Component *self, Point<i32>)
+    {
+      auto *selector = (TextSelector *)reference;
+      auto [option, index] = Framework::getOptionFromValue(Framework::scaleValue(selector->getValue(), 
+        selector->details), selector->details);
+
+      for (; option && (option->flags != Framework::IndexedData::SVGData || !option->svgData); 
+        option = option->parent) { }
+
+      if (option)
+      {
+        drawSVG(option->svgData, openGl, getColour(Skin::kWidgetPrimary1, reference),
+          self->bounds.withZeroOrigin().toFloat(), uiRelated.scale, scaleValue(1.0f));
+      }
+
+      return true;
+    };
+
     addChildComponent(&effectTypeSelector);
+    effectTypeSelector.addChildComponent(&effectTypeIcon, (usize)0);
     effectTypeSelector.arena = arena;
     effectTypeSelector.placement = Placement::left;
     effectTypeSelector.dropdownOffset = { 0, 4 };
@@ -91,7 +114,7 @@ namespace Interface
 
     addChildComponent(&moduleActivator);
     moduleActivator.placement = Placement::right;
-    moduleActivator.margin = { kNumberBoxToPowerButtonMargin, 0, 0, 0 };
+    moduleActivator.margin = { kPowerButtonMargin, 0, kPowerButtonMargin, 0 };
     moduleActivator.desiredSize = { kDefaultActivatorSize, kDefaultActivatorSize, 
       kDefaultActivatorSize, kDefaultActivatorSize };
   }
@@ -115,10 +138,11 @@ namespace Interface
   EffectModuleSection::EffectHolder::render(OpenGlWrapper &openGl)
   {
     nvgBeginPath(openGl);
-    float y = (float)header.bounds.getBottom();
+    float width = scaleValue(kDelimiterWidth);
+    float y = (float)header.bounds.getBottom() + width * 0.5f;
     nvgMoveTo(openGl, 0.0f, y);
     nvgLineTo(openGl, (float)bounds.w, y);
-    nvgStrokeWidth(openGl, scaleValue(1.0f));
+    nvgStrokeWidth(openGl, width);
     nvgStrokeColor(openGl, getColour(Skin::kBackgroundElement, this));
     nvgStroke(openGl);
 

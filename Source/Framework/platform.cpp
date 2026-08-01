@@ -361,6 +361,22 @@ namespace utils
   #endif
   }
 
+  extern "C" void *arena_malloc(size_t size)
+  {
+    return utils::bumpArena::insert(mallocArena, size, alignof(void *));
+  }
+  extern "C" void arena_free(const void *pointer)
+  {
+    utils::bumpArena::remove(pointer);
+  }
+  extern "C" void *arena_realloc(void *pointer, size_t newSize)
+  {
+    if (pointer)
+      return utils::bumpArena::resize(pointer, newSize);
+    else
+      return arena_malloc(newSize);
+  }
+
   ScopedNoDenormals::ScopedNoDenormals()
   {
   #if COMPLEX_X64
@@ -789,10 +805,26 @@ namespace utils
   usize 
   bumpArena::getUsedSize(bumpArena *arena)
   {
+    return (usize)arena->committedSize + 1 - bumpArena::getUnusedSize(arena);
+  }
+
+  usize 
+  bumpArena::getUnusedSize(bumpArena *arena)
+  {
     if (arena->threadSafe)
       utils::ScopedLock g{ arena->lock, utils::WaitMechanism::Spin };
-    // TODO:
-    return usize();
+
+    u32 nodeShift = arena->freeNodeStart;
+    u32 sizeUnused = 0;
+
+    while (nodeShift)
+    {
+      auto *currentNode = utils::launder((bumpArena::node *)((byte *)arena + nodeShift));
+      sizeUnused += currentNode->size;
+      nodeShift = currentNode->next;
+    }
+
+    return sizeUnused;
   }
 
   static void insertNewFreeNode(bumpArena *arena, byte *newFreeNodeAdress, usize newFreeNodeSize)

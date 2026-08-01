@@ -237,8 +237,6 @@ namespace Interface
     bool mouseUp(const MouseEvent &) override { return true; }
     bool mouseWheelMove(const MouseEvent &e) override;
 
-    void setExtraIcon(Paths::DrawingFn *drawFn);
-
     SliderValueEditor text{};
     DrawComponent downArrow{};
 
@@ -250,7 +248,6 @@ namespace Interface
     Point<i8> dropdownOffset{ 0, kPopupToElement };
   private:
     bool isDropdownOpen = false;
-    DrawComponent *extraIcon = nullptr;
   };
 
   class Numberbox final : public Slider

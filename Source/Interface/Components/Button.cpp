@@ -55,7 +55,9 @@ namespace Interface
 
   PowerButton::PowerButton()
   {
-    padding = { kAddedMargin, kAddedMargin, kAddedMargin, kAddedMargin };
+    auto [fn, iconBounds] = Paths::powerButtonIcon();
+    padding = { kAddedMargin, kAddedMargin, 
+      (u16)(kAddedMargin + iconBounds.x), kAddedMargin };
   }
 
   bool PowerButton::render(OpenGlWrapper &openGl)

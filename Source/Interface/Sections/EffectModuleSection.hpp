@@ -21,14 +21,12 @@ namespace Interface
 
   struct EffectModuleSection final : public Component
   {
-    static constexpr int kSpectralMaskMargin = 2;
     static constexpr int kTopMenuHeight = 28;
     static constexpr int kDraggableSectionWidth = 36;
-    static constexpr int kIconSize = 14;
+    static constexpr int kIconSize = 16;
     static constexpr int kIconToTextSelectorMargin = 4;
     static constexpr int kDelimiterWidth = 1;
-    static constexpr int kDelimiterToTextSelectorMargin = 2;
-    static constexpr int kNumberBoxToPowerButtonMargin = 6;
+    static constexpr int kPowerButtonMargin = 4;
     static constexpr int kLabelToNumberBoxMargin = 4;
     static constexpr int kPowerButtonPadding = 8;
 

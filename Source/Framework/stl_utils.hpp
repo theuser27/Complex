@@ -356,7 +356,7 @@ namespace utils
 
   #define defer2(X, Y) X##Y
   #define defer1(name, counter) defer2(name, counter)
-  #define defer deferAtHome defer1(defer__, __COUNTER__) = [&]()
+  #define defer ::utils::deferAtHome defer1(defer__, __COUNTER__) = [&]()
 
   template<usize Iterations>
   forceinline void longPause() noexcept

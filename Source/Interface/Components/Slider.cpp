@@ -617,12 +617,6 @@ namespace Interface
     return Slider::mouseWheelMove(newEvent);
   }
 
-  void TextSelector::setExtraIcon(Paths::DrawingFn *drawFn)
-  {
-    (void)drawFn;
-    // TODO:
-  }
-
   Numberbox::Numberbox()
   {
     controlFlags.canUseScrollWheel = true;

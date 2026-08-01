@@ -23,7 +23,7 @@ namespace
   {
     utils::ScopedLock g{ executableStaticData.readWriteLock, true, utils::WaitMechanism::WaitNotify };
 
-    executableStaticData.stringArena = utils::bumpArena::create(COMPLEX_MB(1), COMPLEX_KB(64));
+    executableStaticData.arena = utils::bumpArena::create(COMPLEX_MB(1), COMPLEX_KB(64));
     executableStaticData.structure.arena = utils::bumpArena::create(COMPLEX_MB(1), COMPLEX_KB(64));
     executableStaticData.structure.metadata = (Framework::ProcessorMetadata *)initialiseTypeStructure<
       Generation::SoundEngine>(nullptr, executableStaticData.structure);
@@ -37,7 +37,7 @@ namespace
         if (element->object == string)
           return;
 
-      auto *node = anew(executableStaticData.stringArena, utils::sll<utils::string_view>, { string });
+      auto *node = anew(executableStaticData.arena, utils::sll<utils::string_view>, { string });
       if (executableStaticData.strings)
         node->next = executableStaticData.strings;
       executableStaticData.strings = node;
@@ -113,7 +113,7 @@ namespace
     utils::bumpArena::destroy(executableStaticData.structure.arena);
 
     executableStaticData.strings = {};
-    utils::bumpArena::destroy(executableStaticData.stringArena);
+    utils::bumpArena::destroy(executableStaticData.arena);
   }
 }
 
@@ -136,7 +136,7 @@ findOrAddPermanentString(utils::string_view string)
   {
     utils::ScopedLock g{ executableStaticData.readWriteLock, true, utils::WaitMechanism::WaitNotify };
 
-    auto *memory = utils::bumpArena::insert(executableStaticData.stringArena, sizeof(utils::sll<utils::string_view>) +
+    auto *memory = utils::bumpArena::insert(executableStaticData.arena, sizeof(utils::sll<utils::string_view>) +
       1 + string.size(), alignof(utils::sll<utils::string_view>));
     auto stringStart = memory + sizeof(utils::sll<utils::string_view>);
     ::memcpy(stringStart, string.data(), string.size());
@@ -534,12 +534,14 @@ namespace Plugin
 namespace utils { void atLoad(); }
 void initialiseCJSONHooks();
 constinit thread_local utils::bumpArena *localScratch = nullptr;
+constinit thread_local utils::bumpArena *mallocArena = nullptr;
 constinit utils::bumpArena *globalArena = nullptr;
 
 void cplug_libraryLoad()
 {
   utils::atLoad();
 
+  localScratch = utils::bumpArena::create(COMPLEX_MB(4), COMPLEX_KB(128));
   globalArena = utils::bumpArena::create(COMPLEX_MB(128), COMPLEX_MB(1));
 
   initialisePluginStructure();
@@ -554,7 +556,8 @@ void cplug_libraryUnload()
 
 void *cplug_createPlugin(CplugHostContext *ctx)
 {
-  localScratch = utils::bumpArena::create(COMPLEX_MB(4), COMPLEX_KB(128));
+  if (!localScratch)
+    localScratch = utils::bumpArena::create(COMPLEX_MB(4), COMPLEX_KB(128));
 
   usize parameterMappings = 64, inSidechains = 0, outSidechains = 0, undoSteps = 100;
   Framework::LoadSave::getStartupParameters(parameterMappings, inSidechains, outSidechains, undoSteps);

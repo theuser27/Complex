@@ -70,6 +70,21 @@
 #define NANOVG_GL3_IMPLEMENTATION
 #include "Third Party/nanovg/nanovg_gl.h"
 #include "Third Party/nanovg/nanovg_gl_utils.h"
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+void *arena_malloc(size_t size);
+void arena_free(const void *pointer);
+void *arena_realloc(void *pointer, size_t newSize);
+#ifdef __cplusplus
+}
+#endif
+
+#define NSVG_MALLOC arena_malloc
+#define NSVG_FREE arena_free
+#define NSVG_REALLOC arena_realloc
+
 #define NANOSVG_IMPLEMENTATION
 #include "Third Party/nanovg/nanosvg.h"
 

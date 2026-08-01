@@ -416,6 +416,7 @@ bool xfiles_read(const char* path, void** out, size_t* outlen)
     XFILES_ASSERT(num);
     if (num)
     {
+    retry:
         hFile = CreateFileW(
             FileName,
             GENERIC_READ,
@@ -427,6 +428,13 @@ bool xfiles_read(const char* path, void** out, size_t* outlen)
         if (hFile == INVALID_HANDLE_VALUE)
         {
             int err = GetLastError();
+            if (err == ERROR_SHARING_VIOLATION)
+            {
+                // A process may currently have exclusive access to the file.
+                // Wait until they close their handle.
+                Sleep(0);
+                goto retry;
+            }
             if (err == ERROR_ACCESS_DENIED)
             {
                 // NOTE: you may get this error when trying to "read" a directory. Check if a directory already exists

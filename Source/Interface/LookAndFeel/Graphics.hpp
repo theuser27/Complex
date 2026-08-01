@@ -127,8 +127,8 @@ namespace Interface
 
     operator NVGcontext *() const { return context; }
 
-    utils::vector_map<u64, Rectangle<i32>> textureBounds{};
-    utils::vector_map<utils::typeInfo, u64> staticTextureIds{};
+    utils::vectormap<u64, Rectangle<i32>> textureBounds{};
+    utils::vectormap<utils::typeInfo, u64> staticTextureIds{};
 
     u64 idGenerator{};
     Area<i32> planeArea{};
@@ -293,7 +293,7 @@ namespace Interface
     Rectangle<int> scissorBounds, const OpenGlWrapper &openGl, const Component *ignoreClipIncluding);
 
   void drawSVG(NSVGimage *image, Graphics &g, Colour colour,
-    Rectangle<float> bounds, float strokeWidth);
+    Rectangle<float> bounds, float scale, float strokeWidth);
 
   namespace Paths
   {
@@ -301,17 +301,6 @@ namespace Interface
       Rectangle<float> bounds, float strokeWidth);
 
     void enterValueIcon(Graphics &g, Rectangle<float> bounds,
-      float strokeWidth, utils::span<Colour> colours);
-
-    void filterIcon(Graphics &g, Rectangle<float> bounds,
-      float strokeWidth, utils::span<Colour> colours);
-    void dynamicsIcon(Graphics &g, Rectangle<float> bounds,
-      float strokeWidth, utils::span<Colour> colours);
-    void phaseIcon(Graphics &g, Rectangle<float> bounds,
-      float strokeWidth, utils::span<Colour> colours);
-    void pitchIcon(Graphics &g, Rectangle<float> bounds,
-      float strokeWidth, utils::span<Colour> colours);
-    void destroyIcon(Graphics &g, Rectangle<float> bounds,
       float strokeWidth, utils::span<Colour> colours);
 
     utils::pair<DrawingFn *, Rectangle<i32>> copyNormalisedValueIcon();
