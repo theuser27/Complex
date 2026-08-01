@@ -9,7 +9,7 @@
 
 namespace Interface
 {
-  bool 
+  bool
   Button::mouseDown(const MouseEvent &e)
   {
     if (e.mods.test(ModifierKeys::popupMenuClickModifier))
@@ -28,7 +28,7 @@ namespace Interface
     return true;
   }
 
-  bool 
+  bool
   Button::mouseUp(const MouseEvent &e)
   {
     if (e.mods.test(ModifierKeys::popupMenuClickModifier))
@@ -56,7 +56,7 @@ namespace Interface
   PowerButton::PowerButton()
   {
     auto [fn, iconBounds] = Paths::powerButtonIcon();
-    padding = { kAddedMargin, kAddedMargin, 
+    padding = { kAddedMargin, kAddedMargin,
       (u16)(kAddedMargin + iconBounds.x), kAddedMargin };
   }
 
@@ -93,11 +93,11 @@ namespace Interface
     auto onNormalColor = getColour(Skin::kWidgetAccent1, this);
     auto offNormalColor = getColour(Skin::kPowerButtonOff, this);
     auto backgroundColor = getColour(Skin::kBackground, this);
-    
+
     tickAnimation(animationValues, {{ componentFlags.isHovered }}, {{ kHoverIncrement }});
     auto hoverAmount = animationValues[0];
     auto drawBounds = getLocalBounds().toFloat().withTrim(scaleValue(padding.toFloat()));
-    
+
     float rounding = utils::min(drawBounds.w, drawBounds.h) * roundingRatio;
 
     //static constexpr float kPowerShrinkRadius = 0.2f;
@@ -108,13 +108,13 @@ namespace Interface
     //quadData.setQuad(0, -kPowerHoverRadius, -kPowerHoverRadius, 2.0f * kPowerHoverRadius, 2.0f * kPowerHoverRadius);
     if (componentFlags.isClicked || !isOn())
     {
-      //fillRect(openGl, drawBounds.expanded(kPowerHoverRadius * drawBounds.w, 
+      //fillRect(openGl, drawBounds.expanded(kPowerHoverRadius * drawBounds.w,
       //  kPowerHoverRadius * drawBounds.h), backgroundColor, rounding * kPowerHoverRadius);
     }
     else if (hoverAmount != 0.0f)
     {
       //fillRect(openGl, drawBounds.expanded(kPowerHoverRadius * drawBounds.w,
-      //  kPowerHoverRadius * drawBounds.h), backgroundColor.withMultipliedAlpha(hoverAmount), 
+      //  kPowerHoverRadius * drawBounds.h), backgroundColor.withMultipliedAlpha(hoverAmount),
       //  rounding + rounding * kPowerHoverRadius);
     }
 

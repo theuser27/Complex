@@ -96,7 +96,7 @@ namespace Interface
     };
   }
 
-  bool 
+  bool
   PopupDisplay::render(OpenGlWrapper &openGl)
   {
     auto localBounds = getLocalBounds().toFloat();
@@ -106,7 +106,7 @@ namespace Interface
 
     auto textBounds = localBounds.withTrim(scaleValue(padding.toFloat()));
     auto usedFontId = (isControl) ? FontId::DDinType : FontId::InterType;
-    renderText(text, usedFontId, textBounds, openGl, 
+    renderText(text, usedFontId, textBounds, openGl,
       getColour(Skin::kWidgetPrimary1, source), Placement::left, true);
 
     //reinitialise();
@@ -142,7 +142,7 @@ namespace Interface
     };
   }
 
-  bool 
+  bool
   PopupList::render(OpenGlWrapper &openGl)
   {
     // if the user is currently holding down a mouse button, we shouldn't change anything
@@ -177,7 +177,7 @@ namespace Interface
     return true;
   }
 
-  bool 
+  bool
   PopupList::mouseEnter(const MouseEvent &e)
   {
     (void)e;
@@ -185,7 +185,7 @@ namespace Interface
     return true;
   }
 
-  bool 
+  bool
   PopupList::mouseExit(const MouseEvent &e)
   {
     (void)e;
@@ -341,7 +341,7 @@ namespace Interface
         currentSublistItem = {};
         sublistAnchorPoint = {};
       }
-      
+
       if (summoningItem && summoningItem->childList)
       {
         auto newSublist = summoningItem->childList;
@@ -373,7 +373,7 @@ namespace Interface
     return false;
   }
 
-  bool 
+  bool
   PopupItem::mouseMove(const MouseEvent &e)
   {
     if (!canBeChosen)
@@ -463,7 +463,7 @@ namespace Interface
     resetState(false);
   }
 
-  bool 
+  bool
   PopupSelector::handleFocus(bool hasFocus, FocusChange, Component *correspondent)
   {
     if (!hasFocus)
@@ -481,7 +481,7 @@ namespace Interface
     return true;
   }
 
-  bool 
+  bool
   PopupSelector::keyPressed(const KeyPress &key)
   {
     if (key.keyCode == PUGL_KEY_ESCAPE)
@@ -541,7 +541,7 @@ namespace Interface
         child->componentFlags.isVisible = !self->summoner->isObscured();
     });
   }
-  
+
   OptionPopupItem::OptionPopupItem()
   {
     componentFlags.acceptsOrphanMouseEvents = true;
@@ -575,7 +575,7 @@ namespace Interface
     };
   }
 
-  bool 
+  bool
   OptionPopupItem::render(OpenGlWrapper &openGl)
   {
     PopupItem::render(openGl);
@@ -596,7 +596,7 @@ namespace Interface
     return true;
   }
 
-  utils::pair<utils::string_view, bool> 
+  utils::pair<utils::string_view, bool>
   OptionPopupItem::getTextAndWrap()
   {
     // label whose extra data is a string

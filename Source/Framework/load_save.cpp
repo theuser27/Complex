@@ -279,7 +279,7 @@ static void handleIndexedData(utils::bumpArena *arena, bool isAutomated,
           // this option points to some processor defined in the save file
           // but because we haven't finished deserialising it might not exist yet
           // for now we just copy the state_id defined in the save file
-          // and add this option to a list for a later fixup 
+          // and add this option to a list for a later fixup
           // when the id of the deserialised processor in the current state will be assigned
 
           auto *newChildOption = anew(arena, Framework::IndexedData, {});
@@ -328,7 +328,7 @@ static void fixDeserialisedProcessorsStateIds(Plugin::State *state)
 
     while (true)
     {
-      auto iter = utils::findIf(*dynamicOptionFixups, [&oldId](Framework::IndexedData *item) 
+      auto iter = utils::findIf(*dynamicOptionFixups, [&oldId](Framework::IndexedData *item)
         { return item->flags == Framework::IndexedData::StateIdFlag && item->stateId == oldId; });
       if (iter == dynamicOptionFixups->end())
         break;
@@ -360,7 +360,7 @@ namespace Framework
     {
       auto recurseOptions = [&](const auto &self, cjson *optionData, IndexedData *option) -> void
       {
-        // this line is leaking technically at leaf nodes but because 
+        // this line is leaking technically at leaf nodes but because
         cjson *children = cjson_Create(cjson_Array);
         for (auto *child = option->children; child; child = child->next)
         {
@@ -857,7 +857,7 @@ namespace Plugin
     }
     else
       plugin->state_ = COMPLEX_MOVE(state);
-    
+
     auto *newGui = plugin->state_->gui;
     Interface::resetGui(&plugin->getRenderer(), newGui);
     newGui->restartUI(plugin->state_.get());

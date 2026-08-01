@@ -20,7 +20,7 @@ namespace Interface
   // EffectModule sizes
   inline constexpr int kSpectralMaskContractedHeight = 20;
   inline constexpr int kEffectModuleMainBodyHeight = 144;
-  
+
   inline constexpr int kEffectModuleWidth = 400;
   inline constexpr int kEffectModuleMinHeight = kSpectralMaskContractedHeight + kEffectModuleMainBodyHeight;
 

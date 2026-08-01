@@ -11,7 +11,7 @@
 
 namespace Generation
 {
-  Processor::Processor(utils::bumpArena *arena, Plugin::State *state, 
+  Processor::Processor(utils::bumpArena *arena, Plugin::State *state,
     Framework::ProcessorMetadata *metadata, const Processor *other) : metadata{ metadata },
     state{ state }, stateId{ ++state->stateIdCounter }, arena{ arena }, name{ arena }
   {
@@ -72,7 +72,7 @@ namespace Generation
   }
 
   // the following functions are to be called outside of processing time
-  bool 
+  bool
   Processor::addChildProcessor(Processor &newChildProcessor, Processor *insertBefore)
   {
     COMPLEX_ASSERT(!newChildProcessor.parent);
@@ -212,7 +212,7 @@ namespace Generation
         slot->previous = slot - 1;
         slot->next = slot + 1;
 
-        // register dynamic parameters 
+        // register dynamic parameters
         state->registerDynamicParameter(slot);
       }
     }
@@ -231,7 +231,7 @@ namespace Generation
         slot->previous = slot - 1;
         slot->next = slot + 1;
 
-        // register dynamic parameters 
+        // register dynamic parameters
         state->registerDynamicParameter(slot);
       }
     }
@@ -293,7 +293,7 @@ namespace Framework
         auto g = self->state.plugin->acquireProcessingLock();
         self->processor = &destinationPointer->removeChildProcessor(self->destinationIndex);
       }
-      
+
       if (self->processor->component)
         self->processor->component->parent->removeChildComponent(self->processor->component);
 
@@ -307,7 +307,7 @@ namespace Framework
     destinationParentStateId{ destinationParentStateId }, destinationIndex{ destinationIndex },
     sourceParentStateId{ sourceParentStateId }, sourceIndex{ sourceIndex }, isDone{ isDone }
   {
-    static constexpr auto insertComponent = [](Generation::Processor *movedProcessor, 
+    static constexpr auto insertComponent = [](Generation::Processor *movedProcessor,
       Generation::Processor *destinationProcessor, u32 index)
     {
       if (movedProcessor->component && movedProcessor->component->parent)
@@ -353,7 +353,7 @@ namespace Framework
       if (!self->isDone)
         return;
       self->isDone = !self->isDone;
-      
+
       auto destinationPointer = self->state.getProcessor(self->destinationParentStateId);
       auto sourcePointer = self->state.getProcessor(self->sourceParentStateId);
 
@@ -363,7 +363,7 @@ namespace Framework
     };
   }
 
-  DeleteProcessorUpdate::DeleteProcessorUpdate(Generation::Processor *processorToDelete) : 
+  DeleteProcessorUpdate::DeleteProcessorUpdate(Generation::Processor *processorToDelete) :
     state{ *processorToDelete->state }
   {
     parentStateId = processorToDelete->parent->stateId;
@@ -384,7 +384,7 @@ namespace Framework
       auto g = self->state.plugin->acquireProcessingLock();
       if (!self->processor)
         self->processor = &parentPointer->removeChildProcessor(self->index);
-      
+
       auto recurseParameters = [](const auto &self, Generation::Processor *processor) -> void
       {
         processor->remapParameters({}, true, true);

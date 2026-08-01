@@ -15,7 +15,7 @@
 
 namespace Interface
 {
-  bool 
+  bool
   Slider::mouseDown(const MouseEvent &e)
   {
     lastMouseDragPosition = { e.x, e.y };
@@ -42,7 +42,7 @@ namespace Interface
       return true;
     }
 
-    if (!controlFlags.resetValueOnDoubleClick && 
+    if (!controlFlags.resetValueOnDoubleClick &&
       resetValueModifiers != ModifierKeys::noModifiers &&
       e.mods.withoutFlags(ModifierKeys::allMouseButtonModifiers) == resetValueModifiers)
     {
@@ -61,13 +61,13 @@ namespace Interface
     return true;
   }
 
-  bool 
+  bool
   Slider::mouseDrag(const MouseEvent &e)
   {
     if (!componentFlags.isClicked)
       return false;
 
-    auto mouseDiff = (controlFlags.isHorizotalDraggable) ? 
+    auto mouseDiff = (controlFlags.isHorizotalDraggable) ?
       e.x - lastMouseDragPosition.x : lastMouseDragPosition.y - e.y;
     lastMouseDragPosition = { e.x, e.y };
 
@@ -87,7 +87,7 @@ namespace Interface
     return true;
   }
 
-  bool 
+  bool
   Slider::mouseUp(const MouseEvent &e)
   {
     if (!componentFlags.isClicked)
@@ -98,7 +98,7 @@ namespace Interface
 
     if (e.numberOfClicks == 2)
     {
-      if (!controlFlags.resetValueOnDoubleClick || 
+      if (!controlFlags.resetValueOnDoubleClick ||
         e.mods.test(ModifierKeys::popupMenuClickModifier))
         return true;
 
@@ -111,7 +111,7 @@ namespace Interface
     return true;
   }
 
-  bool 
+  bool
   Slider::mouseEnter(const MouseEvent &)
   {
     if (controlFlags.showPopupOnHover)
@@ -120,7 +120,7 @@ namespace Interface
     return true;
   }
 
-  bool 
+  bool
   Slider::mouseExit(const MouseEvent &)
   {
     hidePopup();
@@ -128,7 +128,7 @@ namespace Interface
     return true;
   }
 
-  bool 
+  bool
   Slider::mouseWheelMove(const MouseEvent &e)
   {
     if (!controlFlags.canUseScrollWheel)
@@ -140,7 +140,7 @@ namespace Interface
     double multiplier = 0.05;
     if (e.mods.test(ModifierKeys::shiftModifier))
       multiplier *= 0.1;
-    
+
     auto currentValue = getValue();
     auto mouseWheelDelta = (::fabs(e.wheelDeltaX) > ::fabs(e.wheelDeltaY)) ? -e.wheelDeltaX : e.wheelDeltaY;
     auto valueDelta = currentValue + multiplier * mouseWheelDelta * (e.wheelIsReversed ? -1.0 : 1.0);
@@ -148,7 +148,7 @@ namespace Interface
     valueDelta -= currentValue;
     if (valueDelta == 0.0)
       return true;
-    
+
     double newValue = 0.0;
     if (details.scale == Framework::ParameterScale::Indexed)
     {
@@ -190,8 +190,8 @@ namespace Interface
     desiredSize = { kDefaultWidthHeight, kDefaultWidthHeight,
       kDefaultWidthHeight, kDefaultWidthHeight };
   }
-  
-  bool 
+
+  bool
   RotarySlider::render(OpenGlWrapper &openGl)
   {
     static constexpr float kHoverIncrement = 0.15f;
@@ -225,7 +225,7 @@ namespace Interface
     // outline
     nvgBeginPath(openGl);
     nvgCircle(openGl, centreX, centreY - outlineWidth * 0.5f, outlineRadius);
-    auto outlineGradient = nvgLinearGradient(openGl, 
+    auto outlineGradient = nvgLinearGradient(openGl,
       0.0f, centreY - bodyRadius + outlineWidth, 0.0f, centreY + bodyRadius - outlineWidth,
       Colour{ 255, 255, 255, 0.1f }, Colour{ 255, 255, 255, 0.0f });
     nvgStrokePaint(openGl, outlineGradient);
@@ -274,7 +274,7 @@ namespace Interface
     return true;
   }
 
-  bool 
+  bool
   RotarySlider::mouseDrag(const MouseEvent &e)
   {
     auto oldSensitivity = sensitivity;
@@ -366,7 +366,7 @@ namespace Interface
     };
   }
 
-  bool 
+  bool
   PinSlider::mouseDown(const MouseEvent &e)
   {
     if (e.mods.test(ModifierKeys::popupMenuClickModifier))
@@ -382,7 +382,7 @@ namespace Interface
     return Slider::mouseDown(mouseEvent);
   }
 
-  bool 
+  bool
   PinSlider::mouseDrag(const MouseEvent &e)
   {
     float multiply = sensitivity;
@@ -437,7 +437,7 @@ namespace Interface
     nvgMoveTo(openGl, w - rounding, 0.0f);
     nvgQuadTo(openGl, w, 0.0f, w, rounding);
     nvgLineTo(openGl, w, verticalSideLength - c1OffsetY);
-    nvgQuadTo(openGl, w, verticalSideLength, w - c2OffsetX, 
+    nvgQuadTo(openGl, w, verticalSideLength, w - c2OffsetX,
       verticalSideLength + c2OffsetY);
     nvgLineTo(openGl, w * 0.5f + c3OffsetX, pinHeight - c3OffsetY);
 
@@ -508,7 +508,7 @@ namespace Interface
     addChildComponent(&downArrow);
   }
 
-  bool 
+  bool
   TextSelector::render(OpenGlWrapper &openGl)
   {
     static constexpr float kHoverIncrement = 0.2f;
@@ -527,7 +527,7 @@ namespace Interface
     return true;
   }
 
-  bool 
+  bool
   TextSelector::mouseDown(const MouseEvent &e)
   {
     // probably unnecessary but just in case
@@ -563,7 +563,7 @@ namespace Interface
     list->parentSelector = selector;
 
     if (auto title = (!dropdownTitle.empty()) ?
-      utils::string_view{ dropdownTitle } : details.displayName; 
+      utils::string_view{ dropdownTitle } : details.displayName;
       !title.empty())
     {
       list->addChildComponent(OptionPopupItem::createTitle(list, title));
@@ -646,14 +646,14 @@ namespace Interface
     addChildComponent(&editor);
   }
 
-  bool 
+  bool
   Numberbox::render(OpenGlWrapper &openGl)
   {
     static constexpr float kHoverIncrement = 0.2f;
 
     // if we've clicked we still want the hover animator to run
-    tickAnimation(animationValues, 
-      {{ componentFlags.isHovered || componentFlags.isClicked }}, 
+    tickAnimation(animationValues,
+      {{ componentFlags.isHovered || componentFlags.isClicked }},
       {{ kHoverIncrement }});
 
     if (drawBackgroundArrow)
@@ -671,7 +671,7 @@ namespace Interface
       static constexpr float edgeControlPointYOffset = edgeControlPointAbsoluteOffset * const_math::sin(kRotatedSideAngle);
 
       nvgBeginPath(openGl.g);
-      
+
       float width = (float)bounds.w;
       float height = (float)bounds.h;
       float triangleXLength = height * 0.5f;
@@ -787,10 +787,10 @@ namespace Interface
     addChildComponent(&highBound);
   }
 
-  bool 
+  bool
   PinBoundsBox::render(OpenGlWrapper &openGl)
   {
-    fillRect(openGl, getLocalBounds().toFloat(), getColour(Skin::kBody, this), 
+    fillRect(openGl, getLocalBounds().toFloat(), getColour(Skin::kBody, this),
       scaleValue(rounding[0]), scaleValue(rounding[1]), scaleValue(rounding[2]), scaleValue(rounding[3]));
 
     paintHighlightBox(this, openGl, (float)lowBound.getValue(), (float)highBound.getValue(),
@@ -826,7 +826,7 @@ namespace Interface
       fillRect(g, upperBounds, colour);
       fillRect(g, lowerBounds, colour);
     }
-    
+
     (void)backgroundColour;
     // TODO: rounding at the ends
   }

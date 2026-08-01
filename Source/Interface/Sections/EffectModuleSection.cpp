@@ -21,7 +21,7 @@ namespace Interface
     controlFlags.shouldShowPopup = true;
     controlFlags.shouldUsePlusMinusPrefix = true;
     overridePosition = [](Component *c) { c->bounds.x = c->bounds.y = 0; return true; };
-    // because of the bipolarity we need to lower the sensitivity 
+    // because of the bipolarity we need to lower the sensitivity
     // so that the shift follows the mouse exactly
     sensitivity = 0.5f;
   }
@@ -67,9 +67,9 @@ namespace Interface
 
     addChildComponent(&draggableBox);
     draggableBox.placement = Placement::left;
-    draggableBox.desiredSize = { kDraggableSectionWidth, kDraggableSectionWidth, 
+    draggableBox.desiredSize = { kDraggableSectionWidth, kDraggableSectionWidth,
       kDraggableSectionWidth, kDraggableSectionWidth };
-    
+
     effectTypeIcon.desiredSize = { kIconSize, kIconSize, kIconSize, kIconSize };
     effectTypeIcon.placement = Placement::left;
     effectTypeIcon.margin = { 0, 0, 4, 0 };
@@ -77,10 +77,10 @@ namespace Interface
     effectTypeIcon.draw = [](OpenGlWrapper &openGl, Component *reference, Component *self, Point<i32>)
     {
       auto *selector = (TextSelector *)reference;
-      auto [option, index] = Framework::getOptionFromValue(Framework::scaleValue(selector->getValue(), 
+      auto [option, index] = Framework::getOptionFromValue(Framework::scaleValue(selector->getValue(),
         selector->details), selector->details);
 
-      for (; option && (option->flags != Framework::IndexedData::SVGData || !option->svgData); 
+      for (; option && (option->flags != Framework::IndexedData::SVGData || !option->svgData);
         option = option->parent) { }
 
       if (option)
@@ -103,7 +103,7 @@ namespace Interface
       auto *section = (EffectModuleSection *)c->parent->parent->parent;
       (void)section->effectModule->changeEffect(Framework::getOptionFromValue(
         Framework::scaleValue(newValue, c->details), c->details).first);
-      
+
       section->restartEffectUI();
     };
 
@@ -115,7 +115,7 @@ namespace Interface
     addChildComponent(&moduleActivator);
     moduleActivator.placement = Placement::right;
     moduleActivator.margin = { kPowerButtonMargin, 0, kPowerButtonMargin, 0 };
-    moduleActivator.desiredSize = { kDefaultActivatorSize, kDefaultActivatorSize, 
+    moduleActivator.desiredSize = { kDefaultActivatorSize, kDefaultActivatorSize,
       kDefaultActivatorSize, kDefaultActivatorSize };
   }
 
@@ -134,7 +134,7 @@ namespace Interface
     header.reinitialise();
   }
 
-  bool 
+  bool
   EffectModuleSection::EffectHolder::render(OpenGlWrapper &openGl)
   {
     nvgBeginPath(openGl);
@@ -149,7 +149,7 @@ namespace Interface
     return true;
   }
 
-  bool 
+  bool
   EffectModuleSection::render(OpenGlWrapper &openGl)
   {
     float rounding = scaleValue(kOuterPixelRounding);
@@ -157,7 +157,7 @@ namespace Interface
       rounding, rounding, rounding, rounding);
 
     doRenderChildren(openGl);
-    
+
     if (!effectHolder.header.moduleActivator.isOn())
     {
       fillRect(openGl, getLocalBounds().toFloat(), getColour(Skin::kOverlayScreen, this));
@@ -230,7 +230,7 @@ namespace Interface
 
       return true;
     }
-    
+
     if (!e.mods.test(ModifierKeys::popupMenuClickModifier))
       return false;
 
@@ -306,7 +306,7 @@ namespace Interface
     if (auto *createUIPointer = activeEffect->metadata->vtable[Generation::EffectData::CreateUIVtableIndex])
       effectControls = ((Generation::EffectData::CreateUIFn *)createUIPointer)(effectArena, this,
         effectModule->currentEffect.load(satomi::memory_order_acquire));
-    
+
     // TODO: icon
   }
 }
@@ -353,7 +353,7 @@ namespace Generation
 
 
 
-  utils::span<Interface::Control *> 
+  utils::span<Interface::Control *>
   Filter::createUINormal(utils::bumpArena *arena, Interface::EffectModuleSection *section,
     EffectData *effectData)
   {
@@ -365,7 +365,7 @@ namespace Generation
     EffectData *effectData)
   {
     using namespace Interface;
-    
+
     Component *holder = anew(arena, Component, {});
     holder->sizingFlags = (Component::SizingFlags)(Component::GrowableX | Component::GrowableY);
     holder->padding = { 32, 0, 32, 0 };
@@ -386,22 +386,22 @@ namespace Generation
     return controls;
   }
 
-  utils::span<Interface::Control *> 
-  Dynamics::createUIContrast(utils::bumpArena *arena, 
+  utils::span<Interface::Control *>
+  Dynamics::createUIContrast(utils::bumpArena *arena,
     Interface::EffectModuleSection *section, EffectData *effectData)
   {
     return genericKnobUI(arena, section, effectData);
   }
 
-  utils::span<Interface::Control *> 
+  utils::span<Interface::Control *>
   Dynamics::createUIClip(utils::bumpArena *arena,
     Interface::EffectModuleSection *section, EffectData *effectData)
   {
     return genericKnobUI(arena, section, effectData);
   }
 
-  utils::span<Interface::Control *> 
-  Phase::createUIShift(utils::bumpArena *arena, 
+  utils::span<Interface::Control *>
+  Phase::createUIShift(utils::bumpArena *arena,
     Interface::EffectModuleSection *section, EffectData *effectData)
   {
     using namespace Interface;
@@ -418,7 +418,7 @@ namespace Generation
 
     auto *offsetRotary = createRotary(arena, findParameterWithId(effectData->parameters, Shift::Offset));
     holder->addChildComponent(offsetRotary);
-    
+
     auto *selector = anew(arena, TextSelector, {});
     selector->arena = arena;
     selector->changeLinkedParameter(*findParameterWithId(effectData->parameters, Shift::Slope));
@@ -426,13 +426,13 @@ namespace Generation
 
     section->effectHolder.addChildComponent(holder);
 
-    utils::vectornd<Control *> controls{ arena, 
+    utils::vectornd<Control *> controls{ arena,
       {{ &shiftRotary->rotary, &intervalRotary->rotary, &offsetRotary->rotary, selector }} };
     return controls;
   }
 
-  utils::span<Interface::Control *> 
-  Pitch::createUIResample(utils::bumpArena *arena, 
+  utils::span<Interface::Control *>
+  Pitch::createUIResample(utils::bumpArena *arena,
     Interface::EffectModuleSection *section, EffectData *effectData)
   {
     using namespace Interface;
@@ -457,8 +457,8 @@ namespace Generation
     return genericKnobUI(arena, section, effectData);
   }
 
-  utils::span<Interface::Control *> 
-  Destroy::createUIReinterpret(utils::bumpArena *arena, 
+  utils::span<Interface::Control *>
+  Destroy::createUIReinterpret(utils::bumpArena *arena,
     Interface::EffectModuleSection *section, EffectData *effectData)
   {
     using namespace Interface;

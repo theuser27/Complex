@@ -35,7 +35,7 @@ namespace Generation
   class Processor
   {
   public:
-    Processor(utils::bumpArena *arena, Plugin::State *state, 
+    Processor(utils::bumpArena *arena, Plugin::State *state,
       Framework::ProcessorMetadata *metadata, const Processor *other);
     Processor(Processor &&) = default;
 
@@ -54,8 +54,8 @@ namespace Generation
     // the following functions are to be called outside of processing time
     bool addChildProcessor(Processor &newChildProcessor, Processor *insertBefore = nullptr);
     void removeChildProcessor(Processor &removedChildProcessor);
-    bool 
-    addChildProcessor(Processor &newChildProcessor, usize index) 
+    bool
+    addChildProcessor(Processor &newChildProcessor, usize index)
     {
       COMPLEX_HARD_ASSERT(index <= childrenCount);
       return addChildProcessor(newChildProcessor, getChild(children, index));
@@ -84,8 +84,8 @@ namespace Generation
     //void setAllParametersRandomisation(bool toRandomise = true);
     //void setParameterRandomisation(utils::string_view name, bool toRandomise = true);
 
-    usize 
-    getIndex() 
+    usize
+    getIndex()
     {
       usize i = 0;
       for (auto *child = parent->children; child != this; child = child->next)

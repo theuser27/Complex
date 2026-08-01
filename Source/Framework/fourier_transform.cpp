@@ -85,8 +85,8 @@ namespace Framework
 
     // zeroing out nyquist from previous transforms
     input[size] = 0.0f;
-    ippsFFTFwd_RToCCS_32f_I(input, 
-      (IppsFFTSpec_R_32f *)ippSpecs_.load(satomi::memory_order_acquire)[order], 
+    ippsFFTFwd_RToCCS_32f_I(input,
+      (IppsFFTSpec_R_32f *)ippSpecs_.load(satomi::memory_order_acquire)[order],
       (Ipp8u *)buffer_.load(satomi::memory_order_relaxed));
   }
 
@@ -99,8 +99,8 @@ namespace Framework
     // but you don't know what might have happened during processing
     output[1] = 0.0f;
     output[size + 1] = 0.0f;
-    ippsFFTInv_CCSToR_32f_I(output, 
-      (IppsFFTSpec_R_32f *)ippSpecs_.load(satomi::memory_order_acquire)[order], 
+    ippsFFTInv_CCSToR_32f_I(output,
+      (IppsFFTSpec_R_32f *)ippSpecs_.load(satomi::memory_order_acquire)[order],
       (Ipp8u *)buffer_.load(satomi::memory_order_relaxed));
   }
 
@@ -135,7 +135,7 @@ namespace Framework
       plans[i] = pffft_new_setup(1 << i, PFFFT_REAL);
 
     plans_.store(plans, satomi::memory_order_relaxed);
-    scratchBuffers_.store((float *)pffft_aligned_malloc((usize(1) << maxOrder) * sizeof(float)), 
+    scratchBuffers_.store((float *)pffft_aligned_malloc((usize(1) << maxOrder) * sizeof(float)),
       satomi::memory_order_relaxed);
   }
 

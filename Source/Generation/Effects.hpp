@@ -45,7 +45,7 @@ namespace Generation
     enum class BoundRepresentation : u32 { Normalised, Frequency, BinIndex };
 
 
-    EffectModule(utils::bumpArena *arena, Plugin::State *state, 
+    EffectModule(utils::bumpArena *arena, Plugin::State *state,
       Framework::ProcessorMetadata *metadata, const EffectModule *other, void *serialisedSave);
 
     Interface::Component *createUI() override;
@@ -90,7 +90,7 @@ namespace Generation
     // Stopped - temporarily stopped to wait for data from another lane
     enum class LaneStatus : u32 { Finished, Ready, Running, Stopped };
 
-    EffectsLane(utils::bumpArena *arena, Plugin::State *state, 
+    EffectsLane(utils::bumpArena *arena, Plugin::State *state,
       Framework::ProcessorMetadata *metadata, const EffectsLane *other, void *serialisedSave);
 
     Interface::Component *createUI() override;

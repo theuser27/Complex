@@ -47,7 +47,7 @@ namespace Framework
     return adjustedPosition == 0.0f ? 1.0f :
       const_math::sin(k2Pi * adjustedPosition) / (k2Pi * adjustedPosition);
   }
-  
+
 
   static constexpr auto hannWindowLookup = utils::Lookup<kWindowResolution>(createHannWindow);
   static constexpr auto hammingWindowLookup = utils::Lookup<kWindowResolution>(createHammingWindow);
@@ -62,7 +62,7 @@ namespace Framework
   float getTriangleWindow(float position) noexcept { return triangleWindowLookup.linearLookup(position); }
   float getSineWindow(float position) noexcept { return sineWindowLookup.linearLookup(position); }
 
-  float getExponentialWindow(float position, float alpha) noexcept 
+  float getExponentialWindow(float position, float alpha) noexcept
   { return utils::pow((exponentialWindowLookup.linearLookup(position)), alpha); }
 
   float getHannExponentialWindow(float position, float alpha) noexcept
@@ -71,7 +71,7 @@ namespace Framework
       * hannWindowLookup.linearLookup(position));
   }
 
-  float getLanczosWindow(float position, float alpha) noexcept 
+  float getLanczosWindow(float position, float alpha) noexcept
   { return utils::pow(utils::clamp(lanczosWindowLookup.linearLookup(position), 0.0f, 1.0f), alpha); }
 
   static void applyDefaultWindows(Buffer &buffer, u32 channels, utils::span<bool> channelsToProcess,
@@ -191,7 +191,7 @@ namespace Framework
     applyDefaultWindows(buffer, channels, channelsToProcess, samples, windowType, alpha);
   }
 
-  void Window::addOverlap(CircularBuffer &destination, Buffer &source, u32 channels, 
+  void Window::addOverlap(CircularBuffer &destination, Buffer &source, u32 channels,
     utils::span<bool> channelsToProcess, u32 samples, u32 destinationBegin, uuid windowType)
   {
     auto bufferSize = destination.size;
@@ -228,8 +228,8 @@ namespace Framework
   void Window::scaleDown(Buffer &buffer, u32 channels, utils::span<bool> channelsToProcess,
     u32 start, u32 samples, uuid windowType, float overlap, float alpha)
   {
-    // TODO: use an extra overlap_ variable to store the overlap param 
-    // from previous scaleDown run in order to apply extra attenuation 
+    // TODO: use an extra overlap_ variable to store the overlap param
+    // from previous scaleDown run in order to apply extra attenuation
     // when moving the overlap control (essentially becomes linear interpolation)
 
     float mult;

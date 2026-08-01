@@ -77,9 +77,9 @@ namespace Interface
       } header{};
 
       void reinitialise();
-      
+
       bool render(OpenGlWrapper &openGl) override;
 
     } effectHolder{};
-  };	
+  };
 }

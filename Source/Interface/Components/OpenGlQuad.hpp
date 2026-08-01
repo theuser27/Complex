@@ -163,7 +163,7 @@ namespace Interface
 		{
 			float width = bottomRounding / (float)cornerBounds.w * 2.0f;
 			float height = bottomRounding / (float)cornerBounds.h * 2.0f;
-			
+
 			setQuad(0, -1.0f, -1.0f, width, height);
 			setQuad(1, -2.0f, -2.0f, 0.0f, 0.0f);
 			setQuad(2, -2.0f, -2.0f, 0.0f, 0.0f);

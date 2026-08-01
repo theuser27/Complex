@@ -417,7 +417,7 @@ namespace Plugin
   void *
   State::getHotreloadSymbol(utils::string_view decoratedName)
   {
-    if (auto iter = cachedHotreloadSymbols.get_last_of(decoratedName); 
+    if (auto iter = cachedHotreloadSymbols.get_last_of(decoratedName);
       iter != cachedHotreloadSymbols.data.end())
       return iter->second;
 

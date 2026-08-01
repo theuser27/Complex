@@ -26,7 +26,7 @@ namespace std
     constexpr initializer_list() noexcept = default;
     template<auto Size>
     constexpr initializer_list(const T (&rawArray)[Size]) noexcept : data_{ rawArray }, size_{ Size } { }
-    
+
     constexpr const_iterator data() const noexcept { return data_; }
     constexpr size_type size() const noexcept { return size_; }
     constexpr const_iterator begin() const noexcept { return data_; }
@@ -678,7 +678,7 @@ namespace utils
     constexpr span(It first, size_type count) noexcept : data_{ &(*first) }, size_{ count } { }
 
     template<typename It>
-    constexpr span(It first, It pastLast) noexcept : data_{ &(*first) }, 
+    constexpr span(It first, It pastLast) noexcept : data_{ &(*first) },
       size_{ (size_type)(pastLast - first) } { COMPLEX_ASSERT(pastLast > first); }
 
     template<auto Size>
@@ -691,19 +691,19 @@ namespace utils
     template<typename U> requires is_convertible_v<U(*)[], T(*)[]>
     constexpr span(const span<U> &other) noexcept : data_{ other.data() }, size_{ other.size() } { }
 
-    [[nodiscard]] constexpr span 
+    [[nodiscard]] constexpr span
     removeLast(size_type count) const noexcept
     {
       COMPLEX_ASSERT(count <= size_, "Count out of range in span::removeLast()");
       return { data_, count };
     }
-    [[nodiscard]] constexpr span 
+    [[nodiscard]] constexpr span
     removeFirst(size_type count) const noexcept
     {
       COMPLEX_ASSERT(count <= size_, "Count out of range in span::removeFirst()");
       return { data_ + count, size_ - count };
     }
-    [[nodiscard]] constexpr span 
+    [[nodiscard]] constexpr span
     subrange(size_type position, size_type count = npos) const noexcept
     {
       COMPLEX_ASSERT(position <= size_, "Position out of range in span::subrange()");
@@ -775,7 +775,7 @@ namespace utils
     template<auto Size>
     constexpr string_view(const char (&rawArray)[Size]) noexcept : span{ rawArray, Size - 1 } { }
 
-    [[nodiscard]] constexpr size_type 
+    [[nodiscard]] constexpr size_type
     find(string_view substring, size_type position = 0) const noexcept
     {
       COMPLEX_ASSERT(substring.size() <= size_, "Size of substring is larger than the searched string in string_view::find()");
@@ -788,7 +788,7 @@ namespace utils
       return npos;
     }
 
-    [[nodiscard]] constexpr size_type 
+    [[nodiscard]] constexpr size_type
     rfind(string_view substring, size_type position = npos) const noexcept
     {
       COMPLEX_ASSERT(substring.size() <= size_, "Size of substring is larger than the searched string in string_view::rfind()");
@@ -807,7 +807,7 @@ namespace utils
 
         --position;
       }
-    }    
+    }
 
     [[nodiscard]] constexpr int
     compare(string_view other) const noexcept
@@ -817,11 +817,11 @@ namespace utils
     compareCaseInsensitive(string_view other) const noexcept
     { return utils::compareCaseInsensitive(data(), size(), other.data(), other.size()); }
 
-    [[nodiscard]] friend constexpr bool 
+    [[nodiscard]] friend constexpr bool
     operator==(string_view lhs, string_view rhs) noexcept
     { return lhs.size() == rhs.size() && (lhs.data() == rhs.data() || lhs.compare(rhs) == 0); }
 
-    [[nodiscard]] friend constexpr bool 
+    [[nodiscard]] friend constexpr bool
     operator<(string_view lhs, string_view rhs) noexcept
     { return lhs.compare(rhs) < 0; }
   };
@@ -831,7 +831,7 @@ namespace utils
     string_view p{};
 
     template<typename T>
-    static constexpr typeInfo 
+    static constexpr typeInfo
     create()
     {
     #ifdef _MSC_VER
@@ -968,7 +968,7 @@ namespace utils
   constexpr bool operator==(nullptr_t, const up<T> &two) noexcept { return two.get() == nullptr; }
 
   // checked array
-  // thin abstraction intended to be zero-cost in release builds 
+  // thin abstraction intended to be zero-cost in release builds
   // but provide checked access for debug ones
   template<typename T>
   struct ca
@@ -994,7 +994,7 @@ namespace utils
       COMPLEX_ASSERT(explicitSize == 0 || explicitSize <= size - offset);
       return ca
       {
-        pointer + offset 
+        pointer + offset
       #if COMPLEX_DEBUG
         , (explicitSize) ? explicitSize : size - offset
       #endif
@@ -1019,7 +1019,7 @@ namespace utils
   };
 
   template<typename T, auto Size>
-  constexpr auto 
+  constexpr auto
   find(const T (&array)[Size], const T &element)
   {
     decltype(Size) i = 0;
@@ -1031,7 +1031,7 @@ namespace utils
   }
 
   template<typename T, auto Size>
-  constexpr auto 
+  constexpr auto
   findIf(const T(&array)[Size], const auto &predicate)
   {
     decltype(Size) i = 0;
@@ -1042,7 +1042,7 @@ namespace utils
     return &array[i];
   }
 
-  constexpr auto 
+  constexpr auto
   find(auto &container, const auto &element)
   {
     auto begin = container.begin();
@@ -1054,7 +1054,7 @@ namespace utils
     return begin;
   }
 
-  constexpr auto 
+  constexpr auto
   findIf(auto &container, const auto &predicate)
   {
     auto begin = container.begin();
@@ -1066,15 +1066,15 @@ namespace utils
     return begin;
   }
 
-  constexpr usize 
+  constexpr usize
   findIndex(auto &container, const auto &element)
   { return (usize)(utils::find(container, element) - container.begin()); }
 
-  constexpr usize 
+  constexpr usize
   findIndexIf(auto &container, const auto &predicate)
   { return (usize)(utils::findIf(container, predicate) - container.begin()); }
 
-  constexpr bool 
+  constexpr bool
   allOf(auto &container, const auto &predicate)
   {
     auto begin = container.begin();
@@ -1102,7 +1102,7 @@ namespace utils
   {
     if (lower >= upper)
       return;
-    
+
     COMPLEX_SWAP(container[lower], container[(upper + lower) / 2]);
     const auto &pivot = container[lower];
     usize	m = lower;
@@ -1121,7 +1121,7 @@ namespace utils
     quicksort(container, m + 1, upper, predicate);
   }
 
-  constexpr void quicksort(auto &container, const auto &predicate) 
+  constexpr void quicksort(auto &container, const auto &predicate)
   { quicksort(container, 0, container.size(), predicate); }
 
 
@@ -1154,7 +1154,7 @@ namespace utils
   #endif
   }
 
-  forceinline usize 
+  forceinline usize
   log2(usize value) noexcept
   {
     COMPLEX_ASSERT(value != 0);
@@ -1176,16 +1176,16 @@ namespace utils
   float sin(float arg);
   float cos(float arg);
 
-  constexpr bool 
+  constexpr bool
   isPowerOfTwo(utils::integral auto value) noexcept
   { return (value & (value - 1)) == 0; }
 
   template<utils::integral T>
-  constexpr T 
+  constexpr T
   roundUpToMultiple(T i, T factor) noexcept
   { return ((i + factor - 1) / factor) * factor; }
 
-  forceinline usize 
+  forceinline usize
   getAlignment(const void *pointer) noexcept
   {
     COMPLEX_ASSERT(pointer);
@@ -1207,8 +1207,8 @@ namespace utils
   #endif
   }
 
-  template <typename T> 
-  constexpr int signum(T val, bool zeroAtCenter = true) noexcept 
+  template <typename T>
+  constexpr int signum(T val, bool zeroAtCenter = true) noexcept
   {
     if (zeroAtCenter)
       return (T(0) < val) - (val < T(0));
@@ -1218,12 +1218,12 @@ namespace utils
 
   // returns the starting position of the centered element relative to container
   template<typename T>
-  constexpr T 
+  constexpr T
   centerAxis(T elementRange, T containerRange) noexcept
   { return (containerRange - elementRange) / T(2); }
 
   template<utils::floating_point T>
-  constexpr T 
+  constexpr T
   unsignFloat(T &value) noexcept
   {
     int sign = signum(value);
@@ -1260,7 +1260,7 @@ namespace utils
 
   // acquires a contiguous block of virtual memory
   // cannot be used as a resource yet
-  // 
+  //
   // size is rounded up to the nearest page size
   byte *reserveMemory(usize &size);
   // assigns pages to a given reserved virtual address space
@@ -1273,7 +1273,7 @@ namespace utils
   // starting at memory, rounded up to the nearest page
   void decommitMemory(void *memory, usize size);
   // relinquish contiguous block of virtual memory
-  // 
+  //
   // memory MUST point to a block returned by reserveMemory
   // (because of windows VirtualFree)
   // and size MUST be equal to the size, modified by reserveMemory

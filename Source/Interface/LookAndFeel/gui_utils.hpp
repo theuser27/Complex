@@ -43,8 +43,8 @@ namespace Interface
       T end;
     };
 
-    friend constexpr bool 
-    operator==(Area lhs, Area rhs) 
+    friend constexpr bool
+    operator==(Area lhs, Area rhs)
     { return lhs.x == rhs.x && lhs.y == rhs.y; };
   };
 
@@ -54,7 +54,7 @@ namespace Interface
   template<typename T>
   using Range = Area<T>;
 
-  template<usize I, typename T> 
+  template<usize I, typename T>
   T get(const Area<T> &p) { return (I == 0) ? p.x : p.y; }
 }
 
@@ -180,13 +180,13 @@ namespace Interface
     constexpr Rectangle withExpandTop(T delta) const { return withTop(y - delta); }
     constexpr Rectangle withExpandRight(T delta) const { return withWidth(w + delta); }
     constexpr Rectangle withExpandBottom(T delta) const { return withHeight(h + delta); }
-    constexpr Rectangle 
+    constexpr Rectangle
     withExpand(Rectangle<T> delta) const
     {
       return { x - delta.x, y - delta.y, utils::max(T(), w + delta.x + delta.w),
         utils::max(T(), h + delta.y + delta.h) };
     }
-    constexpr Rectangle 
+    constexpr Rectangle
     withExpand(T deltaX, T deltaY) const
     {
       return { x - deltaX, y - deltaY, utils::max(T(), w + deltaX * 2),
@@ -212,19 +212,19 @@ namespace Interface
     constexpr Rectangle &transpose() { return *this = transposed(); }
 
     constexpr bool isEmpty() const { return w <= T() || h <= T(); }
-    constexpr bool 
+    constexpr bool
     contains(T xCoord, T yCoord) const
     {
       return xCoord >= x && yCoord >= y && xCoord < x + w && yCoord < y + h;
     }
     constexpr bool contains(Point<T> point) const { return contains(point.x, point.y); }
-    constexpr bool 
+    constexpr bool
     contains(Rectangle other) const
     {
       return x <= other.x && y <= other.y && x + w >= other.x + other.w && y + h >= other.y + other.h;
     }
 
-    constexpr bool 
+    constexpr bool
     intersects(Rectangle other) const
     {
       return x + w > other.x
@@ -235,7 +235,7 @@ namespace Interface
         && other.w > T() && other.h > T();
     }
 
-    constexpr Rectangle 
+    constexpr Rectangle
     getIntersection(Rectangle other) const
     {
       auto nx = utils::max(x, other.x);
@@ -246,7 +246,7 @@ namespace Interface
       return { nx, ny, nw, nh };
     }
 
-    constexpr Rectangle 
+    constexpr Rectangle
     getUnion(Rectangle other) const
     {
       if (other.isEmpty())
@@ -261,14 +261,14 @@ namespace Interface
         utils::max(y + h, other.y + other.h) - newY };
     }
 
-    constexpr Point<T> 
+    constexpr Point<T>
     getConstrainedPoint(Point<T> point) const
     {
       return { utils::clamp(point.x, x, getRight()),
         utils::clamp(point.y, y, getBottom()) };
     }
 
-    constexpr Rectangle 
+    constexpr Rectangle
     constrainedWithin(Rectangle areaToFitWithin) const
     {
       auto newPos = areaToFitWithin.withSize(areaToFitWithin.w - w,
@@ -304,7 +304,7 @@ namespace Interface
 
 
     constexpr u32 getARGB() const { return ((u32)a << 24) | ((u32)r << 16) | ((u32)g << 8) | b; }
-    constexpr utils::array<float, 4> 
+    constexpr utils::array<float, 4>
     getNormalisedARGB() const
     { return utils::array{ a / 255.0f, r / 255.0f, g / 255.0f, b / 255.0f }; }
     constexpr utils::array<float, 4>
@@ -326,7 +326,7 @@ namespace Interface
       amount = 1.0f / (1.0f + amount);
 
       return Colour
-      { 
+      {
         (u8)(255.0f - (amount * (255.0f - r))),
         (u8)(255.0f - (amount * (255.0f - g))),
         (u8)(255.0f - (amount * (255.0f - b))),
@@ -412,7 +412,7 @@ namespace Interface
       middleButtonModifier = 1 << 6,
       forwardButtonModifier = 1 << 7,
       backwardButtonModifier = 1 << 8,
-      
+
       // use this to check for popup menus, instead of rightButtonModifier
     #if COMPLEX_MAC
       popupMenuClickModifier = rightButtonModifier | macosCtrlModifier,
@@ -437,7 +437,7 @@ namespace Interface
 
     constexpr bool test(decltype(flags) flagsToTest) const { return (flags & flagsToTest) != 0; }
 
-    constexpr u8 
+    constexpr u8
     getMouseButtonsDownCount() const
     {
       u8 num = 0;
@@ -523,7 +523,7 @@ namespace Interface
     // one of special constants listed in this class, or an
     // 8 - bit character code such as a letter(case is ignored),
     // digit or a simple key like "," or ".". Note that this
-    // doesn't take modifiers into account. For example, 
+    // doesn't take modifiers into account. For example,
     // 'a' and shift + 'a' will result in the same keyCode of 'a'.
     u32 keyCode = 0;
 
@@ -548,7 +548,7 @@ namespace Interface
     static bool isKeyCurrentlyDown(int keyCode);
   };
 
-  inline void tickAnimation(utils::span<float> values, 
+  inline void tickAnimation(utils::span<float> values,
     utils::span<const bool> flags, utils::span<const float> increments)
   {
     COMPLEX_ASSERT(values.size() == flags.size());

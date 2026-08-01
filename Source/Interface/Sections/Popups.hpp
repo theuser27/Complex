@@ -20,8 +20,8 @@ namespace Interface
 
     bool render(OpenGlWrapper &openGl) override;
 
-    void setContent(Component *sourceComponent, 
-      utils::string_view displayText, Placement relativeSourcePlacement, 
+    void setContent(Component *sourceComponent,
+      utils::string_view displayText, Placement relativeSourcePlacement,
       Point<i32> customPosition = {})
     {
       source = sourceComponent;
@@ -31,7 +31,7 @@ namespace Interface
       text.copy(displayText);
       componentFlags.isVisible = true;
     }
-    void setContentControl(Control *sourceControl, 
+    void setContentControl(Control *sourceControl,
       Placement relativeSourcePlacement, Point<i32> customPosition = {})
     {
       source = sourceControl;
@@ -84,7 +84,7 @@ namespace Interface
     bool mouseEnter(const MouseEvent &e) override;
     bool mouseExit(const MouseEvent &e) override;
 
-    void summonChildList(PopupItem *summoningItem, 
+    void summonChildList(PopupItem *summoningItem,
       const MouseEvent &summoningMouseEvent, bool force = false);
 
     static bool drawV1(OpenGlWrapper &openGl, PopupList *self);
@@ -92,7 +92,7 @@ namespace Interface
     bool (*draw)(OpenGlWrapper &openGl, PopupList *self) = drawV1;
 
     PopupItem *parentItem{};
-    
+
     PopupSelector *parentSelector{};
     PopupList *parentList{};
     PopupItem *currentSublistItem{};
@@ -112,7 +112,7 @@ namespace Interface
       componentFlags.clickableChildren = false;
       componentFlags.acceptsOrphanMouseEvents = true;
     }
-    
+
     bool mouseMove(const MouseEvent &e) override;
     bool mouseDown(const MouseEvent &e) override;
     bool mouseUp(const MouseEvent &e) override;
@@ -149,7 +149,7 @@ namespace Interface
     void newSelection(PopupItem *entry);
 
     void resetState(bool callCancelFn = true);
-    void summon(Component *summoningComponent, 
+    void summon(Component *summoningComponent,
       Placement newListPlacement, Point<i32> customPosition = {});
 
     utils::smallFn<void(PopupSelector *, PopupItem *)> callback{};

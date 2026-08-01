@@ -30,7 +30,7 @@ namespace Interface
     Component *surfaceToLiftTo{};
     // copy draggedComponent and return the new DraggableComponent inside
     DraggableComponent *(*copyingDraggedComponent)(Component *c){};
-    
+
     Point<i32> initialClickPosition{};
     bool (*previousOverridePosition)(Component *c){};
     Range<i32> (*previousOverrideSize)(Component *c, bool isCalculatingVertical){};

@@ -11,11 +11,11 @@
 
 namespace Generation
 {
-  static bool 
+  static bool
   reserveBuffer(Framework::Buffer &buffer, utils::bumpArena *arena, u32 newChannels, u32 newSize, u32 *end)
   {
     newChannels = newChannels ? newChannels : buffer.channels;
-    newSize = newSize ? newSize : buffer.size;      
+    newSize = newSize ? newSize : buffer.size;
 
     if (newChannels <= buffer.channels && newSize <= buffer.size)
       return false;
@@ -43,7 +43,7 @@ namespace Generation
       utils::bumpArena::remove(oldData);
     return copiedData;
   }
-  
+
   void SoundEngine::InputBuffer::reserve(u32 newChannels, u32 newSize)
   {
     bool copiedData = reserveBuffer(*this, arena, newChannels, newSize, &end);
@@ -78,7 +78,7 @@ createProcessor<Generation::SoundEngine>(Plugin::State *state, Framework::Proces
 
 namespace Generation
 {
-  SoundEngine::SoundEngine(utils::bumpArena *arena, Plugin::State *state, 
+  SoundEngine::SoundEngine(utils::bumpArena *arena, Plugin::State *state,
     Framework::ProcessorMetadata *metadata, void *serialisedSave) : Processor{ arena, state, metadata, nullptr }
   {
     using namespace Framework;
@@ -90,7 +90,7 @@ namespace Generation
       parameters = createParameters(metadata->parametersCount, metadata->parameters);
       parameterCount = metadata->parametersCount;
     }
-    
+
     inBuffer.arena = arena;
     outBuffer.arena = arena;
     resizeBuffers(state->plugin->inSidechains, state->plugin->outSidechains);
@@ -99,7 +99,7 @@ namespace Generation
   void SoundEngine::resizeBuffers(u32 maxSidechainInputs, u32 maxSidechainOutputs)
   {
     auto maxOrder = (u32)getParameter(Parameters::BlockSize)->getParameterDetails().maxValue;
-    
+
     // input buffer size, kind of arbitrary but it must be longer than maxProcessingBufferLength
     u32 maxInputBufferLength = 1 << (maxOrder + 4);
     // pre- and post-processing FFT buffers size
@@ -127,13 +127,13 @@ namespace Generation
 
   u32 SoundEngine::getProcessingDelay() const { return FFTSamples_ + state->plugin->getSamplesPerBlock(); }
   u32 SoundEngine::getFFTSize() const { return 1 << getParameter(Parameters::BlockSize)->getInternalValue<u32>(); }
-  u32 
+  u32
   SoundEngine::getMaxBinCount() const
   {
     return (1 << ((u32)getParameter(Parameters::BlockSize)->getParameterDetails().maxValue - 1)) + 1;
   }
 
-  utils::pair<u32, u32> 
+  utils::pair<u32, u32>
   SoundEngine::getMinMaxFFTOrder()
   {
     auto *parameter = getParameter(Parameters::BlockSize);
@@ -159,7 +159,7 @@ namespace Generation
     inBuffer.writeAtEnd(buffer, inputs, samples);
 
     // update used in/outputs here because we could get broken up blocks if done inside the loop
-    
+
     // update inputs
     {
       ::zeroset(usedInputChannels_.data(), usedInputChannels_.size());
@@ -370,7 +370,7 @@ namespace Generation
     // when the overlap is more than what the window requires
     // there will be an increase in gain, so we need to offset that
     windows.scaleDown(outBuffer, outBuffer.channels,
-      usedOutputChannels_, start, toScaleSamples, windowTypeId_, 
+      usedOutputChannels_, start, toScaleSamples, windowTypeId_,
       currentOverlap_.load(satomi::memory_order_relaxed), alpha_);
 
     // only wet

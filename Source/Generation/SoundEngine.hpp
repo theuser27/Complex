@@ -34,7 +34,7 @@ namespace Generation
       (    OutGain, 1758060942415),
     )
 
-    SoundEngine(utils::bumpArena *arena, Plugin::State *state, 
+    SoundEngine(utils::bumpArena *arena, Plugin::State *state,
       Framework::ProcessorMetadata *metadata, void *serialisedSave);
 
   private:
@@ -124,7 +124,7 @@ namespace Generation
       u32 addOverlap_ = 0;
 
       utils::bumpArena *arena{};
-      
+
       // lock must be acquired manually to have access to this struct (except in reserve())
 
       void reset()

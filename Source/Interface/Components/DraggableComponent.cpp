@@ -94,7 +94,7 @@ namespace Interface
         return s;
       }, position + componentToInsert->bounds.getPosition(), false, componentToInsert, true);
 
-    // if for some reason the dragged component is outside of bounds 
+    // if for some reason the dragged component is outside of bounds
     // we can fallback on wherever it was already inserted and move up
     if (!success && lastInsertedInto)
     {
@@ -103,7 +103,7 @@ namespace Interface
         if (lastInsertedInto->handleCommandMessage(CommandMessages::HandleProcessorInsertion, &insertInfo))
           break;
         lastInsertedInto = lastInsertedInto->parent;
-      }      
+      }
     }
 
     return lastInsertedInto;
@@ -161,7 +161,7 @@ namespace Interface
       c->margin = draggedComponent->margin;
 
       if (!isCalculatingVertical)
-        return Range<i32>{ -1, (draggedComponent->sizingFlags & Component::GrowableX) ? 
+        return Range<i32>{ -1, (draggedComponent->sizingFlags & Component::GrowableX) ?
           -1 : draggedComponent->lastBounds.w };
       else
         return Range<i32>{ -1, (draggedComponent->sizingFlags & Component::GrowableY) ?
@@ -202,7 +202,7 @@ namespace Interface
     // if this is the draggable component we must keep focus otherwise our click will be discarded
     draggedComponent->parent->removeChildComponent(draggedComponent, draggedComponent == this);
     surfaceToLiftTo->addChildComponent(draggedComponent);
-    
+
     // set the dragged component to its correct position
     draggedComponent->bounds = draggedComponent->bounds.withPosition(initialClickPosition);
 
@@ -216,7 +216,7 @@ namespace Interface
 
         //draggedComponent->nextPosition = initialClickPosition + lastDragEvent.getOffsetFromDragStart();
         auto *placeholder = &getGui(uiRelated.renderer)->placeholderInsert;
-        auto *insertedIntoComponent = tryToInsertDraggableComponent(self->draggedComponent, 
+        auto *insertedIntoComponent = tryToInsertDraggableComponent(self->draggedComponent,
           placeholder->parent, self->processor, placeholder, self->directionX, self->directionY);
 
         utils::vector<Component *> parentComponentPath{ localScratch, 8 };
@@ -269,7 +269,7 @@ namespace Interface
     else if (!directionY && newPosition.y - directionChangePoint.y < -draggedComponent->bounds.h / 4)
       directionY = true;
 
-    //COMPLEX_DEBUG_LOG("wasMovingUpX: %d, wasMovingUpY: %d, new - directionChange: { %d, %d }\n", 
+    //COMPLEX_DEBUG_LOG("wasMovingUpX: %d, wasMovingUpY: %d, new - directionChange: { %d, %d }\n",
     //  wasMovingUpX, wasMovingUpY, newPosition.x - directionChangePoint.x, newPosition.y - directionChangePoint.y);
 
     return true;
@@ -292,7 +292,7 @@ namespace Interface
     auto finalParentComponent = placeholder->parent;
     placeholder->parent->removeChildComponent(placeholder);
 
-    tryToInsertDraggableComponent(draggedComponent, finalParentComponent, 
+    tryToInsertDraggableComponent(draggedComponent, finalParentComponent,
       processor, nullptr, directionX, directionY);
 
     auto &plugin = *processor->state->plugin;

@@ -115,7 +115,7 @@ namespace Interface
       component->bounds.*minMember = utils::max((i32)sizes.min, component->desiredSize.*minMember);
 
       if (test_flag(component->sizingFlags, (isCalculatingVertical) ? Component::SnapToMinY : Component::SnapToMinX))
-        component->bounds.*maxMember = utils::min(component->bounds.*minMember, component->desiredSize.*maxMember);      
+        component->bounds.*maxMember = utils::min(component->bounds.*minMember, component->desiredSize.*maxMember);
       else
         component->bounds.*maxMember = utils::clamp((i32)sizes.max, component->bounds.*minMember, component->desiredSize.*maxMember);
 
@@ -123,7 +123,7 @@ namespace Interface
       {
         // if you have a scrollable parent and a growable child
         // along the same axis, the algorithm will fail spectacularly
-        //[[maybe_unused]] auto scrollableFlag = (isCalculatingVertical) ? 
+        //[[maybe_unused]] auto scrollableFlag = (isCalculatingVertical) ?
         //  Component::ScrollableY : Component::ScrollableX;
         //COMPLEX_ASSERT((component->parent->sizingFlags & scrollableFlag) == 0);
 
@@ -182,7 +182,7 @@ namespace Interface
     // when parent has horizontal/vertical orientation but we're calculating vertical/horizontal sizes
     if (component->componentFlags.vertical ^ isCalculatingVertical)
     {
-      auto padding = (isCalculatingVertical) ? 
+      auto padding = (isCalculatingVertical) ?
         component->padding.getBottom() : component->padding.getRight();
 
       for (auto *child = children; child; child = child->next)
@@ -200,7 +200,7 @@ namespace Interface
       // scaling the final size
       component->bounds.*actualSize = scaleValueRoundInt((float)(component->bounds.*actualSize));
       COMPLEX_ASSERT(component->bounds.*actualSize >= 0);
-      component->bounds.*actualSize = (component->componentFlags.keepSize) ? 
+      component->bounds.*actualSize = (component->componentFlags.keepSize) ?
         component->lastBounds.*actualSize : component->bounds.*actualSize;
 
       return;
@@ -229,7 +229,7 @@ namespace Interface
       {
         child->bounds.*actualSize = utils::clamp(component->bounds.*actualSize,
           child->bounds.*minMember, child->bounds.*maxMember);
-        
+
         continue;
       }
 
@@ -257,7 +257,7 @@ namespace Interface
 
     bool skipResizingChildren = test_flag(component->sizingFlags, (isCalculatingVertical) ? Component::ScrollableY : Component::ScrollableX) &&
       !test_flag(component->sizingFlags, (isCalculatingVertical) ? Component::SnapToMinY : Component::SnapToMinX);
-    
+
     if (!skipResizingChildren && (!sortedMin.empty() && !sortedMax.empty()))
     {
       i32 remaining = component->bounds.*actualSize - (i32)sizes.min;
@@ -537,9 +537,9 @@ namespace Interface
           usize j = 0;
 
           for (; nextChild && (nextChild->placement & GET_PRIMARY_FLAG(component, Placement::justifyX)) == type;
-            nextChild = nextChild->next) 
+            nextChild = nextChild->next)
           {
-            if (nextChild->componentFlags.isVisible && 
+            if (nextChild->componentFlags.isVisible &&
               !(nextChild->placement & Placement::custom))
               ++j;
           }
@@ -601,7 +601,7 @@ namespace Interface
         // in reverse start from the right-most
         do
         {
-          if (nextChild->componentFlags.isVisible && 
+          if (nextChild->componentFlags.isVisible &&
             !(nextChild->placement & Placement::custom))
           {
             auto bounds = TRANSPOSE(component, nextChild->bounds);
@@ -717,11 +717,11 @@ namespace Interface
     Rectangle scrollBoundsY{ component->bounds.w - scaledPadding.w, scaledPadding.y,
       scaledPadding.w, component->bounds.h - scaledPadding.getBottom() };
 
-    component->componentFlags.isScrollbarXClicked = 
+    component->componentFlags.isScrollbarXClicked =
       test_flag(component->sizingFlags, Component::ScrollableWithBarX) &&
       component->scrollableArea.w > component->bounds.w && scrollBoundsX.contains(e.x, e.y);
 
-    component->componentFlags.isScrollbarYClicked = 
+    component->componentFlags.isScrollbarYClicked =
       test_flag(component->sizingFlags, Component::ScrollableWithBarY) &&
       component->scrollableArea.h > component->bounds.h && scrollBoundsY.contains(e.x, e.y);
 
@@ -753,11 +753,11 @@ namespace Interface
     auto scaledPadding = scaleValueRoundInt(component->padding.toInt());
 
     if (component->componentFlags.isScrollbarXClicked)
-      deltaX = (float)component->scrollableArea.w * (float)offset.x / 
+      deltaX = (float)component->scrollableArea.w * (float)offset.x /
         (float)(component->bounds.w - scaledPadding.getRight());
 
     if (component->componentFlags.isScrollbarYClicked)
-      deltaY = (float)component->scrollableArea.h * (float)offset.y / 
+      deltaY = (float)component->scrollableArea.h * (float)offset.y /
         (float)(component->bounds.h - scaledPadding.getBottom());
 
     auto old = component->scrollOffset;
@@ -799,7 +799,7 @@ namespace Interface
 
     return old != component->scrollOffset;
   }
-  
+
   bool
   Component::mouseDown(const MouseEvent &event)
   {
@@ -807,7 +807,7 @@ namespace Interface
     return componentFlags.isScrollbarYClicked || componentFlags.isScrollbarXClicked;
   }
 
-  bool 
+  bool
   Component::mouseDrag(const MouseEvent &event)
   {
     if (componentFlags.isScrollbarYClicked || componentFlags.isScrollbarXClicked)
@@ -824,7 +824,7 @@ namespace Interface
 
     bool isHorizontal = e.mods.test(ModifierKeys::shiftModifier);
     auto multiplier = 30.0f * uiRelated.scale;
-    offsetScroll(this, e.wheelDeltaX * multiplier, 
+    offsetScroll(this, e.wheelDeltaX * multiplier,
       e.wheelDeltaY * multiplier, isHorizontal);
 
     return (isHorizontal) ? (sizingFlags & Component::ScrollableX) :
@@ -858,7 +858,7 @@ namespace Interface
   }
 
   Component *
-  Component::getComponentAt(i32 x, i32 y, bool onlyClickable, 
+  Component::getComponentAt(i32 x, i32 y, bool onlyClickable,
     bool recursive, Component *startingAt)
   {
     COMPLEX_ASSERT(!startingAt || startingAt->parent == this);
@@ -869,7 +869,7 @@ namespace Interface
       // this is to support getting components that might be overlapping
       for (auto *child = ((startingAt) ? startingAt : children)->previous; ; child = child->previous)
       {
-        if (child->componentFlags.isVisible && 
+        if (child->componentFlags.isVisible &&
           child->contains(Point{ x - child->bounds.x, y - child->bounds.y }))
         {
           if (!recursive)
@@ -971,7 +971,7 @@ namespace Interface
 
   void Component::grabFocus() { grabFocusInternal(this); }
 
-  bool 
+  bool
   Component::giveAwayFocusTo(Component *component)
   {
     auto *focusedComponent = getMouseInteractions(uiRelated.renderer).focused;
@@ -1014,7 +1014,7 @@ namespace Interface
     return false;
   }
 
-  bool 
+  bool
   Component::isShowing() const
   {
     for (auto c = this; c; c = c->parent)
@@ -1183,9 +1183,9 @@ namespace Interface
       //  scrollBounds = scrollBounds.withShift(0, scrollWidth).withHeight(scrollWidth);
       //}
 
-      float width = 0.5f * (float)scrollBounds.h * calculateScrollWidth(scrollBounds, 
+      float width = 0.5f * (float)scrollBounds.h * calculateScrollWidth(scrollBounds,
         scrollWidthsRatio.x, xScrollBrightness, componentFlags.isScrollbarXClicked);
-      xScrollBounds = { (float)scrollBounds.x + start, 
+      xScrollBounds = { (float)scrollBounds.x + start,
         scrollBounds.getBottom() - width - 0.25f * scrollBounds.h, length, width };
     }
 
@@ -1203,7 +1203,7 @@ namespace Interface
       //  scrollBounds = scrollBounds.withShift(scrollWidth, 0).withWidth(scrollWidth);
       //}
 
-      float width = 0.5f * (float)scrollBounds.w * calculateScrollWidth(scrollBounds, 
+      float width = 0.5f * (float)scrollBounds.w * calculateScrollWidth(scrollBounds,
         scrollWidthsRatio.y, yScrollBrightness, componentFlags.isScrollbarYClicked);
       yScrollBounds = { (float)scrollBounds.getRight() - width - 0.25f * scrollBounds.w,
         (float)scrollBounds.y + start, width, length };
@@ -1227,8 +1227,8 @@ namespace Interface
       fillRect(openGl, yScrollBounds, c, yScrollBounds.w * 0.5f);
     }
   }
-  
-  void Component::addCommandMessageHandler(utils::sll<CommandMessages::HandleMessageFn *> &handler, 
+
+  void Component::addCommandMessageHandler(utils::sll<CommandMessages::HandleMessageFn *> &handler,
     utils::sll<CommandMessages::HandleMessageFn *> *insertBefore)
   {
     COMPLEX_ASSERT(!handler.next);
@@ -1247,7 +1247,7 @@ namespace Interface
     }
 
     auto *nextFreeHandler = commandMessageHandler;
-    for (; nextFreeHandler->next && nextFreeHandler->next != insertBefore; 
+    for (; nextFreeHandler->next && nextFreeHandler->next != insertBefore;
       nextFreeHandler = nextFreeHandler->next) { }
 
     handler.next = nextFreeHandler->next;
@@ -1274,21 +1274,21 @@ namespace Interface
     }
   }
 
-  bool 
+  bool
   Component::handleCommandMessage(u64 commandId, void *extraData, bool useFallbackHandler)
   {
     for (auto *handler = commandMessageHandler; handler; handler = handler->next)
       if (handler->object && handler->object(this, commandId, extraData))
         return true;
-    
+
     if (useFallbackHandler && componentHandleCommandMessage(this, commandId, extraData))
       return true;
 
     return false;
   }
 
-  bool 
-  Component::componentHandleCommandMessage([[maybe_unused]] Component *c, 
+  bool
+  Component::componentHandleCommandMessage([[maybe_unused]] Component *c,
     [[maybe_unused]] u64 commandId, [[maybe_unused]] void *extraData)
   {
     return false;

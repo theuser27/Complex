@@ -11,16 +11,16 @@ namespace utils
 {
   enum class MathOperations { Assign, Add, Multiply, FadeInAdd, FadeOutAdd, Interpolate };
 
-  constexpr bool 
-  closeToZero(double value) 
+  constexpr bool
+  closeToZero(double value)
   { return value <= kEpsilon && value >= -kEpsilon; }
 
-  constexpr bool 
-  closeTo(double reference, double value) 
+  constexpr bool
+  closeTo(double reference, double value)
   { return closeToZero(reference - value); }
 
   template<bool UseAnd = false, typename T>
-  constexpr T 
+  constexpr T
   circularDifference(T lower, T upper, T size)
   {
     if constexpr (UseAnd)
@@ -29,42 +29,42 @@ namespace utils
       return (size + upper - lower) % size;
   }
 
-  forceinline double 
+  forceinline double
   amplitudeToDb(double amplitude)
   { return 20.0 * ::log10(amplitude); }
 
-  forceinline double 
-  dbToAmplitude(double decibels) 
+  forceinline double
+  dbToAmplitude(double decibels)
   { return ::pow(10.0, decibels / 20.0); }
 
-  forceinline double 
-  normalisedToDb(double normalised, double maxDb) 
+  forceinline double
+  normalisedToDb(double normalised, double maxDb)
   { return ::pow(maxDb + 1.0, normalised) - 1.0; }
 
-  forceinline double 
-  dbToNormalised(double db, double maxDb) 
+  forceinline double
+  dbToNormalised(double db, double maxDb)
   { return ::log2(db + 1.0) / ::log2(maxDb + 1.0); }
 
-  forceinline double 
-  normalisedToFrequency(double normalised, double sampleRate) 
+  forceinline double
+  normalisedToFrequency(double normalised, double sampleRate)
   { return ::pow(sampleRate * 0.5 / kMinFrequency, normalised) * kMinFrequency; }
 
-  forceinline double 
-  frequencyToNormalised(double frequency, double sampleRate) 
+  forceinline double
+  frequencyToNormalised(double frequency, double sampleRate)
   { return ::log2(frequency / kMinFrequency) / ::log2(sampleRate * 0.5 / kMinFrequency); }
 
-  // returns the proper bin which may also be nyquist, which is outside a power-of-2 
-  forceinline double 
-  normalisedToBinUnsafe(double normalised, u32 FFTSize, double sampleRate) 
+  // returns the proper bin which may also be nyquist, which is outside a power-of-2
+  forceinline double
+  normalisedToBinUnsafe(double normalised, u32 FFTSize, double sampleRate)
   { return ::round(normalisedToFrequency(normalised, sampleRate) / sampleRate * (double)FFTSize); }
 
   // always returns a bin < FFTSize, therefore cannot return nyquist
-  forceinline double 
-  normalisedToBinSafe(double normalised, u32 FFTSize, double sampleRate) 
+  forceinline double
+  normalisedToBinSafe(double normalised, u32 FFTSize, double sampleRate)
   { return min(normalisedToBinUnsafe(normalised, FFTSize, sampleRate), (double)FFTSize / 2.0 - 1.0); }
 
-  forceinline double 
-  binToNormalised(double bin, u32 FFTSize, double sampleRate) 
+  forceinline double
+  binToNormalised(double bin, u32 FFTSize, double sampleRate)
   {
     // at 0 logarithm doesn't produce valid values
     if (bin == 0.0)
@@ -72,32 +72,32 @@ namespace utils
     return frequencyToNormalised(bin * sampleRate / (double)FFTSize, sampleRate);
   }
 
-  forceinline double 
-  centsToRatio(double cents) 
+  forceinline double
+  centsToRatio(double cents)
   { return ::pow(2.0, cents / (double)kCentsPerOctave); }
 
-  forceinline double 
-  midiCentsToFrequency(double cents) 
+  forceinline double
+  midiCentsToFrequency(double cents)
   { return kMidi0Frequency * centsToRatio(cents); }
 
-  forceinline double 
-  midiNoteToFrequency(double note) 
+  forceinline double
+  midiNoteToFrequency(double note)
   { return midiCentsToFrequency(note * kCentsPerNote); }
 
-  forceinline double 
-  frequencyToMidiNote(double frequency) 
+  forceinline double
+  frequencyToMidiNote(double frequency)
   { return (double)kNotesPerOctave * ::log(frequency / kMidi0Frequency) * kExpConversionMult; }
 
-  forceinline double 
-  frequencyToMidiCents(double frequency) 
+  forceinline double
+  frequencyToMidiCents(double frequency)
   { return kCentsPerNote * frequencyToMidiNote(frequency); }
 
-  forceinline float 
-  nextPowerOfTwo(float value) 
+  forceinline float
+  nextPowerOfTwo(float value)
   { return ::roundf(::powf(2.0f, ::ceilf(::logf(value) * kExpConversionMult))); }
 
-  forceinline i32 
-  prbs32(i32 x) 
+  forceinline i32
+  prbs32(i32 x)
   {
     // maximal length, taps 32 31 29 1, from wikipedia
     return (i32)(((u32)x >> 1U) ^ (-(x & 1) & 0xd0000001U));
@@ -206,7 +206,7 @@ namespace utils
         utils::deallocate(refCount);
     }
 
-    static constexpr sp<T> 
+    static constexpr sp<T>
     create(auto &&... args)
     {
       constexpr auto alignment = alignof(T);
@@ -222,7 +222,7 @@ namespace utils
       }
       else
         memory = (byte *)utils::allocate(totalSize, alignment);
-      
+
       sp shared{};
       shared.refCount_ = new(memory) controlBlock{};
       shared.refCount_->object = new(memory + headerSize) T{ COMPLEX_FWD(args)... };
@@ -241,7 +241,7 @@ namespace utils
     constexpr T *operator->() const { return get(); }
     constexpr T &operator*() const { return *get(); }
 
-    constexpr usize 
+    constexpr usize
     useCount() const
     { return (!refCount_) ? 0 : refCount_->refCount.load(satomi::memory_order_relaxed); }
 
@@ -341,7 +341,7 @@ namespace utils
         {
           COMPLEX_ASSERT(data_);
           // we already have enough memory, no allocation needed
-          // however we might be losing track of the current amount of memory available 
+          // however we might be losing track of the current amount of memory available
           // but we'd need to store this information dynamically otherwise ¯\_(ツ)_/¯
           manager_(OpDestroy, this, nullptr);
         }
@@ -359,7 +359,7 @@ namespace utils
       }
       else
       {
-        COMPLEX_ASSERT(Alignment >= newParams.sizeAlignment.alignment && 
+        COMPLEX_ASSERT(Alignment >= newParams.sizeAlignment.alignment &&
           MaxSize >= newParams.sizeAlignment.size);
       }
 
@@ -429,7 +429,7 @@ namespace utils
       (void)new(data_) T{ COMPLEX_FWD(object) };
     }
     template<typename T>
-    static whatever 
+    static whatever
     create(auto &&... args)
     {
       whatever instance;
@@ -448,7 +448,7 @@ namespace utils
 
     bool hasValue() const { return manager_ != nullptr; }
 
-    typeInfo 
+    typeInfo
     type() const
     {
       if (!hasValue())
@@ -496,7 +496,7 @@ namespace utils
     }
 
     template<typename ... VisitorFunctions>
-    usize 
+    usize
     visit(VisitorFunctions &&... visitors)
     {
       if (!hasValue())
@@ -525,17 +525,17 @@ namespace utils
     }
 
     template<typename ... Ts>
-    bool 
+    bool
     isOneOf()
     {
-      usize matches = 0; 
+      usize matches = 0;
       if (hasValue())
         matches = (usize(manager_ == &ManageStorage<Ts>) + ...);
       return matches > 0;
     }
 
     template<template<typename...> class VariantLike, typename ... Ts>
-    usize 
+    usize
     tryExtract(VariantLike<Ts...> &variant)
     {
       if (!hasValue())
@@ -563,7 +563,7 @@ namespace utils
     }
 
     template<typename T>
-    bool 
+    bool
     tryExtract(T &variable)
     {
       if (manager_ == &ManageStorage<utils::remove_cvref_t<T>>)
@@ -809,7 +809,7 @@ namespace utils
         if (vtable_ && vtable_->alignment >= newVtable->alignment && vtable_->size >= newVtable->size)
         {
           // we already have enough memory, no allocation needed
-          // however we might be losing track of the current amount of memory available 
+          // however we might be losing track of the current amount of memory available
           // but we'd need to store this information dynamically otherwise ¯\_(ツ)_/¯
           vtable_->destroyer(data_);
         }
@@ -893,7 +893,7 @@ namespace utils
     inline static thread_local id currentId = {};
   public:
     // the necessity for this function instead of just getting the value directly
-    // is because the thread might have been started 
+    // is because the thread might have been started
     static id getCurrentId();
     [[noreturn]] static void exit(int result);
 
@@ -903,7 +903,7 @@ namespace utils
     {
       if constexpr (requires{ requires utils::is_same_v<decltype(function()), void>; })
       {
-        createThread(new(utils::allocate(sizealignof(utils::dynFn<int()>))) 
+        createThread(new(utils::allocate(sizealignof(utils::dynFn<int()>)))
           utils::dynFn<int()>{ [fn = COMPLEX_MOVE(function)]() { fn(); return 0; } });
       }
       else
@@ -989,7 +989,7 @@ namespace utils
   // Spin - spinlock (use on realtime threads)
   // Wait - waits for signal from locking site (use for unknown sleep length)
   // Sleep - millisleep (use if you expect something reasonably soon)
-  // 
+  //
   // all notify variants signal waiting sites upon unlock (REALTIME-UNSAFE)
   enum class WaitMechanism : u32 { Spin = 0, Wait, Sleep, SpinNotify = 4, WaitNotify, SleepNotify };
 
@@ -1046,7 +1046,7 @@ namespace utils
   }
   i32 lockAtomic(satomi::atomic<i32> &atomic, bool isExclusive, WaitMechanism mechanism,
     const utils::smallFn<void()> &lambda = [](){}) noexcept;
-  inline i32 
+  inline i32
   lockAtomic(LockBlame<i32> &lock, bool isReentrant, bool isExclusive, WaitMechanism mechanism,
     const utils::smallFn<void()> &lambda = [](){}) noexcept
   {
@@ -1054,7 +1054,7 @@ namespace utils
       return lockAtomic(lock.lock, isExclusive, mechanism, lambda);
 
     auto threadId = utils::thread::getCurrentId();
-    if (lock.lock.load(satomi::memory_order_relaxed) < 0 && 
+    if (lock.lock.load(satomi::memory_order_relaxed) < 0 &&
       lock.lastLockId.load(satomi::memory_order_relaxed) == threadId)
     {
       if (isReentrant)
@@ -1070,7 +1070,7 @@ namespace utils
     return ret;
   }
   void unlockAtomic(satomi::atomic<i32> &atomic, bool wasExclusive, WaitMechanism mechanism) noexcept;
-  inline void unlockAtomic(LockBlame<i32> &lock, bool wasExclusive, 
+  inline void unlockAtomic(LockBlame<i32> &lock, bool wasExclusive,
     WaitMechanism mechanism, i32 previousValue) noexcept
   {
     if (wasExclusive && previousValue == -1)
@@ -1086,7 +1086,7 @@ namespace utils
   {
   public:
     ScopedLock() : type_{ Empty }, mechanism_{ WaitMechanism::Spin }, bool_{} { }
-    
+
     ScopedLock(satomi::atomic<bool> &atomic, WaitMechanism mechanism, bool expected = false) noexcept :
       type_(BoolEnum), mechanism_(mechanism), bool_{ &atomic, expected }
     { lockAtomic(atomic, mechanism, expected); }
@@ -1103,11 +1103,11 @@ namespace utils
         reentrantLock.lastLockId.store(threadId, satomi::memory_order_relaxed);
       }
     }
-    
+
     ScopedLock(satomi::atomic<i32> &atomic, bool isExclusive, WaitMechanism mechanism) noexcept :
       type_{ I32LockEnum }, mechanism_{ mechanism }, i32_{ &atomic, isExclusive }
     { lockAtomic(atomic, isExclusive, mechanism); }
-    
+
     ScopedLock(ReentrantLock<i32> &reentrantLock, bool isExclusive, WaitMechanism mechanism) noexcept :
       type_{ I32LockEnum }, mechanism_{ mechanism }, i32Lock_{ &reentrantLock, isExclusive }
     { i32Lock_.previousValue = lockAtomic(reentrantLock, true, isExclusive, mechanism); }
@@ -1173,19 +1173,19 @@ namespace Interface
 
 // https://github.com/colugomusic/snd/blob/master/include/snd/const_math.hpp
 // MIT License
-// 
+//
 // Copyright(c) 2020 colugomusic
-// 
+//
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files(the "Software"), to deal
 // in the Software without restriction, including without limitation the rights
 // to use, copy, modify, merge, publish, distribute, sublicense, and /or sell
 // copies of the Software, and to permit persons to whom the Software is
 // furnished to do so, subject to the following conditions :
-// 
+//
 // The above copyright notice and this permission notice shall be included in all
 // copies or substantial portions of the Software.
-// 
+//
 // THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 // IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
 // FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.IN NO EVENT SHALL THE
@@ -1208,7 +1208,7 @@ namespace const_math
   }
 
   template<typename T>
-  constexpr T 
+  constexpr T
   min()
   {
     if constexpr (utils::is_same_v<T, float>)
@@ -1222,7 +1222,7 @@ namespace const_math
   }
 
   template<typename T>
-  constexpr T 
+  constexpr T
   max()
   {
     if constexpr (utils::is_same_v<T, float>)
@@ -1236,7 +1236,7 @@ namespace const_math
   }
 
   template<typename T>
-  constexpr T 
+  constexpr T
   infinity()
   {
     if constexpr (utils::is_same_v<T, float>)
@@ -1254,7 +1254,7 @@ namespace const_math
 
 
   template<typename T>
-  constexpr T 
+  constexpr T
   quiet_nan()
   {
     if constexpr (utils::is_same_v<T, float>)
@@ -1267,8 +1267,8 @@ namespace const_math
     }
   }
 
-  template<typename T> 
-  constexpr T 
+  template<typename T>
+  constexpr T
   sqrt(T x)
   {
     auto g = T(1);
@@ -1278,9 +1278,9 @@ namespace const_math
     return g;
   }
 
-  template<typename T> 
+  template<typename T>
   constexpr T
-  sin(T x) 
+  sin(T x)
   {
     x = (x < 0) ? -x + kPi : x;
 
@@ -1297,10 +1297,10 @@ namespace const_math
     return x;
   }
 
-  template<typename T> 
+  template<typename T>
   constexpr T cos(T x) { return sin(kPi / 2 - x); }
 
-  template<typename T> 
+  template<typename T>
   constexpr T
   pow(T base, int exponent)
   {
@@ -1311,28 +1311,28 @@ namespace const_math
     T y = 1;
     for (int i = 0; i < exponent; ++i)
       y *= base;
-    
+
     return (isNegative) ? T(1) / y : y;
   }
 
-  template<typename T> 
+  template<typename T>
   constexpr T
   nearest(T x)
   {
-    return (int)(x - T(0.5)) > (int)(x) ? 
+    return (int)(x - T(0.5)) > (int)(x) ?
       (T)((int)(x + T(0.5))) : (T)((int)(x));
   }
 
-  template<typename T> 
+  template<typename T>
   constexpr T
   fraction(T x)
   {
-    return (int)(x - T(0.5)) > (int)(x) ? 
-      -(((T)(int)(x + T(0.5))) - x) : 
+    return (int)(x - T(0.5)) > (int)(x) ?
+      -(((T)(int)(x + T(0.5))) - x) :
       x - ((T)(int)(x));
   }
 
-  template<typename T> 
+  template<typename T>
   constexpr T
   exp(T x)
   {
@@ -1352,7 +1352,7 @@ namespace const_math
   }
 
   template <typename T>
-  constexpr T 
+  constexpr T
   log(T x)
   {
     if (x == 0)
@@ -1373,7 +1373,7 @@ namespace const_math
         x *= 10;
         --exponent;
       }
-      else 
+      else
         break;
     }
 
@@ -1381,7 +1381,7 @@ namespace const_math
     x = (x - 1) / (x + 1);
     x = T(2) * (x + pow(x, 3) / 3 + pow(x, 5) / 5 + pow(x, 7) / 7 + pow(x, 9) / 9 + pow(x, 11) / 11);
 
-	  return T(2) * x + T(2.3025851) * T(exponent);
+    return T(2) * x + T(2.3025851) * T(exponent);
   }
 
   template<typename T>
@@ -1390,7 +1390,7 @@ namespace const_math
   {
     if (is_nan(x))
       return quiet_nan<T>();
-    // +/- infinite and signed-zero cases 
+    // +/- infinite and signed-zero cases
     else if (abs(x) == infinity<T>() || min<T>() > abs(x))
       return x;
     else
@@ -1438,7 +1438,7 @@ namespace const_math
 
     // main calculation
     T y{};
-    
+
     // deals with a singularity at tan(pi/2)
     if (x > T(1.55) && x < T(1.60))
     {

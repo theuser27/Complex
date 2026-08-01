@@ -102,7 +102,7 @@ namespace Interface
 
     void (*valueChangedCallback)(Control *control,
       double newValue, double oldValue) = nullptr;
-    void (*automationMappingChangedCallback)(Control *control, 
+    void (*automationMappingChangedCallback)(Control *control,
       bool isUnmapping) = nullptr;
   };
 

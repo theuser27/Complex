@@ -14,7 +14,7 @@ namespace Interface
 {
   bool
   CommandMessages::handleProcessorInsertion(Generation::Processor *parentProcessor,
-    Component *parentComponent, ProcessorInsertion *metadata, Placement placement, 
+    Component *parentComponent, ProcessorInsertion *metadata, Placement placement,
     Component *(*getRelativeComponent)(Generation::Processor *))
   {
     COMPLEX_ASSERT(parentProcessor);
@@ -55,7 +55,7 @@ namespace Interface
       //COMPLEX_DEBUG_LOG("\n");
 
       metadata->index = 0;
-      for (child = parentProcessor->children; child; 
+      for (child = parentProcessor->children; child;
         (++metadata->index), child = Generation::Processor::getChild(child, 1))
       {
         // skip if we encounter the processor we're moving
@@ -77,7 +77,7 @@ namespace Interface
     else
       child = Generation::Processor::getChild(parentProcessor->children, metadata->index);
 
-    //COMPLEX_ASSERT(metadata->processor->parent == nullptr || 
+    //COMPLEX_ASSERT(metadata->processor->parent == nullptr ||
     //  metadata->processor->parent == parentProcessor);
 
     metadata->oldIndex = (metadata->processor->parent) ? (u32)metadata->processor->getIndex() : (u32)-1;
@@ -108,7 +108,7 @@ namespace Interface
 
     COMPLEX_ASSERT(!child || child->component);
     // if the processor was already inserted before we started
-    // we might try to insert before itself, 
+    // we might try to insert before itself,
     // therefore we need to the next element as insertBefore
     auto childComponent = child ? getRelativeComponent(child) : nullptr;
     if (child && newComponent == childComponent)
@@ -141,7 +141,7 @@ namespace Interface
       parentComponent->addChildComponent(info.processor->component);
   }
 
-  bool 
+  bool
   EffectsSection::LaneSelector::AddMoreLanesButton::mouseDown(const MouseEvent &)
   {
     // LaneSelector -> EffectsSection -> SoundEngineSection
@@ -205,12 +205,12 @@ namespace Interface
         auto *soundEngineSection = (SoundEngineSection *)self->parent->parent;
         auto *metadata = (CommandMessages::ProcessorInsertion *)extraData;
 
-        auto getMiniView = [](Generation::Processor *processor) 
+        auto getMiniView = [](Generation::Processor *processor)
         {
           return (Component *)&((EffectsLaneSection *)processor->component)->miniView;
         };
 
-        if (!CommandMessages::handleProcessorInsertion(soundEngineSection->soundEngine, 
+        if (!CommandMessages::handleProcessorInsertion(soundEngineSection->soundEngine,
           self, metadata, Placement::centered, getMiniView))
           return false;
 
@@ -258,8 +258,8 @@ namespace Interface
     addChildComponent(&addMoreLanesButton);
     addMoreLanesButton.sizingFlags = Component::GrowableX;
     addMoreLanesButton.margin = { kScrollRectThickness / 2 + kScrollOffset, 0, kScrollRectThickness / 2 + kScrollOffset, 0 };
-    addMoreLanesButton.desiredSize = { EffectsLaneSection::LaneMiniView::kMinWidth, 
-      EffectsLaneSection::LaneMiniView::kMinHeight, utils::int_max<i32>, 
+    addMoreLanesButton.desiredSize = { EffectsLaneSection::LaneMiniView::kMinWidth,
+      EffectsLaneSection::LaneMiniView::kMinHeight, utils::int_max<i32>,
       EffectsLaneSection::LaneMiniView::kMinHeight };
   }
 
@@ -280,7 +280,7 @@ namespace Interface
       end->bounds.getPosition() + Point{ end->bounds.w, end->bounds.h });
   }
 
-  bool 
+  bool
   EffectsSection::LaneSelector::render(OpenGlWrapper &openGl)
   {
     auto effectsSection = (EffectsSection *)parent;
@@ -294,11 +294,11 @@ namespace Interface
       auto thickness = scaleValue(kScrollRectThickness);
       auto rounding = scaleValue(kLaneMiniViewRounding + kScrollOffset + kScrollRectThickness);
       strokeRect(openGl, roundedOutline, thickness, colour, rounding);
-      
+
       auto y = roundedOutline.getBottom() - thickness;
       fillRect(openGl, { roundedOutline.x, y, roundedOutline.w, ::roundf(y + scaleValue((float)kScrollDimensions.h)) - y },
         colour, 0.0f, 0.0f, rounding, rounding);
-      
+
       // yeah this is kinda ugly but it works
       fillRect(openGl, { roundedOutline.x, y - rounding, thickness, rounding + 1 }, colour);
       fillRect(openGl, { roundedOutline.getRight() - thickness, y - rounding, thickness, rounding + 1 }, colour);
@@ -307,7 +307,7 @@ namespace Interface
     return true;
   }
 
-  bool 
+  bool
   EffectsSection::LaneSelector::mouseDrag(const MouseEvent &e)
   {
     auto scrollThumbBounds = getSelectorBounds(this);
@@ -352,7 +352,7 @@ namespace Interface
     scrollThreshold -= direction;
 
     auto *section = (EffectsSection *)parent;
-    section->setStartLaneIndex((u32)utils::max(0, 
+    section->setStartLaneIndex((u32)utils::max(0,
       (i32)section->startLaneIndex - direction), section->visibleLaneCount);
 
     return true;
@@ -601,7 +601,7 @@ namespace Interface
         section->miniView.surfaceToLiftTo = &self->effectsSection;
         if (!metadata->placeholder)
         {
-          self->effectsSection.laneSelector.addChildComponent(&section->miniView, 
+          self->effectsSection.laneSelector.addChildComponent(&section->miniView,
             &self->effectsSection.laneSelector.addMoreLanesButton);
           ++self->effectsSection.laneNameOrdinal;
         }
@@ -655,10 +655,10 @@ namespace Interface
     bottomBar.reinitialise();
   }
 
-  Area<u32> 
+  Area<u32>
   SoundEngineSection::checkResizing(Area<u32> newScaledSize, bool force)
   {
-    auto childNewScaledSize = effectsSection.checkResizing({ 
+    auto childNewScaledSize = effectsSection.checkResizing({
       newScaledSize.w - (bounds.w - effectsSection.bounds.w), newScaledSize.h }, force);
     return { childNewScaledSize.w + bounds.w - effectsSection.bounds.w, childNewScaledSize.h };
   }

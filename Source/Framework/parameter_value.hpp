@@ -92,14 +92,14 @@ namespace Framework
 
       isDirty_ = false;
     }
-    
+
     // prefer calling this only once if possible
     template<ParameterRepresentation T>
     auto
     getInternalValue(float sampleRate = kDefaultSampleRate, bool isNormalised = false) const noexcept
     {
       utils::ScopedLock g{ waitLock_, utils::WaitMechanism::Spin };
-      
+
       [[maybe_unused]] T result;
 
       if constexpr (utils::is_same_v<T, simd_float>)
@@ -208,7 +208,7 @@ namespace Framework
 
       auto &replacedModulator = *parameterLink_.modulators[index];
       parameterLink_.modulators[index] = &modulator;
-      
+
       isDirty_ = true;
 
       return replacedModulator;
@@ -285,7 +285,7 @@ namespace Framework
 
     void serialiseToJson(void *jsonData) const;
     static ParameterValue *
-    deserialiseFromJson(Generation::Processor *processor, void *jsonData, 
+    deserialiseFromJson(Generation::Processor *processor, void *jsonData,
       ParameterDetails &reference, ParameterValue *memory = nullptr);
 
   private:

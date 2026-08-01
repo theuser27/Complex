@@ -39,29 +39,29 @@ namespace Interface
     static float getFontLineHeightFromFontHeight(FontId fontId, float height);
     static float getFontHeightFromLineHeight(FontId fontId, float lineHeight);
 
-    float 
+    float
     getStringWidthFloat(utils::string_view string)
     {
       float width = 0.0f;
       if (!string.empty())
-        width = nvgTextBounds(context, 0.0f, 0.0f, string.data(), 
+        width = nvgTextBounds(context, 0.0f, 0.0f, string.data(),
           string.data() + string.size(), nullptr);
 
       return width;
     }
 
-    Area<float> 
+    Area<float>
     getStringBounds(utils::string_view string)
     {
       float bounds[4]{};
       if (!string.empty())
-        (void)nvgTextBounds(context, 0.0f, 0.0f, string.data(), 
+        (void)nvgTextBounds(context, 0.0f, 0.0f, string.data(),
           string.data() + string.size(), bounds);
 
       return { bounds[2] - bounds[0], bounds[3] - bounds[1] };
     }
 
-    usize 
+    usize
     getStringNumberOfLines(utils::string_view string, float breakRowWidth)
     {
       usize lines = 1;
@@ -72,12 +72,12 @@ namespace Interface
       return lines;
     }
 
-    Area<float> 
+    Area<float>
     getStringBoundsMultiline(utils::string_view string, float breakRowWidth)
     {
       float bounds[4]{};
       if (!string.empty())
-        (void)nvgTextBoxBounds(context, 0.0f, 0.0f, breakRowWidth, 
+        (void)nvgTextBoxBounds(context, 0.0f, 0.0f, breakRowWidth,
           string.data(), string.data() + string.size(), bounds);
 
       return { bounds[2] - bounds[0], bounds[3] - bounds[1] };
@@ -91,7 +91,7 @@ namespace Interface
 
     Rectangle<i32> reserveSlotForTexture(u64 id, Area<i32> desiredArea);
 
-    Rectangle<i32> 
+    Rectangle<i32>
     getTextureWithArea(u64 id, Area<i32> area)
     {
       auto iter = textureBounds.get_first_of(id);
@@ -105,7 +105,7 @@ namespace Interface
       return Rectangle<i32>{};
     }
 
-    Rectangle<i32> 
+    Rectangle<i32>
     resizeTexture(u64 id, Rectangle<i32> currentBounds, Area<i32> desiredArea)
     {
       auto iter = textureBounds.binary_search({ id, currentBounds });
@@ -115,13 +115,13 @@ namespace Interface
       return (iter == textureBounds.data.end()) ? Rectangle<i32>{} : iter->second;
     }
 
-    u64 
+    u64
     getStaticTextureId(utils::typeInfo staticId)
     {
       auto iter = staticTextureIds.get_first_of(staticId);
       if (iter == staticTextureIds.data.end())
         iter = staticTextureIds.add_ordered(staticId, idGenerator++);
-      
+
       return iter->second;
     }
 
@@ -135,7 +135,7 @@ namespace Interface
 
     NVGcontext *context{};
     NVGLUframebuffer *textureFBO{};
-    
+
   private:
     int DDinFontId;
     int InterFontId;
@@ -170,7 +170,7 @@ namespace Interface
     return utils::bit_cast<Rectangle<float>>(values);
   }
   forceinline i32 scaleValueRoundInt(float value) { return (int)::roundf(uiRelated.scale * value); }
-  forceinline Rectangle<i32> 
+  forceinline Rectangle<i32>
   scaleValueRoundInt(Rectangle<i32> bounds)
   {
     auto values = utils::bit_cast<simd_int>(bounds);
@@ -192,7 +192,7 @@ namespace Interface
   }
 
   inline void fillRect(NVGcontext *context, Rectangle<float> bounds,
-    Colour colour, float topLeftRounding, float topRightRounding, 
+    Colour colour, float topLeftRounding, float topRightRounding,
     float bottomLeftRounding, float bottomRightRounding)
   {
     nvgBeginPath(context);
@@ -205,7 +205,7 @@ namespace Interface
   inline void strokeRect(NVGcontext *context, Rectangle<float> bounds,
     float thickness, Colour colour = Colours::white, float cornerRounding = 0.0f)
   {
-    // stroke paints around the specified lines, 
+    // stroke paints around the specified lines,
     // therefore we need to shrink by half the thickess to get the result we need
     bounds = bounds.withTrim(thickness * 0.5f);
 
@@ -255,7 +255,7 @@ namespace Interface
   }
 
   inline void renderText(utils::string_view text, FontId font,
-    Rectangle<float> bounds, Graphics &context, Colour colour, 
+    Rectangle<float> bounds, Graphics &context, Colour colour,
     Placement placement = Placement::centered, bool wrapText = false)
   {
     nvgBeginPath(context.context);
@@ -264,7 +264,7 @@ namespace Interface
     nvgFillColor(context.context, colour);
     nvgTextMetrics(context.context, &ascent, nullptr, &lineHeight);
     int alignmentFlags = NVG_ALIGN_BASELINE;
-    alignmentFlags |= ((placement == Placement::left) ? NVG_ALIGN_LEFT : 
+    alignmentFlags |= ((placement == Placement::left) ? NVG_ALIGN_LEFT :
       (placement == Placement::right) ? NVG_ALIGN_RIGHT : NVG_ALIGN_CENTER);
     nvgTextAlign(context.context, alignmentFlags);
 

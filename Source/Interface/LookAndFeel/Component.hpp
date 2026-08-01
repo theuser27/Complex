@@ -74,9 +74,9 @@ namespace Interface
       bool isMovingUpY{};
     };
 
-    bool handleProcessorInsertion(Generation::Processor *parent, 
-      Component *parentComponent, ProcessorInsertion *metadata, Placement placement, 
-      Component *(*getRelativeComponent)(Generation::Processor *) = 
+    bool handleProcessorInsertion(Generation::Processor *parent,
+      Component *parentComponent, ProcessorInsertion *metadata, Placement placement,
+      Component *(*getRelativeComponent)(Generation::Processor *) =
       [](Generation::Processor *processor) { return processor->component; });
 
     void tryProcessorInsertion(Component *parentComponent, ProcessorInsertion info);
@@ -137,11 +137,11 @@ namespace Interface
     Point<i32> getPositionInWindow() const;
 
     Point<i32> getRelativePoint(const Component *source, Point<i32> pointRelativeToSource = {}) const;
-    Rectangle<i32> 
+    Rectangle<i32>
     getRelativeArea(const Component *source,
       Rectangle<i32> areaRelativeToSource = {}) const
     {
-      areaRelativeToSource = (areaRelativeToSource.isEmpty()) ? 
+      areaRelativeToSource = (areaRelativeToSource.isEmpty()) ?
         Rectangle{ 0, 0, source->bounds.w, source->bounds.h } : areaRelativeToSource;
       auto [x, y] = getRelativePoint(source, areaRelativeToSource.getPosition());
       return Rectangle{ x, y, areaRelativeToSource.w, areaRelativeToSource.h };
@@ -150,10 +150,10 @@ namespace Interface
     bool contains(Point<i32> parentPoint) const { return getLocalBounds().contains(parentPoint); }
     bool contains(Point<float> parentPoint) const { return contains(parentPoint.toInt()); }
 
-    Component *getComponentAt(i32 x, i32 y, bool onlyClickable = false, 
+    Component *getComponentAt(i32 x, i32 y, bool onlyClickable = false,
       bool recursive = true, Component *startingAt = nullptr);
 
-    bool 
+    bool
     isParentOf(const Component *possibleChild) const
     {
       while (possibleChild != nullptr)
@@ -164,7 +164,7 @@ namespace Interface
       }
       return false;
     }
-    bool 
+    bool
     isStillVisible()
     {
       if (componentFlags.isVisible)
@@ -201,8 +201,8 @@ namespace Interface
       FocusGivenAway,     // focus willingly given away (giveAwayFocusTo()),  initiator --> no/direct target
       FocusSetInvisible,  // focus changed due to invisibility (isVisible=0), initiator -->  indirect target
     };
-    virtual bool handleFocus([[maybe_unused]] bool hasFocus, 
-      [[maybe_unused]] FocusChange focusChange, 
+    virtual bool handleFocus([[maybe_unused]] bool hasFocus,
+      [[maybe_unused]] FocusChange focusChange,
       [[maybe_unused]] Component *correspondent) { return true; }
 
     virtual bool keyPressed([[maybe_unused]] const KeyPress &key) { return false; }
@@ -253,10 +253,10 @@ namespace Interface
       bool isOpenGlInitialised : 1 = false;
       bool isScrollbarXClicked : 1 = false;
       bool isScrollbarYClicked : 1 = false;
-      bool isPositionSet : 1 = true;              // to aid components with custom placement 
+      bool isPositionSet : 1 = true;              // to aid components with custom placement
                                                   //  depending on other components' position
     } componentFlags{};
-    
+
 
     Placement placement{};
     SizingFlags sizingFlags = None;
@@ -270,7 +270,7 @@ namespace Interface
     // returns width/height min and max sizes depending on isCalculatingVertical
     // can return -1 to use the calculations in from the underlying algorithm
     Range<i32> (*overrideSize)(Component *c, bool isCalculatingVertical){};
-    // return false if the component couldn't be positioned, 
+    // return false if the component couldn't be positioned,
     // so that it can be pushed at the end of the queue
     bool (*overridePosition)(Component *c){};
 
@@ -286,8 +286,8 @@ namespace Interface
     u16 distanceToNextPositionRatio{};
 
     // support for animated shrinking and alpha fade when made invisible
-    // until it reaches utils::int_max<u16> the component is in a grace period 
-    // where it will continue to have its size and position calculated 
+    // until it reaches utils::int_max<u16> the component is in a grace period
+    // where it will continue to have its size and position calculated
     // @see isStillVisible()
     u16 fadeawayRatio{};
 
@@ -301,11 +301,11 @@ namespace Interface
 
   struct DrawComponent final : public Component
   {
-    bool (*draw)(OpenGlWrapper &openGl, Component *reference, 
+    bool (*draw)(OpenGlWrapper &openGl, Component *reference,
       Component *self, Point<i32> relativePoint) = nullptr;
     Component *reference = nullptr;
 
-    bool 
+    bool
     render(OpenGlWrapper &openGl) override
     {
       auto relativePoint = getRelativePoint(reference);
@@ -313,7 +313,7 @@ namespace Interface
     }
   };
 
-  inline bool preOrderTreeTraversal(Component *tree, const auto &lambda, 
+  inline bool preOrderTreeTraversal(Component *tree, const auto &lambda,
     bool forward = true, bool includeParent = false)
   {
     if (includeParent && lambda(tree))
@@ -344,7 +344,7 @@ namespace Interface
     return false;
   }
 
-  inline bool 
+  inline bool
   preOrderTreeTraversal(Component *tree, const auto &lambda, Point<i32> at,
     bool onlyClickable = true, Component *startingAt = nullptr, bool includeParent = false)
   {
@@ -385,12 +385,12 @@ namespace Interface
       if (child == tree->children)
         break;
     }
-    
+
     return false;
   }
 
-  inline bool 
-  dfsUpwardTreeTraversal(Component *tree, const auto &lambda, 
+  inline bool
+  dfsUpwardTreeTraversal(Component *tree, const auto &lambda,
     Point<i32> at, bool onlyClickable = true, Component *startingAt = nullptr)
   {
     Component *deepestComponent{};

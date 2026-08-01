@@ -12,7 +12,7 @@
 
 namespace Framework
 {
-  utils::string_view 
+  utils::string_view
   IndexedData::getText() const
   {
     auto text = displayName;
@@ -53,7 +53,7 @@ namespace Framework
     return { indexedData, i };
   }
 
-  double 
+  double
   getValueFromOptionText(utils::string_view text, const ParameterDetails &details)
   {
     COMPLEX_ASSERT(details.scale == ParameterScale::Indexed);
@@ -75,7 +75,7 @@ namespace Framework
     return (success) ? value : -1.0;
   }
 
-  double 
+  double
   getValueFromOptionId(uuid optionId, const ParameterDetails &details)
   {
     COMPLEX_ASSERT(details.scale == ParameterScale::Indexed);
@@ -97,7 +97,7 @@ namespace Framework
     return (success) ? value : -1.0;
   }
 
-  double 
+  double
   getValueFromOption(const IndexedData *option, const ParameterDetails &details)
   {
     COMPLEX_ASSERT(details.scale == ParameterScale::Indexed);
@@ -226,7 +226,7 @@ namespace Framework
       result = ::round(value);
       break;
     case ParameterScale::Indexed:
-      result = (details.options->valueCount <= 1) ? 0.0 : 
+      result = (details.options->valueCount <= 1) ? 0.0 :
         value / (details.options->valueCount - 1);
       break;
     case ParameterScale::Clamp:
@@ -451,7 +451,7 @@ namespace Framework
     name_.second = COMPLEX_MOVE(name);
   }
 
-  float 
+  float
   ParameterBridge::getDefaultValue() const
   {
     if (auto pointer = parameterLinkPointer_.load(satomi::memory_order_acquire))
@@ -488,7 +488,7 @@ namespace Framework
   void ParameterBridge::getText(float value, char *buffer, usize maximumStringLength) const
   {
     static constexpr auto kMaxDecimals = 6;
-    
+
     auto pointer = parameterLinkPointer_.load(satomi::memory_order_acquire);
     double internalValue;
     if (!pointer)
@@ -520,7 +520,7 @@ namespace Framework
     utils::floatToString(internalValue, buffer, maximumStringLength);
   }
 
-  float 
+  float
   ParameterBridge::getValueForText(utils::string_view text) const
   {
     if (auto pointer = parameterLinkPointer_.load(satomi::memory_order_acquire))
@@ -529,7 +529,7 @@ namespace Framework
     return ::strtof(text.data(), nullptr);
   }
 
-  bool 
+  bool
   ParameterBridge::isDiscrete() const
   {
     if (auto pointer = parameterLinkPointer_.load(satomi::memory_order_acquire))
@@ -537,7 +537,7 @@ namespace Framework
     return false;
   }
 
-  bool 
+  bool
   ParameterBridge::isBoolean() const
   {
     if (auto pointer = parameterLinkPointer_.load(satomi::memory_order_acquire))
@@ -823,7 +823,7 @@ namespace Plugin
 
     // do a post-order traversal of this function first
     // and check for erased options
-    for (Framework::IndexedData *targetChild = target->children, *previous = nullptr, *next = nullptr; 
+    for (Framework::IndexedData *targetChild = target->children, *previous = nullptr, *next = nullptr;
       targetChild; (targetChild = next), (++i))
     {
       bool isPresent = false;
@@ -850,7 +850,7 @@ namespace Plugin
       target->removeChild(targetChild);
       utils::bumpArena::remove(targetChild);
     }
-    
+
     utils::vector<Framework::IndexedData *> childrenToAdd{ localScratch };
 
     // check for added options, add them as untracked if breaking changes are not allowed
@@ -863,7 +863,7 @@ namespace Plugin
         if (isPresent)
           break;
       }
-      
+
       if (isPresent)
         continue;
 
@@ -874,7 +874,7 @@ namespace Plugin
       target->addChildren(childrenToAdd, !allowsBreakingChanges);
   }
 
-  static void updateDynamicParameter(State *state, 
+  static void updateDynamicParameter(State *state,
     Framework::ParameterValue *parameter, Framework::IndexedData *indexedData)
   {
     using namespace Framework;
@@ -889,7 +889,7 @@ namespace Plugin
     auto dynamicOption = state->dynamicOptions.find(indexedData->dynamicUpdateUuid)->second;
     u32 newCount = dynamicOption->valueCount;
 
-    // this function assumes no changes are ever missed and 
+    // this function assumes no changes are ever missed and
     // therefore counts are always a valid method of checking for changes
     // (no situations where 2 changes happen at the same time to cancel each other out)
     if (indexedData->valueCount == newCount)
@@ -905,7 +905,7 @@ namespace Plugin
       utils::bumpArena::fromAllocation(details.options->children));
 
     auto newNormalised = getValueFromOptionId(oldId, details);
-    newNormalised = unscaleValue((newNormalised < 0.0) ? 0.0 : 
+    newNormalised = unscaleValue((newNormalised < 0.0) ? 0.0 :
       newNormalised + (double)oldIndex, details);
 
     if (link->UIControl)
@@ -950,7 +950,7 @@ namespace Plugin
     {
       auto dynamicOptionsArena = utils::bumpArena::createNested(miscStorage, COMPLEX_KB(1));
 
-      auto iter = dynamicOptions.add(reason, anew(dynamicOptionsArena, IndexedData, 
+      auto iter = dynamicOptions.add(reason, anew(dynamicOptionsArena, IndexedData,
         { .dynamicUpdateUuid = reason }));
 
       switch (reason)
@@ -958,7 +958,7 @@ namespace Plugin
       case ParameterChangeReason::inputSidechain:
         iter->second->valueCount = plugin->inSidechains;
         break;
-        
+
       case ParameterChangeReason::outputSidechain:
         iter->second->valueCount = plugin->outSidechains;
         break;

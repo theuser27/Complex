@@ -8,7 +8,7 @@
 
 namespace Interface
 {
-  MouseEvent 
+  MouseEvent
   MouseEvent::getEventRelativeTo(Component *otherComponent) const
   {
     MouseEvent ret = *this;
@@ -21,7 +21,7 @@ namespace Interface
     return ret;
   }
 
-  Colour 
+  Colour
   Colour::overlaidWith(Colour foregroundColour) const
   {
     auto destAlpha = a;
@@ -90,7 +90,7 @@ namespace Interface
     return c;
   }
 
-  static forceinline Colour 
+  static forceinline Colour
   tween(Colour one, Colour two, u32 amount)
   {
     u32 c1 = utils::bit_cast<u32>(one);
@@ -107,7 +107,7 @@ namespace Interface
     return utils::bit_cast<Colour>((dOddBytes << 8) | dEvenBytes);
   }
 
-  Colour 
+  Colour
   Colour::interpolatedWith(Colour other, float t) const
   {
     if (t <= 0.0f)
@@ -124,7 +124,7 @@ namespace Interface
     return unpremultiply(c1);
   }
 
-  Colour 
+  Colour
   Colour::withBrightness(float newBrightness) const
   {
     auto hsb = nvgHSB(*this);
@@ -134,7 +134,7 @@ namespace Interface
     return { hsb.r, hsb.g, hsb.b, a };
   }
 
-  Colour 
+  Colour
   Colour::withRotatedHue(float amountToRotate) const
   {
     auto hsb = nvgHSB(*this);
@@ -144,7 +144,7 @@ namespace Interface
     return { hsb.r, hsb.g, hsb.b, a };
   }
 
-  usize 
+  usize
   Colour::toString(char *buffer, usize bufferSize) const
   {
     u32 colour = getARGB();
@@ -158,12 +158,12 @@ namespace Interface
     outString.copy({ temp, size });
   }
 
-  Colour 
+  Colour
   Colour::fromString(const char *integer, int base)
   {
     long colour = ::strtoul(integer, nullptr, base);
     return Colour{ (u32)colour };
   }
-  
+
   Colour::operator NVGcolor() const { return nvgRGBA(r, g, b, a); }
 }

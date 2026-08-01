@@ -90,7 +90,7 @@ namespace Interface
     resultBuffer = Framework::SimdBuffer::create(arena, utils::kChannelsPerInOut, kResolution);
   }
 
-  bool 
+  bool
   Spectrogram::mouseDown(const MouseEvent &e)
   {
     if (e.mods.test(ModifierKeys::leftButtonModifier))
@@ -99,7 +99,7 @@ namespace Interface
     return true;
   }
 
-  bool 
+  bool
   Spectrogram::updateAmplitudes(float startDecade, float decadeCount, float decadeSlope)
   {
     using namespace utils;
@@ -113,11 +113,11 @@ namespace Interface
     //u32 bufferPosition;
     {
       utils::ScopedLock g{ bufferView->dataLock, false, WaitMechanism::Sleep };
-      Framework::applyToThisNoMask<utils::MathOperations::Assign>(scratchBuffer, bufferView, 
+      Framework::applyToThisNoMask<utils::MathOperations::Assign>(scratchBuffer, bufferView,
         utils::min(scratchBuffer->channels, bufferView->channels), binCount);
       //bufferPosition = bufferView.getBufferPosition();
     }
-    
+
     //CHECK_NAN(scratchBuffer->data[0]);
     // convert data to polar form
     if (shouldDisplayPhases)
@@ -125,13 +125,13 @@ namespace Interface
       // TODO: look into computing unwrapped phase
       // The cepstrum: A guide to processing, page 5
       // Echo removal by discrete generalized linear filtering, page 54
-      // 
+      //
       // linear phase component caused by normal oscillation can be subtracted by:
       // phase -= k2Pi / FFTSize * binIndex * sampleShift (samples since beginning)
       // might be able to do sampleShift = sampleShift % FFTSize?
-      // 
-      // 
-      // 
+      //
+      //
+      //
       // only for TESTING, don't use otherwise
       /*simd_float blockPhase = (float)((double)bufferPosition / (double)(binCount * 2));
       auto data = scratchBuffer.get();
@@ -174,7 +174,7 @@ namespace Interface
     }
     else
       utils::convertBufferInPlace<::convert>(scratchBuffer, binCount);
-    
+
     auto scratchBufferRaw = scratchBuffer->get();
 
     static constexpr simd_float defaultValue = { 0.001f, 0.0f };
@@ -197,7 +197,7 @@ namespace Interface
     float slope = 1.0f;
 
     auto resultBufferRaw = resultBuffer->get();
-    
+
     // current/previous - current/previous bin
     simd_float currentBin, previousBin;
     u32 j, beginIndex, endIndex;
@@ -252,7 +252,7 @@ namespace Interface
       }
       else
       {
-        // the reason for rounding instead of flooring is because the dc bin is 
+        // the reason for rounding instead of flooring is because the dc bin is
         // halfway between the positive and negative frequencies and this gives us a half bin offset
         beginIndex = (u32)::roundf(rangeBegin);
         endIndex = (u32)::roundf(rangeEnd);
@@ -312,7 +312,7 @@ namespace Interface
     return true;
   }
 
-  static void paintBackground(Graphics &g, Rectangle<float> bounds, 
+  static void paintBackground(Graphics &g, Rectangle<float> bounds,
     float minFrequency, float maxFrequency)
   {
     static constexpr int kLineSpacing = 10;
@@ -350,7 +350,7 @@ namespace Interface
     //nvgStroke(g.context);
   }
 
-  bool 
+  bool
   Spectrogram::render(OpenGlWrapper &openGl)
   {
     //fillRect(openGl, getLocalBounds().toFloat(), getColour(Skin::kBody, this));
@@ -385,7 +385,7 @@ namespace Interface
         nvgLineTo(openGl, lineData[i][j][0], lineData[i][j][1]);
 
       nvgStrokeWidth(openGl, 1.8f);
-      nvgStrokePaint(openGl, nvgLinearGradient(openGl, 
+      nvgStrokePaint(openGl, nvgLinearGradient(openGl,
         0.0f, 0.0f, 0.0f, (float)bounds.h, colour, colour.withMultipliedAlpha(0.2f)));
       nvgStroke(openGl);
       colour = colour.withMultipliedAlpha(0.65f);

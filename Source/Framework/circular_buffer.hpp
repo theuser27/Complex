@@ -19,7 +19,7 @@ namespace Framework
     void clear(u32 begin, u32 count) noexcept
     {
       COMPLEX_ASSERT(begin + count <= size);
-      
+
       for (u32 i = 0; i < channels; ++i)
         ::zeroset(get(i) + begin, count);
     }
@@ -41,7 +41,7 @@ namespace Framework
   // the oldest sample in destination will be at index 0
   forceinline void copyCircular(Buffer &destination, const Buffer &other, u32 otherEnd)
   {
-    if (other.channels == 0 || other.size == 0 || 
+    if (other.channels == 0 || other.size == 0 ||
       destination.channels == 0 || destination.size == 0)
       return;
 
@@ -67,10 +67,10 @@ namespace Framework
     }
   }
 
-  // applies on operation on the samples of otherBuffer and thisBuffer 
+  // applies on operation on the samples of otherBuffer and thisBuffer
   // and writes the results to the respective channels of thisBuffer
-  // while anticipating wrapping around in both buffers 
-  inline void applyToBuffer(const auto &operation, Buffer &thisBuffer, const Buffer &otherBuffer, 
+  // while anticipating wrapping around in both buffers
+  inline void applyToBuffer(const auto &operation, Buffer &thisBuffer, const Buffer &otherBuffer,
     u32 channels, u32 samples, u32 thisStart, u32 otherStart, utils::span<bool> channelsToApplyTo = {}) noexcept
   {
     COMPLEX_ASSERT(thisBuffer.channels >= channels);
@@ -79,7 +79,7 @@ namespace Framework
     COMPLEX_ASSERT(otherBuffer.size >= samples);
 
     [[maybe_unused]] float increment = 1.0f / (float)samples;
-      
+
     auto wrapIndex = [&]() -> u32 (*)(u32, u32)
     {
       if (utils::isPowerOfTwo(thisBuffer.size) && utils::isPowerOfTwo(otherBuffer.size))
@@ -135,7 +135,7 @@ namespace Framework
     u32 setEnd(u32 index) noexcept { return end = index % size; }
 
     // - A specified AudioBuffer reads from the current buffer's data and stores it in a reader, where
-    //	readee's starting index = readerIndex + end_ and 
+    //	readee's starting index = readerIndex + end_ and
     //	reader's starting index = readeeIndex
     // - Can decide whether to advance the block or not
     void readAt(float *const *reader, u32 readChannels, u32 readSize,
@@ -158,10 +158,10 @@ namespace Framework
     }
 
     // - A specified AudioBuffer reads from the current buffer's data and stores it in a reader, where
-    //     readee's starting index = readerIndex + end_ and 
+    //     readee's starting index = readerIndex + end_ and
     //     reader's starting index = readeeIndex
     // - Can decide whether to advance the block or not
-    void readAt(Buffer &reader, u32 readChannels, u32 readSize, 
+    void readAt(Buffer &reader, u32 readChannels, u32 readSize,
       u32 readeeIndex = 0, u32 readerIndex = 0, utils::span<bool> channelsToRead = {}) const noexcept
     {
       applyToBuffer(assignBuffersFn, reader, *this,

@@ -650,8 +650,8 @@ namespace utils
       auto [iter, wasFound] = binary_search(data, key, [](const auto &element, const auto &test) { return element == test.first; });
       if (wasFound)
       {
-        for (auto nextIter = iter - 1; 
-          nextIter != data.end() && nextIter->first == key; 
+        for (auto nextIter = iter - 1;
+          nextIter != data.end() && nextIter->first == key;
           (iter = nextIter), (--nextIter)) { }
 
         if (iter->first == key)
@@ -665,8 +665,8 @@ namespace utils
       auto [iter, wasFound] = binary_search(data, key, [](const auto &element, const auto &test) { return element == test.first; });
       if (wasFound)
       {
-        for (auto nextIter = iter + 1; 
-          nextIter != data.end() && nextIter->first == key; 
+        for (auto nextIter = iter + 1;
+          nextIter != data.end() && nextIter->first == key;
           (iter = nextIter), (++nextIter)) { }
       }
 

@@ -409,7 +409,7 @@ namespace utils
   Dylib::Dylib(const char *fullPath)
   {
   #if COMPLEX_WINDOWS
-    // spinning when loading a library 
+    // spinning when loading a library
     // since it might not have finished being built
     for (usize i = 0; i < 100; ++i) // up to ~10 seconds
     {
@@ -477,8 +477,8 @@ namespace utils
     ::timeEndPeriod(1);
   #else
     ::timespec delay =
-    { 
-      .tv_sec = (::time_t)((sleepUs_ - correctionUs_) / 1'000'000), 
+    {
+      .tv_sec = (::time_t)((sleepUs_ - correctionUs_) / 1'000'000),
       .tv_nsec = (long)(sleepUs_ - correctionUs_) * 1000
     };
     ::clock_nanosleep(CLOCK_MONOTONIC, 0, &delay, nullptr);
@@ -547,7 +547,7 @@ namespace utils
       ::timeEndPeriod(1);
   }
 
-  i32 
+  i32
   lockAtomic(satomi::atomic<i32> &atomic, bool isExclusive, WaitMechanism mechanism,
     const utils::smallFn<void()> &lambda) noexcept
   {
@@ -620,9 +620,9 @@ namespace utils
         }
 
         desired = state + 1;
-        
+
         if (atomic.compare_exchange_weak(state, desired, satomi::memory_order_acq_rel))
-          break;        
+          break;
       }
     }
 
@@ -646,7 +646,7 @@ namespace utils
       atomic.notify_all();
   }
 
-  bool 
+  bool
   thread::id::operator==(const id &other) const
   {
   #ifdef COMPLEX_WINDOWS
@@ -658,7 +658,7 @@ namespace utils
     return ret;
   #endif
   }
-  
+
   static thread::id
   getCurrentThreadId()
   {
@@ -674,7 +674,7 @@ namespace utils
   #endif
   }
 
-  thread::id 
+  thread::id
   thread::getCurrentId()
   {
     if (!currentId)
@@ -800,15 +800,15 @@ namespace utils
 
     (void)utils::thread::getCurrentId();
   }
-  
 
-  usize 
+
+  usize
   bumpArena::getUsedSize(bumpArena *arena)
   {
     return (usize)arena->committedSize + 1 - bumpArena::getUnusedSize(arena);
   }
 
-  usize 
+  usize
   bumpArena::getUnusedSize(bumpArena *arena)
   {
     if (arena->threadSafe)
@@ -854,17 +854,17 @@ namespace utils
   {
     COMPLEX_HARD_ASSERT(arena);
     COMPLEX_HARD_ASSERT(utils::isPowerOfTwo(alignment));
- 
+
     size = utils::roundUpToMultiple(size, sizeof(bumpArena::node));
     alignment = utils::max(alignment, alignof(bumpArena::node));
 
-    COMPLEX_HARD_ASSERT(utils::roundUpToMultiple(sizeof(bumpArena) + size, alignment) <= usize(u32(-1)) + 1, 
+    COMPLEX_HARD_ASSERT(utils::roundUpToMultiple(sizeof(bumpArena) + size, alignment) <= usize(u32(-1)) + 1,
       "Allocations larger than 4GB cannot fit inside this arena");
 
     utils::ScopedLock g{};
     if (arena->threadSafe)
       g = ScopedLock{ arena->lock, utils::WaitMechanism::Spin };
-    
+
     byte *memory{};
     bumpArena::node *currentNode{}, *previousNode{};
     u32 nodeShift = arena->freeNodeStart;
@@ -897,7 +897,7 @@ namespace utils
       nodeShift = currentNode->next;
     }
 
-    
+
     if (!memory)
     {
       // try to commit more pages
@@ -920,7 +920,7 @@ namespace utils
           memory = (byte *)utils::roundUpToMultiple((usize)currentNode + sizeof(bumpArena::node), alignment);
         }
 
-        usize commitSize = utils::min(reservedSize - committedSize, 
+        usize commitSize = utils::min(reservedSize - committedSize,
           (usize)((memory + size) - ((byte *)arena + committedSize)));
 
         utils::commitMemory((byte *)arena + committedSize, commitSize);
@@ -962,7 +962,7 @@ namespace utils
             break;
           }
         }
-      
+
         auto *nextArena = arena->nextArena;
         g.~ScopedLock();
         return bumpArena::insert(nextArena, size, alignment, clean);
@@ -1052,7 +1052,7 @@ namespace utils
 
   void bumpArena::remove(const void *data)
   {
-    auto *toRemove = utils::launder((bumpArena::node *)((byte *)data - sizeof(bumpArena::node))); 
+    auto *toRemove = utils::launder((bumpArena::node *)((byte *)data - sizeof(bumpArena::node)));
     auto *arena = utils::launder((bumpArena *)((byte *)toRemove - toRemove->offsetToArena));
 
     utils::ScopedLock g{};
@@ -1096,7 +1096,7 @@ namespace utils
       //  arena->reservedSize = (u32)(end - 1);
       //  arena->committedSize = (u32)(end - 1);
       //  break;
-      
+
       case AllocatorType::BumpArena:
         break;
 
@@ -1120,7 +1120,7 @@ namespace utils
         g = { arena->lock, utils::WaitMechanism::Spin };
 
       arena->freeNodeStart = (u32)sizeof(bumpArena);
-      (void)new((byte *)arena + sizeof(bumpArena)) 
+      (void)new((byte *)arena + sizeof(bumpArena))
         node{ .size = (u32)(arena->committedSize - sizeof(bumpArena)) };
     }
 
@@ -1130,7 +1130,7 @@ namespace utils
 
   void bumpArena::destroy(bumpArena *arena)
   {
-    // it is assumed no one else has access to the arena 
+    // it is assumed no one else has access to the arena
     // or the underlying memory anymore, therefore **no contention**
 
     auto *nextArena = arena->nextArena;
@@ -1154,7 +1154,7 @@ namespace utils
     case AllocatorType::General:
       releaseMemory(arena, arena->reservedSize);
       break;
-    }      
+    }
 
     if (nextArena)
       destroy(nextArena);

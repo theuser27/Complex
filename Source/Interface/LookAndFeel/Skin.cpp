@@ -1,12 +1,5 @@
-/*
-  ==============================================================================
 
-    Skin.cpp
-    Created: 16 Nov 2022 6:55:11am
-    Author:  theuser27
-
-  ==============================================================================
-*/
+// Created: 2022-11-16 06:55:11
 
 #include "Skin.hpp"
 
@@ -296,8 +289,8 @@ namespace Interface
 
     return true;
   }
-  
-  float 
+
+  float
   getValue(Skin::ValueId valueId, bool isScaled, Skin::Override skinOverride)
   {
     if (uiRelated.skin)
@@ -311,7 +304,7 @@ namespace Interface
     return 0.0f;
   }
 
-  float 
+  float
   getValue(Skin::ValueId valueId, bool isScaled, Component *component)
   {
     if (uiRelated.skin)
@@ -323,7 +316,7 @@ namespace Interface
     return 0.0f;
   }
 
-  Colour 
+  Colour
   getColour(Skin::ColourId colorId, Skin::Override skinOverride)
   {
     if (uiRelated.skin)
@@ -336,7 +329,7 @@ namespace Interface
     return Colours::black;
   }
 
-  Colour 
+  Colour
   getColour(Skin::ColourId colorId, Component *component)
   {
     if (uiRelated.skin)

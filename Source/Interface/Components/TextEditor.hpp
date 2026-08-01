@@ -42,7 +42,7 @@ namespace Interface
   };
 
   // text editor with base implementation taken from juce's
-  // will trim excess functionality later 
+  // will trim excess functionality later
   //class TextEditor final : public Component
   //{
   //public:

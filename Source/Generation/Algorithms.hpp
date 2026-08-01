@@ -76,7 +76,7 @@ namespace Generation
     // idea: flip the phases, panning, LR <-> MS conversion
     // idea: gain matching instead of it being a lane option
     //       gain match based on a set db value
-    // 
+    //
     //void run(EffectModule *effectModule, EffectModule::EffectData *effectData,
     //  Framework::ComplexDataSource &source,
     //  Framework::SimdBuffer * &destination,
@@ -119,7 +119,7 @@ namespace Generation
       Framework::ComplexDataSource &source, Framework::SimdBuffer *destination,
       u32 binCount, float sampleRate) noexcept;
 
-    utils::span<Interface::Control *> createUINormal(utils::bumpArena *arena, 
+    utils::span<Interface::Control *> createUINormal(utils::bumpArena *arena,
       Interface::EffectModuleSection *section, EffectData *effectData);
 
     // Gate - frequency gating
@@ -132,7 +132,7 @@ namespace Generation
     //    at min/max values the left/right-most part of the masked spectrum will have no threshold
     //
     //  proportionality
-    // 
+    //
     //  delta - instead of the absolute loudness it uses the averaged loudness change from the 2 neighbouring bins
     //
     COMPLEX_ENUM(Gate,
@@ -152,7 +152,7 @@ namespace Generation
       Framework::ComplexDataSource &source, Framework::SimdBuffer *destination,
       u32 binCount, float sampleRate) noexcept;
 
-    utils::span<Interface::Control *> createUIGate(utils::bumpArena *arena, 
+    utils::span<Interface::Control *> createUIGate(utils::bumpArena *arena,
       Interface::EffectModuleSection *section, EffectData *effectData);
 
 
@@ -211,10 +211,10 @@ namespace Generation
     // Invert the spectrum relative to a specific loudness value
     //  Threshold (stereo) - range[quietest bin, loudest bin]; centre is the average loudness across the spectrum
     //  Tilt (stereo) - adds tilt to the threshold
-    //  Proportionality (stereo) - range[0.0f, ?]; default value is 1.0f. 
-    //    This determines how much the gain is being applied. In example, 
+    //  Proportionality (stereo) - range[0.0f, ?]; default value is 1.0f.
+    //    This determines how much the gain is being applied. In example,
     //    The quieter something is in proportion to the threshold, that many times the gain gets applied
-    //    At 0 proportionality 
+    //    At 0 proportionality
     //  Gain (stereo) - range[-$ db, +$ db] (symmetric loudness);
     void runInvert(EffectModule *effectModule, EffectData *effectData,
       Framework::ComplexDataSource &source, Framework::SimdBuffer *destination,
@@ -256,7 +256,7 @@ namespace Generation
     void runShift(EffectModule *effectModule, EffectData *effectData,
       Framework::ComplexDataSource &source, Framework::SimdBuffer *destination,
       u32 binCount, float sampleRate) noexcept;
-    
+
     utils::span<Interface::Control *> createUIShift(utils::bumpArena *arena,
       Interface::EffectModuleSection *section, EffectData *effectData);
 

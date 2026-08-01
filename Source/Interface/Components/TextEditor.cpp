@@ -34,7 +34,7 @@ namespace Interface
       return Range<i32>{ height, height };
     }
   }
-  
+
   TextEditor::TextEditor()
   {
     desiredSize.x = kPrimaryTextLineHeight;
@@ -58,25 +58,25 @@ namespace Interface
     return true;
   }
 
-  bool 
+  bool
   TextEditor::mouseDown(const MouseEvent &)
   {
     return true;
   }
 
-  bool 
+  bool
   TextEditor::mouseDrag(const MouseEvent &)
   {
     return true;
   }
 
-  bool 
+  bool
   TextEditor::mouseUp(const MouseEvent &)
   {
     return true;
   }
 
-  bool 
+  bool
   TextEditor::render(OpenGlWrapper &openGl)
   {
     if (!text.empty())
@@ -95,7 +95,7 @@ namespace Interface
 
     float lineHeight = scaleValue((float)((self->componentFlags.vertical) ?
       self->desiredSize.y : self->desiredSize.x));
-    
+
     if (!isCalculatingVertical)
     {
       COMPLEX_ASSERT(self->control, "Forgot to set reference to control in label");
@@ -136,7 +136,7 @@ namespace Interface
 
       float lineHeight = scaleValue((float)((self->componentFlags.vertical) ?
         self->desiredSize.y : self->desiredSize.x));
-      
+
       i32 max{};
       if (!isCalculatingVertical)
       {
@@ -1945,7 +1945,7 @@ namespace Interface
 
   void TextEditor::paintOverChildren(Graphics &g)
   {
-    if (textToShowWhenEmpty.isNotEmpty() && 
+    if (textToShowWhenEmpty.isNotEmpty() &&
       (!hasKeyboardFocus(false)) && getTotalNumChars() == 0)
     {
       g.setColour(colourForTextWhenEmpty);

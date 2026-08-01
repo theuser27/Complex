@@ -50,7 +50,7 @@ namespace Framework
     (SymmetricFrequency, 1757693385953)     // (sampleRate / 2 * minFrequency) ^ (abs(x)) * sgn(x)
   );
 
-  COMPLEX_ENUM(ParameterChangeReason, 
+  COMPLEX_ENUM(ParameterChangeReason,
     ( inputSidechain, 1757682036260),
     (outputSidechain, 1757682033430),
     (    laneSources, 1757682031418),
@@ -66,7 +66,7 @@ namespace Framework
 
     utils::string_view displayName{};       // user-readable name for given parameter value
     uuid id{};                              // uuid for parameter value
-    
+
     IndexedData *parent{};
     IndexedData *children{};
     IndexedData *next{};
@@ -85,7 +85,7 @@ namespace Framework
       NSVGimage *svgData;
     };
 
-    bool 
+    bool
     operator==(const IndexedData &other) const
     {
       return id == other.id && flags == other.flags && userFlags == other.userFlags &&
@@ -98,7 +98,7 @@ namespace Framework
 
     IndexedData &
     addChildren(utils::span<IndexedData *const> childrenToAdd, bool addAsUntracked = false)
-    {      
+    {
       if (!children)
       {
         valueCount = 0;
@@ -171,10 +171,10 @@ namespace Framework
       return newOption;
     }
 
-    static bool 
+    static bool
     visit(IndexedData *data, const auto &predicate)
     {
-      for (IndexedData *child = data->children, *previous = nullptr; child; 
+      for (IndexedData *child = data->children, *previous = nullptr; child;
         (previous = child), (child = child->next))
       {
         if constexpr (requires { predicate(*child, previous); })
@@ -199,7 +199,7 @@ namespace Framework
   struct ParameterDetails
   {
     enum Flags : u8
-    { 
+    {
                    None = 0,
                  Stereo = 1 << 0,                         // if parameter allows stereo modulation
             Modulatable = 1 << 1,                         // if parameter allows modulation at all
@@ -274,13 +274,13 @@ namespace Framework
 
   // with skewOnly == true a normalised value between [0,1] or [-0.5, 0.5] is returned,
   // depending on whether the parameter is bipolar
-  double scaleValue(double value, const ParameterDetails &details, 
+  double scaleValue(double value, const ParameterDetails &details,
     float sampleRate = kDefaultSampleRate, bool scalePercent = false, bool skewOnly = false);
 
   double unscaleValue(double value, const ParameterDetails &details,
     float sampleRate = kDefaultSampleRate, bool unscalePercent = true);
 
-  utils::simd_float scaleValue(utils::simd_float value, 
+  utils::simd_float scaleValue(utils::simd_float value,
     const ParameterDetails &details, float sampleRate = kDefaultSampleRate);
 
 
@@ -340,7 +340,7 @@ namespace Framework
     }
     operator ProcessorMetadata *() { return this; }
 
-    static bool 
+    static bool
     visit(ProcessorMetadata *data, const auto &predicate)
     {
       for (auto *child = data->children; child; child = child->next)
@@ -355,7 +355,7 @@ namespace Framework
       return false;
     }
 
-    bool 
+    bool
     acceptsChild(ProcessorMetadata *potentialChild)
     {
       auto *child = children;
@@ -491,9 +491,9 @@ namespace Framework
     bool canUndo() const { return undoActionsCount; }
     bool canRedo() const { return redoActionsCount; }
 
-    // Tries to roll-back the last transaction, 
+    // Tries to roll-back the last transaction,
     // returns false if there aren't any transactions to undo
-    // 
+    //
     // if undoCurrentTransactionOnly == true, then the transaction index won't be changed
     // when undone and things can immediately be added to the current transaction
     bool undo(bool undoCurrentTransactionOnly = false);

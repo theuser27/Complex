@@ -53,7 +53,7 @@ namespace common
   inline constexpr float kAlphaUpperBound = 10.0f;          // (can be changed)    upper bound for alpha exponent
   inline constexpr u32 kWindowResolution = (1 << 8) + 1;    // (can be changed)    257 samples window lookup resolution
                                                             //                     (+ 1 in order to have a distinct sample in the center)
-  
+
   // processing constants
   inline constexpr double kMinFrequency = kMidi0Frequency;  // (can be changed)    lowest frequency that will be displayed
 

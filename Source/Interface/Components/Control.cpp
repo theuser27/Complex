@@ -36,7 +36,7 @@ namespace Interface
   }
 
   Framework::ParameterValue *
-  Control::changeLinkedParameter(Framework::ParameterValue &parameter, 
+  Control::changeLinkedParameter(Framework::ParameterValue &parameter,
     bool getValueFromParameter)
   {
     controlFlags.hasParameter = true;
@@ -49,7 +49,7 @@ namespace Interface
 
     details = parameter.getParameterDetails();
     {
-      controlFlags.isBipolar = -details.minValue == details.maxValue || 
+      controlFlags.isBipolar = -details.minValue == details.maxValue ||
         details.scale == Framework::ParameterScale::SymmetricQuadratic ||
         details.scale == Framework::ParameterScale::SymmetricCubic ||
         details.scale == Framework::ParameterScale::SymmetricLoudness ||
@@ -57,15 +57,15 @@ namespace Interface
       controlFlags.shouldCheckDbInfinities =
         details.scale == Framework::ParameterScale::Loudness ||
         details.scale == Framework::ParameterScale::SymmetricLoudness;
-      controlFlags.shouldUsePlusMinusPrefix |= 
+      controlFlags.shouldUsePlusMinusPrefix |=
         details.scale == Framework::ParameterScale::SymmetricLoudness;
     }
-    
+
     if (getValueFromParameter)
       setValue(parameterLink->parameter->getNormalisedValue());
     else
       parameterLink->parameter->updateNormalisedValue();
-    
+
     return replacedParameter;
   }
 
@@ -75,16 +75,16 @@ namespace Interface
       parameterLink->hostControl->setValueFromUI((float)getValue());
   }
 
-  bool 
+  bool
   Control::setValue(double newValue, bool notify)
   {
     newValue = utils::clamp(newValue, 0.0, 1.0);
-    
+
     // if the new value requires some processing to run before being set
     if (controlFlags.handleSetValueInCallback)
     {
       COMPLEX_ASSERT(valueChangedCallback);
-      
+
       auto oldValue = value.load(satomi::memory_order_relaxed);
       if (newValue == oldValue)
         return false;
@@ -195,7 +195,7 @@ namespace Interface
         }
 
         action = action->next;
-      } 
+      }
     }
 
     storage = plugin.undoManager.beginNewTransaction();
@@ -298,7 +298,7 @@ namespace Interface
           auto [fn, iconSizes] = Paths::copyNormalisedValueIcon();
 
           fn(*openGl.cache, colours,
-            scaleValue(iconSizes.toFloat()).withCentre(getLocalBounds().toFloat().getCentre()), 
+            scaleValue(iconSizes.toFloat()).withCentre(getLocalBounds().toFloat().getCentre()),
             scaleValue(1.0f));
           break;
         }
@@ -335,7 +335,7 @@ namespace Interface
         fillRect(openGl, getLocalBounds().toFloat(), getColour(Skin::kPopupSelectorDelimiter, this));
       }
 
-      //strokeRect(openGl, getLocalBounds().withTrim(scaleValueRoundInt(padding.toInt())).toFloat(), 
+      //strokeRect(openGl, getLocalBounds().withTrim(scaleValueRoundInt(padding.toInt())).toFloat(),
       //  1.0f, Colour{ 128, 128, 128 });
 
       if (id == kMappingList)
@@ -407,7 +407,7 @@ namespace Interface
     {
       auto index = getParameterIndexFromId(item->id);
       utils::span parameterBridges = getPlugin(uiRelated.renderer).state_->parameterBridges;
-      
+
       if (parameterBridges[index].isMappedToParameter())
         item->textColourId = Skin::kWidgetPrimary1;
       else
@@ -502,7 +502,7 @@ namespace Interface
     };
 
     options.addChildComponent(TEXT_ITEM(kName, options, .extraData = this, .canTextWrap = true,
-      .padding = secondaryPadding, .desiredSize = secondaryDesiredSize, .canBeChosen = false, 
+      .padding = secondaryPadding, .desiredSize = secondaryDesiredSize, .canBeChosen = false,
       .textColourId = Skin::kTextComponentText2));
     options.addChildComponent(TEXT_ITEM(kDefaultValue, options, .shortcutKeyCode = 'D'));
 
@@ -540,10 +540,10 @@ namespace Interface
 
           COMPLEX_ASSERT(parameterBridges[i].getParameterLink()->UIControl);
 
-          Component &wrapper = with_val(*anew(itemArena, Component, {}), .sizingFlags = Component::GrowableX, 
+          Component &wrapper = with_val(*anew(itemArena, Component, {}), .sizingFlags = Component::GrowableX,
             .skinOverride = parameterBridges[i].getParameterLink()->UIControl->getSkinOverride());
           ControlPopupItem *parameterMap = TEXT_ITEM(kMappingList + 1 + (i32)i * 2, (*mappingList.childList),
-            .sizingFlags = Component::GrowableX, .placement = Placement::left, 
+            .sizingFlags = Component::GrowableX, .placement = Placement::left,
             .textColourId = Skin::kWidgetPrimary1, .canBeChosen = false);
           ControlPopupItem *parameterUnmap = TEXT_ITEM(kMappingList + 1 + (i32)i * 2 + 1, (*mappingList.childList),
             .sizingFlags = Component::None, .padding = (Rectangle<u16>{ 4, 4, 4, 4 }), .closesPopup = false,
@@ -556,10 +556,10 @@ namespace Interface
       }
     }
 
-    ControlPopupItem &valueDisplay = *ITEM(kValueDisplayGroup, options, 
+    ControlPopupItem &valueDisplay = *ITEM(kValueDisplayGroup, options,
       .canBeChosen = false, .sizingFlags = Component::GrowableX, .padding = primaryPadding);
     options.addChildComponent(&valueDisplay);
-    valueDisplay.addChildComponent(TEXT_ITEM(kValueDisplayText, options, .placement = Placement::left, 
+    valueDisplay.addChildComponent(TEXT_ITEM(kValueDisplayText, options, .placement = Placement::left,
       .margin = (Rectangle<i16>{ 0, 0, 8, 0 }), .sizingFlags = Component::GrowableX, .canBeChosen = false,
       .desiredSize = secondaryDesiredSize, .padding = {}, .textColourId = Skin::kTextComponentText2));
     valueDisplay.addChildComponent(TEXT_ITEM(kValueDisplay, options, .canBeChosen = false, .textPlacement = Placement::right,
@@ -588,7 +588,7 @@ namespace Interface
   #undef ICON
   #undef TEXT_ITEM
   #undef ITEM
-    
+
     controlFlags.isInModalState = true;
     selector->list = &options;
     selector->skinOverride = getSkinOverride();
@@ -628,12 +628,12 @@ namespace Interface
     return probablyLongestValue;
   }
 
-  float 
+  float
   Control::getNumericTextMaxWidth(FontId usedFont, float lineHeight)
   {
     COMPLEX_ASSERT(details.scale != Framework::ParameterScale::Indexed);
 
-    double probablyLongestValue = getProbablyLongestParameterValue(details, 
+    double probablyLongestValue = getProbablyLongestParameterValue(details,
       getPlugin(uiRelated.renderer).getSampleRate());
 
     char buffer[64]{};
@@ -662,11 +662,11 @@ namespace Interface
   void Control::getScaledValueString(utils::string &outString,
     double valueToConvert, bool addPrefix) const
   {
-    // if the string doesn't have an allocated capacity, 
+    // if the string doesn't have an allocated capacity,
     // provide it through the control's arena
     if (!outString.capacity())
       outString = { arena };
-    
+
     if (!controlFlags.hasParameter)
     {
       utils::floatToString(outString, valueToConvert);
@@ -753,7 +753,7 @@ namespace Interface
     outString.append(details.displayUnits);
   }
 
-  double 
+  double
   Control::getValueFromText(utils::string_view text) const
   {
     utils::string trimmed{ localScratch, text };
@@ -781,10 +781,10 @@ namespace Interface
 
   struct MappingParameterUpdate : public Framework::UndoAction
   {
-    MappingParameterUpdate(Framework::ParameterBridge *bridge, 
+    MappingParameterUpdate(Framework::ParameterBridge *bridge,
       Framework::ParameterLink *link = nullptr) : bridge{ bridge }, link{ link }
     {
-      // TODO: if you map and unmap the same parameter this transaction will contain both actions 
+      // TODO: if you map and unmap the same parameter this transaction will contain both actions
       //  instead of self cancelling and freeing the arena
 
       UndoAction::redo = redo;
@@ -794,7 +794,7 @@ namespace Interface
     static void redo(UndoAction *a)
     {
       auto *self = (MappingParameterUpdate *)a;
-      
+
       if (self->link)
       {
         COMPLEX_ASSERT(!self->bridge->getParameterLink());
@@ -820,7 +820,7 @@ namespace Interface
     }
 
     static bool isOfType(UndoAction *a) { return a->redo == redo && a->undo == redo; }
-    
+
     Framework::ParameterBridge *bridge;
     Framework::ParameterLink *link;
   };

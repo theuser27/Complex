@@ -280,7 +280,7 @@ namespace Interface
 
 
 
-    utils::pair<DrawingFn *, Rectangle<i32>> 
+    utils::pair<DrawingFn *, Rectangle<i32>>
     copyNormalisedValueIcon()
     {
       static constexpr i32 kWidth = 16;
@@ -308,7 +308,7 @@ namespace Interface
           nvgStroke(g);
 
           nvgBeginPath(g);
-          nvgRoundedRect(g, 5.0f * proportionalX, 3.5f * proportionalY, 
+          nvgRoundedRect(g, 5.0f * proportionalX, 3.5f * proportionalY,
             6.0f * proportionalX, 7.0f * proportionalY, 1.25f * utils::min(proportionalX, proportionalY));
           nvgStroke(g);
         },
@@ -382,7 +382,7 @@ namespace Interface
     {
       static constexpr i32 kWidth = 12;
       static constexpr i32 kHeight = 12;
-      return 
+      return
       {
         [](Graphics &g, utils::span<const Colour> colours, Rectangle<float> bounds, float strokeWidth)
         {
@@ -402,7 +402,7 @@ namespace Interface
           nvgStroke(g);
 
           nvgBeginPath(g);
-          nvgArc(g, 5.5f * proportionalX, 6.5f * proportionalY, 
+          nvgArc(g, 5.5f * proportionalX, 6.5f * proportionalY,
             5.0f * utils::min(proportionalX, proportionalY), kAngleStart, kAngleEnd, NVG_CW);
           nvgStroke(g);
         },

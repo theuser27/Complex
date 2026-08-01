@@ -33,13 +33,13 @@ namespace Framework
       COMPLEX_ASSERT(simdChannel * kRelativeSize < channels);
       return { data + simdChannel * size, size };
     }
-    
+
     u32 getSimdChannels() const { return getSimdChannels(channels); }
     static constexpr u32 getSimdChannels(u32 channels) { return (channels + kRelativeSize - 1) / kRelativeSize; }
 
-    // first - index to the simd element 
+    // first - index to the simd element
     // second - channel index of T value inside the SIMD element
-    static constexpr utils::pair<u32, u32> 
+    static constexpr utils::pair<u32, u32>
     getAbsoluteIndices(u32 channel, u32 channelSize, u32 index)
     { return { (channel / kRelativeSize) * channelSize + index, channel % kRelativeSize }; }
 
@@ -63,8 +63,8 @@ namespace Framework
   // specified by starting channels/indices
   // result is shifted by shiftMask and filtered with mergeMask
   // note: starting channels need to be congruent to kNumChannels
-  forceinline void applyToThis(SimdBuffer *thisBuffer, const SimdBuffer *otherBuffer, 
-    u32 channels, u32 samples, utils::MathOperations operation, 
+  forceinline void applyToThis(SimdBuffer *thisBuffer, const SimdBuffer *otherBuffer,
+    u32 channels, u32 samples, utils::MathOperations operation,
     simd_mask mergeMask, u32 thisStartChannel = 0, u32 otherStartChannel = 0,
     u32 thisStartIndex = 0, u32 otherStartIndex = 0)
   {

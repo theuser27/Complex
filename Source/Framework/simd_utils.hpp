@@ -86,7 +86,7 @@ namespace utils
   #elif COMPLEX_NEON
     auto low = vreinterpretq_f32_f64(vzip1q_f64(vreinterpretq_f64_f32(rows[0].value),
       vreinterpretq_f64_f32(rows[1].value)));
-    auto high = vreinterpretq_f32_f64(vzip2q_f64(vreinterpretq_f64_f32(rows[0].value), 
+    auto high = vreinterpretq_f32_f64(vzip2q_f64(vreinterpretq_f64_f32(rows[0].value),
       vreinterpretq_f64_f32(rows[1].value)));
   #endif
     rows[0].value = low;
@@ -139,7 +139,7 @@ namespace utils
   }
 
   // lerps between the closest range of from and to inside +/- range
-  forceinline simd_float vectorcall circularLerpSymmetric(simd_float from, 
+  forceinline simd_float vectorcall circularLerpSymmetric(simd_float from,
     simd_float to, simd_float t, simd_float range) noexcept
   { return circularLerp(from + range, to + range, t, range * 2.0f) - range; }
 
@@ -326,7 +326,7 @@ namespace utils
     auto two = reinterpretToInt(values[array[1]]).value;
     auto three = reinterpretToInt(values[array[2]]).value;
     auto four = reinterpretToInt(values[array[3]]).value;
-    
+
     if constexpr (utils::is_same_v<SIMD, simd_float>)
     {
       values[array[0]] = reinterpretToFloat(simd_int{ _mm_insert_epi32(one, valueArray[0], 0) });
@@ -395,7 +395,7 @@ namespace utils
 
 
 
-  // conditionally unsigns ints if they are negative and 
+  // conditionally unsigns ints if they are negative and
   // returns a mask which can be used to xor the value restore the sign
   // if flag is set, a full mask where values are negative
   template<bool ReturnFullMask = false>
@@ -443,7 +443,7 @@ namespace utils
   // if equalsWrap == true/false, then the value will wrap around when it reaches/when it is greater than the modulo
   forceinline simd_float vectorcall modOnce(simd_float value, simd_float mod, bool equalsWrap = true) noexcept
   {
-    simd_mask lessMask = (equalsWrap) ? simd_float::lessThan(value, mod) : 
+    simd_mask lessMask = (equalsWrap) ? simd_float::lessThan(value, mod) :
       simd_float::lessThanOrEqual(value, mod);
     simd_float lower = value - mod;
     return merge(lower, value, lessMask);
@@ -452,7 +452,7 @@ namespace utils
   forceinline simd_float vectorcall modOnceSymmetric(simd_float value, simd_float mod, bool equalsWrap = true) noexcept
   {
     simd_mask signMask = unsignSimd(value);
-    simd_mask lessMask = (equalsWrap) ? simd_float::lessThan(value, mod) : 
+    simd_mask lessMask = (equalsWrap) ? simd_float::lessThan(value, mod) :
       simd_float::lessThanOrEqual(value, mod);
     simd_float lower = value - mod * 2.0f;
     return merge(lower, value, lessMask) ^ signMask;
@@ -571,8 +571,8 @@ namespace utils
 
     // we exp2 whatever decimal number is left with the taylor series
     // the domain we're in is [0.0f, 0.5f], we don't expect negative numbers
-    simd_float interpolate = simd_float::mulAdd(kCoefficient0, t, 
-      simd_float::mulAdd(kCoefficient1, t, simd_float::mulAdd(kCoefficient2, t, 
+    simd_float interpolate = simd_float::mulAdd(kCoefficient0, t,
+      simd_float::mulAdd(kCoefficient1, t, simd_float::mulAdd(kCoefficient2, t,
         simd_float::mulAdd(kCoefficient3, t, simd_float::mulAdd(kCoefficient4, t, kCoefficient5)))));
 
     return power * interpolate;

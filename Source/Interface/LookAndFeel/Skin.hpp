@@ -97,7 +97,7 @@ namespace Interface
 
       kPowerButtonOn,
       kPowerButtonOff,
-      
+
       kTextComponentBackground,
       kTextComponentText1,
       kTextComponentText2,

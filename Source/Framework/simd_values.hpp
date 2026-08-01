@@ -57,7 +57,7 @@ namespace utils
       return _mm_set1_epi32((i32)scalar);
     #elif COMPLEX_NEON
       return vdupq_n_u32(scalar);
-    #endif 
+    #endif
     }
 
     static forceinline simd_type vectorcall load(const u32 *memory)
@@ -66,7 +66,7 @@ namespace utils
       return _mm_loadu_si128((const __m128i *)memory);
     #elif COMPLEX_NEON
       return vld1q_u32(memory);
-    #endif 
+    #endif
     }
 
     static forceinline simd_type vectorcall add(simd_type one, simd_type two)
@@ -509,7 +509,7 @@ namespace utils
     #endif
     }
 
-    static forceinline simd_type vectorcall sub(simd_type one, simd_type two) 
+    static forceinline simd_type vectorcall sub(simd_type one, simd_type two)
     {
     #if COMPLEX_SSE4_1
       return _mm_sub_ps(one, two);
@@ -831,7 +831,7 @@ namespace utils
 
     static forceinline simd_mask vectorcall lessThanOrEqual(simd_float one, simd_float two)
     { return greaterThanOrEqual(two.value, one.value); }
-    
+
     static forceinline float vectorcall sum(simd_float value)
     { return sum(value.value); }
 
@@ -881,7 +881,7 @@ namespace utils
     #else
       value(utils::bit_cast<simd_type>(scalars)) { }
     #endif
-    
+
     template<typename T, usize N> requires (sizeof(simd_type) == sizeof(T) * N)
     forceinline simd_float(const utils::array<T, N> &scalars) noexcept :
       value(utils::bit_cast<simd_type>(scalars)) { }
@@ -964,13 +964,13 @@ namespace utils
 
     forceinline simd_float& vectorcall operator^=(simd_mask other) noexcept
     { value = bitXor(value, other.value); return *this; }
-    
+
     forceinline simd_float& vectorcall operator&=(simd_float other) noexcept
     { value = bitAnd(value, toMask(other.value)); return *this; }
 
     forceinline simd_float& vectorcall operator|=(simd_float other) noexcept
     { value = bitOr(value, toMask(other.value)); return *this; }
-    
+
     forceinline simd_float& vectorcall operator^=(simd_float other) noexcept
     { value = bitXor(value, toMask(other.value)); return *this; }
 
@@ -1011,7 +1011,7 @@ namespace utils
 
     forceinline simd_float vectorcall operator^(simd_mask other) const noexcept
     { return bitXor(value, other.value); }
-    
+
     forceinline simd_float vectorcall operator&(simd_float other) const noexcept
     { return bitAnd(value, toMask(other.value)); }
 
@@ -1056,4 +1056,3 @@ namespace utils
 using utils::simd_float;
 using utils::simd_int;
 using utils::simd_mask;
-

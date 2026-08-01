@@ -20,7 +20,7 @@ namespace utils
   // { real, imaginary, real, imaginary } and { magnitude, phase, magnitude, phase } respectively
 
   // cos and sin
-  forceinline utils::pair<simd_float, simd_float> vectorcall 
+  forceinline utils::pair<simd_float, simd_float> vectorcall
   cossin(simd_float radians)
   {
     // split pi / 2 into multiple parts to take advantage of the
@@ -77,7 +77,7 @@ namespace utils
   }
 
   // [cos(angle[0]), sin(angle[1]), cos(angle[2]), sin(angle[3])]
-  forceinline simd_float vectorcall 
+  forceinline simd_float vectorcall
   cis(simd_float angle)
   {
     // split pi / 2 into multiple parts to take advantage of the
@@ -124,7 +124,7 @@ namespace utils
 
   forceinline simd_float vectorcall sin(simd_float radians) { return cossin(radians).second; }
   forceinline simd_float vectorcall cos(simd_float radians) { return cossin(radians).first; }
-  forceinline simd_float vectorcall 
+  forceinline simd_float vectorcall
   tan(simd_float radians)
   {
   #ifdef COMPLEX_INTEL_SVML
@@ -135,7 +135,7 @@ namespace utils
   #endif
   }
 
-  forceinline simd_float vectorcall 
+  forceinline simd_float vectorcall
   atan2(simd_float y, simd_float x)
   {
   #ifndef COMPLEX_INTEL_SVML
@@ -169,14 +169,14 @@ namespace utils
   }
 
   // magnitude and phase
-  forceinline utils::pair<simd_float, simd_float> vectorcall 
+  forceinline utils::pair<simd_float, simd_float> vectorcall
   phasor(simd_float real, simd_float imaginary)
   {
     auto magnitude = simd_float::sqrt(simd_float::mulAdd(real * real, imaginary, imaginary));
     return { magnitude, atan2(imaginary, real) };
   }
 
-  forceinline simd_float vectorcall 
+  forceinline simd_float vectorcall
   complexCartMul(simd_float one, simd_float two)
   {
     // [a1c1, a1d1, a2c2, a2d2]
@@ -194,11 +194,11 @@ namespace utils
   #endif
   }
 
-  forceinline simd_float vectorcall 
+  forceinline simd_float vectorcall
   complexPolarMul(simd_float one, simd_float two)
   { return merge(one * two, one + two, kPhaseMask); }
 
-  forceinline simd_float vectorcall 
+  forceinline simd_float vectorcall
   complexMagnitude(simd_float value, bool toSqrt)
   {
     value *= value;
@@ -206,7 +206,7 @@ namespace utils
     return (toSqrt) ? simd_float::sqrt(value) : value;
   }
 
-  forceinline simd_float vectorcall 
+  forceinline simd_float vectorcall
   complexMagnitude(const utils::array<simd_float, simd_float::complexSize> &values, bool toSqrt)
   {
     simd_float one = values[0] * values[0];
@@ -215,7 +215,7 @@ namespace utils
     return (toSqrt) ? simd_float::sqrt(one) : one;
   }
 
-  forceinline simd_float vectorcall 
+  forceinline simd_float vectorcall
   complexPhase(simd_float value)
   {
     simd_float real = copyFromEven(value);
@@ -224,7 +224,7 @@ namespace utils
     return atan2(imaginary, real);
   }
 
-  forceinline simd_float vectorcall 
+  forceinline simd_float vectorcall
   complexPhase(const utils::array<simd_float, simd_float::complexSize> &values)
   {
   #if COMPLEX_SSE4_1
@@ -238,7 +238,7 @@ namespace utils
     return atan2(imaginary, real);
   }
 
-  forceinline simd_float vectorcall 
+  forceinline simd_float vectorcall
   complexReal(simd_float value)
   {
     simd_float magnitude = copyFromEven(value);
@@ -247,7 +247,7 @@ namespace utils
     return magnitude * cos(phase);
   }
 
-  forceinline simd_float vectorcall 
+  forceinline simd_float vectorcall
   complexImaginary(simd_float value)
   {
     simd_float magnitude = copyFromEven(value);
@@ -307,7 +307,7 @@ namespace utils
     auto rawDestination = destination->get();
     usize sourceSize = source->size;
     usize destinationSize = destination->size;
-    
+
     for (usize i = 0; i < source->getSimdChannels(); i++)
     {
       // size - 1 to skip nyquist since it doesn't need to get processed

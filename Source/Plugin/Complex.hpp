@@ -41,14 +41,14 @@ namespace Plugin
 
   struct ComplexPlugin
   {
-    ComplexPlugin(usize parameterMappings, u32 inSidechains, u32 outSidechains, 
+    ComplexPlugin(usize parameterMappings, u32 inSidechains, u32 outSidechains,
       usize undoSteps, CplugHostContext *hostContext);
     ~ComplexPlugin();
 
     void initialise(float sampleRate, u32 samplesPerBlock);
     void process(float *const *in, float *const *out, u32 numSamples,
       u32 numInputs, u32 numOutputs);
-    
+
     Interface::Renderer &getRenderer();
 
     void rescanLatency();
@@ -67,7 +67,7 @@ namespace Plugin
     }
 
     // quick and dirty spinlock to ensure things are executed outside of an audio callback
-    utils::ScopedLock 
+    utils::ScopedLock
     acquireProcessingLock(bool isExclusive = true)
     {
       return utils::ScopedLock{ processingLock, isExclusive, utils::WaitMechanism::Sleep };
@@ -90,7 +90,7 @@ namespace Plugin
 
     Framework::FFT fft{};
     utils::sp<State> state_;
-    
+
     Framework::UndoManager undoManager;
 
     CplugHostContext *hostContext;
@@ -133,7 +133,7 @@ namespace Plugin
     u32 getFFTSize();
     u32 getBlockPosition();
     u32 getLaneCount() const;
-    
+
     struct Thread
     {
       Thread() = default;
@@ -141,7 +141,7 @@ namespace Plugin
         shouldStop{ other.shouldStop } { }
       ~Thread() { stop(); }
 
-      bool 
+      bool
       start(const auto &function)
       {
         if (thread != utils::thread{})
@@ -153,7 +153,7 @@ namespace Plugin
         return true;
       }
 
-      bool 
+      bool
       stop(int *exitCode = nullptr)
       {
         if (thread == utils::thread{})

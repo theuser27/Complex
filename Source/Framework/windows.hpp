@@ -29,7 +29,7 @@ namespace Framework
     void applyWindow(Buffer &buffer, u32 channels, utils::span<bool> channelsToProcess,
       u32 samples, uuid windowType, float alpha);
 
-    void addOverlap(CircularBuffer &destination, Buffer &source, u32 channels, 
+    void addOverlap(CircularBuffer &destination, Buffer &source, u32 channels,
       utils::span<bool> channelsToProcess, u32 samples, u32 destinationBegin, uuid windowType);
 
     void scaleDown(Buffer &buffer, u32 channels, utils::span<bool> channelsToProcess,

@@ -12,8 +12,8 @@
 
 namespace Interface
 {
-  static bool 
-  summonModulePopup(PopupSelector *selector, Component *summoner, 
+  static bool
+  summonModulePopup(PopupSelector *selector, Component *summoner,
     EffectsLaneSection *laneSection, Placement placement, Point<i32> offset, usize insertionIndex)
   {
     using namespace Framework;
@@ -76,7 +76,7 @@ namespace Interface
         auto details = moduleTypeParameter->getParameterDetails();
         auto normalisedValue = (float)Framework::unscaleValue(getValueFromOptionId(option->id, details), details);
         moduleTypeParameter->updateNormalisedValue(&normalisedValue);
-      }      
+      }
 
       auto *transactionArena = state->plugin->undoManager.beginNewTransaction();
       state->plugin->undoManager.perform(anew(transactionArena, AddProcessorUpdate, { effectModule,
@@ -122,7 +122,7 @@ namespace Interface
     {
       auto *metadata = (CommandMessages::ProcessorInsertion *)extraData;
 
-      if (!CommandMessages::handleProcessorInsertion(self->effectsLane, 
+      if (!CommandMessages::handleProcessorInsertion(self->effectsLane,
         &self->moduleHolder, metadata, Placement::top))
         return false;
 
@@ -131,7 +131,7 @@ namespace Interface
       section->componentFlags.animateMovement = true;
       section->previousPosition = invalidPosition;
       if (metadata->useIndex)
-        section->effectHolder.header.draggableBox.surfaceToLiftTo = 
+        section->effectHolder.header.draggableBox.surfaceToLiftTo =
           &self->soundEngineSection->effectsSection;
       (metadata->placeholder ? metadata->placeholder : section)->margin = { 0, 0, 0, kVModuleToModuleMargin };
 
@@ -158,7 +158,7 @@ namespace Interface
 
     // disallow feedback until we figure out a good UX for that
     // TODO: fix lane feedback UX
-    outer: 
+    outer:
     {
       auto *next = option;
       while (true)
@@ -178,12 +178,12 @@ namespace Interface
           option = Framework::getOptionFromValue(newScaled, selector.details).first;
           goto outer; // no labelled break in this language...
         }
-        
+
         // continue down the chain until we find a primary source or our starting lane
         auto *nextControl = parentProcessor->state
           ->getProcessorParameter(next->stateId, Generation::EffectsLane::Input)
           ->getParameterLink()->UIControl;
-        next = Framework::getOptionFromValue(Framework::scaleValue(nextControl->getValue(), 
+        next = Framework::getOptionFromValue(Framework::scaleValue(nextControl->getValue(),
           nextControl->details), nextControl->details).first;
       }
     }
@@ -289,17 +289,17 @@ namespace Interface
     state->plugin->undoManager.perform(anew(transactionArena, Framework::DeleteProcessorUpdate, { effectsLane }));
   }
 
-  bool 
+  bool
   EffectsLaneSection::ModuleHolder::mouseEnter(const MouseEvent &)
   {
-    // this algorithm will ALMOST work in mouseMove 
+    // this algorithm will ALMOST work in mouseMove
     // unfortunately if we add a module and the cursor happens to be where the next add module highlight appears
     // there is a pseudo race for where the next mouse hover refresh will happen:
-    //  1. if it happens from the rendering procedure, 
+    //  1. if it happens from the rendering procedure,
     //      the module's bounds will have been set and everything works or,
     //  2. the windowing system might send a bogus mouse event before that,
     //      so the module will have bounds of { 0, 0, 0, 0 },
-    //      meaning that the next highlight bounds will be where they already were 
+    //      meaning that the next highlight bounds will be where they already were
     //      and if the user doesn't move the cursor, it will not recheck that
 
     registerCallback(uiRelated.renderer, this, [](Component *c)
@@ -371,7 +371,7 @@ namespace Interface
     return true;
   }
 
-  bool 
+  bool
   EffectsLaneSection::ModuleHolder::mouseDown(const MouseEvent &e)
   {
     if (Component::mouseDown(e))
@@ -420,7 +420,7 @@ namespace Interface
       auto scaledPadding = scaleValueRoundInt(holder->padding.toInt());
       auto drawBounds = holder->getLocalBounds().withTrimLeft(scaledPadding.x).withTrimRight(scaledPadding.w);
 
-      // the childrenCount check is necessary because we don't know if have outdated info 
+      // the childrenCount check is necessary because we don't know if have outdated info
       // because callback hadn't run since we weren't hovered over
       if (holder->hoveredBeforeModule && laneSection->effectsLane->childrenCount)
       {
@@ -451,7 +451,7 @@ namespace Interface
 
       if (drawBounds.h >= 2 * plusSize)
       {
-        auto plusBounds = Rectangle{ (float)drawBounds.getCentreX(), 
+        auto plusBounds = Rectangle{ (float)drawBounds.getCentreX(),
           (float)drawBounds.getCentreY(), 0.0f, 0.0f }.withExpand(plusSize * 0.5f);
 
         strokePlus(openGl, plusBounds, scaleValue(2.0f), colour);
@@ -459,7 +459,7 @@ namespace Interface
     }
   }
 
-  bool 
+  bool
   EffectsLaneSection::ModuleHolder::render(OpenGlWrapper &openGl)
   {
     fillRect(openGl, getLocalBounds().toFloat(),
@@ -496,7 +496,7 @@ namespace Interface
     desiredSize = { kMinWidth, kMinHeight, utils::int_max<i32>, kMinHeight };
   }
 
-  bool 
+  bool
   EffectsLaneSection::LaneMiniView::mouseDown(const MouseEvent &e)
   {
     if (e.mods.test(ModifierKeys::middleButtonModifier))
@@ -521,7 +521,7 @@ namespace Interface
       .withY(localBounds.getCentreY()).withHeight(0.0f)
       .withExpand(0.0f, scaleValue(kPrimaryTextLineHeight / 2));
 
-    renderText(((EffectsLaneSection *)processor->component)->laneTitle.text, 
+    renderText(((EffectsLaneSection *)processor->component)->laneTitle.text,
       FontId::DDinType, textBounds, openGl, getColour(Skin::kHeadingText, this));
 
     return true;
