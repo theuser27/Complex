@@ -354,7 +354,6 @@ namespace Interface
         else
           *scrollableDirection = scaleValueRoundInt((float)sizes.max);
       }
-      offsetScroll(component, 0.0f, 0.0f, false);
     }
 
     for (auto *child = children; child; child = child->next)
@@ -371,6 +370,7 @@ namespace Interface
     COMPLEX_ASSERT(component->bounds.*actualSize >= 0);
     component->bounds.*actualSize = (component->componentFlags.keepSize) ?
       component->lastBounds.*actualSize : component->bounds.*actualSize;
+    offsetScroll(component, 0.0f, 0.0f, false);
   }
 
   void calculateSizes(Component *children, Component *component)

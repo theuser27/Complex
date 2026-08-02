@@ -9,8 +9,7 @@
 #include "Generation/SoundEngine.cpp"
 
 #include "Interface/Components/Control.cpp"
-#include "Interface/Components/Button.cpp"
-#include "Interface/Components/Slider.cpp"
+#include "Interface/Components/Controls.cpp"
 #include "Interface/Components/DraggableComponent.cpp"
 #include "Interface/Components/Spectrogram.cpp"
 #include "Interface/Components/TextEditor.cpp"

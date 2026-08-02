@@ -476,8 +476,8 @@ namespace Generation
     mappingSelector->placement = Placement::left;
     auto *label = anew(arena, Label, {});
     label->control = mappingSelector;
-    label->textPlacement = Placement::left;
-    label->placement = Placement::left;
+    label->textPlacement = Placement::right;
+    label->placement = Placement::right;
     label->overrideSize = [](Component *c, bool isCalculatingVertical)
     {
       c->padding = c->next->padding;
