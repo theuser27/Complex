@@ -3,8 +3,6 @@
 
 #include "internal.h"
 
-#include "types.h"
-
 #include "../pugl.h"
 
 #include <assert.h>

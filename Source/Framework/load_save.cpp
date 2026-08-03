@@ -103,7 +103,7 @@ namespace
     if (save)
     {
       size_t size;
-      char *text = cjson_Print(json, &size);
+      char *text = cjson_Print(json, &size, true);
       xfiles_write(filePath.data(), text, size);
     }
 
@@ -781,7 +781,7 @@ namespace Plugin
     cjson *data = cjson_Create(cjson_Object);
     serialiseToJson(plugin->state_.get(), data);
     usize size = 0;
-    char *dataString = cjson_Print(data, &size);
+    char *dataString = cjson_Print(data, &size, true);
     writeProc(stateCtx, dataString, size);
 
     utils::bumpArena::destroy(jsonArena);

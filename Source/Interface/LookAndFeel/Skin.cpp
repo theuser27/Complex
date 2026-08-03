@@ -213,7 +213,7 @@ namespace Interface
     }
 
     usize stringSize;
-    char *string = cjson_Print(data, &stringSize);
+    char *string = cjson_Print(data, &stringSize, true);
     xfiles_write(saveFile, string, stringSize);
 
     utils::bumpArena::destroy(jsonArena);

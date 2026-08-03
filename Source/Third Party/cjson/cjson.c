@@ -1113,17 +1113,12 @@ fail:
 }
 
 /* Render a cjson item/entity/structure to text. */
-char *cjson_Print(const cjson *item, size_t *size)
+char *cjson_Print(const cjson *item, size_t *size, bool formatted)
 {
-    return print(item, true, &global_hooks, size);
+    return print(item, formatted, &global_hooks, size);
 }
 
-char *cjson_PrintUnformatted(const cjson *item, size_t *size)
-{
-    return print(item, false, &global_hooks, size);
-}
-
-char *cjson_PrintBuffered(const cjson *item, int prebuffer, bool fmt)
+char *cjson_PrintBuffered(const cjson *item, int prebuffer, bool formatted)
 {
     printbuffer p = { 0, 0, 0, 0, 0, 0, { 0, 0, 0 } };
 
@@ -1141,7 +1136,7 @@ char *cjson_PrintBuffered(const cjson *item, int prebuffer, bool fmt)
     p.length = (size_t)prebuffer;
     p.offset = 0;
     p.noalloc = false;
-    p.format = fmt;
+    p.format = formatted;
     p.hooks = global_hooks;
 
     if (!print_value(item, &p))
@@ -1154,7 +1149,7 @@ char *cjson_PrintBuffered(const cjson *item, int prebuffer, bool fmt)
     return (char*)p.buffer;
 }
 
-bool cjson_PrintPreallocated(cjson *item, char *buffer, const int length, const bool format)
+bool cjson_PrintPreallocated(cjson *item, char *buffer, int length, bool formatted)
 {
     printbuffer p = { 0, 0, 0, 0, 0, 0, { 0, 0, 0 } };
 
@@ -1167,7 +1162,7 @@ bool cjson_PrintPreallocated(cjson *item, char *buffer, const int length, const 
     p.length = (size_t)length;
     p.offset = 0;
     p.noalloc = true;
-    p.format = format;
+    p.format = formatted;
     p.hooks = global_hooks;
 
     return print_value(item, &p);

@@ -746,6 +746,21 @@ typedef enum {
 PUGL_CONST_API const char*
 puglStrerror(PuglStatus status);
 
+/// Platform-specific world internals
+typedef struct PuglWorldInternalsImpl PuglWorldInternals;
+
+/// Handle for the world's opaque user data
+typedef void *PuglWorldHandle;
+
+/// The type of a World
+typedef enum
+{
+  PUGL_PROGRAM, ///< Top-level application
+  PUGL_MODULE,  ///< Plugin or module within a larger application
+} PuglWorldType;
+
+typedef struct PuglView PuglView;
+
 /**
    @}
    @defgroup pugl_world World
@@ -768,16 +783,15 @@ puglStrerror(PuglStatus status);
    different worlds must be isolated so they are never mixed.  Views are
    strongly associated with the world they were created in.
 */
-typedef struct PuglWorldImpl PuglWorld;
-
-/// Handle for the world's opaque user data
-typedef void* PuglWorldHandle;
-
-/// The type of a World
-typedef enum {
-  PUGL_PROGRAM, ///< Top-level application
-  PUGL_MODULE,  ///< Plugin or module within a larger application
-} PuglWorldType;
+typedef struct PuglWorld {
+  PuglWorldInternals* impl;
+  PuglWorldHandle     handle;
+  double              startTime;
+  size_t              numViews;
+  PuglView**          views;
+  char*               strings[PUGL_NUM_STRING_HINTS];
+  PuglWorldType       type;
+} PuglWorld;
 
 /// World flags
 typedef enum {
@@ -900,8 +914,19 @@ puglUpdate(PuglWorld* world, double timeout);
    @{
 */
 
-/// A drawable region that receives events
-typedef struct PuglViewImpl PuglView;
+/// Platform-specific view internals
+typedef struct PuglInternalsImpl PuglInternals;
+
+/// Stage of a view along its lifespan
+typedef enum
+{
+  PUGL_VIEW_STAGE_ALLOCATED,
+  PUGL_VIEW_STAGE_REALIZED,
+  PUGL_VIEW_STAGE_CONFIGURED,
+} PuglViewStage;
+
+/// Opaque surface used by graphics backend
+typedef void PuglSurface;
 
 /**
    A graphics backend.
@@ -914,7 +939,27 @@ typedef struct PuglViewImpl PuglView;
    backend.  See the definition of `PuglBackendImpl` in the source code for
    details.
 */
-typedef struct PuglBackendImpl PuglBackend;
+typedef struct PuglBackend {
+  /// Get visual information from display and setup view as necessary
+  PUGL_WARN_UNUSED_RESULT PuglStatus (*configure)(PuglView *);
+
+  /// Create surface and drawing context
+  PUGL_WARN_UNUSED_RESULT PuglStatus (*create)(PuglView *);
+
+  /// Destroy surface and drawing context
+  void (*destroy)(PuglView *);
+
+  /// Enter drawing context, for drawing if expose is non-null
+  PUGL_WARN_UNUSED_RESULT PuglStatus (*enter)(PuglView *,
+                                             const PuglExposeEvent *);
+
+  /// Leave drawing context, after drawing if expose is non-null
+  PUGL_WARN_UNUSED_RESULT PuglStatus (*leave)(PuglView *,
+                                             const PuglExposeEvent *);
+
+  /// Return the puglGetContext() handle for the application, if any
+  void * (*getContext)(PuglView *);
+} PuglBackend;
 
 /**
    A native view handle.
@@ -956,6 +1001,9 @@ typedef enum {
 
 /// The number of #PuglViewHint values
 #define PUGL_NUM_VIEW_HINTS ((unsigned)PUGL_DARK_FRAME + 1U)
+
+/// View hints
+typedef int PuglHints[PUGL_NUM_VIEW_HINTS];
 
 /// A special view hint value
 typedef enum {
@@ -1086,7 +1134,25 @@ typedef enum {
 #define PUGL_NUM_SIZE_HINTS ((unsigned)PUGL_MAX_ASPECT + 1U)
 
 /// A function called when an event occurs
-typedef PuglStatus (*PuglEventFunc)(PuglView* view, const PuglEvent* event);
+typedef PuglStatus(*PuglEventFunc)(PuglView *view, const PuglEvent *event);
+
+/// A drawable region that receives events
+struct PuglView {
+  PuglWorld*         world;
+  const PuglBackend* backend;
+  PuglInternals*     impl;
+  PuglHandle         handle;
+  PuglEventFunc      eventFunc;
+  PuglNativeView     parent;
+  uintptr_t          transientParent;
+  PuglConfigureEvent lastConfigure;
+  PuglHints          hints;
+  PuglPoint          positionHints[PUGL_NUM_POSITION_HINTS];
+  PuglArea           sizeHints[PUGL_NUM_SIZE_HINTS];
+  char*              strings[PUGL_NUM_STRING_HINTS];
+  PuglViewStage      stage;
+  bool               resizing;
+};
 
 /**
    @defgroup pugl_setup Setup

@@ -49,7 +49,7 @@ enum cjson_Types
   cjson_Object        = 1 << 7,
   cjson_Raw           = 1 << 8, /* raw json */
   cjson_TypeMask      = (1 << 9) - 1,
-  
+
   cjson_IsReference   = 1 << 9,
   cjson_StringIsConst = 1 << 10,
 };
@@ -105,8 +105,8 @@ typedef struct cjson_Hooks
 /* Supply malloc, realloc and free functions to cjson */
 void cjson_InitHooks(cjson_Hooks* hooks);
 
-/* Memory Management: the caller is always responsible to free the results from all variants of 
-   cjson_Parse (with cjson_Delete) and cjson_Print (with stdlib free, cjson_Hooks.free_fn, or cjson_free as appropriate). 
+/* Memory Management: the caller is always responsible to free the results from all variants of
+   cjson_Parse (with cjson_Delete) and cjson_Print (with stdlib free, cjson_Hooks.free_fn, or cjson_free as appropriate).
    The exception is cjson_PrintPreallocated, where the caller has full responsibility of the buffer. */
 /* Supply a block of JSON, and this returns a cjson object you can interrogate. */
 cjson *cjson_Parse(const char *value, size_t buffer_length);
@@ -115,14 +115,12 @@ cjson *cjson_Parse(const char *value, size_t buffer_length);
 cjson *cjson_ParseWithOpts(const char *value, size_t buffer_length, const char **return_parse_end, bool require_null_terminated);
 
 /* Render a cjson entity to text for transfer/storage. */
-char *cjson_Print(const cjson *item, size_t *size);
-/* Render a cjson entity to text for transfer/storage without any formatting. */
-char *cjson_PrintUnformatted(const cjson *item, size_t *size);
+char *cjson_Print(const cjson *item, size_t *size, bool formatted);
 /* Render a cjson entity to text using a buffered strategy. prebuffer is a guess at the final size. guessing well reduces reallocation. fmt=0 gives unformatted, =1 gives formatted */
-char *cjson_PrintBuffered(const cjson *item, int prebuffer, bool fmt);
+char *cjson_PrintBuffered(const cjson *item, int prebuffer, bool formatted);
 /* Render a cjson entity to text using a buffer already allocated in memory with given length. Returns 1 on success and 0 on failure. */
 /* NOTE: cjson is not always 100% accurate in estimating how much memory it will use, so to be safe allocate 5 bytes more than you actually need */
-bool cjson_PrintPreallocated(cjson *item, char *buffer, const int length, const bool format);
+bool cjson_PrintPreallocated(cjson *item, char *buffer, int length, bool formatted);
 
 
 /* Returns the number of items in an array (or object). */

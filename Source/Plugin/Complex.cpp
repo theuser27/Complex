@@ -533,8 +533,14 @@ namespace Plugin
 
 namespace utils { void atLoad(); }
 void initialiseCJSONHooks();
+// DLL-wide (used for all instances of a plugin !!!) temporary memory resource
+// for the main thread, only gets deallocated when the DLL is unloaded
 constinit thread_local utils::bumpArena *localScratch = nullptr;
+// settable memory source, used when an external library wants to call malloc
+// can be used if malloc/realloc/free are replaced with arena_(malloc/free/realloc)
+// remember to always replace the arena pointer when you want to use it (undefined value)
 constinit thread_local utils::bumpArena *mallocArena = nullptr;
+// DLL-wide global memmory pool, deallocated when DLL is unloaded
 constinit utils::bumpArena *globalArena = nullptr;
 
 void cplug_libraryLoad()
@@ -550,8 +556,11 @@ void cplug_libraryLoad()
 void cplug_libraryUnload()
 {
   deinitialisePluginStructure();
-
+  
+  utils::bumpArena::destroy(localScratch);
+  localScratch = nullptr;
   utils::bumpArena::destroy(globalArena);
+  globalArena = nullptr;
 }
 
 void *cplug_createPlugin(CplugHostContext *ctx)
@@ -562,7 +571,8 @@ void *cplug_createPlugin(CplugHostContext *ctx)
   usize parameterMappings = 64, inSidechains = 0, outSidechains = 0, undoSteps = 100;
   Framework::LoadSave::getStartupParameters(parameterMappings, inSidechains, outSidechains, undoSteps);
 
-  auto *plugin = new utils::sll<Plugin::ComplexPlugin>{ { parameterMappings, (u32)inSidechains, (u32)outSidechains, undoSteps, ctx } };
+  auto *plugin = anew(globalArena, utils::sll<Plugin::ComplexPlugin>, 
+    { { parameterMappings, (u32)inSidechains, (u32)outSidechains, undoSteps, ctx } });
   utils::ScopedLock g{ executableStaticData.readWriteLock, true, utils::WaitMechanism::WaitNotify };
 
   if (auto *lastNode = executableStaticData.pluginInstances)
@@ -595,9 +605,8 @@ void cplug_destroyPlugin(void *ptr)
     ((lastNode) ? lastNode->next : executableStaticData.pluginInstances) = node->next;
   }
 
-  delete plugin;
-
-  utils::bumpArena::destroy(localScratch);
+  auto *data = getParentStruct(utils::sll<Plugin::ComplexPlugin>, object, plugin);
+  utils::bumpArena::remove(data);
 }
 
 /* --------------------------------------------------------------------------------------------------------

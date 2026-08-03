@@ -9,7 +9,6 @@
 
 #define PUGL_NO_INCLUDE_GL_H
 #include "Third Party/pugl/gl.h"
-#include "Third Party/pugl/src/types.h"
 
 #include "Framework/load_save.hpp"
 #include "Framework/parameter_bridge.hpp"

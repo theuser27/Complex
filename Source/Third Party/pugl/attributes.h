@@ -41,4 +41,20 @@
 /// A malloc function in the public API that returns allocated memory
 #define PUGL_MALLOC_API PUGL_API PUGL_MALLOC_FUNC
 
+// Unused parameter macro to suppresses warnings and make it impossible to use
+#if defined(__cplusplus)
+#  define PUGL_UNUSED(name) name
+#elif defined(__GNUC__) || defined(__clang__)
+#  define PUGL_UNUSED(name) name##_unused __attribute__((__unused__))
+#else
+#  define PUGL_UNUSED(name) name
+#endif
+
+// Unused result macro to warn when an important return status is ignored
+#ifndef _MSC_VER
+#  define PUGL_WARN_UNUSED_RESULT __attribute__((warn_unused_result))
+#else
+#  define PUGL_WARN_UNUSED_RESULT
+#endif
+
 #endif // PUGL_ATTRIBUTES_H

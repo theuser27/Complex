@@ -217,6 +217,16 @@ void nsvgDelete(NSVGimage* image);
 	#define NSVG_INLINE inline
 #endif
 
+#ifndef NSVG_MALLOC
+	#define NSVG_MALLOC malloc
+#endif
+#ifndef NSVG_FREE
+	#define NSVG_FREE free
+#endif
+#ifndef NSVG_REALLOC
+	#define NSVG_REALLOC realloc
+#endif
+
 
 static int nsvg__isspace(char c)
 {

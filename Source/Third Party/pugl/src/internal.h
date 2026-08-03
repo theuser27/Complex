@@ -6,9 +6,6 @@
 #ifndef PUGL_INTERNAL_H
 #define PUGL_INTERNAL_H
 
-#include "attributes.h"
-#include "types.h"
-
 #include "../attributes.h"
 #include "../pugl.h"
 
@@ -45,6 +42,13 @@ puglGetInitialPosition(const PuglView* view, PuglArea size);
 /// Set hint to a default value if it is unset (PUGL_DONT_CARE)
 void
 puglEnsureHint(PuglView* view, PuglViewHint hint, int value);
+
+/// Blob of arbitrary data
+typedef struct
+{
+  void *data; ///< Dynamically allocated data
+  size_t len;  ///< Length of data in bytes
+} PuglBlob;
 
 /// Set `blob` to `data` with length `len`, reallocating if necessary
 PuglStatus

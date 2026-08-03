@@ -1253,6 +1253,8 @@ namespace utils
   #endif
   }
 
+  #define getParentStruct(T, name, pointer) ((T *)((byte *)pointer - (usize)offsetof(T, name)))
+
   // malloc replacement
   byte *allocate(usize size, usize alignment = alignof(void *), bool clean = false);
   // free replacement

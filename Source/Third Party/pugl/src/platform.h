@@ -6,8 +6,6 @@
 #ifndef PUGL_PLATFORM_H
 #define PUGL_PLATFORM_H
 
-#include "types.h"
-
 #include "../pugl.h"
 
 PUGL_BEGIN_DECLS

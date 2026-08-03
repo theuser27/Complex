@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: ISC
 
 #include "stub.h"
-#include "types.h"
 #include "win.h"
 
 #include "../gl.h"
