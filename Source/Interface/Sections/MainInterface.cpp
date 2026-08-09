@@ -6,7 +6,6 @@
 #include "Plugin/Complex.hpp"
 #include "Generation/SoundEngine.hpp"
 #include "Generation/Effects.hpp"
-#include "Plugin/Renderer.hpp"
 #include "EffectsLaneSection.hpp"
 
 
@@ -168,11 +167,11 @@ namespace Interface
   }
 
   bool
-  EffectsSection::LaneSelector::AddMoreLanesButton::render(OpenGlWrapper &openGl)
+  EffectsSection::LaneSelector::AddMoreLanesButton::render(Graphics &g)
   {
     auto localBounds = getLocalBounds().toFloat();
 
-    strokeRect(openGl, localBounds, scaleValue(1.0f),
+    strokeRect(g, localBounds, scaleValue(1.0f),
       getColour(Skin::kBody, this), scaleValue(4.0f));
 
     static constexpr int kPlusSize = 8;
@@ -181,7 +180,7 @@ namespace Interface
     auto plusBounds = Rectangle{ (float)localBounds.getCentreX(),
       (float)localBounds.getCentreY(), 0.0f, 0.0f }.withExpand(plusSize * 0.5f);
 
-    strokePlus(openGl, plusBounds, scaleValue(1.0f), getColour(Skin::kNormalText, this));
+    strokePlus(g, plusBounds, scaleValue(1.0f), getColour(Skin::kNormalText, this));
 
     return true;
   }
@@ -243,7 +242,7 @@ namespace Interface
           offset = utils::min(offset, (i32)utils::int_max<i8>);
           auto xOffset = (i8)((position.x < self->bounds.w - position.x) ? offset : -offset);
 
-          offsetScroll(self, xOffset * uiRelated.deltaTime * kAutoscrollMultiplier, 0.0f, false);
+          offsetScroll(self, xOffset * getUiRelated()->deltaTime * kAutoscrollMultiplier, 0.0f, false);
         }
 
         return true;
@@ -281,7 +280,7 @@ namespace Interface
   }
 
   bool
-  EffectsSection::LaneSelector::render(OpenGlWrapper &openGl)
+  EffectsSection::LaneSelector::render(Graphics &g)
   {
     auto effectsSection = (EffectsSection *)parent;
     effectsSection->setStartLaneIndex(effectsSection->startLaneIndex, effectsSection->visibleLaneCount);
@@ -293,15 +292,15 @@ namespace Interface
       roundedOutline = roundedOutline.withExpand(scaleValue(kScrollOffset + kScrollRectThickness));
       auto thickness = scaleValue(kScrollRectThickness);
       auto rounding = scaleValue(kLaneMiniViewRounding + kScrollOffset + kScrollRectThickness);
-      strokeRect(openGl, roundedOutline, thickness, colour, rounding);
+      strokeRect(g, roundedOutline, thickness, colour, rounding);
 
       auto y = roundedOutline.getBottom() - thickness;
-      fillRect(openGl, { roundedOutline.x, y, roundedOutline.w, ::roundf(y + scaleValue((float)kScrollDimensions.h)) - y },
+      fillRect(g, { roundedOutline.x, y, roundedOutline.w, ::roundf(y + scaleValue((float)kScrollDimensions.h)) - y },
         colour, 0.0f, 0.0f, rounding, rounding);
 
       // yeah this is kinda ugly but it works
-      fillRect(openGl, { roundedOutline.x, y - rounding, thickness, rounding + 1 }, colour);
-      fillRect(openGl, { roundedOutline.getRight() - thickness, y - rounding, thickness, rounding + 1 }, colour);
+      fillRect(g, { roundedOutline.x, y - rounding, thickness, rounding + 1 }, colour);
+      fillRect(g, { roundedOutline.getRight() - thickness, y - rounding, thickness, rounding + 1 }, colour);
     }
 
     return true;
@@ -333,7 +332,7 @@ namespace Interface
     if (e.mods.test(ModifierKeys::ctrlModifier))
       return false;
 
-    auto multiplier = 30.0f * uiRelated.scale;
+    auto multiplier = 30.0f * getUiRelated()->scale;
     offsetScroll(this, ((utils::abs(e.wheelDeltaX) > utils::abs(e.wheelDeltaY)) ?
       e.wheelDeltaX : e.wheelDeltaY) * multiplier, 0.0f, false);
 
@@ -391,7 +390,7 @@ namespace Interface
     else
       setStartLaneIndex(startLaneIndex, visibleLaneCount);
 
-    auto &plugin = getPlugin(uiRelated.renderer);
+    auto &plugin = getUiRelated()->plugin;
     auto transactionArena = plugin.undoManager.beginNewTransaction();
     plugin.undoManager.perform(anew(transactionArena,
       Framework::DeleteProcessorUpdate, { lane->effectsLane }));
@@ -447,12 +446,12 @@ namespace Interface
   }
 
   bool
-  EffectsSection::render(OpenGlWrapper &)
+  EffectsSection::render(Graphics &)
   {
     static constexpr float kMoveDelay = 0.15f; //s
 
     auto t0 = smoothstep(nextScrollPositionRatio);
-    nextScrollPositionRatio = utils::min(nextScrollPositionRatio + uiRelated.deltaTime * 1.0f / kMoveDelay, 1.0f);
+    nextScrollPositionRatio = utils::min(nextScrollPositionRatio + getUiRelated()->deltaTime * 1.0f / kMoveDelay, 1.0f);
     auto t1 = smoothstep(nextScrollPositionRatio);
 
     {
@@ -556,9 +555,9 @@ namespace Interface
   }
 
   bool
-  SoundEngineSection::BottomBar::render(OpenGlWrapper &openGl)
+  SoundEngineSection::BottomBar::render(Graphics &g)
   {
-    fillRect(openGl, bounds.withZeroOrigin().toFloat(), getColour(Skin::kBody, this));
+    fillRect(g, bounds.withZeroOrigin().toFloat(), getColour(Skin::kBody, this));
 
     //reinitialise();
 
@@ -658,15 +657,16 @@ namespace Interface
   Area<u32>
   SoundEngineSection::checkResizing(Area<u32> newScaledSize, bool force)
   {
+    auto leftRightPadding = scaleValueRoundInt(2 * kHWindowEdgeMargin);
     auto childNewScaledSize = effectsSection.checkResizing({
-      newScaledSize.w - (bounds.w - effectsSection.bounds.w), newScaledSize.h }, force);
-    return { childNewScaledSize.w + bounds.w - effectsSection.bounds.w, childNewScaledSize.h };
+      newScaledSize.w - leftRightPadding, newScaledSize.h }, force);
+    return { childNewScaledSize.w + leftRightPadding, childNewScaledSize.h };
   }
 
   bool
-  SoundEngineSection::render(OpenGlWrapper &openGl)
+  SoundEngineSection::render(Graphics &g)
   {
-    fillRect(openGl, bounds.withZeroOrigin().toFloat(),
+    fillRect(g, bounds.withZeroOrigin().toFloat(),
       getColour(Skin::kBackground, this));
 
     //reinitialise();
@@ -674,11 +674,11 @@ namespace Interface
     return true;
   }
 
-  PopupSelector *getPopupSelector() { return &getGui(uiRelated.renderer)->popupSelector; }
-  utils::bumpArena *getUIArena() { return getGui(uiRelated.renderer)->arena; }
+  PopupSelector *getPopupSelector() { return &getUiRelated()->renderer->gui->popupSelector; }
+  utils::bumpArena *getUIArena() { return getUiRelated()->renderer->gui->arena; }
   PopupDisplay *getPopupDisplay(bool primary = true)
   {
-    auto *gui = getGui(uiRelated.renderer);
+    auto *gui = getUiRelated()->renderer->gui;
     return (primary) ? &gui->popupDisplay1 : &gui->popupDisplay2;
   }
 
@@ -737,7 +737,7 @@ namespace Interface
     newScaledSize.w = utils::max(newScaledSize.w, minScaledArea.w);
     newScaledSize.h = utils::max(newScaledSize.h, minScaledArea.h);
 
-    auto state = getPlugin(uiRelated.renderer).state_;
+    auto state = getUiRelated()->plugin.state_;
     if (state)
     {
       auto soundEngineSection = (SoundEngineSection *)state->soundEngine->component;
@@ -751,7 +751,7 @@ namespace Interface
 Interface::Component *
 Generation::SoundEngine::createUI()
 {
-  auto guiArena = Interface::getGui(Interface::uiRelated.renderer)->arena;
+  auto guiArena = Interface::getUiRelated()->renderer->gui->arena;
   auto *soundEngineSection = anew(guiArena, Interface::SoundEngineSection, {});
   soundEngineSection->soundEngine = this;
   soundEngineSection->reinitialise();

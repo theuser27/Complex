@@ -4,13 +4,13 @@
 #pragma once
 
 #include "Framework/utils.hpp"
-#include "Framework/circular_buffer.hpp"
+#include "Framework/buffer.hpp"
 #include "Framework/windows.hpp"
 #include "Processor.hpp"
 
 namespace Framework
 {
-  class FFT;
+  struct FFT;
 }
 
 namespace Plugin

@@ -148,7 +148,7 @@ namespace Interface
 
     PowerButton();
 
-    bool render(OpenGlWrapper &openGl) override;
+    bool render(Graphics &g) override;
 
     float animationValues[1]{};
   };
@@ -161,7 +161,7 @@ namespace Interface
 
     RadioButton();
 
-    bool render(OpenGlWrapper &openGl) override;
+    bool render(Graphics &g) override;
 
     float roundingRatio = 0.25f;
 
@@ -190,7 +190,7 @@ namespace Interface
 
     RotarySlider();
 
-    bool render(OpenGlWrapper &openGl) override;
+    bool render(Graphics &g) override;
     bool mouseDrag(const MouseEvent &e) override;
 
     float animationValues[1]{};
@@ -209,7 +209,7 @@ namespace Interface
     bool mouseDown(const MouseEvent &e) override;
     bool mouseDrag(const MouseEvent &e) override;
 
-    bool render(OpenGlWrapper &openGl) override;
+    bool render(Graphics &g) override;
 
     double runningTotal = 0.0;
   };
@@ -230,7 +230,7 @@ namespace Interface
 
     TextSelector();
 
-    bool render(OpenGlWrapper &openGl) override;
+    bool render(Graphics &g) override;
 
     bool mouseDown(const MouseEvent &e) override;
     bool mouseDrag(const MouseEvent &) override { return false; }
@@ -261,7 +261,7 @@ namespace Interface
 
     Numberbox();
 
-    bool render(OpenGlWrapper &openGl) override;
+    bool render(Graphics &g) override;
 
     bool mouseDrag(const MouseEvent &e) override;
 
@@ -293,7 +293,7 @@ namespace Interface
 
     PinBoundsBox();
 
-    bool render(OpenGlWrapper &openGl) override;
+    bool render(Graphics &g) override;
 
     static void paintHighlightBox(Component *component, Graphics &g, float lowBoundValue,
       float highBoundValue, Colour colour, Colour backgroundColour);

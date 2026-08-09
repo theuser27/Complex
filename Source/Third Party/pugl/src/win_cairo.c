@@ -56,7 +56,7 @@ puglWinCairoConfigure(PuglView* view)
 
   if (!st) {
     view->impl->surface =
-      (PuglWinCairoSurface*)calloc(1, sizeof(PuglWinCairoSurface));
+      (PuglWinCairoSurface*)PUGL_CALLOC(1, sizeof(PuglWinCairoSurface));
   }
 
   return st;
@@ -97,7 +97,7 @@ puglWinCairoDestroy(PuglView* view)
 
   puglWinCairoClose(view);
   puglWinCairoDestroyDrawContext(view);
-  free(surface);
+  PUGL_FREE(surface);
   impl->surface = NULL;
 }
 

@@ -1,7 +1,7 @@
 
 // Created: 2022-12-20 19:34:54
 
-#include "Renderer.hpp"
+#include "Plugin/Complex.hpp"
 
 #include "Third Party/cplug/cplug.h"
 #include "Third Party/glad/glad.h"
@@ -12,7 +12,6 @@
 
 #include "Framework/load_save.hpp"
 #include "Framework/parameter_bridge.hpp"
-#include "Plugin/Complex.hpp"
 #include "Interface/LookAndFeel/Graphics.hpp"
 #include "Interface/LookAndFeel/Component.hpp"
 #include "Interface/Sections/MainInterface.hpp"
@@ -68,28 +67,9 @@ unscaleDimensions(u32 width, u32 height, double currentScaling) noexcept
 //   windowHeight = utils::clamp(windowHeight, (u32)kMinHeight, (u32)::floorf(displayHeight / desiredScale));
 // }
 
-#define GRAPH_HISTORY_COUNT 100
-struct PerfGraph
+namespace utils
 {
-  float values[GRAPH_HISTORY_COUNT];
-  int head;
-};
-
-float getGraphAverage(PerfGraph *fps)
-{
-  int i;
-  float avg = 0;
-  for (i = 0; i < GRAPH_HISTORY_COUNT; i++)
-  {
-    avg += fps->values[i];
-  }
-  return avg / (float)GRAPH_HISTORY_COUNT;
-}
-
-void updateGraph(PerfGraph *fps, float frameTime)
-{
-  fps->head = (fps->head + 1) % GRAPH_HISTORY_COUNT;
-  fps->values[fps->head] = frameTime;
+  void initialiseHotreload(utils::Dylib *hotreload);
 }
 
 namespace Interface
@@ -99,269 +79,41 @@ namespace Interface
   constinit utils::vector<Component *> *sortedSizesMin{};
   constinit utils::vector<Component *> *sortedSizesMax{};
 
-  class Renderer
+  void teardownGl(Renderer *renderer)
   {
-  public:
-    enum TimerTypes { kTimerRefreshRate };
+    renderer->generalData.g->~Graphics();
+    renderer->generalData.g = nullptr;
+  }
 
-    static constexpr double kMinOpenGlVersion = 1.4;
-    static constexpr double kMultiClickTimeout = 0.500; //ms
-
-    Area<u32> area{};
-    Area<u32> unscaledArea{};
-    float pluginScale = 1.0f;
-    float monitorScale = 1.0f;
-    float effectiveScale = 1.0f;
-    bool isInitialised = false;
-    bool isVisible = false;
-    bool isResizing = false;
-    bool isHandlingOrphanedMouseEvents = false;
-    bool hasEnteredResizeCorner = false;
-    float fps =
-    #if COMPLEX_WINDOWS
-      64.0F; // Windows timers are complete ass
-    #elif
-      60.0f;
-    #endif
-
-  #ifdef COMPLEX_HOTRELOAD_DIR
-    xfiles_watch_context_t watchFileContext{};
-  #endif
-
-    PuglWorld *world_ = nullptr;
-    PuglView *view_ = nullptr;
-
-    Plugin::ComplexPlugin &plugin;
-
-    Skin *skinInstance;
-    MainInterface *gui;
-    Graphics *graphics;
-
-    Component *mouseHoveredComponent_ = nullptr;
-    Component *mouseDownComponent_ = nullptr;
-    Component *focusedComponent_ = nullptr;
-    Component *dragAndDropComponent_ = nullptr;
-
-    ModifierKeys mouseButtonsDown_{};
-    ModifierKeys lastKeyboardMods_{};
-
-    u64 numberOfFrames{};
-
-    u8 numberOfClicks = 0;
-    double lastMouseClickTime = 0.0;
-    Point<i32> lastMousePosition_{ 0, 0 };
-    Point<i32> lastMouseDownPosition_{ 0, 0 };
-
-    OpenGlWrapper openGl{};
-    utils::bumpArena *arena{};
-
-    utils::vector<utils::pair<Component *, PersistentCallback *>> callbacks{};
-
-    PerfGraph graph{};
-    bool renderDebugFps = true;
-
-    void startUI();
-    void stopUI();
-
-    void resizeChange(bool isResizing);
-    void moveFocusTo(Component *component);
-    //void beginDragAutoRepeat(int millisecondsBetweenCallbacks);
-
-    MouseEvent getRelativeEvent(MouseEvent e, Component *component);
-
-    void refreshComponentUnderMouse(MouseEvent e, bool forceMouseMove = true);
-    void handleMouseMove(MouseEvent e);
-    void handleMouseDown(MouseEvent e);
-    void handleMouseUp(MouseEvent e);
-    void handleMouseEnter(MouseEvent e);
-    void handleMouseLeave(MouseEvent e);
-    void handleMouseWheel(MouseEvent e);
-
-    void handleKeyPress(KeyPress k);
-
-    // snapping to 0.25 scales for better rendering
-    float getEffectiveScale() const { return ::roundf(pluginScale * monitorScale / kWindowScaleIncrements) * kWindowScaleIncrements; }
-
-    void recalculateScale(bool forceResize = false)
+  void computeMultiClick(Renderer *renderer, double currentTime, MouseEvent &e, bool isClicking)
+  {
+    if (isClicking)
     {
-      auto newEffectiveScale = getEffectiveScale();
-      if (newEffectiveScale == effectiveScale && !forceResize)
-        return;
-
-      area = { (u32)::roundf((float)area.w * newEffectiveScale / effectiveScale),
-        (u32)::roundf((float)area.h * newEffectiveScale / effectiveScale) };
-
-      effectiveScale = newEffectiveScale;
-      uiRelated.scale = effectiveScale;
-      // the UI needs to be sized before we can proceed with checking
-      if (isInitialised && !gui->bounds.isEmpty())
-        doSizingAndPositioning();
-
-      area = checkResizing(area, true);
-
-      plugin.hostContext->requestResize(plugin.hostContext, area.w, area.h);
+      if (currentTime - renderer->lastMouseClickTime < Renderer::kMultiClickTimeout &&
+        renderer->lastMouseDownPosition_ == Point{ e.x, e.y })
+        ++renderer->numberOfClicks;
+      else
+        renderer->numberOfClicks = 1;
+      renderer->lastMouseClickTime = currentTime;
     }
+    else if (currentTime - renderer->lastMouseClickTime >= Renderer::kMultiClickTimeout)
+      renderer->numberOfClicks = 0;
 
-    void teardownGl()
-    {
-      auto teardownComponent = [&](const auto &self, Component *c) -> void
-      {
-        if (c->componentFlags.isOpenGlInitialised)
-        {
-          c->render(openGl);
-          COMPLEX_ASSERT(!c->componentFlags.isOpenGlInitialised,
-            "Didn't reset initialisation flag after opengl resource destruction");
-        }
-        for (auto child = c->children; child; child = child->next)
-          self(self, child);
-      };
+    e.numberOfClicks = renderer->numberOfClicks;
+  }
 
-      openGl.isDestroyingOpenGl = true;
-      teardownComponent(teardownComponent, gui);
-      openGl.isDestroyingOpenGl = false;
-
-      graphics->~Graphics();
-      graphics = nullptr;
-    }
-
-    void checkFocusedComponent()
-    {
-      if (!focusedComponent_ || focusedComponent_->componentFlags.isVisible)
-        return;
-
-      auto next = focusedComponent_->parent;
-      while (next)
-      {
-        // both parties must agree to take over/relinquish focus from/to the other
-        if (next->componentFlags.isVisible &&
-          focusedComponent_->handleFocus(false, Component::FocusSetInvisible, next) &&
-          next->handleFocus(true, Component::FocusSetInvisible, focusedComponent_))
-        {
-          focusedComponent_ = next;
-          return;
-        }
-        next = next->parent;
-      }
-
-      focusedComponent_ = nullptr;
-    }
-
-    void doSizingAndPositioning()
-    {
-      uiRelated.scale = effectiveScale;
-      auto [unscaledWidth, unscaledHeight] = unscaleDimensions(area.w, area.h, effectiveScale);
-      gui->desiredSize = { (i32)unscaledWidth, (i32)unscaledHeight, (i32)unscaledWidth, (i32)unscaledHeight };
-
-      for (auto &[c, callback] : callbacks)
-        callback(c);
-
-      utils::vector<Component *> customPlacement_{ localScratch, 32 };
-      customPlacement = &customPlacement_;
-      utils::vector<Component *> sortedSizesMin_{ localScratch, 32 };
-      sortedSizesMin = &sortedSizesMin_;
-      utils::vector<Component *> sortedSizesMax_{ localScratch, 32 };
-      sortedSizesMax = &sortedSizesMax_;
-
-      calculateSizes(gui->children, gui);
-      gui->bounds.x = 0;
-      gui->bounds.y = 0;
-      calculatePositions(gui->children, gui, gui->bounds);
-
-      // looping until all conflicts are resolved
-      // BEWARE of circular dependencies
-      while (!customPlacement->empty())
-      {
-        auto c = customPlacement->front();
-        customPlacement->popFront();
-        c->componentFlags.isPositionSet = c->overridePosition(c);
-        if (!c->componentFlags.isPositionSet)
-          customPlacement->emplaceBack(c);
-      }
-      customPlacement->clear();
-    }
-
-    void renderLoop(PuglView *view)
-    {
-    #ifdef COMPLEX_HOTRELOAD_DIR
-      if (watchFileContext)
-        xfiles_watch_flush(watchFileContext);
-    #endif
-
-      ++numberOfFrames;
-      if (numberOfFrames == 200)
-      {
-        utils::shrinkWorkingSet();
-      }
-
-      auto newRenderTime = puglGetTime(puglGetWorld(view));
-      uiRelated.deltaTime = (float)(newRenderTime - uiRelated.steadyTime);
-      uiRelated.steadyTime = newRenderTime;
-      updateGraph(&graph, (float)uiRelated.deltaTime);
-
-      auto state = plugin.state_;
-      for (usize i = 0; i < state->parameterBridges.size(); ++i)
-        state->parameterBridges[i].updateUIParameter();
-
-      doSizingAndPositioning();
-
-      refreshComponentUnderMouse(getMouseInteractions(this).mouseState, false);
-      checkFocusedComponent();
-
-      // Reset viewport
-      glViewport(0, 0, area.w, area.h);
-      glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
-      glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
-
-      nvgBeginFrame(openGl, (float)area.w, (float)area.h, uiRelated.scale);
-
-      gui->doRender(openGl);
-
-      if (renderDebugFps)
-      {
-        nvgReset(openGl);
-        auto text = utils::floatToString(localScratch, 1.0f / getGraphAverage(&graph), 2);
-        renderText(text, FontId::DDinType, scaleValue({ 4.0f, 4.0f, 24.0f, 24.0f }).toInt().toFloat(),
-          *graphics, Colours::white, Placement::left);
-      }
-
-      nvgEndFrame(openGl.g);
-
-      // calling swapBuffers inside the critical section in case
-      // we're resizing because a glFinish is necessary in order to
-      // not get frame tearing/overlap with previous frames
-      // https://community.khronos.org/t/swapbuffers-and-synchronization/107667/5
-      puglSwapBuffers(view);
-      if (isResizing)
-        glFinish();
-
-      u32 a, b;
-      Framework::LoadSave::getWindowSizeScale(a, b, pluginScale);
-      recalculateScale();
-    }
-
-    void computeMultiClick(double currentTime, MouseEvent &e, bool isClicking)
-    {
-      if (isClicking)
-      {
-        if (currentTime - lastMouseClickTime < Renderer::kMultiClickTimeout &&
-          lastMouseDownPosition_ == Point{ e.x, e.y })
-          ++numberOfClicks;
-        else
-          numberOfClicks = 1;
-        lastMouseClickTime = currentTime;
-      }
-      else if (currentTime - lastMouseClickTime >= Renderer::kMultiClickTimeout)
-        numberOfClicks = 0;
-
-      e.numberOfClicks = numberOfClicks;
-    }
-  };
-
-
+  constinit thread_local PuglView *lastView{};
+  
   PuglStatus
   runThread(PuglView *view, const PuglEvent *event)
   {
+    puglChangeContext(lastView, view);
+    lastView = view;
+
     auto *renderer = (Interface::Renderer *)puglGetHandle(view);
+
+    getUiRelated() = &renderer->generalData;
+    defer { getUiRelated() = nullptr; };
 
     COMPLEX_ASSERT(renderer->view_ == view);
 
@@ -390,40 +142,28 @@ namespace Interface
         return PUGL_FAILURE;
       }
 
-      // TODO:
-      //double versionSupported = OpenGLShaderProgram::getLanguageVersion();
-      //if (versionSupported < kMinOpenGlVersion)
-      //{
-      //	NativeMessageBox::showMessageBoxAsync(MessageBoxIconType::WarningIcon, "Unsupported OpenGl Version",
-      //		String{ CharPointer_UTF8{ JucePlugin_Name " requires OpenGL version: " } } + String(kMinOpenGlVersion) +
-      //		String("\nSupported version: ") + String(versionSupported));
-      //	return false;
-      //}
-
-      renderer->graphics = anew(renderer->arena, Graphics, {});
-      renderer->openGl.cache = renderer->graphics;
-      renderer->openGl.g = renderer->graphics->context;
+      renderer->generalData.g = anew(renderer->arena, Graphics, {});
       renderer->isInitialised = true;
-
-      uiRelated.cache = renderer->graphics;
 
       break;
     }
     case PUGL_CLOSE:
     {
-      renderer->teardownGl();
+      teardownGl(renderer);
       puglLeaveContext(view);
+      lastView = nullptr;
       renderer->isInitialised = false;
 
       break;
     }
     case PUGL_UNREALIZE:
     {
-      renderer->teardownGl();
+      teardownGl(renderer);
       puglLeaveContext(view);
+      lastView = nullptr;
       renderer->isInitialised = false;
 
-      auto [unscaledWidth, unscaledHeight] = unscaleDimensions(renderer->area.w, renderer->area.h, renderer->effectiveScale);
+      auto [unscaledWidth, unscaledHeight] = unscaleDimensions(renderer->area.w, renderer->area.h, renderer->generalData.scale);
       Framework::LoadSave::saveWindowSizeScale(unscaledWidth, unscaledHeight, renderer->pluginScale);
 
       break;
@@ -489,7 +229,7 @@ namespace Interface
       e.mods |= ((event->crossing.state & PUGL_MOD_ALT) != 0) ? ModifierKeys::altModifier : 0;
       e.mods |= renderer->mouseButtonsDown_.flags;
       e.mouseDownPosition = renderer->lastMouseDownPosition_;
-      renderer->computeMultiClick(event->crossing.time, e, false);
+      computeMultiClick(renderer, event->crossing.time, e, false);
 
       if (event->type == PUGL_POINTER_IN)
         renderer->handleMouseEnter(COMPLEX_MOVE(e));
@@ -534,13 +274,13 @@ namespace Interface
 
       if (event->type == PUGL_BUTTON_PRESS)
       {
-        renderer->computeMultiClick(event->button.time, e, true);
+        computeMultiClick(renderer, event->button.time, e, true);
         renderer->handleMouseDown(COMPLEX_MOVE(e));
         renderer->lastMouseDownPosition_ = { e.x, e.y };
       }
       else
       {
-        renderer->computeMultiClick(event->button.time, e, false);
+        computeMultiClick(renderer, event->button.time, e, false);
         renderer->handleMouseUp(COMPLEX_MOVE(e));
       }
 
@@ -562,7 +302,7 @@ namespace Interface
       e.directionX = (i8)utils::clamp(e.x - renderer->lastMousePosition_.x, -1, 1);
       e.directionY = (i8)utils::clamp(e.y - renderer->lastMousePosition_.y, -1, 1);
 
-      renderer->computeMultiClick(event->motion.time, e, false);
+      computeMultiClick(renderer, event->motion.time, e, false);
       renderer->handleMouseMove(COMPLEX_MOVE(e));
 
       renderer->lastMousePosition_ = { e.x, e.y };
@@ -585,7 +325,7 @@ namespace Interface
       e.wheelDeltaX = (float)event->scroll.dx;
       e.wheelDeltaY = (float)event->scroll.dy;
 
-      renderer->computeMultiClick(event->scroll.time, e, false);
+      computeMultiClick(renderer, event->scroll.time, e, false);
       renderer->handleMouseWheel(COMPLEX_MOVE(e));
 
       renderer->lastKeyboardMods_ = e.mods & ModifierKeys::allKeyboardModifiers;
@@ -627,6 +367,7 @@ namespace Interface
       if (!newLib->handle)
         return;
 
+      utils::initialiseHotreload(newLib.get());
       executableStaticData.structure.loadedDynamicLibs.emplaceBack(newLib);
 
       auto *renderer = (Renderer *)udata;
@@ -644,123 +385,96 @@ namespace Interface
     }
   }
 
-  Renderer *
-  createRenderer(Plugin::ComplexPlugin &plugin)
+  Renderer::Renderer(Plugin::ComplexPlugin &plugin) : plugin{ plugin }, generalData{ plugin }
   {
-    auto *arena = utils::bumpArena::create(COMPLEX_MB(8), COMPLEX_MB(1));
+    arena = utils::bumpArena::createNested(plugin.arena, COMPLEX_MB(1));
+    callbacks.data = { arena };
 
-    auto *renderer = anew(arena, Renderer, { .plugin = plugin,
-      .arena = arena, .callbacks = { arena } });
   #ifdef COMPLEX_HOTRELOAD_DIR
-    renderer->watchFileContext = xfiles_watch_create(COMPLEX_HOTRELOAD_DIR, renderer, hotreloadCallback);
+    watchFileContext = xfiles_watch_create(COMPLEX_HOTRELOAD_DIR, this, hotreloadCallback);
   #endif
-    uiRelated.renderer = renderer;
-    renderer->skinInstance = anew(arena, Skin, {});
-    uiRelated.skin = renderer->skinInstance;
-
-    return renderer;
+    generalData.renderer = this;
+    generalData.skin = anew(arena, Skin, {});
   }
 
-  void destroyRenderer(Renderer *renderer)
+  Renderer::~Renderer()
   {
     customPlacement = {};
-    renderer->gui->~MainInterface();
+    gui->~MainInterface();
   #ifdef COMPLEX_HOTRELOAD_DIR
-    xfiles_watch_destroy(renderer->watchFileContext);
+    xfiles_watch_destroy(watchFileContext);
   #endif
-    utils::bumpArena::destroy(renderer->arena);
+    utils::bumpArena::destroy(arena);
   }
 
-  void resetGui(Renderer *renderer, MainInterface *newGui)
+  void Renderer::resetGui(MainInterface *newGui)
   {
-    if (renderer->gui)
+    if (gui)
     {
-      renderer->dragAndDropComponent_ = renderer->focusedComponent_ =
-        renderer->mouseDownComponent_ = renderer->mouseHoveredComponent_ = nullptr;
-      renderer->callbacks.clear();
+      dragAndDropComponent_ = focusedComponent_ =
+        mouseDownComponent_ = mouseHoveredComponent_ = nullptr;
+      callbacks.data.clear();
     }
 
-    renderer->gui = newGui;
+    gui = newGui;
   }
-
-  Plugin::ComplexPlugin &getPlugin(Renderer *renderer) { return renderer->plugin; }
-  MainInterface *getGui(Renderer *renderer) { return renderer->gui; }
-  Skin *getSkin(Renderer *renderer) { return renderer->skinInstance; }
-  PuglView *getPuglView(Renderer *renderer) { return renderer->view_; }
-  OpenGlWrapper &getOpenGlContext(Renderer *renderer) { return renderer->openGl; }
-  Area<u32> getUISize(Renderer *renderer) { return renderer->area; }
 
   bool
-  setUISize(Renderer *renderer, u32 width, u32 height)
+  Renderer::setUISize(u32 width, u32 height)
   {
-    return renderer->plugin.hostContext->requestResize(renderer->plugin.hostContext, width, height);
+    return plugin.hostContext->requestResize(plugin.hostContext, width, height);
   }
 
-  void setUIScale(Renderer *renderer, float pluginScale)
+  void Renderer::setUIScale(float newPluginScale)
   {
-    renderer->pluginScale = pluginScale;
-    renderer->recalculateScale();
+    pluginScale = newPluginScale;
+    recalculateScale();
   }
 
-  void setMouseCursor(Renderer *renderer, MouseCursorTypes cursorType)
+  void Renderer::setMouseCursor(MouseCursorTypes cursorType)
   {
     if (cursorType <= MouseCursorTypes::AllScroll)
-      puglSetCursor(renderer->view_, (PuglCursor)cursorType);
+      puglSetCursor(view_, (PuglCursor)cursorType);
   }
 
-  void setHoveredComponent(Renderer *renderer, Component *component)
+  void Renderer::setHoveredComponent(Component *component)
   {
-    renderer->mouseHoveredComponent_ = component;
+    mouseHoveredComponent_ = component;
   }
 
-  void setClickedComponent(Renderer *renderer, Component *component)
+  void Renderer::setClickedComponent(Component *component)
   {
-    if (renderer->mouseDownComponent_)
+    if (mouseDownComponent_)
     {
-      renderer->mouseDownComponent_->componentFlags.isClicked = false;
-      renderer->mouseDownComponent_->componentFlags.isScrollbarYClicked = false;
-      renderer->mouseDownComponent_->componentFlags.isScrollbarXClicked = false;
+      mouseDownComponent_->componentFlags.isClicked = false;
+      mouseDownComponent_->componentFlags.isScrollbarYClicked = false;
+      mouseDownComponent_->componentFlags.isScrollbarXClicked = false;
     }
-    renderer->mouseDownComponent_ = component;
-    if (renderer->mouseDownComponent_)
-      renderer->mouseDownComponent_->componentFlags.isClicked = true;
+    mouseDownComponent_ = component;
+    if (mouseDownComponent_)
+      mouseDownComponent_->componentFlags.isClicked = true;
   }
 
-  void setFocusedComponent(Renderer *renderer, Component *component)
+  void Renderer::setFocusedComponent(Component *component)
   {
-    renderer->focusedComponent_ = component;
+    focusedComponent_ = component;
   }
 
-  void moveFocusTo(Renderer *renderer, Component *component)
-  {
-    renderer->moveFocusTo(component);
-  }
-
-  void registerCallback(Renderer *renderer,
-    Component *component, PersistentCallback *callback)
-  {
-    renderer->callbacks.emplaceBack(component, callback);
-  }
-
-  void deregisterCallback(Renderer *renderer, Component *component)
-  {
-    renderer->callbacks.eraseIf([&](const auto &item) { return item.first == component; });
-  }
 
   MouseInteractions
-  getMouseInteractions(Renderer *renderer)
+  Renderer::getMouseInteractions()
   {
     return MouseInteractions
     {
-      .hovered = renderer->mouseHoveredComponent_,
-      .clicked = renderer->mouseDownComponent_,
-      .focused = renderer->focusedComponent_,
+      .hovered = mouseHoveredComponent_,
+      .clicked = mouseDownComponent_,
+      .focused = focusedComponent_,
       .mouseState =
       {
-        .x = renderer->lastMousePosition_.x,
-        .y = renderer->lastMousePosition_.y,
-        .mouseDownPosition = renderer->lastMouseDownPosition_,
-        .mods = renderer->mouseButtonsDown_ | renderer->lastKeyboardMods_
+        .x = lastMousePosition_.x,
+        .y = lastMousePosition_.y,
+        .mouseDownPosition = lastMouseDownPosition_,
+        .mods = mouseButtonsDown_ | lastKeyboardMods_
       }
     };
   }
@@ -770,15 +484,17 @@ namespace Interface
     if (view_ != nullptr)
       return;
 
+    getUiRelated() = &generalData;
+
     // Create world and view
-    world_ = puglNewWorld(PUGL_MODULE, 0);
-    view_ = puglNewView(world_);
+    auto world = puglNewWorld(PUGL_MODULE, 0);
+    view_ = puglNewView(world);
 
     // load *some* kind of size until we get a window to check if we stretch outside the screen
     Framework::LoadSave::getWindowSizeScale(area.w, area.h, pluginScale);
 
     // Set up world and view
-    puglSetWorldString(world_, PUGL_CLASS_NAME, "ComplexAudioPlugin");
+    puglSetWorldString(world, PUGL_CLASS_NAME, "ComplexAudioPlugin");
     puglSetViewString(view_, PUGL_WINDOW_TITLE, "Complex");
     // set placeholder sizes for now and calculate the actual ones when we have a window
     puglSetSizeHint(view_, PUGL_DEFAULT_SIZE, kMinWidth, kMinHeight);
@@ -804,14 +520,17 @@ namespace Interface
     if (view_ == nullptr)
       return;
 
+    getUiRelated() = &generalData;
+
     puglStopTimer(view_, kTimerRefreshRate);
 
     puglUnrealize(view_);
+
+    auto world = view_->world;
     puglFreeView(view_);
-    puglFreeWorld(world_);
+    puglFreeWorld(world);
 
     view_ = nullptr;
-    world_ = nullptr;
     isVisible = false;
   }
 
@@ -836,6 +555,19 @@ namespace Interface
     }
   }
 
+  utils::span<const byte> 
+  Renderer::getClipboard()
+  {
+    usize size;
+    auto *data = (const byte *)puglGetClipboard(getUiRelated()->renderer->view_, 0, &size);
+    return { data, size };
+  }
+
+  void Renderer::setClipboard(utils::span<const byte> data)
+  {
+    puglSetClipboard(getUiRelated()->renderer->view_, nullptr, data.data(), data.size());
+  }
+
   MouseEvent
   Renderer::getRelativeEvent(MouseEvent e, Component *component)
   {
@@ -854,6 +586,8 @@ namespace Interface
     if (mouseDownComponent_)
       return;
 
+    // because of the above condition we can assume nothing is clicked from here on
+
     Component *newHoveredComponent = gui->getComponentAt(e.x, e.y, true);
     forceMouseMove |= newHoveredComponent != mouseHoveredComponent_;
 
@@ -861,13 +595,14 @@ namespace Interface
     {
       if (mouseHoveredComponent_)
       {
-        mouseHoveredComponent_->componentFlags.isHovered = false;
         mouseHoveredComponent_->mouseExit(getRelativeEvent(e, mouseHoveredComponent_));
+        mouseHoveredComponent_->componentFlags.isHovered = false;
       }
       if (newHoveredComponent)
       {
+        if (!newHoveredComponent->componentFlags.isHovered)
+          newHoveredComponent->mouseEnter(getRelativeEvent(e, newHoveredComponent));
         newHoveredComponent->componentFlags.isHovered = true;
-        newHoveredComponent->mouseEnter(getRelativeEvent(e, newHoveredComponent));
       }
 
       mouseHoveredComponent_ = newHoveredComponent;
@@ -983,8 +718,9 @@ namespace Interface
 
     if (exited && mouseHoveredComponent_)
     {
+      if (!mouseHoveredComponent_->componentFlags.isHovered && !mouseHoveredComponent_->componentFlags.isClicked)
+        mouseHoveredComponent_->mouseEnter(getRelativeEvent(e, mouseHoveredComponent_));
       mouseHoveredComponent_->componentFlags.isHovered = true;
-      mouseHoveredComponent_->mouseEnter(getRelativeEvent(e, mouseHoveredComponent_));
       if (isHandlingOrphanedMouseEvents && mouseHoveredComponent_->componentFlags.acceptsOrphanMouseEvents)
       {
         isHandlingOrphanedMouseEvents = false;
@@ -1000,12 +736,15 @@ namespace Interface
 
   void Renderer::handleMouseLeave(MouseEvent e)
   {
+    // this function is expected to be called while nothing is clicked
+
     if (mouseHoveredComponent_)
     {
       auto mouseHoveredComponent = mouseHoveredComponent_;
       mouseHoveredComponent_ = nullptr;
 
-      mouseHoveredComponent->mouseExit(getRelativeEvent(COMPLEX_MOVE(e), mouseHoveredComponent));
+      if (mouseHoveredComponent->componentFlags.isHovered)
+        mouseHoveredComponent->mouseExit(getRelativeEvent(COMPLEX_MOVE(e), mouseHoveredComponent));
       mouseHoveredComponent->componentFlags.isHovered = false;
     }
   }
@@ -1014,7 +753,7 @@ namespace Interface
   {
     handleMouseMove(e);
 
-    utils::vector<Component *> stack{ localScratch, 32 };
+    utils::vector<Component *> stack{ getLocalScratch(), 32 };
     auto *c = mouseHoveredComponent_;
     while (c)
     {
@@ -1042,13 +781,148 @@ namespace Interface
     // so that no keyboard input is missed
     gui->keyPressed(k);
   }
+  
+  void Renderer::recalculateScale(bool forceResize)
+  {
+    auto newEffectiveScale = getEffectiveScale();
+    if (newEffectiveScale == generalData.scale && !forceResize)
+      return;
+
+    area = { (u32)::roundf((float)area.w * newEffectiveScale / generalData.scale),
+      (u32)::roundf((float)area.h * newEffectiveScale / generalData.scale) };
+
+    generalData.scale = newEffectiveScale;
+    getUiRelated() = &generalData;
+    defer { getUiRelated() = nullptr; };
+    // the UI needs to be sized before we can proceed with checking
+    if (isInitialised && !gui->bounds.isEmpty())
+      doSizingAndPositioning();
+
+    area = checkResizing(area, true);
+
+    plugin.hostContext->requestResize(plugin.hostContext, area.w, area.h);
+  }
+  
+  void Renderer::checkFocusedComponent()
+  {
+    if (!focusedComponent_ || focusedComponent_->componentFlags.isVisible)
+      return;
+
+    auto next = focusedComponent_->parent;
+    while (next)
+    {
+      // both parties must agree to take over/relinquish focus from/to the other
+      if (next->componentFlags.isVisible &&
+        focusedComponent_->handleFocus(false, Component::FocusSetInvisible, next) &&
+        next->handleFocus(true, Component::FocusSetInvisible, focusedComponent_))
+      {
+        focusedComponent_ = next;
+        return;
+      }
+      next = next->parent;
+    }
+
+    focusedComponent_ = nullptr;
+  }
+  
+  void Renderer::doSizingAndPositioning()
+  {
+    auto [unscaledWidth, unscaledHeight] = unscaleDimensions(area.w, area.h, generalData.scale);
+    gui->desiredSize = { (i32)unscaledWidth, (i32)unscaledHeight, (i32)unscaledWidth, (i32)unscaledHeight };
+
+    for (auto &[c, callback] : callbacks.data)
+      callback(c);
+
+    utils::vector<Component *> customPlacement_{ getLocalScratch(), 32 };
+    customPlacement = &customPlacement_;
+    utils::vector<Component *> sortedSizesMin_{ getLocalScratch(), 32 };
+    sortedSizesMin = &sortedSizesMin_;
+    utils::vector<Component *> sortedSizesMax_{ getLocalScratch(), 32 };
+    sortedSizesMax = &sortedSizesMax_;
+
+    calculateSizes(gui->children, gui);
+    gui->bounds.x = 0;
+    gui->bounds.y = 0;
+    calculatePositions(gui->children, gui, gui->bounds);
+
+    // looping until all conflicts are resolved
+    // BEWARE of circular dependencies
+    while (!customPlacement->empty())
+    {
+      auto c = customPlacement->front();
+      customPlacement->popFront();
+      c->componentFlags.isPositionSet = c->overridePosition(c);
+      if (!c->componentFlags.isPositionSet)
+        customPlacement->emplaceBack(c);
+    }
+    customPlacement->clear();
+  }
+  
+  void Renderer::renderLoop(PuglView *view)
+  {
+  #ifdef COMPLEX_HOTRELOAD_DIR
+    if (watchFileContext)
+      xfiles_watch_flush(watchFileContext);
+  #endif
+
+    ++numberOfFrames;
+    if (numberOfFrames == 200)
+    {
+      utils::shrinkWorkingSet();
+    }
+
+    auto newRenderTime = puglGetTime(puglGetWorld(view));
+    generalData.deltaTime = (float)(newRenderTime - generalData.steadyTime);
+    generalData.steadyTime = newRenderTime;
+    graph.updateGraph((float)generalData.deltaTime);
+
+    auto state = plugin.state_;
+    for (usize i = 0; i < state->parameterBridges.size(); ++i)
+      state->parameterBridges[i].updateUIParameter();
+
+    doSizingAndPositioning();
+
+    refreshComponentUnderMouse(getMouseInteractions().mouseState, false);
+    checkFocusedComponent();
+
+    // Reset viewport
+    glViewport(0, 0, area.w, area.h);
+    glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
+
+    nvgBeginFrame(*generalData.g, (float)area.w, (float)area.h, getUiRelated()->scale);
+
+    gui->doRender(*generalData.g);
+
+    if (renderDebugFps)
+    {
+      nvgReset(*generalData.g);
+      auto text = utils::floatToString(getLocalScratch(), 1.0f / graph.getGraphAverage(), 2);
+      renderText(text, FontId::DDinType, scaleValue({ 4.0f, 4.0f, 24.0f, 24.0f }).toInt().toFloat(),
+        *generalData.g, Colours::white, Placement::left);
+    }
+
+    nvgEndFrame(*generalData.g);
+
+    // calling swapBuffers inside the critical section in case
+    // we're resizing because a glFinish is necessary in order to
+    // not get frame tearing/overlap with previous frames
+    // https://community.khronos.org/t/swapbuffers-and-synchronization/107667/5
+    puglSwapBuffers(view);
+    if (isResizing)
+      glFinish();
+
+    u32 a, b;
+    Framework::LoadSave::getWindowSizeScale(a, b, pluginScale);
+    recalculateScale();
+  }
 }
 
 extern "C"
 {
   void *cplug_createGUI(void *userPlugin)
   {
-    auto &renderer = ((Plugin::ComplexPlugin *)userPlugin)->getRenderer();
+    auto &renderer = ((Plugin::ComplexPlugin *)userPlugin)->renderer;
     renderer.startUI();
     return &renderer;
   }
@@ -1082,7 +956,7 @@ extern "C"
       renderer->monitorScale = monitorInfo.dpiScale;
 
       Framework::LoadSave::getWindowSizeScale(renderer->area.w, renderer->area.h, renderer->pluginScale);
-      renderer->effectiveScale = 1.0f;
+      renderer->generalData.scale = 1.0f;
       renderer->recalculateScale(true);
 
       //clampScaleWidthHeight(renderer->view_, renderer->effectiveScale, windowWidth, windowHeight);
@@ -1140,7 +1014,8 @@ extern "C"
   void cplug_checkSize(void *userGUI, uint32_t *width, uint32_t *height)
   {
     auto renderer = (Interface::Renderer *)userGUI;
-    Interface::uiRelated.scale = renderer->effectiveScale;
+    Interface::getUiRelated() = &renderer->generalData;
+    defer { Interface::getUiRelated() = nullptr; };
     auto [w, h] = Interface::checkResizing({ *width, *height });
     *width = w;
     *height = h;

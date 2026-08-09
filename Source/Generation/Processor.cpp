@@ -79,7 +79,7 @@ namespace Generation
 
     if (!metadata->acceptsChild(newChildProcessor.metadata))
     {
-      auto string = utils::string::create(localScratch,
+      auto string = utils::string::create(getLocalScratch(),
         "Attempted insert of %v(id: %zu) inside an %v(id: %zu). \
         If this shows to you as a user, report it to the dev. \n\nSupported subprocessors by this type are: ",
         newChildProcessor.metadata->name, newChildProcessor.metadata->id, metadata->name, metadata->id

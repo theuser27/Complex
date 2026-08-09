@@ -37,7 +37,7 @@ namespace Interface
     bool mouseDrag(const MouseEvent &e) override;
     bool mouseUp(const MouseEvent &e) override;
 
-    bool render(OpenGlWrapper &openGl) override;
+    bool render(Graphics &g) override;
 
   };
 

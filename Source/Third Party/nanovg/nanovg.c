@@ -22,14 +22,18 @@
 #include <memory.h>
 
 #include "nanovg.h"
+
+#define FONS_MALLOC NVG_MALLOC
+#define FONS_REALLOC NVG_REALLOC
+#define FONS_FREE NVG_FREE
 #define FONTSTASH_IMPLEMENTATION
 #include "fontstash.h"
 
-#ifndef NVG_NO_STB
-#define STBI_NO_STDIO
-#define STB_IMAGE_IMPLEMENTATION
-#include "stb_image.h"
-#endif
+//#ifndef NVG_NO_STB
+//#define STBI_NO_STDIO
+//#define STB_IMAGE_IMPLEMENTATION
+//#include "stb_image.h"
+//#endif
 
 #ifdef _MSC_VER
 #pragma warning(disable: 4100)  // unreferenced formal parameter
@@ -171,29 +175,29 @@ static float nvg__normalize(float *x, float* y)
 static void nvg__deletePathCache(NVGpathCache* c)
 {
 	if (c == NULL) return;
-	if (c->points != NULL) free(c->points);
-	if (c->paths != NULL) free(c->paths);
-	if (c->verts != NULL) free(c->verts);
-	free(c);
+	if (c->points != NULL) NVG_FREE(c->points);
+	if (c->paths != NULL) NVG_FREE(c->paths);
+	if (c->verts != NULL) NVG_FREE(c->verts);
+	NVG_FREE(c);
 }
 
 static NVGpathCache* nvg__allocPathCache(void)
 {
-	NVGpathCache* c = (NVGpathCache*)malloc(sizeof(NVGpathCache));
+	NVGpathCache* c = (NVGpathCache*)NVG_MALLOC(sizeof(NVGpathCache));
 	if (c == NULL) goto error;
 	memset(c, 0, sizeof(NVGpathCache));
 
-	c->points = (NVGpoint*)malloc(sizeof(NVGpoint)*NVG_INIT_POINTS_SIZE);
+	c->points = (NVGpoint*)NVG_MALLOC(sizeof(NVGpoint)*NVG_INIT_POINTS_SIZE);
 	if (!c->points) goto error;
 	c->npoints = 0;
 	c->cpoints = NVG_INIT_POINTS_SIZE;
 
-	c->paths = (NVGpath*)malloc(sizeof(NVGpath)*NVG_INIT_PATHS_SIZE);
+	c->paths = (NVGpath*)NVG_MALLOC(sizeof(NVGpath)*NVG_INIT_PATHS_SIZE);
 	if (!c->paths) goto error;
 	c->npaths = 0;
 	c->cpaths = NVG_INIT_PATHS_SIZE;
 
-	c->verts = (NVGvertex*)malloc(sizeof(NVGvertex)*NVG_INIT_VERTS_SIZE);
+	c->verts = (NVGvertex*)NVG_MALLOC(sizeof(NVGvertex)*NVG_INIT_VERTS_SIZE);
 	if (!c->verts) goto error;
 	c->nverts = 0;
 	c->cverts = NVG_INIT_VERTS_SIZE;
@@ -293,7 +297,7 @@ static NVGstate* nvg__getState(NVGcontext* ctx)
 NVGcontext* nvgCreateInternal(NVGparams* params)
 {
 	FONSparams fontParams;
-	NVGcontext* ctx = (NVGcontext*)malloc(sizeof(NVGcontext));
+	NVGcontext* ctx = (NVGcontext*)NVG_MALLOC(sizeof(NVGcontext));
 	int i;
 	if (ctx == NULL) goto error;
 	memset(ctx, 0, sizeof(NVGcontext));
@@ -302,7 +306,7 @@ NVGcontext* nvgCreateInternal(NVGparams* params)
 	for (i = 0; i < NVG_MAX_FONTIMAGES; i++)
 		ctx->fontImages[i] = 0;
 
-	ctx->commands = (float*)malloc(sizeof(float)*NVG_INIT_COMMANDS_SIZE);
+	ctx->commands = (float*)NVG_MALLOC(sizeof(float)*NVG_INIT_COMMANDS_SIZE);
 	if (!ctx->commands) goto error;
 	ctx->ncommands = 0;
 	ctx->ccommands = NVG_INIT_COMMANDS_SIZE;
@@ -351,7 +355,7 @@ void nvgDeleteInternal(NVGcontext* ctx)
 {
 	int i;
 	if (ctx == NULL) return;
-	if (ctx->commands != NULL) free(ctx->commands);
+	if (ctx->commands != NULL) NVG_FREE(ctx->commands);
 	if (ctx->cache != NULL) nvg__deletePathCache(ctx->cache);
 
 	if (ctx->fs)
@@ -367,7 +371,7 @@ void nvgDeleteInternal(NVGcontext* ctx)
 	if (ctx->params.renderDelete != NULL)
 		ctx->params.renderDelete(ctx->params.userPtr);
 
-	free(ctx);
+	NVG_FREE(ctx);
 }
 
 void nvgBeginFrame(NVGcontext* ctx, float windowWidth, float windowHeight, float devicePixelRatio)
@@ -847,18 +851,18 @@ void nvgFillPaint(NVGcontext* ctx, NVGpaint paint)
 //	return image;
 //}
 
-int nvgCreateImageMem(NVGcontext* ctx, int imageFlags, unsigned char* data, int ndata)
-{
-	int w, h, n, image;
-	unsigned char* img = stbi_load_from_memory(data, ndata, &w, &h, &n, 4);
-	if (img == NULL) {
-//		printf("Failed to load %s - %s\n", filename, stbi_failure_reason());
-		return 0;
-	}
-	image = nvgCreateImageRGBA(ctx, w, h, imageFlags, img);
-	stbi_image_free(img);
-	return image;
-}
+//int nvgCreateImageMem(NVGcontext* ctx, int imageFlags, unsigned char* data, int ndata)
+//{
+//	int w, h, n, image;
+//	unsigned char* img = stbi_load_from_memory(data, ndata, &w, &h, &n, 4);
+//	if (img == NULL) {
+////		printf("Failed to load %s - %s\n", filename, stbi_failure_reason());
+//		return 0;
+//	}
+//	image = nvgCreateImageRGBA(ctx, w, h, imageFlags, img);
+//	stbi_image_free(img);
+//	return image;
+//}
 #endif
 
 int nvgCreateImageRGBA(NVGcontext* ctx, int w, int h, int imageFlags, const unsigned char* data)
@@ -1121,7 +1125,7 @@ static void nvg__appendCommands(NVGcontext* ctx, float* vals, int nvals)
 	if (ctx->ncommands+nvals > ctx->ccommands) {
 		float* commands;
 		int ccommands = ctx->ncommands+nvals + ctx->ccommands/2;
-		commands = (float*)realloc(ctx->commands, sizeof(float)*ccommands);
+		commands = (float*)NVG_REALLOC(ctx->commands, sizeof(float)*ccommands);
 		if (commands == NULL) return;
 		ctx->commands = commands;
 		ctx->ccommands = ccommands;
@@ -1187,7 +1191,7 @@ static void nvg__addPath(NVGcontext* ctx)
 	if (ctx->cache->npaths+1 > ctx->cache->cpaths) {
 		NVGpath* paths;
 		int cpaths = ctx->cache->npaths+1 + ctx->cache->cpaths/2;
-		paths = (NVGpath*)realloc(ctx->cache->paths, sizeof(NVGpath)*cpaths);
+		paths = (NVGpath*)NVG_REALLOC(ctx->cache->paths, sizeof(NVGpath)*cpaths);
 		if (paths == NULL) return;
 		ctx->cache->paths = paths;
 		ctx->cache->cpaths = cpaths;
@@ -1224,7 +1228,7 @@ static void nvg__addPoint(NVGcontext* ctx, float x, float y, int flags)
 	if (ctx->cache->npoints+1 > ctx->cache->cpoints) {
 		NVGpoint* points;
 		int cpoints = ctx->cache->npoints+1 + ctx->cache->cpoints/2;
-		points = (NVGpoint*)realloc(ctx->cache->points, sizeof(NVGpoint)*cpoints);
+		points = (NVGpoint*)NVG_REALLOC(ctx->cache->points, sizeof(NVGpoint)*cpoints);
 		if (points == NULL) return;
 		ctx->cache->points = points;
 		ctx->cache->cpoints = cpoints;
@@ -1266,7 +1270,7 @@ static NVGvertex* nvg__allocTempVerts(NVGcontext* ctx, int nverts)
 	if (nverts > ctx->cache->cverts) {
 		NVGvertex* verts;
 		int cverts = (nverts + 0xff) & ~0xff; // Round up to prevent allocations when things change just slightly.
-		verts = (NVGvertex*)realloc(ctx->cache->verts, sizeof(NVGvertex)*cverts);
+		verts = (NVGvertex*)NVG_REALLOC(ctx->cache->verts, sizeof(NVGvertex)*cverts);
 		if (verts == NULL) return NULL;
 		ctx->cache->verts = verts;
 		ctx->cache->cverts = cverts;

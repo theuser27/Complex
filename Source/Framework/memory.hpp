@@ -11,16 +11,19 @@ namespace utils
   struct bumpArena;
 }
 
-extern thread_local utils::bumpArena *localScratch;
-extern thread_local utils::bumpArena *mallocArena;
+// DLL-wide (used for all instances of a plugin !!!) temporary memory resource
+// for the main thread, only gets deallocated when the DLL is unloaded
+utils::bumpArena *&getLocalScratch();
+// settable memory source, used when an external library wants to call malloc
+// can be used if malloc/realloc/free are replaced with arena_(malloc/free/realloc)
+// remember to always replace the arena pointer when you want to use it (undefined value)
+utils::bumpArena *&getLocalMallocArena();
+
 extern utils::bumpArena *globalArena;
 
 namespace utils
 {
   enum class AllocatorType : u8 { General, BumpArena };
-
-  template<typename Signature, usize MaxSize, usize Alignment>
-  class fn;
 
   template<typename T>
   concept AllocatorConcept = requires(T *allocator, usize size,
@@ -68,6 +71,7 @@ namespace utils
     u32 reservedSize;
     u32 committedSize;
     u32 freeNodeStart;
+    u32 lastUsedNode;
 
     bumpArena *nextArena{};
 
@@ -108,7 +112,8 @@ namespace utils
       (void)new(memory + sizeof(bumpArena)) node{ .size = (u32)(commitSize - sizeof(bumpArena)) };
 
       return new(memory) bumpArena{ .reservedSize = (u32)(reservedSize - 1),
-        .committedSize = (u32)(commitSize - 1), .freeNodeStart = (u32)sizeof(bumpArena) };
+        .committedSize = (u32)(commitSize - 1), .freeNodeStart = (u32)sizeof(bumpArena), 
+        .lastUsedNode = (u32)sizeof(bumpArena) };
     }
     template<typename T>
     [[nodiscard]] static forceinline bumpArena *
@@ -123,14 +128,13 @@ namespace utils
 
       // bumpArena is nested in an arena
       return new(memory) bumpArena{ .flags = flags, .reservedSize = (u32)(allocateSize - 1),
-        .committedSize = (u32)(allocateSize - 1), .freeNodeStart = (u32)sizeof(bumpArena) };
+        .committedSize = (u32)(allocateSize - 1), .freeNodeStart = (u32)sizeof(bumpArena), 
+        .lastUsedNode = (u32)sizeof(bumpArena) };
     }
 
     static void clear(bumpArena *arena);
 
     static void destroy(bumpArena *arena);
-
-    static void logBlocks(bumpArena *arena);
   };
 
   // anew, the replacement to operator new (with arenas/allocators)
@@ -442,10 +446,8 @@ namespace utils
     T &emplaceBack(auto &&... args) { return *new(pushBack()) T{ COMPLEX_FWD(args)... }; }
 
     void *
-    insert(iterator iter)
+    insert(usize index)
     {
-      usize index = (usize)(iter - begin());
-
       COMPLEX_HARD_ASSERT(index <= size());
 
       if (capacity_ == 0)
@@ -458,8 +460,10 @@ namespace utils
       ++size_;
       return data_ + index;
     }
+    void *insertAt(iterator iter) { return insert((usize)(iter - begin())); }
 
-    T &emplace(iterator iter, auto &&... args) { return *new(insert(iter)) T{ COMPLEX_FWD(args)... }; }
+    T &emplace(usize index, auto &&... args) { return *new(insert(index)) T{ COMPLEX_FWD(args)... }; }
+    T &emplaceAt(iterator iter, auto &&... args) { return *new(insertAt(iter)) T{ COMPLEX_FWD(args)... }; }
 
     constexpr void popFront()
     {
@@ -479,19 +483,19 @@ namespace utils
       --size_;
     }
 
-    void erase(iterator iter) { erase(iter, 1); }
-    void erase(iterator start, usize count)
+    void erase(usize index, usize count)
     {
-      usize index = (usize)(start - begin());
-
       COMPLEX_HARD_ASSERT(index < size());
 
       size_ -= count;
       for (usize i = 0; i < count; ++i)
-        (start + (isize)i)->~T();
+        data_[index + i].~T();
 
-      utils::contiguousMoveElements(start, start + count, data_ + size_ - start);
+      utils::contiguousMoveElements(data_ + index, data_ + index + count, size_ - index);
     }
+    void eraseAt(iterator iter, usize count) { erase((usize)(iter - begin()), count); }
+    void erase(usize index) { erase(index, 1); }
+    void eraseAt(iterator iter) { eraseAt(iter, 1); }
 
     void erase(const T &element) { eraseIf([&element](const auto &data) { return element == data; }); }
     void eraseIf(const auto &predicate)
@@ -593,7 +597,7 @@ namespace utils
     {
       auto iter = utils::findIf(data, [&key](const auto &v) { return v.first == key; });
       if (iter != data.end())
-        data.erase(iter);
+        data.eraseAt(iter);
     }
 
   private:
@@ -683,7 +687,7 @@ namespace utils
         ++iter;
 
       auto index = iter - data.begin();
-      data.emplace(iter, COMPLEX_MOVE(key), COMPLEX_MOVE(value));
+      data.emplace(index, COMPLEX_MOVE(key), COMPLEX_MOVE(value));
       return data.begin() + index;
     }
 
@@ -703,7 +707,7 @@ namespace utils
     {
       auto iter = binary_search(element);
       if (iter != data.end())
-        data.erase(iter);
+        data.eraseAt(iter);
     }
   };
 
@@ -1103,16 +1107,4 @@ namespace utils
     usize size = floatToString(value, buffer, sizeof(buffer), maximumDecimalLength, keepPlus);
     preallocatedString.copy({ buffer, size });
   }
-
-  struct MemoryLogger
-  {
-    mutable satomi::atomic<i32> writeLock{};
-    utils::vector<void *> toLog{};
-
-    void add(void *pointer);
-    void erase(void *pointer);
-    bool contains(void *pointer) const;
-  };
 }
-
-extern utils::MemoryLogger memoryLogger;

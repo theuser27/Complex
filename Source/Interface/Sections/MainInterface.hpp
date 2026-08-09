@@ -3,7 +3,6 @@
 
 #pragma once
 
-#include "Plugin/Renderer.hpp"
 #include "../LookAndFeel/Component.hpp"
 #include "../Components/Control.hpp"
 #include "../Components/Spectrogram.hpp"
@@ -38,12 +37,12 @@ namespace Interface
         AddMoreLanesButton() { componentFlags.clickable = true; }
         bool mouseDown(const MouseEvent &e) override;
 
-        bool render(OpenGlWrapper &openGl) override;
+        bool render(Graphics &g) override;
       };
 
       void reinitialise();
 
-      bool render(OpenGlWrapper &openGl) override;
+      bool render(Graphics &g) override;
       bool mouseDown(const MouseEvent &e) override { return mouseDrag(e); }
       bool mouseDrag(const MouseEvent &e) override;
       bool mouseWheelMove(const MouseEvent &e) override;
@@ -69,7 +68,7 @@ namespace Interface
     void setStartLaneIndex(u32 newStart, u32 newCount);
     Area<u32> checkResizing(Area<u32> newScaledSize, bool force = false);
 
-    bool render(OpenGlWrapper &openGl) override;
+    bool render(Graphics &g) override;
 
     LaneSelector laneSelector{};
     LaneHolder laneHolder{};
@@ -102,7 +101,7 @@ namespace Interface
     {
       void reinitialise();
 
-      bool render(OpenGlWrapper &openGl) override;
+      bool render(Graphics &g) override;
 
       SoundEngineSection *mainSection{};
 
@@ -123,7 +122,7 @@ namespace Interface
     void reinitialise();
     Area<u32> checkResizing(Area<u32> newScaledSize, bool force = false);
 
-    bool render(OpenGlWrapper &openGl) override;
+    bool render(Graphics &g) override;
 
     Generation::SoundEngine *soundEngine{};
     utils::sll<CommandMessages::HandleMessageFn *> soundEngineHandler{};

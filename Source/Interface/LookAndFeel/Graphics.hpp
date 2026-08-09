@@ -141,43 +141,33 @@ namespace Interface
     int InterFontId;
   };
 
-  struct InterfaceRelated
-  {
-    Renderer *renderer = nullptr;
-    Graphics *cache = nullptr;
-    Skin *skin = nullptr;
-    float scale = 1.0f;
-    float deltaTime = 0.0f;
-    double steadyTime = 0.0;
-  };
-
   // thread_local variable for the message thread so that we don't need to pass pointers around
-  extern thread_local InterfaceRelated uiRelated;
-  forceinline float scaleValue(float value) { return uiRelated.scale * value; }
+  InterfaceRelated *&getUiRelated();
+  forceinline float scaleValue(float value) { return getUiRelated()->scale * value; }
   forceinline Rectangle<float>
   scaleValue(Rectangle<float> bounds)
   {
     auto values = utils::bit_cast<simd_float>(bounds);
-    values = uiRelated.scale * utils::toFloat(values);
+    values = getUiRelated()->scale * utils::toFloat(values);
     return utils::bit_cast<Rectangle<float>>(values);
   }
-  forceinline float scaleValueRound(float value) { return ::roundf(uiRelated.scale * value); }
+  forceinline float scaleValueRound(float value) { return ::roundf(getUiRelated()->scale * value); }
   forceinline Rectangle<float>
   scaleValueRound(Rectangle<float> bounds)
   {
     auto values = utils::bit_cast<simd_float>(bounds);
-    values = simd_float::round(uiRelated.scale * utils::toFloat(values));
+    values = simd_float::round(getUiRelated()->scale * utils::toFloat(values));
     return utils::bit_cast<Rectangle<float>>(values);
   }
-  forceinline i32 scaleValueRoundInt(float value) { return (int)::roundf(uiRelated.scale * value); }
+  forceinline i32 scaleValueRoundInt(float value) { return (int)::roundf(getUiRelated()->scale * value); }
   forceinline Rectangle<i32>
   scaleValueRoundInt(Rectangle<i32> bounds)
   {
     auto values = utils::bit_cast<simd_int>(bounds);
-    values = utils::toInt(simd_float::round(uiRelated.scale * utils::toFloat(values)));
+    values = utils::toInt(simd_float::round(getUiRelated()->scale * utils::toFloat(values)));
     return utils::bit_cast<Rectangle<i32>>(values);
   }
-  forceinline float unscaleValue(float value) { return value / uiRelated.scale; }
+  forceinline float unscaleValue(float value) { return value / getUiRelated()->scale; }
 
   inline void fillRect(NVGcontext *context, Rectangle<float> bounds,
     Colour colour = Colours::white, float cornerRounding = 0.0f)
@@ -290,7 +280,7 @@ namespace Interface
   };
 
   bool setViewport(Point<int> positionInViewport, Rectangle<int> viewportBounds,
-    Rectangle<int> scissorBounds, const OpenGlWrapper &openGl, const Component *ignoreClipIncluding);
+    Rectangle<int> scissorBounds, const Graphics &g, const Component *ignoreClipIncluding);
 
   void drawSVG(NSVGimage *image, Graphics &g, Colour colour,
     Rectangle<float> bounds, float scale, float strokeWidth);

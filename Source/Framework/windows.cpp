@@ -5,7 +5,7 @@
 
 #include "utils.hpp"
 #include "simd_utils.hpp"
-#include "circular_buffer.hpp"
+#include "buffer.hpp"
 
 namespace Framework
 {

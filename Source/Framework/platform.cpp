@@ -3,8 +3,8 @@
 
 #include "utils.hpp"
 
-#include <stdarg.h>
-#include <stdlib.h>
+#include <stdarg.h> // va_list, va_arg, va_start, va_copy, va_end
+#include <stdlib.h> // offsetof
 
 #include "stl_utils.hpp"
 #include "memory.hpp"
@@ -72,33 +72,33 @@
 #endif
 
 #if COMPLEX_WINDOWS
-  #define PRINT_SIMPLE(message) ::OutputDebugStringA(message)
+  #define PRINT_SIMPLE(message) OutputDebugStringA(message)
 #else
-  #define PRINT_SIMPLE(message) ::fputs(message, stdout)
+  #define PRINT_SIMPLE(message) fputs(message, stdout)
 #endif
 
 #define PRINT_MESSAGE(message, ...) do { \
-    usize size__ = 1 + ::stbsp_snprintf(nullptr, 0, message, __VA_ARGS__); \
+    usize size__ = 1 + stbsp_snprintf(nullptr, 0, message, __VA_ARGS__); \
     auto buffer__ = arranew(globalArena, char, size__); \
-    ::stbsp_snprintf(buffer__, (int)size__, message, __VA_ARGS__); \
+    stbsp_snprintf(buffer__, (int)size__, message, __VA_ARGS__); \
     PRINT_SIMPLE(buffer__); \
-    ::utils::bumpArena::remove(buffer__); \
+    utils::bumpArena::remove(buffer__); \
   } while(false)
 
 static void printVariadic(const char *format, va_list args)
 {
   va_list argsCopy;
   va_copy(argsCopy, args);
-  usize size = ::stbsp_vsnprintf(nullptr, 0, format, argsCopy) + 1;
+  usize size = stbsp_vsnprintf(nullptr, 0, format, argsCopy) + 1;
   char *buffer = arranew(globalArena, char, size);
   va_end(argsCopy);
 
-  ::stbsp_vsnprintf(buffer, (int)size, format, args);
+  stbsp_vsnprintf(buffer, (int)size, format, args);
   //PRINT_SIMPLE("\"");
   PRINT_SIMPLE(buffer);
   //PRINT_SIMPLE("\"\n\n");
 
-  ::utils::bumpArena::remove(buffer);
+  utils::bumpArena::remove(buffer);
 }
 
 void common::complexLogMessage(const char *fileName,
@@ -118,10 +118,18 @@ void common::complexLogMessage(const char *fileName,
 void common::complexPrintAssertMessage(const char *conditionString, const char *fileName,
   const char *functionName, int line, int hasMoreArgs, ...)
 {
-  PRINT_MESSAGE("\nError: %s, #%d, %s\n", fileName, line, functionName);
+  char errorBuffer[256];
+  stbsp_snprintf(errorBuffer, (int)countof(errorBuffer), "\nError: %s, #%d, %s", fileName, line, functionName);
+  PRINT_SIMPLE(errorBuffer);
   if (conditionString)
-    PRINT_MESSAGE("Condition not met: %s\n", conditionString);
-  PRINT_SIMPLE("\n");
+  {
+    PRINT_SIMPLE("\nCondition not met: ");
+    PRINT_SIMPLE(conditionString);
+  }
+  PRINT_SIMPLE("\n\n");
+
+  // errors with further messages will require allocations,
+  // so don't provide any if inside allocator code
 
   if (!hasMoreArgs)
     return;
@@ -252,9 +260,9 @@ namespace Interface
 namespace utils
 {
   // keeping struct layout the same so that utils::string_view can be passed the stb_printf routines safely
-  static_assert(sizeof(::String_View) == sizeof(utils::string_view));
-  static_assert(offsetof(::String_View, data) == offsetof(utils::string_view, data_));
-  static_assert(offsetof(::String_View, size) == offsetof(utils::string_view, size_));
+  static_assert(sizeof(String_View) == sizeof(utils::string_view));
+  static_assert(offsetof(String_View, data) == offsetof(utils::string_view, data_));
+  static_assert(offsetof(String_View, size) == offsetof(utils::string_view, size_));
 
   float sin(float arg) { return sin(simd_float{ arg })[0]; }
   float cos(float arg) { return cos(simd_float{ arg })[0]; }
@@ -270,16 +278,16 @@ namespace utils
     return utils::bumpArena::remove(memory);
   }
 
-  static constinit satomi::atomic<int> pageSize_ = 0;
+  static constinit usize pageSize = 0;
 
   byte *
   reserveMemory(usize &size)
   {
-    size = utils::roundUpToMultiple(size, (usize)pageSize_.load(satomi::memory_order_relaxed));
+    size = utils::roundUpToMultiple(size, pageSize);
   #if COMPLEX_WINDOWS
-    return (byte *)::VirtualAlloc(nullptr, size, MEM_RESERVE, PAGE_READWRITE);
+    return (byte *)VirtualAlloc(nullptr, size, MEM_RESERVE, PAGE_READWRITE);
   #else
-    return (byte *)::mmap(nullptr, size, PROT_NONE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+    return (byte *)mmap(nullptr, size, PROT_NONE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
   #endif
   }
 
@@ -288,15 +296,14 @@ namespace utils
     usize allocatedSize;
     void *begin;
     {
-      auto pageSize = pageSize_.load(satomi::memory_order_relaxed);
-      usize newStart = utils::roundUpToMultiple((usize)memory, (usize)pageSize);
+      usize newStart = utils::roundUpToMultiple((usize)memory, pageSize);
       if ((newStart - (usize)memory) >= size)
       {
         size = newStart - (usize)memory;
         return;
       }
 
-      usize newEnd = utils::roundUpToMultiple((usize)memory + size, (usize)pageSize);
+      usize newEnd = utils::roundUpToMultiple((usize)memory + size, pageSize);
       size = newEnd - (usize)memory;
       begin = (void *)newStart;
       allocatedSize = newEnd - newStart;
@@ -305,11 +312,11 @@ namespace utils
     while (true)
     {
     #if COMPLEX_WINDOWS
-      auto result = ::VirtualAlloc(begin, allocatedSize, MEM_COMMIT, PAGE_READWRITE);
+      auto result = VirtualAlloc(begin, allocatedSize, MEM_COMMIT, PAGE_READWRITE);
       if (result != nullptr)
         return;
     #else
-      auto result = ::mprotect(begin, allocatedSize, PROT_READ | PROT_WRITE);
+      auto result = mprotect(begin, allocatedSize, PROT_READ | PROT_WRITE);
       if (result == 0)
         return;
     #endif
@@ -321,22 +328,21 @@ namespace utils
   void decommitMemory(void *memory, usize size)
   {
     {
-      auto pageSize = pageSize_.load(satomi::memory_order_relaxed);
-      usize newStart = utils::roundUpToMultiple((usize)memory, (usize)pageSize);
+      usize newStart = utils::roundUpToMultiple((usize)memory, pageSize);
       if ((newStart - (usize)memory) >= size)
         return;
 
-      usize newEnd = utils::roundUpToMultiple((usize)memory + size, (usize)pageSize);
+      usize newEnd = utils::roundUpToMultiple((usize)memory + size, pageSize);
       memory = (void *)newStart;
       size = newEnd - newStart;
     }
 
   #if COMPLEX_WINDOWS
-    [[maybe_unused]] auto result = ::VirtualFree(memory, size, MEM_DECOMMIT);
+    [[maybe_unused]] auto result = VirtualFree(memory, size, MEM_DECOMMIT);
     COMPLEX_ASSERT(result != 0);
   #else
-    ::madvise(memory, size, MADV_DONTNEED);
-    [[maybe_unused]] auto result = ::mprotect(memory, size, PROT_NONE);
+    madvise(memory, size, MADV_DONTNEED);
+    [[maybe_unused]] auto result = mprotect(memory, size, PROT_NONE);
     COMPLEX_ASSERT(result == 0);
   #endif
   }
@@ -344,10 +350,10 @@ namespace utils
   void releaseMemory(void *memory, [[maybe_unused]] usize size)
   {
   #if COMPLEX_WINDOWS
-    [[maybe_unused]] auto result = ::VirtualFree(memory, 0, MEM_RELEASE);
+    [[maybe_unused]] auto result = VirtualFree(memory, 0, MEM_RELEASE);
     COMPLEX_ASSERT(result != 0);
   #else
-    [[maybe_unused]] auto result = ::munmap(memory, size);
+    [[maybe_unused]] auto result = munmap(memory, size);
     COMPLEX_ASSERT(result == 0);
   #endif
   }
@@ -361,13 +367,15 @@ namespace utils
   #endif
   }
 
+  // unlike the global allocation functions
+  // you can set the arena for these with `getLocalMallocArena() = arena;`
   extern "C" void *arena_malloc(size_t size)
   {
-    return utils::bumpArena::insert(mallocArena, size, alignof(void *));
+    return utils::bumpArena::insert(getLocalMallocArena(), size, alignof(void *));
   }
-  extern "C" void arena_free(const void *pointer)
+  extern "C" void *arena_calloc(size_t num, size_t size)
   {
-    utils::bumpArena::remove(pointer);
+    return utils::bumpArena::insert(getLocalMallocArena(), num * size, alignof(void *), true);
   }
   extern "C" void *arena_realloc(void *pointer, size_t newSize)
   {
@@ -375,6 +383,36 @@ namespace utils
       return utils::bumpArena::resize(pointer, newSize);
     else
       return arena_malloc(newSize);
+  }
+  extern "C" void arena_free(void *pointer)
+  {
+    if (pointer)
+      utils::bumpArena::remove(pointer);
+  }
+
+  extern "C" void *global_malloc(size_t size)
+  {
+    //return malloc(size);
+    return utils::bumpArena::insert(globalArena, size, alignof(void *));
+  }
+  extern "C" void *global_calloc(size_t num, size_t size)
+  {
+    //return calloc(num, size);
+    return utils::bumpArena::insert(globalArena, num * size, alignof(void *), true);
+  }
+  extern "C" void *global_realloc(void *pointer, size_t newSize)
+  {
+    //return realloc(pointer, newSize);
+    if (pointer)
+      return utils::bumpArena::resize(pointer, newSize);
+    else
+      return arena_malloc(newSize);
+  }
+  extern "C" void global_free(void *pointer)
+  {
+    //return free(pointer);
+    if (pointer)
+      utils::bumpArena::remove(pointer);
   }
 
   ScopedNoDenormals::ScopedNoDenormals()
@@ -413,19 +451,19 @@ namespace utils
     // since it might not have finished being built
     for (usize i = 0; i < 100; ++i) // up to ~10 seconds
     {
-      handle = ::LoadLibraryA(fullPath);
+      handle = LoadLibraryA(fullPath);
       if (handle)
         break;
 
-      if (::GetLastError() != ERROR_SHARING_VIOLATION)
+      if (GetLastError() != ERROR_SHARING_VIOLATION)
         break;
 
-      ::Sleep(100);
+      Sleep(100);
     }
 
     COMPLEX_ASSERT(handle, "Couldn't load library");
   #else
-
+    handle = dlopen(fullPath, RTLD_NOW);
   #endif
   }
 
@@ -433,9 +471,10 @@ namespace utils
   {
   #if COMPLEX_WINDOWS
     if (handle)
-      ::FreeLibrary((::HMODULE)handle);
+      FreeLibrary((HMODULE)handle);
   #else
-
+    if (handle)
+      dlclose(handle);
   #endif
   }
 
@@ -444,9 +483,10 @@ namespace utils
   {
   #if COMPLEX_WINDOWS
     if (handle)
-      return ::GetProcAddress((::HMODULE)handle, decoratedName.data());
+      return GetProcAddress((HMODULE)handle, decoratedName.data());
   #else
-
+    if (handle)
+      return dlsym(handle, decoratedName.data());
   #endif
 
     return nullptr;
@@ -471,17 +511,17 @@ namespace utils
   #if COMPLEX_WINDOWS
     // negative multiplier to signalise relative value
     // 10 in order to input microsecond delay
-    ::LARGE_INTEGER delay = { .QuadPart = ((LONGLONG)sleepUs_ - correctionUs_) * -10 };
-    ::timeBeginPeriod(1);
-    ::NtDelayExecution(FALSE, &delay);
-    ::timeEndPeriod(1);
+    LARGE_INTEGER delay = { .QuadPart = ((LONGLONG)sleepUs_ - correctionUs_) * -10 };
+    timeBeginPeriod(1);
+    NtDelayExecution(FALSE, &delay);
+    timeEndPeriod(1);
   #else
-    ::timespec delay =
+    timespec delay =
     {
-      .tv_sec = (::time_t)((sleepUs_ - correctionUs_) / 1'000'000),
+      .tv_sec = (time_t)((sleepUs_ - correctionUs_) / 1'000'000),
       .tv_nsec = (long)(sleepUs_ - correctionUs_) * 1000
     };
-    ::clock_nanosleep(CLOCK_MONOTONIC, 0, &delay, nullptr);
+    clock_nanosleep(CLOCK_MONOTONIC, 0, &delay, nullptr);
   #endif
 
     ++counter_;
@@ -495,12 +535,12 @@ namespace utils
     u64 timestamp;
     {
     #if COMPLEX_WINDOWS
-      ::LARGE_INTEGER largeInt;
-      ::QueryPerformanceCounter(&largeInt);
+      LARGE_INTEGER largeInt;
+      QueryPerformanceCounter(&largeInt);
       timestamp = (u64)largeInt.QuadPart;
     #else
-      ::timespec time;
-      ::clock_gettime(CLOCK_MONOTONIC_RAW, &time);
+      timespec time;
+      clock_gettime(CLOCK_MONOTONIC_RAW, &time);
       timestamp = (u64)time.tv_nsec / 100 + (u64)time.tv_sec * 10'000'000;
     #endif
     }
@@ -529,22 +569,22 @@ namespace utils
     // taking advantage of undocumented ntdll function in combination with timeBegin/timeEndPeriod to reach ~1ms sleep
     // https://undocumented.ntinternals.net/index.html?page=UserMode%2FUndocumented%20Functions%2FNT%20Objects%2FThread%2FNtDelayExecution.html
     // after some experimentation i discovered that 600us most consistently yielded a real delay of ~1ms **on my machine**
-    ::LONGLONG delay = 600 * -10;
-    ::timeBeginPeriod(1);
-    ::NtDelayExecution(0, (PLARGE_INTEGER)&delay);
-    ::timeEndPeriod(1);
+    LONGLONG delay = 600 * -10;
+    timeBeginPeriod(1);
+    NtDelayExecution(0, (PLARGE_INTEGER)&delay);
+    timeEndPeriod(1);
   #else
-    ::timespec delay = { .tv_sec = 0, .tv_nsec = 900 };
-    ::clock_nanosleep(CLOCK_MONOTONIC, 0, &delay, nullptr);
+    timespec delay = { .tv_sec = 0, .tv_nsec = 900 };
+    clock_nanosleep(CLOCK_MONOTONIC, 0, &delay, nullptr);
   #endif
   }
 
   void setHighResolutionClock(bool isHighResolution)
   {
     if (isHighResolution)
-      ::timeBeginPeriod(1);
+      timeBeginPeriod(1);
     else
-      ::timeEndPeriod(1);
+      timeEndPeriod(1);
   }
 
   i32
@@ -646,6 +686,66 @@ namespace utils
       atomic.notify_all();
   }
 
+  static void destroyTlsIndex();
+
+  static constinit bool gfreeTlsIndex = true;
+#if COMPLEX_WINDOWS
+  constinit DWORD gDwTlsIndex = TLS_OUT_OF_INDEXES;
+  extern "C" __declspec(dllexport) void
+  initialiseHotreloadDylib(DWORD tlsIndex, utils::bumpArena *global)
+#else
+  constinit pthread_key_t gTlsKey{};
+  extern "C" __attribute__((visibility("default"))) void
+    initialiseHotreloadDylib(pthread_key_t tlsKey, utils::bumpArena *global)
+#endif
+  {
+    destroyTlsIndex();
+    if (globalArena)
+      utils::bumpArena::destroy(globalArena);
+    globalArena = global;
+
+    gfreeTlsIndex = false;
+  #if COMPLEX_WINDOWS
+    gDwTlsIndex = tlsIndex;
+  #else
+    gTlsKey = tlsKey;
+  #endif
+  }
+
+  void initialiseHotreload(utils::Dylib *hotreload)
+  {
+    auto *fn = (decltype(initialiseHotreloadDylib) *)hotreload->getSymbol("initialiseHotreloadDylib");
+  #if COMPLEX_WINDOWS
+    fn(gDwTlsIndex, globalArena);
+  #else
+    fn(gTlsKey, globalArena);
+  #endif
+  }
+
+  void *
+  getTls()
+  {
+  #if COMPLEX_WINDOWS
+    if (gDwTlsIndex != TLS_OUT_OF_INDEXES)
+      return TlsGetValue(gDwTlsIndex);
+  #else
+    if (gTlsKey)
+      return pthread_getspecific(gTlsKey);
+  #endif
+    return nullptr;
+  }
+
+  void setTls(void *context)
+  {
+  #if COMPLEX_WINDOWS
+    if (gDwTlsIndex != TLS_OUT_OF_INDEXES)
+      TlsSetValue(gDwTlsIndex, context);
+  #else
+    if (gTlsKey)
+      pthread_setspecific(gTlsKey, context);
+  #endif
+  }
+
   bool
   thread::id::operator==(const id &other) const
   {
@@ -654,7 +754,7 @@ namespace utils
   #else
     auto ret = nativeId == other.nativeId;
     // on linux this should just compare the values directly inside the function
-    COMPLEX_ASSERT(::pthread_equal((::pthread_t)nativeId, (::pthread_t)other.nativeId) == ret);
+    COMPLEX_ASSERT(pthread_equal((pthread_t)nativeId, (pthread_t)other.nativeId) == ret);
     return ret;
   #endif
   }
@@ -663,14 +763,14 @@ namespace utils
   getCurrentThreadId()
   {
   #if COMPLEX_WINDOWS
-    return { (decltype(thread::id::nativeId))::GetCurrentThreadId() };
+    return { (decltype(thread::id::nativeId))GetCurrentThreadId() };
   //#elif COMPLEX_LINUX
-  //  auto threadId_ = ::gettid();
+  //  auto threadId_ = gettid();
   //#elif COMPLEX_MAC
   //  // https://elliotth.blogspot.com/2012/04/gettid-on-mac-os.html
-  //  auto threadId_ = ::syscall(SYS_thread_selfid);
+  //  auto threadId_ = syscall(SYS_thread_selfid);
   #else
-    return { (decltype(thread::id::nativeId))::pthread_self() };
+    return { (decltype(thread::id::nativeId))pthread_self() };
   #endif
   }
 
@@ -685,9 +785,9 @@ namespace utils
   void thread::exit(int result)
   {
   #ifdef COMPLEX_WINDOWS
-    ::ExitThread((DWORD)result);
+    ExitThread((DWORD)result);
   #else
-    ::pthread_exit((void *)(intptr_t)result);
+    pthread_exit((void *)(intptr_t)result);
   #endif
   }
 
@@ -701,12 +801,15 @@ namespace utils
     utils::deallocate(argument);
 
     (void)thread::getCurrentId();
-    localScratch = utils::bumpArena::create(COMPLEX_MB(4), COMPLEX_KB(128));
+    setTls(createTlsContext());
 
     int result = function();
 
+    if (auto *tls = getTls())
+      destroyTlsContext(tls);
+
   #ifdef COMPLEX_WINDOWS
-    return (::DWORD)result;
+    return (DWORD)result;
   #else
     return (void *)(usize)result;
   #endif
@@ -715,11 +818,11 @@ namespace utils
   void thread::createThread(utils::dynFn<int()> *procedure)
   {
   #ifdef COMPLEX_WINDOWS
-    static_assert(sizeof(::DWORD) == sizeof(threadId.nativeId));
-    if (!::CreateThread(nullptr, 0, threadEntry, (LPVOID)procedure, 0, (::DWORD *)&threadId.nativeId))
+    static_assert(sizeof(DWORD) == sizeof(threadId.nativeId));
+    if (!::CreateThread(nullptr, 0, threadEntry, (LPVOID)procedure, 0, (DWORD *)&threadId.nativeId))
   #else
-    static_assert(sizeof(::pthread_t) == sizeof(threadId.nativeId));
-    if (pthread_create((::pthread_t *)&threadId.nativeId, nullptr, threadEntry, (void *)procedure) != 0)
+    static_assert(sizeof(pthread_t) == sizeof(threadId.nativeId));
+    if (pthread_create((pthread_t *)&threadId.nativeId, nullptr, threadEntry, (void *)procedure) != 0)
   #endif
     {
       threadId = {};
@@ -739,23 +842,23 @@ namespace utils
   bool thread::join(int *exitCode)
   {
   #ifdef COMPLEX_WINDOWS
-    ::DWORD dwRes;
-    auto handle = ::OpenThread(THREAD_ALL_ACCESS, false, (::DWORD)threadId.nativeId);
+    DWORD dwRes;
+    auto handle = OpenThread(THREAD_ALL_ACCESS, false, (DWORD)threadId.nativeId);
 
-    if (::WaitForSingleObject(handle, INFINITE) == WAIT_FAILED)
+    if (WaitForSingleObject(handle, INFINITE) == WAIT_FAILED)
       return false;
     if (exitCode != nullptr)
     {
-      if (::GetExitCodeThread(handle, &dwRes) != 0)
+      if (GetExitCodeThread(handle, &dwRes) != 0)
         *exitCode = (int)dwRes;
       else
         return false;
     }
-    ::CloseHandle(handle);
+    CloseHandle(handle);
   #else
     void *result;
-    auto handle = (::pthread_t)threadId.nativeId;
-    if (::pthread_join(handle, &result) != 0)
+    auto handle = (pthread_t)threadId.nativeId;
+    if (pthread_join(handle, &result) != 0)
       return false;
     if (exitCode != nullptr)
       *exitCode = (int)(usize)result;
@@ -766,20 +869,20 @@ namespace utils
   bool thread::detach()
   {
   #ifdef COMPLEX_WINDOWS
-    auto handle = ::OpenThread(THREAD_ALL_ACCESS, false, (::DWORD)threadId.nativeId);
+    auto handle = OpenThread(THREAD_ALL_ACCESS, false, (DWORD)threadId.nativeId);
     // https://stackoverflow.com/questions/12744324/how-to-detach-a-thread-on-windows-c#answer-12746081
-    return ::CloseHandle(handle) != 0;
+    return CloseHandle(handle) != 0;
   #else
-    return ::pthread_detach((::pthread_t)threadId.nativeId) == 0;
+    return pthread_detach((pthread_t)threadId.nativeId) == 0;
   #endif
   }
 
   void thread::yield()
   {
   #ifdef COMPLEX_WINDOWS
-    ::Sleep(0);
+    Sleep(0);
   #else
-    ::sched_yield();
+    sched_yield();
   #endif
   }
 
@@ -787,20 +890,49 @@ namespace utils
   void atLoad()
   {
   #if COMPLEX_WINDOWS
-    ::SYSTEM_INFO sysinfo{};
-    ::GetSystemInfo(&sysinfo);
-    pageSize_.store(sysinfo.dwPageSize, satomi::memory_order_relaxed);
+    SYSTEM_INFO sysinfo{};
+    GetSystemInfo(&sysinfo);
+    pageSize = sysinfo.dwPageSize;
 
-    ::LARGE_INTEGER largeInt;
-    ::QueryPerformanceFrequency(&largeInt);
+    LARGE_INTEGER largeInt;
+    QueryPerformanceFrequency(&largeInt);
     systemFrequency = (u64)largeInt.QuadPart;
+
+    gDwTlsIndex = TlsAlloc();
   #else
-    pageSize_.store(::sysconf(_SC_PAGE_SIZE), satomi::memory_order_relaxed);
+    pageSize = sysconf(_SC_PAGE_SIZE);
+    pthread_key_create(&gTlsKey, nullptr);
   #endif
 
+    globalArena = utils::bumpArena::create(COMPLEX_MB(128), COMPLEX_MB(1));
+    setTls(createTlsContext());
     (void)utils::thread::getCurrentId();
   }
 
+  void destroyTlsIndex()
+  {
+    if (auto tls = getTls())
+      destroyTlsContext(tls);
+
+    if (gfreeTlsIndex)
+    {
+    #if COMPLEX_WINDOWS
+      if (gDwTlsIndex != TLS_OUT_OF_INDEXES)
+        TlsFree(gDwTlsIndex);
+    #else
+      if (gTlsKey)
+        pthread_key_delete(gTlsKey);
+    #endif
+    }
+  }
+
+  void atUnload()
+  {
+    destroyTlsIndex();
+    if (gfreeTlsIndex)
+      utils::bumpArena::destroy(globalArena);
+    globalArena = nullptr;
+  }
 
   usize
   bumpArena::getUsedSize(bumpArena *arena)
@@ -849,6 +981,19 @@ namespace utils
     (void)new(newFreeNodeAdress) bumpArena::node{ .size = (u32)newFreeNodeSize, .next = nodeShift };
   }
 
+  static void combineAdjacentFreeNodes(bumpArena *arena, bumpArena::node *currentNode)
+  {
+    for (; currentNode->next;)
+    {
+      auto *nextNode = utils::launder((bumpArena::node *)((byte *)arena + currentNode->next));
+      if ((byte *)currentNode + currentNode->size < (byte *)nextNode)
+        break;
+      // free nodes form a contiguous block of memory, combine them
+      currentNode->size += nextNode->size;
+      currentNode->next = nextNode->next;
+    }
+  }
+
   byte *
   bumpArena::insert(bumpArena *arena, usize size, usize alignment, bool clean)
   {
@@ -867,24 +1012,14 @@ namespace utils
 
     byte *memory{};
     bumpArena::node *currentNode{}, *previousNode{};
-    u32 nodeShift = arena->freeNodeStart;
 
     // try to find a free node to fit the allocation
-    while (nodeShift)
+    for (u32 nodeShift = arena->freeNodeStart; nodeShift; nodeShift = currentNode->next)
     {
       previousNode = currentNode;
       currentNode = utils::launder((bumpArena::node *)((byte *)arena + nodeShift));
 
-      // collapsing nearby free nodes
-      for (; currentNode->next;)
-      {
-        auto *nextNode = utils::launder((bumpArena::node *)((byte *)arena + currentNode->next));
-        if ((byte *)currentNode + currentNode->size < (byte *)nextNode)
-          break;
-        // free nodes form a contiguous block of memory, combine them
-        currentNode->size += nextNode->size;
-        currentNode->next = nextNode->next;
-      }
+      combineAdjacentFreeNodes(arena, currentNode);
 
       // align for object placement
       byte *test = (byte *)utils::roundUpToMultiple((usize)(currentNode) + sizeof(bumpArena::node), alignment);
@@ -893,10 +1028,20 @@ namespace utils
         memory = test;
         break;
       }
-
-      nodeShift = currentNode->next;
     }
 
+    COMPLEX_INVARIANT_ASSERT(
+      (
+        return !previousNode || previousNode->next == (u32)((byte *)currentNode - (byte *)arena);
+      ),
+      (
+        if (!memory) 
+          return true;
+
+        byte *nodeAddress = memory - sizeof(bumpArena::node);
+        return (byte *)currentNode <= nodeAddress && (byte *)currentNode > nodeAddress - alignment;
+      )
+    );
 
     if (!memory)
     {
@@ -971,8 +1116,20 @@ namespace utils
 
     byte *nodeAddress = memory - sizeof(bumpArena::node);
 
+    COMPLEX_INVARIANT_ASSERT(
+      (
+        return memory;
+      ),
+      (
+        return !previousNode || previousNode->next == (u32)((byte *)currentNode - (byte *)arena);
+      ),
+      (
+        return (byte *)currentNode <= nodeAddress && (byte *)currentNode > nodeAddress - alignment;
+      )
+    );
+
     // if we can insert a new free node at the end of the range
-    if (memory + size + sizeof(bumpArena::node) < (byte *)currentNode + currentNode->size)
+    if (memory + size + sizeof(bumpArena::node) <= (byte *)currentNode + currentNode->size)
     {
       // add the free node at the end
       auto newSize = ((byte *)currentNode + currentNode->size) - (memory + size);
@@ -1002,16 +1159,13 @@ namespace utils
       }
     }
 
+    arena->lastUsedNode = utils::max(arena->lastUsedNode, (u32)((byte *)nodeAddress - (byte *)arena));
+    
     (void)new(nodeAddress) bumpArena::node{ .size = (u32)(size + sizeof(bumpArena::node)),
       .offsetToArena = (u32)(nodeAddress - (byte *)arena) };
 
     if (clean)
-      ::zeroset(memory, size);
-
-  #if COMPLEX_DEBUG
-    if (memoryLogger.contains(arena))
-      logBlocks(arena);
-  #endif
+      zeroset(memory, size);
 
     return memory;
   }
@@ -1023,12 +1177,12 @@ namespace utils
     auto *arena = utils::launder((bumpArena *)((byte *)node - node->offsetToArena));
 
     newSize = utils::roundUpToMultiple(newSize, sizeof(bumpArena::node));
+    auto fullSize = newSize + sizeof(bumpArena::node);
 
     if (newSize + sizeof(bumpArena::node) == node->size)
       return (byte *)data;
     else if (newSize + sizeof(bumpArena::node) < node->size)
     {
-      auto fullSize = newSize + sizeof(bumpArena::node);
       if (arena->threadSafe)
         utils::ScopedLock g{ arena->lock, utils::WaitMechanism::Spin };
 
@@ -1039,6 +1193,55 @@ namespace utils
     }
     else
     {
+      // if we're the last node we can just expand (assuming we have enough reserved space to do so)
+      usize reservedSize = (usize)arena->reservedSize + 1;
+      usize committedSize = (usize)arena->committedSize + 1;
+      byte *endOfAllocation = (byte *)data + newSize;
+      byte *endOfCommitted = (byte *)arena + committedSize;
+      if (arena->lastUsedNode == node->offsetToArena && 
+        endOfAllocation <= ((byte *)arena + reservedSize))
+      {
+        if (endOfAllocation > endOfCommitted)
+        {
+          usize commitSize = utils::min(reservedSize - committedSize,
+            (usize)(endOfAllocation - endOfCommitted));
+          utils::commitMemory(endOfCommitted, commitSize);
+
+          arena->committedSize += (u32)commitSize;
+          committedSize += commitSize;
+          endOfCommitted += commitSize;
+        }
+
+        // find last/2nd to last free node and 
+        // change what it's pointing to inside the newly "allocated" region
+        bumpArena::node *currentNode{}, *previousNode{};
+        for (u32 nodeShift = arena->freeNodeStart; nodeShift; nodeShift = currentNode->next)
+        {
+          previousNode = currentNode;
+          currentNode = utils::launder((bumpArena::node *)((byte *)arena + nodeShift));
+
+          combineAdjacentFreeNodes(arena, currentNode);
+
+          if ((byte *)currentNode >= (byte *)data && (byte *)currentNode < endOfAllocation)
+            break;
+        }
+
+        // is there space left to insert a free node at the end
+        u32 newFreeNodeOffset = 0;
+        u32 spaceLeft = (u32)(endOfCommitted - endOfAllocation);
+        if (spaceLeft >= sizeof(bumpArena::node))
+        {
+          (void)new(endOfAllocation) bumpArena::node{ .size = (u32)spaceLeft, .next = 0 };
+          newFreeNodeOffset = (u32)(endOfAllocation - (byte *)arena);
+        }
+
+        ((previousNode) ? previousNode->next : arena->freeNodeStart) = newFreeNodeOffset;
+
+        node->size = (u32)fullSize;
+        return (byte *)data;
+      }
+
+      // allocation cannot be expanded in-place, allocate again and copy data over
       auto *newAllocation = bumpArena::insert(arena, newSize, utils::getAlignment(data));
       usize copiedBytes = node->size - sizeof(bumpArena::node);
       valcpy(newAllocation, (byte *)data, copiedBytes);
@@ -1060,11 +1263,6 @@ namespace utils
       g = { arena->lock, utils::WaitMechanism::Spin };
 
     insertNewFreeNode(arena, (byte *)toRemove, toRemove->size);
-
-  #if COMPLEX_DEBUG
-    if (memoryLogger.contains(arena))
-      logBlocks(arena);
-  #endif
   }
 
   void bumpArena::shrinkToFit(bumpArena *arena, bool shrinkToCommitted)
@@ -1135,10 +1333,6 @@ namespace utils
 
     auto *nextArena = arena->nextArena;
 
-  #if COMPLEX_DEBUG
-    memoryLogger.erase(arena);
-  #endif
-
     // if arena is nested, we need to free the node
     switch ((AllocatorType)arena->flags)
     {
@@ -1158,50 +1352,5 @@ namespace utils
 
     if (nextArena)
       destroy(nextArena);
-  }
-
-  void bumpArena::logBlocks(bumpArena *arena)
-  {
-    bumpArena::node *currentNode{};
-    usize nodeShift = arena->freeNodeStart;
-
-    usize i = 0;
-    utils::string string{ globalArena, 128 };
-    string.appendFormat("bumpArena @ %p\n", arena);
-
-    // try to find a free node to fit the allocation
-    while (nodeShift)
-    {
-      currentNode = utils::launder((bumpArena::node *)((byte *)arena + nodeShift));
-      nodeShift = currentNode->next;
-
-      string.appendFormat("free list [%zu]{ .address = %zu, .size = %zu, .next = %zu }\n",
-        i, (usize)((byte *)currentNode - (byte *)arena), (usize)currentNode->size, nodeShift);
-
-      ++i;
-    }
-
-    if (string.size())
-      COMPLEX_LOG("%v", utils::string_view{ string });
-  }
-
-  void MemoryLogger::add(void *pointer)
-  {
-    utils::ScopedLock g{ writeLock, true, utils::WaitMechanism::Spin };
-    memoryLogger.toLog.emplaceBack(pointer);
-  }
-
-  void MemoryLogger::erase(void *pointer)
-  {
-    utils::ScopedLock g{ writeLock, false, utils::WaitMechanism::Spin };
-    memoryLogger.toLog.erase(pointer);
-  }
-
-  bool
-  MemoryLogger::contains(void *pointer) const
-  {
-    utils::ScopedLock g{ writeLock, false, utils::WaitMechanism::Spin };
-    auto iter = utils::findIf(memoryLogger.toLog, [pointer](const auto &item) { return item == pointer; });
-    return iter != memoryLogger.toLog.end();
   }
 }

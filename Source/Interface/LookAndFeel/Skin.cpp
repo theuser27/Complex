@@ -107,7 +107,7 @@ namespace
 }
 
 extern thread_local utils::bumpArena *jsonArena;
-extern thread_local utils::bumpArena *localScratch;
+utils::bumpArena *&getLocalScratch();
 
 namespace Interface
 {
@@ -178,7 +178,7 @@ namespace Interface
 
   void Skin::saveToFile(char *saveFile)
   {
-    jsonArena = utils::bumpArena::createNested(localScratch, COMPLEX_KB(128));
+    jsonArena = utils::bumpArena::createNested(getLocalScratch(), COMPLEX_KB(128));
 
     cjson *data = cjson_Create(cjson_Object);
     cjson_AddTo(data, "Plugin Version", cjson_String, CPLUG_PLUGIN_VERSION);
@@ -270,7 +270,7 @@ namespace Interface
 
   bool Skin::stringToState(utils::string_view skinString)
   {
-    jsonArena = utils::bumpArena::createNested(localScratch, COMPLEX_KB(128));
+    jsonArena = utils::bumpArena::createNested(getLocalScratch(), COMPLEX_KB(128));
 
     const char *potentialError = nullptr;
     cjson *data = cjson_ParseWithOpts(skinString.data(), skinString.size(), &potentialError, false);
@@ -293,11 +293,11 @@ namespace Interface
   float
   getValue(Skin::ValueId valueId, bool isScaled, Skin::Override skinOverride)
   {
-    if (uiRelated.skin)
+    if (getUiRelated()->skin)
     {
       COMPLEX_ASSERT(skinOverride < Skin::kSectionsCount);
       COMPLEX_ASSERT(valueId < Skin::kValueIdCount);
-      auto value = uiRelated.skin->values[skinOverride][valueId];
+      auto value = getUiRelated()->skin->values[skinOverride][valueId];
       return (isScaled) ? scaleValue(value) : value;
     }
 
@@ -307,9 +307,9 @@ namespace Interface
   float
   getValue(Skin::ValueId valueId, bool isScaled, Component *component)
   {
-    if (uiRelated.skin)
+    if (getUiRelated()->skin)
     {
-      auto value = uiRelated.skin->getValue(valueId, component);
+      auto value = getUiRelated()->skin->getValue(valueId, component);
       return (isScaled) ? scaleValue(value) : value;
     }
 
@@ -319,11 +319,11 @@ namespace Interface
   Colour
   getColour(Skin::ColourId colorId, Skin::Override skinOverride)
   {
-    if (uiRelated.skin)
+    if (getUiRelated()->skin)
     {
       COMPLEX_ASSERT(skinOverride < Skin::kSectionsCount);
       COMPLEX_ASSERT(colorId < Skin::kColorIdCount);
-      return uiRelated.skin->colours[skinOverride][colorId];
+      return getUiRelated()->skin->colours[skinOverride][colorId];
     }
 
     return Colours::black;
@@ -332,8 +332,8 @@ namespace Interface
   Colour
   getColour(Skin::ColourId colorId, Component *component)
   {
-    if (uiRelated.skin)
-      return uiRelated.skin->getColour(colorId, component);
+    if (getUiRelated()->skin)
+      return getUiRelated()->skin->getColour(colorId, component);
 
     return Colours::black;
   }

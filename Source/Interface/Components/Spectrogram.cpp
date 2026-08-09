@@ -6,7 +6,6 @@
 #include "Framework/utils.hpp"
 #include "Framework/simd_math.hpp"
 #include "Plugin/Complex.hpp"
-#include "Plugin/Renderer.hpp"
 #include "../LookAndFeel/Skin.hpp"
 
 namespace
@@ -76,7 +75,7 @@ namespace Interface
     componentFlags.clickable = true;
     componentFlags.clickableChildren = false;
 
-    auto maxBinCount = getPlugin(uiRelated.renderer).state_->getMaxBinCount();
+    auto maxBinCount = getUiRelated()->plugin.state_->getMaxBinCount();
 
     if (!arena)
     {
@@ -350,18 +349,41 @@ namespace Interface
     //nvgStroke(g.context);
   }
 
-  bool
-  Spectrogram::render(OpenGlWrapper &openGl)
+  hotreloadable void drawSpectrum(Graphics &g, Spectrogram *s)
   {
-    //fillRect(openGl, getLocalBounds().toFloat(), getColour(Skin::kBody, this));
+    COMPLEX_HOTRELOAD_CHECK(getUiRelated()->plugin.state_.get(), drawSpectrum, g, s);
+
+    Colour colour = getColour(Skin::kWidgetPrimary1, s);
+    Colour fillColour = getColour(Skin::kWidgetPrimary2, s);
+
+    for (usize i = 0; i < countof(s->lineData); ++i)
+    {
+      nvgBeginPath(g);
+      nvgMoveTo(g, s->lineData[i][0][0], s->lineData[i][0][1]);
+
+      for (usize j = 1; j < countof(s->lineData[0]); ++j)
+        nvgLineTo(g, s->lineData[i][j][0], s->lineData[i][j][1]);
+
+      nvgStrokeWidth(g, 1.8f);
+      nvgStrokePaint(g, nvgLinearGradient(g,
+        0.0f, 0.0f, 0.0f, (float)s->bounds.h, colour, colour.withMultipliedAlpha(0.2f)));
+      nvgStroke(g);
+      colour = colour.withMultipliedAlpha(0.65f);
+    }
+  }
+
+  bool
+  Spectrogram::render(Graphics &g)
+  {
+    //fillRect(g, getLocalBounds().toFloat(), getColour(Skin::kBody, this));
 
     if (shouldPaintBackgroundLines)
     {
-      paintBackground(openGl, getLocalBounds().toFloat(), minFrequency, maxFrequency);
+      paintBackground(g, getLocalBounds().toFloat(), minFrequency, maxFrequency);
     }
 
     auto localBounds = getLocalBounds();
-    auto &plugin = getPlugin(uiRelated.renderer);
+    auto &plugin = getUiRelated()->plugin;
     nyquistFreq = plugin.getSampleRate() * 0.5f;
     binCount = plugin.state_->getFFTSize() / 2;
 
@@ -373,24 +395,10 @@ namespace Interface
     if (!updateAmplitudes(startDecade, decadeCount, decadeSlope))
       return true;
 
-    Colour colour = getColour(Skin::kWidgetPrimary1, this);
-    Colour fillColour = getColour(Skin::kWidgetPrimary2, this);
-
-    for (usize i = 0; i < countof(lineData); ++i)
-    {
-      nvgBeginPath(openGl);
-      nvgMoveTo(openGl, lineData[i][0][0], lineData[i][0][1]);
-
-      for (usize j = 1; j < countof(lineData[0]); ++j)
-        nvgLineTo(openGl, lineData[i][j][0], lineData[i][j][1]);
-
-      nvgStrokeWidth(openGl, 1.8f);
-      nvgStrokePaint(openGl, nvgLinearGradient(openGl,
-        0.0f, 0.0f, 0.0f, (float)bounds.h, colour, colour.withMultipliedAlpha(0.2f)));
-      nvgStroke(openGl);
-      colour = colour.withMultipliedAlpha(0.65f);
-    }
+    drawSpectrum(g, this);
 
     return true;
   }
+
+#undef CHECK_NAN
 }

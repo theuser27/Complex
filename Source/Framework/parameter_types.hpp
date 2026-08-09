@@ -472,9 +472,11 @@ namespace Framework
   class UndoManager
   {
   public:
+    static constexpr auto storagePerTransaction = 512;
+
     ~UndoManager();
 
-    UndoManager(usize transactionsToKeep);
+    UndoManager(utils::bumpArena *parentArena, usize transactionsToKeep);
 
     void clear();
     void setTransationStorage(usize transactionsToKeep);

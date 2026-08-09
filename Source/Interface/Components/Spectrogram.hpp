@@ -21,7 +21,7 @@ namespace Interface
 
     void reinitialise();
 
-    bool render(OpenGlWrapper &openGl) override;
+    bool render(Graphics &g) override;
 
     bool mouseDown(const MouseEvent &e) override;
 

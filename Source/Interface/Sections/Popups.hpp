@@ -18,7 +18,7 @@ namespace Interface
 
     void reinitialise();
 
-    bool render(OpenGlWrapper &openGl) override;
+    bool render(Graphics &g) override;
 
     void setContent(Component *sourceComponent,
       utils::string_view displayText, Placement relativeSourcePlacement,
@@ -79,7 +79,7 @@ namespace Interface
 
     PopupList(PopupSelector *parentSelector);
 
-    bool render(OpenGlWrapper &openGl) override;
+    bool render(Graphics &g) override;
 
     bool mouseEnter(const MouseEvent &e) override;
     bool mouseExit(const MouseEvent &e) override;
@@ -87,9 +87,9 @@ namespace Interface
     void summonChildList(PopupItem *summoningItem,
       const MouseEvent &summoningMouseEvent, bool force = false);
 
-    static bool drawV1(OpenGlWrapper &openGl, PopupList *self);
+    static bool drawV1(Graphics &g, PopupList *self);
 
-    bool (*draw)(OpenGlWrapper &openGl, PopupList *self) = drawV1;
+    bool (*draw)(Graphics &g, PopupList *self) = drawV1;
 
     PopupItem *parentItem{};
 
@@ -116,7 +116,7 @@ namespace Interface
     bool mouseMove(const MouseEvent &e) override;
     bool mouseDown(const MouseEvent &e) override;
     bool mouseUp(const MouseEvent &e) override;
-    bool render(OpenGlWrapper &openGl) override;
+    bool render(Graphics &g) override;
 
     Colour getHighlightColour() { return getColour(Skin::kWidgetPrimary1, this).darker(0.8f); }
 
@@ -184,7 +184,7 @@ namespace Interface
 
     OptionPopupItem();
 
-    bool render(OpenGlWrapper &openGl) override;
+    bool render(Graphics &g) override;
 
     utils::pair<utils::string_view, bool> getTextAndWrap();
 

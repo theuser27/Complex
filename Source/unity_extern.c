@@ -41,6 +41,27 @@
 
 #include "Third Party/cplug/config.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+void *global_malloc(size_t size);
+void *global_calloc(size_t num, size_t size);
+void *global_realloc(void *pointer, size_t newSize);
+void  global_free(void *pointer);
+
+void *arena_malloc(size_t size);
+void *arena_calloc(size_t num, size_t size);
+void *arena_realloc(void *pointer, size_t newSize);
+void  arena_free(void *pointer);
+#ifdef __cplusplus
+}
+#endif
+
+#define CPLUG_MALLOC global_malloc
+#define CPLUG_CALLOC global_calloc
+#define CPLUG_REALLOC global_realloc
+#define CPLUG_FREE global_free
+
 #ifdef COMPLEX_STANDALONE
   #if COMPLEX_WINDOWS
     #include "Third Party/cplug/cplug_standalone_win.c"
@@ -55,6 +76,9 @@
   #include "Third Party/cplug/cplug_vst3.c"
 #endif
 
+#define XFILES_MALLOC(size)       global_malloc(size)
+#define XFILES_REALLOC(ptr, size) global_realloc(ptr, size)
+#define XFILES_FREE(ptr)          global_free(ptr)
 #define XHL_FILES_IMPL
 #include "Third Party/xhl/xhl_files.h"
 
@@ -64,30 +88,27 @@
 
 #endif
 
+#define GLAD_MALLOC global_malloc
+#define GLAD_FREE global_free
 #include "Third Party/glad/glad.c"
 
+#define NVG_MALLOC global_malloc
+#define NVG_REALLOC global_realloc
+#define NVG_FREE global_free
 #include "Third Party/nanovg/nanovg.c"
 #define NANOVG_GL3_IMPLEMENTATION
 #include "Third Party/nanovg/nanovg_gl.h"
 #include "Third Party/nanovg/nanovg_gl_utils.h"
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-void *arena_malloc(size_t size);
-void arena_free(const void *pointer);
-void *arena_realloc(void *pointer, size_t newSize);
-#ifdef __cplusplus
-}
-#endif
-
 #define NSVG_MALLOC arena_malloc
 #define NSVG_FREE arena_free
 #define NSVG_REALLOC arena_realloc
-
 #define NANOSVG_IMPLEMENTATION
 #include "Third Party/nanovg/nanosvg.h"
 
+#define PUGL_CALLOC global_calloc
+#define PUGL_REALLOC global_realloc
+#define PUGL_FREE global_free
 #include "Third Party/pugl/src/common.c"
 #include "Third Party/pugl/src/internal.c"
 #if COMPLEX_WINDOWS

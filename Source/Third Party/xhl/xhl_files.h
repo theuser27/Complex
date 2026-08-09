@@ -154,29 +154,6 @@ int main()
 #define XFILES_TRASH_NAME   "Trash"
 #endif
 
-#define XFILES_ARRLEN(arr) (sizeof(arr) / sizeof(arr[0]))
-
-#if !defined(XFILES_MALLOC) || !defined(XFILES_REALLOC) || !defined(XFILES_FREE)
-#include <stdlib.h>
-#define XFILES_MALLOC(size)       malloc(size)
-#define XFILES_REALLOC(ptr, size) realloc(ptr, size)
-#define XFILES_FREE(ptr)          free(ptr)
-#endif
-
-#ifndef XFILES_ASSERT
-#ifdef NDEBUG
-// clang-format off
-#define XFILES_ASSERT(cond) do { (void)(cond); } while (0)
-// clang-format on
-#else
-#ifdef _WIN32
-#define XFILES_ASSERT(cond) (cond) ? (void)0 : __debugbreak()
-#else // #if __APPLE__
-#define XFILES_ASSERT(cond) (cond) ? (void)0 : __builtin_debugtrap()
-#endif // _WIN32
-#endif // NDEBUG
-#endif // XFILES_ASSERT
-
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -196,8 +173,10 @@ bool xfiles_create_directory(const char* path);
 bool xfiles_create_directory_recursive(const char* path);
 
 // Returns only true on success and sets 'out' and 'outlen' with file contents and size
-// Must release 'out' with free()
+// Must release 'out' with xfiles_read_free()
 bool xfiles_read(const char* path, void** out, size_t* outlen);
+// Frees a file's contents allocated with xfiles_read()
+void xfiles_read_free(void *data);
 // Creates file if it doesn't exist with default access permissions.
 // If file already exists, it overwrites all contents.
 bool xfiles_write(const char* path, const void* in, size_t inlen);
@@ -333,6 +312,29 @@ void xfiles_watch_destroy(xfiles_watch_context_t ctx);
 #endif
 
 #ifdef XHL_FILES_IMPL
+
+#define XFILES_ARRLEN(arr) (sizeof(arr) / sizeof(arr[0]))
+
+#if !defined(XFILES_MALLOC) || !defined(XFILES_REALLOC) || !defined(XFILES_FREE)
+#include <stdlib.h>
+#define XFILES_MALLOC(size)       malloc(size)
+#define XFILES_REALLOC(ptr, size) realloc(ptr, size)
+#define XFILES_FREE(ptr)          free(ptr)
+#endif
+
+#ifndef XFILES_ASSERT
+#ifdef NDEBUG
+// clang-format off
+#define XFILES_ASSERT(cond) do { (void)(cond); } while (0)
+// clang-format on
+#else
+#ifdef _WIN32
+#define XFILES_ASSERT(cond) (cond) ? (void)0 : __debugbreak()
+#else // #if __APPLE__
+#define XFILES_ASSERT(cond) (cond) ? (void)0 : __builtin_debugtrap()
+#endif // _WIN32
+#endif // NDEBUG
+#endif // XFILES_ASSERT
 
 #ifdef _WIN32
 #include <Windows.h>
@@ -1726,6 +1728,11 @@ int xfiles_get_user_directory(char* out, size_t outlen, XFilesUserDirectory loc)
 
 #endif // __OBJC__
 #endif // __APPLE__
+
+void xfiles_read_free(void *data)
+{
+    XFILES_FREE(data);
+}
 
 const char* xfiles_get_name(const char* path)
 {

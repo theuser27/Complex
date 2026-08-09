@@ -872,6 +872,22 @@ namespace utils
   template<typename Signature, usize MaxSize = 16, usize Alignment = 8>
   using smallFn = fn<Signature, MaxSize, Alignment>;
 
+  // to be called at DLL/Process load time
+  void atLoad();
+  // to be called at DLL/Process unload time
+  void atUnload();
+  // will be called at the entry point of every thread
+  // or (for the initial main thread) at DLL/Process load time
+  //
+  // needs to be implemented by the user and allocate a structure
+  // that will hold all the thread-local data that's going to be used
+  // 
+  // can return nullptr, in which case no thread-local storage will be used
+  // can be replaced with setTls below at any point
+  void *createTlsContext();
+  void destroyTlsContext(void *context);
+  void *getTls();
+  void setTls(void *context);
 
   class thread
   {
@@ -914,7 +930,7 @@ namespace utils
     }
     thread() = default;
     thread(const thread &) = delete;
-    thread(thread &&other) noexcept : thread{}
+    thread(thread &&other) noexcept
     {
       COMPLEX_SWAP_MEMBERS(threadId, other);
     }
@@ -1050,9 +1066,6 @@ namespace utils
   lockAtomic(LockBlame<i32> &lock, bool isReentrant, bool isExclusive, WaitMechanism mechanism,
     const utils::smallFn<void()> &lambda = [](){}) noexcept
   {
-    if (!isExclusive)
-      return lockAtomic(lock.lock, isExclusive, mechanism, lambda);
-
     auto threadId = utils::thread::getCurrentId();
     if (lock.lock.load(satomi::memory_order_relaxed) < 0 &&
       lock.lastLockId.load(satomi::memory_order_relaxed) == threadId)
@@ -1062,6 +1075,9 @@ namespace utils
       else
         COMPLEX_ASSERT_FALSE("Guess who forgot to unlock this atomic");
     }
+
+    if (!isExclusive)
+      return lockAtomic(lock.lock, isExclusive, mechanism, lambda);
 
     auto ret = lockAtomic(lock.lock, isExclusive, mechanism, lambda);
 
@@ -1073,7 +1089,7 @@ namespace utils
   inline void unlockAtomic(LockBlame<i32> &lock, bool wasExclusive,
     WaitMechanism mechanism, i32 previousValue) noexcept
   {
-    if (wasExclusive && previousValue == -1)
+    if (previousValue == -1)
       return;
 
     unlockAtomic(lock.lock, wasExclusive, mechanism);

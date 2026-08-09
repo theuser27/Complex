@@ -279,7 +279,7 @@ int64_t AUv2WriteProc(const void* stateCtx, void* writePos, size_t numBytesToWri
     if (nextLen > ctx->cap)
     {
         ctx->cap  = nextLen * 2;
-        ctx->data = realloc(ctx->data, ctx->cap);
+        ctx->data = CPLUG_REALLOC(ctx->data, ctx->cap);
     }
     memcpy(ctx->data + ctx->len, writePos, numBytesToWrite);
     ctx->len = nextLen;
@@ -445,7 +445,7 @@ OSStatus AUMethodGetPropertyInfo(
             if (num != auv2->numInputBusNames)
             {
                 AUv2ReleaseStringArray(auv2->inputBusNames, auv2->numInputBusNames);
-                auv2->inputBusNames = (CFStringRef*)realloc(auv2->inputBusNames, num * sizeof(*auv2->inputBusNames));
+                auv2->inputBusNames = (CFStringRef*)CPLUG_REALLOC(auv2->inputBusNames, num * sizeof(*auv2->inputBusNames));
             }
         }
         else if (inScope == kAudioUnitScope_Output)
@@ -454,7 +454,7 @@ OSStatus AUMethodGetPropertyInfo(
             if (num != auv2->numOutputBusNames)
             {
                 AUv2ReleaseStringArray(auv2->outputBusNames, auv2->numOutputBusNames);
-                auv2->outputBusNames = (CFStringRef*)realloc(auv2->outputBusNames, num * sizeof(*auv2->outputBusNames));
+                auv2->outputBusNames = (CFStringRef*)CPLUG_REALLOC(auv2->outputBusNames, num * sizeof(*auv2->outputBusNames));
             }
         }
 
@@ -595,7 +595,7 @@ static OSStatus AUMethodGetProperty(
         {
             presetDataRef = CFDataCreate(NULL, writeCtx.data, writeCtx.len);
             CFDictionarySetValue(dict, presetDataKey, presetDataRef);
-            free(writeCtx.data);
+            CPLUG_FREE(writeCtx.data);
         }
 
         CFRelease(versionKey);
@@ -1573,10 +1573,10 @@ OSStatus ComponentBase_AP_Close(AUv2Plugin* auv2)
 
     AUv2ReleaseStringArray(auv2->inputBusNames, auv2->numInputBusNames);
     AUv2ReleaseStringArray(auv2->outputBusNames, auv2->numOutputBusNames);
-    free(auv2->inputBusNames);
-    free(auv2->outputBusNames);
+    CPLUG_FREE(auv2->inputBusNames);
+    CPLUG_FREE(auv2->outputBusNames);
 
-    free(auv2);
+    CPLUG_FREE(auv2);
 
     int numInstances = __atomic_fetch_sub(&g_auv2InstanceCount, 1, __ATOMIC_SEQ_CST);
     if (numInstances == 1)
@@ -1593,7 +1593,7 @@ __attribute__((visibility("default"))) void* GetAUv2PluginFactory(const AudioCom
     if (numInstances == 0)
         cplug_libraryLoad();
 
-    AUv2Plugin* auv2 = (AUv2Plugin*)(calloc(1, sizeof(AUv2Plugin)));
+    AUv2Plugin* auv2 = (AUv2Plugin*)(CPLUG_CALLOC(1, sizeof(AUv2Plugin)));
     _Static_assert(offsetof(AUv2Plugin, mPlugInInterface) == 0, "Required by the AU format to be first");
 
     auv2->mPlugInInterface.Open      = (OSStatus(*)(void*, AudioComponentInstance))ComponentBase_AP_Open;

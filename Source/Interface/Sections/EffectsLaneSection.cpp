@@ -5,7 +5,6 @@
 
 #include "Generation/Effects.hpp"
 #include "Plugin/Complex.hpp"
-#include "Plugin/Renderer.hpp"
 #include "../Components/Control.hpp"
 #include "MainInterface.hpp"
 #include "EffectModuleSection.hpp"
@@ -110,7 +109,7 @@ namespace Interface
         offset = utils::min(offset, (i32)utils::int_max<i8>);
         auto yOffset = (i8)((position.y < self->bounds.h - position.y) ? offset : -offset);
 
-        offsetScroll(&self->moduleHolder, 0.0f, yOffset * uiRelated.deltaTime * kAutoscrollMultiplier, false);
+        offsetScroll(&self->moduleHolder, 0.0f, yOffset * getUiRelated()->deltaTime * kAutoscrollMultiplier, false);
       }
 
       //COMPLEX_DEBUG_LOG("Position: %d, %d\n", data.position.x, data.position.y);
@@ -302,7 +301,14 @@ namespace Interface
     //      meaning that the next highlight bounds will be where they already were
     //      and if the user doesn't move the cursor, it will not recheck that
 
-    registerCallback(uiRelated.renderer, this, [](Component *c)
+    COMPLEX_INVARIANT_ASSERT(
+      (
+        return getUiRelated()->renderer->callbacks.find(this) ==
+          getUiRelated()->renderer->callbacks.data.end();
+      )
+    );
+
+    getUiRelated()->renderer->callbacks.add(this, [](Component *c)
       {
         auto self = (EffectsLaneSection::ModuleHolder *)c;
         auto laneSection = (EffectsLaneSection *)self->parent;
@@ -326,7 +332,7 @@ namespace Interface
         {
           if (!self->hasEnteredHover)
           {
-            self->enterHoverTime = uiRelated.steadyTime;
+            self->enterHoverTime = getUiRelated()->steadyTime;
             self->hasEnteredHover = true;
           }
 
@@ -343,7 +349,7 @@ namespace Interface
         }
         else if (self->hasEnteredHover)
         {
-          setMouseCursor(uiRelated.renderer, MouseCursorTypes::Normal);
+          getUiRelated()->renderer->setMouseCursor(MouseCursorTypes::Normal);
           self->hasEnteredHover = false;
         }
       });
@@ -354,10 +360,17 @@ namespace Interface
   bool
   EffectsLaneSection::ModuleHolder::mouseExit(const MouseEvent &)
   {
-    setMouseCursor(uiRelated.renderer, MouseCursorTypes::Normal);
+    getUiRelated()->renderer->setMouseCursor(MouseCursorTypes::Normal);
     hasEnteredHover = false;
 
-    deregisterCallback(uiRelated.renderer, this);
+    getUiRelated()->renderer->callbacks.erase(this);
+
+    COMPLEX_INVARIANT_ASSERT(
+      (
+        return getUiRelated()->renderer->callbacks.find(this) == 
+          getUiRelated()->renderer->callbacks.data.end();
+      )
+    );
 
     return true;
   }
@@ -386,20 +399,35 @@ namespace Interface
       return true;
     }
 
-    double time = uiRelated.steadyTime;
+    double time = getUiRelated()->steadyTime;
     if (time - enterHoverTime < kTimeout)
       return true;
 
     if (e.mods.test(ModifierKeys::altModifier) || e.mods.test(ModifierKeys::popupMenuClickModifier))
       return true;
 
+    // need to get rid of the callback here manually
+    // because the renderer will not call our mouseUp
+    // since we allow to be handled by the popup
+    // which can result in more than 1 callback being present
+    // if the mouse continues being inside the lane
+    // because it will trigger an immediate mouseEnter
+    getUiRelated()->renderer->callbacks.erase(this);
+
     summonModulePopup(getPopupSelector(), this, laneSection,
       Placement::custom, { e.x, e.y }, hoveredBeforeModuleIndex);
+
+    COMPLEX_INVARIANT_ASSERT(
+      (
+        return getUiRelated()->renderer->callbacks.find(this) == 
+          getUiRelated()->renderer->callbacks.data.end();
+      )
+    );
 
     return true;
   }
 
-  static void renderInsertHint(EffectsLaneSection::ModuleHolder *holder, OpenGlWrapper &openGl)
+  static void renderInsertHint(EffectsLaneSection::ModuleHolder *holder, Graphics &g)
   {
     static constexpr auto kHoverIncrement = 0.05f;
 
@@ -407,16 +435,16 @@ namespace Interface
     bool isEmptyAndHovered = holder->componentFlags.isHovered && laneSection->effectsLane->childrenCount == 0;
     tickAnimation(holder->animationValues,
       { { isEmptyAndHovered || laneSection->isDropdownOpen ||
-        (holder->hasEnteredHover && uiRelated.steadyTime - holder->enterHoverTime >= EffectsLaneSection::kTimeout) } },
+        (holder->hasEnteredHover && getUiRelated()->steadyTime - holder->enterHoverTime >= EffectsLaneSection::kTimeout) } },
       { { kHoverIncrement } });
 
     if (isEmptyAndHovered || laneSection->isDropdownOpen ||
-      (holder->hasEnteredHover && uiRelated.steadyTime - holder->enterHoverTime >= EffectsLaneSection::kTimeout))
+      (holder->hasEnteredHover && getUiRelated()->steadyTime - holder->enterHoverTime >= EffectsLaneSection::kTimeout))
     {
       if (holder->hasEnteredHover)
-        setMouseCursor(uiRelated.renderer, MouseCursorTypes::PointingHand);
+        getUiRelated()->renderer->setMouseCursor(MouseCursorTypes::PointingHand);
 
-      auto e = getMouseInteractions(uiRelated.renderer).mouseState.getEventRelativeTo(holder);
+      auto e = getUiRelated()->renderer->getMouseInteractions().mouseState.getEventRelativeTo(holder);
       auto scaledPadding = scaleValueRoundInt(holder->padding.toInt());
       auto drawBounds = holder->getLocalBounds().withTrimLeft(scaledPadding.x).withTrimRight(scaledPadding.w);
 
@@ -444,7 +472,7 @@ namespace Interface
       }
 
       auto colour = getColour(Skin::kBorder, holder).withMultipliedAlpha(holder->animationValues[0]);
-      strokeRect(openGl, drawBounds.toFloat(), scaleValue(1.0f), colour, scaleValue(EffectsLaneSection::kBorderRounding));
+      strokeRect(g, drawBounds.toFloat(), scaleValue(1.0f), colour, scaleValue(EffectsLaneSection::kBorderRounding));
 
       static constexpr int kPlusSize = 16;
       auto plusSize = scaleValueRound(kPlusSize);
@@ -454,36 +482,36 @@ namespace Interface
         auto plusBounds = Rectangle{ (float)drawBounds.getCentreX(),
           (float)drawBounds.getCentreY(), 0.0f, 0.0f }.withExpand(plusSize * 0.5f);
 
-        strokePlus(openGl, plusBounds, scaleValue(2.0f), colour);
+        strokePlus(g, plusBounds, scaleValue(2.0f), colour);
       }
     }
   }
 
   bool
-  EffectsLaneSection::ModuleHolder::render(OpenGlWrapper &openGl)
+  EffectsLaneSection::ModuleHolder::render(Graphics &g)
   {
-    fillRect(openGl, getLocalBounds().toFloat(),
+    fillRect(g, getLocalBounds().toFloat(),
       getColour(Skin::kBackground, this), scaleValue(kInsideRouding));
 
-    renderScrollbars(openGl, 0.2f);
+    renderScrollbars(g, 0.2f);
 
-    renderInsertHint(this, openGl);
+    renderInsertHint(this, g);
 
     return true;
   }
 
   bool
-  EffectsLaneSection::render(OpenGlWrapper &openGl)
+  EffectsLaneSection::render(Graphics &g)
   {
-    fillRect(openGl, getLocalBounds().toFloat(), getColour(Skin::kBody, this), scaleValue(kInsideRouding));
-    strokeRect(openGl, getLocalBounds().toFloat(), scaleValue(kEffectsLaneOutlineThickness),
+    fillRect(g, getLocalBounds().toFloat(), getColour(Skin::kBody, this), scaleValue(kInsideRouding));
+    strokeRect(g, getLocalBounds().toFloat(), scaleValue(kEffectsLaneOutlineThickness),
       Colour{ 45, 45, 45 }, scaleValue(kInsideRouding));
 
-    doRenderChildren(openGl);
+    doRenderChildren(g);
 
     if (!laneActivator.isOn())
     {
-      fillRect(openGl, getLocalBounds().toFloat(), getColour(Skin::kOverlayScreen, this));
+      fillRect(g, getLocalBounds().toFloat(), getColour(Skin::kOverlayScreen, this));
     }
 
     return false;
@@ -512,17 +540,17 @@ namespace Interface
   }
 
   bool
-  EffectsLaneSection::LaneMiniView::render(OpenGlWrapper &openGl)
+  EffectsLaneSection::LaneMiniView::render(Graphics &g)
   {
     auto localBounds = getLocalBounds().toFloat();
-    fillRect(openGl, localBounds, getColour(Skin::kBody, this), EffectsSection::LaneSelector::kLaneMiniViewRounding);
+    fillRect(g, localBounds, getColour(Skin::kBody, this), EffectsSection::LaneSelector::kLaneMiniViewRounding);
 
     auto textBounds = localBounds.withTrim(scaleValueRound(padding.toFloat()))
       .withY(localBounds.getCentreY()).withHeight(0.0f)
       .withExpand(0.0f, scaleValue(kPrimaryTextLineHeight / 2));
 
     renderText(((EffectsLaneSection *)processor->component)->laneTitle.text,
-      FontId::DDinType, textBounds, openGl, getColour(Skin::kHeadingText, this));
+      FontId::DDinType, textBounds, g, getColour(Skin::kHeadingText, this));
 
     return true;
   }
@@ -531,7 +559,7 @@ namespace Interface
 Interface::Component *
 Generation::EffectsLane::createUI()
 {
-  auto guiArena = Interface::getGui(Interface::uiRelated.renderer)->arena;
+  auto guiArena = Interface::getUiRelated()->renderer->gui->arena;
   auto *effectsLaneSection = anew(guiArena, Interface::EffectsLaneSection, {});
   effectsLaneSection->effectsLane = this;
   effectsLaneSection->reinitialise();

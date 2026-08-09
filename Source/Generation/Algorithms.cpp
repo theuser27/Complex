@@ -19,7 +19,11 @@ namespace Generation
     return anew(module->arena, EffectData, {});
   }
 
-#define EFFECT_VTABLE(name, creationFunction, createUIFunction) static void(*const vtable##name[])() = { (void (*)())creationFunction, (void (*)())run##name, (void (*)())createUIFunction }
+  // unary plus is so that it converts lambdas to function pointers (while also accepting raw functions as well)
+#define EFFECT_VTABLE(name, creationFunction, createUIFunction) \
+  static_assert(utils::is_same_v<decltype(+creationFunction), EffectData::CreateEffectFn *>); \
+  static_assert(utils::is_same_v<decltype(+createUIFunction), EffectData::CreateUIFn *>); \
+  static void(*const vtable##name[])() = { (void (*)())(+creationFunction), (void (*)())run##name, (void (*)())createUIFunction }
 #define COMPLEX_STRUCTURE_EFFECT(nameString, idNumber, vtableArray, skinOverride, ...) (*anew(arena, Framework::ProcessorMetadata, \
   { .flags = ProcessorMetadata::ProcessorTag, .userFlags = skinOverride, .id = idNumber, .name = nameString __VA_OPT__(,) __VA_ARGS__, .vtable = vtableArray })).computeCounts()
 
@@ -38,12 +42,12 @@ namespace Generation
   static NSVGimage *
   parseSVG(utils::bumpArena *arena, const unsigned char *data, usize dataSize)
   {
-    char *svgString = arranew(localScratch, char, 1 + dataSize);
+    char *svgString = arranew(getLocalScratch(), char, 1 + dataSize);
     defer{ utils::bumpArena::remove(svgString); };
     valcpy(svgString, data, dataSize);
     svgString[dataSize] = '\0';
 
-    mallocArena = arena;
+    getLocalMallocArena() = arena;
     return nsvgParse(svgString, "px", 96);
   }
 
@@ -202,6 +206,44 @@ namespace Generation
         .processorMetadata = COMPLEX_STRUCTURE_EFFECT("Frequency Shift", Types::FrequencyShift, vtableFrequencyShift, Interface::Skin::kPitchModule, .parameters =
           (
             COMPLEX_STRUCTURE_PARAMETER("Shift", FrequencyShift::Shift, -20'000.0f, 20'000.0f, 0.0f, 0.5f, ParameterScale::SymmetricCubic,
+              " hz", ParameterDetails::Modulatable | ParameterDetails::Automatable | ParameterDetails::Stereo)
+          )
+        )
+      )
+    }});
+  }
+
+  Framework::IndexedData *
+  Freeze::initialiseTypeStructure(Framework::PluginStructure &structure)
+  {
+    using namespace Framework;
+
+    static constexpr auto createEffectRolling = [](EffectModule *module, EffectData *copy) -> EffectData *
+    {
+      auto *rollingData = anew(module->arena, RollingData, {});
+      auto maxBinCount = module->state->getMaxBinCount();
+
+      rollingData->freezeBuffer = SimdBuffer::create(module->arena, 
+        utils::kChannelsPerInOut, maxBinCount, copy != nullptr);
+
+      if (copy)
+        valcpy(rollingData->freezeBuffer->data, 
+          ((RollingData *)copy)->freezeBuffer->data, rollingData->freezeBuffer->size);
+
+      return (EffectData *)rollingData;
+    };
+
+    EFFECT_VTABLE(Rolling, createEffectRolling, createUIRolling);
+
+    auto *arena = structure.getNewArena(COMPLEX_KB(1));
+
+    return COMPLEX_STRUCTURE_INDEXED_DATA(.displayName = "Freeze", .id = id)->addChildren({{
+      COMPLEX_STRUCTURE_INDEXED_DATA(.displayName = "Rolling", .id = Types::Rolling, .flags = IndexedData::ProcessorFlag,
+        .processorMetadata = COMPLEX_STRUCTURE_EFFECT("Rolling", Types::Rolling, vtableRolling, Interface::Skin::kPitchModule, .parameters =
+          (
+            COMPLEX_STRUCTURE_PARAMETER("Rate", Rolling::Rate, -4.0f, 4.0f, 0.0f, 0.5f, ParameterScale::SymmetricCubic,
+              "x", ParameterDetails::Modulatable | ParameterDetails::Automatable | ParameterDetails::Stereo),
+            COMPLEX_STRUCTURE_PARAMETER("Shift", Rolling::Shift, 0.0f, 1.0f, 0.0f, 0.0f, ParameterScale::Frequency,
               " hz", ParameterDetails::Modulatable | ParameterDetails::Automatable | ParameterDetails::Stereo)
           )
         )
@@ -502,6 +544,13 @@ namespace Generation
   // 1. When dealing with nyquist it's best to have a small section after your main algorithm to process it separately.
   // 2. Whenever in doubt, look at other algorithm implementations for ideas
   // 3. If no output/no unprocessed ranges or only dry/wet signal can be heard, be sure to check masking logic
+
+  // placeholder processing while developing
+#define PASSTHROUGH_PROCESS(outputBuffer, inputBuffer, binCount) do { \
+  auto rawSource = inputBuffer->get();                                \
+  auto rawDestination = destination->get();                           \
+  for (u32 _i = 0; _i < binCount; _i++)                               \
+    rawDestination[_i] = rawSource[_i]; } while(false)
 
   void Filter::runNormal(EffectModule *effectModule, EffectData *effectData,
     Framework::ComplexDataSource &source, Framework::SimdBuffer *destination,
@@ -1342,6 +1391,62 @@ namespace Generation
     }
   }
 
+  void Freeze::runRolling(EffectModule *effectModule, EffectData *effectData, 
+    Framework::ComplexDataSource &source, Framework::SimdBuffer *destination, 
+    u32 binCount, float sampleRate) noexcept
+  {
+    using namespace utils;
+    using namespace Framework;
+
+    auto [lowBoundIndices, highBoundIndices] = [&]()
+    {
+      auto shiftedBoundsIndices = getShiftedBounds(effectModule, EffectModule::BoundRepresentation::BinIndex, sampleRate, binCount);
+      return utils::pair{ toInt(shiftedBoundsIndices.first), toInt(shiftedBoundsIndices.second) };
+    }();
+    simd_mask isHighAboveLow = simd_int::greaterThanOrEqualSigned(highBoundIndices, lowBoundIndices);
+
+    auto rawSource = source.sourceBuffer->get();
+    auto rawDestination = destination->get();
+    auto *rollingData = (RollingData *)effectData;
+    auto rawFreezeBuffer = rollingData->freezeBuffer->get();
+
+    // copy over data we don't have
+    if (rollingData->lastBinCount < binCount)
+      for (usize i = rollingData->lastBinCount; i < binCount; ++i)
+        rawFreezeBuffer[i] = rawSource[i];
+
+    simd_float rate = getParameter(effectData, Freeze::Rolling::Rate)->getInternalValue<simd_float>();
+    simd_float offset = rate * (float)(source.blockPosition - rollingData->lastBlockPosition);
+    simd_float mod = (float)binCount;
+
+    simd_float oldPosition = simd_float::min(rollingData->lastPosition, mod - 1.0f);
+    simd_float newPosition = modOnce(mod + modOnce(oldPosition + offset, mod), mod);
+
+    simd_int start, end;
+    {
+      simd_mask switchBounds = simd_float::lessThan(rate, 0.0f) & simd_float::lessThan(oldPosition, newPosition);
+      start = toInt(simd_float::round(oldPosition));
+      end = toInt(simd_float::round(newPosition));
+      auto temp = merge(start, end, switchBounds);
+      end = merge(end, start, switchBounds);
+      start = temp;
+    }
+    simd_mask isHighAboveLow2 = simd_int::greaterThanOrEqualSigned(end, start);
+
+    for (u32 i = 0; i < binCount; ++i)
+    {
+      simd_mask dontRefreshFreeze = isOutsideBounds(i, start, end, isHighAboveLow2);
+      simd_float wet = merge(rawSource[i], rawFreezeBuffer[i], dontRefreshFreeze);
+      rawFreezeBuffer[i] = wet;
+      rawDestination[i] = merge(wet, rawSource[i],
+        isOutsideBounds(i, lowBoundIndices, highBoundIndices, isHighAboveLow));
+    }
+    
+    rollingData->lastPosition = newPosition;
+    rollingData->lastBinCount = binCount;
+    rollingData->lastBlockPosition = source.blockPosition;
+  }
+
   void Destroy::runReinterpret(EffectModule *effectModule, EffectData *effectData,
     Framework::ComplexDataSource &source, Framework::SimdBuffer *destination,
     u32 binCount, float sampleRate) noexcept
@@ -1355,8 +1460,7 @@ namespace Generation
       return utils::pair{ toInt(shiftedBoundsIndices.first), toInt(shiftedBoundsIndices.second) };
     }();
     simd_mask isHighAboveLow = simd_int::greaterThanOrEqualSigned(highBoundIndices, lowBoundIndices);
-    //auto [start, processedCount, _] = minimiseRange(lowBoundIndices, highBoundIndices, binCount, true);
-
+    
     simd_float attenuation = [&]()
     {
       auto parameter = getParameter(effectData, Destroy::Reinterpret::Attenuation)->getInternalValue<simd_float>();
@@ -1412,4 +1516,5 @@ namespace Generation
     rawDestination[binCount - 1] = wet[0];
   }
 
+#undef PASSTHROUGH_PROCESS
 }

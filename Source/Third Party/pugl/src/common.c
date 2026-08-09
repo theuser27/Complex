@@ -40,9 +40,9 @@ puglStrerror(const PuglStatus status)
 PuglWorld*
 puglNewWorld(PuglWorldType type, PuglWorldFlags flags)
 {
-  PuglWorld* world = (PuglWorld*)calloc(1, sizeof(PuglWorld));
+  PuglWorld* world = (PuglWorld*)PUGL_CALLOC(1, sizeof(PuglWorld));
   if (!world || !(world->impl = puglInitWorldInternals(type, flags))) {
-    free(world);
+    PUGL_FREE(world);
     return NULL;
   }
 
@@ -60,11 +60,11 @@ puglFreeWorld(PuglWorld* const world)
   puglFreeWorldInternals(world);
 
   for (size_t i = 0; i < PUGL_NUM_STRING_HINTS; ++i) {
-    free(world->strings[i]);
+    PUGL_FREE(world->strings[i]);
   }
 
-  free(world->views);
-  free(world);
+  PUGL_FREE(world->views);
+  PUGL_FREE(world);
 }
 
 void
@@ -139,9 +139,9 @@ puglSetDefaultHints(PuglView* const view)
 PuglView*
 puglNewView(PuglWorld* const world)
 {
-  PuglView* view = (PuglView*)calloc(1, sizeof(PuglView));
+  PuglView* view = (PuglView*)PUGL_CALLOC(1, sizeof(PuglView));
   if (!view || !(view->impl = puglInitViewInternals(world))) {
-    free(view);
+    PUGL_FREE(view);
     return NULL;
   }
 
@@ -151,10 +151,10 @@ puglNewView(PuglWorld* const world)
   // Enlarge world view list
   const size_t     newNumViews = world->numViews + 1U;
   PuglView** const views =
-    (PuglView**)realloc(world->views, newNumViews * sizeof(PuglView*));
+    (PuglView**)PUGL_REALLOC(world->views, newNumViews * sizeof(PuglView*));
 
   if (!views) {
-    free(view);
+    PUGL_FREE(view);
     return NULL;
   }
 
@@ -186,11 +186,11 @@ puglFreeView(PuglView* view)
   }
 
   for (size_t i = 0; i < PUGL_NUM_STRING_HINTS; ++i) {
-    free(view->strings[i]);
+    PUGL_FREE(view->strings[i]);
   }
 
   puglFreeViewInternals(view);
-  free(view);
+  PUGL_FREE(view);
 }
 
 PuglWorld*

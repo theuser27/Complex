@@ -46,17 +46,17 @@ namespace Interface
   }
 
   bool
-  EffectModuleSection::SpectralMaskComponent::render(OpenGlWrapper &openGl)
+  EffectModuleSection::SpectralMaskComponent::render(Graphics &g)
   {
-    fillRect(openGl, getLocalBounds().toFloat(), getColour(Skin::kBody, this),
+    fillRect(g, getLocalBounds().toFloat(), getColour(Skin::kBody, this),
       scaleValue(rounding[0]), scaleValue(rounding[1]), scaleValue(rounding[2]), scaleValue(rounding[3]));
 
     auto shiftValue = Framework::scaleValue(shiftBounds.getValue(), shiftBounds.details);
-    paintHighlightBox(this, *openGl.cache, (float)(shiftValue + lowBound.getValue()),
+    paintHighlightBox(this, g, (float)(shiftValue + lowBound.getValue()),
       (float)(shiftValue + highBound.getValue()),
       getColour(Skin::kWidgetPrimary1, this).withAlpha(0.15f), backgroundColour);
 
-    doRenderChildren(openGl);
+    doRenderChildren(g);
 
     return false;
   }
@@ -73,20 +73,14 @@ namespace Interface
     effectTypeIcon.desiredSize = { kIconSize, kIconSize, kIconSize, kIconSize };
     effectTypeIcon.placement = Placement::left;
     effectTypeIcon.margin = { 0, 0, 4, 0 };
-    effectTypeIcon.reference = &effectTypeSelector;
-    effectTypeIcon.draw = [](OpenGlWrapper &openGl, Component *reference, Component *self, Point<i32>)
+    effectTypeIcon.reference = this;
+    effectTypeIcon.draw = [](Graphics &g, Component *reference, Component *self, Point<i32>)
     {
-      auto *selector = (TextSelector *)reference;
-      auto [option, index] = Framework::getOptionFromValue(Framework::scaleValue(selector->getValue(),
-        selector->details), selector->details);
-
-      for (; option && (option->flags != Framework::IndexedData::SVGData || !option->svgData);
-        option = option->parent) { }
-
-      if (option)
+      auto *header = (Header *)reference;
+      if (header->icon)
       {
-        drawSVG(option->svgData, openGl, getColour(Skin::kWidgetPrimary1, reference),
-          self->bounds.withZeroOrigin().toFloat(), uiRelated.scale, scaleValue(1.0f));
+        drawSVG(header->icon, g, getColour(Skin::kWidgetPrimary1, reference),
+          self->bounds.withZeroOrigin().toFloat(), getUiRelated()->scale, scaleValue(1.0f));
       }
 
       return true;
@@ -101,8 +95,23 @@ namespace Interface
     {
       // selector -> header -> effectHolder -> effectModuleSection
       auto *section = (EffectModuleSection *)c->parent->parent->parent;
-      (void)section->effectModule->changeEffect(Framework::getOptionFromValue(
-        Framework::scaleValue(newValue, c->details), c->details).first);
+      auto [option, _] = Framework::getOptionFromValue(
+        Framework::scaleValue(newValue, c->details), c->details);
+      (void)section->effectModule->changeEffect(option);
+
+      // make icon component invisible and only show it if an icon exist
+      // selector -> header
+      auto *header = (Header *)c->parent;
+      header->icon = nullptr;
+      header->effectTypeIcon.componentFlags.isVisible = false;
+
+      for (; option && (option->flags != Framework::IndexedData::SVGData || !option->svgData);
+        option = option->parent) { }
+      if (option)
+      {
+        header->icon = option->svgData;
+        header->effectTypeIcon.componentFlags.isVisible = true;
+      }
 
       section->restartEffectUI();
     };
@@ -117,6 +126,8 @@ namespace Interface
     moduleActivator.margin = { kPowerButtonMargin, 0, kPowerButtonMargin, 0 };
     moduleActivator.desiredSize = { kDefaultActivatorSize, kDefaultActivatorSize,
       kDefaultActivatorSize, kDefaultActivatorSize };
+
+    effectTypeSelector.valueChangedCallback(&effectTypeSelector, effectTypeSelector.getValue(), 0.0);
   }
 
   void EffectModuleSection::EffectHolder::reinitialise()
@@ -135,32 +146,32 @@ namespace Interface
   }
 
   bool
-  EffectModuleSection::EffectHolder::render(OpenGlWrapper &openGl)
+  EffectModuleSection::EffectHolder::render(Graphics &g)
   {
-    nvgBeginPath(openGl);
+    nvgBeginPath(g);
     float width = scaleValue(kDelimiterWidth);
     float y = (float)header.bounds.getBottom() + width * 0.5f;
-    nvgMoveTo(openGl, 0.0f, y);
-    nvgLineTo(openGl, (float)bounds.w, y);
-    nvgStrokeWidth(openGl, width);
-    nvgStrokeColor(openGl, getColour(Skin::kBackgroundElement, this));
-    nvgStroke(openGl);
+    nvgMoveTo(g, 0.0f, y);
+    nvgLineTo(g, (float)bounds.w, y);
+    nvgStrokeWidth(g, width);
+    nvgStrokeColor(g, getColour(Skin::kBackgroundElement, this));
+    nvgStroke(g);
 
     return true;
   }
 
   bool
-  EffectModuleSection::render(OpenGlWrapper &openGl)
+  EffectModuleSection::render(Graphics &g)
   {
     float rounding = scaleValue(kOuterPixelRounding);
-    fillRect(openGl, getLocalBounds().toFloat(), getColour(Skin::kBackground, this),
+    fillRect(g, getLocalBounds().toFloat(), getColour(Skin::kBackground, this),
       rounding, rounding, rounding, rounding);
 
-    doRenderChildren(openGl);
+    doRenderChildren(g);
 
     if (!effectHolder.header.moduleActivator.isOn())
     {
-      fillRect(openGl, getLocalBounds().toFloat(), getColour(Skin::kOverlayScreen, this));
+      fillRect(g, getLocalBounds().toFloat(), getColour(Skin::kOverlayScreen, this));
     }
 
     return false;
@@ -198,7 +209,6 @@ namespace Interface
     effectHolder.sizingFlags = (Component::SizingFlags)(Component::GrowableX | Component::SnapToMinY);
     effectHolder.desiredSize = { 0, kEffectModuleMainBodyHeight, 0, utils::int_max<i32> };
     effectHolder.arena = arena;
-    effectHolder.reinitialise();
 
     effectHolder.header.effectTypeSelector.changeLinkedParameter(*effectModule->getParameter(Generation::EffectModule::ModuleType));
     effectHolder.header.mixNumberBox.changeLinkedParameter(*effectModule->getParameter(Generation::EffectModule::ModuleMix));
@@ -214,8 +224,7 @@ namespace Interface
       effectModuleCopy->component = effectModuleSectionCopy;
       return &effectModuleSectionCopy->effectHolder.header.draggableBox;
     };
-
-    restartEffectUI();
+    effectHolder.reinitialise();
   }
 
 
@@ -457,6 +466,25 @@ namespace Generation
     return genericKnobUI(arena, section, effectData);
   }
 
+  utils::span<Interface::Control *> 
+  Freeze::createUIRolling(utils::bumpArena *arena, 
+    Interface::EffectModuleSection *section, EffectData *effectData)
+  {
+    using namespace Interface;
+
+    Component *holder = anew(arena, Component, {});
+    holder->sizingFlags = (Component::SizingFlags)(Component::GrowableX | Component::GrowableY);
+    holder->padding = { 32, 0, 32, 0 };
+
+    auto *shiftRotary = createRotary(arena, findParameterWithId(effectData->parameters, Rolling::Rate));
+    holder->addChildComponent(shiftRotary);
+
+    section->effectHolder.addChildComponent(holder);
+
+    utils::vectornd<Control *> controls{ arena, {{ &shiftRotary->rotary }} };
+    return controls;
+  }
+
   utils::span<Interface::Control *>
   Destroy::createUIReinterpret(utils::bumpArena *arena,
     Interface::EffectModuleSection *section, EffectData *effectData)
@@ -502,7 +530,7 @@ namespace Generation
 Interface::Component *
 Generation::EffectModule::createUI()
 {
-  auto guiArena = Interface::getGui(Interface::uiRelated.renderer)->arena;
+  auto guiArena = Interface::getUiRelated()->renderer->gui->arena;
   auto *effectModuleSection = anew(guiArena, Interface::EffectModuleSection, {});
   effectModuleSection->effectModule = this;
   effectModuleSection->reinitialise();

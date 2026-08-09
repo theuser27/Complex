@@ -215,10 +215,10 @@ namespace Interface
 
     Skin::Override getSkinOverride() const;
 
-    void doRenderChildren(OpenGlWrapper &openGl);
-    void doRender(OpenGlWrapper &openGl);
-    void renderScrollbars(OpenGlWrapper &openGl, float scrollHoverIncrement);
-    virtual bool render([[maybe_unused]] OpenGlWrapper &openGl) { return true; }
+    void doRenderChildren(Graphics &g);
+    void doRender(Graphics &g);
+    void renderScrollbars(Graphics &g, float scrollHoverIncrement);
+    virtual bool render([[maybe_unused]] Graphics &g) { return true; }
 
     utils::bumpArena *arena{};
 
@@ -250,7 +250,6 @@ namespace Interface
       bool isVisible : 1 = true;
       bool isHovered : 1 = false;
       bool isClicked : 1 = false;
-      bool isOpenGlInitialised : 1 = false;
       bool isScrollbarXClicked : 1 = false;
       bool isScrollbarYClicked : 1 = false;
       bool isPositionSet : 1 = true;              // to aid components with custom placement
@@ -301,15 +300,15 @@ namespace Interface
 
   struct DrawComponent final : public Component
   {
-    bool (*draw)(OpenGlWrapper &openGl, Component *reference,
+    bool (*draw)(Graphics &g, Component *reference,
       Component *self, Point<i32> relativePoint) = nullptr;
     Component *reference = nullptr;
 
     bool
-    render(OpenGlWrapper &openGl) override
+    render(Graphics &g) override
     {
       auto relativePoint = getRelativePoint(reference);
-      return draw(openGl, reference, this, relativePoint);
+      return draw(g, reference, this, relativePoint);
     }
   };
 

@@ -24,6 +24,14 @@
 #include <string.h>
 #include "glad.h"
 
+#ifndef GLAD_MALLOC
+#define GLAD_MALLOC malloc
+#endif
+
+#ifndef GLAD_FREE
+#define GLAD_FREE free
+#endif
+
 static void* get_proc(const char *namez);
 
 #if defined(_WIN32) || defined(__CYGWIN__)
@@ -181,7 +189,7 @@ static int get_exts(void) {
         num_exts_i = 0;
         glGetIntegerv(GL_NUM_EXTENSIONS, &num_exts_i);
         if (num_exts_i > 0) {
-            exts_i = (char **)malloc((size_t)num_exts_i * (sizeof *exts_i));
+            exts_i = (char **)GLAD_MALLOC((size_t)num_exts_i * (sizeof *exts_i));
         }
 
         if (exts_i == NULL) {
@@ -192,7 +200,7 @@ static int get_exts(void) {
             const char *gl_str_tmp = (const char*)glGetStringi(GL_EXTENSIONS, index);
             size_t len = strlen(gl_str_tmp);
 
-            char *local_str = (char*)malloc((len+1) * sizeof(char));
+            char *local_str = (char*)GLAD_MALLOC((len+1) * sizeof(char));
             if(local_str != NULL) {
                 memcpy(local_str, gl_str_tmp, (len+1) * sizeof(char));
             }
@@ -207,9 +215,9 @@ static void free_exts(void) {
     if (exts_i != NULL) {
         int index;
         for(index = 0; index < num_exts_i; index++) {
-            free((char *)exts_i[index]);
+            GLAD_FREE((char *)exts_i[index]);
         }
-        free((void *)exts_i);
+        GLAD_FREE((void *)exts_i);
         exts_i = NULL;
     }
 }

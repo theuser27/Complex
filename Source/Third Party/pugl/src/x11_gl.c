@@ -47,7 +47,7 @@ puglX11GlConfigure(PuglView* view)
   Display* const       display = view->world->impl->display;
 
   PuglX11GlSurface* const surface =
-    (PuglX11GlSurface*)calloc(1, sizeof(PuglX11GlSurface));
+    (PuglX11GlSurface*)PUGL_CALLOC(1, sizeof(PuglX11GlSurface));
   impl->surface = surface;
 
   // clang-format off
@@ -216,7 +216,7 @@ puglX11GlDestroy(PuglView* view)
   PuglX11GlSurface* surface = (PuglX11GlSurface*)view->impl->surface;
   if (surface) {
     glXDestroyContext(view->world->impl->display, surface->ctx);
-    free(surface);
+    PUGL_FREE(surface);
     view->impl->surface = NULL;
   }
 }

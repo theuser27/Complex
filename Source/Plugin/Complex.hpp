@@ -8,11 +8,14 @@
 #include "Framework/constants.hpp"
 #include "Framework/memory.hpp"
 #include "Framework/parameter_types.hpp"
+#include "Interface/LookAndFeel/gui_utils.hpp"
 
 extern "C"
 {
   typedef struct CplugHostContext CplugHostContext;
   typedef i64 (*cplug_writeProc)(const void *stateCtx, void *writePos, usize numBytesToWrite);
+  typedef struct PuglView PuglView;
+  typedef void *xfiles_watch_context_t;
 }
 
 namespace Generation
@@ -31,8 +34,138 @@ namespace Framework
 
 namespace Interface
 {
-  class Renderer;
   struct MainInterface;
+
+  using PersistentCallback = void(Component *component);
+  struct MouseInteractions
+  {
+    Component *hovered = nullptr;
+    Component *clicked = nullptr;
+    Component *focused = nullptr;
+
+    MouseEvent mouseState{};
+  };
+
+  class Renderer
+  {
+  public:
+    enum TimerTypes { kTimerRefreshRate };
+
+    struct PerfGraph
+    {
+      float values[128];
+      int head;
+
+      float getGraphAverage()
+      {
+        float avg = 0;
+        for (usize i = 0; i < countof(values); i++)
+          avg += values[i];
+        
+        return avg / (float)countof(values);
+      }
+
+      void updateGraph(float frameTime)
+      {
+        head = (head + 1) % countof(values);
+        values[head] = frameTime;
+      }
+    };
+
+    static constexpr double kMultiClickTimeout = 0.500; //ms
+
+    Renderer(Plugin::ComplexPlugin &plugin);
+    ~Renderer();
+
+    PerfGraph graph{};
+
+    Area<u32> area{};
+    Area<u32> unscaledArea{};
+    float pluginScale = 1.0f;
+    float monitorScale = 1.0f;
+    bool isInitialised = false;
+    bool isVisible = false;
+    bool isResizing = false;
+    bool isHandlingOrphanedMouseEvents = false;
+    bool hasEnteredResizeCorner = false;
+    float fps =
+    #if COMPLEX_WINDOWS
+      64.0f; // Windows timers are complete ass
+    #elif
+      60.0f;
+    #endif
+
+  #ifdef COMPLEX_HOTRELOAD_DIR
+    xfiles_watch_context_t watchFileContext{};
+  #endif
+
+    PuglView *view_ = nullptr;
+
+    Plugin::ComplexPlugin &plugin;
+    InterfaceRelated generalData;
+
+    MainInterface *gui{};
+
+    Component *mouseHoveredComponent_ = nullptr;
+    Component *mouseDownComponent_ = nullptr;
+    Component *focusedComponent_ = nullptr;
+    Component *dragAndDropComponent_ = nullptr;
+
+    ModifierKeys mouseButtonsDown_{};
+    ModifierKeys lastKeyboardMods_{};
+
+    u64 numberOfFrames{};
+
+    u8 numberOfClicks = 0;
+    double lastMouseClickTime = 0.0;
+    Point<i32> lastMousePosition_{ 0, 0 };
+    Point<i32> lastMouseDownPosition_{ 0, 0 };
+
+    utils::bumpArena *arena{};
+
+    utils::vectormap<Component *, PersistentCallback *> callbacks{};
+
+    bool renderDebugFps = true;
+
+    void startUI();
+    void stopUI();
+
+    void resetGui(MainInterface *newGui);
+
+    void resizeChange(bool isResizing);
+    void moveFocusTo(Component *component);
+
+    utils::span<const byte> getClipboard();
+    void setClipboard(utils::span<const byte> data);
+
+    void setMouseCursor(MouseCursorTypes cursorType);
+    bool setUISize(u32 width, u32 height);
+    void setUIScale(float newPluginScale);
+    void setHoveredComponent(Component *component);
+    void setClickedComponent(Component *component);
+    void setFocusedComponent(Component *component);
+
+    MouseEvent getRelativeEvent(MouseEvent e, Component *component);
+    MouseInteractions getMouseInteractions();
+
+    void refreshComponentUnderMouse(MouseEvent e, bool forceMouseMove = true);
+    void handleMouseMove(MouseEvent e);
+    void handleMouseDown(MouseEvent e);
+    void handleMouseUp(MouseEvent e);
+    void handleMouseEnter(MouseEvent e);
+    void handleMouseLeave(MouseEvent e);
+    void handleMouseWheel(MouseEvent e);
+
+    void handleKeyPress(KeyPress k);
+
+    // snapping to 0.25 scales for better rendering
+    float getEffectiveScale() const { return ::roundf(pluginScale * monitorScale / kWindowScaleIncrements) * kWindowScaleIncrements; }
+
+    void recalculateScale(bool forceResize = false);
+    void checkFocusedComponent();
+    void doSizingAndPositioning();
+    void renderLoop(PuglView *view);
+  };
 }
 
 namespace Plugin
@@ -48,8 +181,6 @@ namespace Plugin
     void initialise(float sampleRate, u32 samplesPerBlock);
     void process(float *const *in, float *const *out, u32 numSamples,
       u32 numInputs, u32 numOutputs);
-
-    Interface::Renderer &getRenderer();
 
     void rescanLatency();
 
@@ -78,6 +209,8 @@ namespace Plugin
     const u32 outSidechains = 0;
     const usize parameterCount = 0;
 
+    utils::bumpArena *arena{};
+
     // might be updated on any thread hence atomic
     satomi::atomic<u32> samplesPerBlock = 0;
     satomi::atomic<float> sampleRate = kDefaultSampleRate;
@@ -95,8 +228,7 @@ namespace Plugin
 
     CplugHostContext *hostContext;
 
-    // pointer to the main processing engine
-    Interface::Renderer *rendererInstance = nullptr;
+    Interface::Renderer renderer;
   };
 }
 
@@ -207,7 +339,7 @@ namespace Plugin
     utils::vectornd<Thread> workers{};
   };
 
-  #define COMPLEX_CHECK_HOTRELOAD(state, functionName, ...)         \
+  #define COMPLEX_HOTRELOAD_CHECK(state, functionName, ...)         \
     if (auto *symbol = (state)->getHotreloadSymbol(function_symbol);\
       symbol && symbol != ((void *)&functionName))                  \
     { return ((decltype(functionName) *)symbol)(__VA_ARGS__); }

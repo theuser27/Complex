@@ -15,6 +15,11 @@ namespace utils
   class string;
 }
 
+namespace Plugin
+{
+  struct ComplexPlugin;
+}
+
 namespace Interface
 {
   template<typename T>
@@ -571,4 +576,19 @@ namespace Interface
   };
 
   MonitorInfo getCurrentMonitorInfo(void *nativeHandle);
+
+  class Renderer;
+  class Graphics;
+  class Skin;
+
+  struct InterfaceRelated
+  {
+    Plugin::ComplexPlugin &plugin;
+    Renderer *renderer = nullptr;
+    Graphics *g = nullptr;
+    Skin *skin = nullptr;
+    float scale = 1.0f;
+    float deltaTime = 0.0f;
+    double steadyTime = 0.0;
+  };
 }

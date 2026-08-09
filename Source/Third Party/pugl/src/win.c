@@ -73,7 +73,7 @@ puglArgStringNew(const char* const utf8)
 {
   const int len = MultiByteToWideChar(CP_UTF8, 0, utf8, -1, NULL, 0);
   if (len > 0) {
-    wchar_t* result = (wchar_t*)calloc((size_t)len, sizeof(wchar_t));
+    wchar_t* result = (wchar_t*)PUGL_CALLOC((size_t)len, sizeof(wchar_t));
     MultiByteToWideChar(CP_UTF8, 0, utf8, -1, result, len);
     return result;
   }
@@ -84,7 +84,7 @@ puglArgStringNew(const char* const utf8)
 static void
 puglArgStringFree(ArgStringChar* const utf8)
 {
-  free(utf8);
+  PUGL_FREE(utf8);
 }
 
 #else // !defined(UNICODE)
@@ -110,7 +110,7 @@ puglWideCharToUtf8(const wchar_t* const wstr, size_t* len)
 {
   int n = WideCharToMultiByte(CP_UTF8, 0, wstr, -1, NULL, 0, NULL, NULL);
   if (n > 0) {
-    char* result = (char*)calloc((size_t)n, sizeof(char));
+    char* result = (char*)PUGL_CALLOC((size_t)n, sizeof(char));
     WideCharToMultiByte(CP_UTF8, 0, wstr, -1, result, n, NULL, NULL);
     *len = (size_t)n - 1;
     return result;
@@ -241,7 +241,7 @@ puglInitWorldInternals(PuglWorldType type, PuglWorldFlags PUGL_UNUSED(flags))
 {
   (void)flags;
   PuglWorldInternals* impl =
-    (PuglWorldInternals*)calloc(1, sizeof(PuglWorldInternals));
+    (PuglWorldInternals*)PUGL_CALLOC(1, sizeof(PuglWorldInternals));
   if (!impl) {
     return NULL;
   }
@@ -278,7 +278,7 @@ PuglInternals*
 puglInitViewInternals(PuglWorld* PUGL_UNUSED(world))
 {
   (void)world;
-  return (PuglInternals*)calloc(1, sizeof(PuglInternals));
+  return (PuglInternals*)PUGL_CALLOC(1, sizeof(PuglInternals));
 }
 
 PuglStatus
@@ -416,7 +416,7 @@ puglFreeViewInternals(PuglView* view)
 
     ReleaseDC(view->impl->hwnd, view->impl->hdc);
     DestroyWindow(view->impl->hwnd);
-    free(view->impl);
+    PUGL_FREE(view->impl);
   }
 }
 
@@ -428,7 +428,7 @@ puglFreeWorldInternals(PuglWorld* world)
 
   UnregisterClass(classNameArg, NULL);
   puglArgStringFree(classNameArg);
-  free(world->impl);
+  PUGL_FREE(world->impl);
 }
 
 static PuglKey
@@ -1403,7 +1403,7 @@ puglGetClipboard(PuglView* const view,
     return NULL;
   }
 
-  free(impl->clipboard.data);
+  PUGL_FREE(impl->clipboard.data);
   impl->clipboard.data = puglWideCharToUtf8(wstr, &impl->clipboard.len);
 
   GlobalUnlock(mem);

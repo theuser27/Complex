@@ -1,6 +1,8 @@
 
 // Created: 2021-05-23 00:20:15
 
+#include <stdlib.h> // offsetof
+
 #include "Complex.hpp"
 
 #include "Third Party/cplug/cplug.h"
@@ -10,7 +12,6 @@
 #include "Framework/parameter_value.hpp"
 #include "Generation/Effects.hpp"
 #include "Generation/SoundEngine.hpp"
-#include "Renderer.hpp"
 #include "Interface/LookAndFeel/Graphics.hpp"
 #include "Interface/LookAndFeel/Component.hpp"
 #include "Interface/Sections/MainInterface.hpp"
@@ -117,8 +118,6 @@ namespace
   }
 }
 
-utils::MemoryLogger memoryLogger{};
-
 utils::string_view
 findOrAddPermanentString(utils::string_view string)
 {
@@ -156,14 +155,14 @@ namespace Framework
 {
   void ParameterBridge::notifyParameterChange()
   {
-    auto hostContext = Interface::getPlugin(Interface::uiRelated.renderer).hostContext;
+    auto hostContext = Interface::getUiRelated()->plugin.hostContext;
     hostContext->rescan(hostContext,
       CPLUG_FLAG_RESCAN_PARAM_VALUES | CPLUG_FLAG_RESCAN_PARAM_NAMES | CPLUG_FLAG_RESCAN_PARAM_METADATA);
   }
 
   void ParameterBridge::beginChangeGesture()
   {
-    if (!state->plugin->rendererInstance)
+    if (!state->plugin->renderer.gui)
       return;
 
     auto event = CplugEvent{ .parameter = { .type = CPLUG_EVENT_PARAM_CHANGE_BEGIN, .id = (uint32_t)parameterIndex } };
@@ -174,7 +173,7 @@ namespace Framework
   {
     value_.store(newValue, satomi::memory_order_release);
 
-    if (!state->plugin->rendererInstance)
+    if (!state->plugin->renderer.gui)
       return;
 
     auto event = CplugEvent{ .parameter = { .type = CPLUG_EVENT_PARAM_CHANGE_UPDATE,
@@ -184,7 +183,7 @@ namespace Framework
 
   void ParameterBridge::endChangeGesture()
   {
-    if (!state->plugin->rendererInstance)
+    if (!state->plugin->renderer.gui)
       return;
 
     auto event = CplugEvent{ .parameter = {.type = CPLUG_EVENT_PARAM_CHANGE_END, .id = (uint32_t)parameterIndex } };
@@ -434,10 +433,11 @@ namespace Plugin
 
   ComplexPlugin::ComplexPlugin(usize parameterMappings, u32 inSidechains,
     u32 outSidechains, usize undoSteps, CplugHostContext *hostContext) :
-    inSidechains{ inSidechains }, outSidechains{ outSidechains },
-    parameterCount{ parameterMappings }, undoManager{ undoSteps },
-    hostContext{ hostContext }
+    inSidechains{ inSidechains }, outSidechains{ outSidechains }, parameterCount{ parameterMappings }, 
+    arena{ utils::bumpArena::create(COMPLEX_MB(16), COMPLEX_MB(2)) }, undoManager{ arena, undoSteps },
+    hostContext{ hostContext }, renderer{ *this }
   {
+    fft.arena = arena;
     loadState(this, {});
     // plugin formats will later call loadState
     // but in between that other functions get called that will require *some* state
@@ -482,23 +482,6 @@ namespace Plugin
     return state;
   }
 
-  Interface::Renderer &
-  ComplexPlugin::getRenderer()
-  {
-    if (!rendererInstance)
-    {
-      rendererInstance = Interface::createRenderer(*this);
-      return *rendererInstance;
-    }
-
-    // setting these once more because i don't know if the message thread
-    // might have been shut down and started up again
-    Interface::uiRelated.renderer = rendererInstance;
-    Interface::uiRelated.skin = Interface::getSkin(rendererInstance);
-
-    return *rendererInstance;
-  }
-
   void ComplexPlugin::rescanLatency()
   {
     if (hasLatencyChanged.exchange(false, satomi::memory_order_relaxed))
@@ -531,24 +514,56 @@ namespace Plugin
   }
 }
 
-namespace utils { void atLoad(); }
+struct TlsContext
+{
+  utils::bumpArena *localScratch{};
+  utils::bumpArena *localMallocArena{};
+  Interface::InterfaceRelated *uiRelated{};
+};
+
+void *
+utils::createTlsContext()
+{
+  auto *context = anew(globalArena, TlsContext, {});
+  
+  context->localScratch = utils::bumpArena::create(COMPLEX_MB(4), COMPLEX_KB(128));
+
+  return context;
+}
+
+void utils::destroyTlsContext(void *context)
+{
+  auto *tls = (TlsContext *)context;
+  utils::bumpArena::destroy(tls->localScratch);
+  tls->localScratch = nullptr;
+}
+
+utils::bumpArena *&
+getLocalScratch()
+{
+  return ((TlsContext *)utils::getTls())->localScratch;
+}
+
+utils::bumpArena *&
+getLocalMallocArena()
+{
+  return ((TlsContext *)utils::getTls())->localMallocArena;
+}
+
+Interface::InterfaceRelated *&
+Interface::getUiRelated()
+{
+  return ((TlsContext *)utils::getTls())->uiRelated;
+}
+
 void initialiseCJSONHooks();
-// DLL-wide (used for all instances of a plugin !!!) temporary memory resource
-// for the main thread, only gets deallocated when the DLL is unloaded
-constinit thread_local utils::bumpArena *localScratch = nullptr;
-// settable memory source, used when an external library wants to call malloc
-// can be used if malloc/realloc/free are replaced with arena_(malloc/free/realloc)
-// remember to always replace the arena pointer when you want to use it (undefined value)
-constinit thread_local utils::bumpArena *mallocArena = nullptr;
+
 // DLL-wide global memmory pool, deallocated when DLL is unloaded
 constinit utils::bumpArena *globalArena = nullptr;
 
 void cplug_libraryLoad()
 {
   utils::atLoad();
-
-  localScratch = utils::bumpArena::create(COMPLEX_MB(4), COMPLEX_KB(128));
-  globalArena = utils::bumpArena::create(COMPLEX_MB(128), COMPLEX_MB(1));
 
   initialisePluginStructure();
   initialiseCJSONHooks();
@@ -557,16 +572,12 @@ void cplug_libraryUnload()
 {
   deinitialisePluginStructure();
   
-  utils::bumpArena::destroy(localScratch);
-  localScratch = nullptr;
-  utils::bumpArena::destroy(globalArena);
-  globalArena = nullptr;
+  utils::atUnload();
 }
 
 void *cplug_createPlugin(CplugHostContext *ctx)
 {
-  if (!localScratch)
-    localScratch = utils::bumpArena::create(COMPLEX_MB(4), COMPLEX_KB(128));
+  COMPLEX_ASSERT(getLocalScratch());
 
   usize parameterMappings = 64, inSidechains = 0, outSidechains = 0, undoSteps = 100;
   Framework::LoadSave::getStartupParameters(parameterMappings, inSidechains, outSidechains, undoSteps);
@@ -782,7 +793,7 @@ void cplug_loadState(void *userPlugin, const void *stateCtx, cplug_readProc read
 
   usize capacity = kCapacityIncrease;
   usize size{};
-  char *buffer = arranew(localScratch, char, capacity, {});
+  char *buffer = arranew(getLocalScratch(), char, capacity, {});
   while (true)
   {
     usize readBytes = readProc(stateCtx, buffer + size, capacity - size);

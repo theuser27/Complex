@@ -63,12 +63,10 @@
 
 #include <assert.h>
 #include <stdlib.h>
+#include <math.h> // sinf(), cosf()
 
 #define PFFFT_PI 3.14159265358979323846
 #define PFFFT_SQRT2 1.41421356237309504880
-
-float sinf(float x);
-float cosf(float x);
 
 /* detect compiler flavour */
 #if defined(_MSC_VER)
@@ -235,20 +233,6 @@ void validate_pffft_simd(void) {
   assertv4(a0, 0, 4, 8, 12); assertv4(a1, 1, 5, 9, 13); assertv4(a2, 2, 6, 10, 14); assertv4(a3, 3, 7, 11, 15);
 }
 #endif
-
-/* SSE and co like 16-bytes aligned pointers */
-#define MALLOC_V4SF_ALIGNMENT 64 // with a 64-byte alignment, we are even aligned on L2 cache lines...
-void *pffft_aligned_malloc(size_t nb_bytes) {
-  void *p, *p0 = malloc(nb_bytes + MALLOC_V4SF_ALIGNMENT);
-  if (!p0) return (void *) 0;
-  p = (void *) (((size_t) p0 + MALLOC_V4SF_ALIGNMENT) & (~((size_t) (MALLOC_V4SF_ALIGNMENT-1))));
-  *((void **) p - 1) = p0;
-  return p;
-}
-
-void pffft_aligned_free(void *p) {
-  if (p) free(*((void **) p - 1));
-}
 
 int pffft_simd_size(void) { return SIMD_SZ; }
 
@@ -1211,11 +1195,22 @@ struct PFFFT_Setup {
   v4sf *data; // allocated room for twiddle coefs
   float *e;    // points into 'data' , N/4*3 elements
   float *twiddle; // points into 'data', N/4 elements
+  
+  void *userdata;
+  pffft_deallocate *deallocate;
 };
 
-PFFFT_Setup *pffft_new_setup(int N, pffft_transform_t transform)
+/* SSE and co like 16-bytes aligned pointers */
+#define MALLOC_V4SF_ALIGNMENT 64 // with a 64-byte alignment, we are even aligned on L2 cache lines...
+PFFFT_Setup *pffft_new_setup(int N, pffft_transform_t transform, pffft_allocate *allocate, pffft_deallocate *deallocate, void *userdata)
 {
-  PFFFT_Setup *setup = (PFFFT_Setup *)malloc(sizeof(PFFFT_Setup));
+#ifdef COMPILER_MSVC
+#  define ALIGNOF(T) __alignof(T)
+#else
+#  define ALIGNOF(T) __alignof__(T)
+#endif
+  
+  PFFFT_Setup *setup = (PFFFT_Setup *)allocate(userdata, sizeof(PFFFT_Setup), ALIGNOF(PFFFT_Setup));
 
   /* unfortunately, the fft size must be a multiple of 16 for complex FFTs 
      and 32 for real FFTs -- a lot of stuff would need to be rewritten to
@@ -1227,9 +1222,11 @@ PFFFT_Setup *pffft_new_setup(int N, pffft_transform_t transform)
   setup->transform = transform;
   /* nb of complex simd vectors */
   setup->Ncvec = (transform == PFFFT_REAL ? N/2 : N) / SIMD_SZ;
-  setup->data = (v4sf *)pffft_aligned_malloc(2 * setup->Ncvec * sizeof(v4sf));
+  setup->data = (v4sf *)allocate(userdata, 2 * setup->Ncvec * sizeof(v4sf), MALLOC_V4SF_ALIGNMENT);
   setup->e = (float *)setup->data;
   setup->twiddle = (float *)(setup->data + (2 * setup->Ncvec * (SIMD_SZ - 1)) / SIMD_SZ);
+  setup->userdata = userdata;
+  setup->deallocate = deallocate;
 
   for (int k = 0; k < setup->Ncvec; ++k)
   {
@@ -1265,12 +1262,14 @@ PFFFT_Setup *pffft_new_setup(int N, pffft_transform_t transform)
   }
 
   return setup;
+
+#undef ALIGNOF
 }
 
 
 void pffft_destroy_setup(PFFFT_Setup *s) {
-  pffft_aligned_free(s->data);
-  free(s);
+  s->deallocate(s->userdata, s->data);
+  s->deallocate(s->userdata, s);
 }
 
 /* [0 0 1 2 3 4 5 6 7 8] -> [0 8 7 6 5 4 3 2 1] */

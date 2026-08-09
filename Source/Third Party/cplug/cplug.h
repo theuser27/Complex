@@ -19,6 +19,22 @@ extern "C" {
 #include <stdint.h>
 #include <stdlib.h>
 
+#ifndef CPLUG_MALLOC
+#define CPLUG_MALLOC malloc
+#endif
+
+#ifndef CPLUG_CALLOC
+#define CPLUG_CALLOC calloc
+#endif
+
+#ifndef CPLUG_REALLOC
+#define CPLUG_REALLOC realloc
+#endif
+
+#ifndef CPLUG_FREE
+#define CPLUG_FREE free
+#endif
+
 #ifdef CPLUG_SHARED
 #ifdef _WIN32
 #define CPLUG_API __declspec(dllexport)

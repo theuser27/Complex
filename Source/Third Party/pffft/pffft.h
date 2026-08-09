@@ -88,6 +88,9 @@
 extern "C" {
 #endif
 
+typedef void *(pffft_allocate)(void *userdata, size_t size, size_t alignment);
+typedef void (pffft_deallocate)(void *userdata, void *allocation);
+
 /* opaque struct holding internal stuff (precomputed twiddle factors)
     this struct can be shared by many threads as it contains only
     read-only data.  
@@ -105,8 +108,8 @@ typedef enum { PFFFT_REAL, PFFFT_COMPLEX } pffft_transform_t;
   PFFFT_Setup structure is read-only so it can safely be shared by
   multiple concurrent threads. 
 */
-PFFFT_Setup *pffft_new_setup(int N, pffft_transform_t transform);
-void pffft_destroy_setup(PFFFT_Setup *);
+PFFFT_Setup *pffft_new_setup(int N, pffft_transform_t transform, pffft_allocate *allocate, pffft_deallocate *deallocate, void *userdata);
+void pffft_destroy_setup(PFFFT_Setup *s);
 /* 
     Perform a Fourier transform , The z-domain data is stored in the
     most efficient order for transforming it back, or using it for
@@ -163,14 +166,6 @@ void pffft_zreorder(PFFFT_Setup *setup, const float *input, float *output, pffft
     The dft_a, dft_b and dft_ab pointers may alias.
 */
 void pffft_zconvolve_accumulate(PFFFT_Setup *setup, const float *dft_a, const float *dft_b, float *dft_ab, float scaling);
-
-/*
-  the float buffers must have the correct alignment (16-byte boundary
-  on intel and powerpc). This function may be used to obtain such
-  correctly aligned buffers.  
-*/
-void *pffft_aligned_malloc(size_t nb_bytes);
-void pffft_aligned_free(void *);
 
 /* return 4 or 1 wether support SSE/Altivec instructions was enable when building pffft.c */
 int pffft_simd_size(void);

@@ -3,7 +3,7 @@
 
 #include "Effects.hpp"
 
-#include "Framework/circular_buffer.hpp"
+#include "Framework/buffer.hpp"
 #include "Framework/simd_math.hpp"
 #include "Framework/simd_utils.hpp"
 #include "Framework/parameter_value.hpp"
@@ -82,16 +82,17 @@ namespace Generation
     buffer = Framework::SimdBuffer::create(arena, utils::kChannelsPerInOut, maxBinCount);
 
     if (serialisedSave)
+    {
       deserialiseFromJson(serialisedSave);
+      auto [effectOption, _] = getParameter(EffectModule::ModuleType)->getInternalValue<Framework::IndexedData>();
+      effects = createEffect(effectOption->processorMetadata, this, nullptr, serialisedSave);
+      changeEffect(effectOption);
+    }
     else
     {
       parameters = createParameters(metadata->parametersCount, metadata->parameters);
       parameterCount = metadata->parametersCount;
     }
-
-    auto [effectOption, _] = getParameter(EffectModule::ModuleType)->getInternalValue<Framework::IndexedData>();
-    effects = createEffect(effectOption->processorMetadata, this, nullptr, serialisedSave);
-    changeEffect(effectOption);
   }
 
   void EffectModule::serialiseToJson(void *jsonData, utils::span<Framework::ParameterValue *>) const
@@ -99,7 +100,7 @@ namespace Generation
     auto *effect = currentEffect.load(satomi::memory_order_acquire);
 
     auto parametersToSerialise = utils::vector<Framework::ParameterValue *>{
-      localScratch, effect->parameterCount + parameterCount };
+      getLocalScratch(), effect->parameterCount + parameterCount };
 
     auto parameter = parameters;
     for (usize i = 0; i < parameterCount; (++i), (parameter = parameter->next))
@@ -580,6 +581,7 @@ initialiseTypeStructure<Generation::EffectModule>(void *, Framework::PluginStruc
             Dynamics::initialiseTypeStructure(structure),
             Phase::initialiseTypeStructure(structure),
             Pitch::initialiseTypeStructure(structure),
+            Freeze::initialiseTypeStructure(structure),
             Destroy::initialiseTypeStructure(structure) }}),
           .defaultOptionId = Filter::Types::Normal
         }, ParameterScale::Indexed, {}, ParameterDetails::Automatable | ParameterDetails::Extensible, UpdateFlag::AfterProcess),

@@ -2,6 +2,7 @@
 // Created: 2024-02-13 20:05:06
 
 #include "fourier_transform.hpp"
+#include "memory.hpp"
 
 #ifdef COMPLEX_INTEL_IPP
   #include "ipps.h"
@@ -13,20 +14,20 @@
 
 namespace Framework
 {
-#if COMPLEX_INTEL_IPP
+#ifdef COMPLEX_INTEL_IPP
 
-  FFT::FFT(u32 minOrder, u32 maxOrder) : orders{ { minOrder, maxOrder } }
+  void createFFTRoutines(FFT &instance, u32 minOrder, u32 maxOrder)
   {
     static constexpr int cachelLineAlignment = 64;
 
     COMPLEX_ASSERT(minOrder <= maxOrder);
 
     // full array is needed so that extending FFT orders works
-    auto ippSpecs = (void **)ippsMalloc_8u((maxOrder + 1) * sizeof(void *));
+    auto *ippSpecs = arranew(instance.arena, void *, maxOrder + 1);
 
     auto orderCount = maxOrder - minOrder + 1;
     // compute sizes for all specs and add padding so that the specBuffer is also 64-byte aligned just in case
-    int *tempData = (int *)ippsMalloc_8u((orderCount * 4) * sizeof(int));
+    int *tempData = arranew(instance.arena, int, orderCount * 4);
     int *specSizes = tempData;
     int *specSizesPadding = specSizes + orderCount;
     int *specBufferSizes = specSizesPadding + orderCount;
@@ -49,8 +50,8 @@ namespace Framework
 
     totalSize += maxBufferSize;
 
-    auto buffer = ippsMalloc_8u(totalSize);
-    Ipp8u *rest = (Ipp8u *)buffer + maxBufferSize + (cachelLineAlignment - (maxBufferSize % cachelLineAlignment)) % cachelLineAlignment;
+    Ipp8u *buffer = arranew(instance.arena, Ipp8u, totalSize);
+    Ipp8u *rest = buffer + maxBufferSize + (cachelLineAlignment - (maxBufferSize % cachelLineAlignment)) % cachelLineAlignment;
 
     for (u32 i = 0; i < orderCount; ++i)
     {
@@ -64,18 +65,18 @@ namespace Framework
       ippSpecs[minOrder + i] = plan;
     }
 
-    ippsFree(tempData);
+    utils::bumpArena::remove(tempData);
 
-    ippSpecs_.store(ippSpecs, satomi::memory_order_relaxed);
-    buffer_.store(buffer, satomi::memory_order_relaxed);
+    instance.ippSpecs_.store(ippSpecs, satomi::memory_order_relaxed);
+    instance.buffer_.store(buffer, satomi::memory_order_relaxed);
   }
 
-  FFT::~FFT() noexcept
+  static void destroyFFTRoutines(FFT &instance)
   {
-    if (auto buffer = buffer_.load(satomi::memory_order_relaxed))
-      ippsFree(buffer);
-    if (auto ippSpecs = ippSpecs_.load(satomi::memory_order_relaxed))
-      ippsFree(ippSpecs);
+    if (auto buffer = instance.buffer_.load(satomi::memory_order_relaxed))
+      utils::bumpArena::remove(buffer);
+    if (auto ippSpecs = instance.ippSpecs_.load(satomi::memory_order_relaxed))
+      utils::bumpArena::remove(ippSpecs);
   }
 
   void FFT::transformRealForward(u32 order, float *input, u32) const noexcept
@@ -126,33 +127,39 @@ namespace Framework
   #endif
   }
 
-  FFT::FFT(u32 minOrder, u32 maxOrder) : orders{ { minOrder, maxOrder } }
+  static void createFFTRoutines(FFT &instance, u32 minOrder, u32 maxOrder)
   {
     // full array is needed so that extending FFT orders works
-    auto plans = (void **)utils::allocate((maxOrder + 1) * sizeof(void *));
+    auto *plans = arranew(instance.arena, void *, maxOrder + 1);
 
     for (usize i = minOrder; i < maxOrder + 1; ++i)
-      plans[i] = pffft_new_setup(1 << i, PFFFT_REAL);
+      plans[i] = pffft_new_setup(1 << i, PFFFT_REAL, 
+        [](void *ud, usize size, usize alignment) -> void * { return utils::bumpArena::insert((utils::bumpArena *)ud, size, alignment); },
+        [](void *, void *allocation) { utils::bumpArena::remove(allocation); },
+        instance.arena);
 
-    plans_.store(plans, satomi::memory_order_relaxed);
-    scratchBuffers_.store((float *)pffft_aligned_malloc((usize(1) << maxOrder) * sizeof(float)),
+    instance.plans_.store(plans, satomi::memory_order_relaxed);
+
+    // buffer needs to be 16 byte aligned for sse/neon
+    instance.scratchBuffers_.store((float *)instance.arena->insert(instance.arena, 
+      ((usize(1) << maxOrder) * sizeof(float)), pffft_simd_size() * alignof(float), true),
       satomi::memory_order_relaxed);
   }
 
-  FFT::~FFT() noexcept
+  static void destroyFFTRoutines(FFT &instance)
   {
-    auto [minOrder, maxOrder] = orders.load(satomi::memory_order_acquire);
+    auto [minOrder, maxOrder] = instance.orders.load(satomi::memory_order_acquire);
 
-    if (auto *plans = plans_.load(satomi::memory_order_relaxed))
+    if (auto *plans = instance.plans_.load(satomi::memory_order_relaxed))
     {
       for (usize i = minOrder; i < maxOrder + 1; ++i)
         if (plans[i])
           pffft_destroy_setup((PFFFT_Setup *)plans[i]);
 
-      utils::deallocate(plans);
+      utils::bumpArena::remove(plans);
     }
-    if (auto *scratch = scratchBuffers_.load(satomi::memory_order_relaxed))
-      pffft_aligned_free(scratch);
+    if (auto *scratch = instance.scratchBuffers_.load(satomi::memory_order_relaxed))
+      utils::bumpArena::remove(scratch);
   }
 
   void FFT::transformRealForward(u32 order, float *input, u32) const noexcept
@@ -190,6 +197,11 @@ namespace Framework
 
 #endif
 
+  FFT::~FFT() noexcept
+  {
+    destroyFFTRoutines(*this);
+  }
+
   void FFT::extendFFTOrders(u32 newMinOrder, u32 newMaxOrder)
   {
     auto [minOrder, maxOrder] = orders.load(satomi::memory_order_acquire);
@@ -198,43 +210,9 @@ namespace Framework
     if (newMinOrder >= minOrder && newMaxOrder <= maxOrder)
       return;
 
-    FFT newFFT{ newMinOrder, newMaxOrder };
+    destroyFFTRoutines(*this);
+    createFFTRoutines(*this, newMinOrder, newMaxOrder);
 
-  #if COMPLEX_INTEL_IPP
-    newFFT.buffer_.store(
-      buffer_.exchange(
-        newFFT.buffer_.load(satomi::memory_order_relaxed),
-        satomi::memory_order_release),
-      satomi::memory_order_relaxed
-    );
-
-    newFFT.ippSpecs_.store(
-      ippSpecs_.exchange(
-        newFFT.ippSpecs_.load(satomi::memory_order_relaxed),
-        satomi::memory_order_release),
-      satomi::memory_order_relaxed
-    );
-  #else
-    newFFT.scratchBuffers_.store(
-      scratchBuffers_.exchange(
-        newFFT.scratchBuffers_.load(satomi::memory_order_relaxed),
-        satomi::memory_order_release),
-      satomi::memory_order_relaxed
-    );
-
-    newFFT.plans_.store(
-      plans_.exchange(
-        newFFT.plans_.load(satomi::memory_order_relaxed),
-        satomi::memory_order_release),
-      satomi::memory_order_relaxed
-    );
-  #endif
-
-    newFFT.orders.store(
-      orders.exchange(
-        { newMinOrder, newMaxOrder },
-        satomi::memory_order_release),
-      satomi::memory_order_relaxed
-    );
+    orders.store({ newMinOrder, newMaxOrder }, satomi::memory_order_relaxed);
   }
 }

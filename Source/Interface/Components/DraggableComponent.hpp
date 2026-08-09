@@ -14,7 +14,7 @@ namespace Interface
       componentFlags.clickable = true;
     }
 
-    bool render(OpenGlWrapper &openGl) override;
+    bool render(Graphics &g) override;
 
     bool mouseEnter(const MouseEvent &e) override;
     bool mouseDown(const MouseEvent &e) override;

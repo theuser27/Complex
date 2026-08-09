@@ -1049,7 +1049,7 @@ PuglWorldInternals*
 puglInitWorldInternals(PuglWorldType type, PuglWorldFlags PUGL_UNUSED(flags))
 {
   PuglWorldInternals* impl =
-    (PuglWorldInternals*)calloc(1, sizeof(PuglWorldInternals));
+    (PuglWorldInternals*)PUGL_CALLOC(1, sizeof(PuglWorldInternals));
 
   impl->app = [NSApplication sharedApplication];
 
@@ -1073,7 +1073,7 @@ puglFreeWorldInternals(PuglWorld* world)
     [world->impl->autoreleasePool drain];
   }
 
-  free(world->impl);
+  PUGL_FREE(world->impl);
 }
 
 void*
@@ -1085,7 +1085,7 @@ puglGetNativeWorld(PuglWorld* world)
 PuglInternals*
 puglInitViewInternals(PuglWorld* PUGL_UNUSED(world))
 {
-  PuglInternals* impl = (PuglInternals*)calloc(1, sizeof(PuglInternals));
+  PuglInternals* impl = (PuglInternals*)PUGL_CALLOC(1, sizeof(PuglInternals));
 
   impl->cursor = [NSCursor arrowCursor];
 
@@ -1427,7 +1427,7 @@ puglFreeViewInternals(PuglView* view)
         [view->impl->window release];
       }
 
-      free(view->impl);
+      PUGL_FREE(view->impl);
     }
   }
 }

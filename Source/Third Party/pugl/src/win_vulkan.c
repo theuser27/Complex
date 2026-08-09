@@ -25,7 +25,7 @@ puglNewVulkanLoader(PuglWorld*        PUGL_UNUSED(world),
                     const char* const libraryName)
 {
   PuglVulkanLoader* loader =
-    (PuglVulkanLoader*)calloc(1, sizeof(PuglVulkanLoader));
+    (PuglVulkanLoader*)PUGL_CALLOC(1, sizeof(PuglVulkanLoader));
   if (!loader) {
     return NULL;
   }
@@ -33,7 +33,7 @@ puglNewVulkanLoader(PuglWorld*        PUGL_UNUSED(world),
   const char* const filename = libraryName ? libraryName : "vulkan-1.dll";
   if (!(loader->libvulkan =
           LoadLibraryExA(filename, NULL, LOAD_LIBRARY_SEARCH_DEFAULT_DIRS))) {
-    free(loader);
+    PUGL_FREE(loader);
     return NULL;
   }
 
@@ -51,7 +51,7 @@ puglFreeVulkanLoader(PuglVulkanLoader* loader)
 {
   if (loader) {
     FreeLibrary(loader->libvulkan);
-    free(loader);
+    PUGL_FREE(loader);
   }
 }
 

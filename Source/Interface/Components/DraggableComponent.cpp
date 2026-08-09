@@ -3,15 +3,16 @@
 
 #include "DraggableComponent.hpp"
 
+#include "Third Party/pugl/pugl.h"
+
 #include "Generation/Processor.hpp"
 #include "Plugin/Complex.hpp"
-#include "Plugin/Renderer.hpp"
 #include "../Sections/MainInterface.hpp"
 
 namespace Interface
 {
   bool
-  DraggableComponent::render(OpenGlWrapper &openGl)
+  DraggableComponent::render(Graphics &g)
   {
     static constexpr float kDotDiameter = 1.0f;
     static constexpr float kDotsOffset = 6.0f;
@@ -25,19 +26,19 @@ namespace Interface
     auto centreRectangle = Rectangle{ (float)centeredX, (float)centeredY,
       (float)dotsOffset, (float)dotsOffset };
 
-    nvgFillColor(openGl, getColour(Skin::kWidgetSecondary1, this));
-    nvgBeginPath(openGl);
-    nvgEllipse(openGl, centreRectangle.x, centreRectangle.y, dotsDiameter, dotsDiameter);
-    nvgFill(openGl);
-    nvgBeginPath(openGl);
-    nvgEllipse(openGl, centreRectangle.x, centreRectangle.getBottom(), dotsDiameter, dotsDiameter);
-    nvgFill(openGl);
-    nvgBeginPath(openGl);
-    nvgEllipse(openGl, centreRectangle.getRight(), centreRectangle.y, dotsDiameter, dotsDiameter);
-    nvgFill(openGl);
-    nvgBeginPath(openGl);
-    nvgEllipse(openGl, centreRectangle.getRight(), centreRectangle.getBottom(), dotsDiameter, dotsDiameter);
-    nvgFill(openGl);
+    nvgFillColor(g, getColour(Skin::kWidgetSecondary1, this));
+    nvgBeginPath(g);
+    nvgEllipse(g, centreRectangle.x, centreRectangle.y, dotsDiameter, dotsDiameter);
+    nvgFill(g);
+    nvgBeginPath(g);
+    nvgEllipse(g, centreRectangle.x, centreRectangle.getBottom(), dotsDiameter, dotsDiameter);
+    nvgFill(g);
+    nvgBeginPath(g);
+    nvgEllipse(g, centreRectangle.getRight(), centreRectangle.y, dotsDiameter, dotsDiameter);
+    nvgFill(g);
+    nvgBeginPath(g);
+    nvgEllipse(g, centreRectangle.getRight(), centreRectangle.getBottom(), dotsDiameter, dotsDiameter);
+    nvgFill(g);
 
     //if (isDragging)
     //{
@@ -45,7 +46,7 @@ namespace Interface
 
     //  //draggedComponent->nextPosition = initialClickPosition + lastDragEvent.getOffsetFromDragStart();
     //  auto position = draggedComponent->getLocalBounds().getCentre();
-    //  auto *placeholder = &getGui(uiRelated.renderer)->placeholderInsert;
+    //  auto *placeholder = &getUiRelated()->renderer->gui->placeholderInsert;
 
     //  CommandMessages::ProcessorInsertion insertInfo{
     //    .position = position, .processor = processor, .placeholder = placeholder,
@@ -63,7 +64,7 @@ namespace Interface
   bool
   DraggableComponent::mouseEnter(const MouseEvent &)
   {
-    setMouseCursor(uiRelated.renderer, MouseCursorTypes::AllScroll);
+    getUiRelated()->renderer->setMouseCursor(MouseCursorTypes::AllScroll);
     return true;
   }
 
@@ -71,7 +72,7 @@ namespace Interface
   DraggableComponent::mouseExit(const MouseEvent &e)
   {
     if (!componentFlags.isClicked || !e.mods.test(ModifierKeys::leftButtonModifier))
-      setMouseCursor(uiRelated.renderer, MouseCursorTypes::Normal);
+      getUiRelated()->renderer->setMouseCursor(MouseCursorTypes::Normal);
     return true;
   }
 
@@ -129,7 +130,7 @@ namespace Interface
       newDraggableComponent->draggedComponent->placement = draggedComponent->placement;
       newDraggableComponent->isCopying = true;
 
-      setClickedComponent(uiRelated.renderer, newDraggableComponent);
+      getUiRelated()->renderer->setClickedComponent(newDraggableComponent);
 
       auto event = e;
       event.mods = event.mods.withoutFlags(ModifierKeys::ctrlModifier);
@@ -138,17 +139,17 @@ namespace Interface
 
     isDragging = true;
 
-    auto *placeholder = &getGui(uiRelated.renderer)->placeholderInsert;
+    auto *placeholder = &getUiRelated()->renderer->gui->placeholderInsert;
     placeholder->reference = this;
     placeholder->placement = draggedComponent->placement;
     placeholder->sizingFlags = draggedComponent->sizingFlags;
     placeholder->desiredSize = draggedComponent->desiredSize;
-    placeholder->draw = [](OpenGlWrapper &openGl, Component *, Component *self, Point<i32>)
+    placeholder->draw = [](Graphics &g, Component *, Component *self, Point<i32>)
     {
       auto colour = getColour(Skin::kLightenScreen, self);
 
-      fillRect(openGl, self->getLocalBounds().toFloat(), colour.dimmer(0.3f), scaleValue(4.0f));
-      strokeRect(openGl, self->getLocalBounds().toFloat(), scaleValue(1.0f), colour, scaleValue(4.0f));
+      fillRect(g, self->getLocalBounds().toFloat(), colour.dimmer(0.3f), scaleValue(4.0f));
+      strokeRect(g, self->getLocalBounds().toFloat(), scaleValue(1.0f), colour, scaleValue(4.0f));
 
       return true;
     };
@@ -206,7 +207,7 @@ namespace Interface
     // set the dragged component to its correct position
     draggedComponent->bounds = draggedComponent->bounds.withPosition(initialClickPosition);
 
-    registerCallback(uiRelated.renderer, this, [](Component *c)
+    getUiRelated()->renderer->callbacks.add(this, [](Component *c)
       {
         auto *self = (DraggableComponent *)c;
         if (!self->isDragging)
@@ -215,11 +216,11 @@ namespace Interface
         COMPLEX_ASSERT(self->processor);
 
         //draggedComponent->nextPosition = initialClickPosition + lastDragEvent.getOffsetFromDragStart();
-        auto *placeholder = &getGui(uiRelated.renderer)->placeholderInsert;
+        auto *placeholder = &getUiRelated()->renderer->gui->placeholderInsert;
         auto *insertedIntoComponent = tryToInsertDraggableComponent(self->draggedComponent,
           placeholder->parent, self->processor, placeholder, self->directionX, self->directionY);
 
-        utils::vector<Component *> parentComponentPath{ localScratch, 8 };
+        utils::vector<Component *> parentComponentPath{ getLocalScratch(), 8 };
         while (insertedIntoComponent != self->surfaceToLiftTo->parent)
         {
           parentComponentPath.emplaceBack(insertedIntoComponent);
@@ -284,11 +285,11 @@ namespace Interface
 
     COMPLEX_ASSERT(processor);
 
-    deregisterCallback(uiRelated.renderer, this);
+    getUiRelated()->renderer->callbacks.erase(this);
 
     // finalising placement
     draggedComponent->nextPosition = initialClickPosition + e.getOffsetFromDragStart();
-    auto *placeholder = &getGui(uiRelated.renderer)->placeholderInsert;
+    auto *placeholder = &getUiRelated()->renderer->gui->placeholderInsert;
     auto finalParentComponent = placeholder->parent;
     placeholder->parent->removeChildComponent(placeholder);
 
@@ -346,7 +347,7 @@ namespace Interface
     draggedComponent->overridePosition = previousOverridePosition;
     draggedComponent->componentFlags.keepSize = false;
 
-    deregisterCallback(uiRelated.renderer, this);
+    getUiRelated()->renderer->callbacks.erase(this);
 
     if (!isCopying)
     {

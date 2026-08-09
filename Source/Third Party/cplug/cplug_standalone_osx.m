@@ -1270,7 +1270,7 @@ void STAND_openLibraryWithSymbols()
         int         ret  = fstat(fd_src, &info);
         cplug_assert(ret != -1);
 
-        void* src_data = malloc(info.st_size);
+        void* src_data = CPLUG_MALLOC(info.st_size);
         cplug_assert(src_data != NULL);
 
         ret = read(fd_src, src_data, info.st_size);

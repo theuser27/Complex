@@ -182,7 +182,7 @@ puglInitWorldInternals(const PuglWorldType type, const PuglWorldFlags flags)
   }
 
   PuglWorldInternals* impl =
-    (PuglWorldInternals*)calloc(1, sizeof(PuglWorldInternals));
+    (PuglWorldInternals*)PUGL_CALLOC(1, sizeof(PuglWorldInternals));
 
   impl->display     = display;
   impl->scaleFactor = puglX11GetDisplayScaleFactor(display);
@@ -253,7 +253,7 @@ puglGetNativeWorld(PuglWorld* const world)
 PuglInternals*
 puglInitViewInternals(PuglWorld* const world)
 {
-  PuglInternals* impl = (PuglInternals*)calloc(1, sizeof(PuglInternals));
+  PuglInternals* impl = (PuglInternals*)PUGL_CALLOC(1, sizeof(PuglInternals));
 
   impl->clipboard.selection = world->impl->atoms.CLIPBOARD;
   impl->clipboard.property  = XA_PRIMARY;
@@ -504,7 +504,7 @@ static void
 clearX11Clipboard(PuglX11Clipboard* const board)
 {
   for (unsigned long i = 0; i < board->numFormats; ++i) {
-    free(board->formatStrings[i]);
+    PUGL_FREE(board->formatStrings[i]);
     board->formatStrings[i] = NULL;
   }
 
@@ -768,10 +768,10 @@ puglFreeViewInternals(PuglView* const view)
 {
   if (view && view->impl) {
     puglUnrealize(view);
-    free(view->impl->clipboard.data.data);
-    free(view->impl->clipboard.formats);
-    free(view->impl->clipboard.formatStrings);
-    free(view->impl);
+    PUGL_FREE(view->impl->clipboard.data.data);
+    PUGL_FREE(view->impl->clipboard.formats);
+    PUGL_FREE(view->impl->clipboard.formatStrings);
+    PUGL_FREE(view->impl);
   }
 }
 
@@ -782,8 +782,8 @@ puglFreeWorldInternals(PuglWorld* const world)
     XCloseIM(world->impl->xim);
   }
   XCloseDisplay(world->impl->display);
-  free(world->impl->timers);
-  free(world->impl);
+  PUGL_FREE(world->impl->timers);
+  PUGL_FREE(world->impl);
 }
 
 static PuglKey
@@ -947,7 +947,7 @@ setClipboardFormats(PuglView* const         view,
 {
   // Clear current board formats
   for (unsigned long i = 0; i < board->numFormats; ++i) {
-    free(board->formatStrings[i]);
+    PUGL_FREE(board->formatStrings[i]);
     board->formatStrings[i] = NULL;
   }
 
@@ -955,7 +955,7 @@ setClipboardFormats(PuglView* const         view,
 
   // Enlarge formats array
   Atom* const newFormats =
-    (Atom*)realloc(board->formats, numFormats * sizeof(Atom));
+    (Atom*)PUGL_REALLOC(board->formats, numFormats * sizeof(Atom));
   if (!newFormats) {
     return PUGL_NO_MEMORY;
   }
@@ -964,7 +964,7 @@ setClipboardFormats(PuglView* const         view,
 
   // Enlarge format strings array
   char** const newFormatStrings =
-    (char**)realloc(board->formatStrings, numFormats * sizeof(char*));
+    (char**)PUGL_REALLOC(board->formatStrings, numFormats * sizeof(char*));
   if (!newFormatStrings) {
     return PUGL_NO_MEMORY;
   }
@@ -984,7 +984,7 @@ setClipboardFormats(PuglView* const         view,
 
       if (type) {
         const size_t typeLen      = strlen(type);
-        char* const  formatString = (char*)calloc(typeLen + 1, 1);
+        char* const  formatString = (char*)PUGL_CALLOC(typeLen + 1, 1);
 
         memcpy(formatString, type, typeLen + 1);
 
@@ -1386,7 +1386,7 @@ puglStartTimer(PuglView* const view, const uintptr_t id, const double timeout)
 
       // Add new timer
       const size_t     size      = ++w->numTimers * sizeof(timer);
-      PuglTimer* const newTimers = (PuglTimer*)realloc(w->timers, size);
+      PuglTimer* const newTimers = (PuglTimer*)PUGL_REALLOC(w->timers, size);
       if (newTimers) {
         w->timers                   = newTimers;
         w->timers[w->numTimers - 1] = timer;

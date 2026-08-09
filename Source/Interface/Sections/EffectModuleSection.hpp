@@ -33,7 +33,7 @@ namespace Interface
     static constexpr int kOuterPixelRounding = 8;
     static constexpr int kInnerPixelRounding = 3;
 
-    bool render(OpenGlWrapper &openGl) override;
+    bool render(Graphics &g) override;
 
     void reinitialise();
     void destroy();
@@ -53,12 +53,12 @@ namespace Interface
         EmptySlider();
 
         bool mouseDown(const MouseEvent &e) override;
-        bool render(OpenGlWrapper &) override { return false; }
+        bool render(Graphics &) override { return false; }
 
       } shiftBounds{};
 
       SpectralMaskComponent();
-      bool render(OpenGlWrapper &openGl) override;
+      bool render(Graphics &g) override;
 
     } maskComponent{};
 
@@ -73,12 +73,13 @@ namespace Interface
         TextSelector effectTypeSelector{};
         Numberbox mixNumberBox{};
         PowerButton moduleActivator{};
+        NSVGimage *icon{};
 
       } header{};
 
       void reinitialise();
 
-      bool render(OpenGlWrapper &openGl) override;
+      bool render(Graphics &g) override;
 
     } effectHolder{};
   };

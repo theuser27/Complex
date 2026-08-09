@@ -4,6 +4,7 @@
 #pragma once
 
 #include "Framework/stl_utils.hpp"
+#include "Framework/simd_values.hpp"
 
 extern "C" typedef struct NSVGimage NSVGimage;
 
@@ -53,8 +54,8 @@ namespace Generation
 
     Framework::ProcessorMetadata *metadata{};
     Framework::ParameterValue *parameters{};
-    u32 parameterCount{};
     NSVGimage *(*createEffectIcon)(Interface::Graphics &g){};
+    u32 parameterCount{};
   };
 
   namespace Utility
@@ -318,6 +319,39 @@ namespace Generation
     inline constexpr uuid id = 1759541685084;
 
     // vocode, harmonic match, cross/warp mix
+  }
+
+  namespace Freeze
+  {
+    inline constexpr uuid id = 1786036297025;
+
+    COMPLEX_ENUM(Types,
+      (Rolling, 1786036485963),
+    );
+
+    COMPLEX_ENUM(Rolling,
+      (        Rate, 1786036549576),
+      (       Shift, 1786036602314),
+      (PhaseCorrect, 1786036659887),
+    );
+
+    struct RollingData : EffectData
+    {
+      u32 lastBlockPosition{};
+      u32 lastBinCount{};
+      Framework::SimdBuffer *freezeBuffer{};
+      simd_float lastPosition{};
+    };
+
+    void runRolling(EffectModule *effectModule, EffectData *effectData,
+      Framework::ComplexDataSource &source, Framework::SimdBuffer *destination,
+      u32 binCount, float sampleRate) noexcept;
+
+    utils::span<Interface::Control *> createUIRolling(utils::bumpArena *arena,
+      Interface::EffectModuleSection *section, EffectData *effectData);
+
+    // various freezer ideas
+    Framework::IndexedData *initialiseTypeStructure(Framework::PluginStructure &structure);
   }
 
   namespace Destroy

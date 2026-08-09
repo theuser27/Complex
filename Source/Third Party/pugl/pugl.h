@@ -951,10 +951,14 @@ typedef struct PuglBackend {
 
   /// Enter drawing context, for drawing if expose is non-null
   PUGL_WARN_UNUSED_RESULT PuglStatus (*enter)(PuglView *,
-                                             const PuglExposeEvent *);
+                                              const PuglExposeEvent *);
 
   /// Leave drawing context, after drawing if expose is non-null
   PUGL_WARN_UNUSED_RESULT PuglStatus (*leave)(PuglView *,
+                                              const PuglExposeEvent *);
+
+  /// Leave drawing context, after drawing if expose is non-null
+  PUGL_WARN_UNUSED_RESULT PuglStatus(*change)(PuglView *, PuglView *,
                                              const PuglExposeEvent *);
 
   /// Return the puglGetContext() handle for the application, if any

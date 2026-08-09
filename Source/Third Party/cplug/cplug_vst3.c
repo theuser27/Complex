@@ -570,7 +570,7 @@ static void _cplug_tryDeleteVST3Plugin(VST3Plugin* vst3)
     if (total == 0)
     {
         cplug_log("_cplug_tryDeleteVST3Plugin %p | all refcounts are zero, deleting everything!", vst3);
-        free(vst3);
+        CPLUG_FREE(vst3);
     }
 }
 
@@ -613,7 +613,7 @@ static void _cplug_tryDeleteVST3View(VST3View* view)
         view->userGUI = NULL;
 
         vst3->view = NULL;
-        free(view);
+        CPLUG_FREE(view);
 
         // Help make sure "vst3" is deleted last. DAWs such as Cubase may delete the your GUI last, which is not
         // desirable for many plugins
@@ -1411,7 +1411,7 @@ static Steinberg_IPlugView* SMTG_STDMETHODCALLTYPE VST3Controller_createView(voi
     // plugin must be initialized
     CPLUG_LOG_ASSERT_RETURN(vst3->userPlugin != NULL, NULL);
 
-    VST3View* const view = (VST3View*)malloc(sizeof(VST3View));
+    VST3View* const view = (VST3View*)CPLUG_MALLOC(sizeof(VST3View));
 
     view->vst3 = vst3;
     vst3->view = view;
@@ -2394,7 +2394,7 @@ uint32_t SMTG_STDMETHODCALLTYPE VST3Factory_release(void* const self)
     {
         cplug_log("VST3Factory_release => %p | refcount is zero, deleting factory", self);
 
-        free(factory);
+        CPLUG_FREE(factory);
     }
 
     return refcount;
@@ -2447,7 +2447,7 @@ VST3Factory_createInstance(void* self, const Steinberg_TUID class_id, const Stei
     if (tuid_match(class_id, cplug_tuid_component) &&
         (tuid_match(iid, Steinberg_Vst_IComponent_iid) || tuid_match(iid, Steinberg_FUnknown_iid)))
     {
-        VST3Plugin* vst3                 = (VST3Plugin*)calloc(1, sizeof(VST3Plugin));
+        VST3Plugin* vst3                 = (VST3Plugin*)CPLUG_CALLOC(1, sizeof(VST3Plugin));
         vst3->hostContext.type           = CPLUG_PLUGIN_IS_VST3;
         vst3->hostContext.sendParamEvent = _cplug_vst3_sendParamEvent;
         vst3->hostContext.rescan         = _cplug_vst3_rescan;
@@ -2613,7 +2613,7 @@ Steinberg_tresult SMTG_STDMETHODCALLTYPE VST3Factory_setHostContext(void* const 
 CPLUG_VST3_EXPORT
 const void* GetPluginFactory(void)
 {
-    VST3Factory* factory = (VST3Factory*)malloc(sizeof(VST3Factory));
+    VST3Factory* factory = (VST3Factory*)CPLUG_MALLOC(sizeof(VST3Factory));
     factory->lpVtbl      = &factory->base;
     // Steinberg_FUnknown
     factory->base.queryInterface = VST3Factory_queryInterface;

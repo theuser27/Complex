@@ -112,14 +112,14 @@ puglNewVulkanLoader(PuglWorld*        PUGL_UNUSED(world),
                     const char* const libraryName)
 {
   PuglVulkanLoader* loader =
-    (PuglVulkanLoader*)calloc(1, sizeof(PuglVulkanLoader));
+    (PuglVulkanLoader*)PUGL_CALLOC(1, sizeof(PuglVulkanLoader));
   if (!loader) {
     return NULL;
   }
 
   const char* const filename = libraryName ? libraryName : "libvulkan.dylib";
   if (!(loader->libvulkan = dlopen(filename, RTLD_LAZY))) {
-    free(loader);
+    PUGL_FREE(loader);
     return NULL;
   }
 
@@ -137,7 +137,7 @@ puglFreeVulkanLoader(PuglVulkanLoader* loader)
 {
   if (loader) {
     dlclose(loader->libvulkan);
-    free(loader);
+    PUGL_FREE(loader);
   }
 }
 

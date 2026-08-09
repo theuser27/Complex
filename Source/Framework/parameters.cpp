@@ -6,7 +6,6 @@
 #include "parameter_value.hpp"
 #include "parameter_bridge.hpp"
 #include "Plugin/Complex.hpp"
-#include "Plugin/Renderer.hpp"
 #include "Generation/Processor.hpp"
 #include "Interface/Components/Control.hpp"
 
@@ -18,7 +17,7 @@ namespace Framework
     auto text = displayName;
     if (text.empty() && flags == StateIdFlag)
     {
-      auto *processor = Interface::getPlugin(Interface::uiRelated.renderer).state_->getProcessor(stateId);
+      auto *processor = Interface::getUiRelated()->plugin.state_->getProcessor(stateId);
       text = processor->name;
     }
     return text;
@@ -578,9 +577,10 @@ namespace Framework
     isDirty_ = false;
   }
 
-  UndoManager::UndoManager(usize transactionsToKeep)
+  UndoManager::UndoManager(utils::bumpArena *parentArena, usize transactionsToKeep)
   {
-    storage = utils::bumpArena::create(COMPLEX_MB(64), transactionsToKeep * 512);
+    storage = utils::bumpArena::createNested(parentArena, 
+      transactionsToKeep * storagePerTransaction);
     setTransationStorage(transactionsToKeep);
   }
 
@@ -603,7 +603,7 @@ namespace Framework
     }
 
     usize copySize, begin;
-    if ((usize)(undoActionsCount + redoActionsCount) <= transactionsToKeep)
+    if ((usize)(undoActionsCount + redoActionsCount) < transactionsToKeep)
     {
       // new buffer can house all currently stored actions
       copySize = undoActionsCount + redoActionsCount;
@@ -615,8 +615,24 @@ namespace Framework
       // new buffer can't house all currently stored actions
       // use half the size for undo and redo actions respectively
       copySize = transactionsToKeep;
-      redoActionsCount = transactionsToKeep / 2;
-      undoActionsCount = transactionsToKeep - redoActionsCount;
+      auto newRedoActionsCount = transactionsToKeep / 2;
+      auto newUndoActionsCount = transactionsToKeep - newRedoActionsCount;
+
+      // destroy the to be deleted redos/undos
+      // in reverse, from newest to oldest
+
+      for (usize i = redoActionsCount - newRedoActionsCount; i > 0; --i)
+        for (auto *action = transactions[currentIndex + newRedoActionsCount + i - 1].second; action; action = action->next)
+          if (action->destructor)
+            action->destructor(action);
+
+      for (usize i = 0; i < undoActionsCount - newUndoActionsCount; ++i)
+        for (auto *action = transactions[currentIndex - newUndoActionsCount - i].second; action; action = action->next)
+          if (action->destructor)
+            action->destructor(action);
+
+      redoActionsCount = newRedoActionsCount;
+      undoActionsCount = newUndoActionsCount;
       begin = ((usize)currentIndex + 1 - undoActionsCount +
         transactions.size()) % transactions.size();
     }
@@ -725,7 +741,7 @@ namespace Framework
 
       transactions[currentIndex].second = {};
       if (!transactions[currentIndex].first)
-        transactions[currentIndex].first = utils::bumpArena::createNested(storage, 512);
+        transactions[currentIndex].first = utils::bumpArena::createNested(storage, storagePerTransaction);
     }
 
     return transactions[currentIndex].first;
@@ -851,7 +867,7 @@ namespace Plugin
       utils::bumpArena::remove(targetChild);
     }
 
-    utils::vector<Framework::IndexedData *> childrenToAdd{ localScratch };
+    utils::vector<Framework::IndexedData *> childrenToAdd{ getLocalScratch() };
 
     // check for added options, add them as untracked if breaking changes are not allowed
     for (auto referenceChild = reference->children; referenceChild; referenceChild = referenceChild->next)

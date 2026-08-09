@@ -36,7 +36,7 @@ puglNewVulkanLoader(PuglWorld*        PUGL_UNUSED(world),
   }
 
   PuglVulkanLoader* const loader =
-    (PuglVulkanLoader*)calloc(1, sizeof(PuglVulkanLoader));
+    (PuglVulkanLoader*)PUGL_CALLOC(1, sizeof(PuglVulkanLoader));
 
   if (!loader) {
     dlclose(libvulkan);
@@ -59,7 +59,7 @@ puglFreeVulkanLoader(PuglVulkanLoader* loader)
 {
   if (loader) {
     dlclose(loader->libvulkan);
-    free(loader);
+    PUGL_FREE(loader);
   }
 }
 

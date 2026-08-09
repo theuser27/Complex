@@ -78,6 +78,12 @@
   #define hotreloadable __declspec(dllexport)
   #define function_symbol __FUNCDNAME__
 
+  #ifdef _DLL
+    #define CRT_LINKAGE __declspec(dllimport)
+  #else
+    #define CRT_LINKAGE
+  #endif
+
   #define COMPLEX_NO_FAST_MATH_BEGIN _Pragma("float_control(precise, on)")
   #define COMPLEX_NO_FAST_MATH_END _Pragma("float_control(precise, off)")
 
@@ -150,12 +156,17 @@
     __FILE__, __func__, __LINE__ __VA_OPT__(, true,) __VA_ARGS__), COMPLEX_DEBUG_TRAP(), false))
   #define COMPLEX_ASSERT_FALSE(...) (void)(::common::complexPrintAssertMessage(nullptr, \
     __FILE__, __func__, __LINE__ __VA_OPT__(, true,) __VA_ARGS__), COMPLEX_DEBUG_TRAP(), false)
+
+  #define COMPLEX_INVARIANT_ASSERT_HELPER(...) if (![&]() -> bool { __VA_ARGS__ }()) \
+    { ::common::complexPrintAssertMessage("Test failed:\n{\n" #__VA_ARGS__ "\n}", __FILE__, __func__, __LINE__); COMPLEX_DEBUG_TRAP(); }
+  #define COMPLEX_INVARIANT_ASSERT(...) [&]() { COMPLEX_FOR_EACH(COMPLEX_INTERNAL_ITERATE, COMPLEX_INVARIANT_ASSERT_HELPER, (,), __VA_ARGS__) }()
 #else
   #define COMPLEX_DEBUG_TRAP() ((void)0)
   #define COMPLEX_LOG(...) ((void)0)
   #define COMPLEX_DEBUG_LOG(...) ((void)0)
   #define COMPLEX_ASSERT(...) ((void)0)
   #define COMPLEX_ASSERT_FALSE(...) ((void)0)
+  #define COMPLEX_INVARIANT_ASSERT(...) ((void)0)
 #endif
 
 #define COMPLEX_HARD_ASSERT(condition, ...) (void)((!!(condition)) || (::common::complexPrintAssertMessage(#condition, \
@@ -225,35 +236,36 @@ extern "C"
   void *memmove(void *destination, const void *source, usize count);
   void *memset(void *destination, int value, usize count);
 
-  float fabsf(float arg);
-  float truncf(float arg);
-  float floorf(float arg);
-  float ceilf(float arg);
-  float roundf(float arg);
-  float logf(float arg);
-  float log2f(float arg);
-  float log10f(float arg);
-  float powf(float base, float exponent);
-  float sqrtf(float arg);
+  CRT_LINKAGE float fabsf(float arg);
+  CRT_LINKAGE float truncf(float arg);
+  CRT_LINKAGE float floorf(float arg);
+  CRT_LINKAGE float ceilf(float arg);
+  CRT_LINKAGE float roundf(float arg);
+  CRT_LINKAGE float logf(float arg);
+  CRT_LINKAGE float log2f(float arg);
+  CRT_LINKAGE float log10f(float arg);
+  CRT_LINKAGE float powf(float base, float exponent);
+  CRT_LINKAGE float sqrtf(float arg);
 
-  double fabs(double arg);
-  double trunc(double arg);
-  double floor(double arg);
-  double ceil(double arg);
-  double round(double arg);
-  double log(double arg);
-  double log2(double arg);
-  double log10(double arg);
-  double pow(double base, double exponent);
-  double sqrt(double arg);
+  CRT_LINKAGE double fabs(double arg);
+  CRT_LINKAGE double trunc(double arg);
+  CRT_LINKAGE double floor(double arg);
+  CRT_LINKAGE double ceil(double arg);
+  CRT_LINKAGE double round(double arg);
+  CRT_LINKAGE double log(double arg);
+  CRT_LINKAGE double log2(double arg);
+  CRT_LINKAGE double log10(double arg);
+  CRT_LINKAGE double pow(double base, double exponent);
+  CRT_LINKAGE double sqrt(double arg);
 
-  unsigned long strtoul(const char *string, char **string_end, int base);
-  float         strtof(const char *string, char **string_end);
-  double        strtod(const char *string, char **string_end);
+  CRT_LINKAGE unsigned long strtoul(const char *string, char **string_end, int base);
+  CRT_LINKAGE float         strtof(const char *string, char **string_end);
+  CRT_LINKAGE double        strtod(const char *string, char **string_end);
 
   int stbsp_snprintf(char *buffer, int count, const char *format, ...);
 }
 
+#undef CRT_LINKAGE
 #define zeroset(destination, /*count*/ ...) memset((destination), 0, sizeof(*(destination)) __VA_OPT__(* (__VA_ARGS__)))
 #define valcpy(destination, source, /*count*/ ...) memcpy((destination), (source), sizeof(*(destination)) __VA_OPT__(* (__VA_ARGS__)))
 

@@ -7,7 +7,6 @@
 #include "Framework/parameter_bridge.hpp"
 #include "Generation/Processor.hpp"
 #include "Plugin/Complex.hpp"
-#include "Plugin/Renderer.hpp"
 #include "../LookAndFeel/ui_constants.hpp"
 #include "../LookAndFeel/Graphics.hpp"
 #include "../LookAndFeel/Skin.hpp"
@@ -66,7 +65,7 @@ namespace Interface
       (u16)(kAddedMargin + iconBounds.x), kAddedMargin };
   }
 
-  bool PowerButton::render(OpenGlWrapper &openGl)
+  bool PowerButton::render(Graphics &g)
   {
     auto colour = getColour(Skin::kWidgetAccent1, this);
 
@@ -82,7 +81,7 @@ namespace Interface
 
     Colour colours[] = { colour };
     auto [fn, iconBounds] = Paths::powerButtonIcon();
-    fn(openGl, colours, getLocalBounds().toFloat().withTrim(scaleValue(padding.toFloat())), scaleValue(1.0f));
+    fn(g, colours, getLocalBounds().toFloat().withTrim(scaleValue(padding.toFloat())), scaleValue(1.0f));
 
     return true;
   }
@@ -94,7 +93,7 @@ namespace Interface
     desiredSize = { kDimensions, kDimensions, kDimensions, kDimensions };
   }
 
-  bool RadioButton::render(OpenGlWrapper &openGl)
+  bool RadioButton::render(Graphics &g)
   {
     auto onNormalColor = getColour(Skin::kWidgetAccent1, this);
     auto offNormalColor = getColour(Skin::kPowerButtonOff, this);
@@ -114,21 +113,21 @@ namespace Interface
     //quadData.setQuad(0, -kPowerHoverRadius, -kPowerHoverRadius, 2.0f * kPowerHoverRadius, 2.0f * kPowerHoverRadius);
     if (componentFlags.isClicked || !isOn())
     {
-      //fillRect(openGl, drawBounds.expanded(kPowerHoverRadius * drawBounds.w,
+      //fillRect(g, drawBounds.expanded(kPowerHoverRadius * drawBounds.w,
       //  kPowerHoverRadius * drawBounds.h), backgroundColor, rounding * kPowerHoverRadius);
     }
     else if (hoverAmount != 0.0f)
     {
-      //fillRect(openGl, drawBounds.expanded(kPowerHoverRadius * drawBounds.w,
+      //fillRect(g, drawBounds.expanded(kPowerHoverRadius * drawBounds.w,
       //  kPowerHoverRadius * drawBounds.h), backgroundColor.withMultipliedAlpha(hoverAmount),
       //  rounding + rounding * kPowerHoverRadius);
     }
 
     auto colour = (isOn()) ? onNormalColor : offNormalColor;
-    fillRect(openGl, drawBounds, colour, rounding);
+    fillRect(g, drawBounds, colour, rounding);
 
     //quadData.setQuad(0, -kPowerRadius, -kPowerRadius, 2.0f * kPowerRadius, 2.0f * kPowerRadius);
-    //backgroundComponent->render(openGl);
+    //backgroundComponent->render(g);
 
     return true;
   }
@@ -310,7 +309,7 @@ namespace Interface
   }
 
   bool
-  RotarySlider::render(OpenGlWrapper &openGl)
+  RotarySlider::render(Graphics &g)
   {
     static constexpr float kHoverIncrement = 0.15f;
     static constexpr float kHalfPi = kPi * 0.5f;
@@ -327,27 +326,27 @@ namespace Interface
     auto backgroundColour = getColour(Skin::kRotaryArcUnselected, this);
     float currentValue = (float)getValue();
 
-    nvgLineCap(openGl, NVG_ROUND);
+    nvgLineCap(g, NVG_ROUND);
 
     // TODO: rotary body shadow
 
     // body
-    nvgBeginPath(openGl);
-    nvgCircle(openGl, centreX, centreY, bodyRadius);
-    nvgFillColor(openGl, backgroundColour);
-    nvgFill(openGl);
+    nvgBeginPath(g);
+    nvgCircle(g, centreX, centreY, bodyRadius);
+    nvgFillColor(g, backgroundColour);
+    nvgFill(g);
 
     float outlineWidth = scaleValue(1.0f);
     float outlineRadius = bodyRadius - outlineWidth;
-    nvgStrokeWidth(openGl, outlineWidth);
+    nvgStrokeWidth(g, outlineWidth);
     // outline
-    nvgBeginPath(openGl);
-    nvgCircle(openGl, centreX, centreY - outlineWidth * 0.5f, outlineRadius);
-    auto outlineGradient = nvgLinearGradient(openGl,
+    nvgBeginPath(g);
+    nvgCircle(g, centreX, centreY - outlineWidth * 0.5f, outlineRadius);
+    auto outlineGradient = nvgLinearGradient(g,
       0.0f, centreY - bodyRadius + outlineWidth, 0.0f, centreY + bodyRadius - outlineWidth,
       Colour{ 255, 255, 255, 0.1f }, Colour{ 255, 255, 255, 0.0f });
-    nvgStrokePaint(openGl, outlineGradient);
-    nvgStroke(openGl);
+    nvgStrokePaint(g, outlineGradient);
+    nvgStroke(g);
 
     // thumb
     float phi = 2 * maxArc * currentValue - maxArc;
@@ -356,22 +355,22 @@ namespace Interface
     float thumbRadiusOffset = scaleValue(kThumbRadiusOffset);
     float thumbLength = Interface::getValue(Skin::kKnobHandleLength, true, this);
 
-    nvgBeginPath(openGl);
-    nvgStrokeWidth(openGl, thickness);
-    nvgMoveTo(openGl, centreX + thumbX * (outlineRadius - thumbRadiusOffset - thumbLength),
+    nvgBeginPath(g);
+    nvgStrokeWidth(g, thickness);
+    nvgMoveTo(g, centreX + thumbX * (outlineRadius - thumbRadiusOffset - thumbLength),
       centreY - thumbY * (outlineRadius - thumbRadiusOffset - thumbLength));
-    nvgLineTo(openGl, centreX + thumbX * (outlineRadius - thumbRadiusOffset),
+    nvgLineTo(g, centreX + thumbX * (outlineRadius - thumbRadiusOffset),
       centreY - thumbY * (outlineRadius - thumbRadiusOffset));
-    nvgStrokeColor(openGl, getColour(Skin::kRotaryHand, this));
-    nvgStroke(openGl);
+    nvgStrokeColor(g, getColour(Skin::kRotaryHand, this));
+    nvgStroke(g);
 
     // radial background fill
-    nvgStrokeWidth(openGl, thickness);
+    nvgStrokeWidth(g, thickness);
 
-    nvgBeginPath(openGl);
-    nvgStrokeColor(openGl, backgroundColour);
-    nvgArc(openGl, centreX, centreY, fullRadius, -maxArc - kHalfPi, maxArc - kHalfPi, NVG_CW);
-    nvgStroke(openGl);
+    nvgBeginPath(g);
+    nvgStrokeColor(g, backgroundColour);
+    nvgArc(g, centreX, centreY, fullRadius, -maxArc - kHalfPi, maxArc - kHalfPi, NVG_CW);
+    nvgStroke(g);
 
     // radial fill
     float startingPoint = -maxArc - kHalfPi;
@@ -383,11 +382,11 @@ namespace Interface
       length = utils::abs(length);
     }
 
-    nvgBeginPath(openGl);
-    nvgStrokeColor(openGl, getColour(Skin::kWidgetPrimary1, this));
-    nvgArc(openGl, centreX, centreY, fullRadius,
+    nvgBeginPath(g);
+    nvgStrokeColor(g, getColour(Skin::kWidgetPrimary1, this));
+    nvgArc(g, centreX, centreY, fullRadius,
       startingPoint, startingPoint + length, NVG_CW);
-    nvgStroke(openGl);
+    nvgStroke(g);
 
     return true;
   }
@@ -522,7 +521,7 @@ namespace Interface
     return true;
   }
 
-  bool PinSlider::render(OpenGlWrapper &openGl)
+  bool PinSlider::render(Graphics &g)
   {
     static constexpr float kWidth = 10.0f;
     static constexpr float kHeight = kWidth * 0.9f;
@@ -548,37 +547,37 @@ namespace Interface
     float c3OffsetY = scaleValue(kControlPoint3OffsetY);
     float pinHeight = w * 0.9f;
 
-    nvgTranslate(openGl, x, y);
-    nvgBeginPath(openGl);
+    nvgTranslate(g, x, y);
+    nvgBeginPath(g);
 
     // right side
-    nvgMoveTo(openGl, w - rounding, 0.0f);
-    nvgQuadTo(openGl, w, 0.0f, w, rounding);
-    nvgLineTo(openGl, w, verticalSideLength - c1OffsetY);
-    nvgQuadTo(openGl, w, verticalSideLength, w - c2OffsetX,
+    nvgMoveTo(g, w - rounding, 0.0f);
+    nvgQuadTo(g, w, 0.0f, w, rounding);
+    nvgLineTo(g, w, verticalSideLength - c1OffsetY);
+    nvgQuadTo(g, w, verticalSideLength, w - c2OffsetX,
       verticalSideLength + c2OffsetY);
-    nvgLineTo(openGl, w * 0.5f + c3OffsetX, pinHeight - c3OffsetY);
+    nvgLineTo(g, w * 0.5f + c3OffsetX, pinHeight - c3OffsetY);
 
     // bottom
-    nvgQuadTo(openGl, w * 0.5f, pinHeight, w * 0.5f - c3OffsetX, pinHeight - c3OffsetY);
+    nvgQuadTo(g, w * 0.5f, pinHeight, w * 0.5f - c3OffsetX, pinHeight - c3OffsetY);
 
     // left side
-    nvgLineTo(openGl, c2OffsetX, verticalSideLength + c2OffsetY);
-    nvgQuadTo(openGl, 0.0f, verticalSideLength, 0.0f, verticalSideLength - c2OffsetY);
-    nvgLineTo(openGl, 0.0f, rounding);
-    nvgQuadTo(openGl, 0.0f, 0.0f, rounding, 0.0f);
+    nvgLineTo(g, c2OffsetX, verticalSideLength + c2OffsetY);
+    nvgQuadTo(g, 0.0f, verticalSideLength, 0.0f, verticalSideLength - c2OffsetY);
+    nvgLineTo(g, 0.0f, rounding);
+    nvgQuadTo(g, 0.0f, 0.0f, rounding, 0.0f);
 
-    nvgClosePath(openGl);
-    nvgFillColor(openGl, colour);
-    nvgFill(openGl);
+    nvgClosePath(g);
+    nvgFillColor(g, colour);
+    nvgFill(g);
 
     // line
-    auto gradient = nvgLinearGradient(openGl, 0.0f, pinHeight, 0.0f, h, colour, colour.withAlpha(0.2f));
+    auto gradient = nvgLinearGradient(g, 0.0f, pinHeight, 0.0f, h, colour, colour.withAlpha(0.2f));
     float lineWidth = scaleValue(1.0f);
-    nvgBeginPath(openGl);
-    nvgRect(openGl, (w - lineWidth) * 0.5f, pinHeight - c3OffsetY, lineWidth, h - (pinHeight - c3OffsetY));
-    nvgFillPaint(openGl, gradient);
-    nvgFill(openGl);
+    nvgBeginPath(g);
+    nvgRect(g, (w - lineWidth) * 0.5f, pinHeight - c3OffsetY, lineWidth, h - (pinHeight - c3OffsetY));
+    nvgFillPaint(g, gradient);
+    nvgFill(g);
 
     return false;
   }
@@ -607,19 +606,19 @@ namespace Interface
     downArrow.desiredSize = { 5, 0, 5, 0 };
     downArrow.sizingFlags |= (Component::SizingFlags)(Component::SameAsSiblingsY);
     downArrow.reference = this;
-    downArrow.draw = [](OpenGlWrapper &openGl, Component *c, Component *self, Point<i32>)
+    downArrow.draw = [](Graphics &g, Component *c, Component *self, Point<i32>)
     {
       auto bounds = self->bounds.toFloat();
       float yCenter = bounds.h * 0.5f;
       float height = bounds.w * 0.25f;
 
-      nvgStrokeWidth(openGl, scaleValue(1.0f));
-      nvgBeginPath(openGl.g);
-      nvgMoveTo(openGl.g, 0.0f, yCenter - height);
-      nvgLineTo(openGl, bounds.w * 0.5f, yCenter + height);
-      nvgLineTo(openGl, bounds.w, yCenter - height);
-      nvgStrokeColor(openGl.g, getColour(Skin::kWidgetPrimary1, c));
-      nvgStroke(openGl);
+      nvgStrokeWidth(g, scaleValue(1.0f));
+      nvgBeginPath(g);
+      nvgMoveTo(g, 0.0f, yCenter - height);
+      nvgLineTo(g, bounds.w * 0.5f, yCenter + height);
+      nvgLineTo(g, bounds.w, yCenter - height);
+      nvgStrokeColor(g, getColour(Skin::kWidgetPrimary1, c));
+      nvgStroke(g);
 
       return true;
     };
@@ -627,7 +626,7 @@ namespace Interface
   }
 
   bool
-  TextSelector::render(OpenGlWrapper &openGl)
+  TextSelector::render(Graphics &g)
   {
     static constexpr float kHoverIncrement = 0.2f;
 
@@ -635,11 +634,11 @@ namespace Interface
 
     if (auto alpha = animationValues[0]; alpha != 0.0f)
     {
-      nvgBeginPath(openGl);
-      nvgRoundedRect(openGl, 0.0f, 0.0f, (float)bounds.w, (float)bounds.h,
+      nvgBeginPath(g);
+      nvgRoundedRect(g, 0.0f, 0.0f, (float)bounds.w, (float)bounds.h,
         Interface::getValue(Skin::kWidgetRoundedCorner, true, this));
-      nvgFillColor(openGl, getColour(Skin::kWidgetBackground2, this).withAlpha(alpha));
-      nvgFill(openGl);
+      nvgFillColor(g, getColour(Skin::kWidgetBackground2, this).withAlpha(alpha));
+      nvgFill(g);
     }
 
     return true;
@@ -707,7 +706,7 @@ namespace Interface
 
       beginChange(getValue());
       auto unscaledValue = unscaleValue(Framework::getValueFromOption(option, details),
-        details, getPlugin(uiRelated.renderer).getSampleRate());
+        details, getUiRelated()->plugin.getSampleRate());
       setValue(unscaledValue, true);
       setValueToHost();
       endChange();
@@ -765,7 +764,7 @@ namespace Interface
   }
 
   bool
-  Numberbox::render(OpenGlWrapper &openGl)
+  Numberbox::render(Graphics &g)
   {
     static constexpr float kHoverIncrement = 0.2f;
 
@@ -788,40 +787,40 @@ namespace Interface
       static constexpr float edgeControlPointXOffset = edgeControlPointAbsoluteOffset * const_math::cos(kRotatedSideAngle);
       static constexpr float edgeControlPointYOffset = edgeControlPointAbsoluteOffset * const_math::sin(kRotatedSideAngle);
 
-      nvgBeginPath(openGl.g);
+      nvgBeginPath(g);
 
       float width = (float)bounds.w;
       float height = (float)bounds.h;
       float triangleXLength = height * 0.5f;
 
       // right
-      nvgMoveTo(openGl.g, width - kCornerRounding, 0.0f);
-      nvgQuadTo(openGl.g, width, 0.0f, width, kCornerRounding);
-      nvgLineTo(openGl.g, width, height - kCornerRounding);
+      nvgMoveTo(g, width - kCornerRounding, 0.0f);
+      nvgQuadTo(g, width, 0.0f, width, kCornerRounding);
+      nvgLineTo(g, width, height - kCornerRounding);
 
       // bottom
-      nvgQuadTo(openGl.g, width, height, width - kCornerRounding, height);
-      nvgLineTo(openGl.g, triangleXLength + controlPoint1XOffset, height);
+      nvgQuadTo(g, width, height, width - kCornerRounding, height);
+      nvgLineTo(g, triangleXLength + controlPoint1XOffset, height);
 
       // triangle bottom side
-      nvgQuadTo(openGl.g, triangleXLength, height, triangleXLength - controlPoint2XOffset, height - controlPoint2YOffset);
-      nvgLineTo(openGl.g, edgeControlPointXOffset, height / 2.0f + edgeControlPointYOffset);
+      nvgQuadTo(g, triangleXLength, height, triangleXLength - controlPoint2XOffset, height - controlPoint2YOffset);
+      nvgLineTo(g, edgeControlPointXOffset, height / 2.0f + edgeControlPointYOffset);
 
       // triangle top side
-      nvgQuadTo(openGl.g, 0.0f, height * 0.5f, edgeControlPointXOffset, height * 0.5f - edgeControlPointYOffset);
-      nvgLineTo(openGl.g, triangleXLength - controlPoint2XOffset, controlPoint2YOffset);
+      nvgQuadTo(g, 0.0f, height * 0.5f, edgeControlPointXOffset, height * 0.5f - edgeControlPointYOffset);
+      nvgLineTo(g, triangleXLength - controlPoint2XOffset, controlPoint2YOffset);
 
       // top
-      nvgQuadTo(openGl.g, triangleXLength, 0.0f, triangleXLength + controlPoint2XOffset, 0.0f);
-      nvgFillColor(openGl.g, getColour(Skin::kWidgetBackground1, this));
-      nvgFill(openGl.g);
+      nvgQuadTo(g, triangleXLength, 0.0f, triangleXLength + controlPoint2XOffset, 0.0f);
+      nvgFillColor(g, getColour(Skin::kWidgetBackground1, this));
+      nvgFill(g);
     }
     else if (auto alpha = animationValues[0]; alpha != 0.0f)
     {
-      nvgBeginPath(openGl.g);
-      nvgRoundedRect(openGl.g, 0.0f, 0.0f, (float)bounds.w, (float)bounds.h, scaleValue(backgroundRounding));
-      nvgFillColor(openGl.g, getColour(Skin::kWidgetBackground2, this).withAlpha(alpha));
-      nvgFill(openGl.g);
+      nvgBeginPath(g);
+      nvgRoundedRect(g, 0.0f, 0.0f, (float)bounds.w, (float)bounds.h, scaleValue(backgroundRounding));
+      nvgFillColor(g, getColour(Skin::kWidgetBackground2, this).withAlpha(alpha));
+      nvgFill(g);
     }
 
     return true;
@@ -906,12 +905,12 @@ namespace Interface
   }
 
   bool
-  PinBoundsBox::render(OpenGlWrapper &openGl)
+  PinBoundsBox::render(Graphics &g)
   {
-    fillRect(openGl, getLocalBounds().toFloat(), getColour(Skin::kBody, this),
+    fillRect(g, getLocalBounds().toFloat(), getColour(Skin::kBody, this),
       scaleValue(rounding[0]), scaleValue(rounding[1]), scaleValue(rounding[2]), scaleValue(rounding[3]));
 
-    paintHighlightBox(this, openGl, (float)lowBound.getValue(), (float)highBound.getValue(),
+    paintHighlightBox(this, g, (float)lowBound.getValue(), (float)highBound.getValue(),
       getColour(Skin::kWidgetPrimary1, this).withAlpha(0.15f), backgroundColour);
 
     return true;

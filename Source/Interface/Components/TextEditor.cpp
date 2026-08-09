@@ -5,7 +5,7 @@
 
 #include "Framework/parameter_value.hpp"
 #include "Framework/parameter_bridge.hpp"
-#include "Plugin/Renderer.hpp"
+#include "Plugin/Complex.hpp"
 #include "../LookAndFeel/ui_constants.hpp"
 #include "Control.hpp"
 
@@ -21,8 +21,8 @@ namespace Interface
 
     if (!isCalculatingVertical)
     {
-      uiRelated.cache->setFont(self->font, lineHeight);
-      auto max = (i32)::ceilf(uiRelated.cache->getStringWidthFloat(self->text));
+      getUiRelated()->g->setFont(self->font, lineHeight);
+      auto max = (i32)::ceilf(getUiRelated()->g->getStringWidthFloat(self->text));
 
       return Range<i32>{ 0, max };
     }
@@ -46,7 +46,7 @@ namespace Interface
   TextEditor::mouseEnter(const MouseEvent &)
   {
     if (componentFlags.clickable)
-      setMouseCursor(uiRelated.renderer, MouseCursorTypes::Caret);
+      getUiRelated()->renderer->setMouseCursor(MouseCursorTypes::Caret);
     return true;
   }
 
@@ -54,7 +54,7 @@ namespace Interface
   TextEditor::mouseExit(const MouseEvent &)
   {
     if (componentFlags.clickable)
-      setMouseCursor(uiRelated.renderer, MouseCursorTypes::Normal);
+      getUiRelated()->renderer->setMouseCursor(MouseCursorTypes::Normal);
     return true;
   }
 
@@ -77,12 +77,12 @@ namespace Interface
   }
 
   bool
-  TextEditor::render(OpenGlWrapper &openGl)
+  TextEditor::render(Graphics &g)
   {
     if (!text.empty())
     {
       auto textBounds = getLocalBounds().toFloat().withTrim(scaleValueRound(padding.toFloat()));
-      renderText(text, font, textBounds, openGl, getColour(textColour, this), textPlacement, editorFlags.wordWrap);
+      renderText(text, font, textBounds, g, getColour(textColour, this), textPlacement, editorFlags.wordWrap);
     }
 
     return true;
@@ -107,8 +107,8 @@ namespace Interface
       }
 
       self->cacheString(self, self->control);
-      uiRelated.cache->setFont(self->font, lineHeight);
-      auto max = (i32)::ceilf(uiRelated.cache->getStringWidthFloat(self->text));
+      getUiRelated()->g->setFont(self->font, lineHeight);
+      auto max = (i32)::ceilf(getUiRelated()->g->getStringWidthFloat(self->text));
 
       return Range<i32>{ 0, max };
     }
@@ -144,8 +144,8 @@ namespace Interface
 
         if (self->control->details.scale == Framework::ParameterScale::Indexed)
         {
-          uiRelated.cache->setFont(self->font, lineHeight);
-          max = (i32)::ceilf(uiRelated.cache->getStringWidthFloat(self->text));
+          getUiRelated()->g->setFont(self->font, lineHeight);
+          max = (i32)::ceilf(getUiRelated()->g->getStringWidthFloat(self->text));
         }
         else
           max = (i32)::ceilf(self->control->getNumericTextMaxWidth(self->font, lineHeight));

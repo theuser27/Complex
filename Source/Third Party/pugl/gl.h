@@ -63,11 +63,14 @@ puglEnterContext(PuglView* view);
 PUGL_API PuglStatus
 puglLeaveContext(PuglView* view);
 
+PUGL_API PuglStatus
+puglChangeContext(PuglView *oldView, PuglView *newView);
+
 PUGL_API void
 puglSwapBuffers(PuglView* view);
 
 PUGL_API bool
-puglIsContextActive(void);
+puglIsOpenGlContextActive(void);
 
 /**
    OpenGL graphics backend.

@@ -6,7 +6,6 @@
 #include "ui_constants.hpp"
 #include "Graphics.hpp"
 #include "Plugin/Complex.hpp"
-#include "Plugin/Renderer.hpp"
 #include "Generation/Processor.hpp"
 #include "../Components/Control.hpp"
 #include "../Sections/MainInterface.hpp"
@@ -37,7 +36,7 @@ namespace Interface
     Range<i64> nonPositionedSizes{};
 
     Range<i32> sameAsSiblingsSizes{};
-    utils::vector<Component *> sameAsSiblingsComponents{ localScratch };
+    utils::vector<Component *> sameAsSiblingsComponents{ getLocalScratch() };
 
     for (auto *child = children; child; child = child->next)
     {
@@ -242,11 +241,11 @@ namespace Interface
 
       auto iter = utils::findIf(sortedMin, [&](const Interface::Component *c)
         { return c->bounds.*minMember > child->bounds.*minMember; });
-      sortedMin.emplace(iter, child);
+      sortedMin.emplaceAt(iter, child);
 
       iter = utils::findIf(sortedMax, [&](const Interface::Component *c)
         { return c->bounds.*maxMember > child->bounds.*maxMember; });
-      sortedMax.emplace(iter, child);
+      sortedMax.emplaceAt(iter, child);
     }
 
     COMPLEX_ASSERT(sizes.min >= 0);
@@ -644,7 +643,7 @@ namespace Interface
       // we're interpolating between the previous position (animation start) and the supposed position
 
       float distanceToNextPositionRatio = (float)component->distanceToNextPositionRatio / (float)utils::int_max<decltype(component->distanceToNextPositionRatio)>;
-      distanceToNextPositionRatio = utils::min(distanceToNextPositionRatio + uiRelated.deltaTime * 1.0f / kMoveDelay, 1.0f);
+      distanceToNextPositionRatio = utils::min(distanceToNextPositionRatio + getUiRelated()->deltaTime * 1.0f / kMoveDelay, 1.0f);
       //auto t = easeOutQuadratic(distanceToNextPositionRatio);
       auto t = smoothstep(distanceToNextPositionRatio);
 
@@ -672,18 +671,7 @@ namespace Interface
 
   void deleteComponent(Component *component, bool freeArena)
   {
-    if (component->componentFlags.isOpenGlInitialised)
-    {
-      auto &context = getOpenGlContext(uiRelated.renderer);
-      bool save = context.isDestroyingOpenGl;
-      context.isDestroyingOpenGl = true;
-
-      component->render(context);
-
-      context.isDestroyingOpenGl = save;
-    }
-
-    auto *gui = getGui(uiRelated.renderer);
+    auto *gui = getUiRelated()->renderer->gui;
     if (gui->popupSelector.summoner == component)
     {
       if (gui->popupSelector.cancel)
@@ -707,6 +695,9 @@ namespace Interface
     utils::bumpArena::remove(component);
   }
 
+  // this one miraculously works as a thread-local 
+  // until we have more than one mouse cursor/mouse input...
+  // ideally this should be stored as a key-value pair inside the renderer
   thread_local Point<float> initialScrollOffset;
 
   void checkScrollClick(Component *component, const MouseEvent &e)
@@ -823,7 +814,7 @@ namespace Interface
       return false;
 
     bool isHorizontal = e.mods.test(ModifierKeys::shiftModifier);
-    auto multiplier = 30.0f * uiRelated.scale;
+    auto multiplier = 30.0f * getUiRelated()->scale;
     offsetScroll(this, e.wheelDeltaX * multiplier,
       e.wheelDeltaY * multiplier, isHorizontal);
 
@@ -893,7 +884,7 @@ namespace Interface
   bool
   Component::hasFocus(bool trueIfChildIsFocused) const
   {
-    auto *focusedComponent = getMouseInteractions(uiRelated.renderer).focused;
+    auto *focusedComponent = getUiRelated()->renderer->getMouseInteractions().focused;
     if (!trueIfChildIsFocused && this != focusedComponent)
       return false;
 
@@ -920,13 +911,13 @@ namespace Interface
     if (!isShowingInternal(component))
       return true;
 
-    auto *focusedComponent = getMouseInteractions(uiRelated.renderer).focused;
+    auto *focusedComponent = getUiRelated()->renderer->getMouseInteractions().focused;
     if (component == focusedComponent)
       return true;
 
     if (!focusedComponent || focusedComponent->handleFocus(false, Component::FocusGrabbed, component))
     {
-      setFocusedComponent(uiRelated.renderer, component);
+      getUiRelated()->renderer->setFocusedComponent(component);
       component->handleFocus(true, Component::FocusGrabbed, focusedComponent);
       return true;
     }
@@ -941,7 +932,7 @@ namespace Interface
       {
         if (child != origin && (!focusedComponent || focusedComponent->handleFocus(false, Component::FocusGrabbed, child)))
         {
-          setFocusedComponent(uiRelated.renderer, child);
+          getUiRelated()->renderer->setFocusedComponent(child);
           child->handleFocus(true, Component::FocusGrabbed, focusedComponent);
           return true;
         }
@@ -974,14 +965,14 @@ namespace Interface
   bool
   Component::giveAwayFocusTo(Component *component)
   {
-    auto *focusedComponent = getMouseInteractions(uiRelated.renderer).focused;
+    auto *focusedComponent = getUiRelated()->renderer->getMouseInteractions().focused;
     if (focusedComponent != this)
       return false;
 
     if (focusedComponent->handleFocus(false, Component::FocusGivenAway, component) &&
       (!component || component->handleFocus(true, Component::FocusGivenAway, focusedComponent)))
     {
-      setFocusedComponent(uiRelated.renderer, component);
+      getUiRelated()->renderer->setFocusedComponent(component);
       return true;
     }
 
@@ -1048,7 +1039,7 @@ namespace Interface
 
     if (!keepFocus)
     {
-      auto mouseInteractions = getMouseInteractions(uiRelated.renderer);
+      auto mouseInteractions = getUiRelated()->renderer->getMouseInteractions();
       if (auto *focusedComponent = mouseInteractions.focused)
         if (childToRemove == focusedComponent)
           focusedComponent->giveAwayFocusTo();
@@ -1059,13 +1050,13 @@ namespace Interface
         {
           // last chance to execute anything from this component (i.e. reset cursor shape)
           childToRemove->mouseExit(mouseInteractions.mouseState);
-          setHoveredComponent(uiRelated.renderer, nullptr);
+          getUiRelated()->renderer->setHoveredComponent(nullptr);
         }
       }
 
       if (auto *clickedComponent = mouseInteractions.clicked)
         if (childToRemove == clickedComponent)
-          setClickedComponent(uiRelated.renderer, nullptr);
+          getUiRelated()->renderer->setClickedComponent(nullptr);
     }
 
     childToRemove->parent = nullptr;
@@ -1089,18 +1080,18 @@ namespace Interface
     if (!children)
       return;
 
-    auto mouseInteractions = getMouseInteractions(uiRelated.renderer);
+    auto mouseInteractions = getUiRelated()->renderer->getMouseInteractions();
     if (auto *focusedComponent = mouseInteractions.focused)
       if (isParentOf(focusedComponent))
         focusedComponent->giveAwayFocusTo();
 
     if (auto *hoveredComponent = mouseInteractions.hovered)
       if (isParentOf(hoveredComponent))
-        setHoveredComponent(uiRelated.renderer, nullptr);
+        getUiRelated()->renderer->setHoveredComponent(nullptr);
 
     if (auto *clickedComponent = mouseInteractions.clicked)
       if (isParentOf(clickedComponent))
-        setClickedComponent(uiRelated.renderer, nullptr);
+        getUiRelated()->renderer->setClickedComponent(nullptr);
 
     for (Component *child = children, *nextChild = nullptr; child; child = nextChild)
     {
@@ -1130,7 +1121,7 @@ namespace Interface
     if (!children)
       return;
 
-    if (auto *focusedComponent = getMouseInteractions(uiRelated.renderer).focused)
+    if (auto *focusedComponent = getUiRelated()->renderer->getMouseInteractions().focused)
       if (isParentOf(focusedComponent))
         focusedComponent->giveAwayFocusTo();
 
@@ -1138,7 +1129,7 @@ namespace Interface
       deleteComponent(child, freeChildArenas);
   }
 
-  void Component::renderScrollbars(OpenGlWrapper &openGl, float scrollExpandPercent)
+  void Component::renderScrollbars(Graphics &g, float scrollExpandPercent)
   {
     Rectangle<float> xScrollBounds{};
     Rectangle<float> yScrollBounds{};
@@ -1149,7 +1140,7 @@ namespace Interface
     Point<int> mousePosition{};
     if (componentFlags.isHovered)
     {
-      auto interactions = getMouseInteractions(uiRelated.renderer);
+      auto interactions = getUiRelated()->renderer->getMouseInteractions();
       mousePosition = Point{ interactions.mouseState.x, interactions.mouseState.y } - getPositionInWindow();
     }
 
@@ -1215,7 +1206,7 @@ namespace Interface
       if (xScrollBrightness > 0.0f)
         c = c.lighter(xScrollBrightness);
 
-      fillRect(openGl, xScrollBounds, c, xScrollBounds.h * 0.5f);
+      fillRect(g, xScrollBounds, c, xScrollBounds.h * 0.5f);
     }
 
     if (!yScrollBounds.isEmpty())
@@ -1224,7 +1215,7 @@ namespace Interface
       if (yScrollBrightness > 0.0f)
         c = c.lighter(yScrollBrightness);
 
-      fillRect(openGl, yScrollBounds, c, yScrollBounds.w * 0.5f);
+      fillRect(g, yScrollBounds, c, yScrollBounds.w * 0.5f);
     }
   }
 
@@ -1304,7 +1295,7 @@ namespace Interface
     return (c->skinOverride == Skin::kUseParentOverride) ? Skin::kNone : c->skinOverride;
   }
 
-  void Component::doRenderChildren(OpenGlWrapper &openGl)
+  void Component::doRenderChildren(Graphics &g)
   {
     for (auto *child = children; child; child = child->next)
     {
@@ -1315,23 +1306,23 @@ namespace Interface
       if (getLocalBounds().getIntersection(child->bounds).isEmpty())
         continue;
 
-      nvgSave(openGl);
-      nvgIntersectScissor(openGl, (float)child->bounds.x, (float)child->bounds.y,
+      nvgSave(g);
+      nvgIntersectScissor(g, (float)child->bounds.x, (float)child->bounds.y,
         (float)child->bounds.w, (float)child->bounds.h);
-      nvgTranslate(openGl, (float)child->bounds.x, (float)child->bounds.y);
-      child->doRender(openGl);
-      nvgRestore(openGl);
+      nvgTranslate(g, (float)child->bounds.x, (float)child->bounds.y);
+      child->doRender(g);
+      nvgRestore(g);
     }
   }
 
-  void Component::doRender(OpenGlWrapper &openGl)
+  void Component::doRender(Graphics &g)
   {
-    bool continueRender = render(openGl);
+    bool continueRender = render(g);
 
     if (!continueRender)
       return;
 
-    doRenderChildren(openGl);
+    doRenderChildren(g);
   }
 
 

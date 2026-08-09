@@ -41,6 +41,12 @@
 /// A malloc function in the public API that returns allocated memory
 #define PUGL_MALLOC_API PUGL_API PUGL_MALLOC_FUNC
 
+#if !defined(PUGL_CALLOC) && !defined(PUGL_REALLOC) && !defined(PUGL_FREE)
+#	 define PUGL_CALLOC calloc
+#  define PUGL_REALLOC realloc
+#  define PUGL_FREE free
+#endif
+
 // Unused parameter macro to suppresses warnings and make it impossible to use
 #if defined(__cplusplus)
 #  define PUGL_UNUSED(name) name

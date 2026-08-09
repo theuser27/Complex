@@ -136,8 +136,6 @@ namespace Interface
     return Rectangle<i32>();
   }
 
-  constinit thread_local InterfaceRelated uiRelated{};
-
   //void Shape::drawAll(Graphics &g, Rectangle<float> bounds, float scale,
   //  float strokeWidth, utils::span<Colour> colours) const
   //{

@@ -8,7 +8,6 @@
 #include "Framework/parameter_value.hpp"
 #include "Framework/parameter_bridge.hpp"
 #include "Plugin/Complex.hpp"
-#include "Plugin/Renderer.hpp"
 #include "../Sections/MainInterface.hpp"
 #include "../Sections/Popups.hpp"
 
@@ -178,13 +177,13 @@ namespace Interface
 
   void Control::endChange()
   {
-    auto &plugin = getPlugin(uiRelated.renderer);
+    auto &plugin = getUiRelated()->plugin;
     auto [storage, action] = plugin.undoManager.getCurrent();
 
     auto oldEditTime = lastEditTime;
-    lastEditTime = uiRelated.steadyTime;
+    lastEditTime = getUiRelated()->steadyTime;
 
-    if (uiRelated.steadyTime - oldEditTime <= kUndoTimeout)
+    if (getUiRelated()->steadyTime - oldEditTime <= kUndoTimeout)
     {
       while (action)
       {
@@ -260,25 +259,25 @@ namespace Interface
     PopupItem *siblingItem{};
 
     bool
-    render(OpenGlWrapper &openGl) override
+    render(Graphics &g) override
     {
       if ((componentFlags.isHovered || componentFlags.isClicked) && canBeChosen)
-        fillRect(openGl, getLocalBounds().toFloat(), getHighlightColour(), scaleValue(rounding));
+        fillRect(g, getLocalBounds().toFloat(), getHighlightColour(), scaleValue(rounding));
 
       if (id > kMappingList && isUnmappingParameter(id))
       {
         auto crossBounds = getLocalBounds().toFloat().withTrim(scaleValue(padding.toFloat()));
         crossBounds = crossBounds.withTrim(crossBounds.w * 0.25f, crossBounds.h * 0.25f);
 
-        nvgBeginPath(openGl);
-        nvgMoveTo(openGl, crossBounds.x, crossBounds.y);
-        nvgLineTo(openGl, crossBounds.getRight(), crossBounds.getBottom());
+        nvgBeginPath(g);
+        nvgMoveTo(g, crossBounds.x, crossBounds.y);
+        nvgLineTo(g, crossBounds.getRight(), crossBounds.getBottom());
 
-        nvgMoveTo(openGl, crossBounds.x, crossBounds.getBottom());
-        nvgLineTo(openGl, crossBounds.getRight(), crossBounds.y);
+        nvgMoveTo(g, crossBounds.x, crossBounds.getBottom());
+        nvgLineTo(g, crossBounds.getRight(), crossBounds.y);
 
-        nvgStrokeColor(openGl, getColour(Skin::kTextComponentText1, this));
-        nvgStroke(openGl);
+        nvgStrokeColor(g, getColour(Skin::kTextComponentText1, this));
+        nvgStroke(g);
       }
 
       if (id == kManualEntry || id == kCopyNormalisedValue ||
@@ -297,7 +296,7 @@ namespace Interface
         {
           auto [fn, iconSizes] = Paths::copyNormalisedValueIcon();
 
-          fn(*openGl.cache, colours,
+          fn(g, colours,
             scaleValue(iconSizes.toFloat()).withCentre(getLocalBounds().toFloat().getCentre()),
             scaleValue(1.0f));
           break;
@@ -306,7 +305,7 @@ namespace Interface
         {
           auto [fn, iconSizes] = Paths::copyScaledValueIcon();
 
-          fn(*openGl.cache, colours,
+          fn(g, colours,
             scaleValue(iconSizes.toFloat()).withCentre(getLocalBounds().toFloat().getCentre()),
             scaleValue(1.0f));
           break;
@@ -315,7 +314,7 @@ namespace Interface
         {
           auto [fn, iconSizes] = Paths::pasteValueIcon();
 
-          fn(*openGl.cache, colours,
+          fn(g, colours,
             scaleValue(iconSizes.toFloat()).withCentre(getLocalBounds().toFloat().getCentre()),
             scaleValue(1.0f));
           break;
@@ -332,10 +331,10 @@ namespace Interface
 
       if (!canBeChosen && id != kMapFirstSlotSubtitle && id <= kMappingList)
       {
-        fillRect(openGl, getLocalBounds().toFloat(), getColour(Skin::kPopupSelectorDelimiter, this));
+        fillRect(g, getLocalBounds().toFloat(), getColour(Skin::kPopupSelectorDelimiter, this));
       }
 
-      //strokeRect(openGl, getLocalBounds().withTrim(scaleValueRoundInt(padding.toInt())).toFloat(),
+      //strokeRect(g, getLocalBounds().withTrim(scaleValueRoundInt(padding.toInt())).toFloat(),
       //  1.0f, Colour{ 128, 128, 128 });
 
       if (id == kMappingList)
@@ -346,13 +345,13 @@ namespace Interface
         float yCenter = bounds.h * 0.5f;
         float height = width;
 
-        nvgStrokeWidth(openGl, scaleValue(1.0f));
-        nvgBeginPath(openGl);
-        nvgMoveTo(openGl.g, arrowBounds.getRight() - width, yCenter - height);
-        nvgLineTo(openGl, arrowBounds.getRight(), yCenter);
-        nvgLineTo(openGl, arrowBounds.getRight() - width, yCenter + height);
-        nvgStrokeColor(openGl.g, getColour(Skin::kTextComponentText2, this));
-        nvgStroke(openGl);
+        nvgStrokeWidth(g, scaleValue(1.0f));
+        nvgBeginPath(g);
+        nvgMoveTo(g, arrowBounds.getRight() - width, yCenter - height);
+        nvgLineTo(g, arrowBounds.getRight(), yCenter);
+        nvgLineTo(g, arrowBounds.getRight() - width, yCenter + height);
+        nvgStrokeColor(g, getColour(Skin::kTextComponentText2, this));
+        nvgStroke(g);
       }
 
       if (!text.empty())
@@ -360,7 +359,7 @@ namespace Interface
         auto textBounds = getLocalBounds().withTrim(scaleValueRoundInt(padding.toInt())).toFloat();
         textBounds.h = ::roundf(scaleValue((float)desiredSize.h));
 
-        renderText(text, FontId::InterType, textBounds, openGl,
+        renderText(text, FontId::InterType, textBounds, g,
           getColour(textColourId, this), textPlacement, canTextWrap);
       }
 
@@ -390,7 +389,7 @@ namespace Interface
     case kValueDisplay:
     {
       auto *control = (Control *)item->extraData;
-      savedText.reserve(localScratch, 31);
+      savedText.reserve(getLocalScratch(), 31);
       control->getScaledValueString(savedText, control->getValue(), false);
 
       char unscaledValueStringBuffer[64];
@@ -406,7 +405,7 @@ namespace Interface
     if (item->id > kMappingList && !isUnmappingParameter(item->id))
     {
       auto index = getParameterIndexFromId(item->id);
-      utils::span parameterBridges = getPlugin(uiRelated.renderer).state_->parameterBridges;
+      utils::span parameterBridges = getUiRelated()->plugin.state_->parameterBridges;
 
       if (parameterBridges[index].isMappedToParameter())
         item->textColourId = Skin::kWidgetPrimary1;
@@ -441,11 +440,11 @@ namespace Interface
 
     bool canTextWrap = item->canTextWrap;
     float height = ::roundf(scaleValue((float)item->desiredSize.h));
-    uiRelated.cache->setFont(FontId::InterType, height);
+    getUiRelated()->g->setFont(FontId::InterType, height);
 
     if (!isCalculatingVertical)
     {
-      minSize = (canTextWrap) ? 0 : (i32)::ceilf(uiRelated.cache->getStringWidthFloat(text));
+      minSize = (canTextWrap) ? 0 : (i32)::ceilf(getUiRelated()->g->getStringWidthFloat(text));
       if (item->id == kMappingList)
       {
         minSize += scaleValueRoundInt((float)(kPopupSubwindowArrowMargin + kPopupSubwindowArrowWidth));
@@ -455,7 +454,7 @@ namespace Interface
     }
     else
     {
-      auto lineCount = uiRelated.cache->getStringNumberOfLines(text, (float)item->bounds.w);
+      auto lineCount = getUiRelated()->g->getStringNumberOfLines(text, (float)item->bounds.w);
       minSize = (i32)height * (i32)lineCount;
       maxSize = minSize;
     }
@@ -485,17 +484,17 @@ namespace Interface
     options.componentFlags.vertical = true;
     options.padding = { 0, 4, 0, 4 };
     options.desiredSize = { kPopupMinWidth, 0, utils::int_max<i32>, utils::int_max<i32> };
-    options.draw = [](OpenGlWrapper &openGl, PopupList *self)
+    options.draw = [](Graphics &g, PopupList *self)
     {
       auto topPadding = scaleValue((float)self->padding.y);
       auto bottomPadding = scaleValue((float)self->padding.h);
 
-      fillRect(openGl, self->getLocalBounds().toFloat(), getColour(Skin::kBody, self),
+      fillRect(g, self->getLocalBounds().toFloat(), getColour(Skin::kBody, self),
         topPadding, topPadding, bottomPadding, bottomPadding);
 
-      self->doRenderChildren(openGl);
+      self->doRenderChildren(g);
 
-      strokeRect(openGl, self->getLocalBounds().toFloat(), scaleValue(1.0f), Colour{ 45,45,45 },
+      strokeRect(g, self->getLocalBounds().toFloat(), scaleValue(1.0f), Colour{ 45,45,45 },
         topPadding);
 
       return false;
@@ -528,7 +527,7 @@ namespace Interface
         mappingList.childList->draw = options.draw;
         mappingList.childList->padding = { 0, 4, 8, 4 };
         options.addChildComponent(&mappingList);
-        utils::span parameterBridges = getPlugin(uiRelated.renderer).state_->parameterBridges;
+        utils::span parameterBridges = getUiRelated()->plugin.state_->parameterBridges;
         for (usize i = 0; i < parameterBridges.size(); ++i)
         {
           if (!parameterBridges[i].isMappedToParameter())
@@ -634,7 +633,7 @@ namespace Interface
     COMPLEX_ASSERT(details.scale != Framework::ParameterScale::Indexed);
 
     double probablyLongestValue = getProbablyLongestParameterValue(details,
-      getPlugin(uiRelated.renderer).getSampleRate());
+      getUiRelated()->plugin.getSampleRate());
 
     char buffer[64]{};
     usize size{};
@@ -649,14 +648,14 @@ namespace Interface
         controlFlags.shouldUsePlusMinusPrefix || details.minValue < 0.0f);
     }
 
-    auto maxStringLength = utils::string{ localScratch, { buffer, size } };
+    auto maxStringLength = utils::string{ getLocalScratch(), { buffer, size } };
     if (!prefix.empty())
       maxStringLength.prepend(prefix);
     if (!details.displayUnits.empty())
       maxStringLength.append(details.displayUnits);
 
-    uiRelated.cache->setFont(usedFont, lineHeight);
-    return uiRelated.cache->getStringWidthFloat(maxStringLength);
+    getUiRelated()->g->setFont(usedFont, lineHeight);
+    return getUiRelated()->g->getStringWidthFloat(maxStringLength);
   }
 
   void Control::getScaledValueString(utils::string &outString,
@@ -680,7 +679,7 @@ namespace Interface
       return;
     }
 
-    float sampleRate = getPlugin(uiRelated.renderer).getSampleRate();
+    float sampleRate = getUiRelated()->plugin.getSampleRate();
     double scaledValue = Framework::scaleValue(valueToConvert, details, sampleRate, true);
 
     if (details.scale == Framework::ParameterScale::Indexed)
@@ -756,7 +755,7 @@ namespace Interface
   double
   Control::getValueFromText(utils::string_view text) const
   {
-    utils::string trimmed{ localScratch, text };
+    utils::string trimmed{ getLocalScratch(), text };
     trimmed.trim().toLower();
 
     if (text.back() == '%' && details.displayUnits != "%")
@@ -827,7 +826,7 @@ namespace Interface
 
   void handleControlPopupResult(Control *control, PopupItem *selectedItem)
   {
-    auto &plugin = getPlugin(uiRelated.renderer);
+    auto &plugin = getUiRelated()->plugin;
 
     auto createMappingParameterUpdate = [&plugin](Framework::ParameterBridge *bridge, Framework::ParameterLink *link = nullptr)
     {
@@ -849,7 +848,7 @@ namespace Interface
     }
     else if (result == kManualEntry)
     {
-      //auto font = uiRelated.cache->getInterFont();
+      //auto font = getUiRelated()->cache->getInterFont();
       control->showTextEntry();
     }
     else if (result == kCopyValue || result == kCopyNormalisedValue)
@@ -867,14 +866,13 @@ namespace Interface
           stringBuffer, sizeof(stringBuffer) - 1, 5);
       }
 
-      puglSetClipboard(getPuglView(uiRelated.renderer), nullptr, stringBuffer, stringSize);
+      getUiRelated()->renderer->setClipboard({ (byte *)stringBuffer, stringSize });
     }
     else if (result == kPasteValue)
     {
-      usize length;
-      const char *string = (const char *)puglGetClipboard(getPuglView(uiRelated.renderer), 0, &length);
-      if (string && length > 0)
-        control->setValue(control->getValueFromText(utils::string_view{ string, length }));
+      auto stringData = getUiRelated()->renderer->getClipboard();
+      if (!stringData.empty())
+        control->setValue(control->getValueFromText({ (char *)stringData.data(), stringData.size() }));
     }
     else if (result == kClearMapping)
     {

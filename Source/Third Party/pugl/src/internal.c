@@ -89,9 +89,9 @@ PuglStatus
 puglSetBlob(PuglBlob* const dest, const void* const data, const size_t len)
 {
   if (data) {
-    void* const newData = realloc(dest->data, len + 1);
+    void* const newData = PUGL_REALLOC(dest->data, len + 1);
     if (!newData) {
-      free(dest->data);
+      PUGL_FREE(dest->data);
       dest->len = 0;
       return PUGL_NO_MEMORY;
     }
@@ -119,10 +119,10 @@ puglSetString(char** dest, const char* string)
   const size_t len = string ? strlen(string) : 0U;
 
   if (!len) {
-    free(*dest);
+    PUGL_FREE(*dest);
     *dest = NULL;
   } else {
-    *dest = (char*)realloc(*dest, len + 1U);
+    *dest = (char*)PUGL_REALLOC(*dest, len + 1U);
     strncpy(*dest, string, len + 1U);
   }
 }

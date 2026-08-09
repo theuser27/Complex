@@ -196,7 +196,7 @@ namespace Framework
       utils::ScopedLock g{ waitLock_, utils::WaitMechanism::Spin };
 
       if (index < 0) parameterLink_.modulators.emplaceBack(&modulator);
-      else parameterLink_.modulators.emplace(parameterLink_.modulators.begin() + index, &modulator);
+      else parameterLink_.modulators.emplace(index, &modulator);
 
       isDirty_ = true;
     }
@@ -222,7 +222,7 @@ namespace Framework
       utils::ScopedLock g{ waitLock_, utils::WaitMechanism::Spin };
 
       auto &deletedModulator = *parameterLink_.modulators[index];
-      parameterLink_.modulators.erase(parameterLink_.modulators.begin() + (isize)index);
+      parameterLink_.modulators.erase(index);
 
       isDirty_ = true;
 

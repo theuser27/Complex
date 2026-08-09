@@ -34,7 +34,7 @@ namespace Interface
     void reinitialise();
     void destroy();
 
-    bool render(OpenGlWrapper &openGl) override;
+    bool render(Graphics &g) override;
 
     Generation::EffectsLane *effectsLane{};
     SoundEngineSection *soundEngineSection{};
@@ -48,7 +48,7 @@ namespace Interface
       bool mouseExit(const MouseEvent &e) override;
       bool mouseMove(const MouseEvent &e) override;
       bool mouseDown(const MouseEvent &e) override;
-      bool render(OpenGlWrapper &openGl) override;
+      bool render(Graphics &g) override;
 
       double enterHoverTime{};
       bool hasEnteredHover{};
@@ -78,7 +78,7 @@ namespace Interface
       LaneMiniView();
 
       bool mouseDown(const MouseEvent &e) override;
-      bool render(OpenGlWrapper &openGl) override;
+      bool render(Graphics &g) override;
     };
 
     LaneMiniView miniView{};

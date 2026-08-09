@@ -3,8 +3,9 @@
 
 #include "Popups.hpp"
 
+#include "Third Party/pugl/pugl.h"
+
 #include "Framework/parameter_value.hpp"
-#include "Plugin/Renderer.hpp"
 #include "Plugin/Complex.hpp"
 #include "../LookAndFeel/Graphics.hpp"
 #include "../Components/Control.hpp"
@@ -25,8 +26,8 @@ namespace Interface
         control->getScaledValueString(self->text, control->getValue());
       }
 
-      uiRelated.cache->setFont((self->isControl) ? FontId::DDinType : FontId::InterType, (float)lineHeight);
-      self->cachedFontWidth = (i32)::ceilf(uiRelated.cache->getStringWidthFloat(self->text));
+      getUiRelated()->g->setFont((self->isControl) ? FontId::DDinType : FontId::InterType, (float)lineHeight);
+      self->cachedFontWidth = (i32)::ceilf(getUiRelated()->g->getStringWidthFloat(self->text));
       return Range<i32>{ 0, self->cachedFontWidth };
     }
     else
@@ -97,16 +98,16 @@ namespace Interface
   }
 
   bool
-  PopupDisplay::render(OpenGlWrapper &openGl)
+  PopupDisplay::render(Graphics &g)
   {
     auto localBounds = getLocalBounds().toFloat();
     float rounding = getValue(Skin::kBodyRoundingTop, true, this);
-    fillRect(openGl, localBounds, getColour(Skin::kPopupDisplayBackground, this), rounding);
-    strokeRect(openGl, localBounds, scaleValue(1.0f), getColour(Skin::kPopupDisplayBorder, this), rounding);
+    fillRect(g, localBounds, getColour(Skin::kPopupDisplayBackground, this), rounding);
+    strokeRect(g, localBounds, scaleValue(1.0f), getColour(Skin::kPopupDisplayBorder, this), rounding);
 
     auto textBounds = localBounds.withTrim(scaleValue(padding.toFloat()));
     auto usedFontId = (isControl) ? FontId::DDinType : FontId::InterType;
-    renderText(text, usedFontId, textBounds, openGl,
+    renderText(text, usedFontId, textBounds, g,
       getColour(Skin::kWidgetPrimary1, source), Placement::left, true);
 
     //reinitialise();
@@ -143,10 +144,10 @@ namespace Interface
   }
 
   bool
-  PopupList::render(OpenGlWrapper &openGl)
+  PopupList::render(Graphics &g)
   {
     // if the user is currently holding down a mouse button, we shouldn't change anything
-    if (auto mouseInteractions = getMouseInteractions(uiRelated.renderer); !mouseInteractions.clicked)
+    if (auto mouseInteractions = getUiRelated()->renderer->getMouseInteractions(); !mouseInteractions.clicked)
     {
       if (currentSublistItem && componentFlags.isHovered)
       {
@@ -161,14 +162,14 @@ namespace Interface
 
     if (draw)
     {
-      if (draw(openGl, this))
+      if (draw(g, this))
       {
-        doRenderChildren(openGl);
+        doRenderChildren(g);
       }
 
-      renderScrollbars(openGl, 0.2f);
+      renderScrollbars(g, 0.2f);
 
-      auto mouseState = getMouseInteractions(uiRelated.renderer).mouseState.getEventRelativeTo(this);
+      auto mouseState = getUiRelated()->renderer->getMouseInteractions().mouseState.getEventRelativeTo(this);
       auto *c = contains(Point{ mouseState.x, mouseState.y }) ? lastMouseEvent.eventComponent : currentSublistItem;
       summonChildList((PopupItem *)c, lastMouseEvent);
 
@@ -313,7 +314,7 @@ namespace Interface
   {
     static constexpr double kSublistConeTimeout = 0.25; //s
 
-    bool shouldCloseSublist = force || uiRelated.steadyTime - lastSummonTime >= kSublistConeTimeout;
+    bool shouldCloseSublist = force || getUiRelated()->steadyTime - lastSummonTime >= kSublistConeTimeout;
     auto event = summoningMouseEvent.getEventRelativeTo(parentSelector);
     if (currentSublistItem)
     {
@@ -329,7 +330,7 @@ namespace Interface
     // refreshing the last summon time while we're on the summoning item
     lastSummonTime = (currentSublistItem != summoningItem && summoningItem && (summoningItem->childList || currentSublistItem) &&
       summoningItem->contains(Point{ summoningMouseEvent.x, summoningMouseEvent.y })) ?
-      lastSummonTime : uiRelated.steadyTime;
+      lastSummonTime : getUiRelated()->steadyTime;
 
     if (currentSublistItem != summoningItem && shouldCloseSublist)
     {
@@ -357,17 +358,17 @@ namespace Interface
   }
 
   bool
-  PopupList::drawV1(OpenGlWrapper &openGl, PopupList *self)
+  PopupList::drawV1(Graphics &g, PopupList *self)
   {
     auto topPadding = scaleValue((float)self->padding.y);
     auto bottomPadding = scaleValue((float)self->padding.h);
 
-    fillRect(openGl, self->getLocalBounds().toFloat(), getColour(Skin::kBody, self),
+    fillRect(g, self->getLocalBounds().toFloat(), getColour(Skin::kBody, self),
       topPadding, topPadding, bottomPadding, bottomPadding);
 
-    self->doRenderChildren(openGl);
+    self->doRenderChildren(g);
 
-    strokeRect(openGl, self->getLocalBounds().toFloat(), scaleValue(1.0f),
+    strokeRect(g, self->getLocalBounds().toFloat(), scaleValue(1.0f),
       Colour{ 45, 45, 45 }, topPadding);
 
     return false;
@@ -406,7 +407,7 @@ namespace Interface
     if (!canBeChosen || childList)
       return false;
 
-    if (uiRelated.steadyTime - associatedList->parentSelector->timeOfAppearance <= PopupSelector::kClickTimeout)
+    if (getUiRelated()->steadyTime - associatedList->parentSelector->timeOfAppearance <= PopupSelector::kClickTimeout)
       return false;
 
     associatedList->parentSelector->newSelection(this);
@@ -415,10 +416,10 @@ namespace Interface
   }
 
   bool
-  PopupItem::render(OpenGlWrapper &openGl)
+  PopupItem::render(Graphics &g)
   {
     if ((componentFlags.isHovered || componentFlags.isClicked) && canBeChosen)
-      fillRect(openGl, getLocalBounds().toFloat(), getHighlightColour());
+      fillRect(g, getLocalBounds().toFloat(), getHighlightColour());
 
     return true;
   }
@@ -518,7 +519,7 @@ namespace Interface
     toggleable = true;
     componentFlags.isVisible = false;
 
-    deregisterCallback(uiRelated.renderer, this);
+    getUiRelated()->renderer->callbacks.erase(this);
   }
 
   void PopupSelector::summon(Component *summoningComponent,
@@ -528,13 +529,13 @@ namespace Interface
     listPlacement = newListPlacement;
     summoningPoint = customPosition;
     selectedList = list;
-    timeOfAppearance = uiRelated.steadyTime;
+    timeOfAppearance = getUiRelated()->steadyTime;
     addChildComponent(list);
 
     componentFlags.isVisible = true;
     grabFocus();
 
-    registerCallback(uiRelated.renderer, this, [](Component *c)
+    getUiRelated()->renderer->callbacks.add(this, [](Component *c)
     {
       auto *self = (PopupSelector *)c;
       for (auto *child = self->children; child; child = child->next)
@@ -556,17 +557,17 @@ namespace Interface
       auto [text, canTextWrap] = item->getTextAndWrap();
 
       float height = scaleValue((float)item->desiredSize.h);
-      uiRelated.cache->setFont(FontId::InterType, height);
-      nvgTextAlign(uiRelated.cache->context, NVG_ALIGN_LEFT | NVG_ALIGN_CENTER);
+      getUiRelated()->g->setFont(FontId::InterType, height);
+      nvgTextAlign(getUiRelated()->g->context, NVG_ALIGN_LEFT | NVG_ALIGN_CENTER);
 
       if (!isCalculatingVertical)
       {
-        minSize = (canTextWrap) ? 0 : (i32)::ceilf(uiRelated.cache->getStringWidthFloat(text));
+        minSize = (canTextWrap) ? 0 : (i32)::ceilf(getUiRelated()->g->getStringWidthFloat(text));
         maxSize = -1;
       }
       else
       {
-        auto lineCount = uiRelated.cache->getStringNumberOfLines(text, (float)item->bounds.w);
+        auto lineCount = getUiRelated()->g->getStringNumberOfLines(text, (float)item->bounds.w);
         minSize = (i32)::roundf(height * (float)lineCount);
         maxSize = minSize;
       }
@@ -576,9 +577,9 @@ namespace Interface
   }
 
   bool
-  OptionPopupItem::render(OpenGlWrapper &openGl)
+  OptionPopupItem::render(Graphics &g)
   {
-    PopupItem::render(openGl);
+    PopupItem::render(g);
 
     auto [text, canTextWrap] = getTextAndWrap();
     Skin::ColourId textColourId = Skin::kTextComponentText1;
@@ -587,11 +588,11 @@ namespace Interface
     {
       textColourId = Skin::kTextComponentText2;
       // draw background
-      fillRect(openGl, getLocalBounds().toFloat(), getColour(Skin::kPopupSelectorDelimiter, this));
+      fillRect(g, getLocalBounds().toFloat(), getColour(Skin::kPopupSelectorDelimiter, this));
     }
 
     renderText(text, FontId::InterType, getLocalBounds().withTrim(scaleValueRoundInt(padding.toInt())).toFloat(),
-      openGl, getColour(textColourId, this), Placement::left, canTextWrap);
+      g, getColour(textColourId, this), Placement::left, canTextWrap);
 
     return true;
   }

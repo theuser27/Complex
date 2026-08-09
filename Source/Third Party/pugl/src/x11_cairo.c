@@ -74,7 +74,7 @@ puglX11CairoCreate(PuglView* view)
 {
   PuglInternals* const impl = view->impl;
 
-  impl->surface = (cairo_surface_t*)calloc(1, sizeof(PuglX11CairoSurface));
+  impl->surface = (cairo_surface_t*)PUGL_CALLOC(1, sizeof(PuglX11CairoSurface));
 
   return PUGL_SUCCESS;
 }
@@ -86,7 +86,7 @@ puglX11CairoDestroy(PuglView* view)
   PuglX11CairoSurface* const surface = (PuglX11CairoSurface*)impl->surface;
 
   puglX11CairoClose(view);
-  free(surface);
+  PUGL_FREE(surface);
 }
 
 static PuglStatus

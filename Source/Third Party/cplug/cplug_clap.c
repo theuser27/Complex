@@ -533,7 +533,7 @@ static void CLAPPlugin_destroy(const struct clap_plugin* plugin)
     cplug_log("CLAPPlugin_destroy");
     CLAPPlugin* clap = (CLAPPlugin*)plugin->plugin_data;
     cplug_destroyPlugin(clap->userPlugin);
-    free(clap);
+    CPLUG_FREE(clap);
 }
 
 static bool CLAPPlugin_activate(
@@ -868,7 +868,7 @@ CLAPFactory_create_plugin(const struct clap_plugin_factory* factory, const clap_
     // clap-validator tests you on this
     CPLUG_LOG_ASSERT_RETURN(strcmp(plugin_id, CPLUG_CLAP_ID) == 0, NULL);
 
-    CLAPPlugin* clap                  = (CLAPPlugin*)calloc(1, sizeof(CLAPPlugin));
+    CLAPPlugin* clap                  = (CLAPPlugin*)CPLUG_CALLOC(1, sizeof(CLAPPlugin));
     clap->clapPlugin.desc             = &s_clap_desc;
     clap->clapPlugin.plugin_data      = clap;
     clap->clapPlugin.init             = CLAPPlugin_init;

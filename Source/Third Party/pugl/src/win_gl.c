@@ -148,7 +148,7 @@ puglWinGlConfigure(PuglView* view)
   // clang-format on
 
   PuglWinGlSurface* const surface =
-    (PuglWinGlSurface*)calloc(1, sizeof(PuglWinGlSurface));
+    (PuglWinGlSurface*)PUGL_CALLOC(1, sizeof(PuglWinGlSurface));
   impl->surface = surface;
 
   // Create fake window for getting at GL context
@@ -265,7 +265,7 @@ puglWinGlDestroy(PuglView* view)
   if (surface) {
     wglMakeCurrent(NULL, NULL);
     wglDeleteContext(surface->hglrc);
-    free(surface);
+    PUGL_FREE(surface);
     view->impl->surface = NULL;
   }
 }
@@ -291,6 +291,22 @@ puglWinGlLeave(PuglView* view, const PuglExposeEvent* expose)
   }
 
   wglMakeCurrent(NULL, NULL);
+  return PUGL_SUCCESS;
+}
+
+static PuglStatus
+puglWinGlChange(PuglView *oldView, PuglView *newView, const PuglExposeEvent *expose)
+{
+  if (expose) {
+    SwapBuffers(oldView->impl->hdc);
+  }
+
+  PuglWinGlSurface *surface = (PuglWinGlSurface *)newView->impl->surface;
+  if (!surface || !surface->hglrc) {
+    return PUGL_FAILURE;
+  }
+
+  wglMakeCurrent(newView->impl->hdc, surface->hglrc);
   return PUGL_SUCCESS;
 }
 
@@ -320,6 +336,26 @@ puglLeaveContext(PuglView* view)
   return view->backend->leave(view, NULL);
 }
 
+PuglStatus
+puglChangeContext(PuglView *oldView, PuglView *newView)
+{
+  if (oldView == newView)
+    return PUGL_SUCCESS;
+
+  if (oldView && newView && oldView->backend == newView->backend && 
+    newView->backend == puglGlBackend())
+    return oldView->backend->change(oldView, newView, NULL);
+  else
+  {
+    PuglStatus st0 = PUGL_SUCCESS, st1 = PUGL_SUCCESS;
+    if (oldView)
+      st0 = puglLeaveContext(oldView);
+    if (newView)
+      st1 = puglEnterContext(newView);
+    return st0 ? st0 : st1;
+  }
+}
+
 bool 
 puglIsOpenGlContextActive(void)
 {
@@ -334,6 +370,7 @@ puglGlBackend(void)
                                       puglWinGlDestroy,
                                       puglWinGlEnter,
                                       puglWinGlLeave,
+                                      puglWinGlChange,
                                       puglStubGetContext};
 
   return &backend;

@@ -23,6 +23,12 @@
 extern "C" {
 #endif
 
+#if !defined(NVG_MALLOC) && !defined(NVG_REALLOC) && !defined(NVG_FREE)
+#define NVG_MALLOC malloc
+#define NVG_REALLOC realloc
+#define NVG_FREE free
+#endif
+
 #define NVG_PI 3.14159265358979323846264338327f
 
 #ifdef _MSC_VER
@@ -399,7 +405,7 @@ float nvgRadToDeg(float rad);
 
 // Creates image by loading it from the specified chunk of memory.
 // Returns handle to the image.
-int nvgCreateImageMem(NVGcontext* ctx, int imageFlags, unsigned char* data, int ndata);
+//int nvgCreateImageMem(NVGcontext* ctx, int imageFlags, unsigned char* data, int ndata);
 
 // Creates image from specified image data.
 // Returns handle to the image.

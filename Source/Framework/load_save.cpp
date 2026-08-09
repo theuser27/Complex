@@ -15,7 +15,6 @@
 #include "Interface/LookAndFeel/Graphics.hpp"
 #include "Interface/LookAndFeel/ui_constants.hpp"
 #include "Interface/Sections/MainInterface.hpp"
-#include "Plugin/Renderer.hpp"
 #include "Plugin/Complex.hpp"
 
 
@@ -57,7 +56,7 @@ namespace Framework::LoadSave
     {
       char buffer[bufferSize];
       int pathSize = xfiles_get_user_directory(buffer, sizeof(buffer), XFILES_USER_DIRECTORY_APPDATA);
-      auto string = utils::string::create(localScratch, "%*s" XFILES_DIR_STR "%s", pathSize, buffer, CPLUG_PLUGIN_NAME);
+      auto string = utils::string::create(getLocalScratch(), "%*s" XFILES_DIR_STR "%s", pathSize, buffer, CPLUG_PLUGIN_NAME);
 
       // adding the path to the long term plugin storage
       return findOrAddPermanentString(string);
@@ -66,7 +65,7 @@ namespace Framework::LoadSave
     if (!xfiles_exists(path.data()))
       xfiles_create_directory(path.data());
 
-    return utils::string::create(localScratch, "%v" XFILES_DIR_STR "%v", path, file);
+    return utils::string::create(getLocalScratch(), "%v" XFILES_DIR_STR "%v", path, file);
   }
 }
 
@@ -89,7 +88,7 @@ namespace
     if (!xfiles_read(filePath.data(), (void **)&string, &stringSize))
       return;
 
-    jsonArena = utils::bumpArena::createNested(localScratch, COMPLEX_KB(16));
+    jsonArena = utils::bumpArena::createNested(getLocalScratch(), COMPLEX_KB(16));
 
     cjson *json = cjson_Parse(string, stringSize);
     if (json)
@@ -107,7 +106,7 @@ namespace
       xfiles_write(filePath.data(), text, size);
     }
 
-    XFILES_FREE(string);
+    xfiles_read_free(string);
     utils::bumpArena::destroy(jsonArena);
     jsonArena = nullptr;
   }
@@ -334,7 +333,7 @@ static void fixDeserialisedProcessorsStateIds(Plugin::State *state)
         break;
 
       (*iter)->stateId = processor->stateId;
-      dynamicOptionFixups->erase(iter);
+      dynamicOptionFixups->eraseAt(iter);
     }
 
     oldId = processor->stateId;
@@ -432,7 +431,7 @@ namespace Framework
     {
       if (!cjson_GetObjectItem(data, "options"))
       {
-        auto errorString = utils::string::create(localScratch,
+        auto errorString = utils::string::create(getLocalScratch(),
           "%v\nOptions parameter %v (%zu) is missing its options, replacing with default ones from the plugin.",
           utils::string_view{ *errorPath }, parameter->details_.displayName, parameter->details_.id);
         Interface::showNativeMessageBox("Error opening preset", errorString.data(), Interface::MessageBoxType::Warning);
@@ -594,7 +593,7 @@ namespace Generation
 
       if (!parameter)
       {
-        auto errorString = utils::string::create(localScratch,
+        auto errorString = utils::string::create(getLocalScratch(),
           "%v\nMissing Parameter %v (%zu), replacing with a default initialised one. "
           "This should have been handled by the version upgrade routine but it wasn't. "
           "If this is the mainline version of the plugin consider reporting it to the developer.",
@@ -627,7 +626,7 @@ namespace Generation
         if (!isPresent)
         {
           auto displayName = cjson_GetObjectItem(child, "display_name")->vstring;
-          auto errorString = utils::string::create(localScratch,
+          auto errorString = utils::string::create(getLocalScratch(),
             "%v\nUnexpected parameter %s (%zu).",
             utils::string_view{ *errorPath }, displayName, id);
           Interface::showNativeMessageBox("Error opening preset", errorString.data(), Interface::MessageBoxType::Warning);
@@ -681,7 +680,7 @@ namespace Plugin
 {
   void serialiseToJson(State *state, void *jsonData)
   {
-    utils::vector<Generation::Processor *> topLevelProcessors{ localScratch, 16 };
+    utils::vector<Generation::Processor *> topLevelProcessors{ getLocalScratch(), 16 };
     for (auto &[id, processor] : state->allProcessors.data)
       if (!processor->parent)
         topLevelProcessors.emplaceBack(processor);
@@ -776,7 +775,10 @@ namespace Plugin
     if (!plugin->state_)
       return;
 
-    jsonArena = utils::bumpArena::createNested(localScratch, COMPLEX_KB(128));
+    Interface::getUiRelated() = &plugin->renderer.generalData;
+    defer{ Interface::getUiRelated() = nullptr; };
+
+    jsonArena = utils::bumpArena::createNested(getLocalScratch(), COMPLEX_KB(128));
 
     cjson *data = cjson_Create(cjson_Object);
     serialiseToJson(plugin->state_.get(), data);
@@ -823,9 +825,12 @@ namespace Plugin
 
     utils::sp<State> state{};
 
+    Interface::getUiRelated() = &plugin->renderer.generalData;
+    defer{ Interface::getUiRelated() = nullptr; };
+
     if (data.size() != 0)
     {
-      jsonArena = utils::bumpArena::createNested(localScratch, COMPLEX_KB(128));
+      jsonArena = utils::bumpArena::createNested(getLocalScratch(), COMPLEX_KB(128));
       const char *potentialError = nullptr;
       cjson *jsonData = cjson_ParseWithOpts(data.data(), data.size(), &potentialError, false);
       if (!jsonData)
@@ -859,7 +864,8 @@ namespace Plugin
       plugin->state_ = COMPLEX_MOVE(state);
 
     auto *newGui = plugin->state_->gui;
-    Interface::resetGui(&plugin->getRenderer(), newGui);
+    plugin->renderer.resetGui(newGui);
+
     newGui->restartUI(plugin->state_.get());
   }
 }
