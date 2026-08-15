@@ -131,9 +131,8 @@ cjson *cjson_GetArrayItem(const cjson *array, size_t index);
 cjson *cjson_GetObjectItem(const cjson * const object, const char * const string);
 cjson *cjson_GetObjectItemCaseSensitive(const cjson * const object, const char * const string);
 
-/* These calls create a cjson item of the appropriate type. */
+/* These calls create a cjson item of the appropriate type. Variadic argument serves as initialisation value of the json item. */
 cjson *cjson_Create(int type, ...);
-#define cjson_Create(type, ...) (cjson_Create)(type, (0LL, ##__VA_ARGS__))
 
 #define _cjson_IsStringLiteral_(x) ((#x)[0] == '"' || (sizeof(#x) > 2 && (#x)[1] == '"') || (sizeof(#x) > 3 && (#x)[2] == '"') || (sizeof(#x) > 4 && (#x)[3] == '"'))
 #define _cjson_IsStringLiteral(x) _cjson_IsStringLiteral_(x)
@@ -172,10 +171,6 @@ bool cjson_Compare(const cjson * a, const cjson * b, bool case_sensitive);
  * The input pointer json cannot point to a read-only address area, such as a string constant,
  * but should point to a readable and writable address area. */
 void cjson_Minify(char *json);
-
-/* Helper function for creating and adding items to an object/array at the same time.
- * Returns the added item or NULL on failure. */
-#define cjson_AddTo(parent, name, type, /*args*/ ...) (cjson_AddExistingTo)(parent, name, (cjson_Create)(type, (0LL, ##__VA_ARGS__)), true, _cjson_IsStringLiteral(name))
 
 bool cjson_Set(cjson *item, int type, ...);
 

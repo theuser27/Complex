@@ -258,7 +258,9 @@ namespace utils
   template<typename T>
   constexpr bool operator==(nullptr_t, const sp<T> &two) { return two.get() == nullptr; }
 
-  inline constexpr usize heapAllocatedTag = usize(-1) >> 1;
+  // msvc uses signed u64s as array sizes so you can't just do usize(-1) and
+  // clang for some reason doesn't like sizes above usize(-1) >> 3
+  inline constexpr usize heapAllocatedTag = usize(-1) >> 3;
 
   // ghetto std::any implementation that can also be stack allocated
   template<usize MaxSize, usize Alignment = sizeof(void *)>
@@ -718,7 +720,7 @@ namespace utils
 
     template<typename T, typename Callable = remove_cvref_t<T>>
       requires is_invocable_r_v<R, Callable &, Args...> &&
-      !requires{ typename Callable::fnTag; } // necessary to avoid fn & matches
+      (!requires{ typename Callable::fnTag; }) // necessary to avoid fn & matches
     fn(T &&lambda) { fromCallable(COMPLEX_FWD(lambda)); }
 
 
@@ -767,7 +769,7 @@ namespace utils
 
     template<typename T, typename Callable = remove_cvref_t<T>>
       requires is_invocable_r_v<R, Callable &, Args...> &&
-      !requires{ typename Callable::fnTag; } // necessary to avoid fn & matches
+      (!requires{ typename Callable::fnTag; }) // necessary to avoid fn & matches
     fn &
     operator=(T &&lambda)
     {
@@ -906,7 +908,7 @@ namespace utils
     } threadId{};
 
   private:
-    inline static thread_local id currentId = {};
+    static thread_local id currentId;
   public:
     // the necessity for this function instead of just getting the value directly
     // is because the thread might have been started

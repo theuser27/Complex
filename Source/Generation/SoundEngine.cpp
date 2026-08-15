@@ -480,14 +480,14 @@ initialiseTypeStructure<Generation::SoundEngine>(void *, Framework::PluginStruct
   ProcessorMetadata &soundEngine = COMPLEX_STRUCTURE_PROCESSOR(SoundEngine, "Sound Engine", Processors::SoundEngine, Interface::Skin::kNone);
   soundEngine.parameters =
   (
-    COMPLEX_STRUCTURE_PARAMETER("Mix", SoundEngine::Mix, 0.0f, 1.0f, 1.0f, 1.0f,
+    COMPLEX_STRUCTURE_PARAMETER("Mix", SoundEngine::Mix, { 0.0f, 1.0f, 1.0f, 1.0f },
       ParameterScale::Linear, "%", ParameterDetails::Modulatable | ParameterDetails::Automatable, UpdateFlag::BeforeProcess),
-    COMPLEX_STRUCTURE_PARAMETER("Block Size", SoundEngine::BlockSize, kMinFFTOrder, kMaxFFTOrder, kDefaultFFTOrder,
-      (float)(kDefaultFFTOrder - kMinFFTOrder) / (float)(kMaxFFTOrder - kMinFFTOrder),
+    COMPLEX_STRUCTURE_PARAMETER("Block Size", SoundEngine::BlockSize, { kMinFFTOrder, kMaxFFTOrder, kDefaultFFTOrder,
+      (float)(kDefaultFFTOrder - kMinFFTOrder) / (float)(kMaxFFTOrder - kMinFFTOrder) },
       ParameterScale::Linear, {}, ParameterDetails::Automatable | ParameterDetails::Extensible | ParameterDetails::RoundToInt, UpdateFlag::BeforeProcess,
       [](char *string, usize size, double value, const ParameterDetails &) { return (usize)::stbsp_snprintf(string, (int)size, "%zu", ((usize)1 << (usize)::round(value))); }),
-    COMPLEX_STRUCTURE_PARAMETER("Overlap", SoundEngine::Overlap, kMinWindowOverlap, kMaxWindowOverlap, kDefaultWindowOverlap,
-      kDefaultWindowOverlap, ParameterScale::Clamp, "%", ParameterDetails::Automatable),
+    COMPLEX_STRUCTURE_PARAMETER("Overlap", SoundEngine::Overlap, { kMinWindowOverlap, kMaxWindowOverlap, kDefaultWindowOverlap,
+      kDefaultWindowOverlap }, ParameterScale::Clamp, "%", ParameterDetails::Automatable),
     COMPLEX_STRUCTURE_PARAMETER("Window", SoundEngine::WindowType,
       {
         .options = COMPLEX_STRUCTURE_INDEXED_DATA()->addChildren({{
@@ -502,9 +502,9 @@ initialiseTypeStructure<Generation::SoundEngine>(void *, Framework::PluginStruct
           COMPLEX_STRUCTURE_INDEXED_DATA(.displayName = "Lanczos", .id = Lanczos, .userFlags = Window::HasAlpha) }}),
         .defaultOptionId = Hann
       }, ParameterScale::Indexed, {}, ParameterDetails::Automatable | ParameterDetails::Extensible, UpdateFlag::BeforeProcess),
-    COMPLEX_STRUCTURE_PARAMETER("Alpha", SoundEngine::WindowAlpha, 0.0f, 1.0f, 0.0f, 0.0f, ParameterScale::Linear,
+    COMPLEX_STRUCTURE_PARAMETER("Alpha", SoundEngine::WindowAlpha, { 0.0f, 1.0f, 0.0f, 0.0f }, ParameterScale::Linear,
       "%", ParameterDetails::Automatable, UpdateFlag::BeforeProcess),
-    COMPLEX_STRUCTURE_PARAMETER("Gain", SoundEngine::OutGain, -30.0f, 30.0f, 0.0f, 0.5f, ParameterScale::Linear,
+    COMPLEX_STRUCTURE_PARAMETER("Gain", SoundEngine::OutGain, { -30.0f, 30.0f, 0.0f, 0.5f }, ParameterScale::Linear,
       " dB", ParameterDetails::Modulatable | ParameterDetails::Automatable, UpdateFlag::BeforeProcess)
   );
 

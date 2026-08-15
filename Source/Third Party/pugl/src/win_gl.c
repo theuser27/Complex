@@ -336,26 +336,6 @@ puglLeaveContext(PuglView* view)
   return view->backend->leave(view, NULL);
 }
 
-PuglStatus
-puglChangeContext(PuglView *oldView, PuglView *newView)
-{
-  if (oldView == newView)
-    return PUGL_SUCCESS;
-
-  if (oldView && newView && oldView->backend == newView->backend && 
-    newView->backend == puglGlBackend())
-    return oldView->backend->change(oldView, newView, NULL);
-  else
-  {
-    PuglStatus st0 = PUGL_SUCCESS, st1 = PUGL_SUCCESS;
-    if (oldView)
-      st0 = puglLeaveContext(oldView);
-    if (newView)
-      st1 = puglEnterContext(newView);
-    return st0 ? st0 : st1;
-  }
-}
-
 bool 
 puglIsOpenGlContextActive(void)
 {

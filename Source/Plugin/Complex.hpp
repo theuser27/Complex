@@ -91,7 +91,7 @@ namespace Interface
     float fps =
     #if COMPLEX_WINDOWS
       64.0f; // Windows timers are complete ass
-    #elif
+    #else
       60.0f;
     #endif
 

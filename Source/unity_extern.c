@@ -1,3 +1,4 @@
+#include <stddef.h>
 
 #if defined (_WIN32) || defined (_WIN64)
   #define COMPLEX_WINDOWS 1
@@ -9,10 +10,17 @@
   #error Unsupported Platform
 #endif
 
+#ifdef COMPLEX_MAC
+  #pragma GCC diagnostic push
+  #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
+#endif
+
 #ifdef _MSC_VER
   #pragma warning (push, 2)
 #else
-
+  #pragma GCC diagnostic push
+  #pragma GCC diagnostic ignored "-Wmultichar"
+  #pragma GCC diagnostic ignored "-Wnullability-completeness"
 #endif
 
 #ifdef COMPLEX_WINDOWS
@@ -85,7 +93,7 @@ void  arena_free(void *pointer);
 #ifdef _MSC_VER
   #pragma warning (pop)
 #else
-
+  #pragma GCC diagnostic pop
 #endif
 
 #define GLAD_MALLOC global_malloc
@@ -127,3 +135,7 @@ void  arena_free(void *pointer);
 
 #include "Third Party/cjson/cjson.c"
 #include "Third Party/pffft/pffft.c"
+
+#ifdef COMPLEX_MAC
+  #pragma GCC diagnostic pop
+#endif

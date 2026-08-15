@@ -444,7 +444,6 @@ namespace Interface
       if (holder->hasEnteredHover)
         getUiRelated()->renderer->setMouseCursor(MouseCursorTypes::PointingHand);
 
-      auto e = getUiRelated()->renderer->getMouseInteractions().mouseState.getEventRelativeTo(holder);
       auto scaledPadding = scaleValueRoundInt(holder->padding.toInt());
       auto drawBounds = holder->getLocalBounds().withTrimLeft(scaledPadding.x).withTrimRight(scaledPadding.w);
 

@@ -626,7 +626,7 @@ namespace satomi
         "st" store_order "xr" suffix " %w[success], " modifier "[desired], %[target]\n\t"                                 \
         msvc_fence                                                                                                        \
         "1:\n\t"                                                                                                          \
-        "cset %w[success], eq\n\t"                                                                                        \
+        "eor %w[success], %w[success], #1\n\t"                                                                            \
         : [target] "+Q" (target), [success] "=&r" (success), [out] "=&r" (out)                                            \
         : [desired] "r" (desired), [expected] "r" (expected)                                                              \
         : "cc", "memory"                                                                                                  \
@@ -662,7 +662,7 @@ namespace satomi
           "st" store_order "xp %w[success], %x[desired_0], %x[desired_1], %[target]\n\t"\
           msvc_fence                                                                    \
           "1:\n\t"                                                                      \
-          "cset %w[success], eq\n\t"                                                    \
+          "eor %w[success], %w[success], #1\n\t"                                        \
           : [success] "=&r" (success), [target] "+Q" (target),                          \
             [out_0] "=&r" (out.v[0]), [out_1] "=&r" (out.v[1])                          \
           : [desired_0] "r" (d.v[0]), [desired_1] "r" (d.v[1]),                         \
@@ -1247,6 +1247,7 @@ namespace satomi
     {
       struct alignas(16) uint128__ { SATOMI_U64 v[2]; };
       auto v = SATOMI_BIT_CAST(uint128__, value);
+      (void)v;
 
     // checking for ARMv8.4 (LDP and STP)
     #if __ARM_FEATURE_DOTPROD
@@ -1425,7 +1426,7 @@ namespace satomi
       #ifdef __ARM_FEATURE_ATOMICS
 
         #define SATOMI_ATOMIC_ASM(load_order, store_order, msvc_fence, type, suffix, modifier)                    \
-          type temp, original;                                                                                    \
+          type original;                                                                                          \
           auto o = SATOMI_BIT_CAST(type, operand);                                                                \
           __asm__ __volatile__                                                                                    \
           (                                                                                                       \
@@ -1544,7 +1545,7 @@ namespace satomi
     #ifdef __ARM_FEATURE_ATOMICS
 
       #define SATOMI_ATOMIC_ASM(load_order, store_order, msvc_fence, type, suffix, modifier, ...)                       \
-        type ret, temp;                                                                                                 \
+        type ret;                                                                                                       \
         auto o = SATOMI_BIT_CAST(type, operand);                                                                        \
         __VA_ARGS__                                                                                                     \
         __asm__ __volatile__                                                                                            \

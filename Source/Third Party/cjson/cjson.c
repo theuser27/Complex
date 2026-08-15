@@ -2390,10 +2390,10 @@ bool cjson_Compare(const cjson * const a, const cjson * const b, const bool case
             return false;
 
         case cjson_Integer:
-            return a->vint == a->vint;
+            return a->vint == b->vint;
 
         case cjson_Unsigned:
-          return a->vuint == a->vuint;
+          return a->vuint == b->vuint;
 
         case cjson_String:
         case cjson_Raw:

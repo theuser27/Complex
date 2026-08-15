@@ -17,6 +17,10 @@
 #include "Interface/Sections/MainInterface.hpp"
 #include "Plugin/Complex.hpp"
 
+#define cjson_Create(type, ...) (cjson_Create)(type, COMPLEX_DEFAULT_OR(0LL, __VA_ARGS__))
+/* Helper function for creating and adding items to an object/array at the same time.
+ * Returns the added item or NULL on failure. */
+#define cjson_AddTo(parent, name, type, /*args*/ ...) (cjson_AddExistingTo)(parent, name, (cjson_Create)(type, COMPLEX_DEFAULT_OR(0LL, __VA_ARGS__)), true, _cjson_IsStringLiteral(name))
 
 // after finishing work with the arena and freeing it, reset this pointer
 thread_local utils::bumpArena *jsonArena;
@@ -463,7 +467,7 @@ namespace Framework
         // TODO: log this
       }
 
-      bool changedMinMax = false;
+      // bool changedMinMax = false;
       if (referenceMin != minValue || referenceMax != maxValue)
       {
         // the range of the parameter was changed while being automated
@@ -473,7 +477,7 @@ namespace Framework
           // if we're here then that means the range was changed but it's not larger than the range available
           parameter->details_.minValue = minValue;
           parameter->details_.maxValue = maxValue;
-          changedMinMax = true;
+          // changedMinMax = true;
         }
         else
         {
@@ -488,7 +492,7 @@ namespace Framework
         {
           parameter->details_.minValue = minValue;
           parameter->details_.maxValue = maxValue;
-          changedMinMax = true;
+          // changedMinMax = true;
         }
       }
     }

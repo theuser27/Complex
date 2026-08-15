@@ -616,8 +616,8 @@ void cplug_destroyPlugin(void *ptr)
     ((lastNode) ? lastNode->next : executableStaticData.pluginInstances) = node->next;
   }
 
-  auto *data = getParentStruct(utils::sll<Plugin::ComplexPlugin>, object, plugin);
-  utils::bumpArena::remove(data);
+  // warning: this only works because the plugin is the first member
+  utils::bumpArena::remove(plugin);
 }
 
 /* --------------------------------------------------------------------------------------------------------

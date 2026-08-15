@@ -73,7 +73,6 @@
 
 #if COMPLEX_MSVC
   #define forceinline __forceinline
-  #define noinline __declspec(noinline)
   #define vectorcall __vectorcall
   #define hotreloadable __declspec(dllexport)
   #define function_symbol __FUNCDNAME__
@@ -111,10 +110,11 @@
   #endif
 #else
   #define forceinline inline __attribute__((always_inline))
-  #define noinline __attribute__ ((noinline))
   #define vectorcall
   #define hotreloadable extern "C" __attribute__((visibility("default")))
   #define function_symbol __func__
+
+  #define CRT_LINKAGE
 
   #define COMPLEX_NO_FAST_MATH_BEGIN _Pragma("GCC push_options") _Pragma("GCC optimize (\"no-fast-math\")")
   #define COMPLEX_NO_FAST_MATH_END _Pragma("GCC pop_options")
@@ -217,7 +217,7 @@ namespace common
   // should hold true on platforms where rust and zig can run
   static_assert(sizeof(usize) == sizeof(void *));
 
-  // not an actual uuid container, use unix nanoseconds for ids
+  // not an actual uuid container, use unix milliseconds for ids
   using uuid = u64;
 
   // using int instead of bool to avoid standard argument promotion bs
@@ -259,15 +259,20 @@ extern "C"
   CRT_LINKAGE double sqrt(double arg);
 
   CRT_LINKAGE unsigned long strtoul(const char *string, char **string_end, int base);
-  CRT_LINKAGE float         strtof(const char *string, char **string_end);
-  CRT_LINKAGE double        strtod(const char *string, char **string_end);
-
+  #if COMPLEX_MAC
+    float         strtof(const char *string, char **string_end) __asm("_strtof");
+    double        strtod(const char *string, char **string_end) __asm("_strtod");
+  #else
+    CRT_LINKAGE float         strtof(const char *string, char **string_end);
+    CRT_LINKAGE double        strtod(const char *string, char **string_end);
+  #endif
+  
   int stbsp_snprintf(char *buffer, int count, const char *format, ...);
 }
 
 #undef CRT_LINKAGE
-#define zeroset(destination, /*count*/ ...) memset((destination), 0, sizeof(*(destination)) __VA_OPT__(* (__VA_ARGS__)))
-#define valcpy(destination, source, /*count*/ ...) memcpy((destination), (source), sizeof(*(destination)) __VA_OPT__(* (__VA_ARGS__)))
+#define zeroset(destination, /*count*/ ...) memset((void *)(destination), 0, sizeof(*(destination)) __VA_OPT__(* (__VA_ARGS__)))
+#define valcpy(destination, source, /*count*/ ...) memcpy((void *)(destination), (void *)(source), sizeof(*(destination)) __VA_OPT__(* (__VA_ARGS__)))
 
 
 #ifdef _MSC_VER

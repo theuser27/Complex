@@ -2210,6 +2210,8 @@ static Steinberg_tresult SMTG_STDMETHODCALLTYPE VST3Component_getBusInfo(
     const bool isInput  = bus_direction == Steinberg_Vst_BusDirections_kInput;
     const bool isOutput = bus_direction == Steinberg_Vst_BusDirections_kOutput;
 
+    (void)isMIDI;
+
     if (isAudio && isInput && bus_idx < cplug_getNumInputBusses(vst3->userPlugin))
     {
         info->mediaType    = media_type;

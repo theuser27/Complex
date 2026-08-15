@@ -114,8 +114,8 @@ namespace Generation
   static_assert(utils::is_trivially_destructible_v<EffectsLane>);
 }
 
-extern template Generation::Processor *createProcessor<Generation::EffectModule>(Plugin::State *, Framework::ProcessorMetadata *, const void *, void *);
-extern template void *initialiseTypeStructure<Generation::EffectModule>(void *metadata, Framework::PluginStructure &structure);
+template<> Generation::Processor *createProcessor<Generation::EffectModule>(Plugin::State *, Framework::ProcessorMetadata *, const void *, void *);
+template<> void *initialiseTypeStructure<Generation::EffectModule>(void *metadata, Framework::PluginStructure &structure);
 
-extern template Generation::Processor *createProcessor<Generation::EffectsLane>(Plugin::State *, Framework::ProcessorMetadata *, const void *, void *);
-extern template void *initialiseTypeStructure<Generation::EffectsLane>(void *metadata, Framework::PluginStructure &structure);
+template<> Generation::Processor *createProcessor<Generation::EffectsLane>(Plugin::State *, Framework::ProcessorMetadata *, const void *, void *);
+template<> void *initialiseTypeStructure<Generation::EffectsLane>(void *metadata, Framework::PluginStructure &structure);

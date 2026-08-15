@@ -81,7 +81,7 @@ namespace Interface
 
     Colour colours[] = { colour };
     auto [fn, iconBounds] = Paths::powerButtonIcon();
-    fn(g, colours, getLocalBounds().toFloat().withTrim(scaleValue(padding.toFloat())), scaleValue(1.0f));
+    fn(g, { colours }, getLocalBounds().toFloat().withTrim(scaleValue(padding.toFloat())), scaleValue(1.0f));
 
     return true;
   }
@@ -97,7 +97,7 @@ namespace Interface
   {
     auto onNormalColor = getColour(Skin::kWidgetAccent1, this);
     auto offNormalColor = getColour(Skin::kPowerButtonOff, this);
-    auto backgroundColor = getColour(Skin::kBackground, this);
+    //auto backgroundColor = getColour(Skin::kBackground, this);
 
     tickAnimation(animationValues, {{ componentFlags.isHovered }}, {{ kHoverIncrement }});
     auto hoverAmount = animationValues[0];
@@ -106,7 +106,7 @@ namespace Interface
     float rounding = utils::min(drawBounds.w, drawBounds.h) * roundingRatio;
 
     //static constexpr float kPowerShrinkRadius = 0.2f;
-    static constexpr float kPowerHoverRadius = 0.25f;
+    //static constexpr float kPowerHoverRadius = 0.25f;
 
     //auto *backgroundComponent = utils::as<OpenGlQuad>(&target);
     //auto quadData = backgroundComponent->getQuadData();
@@ -523,8 +523,8 @@ namespace Interface
 
   bool PinSlider::render(Graphics &g)
   {
-    static constexpr float kWidth = 10.0f;
-    static constexpr float kHeight = kWidth * 0.9f;
+    // static constexpr float kWidth = 10.0f;
+    // static constexpr float kHeight = kWidth * 0.9f;
     static constexpr float kRounding = 1.0f;
     static constexpr float kVerticalSideYLength = 4.0f;
     static constexpr float kRotatedSideAngle = kPi * 0.25f;

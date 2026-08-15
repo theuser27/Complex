@@ -293,16 +293,16 @@ namespace Interface
     u8 b{}, g{}, r{}, a{};
 
     constexpr Colour() = default;
-    explicit constexpr Colour(u32 argb) : a{ u8((argb >> 24) & 0xff) },
-      r { u8((argb >> 16) & 0xff) }, g{ u8((argb >> 8) & 0xff) }, b{ u8(argb & 0xff) } { }
+    explicit constexpr Colour(u32 argb) : 
+      b{ u8(argb & 0xff) }, g{ u8((argb >> 8) & 0xff) }, r { u8((argb >> 16) & 0xff) }, a{ u8((argb >> 24) & 0xff) } { }
     constexpr Colour(int red, int green, int blue, int alpha = 255) :
-      a{ (u8)alpha }, r{ (u8)red }, g{ (u8)green }, b{ (u8)blue } {  }
+      b{ (u8)blue }, g{ (u8)green }, r{ (u8)red }, a{ (u8)alpha } {  }
     constexpr Colour(int red, int green, int blue, float alpha) :
-      a{ u8(alpha * 255.0f) }, r{ (u8)red }, g{ (u8)green }, b{ (u8)blue } { }
+      b{ (u8)blue }, g{ (u8)green }, r{ (u8)red }, a{ u8(alpha * 255.0f) } { }
     constexpr Colour(float red, float green, float blue, int alpha = 255) :
-      a{ (u8)alpha }, r{ u8(red * 255.0f) }, g{ u8(green * 255.0f) }, b{ u8(blue * 255.0f) } { }
+      b{ u8(blue * 255.0f) }, g{ u8(green * 255.0f) }, r{ u8(red * 255.0f) }, a{ (u8)alpha } { }
     constexpr Colour(float red, float green, float blue, float alpha) :
-      a{ u8(alpha * 255.0f) }, r{ u8(red * 255.0f) }, g{ u8(green * 255.0f) }, b{ u8(blue * 255.0f) } { }
+      b{ u8(blue * 255.0f) }, g{ u8(green * 255.0f) }, r{ u8(red * 255.0f) }, a{ u8(alpha * 255.0f) } { }
 
     constexpr Colour(const Colour &) = default;
     constexpr Colour &operator=(const Colour &) = default;

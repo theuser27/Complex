@@ -1430,7 +1430,6 @@ void _xfiles_watch_remove_listener_at_index(struct XFWatchContext* ctx, int i)
     if (i != -1)
     {
         struct XFWatchHandles wh   = ctx->handles[i]; // copy data onto stack before deleting
-        const char*           path = ctx->stringpool + wh.stringpool_offset;
         close(wh.fd);
 
         XFILES_ASSERT(ctx->changelist_len == ctx->handles_len);
@@ -1697,7 +1696,7 @@ int xfiles_get_user_directory(char* out, size_t outlen, XFilesUserDirectory loc)
         "/Pictures",                    // XFILES_USER_DIRECTORY_PICTURES
         "/Movies",                      // XFILES_USER_DIRECTORY_VIDEOS
     };
-    _Static_assert(XFILES_ARRLEN(PATHS) == XFILES_USER_DIRECTORY_COUNT);
+    _Static_assert(XFILES_ARRLEN(PATHS) == XFILES_USER_DIRECTORY_COUNT, "");
 
     // I don't think calling this function touches the reference count, but then I haven't looked at the binary
     // https://developer.apple.com/documentation/foundation/1413045-nshomedirectory

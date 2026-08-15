@@ -585,15 +585,15 @@ initialiseTypeStructure<Generation::EffectModule>(void *, Framework::PluginStruc
             Destroy::initialiseTypeStructure(structure) }}),
           .defaultOptionId = Filter::Types::Normal
         }, ParameterScale::Indexed, {}, ParameterDetails::Automatable | ParameterDetails::Extensible, UpdateFlag::AfterProcess),
-      COMPLEX_STRUCTURE_PARAMETER("Module Enabled", EffectModule::ModuleEnabled, 0.0f, 1.0f, 1.0f, 1.0f,
+      COMPLEX_STRUCTURE_PARAMETER("Module Enabled", EffectModule::ModuleEnabled, { 0.0f, 1.0f, 1.0f, 1.0f },
         ParameterScale::Toggle, {}, ParameterDetails::Modulatable | ParameterDetails::Automatable, UpdateFlag::Realtime, Framework::printToggleValues),
-      COMPLEX_STRUCTURE_PARAMETER("Module Mix", EffectModule::ModuleMix, 0.0f, 1.0f, 1.0f, 1.0f, ParameterScale::Linear, "%",
+      COMPLEX_STRUCTURE_PARAMETER("Module Mix", EffectModule::ModuleMix, { 0.0f, 1.0f, 1.0f, 1.0f }, ParameterScale::Linear, "%",
         ParameterDetails::Modulatable | ParameterDetails::Automatable | ParameterDetails::Stereo),
-      COMPLEX_STRUCTURE_PARAMETER("Low Bound", EffectModule::LowBound, 0.0f, 1.0f, 0.0f, 0.0f, ParameterScale::Frequency, " hz",
+      COMPLEX_STRUCTURE_PARAMETER("Low Bound", EffectModule::LowBound, { 0.0f, 1.0f, 0.0f, 0.0f }, ParameterScale::Frequency, " hz",
         ParameterDetails::Modulatable | ParameterDetails::Automatable | ParameterDetails::Stereo),
-      COMPLEX_STRUCTURE_PARAMETER("High Bound", EffectModule::HighBound, 0.0f, 1.0f, 1.0f, 1.0f, ParameterScale::Frequency, " hz",
+      COMPLEX_STRUCTURE_PARAMETER("High Bound", EffectModule::HighBound, { 0.0f, 1.0f, 1.0f, 1.0f }, ParameterScale::Frequency, " hz",
         ParameterDetails::Modulatable | ParameterDetails::Automatable | ParameterDetails::Stereo),
-      COMPLEX_STRUCTURE_PARAMETER("Shift Bounds", EffectModule::ShiftBounds, -1.0f, 1.0f, 0.0f, 0.5f, ParameterScale::Linear, "%",
+      COMPLEX_STRUCTURE_PARAMETER("Shift Bounds", EffectModule::ShiftBounds, { -1.0f, 1.0f, 0.0f, 0.5f }, ParameterScale::Linear, "%",
         ParameterDetails::Modulatable | ParameterDetails::Automatable | ParameterDetails::Stereo)
     );
 
@@ -639,7 +639,7 @@ initialiseTypeStructure<Generation::EffectsLane>(void *, Framework::PluginStruct
           COMPLEX_STRUCTURE_INDEXED_DATA(.displayName = "None", .id = EffectsLane::OutputOptionsNone) }}),
         .defaultOptionId = EffectsLane::OutputOptionsMain
       }, ParameterScale::Indexed, {}, ParameterDetails::Automatable | ParameterDetails::Extensible, UpdateFlag::BeforeProcess),
-    COMPLEX_STRUCTURE_PARAMETER("Gain Matching", EffectsLane::GainMatching, 0.0f, 1.0f, 1.0f, 1.0f, ParameterScale::Toggle, {},
+    COMPLEX_STRUCTURE_PARAMETER("Gain Matching", EffectsLane::GainMatching, { 0.0f, 1.0f, 1.0f, 1.0f }, ParameterScale::Toggle, {},
       ParameterDetails::Modulatable | ParameterDetails::Automatable, UpdateFlag::BeforeProcess, Framework::printToggleValues)
   );
 

@@ -486,8 +486,6 @@ namespace Framework
 
   void ParameterBridge::getText(float value, char *buffer, usize maximumStringLength) const
   {
-    static constexpr auto kMaxDecimals = 6;
-
     auto pointer = parameterLinkPointer_.load(satomi::memory_order_acquire);
     double internalValue;
     if (!pointer)
@@ -834,7 +832,8 @@ namespace Plugin
       return;
     }
 
-    Framework::IndexedData *endOfUntrackedOptions{}, *endOfTrackedOptions{};
+    // Framework::IndexedData *endOfUntrackedOptions{};
+    // Framework::IndexedData *endOfTrackedOptions{};
     u32 i = 0;
 
     // do a post-order traversal of this function first
@@ -855,9 +854,9 @@ namespace Plugin
 
       next = targetChild->next;
       previous = (isPresent) ? targetChild : previous;
-      endOfUntrackedOptions = previous;
-      if (i < target->childrenCount)
-        endOfTrackedOptions = endOfUntrackedOptions;
+      // endOfUntrackedOptions = previous;
+      // if (i < target->childrenCount)
+      //   endOfTrackedOptions = endOfUntrackedOptions;
 
       if (isPresent)
         continue;

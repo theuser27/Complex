@@ -309,7 +309,6 @@ namespace Interface
   bool
   EffectsSection::LaneSelector::mouseDrag(const MouseEvent &e)
   {
-    auto scrollThumbBounds = getSelectorBounds(this);
     i32 i = 0;
     i32 closestPositionX = utils::int_max<i32>;
     for (auto *child = children; child; (++i), (child = child->next))

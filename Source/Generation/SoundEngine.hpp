@@ -269,5 +269,5 @@ namespace Generation
   static_assert(utils::is_trivially_destructible_v<SoundEngine>);
 }
 
-extern template Generation::Processor *createProcessor<Generation::SoundEngine>(Plugin::State *, Framework::ProcessorMetadata *, const void *, void *);
-extern template void *initialiseTypeStructure<Generation::SoundEngine>(void *metadata, Framework::PluginStructure &structure);
+template<> Generation::Processor *createProcessor<Generation::SoundEngine>(Plugin::State *, Framework::ProcessorMetadata *, const void *, void *);
+template<> void *initialiseTypeStructure<Generation::SoundEngine>(void *metadata, Framework::PluginStructure &structure);

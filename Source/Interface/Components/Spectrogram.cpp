@@ -15,8 +15,6 @@ namespace
   forceinline simd_float vectorcall clearNan(simd_float value) { return value & simd_mask{ ~kFloatMantissaMask }; }
   forceinline void vectorcall complexMagnitude(simd_float &one, simd_float &two)
   {
-    static constexpr simd_mask exponentMask = kFloatExponentMask;
-
   #if COMPLEX_SSE4_1
     simd_float real = _mm_shuffle_ps(one.value, two.value, _MM_SHUFFLE(2, 0, 2, 0));
     simd_float imaginary = _mm_shuffle_ps(one.value, two.value, _MM_SHUFFLE(3, 1, 3, 1));
@@ -48,7 +46,7 @@ namespace
     auto upperTwo = _mm_unpackhi_ps(two.value, two.value);
     auto addSubTwo = _mm_addsub_ps(lowerTwo, upperTwo);
   #elif COMPLEX_NEON
-    static constexpr simd_mask kMinusPlus = { kSignMask, 0U };
+    static constexpr simd_mask kMinusPlus = { utils::kSignMask, 0U };
     simd_float lowerOne = vzip1q_f32(one.value, one.value);
     simd_float upperOne = vzip2q_f32(one.value, one.value);
     simd_float addSubOne = lowerOne + (upperOne ^ kMinusPlus);
@@ -354,7 +352,6 @@ namespace Interface
     COMPLEX_HOTRELOAD_CHECK(getUiRelated()->plugin.state_.get(), drawSpectrum, g, s);
 
     Colour colour = getColour(Skin::kWidgetPrimary1, s);
-    Colour fillColour = getColour(Skin::kWidgetPrimary2, s);
 
     for (usize i = 0; i < countof(s->lineData); ++i)
     {
@@ -382,7 +379,6 @@ namespace Interface
       paintBackground(g, getLocalBounds().toFloat(), minFrequency, maxFrequency);
     }
 
-    auto localBounds = getLocalBounds();
     auto &plugin = getUiRelated()->plugin;
     nyquistFreq = plugin.getSampleRate() * 0.5f;
     binCount = plugin.state_->getFFTSize() / 2;

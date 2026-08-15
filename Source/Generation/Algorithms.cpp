@@ -76,11 +76,11 @@ namespace Generation
       COMPLEX_STRUCTURE_INDEXED_DATA(.displayName = "Normal", .id = Types::Normal, .flags = IndexedData::ProcessorFlag,
         .processorMetadata = COMPLEX_STRUCTURE_EFFECT("Normal", Types::Normal, vtableNormal, Interface::Skin::kFilterModule, .parameters =
           (
-            COMPLEX_STRUCTURE_PARAMETER("Gain", Normal::Gain, kMinusInfDb, kInfDb, 0.0f, 0.5f, ParameterScale::SymmetricLoudness,
+            COMPLEX_STRUCTURE_PARAMETER("Gain", Normal::Gain, { kMinusInfDb, kInfDb, 0.0f, 0.5f }, ParameterScale::SymmetricLoudness,
               " dB", ParameterDetails::Modulatable | ParameterDetails::Automatable | ParameterDetails::Stereo),
-            COMPLEX_STRUCTURE_PARAMETER("Cutoff", Normal::Cutoff, 0.0f, 1.0f, 0.5f, 0.5f, ParameterScale::Frequency,
+            COMPLEX_STRUCTURE_PARAMETER("Cutoff", Normal::Cutoff, { 0.0f, 1.0f, 0.5f, 0.5f }, ParameterScale::Frequency,
               " hz", ParameterDetails::Modulatable | ParameterDetails::Automatable | ParameterDetails::Stereo),
-            COMPLEX_STRUCTURE_PARAMETER("Slope", Normal::Slope, -1.0f, 1.0f, 0.25f, 0.75f, ParameterScale::SymmetricQuadratic,
+            COMPLEX_STRUCTURE_PARAMETER("Slope", Normal::Slope, { -1.0f, 1.0f, 0.25f, 0.75f }, ParameterScale::SymmetricQuadratic,
               "%", ParameterDetails::Modulatable | ParameterDetails::Automatable | ParameterDetails::Stereo)
           )
         )
@@ -88,13 +88,13 @@ namespace Generation
       COMPLEX_STRUCTURE_INDEXED_DATA(.displayName = "Gate", .id = Types::Gate, .flags = IndexedData::ProcessorFlag,
         .processorMetadata = COMPLEX_STRUCTURE_EFFECT("Gate", Types::Gate, vtableGate, Interface::Skin::kFilterModule, .parameters =
           (
-            COMPLEX_STRUCTURE_PARAMETER("Input Gain", Gate::InputGain, kMinusInfDb, kInfDb, 0.0f, 0.5f, ParameterScale::SymmetricLoudness,
+            COMPLEX_STRUCTURE_PARAMETER("Input Gain", Gate::InputGain, { kMinusInfDb, kInfDb, 0.0f, 0.5f }, ParameterScale::SymmetricLoudness,
               " dB", ParameterDetails::Modulatable | ParameterDetails::Automatable | ParameterDetails::Stereo),
-            COMPLEX_STRUCTURE_PARAMETER("Gain", Gate::Gain, kMinusInfDb, kInfDb, 0.0f, 0.5f, ParameterScale::SymmetricLoudness,
+            COMPLEX_STRUCTURE_PARAMETER("Gain", Gate::Gain, { kMinusInfDb, kInfDb, 0.0f, 0.5f }, ParameterScale::SymmetricLoudness,
               " dB", ParameterDetails::Modulatable | ParameterDetails::Automatable | ParameterDetails::Stereo),
-            COMPLEX_STRUCTURE_PARAMETER("Threshold", Gate::Threshold, -180.0f, 0.0f, -45.0f, 0.5f, ParameterScale::ReverseQuadratic,
+            COMPLEX_STRUCTURE_PARAMETER("Threshold", Gate::Threshold, { -180.0f, 0.0f, -45.0f, 0.5f }, ParameterScale::ReverseQuadratic,
               " dB", ParameterDetails::Modulatable | ParameterDetails::Automatable | ParameterDetails::Stereo),
-            COMPLEX_STRUCTURE_PARAMETER("Tilt", Gate::Tilt, -24.0f, 24.0f, 0.0f, 0.5f, ParameterScale::SymmetricQuadratic,
+            COMPLEX_STRUCTURE_PARAMETER("Tilt", Gate::Tilt, { -24.0f, 24.0f, 0.0f, 0.5f }, ParameterScale::SymmetricQuadratic,
               " dB", ParameterDetails::Modulatable | ParameterDetails::Automatable | ParameterDetails::Stereo),
             COMPLEX_STRUCTURE_PARAMETER("Mode", Gate::Mode,
               {
@@ -124,11 +124,11 @@ namespace Generation
       COMPLEX_STRUCTURE_INDEXED_DATA(.displayName = "Contrast", .id = Types::Contrast, .flags = IndexedData::ProcessorFlag,
         .processorMetadata = COMPLEX_STRUCTURE_EFFECT("Contrast", Types::Contrast, vtableContrast, Interface::Skin::kDynamicsModule, .parameters =
           (
-            COMPLEX_STRUCTURE_PARAMETER("Depth", Contrast::Depth, -1.0f, 1.0f, 0.0f, 0.5f, ParameterScale::Linear,
+            COMPLEX_STRUCTURE_PARAMETER("Depth", Contrast::Depth, { -1.0f, 1.0f, 0.0f, 0.5f }, ParameterScale::Linear,
               "%", ParameterDetails::Modulatable | ParameterDetails::Automatable | ParameterDetails::Stereo),
-            COMPLEX_STRUCTURE_PARAMETER("Range", Contrast::Range, 0.0f, 1.0f, 1.0f, 1.0f, ParameterScale::Cubic,
+            COMPLEX_STRUCTURE_PARAMETER("Range", Contrast::Range, { 0.0f, 1.0f, 1.0f, 1.0f }, ParameterScale::Cubic,
               "%", ParameterDetails::Modulatable | ParameterDetails::Automatable | ParameterDetails::Stereo),
-            COMPLEX_STRUCTURE_PARAMETER("Tilt", Contrast::Tilt, -24.0f, 24.0f, 0.0f, 0.5f, ParameterScale::SymmetricQuadratic,
+            COMPLEX_STRUCTURE_PARAMETER("Tilt", Contrast::Tilt, { -24.0f, 24.0f, 0.0f, 0.5f }, ParameterScale::SymmetricQuadratic,
               " dB", ParameterDetails::Modulatable | ParameterDetails::Automatable | ParameterDetails::Stereo)
           )
         )
@@ -136,9 +136,9 @@ namespace Generation
       COMPLEX_STRUCTURE_INDEXED_DATA(.displayName = "Clip", .id = Types::Clip, .flags = IndexedData::ProcessorFlag,
         .processorMetadata = COMPLEX_STRUCTURE_EFFECT("Clip", Types::Clip, vtableClip, Interface::Skin::kDynamicsModule, .parameters =
           (
-            COMPLEX_STRUCTURE_PARAMETER("Threshold", Clip::Threshold, 0.0f, 1.0f, 0.0f, 0.0f, ParameterScale::Linear,
+            COMPLEX_STRUCTURE_PARAMETER("Threshold", Clip::Threshold, { 0.0f, 1.0f, 0.0f, 0.0f }, ParameterScale::Linear,
               "%", ParameterDetails::Modulatable | ParameterDetails::Automatable | ParameterDetails::Stereo),
-            COMPLEX_STRUCTURE_PARAMETER("Tilt", Clip::Tilt, -24.0f, 24.0f, 0.0f, 0.5f, ParameterScale::SymmetricQuadratic,
+            COMPLEX_STRUCTURE_PARAMETER("Tilt", Clip::Tilt, { -24.0f, 24.0f, 0.0f, 0.5f }, ParameterScale::SymmetricQuadratic,
               " dB", ParameterDetails::Modulatable | ParameterDetails::Automatable | ParameterDetails::Stereo)
           )
         )
@@ -160,11 +160,11 @@ namespace Generation
       COMPLEX_STRUCTURE_INDEXED_DATA(.displayName = "Shift", .id = Types::Shift, .flags = IndexedData::ProcessorFlag,
         .processorMetadata = COMPLEX_STRUCTURE_EFFECT("Contrast", Types::Shift, vtableShift, Interface::Skin::kPhaseModule, .parameters =
           (
-            COMPLEX_STRUCTURE_PARAMETER("Phase Shift", Shift::PhaseShift, -180.0f, 180.0f, 0.0f, 0.5f, ParameterScale::Linear,
+            COMPLEX_STRUCTURE_PARAMETER("Phase Shift", Shift::PhaseShift, { -180.0f, 180.0f, 0.0f, 0.5f }, ParameterScale::Linear,
               COMPLEX_DEGREE_SIGN_LITERAL, ParameterDetails::Modulatable | ParameterDetails::Automatable | ParameterDetails::Stereo),
-            COMPLEX_STRUCTURE_PARAMETER("Interval", Shift::Interval, 0.0f, 10.0f, 1.0f, ::powf(1.0f / 10.0f, 1.0f / 3.0f), ParameterScale::Cubic,
+            COMPLEX_STRUCTURE_PARAMETER("Interval", Shift::Interval, { 0.0f, 10.0f, 1.0f, ::powf(1.0f / 10.0f, 1.0f / 3.0f) }, ParameterScale::Cubic,
               " oct", ParameterDetails::Modulatable | ParameterDetails::Automatable | ParameterDetails::Stereo),
-            COMPLEX_STRUCTURE_PARAMETER("Offset", Shift::Offset, 0.0f, 1.0f, 0.0f, 0.0f, ParameterScale::Frequency,
+            COMPLEX_STRUCTURE_PARAMETER("Offset", Shift::Offset, { 0.0f, 1.0f, 0.0f, 0.0f }, ParameterScale::Frequency,
               " hz", ParameterDetails::Modulatable | ParameterDetails::Automatable | ParameterDetails::Stereo),
             COMPLEX_STRUCTURE_PARAMETER("Slope", Shift::Slope,
               {
@@ -195,9 +195,9 @@ namespace Generation
       COMPLEX_STRUCTURE_INDEXED_DATA(.displayName = "Resample", .id = Types::Resample, .flags = IndexedData::ProcessorFlag,
         .processorMetadata = COMPLEX_STRUCTURE_EFFECT("Resample", Types::Resample, vtableResample, Interface::Skin::kPitchModule, .parameters =
           (
-            COMPLEX_STRUCTURE_PARAMETER("Shift", Resample::Shift, -48.0f, 48.0f, 0.0f, 0.5f, ParameterScale::Linear,
+            COMPLEX_STRUCTURE_PARAMETER("Shift", Resample::Shift, { -48.0f, 48.0f, 0.0f, 0.5f }, ParameterScale::Linear,
               " st", ParameterDetails::Modulatable | ParameterDetails::Automatable | ParameterDetails::Stereo),
-            COMPLEX_STRUCTURE_PARAMETER("Wrap", Resample::Wrap, 0.0f, 1.0f, 0.0f, 0.0f, ParameterScale::Toggle,
+            COMPLEX_STRUCTURE_PARAMETER("Wrap", Resample::Wrap, { 0.0f, 1.0f, 0.0f, 0.0f }, ParameterScale::Toggle,
               {}, ParameterDetails::Modulatable | ParameterDetails::Automatable)
           )
         )
@@ -205,7 +205,7 @@ namespace Generation
       COMPLEX_STRUCTURE_INDEXED_DATA(.displayName = "Frequency Shift", .id = Types::FrequencyShift, .flags = IndexedData::ProcessorFlag,
         .processorMetadata = COMPLEX_STRUCTURE_EFFECT("Frequency Shift", Types::FrequencyShift, vtableFrequencyShift, Interface::Skin::kPitchModule, .parameters =
           (
-            COMPLEX_STRUCTURE_PARAMETER("Shift", FrequencyShift::Shift, -20'000.0f, 20'000.0f, 0.0f, 0.5f, ParameterScale::SymmetricCubic,
+            COMPLEX_STRUCTURE_PARAMETER("Shift", FrequencyShift::Shift, { -20'000.0f, 20'000.0f, 0.0f, 0.5f }, ParameterScale::SymmetricCubic,
               " hz", ParameterDetails::Modulatable | ParameterDetails::Automatable | ParameterDetails::Stereo)
           )
         )
@@ -241,9 +241,9 @@ namespace Generation
       COMPLEX_STRUCTURE_INDEXED_DATA(.displayName = "Rolling", .id = Types::Rolling, .flags = IndexedData::ProcessorFlag,
         .processorMetadata = COMPLEX_STRUCTURE_EFFECT("Rolling", Types::Rolling, vtableRolling, Interface::Skin::kPitchModule, .parameters =
           (
-            COMPLEX_STRUCTURE_PARAMETER("Rate", Rolling::Rate, -4.0f, 4.0f, 0.0f, 0.5f, ParameterScale::SymmetricCubic,
+            COMPLEX_STRUCTURE_PARAMETER("Rate", Rolling::Rate, { -4.0f, 4.0f, 0.0f, 0.5f }, ParameterScale::SymmetricCubic,
               "x", ParameterDetails::Modulatable | ParameterDetails::Automatable | ParameterDetails::Stereo),
-            COMPLEX_STRUCTURE_PARAMETER("Shift", Rolling::Shift, 0.0f, 1.0f, 0.0f, 0.0f, ParameterScale::Frequency,
+            COMPLEX_STRUCTURE_PARAMETER("Shift", Rolling::Shift, { 0.0f, 1.0f, 0.0f, 0.0f }, ParameterScale::Frequency,
               " hz", ParameterDetails::Modulatable | ParameterDetails::Automatable | ParameterDetails::Stereo)
           )
         )
@@ -265,7 +265,7 @@ namespace Generation
       COMPLEX_STRUCTURE_INDEXED_DATA(.displayName = "Reinterpret", .id = Types::Reinterpret, .flags = IndexedData::ProcessorFlag,
         .processorMetadata = COMPLEX_STRUCTURE_EFFECT("Reinterpret", Types::Reinterpret, vtableReinterpret, Interface::Skin::kDestroyModule, .parameters =
           (
-            COMPLEX_STRUCTURE_PARAMETER("Real/Imag Atten", Reinterpret::Attenuation, kMinusInfDb, kInfDb, 0.0f, 0.5f,
+            COMPLEX_STRUCTURE_PARAMETER("Real/Imag Atten", Reinterpret::Attenuation, { kMinusInfDb, kInfDb, 0.0f, 0.5f },
               ParameterScale::SymmetricLoudness, " dB", ParameterDetails::Modulatable | ParameterDetails::Automatable | ParameterDetails::Stereo),
             COMPLEX_STRUCTURE_PARAMETER("Transform", Reinterpret::Transform,
               {
@@ -1217,7 +1217,7 @@ namespace Generation
       // in that case this guard has not done its job and should be increased
       simd_mask numZeroMask = simd_float::lessThan(complexMagnitude(numerator, true), kMultiplierEpsilon);
 
-      for (i32 i = 0; i < countof(leakMultipliers); ++i)
+      for (i32 i = 0; i < (i32)countof(leakMultipliers); ++i)
       {
         simd_float fullDenominator = denominator + k2Pi * (float)(i - kNeighbourBins);
         simd_mask denZeroMask = simd_float::lessThan(simd_float::abs(fullDenominator), kMultiplierEpsilon);
@@ -1266,7 +1266,7 @@ namespace Generation
           simd_float wet = complexCartMul(gatherComplex(rawSource.pointer, start) & runNotCompleteMask, phaseShift);
           simd_int destinationIndicesInt = simd_int::minUnsigned(toInt(simd_float::round(destinationIndices)), binCount - 1);
 
-          for (i32 j = 0; j < countof(leakMultipliers); ++j)
+          for (i32 j = 0; j < (i32)countof(leakMultipliers); ++j)
           {
             simd_int indices = destinationIndicesInt - kNeighbourBins + j;
             simd_int clampedIndices = simd_int::clampSigned(0, binCount - 1, indices);
@@ -1358,7 +1358,7 @@ namespace Generation
       // in that case this guard has not done its job and should be increased
       simd_mask numZeroMask = simd_float::lessThan(complexMagnitude(numerator, true), kMultiplierEpsilon);
 
-      for (i32 i = 0; i < countof(leakMultipliers); ++i)
+      for (i32 i = 0; i < (i32)countof(leakMultipliers); ++i)
       {
         simd_float fullDenominator = denominator + k2Pi * (float)(i - kNeighbourBins);
         simd_mask denZeroMask = simd_float::lessThan(simd_float::abs(fullDenominator), kMultiplierEpsilon);

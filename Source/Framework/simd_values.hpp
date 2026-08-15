@@ -10,17 +10,19 @@
 // the project cannot run without vectorisation (either x86 SSE4.1 or ARM NEON, however it can run without FMA)
 #if COMPLEX_SSE4_1
   #include <smmintrin.h>
+
+  extern "C"
+  {
+    __m128 _mm_fmadd_ps(__m128, __m128, __m128);
+    __m128 _mm_fmsub_ps(__m128, __m128, __m128);
+  }
 #elif COMPLEX_NEON
   #include <arm_neon.h>
 #else
   #error Either SSE4.1 or ARM NEON is needed for this program to work
 #endif
 
-extern "C"
-{
-  __m128 _mm_fmadd_ps(__m128, __m128, __m128);
-  __m128 _mm_fmsub_ps(__m128, __m128, __m128);
-}
+
 
 #if defined(COMPLEX_MSVC) && !defined(_mm_undefined_si128)
   #define _mm_undefined_si128 _mm_setzero_si128
@@ -156,7 +158,7 @@ namespace utils
     #if COMPLEX_SSE4_1
       return _mm_max_epi32(one, two);
     #elif COMPLEX_NEON
-      return vmaxq_s32(one, two);
+      return vreinterpretq_u32_s32(vmaxq_s32(vreinterpretq_s32_u32(one), vreinterpretq_s32_u32(two)));
     #endif
     }
 
@@ -174,7 +176,7 @@ namespace utils
     #if COMPLEX_SSE4_1
       return _mm_min_epi32(one, two);
     #elif COMPLEX_NEON
-      return vminq_s32(one, two);
+      return vreinterpretq_u32_s32(vminq_s32(vreinterpretq_s32_u32(one), vreinterpretq_s32_u32(two)));
     #endif
     }
 
@@ -192,7 +194,7 @@ namespace utils
     #if COMPLEX_SSE4_1
       return _mm_cmpgt_epi32(one, two);
     #elif COMPLEX_NEON
-      return vcgtq_s32(one, two);
+      return vcgtq_s32(vreinterpretq_s32_u32(one), vreinterpretq_s32_u32(two));
     #endif
     }
 
@@ -287,7 +289,7 @@ namespace utils
       mask = bitAnd(mask, equal(value.value, _mm_shuffle_epi32(value.value, _MM_SHUFFLE(0, 1, 2, 3))));
       return anyMask(mask);
     #elif COMPLEX_NEON
-      return vaddvq_u32(notEqual(value.value, vdupq_laneq_u32(value.value, 0)).value.value) == 0U;
+      return vaddvq_u32(notEqual(value.value, vdupq_laneq_u32(value.value, 0)).value) == 0U;
     #endif
     }
 
@@ -734,7 +736,7 @@ namespace utils
     #if COMPLEX_SSE4_1
       return toMask(_mm_cmpneq_ps(one, two));
     #elif COMPLEX_NEON
-      return simd_mask::bitNot(equal(one.value, two.value));
+      return simd_mask::bitNot(equal(one, two));
     #endif
     }
 

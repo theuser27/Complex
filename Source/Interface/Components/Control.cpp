@@ -296,7 +296,7 @@ namespace Interface
         {
           auto [fn, iconSizes] = Paths::copyNormalisedValueIcon();
 
-          fn(g, colours,
+          fn(g, { colours },
             scaleValue(iconSizes.toFloat()).withCentre(getLocalBounds().toFloat().getCentre()),
             scaleValue(1.0f));
           break;
@@ -305,7 +305,7 @@ namespace Interface
         {
           auto [fn, iconSizes] = Paths::copyScaledValueIcon();
 
-          fn(g, colours,
+          fn(g, { colours },
             scaleValue(iconSizes.toFloat()).withCentre(getLocalBounds().toFloat().getCentre()),
             scaleValue(1.0f));
           break;
@@ -314,7 +314,7 @@ namespace Interface
         {
           auto [fn, iconSizes] = Paths::pasteValueIcon();
 
-          fn(g, colours,
+          fn(g, { colours },
             scaleValue(iconSizes.toFloat()).withCentre(getLocalBounds().toFloat().getCentre()),
             scaleValue(1.0f));
           break;

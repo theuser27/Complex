@@ -1088,8 +1088,8 @@ static void fons__blur(FONScontext* stash, unsigned char* dst, int w, int h, int
 
 #define FONS__RESOLUTION 10.0f
 static short fons__getIsize(float size) { return (short)(size * FONS__RESOLUTION); }
-static float fons__getSize(short isize) { return isize / FONS__RESOLUTION; }
-static int fons__isRoughlyEqual(float x, float y) { return fabsf(x - y) <= 0.001f; }
+// static float fons__getSize(short isize) { return isize / FONS__RESOLUTION; }
+// static int fons__isRoughlyEqual(float x, float y) { return fabsf(x - y) <= 0.001f; }
 
 static FONSglyph* fons__getGlyph(FONScontext* stash, FONSfont* font, unsigned int codepoint,
 								 short isize, short iblur, int bitmapOption)
@@ -1609,12 +1609,12 @@ void fonsVertMetrics(FONScontext* stash,
 {
 	FONSfont* font;
 	FONSstate* state = fons__getState(stash);
-	short isize;
+	// short isize;
 
 	if (stash == NULL) return;
 	if (state->font < 0 || state->font >= stash->nfonts) return;
 	font = stash->fonts[state->font];
-	isize = fons__getIsize(state->size);
+	// isize = fons__getIsize(state->size);
 	if (font->data == NULL) return;
 
 	if (ascender)

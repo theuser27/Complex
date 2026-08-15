@@ -153,44 +153,6 @@ namespace utils
       AllocatorType type;
     };
 
-  private:
-    static Allocator getGeneralAllocator(const void *) { return Allocator{ &generalAllocatorVtable, nullptr }; }
-    template<typename T>
-    static Allocator
-    getAllocatorFromFunction(const void *allocation)
-    {
-      auto *allocator = T::fromAllocation(allocation);
-      return { &allocatorTable[(usize)allocator->type], allocator };
-    }
-    template<AllocatorConcept T>
-    static constexpr AllocatorVtable
-    createVtable()
-    {
-      return AllocatorVtable
-      {
-        .insert = [](void *allocator, usize size, usize alignment, bool clean)
-        { return T::insert((T *)allocator, size, alignment, clean); },
-        .remove = T::remove,
-        .fromAllocation = Allocator::getAllocatorFromFunction<T>,
-        .type = T::type
-      };
-    }
-  public:
-
-    static constexpr AllocatorVtable generalAllocatorVtable
-    {
-      .insert = [](void *, usize size, usize alignment, bool clean)
-      {
-        return utils::bumpArena::insert(globalArena, size, alignment, clean);
-      },
-      .remove = [](const void *allocation) { utils::bumpArena::remove(allocation); },
-      .fromAllocation = getGeneralAllocator,
-      .type = AllocatorType::General
-    };
-
-
-    static constexpr AllocatorVtable allocatorTable[] = { generalAllocatorVtable, createVtable<utils::bumpArena>() };
-
     sourceLocation location{};
     const AllocatorVtable *vtable{};
     void *allocator{};
@@ -199,8 +161,7 @@ namespace utils
     constexpr Allocator() = default;
     constexpr Allocator(AllocatorConcept auto *allocator, bool freeingDestructor = true,
       utils::sourceLocation location = utils::sourceLocation::current()) : location{ location },
-      vtable{ &allocatorTable[(usize)allocator->type] }, allocator{ allocator },
-      freeingDestructor{ freeingDestructor } { }
+      vtable{ fromType(allocator->type).vtable }, allocator{ allocator }, freeingDestructor{ freeingDestructor } { }
     constexpr Allocator(const AllocatorVtable *vtable, void *allocator, bool freeingDestructor = true,
       utils::sourceLocation location = utils::sourceLocation::current()) : location{ location },
       vtable{ vtable }, allocator{ allocator }, freeingDestructor{ freeingDestructor } { }
@@ -212,12 +173,45 @@ namespace utils
     forceinline Allocator fromAllocation(const void *allocation) const { return vtable->fromAllocation(allocation); }
     forceinline AllocatorType type() const { return vtable->type; }
 
-    static constexpr Allocator fromType(AllocatorType type) { return { &allocatorTable[(usize)type], nullptr }; }
+    static constexpr Allocator fromType(AllocatorType type);
+
+    template<AllocatorConcept T>
+    static constexpr AllocatorVtable
+    createVtable()
+    {
+      return AllocatorVtable
+      {
+        .insert = [](void *allocator, usize size, usize alignment, bool clean)
+        { return T::insert((T *)allocator, size, alignment, clean); },
+        .remove = T::remove,
+        .fromAllocation = +[](const void *allocation)
+        {
+          auto allocator = fromType(T::type);
+          allocator.allocator = T::fromAllocation(allocation);
+          return allocator;
+        },
+        .type = T::type
+      };
+    }
 
     explicit operator bool() const { return vtable; }
   };
 
-  inline constexpr Allocator generalAllocator{ &Allocator::generalAllocatorVtable, nullptr };
+  inline constexpr Allocator::AllocatorVtable allocatorTable[] =
+  {
+    Allocator::AllocatorVtable
+    {
+      .insert = [](void *, usize size, usize alignment, bool clean)
+      {
+        return utils::bumpArena::insert(globalArena, size, alignment, clean);
+      },
+      .remove = [](const void *allocation) { utils::bumpArena::remove(allocation); },
+      .fromAllocation = +[](const void *) { return Allocator::fromType(AllocatorType::General); },
+      .type = AllocatorType::General
+    }, 
+    Allocator::createVtable<utils::bumpArena>()
+  };
+  constexpr Allocator Allocator::fromType(AllocatorType type) { return { &allocatorTable[(usize)type], nullptr }; }
 
 
   template<typename T>

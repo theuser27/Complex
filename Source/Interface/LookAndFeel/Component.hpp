@@ -393,7 +393,7 @@ namespace Interface
     Point<i32> at, bool onlyClickable = true, Component *startingAt = nullptr)
   {
     Component *deepestComponent{};
-    while (deepestComponent = tree->getComponentAt(at.x, at.y, onlyClickable, true, startingAt))
+    while ((deepestComponent = tree->getComponentAt(at.x, at.y, onlyClickable, true, startingAt)))
     {
       while (deepestComponent->parent != tree)
       {

@@ -319,9 +319,9 @@ namespace Interface
     if (currentSublistItem)
     {
       // adjust triangle cone
-      auto childListBounds = parentSelector->getRelativeArea(currentSublistItem->childList);
-      auto topPoint = (childListBounds.x > bounds.x) ? childListBounds.getTopLeft() : childListBounds.getTopRight();
-      auto bottomPoint = (childListBounds.x > bounds.x) ? childListBounds.getBottomLeft() : childListBounds.getBottomRight();
+      // auto childListBounds = parentSelector->getRelativeArea(currentSublistItem->childList);
+      // auto topPoint = (childListBounds.x > bounds.x) ? childListBounds.getTopLeft() : childListBounds.getTopRight();
+      // auto bottomPoint = (childListBounds.x > bounds.x) ? childListBounds.getBottomLeft() : childListBounds.getBottomRight();
 
       if (shouldCloseSublist)
         sublistAnchorPoint = { event.x, event.y };

@@ -5,7 +5,7 @@
 #include <CoreAudio/CoreAudio.h>
 #include <CoreMIDI/CoreMIDI.h>
 #include <CoreServices/CoreServices.h>
-#include <cplug.h>
+#include "cplug.h"
 #include <dlfcn.h>
 #include <mach/mach_time.h>
 #include <pthread.h>
@@ -644,6 +644,7 @@ int main()
     [NSApplication sharedApplication];
     [NSApp setDelegate:[[AppDelegate alloc] init]];
     NSXPCListener* listener = [NSXPCListener serviceListener];
+    (void)listener;
 
     [NSApp run];
 

@@ -62,7 +62,7 @@ namespace Framework
       for (u32 i = 0; i < channelsToCopy; ++i)
       {
         ::valcpy(destination.get(i) + destination.size - sizeToCopy, other.get(i) + startCopy, other.size - startCopy);
-        ::valcpy(destination.get(i) + destination.size - sizeLeft, other.get(i), sizeLeft);
+        ::valcpy(destination.get(i) + destination.size - sizeLeft, other.get(i).pointer, sizeLeft);
       }
     }
   }

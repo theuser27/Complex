@@ -472,6 +472,7 @@ static NEVER_INLINE(void) radf2_ps(int ido, int l1, const v4sf * RESTRICT cc, v4
 
 static NEVER_INLINE(void) radb2_ps(int ido, int l1, const v4sf *cc, v4sf *ch, const float *wa1)
 {
+  static const float minusTwo = -2.0f;
   int l1ido = l1*ido;
   v4sf a,b,c,d;
   for (int k=0; k < l1ido; k += ido) {
@@ -499,7 +500,7 @@ static NEVER_INLINE(void) radb2_ps(int ido, int l1, const v4sf *cc, v4sf *ch, co
   for (int k = 0; k < l1ido; k += ido) {
     a = cc[2*k + ido-1]; b = cc[2*k + ido];
     ch[k + ido-1] = VADD(a,a);
-    ch[k + ido-1 + l1ido] = SVMUL(-2.0f, b);
+    ch[k + ido-1 + l1ido] = SVMUL(minusTwo, b);
   }
 } /* radb2 */
 

@@ -5,7 +5,7 @@
 #include "mac.h"
 #include "stub.h"
 
-#include <pugl/gl.h>
+#include "../gl.h"
 
 #ifndef __MAC_10_10
 #  define NSOpenGLProfileVersion4_1Core NSOpenGLProfileVersion3_2Core
@@ -187,6 +187,24 @@ puglLeaveContext(PuglView* view)
   return view->backend->leave(view, NULL);
 }
 
+PuglStatus
+puglMacGlChange(PuglView *oldView, PuglView *newView, const PuglExposeEvent *expose)
+{
+  if (puglMacGlLeave(oldView, expose) == PUGL_FAILURE)
+    return PUGL_FAILURE;
+  if (puglMacGlEnter(newView, expose) == PUGL_FAILURE)
+    return PUGL_FAILURE;
+  
+  return PUGL_SUCCESS;
+}
+
+void
+puglSwapBuffers(PuglView* view)
+{
+  PuglOpenGLView* const drawView = (PuglOpenGLView*)view->impl->drawView;
+  [[drawView openGLContext] flushBuffer];
+}
+
 const PuglBackend*
 puglGlBackend(void)
 {
@@ -195,6 +213,7 @@ puglGlBackend(void)
                                       puglMacGlDestroy,
                                       puglMacGlEnter,
                                       puglMacGlLeave,
+                                      puglMacGlChange,
                                       puglStubGetContext};
 
   return &backend;

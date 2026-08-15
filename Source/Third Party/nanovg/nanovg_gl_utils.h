@@ -24,10 +24,10 @@
 extern "C" {
 #endif
 
-typedef struct NVGcontext NVGcontext;
+struct NVGcontext;
 
 struct NVGLUframebuffer {
-	NVGcontext* ctx;
+	struct NVGcontext* ctx;
 	GLuint fbo;
 	GLuint rbo;
 	GLuint texture;
@@ -37,7 +37,7 @@ typedef struct NVGLUframebuffer NVGLUframebuffer;
 
 // Helper function to create GL frame buffer to render to.
 void nvgluBindFramebuffer(NVGLUframebuffer* fb);
-NVGLUframebuffer* nvgluCreateFramebuffer(NVGcontext* ctx, int w, int h, int imageFlags);
+NVGLUframebuffer* nvgluCreateFramebuffer(struct NVGcontext* ctx, int w, int h, int imageFlags);
 void nvgluDeleteFramebuffer(NVGLUframebuffer* fb);
 
 #ifdef __cplusplus
@@ -61,7 +61,7 @@ void nvgluDeleteFramebuffer(NVGLUframebuffer* fb);
 
 static GLint defaultFBO_ = -1;
 
-NVGLUframebuffer* nvgluCreateFramebuffer(NVGcontext* ctx, int w, int h, int imageFlags)
+NVGLUframebuffer* nvgluCreateFramebuffer(struct NVGcontext* ctx, int w, int h, int imageFlags)
 {
 #ifdef NANOVG_FBO_VALID
 	GLint defaultFBO;

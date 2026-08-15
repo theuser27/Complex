@@ -3,8 +3,11 @@
 
 #include "utils.hpp"
 
+// interferes with things defined in Appkit's NSWindow.h
+#undef defer
+
 #include <stdarg.h> // va_list, va_arg, va_start, va_copy, va_end
-#include <stdlib.h> // offsetof
+#include <stddef.h> // offsetof
 
 #include "stl_utils.hpp"
 #include "memory.hpp"
@@ -66,8 +69,18 @@
   // to get correct nanosecond values in timespec.tv_nsec and not microseconds
   // https://stackoverflow.com/a/53708448
   #define _POSIX_C_SOURCE 200809L
-  #include <time.h>
   #include <sys/syscall.h>
+  // to get the actual MAP_ANONYMOUS definition and also get all clock flag definitions (i.e. CLOCK_MONOTONIC_RAW)
+  // https://catfox.life/2015/09/04/the-joys-of-unix-programming-map_anonymous/ 
+  #define _DARWIN_C_SOURCE
+  #include <sys/mman.h>
+  #include <dlfcn.h>
+  #include <time.h>
+  #include <pthread.h>
+  #include <unistd.h>
+
+  #include <CoreFoundation/CoreFoundation.h>
+  #include <AppKit/AppKit.h>
 
 #endif
 
@@ -166,7 +179,8 @@ extern "C"
 
 namespace Interface
 {
-  MonitorInfo getCurrentMonitorInfo(void *nativeHandle)
+  MonitorInfo
+  getCurrentMonitorInfo(void *nativeHandle)
   {
     MonitorInfo ret;
     ret.nativeHandle = MonitorFromWindow((HWND)nativeHandle, 2 /* MONITOR_DEFAULTTONEAREST */);
@@ -215,11 +229,39 @@ namespace Interface
   }
 }
 
-#elif COMPLEX_MACOS
-#include <CoreFoundation/CoreFoundation.h>
+#elif COMPLEX_MAC
 
 namespace Interface
 {
+  MonitorInfo 
+  getCurrentMonitorInfo(void *nativeHandle)
+  {
+    MonitorInfo ret{};
+
+    NSView *view = (__bridge NSView *)nativeHandle;
+    NSScreen *screen = view.window && view.window.screen ? view.window.screen : NSScreen.mainScreen;
+
+    ret.nativeHandle = (__bridge void *)screen;
+
+    // if it's anything other than (0,0) we have a big problem
+    COMPLEX_ASSERT(screen.frame.origin.x == 0);
+    COMPLEX_ASSERT(screen.frame.origin.y == 0);
+    ret.totalArea = { .w = (i32)screen.frame.size.width, .h = (i32)screen.frame.size.height };
+
+    ret.workArea = {
+        (i32)screen.visibleFrame.origin.x,
+        (i32)screen.visibleFrame.origin.y,
+        (i32)screen.visibleFrame.size.width,
+        (i32)screen.visibleFrame.size.height
+    };
+    // macOS's origin is in the bottom-left, we need to fix it to top-left
+    ret.workArea.y = ret.totalArea.h - (ret.workArea.y + ret.workArea.h);
+    ret.isPrimary = (screen == NSScreen.screens.firstObject);
+    ret.dpiScale = (float)screen.backingScaleFactor;
+
+    return ret;
+  }
+
   bool showNativeMessageBox(const char *title, const char *message, MessageBoxType type)
   {
     CFOptionFlags cfAlertIcon;
@@ -422,14 +464,14 @@ namespace utils
     flags_ = (u64)_mm_getcsr();
     _mm_setcsr((u32)flags_ | mask);
   #elif COMPLEX_ARM
-    u64 fpsr;
+    u64 fpcr;
     u64 mask = (1 << 24 /* FZ */);
-    __asm__ volatile("vmrs %0, fpscr"
-      : "=r"(fpsr));
-    flags_ = fpsr;
-    __asm__ volatile("vmsr fpscr, %0"
+    __asm__ volatile("mrs %0, fpcr"
+      : "=r" (fpcr));
+    flags_ = fpcr;
+    __asm__ volatile("msr fpcr, %0"
       :
-      : "ri"(fpsr | mask));
+      : "r" (fpcr | mask));
   #endif
   }
 
@@ -438,9 +480,9 @@ namespace utils
   #if COMPLEX_X64
     _mm_setcsr((u32)flags_);
   #elif COMPLEX_ARM
-    __asm__ volatile("vmsr fpscr, %0"
+    __asm__ volatile("msr fpcr, %0"
       :
-      : "ri"(flags_));
+      : "r" (flags_));
   #endif
   }
 
@@ -515,6 +557,13 @@ namespace utils
     timeBeginPeriod(1);
     NtDelayExecution(FALSE, &delay);
     timeEndPeriod(1);
+  #elif COMPLEX_MAC
+    timespec delay =
+    {
+      .tv_sec = (time_t)((sleepUs_ - correctionUs_) / 1'000'000),
+      .tv_nsec = (long)(sleepUs_ - correctionUs_) * 1000
+    };
+    nanosleep(&delay, nullptr);
   #else
     timespec delay =
     {
@@ -573,6 +622,9 @@ namespace utils
     timeBeginPeriod(1);
     NtDelayExecution(0, (PLARGE_INTEGER)&delay);
     timeEndPeriod(1);
+  #elif COMPLEX_MAC
+    timespec delay = { .tv_sec = 0, .tv_nsec = 900 };
+    nanosleep(&delay, nullptr);
   #else
     timespec delay = { .tv_sec = 0, .tv_nsec = 900 };
     clock_nanosleep(CLOCK_MONOTONIC, 0, &delay, nullptr);
@@ -581,10 +633,14 @@ namespace utils
 
   void setHighResolutionClock(bool isHighResolution)
   {
+  #if COMPLEX_WINDOWS
     if (isHighResolution)
       timeBeginPeriod(1);
     else
       timeEndPeriod(1);
+  #else
+    (void)isHighResolution;
+  #endif
   }
 
   i32
@@ -696,7 +752,7 @@ namespace utils
 #else
   constinit pthread_key_t gTlsKey{};
   extern "C" __attribute__((visibility("default"))) void
-    initialiseHotreloadDylib(pthread_key_t tlsKey, utils::bumpArena *global)
+  initialiseHotreloadDylib(pthread_key_t tlsKey, utils::bumpArena *global)
 #endif
   {
     destroyTlsIndex();
@@ -773,6 +829,8 @@ namespace utils
     return { (decltype(thread::id::nativeId))pthread_self() };
   #endif
   }
+
+  thread_local thread::id thread::currentId = {};
 
   thread::id
   thread::getCurrentId()
@@ -1057,11 +1115,9 @@ namespace utils
       {
         // commit more pages based on desired allocation
 
-        usize availableSize = reservedSize - committedSize;
         bool isLastFreeNodeAtEnd = currentNode && (byte *)currentNode + currentNode->size == (byte *)arena + committedSize;
         if (isLastFreeNodeAtEnd)
         {
-          availableSize += currentNode->size;
           memory = (byte *)utils::roundUpToMultiple((usize)currentNode + sizeof(bumpArena::node), alignment);
         }
 

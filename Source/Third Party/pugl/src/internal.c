@@ -4,6 +4,7 @@
 #include "internal.h"
 
 #include "../pugl.h"
+#include "../gl.h"
 
 #include <assert.h>
 #include <stdbool.h>
@@ -323,5 +324,22 @@ puglDispatchEvent(PuglView* view, const PuglEvent* event)
     st0 = view->eventFunc(view, event);
   }
 
+  return st0 ? st0 : st1;
+}
+
+PuglStatus
+puglChangeContext(PuglView *oldView, PuglView *newView)
+{
+  if (oldView == newView)
+    return PUGL_SUCCESS;
+
+  if (oldView && newView && oldView->backend == newView->backend && newView->backend != NULL)
+    return oldView->backend->change(oldView, newView, NULL);
+
+  PuglStatus st0 = PUGL_SUCCESS, st1 = PUGL_SUCCESS;
+  if (oldView)
+    st0 = puglLeaveContext(oldView);
+  if (newView)
+    st1 = puglEnterContext(newView);
   return st0 ? st0 : st1;
 }

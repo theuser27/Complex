@@ -10,6 +10,9 @@
 
 namespace std
 {
+  // force the standard headers to not get included
+  #define _LIBCPP_INITIALIZER_LIST
+
   // i hate this type with a passion
   template<typename T>
   class initializer_list
@@ -50,7 +53,11 @@ namespace std
   template<typename T> constexpr const T *begin(initializer_list<T> list) noexcept { return list.begin(); }
   template<typename T> constexpr const T *end(initializer_list<T> list) noexcept { return list.end(); }
 
+
   // forward declaring things for manually defined structured bindings to work
+
+  // force the standard headers to not get included
+  #define _LIBCPP___TUPLE_TUPLE_SIZE_H
 
   template<typename T>
   struct tuple_size;
