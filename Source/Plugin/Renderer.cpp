@@ -102,13 +102,13 @@ namespace Interface
     e.numberOfClicks = renderer->numberOfClicks;
   }
 
-  constinit thread_local PuglView *lastView{};
+  // constinit thread_local PuglView *lastView{};
   
   PuglStatus
   runThread(PuglView *view, const PuglEvent *event)
   {
-    puglChangeContext(lastView, view);
-    lastView = view;
+    // puglChangeContext(lastView, view);
+    // lastView = view;
 
     auto *renderer = (Interface::Renderer *)puglGetHandle(view);
 
@@ -150,18 +150,20 @@ namespace Interface
     case PUGL_CLOSE:
     {
       teardownGl(renderer);
-      puglLeaveContext(view);
-      lastView = nullptr;
+      // puglLeaveContext(view);
+      // lastView = nullptr;
       renderer->isInitialised = false;
+      puglStopTimer(view, Renderer::kTimerRefreshRate);
 
       break;
     }
     case PUGL_UNREALIZE:
     {
       teardownGl(renderer);
-      puglLeaveContext(view);
-      lastView = nullptr;
+      // puglLeaveContext(view);
+      // lastView = nullptr;
       renderer->isInitialised = false;
+      puglStopTimer(view, Renderer::kTimerRefreshRate);
 
       auto [unscaledWidth, unscaledHeight] = unscaleDimensions(renderer->area.w, renderer->area.h, renderer->generalData.scale);
       Framework::LoadSave::saveWindowSizeScale(unscaledWidth, unscaledHeight, renderer->pluginScale);
@@ -521,8 +523,6 @@ namespace Interface
       return;
 
     getUiRelated() = &generalData;
-
-    puglStopTimer(view_, kTimerRefreshRate);
 
     puglUnrealize(view_);
 

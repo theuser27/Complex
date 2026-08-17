@@ -139,9 +139,9 @@ findOrAddPermanentString(utils::string_view string)
       1 + string.size(), alignof(utils::sll<utils::string_view>));
     auto stringStart = memory + sizeof(utils::sll<utils::string_view>);
     ::memcpy(stringStart, string.data(), string.size());
-    memory[sizeof(utils::sll<utils::string_view>) + string.size()] = byte('\0');
+    stringStart[string.size()] = byte('\0');
 
-    auto *node = new(memory) utils::sll<utils::string_view>{ { (char *)(memory + sizeof(*executableStaticData.strings)), string.size() } };
+    auto *node = new(memory) utils::sll<utils::string_view>{ { (char *)stringStart, string.size() } };
     if (!executableStaticData.strings)
       executableStaticData.strings = node;
     else

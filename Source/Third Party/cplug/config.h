@@ -22,6 +22,6 @@
 #define CPLUG_VST3_TUID_COMPONENT  'cmpx', 'mult', 'lane', 0
 #define CPLUG_VST3_TUID_CONTROLLER 'cmpx', 'mult', 'lane', 0
 
-#define CPLUG_CLAP_ID              "com.theuser27.complex"
+#define CPLUG_CLAP_ID              "com.theuser27.Complex"
 #define CPLUG_CLAP_DESCRIPTION     "Multi-lane Spectral Effects Suite"
 #define CPLUG_CLAP_FEATURES        CLAP_PLUGIN_FEATURE_AUDIO_EFFECT, CLAP_PLUGIN_FEATURE_STEREO

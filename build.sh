@@ -19,6 +19,8 @@ for arg in "$@"; do
   esac
 done
 
+echo
+
 [[ $data == 1 ]] && { vst=0; debug=0; full=0; }
 [[ $standalone == 1 ]] && { echo "[standalone build]"; vst=0; clap=0; full=0; }
 [[ $clap == 1 ]] && { echo "[clap build]"; vst=0; standalone=0; full=0; }
@@ -26,8 +28,17 @@ done
 [[ $hotreload == 1 ]] && { echo "[hotreload build]"; full=0; }
 [[ $reloadable == 1 ]] && echo "[reloadable version]"
 
-CXX=${CXX:-clang++}
-CC=${CC:-clang}
+if [[ $release == 1 ]]; then
+    echo "[release mode]"
+    debug=0
+else
+    echo "[debug mode]"
+fi
+
+echo
+
+CXX=${CXX:-g++}
+CC=${CC:-gcc}
 
 command -v "$CXX" >/dev/null || { echo "clang++ not found"; exit 1; }
 
@@ -81,6 +92,7 @@ project_compile() {
 
     [[ $reloadable == 1 ]] && cflags+=(-DCOMPLEX_HOTRELOAD_DIR="\"$hotreload_dir\"")
 
+    bundle_type="BNDL"
     if [[ $hotreload == 1 ]]; then
         build_dir=$hotreload_dir
         outfile="Complex_${datetime}.dylib"
@@ -99,7 +111,8 @@ project_compile() {
     elif [[ $standalone == 1 ]]; then
         rm -rf "$hotreload_dir"/*
         build_dir=build/standalone
-        outfile="Complex"
+        outfile="Complex.app"
+        bundle_type="APPL"
         cflags+=(-DCOMPLEX_STANDALONE)
         ldflags+=(-framework CoreAudio -framework CoreMIDI)
     fi
@@ -118,12 +131,33 @@ project_compile() {
     mkdir -p "$build_dir"
     start_timer
     pushd "$build_dir" >/dev/null
-    [[ $hotreload == 0 ]] && rm -rf ./*
+
+    if [[ $hotreload == 0 ]]; then
+        rm -rf ./*
+        mkdir -p "$outfile"
+        mkdir -p "$outfile/Contents"
+        mkdir -p "$outfile/Contents/MacOS"
+        mkdir -p "$outfile/Contents/Resources"
+
+        pushd "$outfile/Contents" >/dev/null
+        # unquote all strings in the config file because it will interfere with the plist values
+        tr -d '"' < "$TOP/Source/Third Party/cplug/config.h" > config.h
+        "$CC" -E -P -x c -Wno-trigraphs -include "./config.h" -DCPLUG_PLUGIN_EXECUTABLE_NAME="$outfile" -DCPLUG_BUNDLE_TYPE="$bundle_type" "$TOP/Helpers/Info.plist.in" -o Info.plist
+        rm ./config.h
+        pushd "MacOS" >/dev/null
+    fi
+
     "$CC" "${cflags[@]}" -std=c99 -o unity_extern.o -c "${c_sources[@]}"
     "$CXX" "${cflags[@]}" -std=c++20 "${sources[@]}" unity_extern.o -o "$outfile" "${ldflags[@]}"
     rm -f ./*.o
+
+    if [[ $hotreload == 0 ]]; then
+        popd >/dev/null
+        popd >/dev/null
+    fi
+
+    echo "$PWD"
     popd >/dev/null
-    echo "$PWD/$build_dir"
     stop_timer
 }
 
@@ -139,3 +173,5 @@ else
     release=0
     project_compile
 fi
+
+echo

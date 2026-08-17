@@ -282,31 +282,29 @@ puglDispatchEvent(PuglView* view, const PuglEvent* event)
   case PUGL_NOTHING:
     break;
 
-  /*case PUGL_REALIZE:
+  case PUGL_REALIZE:
     assert(view->stage == PUGL_VIEW_STAGE_ALLOCATED);
-    if (!(st0 = view->backend->enter(view, NULL))) {
-      st0 = view->eventFunc(view, event);
-      st1 = view->backend->leave(view, NULL);
-    }
+    puglChangeContext(view->world->activeView, view);
+    view->world->activeView = view;
+    st0 = view->eventFunc(view, event);
     view->stage = PUGL_VIEW_STAGE_REALIZED;
     break;
 
   case PUGL_UNREALIZE:
+  case PUGL_CLOSE:
     assert(view->stage >= PUGL_VIEW_STAGE_REALIZED);
-    if (!(st0 = view->backend->enter(view, NULL))) {
-      st0 = view->eventFunc(view, event);
-      st1 = view->backend->leave(view, NULL);
-    }
+    puglChangeContext(view->world->activeView, view);
+    view->world->activeView = view;
+    st0 = view->eventFunc(view, event);
+    puglLeaveContext(view);
+    view->world->activeView = NULL;
     view->stage = PUGL_VIEW_STAGE_ALLOCATED;
     break;
 
   case PUGL_CONFIGURE:
-    if (puglMustConfigure(view, &event->configure)) {
-      if (!(st0 = view->backend->enter(view, NULL))) {
-        st0 = puglConfigure(view, event);
-        st1 = view->backend->leave(view, NULL);
-      }
-    }
+    puglChangeContext(view->world->activeView, view);
+    view->world->activeView = view;
+    st0 = puglConfigure(view, event);
     if (view->stage == PUGL_VIEW_STAGE_REALIZED) {
       view->stage = PUGL_VIEW_STAGE_CONFIGURED;
     }
@@ -314,13 +312,14 @@ puglDispatchEvent(PuglView* view, const PuglEvent* event)
 
   case PUGL_EXPOSE:
     assert(view->stage == PUGL_VIEW_STAGE_CONFIGURED);
-    if (!(st0 = view->backend->enter(view, &event->expose))) {
-      st0 = view->eventFunc(view, event);
-      st1 = view->backend->leave(view, &event->expose);
-    }
-    break;*/
+    puglChangeContext(view->world->activeView, view);
+    view->world->activeView = view;
+    st0 = view->eventFunc(view, event);
+    break;
 
   default:
+    puglChangeContext(view->world->activeView, view);
+    view->world->activeView = view;
     st0 = view->eventFunc(view, event);
   }
 

@@ -645,7 +645,7 @@ handleCrossing(PuglWrapperView* view, NSEvent* event, const PuglEventType type)
                  : ((dy == 0.0 && dx < 0.0) ? PUGL_SCROLL_LEFT
                                             : PUGL_SCROLL_SMOOTH))));
 
-  const PuglScrollEvent ev = {
+  PuglScrollEvent ev = {
     PUGL_SCROLL,
     0U,
     [event timestamp],
@@ -658,6 +658,13 @@ handleCrossing(PuglWrapperView* view, NSEvent* event, const PuglEventType type)
     dx,
     dy,
   };
+
+  // undoing the switch done by the platform
+  if (ev.state & PUGL_MOD_SHIFT) {
+    double temp = ev.dx;
+    ev.dx = -ev.dy;
+    ev.dy = -temp;
+  }
 
   PuglEvent scrollEvent;
   scrollEvent.scroll = ev;

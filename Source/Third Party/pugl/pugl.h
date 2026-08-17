@@ -789,6 +789,7 @@ typedef struct PuglWorld {
   double              startTime;
   size_t              numViews;
   PuglView**          views;
+  PuglView*           activeView;
   char*               strings[PUGL_NUM_STRING_HINTS];
   PuglWorldType       type;
 } PuglWorld;

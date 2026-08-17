@@ -1062,11 +1062,9 @@ namespace utils
     if ((u32)mechanism & (u32)WaitMechanism::SpinNotify)
       atomic.notify_all();
   }
-  i32 lockAtomic(satomi::atomic<i32> &atomic, bool isExclusive, WaitMechanism mechanism,
-    const utils::smallFn<void()> &lambda = [](){}) noexcept;
+  i32 lockAtomic(satomi::atomic<i32> &atomic, bool isExclusive, WaitMechanism mechanism) noexcept;
   inline i32
-  lockAtomic(LockBlame<i32> &lock, bool isReentrant, bool isExclusive, WaitMechanism mechanism,
-    const utils::smallFn<void()> &lambda = [](){}) noexcept
+  lockAtomic(LockBlame<i32> &lock, bool isReentrant, bool isExclusive, WaitMechanism mechanism) noexcept
   {
     auto threadId = utils::thread::getCurrentId();
     if (lock.lock.load(satomi::memory_order_relaxed) < 0 &&
@@ -1078,13 +1076,12 @@ namespace utils
         COMPLEX_ASSERT_FALSE("Guess who forgot to unlock this atomic");
     }
 
-    if (!isExclusive)
-      return lockAtomic(lock.lock, isExclusive, mechanism, lambda);
-
-    auto ret = lockAtomic(lock.lock, isExclusive, mechanism, lambda);
-
-    if (ret == 0)
-      lock.lastLockId.store(threadId, satomi::memory_order_relaxed);
+    auto ret = lockAtomic(lock.lock, isExclusive, mechanism);
+    if (isExclusive)
+    {
+      if (ret == 0)
+        lock.lastLockId.store(threadId, satomi::memory_order_relaxed);
+    }
     return ret;
   }
   void unlockAtomic(satomi::atomic<i32> &atomic, bool wasExclusive, WaitMechanism mechanism) noexcept;
@@ -1130,10 +1127,9 @@ namespace utils
       type_{ I32LockEnum }, mechanism_{ mechanism }, i32Lock_{ &reentrantLock, isExclusive }
     { i32Lock_.previousValue = lockAtomic(reentrantLock, true, isExclusive, mechanism); }
 
-    ScopedLock(LockBlame<i32> &lock, bool isExclusive, WaitMechanism mechanism,
-      const utils::smallFn<void()> &lambda = [](){}) noexcept : type_{ I32LockEnum },
-      mechanism_{ mechanism }, i32Lock_{ &lock, isExclusive }
-    { i32Lock_.previousValue = lockAtomic(lock, false, isExclusive, mechanism, lambda); }
+    ScopedLock(LockBlame<i32> &lock, bool isExclusive, WaitMechanism mechanism) noexcept : 
+      type_{ I32LockEnum }, mechanism_{ mechanism }, i32Lock_{ &lock, isExclusive }
+    { i32Lock_.previousValue = lockAtomic(lock, false, isExclusive, mechanism); }
 
     ScopedLock(ScopedLock &&other) noexcept = delete;
     ScopedLock &operator=(ScopedLock &&other) noexcept

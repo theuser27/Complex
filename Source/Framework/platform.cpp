@@ -644,8 +644,7 @@ namespace utils
   }
 
   i32
-  lockAtomic(satomi::atomic<i32> &atomic, bool isExclusive, WaitMechanism mechanism,
-    const utils::smallFn<void()> &lambda) noexcept
+  lockAtomic(satomi::atomic<i32> &atomic, bool isExclusive, WaitMechanism mechanism) noexcept
   {
     i32 state, desired;
     if (isExclusive)
@@ -660,38 +659,27 @@ namespace utils
         if (state == expected)
           continue;
 
-        lambda();
-
-        if (mechanism == WaitMechanism::Spin || mechanism == WaitMechanism::SpinNotify)
-          while (atomic.load(satomi::memory_order_relaxed) != expected) { COMPLEX_PAUSE(); }
-        else
+        while ((state = atomic.load(satomi::memory_order_relaxed)) != expected)
         {
-          do
-          {
-            if (mechanism == WaitMechanism::Sleep || mechanism == WaitMechanism::SleepNotify)
-              millisleep();
-            else
-              atomic.wait(state, satomi::memory_order_relaxed);
-            state = atomic.load(satomi::memory_order_relaxed);
-          } while (state != expected);
+          if (mechanism == WaitMechanism::Spin || mechanism == WaitMechanism::SpinNotify)
+            COMPLEX_PAUSE();
+          else if (mechanism == WaitMechanism::Sleep || mechanism == WaitMechanism::SleepNotify)
+            millisleep();
+          else if (mechanism == WaitMechanism::Sleep || mechanism == WaitMechanism::SleepNotify)
+            atomic.wait(state, satomi::memory_order_relaxed);
+          else
+            COMPLEX_ASSERT_FALSE("Invalid wait mechanism");
         }
       }
     }
     else
     {
       state = atomic.load(satomi::memory_order_relaxed);
-      bool isLambdaRun = false;
 
       while (true)
       {
         while (state < 0)
         {
-          if (!isLambdaRun)
-          {
-            lambda();
-            isLambdaRun = true;
-          }
-
           switch (mechanism)
           {
           case WaitMechanism::Spin:
