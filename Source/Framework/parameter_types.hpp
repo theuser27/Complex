@@ -419,6 +419,7 @@ namespace Framework
     utils::LockBlame<i32> readWriteLock{};
     Framework::PluginStructure structure{};
     utils::bumpArena *arena{};
+    utils::string_view configFolderPath{};
     utils::sll<utils::string_view> *strings{};
     utils::sll<Plugin::ComplexPlugin> *pluginInstances{};
   };

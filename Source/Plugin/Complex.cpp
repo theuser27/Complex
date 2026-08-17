@@ -26,22 +26,22 @@ namespace
 
     executableStaticData.arena = utils::bumpArena::create(COMPLEX_MB(1), COMPLEX_KB(64));
     executableStaticData.structure.arena = utils::bumpArena::create(COMPLEX_MB(1), COMPLEX_KB(64));
-    executableStaticData.structure.metadata = (Framework::ProcessorMetadata *)initialiseTypeStructure<
-      Generation::SoundEngine>(nullptr, executableStaticData.structure);
 
     auto pushString = [&](utils::string_view string)
     {
       if (string.empty())
-        return;
+        return string;
 
       for (auto *element = executableStaticData.strings; element; element = element->next)
         if (element->object == string)
-          return;
+          return element->object;
 
       auto *node = anew(executableStaticData.arena, utils::sll<utils::string_view>, { string });
       if (executableStaticData.strings)
         node->next = executableStaticData.strings;
       executableStaticData.strings = node;
+
+      return node->object;
     };
 
     auto recurseParameterStrings = [&](const auto &recurseParameters, const auto &recurseProcessors,
@@ -103,6 +103,16 @@ namespace
         children = children->next;
       }
     };
+
+    {
+      char buffer[512];
+      int pathSize = xfiles_get_user_directory(buffer, sizeof(buffer), XFILES_USER_DIRECTORY_APPDATA);
+      auto string = utils::string::create(getLocalScratch(), "%*s" XFILES_DIR_STR "%s", pathSize, buffer, CPLUG_PLUGIN_NAME);
+      executableStaticData.configFolderPath = pushString(string);
+    }
+
+    executableStaticData.structure.metadata = (Framework::ProcessorMetadata *)initialiseTypeStructure<
+      Generation::SoundEngine>(nullptr, executableStaticData.structure);
 
     recurseProcessorStrings(recurseProcessorStrings, executableStaticData.structure.metadata);
   }

@@ -48,24 +48,17 @@ void initialiseCJSONHooks()
   cjson_InitHooks(&hooks);
 }
 
+extern Framework::ExecutableStaticData executableStaticData;
+
 utils::string_view
 findOrAddPermanentString(utils::string_view string);
 
 namespace Framework::LoadSave
 {
-  utils::string getConfigFilePath(utils::string_view file)
+  utils::string 
+  getConfigFilePath(utils::string_view file)
   {
-    static constexpr auto bufferSize = 512;
-    static const auto path = []()
-    {
-      char buffer[bufferSize];
-      int pathSize = xfiles_get_user_directory(buffer, sizeof(buffer), XFILES_USER_DIRECTORY_APPDATA);
-      auto string = utils::string::create(getLocalScratch(), "%*s" XFILES_DIR_STR "%s", pathSize, buffer, CPLUG_PLUGIN_NAME);
-
-      // adding the path to the long term plugin storage
-      return findOrAddPermanentString(string);
-    }();
-
+    auto path = executableStaticData.configFolderPath;
     if (!xfiles_exists(path.data()))
       xfiles_create_directory(path.data());
 
