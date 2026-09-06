@@ -6,14 +6,6 @@
 #include "simd_buffer.hpp"
 #include "simd_utils.hpp"
 
-#ifdef COMPLEX_INTEL_SVML
-extern "C"
-{
-  __m128 _mm_tan_ps(__m128 a);
-  __m128 _mm_atan2_ps(__m128 a, __m128 b);
-}
-#endif
-
 namespace utils
 {
   // layout of complex cartesian and polar vectors is assumed to be
@@ -25,8 +17,8 @@ namespace utils
   {
     // split pi / 2 into multiple parts to take advantage of the
     // hidden GRS bits during subtraction for more accurate radian wrapping
-    static constexpr simd_float kHalfPiPart1 = 1.5703125f;
-    static constexpr simd_float kHalfPiPart2 = 0.0004838267953f;
+    static constexpr simd_float kHalfPiPart1 = "0 01111111 10010010000000000000000"_fbl;
+    static constexpr simd_float kHalfPiPart2 = "0 01110011 11111011010101000100010"_fbl;
 
     // taylor coefficients of sin
     static constexpr simd_float kSin1 = -0.166666518f;
@@ -82,8 +74,8 @@ namespace utils
   {
     // split pi / 2 into multiple parts to take advantage of the
     // hidden GRS bits during subtraction for more accurate radian wrapping
-    static constexpr simd_float kHalfPiPart1 = 1.5703125f;
-    static constexpr simd_float kHalfPiPart2 = 0.0004838267953f;
+    static constexpr simd_float kHalfPiPart1 = "0 01111111 10010010000000000000000"_fbl;
+    static constexpr simd_float kHalfPiPart2 = "0 01110011 11111011010101000100010"_fbl;
 
     // modified taylor coefficients of { cos, sin }
     static constexpr simd_float k0 = { 1.0f, 0.0f };
@@ -127,45 +119,70 @@ namespace utils
   forceinline simd_float vectorcall
   tan(simd_float radians)
   {
-  #ifdef COMPLEX_INTEL_SVML
-    return _mm_tan_ps(radians.value);
-  #else
-    auto [cos, sin] = cossin(radians);
-    return sin / cos;
-  #endif
+    // split pi / 2 into multiple parts to take advantage of the
+    // hidden GRS bits during subtraction for more accurate radian wrapping
+    static constexpr simd_float kHalfPiPart1 = "0 01111111 10010010000000000000000"_fbl;
+    static constexpr simd_float kHalfPiPart2 = "0 01110011 11111011010000000000000"_fbl;
+    static constexpr simd_float kHalfPiPart3 = "0 01100111 01000100010000000000000"_fbl;
+    static constexpr simd_float kHalfPiPart4 = "0 01011000 01101000110000100011010"_fbl;
+
+    // pade coefficients for tan
+    static constexpr simd_float kNum0 = 0.9999997615814208984375f;
+    static constexpr simd_float kNum1 = -0.0958017408847808837890625f;
+    static constexpr simd_float kDen0 = kNum0;
+    static constexpr simd_float kDen1 = -0.4291356503963470458984375f;
+    static constexpr simd_float kDen2 = 0.009716848842799663543701171875f;
+
+    static constexpr simd_float k2InvPi = 2.0f / kPi;
+    static constexpr simd_float kRound = 12582912.0f;
+
+    simd_float absInput = simd_float::abs(radians);
+    simd_mask inputSign = simd_float::signMask(radians);
+    simd_int roundedInt = reinterpretToInt(absInput * k2InvPi + kRound);
+    simd_float roundedFloat = reinterpretToFloat(roundedInt) - kRound;
+    simd_mask quadrantMask = simd_int::equal(roundedInt & 1, 0);
+
+    simd_float position = absInput - (kHalfPiPart1 * roundedFloat) - (kHalfPiPart2 * roundedFloat) -
+      (kHalfPiPart3 * roundedFloat) - (kHalfPiPart4 * roundedFloat);
+    simd_float position2 = position * position;
+
+    // pade approximants of tan(x)
+    simd_float numerator = position * simd_float::mulAdd(kNum0, position2, kNum1);
+    simd_float denominator = simd_float::mulAdd(kDen0, position2, simd_float::mulAdd(kDen1, position2, kDen2));
+    return (merge(denominator, numerator, quadrantMask) / merge(numerator, denominator, quadrantMask)) ^
+      shiftLeft<31>(roundedInt) ^ inputSign;
   }
 
   forceinline simd_float vectorcall
   atan2(simd_float y, simd_float x)
   {
-  #ifndef COMPLEX_INTEL_SVML
-    // based on "Efficient approximations for the arctangent function"
-    // max error ~= 0.008 degrees
-    // https://www.desmos.com/calculator/nmhr3wmgzj
-    static constexpr simd_float a = 0.35496f;
-    static constexpr simd_float b = -0.0815f;
+    // taylor series coefficients of atan(x)
+    static constexpr simd_float k0 = 1.0f;
+    static constexpr simd_float k1 = -0.3333307206630706787109375f;
+    static constexpr simd_float k2 = 0.199926197528839111328125f;
+    static constexpr simd_float k3 = -0.14203643798828125f;
+    static constexpr simd_float k4 = 0.1064093410968780517578125f;
+    static constexpr simd_float k5 = -0.07504294812679290771484375f;
+    static constexpr simd_float k6 = 0.042691521346569061279296875f;
+    static constexpr simd_float k7 = -0.016068629920482635498046875f;
+    static constexpr simd_float k8 = 0.00284988968633115291595458984375f;
 
-    simd_float yxDiv = y / x;
-    simd_float yxDivSqr = yxDiv * yxDiv;
-    simd_float xyDiv = reciprocal(yxDiv);
-    simd_float xyDivSqr = xyDiv * xyDiv;
+    simd_float xAbs = simd_float::abs(x);
+    simd_float yAbs = simd_float::abs(y);
+    simd_float sign = y & simd_int{ kSignMask };
+    simd_mask mask = simd_float::lessThan(xAbs, yAbs);
+    simd_float value = (utils::merge(yAbs, xAbs, mask) / utils::merge(xAbs, yAbs, mask)) | (mask & simd_int{ kSignMask });
+    simd_float v2 = value * value;
+    simd_float v4 = v2 * v2;
+    simd_mask zeroOverZeroMask = simd_int::equal(0, reinterpretToInt(xAbs)) & simd_int::equal(0, reinterpretToInt(yAbs));
 
-    simd_float firstHalf = yxDiv / (yxDivSqr * simd_float::abs(yxDiv) * b + yxDivSqr * a + 1.0f);
-    simd_float secondHalf = (simd_float(kPi * 0.5f) ^ getSign(xyDiv)) - xyDiv / (xyDivSqr * simd_float::abs(xyDiv) * b + xyDivSqr * a + 1.0f);
-    simd_float angle = merge(firstHalf, secondHalf, simd_float::greaterThan(simd_float::abs(yxDiv), 1.0f));
+    // taylor series split into 2 radix-4 sums
+    simd_float one = v2 * simd_float::mulAdd(k1, v4, simd_float::mulAdd(k3, v4, simd_float::mulAdd(k5, k7, v4)));
+    simd_float two = simd_float::mulAdd(k0, v4, simd_float::mulAdd(k2, v4, simd_float::mulAdd(k4, v4, simd_float::mulAdd(k6, k8, v4))));
+    simd_float three = (x & simd_mask{ kSignMask }) ^ simd_float::mulAdd((simd_float{ kPi * 0.5f } &mask), value, (one + two));
+    simd_float result = (three + (simd_float{ kPi } & simd_float::lessThan(x, 0.0f))) ^ sign;
 
-    simd_mask realEqualZeroMask = simd_float::equal(x, 0.0f);
-    simd_mask imaginaryEqualZeroMask = simd_float::equal(y, 0.0f);
-    simd_float extraShift = (simd_float(kPi) & ~realEqualZeroMask) & simd_float::lessThanOrEqual(x, 0.0f);
-    extraShift ^= getSign(y);
-
-    angle += extraShift;
-    angle &= ~(realEqualZeroMask & imaginaryEqualZeroMask);
-
-    return angle;
-  #else
-    return _mm_atan2_ps(y.value, x.value);
-  #endif
+    return result & ~zeroOverZeroMask;
   }
 
   // magnitude and phase

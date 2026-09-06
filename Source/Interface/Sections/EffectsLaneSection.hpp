@@ -78,6 +78,8 @@ namespace Interface
       LaneMiniView();
 
       bool mouseDown(const MouseEvent &e) override;
+      bool mouseDrag(const MouseEvent &e) override;
+      bool mouseUp(const MouseEvent &e) override;
       bool render(Graphics &g) override;
     };
 

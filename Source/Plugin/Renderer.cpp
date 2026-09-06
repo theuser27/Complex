@@ -17,7 +17,7 @@
 #include "Interface/Sections/MainInterface.hpp"
 
 static auto
-unscaleDimensions(u32 width, u32 height, double currentScaling) noexcept
+unscaleDimensions(u32 width, u32 height, double currentScaling)
 {
   return utils::pair{ (u32)::round((double)width / currentScaling),
     (u32)::round((double)height / currentScaling) };
@@ -101,15 +101,10 @@ namespace Interface
 
     e.numberOfClicks = renderer->numberOfClicks;
   }
-
-  // constinit thread_local PuglView *lastView{};
   
   PuglStatus
   runThread(PuglView *view, const PuglEvent *event)
   {
-    // puglChangeContext(lastView, view);
-    // lastView = view;
-
     auto *renderer = (Interface::Renderer *)puglGetHandle(view);
 
     getUiRelated() = &renderer->generalData;

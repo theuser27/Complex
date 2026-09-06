@@ -907,9 +907,6 @@ namespace utils
       explicit operator bool() { return nativeId; }
     } threadId{};
 
-  private:
-    static thread_local id currentId;
-  public:
     // the necessity for this function instead of just getting the value directly
     // is because the thread might have been started
     static id getCurrentId();
@@ -1210,7 +1207,7 @@ namespace Interface
 namespace const_math
 {
   template<typename T>
-  inline constexpr auto EPSILON = T(0.001);
+  inline constexpr auto EPSILON = T(0.0001);
 
   template<typename T>
   constexpr T
@@ -1357,14 +1354,6 @@ namespace const_math
     return pow((T)kExp, (int)nearest(x)) * y;
   }
 
-  template<typename T>
-  constexpr T
-  log_helper(T x)
-  {
-    auto y = (x - 1) / (x + 1);
-    return T(2) * (y + pow(y, 3) / 3 + pow(y, 5) / 5 + pow(y, 7) / 7 + pow(y, 9) / 9 + pow(y, 11) / 11);
-  }
-
   template <typename T>
   constexpr T
   log(T x)
@@ -1398,6 +1387,9 @@ namespace const_math
     return T(2) * x + T(2.3025851) * T(exponent);
   }
 
+  template <typename T>
+  constexpr T log2(T x) { return log(x) / log(T(2)); }
+
   template<typename T>
   constexpr T
   floor(T x)
@@ -1409,15 +1401,15 @@ namespace const_math
       return x;
     else
     {
-      auto floor_int = [](T x, T x_whole)
+      auto floorInt = [](T x, T x_whole)
       {
         return x_whole - static_cast<T>((x < T(0)) && (x < x_whole));
       };
 
       if constexpr (utils::is_same_v<T, float>)
-        return (abs(x) >= 8388608.f) ? x : floor_int(x, (float)(int)x);
+        return (abs(x) >= 8388608.f) ? x : floorInt(x, (float)(int)x);
       else if constexpr (utils::is_same_v<T, double>)
-        return (abs(x) >= 4503599627370496.) ? x : floor_int(x, (double)(long long)x);
+        return (abs(x) >= 4503599627370496.) ? x : floorInt(x, (double)(long long)x);
       else
       {
         // we do not handle other types here
@@ -1467,13 +1459,13 @@ namespace const_math
     }
     else
     {
-      auto tan_cf_recur = [](const auto &self, T xx, int depth, int max_depth) -> T
+      auto tan_cf_recur = [](const auto &self, T x2, int depth, int max_depth) -> T
       {
         // continued fraction calculation
         // https://math.stackexchange.com/a/433857
         T z = T(2 * depth - 1);
         if (depth < max_depth)
-          z -= xx / self(self, xx, depth + 1, max_depth);
+          z -= x2 / self(self, x2, depth + 1, max_depth);
 
         return z;
       };

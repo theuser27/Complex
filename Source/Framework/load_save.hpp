@@ -7,14 +7,28 @@
 
 namespace utils
 {
+  struct bumpArena;
   class string_view;
   class string;
+  template<typename T>
+  class vector;
 }
 
 namespace Framework
 {
+  struct IndexedData;
+
   namespace LoadSave
   {
+    struct JsonTlsContext
+    {
+      // after finishing work with the arena and freeing it, reset this pointer
+      utils::bumpArena *arena{};
+      utils::string *errorPath{};
+      utils::vector<Framework::IndexedData *> *dynamicOptionFixups{};
+    };
+    JsonTlsContext &getJsonContext();
+
     utils::string getConfigFilePath(utils::string_view file);
     // returns absolute window dimensions
     void getWindowSizeScale(u32 &windowWidth, u32 &windowHeight, float &windowScale);

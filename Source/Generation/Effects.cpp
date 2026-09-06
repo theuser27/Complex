@@ -21,12 +21,14 @@ namespace Generation
     if (copy)
       processorMetadata = copy->metadata;
 
+    auto *vtable = (EffectVtable *)processorMetadata->vtable;
+
     COMPLEX_ASSERT(processorMetadata->parameters);
-    COMPLEX_ASSERT(processorMetadata->vtable[0]);
+    COMPLEX_ASSERT(vtable->createEffect);
+    COMPLEX_ASSERT(vtable->runEffect);
+    COMPLEX_ASSERT(vtable->createUI);
 
-    auto *createFn = (EffectData::CreateEffectFn *)processorMetadata->vtable[EffectData::CreateVtableIndex];
-
-    EffectData *effectData = createFn(module, copy);
+    EffectData *effectData = vtable->createEffect(module, copy);
     effectData->metadata = processorMetadata;
 
     Framework::ParameterValue *effectParameters{};
@@ -189,7 +191,7 @@ namespace Generation
     // getting exclusive access to data
     lockAtomic(dataBuffer->dataLock, false, true, WaitMechanism::Spin);
 
-    ((EffectData::RunEffectFn *)effect->metadata->vtable[EffectData::RunVtableIndex])(this, effect, source, dataBuffer, binCount, sampleRate);
+    ((EffectVtable *)effect->metadata->vtable)->runEffect(this, effect, source, dataBuffer, binCount, sampleRate);
 
     // if the mix is 100% for all channels, we can skip mixing entirely
     simd_float wetMix = getParameter(ModuleMix)->getInternalValue<simd_float>(sampleRate);

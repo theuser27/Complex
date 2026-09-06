@@ -363,7 +363,7 @@ namespace utils
 
   #define defer2(X, Y) X##Y
   #define defer1(name, counter) defer2(name, counter)
-  #define defer ::utils::deferAtHome defer1(defer__, __COUNTER__) = [&]()
+  #define defer ::utils::deferAtHome defer1(_______defer__, __COUNTER__) = [&]()
 
   template<usize Iterations>
   forceinline void longPause() noexcept
@@ -1291,4 +1291,18 @@ namespace utils
   // tries to lower private memory pages (memory usage) as much as possible
   // useful for getting rid of pages that are never accessed again (i.e. OpenGl init resources)
   void shrinkWorkingSet();
+}
+
+// float bit literal
+constexpr float 
+operator ""_fbl(const char *string, usize size)
+{
+  u32 ret = 0;
+  usize j = 0;
+  for (usize i = size; i > 0; --i)
+    if (string[i - 1] == '0' || string[i - 1] == '1')
+      ret |= (u32)(string[i - 1] - '0') << (j++);
+  
+  COMPLEX_ASSERT(j == sizeof(float) * 8);
+  return utils::bit_cast<float>(ret);
 }

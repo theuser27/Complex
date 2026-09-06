@@ -312,8 +312,8 @@ namespace Interface
     auto activeEffect = effectModule->currentEffect.load(satomi::memory_order_acquire);
     skinOverride = (Interface::Skin::Override)activeEffect->metadata->userFlags;
 
-    if (auto *createUIPointer = activeEffect->metadata->vtable[Generation::EffectData::CreateUIVtableIndex])
-      effectControls = ((Generation::EffectData::CreateUIFn *)createUIPointer)(effectArena, this,
+    if (auto *createUIPointer = ((Generation::EffectVtable *)activeEffect->metadata->vtable)->createUI)
+      effectControls = createUIPointer(effectArena, this,
         effectModule->currentEffect.load(satomi::memory_order_acquire));
 
     // TODO: icon

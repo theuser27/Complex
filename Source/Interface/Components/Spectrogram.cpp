@@ -183,7 +183,7 @@ namespace Interface
     const float rangeMult = 1.0f / (maxDb - minDb);
 
     // yes these are magic numbers, change at your own risk
-    const simd_float decay = 0.25f - 0.02f * ::log2f(utils::max(1.0f, 2048.0f / (float)binCount - 1.0f));
+    const simd_float decay = 0.25f - 0.02f * utils::log2(utils::max(1.0f, 2048.0f / (float)binCount - 1.0f));
 
     constexpr float resolution = 1.0f / (kResolution - 1.0f);
     const float rangeMultiplier = ::powf(10.0f, decadeCount * resolution);
@@ -239,7 +239,12 @@ namespace Interface
           simd_float upper = scratchBufferRaw[nextIndex];
           CHECK_NAN(upper);
 
-          currentBin = dbToAmplitude(lerp(amplitudeToDb(lower), amplitudeToDb(upper), rangeBegin - (float)beginIndex));
+          {
+            auto x = simd_float::max(-127.0f, amplitudeToDb(lower));
+            auto y = simd_float::max(-127.0f, amplitudeToDb(upper));
+            auto z = lerp(x, y, rangeBegin - (float)beginIndex);
+            currentBin = dbToAmplitude(z);
+          }
           currentBin = merge(currentBin, circularLerpSymmetric(lower, upper, rangeBegin - (float)beginIndex, kPi), kPhaseMask);
         }
         else

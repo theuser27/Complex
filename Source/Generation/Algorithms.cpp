@@ -21,11 +21,9 @@ namespace Generation
 
   // unary plus is so that it converts lambdas to function pointers (while also accepting raw functions as well)
 #define EFFECT_VTABLE(name, creationFunction, createUIFunction) \
-  static_assert(utils::is_same_v<decltype(+creationFunction), EffectData::CreateEffectFn *>); \
-  static_assert(utils::is_same_v<decltype(+createUIFunction), EffectData::CreateUIFn *>); \
-  static void(*const vtable##name[])() = { (void (*)())(+creationFunction), (void (*)())run##name, (void (*)())createUIFunction }
-#define COMPLEX_STRUCTURE_EFFECT(nameString, idNumber, vtableArray, skinOverride, ...) (*anew(arena, Framework::ProcessorMetadata, \
-  { .flags = ProcessorMetadata::ProcessorTag, .userFlags = skinOverride, .id = idNumber, .name = nameString __VA_OPT__(,) __VA_ARGS__, .vtable = vtableArray })).computeCounts()
+  static constexpr EffectVtable vtable##name = { .createEffect = creationFunction, .runEffect = run##name, .createUI = createUIFunction }
+#define COMPLEX_STRUCTURE_EFFECT(nameString, idNumber, vtableStruct, skinOverride, ...) (*anew(arena, Framework::ProcessorMetadata, \
+  { .flags = ProcessorMetadata::ProcessorTag, .userFlags = skinOverride, .id = idNumber, .name = nameString __VA_OPT__(,) __VA_ARGS__, .vtable = &vtableStruct })).computeCounts()
 
   static Framework::ParameterValue *
   getParameter(EffectData *effectData, uuid id)
@@ -213,25 +211,29 @@ namespace Generation
     }});
   }
 
-  Framework::IndexedData *
-  Freeze::initialiseTypeStructure(Framework::PluginStructure &structure)
+  namespace Freeze
   {
-    using namespace Framework;
-
-    static constexpr auto createEffectRolling = [](EffectModule *module, EffectData *copy) -> EffectData *
+    EffectData *
+    createEffectRolling(EffectModule *module, EffectData *copy)
     {
       auto *rollingData = anew(module->arena, RollingData, {});
       auto maxBinCount = module->state->getMaxBinCount();
 
-      rollingData->freezeBuffer = SimdBuffer::create(module->arena, 
+      rollingData->freezeBuffer = Framework::SimdBuffer::create(module->arena,
         utils::kChannelsPerInOut, maxBinCount, copy != nullptr);
 
       if (copy)
-        valcpy(rollingData->freezeBuffer->data, 
+        valcpy(rollingData->freezeBuffer->data,
           ((RollingData *)copy)->freezeBuffer->data, rollingData->freezeBuffer->size);
 
       return (EffectData *)rollingData;
-    };
+    }
+  }
+
+  Framework::IndexedData *
+  Freeze::initialiseTypeStructure(Framework::PluginStructure &structure)
+  {
+    using namespace Framework;
 
     EFFECT_VTABLE(Rolling, createEffectRolling, createUIRolling);
 
@@ -1391,12 +1393,14 @@ namespace Generation
     }
   }
 
-  void Freeze::runRolling(EffectModule *effectModule, EffectData *effectData, 
+  void Freeze::runRolling(EffectModule *effectModule, EffectData *effectData,
     Framework::ComplexDataSource &source, Framework::SimdBuffer *destination, 
     u32 binCount, float sampleRate) noexcept
   {
     using namespace utils;
     using namespace Framework;
+
+    // TODO: linear vs frequency slope
 
     auto [lowBoundIndices, highBoundIndices] = [&]()
     {
@@ -1415,28 +1419,28 @@ namespace Generation
       for (usize i = rollingData->lastBinCount; i < binCount; ++i)
         rawFreezeBuffer[i] = rawSource[i];
 
+    simd_float mod = (float)binCount;
     simd_float rate = getParameter(effectData, Freeze::Rolling::Rate)->getInternalValue<simd_float>();
     simd_float offset = rate * (float)(source.blockPosition - rollingData->lastBlockPosition);
-    simd_float mod = (float)binCount;
+    offset = simd_float::min(mod, offset);
 
     simd_float oldPosition = simd_float::min(rollingData->lastPosition, mod - 1.0f);
     simd_float newPosition = modOnce(mod + modOnce(oldPosition + offset, mod), mod);
 
     simd_int start, end;
     {
-      simd_mask switchBounds = simd_float::lessThan(rate, 0.0f) & simd_float::lessThan(oldPosition, newPosition);
+      simd_mask switchBounds = simd_float::lessThan(rate, 0.0f);
       start = toInt(simd_float::round(oldPosition));
       end = toInt(simd_float::round(newPosition));
       auto temp = merge(start, end, switchBounds);
       end = merge(end, start, switchBounds);
       start = temp;
     }
-    simd_mask isHighAboveLow2 = simd_int::greaterThanOrEqualSigned(end, start);
+    simd_mask isHighAboveLow2 = simd_int::greaterThanSigned(end, start);
 
     for (u32 i = 0; i < binCount; ++i)
     {
-      simd_mask dontRefreshFreeze = isOutsideBounds(i, start, end, isHighAboveLow2);
-      simd_float wet = merge(rawSource[i], rawFreezeBuffer[i], dontRefreshFreeze);
+      simd_float wet = merge(rawSource[i], rawFreezeBuffer[i], isOutsideBounds(i, start, end, isHighAboveLow2));
       rawFreezeBuffer[i] = wet;
       rawDestination[i] = merge(wet, rawSource[i],
         isOutsideBounds(i, lowBoundIndices, highBoundIndices, isHighAboveLow));

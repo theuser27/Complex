@@ -57,25 +57,25 @@ namespace Framework
   static constexpr auto exponentialWindowLookup = utils::Lookup<kWindowResolution>(createExponentialWindow);
   static constexpr auto lanczosWindowLookup = utils::Lookup<kWindowResolution>(createLanczosWindow);
 
-  float getHannWindow(float position) noexcept { return hannWindowLookup.linearLookup(position); }
-  float getHammingWindow(float position) noexcept { return hammingWindowLookup.linearLookup(position); }
-  float getTriangleWindow(float position) noexcept { return triangleWindowLookup.linearLookup(position); }
-  float getSineWindow(float position) noexcept { return sineWindowLookup.linearLookup(position); }
+  float getHannWindow(float position) { return hannWindowLookup.linearLookup(position); }
+  float getHammingWindow(float position) { return hammingWindowLookup.linearLookup(position); }
+  float getTriangleWindow(float position) { return triangleWindowLookup.linearLookup(position); }
+  float getSineWindow(float position) { return sineWindowLookup.linearLookup(position); }
 
-  float getExponentialWindow(float position, float alpha) noexcept
+  float getExponentialWindow(float position, float alpha)
   { return utils::pow((exponentialWindowLookup.linearLookup(position)), alpha); }
 
-  float getHannExponentialWindow(float position, float alpha) noexcept
+  float getHannExponentialWindow(float position, float alpha)
   {
     return (utils::pow((exponentialWindowLookup.linearLookup(position)), alpha)
       * hannWindowLookup.linearLookup(position));
   }
 
-  float getLanczosWindow(float position, float alpha) noexcept
+  float getLanczosWindow(float position, float alpha)
   { return utils::pow(utils::clamp(lanczosWindowLookup.linearLookup(position), 0.0f, 1.0f), alpha); }
 
   static void applyDefaultWindows(Buffer &buffer, u32 channels, utils::span<bool> channelsToProcess,
-    u32 samples, uuid windowType, float alpha) noexcept
+    u32 samples, uuid windowType, float alpha)
   {
     if (windowType == Window::Lerp || windowType == Window::Rectangle)
       return;

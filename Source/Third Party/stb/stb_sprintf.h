@@ -289,6 +289,7 @@ STBSP__PUBLICDEF void STB_SPRINTF_DECORATE(set_separators)(char pcomma, char ppe
 #define STBSP__LEADINGPLUS 2
 #define STBSP__LEADINGSPACE 4
 #define STBSP__LEADING_0X 8
+#define STBSP__ALTERNATE 8192
 #define STBSP__LEADINGZERO 16
 #define STBSP__INTMAX 32
 #define STBSP__TRIPLET_COMMA 64
@@ -468,7 +469,7 @@ STBSP__PUBLICDEF int STB_SPRINTF_DECORATE(vsprintfcb)(STBSP_SPRINTFCB *callback,
             continue;
          // if we have leading 0x
          case '#':
-            fl |= STBSP__LEADING_0X;
+            fl |= STBSP__LEADING_0X | STBSP__ALTERNATE;
             ++f;
             continue;
          // if we have thousand commas
@@ -755,9 +756,11 @@ STBSP__PUBLICDEF int STB_SPRINTF_DECORATE(vsprintfcb)(STBSP_SPRINTFCB *callback,
          n = pr;
          if (l > (stbsp__uint32)pr)
             l = pr;
-         while ((l > 1) && (pr) && (sn[l - 1] == '0')) {
-            --pr;
-            --l;
+         if (!(fl & STBSP__ALTERNATE)) {
+           while ((l > 1) && (pr) && (sn[l - 1] == '0')) {
+              --pr;
+              --l;
+           }
          }
 
          // should we use %e
@@ -870,7 +873,7 @@ STBSP__PUBLICDEF int STB_SPRINTF_DECORATE(vsprintfcb)(STBSP_SPRINTFCB *callback,
             stbsp__int32 i;
             // handle 0.000*000xxxx
             *s++ = '0';
-            if (pr)
+            if (pr || (fl & STBSP__ALTERNATE))
                *s++ = stbsp__period;
             n = -dp;
             if ((stbsp__int32)n > pr)
@@ -942,7 +945,7 @@ STBSP__PUBLICDEF int STB_SPRINTF_DECORATE(vsprintfcb)(STBSP_SPRINTFCB *callback,
                   }
                }
                cs = (int)(s - (num + 64)) + (3 << 24); // cs is how many tens
-               if (pr) {
+               if (pr || (fl & STBSP__ALTERNATE)) {
                   *s++ = stbsp__period;
                   tz = pr;
                }
@@ -961,7 +964,7 @@ STBSP__PUBLICDEF int STB_SPRINTF_DECORATE(vsprintfcb)(STBSP_SPRINTFCB *callback,
                   }
                }
                cs = (int)(s - (num + 64)) + (3 << 24); // cs is how many tens
-               if (pr)
+               if (pr || (fl & STBSP__ALTERNATE))
                   *s++ = stbsp__period;
                if ((l - dp) > (stbsp__uint32)pr)
                   l = pr + dp;

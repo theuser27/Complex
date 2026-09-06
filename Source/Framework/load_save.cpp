@@ -17,13 +17,6 @@
 #include "Interface/Sections/MainInterface.hpp"
 #include "Plugin/Complex.hpp"
 
-#define cjson_Create(type, ...) (cjson_Create)(type, COMPLEX_DEFAULT_OR(0LL, __VA_ARGS__))
-/* Helper function for creating and adding items to an object/array at the same time.
- * Returns the added item or NULL on failure. */
-#define cjson_AddTo(parent, name, type, /*args*/ ...) (cjson_AddExistingTo)(parent, name, (cjson_Create)(type, COMPLEX_DEFAULT_OR(0LL, __VA_ARGS__)), true, _cjson_IsStringLiteral(name))
-
-// after finishing work with the arena and freeing it, reset this pointer
-thread_local utils::bumpArena *jsonArena;
 
 static void *
 #ifdef COMPLEX_WINDOWS
@@ -31,6 +24,7 @@ __cdecl
 #endif
 cjsonAllocate(size_t size)
 {
+  auto jsonArena = Framework::LoadSave::getJsonContext().arena;
   COMPLEX_ASSERT(jsonArena, "Someone forgot to set the arena before using json");
   return utils::bumpArena::insert(jsonArena, size, alignof(void *));
 }
@@ -68,8 +62,6 @@ namespace Framework::LoadSave
 
 namespace
 {
-  thread_local utils::string *errorPath;
-
   void useConfigJson(const auto &predicate, bool save = false)
   {
     auto filePath = Framework::LoadSave::getConfigFilePath(CPLUG_PLUGIN_NAME ".config");
@@ -84,9 +76,12 @@ namespace
     usize stringSize;
     if (!xfiles_read(filePath.data(), (void **)&string, &stringSize))
       return;
+    defer { xfiles_read_free(string); };
 
-    jsonArena = utils::bumpArena::createNested(getLocalScratch(), COMPLEX_KB(16));
-
+    auto &jsonContext = Framework::LoadSave::getJsonContext();
+    jsonContext.arena = utils::bumpArena::createNested(getLocalScratch(), COMPLEX_KB(16));
+    defer { utils::bumpArena::destroy(jsonContext.arena); jsonContext.arena = nullptr; };
+    
     cjson *json = cjson_Parse(string, stringSize);
     if (json)
       predicate(json);
@@ -102,10 +97,6 @@ namespace
       char *text = cjson_Print(json, &size, true);
       xfiles_write(filePath.data(), text, size);
     }
-
-    xfiles_read_free(string);
-    utils::bumpArena::destroy(jsonArena);
-    jsonArena = nullptr;
   }
 
   void upgradeSave([[maybe_unused]] cjson *save)
@@ -213,11 +204,11 @@ namespace Framework::LoadSave
 #undef setJsonItem
 }
 
-thread_local utils::vector<Framework::IndexedData *> *dynamicOptionFixups{};
-
 static void handleIndexedData(utils::bumpArena *arena, bool isAutomated,
   Framework::ParameterDetails &details, cjson *indexedData)
 {
+  auto *dynamicOptionFixups = Framework::LoadSave::getJsonContext().dynamicOptionFixups;
+
   // TODO: this adds duplicate options to IndexedData
   auto processSingle = [&](const auto &self, Framework::IndexedData &option, cjson *data) -> Framework::IndexedData *
   {
@@ -315,7 +306,8 @@ static void handleIndexedData(utils::bumpArena *arena, bool isAutomated,
   details.defaultOptionId = cjson_GetObjectItem(indexedData, "default_option_id")->vuint;
 }
 
-static void fixDeserialisedProcessorsStateIds(Plugin::State *state)
+static void fixDeserialisedProcessorsStateIds(Plugin::State *state, 
+  utils::vector<Framework::IndexedData *> *dynamicOptionFixups)
 {
   state->stateIdCounter = {};
   for (auto &[oldId, processor] : state->allProcessors.data)
@@ -428,6 +420,7 @@ namespace Framework
     {
       if (!cjson_GetObjectItem(data, "options"))
       {
+        auto *errorPath = Framework::LoadSave::getJsonContext().errorPath;
         auto errorString = utils::string::create(getLocalScratch(),
           "%v\nOptions parameter %v (%zu) is missing its options, replacing with default ones from the plugin.",
           utils::string_view{ *errorPath }, parameter->details_.displayName, parameter->details_.id);
@@ -590,6 +583,7 @@ namespace Generation
 
       if (!parameter)
       {
+        auto *errorPath = Framework::LoadSave::getJsonContext().errorPath;
         auto errorString = utils::string::create(getLocalScratch(),
           "%v\nMissing Parameter %v (%zu), replacing with a default initialised one. "
           "This should have been handled by the version upgrade routine but it wasn't. "
@@ -622,6 +616,7 @@ namespace Generation
 
         if (!isPresent)
         {
+          auto *errorPath = Framework::LoadSave::getJsonContext().errorPath;
           auto displayName = cjson_GetObjectItem(child, "display_name")->vstring;
           auto errorString = utils::string::create(getLocalScratch(),
             "%v\nUnexpected parameter %s (%zu).",
@@ -634,9 +629,11 @@ namespace Generation
 
   void deserialiseProcessorChildren(void *jsonData, Processor *parent)
   {
+    auto *errorPath = Framework::LoadSave::getJsonContext().errorPath;
     auto oldSize = errorPath->size();
     errorPath->appendFormat("Inside processor %v (%zu):\n", parent->metadata->name, parent->metadata->id);
     auto newSize = errorPath->size();
+    defer { errorPath->removeLast(errorPath->size() - oldSize); };
 
     cjson *data = (cjson *)jsonData;
     cjson *processors = cjson_GetObjectItem(data, "processors");
@@ -654,9 +651,10 @@ namespace Generation
 
   void Processor::deserialiseFromJson(void *jsonData)
   {
+    auto *errorPath = Framework::LoadSave::getJsonContext().errorPath;
     auto oldSize = errorPath->size();
     errorPath->appendFormat("Inside processor %v (%zu):\n", metadata->name, metadata->id);
-    auto newSize = errorPath->size();
+    defer { errorPath->removeLast(errorPath->size() - oldSize); };
 
     cjson *data = (cjson *)jsonData;
     // id fixup will happen later when deserialisation has finished
@@ -667,8 +665,6 @@ namespace Generation
     parameterCount = (u32)metadata->parametersCount;
     deserialiseParametersFromJson(jsonData, metadata, parameters, this,
       (metadata->flags & Framework::ProcessorMetadata::NoParameterValidationTag) == 0);
-
-    errorPath->removeLast(newSize - oldSize);
   }
 }
 
@@ -738,11 +734,15 @@ namespace Plugin
     auto state = utils::sp<State>::create(plugin);
     cjson *newData = (cjson *)newSave;
 
-    utils::string errorPath_{ jsonArena, 64 };
-    errorPath = &errorPath_;
+    auto &jsonContext = Framework::LoadSave::getJsonContext();
 
-    utils::vector<Framework::IndexedData *> dynamicParameterFixups_{ jsonArena, 64 };
-    dynamicOptionFixups = &dynamicParameterFixups_;
+    utils::string errorPath{ jsonContext.arena, 64 };
+    jsonContext.errorPath = &errorPath;
+
+    utils::vector<Framework::IndexedData *> dynamicOptionFixups{ jsonContext.arena, 64 };
+    jsonContext.dynamicOptionFixups = &dynamicOptionFixups;
+    
+    defer { jsonContext.dynamicOptionFixups = nullptr; jsonContext.errorPath = nullptr; };
 
     cjson *soundEngineJson = cjson_GetArrayItem(cjson_GetObjectItem(newData, "tree"), 0);
     uuid type = cjson_GetObjectItem(soundEngineJson, "id")->vuint;
@@ -758,7 +758,7 @@ namespace Plugin
     state->registerProcessorForDynamicParameters(state->soundEngine);
     Generation::deserialiseProcessorChildren(soundEngineJson, state->soundEngine);
 
-    fixDeserialisedProcessorsStateIds(state.get());
+    fixDeserialisedProcessorsStateIds(state.get(), &dynamicOptionFixups);
     for (auto &id : Framework::ParameterChangeReason::values)
       state->updateDynamicParameters(id);
 
@@ -775,16 +775,15 @@ namespace Plugin
     Interface::getUiRelated() = &plugin->renderer.generalData;
     defer{ Interface::getUiRelated() = nullptr; };
 
-    jsonArena = utils::bumpArena::createNested(getLocalScratch(), COMPLEX_KB(128));
+    auto &jsonContext = Framework::LoadSave::getJsonContext();
+    jsonContext.arena = utils::bumpArena::createNested(getLocalScratch(), COMPLEX_KB(128));
+    defer { utils::bumpArena::destroy(jsonContext.arena); jsonContext.arena = nullptr; };
 
     cjson *data = cjson_Create(cjson_Object);
     serialiseToJson(plugin->state_.get(), data);
     usize size = 0;
     char *dataString = cjson_Print(data, &size, true);
     writeProc(stateCtx, dataString, size);
-
-    utils::bumpArena::destroy(jsonArena);
-    jsonArena = nullptr;
   }
 
   struct PresetUpdate final : public Framework::UndoAction
@@ -827,7 +826,11 @@ namespace Plugin
 
     if (data.size() != 0)
     {
-      jsonArena = utils::bumpArena::createNested(getLocalScratch(), COMPLEX_KB(128));
+      auto &jsonContext = Framework::LoadSave::getJsonContext();
+
+      jsonContext.arena = utils::bumpArena::createNested(getLocalScratch(), COMPLEX_KB(128));
+      defer { utils::bumpArena::destroy(jsonContext.arena); jsonContext.arena = nullptr; };
+
       const char *potentialError = nullptr;
       cjson *jsonData = cjson_ParseWithOpts(data.data(), data.size(), &potentialError, false);
       if (!jsonData)
@@ -840,9 +843,6 @@ namespace Plugin
         upgradeSave(jsonData);
         state = deserialiseFromJson(plugin, jsonData);
       }
-
-      utils::bumpArena::destroy(jsonArena);
-      jsonArena = nullptr;
     }
 
     if (!state)

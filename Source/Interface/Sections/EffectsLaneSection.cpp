@@ -535,7 +535,45 @@ namespace Interface
       return true;
     }
 
-    return DraggableComponent::mouseDown(e);
+    return true;
+  }
+
+  bool 
+  EffectsLaneSection::LaneMiniView::mouseDrag(const MouseEvent &e)
+  {
+    auto offset = e.getOffsetFromDragStart();
+    auto constraint = scaleValueRoundInt(15);
+    if (offset.x < constraint && offset.y < constraint && !isDragging)
+    {
+      auto event = e;
+      event.x = event.mouseDownPosition.x;
+      event.y = event.mouseDownPosition.y;
+    
+      (void)prepareToMove(event);
+    }
+
+    if (isDragging)
+    {
+      move(e);
+      return true;
+    }
+
+    return true;
+  }
+
+  bool 
+  EffectsLaneSection::LaneMiniView::mouseUp(const MouseEvent &e)
+  {
+    auto offset = e.getOffsetFromDragStart();
+    if (!isDragging)
+    {
+      // LaneSelector -> EffectsSection
+      auto *effectsSection = (EffectsSection::LaneSelector *)parent;
+      effectsSection->selectViewedLane(e.getEventRelativeTo(effectsSection));
+      return true;
+    }
+
+    return DraggableComponent::mouseUp(e);
   }
 
   bool

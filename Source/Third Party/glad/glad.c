@@ -1209,12 +1209,12 @@ static void find_coreGL(void) {
         }
     }
 
-/* PR #18 */
-#ifdef _MSC_VER
-    sscanf_s(version, "%d.%d", &major, &minor);
-#else
-    sscanf(version, "%d.%d", &major, &minor);
-#endif
+		// version string is "XX.YY"
+		char *rest;
+		major = (int)strtol(version, &rest, 10);
+		++rest;
+		minor = (int)strtol(rest, NULL, 10);
+
 
     GLVersion.major = major; GLVersion.minor = minor;
     max_loaded_major = major; max_loaded_minor = minor;
@@ -1663,12 +1663,12 @@ static void find_coreGLES2(void) {
         }
     }
 
-/* PR #18 */
-#ifdef _MSC_VER
-    sscanf_s(version, "%d.%d", &major, &minor);
-#else
-    sscanf(version, "%d.%d", &major, &minor);
-#endif
+		// version string is "XX.YY"
+		char *rest;
+		major = (int)strtol(version, &rest, 10);
+		++rest;
+		minor = (int)strtol(rest, NULL, 10);
+
 
     GLVersion.major = major; GLVersion.minor = minor;
     max_loaded_major = major; max_loaded_minor = minor;

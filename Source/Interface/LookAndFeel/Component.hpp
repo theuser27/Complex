@@ -270,10 +270,11 @@ namespace Interface
     // can return -1 to use the calculations in from the underlying algorithm
     Range<i32> (*overrideSize)(Component *c, bool isCalculatingVertical){};
     // return false if the component couldn't be positioned,
-    // so that it can be pushed at the end of the queue
+    // so that it can be pushed at the end of the positioning queue
     bool (*overridePosition)(Component *c){};
 
     Point<float> scrollOffset{};
+    Point<float> scrollOffsetBeforeClick{};
     Area<i32> scrollableArea{};
 
     // animation related

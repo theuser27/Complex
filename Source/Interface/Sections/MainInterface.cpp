@@ -306,8 +306,7 @@ namespace Interface
     return true;
   }
 
-  bool
-  EffectsSection::LaneSelector::mouseDrag(const MouseEvent &e)
+  void EffectsSection::LaneSelector::selectViewedLane(const MouseEvent &e)
   {
     i32 i = 0;
     i32 closestPositionX = utils::int_max<i32>;
@@ -321,7 +320,12 @@ namespace Interface
     auto effectsSection = (EffectsSection *)parent;
     i = utils::max(0, i - 1 - (i32)::roundf((float)effectsSection->visibleLaneCount * 0.5f) / 2);
     effectsSection->setStartLaneIndex(i, effectsSection->visibleLaneCount);
+  }
 
+  bool
+  EffectsSection::LaneSelector::mouseDrag(const MouseEvent &e)
+  {
+    selectViewedLane(e);
     return true;
   }
 

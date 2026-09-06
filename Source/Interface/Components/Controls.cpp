@@ -75,7 +75,10 @@ namespace Interface
     activeColour = (componentFlags.isClicked) ? activeColour : colour;
     hoverColour = colour.brighter(0.6f);
 
-    tickAnimation(animationValues, {{ componentFlags.isHovered || componentFlags.isClicked }}, {{ kHoverIncrement }});
+    tickAnimation(animationValues, 
+      {{ componentFlags.isHovered || componentFlags.isClicked }}, 
+      {{ kHoverIncrement }});
+
     if (!componentFlags.isClicked)
       colour = activeColour.interpolatedWith(hoverColour, animationValues[0]);
 

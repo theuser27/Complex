@@ -230,7 +230,7 @@ void nsvgDelete(NSVGimage* image);
 
 static int nsvg__isspace(char c)
 {
-	return strchr(" \t\n\v\f\r", c) != 0;
+	return c == ' ' || c == '\t' || c == '\n' || c == '\v' || c == '\f' || c == '\r';
 }
 
 static int nsvg__isdigit(char c)
@@ -1233,10 +1233,34 @@ static const char* nsvg__getNextPathItem(const char* s, char* it)
 static unsigned int nsvg__parseColorHex(const char* str)
 {
 	unsigned int r=0, g=0, b=0;
-	if (sscanf(str, "#%2x%2x%2x", &r, &g, &b) == 3 )		// 2 digit hex
+	unsigned long whole;
+	char *rest;
+	
+	whole = strtoul(str, &rest, 16);
+	if (rest - str == 6)
+	{
+		// 2 digit hex
+		r = (whole >> 16) & 0xff;
+		g = (whole >> 8) & 0xff;
+		b = whole & 0xff;
+
 		return NSVG_RGB(r, g, b);
-	if (sscanf(str, "#%1x%1x%1x", &r, &g, &b) == 3 )		// 1 digit hex, e.g. #abc -> 0xccbbaa
-		return NSVG_RGB(r*17, g*17, b*17);			// same effect as (r<<4|r), (g<<4|g), ..
+	}
+	else if (rest - str == 3)
+	{
+		// 1 digit hex, e.g. #abc -> 0xccbbaa
+		
+		r = (whole >> 8) & 0xf;
+		g = (whole >> 4) & 0xf;
+		b = whole & 0xf;
+
+		return NSVG_RGB(r * 17, g * 17, b * 17); // same effect as (r<<4|r), (g<<4|g), ..
+	}
+
+	//if (sscanf(str, "#%2x%2x%2x", &r, &g, &b) == 3 )		// 2 digit hex
+	//	return NSVG_RGB(r, g, b);
+	//if (sscanf(str, "#%1x%1x%1x", &r, &g, &b) == 3 )		// 1 digit hex, e.g. #abc -> 0xccbbaa
+	//	return NSVG_RGB(r*17, g*17, b*17);			// same effect as (r<<4|r), (g<<4|g), ..
 	return NSVG_RGB(128, 128, 128);
 }
 
@@ -1249,8 +1273,35 @@ static unsigned int nsvg__parseColorRGB(const char* str)
 	int i;
 	unsigned int rgbi[3];
 	float rgbf[3];
+	int test;
+
 	// try decimal integers first
-	if (sscanf(str, "rgb(%u, %u, %u)", &rgbi[0], &rgbi[1], &rgbi[2]) != 3) {
+	// pattern is rgb(%u, %u, %u)
+	do
+	{
+		test = strcmp(str, "rgb(");
+		if (test)
+			break;
+		str += 4;
+
+		const char *copy = str;
+		char *rest;
+
+		for (i = 0; i < 3; ++i)
+		{
+			rgbi[i] = (unsigned int)strtoul(copy, &rest, 0);
+			if (rest - copy == 0 || !(*rest == ',' || *rest == ')'))
+			{
+				test = 1;
+				break;
+			}
+
+			copy = rest + 1;
+		}
+	} while (0);
+
+	// try decimal integers first
+	if (test) {
 		// integers failed, try percent values (float, locale independent)
 		const char delimiter[3] = {',', ',', ')'};
 		str += 4; // skip "rgb("

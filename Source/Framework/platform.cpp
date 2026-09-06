@@ -98,7 +98,8 @@
     utils::bumpArena::remove(buffer__); \
   } while(false)
 
-static void printVariadic(const char *format, va_list args)
+int 
+printVariadic(const char *format, va_list args)
 {
   va_list argsCopy;
   va_copy(argsCopy, args);
@@ -112,6 +113,8 @@ static void printVariadic(const char *format, va_list args)
   //PRINT_SIMPLE("\"\n\n");
 
   utils::bumpArena::remove(buffer);
+
+  return (int)size;
 }
 
 void common::complexLogMessage(const char *fileName,
@@ -818,14 +821,10 @@ namespace utils
   #endif
   }
 
-  thread_local thread::id thread::currentId = {};
-
   thread::id
   thread::getCurrentId()
   {
-    if (!currentId)
-      currentId = getCurrentThreadId();
-    return currentId;
+    return getCurrentThreadId();
   }
 
   void thread::exit(int result)

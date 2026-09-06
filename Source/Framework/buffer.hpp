@@ -15,8 +15,8 @@ namespace Framework
 
     mutable satomi::atomic<bool> lock{};
 
-    void clear() noexcept { ::zeroset(const_cast<float *>(data), channels * size); }
-    void clear(u32 begin, u32 count) noexcept
+    void clear() { ::zeroset(const_cast<float *>(data), channels * size); }
+    void clear(u32 begin, u32 count)
     {
       COMPLEX_ASSERT(begin + count <= size);
 
@@ -71,7 +71,7 @@ namespace Framework
   // and writes the results to the respective channels of thisBuffer
   // while anticipating wrapping around in both buffers
   inline void applyToBuffer(const auto &operation, Buffer &thisBuffer, const Buffer &otherBuffer,
-    u32 channels, u32 samples, u32 thisStart, u32 otherStart, utils::span<bool> channelsToApplyTo = {}) noexcept
+    u32 channels, u32 samples, u32 thisStart, u32 otherStart, utils::span<bool> channelsToApplyTo = {})
   {
     COMPLEX_ASSERT(thisBuffer.channels >= channels);
     COMPLEX_ASSERT(otherBuffer.channels >= channels);
@@ -115,7 +115,7 @@ namespace Framework
     static constexpr auto assignBuffersFn = [](float &destination, const float &source, float) { destination = source; };
 
     using Buffer::clear;
-    void clear(u32 begin, u32 samples) noexcept
+    void clear(u32 begin, u32 samples)
     {
       if (begin + samples <= size)
       {
@@ -131,15 +131,15 @@ namespace Framework
         ::zeroset(get(i), samplesLeft);
     }
 
-    u32 advanceEnd(u32 samples) noexcept { return end = (end + samples) % size; }
-    u32 setEnd(u32 index) noexcept { return end = index % size; }
+    u32 advanceEnd(u32 samples) { return end = (end + samples) % size; }
+    u32 setEnd(u32 index) { return end = index % size; }
 
     // - A specified AudioBuffer reads from the current buffer's data and stores it in a reader, where
     //	readee's starting index = readerIndex + end_ and
     //	reader's starting index = readeeIndex
     // - Can decide whether to advance the block or not
     void readAt(float *const *reader, u32 readChannels, u32 readSize,
-      u32 readeeIndex = 0, utils::span<bool> channelsToRead = {}) const noexcept
+      u32 readeeIndex = 0, utils::span<bool> channelsToRead = {}) const
     {
       for (u32 i = 0; i < readChannels; ++i)
       {
@@ -162,13 +162,13 @@ namespace Framework
     //     reader's starting index = readeeIndex
     // - Can decide whether to advance the block or not
     void readAt(Buffer &reader, u32 readChannels, u32 readSize,
-      u32 readeeIndex = 0, u32 readerIndex = 0, utils::span<bool> channelsToRead = {}) const noexcept
+      u32 readeeIndex = 0, u32 readerIndex = 0, utils::span<bool> channelsToRead = {}) const
     {
       applyToBuffer(assignBuffersFn, reader, *this,
         readChannels, readSize, readerIndex, readeeIndex, channelsToRead);
     }
 
-    u32 writeAtEnd(const float *const *const writer, u32 writeChannels, u32 writeSize) noexcept
+    u32 writeAtEnd(const float *const *const writer, u32 writeChannels, u32 writeSize)
     {
       COMPLEX_HARD_ASSERT(writeChannels <= channels);
       COMPLEX_HARD_ASSERT(writeSize <= size);
@@ -192,7 +192,7 @@ namespace Framework
     // - Adjusts end_ according to the new block written
     // - Returns the new endpoint
     u32 writeAtEnd(const Buffer &writer, u32 writeChannels, u32 writeSize,
-      u32 writerIndex = 0, utils::span<bool> channelsToWrite = {}) noexcept
+      u32 writerIndex = 0, utils::span<bool> channelsToWrite = {})
     {
       applyToBuffer(assignBuffersFn, *this, writer,
         writeChannels, writeSize, end, writerIndex, channelsToWrite);
@@ -200,7 +200,7 @@ namespace Framework
     }
 
     void writeAt(const Buffer &writer, u32 writeChannels, u32 writeSize,
-      u32 writeeIndex, u32 writerIndex = 0, utils::span<bool> channelsToWrite = {}) noexcept
+      u32 writeeIndex, u32 writerIndex = 0, utils::span<bool> channelsToWrite = {})
     {
       applyToBuffer(assignBuffersFn, *this, writer,
         writeChannels, writeSize, writeeIndex, writerIndex, channelsToWrite);

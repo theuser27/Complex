@@ -1,11 +1,13 @@
 
 // Created: 2021-05-23 00:20:15
 
-#include <stdlib.h> // offsetof
+#include <stddef.h> // offsetof
 
 #include "Complex.hpp"
 
+#include "Third Party/cplug/config.h"
 #include "Third Party/cplug/cplug.h"
+#include "Third Party/xhl/xhl_files.h"
 
 #include "Framework/load_save.hpp"
 #include "Framework/parameter_bridge.hpp"
@@ -529,6 +531,7 @@ struct TlsContext
   utils::bumpArena *localScratch{};
   utils::bumpArena *localMallocArena{};
   Interface::InterfaceRelated *uiRelated{};
+  Framework::LoadSave::JsonTlsContext jsonContext{};
 };
 
 void *
@@ -564,6 +567,12 @@ Interface::InterfaceRelated *&
 Interface::getUiRelated()
 {
   return ((TlsContext *)utils::getTls())->uiRelated;
+}
+
+Framework::LoadSave::JsonTlsContext &
+Framework::LoadSave::getJsonContext()
+{
+  return ((TlsContext *)utils::getTls())->jsonContext;
 }
 
 void initialiseCJSONHooks();

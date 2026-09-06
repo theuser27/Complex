@@ -1045,7 +1045,9 @@ Steinberg_tresult SMTG_STDMETHODCALLTYPE VST3NoteExpression_getNoteExpressionStr
     {
         // here we have to convert a normalized value to a Tuning string representation
         double denormalised = valueNormalized = (240 * valueNormalized) - 120; // compute half Tones
-        swprintf((wchar_t*)string, 128, L"%.*lf", 2, denormalised);
+        char data[128];
+        int size = stbsp_snprintf(data, CPLUG_ARRLEN(data), "%.*lf", 2, denormalised);
+        _cplug_utf8To16((char16_t *)string, data, (size > CPLUG_ARRLEN(data)) ? CPLUG_ARRLEN(data) : size);
 
         return Steinberg_kResultTrue;
     }
@@ -1074,9 +1076,11 @@ Steinberg_tresult SMTG_STDMETHODCALLTYPE VST3NoteExpression_getNoteExpressionVal
     if (busIndex == 0 && channel == 0 && id == Steinberg_Vst_NoteExpressionTypeIDs_kTuningTypeID)
     {
         // here we have to convert a given tuning string (half Tone) to a normalized value
-        double tmp   = 0;
-        int    count = swscanf((const wchar_t*)string, L"%lf", &tmp);
-        if (count)
+        char utf8Translation[64];
+        _cplug_utf16To8(utf8Translation, (const char16_t *)string, CPLUG_ARRLEN(utf8Translation));
+        char *rest;
+        double tmp = strtod(utf8Translation, &rest);
+        if (*rest == '\0')
         {
             *valueNormalized = (tmp + 120) / 240;
             return Steinberg_kResultTrue;

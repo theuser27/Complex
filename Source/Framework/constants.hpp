@@ -16,12 +16,12 @@ namespace common
   inline constexpr u32 kFloatExponentMask = 0x7f800000U;
   inline constexpr u32 kFloatExponentUnit = 1 << 23;
   inline constexpr u32 kNotFloatExponentMask = ~kFloatExponentMask;
-  inline constexpr float kFloatInf =
-  #if COMPLEX_MSVC
-    __builtin_huge_valf();
-  #else
-    __builtin_inff();
-  #endif
+  inline constexpr float kFloatInf = __builtin_bit_cast(float, kFloatExponentMask);
+  inline constexpr u64 kDoubleMantissaMask = 0x000fffffffffffffU;
+  inline constexpr u64 kDoubleExponentMask = 0x7ff0000000000000U;
+  inline constexpr u64 kDoubleExponentUnit = 1ULL << 52;
+  inline constexpr u64 kNotDoubleExponentMask = ~kDoubleExponentMask;
+  inline constexpr double kDoubleInf = __builtin_bit_cast(double, kDoubleExponentMask);
   inline constexpr float kInvPi = 1.0f / kPi;
   inline constexpr float kInv2Pi = 1.0f / k2Pi;
   inline constexpr double kDefaultSampleRate = 44100.0;
@@ -43,16 +43,16 @@ namespace common
   inline constexpr float kMinusInfDb = -758.595589072f;
 
   // FFT constants; internal processing relies that sizes be powers of 2
-  inline constexpr u32 kMinFFTOrder = 7;                    // (can be changed)    128 samples min
-  inline constexpr u32 kMaxFFTOrder = 15;                   // (can be changed)    32768 samples max
-  inline constexpr u32 kDefaultFFTOrder = 12;               // (can be changed)    4096 samples default
-  inline constexpr float kMinWindowOverlap = 0.0f;          // (can be changed)    minimum window overlap
-  inline constexpr float kMaxWindowOverlap = 0.96875f;      // (can be changed)    maximum window overlap
-  inline constexpr float kDefaultWindowOverlap = 0.5f;      // (can be changed)    default window overlap
-  inline constexpr float kAlphaLowerBound = 1.0f;           // (can be changed)    lower bound for alpha exponent
-  inline constexpr float kAlphaUpperBound = 10.0f;          // (can be changed)    upper bound for alpha exponent
-  inline constexpr u32 kWindowResolution = (1 << 8) + 1;    // (can be changed)    257 samples window lookup resolution
-                                                            //                     (+ 1 in order to have a distinct sample in the center)
+  inline constexpr u32 kMinFFTOrder = 7;                          // (can be changed)    128 samples min
+  inline constexpr u32 kMaxFFTOrder = 15;                         // (can be changed)    32768 samples max
+  inline constexpr u32 kDefaultFFTOrder = 12;                     // (can be changed)    4096 samples default
+  inline constexpr float kMinWindowOverlap = 0.0f;                // (can be changed)    minimum window overlap
+  inline constexpr float kMaxWindowOverlap = 1.0f - 1.0f / 32.0f; // (can be changed)    maximum window overlap
+  inline constexpr float kDefaultWindowOverlap = 0.5f;            // (can be changed)    default window overlap
+  inline constexpr float kAlphaLowerBound = 1.0f;                 // (can be changed)    lower bound for alpha exponent
+  inline constexpr float kAlphaUpperBound = 10.0f;                // (can be changed)    upper bound for alpha exponent
+  inline constexpr u32 kWindowResolution = (1 << 8) + 1;          // (can be changed)    257 samples window lookup resolution
+                                                                  //                     (+ 1 in order to have a distinct sample in the center)
 
   // processing constants
   inline constexpr double kMinFrequency = kMidi0Frequency;  // (can be changed)    lowest frequency that will be displayed

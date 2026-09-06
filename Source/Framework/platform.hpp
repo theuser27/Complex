@@ -257,15 +257,15 @@ extern "C"
   CRT_LINKAGE double log10(double arg);
   CRT_LINKAGE double pow(double base, double exponent);
   CRT_LINKAGE double sqrt(double arg);
+#if COMPLEX_MAC
+  float              strtof(const char *string, char **stringEnd) __asm("_strtof");
+  double             strtod(const char *string, char **stringEnd) __asm("_strtod");
+#else
+  CRT_LINKAGE float  strtof(const char *string, char **stringEnd);
+  CRT_LINKAGE double strtod(const char *string, char **stringEnd);
+#endif
 
-  CRT_LINKAGE unsigned long strtoul(const char *string, char **string_end, int base);
-  #if COMPLEX_MAC
-    float         strtof(const char *string, char **string_end) __asm("_strtof");
-    double        strtod(const char *string, char **string_end) __asm("_strtod");
-  #else
-    CRT_LINKAGE float         strtof(const char *string, char **string_end);
-    CRT_LINKAGE double        strtod(const char *string, char **string_end);
-  #endif
+  CRT_LINKAGE unsigned long strtoul(const char *string, char **stringEnd, int base);
   
   int stbsp_snprintf(char *buffer, int count, const char *format, ...);
 }

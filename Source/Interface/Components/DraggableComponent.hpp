@@ -17,13 +17,17 @@ namespace Interface
     bool render(Graphics &g) override;
 
     bool mouseEnter(const MouseEvent &e) override;
-    bool mouseDown(const MouseEvent &e) override;
-    bool mouseDrag(const MouseEvent &e) override;
-    bool mouseUp(const MouseEvent &e) override;
+    bool mouseDown(const MouseEvent &e) override { return prepareToMove(e); }
+    bool mouseDrag(const MouseEvent &e) override { move(e); return true; }
+    bool mouseUp(const MouseEvent &e) override { endMove(e); return true; }
     bool mouseExit(const MouseEvent &e) override;
     bool mouseWheelMove(const MouseEvent &e) override;
 
     bool keyPressed(const KeyPress &keyPress) override;
+
+    bool prepareToMove(const MouseEvent &e);
+    void move(const MouseEvent &e);
+    void endMove(const MouseEvent &e);
 
     Component *draggedComponent{};
     Generation::Processor *processor{};

@@ -141,7 +141,7 @@ namespace Interface
     int InterFontId;
   };
 
-  // thread_local variable for the message thread so that we don't need to pass pointers around
+  // thread-local variable for the message thread so that we don't need to pass pointers around
   InterfaceRelated *&getUiRelated();
   forceinline float scaleValue(float value) { return getUiRelated()->scale * value; }
   forceinline Rectangle<float>

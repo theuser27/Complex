@@ -39,17 +39,20 @@ namespace Interface
 namespace Generation
 {
   class EffectModule;
+  struct EffectData;
+
+  struct EffectVtable
+  {
+    EffectData *(*createEffect)(EffectModule *module, EffectData *copy);
+    void (*runEffect)(EffectModule *effectModule, EffectData *effectData, 
+      Framework::ComplexDataSource &source, Framework::SimdBuffer *destination, 
+      u32 binCount, float sampleRate);
+    utils::span<Interface::Control *>(*createUI)(utils::bumpArena *arena,
+      Interface::EffectModuleSection *section, EffectData *effectData);
+  };
 
   struct EffectData
   {
-    using CreateEffectFn = EffectData *(EffectModule *module, EffectData *copy);
-    using RunEffectFn = void(EffectModule *effectModule, EffectData *effectData, Framework::ComplexDataSource &source,
-      Framework::SimdBuffer *destination, u32 binCount, float sampleRate);
-    using CreateUIFn = utils::span<Interface::Control *>(utils::bumpArena *arena,
-      Interface::EffectModuleSection *section, EffectData *effectData);
-
-    enum EffectVtableIndices { CreateVtableIndex, RunVtableIndex, CreateUIVtableIndex, VtableIndexCount };
-
     EffectData *next{};
 
     Framework::ProcessorMetadata *metadata{};

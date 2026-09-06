@@ -904,12 +904,12 @@ LRESULT CALLBACK CPWIN_WindowProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lP
         case IDM_SampleRate_96000:
         {
             CPWIN_Audio_Stop();
-            WCHAR text[8];
+            char text[8];
             // https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-getmenustringw
             int numCharsCopied =
-                GetMenuStringW(g_Menus.hSampleRateSubmenu, (UINT)wParam, text, ARRAYSIZE(text), MF_BYCOMMAND);
+                GetMenuStringA(g_Menus.hSampleRateSubmenu, (UINT)wParam, text, ARRAYSIZE(text), MF_BYCOMMAND);
             cplug_assert(numCharsCopied > 0);
-            g_Audio.SampleRate = _wtoi(text);
+            g_Audio.SampleRate = atoi(text);
             CPWIN_Audio_Start();
             CPWIN_Menu_RefreshSampleRates();
             break;
@@ -925,10 +925,10 @@ LRESULT CALLBACK CPWIN_WindowProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lP
         case IDM_BlockSize_2048:
         {
             CPWIN_Audio_Stop();
-            WCHAR text[8];
-            int numCharsCopied = GetMenuStringW(g_Menus.hBlockSizeSubmenu, (UINT)wParam, text, ARRAYSIZE(text), MF_BYCOMMAND);
+            char text[8];
+            int numCharsCopied = GetMenuStringA(g_Menus.hBlockSizeSubmenu, (UINT)wParam, text, ARRAYSIZE(text), MF_BYCOMMAND);
             cplug_assert(numCharsCopied > 0);
-            g_Audio.BlockSize = _wtoi(text);
+            g_Audio.BlockSize = atoi(text);
             CPWIN_Audio_Start();
             CPWIN_Menu_RefreshBlockSizes();
             break;
@@ -1360,10 +1360,10 @@ void CPWIN_Menu_RefreshSampleRates()
     {
     }
 
-    AppendMenuW(g_Menus.hSampleRateSubmenu, CPWIN_MenuFlag(g_Audio.SampleRate, 44100), IDM_SampleRate_44100, L"44100");
-    AppendMenuW(g_Menus.hSampleRateSubmenu, CPWIN_MenuFlag(g_Audio.SampleRate, 48000), IDM_SampleRate_48000, L"48000");
-    AppendMenuW(g_Menus.hSampleRateSubmenu, CPWIN_MenuFlag(g_Audio.SampleRate, 88200), IDM_SampleRate_88200, L"88200");
-    AppendMenuW(g_Menus.hSampleRateSubmenu, CPWIN_MenuFlag(g_Audio.SampleRate, 96000), IDM_SampleRate_96000, L"96000");
+    AppendMenuA(g_Menus.hSampleRateSubmenu, CPWIN_MenuFlag(g_Audio.SampleRate, 44100), IDM_SampleRate_44100, "44100");
+    AppendMenuA(g_Menus.hSampleRateSubmenu, CPWIN_MenuFlag(g_Audio.SampleRate, 48000), IDM_SampleRate_48000, "48000");
+    AppendMenuA(g_Menus.hSampleRateSubmenu, CPWIN_MenuFlag(g_Audio.SampleRate, 88200), IDM_SampleRate_88200, "88200");
+    AppendMenuA(g_Menus.hSampleRateSubmenu, CPWIN_MenuFlag(g_Audio.SampleRate, 96000), IDM_SampleRate_96000, "96000");
 }
 
 void CPWIN_Menu_RefreshBlockSizes()
@@ -1372,15 +1372,15 @@ void CPWIN_Menu_RefreshBlockSizes()
     {
     }
 
-    AppendMenuW(g_Menus.hBlockSizeSubmenu, CPWIN_MenuFlag(g_Audio.BlockSize, 128), IDM_BlockSize_128, L"128");
-    AppendMenuW(g_Menus.hBlockSizeSubmenu, CPWIN_MenuFlag(g_Audio.BlockSize, 192), IDM_BlockSize_192, L"192");
-    AppendMenuW(g_Menus.hBlockSizeSubmenu, CPWIN_MenuFlag(g_Audio.BlockSize, 256), IDM_BlockSize_256, L"256");
-    AppendMenuW(g_Menus.hBlockSizeSubmenu, CPWIN_MenuFlag(g_Audio.BlockSize, 384), IDM_BlockSize_384, L"384");
-    AppendMenuW(g_Menus.hBlockSizeSubmenu, CPWIN_MenuFlag(g_Audio.BlockSize, 448), IDM_BlockSize_448, L"448");
-    AppendMenuW(g_Menus.hBlockSizeSubmenu, CPWIN_MenuFlag(g_Audio.BlockSize, 512), IDM_BlockSize_512, L"512");
-    AppendMenuW(g_Menus.hBlockSizeSubmenu, CPWIN_MenuFlag(g_Audio.BlockSize, 768), IDM_BlockSize_768, L"768");
-    AppendMenuW(g_Menus.hBlockSizeSubmenu, CPWIN_MenuFlag(g_Audio.BlockSize, 1024), IDM_BlockSize_1024, L"1024");
-    AppendMenuW(g_Menus.hBlockSizeSubmenu, CPWIN_MenuFlag(g_Audio.BlockSize, 2048), IDM_BlockSize_2048, L"2048");
+    AppendMenuA(g_Menus.hBlockSizeSubmenu, CPWIN_MenuFlag(g_Audio.BlockSize, 128), IDM_BlockSize_128, "128");
+    AppendMenuA(g_Menus.hBlockSizeSubmenu, CPWIN_MenuFlag(g_Audio.BlockSize, 192), IDM_BlockSize_192, "192");
+    AppendMenuA(g_Menus.hBlockSizeSubmenu, CPWIN_MenuFlag(g_Audio.BlockSize, 256), IDM_BlockSize_256, "256");
+    AppendMenuA(g_Menus.hBlockSizeSubmenu, CPWIN_MenuFlag(g_Audio.BlockSize, 384), IDM_BlockSize_384, "384");
+    AppendMenuA(g_Menus.hBlockSizeSubmenu, CPWIN_MenuFlag(g_Audio.BlockSize, 448), IDM_BlockSize_448, "448");
+    AppendMenuA(g_Menus.hBlockSizeSubmenu, CPWIN_MenuFlag(g_Audio.BlockSize, 512), IDM_BlockSize_512, "512");
+    AppendMenuA(g_Menus.hBlockSizeSubmenu, CPWIN_MenuFlag(g_Audio.BlockSize, 768), IDM_BlockSize_768, "768");
+    AppendMenuA(g_Menus.hBlockSizeSubmenu, CPWIN_MenuFlag(g_Audio.BlockSize, 1024), IDM_BlockSize_1024, "1024");
+    AppendMenuA(g_Menus.hBlockSizeSubmenu, CPWIN_MenuFlag(g_Audio.BlockSize, 2048), IDM_BlockSize_2048, "2048");
 }
 
 void CPWIN_Menu_RefreshAudioOutputs()
@@ -1436,8 +1436,8 @@ void CPWIN_Menu_RefreshAudioOutputs()
 
     pCollection->lpVtbl->Release(pCollection);
 
-    AppendMenuW(g_Menus.hAudioOutputSubmenu, MF_SEPARATOR, IDM_RefreshAudioDeviceList - 1, NULL);
-    AppendMenuW(g_Menus.hAudioOutputSubmenu, MF_STRING, IDM_RefreshAudioDeviceList, L"Refresh list");
+    AppendMenuA(g_Menus.hAudioOutputSubmenu, MF_SEPARATOR, IDM_RefreshAudioDeviceList - 1, NULL);
+    AppendMenuA(g_Menus.hAudioOutputSubmenu, MF_STRING, IDM_RefreshAudioDeviceList, "Refresh list");
 }
 
 void CPWIN_Menu_RefreshMIDIInputs()
@@ -1832,7 +1832,7 @@ void CPWIN_Audio_SetDevice(int deviceIdx)
     WCHAR* audioDeviceID = NULL;
     // https://learn.microsoft.com/en-us/windows/win32/api/mmdeviceapi/nf-mmdeviceapi-immdevice-getid
     g_Audio.pIMMDevice->lpVtbl->GetId(g_Audio.pIMMDevice, &audioDeviceID);
-    wcscpy_s(g_Audio.DeviceIDBuffer, ARRAYSIZE(g_Audio.DeviceIDBuffer), audioDeviceID);
+    strncpy((char *)g_Audio.DeviceIDBuffer, (char *)audioDeviceID, sizeof(g_Audio.DeviceIDBuffer));
     g_Audio.DeviceIDBuffer[ARRAYSIZE(g_Audio.DeviceIDBuffer) - 1] = 0;
     CoTaskMemFree(audioDeviceID);
 }

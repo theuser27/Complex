@@ -106,7 +106,6 @@ namespace
   };
 }
 
-extern thread_local utils::bumpArena *jsonArena;
 utils::bumpArena *&getLocalScratch();
 
 namespace Interface
@@ -178,7 +177,9 @@ namespace Interface
 
   void Skin::saveToFile(char *saveFile)
   {
-    jsonArena = utils::bumpArena::createNested(getLocalScratch(), COMPLEX_KB(128));
+    auto &jsonContext = Framework::LoadSave::getJsonContext();
+    jsonContext.arena = utils::bumpArena::createNested(getLocalScratch(), COMPLEX_KB(128));
+    defer { utils::bumpArena::destroy(jsonContext.arena); jsonContext.arena = nullptr; };
 
     cjson *data = cjson_Create(cjson_Object);
     cjson_AddTo(data, "Plugin Version", cjson_String, CPLUG_PLUGIN_VERSION);
@@ -215,9 +216,6 @@ namespace Interface
     usize stringSize;
     char *string = cjson_Print(data, &stringSize, true);
     xfiles_write(saveFile, string, stringSize);
-
-    utils::bumpArena::destroy(jsonArena);
-    jsonArena = nullptr;
   }
 
   void Skin::jsonToState(void *jsonData)
@@ -268,9 +266,12 @@ namespace Interface
     }
   }
 
-  bool Skin::stringToState(utils::string_view skinString)
+  bool 
+  Skin::stringToState(utils::string_view skinString)
   {
-    jsonArena = utils::bumpArena::createNested(getLocalScratch(), COMPLEX_KB(128));
+    auto &jsonContext = Framework::LoadSave::getJsonContext();
+    jsonContext.arena = utils::bumpArena::createNested(getLocalScratch(), COMPLEX_KB(128));
+    defer{ utils::bumpArena::destroy(jsonContext.arena); jsonContext.arena = nullptr; };
 
     const char *potentialError = nullptr;
     cjson *data = cjson_ParseWithOpts(skinString.data(), skinString.size(), &potentialError, false);
@@ -283,9 +284,6 @@ namespace Interface
     }
 
     jsonToState(data);
-
-    utils::bumpArena::destroy(jsonArena);
-    jsonArena = nullptr;
 
     return true;
   }

@@ -327,7 +327,7 @@ namespace Framework
     ParameterMetadata *parameters{};
     u32 childrenCount{};
     u32 parametersCount{};
-    utils::span<void(*const)()> vtable{};
+    const void *vtable{};
 
     ProcessorMetadata &
     operator,(ProcessorMetadata &other)

@@ -459,7 +459,7 @@ static bool print_number(const cjson * const item, printbuffer * const output_bu
     {
         return false;
     }
- 
+
     /* reserve appropriate space in the output */
     output_pointer = (char *)ensure(output_buffer, length);
     if (output_pointer == NULL)
@@ -475,7 +475,7 @@ static bool print_number(const cjson * const item, printbuffer * const output_bu
     {
         length = snprintf(output_pointer, length, "%lli", item->vint);
     }
-    else if (item->type & cjson_Float && 
+    else if (item->type & cjson_Float &&
       !isnan(item->vdouble) && !isinf(item->vdouble))
     {
         length = snprintf(output_pointer, length, "%#g", item->vdouble);
@@ -2050,7 +2050,7 @@ static bool cjson_SetArgs(cjson *item, int type, va_list args)
     item->type = cjson_Bool;
     item->vbool = (bool)va_arg(args, int);
     break;
-  
+
   case cjson_NULL:
     item->type = cjson_NULL;
     break;
@@ -2059,17 +2059,17 @@ static bool cjson_SetArgs(cjson *item, int type, va_list args)
     item->type = cjson_Float;
     item->vdouble = va_arg(args, double);
     break;
-  
+
   case cjson_Integer:
     item->type = cjson_Integer;
     item->vint = va_arg(args, long long);
     break;
-  
+
   case cjson_Unsigned:
     item->type = cjson_Integer;
     item->vuint = va_arg(args, unsigned long long);
     break;
-  
+
   case cjson_String:
     item->type = cjson_String;
 
@@ -2082,7 +2082,7 @@ static bool cjson_SetArgs(cjson *item, int type, va_list args)
       return false;
 
     break;
-  
+
   case cjson_Array:
   {
     item->type = cjson_Array;
@@ -2090,7 +2090,7 @@ static bool cjson_SetArgs(cjson *item, int type, va_list args)
     unsigned long long count = va_arg(args, unsigned long long);
     if (!count)
       break;
-    
+
     cjson *items = (cjson *)global_hooks.allocate(count * sizeof(cjson));
     if (!items)
       return false;
@@ -2115,7 +2115,7 @@ static bool cjson_SetArgs(cjson *item, int type, va_list args)
       return false;
 
     break;
-  
+
   default:
     return false;
   }
@@ -2179,12 +2179,12 @@ static cjson * cjson_Duplicate_rec(const cjson *item, size_t depth, bool recurse
   /* Bail on bad ptr */
   if (!item)
     goto fail;
-    
+
   /* Create new item */
   newitem = cjson_New_Item(&global_hooks);
   if (!newitem)
     goto fail;
-    
+
   /* Copy over all vars */
   memcpy(newitem, item, sizeof(*item));
   if ((item->type & cjson_String) && !(item->type & cjson_IsReference))
@@ -2199,7 +2199,7 @@ static cjson * cjson_Duplicate_rec(const cjson *item, size_t depth, bool recurse
     if (!newitem->name)
       goto fail;
   }
-  
+
   /* If recursive, and item is array/object */
   if (recurse && ((item->type & cjson_Array) || (item->type & cjson_Object)))
   {
@@ -2209,11 +2209,11 @@ static cjson * cjson_Duplicate_rec(const cjson *item, size_t depth, bool recurse
     {
       if(depth >= CJSON_CIRCULAR_LIMIT)
           goto fail;
-        
+
       newchild = cjson_Duplicate_rec(child, depth + 1, true); /* Duplicate (with recurse) each item in the ->next chain */
       if (!newchild)
         goto fail;
-        
+
       if (next != NULL)
       {
         /* If newitem->child already set, then crosswire ->prev and ->next and move on */

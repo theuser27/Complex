@@ -83,13 +83,18 @@ goto :EOF
 for /f "tokens=2 delims==" %%I in ('wmic os get localdatetime /format:list') do set datetime=%%I
 set datetime=%datetime:~0,8%-%datetime:~8,6%
 
+set msvc_folder=
+for /f "delims=" %%i in ('where cl 2^>nul') do set "msvc_folder=%%~dpi..\..\.."
+for %%I in ("%msvc_folder%") do set "msvc_folder=%%~fI"
+set asm_files_path=%msvc_folder%\crt\src\x64
+
 set build_dir=build
 set binary_data_dir=Source\Data
 if not exist %build_dir% mkdir %build_dir%
 
 set top_level=%~dp0
 set compiled_files= %top_level%\Source\unity_extern.c %top_level%\Source\unity1.cpp %top_level%\Source\unity2.cpp
-set compiler_flags= /I%top_level%\Source\ /std:c++20 /nologo /diagnostics:column /FC /permissive- /MP /Zc:preprocessor /W4 /wd"4201" /sdl- /Zc:inline /fp:precise /D "PUGL_STATIC" /D "_CRT_SECURE_NO_WARNINGS" /D "_MBCS" /errorReport:prompt /GR- /Gd
+set compiler_flags= /I%top_level%\Source\ /std:c++20 /nologo /diagnostics:column /FC /permissive- /MP /Zc:preprocessor /W4 /wd"4201" /sdl- /Zc:inline /fp:precise /D "PUGL_STATIC" /D "_CRT_SECURE_NO_WARNINGS" /D "_MBCS" /errorReport:prompt /GR- /Gd /GS-
 set linker_flags=   /ERRORREPORT:PROMPT /MANIFEST:EMBED /INCREMENTAL:NO /DEBUG /noexp /nocoffgrpinfo /OPT:REF /OPT:ICF Opengl32.lib Dwmapi.lib kernel32.lib user32.lib Gdi32.lib Ole32.lib Shell32.lib
 
 set hotreload_dir=%build_dir%\hotreload
@@ -129,12 +134,12 @@ if not exist %build_dir% mkdir %build_dir%
 
 if "%debug%"=="1" (
   if "%hotreload%"=="0" set build_dir=%build_dir%\debug
-  set compiler_flags= /MTd /Od /Ob1 /Zi /RTC1 %compiler_flags%
-  set linker_flags= /NODEFAULTLIB:libcpmtd.lib %linker_flags%
+  set compiler_flags= /MTd /Od /Ob1 /Zi %compiler_flags%
+  set linker_flags= /NODEFAULTLIB:libcpmtd.lib /NODEFAULTLIB:libucrtd.lib /NODEFAULTLIB:libcmtd.lib /NODEFAULTLIB:libvcruntime.lib %linker_flags%
 ) else (
   if "%hotreload%"=="0" set build_dir=%build_dir%\release
-  set compiler_flags= /MT /Ox /GL /Gy /Oi /Ot %compiler_flags%
-  set linker_flags= /NODEFAULTLIB:libcpmt.lib %linker_flags%
+  set compiler_flags= /MT /Ox /GL /Gy /Oi- /Ot %compiler_flags%
+  set linker_flags= /NODEFAULTLIB:libcpmt.lib /NODEFAULTLIB:libucrt.lib /NODEFAULTLIB:libcmt.lib /NODEFAULTLIB:libvcruntime.lib /LTCG %linker_flags%
 )
 
 if "%data%"=="1" (
@@ -155,7 +160,11 @@ pushd %build_dir%
 
 if "%hotreload%"=="0" del /Q * > NUL 2> NUL
 
-call cl %compiler_flags% %compiled_files% /link %linker_flags%
+call ml64 /nologo /Zi /c /W3 "%asm_files_path%\memcpy.asm"
+call ml64 /nologo /Zi /c /W3 "%asm_files_path%\memmove.asm"
+call ml64 /nologo /Zi /c /W3 "%asm_files_path%\memset.asm"
+call ml64 /nologo /Zi /c /W3 "%asm_files_path%\memcmp.asm"
+call cl %compiler_flags% %compiled_files% memcpy.obj memmove.obj memset.obj memcmp.obj "%msvc_folder%\lib\x64\chkstk.obj" /link %linker_flags%
 
 del *.obj > NUL 2> NUL
 del vc*0.pdb > NUL 2> NUL

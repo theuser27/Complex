@@ -110,8 +110,8 @@ namespace Interface
     return lastInsertedInto;
   }
 
-  bool
-  DraggableComponent::mouseDown(const MouseEvent &e)
+  bool 
+  DraggableComponent::prepareToMove(const MouseEvent &e)
   {
     COMPLEX_ASSERT(draggedComponent);
     COMPLEX_ASSERT(processor);
@@ -243,8 +243,7 @@ namespace Interface
     return true;
   }
 
-  bool
-  DraggableComponent::mouseDrag(const MouseEvent &e)
+  void DraggableComponent::move(const MouseEvent &e)
   {
     auto newPosition = initialClickPosition + e.getOffsetFromDragStart();
     draggedComponent->nextPosition = newPosition;
@@ -272,12 +271,9 @@ namespace Interface
 
     //COMPLEX_DEBUG_LOG("wasMovingUpX: %d, wasMovingUpY: %d, new - directionChange: { %d, %d }\n",
     //  wasMovingUpX, wasMovingUpY, newPosition.x - directionChangePoint.x, newPosition.y - directionChangePoint.y);
-
-    return true;
   }
 
-  bool
-  DraggableComponent::mouseUp(const MouseEvent &e)
+  void DraggableComponent::endMove(const MouseEvent &e)
   {
     draggedComponent->placement = previousPlacement;
     draggedComponent->overridePosition = previousOverridePosition;
@@ -312,8 +308,6 @@ namespace Interface
     }
 
     isDragging = false;
-
-    return true;
   }
 
   bool

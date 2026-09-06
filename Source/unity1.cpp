@@ -27,4 +27,6 @@
 #include "Plugin/Complex.cpp"
 #include "Plugin/Renderer.cpp"
 
-//#include "crt/crt.cpp"
+#if COMPLEX_MSVC
+	#include "crt/crt.cpp"
+#endif

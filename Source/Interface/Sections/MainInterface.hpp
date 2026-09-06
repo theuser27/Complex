@@ -47,7 +47,7 @@ namespace Interface
       bool mouseDrag(const MouseEvent &e) override;
       bool mouseWheelMove(const MouseEvent &e) override;
 
-
+      void selectViewedLane(const MouseEvent &e);
 
       AddMoreLanesButton addMoreLanesButton{};
 

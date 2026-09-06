@@ -661,12 +661,12 @@ namespace utils
     constexpr auto get_last_of(const Key &key)
     {
       auto [iter, wasFound] = binary_search(data, key, [](const auto &element, const auto &test) { return element == test.first; });
-      if (wasFound)
-      {
-        for (auto nextIter = iter + 1;
-          nextIter != data.end() && nextIter->first == key;
-          (iter = nextIter), (++nextIter)) { }
-      }
+      if (!wasFound)
+        return data.end();
+
+      for (auto nextIter = iter + 1;
+        nextIter != data.end() && nextIter->first == key;
+        (iter = nextIter), (++nextIter)) { }
 
       return iter;
     }

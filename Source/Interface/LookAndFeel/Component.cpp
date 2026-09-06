@@ -695,11 +695,6 @@ namespace Interface
     utils::bumpArena::remove(component);
   }
 
-  // this one miraculously works as a thread-local 
-  // until we have more than one mouse cursor/mouse input...
-  // ideally this should be stored as a key-value pair inside the renderer
-  thread_local Point<float> initialScrollOffset;
-
   void checkScrollClick(Component *component, const MouseEvent &e)
   {
     auto scaledPadding = scaleValueRoundInt(component->padding.toInt());
@@ -716,7 +711,7 @@ namespace Interface
       test_flag(component->sizingFlags, Component::ScrollableWithBarY) &&
       component->scrollableArea.h > component->bounds.h && scrollBoundsY.contains(e.x, e.y);
 
-    initialScrollOffset = component->scrollOffset;
+    component->scrollOffsetBeforeClick = component->scrollOffset;
   }
 
   static void compensateScrollChange(Component *component, Point<float> oldScrollOffset)
@@ -754,13 +749,13 @@ namespace Interface
     auto old = component->scrollOffset;
     if (component->sizingFlags & Component::ScrollableX)
     {
-      component->scrollOffset.x = utils::clamp(initialScrollOffset.x - deltaX,
+      component->scrollOffset.x = utils::clamp(component->scrollOffsetBeforeClick.x - deltaX,
         0.0f, utils::max(0.0f, (float)(component->scrollableArea.w - component->bounds.w)));
     }
 
     if (component->sizingFlags & Component::ScrollableY)
     {
-      component->scrollOffset.y = utils::clamp(initialScrollOffset.y - deltaY,
+      component->scrollOffset.y = utils::clamp(component->scrollOffsetBeforeClick.y - deltaY,
         0.0f, utils::max(0.0f, (float)(component->scrollableArea.h - component->bounds.h)));
     }
 
