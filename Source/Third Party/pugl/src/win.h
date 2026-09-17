@@ -22,6 +22,8 @@ struct PuglInternalsImpl {
   PuglWinPFD      pfd;
   int             pfId;
   HWND            hwnd;
+  HWND            hPrevKeyboardFocus;
+  HHOOK           hGetMessageHook;
   HCURSOR         cursor;
   HDC             hdc;
   WINDOWPLACEMENT oldPlacement;

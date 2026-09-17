@@ -176,8 +176,8 @@ namespace Interface
       {
         auto newValue = control->getValueFromText(self.text);
         control->setValue(newValue, true);
-        if (auto hostControl = control->parameterLink->hostControl)
-          hostControl->setValueFromUI((float)newValue);
+        if (auto hostParameter = control->parameter->hostParameter)
+          hostParameter->setValueFromUI((float)newValue);
       }
 
       self.cachedValue = control->getValue();

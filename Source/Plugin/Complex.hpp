@@ -27,9 +27,9 @@ namespace Generation
 namespace Framework
 {
   struct SimdBuffer;
-  class ParameterValue;
+  class Parameter;
   class ParameterModulator;
-  class ParameterBridge;
+  class HostParameter;
 }
 
 namespace Interface
@@ -121,7 +121,7 @@ namespace Interface
     Point<i32> lastMousePosition_{ 0, 0 };
     Point<i32> lastMouseDownPosition_{ 0, 0 };
 
-    utils::bumpArena *arena{};
+    utils::Pool *arena{};
 
     utils::vectormap<Component *, PersistentCallback *> callbacks{};
 
@@ -156,7 +156,7 @@ namespace Interface
     void handleMouseLeave(MouseEvent e);
     void handleMouseWheel(MouseEvent e);
 
-    void handleKeyPress(KeyPress k);
+    bool handleKeyPress(KeyPress k);
 
     // snapping to 0.25 scales for better rendering
     float getEffectiveScale() const { return ::roundf(pluginScale * monitorScale / kWindowScaleIncrements) * kWindowScaleIncrements; }
@@ -209,7 +209,7 @@ namespace Plugin
     const u32 outSidechains = 0;
     const usize parameterCount = 0;
 
-    utils::bumpArena *arena{};
+    utils::Pool *arena{};
 
     // might be updated on any thread hence atomic
     satomi::atomic<u32> samplesPerBlock = 0;
@@ -250,9 +250,9 @@ namespace Plugin
     utils::pair<u32, u32> getMinMaxFFTOrder() const;
     u32 getMaxBinCount() const;
 
-    Framework::ParameterValue *getProcessorParameter(u64 parentProcessorId, uuid parameterId) const;
+    Framework::Parameter *getProcessorParameter(u64 parentProcessorId, uuid parameterId) const;
     // see IndexedData::dynamicUpdateUuid
-    void registerDynamicParameter(Framework::ParameterValue *parameter);
+    void registerDynamicParameter(Framework::Parameter *parameter);
     void updateDynamicParameters(uuid reason);
     void updateAllDynamicParameters();
     void createDynamicParameters();
@@ -293,7 +293,7 @@ namespace Plugin
 
         shouldStop->store(false, satomi::memory_order_release);
         bool success = thread.join(exitCode);
-        utils::bumpArena::remove(shouldStop);
+        utils::Pool::remove(shouldStop);
         return success;
       }
 
@@ -310,7 +310,7 @@ namespace Plugin
     Generation::SoundEngine *soundEngine = nullptr;
 
     // outward facing parameters, which can be mapped to in-plugin parameters
-    utils::span<Framework::ParameterBridge> parameterBridges{};
+    utils::span<Framework::HostParameter> parameterBridges{};
 
     // used to give out non-repeating ids for all processors
     // 0 is reserved to mean "uninitialised"
@@ -323,7 +323,7 @@ namespace Plugin
     // modulators inside the plugin
     utils::vectornd<Framework::ParameterModulator *> parameterModulators{};
     // parameters that receive updates upon various plugin changes
-    utils::vectornd<utils::pair<Framework::IndexedData *, Framework::ParameterValue *>> dynamicParameters{};
+    utils::vectornd<utils::pair<Framework::IndexedData *, Framework::Parameter *>> dynamicParameters{};
     // the processor tree is stored in a flattened map
     utils::vectormap<u64, Generation::Processor *> allProcessors{};
 
@@ -332,9 +332,9 @@ namespace Plugin
     utils::vectormap<utils::string_view, void *> cachedHotreloadSymbols{};
     Framework::PluginStructure pluginStructure{};
 
-    utils::bumpArena *processorStorage{};
-    utils::bumpArena *uiStorage{};
-    utils::bumpArena *miscStorage{};
+    utils::Pool *processorStorage{};
+    utils::Pool *uiStorage{};
+    utils::Pool *miscStorage{};
 
     utils::vectornd<Thread> workers{};
   };

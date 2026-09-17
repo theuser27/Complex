@@ -24,10 +24,10 @@ namespace common
   inline constexpr double kDoubleInf = __builtin_bit_cast(double, kDoubleExponentMask);
   inline constexpr float kInvPi = 1.0f / kPi;
   inline constexpr float kInv2Pi = 1.0f / k2Pi;
-  inline constexpr double kDefaultSampleRate = 44100.0;
+  inline constexpr float kDefaultSampleRate = 44100.0f;
   inline constexpr u32 kMidiSize = 128;
   inline constexpr u32 kMidiKeyCenter = 60;
-  inline constexpr double kMidi0Frequency = 8.1757989156f;
+  inline constexpr float kMidi0Frequency = 8.1757989156f;
   inline constexpr u32 kNotesPerOctave = 12;
   inline constexpr u32 kCentsPerNote = 100;
   inline constexpr u32 kCentsPerOctave = kNotesPerOctave * kCentsPerNote;
@@ -55,7 +55,7 @@ namespace common
                                                                   //                     (+ 1 in order to have a distinct sample in the center)
 
   // processing constants
-  inline constexpr double kMinFrequency = kMidi0Frequency;  // (can be changed)    lowest frequency that will be displayed
+  inline constexpr float kMinFrequency = kMidi0Frequency;  // (can be changed)    lowest frequency that will be displayed
 
   // GUI constants
   inline constexpr float kWindowScaleIncrements = 0.25f;

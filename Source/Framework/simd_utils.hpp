@@ -4,12 +4,12 @@
 #pragma once
 
 #include "constants.hpp"
-#include "simd_values.hpp"
+#include "simd.hpp"
 
 namespace utils
 {
-  forceinline simd_float vectorcall 
-  toFloat(simd_int value)
+  forceinline f4 vectorcall
+  toFloat(i4 value)
   {
   #if COMPLEX_SSE4_1
     return _mm_cvtepi32_ps(value.value);
@@ -17,10 +17,10 @@ namespace utils
     return vcvtq_f32_s32(vreinterpretq_s32_u32(value.value));
   #endif
   }
-  constexpr forceinline simd_float vectorcall toFloat(simd_float value) { return value; }
+  constexpr forceinline f4 vectorcall toFloat(f4 value) { return value; }
 
-  forceinline simd_int vectorcall 
-  toInt(simd_float value)
+  forceinline i4 vectorcall
+  toInt(f4 value)
   {
   #if COMPLEX_SSE4_1
     return _mm_cvtps_epi32(value.value);
@@ -28,10 +28,10 @@ namespace utils
     return vreinterpretq_u32_s32(vcvtq_s32_f32(value.value));
   #endif
   }
-  constexpr forceinline simd_int vectorcall toInt(simd_int value) { return value; }
+  constexpr forceinline i4 vectorcall toInt(i4 value) { return value; }
 
-  forceinline simd_float vectorcall 
-  reinterpretToFloat(simd_int value)
+  forceinline f4 vectorcall
+  reinterpretToFloat(i4 value)
   {
   #if COMPLEX_SSE4_1
     return _mm_castsi128_ps(value.value);
@@ -39,10 +39,10 @@ namespace utils
     return vreinterpretq_f32_u32(value.value);
   #endif
   }
-  constexpr forceinline simd_float vectorcall reinterpretToFloat(simd_float value) { return value; }
+  constexpr forceinline f4 vectorcall reinterpretToFloat(f4 value) { return value; }
 
-  forceinline simd_int vectorcall 
-  reinterpretToInt(simd_float value)
+  forceinline i4 vectorcall
+  reinterpretToInt(f4 value)
   {
   #if COMPLEX_SSE4_1
     return _mm_castps_si128(value.value);
@@ -50,9 +50,9 @@ namespace utils
     return vreinterpretq_u32_f32(value.value);
   #endif
   }
-  constexpr forceinline simd_int vectorcall reinterpretToInt(simd_int value) { return value; }
+  constexpr forceinline i4 vectorcall reinterpretToInt(i4 value) { return value; }
 
-  forceinline simd_float vectorcall 
+  forceinline f4 vectorcall
   toSimdFloatFromUnaligned(const float *unaligned)
   {
   #if COMPLEX_SSE4_1
@@ -62,7 +62,7 @@ namespace utils
   #endif
   }
 
-  forceinline void vectorcall transpose(utils::array<simd_float, simd_float::size> &rows)
+  forceinline void vectorcall transpose(utils::array<f4, f4::size> &rows)
   {
   #if COMPLEX_SSE4_1
     auto low0 = _mm_unpacklo_ps(rows[0].value, rows[1].value);
@@ -84,7 +84,7 @@ namespace utils
   #endif
   }
 
-  forceinline void vectorcall complexTranspose(utils::array<simd_float, simd_float::complexSize> &rows)
+  forceinline void vectorcall complexTranspose(utils::array<f4, f4::complexSize> &rows)
   {
   #if COMPLEX_SSE4_1
     auto low = _mm_movelh_ps(rows[0].value, rows[1].value);
@@ -99,8 +99,8 @@ namespace utils
     rows[1].value = high;
   }
 
-  forceinline simd_float vectorcall 
-  merge(simd_float falseValue, simd_float trueValue, simd_mask mask)
+  forceinline f4 vectorcall
+  merge(f4 falseValue, f4 trueValue, i4mask mask)
   {
   #ifdef COMPLEX_SSE4_1
     return _mm_blendv_ps(falseValue.value, trueValue.value, reinterpretToFloat(mask).value);
@@ -109,8 +109,8 @@ namespace utils
   #endif
   }
 
-  forceinline simd_int vectorcall 
-  merge(simd_int falseValue, simd_int trueValue, simd_mask mask)
+  forceinline i4 vectorcall
+  merge(i4 falseValue, i4 trueValue, i4mask mask)
   {
   #ifdef COMPLEX_SSE4_1
     return reinterpretToInt(_mm_blendv_ps(reinterpretToFloat(falseValue).value,
@@ -120,74 +120,74 @@ namespace utils
   #endif
   }
 
-  forceinline simd_float vectorcall lerp(simd_float from, simd_float to, simd_float t)
-  { return simd_float::mulAdd(from, to - from, t); }
+  forceinline f4 vectorcall lerp(f4 from, f4 to, f4 t)
+  { return f4::mulAdd(from, to - from, t); }
 
-  forceinline simd_float vectorcall getDecimalPlaces(simd_float value)
-  { return value - simd_float::floor(value); }
+  forceinline f4 vectorcall getDecimalPlaces(f4 value)
+  { return value - f4::floor(value); }
 
-  forceinline simd_mask vectorcall getSign(simd_int value)
+  forceinline i4mask vectorcall getSign(i4 value)
   { return value & kSignMask; }
 
-  forceinline simd_mask vectorcall getSign(simd_float value)
+  forceinline i4mask vectorcall getSign(f4 value)
   { return reinterpretToInt(value) & kSignMask; }
 
   // lerps between the closest range of from and to inside [0; range]
-  forceinline simd_float vectorcall circularLerp(simd_float from, simd_float to, simd_float t, simd_float range)
+  forceinline f4 vectorcall circularLerp(f4 from, f4 to, f4 t, f4 range)
   {
-    simd_float fromTo = to - from;
-    simd_float toFrom = (range ^ getSign(fromTo)) - fromTo;
+    f4 fromTo = to - from;
+    f4 toFrom = (range ^ getSign(fromTo)) - fromTo;
 
-    simd_float result = merge(
-      from - simd_float::mulAdd(range, t, toFrom),
-      simd_float::mulAdd(from, t, fromTo),
-      simd_float::lessThan(simd_float::abs(fromTo), simd_float::abs(toFrom)));
+    f4 result = merge(
+      from - f4::mulAdd(range, t, toFrom),
+      f4::mulAdd(from, t, fromTo),
+      f4::lessThan(f4::abs(fromTo), f4::abs(toFrom)));
 
-    return result - simd_float::floor(result / range) * range;
+    return result - f4::floor(result / range) * range;
   }
 
   // lerps between the closest range of from and to inside +/- range
-  forceinline simd_float vectorcall circularLerpSymmetric(simd_float from,
-    simd_float to, simd_float t, simd_float range)
+  forceinline f4 vectorcall circularLerpSymmetric(f4 from,
+    f4 to, f4 t, f4 range)
   { return circularLerp(from + range, to + range, t, range * 2.0f) - range; }
 
-  forceinline auto vectorcall getLinearInterpolationMatrix(simd_float t)
-  { return utils::array{ simd_float{ 0.0f }, simd_float{ 1.0f } - t, t, simd_float{ 0.0f } }; }
+  forceinline auto vectorcall getLinearInterpolationMatrix(f4 t)
+  { return utils::array{ f4{ 0.0f }, f4{ 1.0f } - t, t, f4{ 0.0f } }; }
 
-  forceinline auto vectorcall getCatmullInterpolationMatrix(simd_float t)
+  forceinline auto vectorcall getCatmullInterpolationMatrix(f4 t)
   {
-    simd_float halfT = t * 0.5f;
-    simd_float halfT2 = t * halfT;
-    simd_float halfT3 = t * halfT2;
-    simd_float halfThreeT3 = halfT3 * 3.0f;
+    f4 halfT = t * 0.5f;
+    f4 halfT2 = t * halfT;
+    f4 halfT3 = t * halfT2;
+    f4 halfThreeT3 = halfT3 * 3.0f;
 
     return utils::array{
-      simd_float::mulAdd(-halfT3, halfT2, 2.0f) - halfT,
-      simd_float::mulSub(halfThreeT3, halfT2, 5.0f) + 1.0f,
-      simd_float::mulAdd(halfT, halfT3, 4.0f) - halfThreeT3,
+      f4::mulAdd(-halfT3, halfT2, 2.0f) - halfT,
+      f4::mulSub(halfThreeT3, halfT2, 5.0f) + 1.0f,
+      f4::mulAdd(halfT, halfT3, 4.0f) - halfThreeT3,
       halfT3 - halfT2
     };
   }
 
-  forceinline auto vectorcall getValueMatrix(const float *buffer, simd_int indices)
+  forceinline auto vectorcall getValueMatrix(const float *buffer, i4 indices)
   {
-    utils::array<simd_float, simd_float::size> values;
+    utils::array<f4, f4::size> values;
     for (u32 i = 0; i < values.size(); i++)
       values[i] = toSimdFloatFromUnaligned(buffer + indices[i]);
     return values;
   }
 
   template<auto N>
-  forceinline simd_float multiplyAndSumRows(const utils::array<simd_float, N> &one,
-    const utils::array<simd_float, N> &two)
+  forceinline f4 multiplyAndSumRows(const utils::array<f4, N> &one,
+    const utils::array<f4, N> &two)
   {
-    simd_float summedVector = 0;
+    f4 summedVector = 0;
     for (usize i = 0; i < N; ++i)
-      summedVector = simd_float::mulAdd(summedVector, one[i], two[i]);
+      summedVector = f4::mulAdd(summedVector, one[i], two[i]);
     return summedVector;
   }
 
-  forceinline simd_float vectorcall copyFromEven(simd_float value)
+  forceinline f4 vectorcall copyFromEven(f4 value)
   {
   #if COMPLEX_SSE4_1
     return _mm_shuffle_ps(value.value, value.value, _MM_SHUFFLE(2, 2, 0, 0));
@@ -198,7 +198,7 @@ namespace utils
   #endif
   }
 
-  forceinline simd_int vectorcall copyFromEven(simd_int value)
+  forceinline i4 vectorcall copyFromEven(i4 value)
   {
   #if COMPLEX_SSE4_1
     return _mm_shuffle_epi32(value.value, _MM_SHUFFLE(2, 2, 0, 0));
@@ -209,7 +209,7 @@ namespace utils
   #endif
   }
 
-  forceinline simd_float vectorcall copyFromOdd(simd_float value)
+  forceinline f4 vectorcall copyFromOdd(f4 value)
   {
   #if COMPLEX_SSE4_1
     return _mm_shuffle_ps(value.value, value.value, _MM_SHUFFLE(3, 3, 1, 1));
@@ -220,7 +220,7 @@ namespace utils
   #endif
   }
 
-  forceinline simd_int vectorcall copyFromOdd(simd_int value)
+  forceinline i4 vectorcall copyFromOdd(i4 value)
   {
   #if COMPLEX_SSE4_1
     return _mm_shuffle_epi32(value.value, _MM_SHUFFLE(3, 3, 1, 1));
@@ -231,7 +231,7 @@ namespace utils
   #endif
   }
 
-  forceinline simd_float vectorcall groupEven(simd_float value)
+  forceinline f4 vectorcall groupEven(f4 value)
   {
   #if COMPLEX_SSE4_1
     return _mm_shuffle_ps(value.value, value.value, _MM_SHUFFLE(3, 1, 2, 0));
@@ -240,7 +240,7 @@ namespace utils
   #endif
   }
 
-  forceinline simd_float vectorcall groupEvenReverse(simd_float value)
+  forceinline f4 vectorcall groupEvenReverse(f4 value)
   {
   #if COMPLEX_SSE4_1
     return _mm_shuffle_ps(value.value, value.value, _MM_SHUFFLE(1, 3, 0, 2));
@@ -256,7 +256,7 @@ namespace utils
   #endif
   }
 
-  forceinline simd_float vectorcall groupOdd(simd_float value)
+  forceinline f4 vectorcall groupOdd(f4 value)
   {
   #if COMPLEX_SSE4_1
     return _mm_shuffle_ps(value.value, value.value, _MM_SHUFFLE(2, 0, 3, 1));
@@ -265,7 +265,7 @@ namespace utils
   #endif
   }
 
-  forceinline simd_float vectorcall groupOddReverse(simd_float value)
+  forceinline f4 vectorcall groupOddReverse(f4 value)
   {
   #if COMPLEX_SSE4_1
     return _mm_shuffle_ps(value.value, value.value, _MM_SHUFFLE(0, 2, 1, 3));
@@ -274,7 +274,7 @@ namespace utils
   #endif
   }
 
-  forceinline simd_float vectorcall switchInner(simd_float value)
+  forceinline f4 vectorcall switchInner(f4 value)
   {
   #if COMPLEX_SSE4_1
     return _mm_shuffle_ps(value.value, value.value, _MM_SHUFFLE(2, 3, 0, 1));
@@ -284,7 +284,7 @@ namespace utils
   #endif
   }
 
-  forceinline simd_float vectorcall switchOuter(simd_float value)
+  forceinline f4 vectorcall switchOuter(f4 value)
   {
   #if COMPLEX_SSE4_1
     return _mm_shuffle_ps(value.value, value.value, _MM_SHUFFLE(1, 0, 3, 2));
@@ -295,7 +295,7 @@ namespace utils
 
 
   template<SimdValue SIMD>
-  forceinline SIMD vectorcall gather(const SIMD *values, simd_int indices)
+  forceinline SIMD vectorcall gather(const SIMD *values, i4 indices)
   {
     auto array = indices.getArrayOfValues();
   #if COMPLEX_SSE4_1
@@ -308,15 +308,15 @@ namespace utils
     two = _mm_shuffle_ps(three, four, _MM_SHUFFLE(3, 3, 2, 2));
     one = _mm_shuffle_ps(one, two, _MM_SHUFFLE(2, 0, 2, 0));
 
-    if constexpr (utils::is_same_v<SIMD, simd_int>)
+    if constexpr (utils::is_same_v<SIMD, i4>)
       return reinterpretToInt(one);
     else
       return one;
   #elif COMPLEX_NEON
-    static constexpr simd_mask one = utils::array{ kFullMask, 0U, 0U, 0U };
-    static constexpr simd_mask two = utils::array{ 0U, kFullMask, 0U, 0U };
-    static constexpr simd_mask three = utils::array{ 0U, 0U, kFullMask, 0U };
-    static constexpr simd_mask four = utils::array{ 0U, 0U, 0U, kFullMask };
+    static constexpr i4mask one = utils::array{ kFullMask, 0U, 0U, 0U };
+    static constexpr i4mask two = utils::array{ 0U, kFullMask, 0U, 0U };
+    static constexpr i4mask three = utils::array{ 0U, 0U, kFullMask, 0U };
+    static constexpr i4mask four = utils::array{ 0U, 0U, 0U, kFullMask };
 
     return (values[array[0]] & one  ) | (values[array[1]] & two) |
            (values[array[2]] & three) | (values[array[3]] & four);
@@ -324,7 +324,7 @@ namespace utils
   }
 
   template<SimdValue SIMD>
-  forceinline void vectorcall scatter(SIMD *values, SIMD value, simd_int indices)
+  forceinline void vectorcall scatter(SIMD *values, SIMD value, i4 indices)
   {
     auto array = indices.getArrayOfValues();
   #if COMPLEX_SSE4_1
@@ -335,12 +335,12 @@ namespace utils
     auto three = reinterpretToInt(values[array[2]]).value;
     auto four = reinterpretToInt(values[array[3]]).value;
 
-    if constexpr (utils::is_same_v<SIMD, simd_float>)
+    if constexpr (utils::is_same_v<SIMD, f4>)
     {
-      values[array[0]] = reinterpretToFloat(simd_int{ _mm_insert_epi32(one, valueArray[0], 0) });
-      values[array[1]] = reinterpretToFloat(simd_int{ _mm_insert_epi32(two, valueArray[1], 1) });
-      values[array[2]] = reinterpretToFloat(simd_int{ _mm_insert_epi32(three, valueArray[2], 2) });
-      values[array[3]] = reinterpretToFloat(simd_int{ _mm_insert_epi32(four, valueArray[3], 3) });
+      values[array[0]] = reinterpretToFloat(i4{ _mm_insert_epi32(one, valueArray[0], 0) });
+      values[array[1]] = reinterpretToFloat(i4{ _mm_insert_epi32(two, valueArray[1], 1) });
+      values[array[2]] = reinterpretToFloat(i4{ _mm_insert_epi32(three, valueArray[2], 2) });
+      values[array[3]] = reinterpretToFloat(i4{ _mm_insert_epi32(four, valueArray[3], 3) });
     }
     else
     {
@@ -350,10 +350,10 @@ namespace utils
       values[array[3]] = _mm_insert_epi32(four, valueArray[3], 3);
     }
   #elif COMPLEX_NEON
-    static constexpr simd_mask one = utils::array{ kFullMask, 0U, 0U, 0U };
-    static constexpr simd_mask two = utils::array{ 0U, kFullMask, 0U, 0U };
-    static constexpr simd_mask three = utils::array{ 0U, 0U, kFullMask, 0U };
-    static constexpr simd_mask four = utils::array{ 0U, 0U, 0U, kFullMask };
+    static constexpr i4mask one = utils::array{ kFullMask, 0U, 0U, 0U };
+    static constexpr i4mask two = utils::array{ 0U, kFullMask, 0U, 0U };
+    static constexpr i4mask three = utils::array{ 0U, 0U, kFullMask, 0U };
+    static constexpr i4mask four = utils::array{ 0U, 0U, 0U, kFullMask };
 
     values[array[0]] = merge(values[array[0]], value, one);
     values[array[1]] = merge(values[array[1]], value, two);
@@ -363,7 +363,7 @@ namespace utils
   }
 
   template<SimdValue SIMD>
-  forceinline SIMD vectorcall gatherComplex(const SIMD *values, simd_int indices)
+  forceinline SIMD vectorcall gatherComplex(const SIMD *values, i4 indices)
   {
     auto array = indices.getArrayOfValues();
     SIMD result = values[array[0]];
@@ -373,28 +373,28 @@ namespace utils
   }
 
   template<SimdValue SIMD>
-  forceinline void vectorcall scatterComplex(SIMD *values, simd_int indices, SIMD value, simd_mask mask)
+  forceinline void vectorcall scatterComplex(SIMD *values, i4 indices, SIMD value, i4mask mask)
   {
     auto array = indices.getArrayOfValues();
     for (usize i = 0; i < kChannelsPerInOut; ++i)
       values[array[2 * i]] = merge(values[array[2 * i]], value, kChannelMasks[i] & mask);
   }
   template<SimdValue SIMD>
-  forceinline void vectorcall scatterComplex(SIMD *values, simd_int indices, SIMD value)
+  forceinline void vectorcall scatterComplex(SIMD *values, i4 indices, SIMD value)
   {
     auto array = indices.getArrayOfValues();
     for (usize i = 0; i < kChannelsPerInOut; ++i)
       values[array[2 * i]] = merge(values[array[2 * i]], value, kChannelMasks[i]);
   }
   template<SimdValue SIMD>
-  forceinline void vectorcall scatterAddComplex(SIMD *values, simd_int indices, SIMD value, simd_mask mask)
+  forceinline void vectorcall scatterAddComplex(SIMD *values, i4 indices, SIMD value, i4mask mask)
   {
     auto array = indices.getArrayOfValues();
     for (usize i = 0; i < kChannelsPerInOut; ++i)
       values[array[2 * i]] = merge(values[array[2 * i]], values[array[2 * i]] + value, kChannelMasks[i] & mask);
   }
   template<SimdValue SIMD>
-  forceinline void vectorcall scatterAddComplex(SIMD *values, simd_int indices, SIMD value)
+  forceinline void vectorcall scatterAddComplex(SIMD *values, i4 indices, SIMD value)
   {
     auto array = indices.getArrayOfValues();
     for (usize i = 0; i < kChannelsPerInOut; ++i)
@@ -407,10 +407,10 @@ namespace utils
   // returns a mask which can be used to xor the value restore the sign
   // if flag is set, a full mask where values are negative
   template<bool ReturnFullMask = false>
-  forceinline simd_mask vectorcall unsignSimd(simd_int &value)
+  forceinline i4mask vectorcall unsignSimd(i4 &value)
   {
-    static constexpr simd_mask signMask = kSignMask;
-    simd_mask mask = simd_mask::equal(value & signMask, signMask);
+    static constexpr i4mask signMask = kSignMask;
+    i4mask mask = i4mask::equal(value & signMask, signMask);
     auto value_ = merge(value, -value, mask);
     if constexpr (ReturnFullMask)
     {
@@ -428,53 +428,53 @@ namespace utils
 
   // conditionally unsigns floats if they are negative and returns full mask where values are negative
   template<bool ReturnFullMask = false>
-  forceinline simd_mask vectorcall unsignSimd(simd_float &value)
+  forceinline i4mask vectorcall unsignSimd(f4 &value)
   {
-    static constexpr simd_mask signMask = kSignMask;
-    simd_mask mask = reinterpretToInt(value) & signMask;
+    static constexpr i4mask signMask = kSignMask;
+    i4mask mask = reinterpretToInt(value) & signMask;
     value ^= mask;
     if constexpr (ReturnFullMask)
-      return simd_mask::equal(mask, signMask);
+      return i4mask::equal(mask, signMask);
     else
       return mask;
   }
 
   // if equalsWrap == true/false, then the value will wrap around when it reaches/when it is greater than the modulo
-  forceinline simd_int vectorcall modOnce(simd_int value, simd_int mod, bool equalsWrap = true)
+  forceinline i4 vectorcall modOnce(i4 value, i4 mod, bool equalsWrap = true)
   {
-    simd_mask lessMask = (equalsWrap) ? simd_int::lessThanSigned(value, mod) :
-      simd_int::lessThanOrEqualSigned(value, mod);
-    simd_int lower = value - mod;
+    i4mask lessMask = (equalsWrap) ? i4::lessThanSigned(value, mod) :
+      i4::lessThanOrEqualSigned(value, mod);
+    i4 lower = value - mod;
     return merge(lower, value, lessMask);
   }
 
   // if equalsWrap == true/false, then the value will wrap around when it reaches/when it is greater than the modulo
-  forceinline simd_float vectorcall modOnce(simd_float value, simd_float mod, bool equalsWrap = true)
+  forceinline f4 vectorcall modOnce(f4 value, f4 mod, bool equalsWrap = true)
   {
-    simd_mask lessMask = (equalsWrap) ? simd_float::lessThan(value, mod) :
-      simd_float::lessThanOrEqual(value, mod);
-    simd_float lower = value - mod;
+    i4mask lessMask = (equalsWrap) ? f4::lessThan(value, mod) :
+      f4::lessThanOrEqual(value, mod);
+    f4 lower = value - mod;
     return merge(lower, value, lessMask);
   }
 
-  forceinline simd_float vectorcall modOnceSymmetric(simd_float value, simd_float mod, bool equalsWrap = true)
+  forceinline f4 vectorcall modOnceSymmetric(f4 value, f4 mod, bool equalsWrap = true)
   {
-    simd_mask signMask = unsignSimd(value);
-    simd_mask lessMask = (equalsWrap) ? simd_float::lessThan(value, mod) :
-      simd_float::lessThanOrEqual(value, mod);
-    simd_float lower = value - mod * 2.0f;
+    i4mask signMask = unsignSimd(value);
+    i4mask lessMask = (equalsWrap) ? f4::lessThan(value, mod) :
+      f4::lessThanOrEqual(value, mod);
+    f4 lower = value - mod * 2.0f;
     return merge(lower, value, lessMask) ^ signMask;
   }
 
-  forceinline simd_float vectorcall modSymmetric(simd_float value, simd_float mod)
+  forceinline f4 vectorcall modSymmetric(f4 value, f4 mod)
   {
     value /= mod;
-    value -= simd_float::round(value * 0.5f) * 2.0f;
+    value -= f4::round(value * 0.5f) * 2.0f;
     return value * mod;
   }
 
 
-  forceinline simd_float vectorcall horizontalAdd(simd_float one, simd_float two)
+  forceinline f4 vectorcall horizontalAdd(f4 one, f4 two)
   {
   #if COMPLEX_SSE4_1
     return _mm_hadd_ps(one.value, two.value);
@@ -483,17 +483,17 @@ namespace utils
   #endif
   }
 
-  forceinline simd_float vectorcall horizontalSub(simd_float one, simd_float two)
+  forceinline f4 vectorcall horizontalSub(f4 one, f4 two)
   {
   #if COMPLEX_SSE4_1
     return _mm_hsub_ps(one.value, two.value);
   #elif COMPLEX_NEON
-    static constexpr simd_mask kMinusPlus = { 0U, kSignMask };
+    static constexpr i4mask kMinusPlus = { 0U, kSignMask };
     return vpaddq_f32((one ^ kMinusPlus).value, (two ^ kMinusPlus).value);
   #endif
   }
 
-  forceinline simd_int vectorcall horizontalMin(simd_int value)
+  forceinline i4 vectorcall horizontalMin(i4 value)
   {
   #if COMPLEX_SSE4_1
     auto reversed = _mm_shuffle_epi32(value.value, _MM_SHUFFLE(0, 1, 2, 3));
@@ -501,11 +501,11 @@ namespace utils
     auto switched = _mm_shuffle_epi32(one, _MM_SHUFFLE(2, 3, 0, 1));
     return _mm_min_epi32(one, switched);
   #elif COMPLEX_NEON
-    return simd_int{ (u32)vminvq_s32(vreinterpretq_s32_u32(value.value)) };
+    return i4{ (u32)vminvq_s32(vreinterpretq_s32_u32(value.value)) };
   #endif
   }
 
-  forceinline simd_float vectorcall horizontalMin(simd_float value)
+  forceinline f4 vectorcall horizontalMin(f4 value)
   {
   #if COMPLEX_SSE4_1
     return reinterpretToFloat(horizontalMin(reinterpretToInt(value)));
@@ -514,7 +514,7 @@ namespace utils
   #endif
   }
 
-  forceinline simd_float vectorcall reciprocal(simd_float value)
+  forceinline f4 vectorcall reciprocal(f4 value)
   {
   #if COMPLEX_SSE4_1
     return _mm_rcp_ps(value.value);
@@ -524,7 +524,7 @@ namespace utils
   }
 
   template<u32 Shift>
-  forceinline simd_int vectorcall shiftRight(simd_int values)
+  forceinline i4 vectorcall shiftRight(i4 values)
   {
   #if COMPLEX_SSE4_1
     return _mm_srli_epi32(values.value, Shift);
@@ -534,7 +534,7 @@ namespace utils
   }
 
   template<u32 shift>
-  forceinline simd_int vectorcall shiftRightArithmetic(simd_int values) noexcept
+  forceinline i4 vectorcall shiftRightArithmetic(i4 values) noexcept
   {
   #if COMPLEX_SSE4_1
     return _mm_srai_epi32(values.value, shift);
@@ -544,7 +544,7 @@ namespace utils
   }
 
   template<u32 Shift>
-  forceinline simd_int vectorcall shiftLeft(simd_int values)
+  forceinline i4 vectorcall shiftLeft(i4 values)
   {
   #if COMPLEX_SSE4_1
     return _mm_slli_epi32(values.value, Shift);
@@ -555,61 +555,61 @@ namespace utils
 
 
 
-  forceinline simd_float vectorcall exp2(simd_float exponent)
+  forceinline f4 vectorcall exp2(f4 exponent)
   {
     // taylor expansion of 2^x at 0
     // coefficients are (ln(2)^n) / n!
-    static constexpr simd_float kCoefficient0 = 1.0f;
-    static constexpr simd_float kCoefficient1 = 16970.0f / 24483.0f;
-    static constexpr simd_float kCoefficient2 = 1960.0f / 8161.0f;
-    static constexpr simd_float kCoefficient3 = 1360.0f / 24483.0f;
-    static constexpr simd_float kCoefficient4 = 80.0f / 8161.0f;
-    static constexpr simd_float kCoefficient5 = 32.0f / 24483.0f;
+    static constexpr f4 kCoefficient0 = 1.0f;
+    static constexpr f4 kCoefficient1 = 16970.0f / 24483.0f;
+    static constexpr f4 kCoefficient2 = 1960.0f / 8161.0f;
+    static constexpr f4 kCoefficient3 = 1360.0f / 24483.0f;
+    static constexpr f4 kCoefficient4 = 80.0f / 8161.0f;
+    static constexpr f4 kCoefficient5 = 32.0f / 24483.0f;
 
     // the closer the exponent is to a whole number, the more accurate it's going to be
     // since it only requires to add it the overall floating point exponent
-    simd_float rounded = simd_float::round(exponent);
-    simd_float t = exponent - rounded;
+    f4 rounded = f4::round(exponent);
+    f4 t = exponent - rounded;
     // clamp the lowest value otherwise get garbage results when shifting left
-    simd_float power = reinterpretToFloat(shiftLeft<23>(simd_int::maxSigned((u32)-127, toInt(rounded)) + 127));
+    f4 power = reinterpretToFloat(shiftLeft<23>(i4::maxSigned((u32)-127, toInt(rounded)) + 127));
 
     // we exp2 whatever decimal number is left with the taylor series
     // the domain we're in is [0.0f, 0.5f], we don't expect negative numbers
-    simd_float interpolate = simd_float::mulAdd(kCoefficient0, t,
-      simd_float::mulAdd(kCoefficient1, t, simd_float::mulAdd(kCoefficient2, t,
-        simd_float::mulAdd(kCoefficient3, t, simd_float::mulAdd(kCoefficient4, t, kCoefficient5)))));
+    f4 interpolate = f4::mulAdd(kCoefficient0, t,
+      f4::mulAdd(kCoefficient1, t, f4::mulAdd(kCoefficient2, t,
+        f4::mulAdd(kCoefficient3, t, f4::mulAdd(kCoefficient4, t, kCoefficient5)))));
 
     return power * interpolate;
   }
-  
+
   // (intentionally) does not handle nans and negative numbers correctly
   // at 0/inf it returns the min/max exponent value
-  forceinline simd_float vectorcall log2(simd_float value)
+  forceinline f4 vectorcall log2(f4 value)
   {
-    // modified/minimax-ed taylor coefficients for atanh 
+    // modified/minimax-ed taylor coefficients for atanh
     // in order to approximatea a contracted version of log2
     // k0 = 2/log(2), k1 ~= 2/(3*log(2)), k2 ~= 2/(5*log(2)), k3 ~= 2/(7*log(2))
-    static constexpr simd_float k0 = 1.44269504088896340736f;
-    static constexpr simd_float k1 = 0.96180442874507310336f;
-    static constexpr simd_float k2 = 0.57647797555770874389f;
-    static constexpr simd_float k3 = 0.43323255205601618467f;
-    static constexpr simd_int kSqrt2Addition = 0x004afb10;
+    static constexpr f4 k0 = 1.44269504088896340736f;
+    static constexpr f4 k1 = 0.96180442874507310336f;
+    static constexpr f4 k2 = 0.57647797555770874389f;
+    static constexpr f4 k3 = 0.43323255205601618467f;
+    static constexpr i4 kSqrt2Addition = 0x004afb10;
 
-    COMPLEX_ASSERT(simd_int::anyMask(simd_float::lessThan(value, 0.0f)) == 0);
+    COMPLEX_ASSERT(i4::anyMask(f4::lessThan(value, 0.0f)) == 0);
 
-    simd_int reinterpreted = reinterpretToInt(value);
-    simd_int mantissaOnly = reinterpreted & kFloatMantissaMask;
-    // if the raw mantissa represents a number larger than sqrt(2) (assuming the exponent is 2^0), 
+    i4 reinterpreted = reinterpretToInt(value);
+    i4 mantissaOnly = reinterpreted & kFloatMantissaMask;
+    // if the raw mantissa represents a number larger than sqrt(2) (assuming the exponent is 2^0),
     // mod it once in order to bring it back to the range [sqrt(2)/2, sqrt(2)) (more info below)
     // this happens by adding a magic constant and extract the lowest bit of the exponent
-    simd_int exponentOffset = (mantissaOnly + kSqrt2Addition) & kFloatExponentUnit;
-    simd_int roundLog2 = shiftRightArithmetic<23>(reinterpreted.value) - 127 + shiftRightArithmetic<23>(exponentOffset);
+    i4 exponentOffset = (mantissaOnly + kSqrt2Addition) & kFloatExponentUnit;
+    i4 roundLog2 = shiftRightArithmetic<23>(reinterpreted.value) - 127 + shiftRightArithmetic<23>(exponentOffset);
 
     // one optimisation that can be made to lower the number of coefficients needed
     // if we look at the full taylor series, log2(x) = 2/log(2) * (x - x^2/2 + x^3/3 - x^4/4 + x^5/5 - ...)
-    // but we substitute x with z = (x - 1)/(x + 1), then the identity can be defined as 
+    // but we substitute x with z = (x - 1)/(x + 1), then the identity can be defined as
     // log2(x) = 2/log(2) * atanh(z) = 2/log(2) * (z + z^3/3 + z^5/5 + z^7/7 + ...)
-    // 
+    //
     // another optimisation is to limit our input range
     // if we define the input as x = 2^e * m then log2(x) = e + log2(m), so if m ∈ [1, 2) => log2(m) = [0, 1)
     // unfortunately when we substitute z = (m - 1)/(m + 1), z ∈ [0, 1/3) which isn't symmetric around 0
@@ -617,90 +617,90 @@ namespace utils
     // on the other hand if we change m ∈ [sqrt(2)/2, sqrt(2)) => log(2) = [-1/2, 1/2)
     // and z ∈ [-0.1715728753, 0.1715728753) which is symmetric around 0 and has a much lower max error
     // only extra work we need to do is mod the input to lie in [sqrt(2)/2, sqrt(2)), which is what we did above
-    // 
+    //
     // the complete calculation looks like log2(x) = e + 2/log(2) * (z + z^3/3 + z^5/5 + z^7/7 + ...)
-    // 
+    //
     // the last thing is that the coefficients are used in the taylor series approximation are minimax-ed
     // for better accuracy so they don't exactly follow the 1, 1/3, 1/5, 1/7 values
 
     // modding the input
-    simd_float m = reinterpretToFloat((reinterpretToInt(simd_float{ 1.0f }) ^ exponentOffset) | mantissaOnly);
-    simd_float numerator = m - 1.0f;
-    simd_float z = numerator / (m + 1.0f);
+    f4 m = reinterpretToFloat((reinterpretToInt(f4{ 1.0f }) ^ exponentOffset) | mantissaOnly);
+    f4 numerator = m - 1.0f;
+    f4 z = numerator / (m + 1.0f);
 
-    simd_float z2 = z * z;
-    simd_float z4 = z2 * z2;
+    f4 z2 = z * z;
+    f4 z4 = z2 * z2;
 
-    // the following line is what is effectively being executed below but it's commented out 
+    // the following line is what is effectively being executed below but it's commented out
     // because the other version produces results with lower fp inaccuracies
-    //simd_float result = toFloat(ceilLog2) + z * (2.0f * k0 + ((k2 * z4) + z2 * (k1 + z4 * k3)));
-    simd_float numInvLog2 = numerator * k0;
-    simd_float result = toFloat(roundLog2) + (numInvLog2 + (z * (-numInvLog2 + ((k2 * z4) + z2 * (k1 + z4 * k3)))));
+    //f4 result = toFloat(ceilLog2) + z * (2.0f * k0 + ((k2 * z4) + z2 * (k1 + z4 * k3)));
+    f4 numInvLog2 = numerator * k0;
+    f4 result = toFloat(roundLog2) + (numInvLog2 + (z * (-numInvLog2 + ((k2 * z4) + z2 * (k1 + z4 * k3)))));
 
     return result;
   }
 
-  forceinline simd_float vectorcall exp(simd_float exponent)
+  forceinline f4 vectorcall exp(f4 exponent)
   { return exp2(exponent * kExpConversionMult); }
 
-  forceinline simd_float vectorcall log(simd_float value)
+  forceinline f4 vectorcall log(f4 value)
   { return log2(value) * kLogConversionMult; }
 
-  forceinline simd_float vectorcall pow(simd_float base, simd_float exponent)
+  forceinline f4 vectorcall pow(f4 base, f4 exponent)
   { return exp2(log2(base) * exponent); }
 
-  forceinline simd_float vectorcall midiOffsetToRatio(simd_float note_offset)
+  forceinline f4 vectorcall midiOffsetToRatio(f4 note_offset)
   { return exp2(note_offset * (1.0f / kNotesPerOctave)); }
 
-  forceinline simd_float vectorcall midiNoteToFrequency(simd_float note)
+  forceinline f4 vectorcall midiNoteToFrequency(f4 note)
   { return midiOffsetToRatio(note) * kMidi0Frequency; }
 
   // fast approximation of the original equation
-  forceinline simd_float vectorcall amplitudeToDb(simd_float magnitude)
+  forceinline f4 vectorcall amplitudeToDb(f4 magnitude)
   { return log2(magnitude) * kAmplitudeToDbConversionMult; }
 
   // fast approximation of the original equation
-  forceinline simd_float vectorcall dbToAmplitude(simd_float decibels)
+  forceinline f4 vectorcall dbToAmplitude(f4 decibels)
   { return exp2(decibels * kDbToAmplitudeConversionMult); }
 
-  forceinline simd_float vectorcall normalisedToDb(simd_float normalised, float maxDb)
+  forceinline f4 vectorcall normalisedToDb(f4 normalised, float maxDb)
   { return pow(maxDb + 1.0f, normalised) - 1.0f; }
 
-  forceinline simd_float vectorcall dbToNormalised(simd_float db, float maxDb)
-  { return log2(db + 1.0f) / log2(simd_float{ maxDb + 1.0f }); }
+  forceinline f4 vectorcall dbToNormalised(f4 db, float maxDb)
+  { return log2(db + 1.0f) / log2(f4{ maxDb + 1.0f }); }
 
-  forceinline simd_float vectorcall normalisedToFrequency(simd_float normalised, float sampleRate, float minFrequency = kMinFrequency)
+  forceinline f4 vectorcall normalisedToFrequency(f4 normalised, float sampleRate, float minFrequency = kMinFrequency)
   { return pow(sampleRate * 0.5f / minFrequency, normalised) * minFrequency; }
 
-  forceinline simd_float vectorcall frequencyToNormalised(simd_float frequency, float sampleRate, float minFrequency = kMinFrequency)
-  { return log2(frequency / minFrequency) / log2(simd_float{ sampleRate * 0.5f / minFrequency }); }
+  forceinline f4 vectorcall frequencyToNormalised(f4 frequency, float sampleRate, float minFrequency = kMinFrequency)
+  { return log2(frequency / minFrequency) / log2(f4{ sampleRate * 0.5f / minFrequency }); }
 
   // returns the proper bin which may also be nyquist, which is outside a power-of-2
-  forceinline simd_float vectorcall normalisedToBin(simd_float normalised, u32 FFTSize, float sampleRate)
+  forceinline f4 vectorcall normalisedToBin(f4 normalised, u32 FFTSize, float sampleRate)
   {
-    simd_mask zeroMask = simd_float::notEqual(normalised, 0.0f);
-    return simd_float::round(normalisedToFrequency(normalised, sampleRate) / sampleRate * (float)FFTSize) & zeroMask;
+    i4mask zeroMask = f4::notEqual(normalised, 0.0f);
+    return f4::round(normalisedToFrequency(normalised, sampleRate) / sampleRate * (float)FFTSize) & zeroMask;
   }
 
-  forceinline simd_float vectorcall binToNormalised(simd_float bin, u32 FFTSize, float sampleRate)
+  forceinline f4 vectorcall binToNormalised(f4 bin, u32 FFTSize, float sampleRate)
   {
     // for 0 logarithm doesn't produce valid values
     // so we mask that with dummy values to not get errors
-    simd_mask zeroMask = simd_float::notEqual(bin, 0.0f);
+    i4mask zeroMask = f4::notEqual(bin, 0.0f);
     return frequencyToNormalised(bin * sampleRate / (float)FFTSize, sampleRate) & zeroMask;
   }
 
   forceinline float exp2(float value)
   {
-    simd_float input = value;
-    simd_float result = exp2(input);
+    f4 input = value;
+    f4 result = exp2(input);
     return result[0];
   }
 
   forceinline float log2(float value)
   {
-    simd_float input = value;
-    simd_float result = log2(input);
+    f4 input = value;
+    f4 result = log2(input);
     return result[0];
   }
 
@@ -719,13 +719,13 @@ namespace utils
   forceinline float log10(float exponent)
   { return log2(exponent) * kLog10ConversionMult; }
 
-  forceinline simd_float powerScale(simd_float value, simd_float power)
+  forceinline f4 powerScale(f4 value, f4 power)
   {
     static constexpr float kMinPowerMag = 0.005f;
-    simd_mask zeroMask = simd_float::lessThan(power, kMinPowerMag) & simd_float::lessThan(-power, kMinPowerMag);
-    simd_float numerator = exp(power * value) - 1.0f;
-    simd_float denominator = exp(power) - 1.0f;
-    simd_float result = numerator / denominator;
+    i4mask zeroMask = f4::lessThan(power, kMinPowerMag) & f4::lessThan(-power, kMinPowerMag);
+    f4 numerator = exp(power * value) - 1.0f;
+    f4 denominator = exp(power) - 1.0f;
+    f4 result = numerator / denominator;
     return merge(result, value, zeroMask);
   }
 
@@ -741,15 +741,15 @@ namespace utils
     return numerator / denominator;
   }
 
-  forceinline simd_float vectorcall getStereoDifference(simd_float value)
+  forceinline f4 vectorcall getStereoDifference(f4 value)
   {
     return (value - switchInner(value)) * 0.5f;
   }
 
   // assumes value is signed
-  forceinline simd_int vectorcall getStereoDifference(simd_int value)
+  forceinline i4 vectorcall getStereoDifference(i4 value)
   {
-    simd_int highestBit = value & kSignMask;
+    i4 highestBit = value & kSignMask;
     return highestBit | shiftRight<1>(value - reinterpretToInt(switchInner(reinterpretToFloat(value))));
   }
 
@@ -773,36 +773,36 @@ namespace utils
     }
 
     // gets catmull-rom spline interpolated y-values at their corresponding x-values
-    simd_float cubicLookup(simd_float x) const
+    f4 cubicLookup(f4 x) const
     {
-      COMPLEX_ASSERT(simd_mask::anyMask(simd_float::lessThan(x, 0.0f)) == 0 &&
-        simd_mask::anyMask(simd_float::greaterThan(x, 1.0f)) == 0);
+      COMPLEX_ASSERT(i4mask::anyMask(f4::lessThan(x, 0.0f)) == 0 &&
+        i4mask::anyMask(f4::greaterThan(x, 1.0f)) == 0);
 
-      simd_float boost = (x * scale_) + 1.0f;
-      simd_int indices = simd_int::clampUnsigned(utils::toInt(boost), simd_int(1), simd_int(Resolution));
-      simd_float t = boost - utils::toFloat(indices);
+      f4 boost = (x * scale_) + 1.0f;
+      i4 indices = i4::clampUnsigned(utils::toInt(boost), i4(1), i4(Resolution));
+      f4 t = boost - utils::toFloat(indices);
 
       auto interpolationMatrix = utils::getCatmullInterpolationMatrix(t);
-      auto valueMatrix = utils::getValueMatrix(lookup_, indices - simd_int(1));
+      auto valueMatrix = utils::getValueMatrix(lookup_, indices - i4(1));
       transpose(valueMatrix);
 
       return multiplyAndSumRows(interpolationMatrix, valueMatrix);
     }
 
     // gets linearly interpolated y-values at their corresponding x-values
-    simd_float linearLookup(simd_float x) const
+    f4 linearLookup(f4 x) const
     {
-      COMPLEX_ASSERT(simd_mask::anyMask(simd_float::lessThan(x, 0.0f)) == 0 &&
-        simd_mask::anyMask(simd_float::greaterThan(x, 1.0f)) == 0);
+      COMPLEX_ASSERT(i4mask::anyMask(f4::lessThan(x, 0.0f)) == 0 &&
+        i4mask::anyMask(f4::greaterThan(x, 1.0f)) == 0);
 
-      simd_float boost = (x * scale_) + 1.0f;
-      simd_int indices = simd_int::clampUnsigned(utils::toInt(boost), simd_int(1), simd_int(Resolution));
-      simd_float t = boost - utils::toFloat(indices);
+      f4 boost = (x * scale_) + 1.0f;
+      i4 indices = i4::clampUnsigned(utils::toInt(boost), i4(1), i4(Resolution));
+      f4 t = boost - utils::toFloat(indices);
 
-      auto valueMatrix = utils::getValueMatrix(lookup_, indices - simd_int(1));
+      auto valueMatrix = utils::getValueMatrix(lookup_, indices - i4(1));
       transpose(valueMatrix);
 
-      return simd_float::mulAdd((1.0f - t) * valueMatrix[1], t, valueMatrix[2]);
+      return f4::mulAdd((1.0f - t) * valueMatrix[1], t, valueMatrix[2]);
     }
 
     // gets catmull-rom spline interpolated y-value at the corresponding x-value

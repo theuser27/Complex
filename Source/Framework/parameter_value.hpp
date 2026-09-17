@@ -8,11 +8,6 @@
 #include "simd_utils.hpp"
 #include "parameter_types.hpp"
 
-namespace Plugin
-{
-  struct State;
-}
-
 namespace Interface
 {
   class Control;
@@ -24,145 +19,91 @@ namespace Framework
   concept ParameterRepresentation = utils::is_same_v<T, float> || utils::is_same_v<T, u32>
     || utils::SimdValue<T> || utils::is_same_v<T, Framework::IndexedData>;
 
-  class ParameterBridge;
-  class ParameterValue;
+  class HostParameter;
 
   class ParameterModulator
   {
   public:
-    // deltaValue is the difference between the current and previous values
-    simd_float getDeltaValue()
+
+    f4 
+    getValue()
     {
-      return currentValue.load(satomi::memory_order_relaxed) -
-        previousValue.load(satomi::memory_order_relaxed);
+      auto values = currentValue.load(satomi::memory_order_relaxed);
+      f4::array_t expandedValues{};
+      for (usize i = 0; i < expandedValues.size(); ++i)
+        expandedValues[i] = values[i / 2];
+      
+      return expandedValues;
     }
 
-    satomi::atomic<simd_float> currentValue{ 0.0f };
-    satomi::atomic<simd_float> previousValue{ 0.0f };
+    satomi::atomic<utils::array<float, f4::complexSize>> currentValue{};
   };
 
-  struct ParameterLink
-  {
-    // the lifetime of the UIControl and parameter are the same, so there's no danger of accessing freed memory
-    // as for the hostControl, in the destructor of the UI element, tied to the BaseProcessor,
-    // we reset its pointer to the ParameterLink and so it cannot access the parameter/UIControl
-    Interface::Control *UIControl = nullptr;
-    ParameterBridge *hostControl = nullptr;
-    utils::vector<ParameterModulator *> modulators{};
-    ParameterValue *parameter = nullptr;
-  };
-
-  class ParameterValue
+  class Parameter
   {
   public:
-    ParameterValue(ParameterValue &&) = delete;
-    ParameterValue &operator=(const ParameterValue &) = delete;
-    ParameterValue &operator=(ParameterValue &&) = delete;
+    Parameter(Parameter &&) = delete;
+    Parameter &operator=(const Parameter &) = delete;
+    Parameter &operator=(Parameter &&) = delete;
 
-    ParameterValue() = default;
+    Parameter() = default;
+    Parameter(ParameterDetails details, Generation::Processor *parent);
+    Parameter(const Parameter &other, Generation::Processor *parent);
 
-    ParameterValue(ParameterDetails details) noexcept :
-      details_(COMPLEX_MOVE(details)) { reset(); }
-
-    ParameterValue(const ParameterValue &other) noexcept : details_{ other.details_ }
-    {
-      utils::ScopedLock g{ other.waitLock_, utils::WaitMechanism::Spin };
-      reset(&other.normalisedValue_);
-    }
-
-    void reset(const float *value = nullptr, float sampleRate = kDefaultSampleRate)
-    {
-      utils::ScopedLock g{ waitLock_, utils::WaitMechanism::Spin };
-
-      if (!value && details_.scale == ParameterScale::Indexed)
-      {
-        internalValue_ = (float)getValueFromOptionId(details_.defaultOptionId, details_);
-        normalisedValue_ = (float)unscaleValue(internalValue_[0], details_, sampleRate);
-      }
-      else
-      {
-        normalisedValue_ = (value) ? *value : details_.defaultNormalisedValue;
-        internalValue_ = (!value) ? details_.defaultValue : (float)scaleValue(*value, details_, sampleRate);
-      }
-
-      COMPLEX_ASSERT(normalisedValue_ <= 1.0f && normalisedValue_ >= 0.0f);
-
-      modulations_ = 0.0f;
-      normalisedInternalValue_ = normalisedValue_;
-
-      isDirty_ = false;
-    }
+    float reset(const ParameterDetails *newDetails = nullptr,
+      const float *value = nullptr, float sampleRate = kDefaultSampleRate);
 
     // prefer calling this only once if possible
+    // audio threads only
     template<ParameterRepresentation T>
     auto
-    getInternalValue(float sampleRate = kDefaultSampleRate, bool isNormalised = false) const noexcept
+    getInternalValue([[maybe_unused]] float sampleRate = kDefaultSampleRate, bool isNormalised = false) const
     {
-      utils::ScopedLock g{ waitLock_, utils::WaitMechanism::Spin };
-
       [[maybe_unused]] T result;
 
-      if constexpr (utils::is_same_v<T, simd_float>)
+      if constexpr (utils::is_same_v<T, f4>)
       {
-        COMPLEX_ASSERT(details_.scale != ParameterScale::Toggle, "Parameter isn't supposed to be a toggle control");
-        COMPLEX_ASSERT(details_.scale != ParameterScale::Indexed, "Parameter isn't supposed to be a choice control");
+        COMPLEX_ASSERT(details.scale != ParameterScale::Toggle, "Parameter isn't supposed to be a toggle control");
+        COMPLEX_ASSERT(details.scale != ParameterScale::Indexed, "Parameter isn't supposed to be a choice control");
 
         if (isNormalised)
-          result = normalisedInternalValue_;
+          result = normalisedInternalValue;
         else
-          result = internalValue_;
+          result = internalValue;
         return result;
       }
       else if constexpr (utils::is_same_v<T, float>)
       {
-        COMPLEX_ASSERT(details_.scale != ParameterScale::Toggle, "Parameter isn't supposed to be a toggle control");
-        COMPLEX_ASSERT(details_.scale != ParameterScale::Indexed, "Parameter isn't supposed to be a choice control");
+        COMPLEX_ASSERT(details.scale != ParameterScale::Toggle, "Parameter isn't supposed to be a toggle control");
+        COMPLEX_ASSERT(details.scale != ParameterScale::Indexed, "Parameter isn't supposed to be a choice control");
+        COMPLEX_ASSERT((details.flags & ParameterDetails::Stereo) == 0, "Handle values from stereo channels yourself");
 
-        if (details_.flags & ParameterDetails::Stereo)
-        {
-          simd_float modulations = modulations_;
-          simd_float difference = utils::getStereoDifference(modulations);
-          if (isNormalised)
-            result = (modulations - difference)[0];
-          else
-            result = scaleValue(modulations - difference, details_, sampleRate)[0];
-        }
+        if (isNormalised)
+          result = normalisedInternalValue[0];
         else
-        {
-          if (isNormalised)
-            result = normalisedInternalValue_[0];
-          else
-            result = internalValue_[0];
-          return result;
-        }
+          result = internalValue[0];
 
         return result;
       }
-      else if constexpr (utils::is_same_v<T, simd_int>)
+      else if constexpr (utils::is_same_v<T, i4>)
       {
-        return utils::toInt(simd_float::round(internalValue_));
+        return utils::toInt(f4::round(internalValue));
       }
       else if constexpr (utils::is_same_v<T, u32>)
       {
-        if (details_.scale == ParameterScale::Toggle)
-          result = (u32)(simd_float::round(internalValue_)[0]);
-        else if (details_.flags & ParameterDetails::Stereo)
-        {
-          simd_int difference = utils::getStereoDifference(utils::toInt(modulations_));
-          result = (u32)(simd_float::round(scaleValue(modulations_ - utils::toFloat(difference), details_, sampleRate))[0]);
-        }
-        else
-          result = (u32)(simd_float::round(internalValue_)[0]);
+        COMPLEX_ASSERT((details.flags & ParameterDetails::Stereo) == 0, "Handle values from stereo channels yourself");
+
+        result = (u32)(f4::round(internalValue)[0]);
         return result;
       }
       else if constexpr (utils::is_same_v<T, Framework::IndexedData>)
       {
-        COMPLEX_ASSERT(details_.scale == ParameterScale::Indexed,
+        COMPLEX_ASSERT(details.scale == ParameterScale::Indexed,
           "Parameter must be indexed to support value to string conversion");
-        COMPLEX_ASSERT((details_.flags & ParameterDetails::Stereo) == 0,
+        COMPLEX_ASSERT((details.flags & ParameterDetails::Stereo) == 0,
           "Indexed types that support value to string conversion must not be stereo");
 
-        return getOptionFromValue(internalValue_[0], details_);
+        return getOptionFromValue(internalValue[0], details);
       }
       else
       {
@@ -171,144 +112,60 @@ namespace Framework
       }
     }
 
-    Interface::Control *
-    changeControl(Interface::Control *control) noexcept
+    // this method will sample the current state of normalisedValue and modulations
+    // and update the internal values only
+    void updateValue(float sampleRate)
     {
-      utils::ScopedLock g{ waitLock_, utils::WaitMechanism::Spin };
-
-      auto oldControl = parameterLink_.UIControl;
-      parameterLink_.UIControl = control;
-      return oldControl;
+      sampledNormalisedValue = normalisedValue.load(satomi::memory_order_relaxed);
+      sampledModulations = 0.0f;
+      for (auto *mod : modulators)
+        sampledModulations += mod->getValue();
+      normalisedInternalValue = f4::clamp(sampledModulations + sampledNormalisedValue, 0.0f, 1.0f);
+      internalValue = scaleValue(normalisedInternalValue, details, sampleRate);
     }
 
-    ParameterBridge *
-    changeBridge(ParameterBridge *bridge) noexcept
+    void addModulator(ParameterModulator &modulator);
+    void deleteModulator(ParameterModulator &modulator);
+
+    [[nodiscard]] float
+    updateNormalisedValue(float value)
     {
-      utils::ScopedLock g{ waitLock_, utils::WaitMechanism::Spin };
+      COMPLEX_ASSERT(value >= 0.0f && value <= 1.0f);
 
-      auto oldBridge = parameterLink_.hostControl;
-      parameterLink_.hostControl = bridge;
-      return oldBridge;
-    }
+      auto newNormalisedValue = value;
+      if (details.valueChange)
+        newNormalisedValue = details.valueChange(this, value, 
+          normalisedValue.load(satomi::memory_order_relaxed));
 
-    void addModulator(ParameterModulator &modulator, isize index = -1)
-    {
-      utils::ScopedLock g{ waitLock_, utils::WaitMechanism::Spin };
+      normalisedValue.store(newNormalisedValue, satomi::memory_order_relaxed);
 
-      if (index < 0) parameterLink_.modulators.emplaceBack(&modulator);
-      else parameterLink_.modulators.emplace(index, &modulator);
-
-      isDirty_ = true;
-    }
-
-    ParameterModulator &
-    updateModulator(ParameterModulator &modulator, usize index)
-    {
-      utils::ScopedLock g{ waitLock_, utils::WaitMechanism::Spin };
-
-      auto &replacedModulator = *parameterLink_.modulators[index];
-      parameterLink_.modulators[index] = &modulator;
-
-      isDirty_ = true;
-
-      return replacedModulator;
-    }
-
-    ParameterModulator &
-    deleteModulator(usize index)
-    {
-      COMPLEX_ASSERT(index < parameterLink_.modulators.size() && "You're have given an index that's too large");
-
-      utils::ScopedLock g{ waitLock_, utils::WaitMechanism::Spin };
-
-      auto &deletedModulator = *parameterLink_.modulators[index];
-      parameterLink_.modulators.erase(index);
-
-      isDirty_ = true;
-
-      return deletedModulator;
-    }
-
-    // this method will only update the values of the parameter, parameter bridge and ui control
-    // it will NOT notify the latter about the change, so any GUI changes must be forced
-    void updateValue(float sampleRate);
-    void updateNormalisedValue(float *value = nullptr) noexcept
-    {
-      utils::ScopedLock g{ waitLock_, utils::WaitMechanism::Spin };
-      if (value)
-        normalisedValue_ = *value;
-      isDirty_ = true;
-    }
-
-    float
-    getNormalisedValue() const noexcept
-    {
-      utils::ScopedLock g{ waitLock_, utils::WaitMechanism::Spin };
-      return normalisedValue_;
-    }
-    ParameterDetails
-    getParameterDetails() const noexcept
-    {
-      utils::ScopedLock g{ waitLock_, utils::WaitMechanism::Spin };
-      return details_;
-    }
-    // id can't change, so there's no reason to acquire a lock
-    uuid getParameterId() const noexcept { return details_.id; }
-    utils::string_view
-    getParameterName() const noexcept
-    {
-      utils::ScopedLock g{ waitLock_, utils::WaitMechanism::Spin };
-      return details_.displayName;
-    }
-    Framework::ParameterScale::Value
-    getScale() const noexcept
-    {
-      utils::ScopedLock g{ waitLock_, utils::WaitMechanism::Spin };
-      return details_.scale;
-    }
-    UpdateFlag
-    getUpdateFlag() const noexcept
-    {
-      utils::ScopedLock g{ waitLock_, utils::WaitMechanism::Spin };
-      return details_.updateFlag;
-    }
-    ParameterLink *getParameterLink() noexcept { return &parameterLink_; }
-
-    void setParameterDetails(const ParameterDetails &details, float *value = nullptr) noexcept
-    {
-      utils::ScopedLock g{ waitLock_, utils::WaitMechanism::Spin };
-      details_ = details;
-      if (value)
-        normalisedValue_ = *value;
-      isDirty_ = true;
+      return newNormalisedValue;
     }
 
     void serialiseToJson(void *jsonData) const;
-    static ParameterValue *
-    deserialiseFromJson(Generation::Processor *processor, void *jsonData,
-      ParameterDetails &reference, ParameterValue *memory = nullptr);
+    static Parameter *deserialiseFromJson(Generation::Processor *processor, 
+      void *jsonData, ParameterDetails &reference, Parameter *memory = nullptr);
 
   private:
     // after adding modulations and scaling
-    simd_float internalValue_ = 0.0f;
+    f4 internalValue = 0.0f;
     // after adding modulations
-    simd_float normalisedInternalValue_ = 0.0f;
-    // value of all internal modulations
-    simd_float modulations_ = 0.0f;
-    // normalised, received from gui changes or from host when mapped out
-    float normalisedValue_ = 0.0f;
-
-    mutable satomi::atomic<bool> waitLock_ = false;
-    bool isDirty_ = false;
+    f4 normalisedInternalValue = 0.0f;
+    // value of all internal modulations, sampled on calling updateValue()
+    f4 sampledModulations = 0.0f;
+    // initial normalised value, sampled on calling updateValue()
+    float sampledNormalisedValue = 0.0f;
 
   public:
-    Generation::Processor *parentProcessor{};
-    ParameterValue *previous{};
-    ParameterValue *next{};
-  private:
+    satomi::atomic<float> normalisedValue{};
+    const utils::vector<ParameterModulator *> modulators{};
 
-    ParameterLink parameterLink_{ .parameter = this };
+    Generation::Processor *const parentProcessor{};
+    const ParameterDetails details{};
 
-    ParameterDetails details_{};
+    Interface::Control *control = nullptr;
+    HostParameter *hostParameter = nullptr;
+    Parameter *previous{};
+    Parameter *next{};
   };
 }

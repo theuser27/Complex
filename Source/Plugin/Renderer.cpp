@@ -137,7 +137,7 @@ namespace Interface
         return PUGL_FAILURE;
       }
 
-      renderer->generalData.g = anew(renderer->arena, Graphics, {});
+      renderer->generalData.g = anew(renderer->arena, Graphics, { renderer->arena });
       renderer->isInitialised = true;
 
       break;
@@ -185,6 +185,8 @@ namespace Interface
     case PUGL_UPDATE: break;
     case PUGL_LOOP_ENTER: break;
     case PUGL_LOOP_LEAVE: break;
+    // this is so that we don't hog the midi keys or other things
+    case PUGL_TEXT: return PUGL_FAILURE;
     case PUGL_KEY_PRESS:
     {
       KeyPress k{};
@@ -194,9 +196,8 @@ namespace Interface
       k.mods |= renderer->mouseButtonsDown_.flags;
 
       k.keyCode = event->key.key;
-      renderer->handleKeyPress(k);
-
-      break;
+      bool success = renderer->handleKeyPress(k);
+      return (success) ? PUGL_SUCCESS : PUGL_FAILURE;
     }
     case PUGL_FOCUS_OUT:
     {
@@ -384,7 +385,7 @@ namespace Interface
 
   Renderer::Renderer(Plugin::ComplexPlugin &plugin) : plugin{ plugin }, generalData{ plugin }
   {
-    arena = utils::bumpArena::createNested(plugin.arena, COMPLEX_MB(1));
+    arena = utils::Pool::createNested(plugin.arena, COMPLEX_MB(1));
     callbacks.data = { arena };
 
   #ifdef COMPLEX_HOTRELOAD_DIR
@@ -401,7 +402,7 @@ namespace Interface
   #ifdef COMPLEX_HOTRELOAD_DIR
     xfiles_watch_destroy(watchFileContext);
   #endif
-    utils::bumpArena::destroy(arena);
+    utils::Pool::destroy(arena);
   }
 
   void Renderer::resetGui(MainInterface *newGui)
@@ -506,8 +507,24 @@ namespace Interface
     puglSetViewHint(view_, PUGL_SAMPLES, 1);
     puglSetViewHint(view_, PUGL_DOUBLE_BUFFER, PUGL_TRUE);
     puglSetViewHint(view_, PUGL_SWAP_INTERVAL, 1);
+    puglSetViewHint(view_, PUGL_STENCIL_BITS, 8);
     puglSetViewHint(view_, PUGL_DARK_FRAME, PUGL_TRUE);
-    //puglSetViewHint(view_, PUGL_REFRESH_RATE, 60);
+
+  #ifndef COMPLEX_STANDALONE
+    // if we're on these hosts, aggressive keyboard focus is needed
+    // in order to circumvent DAW keyboard hogging
+    {
+      char hostNameData[128]{};
+      if (plugin.hostContext->getHostName(plugin.hostContext, hostNameData, countof(hostNameData)))
+      {
+        utils::string_view hostName = { hostNameData, utils::getStringSize(hostNameData) };
+        if (hostName.findCaseInsensitive("Live ") != utils::string_view::npos || 
+          hostName.findCaseInsensitive("FL") != utils::string_view::npos)
+          puglSetViewHint(view_, PUGL_AGGRESSIVE_KEYBOARD_FOCUS, PUGL_TRUE);
+      }
+    }
+  #endif
+
     puglSetHandle(view_, this);
     puglSetEventFunc(view_, runThread);
   }
@@ -767,14 +784,15 @@ namespace Interface
     //  mouseHoveredComponent_->mouseWheelMove(e);
   }
 
-  void Renderer::handleKeyPress(KeyPress k)
+  bool
+  Renderer::handleKeyPress(KeyPress k)
   {
     for (auto f = focusedComponent_; f; f = f->parent)
       if (focusedComponent_->keyPressed(k))
-        return;
+        return true;
 
     // so that no keyboard input is missed
-    gui->keyPressed(k);
+    return gui->keyPressed(k);
   }
   
   void Renderer::recalculateScale(bool forceResize)
@@ -915,7 +933,7 @@ namespace Interface
 
 extern "C"
 {
-  void *cplug_createGUI(void *userPlugin)
+  void *cplug_createGUI(CplugHostContext *, void *userPlugin)
   {
     auto &renderer = ((Plugin::ComplexPlugin *)userPlugin)->renderer;
     renderer.startUI();

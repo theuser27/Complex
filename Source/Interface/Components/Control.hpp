@@ -11,9 +11,8 @@
 
 namespace Framework
 {
-  class ParameterValue;
-  struct ParameterLink;
-  class ParameterBridge;
+  class Parameter;
+  class HostParameter;
 }
 
 namespace Interface
@@ -33,22 +32,22 @@ namespace Interface
 
     Control();
 
-    // returns the replaced link
-    Framework::ParameterLink *setParameterLink(Framework::ParameterLink *parameterLink);
+    // returns the replaced parameter
+    Framework::Parameter *setParameter(Framework::Parameter *parameter);
 
-    Framework::ParameterValue *changeLinkedParameter(Framework::ParameterValue &parameter,
+    Framework::Parameter *changeLinkedParameter(Framework::Parameter &parameter,
       bool getValueFromParameter = true);
 
-    double getValue() const { return value.load(satomi::memory_order_relaxed); }
-    bool setValue(double newValue, bool notify = true);
+    float getValue() const { return value.load(satomi::memory_order_relaxed); }
+    bool setValue(float newValue, bool setParameter);
     void resetValue();
     void setValueToHost() const;
 
     void getScaledValueString(utils::string &outString,
-      double value, bool addPrefix = true) const;
-    double getValueFromText(utils::string_view text) const;
+      float value, bool addPrefix = true) const;
+    float getValueFromText(utils::string_view text) const;
 
-    void beginChange(double oldValue);
+    void beginChange(float oldValue);
     void endChange();
 
     void createPopupMenu(PopupSelector *selector, Point<i32> position);
@@ -59,8 +58,8 @@ namespace Interface
     void showPopup(bool primary = true);
     void hidePopup(bool primary = true);
 
-    satomi::atomic<double> value = 0.0;
-    double valueBeforeChange = 0.0;
+    satomi::atomic<float> value = 0.0;
+    float valueBeforeChange = 0.0;
     float sensitivity = kDefaultSensitivity;
     ModifierKeys resetValueModifiers;
     double lastEditTime{};
@@ -83,7 +82,6 @@ namespace Interface
       bool shouldMoveOnValueChange : 1 = false;
       bool resetValueOnDoubleClick : 1 = true;
       bool isEnabled : 1 = true;
-      bool handleSetValueInCallback : 1 = false;
 
       // state flags
       bool hasParameter : 1 = false;
@@ -97,11 +95,11 @@ namespace Interface
     u8 maxDecimalCharacters = kDefaultMaxDecimalCharacters;
     Point<i32> lastMouseDragPosition{};
 
-    Framework::ParameterLink *parameterLink = nullptr;
+    Framework::Parameter *parameter = nullptr;
     Framework::ParameterDetails details{};
 
     void (*valueChangedCallback)(Control *control,
-      double newValue, double oldValue) = nullptr;
+      float newValue, float oldValue) = nullptr;
     void (*automationMappingChangedCallback)(Control *control,
       bool isUnmapping) = nullptr;
   };
@@ -126,7 +124,7 @@ namespace Interface
   public:
     SliderValueEditor();
 
-    double cachedValue = 0.0;
+    float cachedValue = 0.0;
   };
 
   class Button : public Control
@@ -195,8 +193,6 @@ namespace Interface
 
     float animationValues[1]{};
     float maxArc = kRotaryAngle;
-    //float knobArcThickness{};
-    float knobSizeScale = 1.0f;
   };
 
   class PinSlider : public Slider
@@ -241,12 +237,10 @@ namespace Interface
     DrawComponent downArrow{};
 
     utils::string dropdownTitle{};
-    double lastValue = 0.0;
 
     float animationValues[1]{};
     Placement dropdownPlacement = Placement::bottom;
     Point<i8> dropdownOffset{ 0, kPopupToElement };
-  private:
     bool isDropdownOpen = false;
   };
 

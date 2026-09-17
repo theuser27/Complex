@@ -8,7 +8,7 @@
   #include "ipps.h"
 #else
   #include "Third Party/pffft/pffft.h"
-  #include "simd_values.hpp"
+  #include "simd.hpp"
 #endif
 
 
@@ -65,7 +65,7 @@ namespace Framework
       ippSpecs[minOrder + i] = plan;
     }
 
-    utils::bumpArena::remove(tempData);
+    utils::Pool::remove(tempData);
 
     instance.ippSpecs_.store(ippSpecs, satomi::memory_order_relaxed);
     instance.buffer_.store(buffer, satomi::memory_order_relaxed);
@@ -74,9 +74,9 @@ namespace Framework
   static void destroyFFTRoutines(FFT &instance)
   {
     if (auto buffer = instance.buffer_.load(satomi::memory_order_relaxed))
-      utils::bumpArena::remove(buffer);
+      utils::Pool::remove(buffer);
     if (auto ippSpecs = instance.ippSpecs_.load(satomi::memory_order_relaxed))
-      utils::bumpArena::remove(ippSpecs);
+      utils::Pool::remove(ippSpecs);
   }
 
   void FFT::transformRealForward(u32 order, float *input, u32) const noexcept
@@ -109,7 +109,7 @@ namespace Framework
 
   // pffft requires all inputs and outputs be aligned to the simd type at use
   // so we can safely use aligned loads and stores
-  forceinline simd_float vectorcall toSimdFloat(const float *aligned) noexcept
+  forceinline f4 vectorcall toSimdFloat(const float *aligned) noexcept
   {
   #if COMPLEX_SSE4_1
     return _mm_load_ps(aligned);
@@ -118,7 +118,7 @@ namespace Framework
   #endif
   }
 
-  forceinline void vectorcall fromSimdFloat(float *aligned, simd_float value) noexcept
+  forceinline void vectorcall fromSimdFloat(float *aligned, f4 value) noexcept
   {
   #if COMPLEX_SSE4_1
     _mm_store_ps(aligned, value.value);
@@ -133,15 +133,15 @@ namespace Framework
     auto *plans = arranew(instance.arena, void *, maxOrder + 1);
 
     for (usize i = minOrder; i < maxOrder + 1; ++i)
-      plans[i] = pffft_new_setup(1 << i, PFFFT_REAL, 
-        [](void *ud, usize size, usize alignment) -> void * { return utils::bumpArena::insert((utils::bumpArena *)ud, size, alignment); },
-        [](void *, void *allocation) { utils::bumpArena::remove(allocation); },
+      plans[i] = pffft_new_setup(1 << i, PFFFT_REAL,
+        [](void *ud, usize size, usize alignment) -> void * { return utils::Pool::insert((utils::Pool *)ud, size, alignment); },
+        [](void *, void *allocation) { utils::Pool::remove(allocation); },
         instance.arena);
 
     instance.plans_.store(plans, satomi::memory_order_relaxed);
 
     // buffer needs to be 16 byte aligned for sse/neon
-    instance.scratchBuffers_.store((float *)instance.arena->insert(instance.arena, 
+    instance.scratchBuffers_.store((float *)instance.arena->insert(instance.arena,
       ((usize(1) << maxOrder) * sizeof(float)), pffft_simd_size() * alignof(float), true),
       satomi::memory_order_relaxed);
   }
@@ -156,10 +156,10 @@ namespace Framework
         if (plans[i])
           pffft_destroy_setup((PFFFT_Setup *)plans[i]);
 
-      utils::bumpArena::remove(plans);
+      utils::Pool::remove(plans);
     }
     if (auto *scratch = instance.scratchBuffers_.load(satomi::memory_order_relaxed))
-      utils::bumpArena::remove(scratch);
+      utils::Pool::remove(scratch);
   }
 
   void FFT::transformRealForward(u32 order, float *input, u32) const noexcept
@@ -181,9 +181,9 @@ namespace Framework
     COMPLEX_ASSERT(order >= orders.load(satomi::memory_order_relaxed).first);
     usize size = 1ULL << order;
 
-    COMPLEX_ASSERT((uintptr_t)output % sizeof(simd_float) == 0 && "Output buffer is not aligned");
-    simd_float scaling = 1.0f / (float)size;
-    for (usize i = 0; i < size; i += simd_float::size)
+    COMPLEX_ASSERT((uintptr_t)output % sizeof(f4) == 0 && "Output buffer is not aligned");
+    f4 scaling = 1.0f / (float)size;
+    for (usize i = 0; i < size; i += f4::size)
       fromSimdFloat(output + i, toSimdFloat(output + i) * scaling);
 
     auto plan = (PFFFT_Setup *)plans_.load(satomi::memory_order_acquire)[order];

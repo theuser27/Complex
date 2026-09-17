@@ -9,7 +9,7 @@
 
 namespace utils
 {
-  struct bumpArena;
+  struct Pool;
 }
 
 namespace Framework
@@ -27,7 +27,7 @@ namespace Framework
     // TODO: why are these even atomics 
     // if a single instance of this struct can't be used by multiple states??
     satomi::atomic<utils::pair<u32, u32>> orders{};
-    utils::bumpArena *arena{};
+    utils::Pool *arena{};
 
   #ifdef COMPLEX_INTEL_IPP
     // Intel IPP

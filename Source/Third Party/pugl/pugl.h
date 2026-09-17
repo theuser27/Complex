@@ -83,10 +83,10 @@ typedef enum {
      document, like "myfile.txt - Fancy Editor".
   */
   PUGL_WINDOW_TITLE,
+
+  PUGL_NUM_STRING_HINTS
 } PuglStringHint;
 
-/// The number of #PuglStringHint values
-#define PUGL_NUM_STRING_HINTS ((unsigned)PUGL_WINDOW_TITLE + 1U)
 
 /**
    @}
@@ -1002,10 +1002,10 @@ typedef enum {
   PUGL_REFRESH_RATE,          ///< Refresh rate in Hz
   PUGL_VIEW_TYPE,             ///< View type (a #PuglViewType)
   PUGL_DARK_FRAME,            ///< True if window frame should be dark
-} PuglViewHint;
+  PUGL_AGGRESSIVE_KEYBOARD_FOCUS,
 
-/// The number of #PuglViewHint values
-#define PUGL_NUM_VIEW_HINTS ((unsigned)PUGL_DARK_FRAME + 1U)
+  PUGL_NUM_VIEW_HINTS
+} PuglViewHint;
 
 /// View hints
 typedef int PuglHints[PUGL_NUM_VIEW_HINTS];
@@ -1066,10 +1066,9 @@ typedef enum {
      default position.
   */
   PUGL_CURRENT_POSITION,
-} PuglPositionHint;
 
-/// The number of #PuglPositionHint values
-#define PUGL_NUM_POSITION_HINTS ((unsigned)PUGL_CURRENT_POSITION + 1U)
+  PUGL_NUM_POSITION_HINTS
+} PuglPositionHint;
 
 /**
    A hint for configuring/constraining the size of a view.
@@ -1133,10 +1132,10 @@ typedef enum {
      than this.  Mutually exclusive with #PUGL_FIXED_ASPECT.
   */
   PUGL_MAX_ASPECT,
+
+  PUGL_NUM_SIZE_HINTS
 } PuglSizeHint;
 
-/// The number of #PuglSizeHint values
-#define PUGL_NUM_SIZE_HINTS ((unsigned)PUGL_MAX_ASPECT + 1U)
 
 /// A function called when an event occurs
 typedef PuglStatus(*PuglEventFunc)(PuglView *view, const PuglEvent *event);
@@ -1559,10 +1558,9 @@ typedef enum {
   PUGL_CURSOR_UP_LEFT_DOWN_RIGHT, ///< Diagonal arrow for down/right resize
   PUGL_CURSOR_UP_RIGHT_DOWN_LEFT, ///< Diagonal arrow for down/left resize
   PUGL_CURSOR_ALL_SCROLL,         ///< Omnidirectional "arrow" for scrolling
-} PuglCursor;
 
-/// The number of #PuglCursor values
-#define PUGL_NUM_CURSORS ((unsigned)PUGL_CURSOR_ALL_SCROLL + 1U)
+  PUGL_NUM_CURSORS
+} PuglCursor;
 
 /**
    Grab the keyboard input focus.

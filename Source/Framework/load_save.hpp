@@ -7,7 +7,7 @@
 
 namespace utils
 {
-  struct bumpArena;
+  struct Pool;
   class string_view;
   class string;
   template<typename T>
@@ -23,7 +23,7 @@ namespace Framework
     struct JsonTlsContext
     {
       // after finishing work with the arena and freeing it, reset this pointer
-      utils::bumpArena *arena{};
+      utils::Pool *arena{};
       utils::string *errorPath{};
       utils::vector<Framework::IndexedData *> *dynamicOptionFixups{};
     };

@@ -15,8 +15,10 @@
 
 namespace Interface
 {
-  Graphics::Graphics()
+  Graphics::Graphics(utils::Pool *nestedArena)
   {
+    arena = utils::Pool::createNested(nestedArena, COMPLEX_KB(8));
+
     context = nvgCreateGL3(NVG_ANTIALIAS | NVG_STENCIL_STROKES
     #if COMPLEX_DEBUG
       | NVG_DEBUG
@@ -35,6 +37,8 @@ namespace Interface
     InterFontId = nvgCreateFontMem(context, "Inter",
       (unsigned char *)BinaryData::Inter_Medium_ttf, (int)BinaryData::Inter_Medium_ttfSize, false);
 
+    svgs.data = utils::Allocator{ arena, false };
+
     // TODO: how big should the framebuffer be
     planeArea = { 640, 480 };
     textureFBO = nvgluCreateFramebuffer(context, planeArea.w, planeArea.h, 0);
@@ -44,6 +48,7 @@ namespace Interface
   {
     nvgluDeleteFramebuffer(textureFBO);
     nvgDeleteGL3(context);
+    utils::Pool::destroy(arena);
   }
 
   static constexpr float kDDinDefaultHeight = 11.5f;
@@ -118,34 +123,28 @@ namespace Interface
     nvgTextAlign(context, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
   }
 
-  void Graphics::bindTextureFramebuffer()
+  NSVGimage *
+  Graphics::getSVG(utils::span<const byte> data)
   {
-    nvgluBindFramebuffer(textureFBO);
-  }
-  void Graphics::unbindTextureFramebuffer()
-  {
-    nvgluBindFramebuffer(nullptr);
-  }
-  Rectangle<i32> Graphics::reserveSlotForTexture([[maybe_unused]] u64 id, [[maybe_unused]] Area<i32> desiredArea)
-  {
+    auto iter = svgs.get_first_of(data.data());
+    if (iter != svgs.data.end())
+      return iter->second;
 
-    //for (auto &[id_, bounds] : textureBounds.data)
-    //{
-
-    //}
-    return Rectangle<i32>();
+    auto parsedSVG = parseSVG(arena, data.data(), data.size());
+    return svgs.add_ordered(data.data(), parsedSVG)->second;
   }
 
-  //void Shape::drawAll(Graphics &g, Rectangle<float> bounds, float scale,
-  //  float strokeWidth, utils::span<Colour> colours) const
-  //{
-  //  for (usize i = 0; i < paths.size(); ++i)
-  //  {
-  //    auto &[fn, predefinedColour] = paths[i];
-  //    auto colour = (predefinedColour == Colour{}) ? colours[i] : predefinedColour;
-  //    fn(g, colour, bounds, scale, strokeWidth);
-  //  }
-  //}
+  NSVGimage *
+  parseSVG(utils::Pool *arenaToAllocateIn, const void *data, usize dataSize)
+  {
+    char *svgString = arranew(getLocalScratch(), char, 1 + dataSize);
+    defer{ utils::Pool::remove(svgString); };
+    valcpy(svgString, data, dataSize);
+    svgString[dataSize] = '\0';
+
+    getLocalMallocArena() = arenaToAllocateIn;
+    return nsvgParse(svgString, "px", 96);
+  }
 
   void drawSVG(NSVGimage *image, Graphics &g, Colour colour,
     Rectangle<float> bounds, float scale, float strokeWidth)
@@ -153,36 +152,52 @@ namespace Interface
     nvgSave(g);
 
     nvgStrokeWidth(g, strokeWidth);
+    nvgFillColor(g, colour);
     nvgStrokeColor(g, colour);
 
     if (scale == 0.0f)
-      scale = utils::min(bounds.w / image->width, bounds.h / image->height);
+      scale = utils::min(utils::abs(bounds.w / image->width), utils::abs(bounds.h / image->height));
+    
+    float xScale = scale * ((bounds.w < 0.0f) ? -1.0f : 1.0f);
+    float yScale = scale * ((bounds.h < 0.0f) ? -1.0f : 1.0f);
 
-    float x = bounds.x + ::roundf((bounds.w - image->width * scale) * 0.5f);
-    float y = bounds.y + ::roundf((bounds.h - image->height * scale) * 0.5f);
+    float x = bounds.x + ::roundf((bounds.w - image->width * xScale) * 0.5f);
+    float y = bounds.y + ::roundf((bounds.h - image->height * yScale) * 0.5f);
 
-    nvgBeginPath(g);
     for (NSVGshape *shape = image->shapes; shape != nullptr; shape = shape->next)
     {
+      nvgBeginPath(g);
+
       // important: implicitly casting NSVGlineCap to NVGlineCap, ensure the enum values correspond
       nvgLineCap(g, shape->strokeLineCap);
-      for (NSVGpath *path = shape->paths; path != nullptr; path = path->next)
+
+      usize i = 0;
+      for (NSVGpath *path = shape->paths; path != nullptr; (path = path->next), (++i))
       {
-        nvgMoveTo(g, x + scale * path->pts[0], y + scale * path->pts[1]);
-        for (int i = 0; i < path->npts - 1; i += 3)
+        if (shape->fillRule == NSVG_FILLRULE_EVENODD && i % 2)
+          nvgPathWinding(g, NVG_HOLE);
+        else
+          nvgPathWinding(g, NVG_SOLID);
+
+        nvgMoveTo(g, x + xScale * path->pts[0], y + yScale * path->pts[1]);
+        for (int k = 0; k < path->npts - 1; k += 3)
         {
-          float *p = &path->pts[i * 2];
+          float *p = &path->pts[k * 2];
           nvgBezierTo(g,
-            x + scale * p[2], y + scale * p[3],
-            x + scale * p[4], y + scale * p[5],
-            x + scale * p[6], y + scale * p[7]);
+            x + xScale * p[2], y + yScale * p[3],
+            x + xScale * p[4], y + yScale * p[5],
+            x + xScale * p[6], y + yScale * p[7]);
         }
 
         if (path->closed)
           nvgClosePath(g);
       }
+
+      if (shape->fill.type == NSVG_PAINT_NONE)
+        nvgStroke(g);
+      else
+        nvgFill(g);
     }
-    nvgStroke(g);
 
     nvgRestore(g);
   }

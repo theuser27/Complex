@@ -275,8 +275,7 @@ puglConfigure(PuglView* view, const PuglEvent* event)
 PuglStatus
 puglDispatchEvent(PuglView* view, const PuglEvent* event)
 {
-  PuglStatus st0 = PUGL_SUCCESS;
-  PuglStatus st1 = PUGL_SUCCESS;
+  PuglStatus status = PUGL_SUCCESS;
 
   switch (event->type) {
   case PUGL_NOTHING:
@@ -286,7 +285,7 @@ puglDispatchEvent(PuglView* view, const PuglEvent* event)
     assert(view->stage == PUGL_VIEW_STAGE_ALLOCATED);
     puglChangeContext(view->world->activeView, view);
     view->world->activeView = view;
-    st0 = view->eventFunc(view, event);
+    status = view->eventFunc(view, event);
     view->stage = PUGL_VIEW_STAGE_REALIZED;
     break;
 
@@ -295,7 +294,7 @@ puglDispatchEvent(PuglView* view, const PuglEvent* event)
     assert(view->stage >= PUGL_VIEW_STAGE_REALIZED);
     puglChangeContext(view->world->activeView, view);
     view->world->activeView = view;
-    st0 = view->eventFunc(view, event);
+    status = view->eventFunc(view, event);
     puglLeaveContext(view);
     view->world->activeView = NULL;
     view->stage = PUGL_VIEW_STAGE_ALLOCATED;
@@ -304,7 +303,7 @@ puglDispatchEvent(PuglView* view, const PuglEvent* event)
   case PUGL_CONFIGURE:
     puglChangeContext(view->world->activeView, view);
     view->world->activeView = view;
-    st0 = puglConfigure(view, event);
+    status = puglConfigure(view, event);
     if (view->stage == PUGL_VIEW_STAGE_REALIZED) {
       view->stage = PUGL_VIEW_STAGE_CONFIGURED;
     }
@@ -314,16 +313,16 @@ puglDispatchEvent(PuglView* view, const PuglEvent* event)
     assert(view->stage == PUGL_VIEW_STAGE_CONFIGURED);
     puglChangeContext(view->world->activeView, view);
     view->world->activeView = view;
-    st0 = view->eventFunc(view, event);
+    status = view->eventFunc(view, event);
     break;
 
   default:
     puglChangeContext(view->world->activeView, view);
     view->world->activeView = view;
-    st0 = view->eventFunc(view, event);
+    status = view->eventFunc(view, event);
   }
 
-  return st0 ? st0 : st1;
+  return status;
 }
 
 PuglStatus

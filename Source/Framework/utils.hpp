@@ -12,11 +12,11 @@ namespace utils
   enum class MathOperations { Assign, Add, Multiply, FadeInAdd, FadeOutAdd, Interpolate };
 
   constexpr bool
-  closeToZero(double value)
+  closeToZero(float value)
   { return value <= kEpsilon && value >= -kEpsilon; }
 
   constexpr bool
-  closeTo(double reference, double value)
+  closeTo(float reference, float value)
   { return closeToZero(reference - value); }
 
   template<bool UseAnd = false, typename T>
@@ -29,67 +29,67 @@ namespace utils
       return (size + upper - lower) % size;
   }
 
-  forceinline double
-  amplitudeToDb(double amplitude)
-  { return 20.0 * ::log10(amplitude); }
+  forceinline float
+  amplitudeToDb(float amplitude)
+  { return 20.0f * ::log10f(amplitude); }
 
-  forceinline double
-  dbToAmplitude(double decibels)
-  { return ::pow(10.0, decibels / 20.0); }
+  forceinline float
+  dbToAmplitude(float decibels)
+  { return ::powf(10.0f, decibels / 20.0f); }
 
-  forceinline double
-  normalisedToDb(double normalised, double maxDb)
-  { return ::pow(maxDb + 1.0, normalised) - 1.0; }
+  forceinline float
+  normalisedToDb(float normalised, float maxDb)
+  { return ::powf(maxDb + 1.0f, normalised) - 1.0f; }
 
-  forceinline double
-  dbToNormalised(double db, double maxDb)
-  { return ::log2(db + 1.0) / ::log2(maxDb + 1.0); }
+  forceinline float
+  dbToNormalised(float db, float maxDb)
+  { return ::log2f(db + 1.0f) / ::log2f(maxDb + 1.0f); }
 
-  forceinline double
-  normalisedToFrequency(double normalised, double sampleRate)
-  { return ::pow(sampleRate * 0.5 / kMinFrequency, normalised) * kMinFrequency; }
+  forceinline float
+  normalisedToFrequency(float normalised, float sampleRate)
+  { return ::powf(sampleRate * 0.5f / kMinFrequency, normalised) * kMinFrequency; }
 
-  forceinline double
-  frequencyToNormalised(double frequency, double sampleRate)
-  { return ::log2(frequency / kMinFrequency) / ::log2(sampleRate * 0.5 / kMinFrequency); }
+  forceinline float
+  frequencyToNormalised(float frequency, float sampleRate)
+  { return ::log2f(frequency / kMinFrequency) / ::log2f(sampleRate * 0.5f / kMinFrequency); }
 
   // returns the proper bin which may also be nyquist, which is outside a power-of-2
-  forceinline double
-  normalisedToBinUnsafe(double normalised, u32 FFTSize, double sampleRate)
-  { return ::round(normalisedToFrequency(normalised, sampleRate) / sampleRate * (double)FFTSize); }
+  forceinline float
+  normalisedToBinUnsafe(float normalised, u32 FFTSize, float sampleRate)
+  { return ::roundf(normalisedToFrequency(normalised, sampleRate) / sampleRate * (float)FFTSize); }
 
   // always returns a bin < FFTSize, therefore cannot return nyquist
-  forceinline double
-  normalisedToBinSafe(double normalised, u32 FFTSize, double sampleRate)
-  { return min(normalisedToBinUnsafe(normalised, FFTSize, sampleRate), (double)FFTSize / 2.0 - 1.0); }
+  forceinline float
+  normalisedToBinSafe(float normalised, u32 FFTSize, float sampleRate)
+  { return min(normalisedToBinUnsafe(normalised, FFTSize, sampleRate), (float)FFTSize / 2.0f - 1.0f); }
 
-  forceinline double
-  binToNormalised(double bin, u32 FFTSize, double sampleRate)
+  forceinline float
+  binToNormalised(float bin, u32 FFTSize, float sampleRate)
   {
     // at 0 logarithm doesn't produce valid values
-    if (bin == 0.0)
-      return 0.0;
-    return frequencyToNormalised(bin * sampleRate / (double)FFTSize, sampleRate);
+    if (bin == 0.0f)
+      return 0.0f;
+    return frequencyToNormalised(bin * sampleRate / (float)FFTSize, sampleRate);
   }
 
-  forceinline double
-  centsToRatio(double cents)
-  { return ::pow(2.0, cents / (double)kCentsPerOctave); }
+  forceinline float
+  centsToRatio(float cents)
+  { return ::powf(2.0f, cents / (float)kCentsPerOctave); }
 
-  forceinline double
-  midiCentsToFrequency(double cents)
+  forceinline float
+  midiCentsToFrequency(float cents)
   { return kMidi0Frequency * centsToRatio(cents); }
 
-  forceinline double
-  midiNoteToFrequency(double note)
+  forceinline float
+  midiNoteToFrequency(float note)
   { return midiCentsToFrequency(note * kCentsPerNote); }
 
-  forceinline double
-  frequencyToMidiNote(double frequency)
-  { return (double)kNotesPerOctave * ::log(frequency / kMidi0Frequency) * kExpConversionMult; }
+  forceinline float
+  frequencyToMidiNote(float frequency)
+  { return (float)kNotesPerOctave * ::logf(frequency / kMidi0Frequency) * kExpConversionMult; }
 
-  forceinline double
-  frequencyToMidiCents(double frequency)
+  forceinline float
+  frequencyToMidiCents(float frequency)
   { return kCentsPerNote * frequencyToMidiNote(frequency); }
 
   forceinline float

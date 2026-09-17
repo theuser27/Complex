@@ -84,9 +84,33 @@ namespace Interface
   {
     struct TopBar final : public Component
     {
+      struct UndoRedoButton final : public Component
+      {
+        static constexpr int kAddedMargin = 4;
+        static constexpr int kDimensions = 10;
+        static constexpr float kHoverIncrement = 0.1f;
+
+        UndoRedoButton()
+        {
+          componentFlags.clickable = true;
+          padding = { kAddedMargin, kAddedMargin, kAddedMargin, kAddedMargin };
+          desiredSize = { kDimensions, kDimensions, kDimensions, kDimensions };
+        }
+
+        bool mouseDown(const MouseEvent &) override { return true; }
+        bool mouseUp(const MouseEvent &event) override;
+        bool render(Graphics &g) override;
+
+        bool isRedo = false;
+        float rectRoundingRatio = 0.25f;
+        float animationValues[1]{};
+      };
+
       void reinitialise();
 
-      SoundEngineSection *mainSection{};
+      Component undoRedoGroup{};
+      UndoRedoButton undoButton{};
+      UndoRedoButton redoButton{};
 
       Label gainLabel{};
       Numberbox gain{};
@@ -102,8 +126,6 @@ namespace Interface
       void reinitialise();
 
       bool render(Graphics &g) override;
-
-      SoundEngineSection *mainSection{};
 
       Label blockSizeLabel{};
       Numberbox blockSize{};
@@ -138,6 +160,8 @@ namespace Interface
   struct MainInterface final : public Component
   {
     void restartUI(Plugin::State *state);
+
+    bool keyPressed(const KeyPress &key) override;
 
     DrawComponent placeholderInsert{};
     PopupSelector popupSelector{};

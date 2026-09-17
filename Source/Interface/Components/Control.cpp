@@ -19,34 +19,30 @@ namespace Interface
     componentFlags.clickableChildren = false;
   }
 
-  Framework::ParameterLink *
-  Control::setParameterLink(Framework::ParameterLink *newParameterLink)
+  Framework::Parameter *
+  Control::setParameter(Framework::Parameter *newParameter)
   {
-    auto replacedLink = parameterLink;
-    if (replacedLink)
-      replacedLink->parameter->changeControl(nullptr);
+    auto replacedParameter = parameter;
+    if (replacedParameter)
+      replacedParameter->control = nullptr;
 
-    parameterLink = newParameterLink;
+    parameter = newParameter;
 
-    if (parameterLink)
-      parameterLink->parameter->changeControl(this);
+    if (newParameter)
+      newParameter->control = this;
 
-    return replacedLink;
+    return replacedParameter;
   }
 
-  Framework::ParameterValue *
-  Control::changeLinkedParameter(Framework::ParameterValue &parameter,
+  Framework::Parameter *
+  Control::changeLinkedParameter(Framework::Parameter &newParameter,
     bool getValueFromParameter)
   {
     controlFlags.hasParameter = true;
 
-    auto replacedLink = setParameterLink(parameter.getParameterLink());
+    auto *replacedParameter = setParameter(&newParameter);
 
-    Framework::ParameterValue *replacedParameter = nullptr;
-    if (replacedLink)
-      replacedParameter = replacedLink->parameter;
-
-    details = parameter.getParameterDetails();
+    details = newParameter.details;
     {
       controlFlags.isBipolar = -details.minValue == details.maxValue ||
         details.scale == Framework::ParameterScale::SymmetricQuadratic ||
@@ -61,37 +57,28 @@ namespace Interface
     }
 
     if (getValueFromParameter)
-      setValue(parameterLink->parameter->getNormalisedValue());
+      setValue(newParameter.normalisedValue.load(satomi::memory_order_relaxed), false);
     else
-      parameterLink->parameter->updateNormalisedValue();
+      setValue(newParameter.updateNormalisedValue(getValue()), false);
 
     return replacedParameter;
   }
 
   void Control::setValueToHost() const
   {
-    if (parameterLink && parameterLink->hostControl)
-      parameterLink->hostControl->setValueFromUI((float)getValue());
+    if (parameter && parameter->hostParameter)
+      parameter->hostParameter->setValueFromUI((float)getValue());
   }
 
+  // TODO: change this bool to instead either run through the valueChange fn ptr or not
   bool
-  Control::setValue(double newValue, bool notify)
+  Control::setValue(float newValue, bool setParameter)
   {
-    newValue = utils::clamp(newValue, 0.0, 1.0);
+    newValue = utils::clamp(newValue, 0.0f, 1.0f);
 
-    // if the new value requires some processing to run before being set
-    if (controlFlags.handleSetValueInCallback)
-    {
-      COMPLEX_ASSERT(valueChangedCallback);
-
-      auto oldValue = value.load(satomi::memory_order_relaxed);
-      if (newValue == oldValue)
-        return false;
-
-      valueChangedCallback(this, newValue, oldValue);
-
-      return oldValue != value.load(satomi::memory_order_relaxed);
-    }
+    // set parameter value as well
+    if (setParameter && parameter)
+      newValue = parameter->updateNormalisedValue(newValue);
 
     auto oldValue = value.exchange(newValue, satomi::memory_order_relaxed);
     if (newValue == oldValue)
@@ -113,20 +100,20 @@ namespace Interface
         return false;
     }
 
-    if (notify && valueChangedCallback)
+    if (valueChangedCallback)
       valueChangedCallback(this, newValue, oldValue);
 
     return true;
   }
 
-  void Control::beginChange(double oldValue)
+  void Control::beginChange(float oldValue)
   {
     valueBeforeChange = oldValue;
   }
 
   struct ParameterUpdate final : public Framework::UndoAction
   {
-    ParameterUpdate(Interface::Control *control, double oldValue, double newValue) :
+    ParameterUpdate(Interface::Control *control, float oldValue, float newValue) :
       control(control), oldValue(oldValue), newValue(newValue)
     {
       UndoAction::redo = redo;
@@ -146,12 +133,12 @@ namespace Interface
     {
       auto *self = (ParameterUpdate *)a;
 
-      if (self->control->setValue(self->oldValue, false))
+      if (self->control->setValue(self->oldValue, true))
         self->control->setValueToHost();
     }
 
     //static UndoAction *
-    //combineActions(utils::bumpArena *, UndoAction *currentAction, UndoAction *nextAction)
+    //combineActions(utils::Pool *, UndoAction *currentAction, UndoAction *nextAction)
     //{
     //  if (currentAction->redo != nextAction->redo ||
     //    currentAction->undo != nextAction->undo)
@@ -171,8 +158,8 @@ namespace Interface
     static bool isOfType(Framework::UndoAction *a) { return a->redo == redo && a->undo == undo; }
 
     Interface::Control *control;
-    double oldValue;
-    double newValue;
+    float oldValue;
+    float newValue;
   };
 
   void Control::endChange()
@@ -204,9 +191,9 @@ namespace Interface
 
   void Control::resetValue()
   {
-    bool isMapped = parameterLink && parameterLink->hostControl;
+    bool isMapped = parameter && parameter->hostParameter;
     if (isMapped)
-      parameterLink->hostControl->beginChangeGesture();
+      parameter->hostParameter->beginChangeGesture();
 
     beginChange(getValue());
 
@@ -216,7 +203,7 @@ namespace Interface
     endChange();
 
     if (isMapped)
-      parameterLink->hostControl->endChangeGesture();
+      parameter->hostParameter->endChangeGesture();
   }
 
   enum MenuId
@@ -503,18 +490,18 @@ namespace Interface
     options.addChildComponent(TEXT_ITEM(kName, options, .extraData = this, .canTextWrap = true,
       .padding = secondaryPadding, .desiredSize = secondaryDesiredSize, .canBeChosen = false,
       .textColourId = Skin::kTextComponentText2));
-    options.addChildComponent(TEXT_ITEM(kDefaultValue, options, .shortcutKeyCode = 'D'));
+    options.addChildComponent(TEXT_ITEM(kDefaultValue, options, .shortcutKeyCode = 'd'));
 
     if (details.flags & Framework::ParameterDetails::Automatable)
     {
-      if (parameterLink && parameterLink->hostControl)
+      if (parameter && parameter->hostParameter)
       {
-        options.addChildComponent(TEXT_ITEM(kClearMapping, options, .shortcutKeyCode = 'C'));
+        options.addChildComponent(TEXT_ITEM(kClearMapping, options, .shortcutKeyCode = 'c'));
       }
       else
       {
         PopupItem &mapFirstSlot = with_val(*anew(itemArena, PopupItem, {}), .id = kMapFirstSlot,
-          .associatedList = &options, .shortcutKeyCode = 'A', .padding = (Rectangle<u16>{ 12, 4, 12, 4 }),
+          .associatedList = &options, .shortcutKeyCode = 'a', .padding = (Rectangle<u16>{ 12, 4, 12, 4 }),
           .componentFlags.vertical = true, .sizingFlags = Component::GrowableX);
         options.addChildComponent(&mapFirstSlot);
         mapFirstSlot.addChildComponent(TEXT_ITEM(kMapFirstSlot, options, .placement = Placement::left, .padding = {}));
@@ -537,10 +524,10 @@ namespace Interface
             continue;
           }
 
-          COMPLEX_ASSERT(parameterBridges[i].getParameterLink()->UIControl);
+          COMPLEX_ASSERT(parameterBridges[i].getParameter()->control);
 
           Component &wrapper = with_val(*anew(itemArena, Component, {}), .sizingFlags = Component::GrowableX,
-            .skinOverride = parameterBridges[i].getParameterLink()->UIControl->getSkinOverride());
+            .skinOverride = parameterBridges[i].getParameter()->control->getSkinOverride());
           ControlPopupItem *parameterMap = TEXT_ITEM(kMappingList + 1 + (i32)i * 2, (*mappingList.childList),
             .sizingFlags = Component::GrowableX, .placement = Placement::left,
             .textColourId = Skin::kWidgetPrimary1, .canBeChosen = false);
@@ -613,17 +600,17 @@ namespace Interface
     return utils::string_view{ string.data() + i, j - i };
   }
 
-  static double getProbablyLongestParameterValue(const Framework::ParameterDetails &details, float sampleRate)
+  static float getProbablyLongestParameterValue(const Framework::ParameterDetails &details, float sampleRate)
   {
-    double lowestValue = Framework::scaleValue(0.0, details, sampleRate, true);
-    double highestValue = Framework::scaleValue(1.0, details, sampleRate, true);
+    float lowestValue = Framework::scaleValue(0.0f, details, sampleRate, true);
+    float highestValue = Framework::scaleValue(1.0f, details, sampleRate, true);
 
-    double probablyLongestValue = (::fabs(lowestValue) < ::fabs(highestValue)) ? highestValue : lowestValue;
+    float probablyLongestValue = (::fabs(lowestValue) < ::fabs(highestValue)) ? highestValue : lowestValue;
     // we have nextafter at home
     if (probablyLongestValue < 0.0)
-      probablyLongestValue = probablyLongestValue + 0.1;
+      probablyLongestValue = probablyLongestValue + 0.1f;
     else
-      probablyLongestValue = probablyLongestValue - 0.1;
+      probablyLongestValue = probablyLongestValue - 0.1f;
     return probablyLongestValue;
   }
 
@@ -632,15 +619,15 @@ namespace Interface
   {
     COMPLEX_ASSERT(details.scale != Framework::ParameterScale::Indexed);
 
-    double probablyLongestValue = getProbablyLongestParameterValue(details,
+    float probablyLongestValue = getProbablyLongestParameterValue(details,
       getUiRelated()->plugin.getSampleRate());
 
     char buffer[64]{};
     usize size{};
 
-    if (details.generateNumeric)
+    if (details.toString)
     {
-      size = details.generateNumeric(buffer, sizeof(buffer), probablyLongestValue, details);
+      size = details.toString(buffer, sizeof(buffer), probablyLongestValue, details);
     }
     else
     {
@@ -659,7 +646,7 @@ namespace Interface
   }
 
   void Control::getScaledValueString(utils::string &outString,
-    double valueToConvert, bool addPrefix) const
+    float valueToConvert, bool addPrefix) const
   {
     // if the string doesn't have an allocated capacity,
     // provide it through the control's arena
@@ -680,7 +667,7 @@ namespace Interface
     }
 
     float sampleRate = getUiRelated()->plugin.getSampleRate();
-    double scaledValue = Framework::scaleValue(valueToConvert, details, sampleRate, true);
+    float scaledValue = Framework::scaleValue(valueToConvert, details, sampleRate, true);
 
     if (details.scale == Framework::ParameterScale::Indexed)
     {
@@ -698,10 +685,10 @@ namespace Interface
         option = option->parent;
       }
     }
-    else if (details.generateNumeric)
+    else if (details.toString)
     {
       char buffer[64]{};
-      usize size = details.generateNumeric(buffer, sizeof(buffer), scaledValue, details);
+      usize size = details.toString(buffer, sizeof(buffer), scaledValue, details);
       outString.copy({ buffer, size });
     }
     else if ((details.scale == Framework::ParameterScale::SymmetricLoudness ||
@@ -709,7 +696,7 @@ namespace Interface
       (utils::closeTo(kMinusInfDb, scaledValue) || utils::closeTo(kInfDb, scaledValue)))
     {
       outString.copy("+inf");
-      if (scaledValue < 0.0)
+      if (scaledValue < 0.0f)
         outString[0] = '-';
       else if (!controlFlags.shouldUsePlusMinusPrefix)
         outString.removeFirst(1);
@@ -721,14 +708,14 @@ namespace Interface
         controlFlags.shouldUsePlusMinusPrefix);
 
       usize maxIntergerCharacters = 0;
-      double probablyLongestValue = ::fabs(getProbablyLongestParameterValue(details, sampleRate));
-      if (probablyLongestValue < 1.0)
+      float probablyLongestValue = ::fabsf(getProbablyLongestParameterValue(details, sampleRate));
+      if (probablyLongestValue < 1.0f)
         maxIntergerCharacters = 1;
       else
       {
-        while (probablyLongestValue >= 1.0)
+        while (probablyLongestValue >= 1.0f)
         {
-          probablyLongestValue *= 0.1;
+          probablyLongestValue *= 0.1f;
           ++maxIntergerCharacters;
         }
       }
@@ -752,19 +739,19 @@ namespace Interface
     outString.append(details.displayUnits);
   }
 
-  double
+  float
   Control::getValueFromText(utils::string_view text) const
   {
     utils::string trimmed{ getLocalScratch(), text };
     trimmed.trim().toLower();
 
     if (text.back() == '%' && details.displayUnits != "%")
-      return 0.01 * ::strtod(text.data(), nullptr);
+      return 0.01f * ::strtof(text.data(), nullptr);
 
     if (details.scale == Framework::ParameterScale::Indexed)
     {
       auto parsedValue = Framework::getValueFromOptionText(text, details);
-      if (parsedValue >= 0.0)
+      if (parsedValue >= 0.0f)
         return Framework::unscaleValue(parsedValue, details);
     }
 
@@ -774,14 +761,14 @@ namespace Interface
     while (trimmed.front() == '+')
       trimmed.removeFirst(1).trim();
 
-    double parsedValue = ::strtod(trimmed.filterIn("0123456789.,-").data(), nullptr);
+    float parsedValue = ::strtof(trimmed.filterIn("0123456789.,-").data(), nullptr);
     return Framework::unscaleValue(parsedValue, details, true);
   }
 
   struct MappingParameterUpdate : public Framework::UndoAction
   {
-    MappingParameterUpdate(Framework::ParameterBridge *bridge,
-      Framework::ParameterLink *link = nullptr) : bridge{ bridge }, link{ link }
+    MappingParameterUpdate(Framework::HostParameter *bridge,
+      Framework::Parameter *parameter = nullptr) : bridge{ bridge }, parameter{ parameter }
     {
       // TODO: if you map and unmap the same parameter this transaction will contain both actions
       //  instead of self cancelling and freeing the arena
@@ -794,48 +781,48 @@ namespace Interface
     {
       auto *self = (MappingParameterUpdate *)a;
 
-      if (self->link)
+      if (self->parameter)
       {
-        COMPLEX_ASSERT(!self->bridge->getParameterLink());
-        self->bridge->resetParameterLink(self->link);
+        COMPLEX_ASSERT(!self->bridge->getParameter());
+        self->bridge->resetParameter(self->parameter);
 
-        Framework::ParameterBridge::notifyParameterChange();
-        if (self->link->UIControl && self->link->UIControl->automationMappingChangedCallback)
-          self->link->UIControl->automationMappingChangedCallback(self->link->UIControl, false);
+        Framework::HostParameter::notifyParameterChange();
+        if (self->parameter->control && self->parameter->control->automationMappingChangedCallback)
+          self->parameter->control->automationMappingChangedCallback(self->parameter->control, false);
 
-        self->link = nullptr;
+        self->parameter = nullptr;
       }
       else
       {
-        self->link = self->bridge->getParameterLink();
-        COMPLEX_ASSERT(self->link);
+        self->parameter = self->bridge->getParameter();
+        COMPLEX_ASSERT(self->parameter);
 
-        //Framework::ParameterBridge::notifyParameterChange();
-        if (self->link->UIControl && self->link->UIControl->automationMappingChangedCallback)
-          self->link->UIControl->automationMappingChangedCallback(self->link->UIControl, true);
+        //Framework::HostParameter::notifyParameterChange();
+        if (self->parameter->control && self->parameter->control->automationMappingChangedCallback)
+          self->parameter->control->automationMappingChangedCallback(self->parameter->control, true);
 
-        self->bridge->resetParameterLink(nullptr);
+        self->bridge->resetParameter(nullptr);
       }
     }
 
     static bool isOfType(UndoAction *a) { return a->redo == redo && a->undo == redo; }
 
-    Framework::ParameterBridge *bridge;
-    Framework::ParameterLink *link;
+    Framework::HostParameter *bridge;
+    Framework::Parameter *parameter;
   };
 
   void handleControlPopupResult(Control *control, PopupItem *selectedItem)
   {
     auto &plugin = getUiRelated()->plugin;
 
-    auto createMappingParameterUpdate = [&plugin](Framework::ParameterBridge *bridge, Framework::ParameterLink *link = nullptr)
+    auto createMappingParameterUpdate = [&plugin](Framework::HostParameter *bridge, Framework::Parameter *parameter = nullptr)
     {
       // combine as many mappings into a single transaction
-      auto *arena = plugin.undoManager.getCurrentTransaction();
-      if (auto lastAction = plugin.undoManager.getLastAction(); !arena || (lastAction && !MappingParameterUpdate::isOfType(lastAction)))
+      auto [arena, lastAction] = plugin.undoManager.getCurrent();
+      if (!arena || (lastAction && !MappingParameterUpdate::isOfType(lastAction)))
         arena = plugin.undoManager.beginNewTransaction();
 
-      plugin.undoManager.perform(anew(arena, MappingParameterUpdate, { bridge, link }));
+      plugin.undoManager.perform(anew(arena, MappingParameterUpdate, { bridge, parameter }));
     };
 
     auto result = selectedItem->id;
@@ -855,7 +842,7 @@ namespace Interface
     {
       char stringBuffer[128]{};
       usize stringSize{};
-      double currentValue = control->getValue();
+      float currentValue = control->getValue();
 
       if (!control->controlFlags.hasParameter || result == kCopyNormalisedValue)
         stringSize = utils::floatToString(currentValue, stringBuffer, sizeof(stringBuffer) - 1, 5);
@@ -872,14 +859,14 @@ namespace Interface
     {
       auto stringData = getUiRelated()->renderer->getClipboard();
       if (!stringData.empty())
-        control->setValue(control->getValueFromText({ (char *)stringData.data(), stringData.size() }));
+        control->setValue(control->getValueFromText({ (char *)stringData.data(), stringData.size() }), true);
     }
     else if (result == kClearMapping)
     {
-      if (!control->parameterLink || !control->parameterLink->hostControl)
+      if (!control->parameter || !control->parameter->hostParameter)
         return;
 
-      createMappingParameterUpdate(control->parameterLink->hostControl);
+      createMappingParameterUpdate(control->parameter->hostParameter);
     }
     else if (result == kMapFirstSlot)
     {
@@ -887,7 +874,7 @@ namespace Interface
       {
         if (!parameter.isMappedToParameter())
         {
-          createMappingParameterUpdate(&parameter, control->parameterLink);
+          createMappingParameterUpdate(&parameter, control->parameter);
           break;
         }
       }
@@ -905,10 +892,10 @@ namespace Interface
       }
       else
       {
-        if (!control->parameterLink)
+        if (!control->parameter)
           return;
 
-        createMappingParameterUpdate(&plugin.state_->parameterBridges[index], control->parameterLink);
+        createMappingParameterUpdate(&plugin.state_->parameterBridges[index], control->parameter);
       }
     }
   }
@@ -925,8 +912,8 @@ namespace Interface
   //  {
   //    auto value = control->getValueFromText(editor.enteredText);
   //    control->setValue(value, true);
-  //    if (auto hostControl = control->parameterLink->hostControl)
-  //      hostControl->setValueFromUI((float)value);
+  //    if (auto hostParameter = control->parameterLink->hostParameter)
+  //      hostParameter->setValueFromUI((float)value);
   //  }
   //}
 

@@ -5,7 +5,7 @@
 
 #include "Third Party/nanovg/nanovg.h"
 
-#include "Framework/simd_values.hpp"
+#include "Framework/simd.hpp"
 #include "Framework/simd_utils.hpp"
 #include "Framework/memory.hpp"
 #include "gui_utils.hpp"
@@ -32,7 +32,7 @@ namespace Interface
   class Graphics
   {
   public:
-    Graphics();
+    Graphics(utils::Pool *arena);
     ~Graphics();
 
     static float getFontKerningFromFontHeight(FontId fontId, float height);
@@ -86,57 +86,19 @@ namespace Interface
     void setFont(FontId fontid, float lineHeight);
     void setFontHeight(float height) const;
 
-    void bindTextureFramebuffer();
-    void unbindTextureFramebuffer();
-
-    Rectangle<i32> reserveSlotForTexture(u64 id, Area<i32> desiredArea);
-
-    Rectangle<i32>
-    getTextureWithArea(u64 id, Area<i32> area)
-    {
-      auto iter = textureBounds.get_first_of(id);
-      while (iter != textureBounds.data.end() && iter->first == id)
-      {
-        if (Area{ iter->second.w, iter->second.h } == area)
-          return iter->second;
-        ++iter;
-      }
-
-      return Rectangle<i32>{};
-    }
-
-    Rectangle<i32>
-    resizeTexture(u64 id, Rectangle<i32> currentBounds, Area<i32> desiredArea)
-    {
-      auto iter = textureBounds.binary_search({ id, currentBounds });
-      if (iter == textureBounds.data.end())
-        return reserveSlotForTexture(id, desiredArea);
-
-      return (iter == textureBounds.data.end()) ? Rectangle<i32>{} : iter->second;
-    }
-
-    u64
-    getStaticTextureId(utils::typeInfo staticId)
-    {
-      auto iter = staticTextureIds.get_first_of(staticId);
-      if (iter == staticTextureIds.data.end())
-        iter = staticTextureIds.add_ordered(staticId, idGenerator++);
-
-      return iter->second;
-    }
+    NSVGimage *getSVG(utils::span<const byte> data);
 
     operator NVGcontext *() const { return context; }
 
-    utils::vectormap<u64, Rectangle<i32>> textureBounds{};
-    utils::vectormap<utils::typeInfo, u64> staticTextureIds{};
+    utils::Pool *arena{};
 
+    utils::vectormap<const byte *, NSVGimage *> svgs{};
     u64 idGenerator{};
     Area<i32> planeArea{};
 
     NVGcontext *context{};
     NVGLUframebuffer *textureFBO{};
 
-  private:
     int DDinFontId;
     int InterFontId;
   };
@@ -147,7 +109,7 @@ namespace Interface
   forceinline Rectangle<float>
   scaleValue(Rectangle<float> bounds)
   {
-    auto values = utils::bit_cast<simd_float>(bounds);
+    auto values = utils::bit_cast<f4>(bounds);
     values = getUiRelated()->scale * utils::toFloat(values);
     return utils::bit_cast<Rectangle<float>>(values);
   }
@@ -155,16 +117,16 @@ namespace Interface
   forceinline Rectangle<float>
   scaleValueRound(Rectangle<float> bounds)
   {
-    auto values = utils::bit_cast<simd_float>(bounds);
-    values = simd_float::round(getUiRelated()->scale * utils::toFloat(values));
+    auto values = utils::bit_cast<f4>(bounds);
+    values = f4::round(getUiRelated()->scale * utils::toFloat(values));
     return utils::bit_cast<Rectangle<float>>(values);
   }
   forceinline i32 scaleValueRoundInt(float value) { return (int)::roundf(getUiRelated()->scale * value); }
   forceinline Rectangle<i32>
   scaleValueRoundInt(Rectangle<i32> bounds)
   {
-    auto values = utils::bit_cast<simd_int>(bounds);
-    values = utils::toInt(simd_float::round(getUiRelated()->scale * utils::toFloat(values)));
+    auto values = utils::bit_cast<i4>(bounds);
+    values = utils::toInt(f4::round(getUiRelated()->scale * utils::toFloat(values)));
     return utils::bit_cast<Rectangle<i32>>(values);
   }
   forceinline float unscaleValue(float value) { return value / getUiRelated()->scale; }
@@ -268,19 +230,8 @@ namespace Interface
       nvgText(context.context, x, y, text.data(), text.data() + text.size());
   }
 
-  struct OpenGlWrapper
-  {
-    Graphics *cache = nullptr;
-    NVGcontext *g = nullptr;
-    int topLevelHeight = 0;
-    bool isDestroyingOpenGl = false;
-
-    operator NVGcontext *() { return g; }
-    operator Graphics &() { return *cache; }
-  };
-
-  bool setViewport(Point<int> positionInViewport, Rectangle<int> viewportBounds,
-    Rectangle<int> scissorBounds, const Graphics &g, const Component *ignoreClipIncluding);
+  NSVGimage *parseSVG(utils::Pool *arenaToAllocateIn, 
+    const void *data, usize dataSize);
 
   void drawSVG(NSVGimage *image, Graphics &g, Colour colour,
     Rectangle<float> bounds, float scale, float strokeWidth);

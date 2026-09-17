@@ -72,9 +72,9 @@ namespace Interface
 
       {
         auto *moduleTypeParameter = effectModule->getParameter(Generation::EffectModule::ModuleType);
-        auto details = moduleTypeParameter->getParameterDetails();
-        auto normalisedValue = (float)Framework::unscaleValue(getValueFromOptionId(option->id, details), details);
-        moduleTypeParameter->updateNormalisedValue(&normalisedValue);
+        auto details = moduleTypeParameter->details;
+        auto normalisedValue = Framework::unscaleValue(getValueFromOptionId(option->id, details), details);
+        (void)moduleTypeParameter->updateNormalisedValue(normalisedValue);
       }
 
       auto *transactionArena = state->plugin->undoManager.beginNewTransaction();
@@ -141,57 +141,6 @@ namespace Interface
     return false;
   }
 
-  static void laneInputChangeCallback(Control *c, double newValue, double oldValue)
-  {
-    auto &selector = *(TextSelector *)c;
-
-    bool direction = oldValue < newValue;
-    double oldScaled = Framework::scaleValue(oldValue, selector.details);
-    double newScaled = Framework::scaleValue(newValue, selector.details);
-
-    if (oldScaled == newScaled)
-      return;
-
-    auto *parentProcessor = selector.parameterLink->parameter->parentProcessor;
-    auto [option, _] = Framework::getOptionFromValue(newScaled, selector.details);
-
-    // disallow feedback until we figure out a good UX for that
-    // TODO: fix lane feedback UX
-    outer:
-    {
-      auto *next = option;
-      while (true)
-      {
-        // have we reached a primary source? (main or sidechain inputs)
-        if (next->flags != Framework::IndexedData::StateIdFlag)
-          break;
-
-        // if we've reached our starting lane change initial option
-        if (next->stateId == parentProcessor->stateId)
-        {
-          if (direction)
-            --newScaled;
-          else
-            ++newScaled;
-
-          option = Framework::getOptionFromValue(newScaled, selector.details).first;
-          goto outer; // no labelled break in this language...
-        }
-
-        // continue down the chain until we find a primary source or our starting lane
-        auto *nextControl = parentProcessor->state
-          ->getProcessorParameter(next->stateId, Generation::EffectsLane::Input)
-          ->getParameterLink()->UIControl;
-        next = Framework::getOptionFromValue(Framework::scaleValue(nextControl->getValue(),
-          nextControl->details), nextControl->details).first;
-      }
-    }
-
-    newValue = Framework::unscaleValue(Framework::getValueFromOption(option, selector.details), selector.details);
-
-    (void)selector.value.exchange(newValue, satomi::memory_order_relaxed);
-  }
-
   void EffectsLaneSection::reinitialise()
   {
     static constexpr auto kHeaderLeftPadding = 12;
@@ -214,7 +163,7 @@ namespace Interface
     laneHandler.object = laneMessageHandler;
 
     if (!arena)
-      arena = utils::bumpArena::createNested(utils::bumpArena::fromAllocation(this), COMPLEX_KB(1));
+      arena = utils::Pool::createNested(utils::Pool::fromAllocation(this), COMPLEX_KB(1));
 
     addChildComponent(&header);
     header.desiredSize = { 0, kEffectsLaneTopBarHeight, 0, kEffectsLaneTopBarHeight };
@@ -232,8 +181,6 @@ namespace Interface
     inputSelector.arena = arena;
     inputSelector.text.font = FontId::InterType;
     inputSelector.changeLinkedParameter(*effectsLane->getParameter(Generation::EffectsLane::Input));
-    inputSelector.controlFlags.handleSetValueInCallback = true;
-    inputSelector.valueChangedCallback = laneInputChangeCallback;
     header.addChildComponent(&laneActivator);
     laneActivator.placement = Placement::right;
     laneActivator.margin = { 4, 0, 0, 0 };
@@ -280,7 +227,7 @@ namespace Interface
     moduleHolder.deleteAllChildComponents();
     removeAllChildComponents();
 
-    utils::bumpArena::destroy(arena);
+    utils::Pool::destroy(arena);
     arena = nullptr;
 
     auto *state = effectsLane->state;

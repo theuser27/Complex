@@ -43,9 +43,7 @@
 #define PUGL_USER_TIMER_MIN 9470
 
 #ifdef __cplusplus
-#  define PUGL_INIT_STRUCT \
-    {                      \
-    }
+#  define PUGL_INIT_STRUCT {}
 #else
 #  define PUGL_INIT_STRUCT {0}
 #endif
@@ -745,6 +743,127 @@ constrainAspect(const PuglView* const view,
   }
 }
 
+// This part of the code is taken from 
+// https://github.com/Tremus/CPLUG/blob/develop/src/cplug_extensions/window_win.c
+// in order to circumvent host keyboard focus hogging
+
+// This is required by a hack to tag our window within a Hook Proc
+static LONG_PTR PW_UNIQUE_INT_ID = 0;
+
+LRESULT CALLBACK PWGetMsgProc(int nCode, WPARAM wParam, LPARAM lParam)
+{
+  // cplug_log("PWGetMsgProc => %d %llu %lld", nCode, wParam, lParam);
+  MSG *msg = (MSG *)lParam;
+
+  // Check application is trying to dequeue a message
+  if (nCode == HC_ACTION && wParam == PM_REMOVE)
+  {
+    BOOL IsKeyEvent = msg->message == WM_KEYDOWN || msg->message == WM_KEYUP;
+    if (IsKeyEvent && GetWindowLongPtrW(msg->hwnd, GWLP_ID) == PW_UNIQUE_INT_ID)
+    {
+      // redirecting this to a separate message code so that we don't get double messages
+      LRESULT result = wndProc(msg->hwnd, msg->message | WM_USER, msg->wParam, msg->lParam);
+
+      // If plugin handles the input we erase it from the DAW's POV, otherwise forward it
+      if (!result)
+      {
+        // Calling TranslateMessage here immediately triggers this GetMsgProc callback
+        // https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-translatemessage#remarks
+        TranslateMessage(msg);
+        // JUCE use this to remove duplicate WM_CHAR messages in the queue.
+        // REUK mentioned on Discord that Japanese characters have this problem
+        MSG NextMsg;
+        memset(&NextMsg, 0, sizeof(NextMsg));
+        PeekMessageW(&NextMsg, msg->hwnd, WM_CHAR, WM_DEADCHAR, PM_REMOVE);
+
+        // Overwite the message so nasty hosts like Reaper & Ableton can't consume it eg. the spacebar
+        // https://forum.cockos.com/showthread.php?t=236843
+        // Skip WM_KEYUP otherwise controlling Ableton's midi keys can get sticky
+        if (msg->message != WM_KEYUP)
+        {
+          memset(msg, 0, sizeof(*msg));
+          msg->message = WM_NULL;
+        }
+
+        return 0;
+      }
+    }
+  }
+
+  return 0;
+}
+
+void pw_forward_keyboard_input(PuglView *view, 
+  UINT message, WPARAM wParam, LPARAM lParam)
+{
+  if (view->hints[PUGL_AGGRESSIVE_KEYBOARD_FOCUS] == PUGL_TRUE)
+    return;
+
+  HWND parent = GetParent(view->impl->hwnd);
+  if (parent)
+    PostMessage(parent, message, wParam, lParam);
+  else
+    DefWindowProc(view->impl->hwnd, message, wParam, lParam);
+}
+
+void pw_get_keyboard_focus(PuglView *view)
+{
+  // cplug_log("pw_get_keyboard_focus => %p", _pw);
+  // https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-setfocus
+  // https://learn.microsoft.com/en-us/windows/win32/api/libloaderapi/nf-libloaderapi-getmodulehandleexw
+  // https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-setwindowshookexw
+
+  if (GetFocus() == view->impl->hwnd)
+    return;
+
+  HWND oldFocus = SetFocus(view->impl->hwnd);
+  if (view->hints[PUGL_AGGRESSIVE_KEYBOARD_FOCUS] != PUGL_TRUE)
+    return;
+
+  if (view->impl->hwnd != oldFocus)
+  {
+    view->impl->hPrevKeyboardFocus = oldFocus;
+  }
+
+  // This is a hack to deal with DAWs that use questionable win32 tricks
+  // https://forum.juce.com/t/vst-plugin-isnt-getting-keystrokes/1633/71
+  //assert(view->impl->hGetMessageHook == NULL);
+  if (view->impl->hGetMessageHook == NULL)
+  {
+    DWORD Flags = GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT;
+    static HMODULE hModule = NULL;
+    if (hModule == NULL)
+    {
+      BOOL ok = GetModuleHandleExW(Flags, (LPCWSTR)&hModule, &hModule);
+      assert(ok);
+    }
+    if (hModule)
+      view->impl->hGetMessageHook = SetWindowsHookExW(WH_GETMESSAGE, PWGetMsgProc, hModule, 0);
+  }
+  assert(view->impl->hGetMessageHook != NULL);
+}
+
+void pw_release_keyboard_focus(PuglView *view)
+{
+  // cplug_log("pw_release_keyboard_focus => %p", _pw);
+
+  if (view->hints[PUGL_AGGRESSIVE_KEYBOARD_FOCUS] != PUGL_TRUE)
+    return;
+
+  assert(view->impl->hGetMessageHook != NULL);
+  if (view->impl->hGetMessageHook)
+  {
+    UnhookWindowsHookEx(view->impl->hGetMessageHook);
+    view->impl->hGetMessageHook = NULL;
+  }
+
+  if (view->impl->hPrevKeyboardFocus)
+  {
+    //SetFocus(view->impl->hPrevKeyboardFocus);
+    view->impl->hPrevKeyboardFocus = NULL;
+  }
+}
+
 static LRESULT
 handleMessage(PuglView* view, UINT message, WPARAM wParam, LPARAM lParam)
 {
@@ -754,6 +873,7 @@ handleMessage(PuglView* view, UINT message, WPARAM wParam, LPARAM lParam)
   MINMAXINFO*     mmi       = NULL;
   void*           dummy_ptr = NULL;
   WINDOWPLACEMENT placement = {sizeof(WINDOWPLACEMENT), 0, 0, pt, pt, rect};
+  PuglStatus      status    = PUGL_SUCCESS;
 
   if (InSendMessageEx(dummy_ptr)) {
     event.any.flags |= PUGL_IS_SEND_EVENT;
@@ -777,6 +897,7 @@ handleMessage(PuglView* view, UINT message, WPARAM wParam, LPARAM lParam)
 
     view->impl->mapped = wParam;
     handleConfigure(view, &event);
+    //pw_get_keyboard_focus(view);
     break;
   case WM_DPICHANGED:
     event.type = PUGL_DPI_CHANGE;
@@ -879,18 +1000,22 @@ handleMessage(PuglView* view, UINT message, WPARAM wParam, LPARAM lParam)
     view->impl->mouseTracked = false;
     break;
   case WM_LBUTTONDOWN:
+    pw_get_keyboard_focus(view);
   case WM_LBUTTONUP:
     initMouseEvent(&event, view, 0, message == WM_LBUTTONDOWN, lParam);
     break;
   case WM_RBUTTONDOWN:
+    pw_get_keyboard_focus(view);
   case WM_RBUTTONUP:
     initMouseEvent(&event, view, 1, message == WM_RBUTTONDOWN, lParam);
     break;
   case WM_MBUTTONDOWN:
+    pw_get_keyboard_focus(view);
   case WM_MBUTTONUP:
     initMouseEvent(&event, view, 2, message == WM_MBUTTONDOWN, lParam);
     break;
   case WM_XBUTTONDOWN:
+    pw_get_keyboard_focus(view);
   case WM_XBUTTONUP:
     if (GET_XBUTTON_WPARAM(wParam) == XBUTTON1) {
       initMouseEvent(&event, view, 3, message == WM_XBUTTONDOWN, lParam);
@@ -911,20 +1036,42 @@ handleMessage(PuglView* view, UINT message, WPARAM wParam, LPARAM lParam)
       (event.scroll.dx > 0 ? PUGL_SCROLL_RIGHT : PUGL_SCROLL_LEFT);
     break;
   case WM_KEYDOWN:
+    if (view->hints[PUGL_AGGRESSIVE_KEYBOARD_FOCUS] == PUGL_TRUE)
+      return 1;
+  case WM_KEYDOWN | WM_USER:
     if (!ignoreKeyEvent(view, lParam)) {
       initKeyEvent(&event.key, view, true, wParam, lParam);
     }
-    break;
+    status = puglDispatchEvent(view, &event);
+    if (status != PUGL_SUCCESS)
+      pw_forward_keyboard_input(view, WM_KEYDOWN, wParam, lParam);
+    
+    return status != PUGL_SUCCESS;
   case WM_KEYUP:
+    if (view->hints[PUGL_AGGRESSIVE_KEYBOARD_FOCUS] == PUGL_TRUE)
+      return 1;
+  case WM_KEYUP | WM_USER:
     initKeyEvent(&event.key, view, false, wParam, lParam);
-    break;
+    status = puglDispatchEvent(view, &event);
+    if (status != PUGL_SUCCESS)
+      pw_forward_keyboard_input(view, WM_KEYUP, wParam, lParam);
+
+    return status != PUGL_SUCCESS;
   case WM_CHAR:
+    if (view->hints[PUGL_AGGRESSIVE_KEYBOARD_FOCUS] == PUGL_TRUE)
+      return 1;
+  case WM_CHAR | WM_USER:
     initCharEvent(&event, view, wParam, lParam);
-    break;
+    status = puglDispatchEvent(view, &event);
+    if (status != PUGL_SUCCESS)
+      pw_forward_keyboard_input(view, WM_CHAR, wParam, lParam);
+
+    return status != PUGL_SUCCESS;
   case WM_SETFOCUS:
     event.type = PUGL_FOCUS_IN;
     break;
   case WM_KILLFOCUS:
+    pw_release_keyboard_focus(view);
     event.type = PUGL_FOCUS_OUT;
     break;
   case WM_SYSKEYDOWN:
@@ -1151,6 +1298,20 @@ wndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam)
 
   switch (message) {
   case WM_CREATE:
+    if (PW_UNIQUE_INT_ID == 0)
+    {
+      // https://stackoverflow.com/questions/1695288/getting-the-current-time-in-milliseconds-from-the-system-clock-in-windows#1695332
+      UINT64   EpochTimeMs = 0;
+      FILETIME filetime;
+      GetSystemTimeAsFileTime(&filetime);
+      EpochTimeMs = (UINT64)filetime.dwLowDateTime + ((UINT64)(filetime.dwHighDateTime) << 32LL);
+      EpochTimeMs = EpochTimeMs / 10000;             // convert units 100 nanosecods > ms
+      EpochTimeMs = EpochTimeMs - 11644473600000ULL; // convert date from Jan 1, 1601 to Jan 1 1970.
+
+      PW_UNIQUE_INT_ID = EpochTimeMs;
+    }
+
+    SetWindowLongPtr(hwnd, GWLP_ID, PW_UNIQUE_INT_ID);
     PostMessage(hwnd, WM_SHOWWINDOW, TRUE, 0);
     return 0;
   case WM_CLOSE:

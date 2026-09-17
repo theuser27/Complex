@@ -1,7 +1,7 @@
-
+﻿
 #include "Framework/stl_utils.hpp"
 #include "Framework/memory.hpp"
-#include "Framework/simd_values.hpp"
+#include "Framework/simd.hpp"
 #include "Framework/simd_utils.hpp"
 #include "Framework/simd_math.hpp"
 
@@ -36,7 +36,7 @@ extern "C++"
     COMPLEX_ASSERT_FALSE("Do not use allocating operator new, use arenas instead");
     return utils::allocate(size, (usize)alignment);
   }
-  [[nodiscard]] void *CALL_CONV operator new[](usize size) 
+  [[nodiscard]] void *CALL_CONV operator new[](usize size)
   {
     COMPLEX_ASSERT_FALSE("Do not use allocating operator new, use arenas instead");
     return utils::allocate(size);
@@ -47,7 +47,7 @@ extern "C++"
     return utils::allocate(size, (usize)alignment);
   }
 
-  void CALL_CONV operator delete(void *pointer) noexcept 
+  void CALL_CONV operator delete(void *pointer) noexcept
   {
     COMPLEX_ASSERT_FALSE("Do not use deallocating operator delete, use arenas instead");
     utils::deallocate(pointer);
@@ -83,34 +83,34 @@ int printVariadic(const char *format, va_list args);
 
 extern "C"
 {
-  __declspec(allocator) __declspec(restrict) void *CALL_CONV malloc(usize size) { return utils::bumpArena::insert(globalArena, size, alignof(void *)); }
-  __declspec(allocator) __declspec(restrict) void *CALL_CONV calloc(usize count, usize size) { return utils::bumpArena::insert(globalArena, count * size, alignof(void *), true); }
-  __declspec(allocator) __declspec(restrict) void *CALL_CONV realloc(void *pointer, usize newSize) { return utils::bumpArena::resize(pointer, newSize); }
-  void CALL_CONV free(void *pointer) { utils::bumpArena::remove(pointer); }
+  __declspec(allocator) __declspec(restrict) void *CALL_CONV malloc(usize size) { return utils::Pool::insert(globalArena, size, alignof(void *)); }
+  __declspec(allocator) __declspec(restrict) void *CALL_CONV calloc(usize count, usize size) { return utils::Pool::insert(globalArena, count * size, alignof(void *), true); }
+  __declspec(allocator) __declspec(restrict) void *CALL_CONV realloc(void *pointer, usize newSize) { return utils::Pool::resize(pointer, newSize); }
+  void CALL_CONV free(void *pointer) { utils::Pool::remove(pointer); }
 
   int CALL_CONV abs(int x) { return utils::abs(x); }
 
-  float CALL_CONV floorf(float x) { return simd_float::floor(x)[0]; }
-  float CALL_CONV ceilf(float x) { return simd_float::ceil(x)[0]; }
-  float CALL_CONV roundf(float x) { return simd_float::round(x)[0]; }
+  float CALL_CONV floorf(float x) { return f4::floor(x)[0]; }
+  float CALL_CONV ceilf(float x) { return f4::ceil(x)[0]; }
+  float CALL_CONV roundf(float x) { return f4::round(x)[0]; }
 
   float CALL_CONV sinf(float x) { return utils::cis(x)[1]; }
   float CALL_CONV cosf(float x) { return utils::cis(x)[0]; }
   float CALL_CONV tanf(float x) { return utils::tan(x)[0]; }
   float CALL_CONV atan2f(float y, float x) { return utils::atan2(y, x)[0]; }
 
-  float CALL_CONV sqrtf(float x) { return simd_float::sqrt(x)[0]; }
+  float CALL_CONV sqrtf(float x) { return f4::sqrt(x)[0]; }
   float CALL_CONV expf(float x) { return utils::exp(x); }
   float CALL_CONV powf(float x, float y) { return utils::pow(x, y); }
   float CALL_CONV log10f(float x) { return utils::log10(x); }
 
-  double CALL_CONV 
+  double CALL_CONV
   floor(double value)
   {
   #if COMPLEX_SSE4_1
     return _mm_round_pd(_mm_set1_pd(value), _MM_FROUND_TO_NEG_INF | _MM_FROUND_NO_EXC).m128d_f64[0];
   #elif COMPLEX_NEON
-    
+
   #endif
   }
 
@@ -220,14 +220,12 @@ extern "C"
   }
 
   float CALL_CONV acosf(float x) { return (float)acos(x); }
-  
-  double CALL_CONV
-  log2(double x)
-  {
-    return utils::log2((float)x);
-  }
 
-  double CALL_CONV 
+  double CALL_CONV log2(double x) { return utils::log2((float)x); }
+
+  float CALL_CONV log2f(float x) { return utils::log2(x); }
+
+  double CALL_CONV
   pow(double base, double exponent)
   {
     return utils::exp2((float)(utils::log2((float)base) * exponent));
@@ -262,20 +260,20 @@ extern "C"
     return (unsigned)(c - 9) < 5u || c == ' ';
   }
 
-  int CALL_CONV 
+  int CALL_CONV
   isdigit(int c)
   {
     return c >= '0' && c <= '9';
   }
 
-  int CALL_CONV 
+  int CALL_CONV
   isxdigit(int c)
   {
-    return (bool)isdigit(c) || 
+    return (bool)isdigit(c) ||
       (c >= 'A' && c <= 'F') || (c >= 'a' && c <= 'f');
   }
 
-  int CALL_CONV 
+  int CALL_CONV
   tolower(int c)
   {
     if (c >= 'A' && c <= 'Z')
@@ -283,7 +281,7 @@ extern "C"
     return c;
   }
 
-  int CALL_CONV 
+  int CALL_CONV
   strcmp(const char *one, const char *two)
   {
     COMPLEX_ASSERT(one);
@@ -298,8 +296,8 @@ extern "C"
   strlen(const char *string)
   {
     size_t size = 0;
-    usize address = utils::roundUpToMultiple((usize)string, sizeof(simd_int));
-    for (usize i = address - (usize)string; i; (--i), (++size))
+    usize address = utils::roundUpToMultiple((usize)string, sizeof(i4));
+    for (usize i = (address - (usize)string) / sizeof(*string); i; (--i), (++size))
       if (!string[size])
         return size;
 
@@ -311,14 +309,14 @@ extern "C"
       auto mask = _mm_movemask_epi8(_mm_cmpeq_epi8(test, _mm_setzero_si128()));
       if (!mask)
       {
-        size += sizeof(__m128i);
+        size += sizeof(__m128i) / sizeof(*string);
         continue;
       }
 
       unsigned long increment;
       _BitScanForward(&increment, (u32)mask);
 
-      size += increment;
+      size += increment / sizeof(*string);
 
       break;
 
@@ -338,12 +336,13 @@ extern "C"
   }
 
   char *CALL_CONV
-  strncpy(char *destination, const char *source, size_t num)
+  strncpy(char *destination, const char *source, size_t count)
   {
     auto size = strlen(source);
-    memmove(destination, source, utils::min(size + 1, num));
-    if (size + 1 < num)
-      memset(destination + size + 1, 0, num - size - 1);
+    // no this is not a bug, by definition strncpy does NOT null-terminate 💀
+    memmove(destination, source, utils::min(size + 1, count) * sizeof(*destination));
+    if (size + 1 < count)
+      memset(destination + size + 1, 0, (count - size - 1) * sizeof(*destination));
 
     return destination;
   }
@@ -380,7 +379,42 @@ extern "C"
     return diff;
   }
 
-  wchar_t *CALL_CONV 
+  size_t CALL_CONV
+  wcslen(const wchar_t *wstring)
+  {
+    size_t size = 0;
+    usize address = utils::roundUpToMultiple((usize)wstring, sizeof(i4));
+    for (usize i = (address - (usize)wstring) / sizeof(*wstring); i; (--i), (++size))
+      if (!wstring[size])
+        return size;
+
+    while (true)
+    {
+    #if COMPLEX_SSE4_1
+
+      auto test = _mm_load_si128((const __m128i *)(wstring + size));
+      auto mask = _mm_movemask_epi8(_mm_cmpeq_epi16(test, _mm_setzero_si128()));
+      if (!mask)
+      {
+        size += sizeof(__m128i) / sizeof(*wstring);
+        continue;
+      }
+
+      unsigned long increment;
+      _BitScanForward(&increment, (u32)mask);
+
+      size += increment / sizeof(*wstring);
+
+      break;
+
+    #elif COMPLEX_NEON
+
+    #endif
+    }
+    return size;
+  }
+
+  wchar_t *CALL_CONV
   wcsncat(wchar_t *dest, const wchar_t *src, size_t count)
   {
     usize i = 0;
@@ -400,9 +434,15 @@ extern "C"
   }
 
   wchar_t *CALL_CONV
-  wcsncpy(wchar_t *dest, const wchar_t *src, size_t count)
+  wcsncpy(wchar_t *destination, const wchar_t *source, size_t count)
   {
-    return (wchar_t *)strncpy((char *)dest, (const char *)src, count * sizeof(wchar_t));
+    auto size = wcslen(source);
+    // no this is not a bug, by definition strncpy does NOT null-terminate 💀
+    memmove(destination, source, utils::min(size + 1, count) * sizeof(*destination));
+    if (size + 1 < count)
+      memset(destination + size + 1, 0, (count - size - 1) * sizeof(*destination));
+
+    return destination;
   }
 
   int CALL_CONV
@@ -419,15 +459,15 @@ extern "C"
   //
   // LICENCE
   // =======
-  // 
+  //
   // NEATLIBC C STANDARD LIBRARY
-  // 
+  //
   // Copyright (C) 2010-2020 Ali Gholami Rudi <ali at rudi dot ir>
-  // 
+  //
   // Permission to use, copy, modify, and/or distribute this software for any
   // purpose with or without fee is hereby granted, provided that the above
   // copyright notice and this permission notice appear in all copies.
-  // 
+  //
   // THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
   // WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
   // MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
@@ -452,7 +492,7 @@ extern "C"
 
   int atoi(const char *s) { return (int)atol(s); }
 
-  static int 
+  static int
   digit(char c, int base)
   {
     int d;
@@ -567,7 +607,7 @@ extern "C"
 
   long CALL_CONV strtol(const char *s, char **endptr, int base) { return (long)strtoll(s, endptr, base); }
   unsigned long CALL_CONV strtoul(const char *s, char **endptr, int base) { return (long)strtoull(s, endptr, base); }
-  
+
   double
   strtod(const char *string, char **stringEnd)
   {
@@ -625,7 +665,7 @@ extern "C"
     bool isHex = p[0] == '0' && tolower(p[1]) == 'x';
     if (isHex)
       p += 2;
-    
+
     // integer part
     if (isHex)
     {
@@ -703,7 +743,7 @@ extern "C"
         i64 exponent = 0;
         for (; isdigit(*exponentStart); ++exponentStart)
           exponent = exponent * 10 + (*exponentStart - '0');
-        
+
         exponent = (exponentSign) ? -exponent : exponent;
         exponent += (utils::bit_cast<u64>(value) >> 52) & 0x7ff;
         if (exponent > 2046)
@@ -797,30 +837,30 @@ extern "C"
 
   #include <corecrt_math.h>
 
-  short __cdecl 
+  short __cdecl
   _fdtest(float *x)
   {
     auto value = utils::bit_cast<u32>(*x);
     bool isInf = (value & kFloatExponentMask) == kFloatExponentMask;
     bool isSubnormal = (value & kFloatExponentMask) == 0;
     bool hasMantissaBits = (value & kFloatMantissaMask) > 0;
-    return (isSubnormal && !hasMantissaBits) ? FP_ZERO : 
+    return (isSubnormal && !hasMantissaBits) ? FP_ZERO :
            (isSubnormal                    ) ? FP_SUBNORMAL :
-           (isInf && hasMantissaBits       ) ? FP_NAN : 
-           (isInf                          ) ? FP_INFINITE : 
+           (isInf && hasMantissaBits       ) ? FP_NAN :
+           (isInf                          ) ? FP_INFINITE :
                                                FP_NORMAL;
   }
-  short __cdecl 
+  short __cdecl
   _dtest(double *x)
   {
     auto value = utils::bit_cast<u64>(*x);
     bool isInf = (value & kDoubleExponentMask) == kDoubleExponentMask;
     bool isSubnormal = (value & kDoubleExponentMask) == 0;
     bool hasMantissaBits = (value & kDoubleMantissaMask) > 0;
-    return (isSubnormal && !hasMantissaBits) ? FP_ZERO : 
+    return (isSubnormal && !hasMantissaBits) ? FP_ZERO :
            (isSubnormal                    ) ? FP_SUBNORMAL :
-           (isInf && hasMantissaBits       ) ? FP_NAN : 
-           (isInf                          ) ? FP_INFINITE : 
+           (isInf && hasMantissaBits       ) ? FP_NAN :
+           (isInf                          ) ? FP_INFINITE :
                                                FP_NORMAL;
   }
   short __cdecl _ldtest(long double *x) { return _dtest((double *)x); }
@@ -850,13 +890,13 @@ extern "C"
   static constinit FILE stdOutput = { ._Placeholder = (void *)1 };
   static constinit FILE stdError = { ._Placeholder = (void *)2 };
 
-  FILE *__cdecl 
+  FILE *__cdecl
   __acrt_iob_func(unsigned index)
   {
     return (index == 0) ? &stdInput : (index == 1) ? &stdOutput : &stdError;
   }
 
-  int __cdecl 
+  int __cdecl
   __stdio_common_vfprintf(unsigned __int64, FILE *,
     char const *format, _locale_t, va_list args)
   {
@@ -865,8 +905,8 @@ extern "C"
 
   int stbsp_vsnprintf(char *buf, int count, char const *fmt, va_list va);
 
-  int __cdecl 
-  __stdio_common_vsprintf(unsigned __int64, char *buffer, size_t size, 
+  int __cdecl
+  __stdio_common_vsprintf(unsigned __int64, char *buffer, size_t size,
     char const *format, _locale_t, va_list args)
   {
     return stbsp_vsnprintf(buffer, (int)size, format, args);
@@ -897,7 +937,7 @@ extern "C"
   };
 
   extern "C" image_dos_header __ImageBase;
-  
+
   struct startupinfo
   {
     u32      cb;
@@ -927,7 +967,7 @@ extern "C"
 
   __declspec(dllimport) void __stdcall ExitProcess(u32 uExitCode);
   int __stdcall WinMain(void *hInst, void *hPrevInst, char *cmdline, int cmdshow);
-  int 
+  int
   WinMainCRTStartup(void *)
   {
     startupinfo info{};

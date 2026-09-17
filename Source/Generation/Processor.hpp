@@ -8,8 +8,8 @@
 
 namespace Framework
 {
-  class ParameterBridge;
-  class ParameterValue;
+  class HostParameter;
+  class Parameter;
   struct ParameterMetadata;
   struct ProcessorMetadata;
 }
@@ -35,7 +35,7 @@ namespace Generation
   class Processor
   {
   public:
-    Processor(utils::bumpArena *arena, Plugin::State *state,
+    Processor(utils::Pool *arena, Plugin::State *state,
       Framework::ProcessorMetadata *metadata, const Processor *other);
     Processor(Processor &&) = default;
 
@@ -47,7 +47,7 @@ namespace Generation
     virtual Interface::Component *createUI() = 0;
     virtual void reset();
 
-    virtual void serialiseToJson(void *jsonData, utils::span<Framework::ParameterValue *> parametersToSerialise = {}) const;
+    virtual void serialiseToJson(void *jsonData, utils::span<Framework::Parameter *> parametersToSerialise = {}) const;
     void deserialiseFromJson(void *jsonData);
     Processor *createCopy() const { return metadata->create(state, metadata, this, nullptr); }
 
@@ -68,16 +68,16 @@ namespace Generation
       return *child;
     }
 
-    Framework::ParameterValue *getParameter(uuid parameterId) const;
-    Framework::ParameterValue *createParameters(usize count,
-      Framework::ParameterMetadata *metadata, Framework::ParameterValue *copy = nullptr);
+    Framework::Parameter *getParameter(uuid parameterId) const;
+    Framework::Parameter *createParameters(usize count,
+      Framework::ParameterMetadata *metadata, Framework::Parameter *copy = nullptr);
 
     void updateParameters(UpdateFlag flag, float sampleRate, bool updateChildrenParameters = true);
     // remaps parameters from the current bridges (if they exist) to new ones (if they exist)
     // if no bridges are provided they are assumed to be nullptr
     // if remapOnlyBridges is also provided it will unmap/remap only the bridges from the parameters
     // while the parameters still keep a reference to them
-    void remapParameters(utils::span<Framework::ParameterBridge *> bridges,
+    void remapParameters(utils::span<Framework::HostParameter *> bridges,
       bool bridgeValueFromParameters, bool remapOnlyBridges = false);
 
     //void randomiseParameters();
@@ -128,10 +128,10 @@ namespace Generation
 
     u32 parameterCount{};
     // first node's previous points to the last, last node's next is always nullptr
-    Framework::ParameterValue *parameters{};
+    Framework::Parameter *parameters{};
     Framework::SimdBuffer *dataBuffer = nullptr;
 
-    utils::bumpArena *arena = nullptr;
+    utils::Pool *arena = nullptr;
     Interface::Component *component = nullptr;
 
     utils::stringnd name{};
@@ -140,7 +140,7 @@ namespace Generation
   static_assert(utils::is_trivially_destructible_v<Processor>);
 
   void deserialiseParametersFromJson(void *jsonData, Framework::ProcessorMetadata *metadata,
-    Framework::ParameterValue *&parameters, Processor *processor, bool validateParameters);
+    Framework::Parameter *&parameters, Processor *processor, bool validateParameters);
 }
 
 namespace Framework

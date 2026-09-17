@@ -19,7 +19,6 @@ namespace Generation
 namespace Interface
 {
   class Component;
-  struct OpenGlWrapper;
   class PopupDisplay;
   class PopupSelector;
   struct PopupItem;
@@ -36,9 +35,9 @@ namespace Interface
 
   PopupDisplay *getPopupDisplay(bool primary);
   PopupSelector *getPopupSelector();
-  utils::bumpArena *getUIArena();
+  utils::Pool *getUIArena();
 
-  void deleteComponent(Component *component, bool freeArena = true);
+  void deleteComponent(Component *component);
 
   void checkScrollClick(Component *component, const MouseEvent &e);
   void dragScroll(Component *component, const MouseEvent &e);
@@ -185,9 +184,9 @@ namespace Interface
     void removeAllChildComponents();
 
     // this one removes and frees component from arena
-    void deleteChildComponent(Component *childToDelete, bool freeArena = true);
-    void deleteChildComponent(usize childIndexToDelete, bool freeArena = true);
-    void deleteAllChildComponents(bool freeChildArenas = true);
+    void deleteChildComponent(Component *childToDelete);
+    void deleteChildComponent(usize childIndexToDelete);
+    void deleteAllChildComponents();
 
     bool hasFocus(bool trueIfChildIsFocused) const;
     void grabFocus();
@@ -220,7 +219,7 @@ namespace Interface
     void renderScrollbars(Graphics &g, float scrollHoverIncrement);
     virtual bool render([[maybe_unused]] Graphics &g) { return true; }
 
-    utils::bumpArena *arena{};
+    utils::Pool *arena{};
 
     Rectangle<i32> bounds{};
 

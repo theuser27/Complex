@@ -7,7 +7,7 @@
   #define COMPLEX_WINDOWS 1
 #elif defined (LINUX) || defined (__linux__)
   #define COMPLEX_LINUX 1
-#elif defined (__APPLE__ ) || defined (__MACH__)
+#elif defined (__APPLE__) || defined (__MACH__)
   #define COMPLEX_MAC 1
 #else
   #error Unsupported Platform
@@ -91,11 +91,14 @@
   // https://devblogs.microsoft.com/oldnewthing/20040826-00/?p=38043
   #define COMPLEX_FAM 1
 
-  extern "C" __declspec(noreturn) void __fastfail(unsigned int code);
+  extern "C" [[noreturn]] __declspec(noreturn) void __fastfail(unsigned int code);
   #pragma intrinsic(__fastfail)
 
-  namespace common { [[noreturn]] forceinline void fail_fast() { ::__fastfail(7 /*FAST_FAIL_FATAL_APP_EXIT*/); } }
-  #define COMPLEX_TRAP() ::common::fail_fast()
+  // for some reason __fastfail()'s noreturn is not recognised by the compiler
+  // so in cases it will request return values inside functions that won't return
+  // noreturn_hack() exists to patch this
+  namespace common { [[noreturn]] forceinline void noreturn_hack() { } }
+  #define COMPLEX_TRAP() (::__fastfail(7 /*FAST_FAIL_FATAL_APP_EXIT*/), ::common::noreturn_hack())
 
   #if COMPLEX_X64
     extern "C" void _mm_pause(void);
@@ -105,9 +108,6 @@
     #define COMPLEX_PAUSE() __yield()
   #endif
 
-  #if COMPLEX_X64
-    #define COMPLEX_INTEL_SVML
-  #endif
 #else
   #define forceinline inline __attribute__((always_inline))
   #define vectorcall

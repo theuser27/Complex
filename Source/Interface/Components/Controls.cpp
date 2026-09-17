@@ -42,8 +42,8 @@ namespace Interface
     if (!componentFlags.isClicked || !componentFlags.isHovered)
       return false;
 
-    if (parameterLink && parameterLink->hostControl)
-      parameterLink->hostControl->beginChangeGesture();
+    if (parameter && parameter->hostParameter)
+      parameter->hostParameter->beginChangeGesture();
 
     beginChange(isOn());
 
@@ -52,8 +52,8 @@ namespace Interface
     setValueToHost();
     endChange();
 
-    if (parameterLink && parameterLink->hostControl)
-      parameterLink->hostControl->endChangeGesture();
+    if (parameter && parameter->hostParameter)
+      parameter->hostParameter->endChangeGesture();
 
     return true;
   }
@@ -65,7 +65,8 @@ namespace Interface
       (u16)(kAddedMargin + iconBounds.x), kAddedMargin };
   }
 
-  bool PowerButton::render(Graphics &g)
+  bool 
+  PowerButton::render(Graphics &g)
   {
     auto colour = getColour(Skin::kWidgetAccent1, this);
 
@@ -96,7 +97,8 @@ namespace Interface
     desiredSize = { kDimensions, kDimensions, kDimensions, kDimensions };
   }
 
-  bool RadioButton::render(Graphics &g)
+  bool 
+  RadioButton::render(Graphics &g)
   {
     auto onNormalColor = getColour(Skin::kWidgetAccent1, this);
     auto offNormalColor = getColour(Skin::kPowerButtonOff, this);
@@ -173,8 +175,8 @@ namespace Interface
 
     showPopup();
 
-    if (parameterLink && parameterLink->hostControl)
-      parameterLink->hostControl->beginChangeGesture();
+    if (parameter && parameter->hostParameter)
+      parameter->hostParameter->beginChangeGesture();
 
     mouseDrag(e);
 
@@ -193,8 +195,8 @@ namespace Interface
 
     if (mouseDiff)
     {
-      double newPos = getValue() + mouseDiff * (1.0 / sensitivity);
-      newPos = (controlFlags.canLoopAround) ? newPos - ::floor(newPos) : utils::clamp(newPos, 0.0, 1.0);
+      float newPos = getValue() + (float)mouseDiff * (1.0f / sensitivity);
+      newPos = (controlFlags.canLoopAround) ? newPos - ::floorf(newPos) : utils::clamp(newPos, 0.0f, 1.0f);
 
       beginChange(getValue());
 
@@ -213,8 +215,8 @@ namespace Interface
     if (!componentFlags.isClicked)
       return false;
 
-    if (parameterLink && parameterLink->hostControl)
-      parameterLink->hostControl->endChangeGesture();
+    if (parameter && parameter->hostParameter)
+      parameter->hostParameter->endChangeGesture();
 
     if (e.numberOfClicks == 2)
     {
@@ -257,35 +259,35 @@ namespace Interface
     if (e.mods.test(ModifierKeys::allMouseButtonModifiers))
       return true;
 
-    double multiplier = 0.05;
+    float multiplier = 0.05f;
     if (e.mods.test(ModifierKeys::shiftModifier))
-      multiplier *= 0.1;
+      multiplier *= 0.1f;
 
     auto currentValue = getValue();
-    auto mouseWheelDelta = (::fabs(e.wheelDeltaX) > ::fabs(e.wheelDeltaY)) ? -e.wheelDeltaX : e.wheelDeltaY;
-    auto valueDelta = currentValue + multiplier * mouseWheelDelta * (e.wheelIsReversed ? -1.0 : 1.0);
-    valueDelta = (controlFlags.canLoopAround) ? valueDelta - ::floor(valueDelta) : utils::clamp(valueDelta, 0.0, 1.0);
+    auto mouseWheelDelta = (::fabsf(e.wheelDeltaX) > ::fabsf(e.wheelDeltaY)) ? -e.wheelDeltaX : e.wheelDeltaY;
+    auto valueDelta = currentValue + multiplier * mouseWheelDelta * (e.wheelIsReversed ? -1.0f : 1.0f);
+    valueDelta = (controlFlags.canLoopAround) ? valueDelta - ::floorf(valueDelta) : utils::clamp(valueDelta, 0.0f, 1.0f);
     valueDelta -= currentValue;
-    if (valueDelta == 0.0)
+    if (valueDelta == 0.0f)
       return true;
 
-    double newValue = 0.0;
+    float newValue = 0.0f;
     if (details.scale == Framework::ParameterScale::Indexed)
     {
-      auto valueInterval = 1.0 / (details.options->valueCount - 1);
-      newValue = currentValue + valueInterval * (valueDelta < 0.0 ? -1.0 : 1.0);
+      auto valueInterval = 1.0f / (float)(details.options->valueCount - 1);
+      newValue = currentValue + valueInterval * (valueDelta < 0.0f ? -1.0f : 1.0f);
     }
     else if (details.flags & Framework::ParameterDetails::RoundToInt)
     {
-      auto valueInterval = 1.0 / (details.maxValue - details.minValue);
-      newValue = currentValue + valueInterval * (valueDelta < 0.0 ? -1.0 : 1.0);
+      auto valueInterval = 1.0f / (details.maxValue - details.minValue);
+      newValue = currentValue + valueInterval * (valueDelta < 0.0f ? -1.0f : 1.0f);
     }
     else
-      newValue = currentValue + ::fabs(valueDelta) * (valueDelta < 0.0 ? -1.0 : 1.0);
+      newValue = currentValue + ::fabsf(valueDelta) * (valueDelta < 0.0f ? -1.0f : 1.0f);
 
-    bool isMapped = parameterLink && parameterLink->hostControl;
+    bool isMapped = parameter && parameter->hostParameter;
     if (isMapped)
-      parameterLink->hostControl->beginChangeGesture();
+      parameter->hostParameter->beginChangeGesture();
 
     beginChange(currentValue);
 
@@ -295,7 +297,7 @@ namespace Interface
     endChange();
 
     if (isMapped)
-      parameterLink->hostControl->endChangeGesture();
+      parameter->hostParameter->endChangeGesture();
 
     showPopup();
 
@@ -515,10 +517,9 @@ namespace Interface
 
     auto normalisedDiff = ((double)mouseEvent.x - lastMouseDragPosition.x) / (double)parent->bounds.w;
     runningTotal += multiply * normalisedDiff;
-    setValue(utils::clamp(runningTotal, 0.0, 1.0), true);
+    setValue((float)utils::clamp(runningTotal, 0.0, 1.0), true);
     lastMouseDragPosition = { mouseEvent.x, mouseEvent.y };
 
-    setValue(getValue(), false);
     setValueToHost();
 
     return true;
@@ -676,7 +677,6 @@ namespace Interface
     }
 
     selector->resetState();
-    lastValue = getValue();
     isDropdownOpen = true;
 
     PopupList *list = anew(selector->arena, PopupList, { selector });
@@ -702,8 +702,8 @@ namespace Interface
     selector->skinOverride = getSkinOverride();
     selector->callback = [this](PopupSelector *, PopupItem *item)
     {
-      if (parameterLink && parameterLink->hostControl)
-        parameterLink->hostControl->beginChangeGesture();
+      if (parameter && parameter->hostParameter)
+        parameter->hostParameter->beginChangeGesture();
 
       auto *option = (Framework::IndexedData *)item->extraData;
 
@@ -716,8 +716,8 @@ namespace Interface
 
       isDropdownOpen = false;
 
-      if (parameterLink && parameterLink->hostControl)
-        parameterLink->hostControl->endChangeGesture();
+      if (parameter && parameter->hostParameter)
+        parameter->hostParameter->endChangeGesture();
     };
     selector->cancel = [this](PopupSelector *) { isDropdownOpen = false; };
     selector->summon(this, dropdownPlacement, dropdownOffset.toInt());
@@ -730,7 +730,6 @@ namespace Interface
   bool
   TextSelector::mouseWheelMove(const MouseEvent &e)
   {
-    lastValue = getValue();
     auto newEvent = e;
     newEvent.wheelIsReversed = !e.wheelIsReversed;
 

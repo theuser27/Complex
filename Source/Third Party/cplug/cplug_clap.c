@@ -1,11 +1,11 @@
 /* Released into the public domain by Tré Dudman - 2024
  * For licensing and more info see https://github.com/Tremus/CPLUG */
 
-#include <stdio.h>
-#include <string.h>
-
+#include "config.h"
 #include "clap/clap.h"
 #include "cplug.h"
+#include <stdio.h>
+#include <string.h>
 
 typedef struct CLAPPlugin
 {
@@ -47,9 +47,9 @@ CLAPExtAudioPorts_get(const clap_plugin_t* plugin, uint32_t index, bool is_input
     cplug_log("CLAPExtAudioPorts_get => %u %p", (unsigned)is_input, info);
     CLAPPlugin* clap = (CLAPPlugin*)plugin->plugin_data;
 
-    uint32_t numInputs  = cplug_getNumInputBusses(clap->userPlugin);
-    uint32_t numOutputs = cplug_getNumOutputBusses(clap->userPlugin);
-    if (is_input && index < numInputs)
+    uint32_t numInputBusses  = cplug_getNumInputBusses(clap->userPlugin);
+    uint32_t numOutputBusses = cplug_getNumOutputBusses(clap->userPlugin);
+    if (is_input && index < numInputBusses)
     {
         info->id = index;
         cplug_getInputBusName(clap->userPlugin, index, info->name, sizeof(info->name));
@@ -66,16 +66,16 @@ CLAPExtAudioPorts_get(const clap_plugin_t* plugin, uint32_t index, bool is_input
         else
             info->port_type = NULL;
 
-        if (index < numOutputs)
-            info->in_place_pair = numInputs + index;
+        if (index < numOutputBusses)
+            info->in_place_pair = numInputBusses + index;
         else
             info->in_place_pair = CLAP_INVALID_ID;
         return true;
     }
 
-    if (!is_input && index < numOutputs)
+    if (!is_input && index < numOutputBusses)
     {
-        info->id = numInputs + index;
+        info->id = numInputBusses + index;
         cplug_getOutputBusName(clap->userPlugin, index, info->name, sizeof(info->name));
         info->channel_count = cplug_getOutputBusChannelCount(clap->userPlugin, index);
         // Maybe we will support 64bit one day (probably not)
@@ -90,7 +90,7 @@ CLAPExtAudioPorts_get(const clap_plugin_t* plugin, uint32_t index, bool is_input
         else
             info->port_type = NULL;
 
-        if (index < numInputs)
+        if (index < numInputBusses)
             info->in_place_pair = index;
         else
             info->in_place_pair = CLAP_INVALID_ID;
@@ -315,7 +315,7 @@ bool CLAPExtGUI_create(const clap_plugin_t* plugin, const char* api, bool is_flo
     CPLUG_LOG_ASSERT_RETURN(CLAPExtGUI_is_api_supported(plugin, api, is_floating), false);
 
     CLAPPlugin* clap = (CLAPPlugin*)plugin->plugin_data;
-    clap->userGUI    = cplug_createGUI(clap->userPlugin);
+    clap->userGUI    = cplug_createGUI(&clap->hostContext, clap->userPlugin);
     CPLUG_LOG_ASSERT_RETURN(clap->userGUI != NULL, false);
 
     return true;
@@ -533,7 +533,7 @@ static void CLAPPlugin_destroy(const struct clap_plugin* plugin)
     cplug_log("CLAPPlugin_destroy");
     CLAPPlugin* clap = (CLAPPlugin*)plugin->plugin_data;
     cplug_destroyPlugin(clap->userPlugin);
-    CPLUG_FREE(clap);
+    free(clap);
 }
 
 static bool CLAPPlugin_activate(
@@ -568,12 +568,12 @@ typedef struct ClapProcessContextTranslator
     uint32_t              numEvents;
 } ClapProcessContextTranslator;
 
-bool ClapProcessContext_enqueueEvent(struct CplugProcessContext* ctx, const CplugEvent* paramEvent, uint32_t frameIdx)
+bool ClapProcessContext_enqueueEvent(struct CplugProcessContext* ctx, const CplugEvent* cplugEvent, uint32_t frameIdx)
 {
     ClapProcessContextTranslator* translator = (ClapProcessContextTranslator*)ctx;
     const clap_process_t*         process    = translator->process;
 
-    switch (paramEvent->type)
+    switch (cplugEvent->type)
     {
     case CPLUG_EVENT_PARAM_CHANGE_BEGIN:
     case CPLUG_EVENT_PARAM_CHANGE_END:
@@ -581,9 +581,10 @@ bool ClapProcessContext_enqueueEvent(struct CplugProcessContext* ctx, const Cplu
         clap_event_param_gesture_t event;
         memset(&event, 0, sizeof(event));
         event.header.size = sizeof(event);
-        event.header.type = paramEvent->type == CPLUG_EVENT_PARAM_CHANGE_BEGIN ? CLAP_EVENT_PARAM_GESTURE_BEGIN
+        event.header.time = frameIdx;
+        event.header.type = cplugEvent->type == CPLUG_EVENT_PARAM_CHANGE_BEGIN ? CLAP_EVENT_PARAM_GESTURE_BEGIN
                                                                                : CLAP_EVENT_PARAM_GESTURE_END;
-        event.param_id    = paramEvent->parameter.id;
+        event.param_id    = cplugEvent->parameter.id;
         return process->out_events->try_push(process->out_events, &event.header);
     }
     case CPLUG_EVENT_PARAM_CHANGE_UPDATE:
@@ -591,9 +592,24 @@ bool ClapProcessContext_enqueueEvent(struct CplugProcessContext* ctx, const Cplu
         clap_event_param_value_t event;
         memset(&event, 0, sizeof(event));
         event.header.size = sizeof(event);
+        event.header.time = frameIdx;
         event.header.type = CLAP_EVENT_PARAM_VALUE;
-        event.param_id    = paramEvent->parameter.id;
-        event.value       = paramEvent->parameter.value;
+        event.param_id    = cplugEvent->parameter.id;
+        event.value       = cplugEvent->parameter.value;
+        return process->out_events->try_push(process->out_events, &event.header);
+    }
+    case CPLUG_EVENT_MIDI:
+    {
+        clap_event_midi_t event;
+        memset(&event, 0, sizeof(event));
+        event.header.size = sizeof(event);
+        event.header.time = frameIdx;
+        event.header.type = CLAP_EVENT_MIDI;
+
+        event.data[0] = cplugEvent->midi.bytes[0];
+        event.data[1] = cplugEvent->midi.bytes[1];
+        event.data[2] = cplugEvent->midi.bytes[2];
+
         return process->out_events->try_push(process->out_events, &event.header);
     }
     default:
@@ -744,9 +760,9 @@ static clap_process_status CLAPPlugin_process(const struct clap_plugin* plugin, 
 
     struct ClapProcessContextTranslator translator;
     memset(&translator, 0, sizeof(translator));
-    translator.cplugContext.numFrames  = process->frames_count;
-    translator.cplugContext.numInputs  = process->audio_inputs_count;
-    translator.cplugContext.numOutputs = process->audio_outputs_count;
+    translator.cplugContext.numFrames       = process->frames_count;
+    translator.cplugContext.numInputBusses  = process->audio_inputs_count;
+    translator.cplugContext.numOutputBusses = process->audio_outputs_count;
 
     if (process->transport)
     {
@@ -801,15 +817,15 @@ static const void* CLAPPlugin_get_extension(const struct clap_plugin* plugin, co
     cplug_log("CLAPPlugin_get_extension => %s", id);
     CLAPPlugin* clap = (CLAPPlugin*)plugin->plugin_data;
 
-    uint32_t numInputs  = cplug_getNumInputBusses(clap->userPlugin);
-    uint32_t numOutputs = cplug_getNumOutputBusses(clap->userPlugin);
-    uint32_t numParams  = cplug_getNumParameters(clap->userPlugin);
+    uint32_t numInputBusses  = cplug_getNumInputBusses(clap->userPlugin);
+    uint32_t numOutputBusses = cplug_getNumOutputBusses(clap->userPlugin);
+    uint32_t numParams       = cplug_getNumParameters(clap->userPlugin);
 
     if (!strcmp(id, CLAP_EXT_LATENCY))
         return &s_clap_latency;
     if (!strcmp(id, CLAP_EXT_TAIL))
         return &s_clap_tail;
-    if (!strcmp(id, CLAP_EXT_AUDIO_PORTS) && (numInputs || numOutputs))
+    if (!strcmp(id, CLAP_EXT_AUDIO_PORTS) && (numInputBusses || numOutputBusses))
         return &s_clap_audio_ports;
 #if CPLUG_WANT_MIDI_INPUT
     if (!strcmp(id, CLAP_EXT_NOTE_PORTS))
@@ -868,7 +884,7 @@ CLAPFactory_create_plugin(const struct clap_plugin_factory* factory, const clap_
     // clap-validator tests you on this
     CPLUG_LOG_ASSERT_RETURN(strcmp(plugin_id, CPLUG_CLAP_ID) == 0, NULL);
 
-    CLAPPlugin* clap                  = (CLAPPlugin*)CPLUG_CALLOC(1, sizeof(CLAPPlugin));
+    CLAPPlugin* clap                  = (CLAPPlugin*)calloc(1, sizeof(CLAPPlugin));
     clap->clapPlugin.desc             = &s_clap_desc;
     clap->clapPlugin.plugin_data      = clap;
     clap->clapPlugin.init             = CLAPPlugin_init;

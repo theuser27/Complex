@@ -26,8 +26,8 @@ namespace
   {
     utils::ScopedLock g{ executableStaticData.readWriteLock, true, utils::WaitMechanism::WaitNotify };
 
-    executableStaticData.arena = utils::bumpArena::create(COMPLEX_MB(1), COMPLEX_KB(64));
-    executableStaticData.structure.arena = utils::bumpArena::create(COMPLEX_MB(1), COMPLEX_KB(64));
+    executableStaticData.arena = utils::Pool::create(COMPLEX_MB(1), COMPLEX_KB(64));
+    executableStaticData.structure.arena = utils::Pool::create(COMPLEX_MB(1), COMPLEX_KB(64));
 
     auto pushString = [&](utils::string_view string)
     {
@@ -123,10 +123,10 @@ namespace
   {
     utils::ScopedLock g{ executableStaticData.readWriteLock, true, utils::WaitMechanism::WaitNotify };
 
-    utils::bumpArena::destroy(executableStaticData.structure.arena);
+    utils::Pool::destroy(executableStaticData.structure.arena);
 
     executableStaticData.strings = {};
-    utils::bumpArena::destroy(executableStaticData.arena);
+    utils::Pool::destroy(executableStaticData.arena);
   }
 }
 
@@ -147,7 +147,7 @@ findOrAddPermanentString(utils::string_view string)
   {
     utils::ScopedLock g{ executableStaticData.readWriteLock, true, utils::WaitMechanism::WaitNotify };
 
-    auto *memory = utils::bumpArena::insert(executableStaticData.arena, sizeof(utils::sll<utils::string_view>) +
+    auto *memory = utils::Pool::insert(executableStaticData.arena, sizeof(utils::sll<utils::string_view>) +
       1 + string.size(), alignof(utils::sll<utils::string_view>));
     auto stringStart = memory + sizeof(utils::sll<utils::string_view>);
     ::memcpy(stringStart, string.data(), string.size());
@@ -165,14 +165,14 @@ findOrAddPermanentString(utils::string_view string)
 
 namespace Framework
 {
-  void ParameterBridge::notifyParameterChange()
+  void HostParameter::notifyParameterChange()
   {
     auto hostContext = Interface::getUiRelated()->plugin.hostContext;
     hostContext->rescan(hostContext,
       CPLUG_FLAG_RESCAN_PARAM_VALUES | CPLUG_FLAG_RESCAN_PARAM_NAMES | CPLUG_FLAG_RESCAN_PARAM_METADATA);
   }
 
-  void ParameterBridge::beginChangeGesture()
+  void HostParameter::beginChangeGesture()
   {
     if (!state->plugin->renderer.gui)
       return;
@@ -181,7 +181,7 @@ namespace Framework
     state->plugin->hostContext->sendParamEvent(state->plugin->hostContext, &event);
   }
 
-  void ParameterBridge::setValueFromUI(float newValue)
+  void HostParameter::setValueFromUI(float newValue)
   {
     value_.store(newValue, satomi::memory_order_release);
 
@@ -193,7 +193,7 @@ namespace Framework
     state->plugin->hostContext->sendParamEvent(state->plugin->hostContext, &event);
   }
 
-  void ParameterBridge::endChangeGesture()
+  void HostParameter::endChangeGesture()
   {
     if (!state->plugin->renderer.gui)
       return;
@@ -210,9 +210,9 @@ namespace Plugin
 
   State::State(ComplexPlugin *plugin) : plugin{ plugin }
   {
-    processorStorage = utils::bumpArena::create(COMPLEX_MB(256), COMPLEX_MB(2));
-    miscStorage = utils::bumpArena::createNested(processorStorage, COMPLEX_KB(128));
-    uiStorage = utils::bumpArena::create(COMPLEX_MB(256), COMPLEX_MB(4));
+    processorStorage = utils::Pool::create(COMPLEX_MB(256), COMPLEX_MB(2));
+    miscStorage = utils::Pool::createNested(processorStorage, COMPLEX_KB(128));
+    uiStorage = utils::Pool::create(COMPLEX_MB(256), COMPLEX_MB(4));
 
     gui = anew(uiStorage, Interface::MainInterface, {});
     gui->arena = uiStorage;
@@ -226,15 +226,15 @@ namespace Plugin
     createDynamicParameters();
 
     auto count = plugin->parameterCount;
-    parameterBridges = utils::span{ (Framework::ParameterBridge *)
-      utils::bumpArena::insert(miscStorage, sizealignof(Framework::ParameterBridge, count)), count };
+    parameterBridges = utils::span{ (Framework::HostParameter *)
+      utils::Pool::insert(miscStorage, sizealignof(Framework::HostParameter, count)), count };
 
     for (usize i = 0; i < count; ++i)
-      (void)new(parameterBridges.data() + i) Framework::ParameterBridge{ this, (u64)i };
+      (void)new(parameterBridges.data() + i) Framework::HostParameter{ this, (u64)i };
 
     // TODO: copy over metadata tree
     // TODO: decide how runtime changes are going to be handled (this is going to be hard)
-    //pluginStructure.arena = utils::bumpArena::create();
+    //pluginStructure.arena = utils::Pool::create();
     //utils::ScopedLock g{ structure.readWriteLock, true, utils::WaitMechanism::WaitNotify };
 
     //pluginStructure.versionNumber = structure.structure.versionNumber;
@@ -247,8 +247,8 @@ namespace Plugin
     for (auto &worker : workers)
       worker.stop();
 
-    utils::bumpArena::destroy(uiStorage);
-    utils::bumpArena::destroy(processorStorage);
+    utils::Pool::destroy(uiStorage);
+    utils::Pool::destroy(processorStorage);
   }
 
   Framework::ProcessorMetadata *
@@ -305,6 +305,7 @@ namespace Plugin
       auto alreadyExists = utils::findIf(iter->second, [&](IndexedData *option) { return option->stateId == processor->stateId; });
       if (!alreadyExists)
       {
+        auto g = plugin->acquireProcessingLock();
         iter->second->addChildren({{ anew(arena, IndexedData,
           { .id = processor->metadata->id, .flags = IndexedData::StateIdFlag, .stateId = processor->stateId }) }});
 
@@ -336,7 +337,7 @@ namespace Plugin
         else
           previous->next = item.next;
 
-        utils::bumpArena::remove(&item);
+        utils::Pool::remove(&item);
         return false;
       });
     }
@@ -377,7 +378,7 @@ namespace Plugin
     }
 
     allProcessors.data.erase({ processor->stateId, processor });
-    utils::bumpArena::remove(processor->arena);
+    utils::Pool::remove(processor->arena);
   }
 
   Generation::Processor *
@@ -393,7 +394,7 @@ namespace Plugin
   utils::pair<u32, u32> State::getMinMaxFFTOrder() const { return soundEngine->getMinMaxFFTOrder(); }
   u32 State::getMaxBinCount() const { return soundEngine->getMaxBinCount(); }
 
-  Framework::ParameterValue *
+  Framework::Parameter *
   State::getProcessorParameter(u64 parentProcessorId, uuid parameterId) const
   {
     auto *processorPointer = getProcessor(parentProcessorId);
@@ -446,7 +447,7 @@ namespace Plugin
   ComplexPlugin::ComplexPlugin(usize parameterMappings, u32 inSidechains,
     u32 outSidechains, usize undoSteps, CplugHostContext *hostContext) :
     inSidechains{ inSidechains }, outSidechains{ outSidechains }, parameterCount{ parameterMappings }, 
-    arena{ utils::bumpArena::create(COMPLEX_MB(16), COMPLEX_MB(2)) }, undoManager{ arena, undoSteps },
+    arena{ utils::Pool::create(COMPLEX_MB(16), COMPLEX_MB(2)) }, undoManager{ arena, undoSteps },
     hostContext{ hostContext }, renderer{ *this }
   {
     fft.arena = arena;
@@ -528,8 +529,8 @@ namespace Plugin
 
 struct TlsContext
 {
-  utils::bumpArena *localScratch{};
-  utils::bumpArena *localMallocArena{};
+  utils::Pool *localScratch{};
+  utils::Pool *localMallocArena{};
   Interface::InterfaceRelated *uiRelated{};
   Framework::LoadSave::JsonTlsContext jsonContext{};
 };
@@ -539,7 +540,7 @@ utils::createTlsContext()
 {
   auto *context = anew(globalArena, TlsContext, {});
   
-  context->localScratch = utils::bumpArena::create(COMPLEX_MB(4), COMPLEX_KB(128));
+  context->localScratch = utils::Pool::create(COMPLEX_MB(4), COMPLEX_KB(128));
 
   return context;
 }
@@ -547,17 +548,17 @@ utils::createTlsContext()
 void utils::destroyTlsContext(void *context)
 {
   auto *tls = (TlsContext *)context;
-  utils::bumpArena::destroy(tls->localScratch);
+  utils::Pool::destroy(tls->localScratch);
   tls->localScratch = nullptr;
 }
 
-utils::bumpArena *&
+utils::Pool *&
 getLocalScratch()
 {
   return ((TlsContext *)utils::getTls())->localScratch;
 }
 
-utils::bumpArena *&
+utils::Pool *&
 getLocalMallocArena()
 {
   return ((TlsContext *)utils::getTls())->localMallocArena;
@@ -578,7 +579,7 @@ Framework::LoadSave::getJsonContext()
 void initialiseCJSONHooks();
 
 // DLL-wide global memmory pool, deallocated when DLL is unloaded
-constinit utils::bumpArena *globalArena = nullptr;
+constinit utils::Pool *globalArena = nullptr;
 
 void cplug_libraryLoad()
 {
@@ -636,28 +637,32 @@ void cplug_destroyPlugin(void *ptr)
   }
 
   // warning: this only works because the plugin is the first member
-  utils::bumpArena::remove(plugin);
+  utils::Pool::remove(plugin);
 }
 
 /* --------------------------------------------------------------------------------------------------------
  * Busses */
 
-uint32_t cplug_getNumInputBusses(void *ptr)
+uint32_t 
+cplug_getNumInputBusses(void *ptr)
 {
   return ((Plugin::ComplexPlugin *)ptr)->inSidechains + 1;
 }
 
-uint32_t cplug_getNumOutputBusses(void *ptr)
+uint32_t 
+cplug_getNumOutputBusses(void *ptr)
 {
   return ((Plugin::ComplexPlugin *)ptr)->outSidechains + 1;
 }
 
-uint32_t cplug_getInputBusChannelCount([[maybe_unused]] void *ptr, [[maybe_unused]] uint32_t idx)
+uint32_t 
+cplug_getInputBusChannelCount([[maybe_unused]] void *ptr, [[maybe_unused]] uint32_t idx)
 {
   return 2; // always stereo
 }
 
-uint32_t cplug_getOutputBusChannelCount([[maybe_unused]] void *ptr, [[maybe_unused]] uint32_t idx)
+uint32_t 
+cplug_getOutputBusChannelCount([[maybe_unused]] void *ptr, [[maybe_unused]] uint32_t idx)
 {
   return 2; // always stereo
 }
@@ -687,12 +692,14 @@ void cplug_getOutputBusName([[maybe_unused]] void *ptr, uint32_t idx, char *buf,
 /* --------------------------------------------------------------------------------------------------------
  * Parameters */
 
-uint32_t cplug_getNumParameters(void *ptr)
+uint32_t 
+cplug_getNumParameters(void *ptr)
 {
   return (uint32_t)((Plugin::ComplexPlugin *)ptr)->parameterCount;
 }
 
-uint32_t cplug_getParameterID([[maybe_unused]] void *ptr, uint32_t paramIndex)
+uint32_t 
+cplug_getParameterID([[maybe_unused]] void *ptr, uint32_t paramIndex)
 {
   // TODO: consider taking advantage of the index -> id mapping in the future
   // return the exact same parameter index to use as ID
@@ -706,7 +713,8 @@ void cplug_getParameterName(void *ptr, uint32_t paramId, char *buf, size_t bufle
   state->parameterBridges[paramId].getName(buf, buflen);
 }
 
-double cplug_getParameterValue(void *ptr, uint32_t paramId)
+double
+cplug_getParameterValue(void *ptr, uint32_t paramId)
 {
   auto lock = ((Plugin::ComplexPlugin *)ptr)->acquireProcessingLock(false);
   auto state = ((Plugin::ComplexPlugin *)ptr)->state_;
@@ -727,17 +735,20 @@ void cplug_setParameterValue(void *ptr, uint32_t paramId, double value)
   state->parameterBridges[paramId].setValue((float)value);
 }
 
-double cplug_denormaliseParameterValue([[maybe_unused]] void *ptr, [[maybe_unused]] uint32_t paramId, double normalised)
+double 
+cplug_denormaliseParameterValue([[maybe_unused]] void *ptr, [[maybe_unused]] uint32_t paramId, double normalised)
 {
   return normalised;
 }
 
-double cplug_normaliseParameterValue([[maybe_unused]] void *ptr, [[maybe_unused]] uint32_t paramId, double denormalised)
+double 
+cplug_normaliseParameterValue([[maybe_unused]] void *ptr, [[maybe_unused]] uint32_t paramId, double denormalised)
 {
   return denormalised;
 }
 
-double cplug_parameterStringToValue(void *ptr, uint32_t paramId, const char *str)
+double 
+cplug_parameterStringToValue(void *ptr, uint32_t paramId, const char *str)
 {
   auto lock = ((Plugin::ComplexPlugin *)ptr)->acquireProcessingLock(false);
   auto state = ((Plugin::ComplexPlugin *)ptr)->state_;
@@ -758,9 +769,9 @@ void cplug_getParameterRange(void *ptr, uint32_t paramId, double *min, double *m
 
   auto lock = ((Plugin::ComplexPlugin *)ptr)->acquireProcessingLock(false);
   auto state = ((Plugin::ComplexPlugin *)ptr)->state_;
-  if (auto link = state->parameterBridges[paramId].getParameterLink())
+  if (auto parameter = state->parameterBridges[paramId].getParameter())
   {
-    auto details = link->parameter->getParameterDetails();
+    auto details = parameter->details;
     if (details.scale == Framework::ParameterScale::Indexed)
     {
       *min = 0.0;
@@ -774,16 +785,17 @@ void cplug_getParameterRange(void *ptr, uint32_t paramId, double *min, double *m
   }
 }
 
-uint32_t cplug_getParameterFlags(void *ptr, uint32_t paramId)
+uint32_t
+cplug_getParameterFlags(void *ptr, uint32_t paramId)
 {
   uint32_t flags = CPLUG_FLAG_PARAMETER_IS_AUTOMATABLE;
   auto lock = ((Plugin::ComplexPlugin *)ptr)->acquireProcessingLock(false);
   auto state = ((Plugin::ComplexPlugin *)ptr)->state_;
   auto &bridge = state->parameterBridges[paramId];
 
-  if (auto link = bridge.getParameterLink())
+  if (auto parameter = bridge.getParameter())
   {
-    auto details = link->parameter->getParameterDetails();
+    auto details = parameter->details;
     flags |= details.scale == Framework::ParameterScale::Toggle ? CPLUG_FLAG_PARAMETER_IS_BOOL : 0;
     flags |= details.scale == Framework::ParameterScale::Indexed ?
       CPLUG_FLAG_PARAMETER_IS_INTEGER : 0;
@@ -792,7 +804,8 @@ uint32_t cplug_getParameterFlags(void *ptr, uint32_t paramId)
   return flags;
 }
 
-uint32_t cplug_getLatencyInSamples(void *ptr)
+uint32_t 
+cplug_getLatencyInSamples(void *ptr)
 {
   return ((Plugin::ComplexPlugin *)ptr)->latency.load(satomi::memory_order_relaxed);
 }
@@ -813,6 +826,8 @@ void cplug_loadState(void *userPlugin, const void *stateCtx, cplug_readProc read
   usize capacity = kCapacityIncrease;
   usize size{};
   char *buffer = arranew(getLocalScratch(), char, capacity, {});
+  defer { utils::Pool::remove(buffer); };
+
   while (true)
   {
     usize readBytes = readProc(stateCtx, buffer + size, capacity - size);
@@ -823,12 +838,11 @@ void cplug_loadState(void *userPlugin, const void *stateCtx, cplug_readProc read
     if (size >= capacity)
     {
       capacity += kCapacityIncrease;
-      buffer = (char *)utils::bumpArena::resize(buffer, capacity, true);
+      buffer = (char *)utils::Pool::resize(buffer, capacity, true);
     }
   }
 
   loadState((Plugin::ComplexPlugin *)userPlugin, { buffer, size });
-  utils::bumpArena::remove(buffer);
 }
 
 

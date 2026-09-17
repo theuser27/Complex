@@ -19,20 +19,11 @@ extern "C" {
 #include <stdint.h>
 #include <stdlib.h>
 
-#ifndef CPLUG_MALLOC
-#define CPLUG_MALLOC malloc
-#endif
-
-#ifndef CPLUG_CALLOC
-#define CPLUG_CALLOC calloc
-#endif
-
-#ifndef CPLUG_REALLOC
-#define CPLUG_REALLOC realloc
-#endif
-
-#ifndef CPLUG_FREE
-#define CPLUG_FREE free
+#ifndef CPLUG_FOURCC
+// GCC will blow its lid if you use multi-character constants
+#define CPLUG_FOURCC(a, b, c, d)                                                                                       \
+    ((((uint32_t)(uint8_t)(a)) << 24) | (((uint32_t)(uint8_t)(b)) << 16) | (((uint32_t)(uint8_t)(c)) << 8) |           \
+     ((uint32_t)(uint8_t)(d)))
 #endif
 
 #ifdef CPLUG_SHARED
@@ -178,8 +169,8 @@ enum
 struct CplugProcessContext
 {
     uint32_t numFrames;
-    uint32_t numInputs;
-    uint32_t numOutputs;
+    uint32_t numInputBusses;
+    uint32_t numOutputBusses;
 
     uint32_t flags; // CPLUG_FLAG_TRANSPORT_XXX
     double   bpm;
@@ -219,6 +210,7 @@ CPLUG_API void cplug_getParameterRange(void*, uint32_t paramId, double* min, dou
 // NOTE: AUv2 supports a max length of 52 bytes, VST3 128, CLAP 256
 CPLUG_API void cplug_getParameterName(void*, uint32_t paramId, char* buf, size_t buflen);
 
+// NOTE: some hosts will test you with garbage IDs
 CPLUG_API double cplug_getParameterValue(void*, uint32_t paramId);
 CPLUG_API double cplug_getDefaultParameterValue(void*, uint32_t paramId);
 // [hopefully audio thread] VST3 & AU only
@@ -241,15 +233,15 @@ CPLUG_API void cplug_loadState(void* userPlugin, const void* stateCtx, cplug_rea
 // AUv2 hacks. Unfortunately Apple's API designs are offensive leaky abstractions.
 enum
 {
-    kAudioUnitProperty_UserPlugin          = 'plug',
-    kAudioUnitProperty_CplugProcessContext = kAudioUnitProperty_UserPlugin + 1,
-    CPLUG_AUV2_OFFSET_PROCESS_CONTEXT      = 64,
-    CPLUG_AUV2_OFFSET_NSVIEW               = CPLUG_AUV2_OFFSET_PROCESS_CONTEXT + sizeof(CplugHostContext),
+    kAudioUnitProperty_AUV2Wrapper    = CPLUG_FOURCC('p', 'l', 'u', 'g'),
+    CPLUG_AUV2_OFFSET_WRAPPER_CONTEXT = 64,
+    CPLUG_AUV2_OFFSET_PLUGIN          = CPLUG_AUV2_OFFSET_WRAPPER_CONTEXT + sizeof(CplugHostContext),
+    CPLUG_AUV2_OFFSET_NSVIEW          = CPLUG_AUV2_OFFSET_PLUGIN + sizeof(size_t),
 };
 
 // NOTE: For AUv2, your pointer MUST be castable to NSView. AUv2 hosts expect an NSView & you simply override methods
 // This is the only CPLUG method used in AUv2 builds.
-CPLUG_API void* cplug_createGUI(void* userPlugin);
+CPLUG_API void* cplug_createGUI(CplugHostContext* ctx, void* userPlugin);
 CPLUG_API void  cplug_destroyGUI(void* userGUI);
 // If not NULL, set your window/view as a child/subview. If NULL, remove from parent/superview.
 // This is a good place to init/deinit your GFX and timer. Be prepared for this to be called multiple times with NULL
@@ -300,7 +292,6 @@ static inline int cplug_atomic_fetch_and_i32( cplug_atomic_i32* ptr, int v) { re
 #endif
 
 #define cplug_log(...)
-
 #ifndef cplug_log
 #ifdef NDEBUG
 #define cplug_log(...)

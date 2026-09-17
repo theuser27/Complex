@@ -8,10 +8,11 @@
 #include "Framework/parameter_bridge.hpp"
 #include "Plugin/Complex.hpp"
 #include "Interface/LookAndFeel/Component.hpp"
+#include "Interface/Components/Control.hpp"
 
 namespace Generation
 {
-  Processor::Processor(utils::bumpArena *arena, Plugin::State *state,
+  Processor::Processor(utils::Pool *arena, Plugin::State *state,
     Framework::ProcessorMetadata *metadata, const Processor *other) : metadata{ metadata },
     state{ state }, stateId{ ++state->stateIdCounter }, arena{ arena }, name{ arena }
   {
@@ -22,15 +23,14 @@ namespace Generation
     {
       parameterCount = other->parameterCount;
 
-      auto *memory = arranew(arena, Framework::ParameterValue, parameterCount);
+      auto *memory = arranew(arena, Framework::Parameter, parameterCount);
       parameters = memory;
 
       auto *parameter = parameters;
       auto *otherParameter = other->parameters;
       for (usize i = 0; i < parameterCount; ++i)
       {
-        parameter = new (memory) Framework::ParameterValue{ *otherParameter };
-        parameter->parentProcessor = this;
+        parameter = new (memory) Framework::Parameter{ *otherParameter, this };
         parameter->previous = memory - 1;
         parameter->next = memory + 1;
 
@@ -111,14 +111,14 @@ namespace Generation
     utils::removeDllHalfConnected(&removedChildProcessor, children);
   }
 
-  Framework::ParameterValue *
+  Framework::Parameter *
   Processor::getParameter(uuid parameterId) const
   {
     COMPLEX_HARD_ASSERT(parameters, "No parameters contained in processor %v (%zu) to find",
       metadata->name, metadata->id);
 
     for (auto *parameter = parameters; parameter; parameter = parameter->next)
-      if (parameter->getParameterId() == parameterId)
+      if (parameter->details.id == parameterId)
         return parameter;
 
     COMPLEX_HARD_ASSERT("Parameter (%zu) was not found", parameterId);
@@ -132,7 +132,7 @@ namespace Generation
 
     auto parameter = parameters;
     for (usize i = 0; i < parameterCount; (i++), (parameter = parameter->next))
-      if (parameter->getUpdateFlag() == flag)
+      if (parameter->details.updateFlag == flag)
         parameter->updateValue(sampleRate);
 
     if (updateChildrenParameters)
@@ -140,7 +140,7 @@ namespace Generation
         child->updateParameters(flag, sampleRate);
   }
 
-  void Processor::remapParameters(utils::span<Framework::ParameterBridge *> bridges,
+  void Processor::remapParameters(utils::span<Framework::HostParameter *> bridges,
     bool bridgeValueFromParameters, bool remapOnlyBridges)
   {
     if (!bridges.size())
@@ -148,21 +148,21 @@ namespace Generation
       auto *parameter = parameters;
       for (usize i = 0; i < parameterCount; (++i), (parameter = parameter->next))
       {
-        auto bridge = parameter->getParameterLink()->hostControl;
+        auto bridge = parameter->hostParameter;
         if (!bridge)
           continue;
 
         if (remapOnlyBridges)
         {
-          if (bridge->getParameterLink())
-            bridge->resetParameterLink(nullptr);
+          if (bridge->getParameter())
+            bridge->resetParameter(nullptr);
           else
-            bridge->resetParameterLink(parameter->getParameterLink(), bridgeValueFromParameters);
+            bridge->resetParameter(parameter, bridgeValueFromParameters);
         }
         else
         {
-          bridge->resetParameterLink(nullptr);
-          parameter->changeBridge(nullptr);
+          bridge->resetParameter(nullptr);
+          parameter->hostParameter = nullptr;
         }
       }
     }
@@ -174,41 +174,40 @@ namespace Generation
       for (usize i = 0; i < parameterCount; (++i), (parameter = parameter->next))
       {
         auto *newBridge = bridges[i];
-        if (auto *oldBridge = parameter->changeBridge(newBridge))
-          oldBridge->resetParameterLink(nullptr);
+        if (auto *oldBridge = parameter->hostParameter = newBridge)
+          oldBridge->resetParameter(nullptr);
 
-        newBridge->resetParameterLink(parameter->getParameterLink(), bridgeValueFromParameters);
+        newBridge->resetParameter(parameter, bridgeValueFromParameters);
       }
     }
 
-    Framework::ParameterBridge::notifyParameterChange();
+    Framework::HostParameter::notifyParameterChange();
   }
 
-  Framework::ParameterValue *
+  Framework::Parameter *
   Processor::createParameters(usize count, Framework::ParameterMetadata *pararmeterMetadata,
-    Framework::ParameterValue *copy)
+    Framework::Parameter *copy)
   {
     if (!count)
       return nullptr;
 
-    auto *memory = arranew(arena, Framework::ParameterValue, count);
+    auto *memory = arranew(arena, Framework::Parameter, count);
 
     if (!copy)
     {
       for (usize i = 0; i < count; (++i), (pararmeterMetadata = pararmeterMetadata->next))
       {
-        Framework::ParameterValue *slot;
+        Framework::Parameter *slot;
         if (pararmeterMetadata->details.scale == Framework::ParameterScale::Indexed)
         {
           auto details = pararmeterMetadata->details;
           auto *optionStub = Framework::IndexedData::deepCopy(arena, details.options);
           details.options = optionStub;
-          slot = new (memory + i) Framework::ParameterValue{ pararmeterMetadata->details };
+          slot = new (memory + i) Framework::Parameter{ pararmeterMetadata->details, this };
         }
         else
-          slot = new (memory + i) Framework::ParameterValue{ pararmeterMetadata->details };
+          slot = new (memory + i) Framework::Parameter{ pararmeterMetadata->details, this };
 
-        slot->parentProcessor = this;
         slot->previous = slot - 1;
         slot->next = slot + 1;
 
@@ -220,14 +219,13 @@ namespace Generation
     {
       for (usize i = 0; i < count; (++i), (copy = copy->next))
       {
-        auto *slot = new (memory + i) Framework::ParameterValue{ *copy };
-        if (auto details = slot->getParameterDetails(); details.scale == Framework::ParameterScale::Indexed)
+        auto *slot = new (memory + i) Framework::Parameter{ *copy, this };
+        if (auto details = slot->details; details.scale == Framework::ParameterScale::Indexed)
         {
           auto *optionStub = Framework::IndexedData::deepCopy(arena, details.options);
           details.options = optionStub;
-          slot->setParameterDetails(details);
+          slot->reset(&details);
         }
-        slot->parentProcessor = this;
         slot->previous = slot - 1;
         slot->next = slot + 1;
 
@@ -403,12 +401,12 @@ namespace Framework
     {
       auto *self = (DeleteProcessorUpdate *)a;
       auto destinationPointer = self->state.getProcessor(self->parentStateId);
+      auto g = self->state.plugin->acquireProcessingLock();
+
       Interface::CommandMessages::ProcessorInsertion info{ .processor = self->processor,
         .index = (u32)self->index, .useIndex = true };
       Interface::CommandMessages::tryProcessorInsertion(destinationPointer->component, info);
 
-      auto g = self->state.plugin->acquireProcessingLock();
-      destinationPointer->addChildProcessor(*self->processor, self->index);
       auto recurseParameters = [](const auto &self, Generation::Processor *processor) -> void
       {
         processor->remapParameters({}, true, true);

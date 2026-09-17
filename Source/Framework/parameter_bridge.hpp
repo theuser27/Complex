@@ -14,25 +14,24 @@ namespace Plugin
 
 namespace Framework
 {
-  struct ParameterLink;
+  class Parameter;
 
-  class ParameterBridge
+  class HostParameter
   {
   public:
     static constexpr float kDefaultParameterValue = 0.5f;
 
-    ParameterBridge() = delete;
-    ParameterBridge(const ParameterBridge &) = delete;
-    ParameterBridge(ParameterBridge &&) = delete;
-    ParameterBridge &operator=(const ParameterBridge &) = delete;
-    ParameterBridge &operator=(ParameterBridge &&) = delete;
+    HostParameter() = delete;
+    HostParameter(const HostParameter &) = delete;
+    HostParameter(HostParameter &&) = delete;
+    HostParameter &operator=(const HostParameter &) = delete;
+    HostParameter &operator=(HostParameter &&) = delete;
 
-    ParameterBridge(Plugin::State *state,
-      u64 parameterIndex = u64(-1), ParameterLink *link = nullptr);
-    ~ParameterBridge();
+    HostParameter(Plugin::State *state, u64 parameterIndex = u64(-1));
+    ~HostParameter();
 
-    auto *getParameterLink() const { return parameterLinkPointer_.load(satomi::memory_order_acquire); }
-    void resetParameterLink(ParameterLink *link, bool getValueFromParameter = true);
+    auto *getParameter() const { return parameter_.load(satomi::memory_order_acquire); }
+    void resetParameter(Parameter *parameter, bool getValueFromParameter = true);
     static void notifyParameterChange();
 
     void beginChangeGesture();
@@ -43,15 +42,10 @@ namespace Framework
 
     void setCustomName(utils::string name);
 
-    bool isMappedToParameter() const { return parameterLinkPointer_.load(satomi::memory_order_acquire); }
+    bool isMappedToParameter() const { return parameter_.load(satomi::memory_order_acquire); }
 
     float getValue() const { return value_.load(satomi::memory_order_relaxed); }
-    void setValue(float newValue)
-    {
-      auto oldValue = value_.exchange(newValue, satomi::memory_order_relaxed);
-      if (oldValue != newValue)
-        wasValueSet_.store(true, satomi::memory_order_relaxed);
-    }
+    void setValue(float newValue);
     float getDefaultValue() const;
 
     void getName(utils::string &outString) const;
@@ -69,6 +63,6 @@ namespace Framework
     utils::pair<satomi::atomic<bool>, utils::string> name_{};
     satomi::atomic<float> value_ = kDefaultParameterValue;
     satomi::atomic<bool> wasValueSet_ = false;
-    satomi::atomic<ParameterLink *> parameterLinkPointer_ = nullptr;
+    satomi::atomic<Parameter *> parameter_ = nullptr;
   };
 }

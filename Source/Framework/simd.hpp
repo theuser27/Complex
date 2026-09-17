@@ -35,25 +35,26 @@ namespace utils
   inline constexpr u32 kSignMask = 1U << 31;
   inline constexpr u32 kNotSignMask = kSignMask - 1;
 
-  struct alignas(COMPLEX_SIMD_ALIGNMENT) simd_int
+  // u32/i32 x 4
+  struct alignas(COMPLEX_SIMD_ALIGNMENT) i4
   {
   #if COMPLEX_SSE4_1
-    using simd_type = __m128i;
+    using simdtype = __m128i;
     static constexpr usize size = 4;
   #elif COMPLEX_NEON
-    using simd_type = uint32x4_t;
+    using simdtype = uint32x4_t;
     static constexpr usize size = 4;
   #endif
     using array_t = utils::array<u32, size>;
 
-    simd_type value;
+    simdtype value;
 
 
     ////////////////////////////
     // Method Implementations //
     ////////////////////////////
 
-    static forceinline simd_type vectorcall init(u32 scalar)
+    static forceinline simdtype vectorcall init(u32 scalar)
     {
     #if COMPLEX_SSE4_1
       return _mm_set1_epi32((i32)scalar);
@@ -62,7 +63,7 @@ namespace utils
     #endif
     }
 
-    static forceinline simd_type vectorcall load(const u32 *memory)
+    static forceinline simdtype vectorcall load(const u32 *memory)
     {
     #if COMPLEX_SSE4_1
       return _mm_loadu_si128((const __m128i *)memory);
@@ -71,7 +72,7 @@ namespace utils
     #endif
     }
 
-    static forceinline simd_type vectorcall add(simd_type one, simd_type two)
+    static forceinline simdtype vectorcall add(simdtype one, simdtype two)
     {
     #if COMPLEX_SSE4_1
       return _mm_add_epi32(one, two);
@@ -80,7 +81,7 @@ namespace utils
     #endif
     }
 
-    static forceinline simd_type vectorcall sub(simd_type one, simd_type two)
+    static forceinline simdtype vectorcall sub(simdtype one, simdtype two)
     {
     #if COMPLEX_SSE4_1
       return _mm_sub_epi32(one, two);
@@ -89,7 +90,7 @@ namespace utils
     #endif
     }
 
-    static forceinline simd_type vectorcall neg(simd_type value)
+    static forceinline simdtype vectorcall neg(simdtype value)
     {
     #if COMPLEX_SSE4_1
       return _mm_sub_epi32(_mm_setzero_si128(), value);
@@ -98,7 +99,7 @@ namespace utils
     #endif
     }
 
-    static forceinline simd_type vectorcall mul(simd_type one, simd_type two)
+    static forceinline simdtype vectorcall mul(simdtype one, simdtype two)
     {
     #if COMPLEX_SSE4_1
       return _mm_mullo_epi32(one, two);
@@ -107,7 +108,7 @@ namespace utils
     #endif
     }
 
-    static forceinline simd_type vectorcall bitAnd(simd_type value, simd_type mask)
+    static forceinline simdtype vectorcall bitAnd(simdtype value, simdtype mask)
     {
     #if COMPLEX_SSE4_1
       return _mm_and_si128(value, mask);
@@ -116,7 +117,7 @@ namespace utils
     #endif
     }
 
-    static forceinline simd_type vectorcall bitOr(simd_type value, simd_type mask)
+    static forceinline simdtype vectorcall bitOr(simdtype value, simdtype mask)
     {
     #if COMPLEX_SSE4_1
       return _mm_or_si128(value, mask);
@@ -125,7 +126,7 @@ namespace utils
     #endif
     }
 
-    static forceinline simd_type vectorcall bitXor(simd_type value, simd_type mask)
+    static forceinline simdtype vectorcall bitXor(simdtype value, simdtype mask)
     {
     #if COMPLEX_SSE4_1
       return _mm_xor_si128(value, mask);
@@ -134,7 +135,7 @@ namespace utils
     #endif
     }
 
-    static forceinline simd_type vectorcall bitNot(simd_type value)
+    static forceinline simdtype vectorcall bitNot(simdtype value)
     {
     #if COMPLEX_SSE4_1
       auto dummy = _mm_undefined_si128();
@@ -144,7 +145,7 @@ namespace utils
     #endif
     }
 
-    static forceinline simd_type vectorcall equal(simd_type one, simd_type two)
+    static forceinline simdtype vectorcall equal(simdtype one, simdtype two)
     {
     #if COMPLEX_SSE4_1
       return _mm_cmpeq_epi32(one, two);
@@ -153,7 +154,7 @@ namespace utils
     #endif
     }
 
-    static forceinline simd_type vectorcall maxSigned(simd_type one, simd_type two)
+    static forceinline simdtype vectorcall maxSigned(simdtype one, simdtype two)
     {
     #if COMPLEX_SSE4_1
       return _mm_max_epi32(one, two);
@@ -162,7 +163,7 @@ namespace utils
     #endif
     }
 
-    static forceinline simd_type vectorcall maxUnsigned(simd_type one, simd_type two)
+    static forceinline simdtype vectorcall maxUnsigned(simdtype one, simdtype two)
     {
     #if COMPLEX_SSE4_1
       return _mm_max_epu32(one, two);
@@ -171,7 +172,7 @@ namespace utils
     #endif
     }
 
-    static forceinline simd_type vectorcall minSigned(simd_type one, simd_type two)
+    static forceinline simdtype vectorcall minSigned(simdtype one, simdtype two)
     {
     #if COMPLEX_SSE4_1
       return _mm_min_epi32(one, two);
@@ -180,7 +181,7 @@ namespace utils
     #endif
     }
 
-    static forceinline simd_type vectorcall minUnsigned(simd_type one, simd_type two)
+    static forceinline simdtype vectorcall minUnsigned(simdtype one, simdtype two)
     {
     #if COMPLEX_SSE4_1
       return _mm_min_epu32(one, two);
@@ -189,7 +190,7 @@ namespace utils
     #endif
     }
 
-    static forceinline simd_type vectorcall greaterThanSigned(simd_type one, simd_type two)
+    static forceinline simdtype vectorcall greaterThanSigned(simdtype one, simdtype two)
     {
     #if COMPLEX_SSE4_1
       return _mm_cmpgt_epi32(one, two);
@@ -198,7 +199,7 @@ namespace utils
     #endif
     }
 
-    static forceinline simd_type vectorcall greaterThanUnsigned(simd_type one, simd_type two)
+    static forceinline simdtype vectorcall greaterThanUnsigned(simdtype one, simdtype two)
     {
     #if COMPLEX_SSE4_1
       return equal(maxUnsigned(one, two), one);
@@ -207,9 +208,9 @@ namespace utils
     #endif
     }
 
-    static forceinline u32 vectorcall sum(simd_type value) {
+    static forceinline u32 vectorcall sum(simdtype value) {
     #if COMPLEX_SSE4_1
-      simd_type flip = _mm_shuffle_epi32(value, _MM_SHUFFLE(1, 0, 3, 2));
+      simdtype flip = _mm_shuffle_epi32(value, _MM_SHUFFLE(1, 0, 3, 2));
       value = _mm_add_epi32(value, flip);
       flip = _mm_shuffle_epi32(value, _MM_SHUFFLE(2, 3, 0, 1));
       return _mm_cvtsi128_si32(_mm_add_epi32(value, flip));
@@ -220,7 +221,7 @@ namespace utils
     #endif
     }
 
-    static forceinline u32 vectorcall anyMask(simd_type value)
+    static forceinline u32 vectorcall anyMask(simdtype value)
     {
     #if COMPLEX_SSE4_1
       return _mm_movemask_epi8(value);
@@ -236,56 +237,56 @@ namespace utils
     // Method Calls //
     //////////////////
 
-    static forceinline simd_int vectorcall maxSigned(simd_int one, simd_int two)
+    static forceinline i4 vectorcall maxSigned(i4 one, i4 two)
     {	return maxSigned(one.value, two.value); }
 
-    static forceinline simd_int vectorcall maxUnsigned(simd_int one, simd_int two)
+    static forceinline i4 vectorcall maxUnsigned(i4 one, i4 two)
     {	return maxUnsigned(one.value, two.value); }
 
-    static forceinline simd_int vectorcall minSigned(simd_int one, simd_int two)
+    static forceinline i4 vectorcall minSigned(i4 one, i4 two)
     { return minSigned(one.value, two.value); }
 
-    static forceinline simd_int vectorcall minUnsigned(simd_int one, simd_int two)
+    static forceinline i4 vectorcall minUnsigned(i4 one, i4 two)
     { return minUnsigned(one.value, two.value); }
 
-    static forceinline simd_int vectorcall clampSigned(simd_int low, simd_int high, simd_int value)
+    static forceinline i4 vectorcall clampSigned(i4 low, i4 high, i4 value)
     { return maxSigned(minSigned(value.value, high.value), low.value); }
 
-    static forceinline simd_int vectorcall clampUnsigned(simd_int low, simd_int high, simd_int value)
+    static forceinline i4 vectorcall clampUnsigned(i4 low, i4 high, i4 value)
     { return maxUnsigned(minUnsigned(value.value, high.value), low.value); }
 
-    static forceinline simd_int vectorcall equal(simd_int one, simd_int two)
+    static forceinline i4 vectorcall equal(i4 one, i4 two)
     {	return equal(one.value, two.value); }
 
-    static forceinline simd_int vectorcall notEqual(simd_int one, simd_int two)
+    static forceinline i4 vectorcall notEqual(i4 one, i4 two)
     {
       // DO NOT try to optimise this by using the fp version on intel
       // because that one is subject to FTZ and DAZ flags
       return ~equal(one, two);
     }
 
-    static forceinline simd_int vectorcall greaterThanSigned(simd_int one, simd_int two)
+    static forceinline i4 vectorcall greaterThanSigned(i4 one, i4 two)
     {	return greaterThanSigned(one.value, two.value); }
 
-    static forceinline simd_int vectorcall lessThanSigned(simd_int one, simd_int two)
+    static forceinline i4 vectorcall lessThanSigned(i4 one, i4 two)
     {	return greaterThanSigned(two.value, one.value); }
 
-    static forceinline simd_int vectorcall greaterThanOrEqualSigned(simd_int one, simd_int two)
+    static forceinline i4 vectorcall greaterThanOrEqualSigned(i4 one, i4 two)
     {	return ~lessThanSigned(one, two); }
 
-    static forceinline simd_int vectorcall lessThanOrEqualSigned(simd_int one, simd_int two)
+    static forceinline i4 vectorcall lessThanOrEqualSigned(i4 one, i4 two)
     {	return ~greaterThanSigned(one, two); }
 
-    static forceinline u32 vectorcall sum(simd_int value)
+    static forceinline u32 vectorcall sum(i4 value)
     { return sum(value.value); }
 
-    static forceinline u32 vectorcall anyMask(simd_int value)
+    static forceinline u32 vectorcall anyMask(i4 value)
     { return anyMask(value.value); }
 
-    static forceinline bool vectorcall allSame(simd_int value)
+    static forceinline bool vectorcall allSame(i4 value)
     {
     #if COMPLEX_SSE4_1
-      simd_type mask = equal(value.value, _mm_shuffle_epi32(value.value, _MM_SHUFFLE(2, 3, 0, 1)));
+      simdtype mask = equal(value.value, _mm_shuffle_epi32(value.value, _MM_SHUFFLE(2, 3, 0, 1)));
       mask = bitAnd(mask, equal(value.value, _mm_shuffle_epi32(value.value, _MM_SHUFFLE(0, 1, 2, 3))));
       return anyMask(mask);
     #elif COMPLEX_NEON
@@ -303,12 +304,12 @@ namespace utils
     // i hate unions
     template<usize ... N>
     static constexpr auto getInternalValue(const auto &scalars, utils::index_sequence<N...>) noexcept
-    { return simd_type{ .m128i_u32 = { scalars[N]... } }; }
+    { return simdtype{ .m128i_u32 = { scalars[N]... } }; }
   public:
   #endif
 
-    constexpr forceinline simd_int() noexcept : simd_int{ 0 } { }
-    constexpr forceinline simd_int(u32 initialValue) noexcept
+    constexpr forceinline i4() noexcept : i4{ 0 } { }
+    constexpr forceinline i4(u32 initialValue) noexcept
     {
       if (utils::is_constant_evaluated())
       {
@@ -317,21 +318,21 @@ namespace utils
       #ifdef COMPLEX_MSVC
         value = getInternalValue(values, utils::make_index_sequence<size>());
       #else
-        value = utils::bit_cast<simd_type>(values);
+        value = utils::bit_cast<simdtype>(values);
       #endif
       }
       else
         value = init(initialValue);
     }
-    constexpr forceinline simd_int(simd_type initialValue) noexcept : value(initialValue) { }
-    constexpr forceinline simd_int(const array_t &scalars) noexcept :
+    constexpr forceinline i4(simdtype initialValue) noexcept : value(initialValue) { }
+    constexpr forceinline i4(const array_t &scalars) noexcept :
   #ifdef COMPLEX_MSVC
       value(getInternalValue(scalars, utils::make_index_sequence<size>())) { }
   #else
-      value(utils::bit_cast<simd_type>(scalars)) { }
+      value(utils::bit_cast<simdtype>(scalars)) { }
   #endif
 
-    constexpr forceinline simd_int(u32 even, u32 odd) noexcept
+    constexpr forceinline i4(u32 even, u32 odd) noexcept
     {
       array_t values{};
       for (usize i = 0; i < size; i += 2)
@@ -343,7 +344,7 @@ namespace utils
     #ifdef COMPLEX_MSVC
       value = getInternalValue(values, utils::make_index_sequence<size>());
     #else
-      value = utils::bit_cast<simd_type>(values);
+      value = utils::bit_cast<simdtype>(values);
     #endif
     }
 
@@ -352,7 +353,7 @@ namespace utils
     {
       auto scalars = utils::bit_cast<array_t>(value);
       scalars[index] = newValue;
-      value = utils::bit_cast<simd_type>(scalars);
+      value = utils::bit_cast<simdtype>(scalars);
     }
 
     constexpr forceinline array_t getArrayOfValues() const noexcept
@@ -377,96 +378,98 @@ namespace utils
     // Operators //
     ///////////////
 
-    //forceinline bool vectorcall operator==(simd_int other) const noexcept
+    //forceinline bool vectorcall operator==(i4 other) const noexcept
     //{ return anyMask(notEqual(*this, other)); }
 
     constexpr forceinline u32 vectorcall operator[](usize index) const noexcept
     { return getArrayOfValues()[index]; }
 
-    forceinline simd_int vectorcall operator+(simd_int other) const noexcept
+    forceinline i4 vectorcall operator+(i4 other) const noexcept
     { return add(value, other.value); }
 
-    friend forceinline simd_int vectorcall operator+(u32 one, simd_int two) noexcept
+    friend forceinline i4 vectorcall operator+(u32 one, i4 two) noexcept
     { return add(init(one), two.value); }
 
-    forceinline simd_int vectorcall operator-(simd_int other) const noexcept
+    forceinline i4 vectorcall operator-(i4 other) const noexcept
     { return sub(value, other.value); }
 
-    friend forceinline simd_int vectorcall operator-(u32 one, simd_int two) noexcept
+    friend forceinline i4 vectorcall operator-(u32 one, i4 two) noexcept
     { return sub(init(one), two.value); }
 
-    forceinline simd_int vectorcall operator*(simd_int other) const noexcept
+    forceinline i4 vectorcall operator*(i4 other) const noexcept
     { return mul(value, other.value); }
 
-    friend forceinline simd_int vectorcall operator*(u32 one, simd_int two) noexcept
+    friend forceinline i4 vectorcall operator*(u32 one, i4 two) noexcept
     { return mul(init(one), two.value); }
 
-    forceinline simd_int vectorcall operator&(simd_int other) const noexcept
+    forceinline i4 vectorcall operator&(i4 other) const noexcept
     { return bitAnd(value, other.value); }
 
-    friend forceinline simd_int vectorcall operator&(u32 one, simd_int two) noexcept
+    friend forceinline i4 vectorcall operator&(u32 one, i4 two) noexcept
     { return bitAnd(init(one), two.value); }
 
-    forceinline simd_int vectorcall operator|(simd_int other) const noexcept
+    forceinline i4 vectorcall operator|(i4 other) const noexcept
     { return bitOr(value, other.value); }
 
-    friend forceinline simd_int vectorcall operator|(u32 one, simd_int two) noexcept
+    friend forceinline i4 vectorcall operator|(u32 one, i4 two) noexcept
     { return bitOr(init(one), two.value); }
 
-    forceinline simd_int vectorcall operator^(simd_int other) const noexcept
+    forceinline i4 vectorcall operator^(i4 other) const noexcept
     { return bitXor(value, other.value); }
 
-    friend forceinline simd_int vectorcall operator^(u32 one, simd_int two) noexcept
+    friend forceinline i4 vectorcall operator^(u32 one, i4 two) noexcept
     { return bitXor(init(one), two.value); }
 
-    forceinline simd_int vectorcall operator-() const noexcept
+    forceinline i4 vectorcall operator-() const noexcept
     { return neg(value); }
 
-    forceinline simd_int vectorcall operator~() const noexcept
+    forceinline i4 vectorcall operator~() const noexcept
     { return bitNot(value); }
 
-    forceinline simd_int &vectorcall operator+=(simd_int other) noexcept
+    forceinline i4 &vectorcall operator+=(i4 other) noexcept
     { value = add(value, other.value); return *this; }
 
-    forceinline simd_int &vectorcall operator-=(simd_int other) noexcept
+    forceinline i4 &vectorcall operator-=(i4 other) noexcept
     { value = sub(value, other.value); return *this; }
 
-    forceinline simd_int &vectorcall operator*=(simd_int other) noexcept
+    forceinline i4 &vectorcall operator*=(i4 other) noexcept
     { value = mul(value, other.value); return *this; }
 
-    forceinline simd_int &vectorcall operator&=(simd_int other) noexcept
+    forceinline i4 &vectorcall operator&=(i4 other) noexcept
     { value = bitAnd(value, other.value); return *this; }
 
-    forceinline simd_int &vectorcall operator|=(simd_int other) noexcept
+    forceinline i4 &vectorcall operator|=(i4 other) noexcept
     { value = bitOr(value, other.value); return *this; }
 
-    forceinline simd_int &vectorcall operator^=(simd_int other) noexcept
+    forceinline i4 &vectorcall operator^=(i4 other) noexcept
     { value = bitXor(value, other.value); return *this; }
   };
 
-  using simd_mask = simd_int;
+  // u32/i32 x 4 mask type
+  using i4mask = i4;
 
-  struct alignas(COMPLEX_SIMD_ALIGNMENT) simd_float
+  // f32 x 4
+  struct alignas(COMPLEX_SIMD_ALIGNMENT) f4
   {
   #if COMPLEX_SSE4_1
-    using simd_type = __m128;
-    using mask_simd_type = __m128i;
+    using simdtype = __m128;
+    using mask_simdtype = __m128i;
   #elif COMPLEX_NEON
-    using simd_type = float32x4_t;
-    using mask_simd_type = uint32x4_t;
+    using simdtype = float32x4_t;
+    using mask_simdtype = uint32x4_t;
   #endif
-    static constexpr usize size = sizeof(simd_type) / sizeof(float);
+    static constexpr usize size = sizeof(simdtype) / sizeof(float);
     static constexpr usize complexSize = size / 2;
     using array_t = utils::array<float, size>;
 
-    simd_type value;
+    simdtype value;
 
 
     ////////////////////////////
     // Methods Implementation //
     ////////////////////////////
 
-    static forceinline mask_simd_type vectorcall toMask(simd_type value)
+    static forceinline mask_simdtype vectorcall toMask(simdtype value)
     {
     #if COMPLEX_SSE4_1
       return _mm_castps_si128(value);
@@ -475,7 +478,7 @@ namespace utils
     #endif
     }
 
-    static forceinline simd_type vectorcall toSimd(mask_simd_type mask)
+    static forceinline simdtype vectorcall toSimd(mask_simdtype mask)
     {
     #if COMPLEX_SSE4_1
       return _mm_castsi128_ps(mask);
@@ -484,7 +487,7 @@ namespace utils
     #endif
     }
 
-    static forceinline simd_type vectorcall init(float scalar)
+    static forceinline simdtype vectorcall init(float scalar)
     {
     #if COMPLEX_SSE4_1
       return _mm_set1_ps(scalar);
@@ -493,7 +496,7 @@ namespace utils
     #endif
     }
 
-    static forceinline simd_type vectorcall load(const float *memory)
+    static forceinline simdtype vectorcall load(const float *memory)
     {
     #if COMPLEX_SSE4_1
       return _mm_loadu_ps(memory);
@@ -502,7 +505,7 @@ namespace utils
     #endif
     }
 
-    static forceinline simd_type vectorcall add(simd_type one, simd_type two)
+    static forceinline simdtype vectorcall add(simdtype one, simdtype two)
     {
     #if COMPLEX_SSE4_1
       return _mm_add_ps(one, two);
@@ -511,7 +514,7 @@ namespace utils
     #endif
     }
 
-    static forceinline simd_type vectorcall sub(simd_type one, simd_type two)
+    static forceinline simdtype vectorcall sub(simdtype one, simdtype two)
     {
     #if COMPLEX_SSE4_1
       return _mm_sub_ps(one, two);
@@ -520,7 +523,7 @@ namespace utils
     #endif
     }
 
-    static forceinline simd_type vectorcall neg(simd_type value)
+    static forceinline simdtype vectorcall neg(simdtype value)
     {
     #if COMPLEX_SSE4_1
       return _mm_xor_ps(value, _mm_set1_ps(-0.0f));
@@ -529,7 +532,7 @@ namespace utils
     #endif
     }
 
-    static forceinline simd_type vectorcall mul(simd_type one, simd_type two)
+    static forceinline simdtype vectorcall mul(simdtype one, simdtype two)
     {
     #if COMPLEX_SSE4_1
       return _mm_mul_ps(one, two);
@@ -538,7 +541,7 @@ namespace utils
     #endif
     }
 
-    static forceinline simd_type vectorcall mulScalar(simd_type value, float scalar)
+    static forceinline simdtype vectorcall mulScalar(simdtype value, float scalar)
     {
     #if COMPLEX_SSE4_1
       return _mm_mul_ps(value, _mm_set1_ps(scalar));
@@ -547,7 +550,7 @@ namespace utils
     #endif
     }
 
-    static forceinline simd_type vectorcall mulAdd(simd_type add, simd_type mulOne, simd_type mulTwo)
+    static forceinline simdtype vectorcall mulAdd(simdtype add, simdtype mulOne, simdtype mulTwo)
     {
     #if COMPLEX_SSE4_1
     #if COMPLEX_FMA
@@ -560,7 +563,7 @@ namespace utils
     #endif
     }
 
-    static forceinline simd_type vectorcall mulSub(simd_type sub, simd_type mulOne, simd_type mulTwo)
+    static forceinline simdtype vectorcall mulSub(simdtype sub, simdtype mulOne, simdtype mulTwo)
     {
     #if COMPLEX_SSE4_1
     #if COMPLEX_FMA
@@ -573,7 +576,7 @@ namespace utils
     #endif
     }
 
-    static forceinline simd_type vectorcall div(simd_type one, simd_type two)
+    static forceinline simdtype vectorcall div(simdtype one, simdtype two)
     {
     #if COMPLEX_SSE4_1
       return _mm_div_ps(one, two);
@@ -582,7 +585,7 @@ namespace utils
     #endif
     }
 
-    static forceinline simd_type vectorcall sqrt(simd_type value) noexcept
+    static forceinline simdtype vectorcall sqrt(simdtype value) noexcept
     {
     #if COMPLEX_SSE4_1
       return _mm_sqrt_ps(value);
@@ -591,7 +594,7 @@ namespace utils
     #endif
     }
 
-    static forceinline simd_type vectorcall invSqrt(simd_type value) noexcept
+    static forceinline simdtype vectorcall invSqrt(simdtype value) noexcept
     {
     #if COMPLEX_SSE4_1
       return _mm_rsqrt_ps(value);
@@ -600,7 +603,7 @@ namespace utils
     #endif
     }
 
-    static forceinline simd_type vectorcall bitAnd(simd_type value, mask_simd_type mask)
+    static forceinline simdtype vectorcall bitAnd(simdtype value, mask_simdtype mask)
     {
     #if COMPLEX_SSE4_1
       return _mm_and_ps(value, toSimd(mask));
@@ -609,7 +612,7 @@ namespace utils
     #endif
     }
 
-    static forceinline simd_type vectorcall bitOr(simd_type value, mask_simd_type mask)
+    static forceinline simdtype vectorcall bitOr(simdtype value, mask_simdtype mask)
     {
     #if COMPLEX_SSE4_1
       return _mm_or_ps(value, toSimd(mask));
@@ -618,7 +621,7 @@ namespace utils
     #endif
     }
 
-    static forceinline simd_type vectorcall bitXor(simd_type value, mask_simd_type mask)
+    static forceinline simdtype vectorcall bitXor(simdtype value, mask_simdtype mask)
     {
     #if COMPLEX_SSE4_1
       return _mm_xor_ps(value, toSimd(mask));
@@ -627,7 +630,7 @@ namespace utils
     #endif
     }
 
-    static forceinline simd_type vectorcall bitNot(simd_type value)
+    static forceinline simdtype vectorcall bitNot(simdtype value)
     {
     #if COMPLEX_SSE4_1
       auto dummy = _mm_undefined_si128();
@@ -637,7 +640,7 @@ namespace utils
     #endif
     }
 
-    static forceinline simd_type vectorcall max(simd_type one, simd_type two)
+    static forceinline simdtype vectorcall max(simdtype one, simdtype two)
     {
     #if COMPLEX_SSE4_1
       return _mm_max_ps(one, two);
@@ -646,7 +649,7 @@ namespace utils
     #endif
     }
 
-    static forceinline simd_type vectorcall min(simd_type one, simd_type two)
+    static forceinline simdtype vectorcall min(simdtype one, simdtype two)
     {
     #if COMPLEX_SSE4_1
       return _mm_min_ps(one, two);
@@ -655,7 +658,7 @@ namespace utils
     #endif
     }
 
-    static forceinline simd_type vectorcall truncate(simd_type values)
+    static forceinline simdtype vectorcall truncate(simdtype values)
     {
     #if COMPLEX_SSE4_1
       return _mm_round_ps(values, _MM_FROUND_TO_ZERO | _MM_FROUND_NO_EXC);
@@ -664,7 +667,7 @@ namespace utils
     #endif
     }
 
-    static forceinline simd_type vectorcall floor(simd_type values)
+    static forceinline simdtype vectorcall floor(simdtype values)
     {
     #if COMPLEX_SSE4_1
       return _mm_round_ps(values, _MM_FROUND_TO_NEG_INF | _MM_FROUND_NO_EXC);
@@ -673,7 +676,7 @@ namespace utils
     #endif
     }
 
-    static forceinline simd_type vectorcall ceil(simd_type values)
+    static forceinline simdtype vectorcall ceil(simdtype values)
     {
     #if COMPLEX_SSE4_1
       return _mm_round_ps(values, _MM_FROUND_TO_POS_INF | _MM_FROUND_NO_EXC);
@@ -682,7 +685,7 @@ namespace utils
     #endif
     }
 
-    static forceinline simd_type vectorcall round(simd_type values)
+    static forceinline simdtype vectorcall round(simdtype values)
     {
     #if COMPLEX_SSE4_1
       return _mm_round_ps(values, _MM_FROUND_TO_NEAREST_INT | _MM_FROUND_NO_EXC);
@@ -691,9 +694,9 @@ namespace utils
     #endif
     }
 
-    static forceinline simd_type vectorcall abs(simd_type value)
+    static forceinline simdtype vectorcall abs(simdtype value)
     {
-      static constexpr simd_mask mask = kNotSignMask;
+      static constexpr i4mask mask = kNotSignMask;
     #if COMPLEX_SSE4_1
       return _mm_and_ps(value, toSimd(mask.value));
     #elif COMPLEX_NEON
@@ -701,10 +704,10 @@ namespace utils
     #endif
     }
 
-    static forceinline mask_simd_type vectorcall signMask(simd_type value)
-    { return toMask(bitAnd(value, simd_mask::init(kSignMask))); }
+    static forceinline mask_simdtype vectorcall signMask(simdtype value)
+    { return toMask(bitAnd(value, i4mask::init(kSignMask))); }
 
-    static forceinline mask_simd_type vectorcall equal(simd_type one, simd_type two)
+    static forceinline mask_simdtype vectorcall equal(simdtype one, simdtype two)
     {
     #if COMPLEX_SSE4_1
       return toMask(_mm_cmpeq_ps(one, two));
@@ -713,7 +716,7 @@ namespace utils
     #endif
     }
 
-    static forceinline mask_simd_type vectorcall greaterThan(simd_type one, simd_type two)
+    static forceinline mask_simdtype vectorcall greaterThan(simdtype one, simdtype two)
     {
     #if COMPLEX_SSE4_1
       return toMask(_mm_cmpgt_ps(one, two));
@@ -722,7 +725,7 @@ namespace utils
     #endif
     }
 
-    static forceinline mask_simd_type vectorcall greaterThanOrEqual(simd_type one, simd_type two)
+    static forceinline mask_simdtype vectorcall greaterThanOrEqual(simdtype one, simdtype two)
     {
     #if COMPLEX_SSE4_1
       return toMask(_mm_cmpge_ps(one, two));
@@ -731,19 +734,19 @@ namespace utils
     #endif
     }
 
-    static forceinline mask_simd_type vectorcall notEqual(simd_type one, simd_type two)
+    static forceinline mask_simdtype vectorcall notEqual(simdtype one, simdtype two)
     {
     #if COMPLEX_SSE4_1
       return toMask(_mm_cmpneq_ps(one, two));
     #elif COMPLEX_NEON
-      return simd_mask::bitNot(equal(one, two));
+      return i4mask::bitNot(equal(one, two));
     #endif
     }
 
-    static forceinline float vectorcall sum(simd_type value)
+    static forceinline float vectorcall sum(simdtype value)
     {
     #if COMPLEX_SSE4_1
-      simd_type flip = _mm_shuffle_ps(value, value, _MM_SHUFFLE(1, 0, 3, 2));
+      simdtype flip = _mm_shuffle_ps(value, value, _MM_SHUFFLE(1, 0, 3, 2));
       value = _mm_add_ps(value, flip);
       flip = _mm_shuffle_ps(value, value, _MM_SHUFFLE(2, 3, 0, 1));
       return _mm_cvtss_f32(_mm_add_ps(value, flip));
@@ -754,12 +757,12 @@ namespace utils
     #endif
     }
 
-    static forceinline mask_simd_type vectorcall isNan(simd_type value)
+    static forceinline mask_simdtype vectorcall isNan(simdtype value)
     {
     #if COMPLEX_SSE4_1
       return toMask(_mm_cmpunord_ps(value, value));
     #elif COMPLEX_NEON
-      return simd_mask::bitNot(vceqq_f32(value, value));
+      return i4mask::bitNot(vceqq_f32(value, value));
     #endif
     }
 
@@ -768,7 +771,7 @@ namespace utils
     // Method Calls //
     //////////////////
 
-    static forceinline simd_mask vectorcall toMask(simd_float value)
+    static forceinline i4mask vectorcall toMask(f4 value)
     {
     #if COMPLEX_SSE4_1
       return _mm_castps_si128(value.value);
@@ -777,74 +780,74 @@ namespace utils
     #endif
     }
 
-    static forceinline simd_float vectorcall mulAdd(simd_float add, simd_float mulOne, simd_float mulTwo)
+    static forceinline f4 vectorcall mulAdd(f4 add, f4 mulOne, f4 mulTwo)
     { return mulAdd(add.value, mulOne.value, mulTwo.value);	}
 
-    static forceinline simd_float vectorcall mulSub(simd_float sub, simd_float mulOne, simd_float mulTwo)
+    static forceinline f4 vectorcall mulSub(f4 sub, f4 mulOne, f4 mulTwo)
     { return mulSub(sub.value, mulOne.value, mulTwo.value); }
 
-    static forceinline simd_float vectorcall sqrt(simd_float value)
+    static forceinline f4 vectorcall sqrt(f4 value)
     { return sqrt(value.value); }
 
-    static forceinline simd_float vectorcall invSqrt(simd_float value)
+    static forceinline f4 vectorcall invSqrt(f4 value)
     { return invSqrt(value.value); }
 
-    static forceinline simd_float vectorcall max(simd_float one, simd_float two)
+    static forceinline f4 vectorcall max(f4 one, f4 two)
     { return max(one.value, two.value); }
 
-    static forceinline simd_float vectorcall min(simd_float one, simd_float two)
+    static forceinline f4 vectorcall min(f4 one, f4 two)
     { return min(one.value, two.value);	}
 
-    static forceinline simd_float vectorcall clamp(simd_float value, simd_float low, simd_float high)
+    static forceinline f4 vectorcall clamp(f4 value, f4 low, f4 high)
     { return max(min(value.value, high.value), low.value); }
 
-    static forceinline simd_float vectorcall truncate(simd_float value)
+    static forceinline f4 vectorcall truncate(f4 value)
     { return truncate(value.value); }
 
-    static forceinline simd_float vectorcall floor(simd_float value)
+    static forceinline f4 vectorcall floor(f4 value)
     { return floor(value.value); }
 
-    static forceinline simd_float vectorcall ceil(simd_float value)
+    static forceinline f4 vectorcall ceil(f4 value)
     { return ceil(value.value); }
 
-    static forceinline simd_float vectorcall round(simd_float value)
+    static forceinline f4 vectorcall round(f4 value)
     { return round(value.value); }
 
-    static forceinline simd_float vectorcall abs(simd_float value)
+    static forceinline f4 vectorcall abs(f4 value)
     { return abs(value.value); }
 
-    static forceinline simd_mask vectorcall signMask(simd_float value)
+    static forceinline i4mask vectorcall signMask(f4 value)
     { return signMask(value.value); }
 
-    static forceinline simd_mask vectorcall equal(simd_float one, simd_float two)
+    static forceinline i4mask vectorcall equal(f4 one, f4 two)
     { return equal(one.value, two.value);	}
 
-    static forceinline simd_mask vectorcall notEqual(simd_float one, simd_float two)
+    static forceinline i4mask vectorcall notEqual(f4 one, f4 two)
     { return notEqual(one.value, two.value); }
 
-    static forceinline simd_mask vectorcall greaterThan(simd_float one, simd_float two)
+    static forceinline i4mask vectorcall greaterThan(f4 one, f4 two)
     { return greaterThan(one.value, two.value);	}
 
-    static forceinline simd_mask vectorcall greaterThanOrEqual(simd_float one, simd_float two)
+    static forceinline i4mask vectorcall greaterThanOrEqual(f4 one, f4 two)
     { return greaterThanOrEqual(one.value, two.value); }
 
-    static forceinline simd_mask vectorcall lessThan(simd_float one, simd_float two)
+    static forceinline i4mask vectorcall lessThan(f4 one, f4 two)
     { return greaterThan(two.value, one.value); }
 
-    static forceinline simd_mask vectorcall lessThanOrEqual(simd_float one, simd_float two)
+    static forceinline i4mask vectorcall lessThanOrEqual(f4 one, f4 two)
     { return greaterThanOrEqual(two.value, one.value); }
 
-    static forceinline float vectorcall sum(simd_float value)
+    static forceinline float vectorcall sum(f4 value)
     { return sum(value.value); }
 
-    static forceinline bool vectorcall allSame(simd_float value)
-    { return simd_int::allSame(toMask(value)); }
+    static forceinline bool vectorcall allSame(f4 value)
+    { return i4::allSame(toMask(value)); }
 
-    static forceinline simd_mask vectorcall isNan(simd_float value)
+    static forceinline i4mask vectorcall isNan(f4 value)
     { return isNan(value.value); }
 
-    static forceinline bool vectorcall allEqual(simd_float one, simd_float two)
-    { return simd_mask::anyMask(notEqual(one, two)) == 0; }
+    static forceinline bool vectorcall allEqual(f4 one, f4 two)
+    { return i4mask::anyMask(notEqual(one, two)) == 0; }
 
 
     //////////////////////////////////
@@ -856,12 +859,12 @@ namespace utils
     // i hate unions
     template<usize ... N>
     static constexpr auto getInternalValue(const auto &scalars, utils::index_sequence<N...>) noexcept
-    { return simd_type{ .m128_f32 = { scalars[N]... } }; }
+    { return simdtype{ .m128_f32 = { scalars[N]... } }; }
   public:
   #endif
 
-    constexpr forceinline simd_float() noexcept : simd_float{ 0.0f } { }
-    constexpr forceinline simd_float(float initialValue) noexcept
+    constexpr forceinline f4() noexcept : f4{ 0.0f } { }
+    constexpr forceinline f4(float initialValue) noexcept
     {
       if (utils::is_constant_evaluated())
       {
@@ -870,25 +873,25 @@ namespace utils
       #ifdef COMPLEX_MSVC
         value = getInternalValue(values, utils::make_index_sequence<size>());
       #else
-        value = utils::bit_cast<simd_type>(values);
+        value = utils::bit_cast<simdtype>(values);
       #endif
       }
       else
         value = init(initialValue);
     }
-    constexpr forceinline simd_float(simd_type initialValue) noexcept : value(initialValue) { }
-    constexpr forceinline simd_float(const array_t &scalars) noexcept :
+    constexpr forceinline f4(simdtype initialValue) noexcept : value(initialValue) { }
+    constexpr forceinline f4(const array_t &scalars) noexcept :
     #ifdef COMPLEX_MSVC
       value(getInternalValue(scalars, utils::make_index_sequence<size>())) { }
     #else
-      value(utils::bit_cast<simd_type>(scalars)) { }
+      value(utils::bit_cast<simdtype>(scalars)) { }
     #endif
 
-    template<typename T, usize N> requires (sizeof(simd_type) == sizeof(T) * N)
-    forceinline simd_float(const utils::array<T, N> &scalars) noexcept :
-      value(utils::bit_cast<simd_type>(scalars)) { }
+    template<typename T, usize N> requires (sizeof(simdtype) == sizeof(T) * N)
+    forceinline f4(const utils::array<T, N> &scalars) noexcept :
+      value(utils::bit_cast<simdtype>(scalars)) { }
 
-    constexpr forceinline simd_float(float even, float odd) noexcept
+    constexpr forceinline f4(float even, float odd) noexcept
     {
       array_t values{};
       for (usize i = 0; i < size; i += 2)
@@ -900,7 +903,7 @@ namespace utils
     #ifdef COMPLEX_MSVC
       value = getInternalValue(values, utils::make_index_sequence<size>());
     #else
-      value = utils::bit_cast<simd_type>(values);
+      value = utils::bit_cast<simdtype>(values);
     #endif
     }
 
@@ -908,7 +911,7 @@ namespace utils
     {
       auto scalars = utils::bit_cast<array_t>(value);
       scalars[index] = newValue;
-      value = utils::bit_cast<simd_type>(scalars);
+      value = utils::bit_cast<simdtype>(scalars);
     }
 
     constexpr forceinline array_t vectorcall getArrayOfValues() const noexcept
@@ -930,8 +933,8 @@ namespace utils
     // Operators //
     ///////////////
 
-    forceinline bool vectorcall operator==(simd_float other) const noexcept
-    { return simd_mask::anyMask(notEqual(*this, other)) == 0; }
+    forceinline bool vectorcall operator==(f4 other) const noexcept
+    { return i4mask::anyMask(notEqual(*this, other)) == 0; }
 
     constexpr forceinline float vectorcall operator[](usize index) const noexcept
     {
@@ -942,119 +945,119 @@ namespace utils
     #endif
     }
 
-    forceinline simd_float& vectorcall operator+=(simd_float other) noexcept
+    forceinline f4& vectorcall operator+=(f4 other) noexcept
     { value = add(value, other.value); return *this; }
 
-    forceinline simd_float& vectorcall operator-=(simd_float other) noexcept
+    forceinline f4& vectorcall operator-=(f4 other) noexcept
     { value = sub(value, other.value); return *this; }
 
-    forceinline simd_float& vectorcall operator*=(simd_float other) noexcept
+    forceinline f4& vectorcall operator*=(f4 other) noexcept
     { value = mul(value, other.value); return *this; }
 
-    forceinline simd_float& vectorcall operator*=(float scalar) noexcept
+    forceinline f4& vectorcall operator*=(float scalar) noexcept
     { value = mulScalar(value, scalar); return *this; }
 
-    forceinline simd_float& vectorcall operator/=(simd_float other) noexcept
+    forceinline f4& vectorcall operator/=(f4 other) noexcept
     { value = div(value, other.value); return *this; }
 
 
-    forceinline simd_float& vectorcall operator&=(simd_mask other) noexcept
+    forceinline f4& vectorcall operator&=(i4mask other) noexcept
     { value = bitAnd(value, other.value); return *this; }
 
-    forceinline simd_float& vectorcall operator|=(simd_mask other) noexcept
+    forceinline f4& vectorcall operator|=(i4mask other) noexcept
     { value = bitOr(value, other.value); return *this; }
 
-    forceinline simd_float& vectorcall operator^=(simd_mask other) noexcept
+    forceinline f4& vectorcall operator^=(i4mask other) noexcept
     { value = bitXor(value, other.value); return *this; }
 
-    forceinline simd_float& vectorcall operator&=(simd_float other) noexcept
+    forceinline f4& vectorcall operator&=(f4 other) noexcept
     { value = bitAnd(value, toMask(other.value)); return *this; }
 
-    forceinline simd_float& vectorcall operator|=(simd_float other) noexcept
+    forceinline f4& vectorcall operator|=(f4 other) noexcept
     { value = bitOr(value, toMask(other.value)); return *this; }
 
-    forceinline simd_float& vectorcall operator^=(simd_float other) noexcept
+    forceinline f4& vectorcall operator^=(f4 other) noexcept
     { value = bitXor(value, toMask(other.value)); return *this; }
 
 
-    forceinline simd_float vectorcall operator+(simd_float other) const noexcept
+    forceinline f4 vectorcall operator+(f4 other) const noexcept
     { return add(value, other.value); }
 
-    forceinline friend simd_float vectorcall operator+(float one, simd_float two) noexcept
+    forceinline friend f4 vectorcall operator+(float one, f4 two) noexcept
     { return add(init(one), two.value); }
 
-    forceinline simd_float vectorcall operator-(simd_float other) const noexcept
+    forceinline f4 vectorcall operator-(f4 other) const noexcept
     { return sub(value, other.value); }
 
-    forceinline friend simd_float vectorcall operator-(float one, simd_float two) noexcept
+    forceinline friend f4 vectorcall operator-(float one, f4 two) noexcept
     { return sub(init(one), two.value); }
 
-    forceinline simd_float vectorcall operator*(simd_float other) const noexcept
+    forceinline f4 vectorcall operator*(f4 other) const noexcept
     { return mul(value, other.value); }
 
-    forceinline simd_float vectorcall operator*(float scalar) const noexcept
+    forceinline f4 vectorcall operator*(float scalar) const noexcept
     { return mulScalar(value, scalar); }
 
-    forceinline friend simd_float vectorcall operator*(float one, simd_float two) noexcept
+    forceinline friend f4 vectorcall operator*(float one, f4 two) noexcept
     { return mulScalar(two.value, one); }
 
-    forceinline simd_float vectorcall operator/(simd_float other) const noexcept
+    forceinline f4 vectorcall operator/(f4 other) const noexcept
     { return div(value, other.value); }
 
-    forceinline friend simd_float vectorcall operator/(float one, simd_float two) noexcept
+    forceinline friend f4 vectorcall operator/(float one, f4 two) noexcept
     { return div(init(one), two.value); }
 
 
-    forceinline simd_float vectorcall operator&(simd_mask other) const noexcept
+    forceinline f4 vectorcall operator&(i4mask other) const noexcept
     { return bitAnd(value, other.value); }
 
-    forceinline simd_float vectorcall operator|(simd_mask other) const noexcept
+    forceinline f4 vectorcall operator|(i4mask other) const noexcept
     { return bitOr(value, other.value); }
 
-    forceinline simd_float vectorcall operator^(simd_mask other) const noexcept
+    forceinline f4 vectorcall operator^(i4mask other) const noexcept
     { return bitXor(value, other.value); }
 
-    forceinline simd_float vectorcall operator&(simd_float other) const noexcept
+    forceinline f4 vectorcall operator&(f4 other) const noexcept
     { return bitAnd(value, toMask(other.value)); }
 
-    forceinline simd_float vectorcall operator|(simd_float other) const noexcept
+    forceinline f4 vectorcall operator|(f4 other) const noexcept
     { return bitOr(value, toMask(other.value)); }
 
-    forceinline simd_float vectorcall operator^(simd_float other) const noexcept
+    forceinline f4 vectorcall operator^(f4 other) const noexcept
     { return bitXor(value, toMask(other.value)); }
 
-    forceinline simd_float vectorcall operator-() const noexcept
+    forceinline f4 vectorcall operator-() const noexcept
     { return neg(value); }
 
-    forceinline simd_float vectorcall operator~() const noexcept
+    forceinline f4 vectorcall operator~() const noexcept
     { return bitNot(value); }
   };
 
   template<typename T>
-  concept SimdValue = utils::is_same_v<T, simd_float> || utils::is_same_v<T, simd_int>;
+  concept SimdValue = utils::is_same_v<T, f4> || utils::is_same_v<T, i4>;
 
   // an in/output needs to be contained in a single simd
   // effectively an alias of complexSize
-  inline constexpr u32 kChannelsPerInOut = simd_float::complexSize;
+  inline constexpr u32 kChannelsPerInOut = f4::complexSize;
 
   inline constexpr auto kChannelMasks = []()
   {
-    utils::array<simd_mask, kChannelsPerInOut> channelMasks{};
+    utils::array<i4mask, kChannelsPerInOut> channelMasks{};
     for (usize i = 0; i < channelMasks.size(); ++i)
     {
-      utils::array<u32, simd_mask::size> mask{};
+      utils::array<u32, i4mask::size> mask{};
       mask[2 * i] = kFullMask;
       mask[2 * i + 1] = kFullMask;
       channelMasks[i] = mask;
     }
     return channelMasks;
   }();
-  inline constexpr simd_mask kRealMask = { kFullMask, 0U };
-  inline constexpr simd_mask kImaginaryMask = { 0U, kFullMask };
-  inline constexpr simd_mask kMagnitudeMask = kRealMask;
-  inline constexpr simd_mask kPhaseMask = kImaginaryMask;
+  inline constexpr i4mask kRealMask = { kFullMask, 0U };
+  inline constexpr i4mask kImaginaryMask = { 0U, kFullMask };
+  inline constexpr i4mask kMagnitudeMask = kRealMask;
+  inline constexpr i4mask kPhaseMask = kImaginaryMask;
 }
 
-using utils::simd_float;
-using utils::simd_int;
-using utils::simd_mask;
+using utils::f4;
+using utils::i4;
+using utils::i4mask;

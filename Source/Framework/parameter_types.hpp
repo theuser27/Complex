@@ -17,8 +17,8 @@ namespace Plugin
 
 namespace utils
 {
-  struct simd_int;
-  struct simd_float;
+  struct i4;
+  struct f4;
 }
 
 namespace Generation
@@ -28,7 +28,7 @@ namespace Generation
 
 namespace Framework
 {
-  class ParameterValue;
+  class Parameter;
 
   // symmetric types apply the flipped curve to negative values
   // all x values are normalised
@@ -231,16 +231,18 @@ namespace Framework
     utils::string_view displayUnits{};                    // "%", " db", etc.
     u32 flags = Modulatable | Automatable;                // various flags
     UpdateFlag updateFlag = UpdateFlag::Realtime;         // at which point during processing the parameter is updated
-    usize (*generateNumeric)(char *string,                // string generator function for IndexedNumeric parameters
-      usize stringSize, double value,
+    usize (*toString)(char *string,                       // string generator function for IndexedNumeric parameters
+      usize stringSize, float value,
       const ParameterDetails &details) = nullptr;
+    float (*valueChange)(Parameter *parameter,       // calculates new value based on desired and previous ones
+      float newValue, float oldValue) = nullptr;
   };
 
 
-  utils::pair<const IndexedData *, usize> getOptionFromValue(double scaledValue, const ParameterDetails &details);
-  double getValueFromOptionText(utils::string_view text, const ParameterDetails &details);
-  double getValueFromOptionId(uuid optionId, const ParameterDetails &details);
-  double getValueFromOption(const IndexedData *option, const ParameterDetails &details);
+  utils::pair<const IndexedData *, usize> getOptionFromValue(float scaledValue, const ParameterDetails &details);
+  float getValueFromOptionText(utils::string_view text, const ParameterDetails &details);
+  float getValueFromOptionId(uuid optionId, const ParameterDetails &details);
+  float getValueFromOption(const IndexedData *option, const ParameterDetails &details);
 
   bool
   iterateOverIndexedData(IndexedData *options, const auto &predicate)
@@ -274,13 +276,13 @@ namespace Framework
 
   // with skewOnly == true a normalised value between [0,1] or [-0.5, 0.5] is returned,
   // depending on whether the parameter is bipolar
-  double scaleValue(double value, const ParameterDetails &details,
+  float scaleValue(float value, const ParameterDetails &details,
     float sampleRate = kDefaultSampleRate, bool scalePercent = false, bool skewOnly = false);
 
-  double unscaleValue(double value, const ParameterDetails &details,
+  float unscaleValue(float value, const ParameterDetails &details,
     float sampleRate = kDefaultSampleRate, bool unscalePercent = true);
 
-  utils::simd_float scaleValue(utils::simd_float value,
+  utils::f4 scaleValue(utils::f4 value,
     const ParameterDetails &details, float sampleRate = kDefaultSampleRate);
 
 
@@ -403,14 +405,14 @@ namespace Framework
   {
     u64 versionNumber{};
 
-    utils::bumpArena *arena{};
+    utils::Pool *arena{};
 
     Framework::ProcessorMetadata *metadata{};
     utils::vectornd<utils::sp<utils::Dylib>> loadedDynamicLibs{};
 
-    utils::bumpArena *getNewArena(usize size)
+    utils::Pool *getNewArena(usize size)
     {
-      return utils::bumpArena::createNested(arena, size);
+      return utils::Pool::createNested(arena, size);
     }
   };
 
@@ -418,13 +420,13 @@ namespace Framework
   {
     utils::LockBlame<i32> readWriteLock{};
     Framework::PluginStructure structure{};
-    utils::bumpArena *arena{};
+    utils::Pool *arena{};
     utils::string_view configFolderPath{};
     utils::sll<utils::string_view> *strings{};
     utils::sll<Plugin::ComplexPlugin> *pluginInstances{};
   };
 
-  inline usize printToggleValues(char *string, usize size, double value, const ParameterDetails &)
+  inline usize printToggleValues(char *string, usize size, float value, const ParameterDetails &)
   {
     static constexpr utils::string_view toggleStrings[] = { "Off", "On" };
     size = utils::min(toggleStrings[(usize)value].size(), size - 1);
@@ -464,7 +466,7 @@ namespace Framework
     void (*destructor)(UndoAction *){};
     // Allows multiple actions to be coalesced into a single action object, to reduce storage space.
     // The combined action can be the current, next or an entire new action
-    UndoAction *(*combineActions)(utils::bumpArena *transaction,
+    UndoAction *(*combineActions)(utils::Pool *transaction,
       UndoAction *currentAction, UndoAction *nextAction){};
 
     UndoAction *next{};
@@ -477,7 +479,7 @@ namespace Framework
 
     ~UndoManager();
 
-    UndoManager(utils::bumpArena *parentArena, usize transactionsToKeep);
+    UndoManager(utils::Pool *parentArena, usize transactionsToKeep);
 
     void clear();
     void setTransationStorage(usize transactionsToKeep);
@@ -486,10 +488,8 @@ namespace Framework
     bool perform(UndoAction *action);
 
     // Starts a new group of actions that together will be treated as a single transaction.
-    [[nodiscard]] utils::bumpArena *beginNewTransaction();
-    [[nodiscard]] utils::pair<utils::bumpArena *, UndoAction *> getCurrent() { return transactions[currentIndex]; }
-    [[nodiscard]] utils::bumpArena *getCurrentTransaction() { return transactions[currentIndex].first; }
-    [[nodiscard]] UndoAction *getLastAction() { return transactions[currentIndex].second; }
+    [[nodiscard]] utils::Pool *beginNewTransaction();
+    [[nodiscard]] utils::pair<utils::Pool *, UndoAction *> getCurrent() { return transactions[currentIndex]; }
 
     bool canUndo() const { return undoActionsCount; }
     bool canRedo() const { return redoActionsCount; }
@@ -499,19 +499,18 @@ namespace Framework
     //
     // if undoCurrentTransactionOnly == true, then the transaction index won't be changed
     // when undone and things can immediately be added to the current transaction
-    bool undo(bool undoCurrentTransactionOnly = false);
+    bool undo();
 
     // Tries to redo the last transaction that was undone.
     // returns false if there aren't any transactions to redo
     bool redo();
 
-    // Returns true if the caller code is in the middle of an undo or redo action.
-    bool isPerformingUndoRedo() const { return isInsideUndoRedoCall; }
-
-  private:
-    utils::bumpArena *storage{};
-    utils::span<utils::pair<utils::bumpArena *, UndoAction *>> transactions{};
+    utils::Pool *storage{};
+    utils::span<utils::pair<utils::Pool *, UndoAction *>> transactions{};
+    // once sized, currentIndex starts at the last index of the transactions array
+    // this is so that it moves to 0 when beginNewTransaction() is called
     usize currentIndex = 0, undoActionsCount = 0, redoActionsCount = 0;
+    // prevents reentrant calls because those would derail the system
     bool isInsideUndoRedoCall = false;
   };
 }

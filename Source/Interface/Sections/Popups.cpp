@@ -40,7 +40,7 @@ namespace Interface
   void PopupDisplay::reinitialise()
   {
     if (!arena)
-      arena = utils::bumpArena::createNested(parent->arena, COMPLEX_KB(8));
+      arena = utils::Pool::createNested(parent->arena, COMPLEX_KB(8));
 
     placement = Placement::custom;
     padding = { kLineHeight / 4, 0, kLineHeight / 4, 0 };
@@ -427,7 +427,7 @@ namespace Interface
   void PopupSelector::reinitialise()
   {
     if (!arena)
-      arena = utils::bumpArena::createNested(parent->arena, COMPLEX_KB(128));
+      arena = utils::Pool::createNested(parent->arena, COMPLEX_KB(128));
 
     placement = Placement::custom;
     sizingFlags |= GrowableX | GrowableY;
@@ -514,7 +514,7 @@ namespace Interface
       cancel(this);
     cancel = {};
     lastPlacement = Placement::right;
-    utils::bumpArena::clear(arena);
+    utils::Pool::clear(arena);
     skinOverride = Skin::kNone;
     toggleable = true;
     componentFlags.isVisible = false;

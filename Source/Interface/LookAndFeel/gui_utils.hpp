@@ -534,23 +534,6 @@ namespace Interface
 
     // the modifiers to associate with the keystroke
     ModifierKeys mods;
-
-    //==============================================================================
-    /** Checks whether the user is currently holding down the keys that make up this
-        KeyPress.
-
-        Note that this will return false if any extra modifier keys are
-        down - e.g. if the keypress is CTRL+X and the user is actually holding CTRL+ALT+x
-        then it will be false.
-    */
-    bool isCurrentlyDown() const;
-
-    /** Checks whether a particular key is held down, irrespective of modifiers.
-
-        The values for key codes can either be one of the special constants defined in
-        this class, or an 8-bit character code.
-    */
-    static bool isKeyCurrentlyDown(int keyCode);
   };
 
   inline void tickAnimation(utils::span<float> values,

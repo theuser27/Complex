@@ -31,7 +31,7 @@ namespace Generation
     EffectData *effectData = vtable->createEffect(module, copy);
     effectData->metadata = processorMetadata;
 
-    Framework::ParameterValue *effectParameters{};
+    Framework::Parameter *effectParameters{};
     u32 parameterCount;
     if (copy)
     {
@@ -55,7 +55,7 @@ namespace Generation
     return effectData;
   }
 
-  EffectModule::EffectModule(utils::bumpArena *arena, Plugin::State *state,
+  EffectModule::EffectModule(utils::Pool *arena, Plugin::State *state,
     Framework::ProcessorMetadata *metadata, const EffectModule *other, void *serialisedSave) :
     Processor{ arena, state, metadata, other }
   {
@@ -97,11 +97,11 @@ namespace Generation
     }
   }
 
-  void EffectModule::serialiseToJson(void *jsonData, utils::span<Framework::ParameterValue *>) const
+  void EffectModule::serialiseToJson(void *jsonData, utils::span<Framework::Parameter *>) const
   {
     auto *effect = currentEffect.load(satomi::memory_order_acquire);
 
-    auto parametersToSerialise = utils::vector<Framework::ParameterValue *>{
+    auto parametersToSerialise = utils::vector<Framework::Parameter *>{
       getLocalScratch(), effect->parameterCount + parameterCount };
 
     auto parameter = parameters;
@@ -154,11 +154,10 @@ namespace Generation
         parameter && i < activeEffect->parameterCount && i < effect->parameterCount;
         (parameter = parameter->next), (replacementParameter = replacementParameter->next), (++i))
       {
-        auto *parameterLink = parameter->getParameterLink();
-        if (!parameterLink->hostControl)
+        if (!parameter->hostParameter)
           continue;
 
-        parameterLink->hostControl->resetParameterLink(replacementParameter->getParameterLink(), false);
+        parameter->hostParameter->resetParameter(replacementParameter, false);
       }
     }
 
@@ -194,14 +193,14 @@ namespace Generation
     ((EffectVtable *)effect->metadata->vtable)->runEffect(this, effect, source, dataBuffer, binCount, sampleRate);
 
     // if the mix is 100% for all channels, we can skip mixing entirely
-    simd_float wetMix = getParameter(ModuleMix)->getInternalValue<simd_float>(sampleRate);
-    if (!simd_float::allEqual(wetMix, 1.0f))
+    f4 wetMix = getParameter(ModuleMix)->getInternalValue<f4>(sampleRate);
+    if (!f4::allEqual(wetMix, 1.0f))
     {
       auto sourceData = source.sourceBuffer->get();
       auto destinationData = dataBuffer->get();
-      simd_float dryMix = 1.0f - wetMix;
+      f4 dryMix = 1.0f - wetMix;
       for (u32 i = 0; i < binCount; i++)
-        destinationData[i] = simd_float::mulAdd(dryMix * sourceData[i], wetMix, destinationData[i]);
+        destinationData[i] = f4::mulAdd(dryMix * sourceData[i], wetMix, destinationData[i]);
     }
 
     // switching to being a reader and allowing other readers to participate
@@ -212,7 +211,7 @@ namespace Generation
     source.sourceBuffer = dataBuffer;
   }
 
-  EffectsLane::EffectsLane(utils::bumpArena *arena, Plugin::State *state, Framework::ProcessorMetadata *metadata,
+  EffectsLane::EffectsLane(utils::Pool *arena, Plugin::State *state, Framework::ProcessorMetadata *metadata,
     const EffectsLane *other, void *serialisedSave) : Processor{ arena, state, metadata, other }
   {
     if (other)
@@ -241,7 +240,7 @@ namespace Generation
     COMPLEX_ASSERT(interleavedInputBuffer->dataLock.lock.load() >= 0);
     ScopedLock g{ interleavedInputBuffer->dataLock, true, WaitMechanism::Spin };
 
-    auto values = utils::array<simd_float, SimdBuffer::kRelativeSize>{};
+    auto values = utils::array<f4, SimdBuffer::kRelativeSize>{};
     auto valueSources = utils::array<utils::ca<const float>, decltype(values)::size()>{};
 
     for (u32 i = 0; i < inputBuffer.channels; i += (u32)values.size())
@@ -255,7 +254,7 @@ namespace Generation
 
       auto data = interleavedInputBuffer->get(i / (u32)valueSources.size());
 
-      // skipping every n-th complex pair (currently simd_float can take 2 pairs)
+      // skipping every n-th complex pair (currently f4 can take 2 pairs)
       for (u32 j = 0; j < binCount - 1; j += (u32)values.size())
       {
         // skipping every second sample (complex signal)
@@ -268,7 +267,7 @@ namespace Generation
           data[j + k] = values[k];
       }
 
-      simd_float::array_t nyquist{};
+      f4::array_t nyquist{};
       for (u32 k = 0; k < valueSources.size(); ++k)
       {
         nyquist[2 * k] = valueSources[k][(binCount - 1) * 2];
@@ -417,20 +416,20 @@ namespace Generation
       }
     }
 
-    simd_float inputVolume = 0.0f;
-    simd_float loudnessScale = 1.0f / (float)binCount;
+    f4 inputVolume = 0.0f;
+    f4 loudnessScale = 1.0f / (float)binCount;
     u32 isGainMatching = thisLane->getParameter(EffectsLane::GainMatching)->getInternalValue<u32>();
 
-    auto getLoudness = [](const ComplexDataSource &laneDataSource, simd_float loudnessScale, u32 binCount)
+    auto getLoudness = [](const ComplexDataSource &laneDataSource, f4 loudnessScale, u32 binCount)
     {
-      simd_float loudness = 0.0f;
+      f4 loudness = 0.0f;
       // this is because we're squaring and then scaling inside the loops
       loudnessScale *= loudnessScale;
       auto data = laneDataSource.sourceBuffer->get(laneDataSource.simdChannelOffset);
       for (u32 i = 0; i < binCount - 1; i += 2)
       {
         // magnitudes are: [left channel, right channel, left channel + 1, right channel + 1]
-        simd_float values = complexMagnitude({ data[i], data[i + 1] }, false);
+        f4 values = complexMagnitude({ data[i], data[i + 1] }, false);
         // [left channel,     left channel + 1, right channel,     right channel + 1] +
         // [left channel + 1, left channel,     right channel + 1, right channel    ]
         loudness += groupEven(values) + groupEvenReverse(values);
@@ -443,7 +442,7 @@ namespace Generation
     if (isGainMatching)
     {
       inputVolume = getLoudness(laneDataSource, loudnessScale, binCount);
-      inputVolume = merge(inputVolume, simd_float(1.0f), simd_float::equal(inputVolume, 0.0f));
+      inputVolume = merge(inputVolume, f4(1.0f), f4::equal(inputVolume, 0.0f));
     }
     else
       thisLane->volumeScale.store(1.0f, satomi::memory_order_relaxed);
@@ -460,15 +459,15 @@ namespace Generation
 
     if (isGainMatching)
     {
-      simd_float outputVolume = getLoudness(laneDataSource, loudnessScale, binCount);
-      outputVolume = merge(outputVolume, simd_float(1.0f), simd_float::equal(outputVolume, 0.0f));
-      simd_float scale = inputVolume / outputVolume;
+      f4 outputVolume = getLoudness(laneDataSource, loudnessScale, binCount);
+      outputVolume = merge(outputVolume, f4(1.0f), f4::equal(outputVolume, 0.0f));
+      f4 scale = inputVolume / outputVolume;
 
       // some arbitrary limits taken from dtblkfx
-      scale = merge(scale, simd_float{ 1.0f }, simd_float::greaterThan(scale, 1.0e30f));
-      scale = merge(scale, simd_float{ 0.0f }, simd_float::lessThan(scale, 1.0e-30f));
+      scale = merge(scale, f4{ 1.0f }, f4::greaterThan(scale, 1.0e30f));
+      scale = merge(scale, f4{ 0.0f }, f4::lessThan(scale, 1.0e-30f));
 
-      thisLane->volumeScale.store(simd_float::sqrt(scale), satomi::memory_order_relaxed);
+      thisLane->volumeScale.store(f4::sqrt(scale), satomi::memory_order_relaxed);
     }
 
     // unlocking the final output of the lane until we need it again (be it a module or the input itself if the lane is empty)
@@ -514,13 +513,13 @@ namespace Generation
 
       ScopedLock g1{ lane->laneDataSource.sourceBuffer->dataLock, false, WaitMechanism::Spin };
 
-      simd_float multiplier = simd_float::max(1.0f, outputScaleMultipliers_[index]);
+      f4 multiplier = f4::max(1.0f, outputScaleMultipliers_[index]);
       Framework::applyToThisNoMask<MathOperations::Add>(interleavedOutputBuffer,
         lane->laneDataSource.sourceBuffer, kChannelsPerInOut, binCount, (u32)index * kChannelsPerInOut, 0, 0, 0,
         lane->volumeScale.load(satomi::memory_order_relaxed) / multiplier);
     }
 
-    auto values = utils::array<simd_float, SimdBuffer::kRelativeSize>{};
+    auto values = utils::array<f4, SimdBuffer::kRelativeSize>{};
     auto valueDestinations = utils::array<utils::ca<float>, decltype(values)::size()>{};
 
     for (u32 i = 0; i < out.channels; i += (u32)values.size())
@@ -533,7 +532,7 @@ namespace Generation
       for (u32 k = 0; k < valueDestinations.size(); ++k)
         valueDestinations[k] = out.get((u32)(i + k)).offset(0, 2 * binCount);
 
-      // skipping every n-th complex pair (currently simd_float can take 2 pairs)
+      // skipping every n-th complex pair (currently f4 can take 2 pairs)
       for (u32 j = 0; j < binCount - 1; j += (u32)values.size())
       {
         for (u32 k = 0; k < values.size(); ++k)
@@ -543,7 +542,7 @@ namespace Generation
 
         // skipping every second sample (complex signal)
         for (u32 k = 0; k < values.size(); k++)
-          ::memcpy(&valueDestinations[k][j * 2], &values[k], sizeof(simd_float));
+          ::memcpy(&valueDestinations[k][j * 2], &values[k], sizeof(f4));
       }
 
       auto rest = data[binCount - 1].getArrayOfValues();
@@ -559,7 +558,7 @@ namespace Generation
 template<> Generation::Processor *
 createProcessor<Generation::EffectModule>(Plugin::State *state, Framework::ProcessorMetadata *metadata, const void *copy, void *serialisedSave)
 {
-  auto *arena = utils::bumpArena::createNested(state->processorStorage, COMPLEX_MB(1));
+  auto *arena = utils::Pool::createNested(state->processorStorage, COMPLEX_MB(1));
   return anew(state->processorStorage, Generation::EffectModule,
     { arena, state, metadata, (const Generation::EffectModule *)copy, serialisedSave });
 }
@@ -605,7 +604,7 @@ initialiseTypeStructure<Generation::EffectModule>(void *, Framework::PluginStruc
 template<> Generation::Processor *
 createProcessor<Generation::EffectsLane>(Plugin::State *state, Framework::ProcessorMetadata *metadata, const void *toCopy, void *serialisedSave)
 {
-  auto *arena = utils::bumpArena::createNested(state->processorStorage, COMPLEX_MB(1));
+  auto *arena = utils::Pool::createNested(state->processorStorage, COMPLEX_MB(1));
   return anew(state->processorStorage, Generation::EffectsLane, { arena, state, metadata,
     (const Generation::EffectsLane *)toCopy, serialisedSave });
 }
@@ -614,6 +613,55 @@ initialiseTypeStructure<Generation::EffectsLane>(void *, Framework::PluginStruct
 {
   using namespace Framework;
   using namespace Generation;
+
+  static constexpr auto laneInputChangeCallback = [](Parameter *p,
+    float newValue, float oldValue) -> float
+  {
+    bool direction = oldValue < newValue;
+    float oldScaled = Framework::scaleValue(oldValue, p->details);
+    float newScaled = Framework::scaleValue(newValue, p->details);
+
+    if (oldScaled == newScaled)
+      return newValue;
+
+    auto *parentProcessor = p->parentProcessor;
+    auto [option, _] = Framework::getOptionFromValue(newScaled, p->details);
+
+    // disallow feedback until we figure out a good UX for that
+    // TODO: fix lane feedback UX
+  outer:
+    {
+      auto *next = option;
+      while (true)
+      {
+        // have we reached a primary source? (main or sidechain inputs)
+        if (next->flags != Framework::IndexedData::StateIdFlag)
+          break;
+
+        // if we've reached our starting lane change initial option
+        if (next->stateId == parentProcessor->stateId)
+        {
+          if (direction)
+            --newScaled;
+          else
+            ++newScaled;
+
+          option = Framework::getOptionFromValue(newScaled, p->details).first;
+          goto outer; // no labelled break in this language...
+        }
+
+        // continue down the chain until we find a primary source or our starting lane
+        auto *nextParameter = parentProcessor->state
+          ->getProcessorParameter(next->stateId, Generation::EffectsLane::Input);
+        next = Framework::getOptionFromValue(Framework::scaleValue(
+          nextParameter->normalisedValue.load(satomi::memory_order_relaxed),
+          nextParameter->details), nextParameter->details).first;
+      }
+    }
+
+    newValue = Framework::unscaleValue(Framework::getValueFromOption(option, p->details), p->details);
+    return newValue;
+  };
 
   auto arena = structure.getNewArena(COMPLEX_KB(2));
 

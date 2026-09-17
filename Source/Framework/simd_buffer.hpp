@@ -11,23 +11,23 @@ namespace Framework
 {
   struct SimdBuffer
   {
-    static constexpr u32 kRelativeSize = sizeof(simd_float) / sizeof(float[2]);
+    static constexpr u32 kRelativeSize = utils::kChannelsPerInOut;
 
     u32 channels = 0;
     u32 size = 0;
     mutable utils::LockBlame<i32> dataLock{ 0 };
 
-    simd_float data[COMPLEX_FAM];
+    f4 data[COMPLEX_FAM];
 
     void clear() { ::zeroset(data, getSimdChannels() * size); }
 
-    utils::ca<simd_float>
+    utils::ca<f4>
     get(u32 simdChannel = 0)
     {
       COMPLEX_ASSERT(simdChannel * kRelativeSize < channels);
       return { data + simdChannel * size, size };
     }
-    utils::ca<const simd_float>
+    utils::ca<const f4>
     get(u32 simdChannel = 0) const
     {
       COMPLEX_ASSERT(simdChannel * kRelativeSize < channels);
@@ -49,11 +49,11 @@ namespace Framework
       u32 simdChannels = Framework::SimdBuffer::getSimdChannels(channels);
       u32 dataSize = size * simdChannels;
 
-      usize extra = utils::roundUpToMultiple(sizeof(Framework::SimdBuffer), alignof(simd_float));
-      usize totalSize = extra + dataSize * sizeof(simd_float);
+      usize extra = utils::roundUpToMultiple(sizeof(Framework::SimdBuffer), alignof(f4));
+      usize totalSize = extra + dataSize * sizeof(f4);
 
-      byte *memory = allocator.insert(totalSize, alignof(simd_float), clean);
-      (void)new(memory + extra) simd_float[dataSize];
+      byte *memory = allocator.insert(totalSize, alignof(f4), clean);
+      (void)new(memory + extra) f4[dataSize];
 
       return new(memory) Framework::SimdBuffer{ .channels = channels, .size = size };
     }
@@ -65,7 +65,7 @@ namespace Framework
   // note: starting channels need to be congruent to kNumChannels
   forceinline void applyToThis(SimdBuffer *thisBuffer, const SimdBuffer *otherBuffer,
     u32 channels, u32 samples, utils::MathOperations operation,
-    simd_mask mergeMask, u32 thisStartChannel = 0, u32 otherStartChannel = 0,
+    i4mask mergeMask, u32 thisStartChannel = 0, u32 otherStartChannel = 0,
     u32 thisStartIndex = 0, u32 otherStartIndex = 0)
   {
     COMPLEX_HARD_ASSERT(thisBuffer->channels >= thisStartChannel + channels);
@@ -75,18 +75,18 @@ namespace Framework
     COMPLEX_HARD_ASSERT(thisBuffer != otherBuffer);
 
     // defining the math operations
-    simd_float (*function)(simd_float, simd_float, simd_mask);
+    f4 (*function)(f4, f4, i4mask);
     switch (operation)
     {
     case utils::MathOperations::Add:
-      function = [](simd_float one, simd_float two, simd_mask mask) { return utils::merge(one + two, one, mask); };
+      function = [](f4 one, f4 two, i4mask mask) { return utils::merge(one + two, one, mask); };
       break;
     case utils::MathOperations::Multiply:
-      function = [](simd_float one, simd_float two, simd_mask mask) { return utils::merge(one * two, one, mask); };
+      function = [](f4 one, f4 two, i4mask mask) { return utils::merge(one * two, one, mask); };
       break;
     default:
     case utils::MathOperations::Assign:
-      function = [](simd_float one, simd_float two, simd_mask mask) { return utils::merge(two, one, mask); };
+      function = [](f4 one, f4 two, i4mask mask) { return utils::merge(two, one, mask); };
       break;
     }
 
@@ -107,7 +107,7 @@ namespace Framework
   template<utils::MathOperations Operation>
   void applyToThisNoMask(SimdBuffer *thisBuffer, const SimdBuffer *otherBuffer,
     u32 channels, u32 samples, u32 thisStartChannel = 0, u32 otherStartChannel = 0,
-    u32 thisStartIndex = 0, u32 otherStartIndex = 0, simd_float scaleFactor = 1.0f)
+    u32 thisStartIndex = 0, u32 otherStartIndex = 0, f4 scaleFactor = 1.0f)
   {
     COMPLEX_ASSERT(thisBuffer->channels >= thisStartChannel + channels);
     COMPLEX_ASSERT(otherBuffer->channels >= otherStartChannel + channels);

@@ -4,13 +4,13 @@
 #pragma once
 
 #include "Framework/stl_utils.hpp"
-#include "Framework/simd_values.hpp"
+#include "Framework/simd.hpp"
 
 extern "C" typedef struct NSVGimage NSVGimage;
 
 namespace utils
 {
-  struct bumpArena;
+  struct Pool;
 }
 
 namespace Framework
@@ -19,7 +19,7 @@ namespace Framework
   struct IndexedData;
   struct ProcessorMetadata;
   struct PluginStructure;
-  class ParameterValue;
+  class Parameter;
   struct ComplexDataSource;
   struct SimdBuffer;
 }
@@ -47,7 +47,7 @@ namespace Generation
     void (*runEffect)(EffectModule *effectModule, EffectData *effectData, 
       Framework::ComplexDataSource &source, Framework::SimdBuffer *destination, 
       u32 binCount, float sampleRate);
-    utils::span<Interface::Control *>(*createUI)(utils::bumpArena *arena,
+    utils::span<Interface::Control *>(*createUI)(utils::Pool *arena,
       Interface::EffectModuleSection *section, EffectData *effectData);
   };
 
@@ -56,7 +56,7 @@ namespace Generation
     EffectData *next{};
 
     Framework::ProcessorMetadata *metadata{};
-    Framework::ParameterValue *parameters{};
+    Framework::Parameter *parameters{};
     NSVGimage *(*createEffectIcon)(Interface::Graphics &g){};
     u32 parameterCount{};
   };
@@ -123,7 +123,7 @@ namespace Generation
       Framework::ComplexDataSource &source, Framework::SimdBuffer *destination,
       u32 binCount, float sampleRate) noexcept;
 
-    utils::span<Interface::Control *> createUINormal(utils::bumpArena *arena,
+    utils::span<Interface::Control *> createUINormal(utils::Pool *arena,
       Interface::EffectModuleSection *section, EffectData *effectData);
 
     // Gate - frequency gating
@@ -156,7 +156,7 @@ namespace Generation
       Framework::ComplexDataSource &source, Framework::SimdBuffer *destination,
       u32 binCount, float sampleRate) noexcept;
 
-    utils::span<Interface::Control *> createUIGate(utils::bumpArena *arena,
+    utils::span<Interface::Control *> createUIGate(utils::Pool *arena,
       Interface::EffectModuleSection *section, EffectData *effectData);
 
 
@@ -194,7 +194,7 @@ namespace Generation
       Framework::ComplexDataSource &source, Framework::SimdBuffer *destination,
       u32 binCount, float sampleRate) noexcept;
 
-    utils::span<Interface::Control *> createUIContrast(utils::bumpArena *arena,
+    utils::span<Interface::Control *> createUIContrast(utils::Pool *arena,
       Interface::EffectModuleSection *section, EffectData *effectData);
 
     COMPLEX_ENUM(Clip,
@@ -209,7 +209,7 @@ namespace Generation
       Framework::ComplexDataSource &source, Framework::SimdBuffer *destination,
       u32 binCount, float sampleRate) noexcept;
 
-    utils::span<Interface::Control *> createUIClip(utils::bumpArena *arena,
+    utils::span<Interface::Control *> createUIClip(utils::Pool *arena,
       Interface::EffectModuleSection *section, EffectData *effectData);
 
     // Invert the spectrum relative to a specific loudness value
@@ -261,7 +261,7 @@ namespace Generation
       Framework::ComplexDataSource &source, Framework::SimdBuffer *destination,
       u32 binCount, float sampleRate) noexcept;
 
-    utils::span<Interface::Control *> createUIShift(utils::bumpArena *arena,
+    utils::span<Interface::Control *> createUIShift(utils::Pool *arena,
       Interface::EffectModuleSection *section, EffectData *effectData);
 
     // TODO:
@@ -290,7 +290,7 @@ namespace Generation
       Framework::ComplexDataSource &source, Framework::SimdBuffer *destination,
       u32 binCount, float sampleRate) noexcept;
 
-    utils::span<Interface::Control *> createUIResample(utils::bumpArena *arena,
+    utils::span<Interface::Control *> createUIResample(utils::Pool *arena,
       Interface::EffectModuleSection *section, EffectData *effectData);
 
 
@@ -302,7 +302,7 @@ namespace Generation
       Framework::ComplexDataSource &source, Framework::SimdBuffer *destination,
       u32 binCount, float sampleRate) noexcept;
 
-    utils::span<Interface::Control *> createUIFrequencyShift(utils::bumpArena *arena,
+    utils::span<Interface::Control *> createUIFrequencyShift(utils::Pool *arena,
       Interface::EffectModuleSection *section, EffectData *effectData);
 
     // TODO: shift, harmonic shift, harmonic repitch
@@ -343,14 +343,14 @@ namespace Generation
       u32 lastBlockPosition{};
       u32 lastBinCount{};
       Framework::SimdBuffer *freezeBuffer{};
-      simd_float lastPosition{};
+      f4 lastPosition{};
     };
 
     void runRolling(EffectModule *effectModule, EffectData *effectData,
       Framework::ComplexDataSource &source, Framework::SimdBuffer *destination,
       u32 binCount, float sampleRate) noexcept;
 
-    utils::span<Interface::Control *> createUIRolling(utils::bumpArena *arena,
+    utils::span<Interface::Control *> createUIRolling(utils::Pool *arena,
       Interface::EffectModuleSection *section, EffectData *effectData);
 
     // various freezer ideas
@@ -381,7 +381,7 @@ namespace Generation
       Framework::ComplexDataSource &source, Framework::SimdBuffer *destination,
       u32 binCount, float sampleRate) noexcept;
 
-    utils::span<Interface::Control *> createUIReinterpret(utils::bumpArena *arena,
+    utils::span<Interface::Control *> createUIReinterpret(utils::Pool *arena,
       Interface::EffectModuleSection *section, EffectData *effectData);
 
     // resize, specops effects category

@@ -91,7 +91,7 @@ namespace Interface
     effectTypeSelector.arena = arena;
     effectTypeSelector.placement = Placement::left;
     effectTypeSelector.dropdownOffset = { 0, 4 };
-    effectTypeSelector.valueChangedCallback = [](Control *c, double newValue, double)
+    effectTypeSelector.valueChangedCallback = [](Control *c, float newValue, float)
     {
       // selector -> header -> effectHolder -> effectModuleSection
       auto *section = (EffectModuleSection *)c->parent->parent->parent;
@@ -188,9 +188,9 @@ namespace Interface
     desiredSize = { kEffectModuleWidth, 0, kEffectModuleWidth, utils::int_max<i32> };
 
     if (!arena)
-      arena = utils::bumpArena::createNested(utils::bumpArena::fromAllocation(this), COMPLEX_KB(64));
+      arena = utils::Pool::createNested(utils::Pool::fromAllocation(this), COMPLEX_KB(64));
     if (!effectArena)
-      effectArena = utils::bumpArena::createNested(arena, COMPLEX_KB(32));
+      effectArena = utils::Pool::createNested(arena, COMPLEX_KB(32));
 
 
     addChildComponent(&maskComponent);
@@ -305,7 +305,7 @@ namespace Interface
   {
     effectHolder.removeChildComponent(&effectHolder.header);
     effectHolder.removeAllChildComponents();
-    utils::bumpArena::clear(effectArena);
+    utils::Pool::clear(effectArena);
     effectHolder.addChildComponent(&effectHolder.header);
     effectControls = {};
 
@@ -322,10 +322,10 @@ namespace Interface
 
 namespace Generation
 {
-#define findParameterWithId(parameters, id) utils::findIf(parameters, [](Framework::ParameterValue *item) { return item->getParameterId() == id; })
+#define findParameterWithId(parameters, idToCheck) utils::findIf(parameters, [](Framework::Parameter *item) { return item->details.id == idToCheck; })
 
   static Interface::CombinationRotarySlider *
-  createRotary(utils::bumpArena *arena, Framework::ParameterValue *parameter)
+  createRotary(utils::Pool *arena, Framework::Parameter *parameter)
   {
     using namespace Interface;
 
@@ -337,7 +337,7 @@ namespace Generation
   }
 
   static utils::span<Interface::Control *>
-  genericKnobUI(utils::bumpArena *arena, Interface::EffectModuleSection *section,
+  genericKnobUI(utils::Pool *arena, Interface::EffectModuleSection *section,
     EffectData *effectData)
   {
     using namespace Interface;
@@ -363,14 +363,14 @@ namespace Generation
 
 
   utils::span<Interface::Control *>
-  Filter::createUINormal(utils::bumpArena *arena, Interface::EffectModuleSection *section,
+  Filter::createUINormal(utils::Pool *arena, Interface::EffectModuleSection *section,
     EffectData *effectData)
   {
     return genericKnobUI(arena, section, effectData);
   }
 
   utils::span<Interface::Control *>
-  Filter::createUIGate(utils::bumpArena *arena, Interface::EffectModuleSection *section,
+  Filter::createUIGate(utils::Pool *arena, Interface::EffectModuleSection *section,
     EffectData *effectData)
   {
     using namespace Interface;
@@ -396,21 +396,21 @@ namespace Generation
   }
 
   utils::span<Interface::Control *>
-  Dynamics::createUIContrast(utils::bumpArena *arena,
+  Dynamics::createUIContrast(utils::Pool *arena,
     Interface::EffectModuleSection *section, EffectData *effectData)
   {
     return genericKnobUI(arena, section, effectData);
   }
 
   utils::span<Interface::Control *>
-  Dynamics::createUIClip(utils::bumpArena *arena,
+  Dynamics::createUIClip(utils::Pool *arena,
     Interface::EffectModuleSection *section, EffectData *effectData)
   {
     return genericKnobUI(arena, section, effectData);
   }
 
   utils::span<Interface::Control *>
-  Phase::createUIShift(utils::bumpArena *arena,
+  Phase::createUIShift(utils::Pool *arena,
     Interface::EffectModuleSection *section, EffectData *effectData)
   {
     using namespace Interface;
@@ -441,7 +441,7 @@ namespace Generation
   }
 
   utils::span<Interface::Control *>
-  Pitch::createUIResample(utils::bumpArena *arena,
+  Pitch::createUIResample(utils::Pool *arena,
     Interface::EffectModuleSection *section, EffectData *effectData)
   {
     using namespace Interface;
@@ -460,14 +460,14 @@ namespace Generation
   }
 
   utils::span<Interface::Control *>
-  Pitch::createUIFrequencyShift(utils::bumpArena *arena,
+  Pitch::createUIFrequencyShift(utils::Pool *arena,
     Interface::EffectModuleSection *section, EffectData *effectData)
   {
     return genericKnobUI(arena, section, effectData);
   }
 
   utils::span<Interface::Control *> 
-  Freeze::createUIRolling(utils::bumpArena *arena, 
+  Freeze::createUIRolling(utils::Pool *arena, 
     Interface::EffectModuleSection *section, EffectData *effectData)
   {
     using namespace Interface;
@@ -486,7 +486,7 @@ namespace Generation
   }
 
   utils::span<Interface::Control *>
-  Destroy::createUIReinterpret(utils::bumpArena *arena,
+  Destroy::createUIReinterpret(utils::Pool *arena,
     Interface::EffectModuleSection *section, EffectData *effectData)
   {
     using namespace Interface;

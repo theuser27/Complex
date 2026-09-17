@@ -43,7 +43,7 @@ namespace Interface
 
     Generation::EffectModule *effectModule{};
     EffectsLaneSection *laneSection{};
-    utils::bumpArena *effectArena{};
+    utils::Pool *effectArena{};
     utils::span<Control *> effectControls{};
 
     struct SpectralMaskComponent final : public PinBoundsBox

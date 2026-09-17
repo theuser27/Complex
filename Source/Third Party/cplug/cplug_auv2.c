@@ -123,8 +123,7 @@ static const char* _cplugProperty2Str(AudioUnitPropertyID inID)
         {"kAudioUnitProperty_HostMIDIProtocol", 65},
         {"kAudioUnitProperty_MIDIOutputBufferSizeHint", 66},
         {"kMusicDeviceProperty_DualSchedulingMode", 1013},
-        {"kAudioUnitProperty_UserPlugin", kAudioUnitProperty_UserPlugin},
-        {"kAudioUnitProperty_CplugProcessContext", kAudioUnitProperty_CplugProcessContext},
+        {"kAudioUnitProperty_AUV2Wrapper", kAudioUnitProperty_AUV2Wrapper},
     };
     // clang-format on
 
@@ -164,11 +163,11 @@ typedef struct AUv2Plugin
     AudioComponentDescription desc;
 
     CplugHostContext hostContext;
+    void*            userPlugin;
     void*            nsview;
 
     AUHostVersionIdentifier hostVersionIdentifier;
 
-    void* userPlugin;
     // Despite the name, this is actually used for getting transport state, position, and BPM.
     HostCallbackInfo mHostCallbackInfo;
 
@@ -188,6 +187,9 @@ typedef struct AUv2Plugin
     void*                         parameterListListenerData;
     AudioUnitPropertyListenerProc parameterInfoListenerProc;
     void*                         parameterInfoListenerData;
+
+    // Required for effect (non-instruments) audio units in FL
+    AURenderCallbackStruct renderCallback;
 
     // Logic in Rosetta mode breaks if you don't have this
     // Rosetta Logic doesn't seem to support the feature...
@@ -212,13 +214,12 @@ typedef struct AUv2Plugin
 // requires restrictive Cocoa OOP and big brained MVC design patterns, which separates the concerns of plugin params &
 // processing, state etc. and its GUI. Users must write their own GUI code that conforms to the CPLUG API if they wish
 // to use Audio Units.
+// These offsets below allow the caller of AudioUnitGetProperty() to get certain properties on AUv2Plugin
 // CPLUG does of course provide its own optional window extension with most, if not all of these problems solved.
-_Static_assert(
-    offsetof(AUv2Plugin, hostContext) == CPLUG_AUV2_OFFSET_PROCESS_CONTEXT,
-    "This offset is required by a hack in cplug_extensions/window_osx.m");
-_Static_assert(
-    offsetof(AUv2Plugin, nsview) == CPLUG_AUV2_OFFSET_NSVIEW,
-    "This offset is required by a hack in cplug_extensions/window_osx.m");
+// See: cplug_extensions/window_osx.m
+_Static_assert(offsetof(AUv2Plugin, hostContext) == CPLUG_AUV2_OFFSET_WRAPPER_CONTEXT, "");
+_Static_assert(offsetof(AUv2Plugin, userPlugin) == CPLUG_AUV2_OFFSET_PLUGIN, "");
+_Static_assert(offsetof(AUv2Plugin, nsview) == CPLUG_AUV2_OFFSET_NSVIEW, "");
 
 void AUv2ReleaseStringArray(CFStringRef* arr, size_t arrlen)
 {
@@ -232,10 +233,6 @@ void AUv2ReleaseStringArray(CFStringRef* arr, size_t arrlen)
 
 static OSStatus AUv2SendParamEvent(AUv2Plugin* auv2, const CplugEvent* event)
 {
-    CPLUG_LOG_ASSERT(
-        event->type == CPLUG_EVENT_PARAM_CHANGE_BEGIN || event->type == CPLUG_EVENT_PARAM_CHANGE_UPDATE ||
-        event->type == CPLUG_EVENT_PARAM_CHANGE_END);
-
     OSStatus       status = noErr;
     AudioUnitEvent auevent;
 
@@ -250,7 +247,14 @@ static OSStatus AUv2SendParamEvent(AUv2Plugin* auv2, const CplugEvent* event)
     case CPLUG_EVENT_PARAM_CHANGE_END:
         auevent.mEventType = kAudioUnitEvent_EndParameterChangeGesture;
         break;
+    case CPLUG_EVENT_MIDI:
+        // TODO
+        break;
+    case CPLUG_EVENT_NOTE_EXPRESSION_TUNING:
+        // Not supported? TODO: see if this is possible with new MIDI 2.0 APIs
+        break;
     default:
+        cplug_log("[WARNING] Unhandled event: %s => %p %u", __FUNCTION__, auv2, event->type);
         return 1;
     }
 
@@ -279,7 +283,7 @@ int64_t AUv2WriteProc(const void* stateCtx, void* writePos, size_t numBytesToWri
     if (nextLen > ctx->cap)
     {
         ctx->cap  = nextLen * 2;
-        ctx->data = CPLUG_REALLOC(ctx->data, ctx->cap);
+        ctx->data = (UInt8*)realloc(ctx->data, ctx->cap);
     }
     memcpy(ctx->data + ctx->len, writePos, numBytesToWrite);
     ctx->len = nextLen;
@@ -445,7 +449,7 @@ OSStatus AUMethodGetPropertyInfo(
             if (num != auv2->numInputBusNames)
             {
                 AUv2ReleaseStringArray(auv2->inputBusNames, auv2->numInputBusNames);
-                auv2->inputBusNames = (CFStringRef*)CPLUG_REALLOC(auv2->inputBusNames, num * sizeof(*auv2->inputBusNames));
+                auv2->inputBusNames = (CFStringRef*)realloc(auv2->inputBusNames, num * sizeof(*auv2->inputBusNames));
             }
         }
         else if (inScope == kAudioUnitScope_Output)
@@ -454,7 +458,7 @@ OSStatus AUMethodGetPropertyInfo(
             if (num != auv2->numOutputBusNames)
             {
                 AUv2ReleaseStringArray(auv2->outputBusNames, auv2->numOutputBusNames);
-                auv2->outputBusNames = (CFStringRef*)CPLUG_REALLOC(auv2->outputBusNames, num * sizeof(*auv2->outputBusNames));
+                auv2->outputBusNames = (CFStringRef*)realloc(auv2->outputBusNames, num * sizeof(*auv2->outputBusNames));
             }
         }
 
@@ -595,7 +599,7 @@ static OSStatus AUMethodGetProperty(
         {
             presetDataRef = CFDataCreate(NULL, writeCtx.data, writeCtx.len);
             CFDictionarySetValue(dict, presetDataKey, presetDataRef);
-            CPLUG_FREE(writeCtx.data);
+            free(writeCtx.data);
         }
 
         CFRelease(versionKey);
@@ -780,6 +784,9 @@ static OSStatus AUMethodGetProperty(
     case kAudioUnitProperty_CocoaUI:
     {
 #ifdef CPLUG_WANT_GUI
+#define CPLUG_AUV2_MAKE_STRING_(str) #str
+#define CPLUG_AUV2_MAKE_STRING(str)  CPLUG_AUV2_MAKE_STRING_(str)
+
         AudioUnitCocoaViewInfo* info = (AudioUnitCocoaViewInfo*)outData;
         // AUv2 docs tell you to bundle your Cocoa GUI as a separate App bundle nested inside your .component bundle.
         // For most wrapper libraries, including CPLUG, this is s̶t̶u̶p̶i̶d̶ ̶a̶n̶d̶ ̶a̶n̶n̶o̶y̶i̶n̶g̶ intrusive to our build system.
@@ -787,7 +794,8 @@ static OSStatus AUMethodGetProperty(
         CFStringRef bundleID             = CFStringCreateWithCString(0, CPLUG_AUV2_BUNDLE_ID, kCFStringEncodingUTF8);
         CFBundleRef bundle               = CFBundleGetBundleWithIdentifier(bundleID);
         info->mCocoaAUViewBundleLocation = CFBundleCopyBundleURL(bundle);
-        info->mCocoaAUViewClass[0] = CFStringCreateWithCString(0, CPLUG_AUV2_VIEW_CLASS_STR, kCFStringEncodingUTF8);
+        info->mCocoaAUViewClass[0] =
+            CFStringCreateWithCString(0, CPLUG_AUV2_MAKE_STRING(CPLUG_AUV2_VIEW_CLASS), kCFStringEncodingUTF8);
         CFRelease(bundleID);
         break;
 #endif
@@ -844,11 +852,8 @@ static OSStatus AUMethodGetProperty(
         *ioDataSize       = sizeof(UInt32);
         break;
 #endif
-    case kAudioUnitProperty_UserPlugin:
-        *(UInt64*)outData = (UInt64)auv2->userPlugin;
-        break;
-    case kAudioUnitProperty_CplugProcessContext:
-        *(UInt64*)outData = (UInt64)&auv2->hostContext;
+    case kAudioUnitProperty_AUV2Wrapper:
+        *(UInt64*)outData = (UInt64)auv2;
         break;
 
     default:
@@ -947,7 +952,15 @@ static OSStatus AUMethodSetProperty(
         break;
 
     case kAudioUnitProperty_SetRenderCallback:
-        // Pretend to set this. auval only test that you set it, not that you use it
+        if (inScope == kAudioUnitScope_Input && inElement == 0)
+        {
+            // Required to get input audio inside FL Studio
+            auv2->renderCallback = *((AURenderCallbackStruct*)inData);
+        }
+        else
+        {
+            // Pretend to set this. auval only test that you set it, not that you use it
+        }
         break;
 
     case kAudioUnitProperty_PresentPreset:
@@ -1259,9 +1272,9 @@ static OSStatus AUMethodProcessAudio(
         CplugProcessContext* ctx    = &translator.cplugContext;
         HostCallbackInfo*    hostcb = &auv2->mHostCallbackInfo;
 
-        ctx->numFrames  = inNumFrames;
-        ctx->numInputs  = ioData->mNumberBuffers;
-        ctx->numOutputs = ioData->mNumberBuffers;
+        ctx->numFrames       = inNumFrames;
+        ctx->numInputBusses  = ioData->mNumberBuffers;
+        ctx->numOutputBusses = ioData->mNumberBuffers;
 
         if (hostcb->beatAndTempoProc)
         {
@@ -1316,13 +1329,19 @@ static OSStatus AUMethodProcessAudio(
         translator.auv2 = auv2;
 
         CPLUG_LOG_ASSERT(ioData->mNumberBuffers == 2);
-        for (int i = 0; i < ioData->mNumberBuffers; i++)
+        for (int ch = 0; ch < ioData->mNumberBuffers; ch++)
         {
-            UInt32 numChannels = ioData->mBuffers[i].mNumberChannels;
+            UInt32 numChannels = ioData->mBuffers[ch].mNumberChannels;
             CPLUG_LOG_ASSERT(numChannels == 1);
             // The very smart people at Apple test you on this. Yes you actually have to return noErr.
-            CPLUG_LOG_ASSERT_RETURN(ioData->mBuffers[i].mData != NULL, noErr);
-            translator.channels[i] = (float*)ioData->mBuffers[i].mData;
+            CPLUG_LOG_ASSERT_RETURN(ioData->mBuffers[ch].mData != NULL, noErr);
+            translator.channels[ch] = (float*)ioData->mBuffers[ch].mData;
+        }
+
+        if (auv2->renderCallback.inputProc && auv2->renderCallback.inputProcRefCon)
+        {
+            auv2->renderCallback
+                .inputProc(auv2->renderCallback.inputProcRefCon, &flags, inTimeStamp, 0, inNumFrames, ioData);
         }
 
         cplug_process(auv2->userPlugin, (CplugProcessContext*)&translator);
@@ -1573,10 +1592,10 @@ OSStatus ComponentBase_AP_Close(AUv2Plugin* auv2)
 
     AUv2ReleaseStringArray(auv2->inputBusNames, auv2->numInputBusNames);
     AUv2ReleaseStringArray(auv2->outputBusNames, auv2->numOutputBusNames);
-    CPLUG_FREE(auv2->inputBusNames);
-    CPLUG_FREE(auv2->outputBusNames);
+    free(auv2->inputBusNames);
+    free(auv2->outputBusNames);
 
-    CPLUG_FREE(auv2);
+    free(auv2);
 
     int numInstances = __atomic_fetch_sub(&g_auv2InstanceCount, 1, __ATOMIC_SEQ_CST);
     if (numInstances == 1)
@@ -1593,7 +1612,7 @@ __attribute__((visibility("default"))) void* GetAUv2PluginFactory(const AudioCom
     if (numInstances == 0)
         cplug_libraryLoad();
 
-    AUv2Plugin* auv2 = (AUv2Plugin*)(CPLUG_CALLOC(1, sizeof(AUv2Plugin)));
+    AUv2Plugin* auv2 = (AUv2Plugin*)(calloc(1, sizeof(AUv2Plugin)));
     _Static_assert(offsetof(AUv2Plugin, mPlugInInterface) == 0, "Required by the AU format to be first");
 
     auv2->mPlugInInterface.Open      = (OSStatus(*)(void*, AudioComponentInstance))ComponentBase_AP_Open;

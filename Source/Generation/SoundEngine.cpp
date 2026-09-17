@@ -12,7 +12,7 @@
 namespace Generation
 {
   static bool
-  reserveBuffer(Framework::Buffer &buffer, utils::bumpArena *arena, u32 newChannels, u32 newSize, u32 *end)
+  reserveBuffer(Framework::Buffer &buffer, utils::Pool *arena, u32 newChannels, u32 newSize, u32 *end)
   {
     newChannels = newChannels ? newChannels : buffer.channels;
     newSize = newSize ? newSize : buffer.size;
@@ -40,7 +40,7 @@ namespace Generation
     }
 
     if (oldData)
-      utils::bumpArena::remove(oldData);
+      utils::Pool::remove(oldData);
     return copiedData;
   }
 
@@ -72,13 +72,13 @@ namespace Generation
 template<> Generation::Processor *
 createProcessor<Generation::SoundEngine>(Plugin::State *state, Framework::ProcessorMetadata *metadata, const void *, void *serialisedSave)
 {
-  auto *arena = utils::bumpArena::createNested(state->processorStorage, COMPLEX_MB(4));
+  auto *arena = utils::Pool::createNested(state->processorStorage, COMPLEX_MB(4));
   return anew(arena, Generation::SoundEngine, { arena, state, metadata, serialisedSave });
 }
 
 namespace Generation
 {
-  SoundEngine::SoundEngine(utils::bumpArena *arena, Plugin::State *state,
+  SoundEngine::SoundEngine(utils::Pool *arena, Plugin::State *state,
     Framework::ProcessorMetadata *metadata, void *serialisedSave) : Processor{ arena, state, metadata, nullptr }
   {
     using namespace Framework;
@@ -98,13 +98,13 @@ namespace Generation
 
   void SoundEngine::resizeBuffers(u32 maxSidechainInputs, u32 maxSidechainOutputs)
   {
-    auto maxOrder = (u32)getParameter(Parameters::BlockSize)->getParameterDetails().maxValue;
+    auto maxOrder = (u32)getParameter(Parameters::BlockSize)->details.maxValue;
 
     // input buffer size, kind of arbitrary but it must be longer than maxProcessingBufferLength
     u32 maxInputBufferLength = 1 << (maxOrder + 4);
     // pre- and post-processing FFT buffers size
     // (+ 2 for nyquist real/imaginary parts and then rounded up to next simd size)
-    u32 maxProcessingBufferLength = utils::roundUpToMultiple((1U << maxOrder) + 2, (u32)simd_float::size);
+    u32 maxProcessingBufferLength = utils::roundUpToMultiple((1U << maxOrder) + 2, (u32)f4::size);
     // output buffer size, must be longer than maxProcessingBufferLength
     u32 maxOutputBufferLength = (1 << maxOrder) * 2;
 
@@ -130,14 +130,14 @@ namespace Generation
   u32
   SoundEngine::getMaxBinCount() const
   {
-    return (1 << ((u32)getParameter(Parameters::BlockSize)->getParameterDetails().maxValue - 1)) + 1;
+    return (1 << ((u32)getParameter(Parameters::BlockSize)->details.maxValue - 1)) + 1;
   }
 
   utils::pair<u32, u32>
   SoundEngine::getMinMaxFFTOrder()
   {
     auto *parameter = getParameter(Parameters::BlockSize);
-    auto details = parameter->getParameterDetails();
+    auto details = parameter->details;
     return { (u32)details.minValue, (u32)details.maxValue };
   }
 
@@ -485,7 +485,7 @@ initialiseTypeStructure<Generation::SoundEngine>(void *, Framework::PluginStruct
     COMPLEX_STRUCTURE_PARAMETER("Block Size", SoundEngine::BlockSize, { kMinFFTOrder, kMaxFFTOrder, kDefaultFFTOrder,
       (float)(kDefaultFFTOrder - kMinFFTOrder) / (float)(kMaxFFTOrder - kMinFFTOrder) },
       ParameterScale::Linear, {}, ParameterDetails::Automatable | ParameterDetails::Extensible | ParameterDetails::RoundToInt, UpdateFlag::BeforeProcess,
-      [](char *string, usize size, double value, const ParameterDetails &) { return (usize)::stbsp_snprintf(string, (int)size, "%zu", ((usize)1 << (usize)::round(value))); }),
+      [](char *string, usize size, float value, const ParameterDetails &) { return (usize)::stbsp_snprintf(string, (int)size, "%zu", ((usize)1 << (usize)::round(value))); }),
     COMPLEX_STRUCTURE_PARAMETER("Overlap", SoundEngine::Overlap, { kMinWindowOverlap, kMaxWindowOverlap, kDefaultWindowOverlap,
       kDefaultWindowOverlap }, ParameterScale::Clamp, "%", ParameterDetails::Automatable),
     COMPLEX_STRUCTURE_PARAMETER("Window", SoundEngine::WindowType,

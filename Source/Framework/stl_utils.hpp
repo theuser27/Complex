@@ -794,6 +794,18 @@ namespace utils
 
       return npos;
     }
+    [[nodiscard]] constexpr size_type
+    findCaseInsensitive(string_view substring, size_type position = 0) const noexcept
+    {
+      COMPLEX_ASSERT(substring.size() <= size_, "Size of substring is larger than the searched string in string_view::find()");
+      COMPLEX_ASSERT(position + substring.size() <= size_, "Position out of range in string_view::find()");
+
+      for (; position + substring.size() <= size_; ++position)
+        if (utils::compareCaseInsensitive(data_ + position, substring.size(), substring.data(), substring.size()) == 0)
+          return position;
+
+      return npos;
+    }
 
     [[nodiscard]] constexpr size_type
     rfind(string_view substring, size_type position = npos) const noexcept
@@ -807,6 +819,26 @@ namespace utils
       while (true)
       {
         if (utils::compareStrings(data_ + position, substring.size(), substring.data(), substring.size()) == 0)
+          return position;
+
+        if (position == 0)
+          return npos;
+
+        --position;
+      }
+    }
+    [[nodiscard]] constexpr size_type
+    rfindCaseInsensitive(string_view substring, size_type position = npos) const noexcept
+    {
+      COMPLEX_ASSERT(substring.size() <= size_, "Size of substring is larger than the searched string in string_view::rfind()");
+      COMPLEX_ASSERT(position + substring.size() <= size_, "Position out of range in string_view::rfind()");
+
+      if (position == npos)
+        position = size_ - substring.size();
+
+      while (true)
+      {
+        if (utils::compareCaseInsensitive(data_ + position, substring.size(), substring.data(), substring.size()) == 0)
           return position;
 
         if (position == 0)

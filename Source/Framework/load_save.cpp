@@ -26,7 +26,7 @@ cjsonAllocate(size_t size)
 {
   auto jsonArena = Framework::LoadSave::getJsonContext().arena;
   COMPLEX_ASSERT(jsonArena, "Someone forgot to set the arena before using json");
-  return utils::bumpArena::insert(jsonArena, size, alignof(void *));
+  return utils::Pool::insert(jsonArena, size, alignof(void *));
 }
 
 // we free the arena at the end, so it's pointless to deallocate
@@ -79,8 +79,8 @@ namespace
     defer { xfiles_read_free(string); };
 
     auto &jsonContext = Framework::LoadSave::getJsonContext();
-    jsonContext.arena = utils::bumpArena::createNested(getLocalScratch(), COMPLEX_KB(16));
-    defer { utils::bumpArena::destroy(jsonContext.arena); jsonContext.arena = nullptr; };
+    jsonContext.arena = utils::Pool::createNested(getLocalScratch(), COMPLEX_KB(16));
+    defer { utils::Pool::destroy(jsonContext.arena); jsonContext.arena = nullptr; };
     
     cjson *json = cjson_Parse(string, stringSize);
     if (json)
@@ -204,7 +204,7 @@ namespace Framework::LoadSave
 #undef setJsonItem
 }
 
-static void handleIndexedData(utils::bumpArena *arena, bool isAutomated,
+static void handleIndexedData(utils::Pool *arena, bool isAutomated,
   Framework::ParameterDetails &details, cjson *indexedData)
 {
   auto *dynamicOptionFixups = Framework::LoadSave::getJsonContext().dynamicOptionFixups;
@@ -331,20 +331,20 @@ static void fixDeserialisedProcessorsStateIds(Plugin::State *state,
 
 namespace Framework
 {
-  void ParameterValue::serialiseToJson(void *jsonData) const
+  void Parameter::serialiseToJson(void *jsonData) const
   {
     cjson *data = (cjson *)jsonData;
-    cjson_AddTo(data, "id", cjson_Unsigned, details_.id);
-    cjson_AddTo(data, "display_name", cjson_String, details_.displayName.data());
-    cjson_AddTo(data, "value", cjson_Float, normalisedValue_);
-    cjson_AddTo(data, "scale", cjson_Unsigned, details_.scale);
-    cjson_AddTo(data, "is_stereo", cjson_Bool, (details_.flags & ParameterDetails::Stereo) != 0);
-    cjson_AddTo(data, "is_modulatable", cjson_Bool, (details_.flags & ParameterDetails::Modulatable) != 0);
-    cjson_AddTo(data, "is_extensible", cjson_Bool, (details_.flags & ParameterDetails::Extensible) != 0);
-    cjson_AddTo(data, "is_rounding_to_int", cjson_Bool, (details_.flags & ParameterDetails::RoundToInt) != 0);
-    if (parameterLink_.hostControl)
-      cjson_AddTo(data, "automation_slot", cjson_Unsigned, parameterLink_.hostControl->parameterIndex);
-    if (details_.scale == ParameterScale::Indexed)
+    cjson_AddTo(data, "id", cjson_Unsigned, details.id);
+    cjson_AddTo(data, "display_name", cjson_String, details.displayName.data());
+    cjson_AddTo(data, "value", cjson_Float, normalisedValue.load(satomi::memory_order_relaxed));
+    cjson_AddTo(data, "scale", cjson_Unsigned, details.scale);
+    cjson_AddTo(data, "is_stereo", cjson_Bool, (details.flags & ParameterDetails::Stereo) != 0);
+    cjson_AddTo(data, "is_modulatable", cjson_Bool, (details.flags & ParameterDetails::Modulatable) != 0);
+    cjson_AddTo(data, "is_extensible", cjson_Bool, (details.flags & ParameterDetails::Extensible) != 0);
+    cjson_AddTo(data, "is_rounding_to_int", cjson_Bool, (details.flags & ParameterDetails::RoundToInt) != 0);
+    if (hostParameter)
+      cjson_AddTo(data, "automation_slot", cjson_Unsigned, hostParameter->parameterIndex);
+    if (details.scale == ParameterScale::Indexed)
     {
       auto recurseOptions = [&](const auto &self, cjson *optionData, IndexedData *option) -> void
       {
@@ -376,31 +376,31 @@ namespace Framework
       };
 
       cjson_AddTo(data, "min_value", cjson_Unsigned, (u64)0);
-      cjson_AddTo(data, "max_value", cjson_Unsigned, (u64)details_.options->valueCount);
-      cjson_AddTo(data, "default_option_id", cjson_Unsigned, details_.defaultOptionId);
-      recurseOptions(recurseOptions, data, details_.options);
+      cjson_AddTo(data, "max_value", cjson_Unsigned, (u64)details.options->valueCount);
+      cjson_AddTo(data, "default_option_id", cjson_Unsigned, details.defaultOptionId);
+      recurseOptions(recurseOptions, data, details.options);
     }
     else
     {
-      cjson_AddTo(data, "min_value", cjson_Float, (double)details_.minValue);
-      cjson_AddTo(data, "max_value", cjson_Float, (double)details_.maxValue);
-      cjson_AddTo(data, "default_value", cjson_Float, (double)details_.defaultValue);
-      cjson_AddTo(data, "default_normalised_value", cjson_Float, (double)details_.defaultNormalisedValue);
+      cjson_AddTo(data, "min_value", cjson_Float, (double)details.minValue);
+      cjson_AddTo(data, "max_value", cjson_Float, (double)details.maxValue);
+      cjson_AddTo(data, "default_value", cjson_Float, (double)details.defaultValue);
+      cjson_AddTo(data, "default_normalised_value", cjson_Float, (double)details.defaultNormalisedValue);
     }
 
     // TODO: add modulators
   }
 
-  ParameterValue *
-  ParameterValue::deserialiseFromJson(Generation::Processor *processor, void *jsonData,
-    ParameterDetails &reference, ParameterValue *memory)
+  Parameter *
+  Parameter::deserialiseFromJson(Generation::Processor *processor, void *jsonData,
+    ParameterDetails &reference, Parameter *memory)
   {
     COMPLEX_ASSERT(memory);
 
-    auto *parameter = new (memory) ParameterValue{ reference };
+    auto *parameter = new (memory) Parameter{ reference, processor };
     cjson *data = (cjson *)jsonData;
 
-    if (parameter->details_.scale != cjson_GetObjectItem(data, "scale")->vuint)
+    if (parameter->details.scale != cjson_GetObjectItem(data, "scale")->vuint)
     {
       COMPLEX_ASSERT_FALSE();
       // TODO: log this
@@ -410,28 +410,30 @@ namespace Framework
     if (cjson *slot = cjson_GetObjectItem(data, "automation_slot"))
       automationSlot = slot->vuint;
 
-    parameter->details_.flags &= ~ParameterDetails::RoundToInt;
+    auto &details = const_cast<ParameterDetails &>(parameter->details);
+    
+    details.flags &= ~ParameterDetails::RoundToInt;
     if (cjson *slot = cjson_GetObjectItem(data, "is_rounding_to_int"))
-      parameter->details_.flags |= (slot->vbool) ? ParameterDetails::RoundToInt : 0;
+      details.flags |= (slot->vbool) ? ParameterDetails::RoundToInt : 0;
 
-    COMPLEX_ASSERT(cjson_GetObjectItem(data, "is_stereo")->vbool == ((parameter->details_.flags & ParameterDetails::Stereo) != 0));
+    COMPLEX_ASSERT(cjson_GetObjectItem(data, "is_stereo")->vbool == ((details.flags & ParameterDetails::Stereo) != 0));
 
-    if (parameter->details_.scale == ParameterScale::Indexed)
+    if (details.scale == ParameterScale::Indexed)
     {
       if (!cjson_GetObjectItem(data, "options"))
       {
         auto *errorPath = Framework::LoadSave::getJsonContext().errorPath;
         auto errorString = utils::string::create(getLocalScratch(),
           "%v\nOptions parameter %v (%zu) is missing its options, replacing with default ones from the plugin.",
-          utils::string_view{ *errorPath }, parameter->details_.displayName, parameter->details_.id);
+          utils::string_view{ *errorPath }, details.displayName, details.id);
         Interface::showNativeMessageBox("Error opening preset", errorString.data(), Interface::MessageBoxType::Warning);
 
-        parameter->details_.options = IndexedData::deepCopy(processor->arena, parameter->details_.options);
+        details.options = IndexedData::deepCopy(processor->arena, details.options);
       }
       else
       {
         // indexed values validation and deserialisation
-        handleIndexedData(processor->arena, automationSlot != u64(-1), parameter->details_, data);
+        handleIndexedData(processor->arena, automationSlot != u64(-1), details, data);
         processor->state->registerDynamicParameter(parameter);
       }
     }
@@ -440,13 +442,13 @@ namespace Framework
       float minValue = (float)cjson_GetObjectItem(data, "min_value")->vdouble;
       float maxValue = (float)cjson_GetObjectItem(data, "max_value")->vdouble;
 
-      float referenceMin = parameter->details_.minValue;
-      float referenceMax = parameter->details_.maxValue;
+      float referenceMin = details.minValue;
+      float referenceMax = details.maxValue;
 
       // if the save contains an expanded range but the parameter in this version isn't extensible
       // then there's nothing we can do about it
       if ((referenceMin > minValue || referenceMax < maxValue) &&
-        (parameter->details_.flags & ParameterDetails::Extensible) == 0)
+        (details.flags & ParameterDetails::Extensible) == 0)
       {
         //COMPLEX_ASSERT_FALSE();
         // TODO: -inf db gets picked up by this condition which shouldn't happen
@@ -461,8 +463,8 @@ namespace Framework
         if (automationSlot != u64(-1))
         {
           // if we're here then that means the range was changed but it's not larger than the range available
-          parameter->details_.minValue = minValue;
-          parameter->details_.maxValue = maxValue;
+          details.minValue = minValue;
+          details.maxValue = maxValue;
           // changedMinMax = true;
         }
         else
@@ -473,11 +475,11 @@ namespace Framework
 
         // always set min/max for dynamic indexed parameters,
         // since it might be possible to check them at this time
-        if (parameter->details_.scale == ParameterScale::Indexed &&
-          (parameter->details_.flags & ParameterDetails::Extensible) != 0)
+        if (parameter->details.scale == ParameterScale::Indexed &&
+          (parameter->details.flags & ParameterDetails::Extensible) != 0)
         {
-          parameter->details_.minValue = minValue;
-          parameter->details_.maxValue = maxValue;
+          details.minValue = minValue;
+          details.maxValue = maxValue;
           // changedMinMax = true;
         }
       }
@@ -486,19 +488,18 @@ namespace Framework
     // TODO: fit modulation here
 
     float value = utils::clamp((float)cjson_GetObjectItem(data, "value")->vdouble, 0.0f, 1.0f);
-    parameter->normalisedValue_ = value;
-    parameter->isDirty_ = true;
+    parameter->normalisedValue.store(value, satomi::memory_order_relaxed);
     parameter->updateValue(processor->state->plugin->getSampleRate());
 
     // paranoid check just in case
-    COMPLEX_ASSERT(parameter->normalisedValue_ == value);
+    COMPLEX_ASSERT(parameter->normalisedValue.load(satomi::memory_order_relaxed) == value);
 
     if (automationSlot != u64(-1))
     {
       // if we don't have enough parameters then too bad, we only guarantee kMaxParameterMappings generic parameters
       // TODO: report this to user
       if (automationSlot < (u64)processor->state->parameterBridges.size())
-        processor->state->parameterBridges[automationSlot].resetParameterLink(parameter->getParameterLink(), true);
+        processor->state->parameterBridges[automationSlot].resetParameter(parameter, true);
     }
 
     return parameter;
@@ -507,7 +508,7 @@ namespace Framework
 
 namespace Generation
 {
-  void Processor::serialiseToJson(void *jsonData, utils::span<Framework::ParameterValue *> parametersToSerialise) const
+  void Processor::serialiseToJson(void *jsonData, utils::span<Framework::Parameter *> parametersToSerialise) const
   {
     cjson *processorInfo = (cjson *)jsonData;
     cjson_AddTo(processorInfo, "id", cjson_Unsigned, metadata->id);
@@ -542,13 +543,13 @@ namespace Generation
   }
 
   void deserialiseParametersFromJson(void *jsonData, Framework::ProcessorMetadata *metadata,
-    Framework::ParameterValue *&parameters, Processor *processor, bool validateParameters)
+    Framework::Parameter *&parameters, Processor *processor, bool validateParameters)
   {
     cjson *data = (cjson *)jsonData;
     cjson *parametersCopy = cjson_Duplicate(cjson_GetObjectItem(data, "parameters"), true);
     COMPLEX_ASSERT(parametersCopy, "Missing parameters for %v (%zu)", metadata->name, metadata->id);
 
-    auto *memory = arranew(processor->arena, Framework::ParameterValue, metadata->parametersCount, {});
+    auto *memory = arranew(processor->arena, Framework::Parameter, metadata->parametersCount, {});
 
     auto insertParameter = [&](auto *parameter)
     {
@@ -568,13 +569,13 @@ namespace Generation
     for (auto *expectedParameter = metadata->parameters;
       expectedParameter; expectedParameter = expectedParameter->next)
     {
-      Framework::ParameterValue *parameter{};
+      Framework::Parameter *parameter{};
       for (auto child = parametersCopy->child; child; child = child->next)
       {
         uuid id = cjson_GetObjectItem(child, "id")->vuint;
         if (id == expectedParameter->details.id)
         {
-          parameter = Framework::ParameterValue::deserialiseFromJson(processor,
+          parameter = Framework::Parameter::deserialiseFromJson(processor,
             child, expectedParameter->details, memory);
           cjson_Delete(cjson_DetachItemViaPointer(parametersCopy, child));
           break;
@@ -591,7 +592,7 @@ namespace Generation
           utils::string_view{ *errorPath }, expectedParameter->details.displayName, expectedParameter->details.id);
         Interface::showNativeMessageBox("Error opening preset", errorString.data(), Interface::MessageBoxType::Warning);
 
-        parameter = new (memory) Framework::ParameterValue{ expectedParameter->details };
+        parameter = new (memory) Framework::Parameter{ expectedParameter->details, processor };
       }
 
       ++memory;
@@ -711,8 +712,8 @@ namespace Plugin
     state->registerProcessorForDynamicParameters(state->soundEngine);
     auto effectsLane = state->createProcessor(Processors::EffectsLane);
     effectsLane->name = { effectsLane->arena, "A" };
-    state->soundEngine->addChildProcessor(*effectsLane);
     state->registerProcessorForDynamicParameters(effectsLane);
+    state->soundEngine->addChildProcessor(*effectsLane);
 
     checkForDynamicParameters(state.get(), state->soundEngine);
 
@@ -722,7 +723,7 @@ namespace Plugin
       auto *parameter = state->getProcessorParameter(state->soundEngine->stateId,
         Generation::SoundEngine::valuesParameters[i]);
       COMPLEX_ASSERT(parameter);
-      state->parameterBridges[i].resetParameterLink(parameter->getParameterLink(), true);
+      state->parameterBridges[i].resetParameter(parameter, true);
     }
 
     return state;
@@ -762,7 +763,7 @@ namespace Plugin
     for (auto &id : Framework::ParameterChangeReason::values)
       state->updateDynamicParameters(id);
 
-    Framework::ParameterBridge::notifyParameterChange();
+    Framework::HostParameter::notifyParameterChange();
 
     return state;
   }
@@ -776,8 +777,8 @@ namespace Plugin
     defer{ Interface::getUiRelated() = nullptr; };
 
     auto &jsonContext = Framework::LoadSave::getJsonContext();
-    jsonContext.arena = utils::bumpArena::createNested(getLocalScratch(), COMPLEX_KB(128));
-    defer { utils::bumpArena::destroy(jsonContext.arena); jsonContext.arena = nullptr; };
+    jsonContext.arena = utils::Pool::createNested(getLocalScratch(), COMPLEX_KB(128));
+    defer { utils::Pool::destroy(jsonContext.arena); jsonContext.arena = nullptr; };
 
     cjson *data = cjson_Create(cjson_Object);
     serialiseToJson(plugin->state_.get(), data);
@@ -828,8 +829,8 @@ namespace Plugin
     {
       auto &jsonContext = Framework::LoadSave::getJsonContext();
 
-      jsonContext.arena = utils::bumpArena::createNested(getLocalScratch(), COMPLEX_KB(128));
-      defer { utils::bumpArena::destroy(jsonContext.arena); jsonContext.arena = nullptr; };
+      jsonContext.arena = utils::Pool::createNested(getLocalScratch(), COMPLEX_KB(128));
+      defer { utils::Pool::destroy(jsonContext.arena); jsonContext.arena = nullptr; };
 
       const char *potentialError = nullptr;
       cjson *jsonData = cjson_ParseWithOpts(data.data(), data.size(), &potentialError, false);

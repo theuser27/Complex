@@ -669,30 +669,53 @@ namespace Interface
 #undef GET_SECONDARY_FLAG
 #undef GET_PRIMARY_FLAG
 
-  void deleteComponent(Component *component, bool freeArena)
+  static void clearLinkedComponents(Component *c, bool checkSelf)
   {
-    auto *gui = getUiRelated()->renderer->gui;
-    if (gui->popupSelector.summoner == component)
+    auto *renderer = getUiRelated()->renderer;
+    auto *gui = renderer->gui;
+    if ((checkSelf && c == gui->popupSelector.summoner) || c->isParentOf(gui->popupSelector.summoner))
     {
       if (gui->popupSelector.cancel)
         gui->popupSelector.cancel(&gui->popupSelector);
 
       gui->popupSelector.resetState();
-      component->removeChildComponent(&gui->popupSelector);
+      gui->popupSelector.summoner->removeChildComponent(&gui->popupSelector);
     }
-    if (gui->popupDisplay1.source == component)
+    if ((checkSelf && c == gui->popupDisplay1.source) || c->isParentOf(gui->popupDisplay1.source))
     {
       gui->popupDisplay1.componentFlags.isVisible = false;
     }
-    if (gui->popupDisplay2.source == component)
+    if ((checkSelf && c == gui->popupDisplay2.source) || c->isParentOf(gui->popupDisplay2.source))
     {
       gui->popupDisplay2.componentFlags.isVisible = false;
     }
 
-    component->deleteAllChildComponents(false);
-    if (freeArena && component->arena)
-      utils::bumpArena::destroy(component->arena);
-    utils::bumpArena::remove(component);
+    auto mouseInteractions = renderer->getMouseInteractions();
+    if (auto *focusedComponent = mouseInteractions.focused)
+      if ((checkSelf && c == focusedComponent) || c->isParentOf(focusedComponent))
+        focusedComponent->giveAwayFocusTo();
+
+    if (auto *hoveredComponent = mouseInteractions.hovered)
+    {
+      if ((checkSelf && c == hoveredComponent) || c->isParentOf(hoveredComponent))
+      {
+        // last chance to execute anything from this component (i.e. reset cursor shape)
+        hoveredComponent->mouseExit(mouseInteractions.mouseState);
+        renderer->setHoveredComponent(nullptr);
+      }
+    }
+
+    if (auto *clickedComponent = mouseInteractions.clicked)
+      if ((checkSelf && c == clickedComponent) || c->isParentOf(clickedComponent))
+        renderer->setClickedComponent(nullptr);
+  }
+
+  void deleteComponent(Component *component)
+  {
+    clearLinkedComponents(component, true);
+    if (component->arena)
+      utils::Pool::destroy(component->arena);
+    utils::Pool::remove(component);
   }
 
   void checkScrollClick(Component *component, const MouseEvent &e)
@@ -1033,26 +1056,7 @@ namespace Interface
       return;
 
     if (!keepFocus)
-    {
-      auto mouseInteractions = getUiRelated()->renderer->getMouseInteractions();
-      if (auto *focusedComponent = mouseInteractions.focused)
-        if (childToRemove == focusedComponent)
-          focusedComponent->giveAwayFocusTo();
-
-      if (auto *hoveredComponent = mouseInteractions.hovered)
-      {
-        if (childToRemove == hoveredComponent)
-        {
-          // last chance to execute anything from this component (i.e. reset cursor shape)
-          childToRemove->mouseExit(mouseInteractions.mouseState);
-          getUiRelated()->renderer->setHoveredComponent(nullptr);
-        }
-      }
-
-      if (auto *clickedComponent = mouseInteractions.clicked)
-        if (childToRemove == clickedComponent)
-          getUiRelated()->renderer->setClickedComponent(nullptr);
-    }
+      clearLinkedComponents(childToRemove, true);    
 
     childToRemove->parent = nullptr;
     utils::removeDllHalfConnected(childToRemove, children);
@@ -1075,18 +1079,7 @@ namespace Interface
     if (!children)
       return;
 
-    auto mouseInteractions = getUiRelated()->renderer->getMouseInteractions();
-    if (auto *focusedComponent = mouseInteractions.focused)
-      if (isParentOf(focusedComponent))
-        focusedComponent->giveAwayFocusTo();
-
-    if (auto *hoveredComponent = mouseInteractions.hovered)
-      if (isParentOf(hoveredComponent))
-        getUiRelated()->renderer->setHoveredComponent(nullptr);
-
-    if (auto *clickedComponent = mouseInteractions.clicked)
-      if (isParentOf(clickedComponent))
-        getUiRelated()->renderer->setClickedComponent(nullptr);
+    clearLinkedComponents(this, false);
 
     for (Component *child = children, *nextChild = nullptr; child; child = nextChild)
     {
@@ -1099,29 +1092,31 @@ namespace Interface
     children = nullptr;
   }
 
-  void Component::deleteChildComponent(Component *childToDelete, bool freeArena)
+  void Component::deleteChildComponent(Component *childToDelete)
   {
     removeChildComponent(childToDelete);
-    deleteComponent(childToDelete, freeArena);
+    deleteComponent(childToDelete);
   }
 
-  void Component::deleteChildComponent(usize childIndexToDelete, bool freeArena)
+  void Component::deleteChildComponent(usize childIndexToDelete)
   {
     auto childToDelete = removeChildComponent(childIndexToDelete);
-    deleteComponent(childToDelete, freeArena);
+    deleteComponent(childToDelete);
   }
 
-  void Component::deleteAllChildComponents(bool freeChildArenas)
+  void Component::deleteAllChildComponents()
   {
     if (!children)
       return;
 
-    if (auto *focusedComponent = getUiRelated()->renderer->getMouseInteractions().focused)
-      if (isParentOf(focusedComponent))
-        focusedComponent->giveAwayFocusTo();
+    clearLinkedComponents(this, false);
 
     for (auto *child = children; child; child = child->next)
-      deleteComponent(child, freeChildArenas);
+    {
+      if (child->arena)
+        utils::Pool::destroy(child->arena);
+      utils::Pool::remove(child);
+    }
   }
 
   void Component::renderScrollbars(Graphics &g, float scrollExpandPercent)

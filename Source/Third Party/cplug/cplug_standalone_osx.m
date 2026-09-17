@@ -5,7 +5,8 @@
 #include <CoreAudio/CoreAudio.h>
 #include <CoreMIDI/CoreMIDI.h>
 #include <CoreServices/CoreServices.h>
-#include "cplug.h"
+#include <copyfile.h>
+#include <cplug.h>
 #include <dlfcn.h>
 #include <mach/mach_time.h>
 #include <pthread.h>
@@ -30,7 +31,8 @@ enum
 #ifdef NDEBUG
 #define cplug_assert(...)
 #else
-#define cplug_assert(cond) (cond) ? (void)0 : __builtin_debugtrap()
+int g_cplug_debugtrap_helper = 0;
+#define cplug_assert(cond) (cond) ? (void)0 : (__builtin_debugtrap(), g_cplug_debugtrap_helper += 0)
 #endif // NDEBUG
 
 #pragma mark -Structs
@@ -145,7 +147,7 @@ struct STAND_Plugin
     void (*saveState)(void* userPlugin, const void* stateCtx, cplug_writeProc writeProc);
     void (*loadState)(void* userPlugin, const void* stateCtx, cplug_readProc readProc);
 
-    void* (*createGUI)(void* userPlugin);
+    void* (*createGUI)(CplugHostContext* host_ctx, void* userPlugin);
     void (*destroyGUI)(void* userGUI);
     void (*setParent)(void* userGUI, void* hwnd_or_nsview);
     void (*setVisible)(void* userGUI, bool visible);
@@ -306,7 +308,7 @@ OSStatus STAND_audioDeviceChangeListener(
     STAND_audioStart();
 
     // GUI
-    g_plugin.userGUI = g_plugin.createGUI(g_plugin.userPlugin);
+    g_plugin.userGUI = g_plugin.createGUI(&g_plugin.hostContext, g_plugin.userPlugin);
     assert(g_plugin.userGUI != NULL);
 
     uint32_t guiWidth, guiHeight;
@@ -644,7 +646,6 @@ int main()
     [NSApplication sharedApplication];
     [NSApp setDelegate:[[AppDelegate alloc] init]];
     NSXPCListener* listener = [NSXPCListener serviceListener];
-    (void)listener;
 
     [NSApp run];
 
@@ -952,13 +953,13 @@ OSStatus STAND_audioIOProc(
 
     OSXProcessContextTranlator translator;
     memset(&translator, 0, sizeof(translator));
-    translator.cplugContext.numFrames      = g_audioBlockSize;
-    translator.cplugContext.numInputs      = 0;
-    translator.cplugContext.numOutputs     = 2;
-    translator.cplugContext.enqueueEvent   = OSXProcessContext_enqueueEvent;
-    translator.cplugContext.dequeueEvent   = OSXProcessContext_dequeueEvent;
-    translator.cplugContext.getAudioInput  = OSXProcessContext_getAudioInput;
-    translator.cplugContext.getAudioOutput = OSXProcessContext_getAudioOutput;
+    translator.cplugContext.numFrames       = g_audioBlockSize;
+    translator.cplugContext.numInputBusses  = 0;
+    translator.cplugContext.numOutputBusses = 1;
+    translator.cplugContext.enqueueEvent    = OSXProcessContext_enqueueEvent;
+    translator.cplugContext.dequeueEvent    = OSXProcessContext_dequeueEvent;
+    translator.cplugContext.getAudioInput   = OSXProcessContext_getAudioInput;
+    translator.cplugContext.getAudioOutput  = OSXProcessContext_getAudioOutput;
 
     translator.output[0] = (float*)STAND_roundUp((UInt64)&g_audioBuffer, 32);
     translator.output[1] = translator.output[0] + g_audioBlockSize;
@@ -1258,33 +1259,9 @@ void STAND_openLibraryWithSymbols()
             ext);
 
         // deep copy library file
-        // https://developer.apple.com/library/archive/documentation/System/Conceptual/ManPages_iPhoneOS/man2/open.2.html
-        // https://developer.apple.com/library/archive/documentation/System/Conceptual/ManPages_iPhoneOS/man2/fstat.2.html
-        // https://developer.apple.com/library/archive/documentation/System/Conceptual/ManPages_iPhoneOS/man2/read.2.html
-        // https://developer.apple.com/library/archive/documentation/System/Conceptual/ManPages_iPhoneOS/man2/close.2.html
-        // https://developer.apple.com/library/archive/documentation/System/Conceptual/ManPages_iPhoneOS/man2/write.2.html#//apple_ref/doc/man/2/write
-
-        int fd_src = open(hotreloadLibPath, O_RDONLY);
-        cplug_assert(fd_src != -1);
-
-        struct stat info = {0};
-        int         ret  = fstat(fd_src, &info);
-        cplug_assert(ret != -1);
-
-        void* src_data = CPLUG_MALLOC(info.st_size);
-        cplug_assert(src_data != NULL);
-
-        ret = read(fd_src, src_data, info.st_size);
-        cplug_assert(ret == info.st_size);
-        ret = close(fd_src);
-        cplug_assert(ret != -1);
-
-        int fd_dst = open(newlibpath, O_WRONLY | O_CREAT | O_TRUNC, 0777);
-        cplug_assert(fd_dst != -1);
-        ret = write(fd_dst, src_data, info.st_size);
-        cplug_assert(ret == info.st_size);
-        ret = close(fd_dst);
-        cplug_assert(ret != -1);
+        // https://developer.apple.com/library/archive/documentation/System/Conceptual/ManPages_iPhoneOS/man3/copyfile.3.html
+        int ret = copyfile(hotreloadLibPath, newlibpath, NULL, COPYFILE_ALL); // is COPYFILE_DATA better?
+        cplug_assert(ret == 0);
 
         // Load library from new path
         cplug_assert(g_plugin.library == NULL);
@@ -1406,7 +1383,7 @@ void STAND_filesystemEventCallback(
 
                 STAND_audioStart();
 
-                g_plugin.userGUI = g_plugin.createGUI(g_plugin.userPlugin);
+                g_plugin.userGUI = g_plugin.createGUI(&g_plugin.hostContext, g_plugin.userPlugin);
                 cplug_assert(g_plugin.userGUI != NULL);
 
                 uint32_t width, height;

@@ -8,22 +8,22 @@
 
 namespace utils
 {
-  struct bumpArena;
+  struct Pool;
 }
 
 // DLL-wide (used for all instances of a plugin !!!) temporary memory resource
 // for the main thread, only gets deallocated when the DLL is unloaded
-utils::bumpArena *&getLocalScratch();
+utils::Pool *&getLocalScratch();
 // settable memory source, used when an external library wants to call malloc
 // can be used if malloc/realloc/free are replaced with arena_(malloc/free/realloc)
 // remember to always replace the arena pointer when you want to use it (undefined value)
-utils::bumpArena *&getLocalMallocArena();
+utils::Pool *&getLocalMallocArena();
 
-extern utils::bumpArena *globalArena;
+extern utils::Pool *globalArena;
 
 namespace utils
 {
-  enum class AllocatorType : u8 { General, BumpArena };
+  enum class AllocatorType : u8 { General, Pool };
 
   template<typename T>
   concept AllocatorConcept = requires(T *allocator, usize size,
@@ -40,9 +40,10 @@ namespace utils
     T::insert(static_cast<decltype(T::fromAllocation(existingAllocation))>(nullptr), size, alignment, clean);
   };
 
-  struct bumpArena
+  // a pool of memory for unifying lifetimes
+  struct Pool
   {
-    static constexpr auto type = AllocatorType::BumpArena;
+    static constexpr auto type = AllocatorType::Pool;
 
     // instead of trying to give the preceding allocation/free list node the unused space
     // caused by the alignment shift, insert a new free list node if the size allows for it
@@ -73,24 +74,24 @@ namespace utils
     u32 freeNodeStart;
     u32 lastUsedNode;
 
-    bumpArena *nextArena{};
+    Pool *nextArena{};
 
-    static usize getUsedSize(bumpArena *arena);
-    static usize getUnusedSize(bumpArena *arena);
-    static forceinline bumpArena *
+    static usize getUsedSize(Pool *arena);
+    static usize getUnusedSize(Pool *arena);
+    static forceinline Pool *
     fromAllocation(const void *data)
     {
-      auto *node = utils::launder((bumpArena::node *)((byte *)data - sizeof(bumpArena::node)));
-      return utils::launder((bumpArena *)((byte *)node - node->offsetToArena));
+      auto *node = utils::launder((Pool::node *)((byte *)data - sizeof(Pool::node)));
+      return utils::launder((Pool *)((byte *)node - node->offsetToArena));
     }
     static forceinline usize
     getAllocationSize(const void *data)
     {
-      auto *node = utils::launder((bumpArena::node *)((byte *)data - sizeof(bumpArena::node)));
-      return node->size - sizeof(bumpArena::node);
+      auto *node = utils::launder((Pool::node *)((byte *)data - sizeof(Pool::node)));
+      return node->size - sizeof(Pool::node);
     }
 
-    [[nodiscard]] static byte *insert(bumpArena *arena, usize size, usize alignment, bool clean = false);
+    [[nodiscard]] static byte *insert(Pool *arena, usize size, usize alignment, bool clean = false);
     [[nodiscard]] static forceinline byte *
     insert(const void *data, usize size, usize alignment, bool clean = false)
     {
@@ -98,50 +99,53 @@ namespace utils
     }
     static void remove(const void *data);
     [[nodiscard]] static byte *resize(const void *data, usize newSize, bool cleanNewSpace = false);
-    static void shrinkToFit(bumpArena *arena, bool shrinkToCommitted);
+    static void shrinkToFit(Pool *arena, bool shrinkToCommitted);
 
-    [[nodiscard]] static forceinline bumpArena *
+    [[nodiscard]] static forceinline Pool *
     create(usize reservedSize = COMPLEX_MB(64), usize commitSize = COMPLEX_KB(64))
     {
-      reservedSize = utils::clamp(reservedSize, sizeof(bumpArena), usize(u32(-1)) + 1);
-      commitSize = utils::clamp(commitSize, sizeof(bumpArena), reservedSize);
+      reservedSize = utils::clamp(reservedSize, sizeof(Pool), usize(u32(-1)) + 1);
+      commitSize = utils::clamp(commitSize, sizeof(Pool), reservedSize);
 
       byte *memory = reserveMemory(reservedSize);
       commitMemory(memory, commitSize);
 
-      (void)new(memory + sizeof(bumpArena)) node{ .size = (u32)(commitSize - sizeof(bumpArena)) };
+      (void)new(memory + sizeof(Pool)) node{ .size = (u32)(commitSize - sizeof(Pool)) };
 
-      return new(memory) bumpArena{ .reservedSize = (u32)(reservedSize - 1),
-        .committedSize = (u32)(commitSize - 1), .freeNodeStart = (u32)sizeof(bumpArena), 
-        .lastUsedNode = (u32)sizeof(bumpArena) };
+      return new(memory) Pool{ .reservedSize = (u32)(reservedSize - 1),
+        .committedSize = (u32)(commitSize - 1), .freeNodeStart = (u32)sizeof(Pool), 
+        .lastUsedNode = (u32)sizeof(Pool) };
     }
     template<typename T>
-    [[nodiscard]] static forceinline bumpArena *
+    [[nodiscard]] static forceinline Pool *
     createNested(T *differentArena, usize allocateSize) requires requires { T::insert(differentArena, usize(0), usize(0)); }
     {
-      allocateSize = utils::min(allocateSize + sizeof(bumpArena), usize(u32(-1)) + 1);
+      allocateSize = utils::min(allocateSize + sizeof(Pool), usize(u32(-1)) + 1);
 
-      byte *memory = T::insert(differentArena, allocateSize, alignof(bumpArena));
-      (void)new(memory + sizeof(bumpArena)) node{ .size = (u32)(allocateSize - sizeof(bumpArena)) };
+      byte *memory = T::insert(differentArena, allocateSize, alignof(Pool));
+      (void)new(memory + sizeof(Pool)) node{ .size = (u32)(allocateSize - sizeof(Pool)) };
 
       u8 flags = (u8)T::type;
 
-      // bumpArena is nested in an arena
-      return new(memory) bumpArena{ .flags = flags, .reservedSize = (u32)(allocateSize - 1),
-        .committedSize = (u32)(allocateSize - 1), .freeNodeStart = (u32)sizeof(bumpArena), 
-        .lastUsedNode = (u32)sizeof(bumpArena) };
+      // Pool is nested in an arena
+      return new(memory) Pool{ .flags = flags, .reservedSize = (u32)(allocateSize - 1),
+        .committedSize = (u32)(allocateSize - 1), .freeNodeStart = (u32)sizeof(Pool), 
+        .lastUsedNode = (u32)sizeof(Pool) };
     }
 
-    static void clear(bumpArena *arena);
+    static void clear(Pool *arena);
 
-    static void destroy(bumpArena *arena);
+    static void destroy(Pool *arena);
   };
 
   // anew, the replacement to operator new (with arenas/allocators)
   // using placement new on memory resource, provided by an arena implementation
+  //
+  // the macros have an evil use of decltype which *should* be well-defined
+  // the reason for this, is because allocator gets pasted twice so expressions will also be evaluated twice
 
-  #define anew(allocator, T, ...) (new(allocator->insert(allocator, sizealignof(T))) T __VA_ARGS__)
-  #define arranew(allocator, T, count, ...) (new(allocator->insert(allocator, sizealignof(T, count))) T[count] __VA_ARGS__)
+  #define anew(allocator, T, ...) (new(decltype(&(*allocator)){}->insert(allocator, sizealignof(T))) T __VA_ARGS__)
+  #define arranew(allocator, T, count, ...) (new(decltype(&(*allocator)){}->insert(allocator, sizealignof(T, count))) T[count] __VA_ARGS__)
 
   struct Allocator
   {
@@ -203,13 +207,13 @@ namespace utils
     {
       .insert = [](void *, usize size, usize alignment, bool clean)
       {
-        return utils::bumpArena::insert(globalArena, size, alignment, clean);
+        return utils::Pool::insert(globalArena, size, alignment, clean);
       },
-      .remove = [](const void *allocation) { utils::bumpArena::remove(allocation); },
+      .remove = [](const void *allocation) { utils::Pool::remove(allocation); },
       .fromAllocation = +[](const void *) { return Allocator::fromType(AllocatorType::General); },
       .type = AllocatorType::General
     }, 
-    Allocator::createVtable<utils::bumpArena>()
+    Allocator::createVtable<utils::Pool>()
   };
   constexpr Allocator Allocator::fromType(AllocatorType type) { return { &allocatorTable[(usize)type], nullptr }; }
 

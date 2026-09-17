@@ -3,6 +3,10 @@
 
 #include "MainInterface.hpp"
 
+#include "Third Party/pugl/pugl.h"
+#include "Third Party/nanovg/nanosvg.h"
+
+#include "Data/BinaryData.hpp"
 #include "Plugin/Complex.hpp"
 #include "Generation/SoundEngine.hpp"
 #include "Generation/Effects.hpp"
@@ -471,11 +475,66 @@ namespace Interface
     return true;
   }
 
+  bool 
+  SoundEngineSection::TopBar::UndoRedoButton::mouseUp(const MouseEvent &)
+  {
+    if (componentFlags.isClicked && componentFlags.isHovered)
+    {
+      if (isRedo)
+        getUiRelated()->plugin.undoManager.redo();
+      else
+        getUiRelated()->plugin.undoManager.undo();
+    }
+
+    return true;
+  }
+
+  bool
+  SoundEngineSection::TopBar::UndoRedoButton::render(Graphics &g)
+  {
+    auto &undoManager = getUiRelated()->plugin.undoManager;
+    bool canDo = (isRedo && undoManager.canRedo()) || (!isRedo && undoManager.canUndo());
+    auto colour = canDo ? getColour(Skin::kWidgetAccent1, this) : 
+      getColour(Skin::kWidgetPrimaryDisabled, this);
+
+    tickAnimation(animationValues,
+      { { componentFlags.isHovered || componentFlags.isClicked } },
+      { { kHoverIncrement } });
+    auto hoverAmount = animationValues[0];
+    auto drawBounds = getLocalBounds().toFloat();
+
+    float rounding = utils::min(drawBounds.w, drawBounds.h) * rectRoundingRatio;
+
+    strokeRect(g, drawBounds, scaleValue(1.0f), colour.withAlpha(hoverAmount), rounding);
+
+    drawBounds = drawBounds.withTrim(scaleValue(padding.toFloat()));
+
+    if (isRedo)
+    {
+      drawBounds.x = drawBounds.getRight();
+      drawBounds.w = -drawBounds.w;
+    }
+
+    drawSVG(g.getSVG({ (const byte *)BinaryData::Icon_Undo_svg, BinaryData::Icon_Undo_svgSize }),
+      g, colour, drawBounds, 0.0f, scaleValue(1.0f));
+
+    return true;
+  }
+
   void SoundEngineSection::TopBar::reinitialise()
   {
     removeAllChildComponents();
+    undoRedoGroup.removeAllChildComponents();
     gainGroup.removeAllChildComponents();
     mixGroup.removeAllChildComponents();
+
+    auto *mainSection = (SoundEngineSection *)parent;
+
+    undoRedoGroup.placement = Placement::right;
+    undoRedoGroup.addChildComponent(&undoButton);
+    redoButton.isRedo = true;
+    undoRedoGroup.addChildComponent(&redoButton);
+    addChildComponent(&undoRedoGroup);
 
     gainLabel.margin = { 0, 0, 4, 0 };
     gainLabel.control = &gain;
@@ -507,6 +566,8 @@ namespace Interface
     blockSizeGroup.removeAllChildComponents();
     overlapGroup.removeAllChildComponents();
     windowGroup.removeAllChildComponents();
+
+    auto *mainSection = (SoundEngineSection *)parent;
 
     addChildComponent(&blockSizeGroup);
     blockSizeGroup.placement = Placement::justifyX;
@@ -546,7 +607,7 @@ namespace Interface
     windowAlpha.changeLinkedParameter(*mainSection->soundEngine->getParameter(Generation::SoundEngine::WindowAlpha));
     windowGroup.addChildComponent(&window);
     window.arena = arena;
-    window.valueChangedCallback = [](Control *c, double newValue, double)
+    window.valueChangedCallback = [](Control *c, float newValue, float)
     {
       auto *bottomBar = (BottomBar *)c->parent->parent;
       bottomBar->windowAlpha.componentFlags.isVisible = Framework::getOptionFromValue(
@@ -561,8 +622,6 @@ namespace Interface
   SoundEngineSection::BottomBar::render(Graphics &g)
   {
     fillRect(g, bounds.withZeroOrigin().toFloat(), getColour(Skin::kBody, this));
-
-    //reinitialise();
 
     return true;
   }
@@ -618,15 +677,14 @@ namespace Interface
     };
 
     if (!arena)
-      arena = utils::bumpArena::createNested(utils::bumpArena::fromAllocation(this), COMPLEX_KB(16));
-    utils::bumpArena::clear(arena);
+      arena = utils::Pool::createNested(utils::Pool::fromAllocation(this), COMPLEX_KB(16));
+    utils::Pool::clear(arena);
 
     topBar.placement = Placement::top;
     topBar.sizingFlags |= Component::GrowableX;
     topBar.desiredSize = { 0, kHeaderHeight, utils::int_max<i32>, kHeaderHeight };
     topBar.padding = { 16, 0, 16, 0 };
     topBar.arena = arena;
-    topBar.mainSection = this;
     addChildComponent(&topBar);
     topBar.reinitialise();
 
@@ -651,7 +709,6 @@ namespace Interface
     bottomBar.desiredSize = { 0, kFooterHeight, utils::int_max<i32>, kFooterHeight };
     bottomBar.margin = { 0, kLaneToBottomSettingsMargin, 0, 0 };
     bottomBar.padding = { 16, 0, 16, 0 };
-    bottomBar.mainSection = this;
     bottomBar.arena = arena;
     addChildComponent(&bottomBar);
     bottomBar.reinitialise();
@@ -678,7 +735,7 @@ namespace Interface
   }
 
   PopupSelector *getPopupSelector() { return &getUiRelated()->renderer->gui->popupSelector; }
-  utils::bumpArena *getUIArena() { return getUiRelated()->renderer->gui->arena; }
+  utils::Pool *getUIArena() { return getUiRelated()->renderer->gui->arena; }
   PopupDisplay *getPopupDisplay(bool primary = true)
   {
     auto *gui = getUiRelated()->renderer->gui;
@@ -730,6 +787,26 @@ namespace Interface
     popupDisplay2.componentFlags.alwaysOnTop = true;
     addChildComponent(&popupDisplay2);
     popupDisplay2.reinitialise();
+  }
+  
+  
+  bool 
+  MainInterface::keyPressed(const KeyPress &key)
+  {
+    bool isUndo = key.mods.test(ModifierKeys::ctrlModifier) && key.keyCode == 'z';
+    bool isRedo = key.mods.test(ModifierKeys::ctrlModifier) && key.keyCode == 'y';
+
+    if (isUndo || isRedo)
+    {
+      if (isUndo)
+        getUiRelated()->plugin.undoManager.undo();
+      else
+        getUiRelated()->plugin.undoManager.redo();
+
+      return true;
+    }
+  
+    return false;
   }
 
   Area<u32>
