@@ -64,11 +64,11 @@ namespace Generation
 
       void reserve(u32 newChannels, u32 newSize);
 
-      forceinline void advanceLastOutputBlock(u32 samples)
+      void advanceLastOutputBlock(u32 samples)
       { lastOutputBlock_ = (lastOutputBlock_ + samples) % size; }
 
       // used for manually advancing the block to a desired position
-      forceinline void advanceBlock(u32 newBegin, i32 samples)
+      void advanceBlock(u32 newBegin, i32 samples)
       {
         blockBegin_ = newBegin;
         blockEnd_ = (newBegin + (u32)samples) % size;
@@ -76,7 +76,8 @@ namespace Generation
 
       // returns how many samples in the buffer can be read
       // starting at blockBegin_/blockEnd_until end_
-      forceinline u32 newSamplesToRead(BeginPoint beginPoint, u32 overlapOffset = 0) const
+      u32 
+      newSamplesToRead(BeginPoint beginPoint, u32 overlapOffset = 0) const
       {
         u32 begin = (beginPoint == BlockBegin) ? blockBegin_ : blockEnd_;
 
@@ -89,7 +90,8 @@ namespace Generation
         return ret;
       }
 
-      forceinline u32 getIndex(BeginPoint beginPoint, i32 offset = 0)
+      u32 
+      getIndex(BeginPoint beginPoint, i32 offset = 0)
       {
         u32 index = (beginPoint == LastOutputBlock) ? lastOutputBlock_ :
                     (beginPoint ==      BlockBegin) ? blockBegin_ :
@@ -98,9 +100,9 @@ namespace Generation
         return (offset == 0) ? index : (size + index + (u32)offset) % size;
       }
 
-      forceinline u32 getLastOutputBlockToBlockBegin() const { return (size + blockBegin_ - lastOutputBlock_) % size; }
-      forceinline u32 getBlockBeginToBlockEnd() const { return (size + blockEnd_ - blockBegin_) % size; }
-      forceinline u32 getBlockEndToEnd() const { return (size + end - blockEnd_) % size; }
+      u32 getLastOutputBlockToBlockBegin() const { return (size + blockBegin_ - lastOutputBlock_) % size; }
+      u32 getBlockBeginToBlockEnd() const { return (size + blockEnd_ - blockBegin_) % size; }
+      u32 getBlockEndToEnd() const { return (size + end - blockEnd_) % size; }
     } inBuffer{};
     //
     // FFT-ed data buffer, size is double the max FFT block
@@ -137,7 +139,7 @@ namespace Generation
 
       void reserve(u32 newChannels, u32 newSize);
 
-      forceinline void setLatencyOffset(i32 newLatencyOffset)
+      void setLatencyOffset(i32 newLatencyOffset)
       {
         if (latencyOffset_ == newLatencyOffset)
           return;
@@ -152,13 +154,13 @@ namespace Generation
         clear();
       }
 
-      forceinline void advanceBeginOutput(u32 samples) { beginOutput_ = (beginOutput_ + samples) % size; }
-      forceinline void advanceToScaleOutput(u32 samples) { toScaleOutput_ = (toScaleOutput_ + samples) % size; }
-      forceinline void advanceAddOverlap(u32 samples) { addOverlap_ = (addOverlap_ + samples) % size; }
+      void advanceBeginOutput(u32 samples) { beginOutput_ = (beginOutput_ + samples) % size; }
+      void advanceToScaleOutput(u32 samples) { toScaleOutput_ = (toScaleOutput_ + samples) % size; }
+      void advanceAddOverlap(u32 samples) { addOverlap_ = (addOverlap_ + samples) % size; }
 
-      forceinline u32 getBeginOutputToToScaleOutput() const { return (size + toScaleOutput_ - beginOutput_) % size; }
-      forceinline u32 getToScaleOutputToAddOverlap() const { return (size + addOverlap_ - toScaleOutput_) % size; }
-      forceinline u32 getAddOverlapToEnd() const { return (size + end - addOverlap_) % size; }
+      u32 getBeginOutputToToScaleOutput() const { return (size + toScaleOutput_ - beginOutput_) % size; }
+      u32 getToScaleOutputToAddOverlap() const { return (size + addOverlap_ - toScaleOutput_) % size; }
+      u32 getAddOverlapToEnd() const { return (size + end - addOverlap_) % size; }
     } outBuffer{};
     //
     // windows pointer for accessing windowing types

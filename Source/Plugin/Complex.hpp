@@ -125,6 +125,11 @@ namespace Interface
 
     utils::vectormap<Component *, PersistentCallback *> callbacks{};
 
+    // deferred components that will set their own position
+    utils::vector<utils::pair<Component *, utils::smallFn<bool(Component *)>>> *customPlacement{ };
+    utils::vector<Component *> *sortedSizesMin{};
+    utils::vector<Component *> *sortedSizesMax{};
+
     bool renderDebugFps = true;
 
     void startUI();

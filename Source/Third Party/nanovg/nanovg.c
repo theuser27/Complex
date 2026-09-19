@@ -671,7 +671,10 @@ static void nvg__setPaintColor(NVGpaint* p, NVGcolor color)
 void nvgSave(NVGcontext* ctx)
 {
 	if (ctx->nstates >= NVG_MAX_STATES)
+	{
+		assert(false && "Nanovg: Too many saved layers");
 		return;
+	}
 	if (ctx->nstates > 0)
 		memcpy(&ctx->states[ctx->nstates], &ctx->states[ctx->nstates-1], sizeof(NVGstate));
 	ctx->nstates++;
@@ -1035,9 +1038,7 @@ static void nvg__isectRects(float* dst,
 void nvgIntersectScissor(NVGcontext* ctx, float x, float y, float w, float h)
 {
 	NVGstate* state = nvg__getState(ctx);
-	float pxform[6], invxorm[6];
 	float rect[4];
-	float ex, ey, tex, tey;
 
 	// If no previous scissor has been set, set the scissor as current scissor.
 	if (state->scissor.extent[0] < 0) {
@@ -1045,18 +1046,10 @@ void nvgIntersectScissor(NVGcontext* ctx, float x, float y, float w, float h)
 		return;
 	}
 
-	// Transform the current scissor rect into current transform space.
-	// If there is difference in rotation, this will be approximation.
-	memcpy(pxform, state->scissor.xform, sizeof(float)*6);
-	ex = state->scissor.extent[0];
-	ey = state->scissor.extent[1];
-	nvgTransformInverse(invxorm, state->xform);
-	nvgTransformMultiply(pxform, invxorm);
-	tex = ex*nvg__absf(pxform[0]) + ey*nvg__absf(pxform[2]);
-	tey = ex*nvg__absf(pxform[1]) + ey*nvg__absf(pxform[3]);
+	nvgGetScissor(ctx, rect);
 
 	// Intersect rects.
-	nvg__isectRects(rect, pxform[4]-tex,pxform[5]-tey,tex*2,tey*2, x,y,w,h);
+	nvg__isectRects(rect, rect[0], rect[1], rect[2], rect[3], x, y, w, h);
 
 	nvgScissor(ctx, rect[0], rect[1], rect[2], rect[3]);
 }
@@ -1067,6 +1060,28 @@ void nvgResetScissor(NVGcontext* ctx)
 	memset(state->scissor.xform, 0, sizeof(state->scissor.xform));
 	state->scissor.extent[0] = -1.0f;
 	state->scissor.extent[1] = -1.0f;
+}
+
+void nvgGetScissor(NVGcontext *ctx, float rect[4])
+{
+	NVGstate *state = nvg__getState(ctx);
+	float pxform[6], invxorm[6];
+	float ex, ey, tex, tey;
+
+	// Transform the current scissor rect into current transform space.
+	// If there is difference in rotation, this will be approximation.
+	memcpy(pxform, state->scissor.xform, sizeof(float) * 6);
+	ex = state->scissor.extent[0];
+	ey = state->scissor.extent[1];
+	nvgTransformInverse(invxorm, state->xform);
+	nvgTransformMultiply(pxform, invxorm);
+	tex = ex * nvg__absf(pxform[0]) + ey * nvg__absf(pxform[2]);
+	tey = ex * nvg__absf(pxform[1]) + ey * nvg__absf(pxform[3]);
+
+	rect[0] = pxform[4] - tex;
+	rect[1] = pxform[5] - tey;
+	rect[2] = tex * 2;
+	rect[3] = tey * 2;
 }
 
 // Global composite operation.

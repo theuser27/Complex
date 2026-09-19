@@ -201,7 +201,8 @@ namespace Interface
     //};
 
     // if this is the draggable component we must keep focus otherwise our click will be discarded
-    draggedComponent->parent->removeChildComponent(draggedComponent, draggedComponent == this);
+    draggedComponent->parent->removeChildComponent(draggedComponent, 
+      draggedComponent == this || draggedComponent->isParentOf(this));
     surfaceToLiftTo->addChildComponent(draggedComponent);
 
     // set the dragged component to its correct position
@@ -293,15 +294,22 @@ namespace Interface
       processor, nullptr, directionX, directionY);
 
     auto &plugin = *processor->state->plugin;
-    auto *transactionArena = plugin.undoManager.beginNewTransaction();
     if (!isCopying)
     {
-      plugin.undoManager.perform(anew(transactionArena, Framework::MoveProcessorUpdate,
-        { processor->state, previousParentProcessorStateId, previousIndex,
-        processor->parent->stateId, processor->getIndex(), true }));
+      auto newParentId = processor->parent->stateId;
+      auto newIndex = processor->getIndex();
+
+      if (previousParentProcessorStateId != newParentId || previousIndex != newIndex)
+      {
+        auto *transactionArena = plugin.undoManager.beginNewTransaction();
+        plugin.undoManager.perform(anew(transactionArena, Framework::MoveProcessorUpdate,
+          { processor->state, previousParentProcessorStateId, previousIndex,
+          newParentId, newIndex, true }));
+      }
     }
     else
     {
+      auto *transactionArena = plugin.undoManager.beginNewTransaction();
       plugin.undoManager.perform(anew(transactionArena, Framework::AddProcessorUpdate,
         { processor, processor->parent->stateId, processor->getIndex() }));
       isCopying = false;

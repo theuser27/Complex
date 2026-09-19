@@ -33,7 +33,7 @@ namespace Interface
         return false;
     }
 
-    Generation::Processor *child;
+    Generation::Processor *child{};
     metadata->index = utils::min(metadata->index, parentProcessor->childrenCount);
     if (!metadata->useIndex)
     {
@@ -43,19 +43,6 @@ namespace Interface
 
       auto Point<i32>:: *primary = (parentComponent->componentFlags.vertical) ?
         &Point<i32>::y : &Point<i32>::x;
-
-      //metadata->index = 0;
-      //for (child = parentProcessor->children; child; (++metadata->index), child = Generation::Processor::getChild(child, 1))
-      //{
-      //  auto position = Point{ (metadata->isMovingUpX) ? child->component->bounds.w : 0,
-      //    (metadata->isMovingUpY) ? child->component->bounds.h : 0 };
-      //  position = parentComponent->getRelativePoint(child->component, position);
-      //  const char *format = (child == metadata->processor) ?
-      //    " > #%d: x: %d, y: %d, w: %d, h: %d\n" : "   #%d: x: %d, y: %d, w: %d, h: %d\n";
-      //  COMPLEX_DEBUG_LOG(format, metadata->index, position.x, position.y,
-      //    child->component->bounds.w, child->component->bounds.h);
-      //}
-      //COMPLEX_DEBUG_LOG("\n");
 
       metadata->index = 0;
       for (child = parentProcessor->children; child;
@@ -77,11 +64,6 @@ namespace Interface
           break;
       }
     }
-    else
-      child = Generation::Processor::getChild(parentProcessor->children, metadata->index);
-
-    //COMPLEX_ASSERT(metadata->processor->parent == nullptr ||
-    //  metadata->processor->parent == parentProcessor);
 
     metadata->oldIndex = (metadata->processor->parent) ? (u32)metadata->processor->getIndex() : (u32)-1;
     // if the processor already exists at the correct index, we skip
@@ -93,6 +75,9 @@ namespace Interface
 
       (void)parentProcessor->addChildProcessor(*processor, metadata->index);
     }
+
+    if (metadata->useIndex)
+      child = Generation::Processor::getChild(parentProcessor->children, metadata->index);
 
     Component *newComponent = getRelativeComponent(processor);
     auto *substituteInsert = metadata->placeholder;
@@ -144,6 +129,23 @@ namespace Interface
       parentComponent->addChildComponent(info.processor->component);
   }
 
+  static void getLaneName(EffectsLaneSection *effectsLaneSection, 
+    EffectsSection *effectsSection)
+  {
+    auto *effectsLane = effectsLaneSection->effectsLane;
+    effectsLane->name = { effectsLane->arena, utils::string::minimumCapacity };
+    usize i = effectsSection->laneNameOrdinal;
+    do
+    {
+      char letter[] = { (char)('A' + (i % ('Z' - 'A' + 1))), '\0' };
+      effectsLane->name.prepend(letter);
+      i /= ('Z' - 'A' + 1);
+    } while (i);
+
+    effectsLaneSection->laneTitle.text = { effectsLaneSection->arena, effectsLane->name };
+    ++effectsSection->laneNameOrdinal;
+  }
+
   bool
   EffectsSection::LaneSelector::AddMoreLanesButton::mouseDown(const MouseEvent &)
   {
@@ -152,16 +154,6 @@ namespace Interface
     auto *soundEngine = ((SoundEngineSection *)effectsSection->parent)->soundEngine;
     auto *state = soundEngine->state;
     auto *effectsLane = (Generation::EffectsLane *)state->createProcessor(Generation::Processors::EffectsLane);
-
-    // calculating name
-    effectsLane->name = { effectsLane->arena, utils::string::minimumCapacity };
-    for (usize i = effectsSection->laneNameOrdinal; i; i /= ('Z' - 'A' + 1))
-    {
-      char letter[] = { (char)('A' + (i % ('Z' - 'A' + 1))), '\0' };
-      effectsLane->name.prepend(letter);
-    }
-    if (effectsLane->name.empty())
-      effectsLane->name.prepend("A");
 
     auto *transactionArena = state->plugin->undoManager.beginNewTransaction();
     state->plugin->undoManager.perform(anew(transactionArena, Framework::AddProcessorUpdate, { effectsLane,
@@ -362,6 +354,33 @@ namespace Interface
       (i32)section->startLaneIndex - direction), section->visibleLaneCount);
 
     return true;
+  }
+
+  bool
+  EffectsSection::LaneHolder::render(Graphics &g)
+  {
+    for (auto *child = children; child; child = child->next)
+    {
+      auto section = (EffectsLaneSection *)child;
+      section->renderStage = EffectsLaneSection::Background;
+      doRenderChild(g, section);
+    }
+
+    for (auto *child = children; child; child = child->next)
+    {
+      auto section = (EffectsLaneSection *)child;
+      section->renderStage = EffectsLaneSection::Modules;
+      doRenderChild(g, section);
+    }
+
+    for (auto *child = children; child; child = child->next)
+    {
+      auto section = (EffectsLaneSection *)child;
+      section->renderStage = EffectsLaneSection::Highlight;
+      doRenderChild(g, section);
+    }
+
+    return false;
   }
 
   void EffectsSection::reinitialise()
@@ -652,19 +671,19 @@ namespace Interface
           return false;
 
         auto section = (EffectsLaneSection *)metadata->processor->component;
-        section->soundEngineSection = self;
         section->margin = { 0, 0, 4, 0 };
 
         // add mini view to lane selector
-        section->miniView.componentFlags.animateMovement = true;
-        section->miniView.previousPosition = invalidPosition;
         section->miniView.margin = self->effectsSection.laneSelector.addMoreLanesButton.margin;
         section->miniView.surfaceToLiftTo = &self->effectsSection;
         if (!metadata->placeholder)
         {
-          self->effectsSection.laneSelector.addChildComponent(&section->miniView,
-            &self->effectsSection.laneSelector.addMoreLanesButton);
-          ++self->effectsSection.laneNameOrdinal;
+          if (section->miniView.parent)
+            section->miniView.parent->removeChildComponent(&section->miniView);
+
+          self->effectsSection.laneSelector.addChildComponent(&section->miniView, metadata->index);
+          if (metadata->processor->name.empty())
+            getLaneName(section, &self->effectsSection);
         }
 
         return true;
@@ -774,17 +793,17 @@ namespace Interface
     recurseProcessors(recurseProcessors, state->soundEngine, this);
 
     popupSelector.componentFlags.isVisible = false;
-    popupSelector.componentFlags.alwaysOnTop = true;
+    //popupSelector.componentFlags.alwaysOnTop = true;
     addChildComponent(&popupSelector);
     popupSelector.reinitialise();
 
     popupDisplay1.componentFlags.isVisible = false;
-    popupDisplay1.componentFlags.alwaysOnTop = true;
+    //popupDisplay1.componentFlags.alwaysOnTop = true;
     addChildComponent(&popupDisplay1);
     popupDisplay1.reinitialise();
 
     popupDisplay2.componentFlags.isVisible = false;
-    popupDisplay2.componentFlags.alwaysOnTop = true;
+    //popupDisplay2.componentFlags.alwaysOnTop = true;
     addChildComponent(&popupDisplay2);
     popupDisplay2.reinitialise();
   }

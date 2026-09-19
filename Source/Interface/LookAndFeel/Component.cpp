@@ -24,6 +24,7 @@ namespace Interface
     if (!isCalculatingVertical)
     {
       // setup on first run
+      component->componentFlags.isPositionSet = false;
       component->fadeawayRatio = 0;
       component->lastBounds = component->bounds;
       component->bounds = {};
@@ -169,9 +170,6 @@ namespace Interface
     COMPLEX_ASSERT(component->bounds.*maxMember >= 0);
   }
 
-  extern utils::vector<Component *> *sortedSizesMin;
-  extern utils::vector<Component *> *sortedSizesMax;
-
   static void calculateGrow(Component *component, Component *children, bool isCalculatingVertical)
   {
     auto Rectangle<i32>:: *minMember = (isCalculatingVertical) ? &Rectangle<i32>::y : &Rectangle<i32>::x;
@@ -205,8 +203,8 @@ namespace Interface
       return;
     }
 
-    auto &sortedMin = *sortedSizesMin;
-    auto &sortedMax = *sortedSizesMax;
+    auto &sortedMin = *getUiRelated()->renderer->sortedSizesMin;
+    auto &sortedMax = *getUiRelated()->renderer->sortedSizesMax;
     sortedMin.clear();
     sortedMax.clear();
 
@@ -448,8 +446,8 @@ namespace Interface
       if (child->placement & Placement::custom)
       {
         // component has decided to take care of its own position
-        child->componentFlags.isPositionSet = false;
-        customPlacement->emplaceBack(child);
+        getUiRelated()->renderer->customPlacement->emplaceBack(
+          child, [](Component *c) { return c->overridePosition(c); });
         continue;
       }
 
@@ -631,27 +629,53 @@ namespace Interface
     }
   }
 
-  void animatePosition(Component *component, bool wasParentResized)
+  static bool
+  animatePosition(Component *component, bool wasParentResized, bool recursive)
   {
     static constexpr float kMoveDelay = 0.15f; //s
 
-    if (component->componentFlags.animateMovement &&                    // are we animating to begin with?
-      !wasParentResized &&                                              // skip animations if triggered by parent resize
-      component->lastBounds.getPosition() != component->nextPosition && // are we already at the destination?
-      component->previousPosition != invalidPosition)                   // did we have a previous position?
+    bool changedParents = component->lastParent != component->parent &&   // did we change parent components?
+      component->lastParent && component->parent;
+
+    bool requireReposition = changedParents || (!wasParentResized &&      // skip animations if triggered by parent resize
+      component->lastBounds.getPosition() != component->nextPosition);    // did we have a previous position?
+
+    if (requireReposition &&
+      component->componentFlags.animateMovement &&                        // are we animating to begin with?
+      component->previousPosition != invalidPosition)                     // did we have a previous position?
     {
       // we're interpolating between the previous position (animation start) and the supposed position
+      using T = decltype(component->distanceToNextPositionRatio);
 
-      float distanceToNextPositionRatio = (float)component->distanceToNextPositionRatio / (float)utils::int_max<decltype(component->distanceToNextPositionRatio)>;
-      distanceToNextPositionRatio = utils::min(distanceToNextPositionRatio + getUiRelated()->deltaTime * 1.0f / kMoveDelay, 1.0f);
-      //auto t = easeOutQuadratic(distanceToNextPositionRatio);
+      // TODO: fix animations activating on scrolling
+      
+      float distanceToNextPositionRatio = (float)component->distanceToNextPositionRatio / utils::int_max<T>;
+      distanceToNextPositionRatio = utils::min(1.0f,
+        distanceToNextPositionRatio + /*getUiRelated()->deltaTime /*/ kMoveDelay);
       auto t = smoothstep(distanceToNextPositionRatio);
+
+      // translate the last position if it was in a different component
+      if (changedParents)
+      {
+        // if the position of the previous/current parent hasn't been set yet
+        // delay the position setting for this component
+        if (!component->lastParent->componentFlags.isPositionSet ||
+          !component->parent->componentFlags.isPositionSet)
+        {
+          if (recursive)          
+            getUiRelated()->renderer->customPlacement->emplaceBack(component,
+              [wasParentResized](Component *c) { return animatePosition(c, wasParentResized, false); });
+          return false;
+        }
+
+        component->previousPosition = component->parent->getRelativePoint(
+          component->lastParent, component->previousPosition);
+      }
 
       component->bounds.x = (i32)::roundf(utils::lerp((float)component->previousPosition.x, (float)component->nextPosition.x, t));
       component->bounds.y = (i32)::roundf(utils::lerp((float)component->previousPosition.y, (float)component->nextPosition.y, t));
 
-      component->distanceToNextPositionRatio = (decltype(component->distanceToNextPositionRatio))::ceilf(distanceToNextPositionRatio *
-        (float)utils::int_max<decltype(component->distanceToNextPositionRatio)>);
+      component->distanceToNextPositionRatio = (T)::ceilf(distanceToNextPositionRatio * utils::int_max<T>);
     }
     else
     {
@@ -661,6 +685,16 @@ namespace Interface
       component->bounds = component->bounds.withPosition(component->nextPosition);
       component->distanceToNextPositionRatio = 0;
     }
+
+    component->componentFlags.isPositionSet = true;
+    component->lastParent = component->parent;
+
+    return true;
+  }
+
+  void animatePosition(Component *component, bool wasParentResized)
+  {
+    (void)animatePosition(component, wasParentResized, true);
   }
 
 #undef IS_SECONDARY_POSITION_FLAG_SET
@@ -1058,6 +1092,7 @@ namespace Interface
     if (!keepFocus)
       clearLinkedComponents(childToRemove, true);    
 
+    childToRemove->lastParent = childToRemove->parent;
     childToRemove->parent = nullptr;
     utils::removeDllHalfConnected(childToRemove, children);
   }
@@ -1081,15 +1116,13 @@ namespace Interface
 
     clearLinkedComponents(this, false);
 
-    for (Component *child = children, *nextChild = nullptr; child; child = nextChild)
+    while (children)
     {
-      nextChild = child->next;
-      child->parent = nullptr;
-      child->previous = nullptr;
-      child->next = nullptr;
+      // don't remove focus because it's already done
+      removeChildComponent(children, true);
     }
 
-    children = nullptr;
+    COMPLEX_ASSERT(!children);
   }
 
   void Component::deleteChildComponent(Component *childToDelete)
@@ -1285,24 +1318,43 @@ namespace Interface
     return (c->skinOverride == Skin::kUseParentOverride) ? Skin::kNone : c->skinOverride;
   }
 
-  void Component::doRenderChildren(Graphics &g)
+  void Component::doRenderChild(Graphics &g, Component *child,
+    void (*renderFn)(Graphics &, Component *))
   {
-    for (auto *child = children; child; child = child->next)
+    if (!child->componentFlags.isVisible)
+      return;
+
+    // is the child completely outside our bounds
+    if (getLocalBounds().getIntersection(child->bounds).isEmpty())
+      return;
+
+    nvgSave(g);
+
+    auto scissorBounds = child->bounds.toFloat();
+
+    if (child->componentFlags.halfScissor &&
+      !child->componentFlags.vertical)
     {
-      if (!child->componentFlags.isVisible)
-        continue;
-
-      // is the child completely outside our bounds
-      if (getLocalBounds().getIntersection(child->bounds).isEmpty())
-        continue;
-
-      nvgSave(g);
-      nvgIntersectScissor(g, (float)child->bounds.x, (float)child->bounds.y,
-        (float)child->bounds.w, (float)child->bounds.h);
-      nvgTranslate(g, (float)child->bounds.x, (float)child->bounds.y);
-      child->doRender(g);
-      nvgRestore(g);
+      float scissor[4];
+      nvgGetScissor(g, scissor);
+      scissorBounds = { scissorBounds.x, scissor[1], scissorBounds.w, scissor[3] };
     }
+    else if (child->componentFlags.halfScissor &&
+      child->componentFlags.vertical)
+    {
+      float scissor[4];
+      nvgGetScissor(g, scissor);
+      scissorBounds = { scissor[0], scissorBounds.y, scissor[2], scissorBounds.h };
+    }
+
+    nvgIntersectScissor(g, scissorBounds.x, scissorBounds.y,
+      scissorBounds.w, scissorBounds.h);
+
+    nvgTranslate(g, (float)child->bounds.x, (float)child->bounds.y);
+    
+    renderFn(g, child);
+
+    nvgRestore(g);
   }
 
   void Component::doRender(Graphics &g)

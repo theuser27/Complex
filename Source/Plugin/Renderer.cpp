@@ -74,11 +74,6 @@ namespace utils
 
 namespace Interface
 {
-  // deferred components that will set their own position
-  constinit utils::vector<Component *> *customPlacement{};
-  constinit utils::vector<Component *> *sortedSizesMin{};
-  constinit utils::vector<Component *> *sortedSizesMax{};
-
   void teardownGl(Renderer *renderer)
   {
     renderer->generalData.g->~Graphics();
@@ -195,6 +190,8 @@ namespace Interface
       k.mods |= ((event->key.state & PUGL_MOD_ALT) != 0) ? ModifierKeys::altModifier : 0;
       k.mods |= renderer->mouseButtonsDown_.flags;
 
+      // TODO: this is currently sampling the translated key and not the raw key
+      //       this can cause problems for undo/redo behaviour if the alphabet isn't latin
       k.keyCode = event->key.key;
       bool success = renderer->handleKeyPress(k);
       return (success) ? PUGL_SUCCESS : PUGL_FAILURE;
@@ -437,7 +434,11 @@ namespace Interface
 
   void Renderer::setHoveredComponent(Component *component)
   {
+    if (mouseHoveredComponent_)
+      mouseHoveredComponent_->componentFlags.isHovered = false;
     mouseHoveredComponent_ = component;
+    if (mouseHoveredComponent_)
+      mouseHoveredComponent_->componentFlags.isHovered = true;
   }
 
   void Renderer::setClickedComponent(Component *component)
@@ -777,7 +778,7 @@ namespace Interface
     {
       if (stack.back()->mouseWheelMove(getRelativeEvent(e, stack.back())))
         break;
-      stack.popBack();
+      (void)stack.popBack();
     }
 
     //if (!mouseDownComponent_ && mouseHoveredComponent_)
@@ -846,7 +847,7 @@ namespace Interface
     for (auto &[c, callback] : callbacks.data)
       callback(c);
 
-    utils::vector<Component *> customPlacement_{ getLocalScratch(), 32 };
+    utils::remove_cvref_t<decltype(*customPlacement)> customPlacement_{ getLocalScratch(), 32 };
     customPlacement = &customPlacement_;
     utils::vector<Component *> sortedSizesMin_{ getLocalScratch(), 32 };
     sortedSizesMin = &sortedSizesMin_;
@@ -862,11 +863,10 @@ namespace Interface
     // BEWARE of circular dependencies
     while (!customPlacement->empty())
     {
-      auto c = customPlacement->front();
-      customPlacement->popFront();
-      c->componentFlags.isPositionSet = c->overridePosition(c);
+      auto [c, fn] = customPlacement->popFront();
+      c->componentFlags.isPositionSet = fn(c);
       if (!c->componentFlags.isPositionSet)
-        customPlacement->emplaceBack(c);
+        customPlacement->emplaceBack(c, fn);
     }
     customPlacement->clear();
   }

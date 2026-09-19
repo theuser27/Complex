@@ -463,22 +463,30 @@ namespace utils
     T &emplace(usize index, auto &&... args) { return *new(insert(index)) T{ COMPLEX_FWD(args)... }; }
     T &emplaceAt(iterator iter, auto &&... args) { return *new(insertAt(iter)) T{ COMPLEX_FWD(args)... }; }
 
-    constexpr void popFront()
+    constexpr T
+    popFront()
     {
       if (!size_)
-        return;
+        return {};
 
+      T ret = COMPLEX_MOVE(front());
       front().~T();
       --size_;
       utils::contiguousMoveElements(data_, data_ + 1, size_);
+
+      return ret;
     }
-    constexpr void popBack()
+    constexpr T
+    popBack()
     {
       if (!size_)
-        return;
+        return {};
 
+      T ret = COMPLEX_MOVE(back());
       back().~T();
       --size_;
+
+      return ret;
     }
 
     void erase(usize index, usize count)

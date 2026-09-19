@@ -3,6 +3,8 @@
 
 #include "EffectsLaneSection.hpp"
 
+#include <stddef.h>
+
 #include "Generation/Effects.hpp"
 #include "Plugin/Complex.hpp"
 #include "../Components/Control.hpp"
@@ -128,10 +130,11 @@ namespace Interface
       auto section = (EffectModuleSection *)metadata->processor->component;
       section->laneSection = self;
       section->componentFlags.animateMovement = true;
-      section->previousPosition = invalidPosition;
+
       if (metadata->useIndex)
         section->effectHolder.header.draggableBox.surfaceToLiftTo =
-          &self->soundEngineSection->effectsSection;
+          &((SoundEngineSection *)self->effectsLane->parent->component)->effectsSection;
+
       (metadata->placeholder ? metadata->placeholder : section)->margin = { 0, 0, 0, kVModuleToModuleMargin };
 
       return true;
@@ -155,6 +158,7 @@ namespace Interface
 
     componentFlags.vertical = true;
     componentFlags.animateMovement = true;
+    componentFlags.halfScissor = true;
     skinOverride = Skin::kEffectsLane;
     sizingFlags = Component::GrowableY;
     desiredSize = { kEffectsLaneWidth, 0, kEffectsLaneWidth, 0 };
@@ -194,6 +198,7 @@ namespace Interface
     moduleHolder.sizingFlags = (Component::SizingFlags)(Component::GrowableX | Component::GrowableY | Component::ScrollableWithBarY);
     moduleHolder.componentFlags.vertical = true;
     moduleHolder.componentFlags.clickable = true;
+    moduleHolder.componentFlags.halfScissor = true;
     moduleHolder.padding = { kHVModuleToLaneMargin, kHVModuleToLaneMargin, kHVModuleToLaneMargin, kHVModuleToLaneMargin };
 
     addChildComponent(&footer);
@@ -449,15 +454,27 @@ namespace Interface
   bool
   EffectsLaneSection::render(Graphics &g)
   {
-    fillRect(g, getLocalBounds().toFloat(), getColour(Skin::kBody, this), scaleValue(kInsideRouding));
-    strokeRect(g, getLocalBounds().toFloat(), scaleValue(kEffectsLaneOutlineThickness),
-      Colour{ 45, 45, 45 }, scaleValue(kInsideRouding));
-
-    doRenderChildren(g);
-
-    if (!laneActivator.isOn())
+    if (renderStage == All || renderStage == Background)
     {
-      fillRect(g, getLocalBounds().toFloat(), getColour(Skin::kOverlayScreen, this));
+      fillRect(g, getLocalBounds().toFloat(), getColour(Skin::kBody, this), scaleValue(kInsideRouding));
+      strokeRect(g, getLocalBounds().toFloat(), scaleValue(kEffectsLaneOutlineThickness),
+        Colour{ 45, 45, 45 }, scaleValue(kInsideRouding));
+
+      doRenderChild(g, &header);
+      doRenderChild(g, &footer);
+
+      doRenderChild(g, &moduleHolder, [](Graphics &g, Component *c) { c->render(g); });
+    }
+
+    if (renderStage == All || renderStage == Modules)
+    {
+      doRenderChild(g, &moduleHolder, [](Graphics &g, Component *c) { c->doRenderChildren(g); });
+    }
+
+    if (renderStage == All || renderStage == Highlight)
+    {
+      if (!laneActivator.isOn())
+        fillRect(g, getLocalBounds().toFloat(), getColour(Skin::kOverlayScreen, this));
     }
 
     return false;
@@ -468,6 +485,7 @@ namespace Interface
     sizingFlags = Component::GrowableX;
     padding = { 4, 0, 4, 0 };
     desiredSize = { kMinWidth, kMinHeight, utils::int_max<i32>, kMinHeight };
+    componentFlags.animateMovement = true;
   }
 
   bool
@@ -535,6 +553,11 @@ namespace Interface
 
     renderText(((EffectsLaneSection *)processor->component)->laneTitle.text,
       FontId::DDinType, textBounds, g, getColour(Skin::kHeadingText, this));
+
+    // remove the miniview as well if the lane is removed
+    auto *laneSection = getParentStruct(EffectsLaneSection, miniView, this);
+    if (!laneSection->parent)
+      parent->removeChildComponent(this);
 
     return true;
   }

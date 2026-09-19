@@ -107,8 +107,6 @@ namespace Generation
 
     satomi::atomic<LaneStatus> status = LaneStatus::Finished;
     satomi::atomic<f4> volumeScale{};
-
-    friend class SoundEngine;
   };
 
   static_assert(utils::is_trivially_destructible_v<EffectsLane>);

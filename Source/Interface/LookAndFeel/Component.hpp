@@ -214,7 +214,14 @@ namespace Interface
 
     Skin::Override getSkinOverride() const;
 
-    void doRenderChildren(Graphics &g);
+    void doRenderChild(Graphics &g, Component *component, 
+      void (*renderFn)(Graphics &, Component *) = 
+        [](Graphics &g, Component *component) { component->doRender(g); });
+    void doRenderChildren(Graphics &g)
+    {
+      for (auto *child = children; child; child = child->next)
+        doRenderChild(g, child);
+    }
     void doRender(Graphics &g);
     void renderScrollbars(Graphics &g, float scrollHoverIncrement);
     virtual bool render([[maybe_unused]] Graphics &g) { return true; }
@@ -237,13 +244,17 @@ namespace Interface
       // feature flags
       bool clickable : 1 = false;
       bool clickableChildren : 1 = true;
-      bool vertical : 1 = false;                  // controls the children stack direction
+      bool vertical : 1 = false;                  // controls orientation/axis on which children stack 
+      // TODO: add a separate flag for dual orientation, 
+      //       then vertical will only designate primary direction
+      //       and also leave a single scrollable flag
       bool animateMovement : 1 = false;
       bool animateFadeAway : 1 = false;
-      bool alwaysOnTop : 1 = false;
+      //bool alwaysOnTop : 1 = false;
       bool acceptsOrphanMouseEvents : 1 = false;  // if component can accept mouseUp without mouseDown
                                                   //  happens if another component gives up on handling mouseUp
       bool keepSize : 1 = false;
+      bool halfScissor : 1 = false;               // if a component should scissor only on the main axis
 
       // state flags
       bool isVisible : 1 = true;
@@ -278,6 +289,7 @@ namespace Interface
 
     // animation related
     Rectangle<i32> lastBounds{};
+    Component *lastParent{};
 
     // support for animated positions
     Point<i32> nextPosition{};

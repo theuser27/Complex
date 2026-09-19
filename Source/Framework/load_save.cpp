@@ -711,7 +711,6 @@ namespace Plugin
     state->soundEngine = utils::as<SoundEngine>(state->createProcessor(Processors::SoundEngine));
     state->registerProcessorForDynamicParameters(state->soundEngine);
     auto effectsLane = state->createProcessor(Processors::EffectsLane);
-    effectsLane->name = { effectsLane->arena, "A" };
     state->registerProcessorForDynamicParameters(effectsLane);
     state->soundEngine->addChildProcessor(*effectsLane);
 

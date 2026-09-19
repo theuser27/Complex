@@ -57,6 +57,7 @@ namespace Interface
     struct LaneHolder : public Component
     {
       bool mouseWheelMove(const MouseEvent &e) override;
+      bool render(Graphics &g) override;
 
       float previousOffsetX{};
       float scrollThreshold{};

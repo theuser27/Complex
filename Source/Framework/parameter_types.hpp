@@ -466,6 +466,8 @@ namespace Framework
     void (*destructor)(UndoAction *){};
     // Allows multiple actions to be coalesced into a single action object, to reduce storage space.
     // The combined action can be the current, next or an entire new action
+    // Whichever gets returned, that will be stored 
+    // If no action gets returned, both will remain
     UndoAction *(*combineActions)(utils::Pool *transaction,
       UndoAction *currentAction, UndoAction *nextAction){};
 

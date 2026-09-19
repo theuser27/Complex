@@ -19,6 +19,8 @@ namespace Interface
 
   struct EffectsLaneSection final : public Component
   {
+    enum RenderStage { All, Background, Modules, Highlight };
+
     static constexpr int kAutoScrollRegion = 100;
 
     static constexpr int kLeftEdgePadding = 12;
@@ -37,7 +39,6 @@ namespace Interface
     bool render(Graphics &g) override;
 
     Generation::EffectsLane *effectsLane{};
-    SoundEngineSection *soundEngineSection{};
 
     Component header{};
     Component footer{};
@@ -67,6 +68,7 @@ namespace Interface
     TextSelector outputSelector{};
 
     bool isDropdownOpen{};
+    RenderStage renderStage = All;
 
     utils::sll<CommandMessages::HandleMessageFn *> laneHandler{};
 

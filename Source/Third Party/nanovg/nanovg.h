@@ -473,6 +473,9 @@ void nvgIntersectScissor(NVGcontext* ctx, float x, float y, float w, float h);
 // Reset and disables scissoring.
 void nvgResetScissor(NVGcontext* ctx);
 
+// Returns the current scissor bounds
+void nvgGetScissor(NVGcontext *ctx, float rect[4]);
+
 //
 // Paths
 //
