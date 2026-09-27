@@ -4,7 +4,7 @@
 #pragma once
 
 #include "Framework/memory.hpp"
-#include "Framework/parameter_types.hpp"
+#include "Framework/metadata.hpp"
 #include "../LookAndFeel/Component.hpp"
 #include "../LookAndFeel/Graphics.hpp"
 #include "TextEditor.hpp"
@@ -47,10 +47,8 @@ namespace Interface
       float value, bool addPrefix = true) const;
     float getValueFromText(utils::string_view text) const;
 
-    void beginChange(float oldValue);
-    void endChange();
-
     void createPopupMenu(PopupSelector *selector, Point<i32> position);
+    void createParameterUpdate(float previousValue, bool forceOverwrite);
 
     void showTextEntry();
     float getNumericTextMaxWidth(FontId usedFont, float lineHeight);
@@ -59,7 +57,6 @@ namespace Interface
     void hidePopup(bool primary = true);
 
     satomi::atomic<float> value = 0.0;
-    float valueBeforeChange = 0.0;
     float sensitivity = kDefaultSensitivity;
     ModifierKeys resetValueModifiers;
     double lastEditTime{};
@@ -102,6 +99,38 @@ namespace Interface
       float newValue, float oldValue) = nullptr;
     void (*automationMappingChangedCallback)(Control *control,
       bool isUnmapping) = nullptr;
+  };
+
+  struct ParameterUpdate final : public Framework::UndoAction
+  {
+    ParameterUpdate(Control *control, float oldValue, float newValue) :
+      control{ control }, oldValue{ oldValue }, newValue{ newValue }
+    {
+      UndoAction::redo = redo;
+      UndoAction::undo = undo;
+    }
+
+    static void redo(UndoAction *a)
+    {
+      auto *self = (ParameterUpdate *)a;
+
+      if (self->control->setValue(self->newValue, true))
+        self->control->setValueToHost();
+    }
+
+    static void undo(UndoAction *a)
+    {
+      auto *self = (ParameterUpdate *)a;
+
+      if (self->control->setValue(self->oldValue, true))
+        self->control->setValueToHost();
+    }
+
+    static bool isOfType(Framework::UndoAction *a) { return a->redo == redo && a->undo == undo; }
+
+    Control *control;
+    float oldValue;
+    float newValue;
   };
 
   class Label : public TextEditor

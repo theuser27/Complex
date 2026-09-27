@@ -40,24 +40,6 @@ namespace Interface
     nvgEllipse(g, centreRectangle.getRight(), centreRectangle.getBottom(), dotsDiameter, dotsDiameter);
     nvgFill(g);
 
-    //if (isDragging)
-    //{
-    //  COMPLEX_ASSERT(processor);
-
-    //  //draggedComponent->nextPosition = initialClickPosition + lastDragEvent.getOffsetFromDragStart();
-    //  auto position = draggedComponent->getLocalBounds().getCentre();
-    //  auto *placeholder = &getUiRelated()->renderer->gui->placeholderInsert;
-
-    //  CommandMessages::ProcessorInsertion insertInfo{
-    //    .position = position, .processor = processor, .placeholder = placeholder,
-    //    .isMovingUpX = lastDragEvent.directionX < 0, .isMovingUpY = lastDragEvent.directionY < 0 };
-
-    //  preOrderTreeTraversal(draggedComponent->parent, [&insertInfo](Component *c)
-    //  {
-    //    return c->handleCommandMessage(CommandMessages::HandleProcessorInsertion, &insertInfo);
-    //  }, position, false, draggedComponent);
-    //}
-
     return true;
   }
 
@@ -192,13 +174,6 @@ namespace Interface
       return true;
     };
     draggedComponent->componentFlags.keepSize = true;
-    //draggedComponent->overrideSize = [](Component *c, bool isCalculatingVertical)
-    //{
-    //  if (!isCalculatingVertical)
-    //    return Range<i32>{ c->lastBounds.w, c->lastBounds.w };
-    //  else
-    //    return Range<i32>{ c->lastBounds.h, c->lastBounds.h };
-    //};
 
     // if this is the draggable component we must keep focus otherwise our click will be discarded
     draggedComponent->parent->removeChildComponent(draggedComponent, 

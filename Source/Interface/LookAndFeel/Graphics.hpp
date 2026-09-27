@@ -93,11 +93,7 @@ namespace Interface
     utils::Pool *arena{};
 
     utils::vectormap<const byte *, NSVGimage *> svgs{};
-    u64 idGenerator{};
-    Area<i32> planeArea{};
-
     NVGcontext *context{};
-    NVGLUframebuffer *textureFBO{};
 
     int DDinFontId;
     int InterFontId;
@@ -207,27 +203,27 @@ namespace Interface
   }
 
   inline void renderText(utils::string_view text, FontId font,
-    Rectangle<float> bounds, Graphics &context, Colour colour,
+    Rectangle<float> bounds, Graphics &g, Colour colour,
     Placement placement = Placement::centered, bool wrapText = false)
   {
-    nvgBeginPath(context.context);
-    context.setFont(font, (float)bounds.h);
+    nvgBeginPath(g);
+    g.setFont(font, (float)bounds.h);
     float ascent, lineHeight;
-    nvgFillColor(context.context, colour);
-    nvgTextMetrics(context.context, &ascent, nullptr, &lineHeight);
+    nvgFillColor(g, colour);
+    nvgTextMetrics(g, &ascent, nullptr, &lineHeight);
     int alignmentFlags = NVG_ALIGN_BASELINE;
     alignmentFlags |= ((placement == Placement::left) ? NVG_ALIGN_LEFT :
       (placement == Placement::right) ? NVG_ALIGN_RIGHT : NVG_ALIGN_CENTER);
-    nvgTextAlign(context.context, alignmentFlags);
+    nvgTextAlign(g, alignmentFlags);
 
     auto x = (float)bounds.x;
     x += ((placement == Placement::left) ? 0.0f :
       (placement == Placement::right) ? (float)bounds.w : (float)bounds.w * 0.5f);
     auto y = ::ceilf((float)bounds.y + ((float)bounds.h - lineHeight) * 0.5f + ascent);
     if (wrapText)
-      nvgTextBox(context.context, x, y, x + (float)bounds.w, text.data(), text.data() + text.size());
+      nvgTextBox(g, x, y, x + (float)bounds.w, text.data(), text.data() + text.size());
     else
-      nvgText(context.context, x, y, text.data(), text.data() + text.size());
+      nvgText(g, x, y, text.data(), text.data() + text.size());
   }
 
   NSVGimage *parseSVG(utils::Pool *arenaToAllocateIn, 

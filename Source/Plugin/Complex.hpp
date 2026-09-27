@@ -7,7 +7,7 @@
 #include "Framework/utils.hpp"
 #include "Framework/constants.hpp"
 #include "Framework/memory.hpp"
-#include "Framework/parameter_types.hpp"
+#include "Framework/metadata.hpp"
 #include "Interface/LookAndFeel/gui_utils.hpp"
 
 extern "C"
@@ -51,33 +51,10 @@ namespace Interface
   public:
     enum TimerTypes { kTimerRefreshRate };
 
-    struct PerfGraph
-    {
-      float values[128];
-      int head;
-
-      float getGraphAverage()
-      {
-        float avg = 0;
-        for (usize i = 0; i < countof(values); i++)
-          avg += values[i];
-        
-        return avg / (float)countof(values);
-      }
-
-      void updateGraph(float frameTime)
-      {
-        head = (head + 1) % countof(values);
-        values[head] = frameTime;
-      }
-    };
-
     static constexpr double kMultiClickTimeout = 0.500; //ms
 
     Renderer(Plugin::ComplexPlugin &plugin);
     ~Renderer();
-
-    PerfGraph graph{};
 
     Area<u32> area{};
     Area<u32> unscaledArea{};
@@ -248,7 +225,7 @@ namespace Plugin
 
     Generation::Processor *getProcessor(u64 processorId) const;
     // creates a default processor or loads processor from save if jsonData != nullptr
-    Generation::Processor *createProcessor(uuid processorId, void *jsonData = nullptr);
+    Generation::Processor *createProcessor(uuid processorId, void *jsonData = nullptr, void *extra = nullptr);
     Generation::Processor *copyProcessor(Generation::Processor *processor);
     void deleteProcessor(Generation::Processor *processor);
 

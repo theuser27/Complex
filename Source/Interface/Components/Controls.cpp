@@ -3,8 +3,7 @@
 
 #include "Control.hpp"
 
-#include "Framework/parameter_value.hpp"
-#include "Framework/parameter_bridge.hpp"
+#include "Framework/parameters.hpp"
 #include "Generation/Processor.hpp"
 #include "Plugin/Complex.hpp"
 #include "../LookAndFeel/ui_constants.hpp"
@@ -45,15 +44,13 @@ namespace Interface
     if (parameter && parameter->hostParameter)
       parameter->hostParameter->beginChangeGesture();
 
-    beginChange(isOn());
-
-    setValue(!isOn(), true);
-
-    setValueToHost();
-    endChange();
-
-    if (parameter && parameter->hostParameter)
-      parameter->hostParameter->endChangeGesture();
+    auto previousValue = getValue();
+    bool isChanged = setValue(!isOn(), true);
+    if (isChanged)
+    {
+      setValueToHost();
+      createParameterUpdate(previousValue, false);
+    }
 
     return true;
   }
@@ -178,6 +175,8 @@ namespace Interface
     if (parameter && parameter->hostParameter)
       parameter->hostParameter->beginChangeGesture();
 
+    createParameterUpdate(getValue(), false);
+
     mouseDrag(e);
 
     return true;
@@ -195,15 +194,18 @@ namespace Interface
 
     if (mouseDiff)
     {
+      auto previousValue = getValue();
       float newPos = getValue() + (float)mouseDiff * (1.0f / sensitivity);
       newPos = (controlFlags.canLoopAround) ? newPos - ::floorf(newPos) : utils::clamp(newPos, 0.0f, 1.0f);
 
-      beginChange(getValue());
+      bool isChanged = setValue(newPos, true);
+      if (isChanged)
+      {
+        if (parameter && parameter->hostParameter)
+          parameter->hostParameter->setValueFromUI((float)getValue());
 
-      setValue(newPos, true);
-      setValueToHost();
-
-      endChange();
+        createParameterUpdate(previousValue, true);
+      }
     }
 
     return true;
@@ -285,19 +287,12 @@ namespace Interface
     else
       newValue = currentValue + ::fabsf(valueDelta) * (valueDelta < 0.0f ? -1.0f : 1.0f);
 
-    bool isMapped = parameter && parameter->hostParameter;
-    if (isMapped)
-      parameter->hostParameter->beginChangeGesture();
-
-    beginChange(currentValue);
-
-    setValue(newValue, true);
-    setValueToHost();
-
-    endChange();
-
-    if (isMapped)
-      parameter->hostParameter->endChangeGesture();
+    bool isChanged = setValue(newValue, true);
+    if (isChanged)
+    {
+      setValueToHost();
+      createParameterUpdate(currentValue, false);
+    }
 
     showPopup();
 
@@ -516,11 +511,12 @@ namespace Interface
     auto mouseEvent = e.getEventRelativeTo(parent);
 
     auto normalisedDiff = ((double)mouseEvent.x - lastMouseDragPosition.x) / (double)parent->bounds.w;
-    runningTotal += multiply * normalisedDiff;
-    setValue((float)utils::clamp(runningTotal, 0.0, 1.0), true);
     lastMouseDragPosition = { mouseEvent.x, mouseEvent.y };
+    runningTotal += multiply * normalisedDiff;
 
-    setValueToHost();
+    bool isChanged = setValue((float)utils::clamp(runningTotal, 0.0, 1.0), true);
+    if (isChanged && parameter && parameter->hostParameter)
+      parameter->hostParameter->setValueFromUI((float)getValue());
 
     return true;
   }
@@ -702,22 +698,19 @@ namespace Interface
     selector->skinOverride = getSkinOverride();
     selector->callback = [this](PopupSelector *, PopupItem *item)
     {
-      if (parameter && parameter->hostParameter)
-        parameter->hostParameter->beginChangeGesture();
-
       auto *option = (Framework::IndexedData *)item->extraData;
 
-      beginChange(getValue());
+      auto previousValue = getValue();
       auto unscaledValue = unscaleValue(Framework::getValueFromOption(option, details),
         details, getUiRelated()->plugin.getSampleRate());
-      setValue(unscaledValue, true);
-      setValueToHost();
-      endChange();
+      bool isChanged = setValue(unscaledValue, true);
+      if (isChanged)
+      {
+        setValueToHost();
+        createParameterUpdate(previousValue, false);
+      }
 
       isDropdownOpen = false;
-
-      if (parameter && parameter->hostParameter)
-        parameter->hostParameter->endChangeGesture();
     };
     selector->cancel = [this](PopupSelector *) { isDropdownOpen = false; };
     selector->summon(this, dropdownPlacement, dropdownOffset.toInt());

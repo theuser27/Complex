@@ -5,8 +5,7 @@
 
 #include "Third Party/pugl/pugl.h"
 
-#include "Framework/parameter_value.hpp"
-#include "Framework/parameter_bridge.hpp"
+#include "Framework/parameters.hpp"
 #include "Plugin/Complex.hpp"
 #include "../Sections/MainInterface.hpp"
 #include "../Sections/Popups.hpp"
@@ -67,7 +66,11 @@ namespace Interface
   void Control::setValueToHost() const
   {
     if (parameter && parameter->hostParameter)
+    {
+      parameter->hostParameter->beginChangeGesture();
       parameter->hostParameter->setValueFromUI((float)getValue());
+      parameter->hostParameter->endChangeGesture();
+    }
   }
 
   // TODO: change this bool to instead either run through the valueChange fn ptr or not
@@ -106,104 +109,16 @@ namespace Interface
     return true;
   }
 
-  void Control::beginChange(float oldValue)
-  {
-    valueBeforeChange = oldValue;
-  }
-
-  struct ParameterUpdate final : public Framework::UndoAction
-  {
-    ParameterUpdate(Interface::Control *control, float oldValue, float newValue) :
-      control(control), oldValue(oldValue), newValue(newValue)
-    {
-      UndoAction::redo = redo;
-      UndoAction::undo = undo;
-      //UndoAction::combineActions = combineActions;
-    }
-
-    static void redo(UndoAction *a)
-    {
-      auto *self = (ParameterUpdate *)a;
-
-      if (self->control->setValue(self->newValue, true))
-        self->control->setValueToHost();
-    }
-
-    static void undo(UndoAction *a)
-    {
-      auto *self = (ParameterUpdate *)a;
-
-      if (self->control->setValue(self->oldValue, true))
-        self->control->setValueToHost();
-    }
-
-    //static UndoAction *
-    //combineActions(utils::Pool *, UndoAction *currentAction, UndoAction *nextAction)
-    //{
-    //  if (currentAction->redo != nextAction->redo ||
-    //    currentAction->undo != nextAction->undo)
-    //    return nullptr;
-    //
-    //  auto *current = (ParameterUpdate *)currentAction;
-    //  auto *next = (ParameterUpdate *)nextAction;
-    //
-    //  if (current->control != next->control)
-    //    return nullptr;
-    //
-    //  current->newValue = next->newValue;
-    //
-    //  return currentAction;
-    //}
-
-    static bool isOfType(Framework::UndoAction *a) { return a->redo == redo && a->undo == undo; }
-
-    Interface::Control *control;
-    float oldValue;
-    float newValue;
-  };
-
-  void Control::endChange()
-  {
-    auto &plugin = getUiRelated()->plugin;
-    auto [storage, action] = plugin.undoManager.getCurrent();
-
-    auto oldEditTime = lastEditTime;
-    lastEditTime = getUiRelated()->steadyTime;
-
-    if (getUiRelated()->steadyTime - oldEditTime <= kUndoTimeout)
-    {
-      while (action)
-      {
-        if (ParameterUpdate::isOfType(action) && ((ParameterUpdate *)action)->control == this)
-        {
-          ((ParameterUpdate *)action)->newValue = getValue();
-          return;
-        }
-
-        action = action->next;
-      }
-    }
-
-    storage = plugin.undoManager.beginNewTransaction();
-    plugin.undoManager.perform(anew(storage, ParameterUpdate,
-      { this, valueBeforeChange, getValue() }));
-  }
-
   void Control::resetValue()
   {
-    bool isMapped = parameter && parameter->hostParameter;
-    if (isMapped)
-      parameter->hostParameter->beginChangeGesture();
+    auto previousValue = getValue();
+    bool isChanged = setValue(details.defaultNormalisedValue, true);
 
-    beginChange(getValue());
-
-    setValue(details.defaultNormalisedValue, true);
-    setValueToHost();
-
-    endChange();
-
-    if (isMapped)
-      parameter->hostParameter->endChangeGesture();
+    if (isChanged)
+    {
+      setValueToHost();
+      createParameterUpdate(previousValue, false);
+    }
   }
 
   enum MenuId
@@ -479,7 +394,7 @@ namespace Interface
       fillRect(g, self->getLocalBounds().toFloat(), getColour(Skin::kBody, self),
         topPadding, topPadding, bottomPadding, bottomPadding);
 
-      self->doRenderChildren(g);
+      self->renderChildren(g);
 
       strokeRect(g, self->getLocalBounds().toFloat(), scaleValue(1.0f), Colour{ 45,45,45 },
         topPadding);
@@ -582,6 +497,42 @@ namespace Interface
     { handleControlPopupResult(this, selectedItem); if (selectedItem->closesPopup) controlFlags.isInModalState = false; };
     selector->cancel = [this](PopupSelector *) { controlFlags.isInModalState = false; };
     selector->summon(this, Placement::custom, position);
+  }
+
+  void Control::createParameterUpdate(float previousValue, bool forceOverwrite)
+  {
+    auto &undoManager = getUndoManager();
+    auto [storage, action] = undoManager.getCurrent();
+
+    auto oldEditTime = lastEditTime;
+    auto currentValue = getValue();
+    if (!forceOverwrite)
+      lastEditTime = getUiRelated()->steadyTime;
+
+    // we either force an overwrite or we check if there was a very recent change to the control 
+    // we're about to create an event for
+    bool overwriteInstead = forceOverwrite || getUiRelated()->steadyTime - oldEditTime <= Control::kUndoTimeout;
+    if (overwriteInstead)
+    {
+      overwriteInstead = false;
+      while (action)
+      {
+        if (ParameterUpdate::isOfType(action) && ((ParameterUpdate *)action)->control == this)
+        {
+          ((ParameterUpdate *)action)->newValue = currentValue;
+          overwriteInstead = true;
+          break;
+        }
+
+        action = action->next;
+      }
+    }
+
+    // create a parameter change event if one doesn't already exist
+    // same goes for forceOverwrite
+    if (!overwriteInstead)
+      undoManager.perform(anew(undoManager.beginNewTransaction(),
+        ParameterUpdate, { this, previousValue, currentValue }));
   }
 
   static utils::string_view
@@ -770,8 +721,8 @@ namespace Interface
     MappingParameterUpdate(Framework::HostParameter *bridge,
       Framework::Parameter *parameter = nullptr) : bridge{ bridge }, parameter{ parameter }
     {
-      // TODO: if you map and unmap the same parameter this transaction will contain both actions
-      //  instead of self cancelling and freeing the arena
+      // FIXME: if you map and unmap the same parameter this transaction will contain both actions
+      //        instead of self cancelling and freeing the arena
 
       UndoAction::redo = redo;
       UndoAction::undo = redo;
@@ -797,11 +748,11 @@ namespace Interface
         self->parameter = self->bridge->getParameter();
         COMPLEX_ASSERT(self->parameter);
 
-        //Framework::HostParameter::notifyParameterChange();
         if (self->parameter->control && self->parameter->control->automationMappingChangedCallback)
           self->parameter->control->automationMappingChangedCallback(self->parameter->control, true);
 
         self->bridge->resetParameter(nullptr);
+        Framework::HostParameter::notifyParameterChange();
       }
     }
 
@@ -829,9 +780,7 @@ namespace Interface
 
     if (result == kDefaultValue)
     {
-      control->beginChange(control->getValue());
       control->resetValue();
-      control->endChange();
     }
     else if (result == kManualEntry)
     {

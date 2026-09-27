@@ -273,7 +273,7 @@ namespace Framework
       if (overlap <= 0.1235f)
         return;
 
-      // TODO: add optimal scaling for these
+      // FIXME: add optimal scaling for these
       mult = (1.0f - overlap) * 3.25f * sqrtf(alpha * overlap);
       break;
     default:
@@ -289,7 +289,7 @@ namespace Framework
 
       auto channel = buffer.get(i);
 
-      // TODO: optimise this with aligned simd multiply
+      // FIXME: optimise this with aligned simd multiply
       for (u32 j = 0; j < samples; j++)
       {
         u32 sampleIndex = (start + j) % bufferSize;

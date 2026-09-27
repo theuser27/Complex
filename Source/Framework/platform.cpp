@@ -437,25 +437,21 @@ namespace utils
 
   extern "C" void *global_malloc(size_t size)
   {
-    //return malloc(size);
     return utils::Pool::insert(globalArena, size, alignof(void *));
   }
   extern "C" void *global_calloc(size_t num, size_t size)
   {
-    //return calloc(num, size);
     return utils::Pool::insert(globalArena, num * size, alignof(void *), true);
   }
   extern "C" void *global_realloc(void *pointer, size_t newSize)
   {
-    //return realloc(pointer, newSize);
     if (pointer)
       return utils::Pool::resize(pointer, newSize);
     else
-      return arena_malloc(newSize);
+      return global_malloc(newSize);
   }
   extern "C" void global_free(void *pointer)
   {
-    //return free(pointer);
     if (pointer)
       utils::Pool::remove(pointer);
   }

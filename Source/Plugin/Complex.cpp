@@ -10,124 +10,120 @@
 #include "Third Party/xhl/xhl_files.h"
 
 #include "Framework/load_save.hpp"
-#include "Framework/parameter_bridge.hpp"
-#include "Framework/parameter_value.hpp"
+#include "Framework/parameters.hpp"
 #include "Generation/Effects.hpp"
 #include "Generation/SoundEngine.hpp"
 #include "Interface/LookAndFeel/Graphics.hpp"
 #include "Interface/LookAndFeel/Component.hpp"
 #include "Interface/Sections/MainInterface.hpp"
 
-Framework::ExecutableStaticData executableStaticData{};
+Framework::ExecutableMetadata executableStaticData{};
 
-namespace
+static void initialisePluginStructure()
 {
-  void initialisePluginStructure()
+  utils::ScopedLock g{ executableStaticData.readWriteLock, true, utils::WaitMechanism::WaitNotify };
+
+  executableStaticData.arena = utils::Pool::create(COMPLEX_MB(1), COMPLEX_KB(64));
+  executableStaticData.structure.arena = utils::Pool::create(COMPLEX_MB(1), COMPLEX_KB(64));
+
+  auto pushString = [&](utils::string_view string)
   {
-    utils::ScopedLock g{ executableStaticData.readWriteLock, true, utils::WaitMechanism::WaitNotify };
+    if (string.empty())
+      return string;
 
-    executableStaticData.arena = utils::Pool::create(COMPLEX_MB(1), COMPLEX_KB(64));
-    executableStaticData.structure.arena = utils::Pool::create(COMPLEX_MB(1), COMPLEX_KB(64));
+    for (auto *element = executableStaticData.strings; element; element = element->next)
+      if (element->object == string)
+        return element->object;
 
-    auto pushString = [&](utils::string_view string)
+    auto *node = anew(executableStaticData.arena, utils::sll<utils::string_view>, { string });
+    if (executableStaticData.strings)
+      node->next = executableStaticData.strings;
+    executableStaticData.strings = node;
+
+    return node->object;
+  };
+
+  auto recurseParameterStrings = [&](const auto &recurseParameters, const auto &recurseProcessors,
+    Framework::ParameterMetadata *parameterMetadata) -> void
+  {
+    pushString(parameterMetadata->details.displayName);
+    pushString(parameterMetadata->details.displayUnits);
+
+    if (parameterMetadata->details.scale == Framework::ParameterScale::Indexed)
     {
-      if (string.empty())
-        return string;
+      auto *option = parameterMetadata->details.options;
 
-      for (auto *element = executableStaticData.strings; element; element = element->next)
-        if (element->object == string)
-          return element->object;
-
-      auto *node = anew(executableStaticData.arena, utils::sll<utils::string_view>, { string });
-      if (executableStaticData.strings)
-        node->next = executableStaticData.strings;
-      executableStaticData.strings = node;
-
-      return node->object;
-    };
-
-    auto recurseParameterStrings = [&](const auto &recurseParameters, const auto &recurseProcessors,
-      Framework::ParameterMetadata *parameterMetadata) -> void
-    {
-      pushString(parameterMetadata->details.displayName);
-      pushString(parameterMetadata->details.displayUnits);
-
-      if (parameterMetadata->details.scale == Framework::ParameterScale::Indexed)
+      bool visitedChildren = false;
+      while (true)
       {
-        auto *option = parameterMetadata->details.options;
+        pushString(option->displayName);
 
-        bool visitedChildren = false;
-        while (true)
+        if (option->flags == Framework::IndexedData::ProcessorFlag)
+          recurseProcessors(recurseProcessors, option->processorMetadata);
+        else if (option->flags == Framework::IndexedData::ParameterFlag)
+          recurseParameters(recurseParameters, recurseProcessors, option->parameterMetadata);
+
+        if (option->children && !visitedChildren)
         {
-          pushString(option->displayName);
+          option = option->children;
+        }
+        else if (option->next)
+        {
+          visitedChildren = false;
+          option = option->next;
+        }
+        else
+        {
+          visitedChildren = true;
+          if (!option->parent)
+            break;
 
-          if (option->flags == Framework::IndexedData::ProcessorFlag)
-            recurseProcessors(recurseProcessors, option->processorMetadata);
-          else if (option->flags == Framework::IndexedData::ParameterFlag)
-            recurseParameters(recurseParameters, recurseProcessors, option->parameterMetadata);
-
-          if (option->children && !visitedChildren)
-          {
-            option = option->children;
-          }
-          else if (option->next)
-          {
-            visitedChildren = false;
-            option = option->next;
-          }
-          else
-          {
-            visitedChildren = true;
-            if (!option->parent)
-              break;
-
-            option = option->parent;
-          }
+          option = option->parent;
         }
       }
-    };
+    }
+  };
 
-    auto recurseProcessorStrings = [&](const auto &recurseProcessors, Framework::ProcessorMetadata *processorMetadata) -> void
+  auto recurseProcessorStrings = [&](const auto &recurseProcessors, Framework::ProcessorMetadata *processorMetadata) -> void
+  {
+    pushString(processorMetadata->name);
+
+    auto *parameters = processorMetadata->parameters;
+    for (u32 i = 0; i < processorMetadata->parameterCount; ++i)
     {
-      pushString(processorMetadata->name);
-
-      auto *parameters = processorMetadata->parameters;
-      for (u32 i = 0; i < processorMetadata->parametersCount; ++i)
-      {
-        recurseParameterStrings(recurseParameterStrings, recurseProcessors, parameters);
-        parameters = parameters->next;
-      }
-
-      auto *children = processorMetadata->children;
-      for (u32 i = 0; i < processorMetadata->childrenCount; ++i)
-      {
-        recurseProcessors(recurseProcessors, children);
-        children = children->next;
-      }
-    };
-
-    {
-      char buffer[512];
-      int pathSize = xfiles_get_user_directory(buffer, sizeof(buffer), XFILES_USER_DIRECTORY_APPDATA);
-      auto string = utils::string::create(getLocalScratch(), "%*s" XFILES_DIR_STR "%s", pathSize, buffer, CPLUG_PLUGIN_NAME);
-      executableStaticData.configFolderPath = pushString(string);
+      recurseParameterStrings(recurseParameterStrings, recurseProcessors, parameters);
+      parameters = parameters->next;
     }
 
-    executableStaticData.structure.metadata = (Framework::ProcessorMetadata *)initialiseTypeStructure<
-      Generation::SoundEngine>(nullptr, executableStaticData.structure);
+    auto *children = processorMetadata->children;
+    for (u32 i = 0; i < processorMetadata->childrenCount; ++i)
+    {
+      recurseProcessors(recurseProcessors, children);
+      children = children->next;
+    }
+  };
 
-    recurseProcessorStrings(recurseProcessorStrings, executableStaticData.structure.metadata);
-  }
-
-  void deinitialisePluginStructure()
   {
-    utils::ScopedLock g{ executableStaticData.readWriteLock, true, utils::WaitMechanism::WaitNotify };
-
-    utils::Pool::destroy(executableStaticData.structure.arena);
-
-    executableStaticData.strings = {};
-    utils::Pool::destroy(executableStaticData.arena);
+    char buffer[512];
+    int pathSize = xfiles_get_user_directory(buffer, sizeof(buffer), XFILES_USER_DIRECTORY_APPDATA);
+    auto string = utils::string::create(getLocalScratch(), "%*s" XFILES_DIR_STR "%s", pathSize, buffer, CPLUG_PLUGIN_NAME);
+    executableStaticData.configFolderPath = pushString(string);
   }
+
+  executableStaticData.structure.metadata = (Framework::ProcessorMetadata *)
+    initialiseTypeStructureSoundEngine(nullptr, executableStaticData.structure);
+
+  recurseProcessorStrings(recurseProcessorStrings, executableStaticData.structure.metadata);
+}
+
+static void deinitialisePluginStructure()
+{
+  utils::ScopedLock g{ executableStaticData.readWriteLock, true, utils::WaitMechanism::WaitNotify };
+
+  utils::Pool::destroy(executableStaticData.structure.arena);
+
+  executableStaticData.strings = {};
+  utils::Pool::destroy(executableStaticData.arena);
 }
 
 utils::string_view
@@ -347,10 +343,10 @@ namespace Plugin
   }
 
   Generation::Processor *
-  State::createProcessor(uuid processorId, void *jsonData)
+  State::createProcessor(uuid processorId, void *jsonData, void *extra)
   {
     auto *metadata = findProcessorMetadata(processorId);
-    Generation::Processor *processor = metadata->create(this, metadata, nullptr, jsonData);
+    Generation::Processor *processor = metadata->create(this, metadata, nullptr, jsonData, extra);
 
     allProcessors.add(processor->stateId, processor);
 
@@ -367,8 +363,8 @@ namespace Plugin
 
     deregisterProcessorForDynamicParameters(processor);
 
-    // TODO: free all registered resources
-    // TODO: unlink all parameters from their UIs and detach them from the parameter bridges
+    // unlink all parameters from parameter bridges
+    processor->remapParameters({}, false, false);
 
     if (processor->component)
     {

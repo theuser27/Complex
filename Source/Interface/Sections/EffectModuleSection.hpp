@@ -3,8 +3,7 @@
 
 #pragma once
 
-#include "Framework/parameter_value.hpp"
-#include "Framework/parameter_bridge.hpp"
+#include "Framework/parameters.hpp"
 #include "../Components/DraggableComponent.hpp"
 #include "../Components/Control.hpp"
 

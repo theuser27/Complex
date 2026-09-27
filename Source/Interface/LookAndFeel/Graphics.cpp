@@ -38,15 +38,10 @@ namespace Interface
       (unsigned char *)BinaryData::Inter_Medium_ttf, (int)BinaryData::Inter_Medium_ttfSize, false);
 
     svgs.data = utils::Allocator{ arena, false };
-
-    // TODO: how big should the framebuffer be
-    planeArea = { 640, 480 };
-    textureFBO = nvgluCreateFramebuffer(context, planeArea.w, planeArea.h, 0);
   }
 
   Graphics::~Graphics()
   {
-    nvgluDeleteFramebuffer(textureFBO);
     nvgDeleteGL3(context);
     utils::Pool::destroy(arena);
   }

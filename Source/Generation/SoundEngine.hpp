@@ -34,8 +34,7 @@ namespace Generation
       (    OutGain, 1758060942415),
     )
 
-    SoundEngine(utils::Pool *arena, Plugin::State *state,
-      Framework::ProcessorMetadata *metadata, void *serialisedSave);
+    using Processor::Processor;
 
   private:
     //=========================================================================================
@@ -185,8 +184,6 @@ namespace Generation
     void processIndividualLanes(EffectsLane *lane) const;
 
   public:
-    Interface::Component *createUI() override;
-
     // initialising pointers and FFT plans
     void resetBuffers();
     void updateParameters(UpdateFlag flag, float sampleRate, bool updateChildrenParameters = true);
@@ -266,10 +263,12 @@ namespace Generation
     Framework::SimdBuffer *interleavedOutputBuffer{};
 
     satomi::atomic<bool> shouldWorkersProcess_ = false;
+
+    friend Processor *createSoundEngine(Plugin::State *state,
+      Framework::ProcessorMetadata *metadata, const void *, void *serialisedSave, void *);
   };
 
   static_assert(utils::is_trivially_destructible_v<SoundEngine>);
 }
 
-template<> Generation::Processor *createProcessor<Generation::SoundEngine>(Plugin::State *, Framework::ProcessorMetadata *, const void *, void *);
-template<> void *initialiseTypeStructure<Generation::SoundEngine>(void *metadata, Framework::PluginStructure &structure);
+void *initialiseTypeStructureSoundEngine(void *metadata, Framework::PluginStructure &structure);

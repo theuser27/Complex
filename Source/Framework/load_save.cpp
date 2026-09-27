@@ -8,8 +8,7 @@
 #include "Third Party/xhl/xhl_files.h"
 #include "Third Party/cjson/cjson.h"
 
-#include "Framework/parameter_value.hpp"
-#include "Framework/parameter_bridge.hpp"
+#include "Framework/parameters.hpp"
 #include "Generation/SoundEngine.hpp"
 #include "Generation/Effects.hpp"
 #include "Interface/LookAndFeel/Graphics.hpp"
@@ -42,7 +41,7 @@ void initialiseCJSONHooks()
   cjson_InitHooks(&hooks);
 }
 
-extern Framework::ExecutableStaticData executableStaticData;
+extern Framework::ExecutableMetadata executableStaticData;
 
 utils::string_view
 findOrAddPermanentString(utils::string_view string);
@@ -101,9 +100,7 @@ namespace
 
   void upgradeSave([[maybe_unused]] cjson *save)
   {
-    // TODO: change all string ids to numeric ones
-    // TODO: low/highBound and shiftBounds now belong to EffectModule
-    // TODO: json's "indexed_data" is now "options"
+
   }
 }
 
@@ -209,7 +206,7 @@ static void handleIndexedData(utils::Pool *arena, bool isAutomated,
 {
   auto *dynamicOptionFixups = Framework::LoadSave::getJsonContext().dynamicOptionFixups;
 
-  // TODO: this adds duplicate options to IndexedData
+  // FIXME: this adds duplicate options to IndexedData
   auto processSingle = [&](const auto &self, Framework::IndexedData &option, cjson *data) -> Framework::IndexedData *
   {
     auto *newOption = anew(arena, Framework::IndexedData, { option });
@@ -384,7 +381,6 @@ namespace Framework
     {
       cjson_AddTo(data, "min_value", cjson_Float, (double)details.minValue);
       cjson_AddTo(data, "max_value", cjson_Float, (double)details.maxValue);
-      cjson_AddTo(data, "default_value", cjson_Float, (double)details.defaultValue);
       cjson_AddTo(data, "default_normalised_value", cjson_Float, (double)details.defaultNormalisedValue);
     }
 
@@ -403,7 +399,7 @@ namespace Framework
     if (parameter->details.scale != cjson_GetObjectItem(data, "scale")->vuint)
     {
       COMPLEX_ASSERT_FALSE();
-      // TODO: log this
+      // FIXME: log this
     }
 
     u64 automationSlot = u64(-1);
@@ -426,7 +422,7 @@ namespace Framework
         auto errorString = utils::string::create(getLocalScratch(),
           "%v\nOptions parameter %v (%zu) is missing its options, replacing with default ones from the plugin.",
           utils::string_view{ *errorPath }, details.displayName, details.id);
-        Interface::showNativeMessageBox("Error opening preset", errorString.data(), Interface::MessageBoxType::Warning);
+        Interface::showNativeMessageBox("Warning", errorString.data(), Interface::MessageBoxType::Warning);
 
         details.options = IndexedData::deepCopy(processor->arena, details.options);
       }
@@ -451,8 +447,8 @@ namespace Framework
         (details.flags & ParameterDetails::Extensible) == 0)
       {
         //COMPLEX_ASSERT_FALSE();
-        // TODO: -inf db gets picked up by this condition which shouldn't happen
-        // TODO: log this
+        // FIXME: -inf db gets picked up by this condition which shouldn't happen
+        // FIXME: log this
       }
 
       // bool changedMinMax = false;
@@ -489,7 +485,6 @@ namespace Framework
 
     float value = utils::clamp((float)cjson_GetObjectItem(data, "value")->vdouble, 0.0f, 1.0f);
     parameter->normalisedValue.store(value, satomi::memory_order_relaxed);
-    parameter->updateValue(processor->state->plugin->getSampleRate());
 
     // paranoid check just in case
     COMPLEX_ASSERT(parameter->normalisedValue.load(satomi::memory_order_relaxed) == value);
@@ -497,7 +492,7 @@ namespace Framework
     if (automationSlot != u64(-1))
     {
       // if we don't have enough parameters then too bad, we only guarantee kMaxParameterMappings generic parameters
-      // TODO: report this to user
+      // FIXME: report this to user
       if (automationSlot < (u64)processor->state->parameterBridges.size())
         processor->state->parameterBridges[automationSlot].resetParameter(parameter, true);
     }
@@ -508,16 +503,17 @@ namespace Framework
 
 namespace Generation
 {
-  void Processor::serialiseToJson(void *jsonData, utils::span<Framework::Parameter *> parametersToSerialise) const
+  void serialiseProcessorGeneric(const Generation::Processor *processor, 
+    void *jsonData, utils::span<Framework::Parameter *> parametersToSerialise)
   {
     cjson *processorInfo = (cjson *)jsonData;
-    cjson_AddTo(processorInfo, "id", cjson_Unsigned, metadata->id);
-    cjson_AddTo(processorInfo, "state_id", cjson_Unsigned, stateId);
-    if (!name.empty())
-      cjson_AddTo(processorInfo, "name", cjson_String, name.data());
+    cjson_AddTo(processorInfo, "id", cjson_Unsigned, processor->metadata->id);
+    cjson_AddTo(processorInfo, "state_id", cjson_Unsigned, processor->stateId);
+    if (!processor->name.empty())
+      cjson_AddTo(processorInfo, "name", cjson_String, processor->name.data());
 
     cjson *serialisedChildren = cjson_AddTo(processorInfo, "processors", cjson_Array);
-    for (auto *child = children; child; child = child->next)
+    for (auto *child = processor->children; child; child = child->next)
     {
       cjson *subProcessorData = cjson_AddTo(serialisedChildren, nullptr, cjson_Object);
       child->serialiseToJson(subProcessorData);
@@ -526,7 +522,7 @@ namespace Generation
     cjson *serialisedParameters = cjson_AddTo(processorInfo, "parameters", cjson_Array);
     if (parametersToSerialise.empty())
     {
-      for (auto *parameter = parameters; parameter; parameter = parameter->next)
+      for (auto *parameter = processor->parameters; parameter; parameter = parameter->next)
       {
         cjson *parameterData = cjson_AddTo(serialisedParameters, nullptr, cjson_Object);
         parameter->serialiseToJson(parameterData);
@@ -549,9 +545,9 @@ namespace Generation
     cjson *parametersCopy = cjson_Duplicate(cjson_GetObjectItem(data, "parameters"), true);
     COMPLEX_ASSERT(parametersCopy, "Missing parameters for %v (%zu)", metadata->name, metadata->id);
 
-    auto *memory = arranew(processor->arena, Framework::Parameter, metadata->parametersCount, {});
+    auto *memory = arranew(processor->arena, Framework::Parameter, metadata->parameterCount, {});
 
-    auto insertParameter = [&](auto *parameter)
+    auto insertParameter = [&](Framework::Parameter *parameter)
     {
       if (parameters)
       {
@@ -663,9 +659,10 @@ namespace Generation
     if (auto *nameItem = cjson_GetObjectItem(data, "name"))
       name = { arena, nameItem->vstring, utils::getStringSize(nameItem->vstring) };
 
-    parameterCount = (u32)metadata->parametersCount;
+    parameterCount = (u32)metadata->parameterCount;
     deserialiseParametersFromJson(jsonData, metadata, parameters, this,
       (metadata->flags & Framework::ProcessorMetadata::NoParameterValidationTag) == 0);
+    Framework::Parameter::initialiseParameters(parameters, parameterCount, nullptr, true);
   }
 }
 

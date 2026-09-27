@@ -15,6 +15,11 @@ namespace Plugin
   struct ComplexPlugin;
 }
 
+namespace Framework
+{
+  class Parameter;
+}
+
 namespace utils
 {
   struct i4;
@@ -24,12 +29,18 @@ namespace utils
 namespace Generation
 {
   class Processor;
+  void resetProcessorGeneric(Generation::Processor *processor);
+  void serialiseProcessorGeneric(const Generation::Processor *,
+    void *jsonData, utils::span<Framework::Parameter *> parametersToSerialise);
+}
+
+namespace Interface
+{
+  class Component;
 }
 
 namespace Framework
 {
-  class Parameter;
-
   // symmetric types apply the flipped curve to negative values
   // all x values are normalised
 
@@ -200,13 +211,12 @@ namespace Framework
   {
     enum Flags : u8
     {
-                   None = 0,
-                 Stereo = 1 << 0,                         // if parameter allows stereo modulation
-            Modulatable = 1 << 1,                         // if parameter allows modulation at all
-            Automatable = 1 << 2,                         // if parameter allows host automation
-             Extensible = 1 << 3,                         // if parameter's minimum/maximum/default values can change
-             RoundToInt = 1 << 4,                         // if parameter value must be rounded after scaling
-      AlwaysFromControl = 1 << 5,                         // if parameter value must always acquire its value from the GUI
+             None = 0,
+           Stereo = 1 << 0,                               // if parameter allows stereo modulation
+      Modulatable = 1 << 1,                               // if parameter allows modulation at all
+      Automatable = 1 << 2,                               // if parameter allows host automation
+       Extensible = 1 << 3,                               // if parameter's minimum/maximum/default values can change
+       RoundToInt = 1 << 4,                               // if parameter value must be rounded after scaling
     };
 
     utils::string_view displayName{};                     // name displayed to the user
@@ -217,7 +227,6 @@ namespace Framework
       {
         float minValue;                                   // minimum scaled value
         float maxValue;                                   // maximum scaled value
-        float defaultValue;                               // default scaled value
         float defaultNormalisedValue;                     // default normalised value
       };
       struct
@@ -234,8 +243,8 @@ namespace Framework
     usize (*toString)(char *string,                       // string generator function for IndexedNumeric parameters
       usize stringSize, float value,
       const ParameterDetails &details) = nullptr;
-    float (*valueChange)(Parameter *parameter,       // calculates new value based on desired and previous ones
-      float newValue, float oldValue) = nullptr;
+    float (*valueChange)(Parameter *parameter,            // calculates new value based on desired and previous ones
+      float newValue) = nullptr;
   };
 
 
@@ -286,7 +295,6 @@ namespace Framework
     const ParameterDetails &details, float sampleRate = kDefaultSampleRate);
 
 
-
   struct ParameterMetadata
   {
     Framework::ParameterDetails details{};
@@ -306,6 +314,13 @@ namespace Framework
 
   struct ProcessorMetadata
   {
+    using CreateProcessorFn = Generation::Processor *(Plugin::State *state,
+      ProcessorMetadata *metadata, const void *toCopy, void *serialisedSave, void *extra);
+    using CreateUIFn = Interface::Component *(Generation::Processor *);
+    using ResetFn = void(Generation::Processor *);
+    using SerialiseToJsonFn = void(const Generation::Processor *,
+      void *jsonData, utils::span<Framework::Parameter *> parametersToSerialise);
+
     enum : u32
     {
       NoTag = 0U,
@@ -321,14 +336,16 @@ namespace Framework
     u32 userFlags{};
     uuid id{};
     utils::string_view name{};
-    Generation::Processor *(*create)(Plugin::State *state,
-      ProcessorMetadata *metadata, const void *toCopy, void *serialisedSave){};
+    CreateProcessorFn *create{};
+    CreateUIFn *createUI{};
+    ResetFn *reset = Generation::resetProcessorGeneric;
+    SerialiseToJsonFn *serialise = Generation::serialiseProcessorGeneric;
     ProcessorMetadata *parent{};
     ProcessorMetadata *next{};
     ProcessorMetadata *children{};
     ParameterMetadata *parameters{};
     u32 childrenCount{};
-    u32 parametersCount{};
+    u32 parameterCount{};
     const void *vtable{};
 
     ProcessorMetadata &
@@ -378,7 +395,7 @@ namespace Framework
       }
 
       for (auto parameter = parameters; parameter; parameter = parameter->next)
-        ++parametersCount;
+        ++parameterCount;
 
       return *this;
     }
@@ -395,7 +412,7 @@ namespace Framework
       lambda(*this);
 
       for (auto parameter = parameters; parameter; parameter = parameter->next)
-        ++parametersCount;
+        ++parameterCount;
 
       return *this;
     }
@@ -416,7 +433,7 @@ namespace Framework
     }
   };
 
-  struct ExecutableStaticData
+  struct ExecutableMetadata
   {
     utils::LockBlame<i32> readWriteLock{};
     Framework::PluginStructure structure{};
@@ -436,23 +453,18 @@ namespace Framework
   }
 }
 
-extern Framework::ExecutableStaticData executableStaticData;
+extern Framework::ExecutableMetadata executableStaticData;
 
 #define COMPLEX_STRUCTURE_PARAMETER(...) (*anew(arena, Framework::ParameterMetadata, { .details = { __VA_ARGS__ } }))
 #define COMPLEX_STRUCTURE_PARAMETER_CUSTOM(...) (__VA_ARGS__(*anew(arena, Framework::ParameterMetadata, {})))
 
-#define COMPLEX_STRUCTURE_PROCESSOR(T, nameString, idNumber, skinOverride, ...) (*anew(arena, Framework::ProcessorMetadata, \
-  { .flags = ProcessorMetadata::ProcessorTag, .userFlags = skinOverride, .id = idNumber, .name = nameString, .create = ::createProcessor<T> __VA_OPT__(,) __VA_ARGS__ }))
+#define COMPLEX_STRUCTURE_PROCESSOR(T, nameString, idNumber, skinOverride, createFn, createUIFn, ...) (*anew(arena, Framework::ProcessorMetadata, \
+  { .flags = ProcessorMetadata::ProcessorTag, .userFlags = skinOverride, .id = idNumber, .name = nameString, \
+    .create = createFn, .createUI = createUIFn __VA_OPT__(,) __VA_ARGS__ }))
 #define COMPLEX_STRUCTURE_GROUP(nameString, idNumber, ...) (*anew(arena, Framework::ProcessorMetadata, \
   { .flags = ProcessorMetadata::GroupTag, .id = idNumber, .name = nameString __VA_OPT__(,) __VA_ARGS__ }))
 
 #define COMPLEX_STRUCTURE_INDEXED_DATA(...) anew(arena, Framework::IndexedData, { __VA_ARGS__ })
-
-template<typename T>
-Generation::Processor *createProcessor(Plugin::State *state, Framework::ProcessorMetadata *metadata,
-  const void *toCopy = nullptr, void *serialisedSave = nullptr);
-template<typename T>
-void *initialiseTypeStructure(void *metadata, Framework::PluginStructure &structure);
 
 namespace Framework
 {

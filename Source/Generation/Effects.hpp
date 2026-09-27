@@ -44,20 +44,12 @@ namespace Generation
 
     enum class BoundRepresentation : u32 { Normalised, Frequency, BinIndex };
 
-
-    EffectModule(utils::Pool *arena, Plugin::State *state,
-      Framework::ProcessorMetadata *metadata, const EffectModule *other, void *serialisedSave);
-
-    Interface::Component *createUI() override;
+    using Processor::Processor;
 
     void processEffect(Framework::ComplexDataSource &source, u32 binCount, float sampleRate) noexcept;
 
-    // this method exists only to accomodate loading from save files
-    void serialiseToJson(void *jsonData, utils::span<Framework::Parameter *> parametersToSerialise = {}) const override;
-
     EffectData *changeEffect(const Framework::IndexedData *effectOption);
 
-    Framework::SimdBuffer *buffer{};
     EffectData *effects{};
     satomi::atomic<EffectData *> currentEffect{};
   };
@@ -88,32 +80,20 @@ namespace Generation
     // Ready - ready for a thread to begin work
     // Running - processing is running
     // Stopped - temporarily stopped to wait for data from another lane
-    enum class LaneStatus : u32 { Finished, Ready, Running, Stopped };
+    enum class Status : u32 { Finished, Ready, Running, Stopped };
 
-    EffectsLane(utils::Pool *arena, Plugin::State *state,
-      Framework::ProcessorMetadata *metadata, const EffectsLane *other, void *serialisedSave);
-
-    Interface::Component *createUI() override;
-    void reset() override
-    {
-      Processor::reset();
-      status.store(LaneStatus::Finished, satomi::memory_order_release);
-      currentEffectIndex.store(0, satomi::memory_order_release);
-    }
+    using Processor::Processor;
 
     Framework::ComplexDataSource laneDataSource;
 
     satomi::atomic<u32> currentEffectIndex = 0;
 
-    satomi::atomic<LaneStatus> status = LaneStatus::Finished;
+    satomi::atomic<Status> status = Status::Finished;
     satomi::atomic<f4> volumeScale{};
   };
 
   static_assert(utils::is_trivially_destructible_v<EffectsLane>);
 }
 
-template<> Generation::Processor *createProcessor<Generation::EffectModule>(Plugin::State *, Framework::ProcessorMetadata *, const void *, void *);
-template<> void *initialiseTypeStructure<Generation::EffectModule>(void *metadata, Framework::PluginStructure &structure);
-
-template<> Generation::Processor *createProcessor<Generation::EffectsLane>(Plugin::State *, Framework::ProcessorMetadata *, const void *, void *);
-template<> void *initialiseTypeStructure<Generation::EffectsLane>(void *metadata, Framework::PluginStructure &structure);
+void *initialiseTypeStructureEffectModule(void *metadata, Framework::PluginStructure &structure);
+void *initialiseTypeStructureEffectsLane(void *metadata, Framework::PluginStructure &structure);

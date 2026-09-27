@@ -85,6 +85,61 @@ namespace Interface
   {
     struct TopBar final : public Component
     {
+      struct FpsGraph final : public Component
+      {
+        float values[128]{};
+        u32 head{};
+        u32 validValues{};
+        float cachedValue{};
+
+        FpsGraph()
+        {
+          overrideSize = [](Component *c, bool isCalculatingVertical)
+          {
+            auto *self = (FpsGraph *)c;
+            if (!isCalculatingVertical)
+            {
+              self->updateGraph(getUiRelated()->deltaTime);
+              self->cachedValue = 1.0f / self->getGraphAverage();
+            }
+
+            char string[16];
+            usize size = utils::floatToString(self->cachedValue, string, countof(string), 2);
+
+            return calculateSingleLineTextSize(c, isCalculatingVertical,
+              FontId::DDinType, { string, size });
+          };
+        }
+
+        float 
+        getGraphAverage()
+        {
+          float avg = 0;
+          for (usize i = 0; i < validValues; i++)
+            avg += values[i];
+
+          return avg / (float)validValues;
+        }
+
+        void updateGraph(float frameTime)
+        {
+          head = (head + 1) % countof(values);
+          validValues = utils::min(validValues + 1, (u32)countof(values));
+          values[head] = frameTime;
+        }
+
+        bool 
+        render(Graphics &g) override
+        {
+          char string[16];
+          usize size = utils::floatToString(cachedValue, string, countof(string), 2);
+          renderText({ string, size }, FontId::DDinType, getLocalBounds().toFloat(),
+            g, Colours::white, Placement::left);
+
+          return true;
+        }
+      };
+
       struct UndoRedoButton final : public Component
       {
         static constexpr int kAddedMargin = 4;
@@ -109,6 +164,8 @@ namespace Interface
 
       void reinitialise();
 
+      FpsGraph fpsGraph{};
+      
       Component undoRedoGroup{};
       UndoRedoButton undoButton{};
       UndoRedoButton redoButton{};
@@ -149,6 +206,7 @@ namespace Interface
 
     Generation::SoundEngine *soundEngine{};
     utils::sll<CommandMessages::HandleMessageFn *> soundEngineHandler{};
+    bool showFps = true;
 
     TopBar topBar{};
     Spectrogram spectrogram{};

@@ -378,8 +378,6 @@ namespace Interface
     calculateGrow(component, children, true);
   }
 
-  extern utils::vector<Component *> *customPlacement;
-
 #define GET_PRIMARY_FLAG(component, flag) ((flag) << (i32)(!!(component->componentFlags.vertical)))
 #define GET_SECONDARY_FLAG(component, flag) ((flag) << (1 - (!!(component->componentFlags.vertical))))
 #define TRANSPOSE(component, rect) ((component->componentFlags.vertical) ? (rect).transposed() : (rect))
@@ -435,6 +433,8 @@ namespace Interface
     boundsInTarget = TRANSPOSE(component, boundsInTarget);
     padding = TRANSPOSE(component, padding);
 
+    auto &customPlacement = *getUiRelated()->renderer->customPlacement;
+
     i32 primaryUsed = 0;
     i32 groupCount = 0;
     bool isInGroup = false;
@@ -446,10 +446,13 @@ namespace Interface
       if (child->placement & Placement::custom)
       {
         // component has decided to take care of its own position
-        getUiRelated()->renderer->customPlacement->emplaceBack(
-          child, [](Component *c) { return c->overridePosition(c); });
+        customPlacement.emplaceBack(child, 
+          [](Component *c) { return c->overridePosition(c); });
         continue;
       }
+
+      // setting this here so that we can later skip these components in the animation step
+      child->componentFlags.isPositionSet = true;
 
       auto bounds = TRANSPOSE(component, child->bounds);
       auto margin = scaleValueRoundInt(TRANSPOSE(component, child->margin).toInt());
@@ -476,8 +479,6 @@ namespace Interface
 
       setNextPosition(IS_SECONDARY_POSITION_FLAG_SET(child, component, Placement::right),
         TRANSPOSE(component, bounds), child, secondary);
-
-      //child->bounds.setPosition(TRANSPOSE(component, bounds.getPosition()));
     }
 
     groupCount = utils::max(1, groupCount);
@@ -522,7 +523,6 @@ namespace Interface
             boundsInTarget.x += bounds.w + margin.getRight();
 
             setNextPosition(false, TRANSPOSE(component, bounds), nextChild, primary);
-            //nextChild->bounds = TRANSPOSE(component, bounds);
           }
 
           boundsInTarget.x += sizeLeftPerGroup - offset;
@@ -558,7 +558,6 @@ namespace Interface
             boundsInTarget.x += bounds.w + margin.getRight();
 
             setNextPosition(false, TRANSPOSE(component, bounds), groupChild, primary);
-            //groupChild->bounds = TRANSPOSE(component, bounds);
 
             // we expect a division by zero on the last iteration
             offset = size / utils::max((i32)(j - 1), 1);
@@ -582,7 +581,6 @@ namespace Interface
 
         setNextPosition(false, TRANSPOSE(component, bounds), child, primary);
         boundsInTarget = boundsInTarget.withTrimLeft(bounds.w + margin.getRight());
-        //child->bounds = TRANSPOSE(component, bounds);
         child = child->next;
       }
       else if (IS_PRIMARY_POSITION_FLAG_SET(child, component, Placement::right))
@@ -608,7 +606,6 @@ namespace Interface
             boundsInTarget.w -= bounds.w + margin.getRight();
 
             setNextPosition(true, TRANSPOSE(component, bounds), nextChild, primary);
-            //nextChild->bounds = TRANSPOSE(component, bounds);
           }
           nextChild = nextChild->previous;
 
@@ -624,7 +621,9 @@ namespace Interface
     bool wasThisResized = component->bounds.withZeroOrigin() != component->lastBounds.withZeroOrigin();
     for (auto *child = children; child; child = child->next)
     {
-      animatePosition(child, wasThisResized);
+      if (child->componentFlags.isPositionSet)
+        animatePosition(child, wasThisResized);
+
       calculatePositions(child->children, child);
     }
   }
@@ -665,6 +664,9 @@ namespace Interface
           if (recursive)          
             getUiRelated()->renderer->customPlacement->emplaceBack(component,
               [wasParentResized](Component *c) { return animatePosition(c, wasParentResized, false); });
+          
+          // unset position flag, so that others can see
+          //component->componentFlags.isPositionSet = false;
           return false;
         }
 
@@ -841,6 +843,28 @@ namespace Interface
     compensateScrollChange(component, old);
 
     return old != component->scrollOffset;
+  }
+
+  Range<i32>
+  calculateSingleLineTextSize(Component *c, bool isCalculatingVertical, 
+    FontId fontId, utils::string_view text)
+  {
+    float lineHeight = scaleValue((float)((c->componentFlags.vertical) ?
+      c->desiredSize.y : c->desiredSize.x));
+
+    if (!isCalculatingVertical)
+    {
+      getUiRelated()->g->setFont(fontId, lineHeight);
+      auto max = (i32)::ceilf(getUiRelated()->g->getStringWidthFloat(text));
+
+      return Range<i32>{ 0, max };
+    }
+    else
+    {
+      // single line text is single line lmao
+      auto height = (i32)::ceilf(lineHeight);
+      return Range<i32>{ height, height };
+    }
   }
 
   bool
@@ -1318,7 +1342,7 @@ namespace Interface
     return (c->skinOverride == Skin::kUseParentOverride) ? Skin::kNone : c->skinOverride;
   }
 
-  void Component::doRenderChild(Graphics &g, Component *child,
+  void Component::renderChild(Graphics &g, Component *child,
     void (*renderFn)(Graphics &, Component *))
   {
     if (!child->componentFlags.isVisible)
@@ -1352,20 +1376,15 @@ namespace Interface
 
     nvgTranslate(g, (float)child->bounds.x, (float)child->bounds.y);
     
-    renderFn(g, child);
+    if (renderFn)
+      renderFn(g, child);
+    else
+    {
+      bool continueRender = child->render(g);
+      if (continueRender)
+        child->renderChildren(g);
+    }
 
     nvgRestore(g);
   }
-
-  void Component::doRender(Graphics &g)
-  {
-    bool continueRender = render(g);
-
-    if (!continueRender)
-      return;
-
-    doRenderChildren(g);
-  }
-
-
 }

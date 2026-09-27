@@ -4,7 +4,7 @@
 #include "Algorithms.hpp"
 
 #include "Framework/simd_math.hpp"
-#include "Framework/parameter_value.hpp"
+#include "Framework/parameters.hpp"
 #include "Plugin/Complex.hpp"
 #include "Effects.hpp"
 #include "Interface/LookAndFeel/Skin.hpp"
@@ -68,11 +68,11 @@ namespace Generation
       COMPLEX_STRUCTURE_INDEXED_DATA(.displayName = "Normal", .id = Types::Normal, .flags = IndexedData::ProcessorFlag,
         .processorMetadata = COMPLEX_STRUCTURE_EFFECT("Normal", Types::Normal, vtableNormal, Interface::Skin::kFilterModule, .parameters =
           (
-            COMPLEX_STRUCTURE_PARAMETER("Gain", Normal::Gain, { kMinusInfDb, kInfDb, 0.0f, 0.5f }, ParameterScale::SymmetricLoudness,
+            COMPLEX_STRUCTURE_PARAMETER("Gain", Normal::Gain, { kMinusInfDb, kInfDb, 0.5f }, ParameterScale::SymmetricLoudness,
               " dB", ParameterDetails::Modulatable | ParameterDetails::Automatable | ParameterDetails::Stereo),
-            COMPLEX_STRUCTURE_PARAMETER("Cutoff", Normal::Cutoff, { 0.0f, 1.0f, 0.5f, 0.5f }, ParameterScale::Frequency,
+            COMPLEX_STRUCTURE_PARAMETER("Cutoff", Normal::Cutoff, { 0.0f, 1.0f, 0.5f }, ParameterScale::Frequency,
               " hz", ParameterDetails::Modulatable | ParameterDetails::Automatable | ParameterDetails::Stereo),
-            COMPLEX_STRUCTURE_PARAMETER("Slope", Normal::Slope, { -1.0f, 1.0f, 0.25f, 0.75f }, ParameterScale::SymmetricQuadratic,
+            COMPLEX_STRUCTURE_PARAMETER("Slope", Normal::Slope, { -1.0f, 1.0f, 0.75f }, ParameterScale::SymmetricQuadratic,
               "%", ParameterDetails::Modulatable | ParameterDetails::Automatable | ParameterDetails::Stereo)
           )
         )
@@ -80,13 +80,13 @@ namespace Generation
       COMPLEX_STRUCTURE_INDEXED_DATA(.displayName = "Gate", .id = Types::Gate, .flags = IndexedData::ProcessorFlag,
         .processorMetadata = COMPLEX_STRUCTURE_EFFECT("Gate", Types::Gate, vtableGate, Interface::Skin::kFilterModule, .parameters =
           (
-            COMPLEX_STRUCTURE_PARAMETER("Input Gain", Gate::InputGain, { kMinusInfDb, kInfDb, 0.0f, 0.5f }, ParameterScale::SymmetricLoudness,
+            COMPLEX_STRUCTURE_PARAMETER("Input Gain", Gate::InputGain, { kMinusInfDb, kInfDb, 0.5f }, ParameterScale::SymmetricLoudness,
               " dB", ParameterDetails::Modulatable | ParameterDetails::Automatable | ParameterDetails::Stereo),
-            COMPLEX_STRUCTURE_PARAMETER("Gain", Gate::Gain, { kMinusInfDb, kInfDb, 0.0f, 0.5f }, ParameterScale::SymmetricLoudness,
+            COMPLEX_STRUCTURE_PARAMETER("Gain", Gate::Gain, { kMinusInfDb, kInfDb, 0.5f }, ParameterScale::SymmetricLoudness,
               " dB", ParameterDetails::Modulatable | ParameterDetails::Automatable | ParameterDetails::Stereo),
-            COMPLEX_STRUCTURE_PARAMETER("Threshold", Gate::Threshold, { -180.0f, 0.0f, -45.0f, 0.5f }, ParameterScale::ReverseQuadratic,
+            COMPLEX_STRUCTURE_PARAMETER("Threshold", Gate::Threshold, { -180.0f, 0.0f, 0.5f }, ParameterScale::ReverseQuadratic,
               " dB", ParameterDetails::Modulatable | ParameterDetails::Automatable | ParameterDetails::Stereo),
-            COMPLEX_STRUCTURE_PARAMETER("Tilt", Gate::Tilt, { -24.0f, 24.0f, 0.0f, 0.5f }, ParameterScale::SymmetricQuadratic,
+            COMPLEX_STRUCTURE_PARAMETER("Tilt", Gate::Tilt, { -24.0f, 24.0f, 0.5f }, ParameterScale::SymmetricQuadratic,
               " dB", ParameterDetails::Modulatable | ParameterDetails::Automatable | ParameterDetails::Stereo),
             COMPLEX_STRUCTURE_PARAMETER("Mode", Gate::Mode,
               {
@@ -116,11 +116,11 @@ namespace Generation
       COMPLEX_STRUCTURE_INDEXED_DATA(.displayName = "Contrast", .id = Types::Contrast, .flags = IndexedData::ProcessorFlag,
         .processorMetadata = COMPLEX_STRUCTURE_EFFECT("Contrast", Types::Contrast, vtableContrast, Interface::Skin::kDynamicsModule, .parameters =
           (
-            COMPLEX_STRUCTURE_PARAMETER("Depth", Contrast::Depth, { -1.0f, 1.0f, 0.0f, 0.5f }, ParameterScale::Linear,
+            COMPLEX_STRUCTURE_PARAMETER("Depth", Contrast::Depth, { -1.0f, 1.0f, 0.5f }, ParameterScale::Linear,
               "%", ParameterDetails::Modulatable | ParameterDetails::Automatable | ParameterDetails::Stereo),
-            COMPLEX_STRUCTURE_PARAMETER("Range", Contrast::Range, { 0.0f, 1.0f, 1.0f, 1.0f }, ParameterScale::Cubic,
+            COMPLEX_STRUCTURE_PARAMETER("Range", Contrast::Range, { 0.0f, 1.0f, 1.0f }, ParameterScale::Cubic,
               "%", ParameterDetails::Modulatable | ParameterDetails::Automatable | ParameterDetails::Stereo),
-            COMPLEX_STRUCTURE_PARAMETER("Tilt", Contrast::Tilt, { -24.0f, 24.0f, 0.0f, 0.5f }, ParameterScale::SymmetricQuadratic,
+            COMPLEX_STRUCTURE_PARAMETER("Tilt", Contrast::Tilt, { -24.0f, 24.0f, 0.5f }, ParameterScale::SymmetricQuadratic,
               " dB", ParameterDetails::Modulatable | ParameterDetails::Automatable | ParameterDetails::Stereo)
           )
         )
@@ -128,9 +128,9 @@ namespace Generation
       COMPLEX_STRUCTURE_INDEXED_DATA(.displayName = "Clip", .id = Types::Clip, .flags = IndexedData::ProcessorFlag,
         .processorMetadata = COMPLEX_STRUCTURE_EFFECT("Clip", Types::Clip, vtableClip, Interface::Skin::kDynamicsModule, .parameters =
           (
-            COMPLEX_STRUCTURE_PARAMETER("Threshold", Clip::Threshold, { 0.0f, 1.0f, 0.0f, 0.0f }, ParameterScale::Linear,
+            COMPLEX_STRUCTURE_PARAMETER("Threshold", Clip::Threshold, { 0.0f, 1.0f, 0.0f }, ParameterScale::Linear,
               "%", ParameterDetails::Modulatable | ParameterDetails::Automatable | ParameterDetails::Stereo),
-            COMPLEX_STRUCTURE_PARAMETER("Tilt", Clip::Tilt, { -24.0f, 24.0f, 0.0f, 0.5f }, ParameterScale::SymmetricQuadratic,
+            COMPLEX_STRUCTURE_PARAMETER("Tilt", Clip::Tilt, { -24.0f, 24.0f, 0.5f }, ParameterScale::SymmetricQuadratic,
               " dB", ParameterDetails::Modulatable | ParameterDetails::Automatable | ParameterDetails::Stereo)
           )
         )
@@ -152,11 +152,11 @@ namespace Generation
       COMPLEX_STRUCTURE_INDEXED_DATA(.displayName = "Shift", .id = Types::Shift, .flags = IndexedData::ProcessorFlag,
         .processorMetadata = COMPLEX_STRUCTURE_EFFECT("Contrast", Types::Shift, vtableShift, Interface::Skin::kPhaseModule, .parameters =
           (
-            COMPLEX_STRUCTURE_PARAMETER("Phase Shift", Shift::PhaseShift, { -180.0f, 180.0f, 0.0f, 0.5f }, ParameterScale::Linear,
+            COMPLEX_STRUCTURE_PARAMETER("Phase Shift", Shift::PhaseShift, { -180.0f, 180.0f, 0.5f }, ParameterScale::Linear,
               COMPLEX_DEGREE_SIGN_LITERAL, ParameterDetails::Modulatable | ParameterDetails::Automatable | ParameterDetails::Stereo),
-            COMPLEX_STRUCTURE_PARAMETER("Interval", Shift::Interval, { 0.0f, 10.0f, 1.0f, ::powf(1.0f / 10.0f, 1.0f / 3.0f) }, ParameterScale::Cubic,
+            COMPLEX_STRUCTURE_PARAMETER("Interval", Shift::Interval, { 0.0f, 10.0f, ::powf(1.0f / 10.0f, 1.0f / 3.0f) }, ParameterScale::Cubic,
               " oct", ParameterDetails::Modulatable | ParameterDetails::Automatable | ParameterDetails::Stereo),
-            COMPLEX_STRUCTURE_PARAMETER("Offset", Shift::Offset, { 0.0f, 1.0f, 0.0f, 0.0f }, ParameterScale::Frequency,
+            COMPLEX_STRUCTURE_PARAMETER("Offset", Shift::Offset, { 0.0f, 1.0f, 0.0f }, ParameterScale::Frequency,
               " hz", ParameterDetails::Modulatable | ParameterDetails::Automatable | ParameterDetails::Stereo),
             COMPLEX_STRUCTURE_PARAMETER("Slope", Shift::Slope,
               {
@@ -187,9 +187,9 @@ namespace Generation
       COMPLEX_STRUCTURE_INDEXED_DATA(.displayName = "Resample", .id = Types::Resample, .flags = IndexedData::ProcessorFlag,
         .processorMetadata = COMPLEX_STRUCTURE_EFFECT("Resample", Types::Resample, vtableResample, Interface::Skin::kPitchModule, .parameters =
           (
-            COMPLEX_STRUCTURE_PARAMETER("Shift", Resample::Shift, { -48.0f, 48.0f, 0.0f, 0.5f }, ParameterScale::Linear,
+            COMPLEX_STRUCTURE_PARAMETER("Shift", Resample::Shift, { -48.0f, 48.0f, 0.5f }, ParameterScale::Linear,
               " st", ParameterDetails::Modulatable | ParameterDetails::Automatable | ParameterDetails::Stereo),
-            COMPLEX_STRUCTURE_PARAMETER("Wrap", Resample::Wrap, { 0.0f, 1.0f, 0.0f, 0.0f }, ParameterScale::Toggle,
+            COMPLEX_STRUCTURE_PARAMETER("Wrap", Resample::Wrap, { 0.0f, 1.0f, 0.0f }, ParameterScale::Toggle,
               {}, ParameterDetails::Modulatable | ParameterDetails::Automatable)
           )
         )
@@ -197,7 +197,7 @@ namespace Generation
       COMPLEX_STRUCTURE_INDEXED_DATA(.displayName = "Frequency Shift", .id = Types::FrequencyShift, .flags = IndexedData::ProcessorFlag,
         .processorMetadata = COMPLEX_STRUCTURE_EFFECT("Frequency Shift", Types::FrequencyShift, vtableFrequencyShift, Interface::Skin::kPitchModule, .parameters =
           (
-            COMPLEX_STRUCTURE_PARAMETER("Shift", FrequencyShift::Shift, { -20'000.0f, 20'000.0f, 0.0f, 0.5f }, ParameterScale::SymmetricCubic,
+            COMPLEX_STRUCTURE_PARAMETER("Shift", FrequencyShift::Shift, { -20'000.0f, 20'000.0f, 0.5f }, ParameterScale::SymmetricCubic,
               " hz", ParameterDetails::Modulatable | ParameterDetails::Automatable | ParameterDetails::Stereo)
           )
         )
@@ -214,7 +214,7 @@ namespace Generation
       auto maxBinCount = module->state->getMaxBinCount();
 
       rollingData->freezeBuffer = Framework::SimdBuffer::create(module->arena,
-        utils::kChannelsPerInOut, maxBinCount, copy != nullptr);
+        kChannelsPerInOut, maxBinCount, copy != nullptr);
 
       if (copy)
         valcpy(rollingData->freezeBuffer->data,
@@ -237,9 +237,9 @@ namespace Generation
       COMPLEX_STRUCTURE_INDEXED_DATA(.displayName = "Rolling", .id = Types::Rolling, .flags = IndexedData::ProcessorFlag,
         .processorMetadata = COMPLEX_STRUCTURE_EFFECT("Rolling", Types::Rolling, vtableRolling, Interface::Skin::kPitchModule, .parameters =
           (
-            COMPLEX_STRUCTURE_PARAMETER("Rate", Rolling::Rate, { -4.0f, 4.0f, 0.0f, 0.5f }, ParameterScale::SymmetricCubic,
+            COMPLEX_STRUCTURE_PARAMETER("Rate", Rolling::Rate, { -4.0f, 4.0f, 0.5f }, ParameterScale::SymmetricCubic,
               "x", ParameterDetails::Modulatable | ParameterDetails::Automatable | ParameterDetails::Stereo),
-            COMPLEX_STRUCTURE_PARAMETER("Shift", Rolling::Shift, { 0.0f, 1.0f, 0.0f, 0.0f }, ParameterScale::Frequency,
+            COMPLEX_STRUCTURE_PARAMETER("Shift", Rolling::Shift, { 0.0f, 1.0f, 0.0f }, ParameterScale::Frequency,
               " hz", ParameterDetails::Modulatable | ParameterDetails::Automatable | ParameterDetails::Stereo)
           )
         )
@@ -261,7 +261,7 @@ namespace Generation
       COMPLEX_STRUCTURE_INDEXED_DATA(.displayName = "Reinterpret", .id = Types::Reinterpret, .flags = IndexedData::ProcessorFlag,
         .processorMetadata = COMPLEX_STRUCTURE_EFFECT("Reinterpret", Types::Reinterpret, vtableReinterpret, Interface::Skin::kDestroyModule, .parameters =
           (
-            COMPLEX_STRUCTURE_PARAMETER("Real/Imag Atten", Reinterpret::Attenuation, { kMinusInfDb, kInfDb, 0.0f, 0.5f },
+            COMPLEX_STRUCTURE_PARAMETER("Real/Imag Atten", Reinterpret::Attenuation, { kMinusInfDb, kInfDb, 0.5f },
               ParameterScale::SymmetricLoudness, " dB", ParameterDetails::Modulatable | ParameterDetails::Automatable | ParameterDetails::Stereo),
             COMPLEX_STRUCTURE_PARAMETER("Transform", Reinterpret::Transform,
               {
@@ -269,7 +269,9 @@ namespace Generation
                   COMPLEX_STRUCTURE_INDEXED_DATA(.displayName = "No Transform", .id = ReinterpretTransformOptions::NoTransform),
                   COMPLEX_STRUCTURE_INDEXED_DATA(.displayName = "Swap Real/Imaginary", .id = ReinterpretTransformOptions::SwitchRealImag),
                   COMPLEX_STRUCTURE_INDEXED_DATA(.displayName = "Cartesian => Polar", .id = ReinterpretTransformOptions::CartToPolar),
-                  COMPLEX_STRUCTURE_INDEXED_DATA(.displayName = "Polar => Cartesian", .id = ReinterpretTransformOptions::PolarToCart) }}),
+                  COMPLEX_STRUCTURE_INDEXED_DATA(.displayName = "Polar => Cartesian", .id = ReinterpretTransformOptions::PolarToCart),
+                  COMPLEX_STRUCTURE_INDEXED_DATA(.displayName = "Duplicate Real", .id = ReinterpretTransformOptions::CopyReal),
+                  COMPLEX_STRUCTURE_INDEXED_DATA(.displayName = "Duplicate Imaginary", .id = ReinterpretTransformOptions::CopyImag) }}),
                 .defaultOptionId = ReinterpretTransformOptions::NoTransform
               }, ParameterScale::Indexed, {}, ParameterDetails::Modulatable | ParameterDetails::Automatable)
           )
@@ -1445,12 +1447,15 @@ namespace Generation
     rollingData->lastBlockPosition = source.blockPosition;
   }
 
-  void Destroy::runReinterpret(EffectModule *effectModule, EffectData *effectData,
+  hotreloadable void Destroy::runReinterpret(EffectModule *effectModule, EffectData *effectData,
     Framework::ComplexDataSource &source, Framework::SimdBuffer *destination,
     u32 binCount, float sampleRate) noexcept
   {
     using namespace utils;
     using namespace Framework;
+
+    COMPLEX_HOTRELOAD_CHECK(effectModule->state, runReinterpret, effectModule,
+      effectData, source, destination, binCount, sampleRate);
 
     auto [lowBoundIndices, highBoundIndices] = [&]()
     {
@@ -1489,6 +1494,14 @@ namespace Generation
       case PolarToCart:
         complexPolarToCart(one, two);
         break;
+      case CopyReal:
+        one = copyFromEven(one);
+        two = copyFromEven(two);
+        break;
+      case CopyImag:
+        one = copyFromOdd(one);
+        two = copyFromOdd(two);
+        break;
       default:
         COMPLEX_ASSERT_FALSE("Missing case");
         break;
@@ -1509,9 +1522,15 @@ namespace Generation
         isOutsideBounds(i + 1, lowBoundIndices, highBoundIndices, isHighAboveLow));
     }
 
-    wet[0] = rawSource[binCount - 1] * attenuation;
-    operations(wet[0], wet[1]);
-    rawDestination[binCount - 1] = wet[0];
+    if (mappingType != ReinterpretTransformOptions::NoTransform)
+    {
+      wet[0] = rawSource[0] * attenuation;
+      wet[1] = rawSource[binCount - 1] * attenuation;
+      rawDestination[0] = merge(wet[0], rawSource[0],
+        isOutsideBounds(0, lowBoundIndices, highBoundIndices, isHighAboveLow));
+      rawDestination[binCount - 1] = merge(wet[1], rawSource[binCount - 1],
+        isOutsideBounds(binCount - 1, lowBoundIndices, highBoundIndices, isHighAboveLow));
+    }
   }
 
 #undef PASSTHROUGH_PROCESS

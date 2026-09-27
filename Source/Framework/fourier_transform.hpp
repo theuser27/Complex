@@ -24,7 +24,7 @@ namespace Framework
     void transformRealForward(u32 order, float *input, u32 channel) const noexcept;
     void transformRealInverse(u32 order, float *output, u32 channel) const noexcept;
 
-    // TODO: why are these even atomics 
+    // FIXME: why are these even atomics 
     // if a single instance of this struct can't be used by multiple states??
     satomi::atomic<utils::pair<u32, u32>> orders{};
     utils::Pool *arena{};

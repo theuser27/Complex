@@ -5,7 +5,7 @@
 
 #include "Third Party/pugl/pugl.h"
 
-#include "Framework/parameter_value.hpp"
+#include "Framework/parameters.hpp"
 #include "Plugin/Complex.hpp"
 #include "../LookAndFeel/Graphics.hpp"
 #include "../Components/Control.hpp"
@@ -164,7 +164,7 @@ namespace Interface
     {
       if (draw(g, this))
       {
-        doRenderChildren(g);
+        renderChildren(g);
       }
 
       renderScrollbars(g, 0.2f);
@@ -203,17 +203,18 @@ namespace Interface
 
     if (placement == Placement::custom)
     {
-      auto [x, y] = list->getRelativePoint(relativeComponent, extraPosition);
+      auto [x, y] = selector->getRelativePoint(relativeComponent, extraPosition);
 
       bool fitsHorizontally = x + width <= windowWidth;
       bool fitsVertically = y + height <= windowHeight;
 
-      // do we have space to the right
+      // do we have space to the right?
       if (!fitsHorizontally)
       {
-        // do we have enough space to the left
-        if (x > width)
-          x -= width;
+        // do we have enough space to the left?
+        // offset is -1 because we still want the cursor to be inside the popup list
+        if (auto offset = width - 1; x > offset)
+          x -= offset;
         else
         {
           // neither have enough space, offset and shrink if necessary
@@ -221,12 +222,16 @@ namespace Interface
           x = windowWidth - width;
         }
       }
+      // do we have space below?
       if (!fitsVertically)
       {
-        if (y > height)
-          y -= height;
+        // do we have space above?
+        // offset is -1 because we still want the cursor to be inside the popup list
+        if (auto offset = height - 1; y > offset)
+          y -= offset;
         else
         {
+          // neither have enough space, offset and shrink if necessary
           height = utils::min(windowHeight, height);
           y = windowHeight - height;
         }
@@ -366,7 +371,7 @@ namespace Interface
     fillRect(g, self->getLocalBounds().toFloat(), getColour(Skin::kBody, self),
       topPadding, topPadding, bottomPadding, bottomPadding);
 
-    self->doRenderChildren(g);
+    self->renderChildren(g);
 
     strokeRect(g, self->getLocalBounds().toFloat(), scaleValue(1.0f),
       Colour{ 45, 45, 45 }, topPadding);

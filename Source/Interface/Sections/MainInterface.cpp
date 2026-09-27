@@ -363,21 +363,21 @@ namespace Interface
     {
       auto section = (EffectsLaneSection *)child;
       section->renderStage = EffectsLaneSection::Background;
-      doRenderChild(g, section);
+      renderChild(g, section);
     }
 
     for (auto *child = children; child; child = child->next)
     {
       auto section = (EffectsLaneSection *)child;
       section->renderStage = EffectsLaneSection::Modules;
-      doRenderChild(g, section);
+      renderChild(g, section);
     }
 
     for (auto *child = children; child; child = child->next)
     {
       auto section = (EffectsLaneSection *)child;
       section->renderStage = EffectsLaneSection::Highlight;
-      doRenderChild(g, section);
+      renderChild(g, section);
     }
 
     return false;
@@ -549,6 +549,13 @@ namespace Interface
 
     auto *mainSection = (SoundEngineSection *)parent;
 
+    fpsGraph = {};
+    fpsGraph.componentFlags.isVisible = mainSection->showFps;
+    fpsGraph.placement = Placement::left;
+    fpsGraph.margin = { 4, 0, 0, 0 };
+    fpsGraph.desiredSize = { 24, 24, utils::int_max<i32>, utils::int_max<i32> };
+    addChildComponent(&fpsGraph);
+
     undoRedoGroup.placement = Placement::right;
     undoRedoGroup.addChildComponent(&undoButton);
     redoButton.isRedo = true;
@@ -702,7 +709,7 @@ namespace Interface
     topBar.placement = Placement::top;
     topBar.sizingFlags |= Component::GrowableX;
     topBar.desiredSize = { 0, kHeaderHeight, utils::int_max<i32>, kHeaderHeight };
-    topBar.padding = { 16, 0, 16, 0 };
+    topBar.padding = { 0, 0, 16, 0 };
     topBar.arena = arena;
     addChildComponent(&topBar);
     topBar.reinitialise();
@@ -755,6 +762,7 @@ namespace Interface
 
   PopupSelector *getPopupSelector() { return &getUiRelated()->renderer->gui->popupSelector; }
   utils::Pool *getUIArena() { return getUiRelated()->renderer->gui->arena; }
+  Framework::UndoManager &getUndoManager() { return getUiRelated()->plugin.undoManager; }
   PopupDisplay *getPopupDisplay(bool primary = true)
   {
     auto *gui = getUiRelated()->renderer->gui;
@@ -848,11 +856,11 @@ namespace Interface
 }
 
 Interface::Component *
-Generation::SoundEngine::createUI()
+createUISoundEngine(Generation::Processor *processor)
 {
   auto guiArena = Interface::getUiRelated()->renderer->gui->arena;
   auto *soundEngineSection = anew(guiArena, Interface::SoundEngineSection, {});
-  soundEngineSection->soundEngine = this;
+  soundEngineSection->soundEngine = (Generation::SoundEngine *)processor;
   soundEngineSection->reinitialise();
   return soundEngineSection;
 }

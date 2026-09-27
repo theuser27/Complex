@@ -3,8 +3,7 @@
 
 #include "utils.hpp"
 #include "simd_utils.hpp"
-#include "parameter_value.hpp"
-#include "parameter_bridge.hpp"
+#include "parameters.hpp"
 #include "Plugin/Complex.hpp"
 #include "Generation/Processor.hpp"
 #include "Interface/Components/Control.hpp"
@@ -386,29 +385,27 @@ namespace Framework
     if (newParameter == old)
       return;
 
+    utils::ScopedLock guard{ name_.first, utils::WaitMechanism::Spin };
+
     parameter_.store(newParameter, satomi::memory_order_release);
 
+    if (!newParameter)
     {
-      utils::ScopedLock guard{ name_.first, utils::WaitMechanism::Spin };
+      if (old)
+        old->hostParameter = nullptr;
+      name_.second = utils::string::create(state->miscStorage, "%zu", parameterIndex + 1);
+    }
+    else
+    {
+      newParameter->hostParameter = this;
+      if (getValueFromParameter)
+        value_.store(newParameter->normalisedValue.load(satomi::memory_order_relaxed),
+          satomi::memory_order_release);
+      else if (newParameter->control)
+        newParameter->control->setValue(value_.load(satomi::memory_order_relaxed), true);
 
-      if (!newParameter)
-      {
-        if (old)
-          old->hostParameter = nullptr;
-        name_.second = utils::string::create(state->miscStorage, "%zu", parameterIndex + 1);
-      }
-      else
-      {
-        newParameter->hostParameter = this;
-        if (getValueFromParameter)
-          value_.store(newParameter->normalisedValue.load(satomi::memory_order_relaxed), 
-            satomi::memory_order_release);
-        else if (newParameter->control)
-          newParameter->control->setValue(value_.load(satomi::memory_order_relaxed), true);
-
-        auto name = newParameter->details.displayName;
-        name_.second = utils::string::create(state->miscStorage, "%zu > %s", parameterIndex + 1, name.data());
-      }
+      auto name = newParameter->details.displayName;
+      name_.second = utils::string::create(state->miscStorage, "%zu > %s", parameterIndex + 1, name.data());
     }
   }
 
@@ -428,6 +425,7 @@ namespace Framework
       if (!p || !p->control || p->hostParameter != this)
         return;
 
+      // undo/redo doesn't track these changes
       p->control->setValue(value_.load(satomi::memory_order_relaxed), false);
     }
   }
@@ -436,6 +434,22 @@ namespace Framework
   {
     utils::ScopedLock guard{ name_.first, utils::WaitMechanism::Spin };
     name_.second = COMPLEX_MOVE(name);
+  }
+
+  void HostParameter::resetName()
+  {
+    utils::ScopedLock guard{ name_.first, utils::WaitMechanism::Spin };
+    auto parameter = parameter_.load(satomi::memory_order_acquire);
+
+    if (parameter)
+    {
+      auto name = parameter->details.displayName;
+      name_.second = utils::string::create(state->miscStorage, "%zu > %s", parameterIndex + 1, name.data());
+    }
+    else
+    {
+      name_.second = utils::string::create(state->miscStorage, "%zu", parameterIndex + 1);
+    }
   }
 
   void HostParameter::setValue(float newValue)
@@ -592,17 +606,8 @@ namespace Framework
   }
 
   Parameter::Parameter(ParameterDetails details, Generation::Processor *parent) :
-    parentProcessor{ parent }, modulators{ parent->arena }
-  { 
-    (void)resetParameter(this, &details, nullptr, kDefaultSampleRate, false); 
-  }
-
-  Parameter::Parameter(const Parameter &other, Generation::Processor *parent) :
-    parentProcessor{ parent }, modulators{ parent->arena }
-  {
-    float value = other.normalisedValue.load(satomi::memory_order_relaxed);
-    (void)resetParameter(this, &details, &value, kDefaultSampleRate, false);
-  }
+    details{ COMPLEX_MOVE(details) }, parentProcessor{ parent }, 
+    modulators{ parent->arena } { }
 
   float
   Parameter::reset(const ParameterDetails *newDetails, 
@@ -621,6 +626,74 @@ namespace Framework
   {
     checkGlobalLockAcquired(this);
     const_cast<utils::vector<ParameterModulator *> &>(modulators).erase(&modulator);
+  }
+  
+  Parameter *
+  Parameter::createParameters(Generation::Processor *processor, usize count,
+    ParameterMetadata *pararmeterMetadata, Parameter *fromCopy)
+  {
+    if (!count)
+      return nullptr;
+
+    auto *memory = arranew(processor->arena, Parameter, count, {});
+
+    for (usize i = 0; i < count; ++i)
+    {
+      ParameterDetails details;
+
+      if (fromCopy)
+        details = fromCopy->details;
+      else
+        details = pararmeterMetadata->details;
+
+      if (details.scale == ParameterScale::Indexed)
+        details.options = IndexedData::deepCopy(processor->arena, details.options);
+
+      (void)new(memory + i) Parameter{ COMPLEX_MOVE(details), processor };
+      memory[i].previous = memory + i - 1;
+      memory[i].next = memory + i + 1;
+
+      processor->state->registerDynamicParameter(&memory[i]);
+
+      if (fromCopy)
+        fromCopy = fromCopy->next;
+      else
+        pararmeterMetadata = pararmeterMetadata->next;
+    }
+
+    memory[0].previous = memory + count - 1;
+    memory[count - 1].next = nullptr;
+
+    return memory;
+  }
+
+  void Parameter::initialiseParameters(Framework::Parameter *parameters,
+    usize count, Framework::Parameter *fromCopy, bool keepValue)
+  {
+    if (!count)
+      return;
+
+    auto sampleRate = parameters->parentProcessor->state->plugin->getSampleRate();
+
+    for (usize i = 0; i < count; (++i), (parameters = parameters->next))
+    {
+      if (fromCopy)
+      {
+        for (auto *modulator : fromCopy->modulators)
+          parameters->addModulator(*modulator);
+        float newValue = (keepValue) ? parameters->normalisedValue.load(satomi::memory_order_relaxed) :
+          fromCopy->normalisedValue.load(satomi::memory_order_relaxed);
+        parameters->reset(nullptr, &newValue, sampleRate);
+        fromCopy = fromCopy->next;
+      }
+      else
+      {
+        float newValue = parameters->normalisedValue.load(satomi::memory_order_relaxed);
+        parameters->reset(nullptr, (keepValue) ? &newValue : nullptr, sampleRate);
+      }
+
+      parameters->updateValue(sampleRate);
+    }
   }
 
   UndoManager::UndoManager(utils::Pool *parentArena, usize transactionsToKeep)

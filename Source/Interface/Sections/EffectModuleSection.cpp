@@ -4,8 +4,7 @@
 #include "EffectModuleSection.hpp"
 
 #include "Plugin/Complex.hpp"
-#include "Framework/parameter_value.hpp"
-#include "Framework/parameter_bridge.hpp"
+#include "Framework/parameters.hpp"
 #include "Generation/Effects.hpp"
 #include "Generation/Algorithms.hpp"
 #include "../Components/Control.hpp"
@@ -56,7 +55,7 @@ namespace Interface
       (float)(shiftValue + highBound.getValue()),
       getColour(Skin::kWidgetPrimary1, this).withAlpha(0.15f), backgroundColour);
 
-    doRenderChildren(g);
+    renderChildren(g);
 
     return false;
   }
@@ -97,7 +96,6 @@ namespace Interface
       auto *section = (EffectModuleSection *)c->parent->parent->parent;
       auto [option, _] = Framework::getOptionFromValue(
         Framework::scaleValue(newValue, c->details), c->details);
-      (void)section->effectModule->changeEffect(option);
 
       // make icon component invisible and only show it if an icon exist
       // selector -> header
@@ -127,7 +125,7 @@ namespace Interface
     moduleActivator.desiredSize = { kDefaultActivatorSize, kDefaultActivatorSize,
       kDefaultActivatorSize, kDefaultActivatorSize };
 
-    effectTypeSelector.valueChangedCallback(&effectTypeSelector, effectTypeSelector.getValue(), 0.0);
+    effectTypeSelector.valueChangedCallback(&effectTypeSelector, effectTypeSelector.getValue(), 0.0f);
   }
 
   void EffectModuleSection::EffectHolder::reinitialise()
@@ -167,7 +165,7 @@ namespace Interface
     fillRect(g, getLocalBounds().toFloat(), getColour(Skin::kBackground, this),
       rounding, rounding, rounding, rounding);
 
-    doRenderChildren(g);
+    renderChildren(g);
 
     if (!effectHolder.header.moduleActivator.isOn())
     {
@@ -240,63 +238,65 @@ namespace Interface
       return true;
     }
 
-    if (!e.mods.test(ModifierKeys::popupMenuClickModifier))
-      return false;
-
-    enum MenuId
+    if (e.mods.test(ModifierKeys::popupMenuClickModifier))
     {
-      kCancel = 0,
-      kDeleteInstance,
-      kCopyInstance,
-      kInitInstance
-    };
-
-    auto *selector = getPopupSelector();
-    auto *itemArena = selector->arena;
-    PopupList *list = anew(itemArena, PopupList, { selector });
-    list->desiredSize = { kPopupMinWidth, 0, utils::int_max<i32>, utils::int_max<i32> };
-    list->padding = { 0, 4, 0, 4 };
-
-    list->addChildComponent(OptionPopupItem::createTitle(list, "Module Options"));
-    auto insertItem = [&](MenuId id, utils::string_view text, i32 shortcutKeyCode)
-    {
-      auto *item = anew(itemArena, OptionPopupItem, {});
-      item->id = id;
-      item->dataTag = OptionPopupItem::StringData;
-      item->extraData = anew(itemArena, utils::stringnd, { itemArena, text });
-      item->associatedList = list;
-      item->shortcutKeyCode = shortcutKeyCode;
-      list->addChildComponent(item);
-    };
-
-    insertItem(kDeleteInstance, "D" COMPLEX_UNDERSCORE_LITERAL "elete", 'd');
-    insertItem(kCopyInstance, "C" COMPLEX_UNDERSCORE_LITERAL "opy (TODO)", 'c');
-    insertItem(kInitInstance, "I" COMPLEX_UNDERSCORE_LITERAL "nitialise", 'i');
-
-    selector->list = list;
-    selector->toggleable = false;
-    selector->skinOverride = getSkinOverride();
-    selector->callback = [this](PopupSelector *, PopupItem *item)
-    {
-      if (item->id == kDeleteInstance)
+      enum MenuId
       {
-        // make sure nothing touches this after the call runs
-        effectModule->state->plugin->undoManager.perform(anew(
-          effectModule->state->plugin->undoManager.beginNewTransaction(),
-          Framework::DeleteProcessorUpdate, { effectModule }));
-      }
-      else if (item->id == kCopyInstance)
-      {
-        // TODO: copy right click option on EffectModuleSection
-      }
-      else if (item->id == kInitInstance)
-      {
-        // TODO: initialisation right click option on EffectModuleSection
-      }
-    };
-    selector->summon(this, Placement::custom, { e.x, e.y });
+        kCancel = 0,
+        kDeleteInstance,
+        kCopyInstance,
+        kInitInstance
+      };
 
-    componentFlags.isClicked = false;
+      auto *selector = getPopupSelector();
+      auto *itemArena = selector->arena;
+      PopupList *list = anew(itemArena, PopupList, { selector });
+      list->desiredSize = { kPopupMinWidth, 0, utils::int_max<i32>, utils::int_max<i32> };
+      list->padding = { 0, 4, 0, 4 };
+
+      list->addChildComponent(OptionPopupItem::createTitle(list, "Module Options"));
+      auto insertItem = [&](MenuId id, utils::string_view text, i32 shortcutKeyCode)
+      {
+        auto *item = anew(itemArena, OptionPopupItem, {});
+        item->id = id;
+        item->dataTag = OptionPopupItem::StringData;
+        item->extraData = anew(itemArena, utils::stringnd, { itemArena, text });
+        item->associatedList = list;
+        item->shortcutKeyCode = shortcutKeyCode;
+        list->addChildComponent(item);
+      };
+
+      insertItem(kDeleteInstance, "D" COMPLEX_UNDERSCORE_LITERAL "elete", 'd');
+      insertItem(kCopyInstance, "C" COMPLEX_UNDERSCORE_LITERAL "opy (TODO)", 'c');
+      insertItem(kInitInstance, "I" COMPLEX_UNDERSCORE_LITERAL "nitialise", 'i');
+
+      selector->list = list;
+      selector->toggleable = false;
+      selector->skinOverride = getSkinOverride();
+      selector->callback = [this](PopupSelector *, PopupItem *item)
+      {
+        if (item->id == kDeleteInstance)
+        {
+          // make sure nothing touches this after the call runs
+          effectModule->state->plugin->undoManager.perform(anew(
+            effectModule->state->plugin->undoManager.beginNewTransaction(),
+            Framework::DeleteProcessorUpdate, { effectModule }));
+        }
+        else if (item->id == kCopyInstance)
+        {
+          // TODO: copy right click option on EffectModuleSection
+        }
+        else if (item->id == kInitInstance)
+        {
+          // TODO: initialisation right click option on EffectModuleSection
+        }
+      };
+      selector->summon(this, Placement::custom, { e.x, e.y });
+
+      componentFlags.isClicked = false;
+
+      return true;
+    }
 
     return true;
   }
@@ -315,8 +315,6 @@ namespace Interface
     if (auto *createUIPointer = ((Generation::EffectVtable *)activeEffect->metadata->vtable)->createUI)
       effectControls = createUIPointer(effectArena, this,
         effectModule->currentEffect.load(satomi::memory_order_acquire));
-
-    // TODO: icon
   }
 }
 
@@ -528,11 +526,11 @@ namespace Generation
 }
 
 Interface::Component *
-Generation::EffectModule::createUI()
+createUIEffectModule(Generation::Processor *processor)
 {
   auto guiArena = Interface::getUiRelated()->renderer->gui->arena;
   auto *effectModuleSection = anew(guiArena, Interface::EffectModuleSection, {});
-  effectModuleSection->effectModule = this;
+  effectModuleSection->effectModule = (Generation::EffectModule *)processor;
   effectModuleSection->reinitialise();
   return effectModuleSection;
 }

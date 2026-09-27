@@ -11,7 +11,7 @@
 #include "Third Party/pugl/gl.h"
 
 #include "Framework/load_save.hpp"
-#include "Framework/parameter_bridge.hpp"
+#include "Framework/parameters.hpp"
 #include "Interface/LookAndFeel/Graphics.hpp"
 #include "Interface/LookAndFeel/Component.hpp"
 #include "Interface/Sections/MainInterface.hpp"
@@ -190,7 +190,7 @@ namespace Interface
       k.mods |= ((event->key.state & PUGL_MOD_ALT) != 0) ? ModifierKeys::altModifier : 0;
       k.mods |= renderer->mouseButtonsDown_.flags;
 
-      // TODO: this is currently sampling the translated key and not the raw key
+      // FIXME: this is currently sampling the translated key and not the raw key
       //       this can cause problems for undo/redo behaviour if the alphabet isn't latin
       k.keyCode = event->key.key;
       bool success = renderer->handleKeyPress(k);
@@ -652,7 +652,7 @@ namespace Interface
   {
     handleMouseMove(e);
 
-    // TODO: handle more than 1 button being pressed
+    // FIXME: handle more than 1 button being pressed
 
     mouseDownComponent_ = gui->getComponentAt(e.x, e.y, true);
 
@@ -704,7 +704,7 @@ namespace Interface
   {
     handleMouseMove(e);
 
-    // TODO: handle more than 1 button being pressed
+    // FIXME: handle more than 1 button being pressed
 
     bool exited = mouseHoveredComponent_ != mouseDownComponent_;
 
@@ -887,11 +887,13 @@ namespace Interface
     auto newRenderTime = puglGetTime(puglGetWorld(view));
     generalData.deltaTime = (float)(newRenderTime - generalData.steadyTime);
     generalData.steadyTime = newRenderTime;
-    graph.updateGraph((float)generalData.deltaTime);
 
-    auto state = plugin.state_;
-    for (usize i = 0; i < state->parameterBridges.size(); ++i)
-      state->parameterBridges[i].updateUIParameter();
+    // FIXME; this needs to run when the UI is closed
+    {
+      auto state = plugin.state_;
+      for (usize i = 0; i < state->parameterBridges.size(); ++i)
+        state->parameterBridges[i].updateUIParameter();
+    }
 
     doSizingAndPositioning();
 
@@ -905,15 +907,7 @@ namespace Interface
 
     nvgBeginFrame(*generalData.g, (float)area.w, (float)area.h, getUiRelated()->scale);
 
-    gui->doRender(*generalData.g);
-
-    if (renderDebugFps)
-    {
-      nvgReset(*generalData.g);
-      auto text = utils::floatToString(getLocalScratch(), 1.0f / graph.getGraphAverage(), 2);
-      renderText(text, FontId::DDinType, scaleValue({ 4.0f, 4.0f, 24.0f, 24.0f }).toInt().toFloat(),
-        *generalData.g, Colours::white, Placement::left);
-    }
+    gui->renderChildren(*generalData.g);
 
     nvgEndFrame(*generalData.g);
 

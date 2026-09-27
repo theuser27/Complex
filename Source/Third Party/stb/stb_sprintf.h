@@ -616,7 +616,7 @@ STBSP__PUBLICDEF int STB_SPRINTF_DECORATE(vsprintfcb)(STBSP_SPRINTFCB *callback,
           s = (char *)view.data;
           l = (stbsp__uint32)view.size;
         }
-        
+
         if (s == 0)
         {
           s = (char *)"null";

@@ -374,10 +374,12 @@ namespace Generation
       (   NoTransform, 1759183512424),
       (SwitchRealImag, 1759183528061),
       (   CartToPolar, 1759183533232),
-      (   PolarToCart, 1759183546859)
+      (   PolarToCart, 1759183546859),
+      (      CopyReal, 1790269905486),
+      (      CopyImag, 1790270011105)
     );
 
-    void runReinterpret(EffectModule *effectModule, EffectData *effectData,
+    hotreloadable void runReinterpret(EffectModule *effectModule, EffectData *effectData,
       Framework::ComplexDataSource &source, Framework::SimdBuffer *destination,
       u32 binCount, float sampleRate) noexcept;
 
@@ -388,6 +390,7 @@ namespace Generation
     // randomising bin positions
     // bin sorting - by amplitude, phase
     // TODO: freezer and glitcher classes
+    // discard all real/imaginary components and try to recover them with the hibert transform from the other
 
     Framework::IndexedData *initialiseTypeStructure(Framework::PluginStructure &structure);
   }

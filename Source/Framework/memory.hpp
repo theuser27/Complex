@@ -78,13 +78,13 @@ namespace utils
 
     static usize getUsedSize(Pool *arena);
     static usize getUnusedSize(Pool *arena);
-    static forceinline Pool *
+    static Pool *
     fromAllocation(const void *data)
     {
       auto *node = utils::launder((Pool::node *)((byte *)data - sizeof(Pool::node)));
       return utils::launder((Pool *)((byte *)node - node->offsetToArena));
     }
-    static forceinline usize
+    static usize
     getAllocationSize(const void *data)
     {
       auto *node = utils::launder((Pool::node *)((byte *)data - sizeof(Pool::node)));
@@ -92,7 +92,7 @@ namespace utils
     }
 
     [[nodiscard]] static byte *insert(Pool *arena, usize size, usize alignment, bool clean = false);
-    [[nodiscard]] static forceinline byte *
+    [[nodiscard]] static byte *
     insert(const void *data, usize size, usize alignment, bool clean = false)
     {
       return insert(fromAllocation(data), size, alignment, clean);
@@ -101,7 +101,7 @@ namespace utils
     [[nodiscard]] static byte *resize(const void *data, usize newSize, bool cleanNewSpace = false);
     static void shrinkToFit(Pool *arena, bool shrinkToCommitted);
 
-    [[nodiscard]] static forceinline Pool *
+    [[nodiscard]] static Pool *
     create(usize reservedSize = COMPLEX_MB(64), usize commitSize = COMPLEX_KB(64))
     {
       reservedSize = utils::clamp(reservedSize, sizeof(Pool), usize(u32(-1)) + 1);
@@ -117,7 +117,7 @@ namespace utils
         .lastUsedNode = (u32)sizeof(Pool) };
     }
     template<typename T>
-    [[nodiscard]] static forceinline Pool *
+    [[nodiscard]] static Pool *
     createNested(T *differentArena, usize allocateSize) requires requires { T::insert(differentArena, usize(0), usize(0)); }
     {
       allocateSize = utils::min(allocateSize + sizeof(Pool), usize(u32(-1)) + 1);
@@ -170,12 +170,12 @@ namespace utils
       utils::sourceLocation location = utils::sourceLocation::current()) : location{ location },
       vtable{ vtable }, allocator{ allocator }, freeingDestructor{ freeingDestructor } { }
 
-    [[nodiscard]] forceinline byte *
+    [[nodiscard]] byte *
     insert(usize size, usize alignment, bool clean = true) const
     { return vtable->insert(allocator, size, alignment, clean); }
-    forceinline void remove(const void *allocation) const { if (allocation) vtable->remove(allocation); }
-    forceinline Allocator fromAllocation(const void *allocation) const { return vtable->fromAllocation(allocation); }
-    forceinline AllocatorType type() const { return vtable->type; }
+    void remove(const void *allocation) const { if (allocation) vtable->remove(allocation); }
+    Allocator fromAllocation(const void *allocation) const { return vtable->fromAllocation(allocation); }
+    AllocatorType type() const { return vtable->type; }
 
     static constexpr Allocator fromType(AllocatorType type);
 
@@ -646,18 +646,21 @@ namespace utils
 
     constexpr auto binary_search(const utils::pair<Key, Value> &element) const
     {
-      auto [iter, wasFound] = binary_search(data, element, [](const auto &element, const auto &test) { return element == test; });
+      auto [iter, wasFound] = binary_search(data, element, 
+        [](const auto &element, const auto &test) { return element == test; });
       return (wasFound) ? iter : data.end();
     }
     constexpr auto binary_search(const utils::pair<Key, Value> &element)
     {
-      auto [iter, wasFound] = binary_search(data, element, [](const auto &element, const auto &test) { return element == test; });
+      auto [iter, wasFound] = binary_search(data, element, 
+        [](const auto &element, const auto &test) { return element == test; });
       return (wasFound) ? iter : data.end();
     }
 
     constexpr auto get_first_of(const Key &key)
     {
-      auto [iter, wasFound] = binary_search(data, key, [](const auto &element, const auto &test) { return element == test.first; });
+      auto [iter, wasFound] = binary_search(data, key,
+        [](const auto &element, const auto &test) { return element == test.first; });
       if (wasFound)
       {
         for (auto nextIter = iter - 1;
@@ -672,7 +675,8 @@ namespace utils
 
     constexpr auto get_last_of(const Key &key)
     {
-      auto [iter, wasFound] = binary_search(data, key, [](const auto &element, const auto &test) { return element == test.first; });
+      auto [iter, wasFound] = binary_search(data, key, 
+        [](const auto &element, const auto &test) { return element == test.first; });
       if (!wasFound)
         return data.end();
 
@@ -688,7 +692,8 @@ namespace utils
     constexpr auto add_ordered(Key key, Value value)
     {
       // find AN occurance of specified key
-      auto [iter, _] = binary_search(data, key, [](const auto &element, const auto &test) { return element == test.first; });
+      auto [iter, _] = binary_search(data, key, 
+        [](const auto &element, const auto &test) { return element == test.first; });
       while (iter != data.end() && iter->first == key)
         ++iter;
 

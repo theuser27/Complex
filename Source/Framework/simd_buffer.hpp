@@ -11,7 +11,7 @@ namespace Framework
 {
   struct SimdBuffer
   {
-    static constexpr u32 kRelativeSize = utils::kChannelsPerInOut;
+    static constexpr u32 kRelativeSize = kChannelsPerInOut;
 
     u32 channels = 0;
     u32 size = 0;

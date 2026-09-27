@@ -6,11 +6,11 @@
 #include "Framework/buffer.hpp"
 #include "Framework/simd_math.hpp"
 #include "Framework/simd_utils.hpp"
-#include "Framework/parameter_value.hpp"
-#include "Framework/parameter_bridge.hpp"
+#include "Framework/parameters.hpp"
 #include "Plugin/Complex.hpp"
 #include "SoundEngine.hpp"
 #include "Interface/LookAndFeel/Skin.hpp"
+#include "Interface/Sections/EffectModuleSection.hpp"
 
 namespace Generation
 {
@@ -36,17 +36,19 @@ namespace Generation
     if (copy)
     {
       parameterCount = copy->parameterCount;
-      effectParameters = module->createParameters(parameterCount, processorMetadata->parameters, copy->parameters);
+      effectParameters = Framework::Parameter::createAndInitialiseParameters(
+        module, parameterCount, processorMetadata->parameters, copy->parameters);
     }
     else if (jsonData)
     {
-      parameterCount = processorMetadata->parametersCount;
+      parameterCount = processorMetadata->parameterCount;
       deserialiseParametersFromJson(jsonData, processorMetadata, effectParameters, module, false);
     }
     else
     {
-      parameterCount = processorMetadata->parametersCount;
-      effectParameters = module->createParameters(parameterCount, processorMetadata->parameters);
+      parameterCount = processorMetadata->parameterCount;
+      effectParameters = Framework::Parameter::createAndInitialiseParameters(
+        module, parameterCount, processorMetadata->parameters, nullptr);
     }
 
     effectData->parameters = effectParameters;
@@ -55,64 +57,65 @@ namespace Generation
     return effectData;
   }
 
-  EffectModule::EffectModule(utils::Pool *arena, Plugin::State *state,
-    Framework::ProcessorMetadata *metadata, const EffectModule *other, void *serialisedSave) :
-    Processor{ arena, state, metadata, other }
+  static Processor *
+  createEffectModule(Plugin::State *state, Framework::ProcessorMetadata *metadata, 
+    const void *copy, void *serialisedSave, void *extra)
   {
-    auto maxBinCount = state->getMaxBinCount();
-    if (other)
-    {
-      if (other->buffer)
-      {
-        buffer = Framework::SimdBuffer::create(arena, other->buffer->channels, maxBinCount);
-        Framework::applyToThisNoMask<utils::MathOperations::Assign>(buffer,
-          other->buffer, buffer->channels, buffer->size);
-      }
+    auto *arena = utils::Pool::createNested(state->processorStorage, COMPLEX_MB(1));
+    auto *module = anew(state->processorStorage, Generation::EffectModule, { arena, state, metadata });
 
-      auto [effectOption, _] = getParameter(EffectModule::ModuleType)->getInternalValue<Framework::IndexedData>();
-
-      auto *effect = other->effects;
-      for (; effect && effect->metadata->id != effectOption->processorMetadata->id; effect = effect->next) { }
-
-      effects = createEffect(effectOption->processorMetadata, this, effect);
-      changeEffect(effectOption);
-
-      return;
-    }
-
-    dataBuffer = Framework::SimdBuffer::create(arena, utils::kChannelsPerInOut, maxBinCount);
-    buffer = Framework::SimdBuffer::create(arena, utils::kChannelsPerInOut, maxBinCount);
-
+    auto *other = (EffectModule *)copy;
+    module->dataBuffer = module->createBuffer((other) ? other->dataBuffer : nullptr);
     if (serialisedSave)
     {
-      deserialiseFromJson(serialisedSave);
-      auto [effectOption, _] = getParameter(EffectModule::ModuleType)->getInternalValue<Framework::IndexedData>();
-      effects = createEffect(effectOption->processorMetadata, this, nullptr, serialisedSave);
-      changeEffect(effectOption);
+      module->deserialiseFromJson(serialisedSave);
     }
     else
     {
-      parameters = createParameters(metadata->parametersCount, metadata->parameters);
-      parameterCount = metadata->parametersCount;
+      module->parameters = Framework::Parameter::createParameters(module,
+        (other) ? other->parameterCount : metadata->parameterCount, 
+        metadata->parameters, (other) ? other->parameters : nullptr);
+      module->parameterCount = metadata->parameterCount;
+
+      if (other)
+      {
+        Framework::Parameter::initialiseParameters(module->parameters, other->parameterCount, other->parameters);
+      }
+      else
+      {
+        // skip the module type parameter so we can initialise it ourselves
+        COMPLEX_ASSERT(module->parameters->details.id == Generation::EffectModule::ModuleType);
+        Framework::Parameter::initialiseParameters(module->parameters->next, module->parameterCount - 1);
+
+        COMPLEX_ASSERT(extra);
+        auto option = (Framework::IndexedData *)extra;
+        auto *moduleTypeParameter = module->getParameter(Generation::EffectModule::ModuleType);
+        auto normalisedValue = Framework::unscaleValue(getValueFromOptionId(option->id, 
+          moduleTypeParameter->details), moduleTypeParameter->details);
+        (void)moduleTypeParameter->updateNormalisedValue(normalisedValue);
+      }
     }
+
+    return module;
   }
 
-  void EffectModule::serialiseToJson(void *jsonData, utils::span<Framework::Parameter *>) const
+  void serialiseToJsonEffectModule(const Generation::Processor *processor, void *jsonData, utils::span<Framework::Parameter *>)
   {
-    auto *effect = currentEffect.load(satomi::memory_order_acquire);
+    auto *effectModule = (EffectModule *)processor;
+    auto *effect = effectModule->currentEffect.load(satomi::memory_order_acquire);
 
     auto parametersToSerialise = utils::vector<Framework::Parameter *>{
-      getLocalScratch(), effect->parameterCount + parameterCount };
+      getLocalScratch(), effect->parameterCount + effectModule->parameterCount };
 
-    auto parameter = parameters;
-    for (usize i = 0; i < parameterCount; (++i), (parameter = parameter->next))
+    auto parameter = effectModule->parameters;
+    for (usize i = 0; i < effectModule->parameterCount; (++i), (parameter = parameter->next))
       parametersToSerialise.emplaceBack(parameter);
 
     //auto *effectParameter = effect->parameters;
     //for (usize i = 0; i < effect->parameterCount; (++i), (effectParameter = effectParameter->next))
     //  parametersToSerialise.emplaceBack(effectParameter);
 
-    Processor::serialiseToJson(jsonData, parametersToSerialise);
+    serialiseProcessorGeneric(processor, jsonData, parametersToSerialise);
   }
 
   EffectData *
@@ -150,7 +153,7 @@ namespace Generation
     if (activeEffect)
     {
       usize i = 0;
-      for (decltype(activeEffect->parameters) parameter = activeEffect->parameters, replacementParameter = effect->parameters;
+      for (auto *parameter = activeEffect->parameters, *replacementParameter = effect->parameters;
         parameter && i < activeEffect->parameterCount && i < effect->parameterCount;
         (parameter = parameter->next), (replacementParameter = replacementParameter->next), (++i))
       {
@@ -164,7 +167,7 @@ namespace Generation
     currentEffect.store(effect, satomi::memory_order_release);
 
     auto parametersEnd = parameters;
-    for (usize i = 0; i < metadata->parametersCount - 1; (++i), (parametersEnd = parametersEnd->next)) { }
+    for (usize i = 0; i < metadata->parameterCount - 1; (++i), (parametersEnd = parametersEnd->next)) { }
 
     auto effectParametersEnd = effect->parameters;
     for (usize i = 0; i < effect->parameterCount - 1; (++i), (effectParametersEnd = effectParametersEnd->next)) { }
@@ -172,7 +175,7 @@ namespace Generation
     parameters->previous = effectParametersEnd;
     effect->parameters->previous = parametersEnd;
     parametersEnd->next = effect->parameters;
-    parameterCount = metadata->parametersCount + effect->parameterCount;
+    parameterCount = metadata->parameterCount + effect->parameterCount;
 
     return effect;
   }
@@ -211,25 +214,48 @@ namespace Generation
     source.sourceBuffer = dataBuffer;
   }
 
-  EffectsLane::EffectsLane(utils::Pool *arena, Plugin::State *state, Framework::ProcessorMetadata *metadata,
-    const EffectsLane *other, void *serialisedSave) : Processor{ arena, state, metadata, other }
+  static Processor *
+  createEffectsLane(Plugin::State *state, Framework::ProcessorMetadata *metadata, 
+    const void *copy, void *serialisedSave, void *)
   {
-    if (other)
-      return;
+    auto *arena = utils::Pool::createNested(state->processorStorage, COMPLEX_MB(1));
+    auto *lane = anew(state->processorStorage, Generation::EffectsLane, { arena, state, metadata });
 
-    auto maxInOutChannels = utils::kChannelsPerInOut * (utils::max(state->plugin->inSidechains, state->plugin->outSidechains) + 1);
-    auto maxBinCount = state->getMaxBinCount();
-
-    laneDataSource.scratchBuffer = Framework::SimdBuffer::create(arena, maxInOutChannels, maxBinCount);
-    dataBuffer = Framework::SimdBuffer::create(arena, maxInOutChannels, maxBinCount);
-
-    if (serialisedSave)
-      deserialiseFromJson(serialisedSave);
+    if (auto *other = (EffectsLane *)copy)
+    {
+      lane->parameters = Framework::Parameter::createAndInitialiseParameters(
+        lane, other->parameterCount, metadata->parameters, other->parameters);
+      lane->parameterCount = other->parameterCount;
+      lane->dataBuffer = lane->createBuffer(other->dataBuffer);
+      lane->createChildren(*other);
+    }
     else
     {
-      parameters = createParameters(metadata->parametersCount, metadata->parameters);
-      parameterCount = metadata->parametersCount;
+      auto maxInOutChannels = kChannelsPerInOut * (utils::max(state->plugin->inSidechains, state->plugin->outSidechains) + 1);
+      auto maxBinCount = state->getMaxBinCount();
+
+      lane->laneDataSource.scratchBuffer = Framework::SimdBuffer::create(arena, maxInOutChannels, maxBinCount);
+      lane->dataBuffer = Framework::SimdBuffer::create(arena, maxInOutChannels, maxBinCount);
+
+      if (serialisedSave)
+        lane->deserialiseFromJson(serialisedSave);
+      else
+      {
+        lane->parameters = Framework::Parameter::createAndInitialiseParameters(
+          lane, metadata->parameterCount, metadata->parameters);
+        lane->parameterCount = metadata->parameterCount;
+      }
     }
+
+    return lane;
+  }
+
+  void resetEffectsLane(Processor *processor)
+  {
+    resetProcessorGeneric(processor);
+    auto *lane = (EffectsLane *)processor;
+    lane->status.store(EffectsLane::Status::Finished, satomi::memory_order_release);
+    lane->currentEffectIndex.store(0, satomi::memory_order_release);
   }
 
   void SoundEngine::interleaveInputs(const Framework::Buffer &inputBuffer)
@@ -284,7 +310,7 @@ namespace Generation
     // triggers the chains to run again
     for (auto *lane = (EffectsLane *)getChild(children, 0, Processors::EffectsLane); lane;
       lane = (EffectsLane *)getChild(lane, 1, Processors::EffectsLane))
-      lane->status.store(EffectsLane::LaneStatus::Ready, satomi::memory_order_seq_cst);
+      lane->status.store(EffectsLane::Status::Ready, satomi::memory_order_seq_cst);
 
     distributeWork();
 
@@ -292,7 +318,7 @@ namespace Generation
     for (auto *lane = (EffectsLane *)getChild(children, 0, Processors::EffectsLane); lane;
       lane = (EffectsLane *)getChild(lane, 1, Processors::EffectsLane))
     {
-      while (lane->status.load(satomi::memory_order_acquire) != EffectsLane::LaneStatus::Finished)
+      while (lane->status.load(satomi::memory_order_acquire) != EffectsLane::Status::Finished)
       { utils::longPause<5>(); }
     }
   }
@@ -321,10 +347,10 @@ namespace Generation
     for (auto *lane = (EffectsLane *)getChild(children, 0, Processors::EffectsLane); lane;
       lane = (EffectsLane *)getChild(lane, 1, Processors::EffectsLane))
     {
-      if (lane->status.load(satomi::memory_order_relaxed) == EffectsLane::LaneStatus::Ready)
+      if (lane->status.load(satomi::memory_order_relaxed) == EffectsLane::Status::Ready)
       {
-        auto expected = EffectsLane::LaneStatus::Ready;
-        if (lane->status.compare_exchange_strong(expected, EffectsLane::LaneStatus::Running, satomi::memory_order_seq_cst))
+        auto expected = EffectsLane::Status::Ready;
+        if (lane->status.compare_exchange_strong(expected, EffectsLane::Status::Running, satomi::memory_order_seq_cst))
           processIndividualLanes(lane);
       }
     }
@@ -354,13 +380,13 @@ namespace Generation
       while (true)
       {
         auto otherLaneStatus = otherLane->status.load(satomi::memory_order_acquire);
-        if (otherLaneStatus == EffectsLane::LaneStatus::Finished)
+        if (otherLaneStatus == EffectsLane::Status::Finished)
           break;
 
         // process dependent lane if no one else has taken up the work
-        if (otherLaneStatus == EffectsLane::LaneStatus::Ready &&
+        if (otherLaneStatus == EffectsLane::Status::Ready &&
           otherLane->status.compare_exchange_strong(otherLaneStatus,
-            EffectsLane::LaneStatus::Running, satomi::memory_order_seq_cst))
+            EffectsLane::Status::Running, satomi::memory_order_seq_cst))
         {
           processIndividualLanes(otherLane);
           continue;
@@ -377,7 +403,7 @@ namespace Generation
         // TODO: decide if it's even worth to wait, or we can grab a reference to the other lane's SimdBufferView
         laneDataSource.sourceBuffer = otherLane->laneDataSource.sourceBuffer;
 
-        thisLane->status.store(EffectsLane::LaneStatus::Finished, satomi::memory_order_release);
+        thisLane->status.store(EffectsLane::Status::Finished, satomi::memory_order_release);
         return;
       }
 
@@ -411,7 +437,7 @@ namespace Generation
       }
       else
       {
-        thisLane->status.store(EffectsLane::LaneStatus::Finished, satomi::memory_order_release);
+        thisLane->status.store(EffectsLane::Status::Finished, satomi::memory_order_release);
         return;
       }
     }
@@ -476,7 +502,7 @@ namespace Generation
     COMPLEX_ASSERT(interleavedInputBuffer->dataLock.lock.load() >= 0);
 
     // to let other threads know that the data is in its final state
-    thisLane->status.store(EffectsLane::LaneStatus::Finished, satomi::memory_order_release);
+    thisLane->status.store(EffectsLane::Status::Finished, satomi::memory_order_release);
   }
 
   void SoundEngine::sumLanesAndDeinterleaveOutputs(Framework::Buffer &out)
@@ -555,22 +581,32 @@ namespace Generation
   }
 }
 
-template<> Generation::Processor *
-createProcessor<Generation::EffectModule>(Plugin::State *state, Framework::ProcessorMetadata *metadata, const void *copy, void *serialisedSave)
-{
-  auto *arena = utils::Pool::createNested(state->processorStorage, COMPLEX_MB(1));
-  return anew(state->processorStorage, Generation::EffectModule,
-    { arena, state, metadata, (const Generation::EffectModule *)copy, serialisedSave });
-}
-template<> void *
-initialiseTypeStructure<Generation::EffectModule>(void *, Framework::PluginStructure &structure)
+void *
+initialiseTypeStructureEffectModule(void *, Framework::PluginStructure &structure)
 {
   using namespace Framework;
   using namespace Generation;
 
+  Interface::Component *createUIEffectModule(Generation::Processor * processor);
+
+  static constexpr auto moduleChangeCallback = [](Parameter *p, float newValue)
+  {
+    EffectModule *effectModule = (EffectModule *)p->parentProcessor;
+
+    auto newScaled = scaleValue(newValue, p->details);
+    auto [option, _] = Framework::getOptionFromValue(newScaled, p->details);
+
+    // yes this "allocates" on the audio thread once per every new type, get over it
+    (void)effectModule->changeEffect(option);
+
+    return newValue;
+  };
+
   auto *arena = structure.getNewArena(COMPLEX_KB(2));
 
-  ProcessorMetadata &effectModule = COMPLEX_STRUCTURE_PROCESSOR(EffectModule, "Effect Module", Generation::Processors::EffectModule, Interface::Skin::kNone);
+  ProcessorMetadata &effectModule = COMPLEX_STRUCTURE_PROCESSOR(EffectModule, 
+    "Effect Module", Generation::Processors::EffectModule, Interface::Skin::kNone, 
+    Generation::createEffectModule, createUIEffectModule, .serialise = serialiseToJsonEffectModule);
   effectModule.flags |= ProcessorMetadata::NoParameterValidationTag;
   effectModule.parameters =
     (
@@ -585,50 +621,39 @@ initialiseTypeStructure<Generation::EffectModule>(void *, Framework::PluginStruc
             Freeze::initialiseTypeStructure(structure),
             Destroy::initialiseTypeStructure(structure) }}),
           .defaultOptionId = Filter::Types::Normal
-        }, ParameterScale::Indexed, {}, ParameterDetails::Automatable | ParameterDetails::Extensible, UpdateFlag::AfterProcess),
-      COMPLEX_STRUCTURE_PARAMETER("Module Enabled", EffectModule::ModuleEnabled, { 0.0f, 1.0f, 1.0f, 1.0f },
+        }, ParameterScale::Indexed, {}, ParameterDetails::Automatable | ParameterDetails::Extensible, UpdateFlag::AfterProcess, nullptr, moduleChangeCallback),
+      COMPLEX_STRUCTURE_PARAMETER("Module Enabled", EffectModule::ModuleEnabled, { 0.0f, 1.0f, 1.0f },
         ParameterScale::Toggle, {}, ParameterDetails::Modulatable | ParameterDetails::Automatable, UpdateFlag::Realtime, Framework::printToggleValues),
-      COMPLEX_STRUCTURE_PARAMETER("Module Mix", EffectModule::ModuleMix, { 0.0f, 1.0f, 1.0f, 1.0f }, ParameterScale::Linear, "%",
+      COMPLEX_STRUCTURE_PARAMETER("Module Mix", EffectModule::ModuleMix, { 0.0f, 1.0f, 1.0f }, ParameterScale::Linear, "%",
         ParameterDetails::Modulatable | ParameterDetails::Automatable | ParameterDetails::Stereo),
-      COMPLEX_STRUCTURE_PARAMETER("Low Bound", EffectModule::LowBound, { 0.0f, 1.0f, 0.0f, 0.0f }, ParameterScale::Frequency, " hz",
+      COMPLEX_STRUCTURE_PARAMETER("Low Bound", EffectModule::LowBound, { 0.0f, 1.0f, 0.0f }, ParameterScale::Frequency, " hz",
         ParameterDetails::Modulatable | ParameterDetails::Automatable | ParameterDetails::Stereo),
-      COMPLEX_STRUCTURE_PARAMETER("High Bound", EffectModule::HighBound, { 0.0f, 1.0f, 1.0f, 1.0f }, ParameterScale::Frequency, " hz",
+      COMPLEX_STRUCTURE_PARAMETER("High Bound", EffectModule::HighBound, { 0.0f, 1.0f, 1.0f }, ParameterScale::Frequency, " hz",
         ParameterDetails::Modulatable | ParameterDetails::Automatable | ParameterDetails::Stereo),
-      COMPLEX_STRUCTURE_PARAMETER("Shift Bounds", EffectModule::ShiftBounds, { -1.0f, 1.0f, 0.0f, 0.5f }, ParameterScale::Linear, "%",
+      COMPLEX_STRUCTURE_PARAMETER("Shift Bounds", EffectModule::ShiftBounds, { -1.0f, 1.0f, 0.5f }, ParameterScale::Linear, "%",
         ParameterDetails::Modulatable | ParameterDetails::Automatable | ParameterDetails::Stereo)
     );
 
   return &effectModule.computeCounts();
 }
 
-template<> Generation::Processor *
-createProcessor<Generation::EffectsLane>(Plugin::State *state, Framework::ProcessorMetadata *metadata, const void *toCopy, void *serialisedSave)
-{
-  auto *arena = utils::Pool::createNested(state->processorStorage, COMPLEX_MB(1));
-  return anew(state->processorStorage, Generation::EffectsLane, { arena, state, metadata,
-    (const Generation::EffectsLane *)toCopy, serialisedSave });
-}
-template<> void *
-initialiseTypeStructure<Generation::EffectsLane>(void *, Framework::PluginStructure &structure)
+void *
+initialiseTypeStructureEffectsLane(void *, Framework::PluginStructure &structure)
 {
   using namespace Framework;
   using namespace Generation;
-
-  static constexpr auto laneInputChangeCallback = [](Parameter *p,
-    float newValue, float oldValue) -> float
+  
+  Interface::Component *createUIEffectsLane(Generation::Processor * processor);
+  
+  static constexpr auto laneInputChangeCallback = [](Parameter *p, float newValue)
   {
-    bool direction = oldValue < newValue;
-    float oldScaled = Framework::scaleValue(oldValue, p->details);
     float newScaled = Framework::scaleValue(newValue, p->details);
-
-    if (oldScaled == newScaled)
-      return newValue;
 
     auto *parentProcessor = p->parentProcessor;
     auto [option, _] = Framework::getOptionFromValue(newScaled, p->details);
 
     // disallow feedback until we figure out a good UX for that
-    // TODO: fix lane feedback UX
+    // FIXME: fix lane feedback UX
   outer:
     {
       auto *next = option;
@@ -641,10 +666,9 @@ initialiseTypeStructure<Generation::EffectsLane>(void *, Framework::PluginStruct
         // if we've reached our starting lane change initial option
         if (next->stateId == parentProcessor->stateId)
         {
-          if (direction)
-            --newScaled;
-          else
-            ++newScaled;
+          // moving back in order to find another option that doesn't create a feedback loop
+          // the reason for going back is that eventually we can reach the default option from main input
+          --newScaled;
 
           option = Framework::getOptionFromValue(newScaled, p->details).first;
           goto outer; // no labelled break in this language...
@@ -665,10 +689,11 @@ initialiseTypeStructure<Generation::EffectsLane>(void *, Framework::PluginStruct
 
   auto arena = structure.getNewArena(COMPLEX_KB(2));
 
-  ProcessorMetadata &effectsLane = COMPLEX_STRUCTURE_PROCESSOR(Generation::EffectsLane, "Effects Lane", Processors::EffectsLane, Interface::Skin::kEffectsLane);
+  ProcessorMetadata &effectsLane = COMPLEX_STRUCTURE_PROCESSOR(Generation::EffectsLane, "Effects Lane", 
+    Processors::EffectsLane, Interface::Skin::kEffectsLane, Generation::createEffectsLane, createUIEffectsLane, .reset = resetEffectsLane);
   effectsLane.parameters =
   (
-    COMPLEX_STRUCTURE_PARAMETER("Lane Enabled", EffectsLane::LaneEnabled, 0.0f, 1.0f, 1.0f, 1.0f, ParameterScale::Toggle, {},
+    COMPLEX_STRUCTURE_PARAMETER("Lane Enabled", EffectsLane::LaneEnabled, { 0.0f, 1.0f, 1.0f }, ParameterScale::Toggle, {},
       ParameterDetails::Modulatable | ParameterDetails::Automatable, UpdateFlag::BeforeProcess, Framework::printToggleValues),
     COMPLEX_STRUCTURE_PARAMETER("Input", EffectsLane::Input,
       {
@@ -679,7 +704,7 @@ initialiseTypeStructure<Generation::EffectsLane>(void *, Framework::PluginStruct
           COMPLEX_STRUCTURE_INDEXED_DATA(.displayName = "Lanes", .id = EffectsLane::InputOptionsLane,
             .valueCount = 0, .dynamicUpdateUuid = ParameterChangeReason::laneSources) }}),
         .defaultOptionId = EffectsLane::InputOptionsMain
-      }, ParameterScale::Indexed, {}, ParameterDetails::AlwaysFromControl | ParameterDetails::Automatable | ParameterDetails::Extensible, UpdateFlag::BeforeProcess),
+      }, ParameterScale::Indexed, {}, ParameterDetails::Automatable | ParameterDetails::Extensible, UpdateFlag::BeforeProcess, nullptr, laneInputChangeCallback),
     COMPLEX_STRUCTURE_PARAMETER("Output", EffectsLane::Output,
       {
         .options = COMPLEX_STRUCTURE_INDEXED_DATA()->addChildren({{
@@ -689,11 +714,11 @@ initialiseTypeStructure<Generation::EffectsLane>(void *, Framework::PluginStruct
           COMPLEX_STRUCTURE_INDEXED_DATA(.displayName = "None", .id = EffectsLane::OutputOptionsNone) }}),
         .defaultOptionId = EffectsLane::OutputOptionsMain
       }, ParameterScale::Indexed, {}, ParameterDetails::Automatable | ParameterDetails::Extensible, UpdateFlag::BeforeProcess),
-    COMPLEX_STRUCTURE_PARAMETER("Gain Matching", EffectsLane::GainMatching, { 0.0f, 1.0f, 1.0f, 1.0f }, ParameterScale::Toggle, {},
+    COMPLEX_STRUCTURE_PARAMETER("Gain Matching", EffectsLane::GainMatching, { 0.0f, 1.0f, 1.0f }, ParameterScale::Toggle, {},
       ParameterDetails::Modulatable | ParameterDetails::Automatable, UpdateFlag::BeforeProcess, Framework::printToggleValues)
   );
 
-  effectsLane.children = (ProcessorMetadata *)initialiseTypeStructure<EffectModule>(&effectsLane, structure);
+  effectsLane.children = (ProcessorMetadata *)initialiseTypeStructureEffectModule(&effectsLane, structure);
 
   return &effectsLane.computeCounts();
 }

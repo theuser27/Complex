@@ -4,7 +4,7 @@
 #include "SoundEngine.hpp"
 
 #include "Framework/fourier_transform.hpp"
-#include "Framework/parameter_value.hpp"
+#include "Framework/parameters.hpp"
 #include "Effects.hpp"
 #include "Plugin/Complex.hpp"
 #include "Interface/LookAndFeel/Skin.hpp"
@@ -69,31 +69,29 @@ namespace Generation
   }
 }
 
-template<> Generation::Processor *
-createProcessor<Generation::SoundEngine>(Plugin::State *state, Framework::ProcessorMetadata *metadata, const void *, void *serialisedSave)
-{
-  auto *arena = utils::Pool::createNested(state->processorStorage, COMPLEX_MB(4));
-  return anew(arena, Generation::SoundEngine, { arena, state, metadata, serialisedSave });
-}
-
 namespace Generation
 {
-  SoundEngine::SoundEngine(utils::Pool *arena, Plugin::State *state,
-    Framework::ProcessorMetadata *metadata, void *serialisedSave) : Processor{ arena, state, metadata, nullptr }
+  Processor *
+  createSoundEngine(Plugin::State *state, Framework::ProcessorMetadata *metadata, 
+    const void *, void *serialisedSave, void *)
   {
-    using namespace Framework;
+    auto *arena = utils::Pool::createNested(state->processorStorage, COMPLEX_MB(4));
+    auto *soundEngine = anew(arena, Generation::SoundEngine, { arena, state, metadata });
 
     if (serialisedSave)
-      deserialiseFromJson(serialisedSave);
+      soundEngine->deserialiseFromJson(serialisedSave);
     else
     {
-      parameters = createParameters(metadata->parametersCount, metadata->parameters);
-      parameterCount = metadata->parametersCount;
+      soundEngine->parameters = Framework::Parameter::createAndInitialiseParameters(
+        soundEngine, metadata->parameterCount, metadata->parameters);
+      soundEngine->parameterCount = metadata->parameterCount;
     }
 
-    inBuffer.arena = arena;
-    outBuffer.arena = arena;
-    resizeBuffers(state->plugin->inSidechains, state->plugin->outSidechains);
+    soundEngine->inBuffer.arena = arena;
+    soundEngine->outBuffer.arena = arena;
+    soundEngine->resizeBuffers(state->plugin->inSidechains, state->plugin->outSidechains);
+
+    return soundEngine;
   }
 
   void SoundEngine::resizeBuffers(u32 maxSidechainInputs, u32 maxSidechainOutputs)
@@ -108,8 +106,8 @@ namespace Generation
     // output buffer size, must be longer than maxProcessingBufferLength
     u32 maxOutputBufferLength = (1 << maxOrder) * 2;
 
-    u32 maxInChannels = utils::kChannelsPerInOut * (maxSidechainInputs + 1);
-    u32 maxOutChannels = utils::kChannelsPerInOut * (maxSidechainOutputs + 1);
+    u32 maxInChannels = kChannelsPerInOut * (maxSidechainInputs + 1);
+    u32 maxOutChannels = kChannelsPerInOut * (maxSidechainOutputs + 1);
     u32 maxInOutChannels = utils::max(maxInChannels, maxOutChannels);
 
     inBuffer.reserve(maxInOutChannels, maxInputBufferLength);
@@ -174,13 +172,13 @@ namespace Generation
           usize startIndex = 0;
           if (laneIndexedData->id == EffectsLane::InputOptionsMain) { }
           else if (laneIndexedData->id == EffectsLane::InputOptionsSidechain)
-            startIndex = utils::kChannelsPerInOut * (index + 1);
+            startIndex = kChannelsPerInOut * (index + 1);
           // input coming from other processors is readily available
           else if (laneIndexedData->flags == Framework::IndexedData::StateIdFlag)
             continue;
           else COMPLEX_ASSERT_FALSE("Missing case");
 
-          for (usize i = 0; i < utils::kChannelsPerInOut; ++i)
+          for (usize i = 0; i < kChannelsPerInOut; ++i)
             usedInputChannels_[startIndex + i] = true;
         }
       }
@@ -199,12 +197,12 @@ namespace Generation
           usize startIndex = 0;
           if (laneIndexedData->id == EffectsLane::OutputOptionsMain) { }
           else if (laneIndexedData->id == EffectsLane::OutputOptionsSidechain)
-            startIndex = utils::kChannelsPerInOut * (index + 1);
+            startIndex = kChannelsPerInOut * (index + 1);
           else if (laneIndexedData->id == EffectsLane::OutputOptionsNone)
             continue;
           else COMPLEX_ASSERT_FALSE("Missing case");
 
-          for (usize i = 0; i < utils::kChannelsPerInOut; ++i)
+          for (usize i = 0; i < kChannelsPerInOut; ++i)
             usedOutputChannels_[startIndex + i] = true;
         }
       }
@@ -405,7 +403,7 @@ namespace Generation
   void SoundEngine::fillOutput(float *const *buffer, u32 outputs, u32 samples)
   {
     // if we don't have enough samples we simply output silence
-    // TODO: hasEnoughSamples_ is only for FFT-ing data, not outputting??
+    // FIXME: hasEnoughSamples_ is only for FFT-ing data, not outputting??
     if (!hasEnoughSamples_)
     {
       for (u32 i = 0; i < outBuffer.channels; i++)
@@ -468,26 +466,28 @@ namespace Generation
   }
 }
 
-template<> void *
-initialiseTypeStructure<Generation::SoundEngine>(void *, Framework::PluginStructure &structure)
+void *initialiseTypeStructureSoundEngine(void *, Framework::PluginStructure &structure)
 {
   using namespace Framework;
   using namespace Generation;
   using enum Window::Types;
 
+  Interface::Component *createUISoundEngine(Generation::Processor * processor);
+
   auto *arena = structure.getNewArena(COMPLEX_KB(3));
 
-  ProcessorMetadata &soundEngine = COMPLEX_STRUCTURE_PROCESSOR(SoundEngine, "Sound Engine", Processors::SoundEngine, Interface::Skin::kNone);
+  ProcessorMetadata &soundEngine = COMPLEX_STRUCTURE_PROCESSOR(SoundEngine, "Sound Engine", 
+    Processors::SoundEngine, Interface::Skin::kNone, Generation::createSoundEngine, createUISoundEngine);
   soundEngine.parameters =
   (
-    COMPLEX_STRUCTURE_PARAMETER("Mix", SoundEngine::Mix, { 0.0f, 1.0f, 1.0f, 1.0f },
+    COMPLEX_STRUCTURE_PARAMETER("Mix", SoundEngine::Mix, { 0.0f, 1.0f, 1.0f },
       ParameterScale::Linear, "%", ParameterDetails::Modulatable | ParameterDetails::Automatable, UpdateFlag::BeforeProcess),
-    COMPLEX_STRUCTURE_PARAMETER("Block Size", SoundEngine::BlockSize, { kMinFFTOrder, kMaxFFTOrder, kDefaultFFTOrder,
+    COMPLEX_STRUCTURE_PARAMETER("Block Size", SoundEngine::BlockSize, { kMinFFTOrder, kMaxFFTOrder,
       (float)(kDefaultFFTOrder - kMinFFTOrder) / (float)(kMaxFFTOrder - kMinFFTOrder) },
       ParameterScale::Linear, {}, ParameterDetails::Automatable | ParameterDetails::Extensible | ParameterDetails::RoundToInt, UpdateFlag::BeforeProcess,
       [](char *string, usize size, float value, const ParameterDetails &) { return (usize)::stbsp_snprintf(string, (int)size, "%zu", ((usize)1 << (usize)::round(value))); }),
-    COMPLEX_STRUCTURE_PARAMETER("Overlap", SoundEngine::Overlap, { kMinWindowOverlap, kMaxWindowOverlap, kDefaultWindowOverlap,
-      kDefaultWindowOverlap }, ParameterScale::Clamp, "%", ParameterDetails::Automatable),
+    COMPLEX_STRUCTURE_PARAMETER("Overlap", SoundEngine::Overlap, { kMinWindowOverlap, kMaxWindowOverlap, kDefaultWindowOverlap },
+      ParameterScale::Clamp, "%", ParameterDetails::Automatable),
     COMPLEX_STRUCTURE_PARAMETER("Window", SoundEngine::WindowType,
       {
         .options = COMPLEX_STRUCTURE_INDEXED_DATA()->addChildren({{
@@ -502,13 +502,13 @@ initialiseTypeStructure<Generation::SoundEngine>(void *, Framework::PluginStruct
           COMPLEX_STRUCTURE_INDEXED_DATA(.displayName = "Lanczos", .id = Lanczos, .userFlags = Window::HasAlpha) }}),
         .defaultOptionId = Hann
       }, ParameterScale::Indexed, {}, ParameterDetails::Automatable | ParameterDetails::Extensible, UpdateFlag::BeforeProcess),
-    COMPLEX_STRUCTURE_PARAMETER("Alpha", SoundEngine::WindowAlpha, { 0.0f, 1.0f, 0.0f, 0.0f }, ParameterScale::Linear,
+    COMPLEX_STRUCTURE_PARAMETER("Alpha", SoundEngine::WindowAlpha, { 0.0f, 1.0f, 0.0f }, ParameterScale::Linear,
       "%", ParameterDetails::Automatable, UpdateFlag::BeforeProcess),
-    COMPLEX_STRUCTURE_PARAMETER("Gain", SoundEngine::OutGain, { -30.0f, 30.0f, 0.0f, 0.5f }, ParameterScale::Linear,
+    COMPLEX_STRUCTURE_PARAMETER("Gain", SoundEngine::OutGain, { -30.0f, 30.0f, 0.5f }, ParameterScale::Linear,
       " dB", ParameterDetails::Modulatable | ParameterDetails::Automatable, UpdateFlag::BeforeProcess)
   );
 
-  soundEngine.children = (ProcessorMetadata *)initialiseTypeStructure<EffectsLane>(&soundEngine, structure);
+  soundEngine.children = (ProcessorMetadata *)initialiseTypeStructureEffectsLane(&soundEngine, structure);
 
   return &soundEngine.computeCounts();
 }

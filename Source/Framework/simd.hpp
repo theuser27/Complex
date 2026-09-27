@@ -28,13 +28,12 @@
   #define _mm_undefined_si128 _mm_setzero_si128
 #endif
 
+inline constexpr u32 kFullMask = u32(-1);
+inline constexpr u32 kSignMask = 1U << 31;
+inline constexpr u32 kNotSignMask = kSignMask - 1;
+
 namespace utils
 {
-  inline constexpr u32 kFullMask = u32(-1);
-  inline constexpr u32 kNoChangeMask = u32(-1);
-  inline constexpr u32 kSignMask = 1U << 31;
-  inline constexpr u32 kNotSignMask = kSignMask - 1;
-
   // u32/i32 x 4
   struct alignas(COMPLEX_SIMD_ALIGNMENT) i4
   {
@@ -1036,28 +1035,30 @@ namespace utils
   template<typename T>
   concept SimdValue = utils::is_same_v<T, f4> || utils::is_same_v<T, i4>;
 
-  // an in/output needs to be contained in a single simd
-  // effectively an alias of complexSize
-  inline constexpr u32 kChannelsPerInOut = f4::complexSize;
-
-  inline constexpr auto kChannelMasks = []()
-  {
-    utils::array<i4mask, kChannelsPerInOut> channelMasks{};
-    for (usize i = 0; i < channelMasks.size(); ++i)
-    {
-      utils::array<u32, i4mask::size> mask{};
-      mask[2 * i] = kFullMask;
-      mask[2 * i + 1] = kFullMask;
-      channelMasks[i] = mask;
-    }
-    return channelMasks;
-  }();
-  inline constexpr i4mask kRealMask = { kFullMask, 0U };
-  inline constexpr i4mask kImaginaryMask = { 0U, kFullMask };
-  inline constexpr i4mask kMagnitudeMask = kRealMask;
-  inline constexpr i4mask kPhaseMask = kImaginaryMask;
 }
 
 using utils::f4;
 using utils::i4;
 using utils::i4mask;
+
+// an in/output needs to be contained in a single simd
+// effectively an alias of complexSize
+inline constexpr u32 kChannelsPerInOut = f4::complexSize;
+
+inline constexpr auto kChannelMasks = []()
+{
+  utils::array<i4mask, kChannelsPerInOut> channelMasks{};
+  for (usize i = 0; i < channelMasks.size(); ++i)
+  {
+    utils::array<u32, i4mask::size> mask{};
+    mask[2 * i] = kFullMask;
+    mask[2 * i + 1] = kFullMask;
+    channelMasks[i] = mask;
+  }
+  return channelMasks;
+}();
+inline constexpr i4mask kRealMask = { kFullMask, 0U };
+inline constexpr i4mask kImaginaryMask = { 0U, kFullMask };
+inline constexpr i4mask kMagnitudeMask = kRealMask;
+inline constexpr i4mask kPhaseMask = kImaginaryMask;
+

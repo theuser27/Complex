@@ -4,7 +4,7 @@
 #pragma once
 
 #include "Framework/simd_buffer.hpp"
-#include "Framework/parameter_types.hpp"
+#include "Framework/metadata.hpp"
 
 namespace Framework
 {
@@ -35,8 +35,7 @@ namespace Generation
   class Processor
   {
   public:
-    Processor(utils::Pool *arena, Plugin::State *state,
-      Framework::ProcessorMetadata *metadata, const Processor *other);
+    Processor(utils::Pool *arena, Plugin::State *state, Framework::ProcessorMetadata *metadata);
     Processor(Processor &&) = default;
 
     Processor() = delete;
@@ -44,14 +43,17 @@ namespace Generation
     Processor &operator=(const Processor &) = delete;
     Processor &operator=(Processor &&) = delete;
 
-    virtual Interface::Component *createUI() = 0;
-    virtual void reset();
-
-    virtual void serialiseToJson(void *jsonData, utils::span<Framework::Parameter *> parametersToSerialise = {}) const;
+    Interface::Component *createUI() { return metadata->createUI(this); }
+    void reset() { metadata->reset(this); }
+    void serialiseToJson(void *jsonData, utils::span<Framework::Parameter *> parametersToSerialise = {}) const
+    {
+      metadata->serialise(this, jsonData, parametersToSerialise);
+    }
     void deserialiseFromJson(void *jsonData);
-    Processor *createCopy() const { return metadata->create(state, metadata, this, nullptr); }
+    Processor *createCopy() const { return metadata->create(state, metadata, this, nullptr, nullptr); }
 
     // the following functions are to be called outside of processing time
+    void createChildren(const Processor &other);
     bool addChildProcessor(Processor &newChildProcessor, Processor *insertBefore = nullptr);
     void removeChildProcessor(Processor &removedChildProcessor);
     bool
@@ -68,10 +70,9 @@ namespace Generation
       return *child;
     }
 
-    Framework::Parameter *getParameter(uuid parameterId) const;
-    Framework::Parameter *createParameters(usize count,
-      Framework::ParameterMetadata *metadata, Framework::Parameter *copy = nullptr);
+    Framework::SimdBuffer *createBuffer(const Framework::SimdBuffer *other = nullptr);
 
+    Framework::Parameter *getParameter(uuid parameterId) const;
     void updateParameters(UpdateFlag flag, float sampleRate, bool updateChildrenParameters = true);
     // remaps parameters from the current bridges (if they exist) to new ones (if they exist)
     // if no bridges are provided they are assumed to be nullptr
@@ -127,7 +128,8 @@ namespace Generation
     u32 childrenCount{};
 
     u32 parameterCount{};
-    // first node's previous points to the last, last node's next is always nullptr
+    // half-connected dll: first node's previous points to the last, 
+    //                     last node's next is always nullptr
     Framework::Parameter *parameters{};
     Framework::SimdBuffer *dataBuffer = nullptr;
 

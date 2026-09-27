@@ -3,71 +3,20 @@
 
 #include "Processor.hpp"
 
-#include "Framework/parameter_types.hpp"
-#include "Framework/parameter_value.hpp"
-#include "Framework/parameter_bridge.hpp"
+#include "Framework/metadata.hpp"
+#include "Framework/parameters.hpp"
 #include "Plugin/Complex.hpp"
 #include "Interface/LookAndFeel/Component.hpp"
 #include "Interface/Components/Control.hpp"
 
 namespace Generation
 {
-  Processor::Processor(utils::Pool *arena, Plugin::State *state,
-    Framework::ProcessorMetadata *metadata, const Processor *other) : metadata{ metadata },
-    state{ state }, stateId{ ++state->stateIdCounter }, arena{ arena }, name{ arena }
+  Processor::Processor(utils::Pool *arena, Plugin::State *state, Framework::ProcessorMetadata *metadata) : 
+    metadata{ metadata }, state{ state }, stateId{ ++state->stateIdCounter }, arena{ arena }, name{ arena } { }
+
+  void resetProcessorGeneric(Generation::Processor *processor)
   {
-    if (!other)
-      return;
-
-    if (other->parameters)
-    {
-      parameterCount = other->parameterCount;
-
-      auto *memory = arranew(arena, Framework::Parameter, parameterCount);
-      parameters = memory;
-
-      auto *parameter = parameters;
-      auto *otherParameter = other->parameters;
-      for (usize i = 0; i < parameterCount; ++i)
-      {
-        parameter = new (memory) Framework::Parameter{ *otherParameter, this };
-        parameter->previous = memory - 1;
-        parameter->next = memory + 1;
-
-        otherParameter = otherParameter->next;
-        ++memory;
-      }
-
-      parameters->previous = parameter;
-      parameter->next = nullptr;
-    }
-
-    if (other->children)
-    {
-      childrenCount = other->childrenCount;
-
-      children = other->children->createCopy();
-      children->parent = this;
-      for (auto otherChild = other->children->next, child = children; otherChild;
-        (otherChild = otherChild->next), (child = child->next))
-      {
-        child->next = otherChild->createCopy();
-        child->next->parent = this;
-        child->next->previous = child;
-      }
-    }
-
-    if (other->dataBuffer)
-    {
-      dataBuffer = Framework::SimdBuffer::create(arena, other->dataBuffer->channels, state->getMaxBinCount());
-      Framework::applyToThisNoMask<utils::MathOperations::Assign>(dataBuffer,
-        other->dataBuffer, other->dataBuffer->channels, other->dataBuffer->size);
-    }
-  }
-
-  void Processor::reset()
-  {
-    for (auto *parameter = parameters; parameter; parameter = parameter->next)
+    for (auto *parameter = processor->parameters; parameter; parameter = parameter->next)
       parameter->reset();
   }
 
@@ -109,6 +58,34 @@ namespace Generation
     --childrenCount;
     removedChildProcessor.parent = nullptr;
     utils::removeDllHalfConnected(&removedChildProcessor, children);
+  }
+
+  void Processor::createChildren(const Processor &other)
+  {
+    childrenCount = other.childrenCount;
+
+    children = other.children->createCopy();
+    children->parent = this;
+    for (auto otherChild = other.children->next, child = children; otherChild;
+      (otherChild = otherChild->next), (child = child->next))
+    {
+      child->next = otherChild->createCopy();
+      child->next->parent = this;
+      child->next->previous = child;
+    }
+  }
+
+  Framework::SimdBuffer *
+  Processor::createBuffer(const Framework::SimdBuffer *other)
+  {
+    auto channels = (other) ? other->channels : kChannelsPerInOut;
+    auto *buffer = Framework::SimdBuffer::create(arena, channels, state->getMaxBinCount());
+
+    if (other)
+      Framework::applyToThisNoMask<utils::MathOperations::Assign>(buffer,
+        other, buffer->channels, buffer->size);
+
+    return buffer;
   }
 
   Framework::Parameter *
@@ -182,62 +159,6 @@ namespace Generation
     }
 
     Framework::HostParameter::notifyParameterChange();
-  }
-
-  Framework::Parameter *
-  Processor::createParameters(usize count, Framework::ParameterMetadata *pararmeterMetadata,
-    Framework::Parameter *copy)
-  {
-    if (!count)
-      return nullptr;
-
-    auto *memory = arranew(arena, Framework::Parameter, count);
-
-    if (!copy)
-    {
-      for (usize i = 0; i < count; (++i), (pararmeterMetadata = pararmeterMetadata->next))
-      {
-        Framework::Parameter *slot;
-        if (pararmeterMetadata->details.scale == Framework::ParameterScale::Indexed)
-        {
-          auto details = pararmeterMetadata->details;
-          auto *optionStub = Framework::IndexedData::deepCopy(arena, details.options);
-          details.options = optionStub;
-          slot = new (memory + i) Framework::Parameter{ pararmeterMetadata->details, this };
-        }
-        else
-          slot = new (memory + i) Framework::Parameter{ pararmeterMetadata->details, this };
-
-        slot->previous = slot - 1;
-        slot->next = slot + 1;
-
-        // register dynamic parameters
-        state->registerDynamicParameter(slot);
-      }
-    }
-    else
-    {
-      for (usize i = 0; i < count; (++i), (copy = copy->next))
-      {
-        auto *slot = new (memory + i) Framework::Parameter{ *copy, this };
-        if (auto details = slot->details; details.scale == Framework::ParameterScale::Indexed)
-        {
-          auto *optionStub = Framework::IndexedData::deepCopy(arena, details.options);
-          details.options = optionStub;
-          slot->reset(&details);
-        }
-        slot->previous = slot - 1;
-        slot->next = slot + 1;
-
-        // register dynamic parameters
-        state->registerDynamicParameter(slot);
-      }
-    }
-
-    memory[0].previous = &memory[count - 1];
-    memory[count - 1].next = nullptr;
-
-    return memory;
   }
 }
 

@@ -38,7 +38,7 @@ namespace Interface
           return false;
 
         ParameterMetadata *parameter = metadata.parameters;
-        for (usize i = 0; i < metadata.parametersCount; (++i), (parameter = parameter->next))
+        for (usize i = 0; i < metadata.parameterCount; (++i), (parameter = parameter->next))
           if (parameter->details.id == Generation::EffectModule::ModuleType)
             break;
 
@@ -69,15 +69,7 @@ namespace Interface
 
       auto *state = laneSection->effectsLane->state;
       auto *effectModule = (Generation::EffectModule *)state->createProcessor(
-        Generation::Processors::EffectModule);
-      effectModule->changeEffect(option);
-
-      {
-        auto *moduleTypeParameter = effectModule->getParameter(Generation::EffectModule::ModuleType);
-        auto details = moduleTypeParameter->details;
-        auto normalisedValue = Framework::unscaleValue(getValueFromOptionId(option->id, details), details);
-        (void)moduleTypeParameter->updateNormalisedValue(normalisedValue);
-      }
+        Generation::Processors::EffectModule, nullptr, option);
 
       auto *transactionArena = state->plugin->undoManager.beginNewTransaction();
       state->plugin->undoManager.perform(anew(transactionArena, AddProcessorUpdate, { effectModule,
@@ -253,14 +245,16 @@ namespace Interface
     //      meaning that the next highlight bounds will be where they already were
     //      and if the user doesn't move the cursor, it will not recheck that
 
+    auto *uiRelated = getUiRelated();
+
     COMPLEX_INVARIANT_ASSERT(
       (
-        return getUiRelated()->renderer->callbacks.find(this) ==
-          getUiRelated()->renderer->callbacks.data.end();
+        return uiRelated->renderer->callbacks.find(this) ==
+          uiRelated->renderer->callbacks.data.end();
       )
     );
 
-    getUiRelated()->renderer->callbacks.add(this, [](Component *c)
+    uiRelated->renderer->callbacks.add(this, [](Component *c)
       {
         auto self = (EffectsLaneSection::ModuleHolder *)c;
         auto laneSection = (EffectsLaneSection *)self->parent;
@@ -330,9 +324,7 @@ namespace Interface
   bool
   EffectsLaneSection::ModuleHolder::mouseMove(const MouseEvent &e)
   {
-    auto laneSection = (EffectsLaneSection *)parent;
-    if (!laneSection->isDropdownOpen)
-      lastMouseMove = e;
+    lastMouseMove = e;
     return true;
   }
 
@@ -343,11 +335,9 @@ namespace Interface
       return true;
 
     auto laneSection = (EffectsLaneSection *)parent;
-    if (!hasEnteredHover)
+    if (laneSection->isDropdownOpen)
     {
-      if (laneSection->isDropdownOpen)
-        getPopupSelector()->resetState();
-
+      getPopupSelector()->resetState();
       return true;
     }
 
@@ -358,23 +348,8 @@ namespace Interface
     if (e.mods.test(ModifierKeys::altModifier) || e.mods.test(ModifierKeys::popupMenuClickModifier))
       return true;
 
-    // need to get rid of the callback here manually
-    // because the renderer will not call our mouseUp
-    // since we allow to be handled by the popup
-    // which can result in more than 1 callback being present
-    // if the mouse continues being inside the lane
-    // because it will trigger an immediate mouseEnter
-    getUiRelated()->renderer->callbacks.erase(this);
-
     summonModulePopup(getPopupSelector(), this, laneSection,
       Placement::custom, { e.x, e.y }, hoveredBeforeModuleIndex);
-
-    COMPLEX_INVARIANT_ASSERT(
-      (
-        return getUiRelated()->renderer->callbacks.find(this) == 
-          getUiRelated()->renderer->callbacks.data.end();
-      )
-    );
 
     return true;
   }
@@ -460,15 +435,15 @@ namespace Interface
       strokeRect(g, getLocalBounds().toFloat(), scaleValue(kEffectsLaneOutlineThickness),
         Colour{ 45, 45, 45 }, scaleValue(kInsideRouding));
 
-      doRenderChild(g, &header);
-      doRenderChild(g, &footer);
+      renderChild(g, &header);
+      renderChild(g, &footer);
 
-      doRenderChild(g, &moduleHolder, [](Graphics &g, Component *c) { c->render(g); });
+      renderChild(g, &moduleHolder, [](Graphics &g, Component *c) { c->render(g); });
     }
 
     if (renderStage == All || renderStage == Modules)
     {
-      doRenderChild(g, &moduleHolder, [](Graphics &g, Component *c) { c->doRenderChildren(g); });
+      renderChild(g, &moduleHolder, [](Graphics &g, Component *c) { c->renderChildren(g); });
     }
 
     if (renderStage == All || renderStage == Highlight)
@@ -564,11 +539,11 @@ namespace Interface
 }
 
 Interface::Component *
-Generation::EffectsLane::createUI()
+createUIEffectsLane(Generation::Processor *processor)
 {
   auto guiArena = Interface::getUiRelated()->renderer->gui->arena;
   auto *effectsLaneSection = anew(guiArena, Interface::EffectsLaneSection, {});
-  effectsLaneSection->effectsLane = this;
+  effectsLaneSection->effectsLane = (Generation::EffectsLane *)processor;
   effectsLaneSection->reinitialise();
   return effectsLaneSection;
 }

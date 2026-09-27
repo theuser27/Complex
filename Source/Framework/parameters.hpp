@@ -6,7 +6,13 @@
 #include "utils.hpp"
 #include "memory.hpp"
 #include "simd_utils.hpp"
-#include "parameter_types.hpp"
+#include "metadata.hpp"
+#include "satomi.hpp"
+
+namespace Plugin
+{
+  struct State;
+}
 
 namespace Interface
 {
@@ -48,7 +54,6 @@ namespace Framework
 
     Parameter() = default;
     Parameter(ParameterDetails details, Generation::Processor *parent);
-    Parameter(const Parameter &other, Generation::Processor *parent);
 
     float reset(const ParameterDetails *newDetails = nullptr,
       const float *value = nullptr, float sampleRate = kDefaultSampleRate);
@@ -132,19 +137,31 @@ namespace Framework
     {
       COMPLEX_ASSERT(value >= 0.0f && value <= 1.0f);
 
-      auto newNormalisedValue = value;
       if (details.valueChange)
-        newNormalisedValue = details.valueChange(this, value, 
-          normalisedValue.load(satomi::memory_order_relaxed));
+        value = details.valueChange(this, value);
 
-      normalisedValue.store(newNormalisedValue, satomi::memory_order_relaxed);
+      COMPLEX_ASSERT(value >= 0.0f && value <= 1.0f);
+      normalisedValue.store(value, satomi::memory_order_relaxed);
 
-      return newNormalisedValue;
+      return value;
     }
 
     void serialiseToJson(void *jsonData) const;
     static Parameter *deserialiseFromJson(Generation::Processor *processor, 
       void *jsonData, ParameterDetails &reference, Parameter *memory = nullptr);
+
+    [[nodiscard]] static Parameter *createParameters(Generation::Processor *processor, 
+      usize count, ParameterMetadata *metadata, Parameter *fromCopy = nullptr);
+    static void initialiseParameters(Framework::Parameter *parameters, usize count,
+      Framework::Parameter *fromCopy = nullptr, bool keepValue = false);
+    [[nodiscard]] static Parameter *
+    createAndInitialiseParameters(Generation::Processor *processor, usize count,
+      ParameterMetadata *metadata, Parameter *fromCopy = nullptr)
+    {
+      auto *createdParameters = createParameters(processor, count, metadata, fromCopy);
+      initialiseParameters(createdParameters, count, fromCopy);
+      return createdParameters;
+    }
 
   private:
     // after adding modulations and scaling
@@ -167,5 +184,56 @@ namespace Framework
     HostParameter *hostParameter = nullptr;
     Parameter *previous{};
     Parameter *next{};
+  };
+
+  class HostParameter
+  {
+  public:
+    static constexpr float kDefaultParameterValue = 0.5f;
+
+    HostParameter() = delete;
+    HostParameter(const HostParameter &) = delete;
+    HostParameter(HostParameter &&) = delete;
+    HostParameter &operator=(const HostParameter &) = delete;
+    HostParameter &operator=(HostParameter &&) = delete;
+
+    HostParameter(Plugin::State *state, u64 parameterIndex = u64(-1));
+    ~HostParameter();
+
+    auto *getParameter() const { return parameter_.load(satomi::memory_order_acquire); }
+    void resetParameter(Parameter *parameter, bool getValueFromParameter = true);
+    static void notifyParameterChange();
+
+    void beginChangeGesture();
+    void setValueFromUI(float newValue);
+    void endChangeGesture();
+
+    void updateUIParameter();
+
+    void setCustomName(utils::string name);
+    void resetName();
+
+    bool isMappedToParameter() const { return parameter_.load(satomi::memory_order_acquire); }
+
+    float getValue() const { return value_.load(satomi::memory_order_relaxed); }
+    void setValue(float newValue);
+    float getDefaultValue() const;
+
+    void getName(utils::string &outString) const;
+    void getName(char *buffer, usize maximumStringLength) const;
+    void getText(float value, char *buffer, usize maximumStringLength) const;
+    float getValueForText(utils::string_view text) const;
+
+    bool isDiscrete() const;
+    bool isBoolean() const;
+
+    const u64 parameterIndex;
+    Plugin::State *state = nullptr;
+
+  private:
+    utils::pair<satomi::atomic<bool>, utils::string> name_{};
+    satomi::atomic<float> value_ = kDefaultParameterValue;
+    satomi::atomic<bool> wasValueSet_ = false;
+    satomi::atomic<Parameter *> parameter_ = nullptr;
   };
 }

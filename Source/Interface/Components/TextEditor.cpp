@@ -3,43 +3,23 @@
 
 #include "TextEditor.hpp"
 
-#include "Framework/parameter_value.hpp"
-#include "Framework/parameter_bridge.hpp"
+#include "Framework/parameters.hpp"
 #include "Plugin/Complex.hpp"
 #include "../LookAndFeel/ui_constants.hpp"
 #include "Control.hpp"
 
 namespace Interface
 {
-  static Range<i32>
-  getTextEditorTextMetrics(Component *c, bool isCalculatingVertical)
-  {
-    auto *self = (TextEditor *)c;
-
-    float lineHeight = scaleValue((float)((self->componentFlags.vertical) ?
-      self->desiredSize.y : self->desiredSize.x));
-
-    if (!isCalculatingVertical)
-    {
-      getUiRelated()->g->setFont(self->font, lineHeight);
-      auto max = (i32)::ceilf(getUiRelated()->g->getStringWidthFloat(self->text));
-
-      return Range<i32>{ 0, max };
-    }
-    else
-    {
-      auto height = (i32)::ceilf(lineHeight);
-
-      // labels are always a single line
-      return Range<i32>{ height, height };
-    }
-  }
-
   TextEditor::TextEditor()
   {
     desiredSize.x = kPrimaryTextLineHeight;
     desiredSize.y = desiredSize.x;
-    overrideSize = getTextEditorTextMetrics;
+    overrideSize = [](Component *c, bool isCalculatingVertical)
+    {
+      auto *self = (TextEditor *)c;
+      return calculateSingleLineTextSize(c, isCalculatingVertical,
+        self->font, self->text);
+    };
   }
 
   bool

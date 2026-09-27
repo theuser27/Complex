@@ -77,14 +77,14 @@ namespace Interface
 
     if (!arena)
     {
-      auto scratchBufferSize = utils::kChannelsPerInOut * maxBinCount * sizeof(f4);
-      auto resultBufferSize = utils::kChannelsPerInOut * kResolution * sizeof(f4);
+      auto scratchBufferSize = kChannelsPerInOut * maxBinCount * sizeof(f4);
+      auto resultBufferSize = kChannelsPerInOut * kResolution * sizeof(f4);
       arena = utils::Pool::createNested(parent->arena, (resultBufferSize + scratchBufferSize) + COMPLEX_MB(2));
     }
     utils::Pool::clear(arena);
 
-    scratchBuffer = Framework::SimdBuffer::create(arena, utils::kChannelsPerInOut, maxBinCount);
-    resultBuffer = Framework::SimdBuffer::create(arena, utils::kChannelsPerInOut, kResolution);
+    scratchBuffer = Framework::SimdBuffer::create(arena, kChannelsPerInOut, maxBinCount);
+    resultBuffer = Framework::SimdBuffer::create(arena, kChannelsPerInOut, kResolution);
   }
 
   bool

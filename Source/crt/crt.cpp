@@ -234,8 +234,8 @@ extern "C"
   double CALL_CONV
   fabs(double value)
   {
-    static constexpr u64 kNotSignMask = (1ULL << 63) - 1;
-    return utils::bit_cast<double>(utils::bit_cast<u64>(value) & kNotSignMask);
+    static constexpr u64 kNotSignMask8B = (1ULL << 63) - 1;
+    return utils::bit_cast<double>(utils::bit_cast<u64>(value) & kNotSignMask8B);
   }
 
   float CALL_CONV

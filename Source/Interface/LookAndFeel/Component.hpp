@@ -36,12 +36,16 @@ namespace Interface
   PopupDisplay *getPopupDisplay(bool primary);
   PopupSelector *getPopupSelector();
   utils::Pool *getUIArena();
+  Framework::UndoManager &getUndoManager();
 
   void deleteComponent(Component *component);
 
   void checkScrollClick(Component *component, const MouseEvent &e);
   void dragScroll(Component *component, const MouseEvent &e);
   bool offsetScroll(Component *component, float deltaX, float deltaY, bool switchDirections);
+
+  Range<i32> calculateSingleLineTextSize(Component *c, 
+    bool isCalculatingVertical, FontId fontId, utils::string_view text);
 
   namespace CommandMessages
   {
@@ -107,15 +111,14 @@ namespace Interface
       ScrollableY = 1 << 7,
 
       // adds an extra scrollbar to the off-axis' size
-      ScrollbarX = 1 << 8,
-      ScrollbarY = 1 << 9,
+      HasScrollbar = 1 << 8,
 
-      ScrollableWithBarX = ScrollableX | ScrollbarX,
-      ScrollableWithBarY = ScrollableY | ScrollbarY,
+      ScrollableWithBarX = ScrollableX | HasScrollbar,
+      ScrollableWithBarY = ScrollableY | HasScrollbar,
 
       // the max size will be determined by clamp(childrenMinSize, desiredSize.min, desiredSize.max)
-      SnapToMinX = 1 << 10,
-      SnapToMinY = 1 << 11,
+      SnapToMinX = 1 << 9,
+      SnapToMinY = 1 << 10,
 
       ScrollableSnapToMinX = ScrollableX | SnapToMinX,
       ScrollableSnapToMinY = ScrollableY | SnapToMinY,
@@ -214,15 +217,13 @@ namespace Interface
 
     Skin::Override getSkinOverride() const;
 
-    void doRenderChild(Graphics &g, Component *component, 
-      void (*renderFn)(Graphics &, Component *) = 
-        [](Graphics &g, Component *component) { component->doRender(g); });
-    void doRenderChildren(Graphics &g)
+    void renderChild(Graphics &g, Component *component, 
+      void (*renderFn)(Graphics &, Component *) = nullptr);
+    void renderChildren(Graphics &g)
     {
       for (auto *child = children; child; child = child->next)
-        doRenderChild(g, child);
+        renderChild(g, child);
     }
-    void doRender(Graphics &g);
     void renderScrollbars(Graphics &g, float scrollHoverIncrement);
     virtual bool render([[maybe_unused]] Graphics &g) { return true; }
 
@@ -250,7 +251,6 @@ namespace Interface
       //       and also leave a single scrollable flag
       bool animateMovement : 1 = false;
       bool animateFadeAway : 1 = false;
-      //bool alwaysOnTop : 1 = false;
       bool acceptsOrphanMouseEvents : 1 = false;  // if component can accept mouseUp without mouseDown
                                                   //  happens if another component gives up on handling mouseUp
       bool keepSize : 1 = false;
