@@ -175,7 +175,7 @@ popd
 echo %cd%\%build_dir%
 echo:
 
-if "%vst3%"=="1" copy /Y "%cd%\%build_dir%\%out_file%" "C:\Program Files\Common Files\VST3\DEV"
+if "%vst%"=="1" copy /Y "%cd%\%build_dir%\%out_file%" "C:\Program Files\Common Files\VST3\DEV"
 if "%clap%"=="1" copy /Y "%cd%\%build_dir%\%out_file%" "C:\Program Files\Common Files\CLAP\DEV"
 
 call :StopTimer

@@ -14,29 +14,22 @@ namespace utils
   class vector;
 }
 
-namespace Framework
+struct IndexedData;
+struct JsonTlsContext
 {
-  struct IndexedData;
+  // after finishing work with the arena and freeing it, reset this pointer
+  utils::Pool *arena{};
+  utils::string *errorPath{};
+  utils::vector<IndexedData *> *dynamicOptionFixups{};
+};
+JsonTlsContext &getJsonContext();
 
-  namespace LoadSave
-  {
-    struct JsonTlsContext
-    {
-      // after finishing work with the arena and freeing it, reset this pointer
-      utils::Pool *arena{};
-      utils::string *errorPath{};
-      utils::vector<Framework::IndexedData *> *dynamicOptionFixups{};
-    };
-    JsonTlsContext &getJsonContext();
+utils::string getConfigFilePath(utils::string_view file);
+// returns absolute window dimensions
+void getWindowSizeScale(u32 &windowWidth, u32 &windowHeight, float &windowScale);
+i32 getModuleWidth();
+void getStartupParameters(usize &parameterMappings, usize &inSidechains, usize &outSidechains, usize &undoSteps);
 
-    utils::string getConfigFilePath(utils::string_view file);
-    // returns absolute window dimensions
-    void getWindowSizeScale(u32 &windowWidth, u32 &windowHeight, float &windowScale);
-    i32 getModuleWidth();
-    void getStartupParameters(usize &parameterMappings, usize &inSidechains, usize &outSidechains, usize &undoSteps);
-
-    void saveWindowSizeScale(u32 windowWidth, u32 windowHeight, float windowScale);
-    void saveParameterMappings(usize parameterMappings);
-    void saveUndoStepCount(usize undoStepCount);
-  }
-}
+void saveWindowSizeScale(u32 windowWidth, u32 windowHeight, float windowScale);
+void saveParameterMappings(usize parameterMappings);
+void saveUndoStepCount(usize undoStepCount);

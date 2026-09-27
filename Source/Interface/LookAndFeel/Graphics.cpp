@@ -13,412 +13,409 @@
 #include "Framework/platform.hpp"
 #include "Framework/utils.hpp"
 
-namespace Interface
+Graphics::Graphics(utils::Pool *nestedArena)
 {
-  Graphics::Graphics(utils::Pool *nestedArena)
+  arena = utils::Pool::createNested(nestedArena, COMPLEX_KB(8));
+
+  context = nvgCreateGL3(NVG_ANTIALIAS | NVG_STENCIL_STROKES
+  #if COMPLEX_DEBUG
+    | NVG_DEBUG
+  #endif
+  );
+
+  if (!context)
   {
-    arena = utils::Pool::createNested(nestedArena, COMPLEX_KB(8));
-
-    context = nvgCreateGL3(NVG_ANTIALIAS | NVG_STENCIL_STROKES
-    #if COMPLEX_DEBUG
-      | NVG_DEBUG
-    #endif
-    );
-
-    if (!context)
-    {
-      showNativeMessageBox("Graphics Initialisation",
-        "Couldn't create nanovg context.", MessageBoxType::Error);
-      COMPLEX_TRAP();
-    }
-
-    DDinFontId = nvgCreateFontMem(context, "DDin",
-      (unsigned char *)BinaryData::D_DIN_Bold_otf, (int)BinaryData::D_DIN_Bold_otfSize, false);
-    InterFontId = nvgCreateFontMem(context, "Inter",
-      (unsigned char *)BinaryData::Inter_Medium_ttf, (int)BinaryData::Inter_Medium_ttfSize, false);
-
-    svgs.data = utils::Allocator{ arena, false };
+    showNativeMessageBox("Graphics Initialisation",
+      "Couldn't create nanovg context.", MessageBoxType::Error);
+    COMPLEX_TRAP();
   }
 
-  Graphics::~Graphics()
-  {
-    nvgDeleteGL3(context);
-    utils::Pool::destroy(arena);
-  }
+  DDinFontId = nvgCreateFontMem(context, "DDin",
+    (unsigned char *)BinaryData::D_DIN_Bold_otf, (int)BinaryData::D_DIN_Bold_otfSize, false);
+  InterFontId = nvgCreateFontMem(context, "Inter",
+    (unsigned char *)BinaryData::Inter_Medium_ttf, (int)BinaryData::Inter_Medium_ttfSize, false);
 
-  static constexpr float kDDinDefaultHeight = 11.5f;
-  static constexpr float kInterDefaultHeight = 11.0f;
+  svgs.data = utils::Allocator{ arena, false };
+}
 
-  static constexpr float kDDinDefaultKerning = 0.0f;
-  static constexpr float kInterDefaultKerning = 0.0f;
+Graphics::~Graphics()
+{
+  nvgDeleteGL3(context);
+  utils::Pool::destroy(arena);
+}
 
-  float
-  Graphics::getFontLineHeightFromFontHeight(FontId fontId, float height)
-  {
-    if (fontId == FontId::DDinType)
-      return height * 8.0f / kDDinDefaultHeight;
-    if (fontId == FontId::InterType)
-      return height * 8.0f / kInterDefaultHeight;
+static constexpr float kDDinDefaultHeight = 11.5f;
+static constexpr float kInterDefaultHeight = 11.0f;
 
-    COMPLEX_ASSERT_FALSE("Unknown font was provided to get ascent for");
-    return 1.0f;
-  }
+static constexpr float kDDinDefaultKerning = 0.0f;
+static constexpr float kInterDefaultKerning = 0.0f;
 
-  float
-  Graphics::getFontKerningFromFontHeight(FontId fontId, float height)
-  {
-    if (fontId == FontId::DDinType)
-      return height / kDDinDefaultHeight * kDDinDefaultKerning;
-    else if (fontId == FontId::InterType)
-      return height / kInterDefaultHeight * kInterDefaultKerning;
+float
+Graphics::getFontLineHeightFromFontHeight(FontId fontId, float height)
+{
+  if (fontId == FontId::DDinType)
+    return height * 8.0f / kDDinDefaultHeight;
+  if (fontId == FontId::InterType)
+    return height * 8.0f / kInterDefaultHeight;
 
-    COMPLEX_ASSERT_FALSE("Unknown font to get kerning for");
+  COMPLEX_ASSERT_FALSE("Unknown font was provided to get ascent for");
+  return 1.0f;
+}
 
-    return kDDinDefaultKerning;
-  }
+float
+Graphics::getFontKerningFromFontHeight(FontId fontId, float height)
+{
+  if (fontId == FontId::DDinType)
+    return height / kDDinDefaultHeight * kDDinDefaultKerning;
+  else if (fontId == FontId::InterType)
+    return height / kInterDefaultHeight * kInterDefaultKerning;
 
-  float
-  Graphics::getFontHeightFromLineHeight(FontId fontId, float lineHeight)
-  {
-    if (fontId == FontId::DDinType)
-      return lineHeight * kDDinDefaultHeight / 16.0f;
-    if (fontId == FontId::InterType)
-      return lineHeight * kInterDefaultHeight / 16.0f;
+  COMPLEX_ASSERT_FALSE("Unknown font to get kerning for");
 
-    COMPLEX_ASSERT_FALSE("Unknown font was provided to get height for");
-    return 1.0f;
-  }
+  return kDDinDefaultKerning;
+}
 
-  void Graphics::setFontHeight(float height) const
-  {
-    nvgFontSize(context, height);
+float
+Graphics::getFontHeightFromLineHeight(FontId fontId, float lineHeight)
+{
+  if (fontId == FontId::DDinType)
+    return lineHeight * kDDinDefaultHeight / 16.0f;
+  if (fontId == FontId::InterType)
+    return lineHeight * kInterDefaultHeight / 16.0f;
 
-    int id = nvgGetFontFaceId(context);
-    float kerning = 0.0f;
+  COMPLEX_ASSERT_FALSE("Unknown font was provided to get height for");
+  return 1.0f;
+}
 
-    if (id == DDinFontId)
-      kerning = kDDinDefaultKerning * (height / kDDinDefaultHeight);
-    else if (id == InterFontId)
-      kerning = kInterDefaultKerning * (height / kInterDefaultHeight);
-    else COMPLEX_ASSERT_FALSE("Unknown font was provided to set");
+void Graphics::setFontHeight(float height) const
+{
+  nvgFontSize(context, height);
 
-    nvgTextLetterSpacing(context, kerning);
-  }
+  int id = nvgGetFontFaceId(context);
+  float kerning = 0.0f;
 
-  void Graphics::setFont(FontId fontid, float lineHeight)
-  {
-    float height = getFontHeightFromLineHeight(fontid, lineHeight);
-    float kerning = getFontKerningFromFontHeight(fontid, height);
+  if (id == DDinFontId)
+    kerning = kDDinDefaultKerning * (height / kDDinDefaultHeight);
+  else if (id == InterFontId)
+    kerning = kInterDefaultKerning * (height / kInterDefaultHeight);
+  else COMPLEX_ASSERT_FALSE("Unknown font was provided to set");
 
-    int id = (fontid == FontId::DDinType) ? DDinFontId : InterFontId;
-    nvgFontFaceId(context, id);
-    nvgFontSize(context, height);
-    nvgTextLetterSpacing(context, kerning);
-    nvgTextLineHeight(context, lineHeight / height);
-    nvgTextAlign(context, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
-  }
+  nvgTextLetterSpacing(context, kerning);
+}
 
-  NSVGimage *
-  Graphics::getSVG(utils::span<const byte> data)
-  {
-    auto iter = svgs.get_first_of(data.data());
-    if (iter != svgs.data.end())
-      return iter->second;
+void Graphics::setFont(FontId fontid, float lineHeight)
+{
+  float height = getFontHeightFromLineHeight(fontid, lineHeight);
+  float kerning = getFontKerningFromFontHeight(fontid, height);
 
-    auto parsedSVG = parseSVG(arena, data.data(), data.size());
-    return svgs.add_ordered(data.data(), parsedSVG)->second;
-  }
+  int id = (fontid == FontId::DDinType) ? DDinFontId : InterFontId;
+  nvgFontFaceId(context, id);
+  nvgFontSize(context, height);
+  nvgTextLetterSpacing(context, kerning);
+  nvgTextLineHeight(context, lineHeight / height);
+  nvgTextAlign(context, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
+}
 
-  NSVGimage *
-  parseSVG(utils::Pool *arenaToAllocateIn, const void *data, usize dataSize)
-  {
-    char *svgString = arranew(getLocalScratch(), char, 1 + dataSize);
-    defer{ utils::Pool::remove(svgString); };
-    valcpy(svgString, data, dataSize);
-    svgString[dataSize] = '\0';
+NSVGimage *
+Graphics::getSVG(utils::span<const byte> data)
+{
+  auto iter = svgs.get_first_of(data.data());
+  if (iter != svgs.data.end())
+    return iter->second;
 
-    getLocalMallocArena() = arenaToAllocateIn;
-    return nsvgParse(svgString, "px", 96);
-  }
+  auto parsedSVG = parseSVG(arena, data.data(), data.size());
+  return svgs.add_ordered(data.data(), parsedSVG)->second;
+}
 
-  void drawSVG(NSVGimage *image, Graphics &g, Colour colour,
-    Rectangle<float> bounds, float scale, float strokeWidth)
-  {
-    nvgSave(g);
+NSVGimage *
+parseSVG(utils::Pool *arenaToAllocateIn, const void *data, usize dataSize)
+{
+  char *svgString = arranew(getLocalScratch(), char, 1 + dataSize);
+  defer{ utils::Pool::remove(svgString); };
+  valcpy(svgString, data, dataSize);
+  svgString[dataSize] = '\0';
 
-    nvgStrokeWidth(g, strokeWidth);
-    nvgFillColor(g, colour);
-    nvgStrokeColor(g, colour);
+  getLocalMallocArena() = arenaToAllocateIn;
+  return nsvgParse(svgString, "px", 96);
+}
 
-    if (scale == 0.0f)
-      scale = utils::min(utils::abs(bounds.w / image->width), utils::abs(bounds.h / image->height));
+void drawSVG(NSVGimage *image, Graphics &g, Colour colour,
+  Rectangle<float> bounds, float scale, float strokeWidth)
+{
+  nvgSave(g);
+
+  nvgStrokeWidth(g, strokeWidth);
+  nvgFillColor(g, colour);
+  nvgStrokeColor(g, colour);
+
+  if (scale == 0.0f)
+    scale = utils::min(utils::abs(bounds.w / image->width), utils::abs(bounds.h / image->height));
     
-    float xScale = scale * ((bounds.w < 0.0f) ? -1.0f : 1.0f);
-    float yScale = scale * ((bounds.h < 0.0f) ? -1.0f : 1.0f);
+  float xScale = scale * ((bounds.w < 0.0f) ? -1.0f : 1.0f);
+  float yScale = scale * ((bounds.h < 0.0f) ? -1.0f : 1.0f);
 
-    float x = bounds.x + ::roundf((bounds.w - image->width * xScale) * 0.5f);
-    float y = bounds.y + ::roundf((bounds.h - image->height * yScale) * 0.5f);
+  float x = bounds.x + ::roundf((bounds.w - image->width * xScale) * 0.5f);
+  float y = bounds.y + ::roundf((bounds.h - image->height * yScale) * 0.5f);
 
-    for (NSVGshape *shape = image->shapes; shape != nullptr; shape = shape->next)
+  for (NSVGshape *shape = image->shapes; shape != nullptr; shape = shape->next)
+  {
+    nvgBeginPath(g);
+
+    // important: implicitly casting NSVGlineCap to NVGlineCap, ensure the enum values correspond
+    nvgLineCap(g, shape->strokeLineCap);
+
+    usize i = 0;
+    for (NSVGpath *path = shape->paths; path != nullptr; (path = path->next), (++i))
     {
-      nvgBeginPath(g);
+      if (shape->fillRule == NSVG_FILLRULE_EVENODD && i % 2)
+        nvgPathWinding(g, NVG_HOLE);
+      else
+        nvgPathWinding(g, NVG_SOLID);
 
-      // important: implicitly casting NSVGlineCap to NVGlineCap, ensure the enum values correspond
-      nvgLineCap(g, shape->strokeLineCap);
-
-      usize i = 0;
-      for (NSVGpath *path = shape->paths; path != nullptr; (path = path->next), (++i))
+      nvgMoveTo(g, x + xScale * path->pts[0], y + yScale * path->pts[1]);
+      for (int k = 0; k < path->npts - 1; k += 3)
       {
-        if (shape->fillRule == NSVG_FILLRULE_EVENODD && i % 2)
-          nvgPathWinding(g, NVG_HOLE);
-        else
-          nvgPathWinding(g, NVG_SOLID);
-
-        nvgMoveTo(g, x + xScale * path->pts[0], y + yScale * path->pts[1]);
-        for (int k = 0; k < path->npts - 1; k += 3)
-        {
-          float *p = &path->pts[k * 2];
-          nvgBezierTo(g,
-            x + xScale * p[2], y + yScale * p[3],
-            x + xScale * p[4], y + yScale * p[5],
-            x + xScale * p[6], y + yScale * p[7]);
-        }
-
-        if (path->closed)
-          nvgClosePath(g);
+        float *p = &path->pts[k * 2];
+        nvgBezierTo(g,
+          x + xScale * p[2], y + yScale * p[3],
+          x + xScale * p[4], y + yScale * p[5],
+          x + xScale * p[6], y + yScale * p[7]);
       }
 
-      if (shape->fill.type == NSVG_PAINT_NONE)
-        nvgStroke(g);
-      else
-        nvgFill(g);
+      if (path->closed)
+        nvgClosePath(g);
     }
 
-    nvgRestore(g);
+    if (shape->fill.type == NSVG_PAINT_NONE)
+      nvgStroke(g);
+    else
+      nvgFill(g);
   }
 
-  namespace Paths
+  nvgRestore(g);
+}
+
+namespace Paths
+{
+#define MOVETO(x, y) nvgMoveTo(g, (x) * proportionalX, (y) * proportionalY)
+#define LINETO(x, y) nvgLineTo(g, (x) * proportionalX, (y) * proportionalY)
+#define QUADTO(cx, cy, x, y) nvgQuadTo(g, (cx) * proportionalX, (cy) * proportionalY, (x) * proportionalX, (y) * proportionalY)
+
+  utils::pair<DrawingFn *, Rectangle<i32>>
+  pasteValueIcon()
   {
-  #define MOVETO(x, y) nvgMoveTo(g, (x) * proportionalX, (y) * proportionalY)
-  #define LINETO(x, y) nvgLineTo(g, (x) * proportionalX, (y) * proportionalY)
-  #define QUADTO(cx, cy, x, y) nvgQuadTo(g, (cx) * proportionalX, (cy) * proportionalY, (x) * proportionalX, (y) * proportionalY)
+    static constexpr i32 kWidth = 16;
+    static constexpr i32 kHeight = 16;
 
-    utils::pair<DrawingFn *, Rectangle<i32>>
-    pasteValueIcon()
+    return
     {
-      static constexpr i32 kWidth = 16;
-      static constexpr i32 kHeight = 16;
-
-      return
+      [](Graphics &g, utils::span<const Colour> colours, Rectangle<float> bounds, float strokeWidth)
       {
-        [](Graphics &g, utils::span<const Colour> colours, Rectangle<float> bounds, float strokeWidth)
-        {
-          COMPLEX_ASSERT(colours.size() >= 1);
-          COMPLEX_ASSERT(bounds.w == bounds.h);
+        COMPLEX_ASSERT(colours.size() >= 1);
+        COMPLEX_ASSERT(bounds.w == bounds.h);
 
-          float proportionalX = bounds.w / kWidth;
-          float proportionalY = bounds.h / kHeight;
+        float proportionalX = bounds.w / kWidth;
+        float proportionalY = bounds.h / kHeight;
 
-          nvgTranslate(g, ::floorf(bounds.x), ::floorf(bounds.y));
-          nvgStrokeWidth(g, strokeWidth);
-          nvgStrokeColor(g, colours[0]);
+        nvgTranslate(g, ::floorf(bounds.x), ::floorf(bounds.y));
+        nvgStrokeWidth(g, strokeWidth);
+        nvgStrokeColor(g, colours[0]);
 
-          nvgBeginPath(g);
-          MOVETO(4.5f, 11.5f);
-          QUADTO(3.0f, 12.0f, 3.5f, 10.5f);
-          LINETO(3.5f, 4.5f);
-          QUADTO(3.0f, 3.0f, 4.5f, 3.5f);
-          LINETO(5.5f, 3.5f);
-          nvgStroke(g);
+        nvgBeginPath(g);
+        MOVETO(4.5f, 11.5f);
+        QUADTO(3.0f, 12.0f, 3.5f, 10.5f);
+        LINETO(3.5f, 4.5f);
+        QUADTO(3.0f, 3.0f, 4.5f, 3.5f);
+        LINETO(5.5f, 3.5f);
+        nvgStroke(g);
 
-          nvgBeginPath(g);
-          MOVETO(6.0f, 4.5f);
-          QUADTO(5.0f, 5.0f, 5.5f, 4.0f);
-          LINETO(5.5f, 3.0f);
-          QUADTO(5.0f, 2.0f, 6.0f, 2.5f);
-          LINETO(8.0f, 2.5f);
-          QUADTO(9.0f, 2.0f, 8.5f, 3.0f);
-          LINETO(8.5f, 4.0f);
-          QUADTO(9.0f, 5.0f, 8.0f, 4.5f);
-          nvgClosePath(g);
-          nvgStroke(g);
+        nvgBeginPath(g);
+        MOVETO(6.0f, 4.5f);
+        QUADTO(5.0f, 5.0f, 5.5f, 4.0f);
+        LINETO(5.5f, 3.0f);
+        QUADTO(5.0f, 2.0f, 6.0f, 2.5f);
+        LINETO(8.0f, 2.5f);
+        QUADTO(9.0f, 2.0f, 8.5f, 3.0f);
+        LINETO(8.5f, 4.0f);
+        QUADTO(9.0f, 5.0f, 8.0f, 4.5f);
+        nvgClosePath(g);
+        nvgStroke(g);
 
-          nvgBeginPath(g);
-          MOVETO(8.5f, 3.5f);
-          LINETO(9.5f, 3.5f);
-          QUADTO(11.0f, 3.0f, 10.5f, 4.5f);
-          nvgStroke(g);
+        nvgBeginPath(g);
+        MOVETO(8.5f, 3.5f);
+        LINETO(9.5f, 3.5f);
+        QUADTO(11.0f, 3.0f, 10.5f, 4.5f);
+        nvgStroke(g);
 
-          nvgBeginPath(g);
-          nvgRoundedRect(g, 6.5f * proportionalX, 6.5f * proportionalY,
-            6.0f * proportionalX, 7.0f * proportionalY, 1.5f * utils::min(proportionalX, proportionalY));
+        nvgBeginPath(g);
+        nvgRoundedRect(g, 6.5f * proportionalX, 6.5f * proportionalY,
+          6.0f * proportionalX, 7.0f * proportionalY, 1.5f * utils::min(proportionalX, proportionalY));
 
-          nvgStroke(g);
-        },
-        Rectangle{ 0, 0, kWidth, kHeight }
-      };
-    }
-
-    void enterValueIcon()
-    {
-      //static const Shape shape = []()
-      //{
-      //  juce::Path one;
-      //  one.startNewSubPath({ 3.5f, 12.5f });
-      //  one.lineTo({ 3.5f, 11.0f });
-      //  one.quadraticTo({ 3.0f, 10.0f }, { 4.0f, 10.0f });
-      //  one.lineTo({ 8.5f, 5.5f });
-      //  one.lineTo({ 10.5f, 7.5f });
-      //  one.lineTo({ 6.0f, 12.0f });
-      //  one.quadraticTo({ 6.0f, 13.0f }, { 5.0f, 12.5f });
-      //  one.closeSubPath();
-
-      //  juce::Path two;
-      //  two.startNewSubPath({ 10.0f, 4.0f });
-      //  two.quadraticTo({ 11.0f, 2.5f }, { 12.5f, 3.5f });
-      //  two.quadraticTo({ 13.5f, 5.0f }, { 12.0f, 6.0f });
-      //  two.closeSubPath();
-
-      //  Shape result;
-      //  result.paths.emplace_back(COMPLEX_MOVE(one), Shape::Stroke, juce::Colour{});
-      //  result.paths.emplace_back(COMPLEX_MOVE(two), Shape::Fill, juce::Colour{});
-      //  return result;
-      //}();
-    }
-
-
-
-    utils::pair<DrawingFn *, Rectangle<i32>>
-    copyNormalisedValueIcon()
-    {
-      static constexpr i32 kWidth = 16;
-      static constexpr i32 kHeight = 16;
-
-      return
-      {
-        [](Graphics &g, utils::span<const Colour> colours, Rectangle<float> bounds, float strokeWidth)
-        {
-          COMPLEX_ASSERT(colours.size() >= 1);
-          COMPLEX_ASSERT(bounds.w == bounds.h);
-
-          float proportionalX = bounds.w / kWidth;
-          float proportionalY = bounds.h / kHeight;
-
-          nvgTranslate(g, ::floorf(bounds.x) + strokeWidth * 0.5f, ::floorf(bounds.y));
-          nvgStrokeWidth(g, strokeWidth);
-          nvgStrokeColor(g, colours[0]);
-
-          nvgBeginPath(g);
-          MOVETO(3.0f, 6.0f);
-          LINETO(3.0f, 11.0f);
-          QUADTO(3.0f, 12.5f, 5.0f, 12.5f);
-          LINETO(9.5f, 12.5f);
-          nvgStroke(g);
-
-          nvgBeginPath(g);
-          nvgRoundedRect(g, 5.0f * proportionalX, 3.5f * proportionalY,
-            6.0f * proportionalX, 7.0f * proportionalY, 1.25f * utils::min(proportionalX, proportionalY));
-          nvgStroke(g);
-        },
-        Rectangle{ 0, 0, kWidth, kHeight }
-      };
-    }
-
-    utils::pair<DrawingFn *, Rectangle<i32>>
-    copyScaledValueIcon()
-    {
-      static constexpr i32 kWidth = 16;
-      static constexpr i32 kHeight = 16;
-
-      return
-      {
-        [](Graphics &g, utils::span<const Colour> colours, Rectangle<float> bounds, float strokeWidth)
-        {
-          static constexpr float fStartX = 9.0f;
-          static constexpr float fStartY = 8.0f;
-          static constexpr float fWidth = 2.5f;
-          static constexpr float fHeight = 4.5f;
-          static constexpr float fRounding = 1.0f;
-
-          COMPLEX_ASSERT(colours.size() >= 2);
-          COMPLEX_ASSERT(bounds.w == bounds.h);
-
-          float proportionalX = bounds.w / kWidth;
-          float proportionalY = bounds.h / kHeight;
-
-          //bounds.x += (::roundf(bounds.x) == bounds.x) ? 0.5f : 0.0f;
-
-          nvgTranslate(g, ::floorf(bounds.x) + strokeWidth * 0.5f, ::floorf(bounds.y));
-          nvgStrokeWidth(g, strokeWidth);
-          nvgStrokeColor(g, colours[0]);
-
-          nvgBeginPath(g);
-          MOVETO(3.0f, 6.0f);
-          LINETO(3.0f, 11.0f);
-          QUADTO(3.0f, 12.5f, 5.0f, 12.5f);
-          LINETO(9.5f, 12.5f);
-          nvgStroke(g);
-
-          nvgBeginPath(g);
-          MOVETO(7.5f, 3.5f);
-          LINETO(6.5f, 3.5f);
-          QUADTO(5.0f, 3.5f, 5.0f, 4.5f);
-          LINETO(5.0f, 9.5f);
-          QUADTO(5.0f, 10.5f, 6.5f, 10.5f);
-          LINETO(10.5f, 10.5f);
-          QUADTO(11.0f, 10.5f, 11.0f, 9.5f);
-          LINETO(11.0f, 8.5f);
-          nvgStroke(g);
-
-          nvgStrokeColor(g, colours[1]);
-
-          nvgBeginPath(g);
-          MOVETO(fStartX, fStartY);
-          LINETO(fStartX, fStartY - (fHeight - fRounding));
-          QUADTO(fStartX, fStartY - fHeight, fStartX + fRounding, fStartY - fHeight);
-          LINETO(fStartX + fWidth, fStartY - fHeight);
-          MOVETO(fStartX, 5.5f);
-          LINETO(fStartX + fWidth, 5.5f);
-          nvgStroke(g);
-        },
-        Rectangle{ 0, 0, kWidth, kHeight }
-      };
-    }
-
-    utils::pair<DrawingFn *, Rectangle<i32>>
-    powerButtonIcon()
-    {
-      static constexpr i32 kWidth = 12;
-      static constexpr i32 kHeight = 12;
-      return
-      {
-        [](Graphics &g, utils::span<const Colour> colours, Rectangle<float> bounds, float strokeWidth)
-        {
-          static constexpr float kAngleStart = -0.30f * kPi;
-          static constexpr float kAngleEnd = -0.70f * kPi;
-
-          float proportionalX = bounds.w / kWidth;
-          float proportionalY = bounds.h / kHeight;
-
-          nvgTranslate(g, bounds.x, bounds.y);
-          nvgStrokeColor(g, colours[0]);
-          nvgStrokeWidth(g, strokeWidth);
-
-          nvgBeginPath(g);
-          MOVETO(5.5f, 0.0f);
-          LINETO(5.5f, 5.0f);
-          nvgStroke(g);
-
-          nvgBeginPath(g);
-          nvgArc(g, 5.5f * proportionalX, 6.5f * proportionalY,
-            5.0f * utils::min(proportionalX, proportionalY), kAngleStart, kAngleEnd, NVG_CW);
-          nvgStroke(g);
-        },
-        Rectangle{ -1, 0, kWidth, kHeight }
-      };
-    }
-
-  #undef LINETO
-  #undef QUADTO
+        nvgStroke(g);
+      },
+      Rectangle{ 0, 0, kWidth, kHeight }
+    };
   }
+
+  void enterValueIcon()
+  {
+    //static const Shape shape = []()
+    //{
+    //  juce::Path one;
+    //  one.startNewSubPath({ 3.5f, 12.5f });
+    //  one.lineTo({ 3.5f, 11.0f });
+    //  one.quadraticTo({ 3.0f, 10.0f }, { 4.0f, 10.0f });
+    //  one.lineTo({ 8.5f, 5.5f });
+    //  one.lineTo({ 10.5f, 7.5f });
+    //  one.lineTo({ 6.0f, 12.0f });
+    //  one.quadraticTo({ 6.0f, 13.0f }, { 5.0f, 12.5f });
+    //  one.closeSubPath();
+
+    //  juce::Path two;
+    //  two.startNewSubPath({ 10.0f, 4.0f });
+    //  two.quadraticTo({ 11.0f, 2.5f }, { 12.5f, 3.5f });
+    //  two.quadraticTo({ 13.5f, 5.0f }, { 12.0f, 6.0f });
+    //  two.closeSubPath();
+
+    //  Shape result;
+    //  result.paths.emplace_back(COMPLEX_MOVE(one), Shape::Stroke, juce::Colour{});
+    //  result.paths.emplace_back(COMPLEX_MOVE(two), Shape::Fill, juce::Colour{});
+    //  return result;
+    //}();
+  }
+
+
+
+  utils::pair<DrawingFn *, Rectangle<i32>>
+  copyNormalisedValueIcon()
+  {
+    static constexpr i32 kWidth = 16;
+    static constexpr i32 kHeight = 16;
+
+    return
+    {
+      [](Graphics &g, utils::span<const Colour> colours, Rectangle<float> bounds, float strokeWidth)
+      {
+        COMPLEX_ASSERT(colours.size() >= 1);
+        COMPLEX_ASSERT(bounds.w == bounds.h);
+
+        float proportionalX = bounds.w / kWidth;
+        float proportionalY = bounds.h / kHeight;
+
+        nvgTranslate(g, ::floorf(bounds.x) + strokeWidth * 0.5f, ::floorf(bounds.y));
+        nvgStrokeWidth(g, strokeWidth);
+        nvgStrokeColor(g, colours[0]);
+
+        nvgBeginPath(g);
+        MOVETO(3.0f, 6.0f);
+        LINETO(3.0f, 11.0f);
+        QUADTO(3.0f, 12.5f, 5.0f, 12.5f);
+        LINETO(9.5f, 12.5f);
+        nvgStroke(g);
+
+        nvgBeginPath(g);
+        nvgRoundedRect(g, 5.0f * proportionalX, 3.5f * proportionalY,
+          6.0f * proportionalX, 7.0f * proportionalY, 1.25f * utils::min(proportionalX, proportionalY));
+        nvgStroke(g);
+      },
+      Rectangle{ 0, 0, kWidth, kHeight }
+    };
+  }
+
+  utils::pair<DrawingFn *, Rectangle<i32>>
+  copyScaledValueIcon()
+  {
+    static constexpr i32 kWidth = 16;
+    static constexpr i32 kHeight = 16;
+
+    return
+    {
+      [](Graphics &g, utils::span<const Colour> colours, Rectangle<float> bounds, float strokeWidth)
+      {
+        static constexpr float fStartX = 9.0f;
+        static constexpr float fStartY = 8.0f;
+        static constexpr float fWidth = 2.5f;
+        static constexpr float fHeight = 4.5f;
+        static constexpr float fRounding = 1.0f;
+
+        COMPLEX_ASSERT(colours.size() >= 2);
+        COMPLEX_ASSERT(bounds.w == bounds.h);
+
+        float proportionalX = bounds.w / kWidth;
+        float proportionalY = bounds.h / kHeight;
+
+        //bounds.x += (::roundf(bounds.x) == bounds.x) ? 0.5f : 0.0f;
+
+        nvgTranslate(g, ::floorf(bounds.x) + strokeWidth * 0.5f, ::floorf(bounds.y));
+        nvgStrokeWidth(g, strokeWidth);
+        nvgStrokeColor(g, colours[0]);
+
+        nvgBeginPath(g);
+        MOVETO(3.0f, 6.0f);
+        LINETO(3.0f, 11.0f);
+        QUADTO(3.0f, 12.5f, 5.0f, 12.5f);
+        LINETO(9.5f, 12.5f);
+        nvgStroke(g);
+
+        nvgBeginPath(g);
+        MOVETO(7.5f, 3.5f);
+        LINETO(6.5f, 3.5f);
+        QUADTO(5.0f, 3.5f, 5.0f, 4.5f);
+        LINETO(5.0f, 9.5f);
+        QUADTO(5.0f, 10.5f, 6.5f, 10.5f);
+        LINETO(10.5f, 10.5f);
+        QUADTO(11.0f, 10.5f, 11.0f, 9.5f);
+        LINETO(11.0f, 8.5f);
+        nvgStroke(g);
+
+        nvgStrokeColor(g, colours[1]);
+
+        nvgBeginPath(g);
+        MOVETO(fStartX, fStartY);
+        LINETO(fStartX, fStartY - (fHeight - fRounding));
+        QUADTO(fStartX, fStartY - fHeight, fStartX + fRounding, fStartY - fHeight);
+        LINETO(fStartX + fWidth, fStartY - fHeight);
+        MOVETO(fStartX, 5.5f);
+        LINETO(fStartX + fWidth, 5.5f);
+        nvgStroke(g);
+      },
+      Rectangle{ 0, 0, kWidth, kHeight }
+    };
+  }
+
+  utils::pair<DrawingFn *, Rectangle<i32>>
+  powerButtonIcon()
+  {
+    static constexpr i32 kWidth = 12;
+    static constexpr i32 kHeight = 12;
+    return
+    {
+      [](Graphics &g, utils::span<const Colour> colours, Rectangle<float> bounds, float strokeWidth)
+      {
+        static constexpr float kAngleStart = -0.30f * kPi;
+        static constexpr float kAngleEnd = -0.70f * kPi;
+
+        float proportionalX = bounds.w / kWidth;
+        float proportionalY = bounds.h / kHeight;
+
+        nvgTranslate(g, bounds.x, bounds.y);
+        nvgStrokeColor(g, colours[0]);
+        nvgStrokeWidth(g, strokeWidth);
+
+        nvgBeginPath(g);
+        MOVETO(5.5f, 0.0f);
+        LINETO(5.5f, 5.0f);
+        nvgStroke(g);
+
+        nvgBeginPath(g);
+        nvgArc(g, 5.5f * proportionalX, 6.5f * proportionalY,
+          5.0f * utils::min(proportionalX, proportionalY), kAngleStart, kAngleEnd, NVG_CW);
+        nvgStroke(g);
+      },
+      Rectangle{ -1, 0, kWidth, kHeight }
+    };
+  }
+
+#undef LINETO
+#undef QUADTO
 }

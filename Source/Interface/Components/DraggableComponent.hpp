@@ -5,48 +5,45 @@
 
 #include "../LookAndFeel/Component.hpp"
 
-namespace Interface
+struct DraggableComponent : public Component
 {
-  struct DraggableComponent : public Component
+  DraggableComponent()
   {
-    DraggableComponent()
-    {
-      componentFlags.clickable = true;
-    }
+    componentFlags.clickable = true;
+  }
 
-    bool render(Graphics &g) override;
+  bool render(Graphics &g) override;
 
-    bool mouseEnter(const MouseEvent &e) override;
-    bool mouseDown(const MouseEvent &e) override { return prepareToMove(e); }
-    bool mouseDrag(const MouseEvent &e) override { move(e); return true; }
-    bool mouseUp(const MouseEvent &e) override { endMove(e); return true; }
-    bool mouseExit(const MouseEvent &e) override;
-    bool mouseWheelMove(const MouseEvent &e) override;
+  bool mouseEnter(const MouseEvent &e) override;
+  bool mouseDown(const MouseEvent &e) override { return prepareToMove(e); }
+  bool mouseDrag(const MouseEvent &e) override { move(e); return true; }
+  bool mouseUp(const MouseEvent &e) override { endMove(e); return true; }
+  bool mouseExit(const MouseEvent &e) override;
+  bool mouseWheelMove(const MouseEvent &e) override;
 
-    bool keyPressed(const KeyPress &keyPress) override;
+  bool keyPressed(const KeyPress &keyPress) override;
 
-    bool prepareToMove(const MouseEvent &e);
-    void move(const MouseEvent &e);
-    void endMove(const MouseEvent &e);
+  bool prepareToMove(const MouseEvent &e);
+  void move(const MouseEvent &e);
+  void endMove(const MouseEvent &e);
 
-    Component *draggedComponent{};
-    Generation::Processor *processor{};
-    Component *surfaceToLiftTo{};
-    // copy draggedComponent and return the new DraggableComponent inside
-    DraggableComponent *(*copyingDraggedComponent)(Component *c){};
+  Component *draggedComponent{};
+  Processor *processor{};
+  Component *surfaceToLiftTo{};
+  // copy draggedComponent and return the new DraggableComponent inside
+  DraggableComponent *(*copyingDraggedComponent)(Component *c){};
 
-    Point<i32> initialClickPosition{};
-    bool (*previousOverridePosition)(Component *c){};
-    Range<i32> (*previousOverrideSize)(Component *c, bool isCalculatingVertical){};
-    u64 previousParentProcessorStateId{};
-    usize previousIndex{};
-    Placement previousPlacement{};
-    bool isCopying : 1{};
-    bool isDragging : 1{};
-    bool wasMovingUpX : 1{};
-    bool wasMovingUpY : 1{};
-    bool directionX : 1{};
-    bool directionY : 1{};
-    Point<i32> directionChangePoint{};
-  };
-}
+  Point<i32> initialClickPosition{};
+  bool (*previousOverridePosition)(Component *c){};
+  Range<i32> (*previousOverrideSize)(Component *c, bool isCalculatingVertical){};
+  u64 previousParentProcessorStateId{};
+  usize previousIndex{};
+  Placement previousPlacement{};
+  bool isCopying : 1{};
+  bool isDragging : 1{};
+  bool wasMovingUpX : 1{};
+  bool wasMovingUpY : 1{};
+  bool directionX : 1{};
+  bool directionY : 1{};
+  Point<i32> directionChangePoint{};
+};

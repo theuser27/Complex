@@ -17,7 +17,7 @@
 #include "Interface/LookAndFeel/Component.hpp"
 #include "Interface/Sections/MainInterface.hpp"
 
-Framework::ExecutableMetadata executableStaticData{};
+ExecutableMetadata executableStaticData{};
 
 static void initialisePluginStructure()
 {
@@ -44,12 +44,12 @@ static void initialisePluginStructure()
   };
 
   auto recurseParameterStrings = [&](const auto &recurseParameters, const auto &recurseProcessors,
-    Framework::ParameterMetadata *parameterMetadata) -> void
+    ParameterMetadata *parameterMetadata) -> void
   {
     pushString(parameterMetadata->details.displayName);
     pushString(parameterMetadata->details.displayUnits);
 
-    if (parameterMetadata->details.scale == Framework::ParameterScale::Indexed)
+    if (parameterMetadata->details.scale == ParameterScale::Indexed)
     {
       auto *option = parameterMetadata->details.options;
 
@@ -58,9 +58,9 @@ static void initialisePluginStructure()
       {
         pushString(option->displayName);
 
-        if (option->flags == Framework::IndexedData::ProcessorFlag)
+        if (option->flags == IndexedData::ProcessorFlag)
           recurseProcessors(recurseProcessors, option->processorMetadata);
-        else if (option->flags == Framework::IndexedData::ParameterFlag)
+        else if (option->flags == IndexedData::ParameterFlag)
           recurseParameters(recurseParameters, recurseProcessors, option->parameterMetadata);
 
         if (option->children && !visitedChildren)
@@ -84,7 +84,7 @@ static void initialisePluginStructure()
     }
   };
 
-  auto recurseProcessorStrings = [&](const auto &recurseProcessors, Framework::ProcessorMetadata *processorMetadata) -> void
+  auto recurseProcessorStrings = [&](const auto &recurseProcessors, ProcessorMetadata *processorMetadata) -> void
   {
     pushString(processorMetadata->name);
 
@@ -110,7 +110,7 @@ static void initialisePluginStructure()
     executableStaticData.configFolderPath = pushString(string);
   }
 
-  executableStaticData.structure.metadata = (Framework::ProcessorMetadata *)
+  executableStaticData.structure.metadata = (ProcessorMetadata *)
     initialiseTypeStructureSoundEngine(nullptr, executableStaticData.structure);
 
   recurseProcessorStrings(recurseProcessorStrings, executableStaticData.structure.metadata);
@@ -159,376 +159,366 @@ findOrAddPermanentString(utils::string_view string)
   }
 }
 
-namespace Framework
+void HostParameter::notifyParameterChange()
 {
-  void HostParameter::notifyParameterChange()
+  auto hostContext = getUiRelated()->plugin.hostContext;
+  hostContext->rescan(hostContext,
+    CPLUG_FLAG_RESCAN_PARAM_VALUES | CPLUG_FLAG_RESCAN_PARAM_NAMES | CPLUG_FLAG_RESCAN_PARAM_METADATA);
+}
+
+void HostParameter::beginChangeGesture()
+{
+  if (!state->plugin->renderer.gui)
+    return;
+
+  auto event = CplugEvent{ .parameter = { .type = CPLUG_EVENT_PARAM_CHANGE_BEGIN, .id = (uint32_t)parameterIndex } };
+  state->plugin->hostContext->sendParamEvent(state->plugin->hostContext, &event);
+}
+
+void HostParameter::setValueFromUI(float newValue)
+{
+  value_.store(newValue, satomi::memory_order_release);
+
+  if (!state->plugin->renderer.gui)
+    return;
+
+  auto event = CplugEvent{ .parameter = { .type = CPLUG_EVENT_PARAM_CHANGE_UPDATE,
+    .id = (uint32_t)parameterIndex, .value = newValue } };
+  state->plugin->hostContext->sendParamEvent(state->plugin->hostContext, &event);
+}
+
+void HostParameter::endChangeGesture()
+{
+  if (!state->plugin->renderer.gui)
+    return;
+
+  auto event = CplugEvent{ .parameter = {.type = CPLUG_EVENT_PARAM_CHANGE_END, .id = (uint32_t)parameterIndex } };
+  state->plugin->hostContext->sendParamEvent(state->plugin->hostContext, &event);
+}
+
+void saveState(ComplexPlugin *plugin, const void *stateCtx, cplug_writeProc writeProc);
+void loadState(ComplexPlugin *plugin, utils::string_view data);
+
+State::State(ComplexPlugin *plugin) : plugin{ plugin }
+{
+  processorStorage = utils::Pool::create(COMPLEX_MB(256), COMPLEX_MB(2));
+  miscStorage = utils::Pool::createNested(processorStorage, COMPLEX_KB(128));
+  uiStorage = utils::Pool::create(COMPLEX_MB(256), COMPLEX_MB(4));
+
+  gui = anew(uiStorage, MainInterface, {});
+  gui->arena = uiStorage;
+
+  allProcessors.data = { { miscStorage, false }, 64 };
+  parameterModulators = { { miscStorage, false }, 32 };
+  dynamicParameters = { { miscStorage, false }, 32 };
+  workers = { { miscStorage, false }, 16 };
+  cachedHotreloadSymbols.data = { { miscStorage, false }, 16 };
+
+  createDynamicParameters();
+
+  auto count = plugin->parameterCount;
+  parameterBridges = utils::span{ (HostParameter *)
+    utils::Pool::insert(miscStorage, sizealignof(HostParameter, count)), count };
+
+  for (usize i = 0; i < count; ++i)
+    (void)new(parameterBridges.data() + i) HostParameter{ this, (u64)i };
+
+  // TODO: copy over metadata tree
+  // TODO: decide how runtime changes are going to be handled (this is going to be hard)
+  //pluginStructure.arena = utils::Pool::create();
+  //utils::ScopedLock g{ structure.readWriteLock, true, utils::WaitMechanism::WaitNotify };
+
+  //pluginStructure.versionNumber = structure.structure.versionNumber;
+  //pluginStructure.loadedDynamicLibs = { pluginStructure.arena, structure.structure.loadedDynamicLibs };
+  pluginStructure.metadata = executableStaticData.structure.metadata;
+}
+
+State::~State()
+{
+  for (auto &worker : workers)
+    worker.stop();
+
+  utils::Pool::destroy(uiStorage);
+  utils::Pool::destroy(processorStorage);
+}
+
+ProcessorMetadata *
+State::findProcessorMetadata(uuid id) const
+{
+  COMPLEX_ASSERT(pluginStructure.metadata);
+
+  ProcessorMetadata *current = pluginStructure.metadata;
+  bool visitedChildren = false;
+  while (current->id != id)
   {
-    auto hostContext = Interface::getUiRelated()->plugin.hostContext;
-    hostContext->rescan(hostContext,
-      CPLUG_FLAG_RESCAN_PARAM_VALUES | CPLUG_FLAG_RESCAN_PARAM_NAMES | CPLUG_FLAG_RESCAN_PARAM_METADATA);
+    if (current->children && !visitedChildren)
+    {
+      current = current->children;
+    }
+    else if (current->next)
+    {
+      visitedChildren = false;
+      current = current->next;
+    }
+    else
+    {
+      visitedChildren = true;
+      if (!current->parent)
+      {
+        COMPLEX_ASSERT_FALSE("Couldn't find processor with id: %zu", id);
+        return nullptr;
+      }
+      current = current->parent;
+    }
   }
 
-  void HostParameter::beginChangeGesture()
+  return current;
+}
+
+Processor *
+State::getProcessor(u64 processorId) const
+{
+  auto processorIter = allProcessors.find(processorId);
+  return (processorIter != allProcessors.data.end()) ?
+    processorIter->second : nullptr;
+}
+
+// check if processor creation causes dynamic parameters to change
+void State::registerProcessorForDynamicParameters(Processor *processor)
+{
+  auto *arena = miscStorage;
+
+  if (processor->metadata->id == Processors::EffectsLane)
   {
-    if (!state->plugin->renderer.gui)
-      return;
+    auto iter = dynamicOptions.find(ParameterChangeReason::laneSources);
+    auto alreadyExists = utils::findIf(iter->second, [&](IndexedData *option) { return option->stateId == processor->stateId; });
+    if (!alreadyExists)
+    {
+      auto g = plugin->acquireProcessingLock();
+      iter->second->addChildren({{ anew(arena, IndexedData,
+        { .id = processor->metadata->id, .flags = IndexedData::StateIdFlag, .stateId = processor->stateId }) }});
 
-    auto event = CplugEvent{ .parameter = { .type = CPLUG_EVENT_PARAM_CHANGE_BEGIN, .id = (uint32_t)parameterIndex } };
-    state->plugin->hostContext->sendParamEvent(state->plugin->hostContext, &event);
-  }
-
-  void HostParameter::setValueFromUI(float newValue)
-  {
-    value_.store(newValue, satomi::memory_order_release);
-
-    if (!state->plugin->renderer.gui)
-      return;
-
-    auto event = CplugEvent{ .parameter = { .type = CPLUG_EVENT_PARAM_CHANGE_UPDATE,
-      .id = (uint32_t)parameterIndex, .value = newValue } };
-    state->plugin->hostContext->sendParamEvent(state->plugin->hostContext, &event);
-  }
-
-  void HostParameter::endChangeGesture()
-  {
-    if (!state->plugin->renderer.gui)
-      return;
-
-    auto event = CplugEvent{ .parameter = {.type = CPLUG_EVENT_PARAM_CHANGE_END, .id = (uint32_t)parameterIndex } };
-    state->plugin->hostContext->sendParamEvent(state->plugin->hostContext, &event);
+      updateDynamicParameters(ParameterChangeReason::laneSources);
+    }
   }
 }
 
-namespace Plugin
+void State::deregisterProcessorForDynamicParameters(Processor *processor)
 {
-  void saveState(ComplexPlugin *plugin, const void *stateCtx, cplug_writeProc writeProc);
-  void loadState(ComplexPlugin *plugin, utils::string_view data);
-
-  State::State(ComplexPlugin *plugin) : plugin{ plugin }
+  bool needsUpdate = false;
+  // delete all references pointing to this processor
+  for (auto &pair : dynamicOptions.data)
   {
-    processorStorage = utils::Pool::create(COMPLEX_MB(256), COMPLEX_MB(2));
-    miscStorage = utils::Pool::createNested(processorStorage, COMPLEX_KB(128));
-    uiStorage = utils::Pool::create(COMPLEX_MB(256), COMPLEX_MB(4));
-
-    gui = anew(uiStorage, Interface::MainInterface, {});
-    gui->arena = uiStorage;
-
-    allProcessors.data = { { miscStorage, false }, 64 };
-    parameterModulators = { { miscStorage, false }, 32 };
-    dynamicParameters = { { miscStorage, false }, 32 };
-    workers = { { miscStorage, false }, 16 };
-    cachedHotreloadSymbols.data = { { miscStorage, false }, 16 };
-
-    createDynamicParameters();
-
-    auto count = plugin->parameterCount;
-    parameterBridges = utils::span{ (Framework::HostParameter *)
-      utils::Pool::insert(miscStorage, sizealignof(Framework::HostParameter, count)), count };
-
-    for (usize i = 0; i < count; ++i)
-      (void)new(parameterBridges.data() + i) Framework::HostParameter{ this, (u64)i };
-
-    // TODO: copy over metadata tree
-    // TODO: decide how runtime changes are going to be handled (this is going to be hard)
-    //pluginStructure.arena = utils::Pool::create();
-    //utils::ScopedLock g{ structure.readWriteLock, true, utils::WaitMechanism::WaitNotify };
-
-    //pluginStructure.versionNumber = structure.structure.versionNumber;
-    //pluginStructure.loadedDynamicLibs = { pluginStructure.arena, structure.structure.loadedDynamicLibs };
-    pluginStructure.metadata = executableStaticData.structure.metadata;
-  }
-
-  State::~State()
-  {
-    for (auto &worker : workers)
-      worker.stop();
-
-    utils::Pool::destroy(uiStorage);
-    utils::Pool::destroy(processorStorage);
-  }
-
-  Framework::ProcessorMetadata *
-  State::findProcessorMetadata(uuid id) const
-  {
-    COMPLEX_ASSERT(pluginStructure.metadata);
-
-    Framework::ProcessorMetadata *current = pluginStructure.metadata;
-    bool visitedChildren = false;
-    while (current->id != id)
+    IndexedData::visit(pair.second, [&needsUpdate, processor](IndexedData &item, IndexedData *previous)
     {
-      if (current->children && !visitedChildren)
-      {
-        current = current->children;
-      }
-      else if (current->next)
-      {
-        visitedChildren = false;
-        current = current->next;
-      }
-      else
-      {
-        visitedChildren = true;
-        if (!current->parent)
-        {
-          COMPLEX_ASSERT_FALSE("Couldn't find processor with id: %zu", id);
-          return nullptr;
-        }
-        current = current->parent;
-      }
-    }
-
-    return current;
-  }
-
-  Generation::Processor *
-  State::getProcessor(u64 processorId) const
-  {
-    auto processorIter = allProcessors.find(processorId);
-    return (processorIter != allProcessors.data.end()) ?
-      processorIter->second : nullptr;
-  }
-
-  // check if processor creation causes dynamic parameters to change
-  void State::registerProcessorForDynamicParameters(Generation::Processor *processor)
-  {
-    using namespace Framework;
-
-    auto *arena = miscStorage;
-
-    if (processor->metadata->id == Generation::Processors::EffectsLane)
-    {
-      auto iter = dynamicOptions.find(Framework::ParameterChangeReason::laneSources);
-      auto alreadyExists = utils::findIf(iter->second, [&](IndexedData *option) { return option->stateId == processor->stateId; });
-      if (!alreadyExists)
-      {
-        auto g = plugin->acquireProcessingLock();
-        iter->second->addChildren({{ anew(arena, IndexedData,
-          { .id = processor->metadata->id, .flags = IndexedData::StateIdFlag, .stateId = processor->stateId }) }});
-
-        updateDynamicParameters(Framework::ParameterChangeReason::laneSources);
-      }
-    }
-  }
-
-  void State::deregisterProcessorForDynamicParameters(Generation::Processor *processor)
-  {
-    using namespace Framework;
-
-    bool needsUpdate = false;
-    // delete all references pointing to this processor
-    for (auto &pair : dynamicOptions.data)
-    {
-      IndexedData::visit(pair.second, [&needsUpdate, processor](IndexedData &item, IndexedData *previous)
-      {
-        if (item.id != processor->metadata->id || item.stateId != processor->stateId)
-          return false;
-
-        needsUpdate = true;
-        --item.parent->childrenCount;
-        for (auto p = item.parent; p; p = p->parent)
-          p->valueCount -= item.valueCount;
-
-        if (!previous)
-          item.parent->children = item.next;
-        else
-          previous->next = item.next;
-
-        utils::Pool::remove(&item);
+      if (item.id != processor->metadata->id || item.stateId != processor->stateId)
         return false;
-      });
-    }
 
-    if (needsUpdate)
-      updateAllDynamicParameters();
+      needsUpdate = true;
+      --item.parent->childrenCount;
+      for (auto p = item.parent; p; p = p->parent)
+        p->valueCount -= item.valueCount;
+
+      if (!previous)
+        item.parent->children = item.next;
+      else
+        previous->next = item.next;
+
+      utils::Pool::remove(&item);
+      return false;
+    });
   }
 
-  Generation::Processor *
-  State::createProcessor(uuid processorId, void *jsonData, void *extra)
+  if (needsUpdate)
+    updateAllDynamicParameters();
+}
+
+Processor *
+State::createProcessor(uuid processorId, void *jsonData, void *extra)
+{
+  auto *metadata = findProcessorMetadata(processorId);
+  Processor *processor = metadata->create(this, metadata, nullptr, jsonData, extra);
+
+  allProcessors.add(processor->stateId, processor);
+
+  return processor;
+}
+
+void State::deleteProcessor(Processor *processor)
+{
+  COMPLEX_ASSERT(processor->state == this);
+  COMPLEX_ASSERT(processor->stateId != 0);
+
+  for (auto child = processor->children; child; child = child->next)
+    deleteProcessor(child);
+
+  deregisterProcessorForDynamicParameters(processor);
+
+  // unlink all parameters from parameter bridges
+  processor->remapParameters({}, false, false);
+
+  if (processor->component)
   {
-    auto *metadata = findProcessorMetadata(processorId);
-    Generation::Processor *processor = metadata->create(this, metadata, nullptr, jsonData, extra);
-
-    allProcessors.add(processor->stateId, processor);
-
-    return processor;
+    if (processor->component->parent)
+      processor->component->parent->removeChildComponent(processor->component);
+    deleteComponent(processor->component);
   }
 
-  void State::deleteProcessor(Generation::Processor *processor)
+  allProcessors.data.erase({ processor->stateId, processor });
+  utils::Pool::remove(processor->arena);
+}
+
+Processor *
+State::copyProcessor(Processor *processor)
+{
+  utils::ScopedLock guard{};
+  if (this == plugin->state_.get())
+    guard = plugin->acquireProcessingLock(true);
+
+  return processor->createCopy();
+}
+
+utils::pair<u32, u32> State::getMinMaxFFTOrder() const { return soundEngine->getMinMaxFFTOrder(); }
+u32 State::getMaxBinCount() const { return soundEngine->getMaxBinCount(); }
+
+Parameter *
+State::getProcessorParameter(u64 parentProcessorId, uuid parameterId) const
+{
+  auto *processorPointer = getProcessor(parentProcessorId);
+  if (!processorPointer)
+    return {};
+
+  return processorPointer->getParameter(parameterId);
+}
+
+float
+State::getOverlap() { return soundEngine->getOverlap(); }
+u32
+State::getFFTSize() { return soundEngine->getFFTSize(); }
+u32
+State::getBlockPosition() { return soundEngine->getBlockPosition(); }
+u32
+State::getLaneCount() const { return soundEngine->childrenCount; }
+
+
+State::Thread &
+State::reserveFreeWorker(utils::typeInfo reservationTag)
+{
+  for (auto &worker : workers)
+    if (worker.thread == utils::thread{})
+      return worker;
+
+  auto &worker = workers.emplaceBack();
+  worker.reservationTag = reservationTag;
+  return worker;
+}
+
+void *
+State::getHotreloadSymbol(utils::string_view decoratedName)
+{
+  if (auto iter = cachedHotreloadSymbols.get_last_of(decoratedName);
+    iter != cachedHotreloadSymbols.data.end())
+    return iter->second;
+
+  if (!pluginStructure.loadedDynamicLibs.empty())
   {
-    COMPLEX_ASSERT(processor->state == this);
-    COMPLEX_ASSERT(processor->stateId != 0);
-
-    for (auto child = processor->children; child; child = child->next)
-      deleteProcessor(child);
-
-    deregisterProcessorForDynamicParameters(processor);
-
-    // unlink all parameters from parameter bridges
-    processor->remapParameters({}, false, false);
-
-    if (processor->component)
-    {
-      if (processor->component->parent)
-        processor->component->parent->removeChildComponent(processor->component);
-      Interface::deleteComponent(processor->component);
-    }
-
-    allProcessors.data.erase({ processor->stateId, processor });
-    utils::Pool::remove(processor->arena);
+    void *symbol = pluginStructure.loadedDynamicLibs.back()->getSymbol(decoratedName);
+    if (symbol)
+      cachedHotreloadSymbols.add_ordered(decoratedName, symbol);
+    return symbol;
   }
 
-  Generation::Processor *
-  State::copyProcessor(Generation::Processor *processor)
+  return nullptr;
+}
+
+ComplexPlugin::ComplexPlugin(usize parameterMappings, u32 inSidechains,
+  u32 outSidechains, usize undoSteps, CplugHostContext *hostContext) :
+  inSidechains{ inSidechains }, outSidechains{ outSidechains }, parameterCount{ parameterMappings }, 
+  arena{ utils::Pool::create(COMPLEX_MB(16), COMPLEX_MB(2)) }, undoManager{ arena, undoSteps },
+  hostContext{ hostContext }, renderer{ *this }
+{
+  fft.arena = arena;
+  loadState(this, {});
+  // plugin formats will later call loadState
+  // but in between that other functions get called that will require *some* state
+  wasStateInitialised = hostContext->type == CPLUG_PLUGIN_IS_STANDALONE;
+}
+
+ComplexPlugin::~ComplexPlugin()
+{
+}
+
+void ComplexPlugin::initialise(float newSampleRate, u32 newSamplesPerBlock)
+{
+  if (newSampleRate != getSampleRate())
+    sampleRate.store(newSampleRate, satomi::memory_order_release);
+
+  if (newSamplesPerBlock != getSamplesPerBlock())
   {
-    utils::ScopedLock guard{};
-    if (this == plugin->state_.get())
-      guard = plugin->acquireProcessingLock(true);
+    samplesPerBlock.store(newSamplesPerBlock, satomi::memory_order_release);
 
-    return processor->createCopy();
-  }
-
-  utils::pair<u32, u32> State::getMinMaxFFTOrder() const { return soundEngine->getMinMaxFFTOrder(); }
-  u32 State::getMaxBinCount() const { return soundEngine->getMaxBinCount(); }
-
-  Framework::Parameter *
-  State::getProcessorParameter(u64 parentProcessorId, uuid parameterId) const
-  {
-    auto *processorPointer = getProcessor(parentProcessorId);
-    if (!processorPointer)
-      return {};
-
-    return processorPointer->getParameter(parameterId);
-  }
-
-  float
-  State::getOverlap() { return soundEngine->getOverlap(); }
-  u32
-  State::getFFTSize() { return soundEngine->getFFTSize(); }
-  u32
-  State::getBlockPosition() { return soundEngine->getBlockPosition(); }
-  u32
-  State::getLaneCount() const { return soundEngine->childrenCount; }
-
-
-  State::Thread &
-  State::reserveFreeWorker(utils::typeInfo reservationTag)
-  {
-    for (auto &worker : workers)
-      if (worker.thread == utils::thread{})
-        return worker;
-
-    auto &worker = workers.emplaceBack();
-    worker.reservationTag = reservationTag;
-    return worker;
-  }
-
-  void *
-  State::getHotreloadSymbol(utils::string_view decoratedName)
-  {
-    if (auto iter = cachedHotreloadSymbols.get_last_of(decoratedName);
-      iter != cachedHotreloadSymbols.data.end())
-      return iter->second;
-
-    if (!pluginStructure.loadedDynamicLibs.empty())
-    {
-      void *symbol = pluginStructure.loadedDynamicLibs.back()->getSymbol(decoratedName);
-      if (symbol)
-        cachedHotreloadSymbols.add_ordered(decoratedName, symbol);
-      return symbol;
-    }
-
-    return nullptr;
-  }
-
-  ComplexPlugin::ComplexPlugin(usize parameterMappings, u32 inSidechains,
-    u32 outSidechains, usize undoSteps, CplugHostContext *hostContext) :
-    inSidechains{ inSidechains }, outSidechains{ outSidechains }, parameterCount{ parameterMappings }, 
-    arena{ utils::Pool::create(COMPLEX_MB(16), COMPLEX_MB(2)) }, undoManager{ arena, undoSteps },
-    hostContext{ hostContext }, renderer{ *this }
-  {
-    fft.arena = arena;
-    loadState(this, {});
-    // plugin formats will later call loadState
-    // but in between that other functions get called that will require *some* state
-    wasStateInitialised = hostContext->type == CPLUG_PLUGIN_IS_STANDALONE;
-  }
-
-  ComplexPlugin::~ComplexPlugin()
-  {
-  }
-
-  void ComplexPlugin::initialise(float newSampleRate, u32 newSamplesPerBlock)
-  {
-    if (newSampleRate != getSampleRate())
-      sampleRate.store(newSampleRate, satomi::memory_order_release);
-
-    if (newSamplesPerBlock != getSamplesPerBlock())
-    {
-      samplesPerBlock.store(newSamplesPerBlock, satomi::memory_order_release);
-
-      auto lock = acquireProcessingLock(true);
-
-      auto state = state_;
-      if (!state)
-        return;
-
-      state->soundEngine->resetBuffers();
-    }
-  }
-
-  utils::sp<State>
-  ComplexPlugin::exchangeStates(utils::sp<State> state)
-  {
-    {
-      auto guard = acquireProcessingLock(true);
-      state_.swap(state);
-    }
-
-    // refresh all parameters as soon as the states are exchanged
-    hostContext->rescan(hostContext,
-      CPLUG_FLAG_RESCAN_PARAM_METADATA | CPLUG_FLAG_RESCAN_PARAM_NAMES | CPLUG_FLAG_RESCAN_PARAM_VALUES);
-
-    return state;
-  }
-
-  void ComplexPlugin::rescanLatency()
-  {
-    if (hasLatencyChanged.exchange(false, satomi::memory_order_relaxed))
-      hostContext->rescan(hostContext, CPLUG_FLAG_RESCAN_LATENCY);
-  }
-
-  void ComplexPlugin::process(float *const *in, float *const *out,
-    u32 numSamples, u32 numInputs, u32 numOutputs)
-  {
-    float currentSampleRate = getSampleRate();
-
-    utils::ScopedLock g{ processingLock, false, utils::WaitMechanism::Spin };
+    auto lock = acquireProcessingLock(true);
 
     auto state = state_;
-    state->soundEngine->updateParameters(UpdateFlag::BeforeProcess,
-      currentSampleRate, true);
+    if (!state)
+      return;
 
-    if (auto latency_ = state->soundEngine->getProcessingDelay();
-      latency_ != latency.load(satomi::memory_order_relaxed))
-    {
-      latency.store(latency_, satomi::memory_order_relaxed);
-      hasLatencyChanged.store(true, satomi::memory_order_relaxed);
-    }
-
-    state->soundEngine->process(in, out, numSamples,
-      currentSampleRate, numInputs, numOutputs, *state->fft);
-
-    state->soundEngine->updateParameters(UpdateFlag::AfterProcess,
-      currentSampleRate, true);
+    state->soundEngine->resetBuffers();
   }
+}
+
+utils::sp<State>
+ComplexPlugin::exchangeStates(utils::sp<State> state)
+{
+  {
+    auto guard = acquireProcessingLock(true);
+    state_.swap(state);
+  }
+
+  // refresh all parameters as soon as the states are exchanged
+  hostContext->rescan(hostContext,
+    CPLUG_FLAG_RESCAN_PARAM_METADATA | CPLUG_FLAG_RESCAN_PARAM_NAMES | CPLUG_FLAG_RESCAN_PARAM_VALUES);
+
+  return state;
+}
+
+void ComplexPlugin::rescanLatency()
+{
+  if (hasLatencyChanged.exchange(false, satomi::memory_order_relaxed))
+    hostContext->rescan(hostContext, CPLUG_FLAG_RESCAN_LATENCY);
+}
+
+void ComplexPlugin::process(float *const *in, float *const *out,
+  u32 numSamples, u32 numInputs, u32 numOutputs)
+{
+  float currentSampleRate = getSampleRate();
+
+  utils::ScopedLock g{ processingLock, false, utils::WaitMechanism::Spin };
+
+  auto state = state_;
+  state->soundEngine->updateParameters(UpdateFlag::BeforeProcess,
+    currentSampleRate, true);
+
+  if (auto latency_ = state->soundEngine->getProcessingDelay();
+    latency_ != latency.load(satomi::memory_order_relaxed))
+  {
+    latency.store(latency_, satomi::memory_order_relaxed);
+    hasLatencyChanged.store(true, satomi::memory_order_relaxed);
+  }
+
+  state->soundEngine->process(in, out, numSamples,
+    currentSampleRate, numInputs, numOutputs, *state->fft);
+
+  state->soundEngine->updateParameters(UpdateFlag::AfterProcess,
+    currentSampleRate, true);
 }
 
 struct TlsContext
 {
   utils::Pool *localScratch{};
   utils::Pool *localMallocArena{};
-  Interface::InterfaceRelated *uiRelated{};
-  Framework::LoadSave::JsonTlsContext jsonContext{};
+  InterfaceRelated *uiRelated{};
+  JsonTlsContext jsonContext{};
 };
 
 void *
@@ -560,14 +550,14 @@ getLocalMallocArena()
   return ((TlsContext *)utils::getTls())->localMallocArena;
 }
 
-Interface::InterfaceRelated *&
-Interface::getUiRelated()
+InterfaceRelated *&
+getUiRelated()
 {
   return ((TlsContext *)utils::getTls())->uiRelated;
 }
 
-Framework::LoadSave::JsonTlsContext &
-Framework::LoadSave::getJsonContext()
+JsonTlsContext &
+getJsonContext()
 {
   return ((TlsContext *)utils::getTls())->jsonContext;
 }
@@ -596,9 +586,9 @@ void *cplug_createPlugin(CplugHostContext *ctx)
   COMPLEX_ASSERT(getLocalScratch());
 
   usize parameterMappings = 64, inSidechains = 0, outSidechains = 0, undoSteps = 100;
-  Framework::LoadSave::getStartupParameters(parameterMappings, inSidechains, outSidechains, undoSteps);
+  getStartupParameters(parameterMappings, inSidechains, outSidechains, undoSteps);
 
-  auto *plugin = anew(globalArena, utils::sll<Plugin::ComplexPlugin>, 
+  auto *plugin = anew(globalArena, utils::sll<ComplexPlugin>, 
     { { parameterMappings, (u32)inSidechains, (u32)outSidechains, undoSteps, ctx } });
   utils::ScopedLock g{ executableStaticData.readWriteLock, true, utils::WaitMechanism::WaitNotify };
 
@@ -616,12 +606,12 @@ void *cplug_createPlugin(CplugHostContext *ctx)
 
 void cplug_destroyPlugin(void *ptr)
 {
-  auto *plugin = (Plugin::ComplexPlugin *)ptr;
+  auto *plugin = (ComplexPlugin *)ptr;
 
   {
     utils::ScopedLock g{ executableStaticData.readWriteLock, true, utils::WaitMechanism::WaitNotify };
 
-    utils::sll<Plugin::ComplexPlugin> *node = executableStaticData.pluginInstances, *lastNode = nullptr;
+    utils::sll<ComplexPlugin> *node = executableStaticData.pluginInstances, *lastNode = nullptr;
 
     while (&node->object != plugin)
     {
@@ -642,13 +632,13 @@ void cplug_destroyPlugin(void *ptr)
 uint32_t 
 cplug_getNumInputBusses(void *ptr)
 {
-  return ((Plugin::ComplexPlugin *)ptr)->inSidechains + 1;
+  return ((ComplexPlugin *)ptr)->inSidechains + 1;
 }
 
 uint32_t 
 cplug_getNumOutputBusses(void *ptr)
 {
-  return ((Plugin::ComplexPlugin *)ptr)->outSidechains + 1;
+  return ((ComplexPlugin *)ptr)->outSidechains + 1;
 }
 
 uint32_t 
@@ -691,7 +681,7 @@ void cplug_getOutputBusName([[maybe_unused]] void *ptr, uint32_t idx, char *buf,
 uint32_t 
 cplug_getNumParameters(void *ptr)
 {
-  return (uint32_t)((Plugin::ComplexPlugin *)ptr)->parameterCount;
+  return (uint32_t)((ComplexPlugin *)ptr)->parameterCount;
 }
 
 uint32_t 
@@ -704,30 +694,30 @@ cplug_getParameterID([[maybe_unused]] void *ptr, uint32_t paramIndex)
 
 void cplug_getParameterName(void *ptr, uint32_t paramId, char *buf, size_t buflen)
 {
-  auto lock = ((Plugin::ComplexPlugin *)ptr)->acquireProcessingLock(false);
-  auto state = ((Plugin::ComplexPlugin *)ptr)->state_;
+  auto lock = ((ComplexPlugin *)ptr)->acquireProcessingLock(false);
+  auto state = ((ComplexPlugin *)ptr)->state_;
   state->parameterBridges[paramId].getName(buf, buflen);
 }
 
 double
 cplug_getParameterValue(void *ptr, uint32_t paramId)
 {
-  auto lock = ((Plugin::ComplexPlugin *)ptr)->acquireProcessingLock(false);
-  auto state = ((Plugin::ComplexPlugin *)ptr)->state_;
+  auto lock = ((ComplexPlugin *)ptr)->acquireProcessingLock(false);
+  auto state = ((ComplexPlugin *)ptr)->state_;
   return state->parameterBridges[paramId].getValue();
 }
 
 double cplug_getDefaultParameterValue(void *ptr, uint32_t paramId)
 {
-  auto lock = ((Plugin::ComplexPlugin *)ptr)->acquireProcessingLock(false);
-  auto state = ((Plugin::ComplexPlugin *)ptr)->state_;
+  auto lock = ((ComplexPlugin *)ptr)->acquireProcessingLock(false);
+  auto state = ((ComplexPlugin *)ptr)->state_;
   return state->parameterBridges[paramId].getDefaultValue();
 }
 
 void cplug_setParameterValue(void *ptr, uint32_t paramId, double value)
 {
-  auto lock = ((Plugin::ComplexPlugin *)ptr)->acquireProcessingLock(false);
-  auto state = ((Plugin::ComplexPlugin *)ptr)->state_;
+  auto lock = ((ComplexPlugin *)ptr)->acquireProcessingLock(false);
+  auto state = ((ComplexPlugin *)ptr)->state_;
   state->parameterBridges[paramId].setValue((float)value);
 }
 
@@ -746,15 +736,15 @@ cplug_normaliseParameterValue([[maybe_unused]] void *ptr, [[maybe_unused]] uint3
 double 
 cplug_parameterStringToValue(void *ptr, uint32_t paramId, const char *str)
 {
-  auto lock = ((Plugin::ComplexPlugin *)ptr)->acquireProcessingLock(false);
-  auto state = ((Plugin::ComplexPlugin *)ptr)->state_;
+  auto lock = ((ComplexPlugin *)ptr)->acquireProcessingLock(false);
+  auto state = ((ComplexPlugin *)ptr)->state_;
   return state->parameterBridges[paramId].getValueForText({ str, utils::getStringSize(str) });
 }
 
 void cplug_parameterValueToString(void *ptr, uint32_t paramId, char *buf, size_t bufsize, double value)
 {
-  auto lock = ((Plugin::ComplexPlugin *)ptr)->acquireProcessingLock(false);
-  auto state = ((Plugin::ComplexPlugin *)ptr)->state_;
+  auto lock = ((ComplexPlugin *)ptr)->acquireProcessingLock(false);
+  auto state = ((ComplexPlugin *)ptr)->state_;
   state->parameterBridges[paramId].getText((float)value, buf, bufsize);
 }
 
@@ -763,12 +753,12 @@ void cplug_getParameterRange(void *ptr, uint32_t paramId, double *min, double *m
   *min = 0.0;
   *max = 1.0;
 
-  auto lock = ((Plugin::ComplexPlugin *)ptr)->acquireProcessingLock(false);
-  auto state = ((Plugin::ComplexPlugin *)ptr)->state_;
+  auto lock = ((ComplexPlugin *)ptr)->acquireProcessingLock(false);
+  auto state = ((ComplexPlugin *)ptr)->state_;
   if (auto parameter = state->parameterBridges[paramId].getParameter())
   {
     auto details = parameter->details;
-    if (details.scale == Framework::ParameterScale::Indexed)
+    if (details.scale == ParameterScale::Indexed)
     {
       *min = 0.0;
       *max = details.options->valueCount - 1;
@@ -785,15 +775,15 @@ uint32_t
 cplug_getParameterFlags(void *ptr, uint32_t paramId)
 {
   uint32_t flags = CPLUG_FLAG_PARAMETER_IS_AUTOMATABLE;
-  auto lock = ((Plugin::ComplexPlugin *)ptr)->acquireProcessingLock(false);
-  auto state = ((Plugin::ComplexPlugin *)ptr)->state_;
+  auto lock = ((ComplexPlugin *)ptr)->acquireProcessingLock(false);
+  auto state = ((ComplexPlugin *)ptr)->state_;
   auto &bridge = state->parameterBridges[paramId];
 
   if (auto parameter = bridge.getParameter())
   {
     auto details = parameter->details;
-    flags |= details.scale == Framework::ParameterScale::Toggle ? CPLUG_FLAG_PARAMETER_IS_BOOL : 0;
-    flags |= details.scale == Framework::ParameterScale::Indexed ?
+    flags |= details.scale == ParameterScale::Toggle ? CPLUG_FLAG_PARAMETER_IS_BOOL : 0;
+    flags |= details.scale == ParameterScale::Indexed ?
       CPLUG_FLAG_PARAMETER_IS_INTEGER : 0;
   }
 
@@ -803,7 +793,7 @@ cplug_getParameterFlags(void *ptr, uint32_t paramId)
 uint32_t 
 cplug_getLatencyInSamples(void *ptr)
 {
-  return ((Plugin::ComplexPlugin *)ptr)->latency.load(satomi::memory_order_relaxed);
+  return ((ComplexPlugin *)ptr)->latency.load(satomi::memory_order_relaxed);
 }
 uint32_t cplug_getTailInSamples([[maybe_unused]] void *ptr) { return 0; }
 
@@ -812,7 +802,7 @@ uint32_t cplug_getTailInSamples([[maybe_unused]] void *ptr) { return 0; }
 
 void cplug_saveState(void *userPlugin, const void *stateCtx, cplug_writeProc writeProc)
 {
-  saveState((Plugin::ComplexPlugin *)userPlugin, stateCtx, writeProc);
+  saveState((ComplexPlugin *)userPlugin, stateCtx, writeProc);
 }
 
 void cplug_loadState(void *userPlugin, const void *stateCtx, cplug_readProc readProc)
@@ -838,21 +828,21 @@ void cplug_loadState(void *userPlugin, const void *stateCtx, cplug_readProc read
     }
   }
 
-  loadState((Plugin::ComplexPlugin *)userPlugin, { buffer, size });
+  loadState((ComplexPlugin *)userPlugin, { buffer, size });
 }
 
 
 
 void cplug_setSampleRateAndBlockSize(void *ptr, double sampleRate, uint32_t maxBlockSize)
 {
-  ((Plugin::ComplexPlugin *)ptr)->initialise((float)sampleRate, maxBlockSize);
+  ((ComplexPlugin *)ptr)->initialise((float)sampleRate, maxBlockSize);
 }
 
 void cplug_process(void *ptr, CplugProcessContext *ctx)
 {
   utils::ScopedNoDenormals noDenormals{};
 
-  auto *plugin = (Plugin::ComplexPlugin *)ptr;
+  auto *plugin = (ComplexPlugin *)ptr;
 
   // "Sample accurate" process loop
   CplugEvent event;

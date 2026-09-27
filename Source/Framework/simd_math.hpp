@@ -317,8 +317,8 @@ namespace utils
   }
 
   template<auto ConversionFunction>
-  forceinline void convertBuffer(const Framework::SimdBuffer *source,
-    Framework::SimdBuffer *destination, usize size)
+  forceinline void convertBuffer(const SimdBuffer *source,
+    SimdBuffer *destination, usize size)
   {
     auto rawSource = source->get();
     auto rawDestination = destination->get();
@@ -344,7 +344,7 @@ namespace utils
   }
 
   template<auto ConversionFunction>
-  forceinline void convertBufferInPlace(Framework::SimdBuffer *buffer, usize size)
+  forceinline void convertBufferInPlace(SimdBuffer *buffer, usize size)
   {
     for (u32 i = 0; i < buffer->getSimdChannels(); ++i)
     {

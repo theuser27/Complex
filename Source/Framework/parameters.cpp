@@ -8,82 +8,59 @@
 #include "Generation/Processor.hpp"
 #include "Interface/Components/Control.hpp"
 
-namespace Framework
+
+utils::string_view
+IndexedData::getText() const
 {
-  utils::string_view
-  IndexedData::getText() const
+  auto text = displayName;
+  if (text.empty() && flags == StateIdFlag)
   {
-    auto text = displayName;
-    if (text.empty() && flags == StateIdFlag)
+    auto *processor = getUiRelated()->plugin.state_->getProcessor(stateId);
+    text = processor->name;
+  }
+  return text;
+}
+
+utils::pair<const IndexedData *, usize>
+getOptionFromValue(float scaledValue, const ParameterDetails &details)
+{
+  COMPLEX_ASSERT(details.scale == ParameterScale::Indexed);
+
+  usize i = (usize)scaledValue;
+  IndexedData *nextIndexedData = details.options, *indexedData = nullptr;
+
+  COMPLEX_ASSERT(details.options->valueCount > i);
+
+  while (nextIndexedData)
+  {
+    indexedData = nextIndexedData;
+    // move to next option if we've run out
+    if (indexedData->valueCount <= i)
     {
-      auto *processor = Interface::getUiRelated()->plugin.state_->getProcessor(stateId);
-      text = processor->name;
+      i -= indexedData->valueCount;
+      if (indexedData->next)
+        nextIndexedData = indexedData->next;
+      else if (indexedData->parent)
+        nextIndexedData = indexedData->parent->next;
     }
-    return text;
+    else
+      nextIndexedData = indexedData->children;
   }
 
-  utils::pair<const IndexedData *, usize>
-  getOptionFromValue(float scaledValue, const ParameterDetails &details)
-  {
-    COMPLEX_ASSERT(details.scale == ParameterScale::Indexed);
+  return { indexedData, i };
+}
 
-    usize i = (usize)scaledValue;
-    IndexedData *nextIndexedData = details.options, *indexedData = nullptr;
+float
+getValueFromOptionText(utils::string_view text, const ParameterDetails &details)
+{
+  COMPLEX_ASSERT(details.scale == ParameterScale::Indexed);
+  u32 value = 0;
 
-    COMPLEX_ASSERT(details.options->valueCount > i);
-
-    while (nextIndexedData)
-    {
-      indexedData = nextIndexedData;
-      // move to next option if we've run out
-      if (indexedData->valueCount <= i)
-      {
-        i -= indexedData->valueCount;
-        if (indexedData->next)
-          nextIndexedData = indexedData->next;
-        else if (indexedData->parent)
-          nextIndexedData = indexedData->parent->next;
-      }
-      else
-        nextIndexedData = indexedData->children;
-    }
-
-    return { indexedData, i };
-  }
-
-  float
-  getValueFromOptionText(utils::string_view text, const ParameterDetails &details)
-  {
-    COMPLEX_ASSERT(details.scale == ParameterScale::Indexed);
-    u32 value = 0;
-
-    bool success = iterateOverIndexedData(details.options, [&value, text](const IndexedData &option)
-      {
-        if (option.canBeChosen())
-        {
-          if (option.displayName.compareCaseInsensitive(text) == 0)
-            return true;
-
-          ++value;
-        }
-
-        return false;
-      });
-
-    return (success) ? value : -1.0f;
-  }
-
-  float
-  getValueFromOptionId(uuid optionId, const ParameterDetails &details)
-  {
-    COMPLEX_ASSERT(details.scale == ParameterScale::Indexed);
-    u32 value = 0;
-
-    bool success = iterateOverIndexedData(details.options, [&value, optionId](const IndexedData &option)
+  bool success = iterateOverIndexedData(details.options, [&value, text](const IndexedData &option)
     {
       if (option.canBeChosen())
       {
-        if (option.id == optionId)
+        if (option.displayName.compareCaseInsensitive(text) == 0)
           return true;
 
         ++value;
@@ -92,1055 +69,1066 @@ namespace Framework
       return false;
     });
 
-    return (success) ? value : -1.0f;
-  }
+  return (success) ? value : -1.0f;
+}
 
-  float
-  getValueFromOption(const IndexedData *option, const ParameterDetails &details)
+float
+getValueFromOptionId(uuid optionId, const ParameterDetails &details)
+{
+  COMPLEX_ASSERT(details.scale == ParameterScale::Indexed);
+  u32 value = 0;
+
+  bool success = iterateOverIndexedData(details.options, [&value, optionId](const IndexedData &option)
   {
-    COMPLEX_ASSERT(details.scale == ParameterScale::Indexed);
-    u32 value = 0;
-
-    bool success = iterateOverIndexedData(details.options, [&value, option](const IndexedData &other)
+    if (option.canBeChosen())
     {
-      if (other.canBeChosen())
-      {
-        if (other == *option)
-          return true;
+      if (option.id == optionId)
+        return true;
 
-        ++value;
-      }
-
-      return false;
-    });
-
-    return (success) ? value : -1.0f;
-  }
-
-  float
-  scaleValue(float value, const ParameterDetails &details,
-    float sampleRate, bool scalePercent, bool skewOnly)
-  {
-    using namespace utils;
-
-    float result{};
-    float sign;
-    switch (details.scale)
-    {
-    case ParameterScale::Toggle:
-      result = ::roundf(value);
-      break;
-    case ParameterScale::Indexed:
-      result = (!skewOnly) ? ::roundf(value * (float)(details.options->valueCount - 1)) : value;
-      break;
-    case ParameterScale::Linear:
-      result = (!skewOnly) ? value * (details.maxValue - details.minValue) + details.minValue :
-        value + details.minValue / (details.maxValue - details.minValue);
-      break;
-    case ParameterScale::Clamp:
-      result = utils::clamp(value, details.minValue, details.maxValue);
-      result = (!skewOnly) ? result : result / (details.maxValue - details.minValue);
-      break;
-    case ParameterScale::Quadratic:
-      result = (!skewOnly) ? value * value * (details.maxValue - details.minValue) + details.minValue : value * value;
-      break;
-    case ParameterScale::ReverseQuadratic:
-      result = value - 1.0f;
-      result = (!skewOnly) ? details.maxValue - result * result * (details.maxValue - details.minValue): 1.0f - (result * result);
-      break;
-    case ParameterScale::SymmetricQuadratic:
-      value = value * 2.0f - 1.0f;
-      sign = unsignFloat(value);
-      value *= value;
-      result = (!skewOnly) ? (value * 0.5f * sign + 0.5f) * (details.maxValue - details.minValue) + details.minValue : value * 0.5f * sign + 0.5f;
-      break;
-    case ParameterScale::Cubic:
-      result = (!skewOnly) ? value * value * value * (details.maxValue - details.minValue) + details.minValue : value * value * value;
-      break;
-    case ParameterScale::ReverseCubic:
-      result = value - 1.0f;
-      result = (!skewOnly) ? result * result * result * (details.maxValue - details.minValue) + details.maxValue : (result * result * result) + 1.0f;
-      break;
-    case ParameterScale::SymmetricCubic:
-      value = 2.0f * value - 1.0f;
-      value *= value * value;
-      result = (!skewOnly) ? (value * 0.5f + 0.5f) * (details.maxValue - details.minValue) + details.minValue : value;
-      break;
-    case ParameterScale::Loudness:
-      result = normalisedToDb(value, details.maxValue);
-      result = (!skewOnly) ? result : result / details.maxValue;
-      break;
-    case ParameterScale::SymmetricLoudness:
-      value = value * 2.0f - 1.0f;
-      if (value < 0.0f)
-      {
-        result = -normalisedToDb(-value, -details.minValue);
-        result = (!skewOnly) ? result : result * 0.5f / details.minValue;
-      }
-      else
-      {
-        result = normalisedToDb(value, details.maxValue);
-        result = (!skewOnly) ? result : result * 0.5f / details.maxValue;
-      }
-      break;
-    case ParameterScale::Frequency:
-      result = normalisedToFrequency(value, sampleRate);
-      result = (!skewOnly) ? result : result * 2.0f / sampleRate;
-      break;
-    case ParameterScale::SymmetricFrequency:
-      value = value * 2.0f - 1.0f;
-      sign = unsignFloat(value);
-      result = (!skewOnly) ? normalisedToFrequency(value, sampleRate) * sign :
-        (normalisedToFrequency(value, sampleRate) * sign) / sampleRate;
-      break;
-    default:
-      COMPLEX_ASSERT_FALSE("Unhandled case");
-      break;
+      ++value;
     }
 
-    if (details.displayUnits == "%" && scalePercent)
-      result *= 100.0f;
+    return false;
+  });
 
-    if (details.flags & ParameterDetails::RoundToInt)
-      result = roundf(result);
+  return (success) ? value : -1.0f;
+}
 
-    return result;
+float
+getValueFromOption(const IndexedData *option, const ParameterDetails &details)
+{
+  COMPLEX_ASSERT(details.scale == ParameterScale::Indexed);
+  u32 value = 0;
+
+  bool success = iterateOverIndexedData(details.options, [&value, option](const IndexedData &other)
+  {
+    if (other.canBeChosen())
+    {
+      if (other == *option)
+        return true;
+
+      ++value;
+    }
+
+    return false;
+  });
+
+  return (success) ? value : -1.0f;
+}
+
+float
+scaleValue(float value, const ParameterDetails &details,
+  float sampleRate, bool scalePercent, bool skewOnly)
+{
+  using namespace utils;
+
+  float result{};
+  float sign;
+  switch (details.scale)
+  {
+  case ParameterScale::Toggle:
+    result = ::roundf(value);
+    break;
+  case ParameterScale::Indexed:
+    result = (!skewOnly) ? ::roundf(value * (float)(details.options->valueCount - 1)) : value;
+    break;
+  case ParameterScale::Linear:
+    result = (!skewOnly) ? value * (details.maxValue - details.minValue) + details.minValue :
+      value + details.minValue / (details.maxValue - details.minValue);
+    break;
+  case ParameterScale::Clamp:
+    result = utils::clamp(value, details.minValue, details.maxValue);
+    result = (!skewOnly) ? result : result / (details.maxValue - details.minValue);
+    break;
+  case ParameterScale::Quadratic:
+    result = (!skewOnly) ? value * value * (details.maxValue - details.minValue) + details.minValue : value * value;
+    break;
+  case ParameterScale::ReverseQuadratic:
+    result = value - 1.0f;
+    result = (!skewOnly) ? details.maxValue - result * result * (details.maxValue - details.minValue): 1.0f - (result * result);
+    break;
+  case ParameterScale::SymmetricQuadratic:
+    value = value * 2.0f - 1.0f;
+    sign = unsignFloat(value);
+    value *= value;
+    result = (!skewOnly) ? (value * 0.5f * sign + 0.5f) * (details.maxValue - details.minValue) + details.minValue : value * 0.5f * sign + 0.5f;
+    break;
+  case ParameterScale::Cubic:
+    result = (!skewOnly) ? value * value * value * (details.maxValue - details.minValue) + details.minValue : value * value * value;
+    break;
+  case ParameterScale::ReverseCubic:
+    result = value - 1.0f;
+    result = (!skewOnly) ? result * result * result * (details.maxValue - details.minValue) + details.maxValue : (result * result * result) + 1.0f;
+    break;
+  case ParameterScale::SymmetricCubic:
+    value = 2.0f * value - 1.0f;
+    value *= value * value;
+    result = (!skewOnly) ? (value * 0.5f + 0.5f) * (details.maxValue - details.minValue) + details.minValue : value;
+    break;
+  case ParameterScale::Loudness:
+    result = normalisedToDb(value, details.maxValue);
+    result = (!skewOnly) ? result : result / details.maxValue;
+    break;
+  case ParameterScale::SymmetricLoudness:
+    value = value * 2.0f - 1.0f;
+    if (value < 0.0f)
+    {
+      result = -normalisedToDb(-value, -details.minValue);
+      result = (!skewOnly) ? result : result * 0.5f / details.minValue;
+    }
+    else
+    {
+      result = normalisedToDb(value, details.maxValue);
+      result = (!skewOnly) ? result : result * 0.5f / details.maxValue;
+    }
+    break;
+  case ParameterScale::Frequency:
+    result = normalisedToFrequency(value, sampleRate);
+    result = (!skewOnly) ? result : result * 2.0f / sampleRate;
+    break;
+  case ParameterScale::SymmetricFrequency:
+    value = value * 2.0f - 1.0f;
+    sign = unsignFloat(value);
+    result = (!skewOnly) ? normalisedToFrequency(value, sampleRate) * sign :
+      (normalisedToFrequency(value, sampleRate) * sign) / sampleRate;
+    break;
+  default:
+    COMPLEX_ASSERT_FALSE("Unhandled case");
+    break;
   }
 
-  float
-  unscaleValue(float value, const ParameterDetails &details,
-    float sampleRate, bool unscalePercent)
+  if (details.displayUnits == "%" && scalePercent)
+    result *= 100.0f;
+
+  if (details.flags & ParameterDetails::RoundToInt)
+    result = roundf(result);
+
+  return result;
+}
+
+float
+unscaleValue(float value, const ParameterDetails &details,
+  float sampleRate, bool unscalePercent)
+{
+  using namespace utils;
+
+  if (details.displayUnits == "%" && unscalePercent)
+    value *= 0.01f;
+
+  float result{};
+  float sign;
+  switch (details.scale)
   {
-    using namespace utils;
-
-    if (details.displayUnits == "%" && unscalePercent)
-      value *= 0.01f;
-
-    float result{};
-    float sign;
-    switch (details.scale)
-    {
-    case ParameterScale::Toggle:
-      result = ::roundf(value);
-      break;
-    case ParameterScale::Indexed:
-      result = (details.options->valueCount <= 1) ? 0.0f :
-        value / (details.options->valueCount - 1);
-      break;
-    case ParameterScale::Clamp:
-      result = value;
-      break;
-    case ParameterScale::Linear:
-      result = (value - details.minValue) / (details.maxValue - details.minValue);
-      break;
-    case ParameterScale::Quadratic:
-      result = ::sqrtf((value - details.minValue) / (details.maxValue - details.minValue));
-      break;
-    case ParameterScale::ReverseQuadratic:
-      value = -(value - details.maxValue) / (details.maxValue - details.minValue);
-      result = -::sqrtf(value) + 1.0f;
-      break;
-    case ParameterScale::SymmetricQuadratic:
-      value = 2.0f * ((value - details.minValue) / (details.maxValue - details.minValue) - 0.5f);
-      sign = unsignFloat(value);
-      result = (::sqrtf(value) * sign + 1.0f) * 0.5f;
-      break;
-    case ParameterScale::Cubic:
-      value = (value - details.minValue) / (details.maxValue - details.minValue);
-      result = ::powf(value, 1.0f / 3.0f);
-      break;
-    case ParameterScale::ReverseCubic:
-      value = (value - details.maxValue) / (details.maxValue - details.minValue);
-      result = ::powf(value, 1.0f / 3.0f) + 1.0f;
-      break;
-    case ParameterScale::SymmetricCubic:
-      value = 2.0f * (value - details.minValue) / (details.maxValue - details.minValue) - 1.0f;
-      result = (::powf(value, 1.0f / 3.0f) + 1.0f) * 0.5f;
-      break;
-    case ParameterScale::Loudness:
+  case ParameterScale::Toggle:
+    result = ::roundf(value);
+    break;
+  case ParameterScale::Indexed:
+    result = (details.options->valueCount <= 1) ? 0.0f :
+      value / (details.options->valueCount - 1);
+    break;
+  case ParameterScale::Clamp:
+    result = value;
+    break;
+  case ParameterScale::Linear:
+    result = (value - details.minValue) / (details.maxValue - details.minValue);
+    break;
+  case ParameterScale::Quadratic:
+    result = ::sqrtf((value - details.minValue) / (details.maxValue - details.minValue));
+    break;
+  case ParameterScale::ReverseQuadratic:
+    value = -(value - details.maxValue) / (details.maxValue - details.minValue);
+    result = -::sqrtf(value) + 1.0f;
+    break;
+  case ParameterScale::SymmetricQuadratic:
+    value = 2.0f * ((value - details.minValue) / (details.maxValue - details.minValue) - 0.5f);
+    sign = unsignFloat(value);
+    result = (::sqrtf(value) * sign + 1.0f) * 0.5f;
+    break;
+  case ParameterScale::Cubic:
+    value = (value - details.minValue) / (details.maxValue - details.minValue);
+    result = ::powf(value, 1.0f / 3.0f);
+    break;
+  case ParameterScale::ReverseCubic:
+    value = (value - details.maxValue) / (details.maxValue - details.minValue);
+    result = ::powf(value, 1.0f / 3.0f) + 1.0f;
+    break;
+  case ParameterScale::SymmetricCubic:
+    value = 2.0f * (value - details.minValue) / (details.maxValue - details.minValue) - 1.0f;
+    result = (::powf(value, 1.0f / 3.0f) + 1.0f) * 0.5f;
+    break;
+  case ParameterScale::Loudness:
+    value = dbToNormalised(value, details.maxValue);
+    result = (value + 1.0f) * 0.5f;
+    break;
+  case ParameterScale::SymmetricLoudness:
+    if (value < 0.0)
+      value = -dbToNormalised(-value, -details.minValue);
+    else
       value = dbToNormalised(value, details.maxValue);
-      result = (value + 1.0f) * 0.5f;
-      break;
-    case ParameterScale::SymmetricLoudness:
-      if (value < 0.0)
-        value = -dbToNormalised(-value, -details.minValue);
-      else
-        value = dbToNormalised(value, details.maxValue);
-      result = (value + 1.0f) * 0.5f;
-      break;
-    case ParameterScale::Frequency:
-      result = frequencyToNormalised(value, sampleRate);
-      break;
-    case ParameterScale::SymmetricFrequency:
-      sign = unsignFloat(value);
-      value = frequencyToNormalised(value, sampleRate);
-      result = (value * sign + 1.0f) * 0.5f;
-      break;
-    default:
-      COMPLEX_ASSERT_FALSE("Unhandled case");
-      break;
-    }
-
-    return result;
+    result = (value + 1.0f) * 0.5f;
+    break;
+  case ParameterScale::Frequency:
+    result = frequencyToNormalised(value, sampleRate);
+    break;
+  case ParameterScale::SymmetricFrequency:
+    sign = unsignFloat(value);
+    value = frequencyToNormalised(value, sampleRate);
+    result = (value * sign + 1.0f) * 0.5f;
+    break;
+  default:
+    COMPLEX_ASSERT_FALSE("Unhandled case");
+    break;
   }
 
-  f4
-  scaleValue(f4 value, const ParameterDetails &details, float sampleRate)
+  return result;
+}
+
+f4
+scaleValue(f4 value, const ParameterDetails &details, float sampleRate)
+{
+  using namespace utils;
+
+  f4 result{};
+  i4mask sign{};
+  switch (details.scale)
   {
-    using namespace utils;
-
-    f4 result{};
-    i4mask sign{};
-    switch (details.scale)
+  case ParameterScale::Toggle:
+    result = f4::round(value);
+    break;
+  case ParameterScale::Indexed:
+    result = f4::round(value * (float)(details.options->valueCount - 1));
+    break;
+  case ParameterScale::Linear:
+    result = value * (details.maxValue - details.minValue) + details.minValue;
+    break;
+  case ParameterScale::Quadratic:
+    result = value * value * (details.maxValue - details.minValue) + details.minValue;
+    break;
+  case ParameterScale::ReverseQuadratic:
+    result = value - 1.0;
+    result = details.maxValue - result * result * (details.maxValue - details.minValue);
+    break;
+  case ParameterScale::SymmetricQuadratic:
+    value -= 0.5f;
+    sign = getSign(value);
+    value *= value;
+    result = ((value ^ sign) + 0.25f) * 2.0f * (details.maxValue - details.minValue) + details.minValue;
+    break;
+  case ParameterScale::Cubic:
+    result = value * value * value * (details.maxValue - details.minValue) + details.minValue;
+    break;
+  case ParameterScale::ReverseCubic:
+    result = value - 1.0f;
+    result = result * result * result * (details.maxValue - details.minValue) + details.maxValue;
+    break;
+  case ParameterScale::SymmetricCubic:
+    value = f4::mulSub(1.0f, value, 2.0f);
+    value *= value * value;
+    result = f4::mulAdd(0.5f, value, 0.5f) * (details.maxValue - details.minValue) + details.minValue;
+    break;
+  case ParameterScale::Loudness:
+    result = normalisedToDb(value, details.maxValue);
+    break;
+  case ParameterScale::SymmetricLoudness:
+    value = (value * 2.0f - 1.0f);
+    sign = unsignSimd(value);
+    if (i4mask::allSame(sign))
     {
-    case ParameterScale::Toggle:
-      result = f4::round(value);
-      break;
-    case ParameterScale::Indexed:
-      result = f4::round(value * (float)(details.options->valueCount - 1));
-      break;
-    case ParameterScale::Linear:
-      result = value * (details.maxValue - details.minValue) + details.minValue;
-      break;
-    case ParameterScale::Quadratic:
-      result = value * value * (details.maxValue - details.minValue) + details.minValue;
-      break;
-    case ParameterScale::ReverseQuadratic:
-      result = value - 1.0;
-      result = details.maxValue - result * result * (details.maxValue - details.minValue);
-      break;
-    case ParameterScale::SymmetricQuadratic:
-      value -= 0.5f;
-      sign = getSign(value);
-      value *= value;
-      result = ((value ^ sign) + 0.25f) * 2.0f * (details.maxValue - details.minValue) + details.minValue;
-      break;
-    case ParameterScale::Cubic:
-      result = value * value * value * (details.maxValue - details.minValue) + details.minValue;
-      break;
-    case ParameterScale::ReverseCubic:
-      result = value - 1.0f;
-      result = result * result * result * (details.maxValue - details.minValue) + details.maxValue;
-      break;
-    case ParameterScale::SymmetricCubic:
-      value = f4::mulSub(1.0f, value, 2.0f);
-      value *= value * value;
-      result = f4::mulAdd(0.5f, value, 0.5f) * (details.maxValue - details.minValue) + details.minValue;
-      break;
-    case ParameterScale::Loudness:
-      result = normalisedToDb(value, details.maxValue);
-      break;
-    case ParameterScale::SymmetricLoudness:
-      value = (value * 2.0f - 1.0f);
-      sign = unsignSimd(value);
-      if (i4mask::allSame(sign))
-      {
-        float extremum = (sign[0]) ? -details.minValue : details.maxValue;
-        result = normalisedToDb(value, extremum) | sign;
-      }
-      else
-      {
-        i4mask mask = i4mask::equal(sign, kSignMask);
-        result = merge(normalisedToDb(value, details.maxValue),
-          normalisedToDb(value, -details.minValue), mask) | sign;
-      }
-      break;
-    case ParameterScale::Frequency:
-      result = normalisedToFrequency(value, sampleRate);
-      break;
-    case ParameterScale::SymmetricFrequency:
-      value = value * 2.0f - 1.0f;
-      sign = unsignSimd(value);
-      result = normalisedToFrequency(value, sampleRate) | sign;
-      break;
-    case ParameterScale::Clamp:
-      result = f4::clamp(value, details.minValue, details.maxValue);
-      break;
-    default:
-      COMPLEX_ASSERT_FALSE("Unhandled case");
-      break;
+      float extremum = (sign[0]) ? -details.minValue : details.maxValue;
+      result = normalisedToDb(value, extremum) | sign;
     }
-
-    if (details.flags & ParameterDetails::RoundToInt)
-      result = f4::round(result);
-
-    return result;
+    else
+    {
+      i4mask mask = i4mask::equal(sign, kSignMask);
+      result = merge(normalisedToDb(value, details.maxValue),
+        normalisedToDb(value, -details.minValue), mask) | sign;
+    }
+    break;
+  case ParameterScale::Frequency:
+    result = normalisedToFrequency(value, sampleRate);
+    break;
+  case ParameterScale::SymmetricFrequency:
+    value = value * 2.0f - 1.0f;
+    sign = unsignSimd(value);
+    result = normalisedToFrequency(value, sampleRate) | sign;
+    break;
+  case ParameterScale::Clamp:
+    result = f4::clamp(value, details.minValue, details.maxValue);
+    break;
+  default:
+    COMPLEX_ASSERT_FALSE("Unhandled case");
+    break;
   }
 
-  HostParameter::HostParameter(Plugin::State *state, u64 parameterIndex) : 
-    parameterIndex{ parameterIndex }, state{ state }
+  if (details.flags & ParameterDetails::RoundToInt)
+    result = f4::round(result);
+
+  return result;
+}
+
+HostParameter::HostParameter(State *state, u64 parameterIndex) : 
+  parameterIndex{ parameterIndex }, state{ state }
+{
+  name_.second = utils::string::create(state->miscStorage, "%zu", parameterIndex + 1);
+}
+
+HostParameter::~HostParameter()
+{
+  if (auto parameter = parameter_.load(satomi::memory_order_acquire); parameter)
+    parameter->hostParameter = nullptr;
+}
+
+void HostParameter::resetParameter(Parameter *newParameter, bool getValueFromParameter)
+{
+  auto *old = parameter_.load(satomi::memory_order_acquire);
+  if (newParameter == old)
+    return;
+
+  utils::ScopedLock guard{ name_.first, utils::WaitMechanism::Spin };
+
+  parameter_.store(newParameter, satomi::memory_order_release);
+
+  if (!newParameter)
+  {
+    if (old)
+      old->hostParameter = nullptr;
+    name_.second = utils::string::create(state->miscStorage, "%zu", parameterIndex + 1);
+  }
+  else
+  {
+    newParameter->hostParameter = this;
+    if (getValueFromParameter)
+      value_.store(newParameter->normalisedValue.load(satomi::memory_order_relaxed),
+        satomi::memory_order_release);
+    else if (newParameter->control)
+      newParameter->control->setValue(value_.load(satomi::memory_order_relaxed), true);
+
+    auto name = newParameter->details.displayName;
+    name_.second = utils::string::create(state->miscStorage, "%zu > %s", parameterIndex + 1, name.data());
+  }
+}
+
+
+
+// this function is called on the UI thread
+void HostParameter::updateUIParameter()
+{
+  // for wasValueSet_ we only require atomicity, therefore memory_order_relaxed suffices
+  bool dummy = true;
+  if (wasValueSet_.compare_exchange_strong(dummy, false, satomi::memory_order_relaxed))
+  {
+    // for parameter_ it's fine to use relaxed because
+    // this method is only called from the UI thread
+    // which is the only one that touches the UI
+    auto p = parameter_.load(satomi::memory_order_relaxed);
+    if (!p || !p->control || p->hostParameter != this)
+      return;
+
+    // undo/redo doesn't track these changes
+    p->control->setValue(value_.load(satomi::memory_order_relaxed), false);
+  }
+}
+
+void HostParameter::setCustomName(utils::string name)
+{
+  utils::ScopedLock guard{ name_.first, utils::WaitMechanism::Spin };
+  name_.second = COMPLEX_MOVE(name);
+}
+
+void HostParameter::resetName()
+{
+  utils::ScopedLock guard{ name_.first, utils::WaitMechanism::Spin };
+  auto parameter = parameter_.load(satomi::memory_order_acquire);
+
+  if (parameter)
+  {
+    auto name = parameter->details.displayName;
+    name_.second = utils::string::create(state->miscStorage, "%zu > %s", parameterIndex + 1, name.data());
+  }
+  else
   {
     name_.second = utils::string::create(state->miscStorage, "%zu", parameterIndex + 1);
   }
-
-  HostParameter::~HostParameter()
-  {
-    if (auto parameter = parameter_.load(satomi::memory_order_acquire); parameter)
-      parameter->hostParameter = nullptr;
-  }
-
-  void HostParameter::resetParameter(Parameter *newParameter, bool getValueFromParameter)
-  {
-    auto *old = parameter_.load(satomi::memory_order_acquire);
-    if (newParameter == old)
-      return;
-
-    utils::ScopedLock guard{ name_.first, utils::WaitMechanism::Spin };
-
-    parameter_.store(newParameter, satomi::memory_order_release);
-
-    if (!newParameter)
-    {
-      if (old)
-        old->hostParameter = nullptr;
-      name_.second = utils::string::create(state->miscStorage, "%zu", parameterIndex + 1);
-    }
-    else
-    {
-      newParameter->hostParameter = this;
-      if (getValueFromParameter)
-        value_.store(newParameter->normalisedValue.load(satomi::memory_order_relaxed),
-          satomi::memory_order_release);
-      else if (newParameter->control)
-        newParameter->control->setValue(value_.load(satomi::memory_order_relaxed), true);
-
-      auto name = newParameter->details.displayName;
-      name_.second = utils::string::create(state->miscStorage, "%zu > %s", parameterIndex + 1, name.data());
-    }
-  }
-
-
-
-  // this function is called on the UI thread
-  void HostParameter::updateUIParameter()
-  {
-    // for wasValueSet_ we only require atomicity, therefore memory_order_relaxed suffices
-    bool dummy = true;
-    if (wasValueSet_.compare_exchange_strong(dummy, false, satomi::memory_order_relaxed))
-    {
-      // for parameter_ it's fine to use relaxed because
-      // this method is only called from the UI thread
-      // which is the only one that touches the UI
-      auto p = parameter_.load(satomi::memory_order_relaxed);
-      if (!p || !p->control || p->hostParameter != this)
-        return;
-
-      // undo/redo doesn't track these changes
-      p->control->setValue(value_.load(satomi::memory_order_relaxed), false);
-    }
-  }
-
-  void HostParameter::setCustomName(utils::string name)
-  {
-    utils::ScopedLock guard{ name_.first, utils::WaitMechanism::Spin };
-    name_.second = COMPLEX_MOVE(name);
-  }
-
-  void HostParameter::resetName()
-  {
-    utils::ScopedLock guard{ name_.first, utils::WaitMechanism::Spin };
-    auto parameter = parameter_.load(satomi::memory_order_acquire);
-
-    if (parameter)
-    {
-      auto name = parameter->details.displayName;
-      name_.second = utils::string::create(state->miscStorage, "%zu > %s", parameterIndex + 1, name.data());
-    }
-    else
-    {
-      name_.second = utils::string::create(state->miscStorage, "%zu", parameterIndex + 1);
-    }
-  }
-
-  void HostParameter::setValue(float newValue)
-  {
-    auto oldValue = value_.exchange(newValue, satomi::memory_order_relaxed);
-    if (oldValue != newValue)
-    {
-      wasValueSet_.store(true, satomi::memory_order_relaxed);
-      if (auto *parameter = getParameter())
-        parameter->normalisedValue.store(newValue, satomi::memory_order_relaxed);
-    }
-  }
-
-  float
-  HostParameter::getDefaultValue() const
-  {
-    if (auto parameter = parameter_.load(satomi::memory_order_acquire))
-      return utils::clamp(parameter->details.defaultNormalisedValue, 0.0f, 1.0f);
-    return kDefaultParameterValue;
-  }
-
-  void HostParameter::getName(utils::string &outString) const
-  {
-    // this is hacky i know but there's no way to declare the atomic mutable inside the pair
-    utils::ScopedLock guard{ const_cast<satomi::atomic<bool> &>(name_.first), utils::WaitMechanism::Spin };
-
-    if (parameter_.load(satomi::memory_order_acquire))
-    {
-      outString.copy(name_.second);
-    }
-    else
-    {
-      auto index = name_.second.find(" ");
-      outString.copy({ name_.second, 0, index });
-    }
-  }
-
-  void HostParameter::getName(char *buffer, usize maximumStringLength) const
-  {
-    // this is hacky i know but there's no way to declare the atomic mutable inside the pair
-    utils::ScopedLock guard{ const_cast<satomi::atomic<bool> &>(name_.first), utils::WaitMechanism::Spin };
-
-    usize size = utils::min(name_.second.size(), maximumStringLength - 1);
-    ::memcpy(buffer, name_.second.data(), size);
-    buffer[size] = '\0';
-  }
-
-  void HostParameter::getText(float value, char *buffer, usize maximumStringLength) const
-  {
-    auto parameter = parameter_.load(satomi::memory_order_acquire);
-    float internalValue;
-    if (!parameter)
-      internalValue = value;
-    else
-    {
-      auto details = parameter->details;
-      auto sampleRate = state->plugin->getSampleRate();
-      internalValue = scaleValue(value, details, sampleRate, true);
-      if (details.scale == ParameterScale::Indexed)
-      {
-        auto [indexedData, index] = getOptionFromValue(internalValue, details);
-
-        if (indexedData->valueCount > 1)
-        {
-          ::stbsp_snprintf(buffer, (int)maximumStringLength, "%.*s %zu",
-            (int)indexedData->displayName.size(), indexedData->displayName.data(), index + 1);
-        }
-        else
-        {
-          ::stbsp_snprintf(buffer, (int)maximumStringLength, "%.*s",
-            (int)indexedData->displayName.size(), indexedData->displayName.data());
-        }
-
-        return;
-      }
-    }
-
-    utils::floatToString(internalValue, buffer, maximumStringLength);
-  }
-
-  float
-  HostParameter::getValueForText(utils::string_view text) const
-  {
-    if (auto parameter = parameter_.load(satomi::memory_order_acquire))
-      return (float)unscaleValue(::strtof(text.data(), nullptr), parameter->details, true);
-
-    return ::strtof(text.data(), nullptr);
-  }
-
-  bool
-  HostParameter::isDiscrete() const
-  {
-    if (auto parameter = parameter_.load(satomi::memory_order_acquire))
-      return parameter->details.scale == ParameterScale::Indexed;
-    return false;
-  }
-
-  bool
-  HostParameter::isBoolean() const
-  {
-    if (auto parameter = parameter_.load(satomi::memory_order_acquire))
-      return parameter->details.scale == ParameterScale::Toggle;
-    return false;
-  }
-
-  static void checkGlobalLockAcquired(Parameter *parameter)
-  {
-    if (parameter->parentProcessor && parameter->parentProcessor->parent)
-    {
-      if (auto &lock = parameter->parentProcessor->state->plugin->processingLock;
-        lock.lock.load(satomi::memory_order_relaxed) >= 0 ||
-        lock.lastLockId.load(satomi::memory_order_relaxed) != utils::thread::getCurrentId())
-      {
-        COMPLEX_HARD_ASSERT_FALSE(
-          "Attempted parameter changes without an acquired lock on %v (%zu)",
-          parameter->details.displayName, parameter->details.id);
-      }
-    }
-  }
-
-  static float
-  resetParameter(Parameter *p, const ParameterDetails *newDetails,
-    const float *value, float sampleRate, bool checkLock)
-  {
-    if (newDetails)
-    {
-      // in order to make changes to the parameter details
-      // the main processing lock needs to be exclusively acquired
-      // violating this will cause data races because
-      // nothing is guarding most members in this class
-      if (checkLock)
-        checkGlobalLockAcquired(p);
-      const_cast<ParameterDetails &>(p->details) = *newDetails;
-    }
-
-    float newValue;
-    if (!value && p->details.scale == ParameterScale::Indexed)
-    {
-      newValue = unscaleValue(getValueFromOptionId(p->details.defaultOptionId,
-        p->details), p->details, sampleRate);
-    }
-    else
-    {
-      newValue = (value) ? *value : p->details.defaultNormalisedValue;
-    }
-
-    newValue = p->updateNormalisedValue(newValue);
-
-    // set the other values because we're initialising with new details
-    if (newDetails)
-      p->updateValue(sampleRate);
-
-    return newValue;
-  }
-
-  Parameter::Parameter(ParameterDetails details, Generation::Processor *parent) :
-    details{ COMPLEX_MOVE(details) }, parentProcessor{ parent }, 
-    modulators{ parent->arena } { }
-
-  float
-  Parameter::reset(const ParameterDetails *newDetails, 
-    const float *value, float sampleRate)
-  {
-    return resetParameter(this, newDetails, value, sampleRate, true);
-  }
-
-  void Parameter::addModulator(ParameterModulator &modulator)
-  {
-    checkGlobalLockAcquired(this);
-    const_cast<utils::vector<ParameterModulator *> &>(modulators).emplaceBack(&modulator);
-  }
-
-  void Parameter::deleteModulator(ParameterModulator &modulator)
-  {
-    checkGlobalLockAcquired(this);
-    const_cast<utils::vector<ParameterModulator *> &>(modulators).erase(&modulator);
-  }
-  
-  Parameter *
-  Parameter::createParameters(Generation::Processor *processor, usize count,
-    ParameterMetadata *pararmeterMetadata, Parameter *fromCopy)
-  {
-    if (!count)
-      return nullptr;
-
-    auto *memory = arranew(processor->arena, Parameter, count, {});
-
-    for (usize i = 0; i < count; ++i)
-    {
-      ParameterDetails details;
-
-      if (fromCopy)
-        details = fromCopy->details;
-      else
-        details = pararmeterMetadata->details;
-
-      if (details.scale == ParameterScale::Indexed)
-        details.options = IndexedData::deepCopy(processor->arena, details.options);
-
-      (void)new(memory + i) Parameter{ COMPLEX_MOVE(details), processor };
-      memory[i].previous = memory + i - 1;
-      memory[i].next = memory + i + 1;
-
-      processor->state->registerDynamicParameter(&memory[i]);
-
-      if (fromCopy)
-        fromCopy = fromCopy->next;
-      else
-        pararmeterMetadata = pararmeterMetadata->next;
-    }
-
-    memory[0].previous = memory + count - 1;
-    memory[count - 1].next = nullptr;
-
-    return memory;
-  }
-
-  void Parameter::initialiseParameters(Framework::Parameter *parameters,
-    usize count, Framework::Parameter *fromCopy, bool keepValue)
-  {
-    if (!count)
-      return;
-
-    auto sampleRate = parameters->parentProcessor->state->plugin->getSampleRate();
-
-    for (usize i = 0; i < count; (++i), (parameters = parameters->next))
-    {
-      if (fromCopy)
-      {
-        for (auto *modulator : fromCopy->modulators)
-          parameters->addModulator(*modulator);
-        float newValue = (keepValue) ? parameters->normalisedValue.load(satomi::memory_order_relaxed) :
-          fromCopy->normalisedValue.load(satomi::memory_order_relaxed);
-        parameters->reset(nullptr, &newValue, sampleRate);
-        fromCopy = fromCopy->next;
-      }
-      else
-      {
-        float newValue = parameters->normalisedValue.load(satomi::memory_order_relaxed);
-        parameters->reset(nullptr, (keepValue) ? &newValue : nullptr, sampleRate);
-      }
-
-      parameters->updateValue(sampleRate);
-    }
-  }
-
-  UndoManager::UndoManager(utils::Pool *parentArena, usize transactionsToKeep)
-  {
-    storage = utils::Pool::createNested(parentArena, 
-      transactionsToKeep * storagePerTransaction);
-    setTransationStorage(transactionsToKeep);
-  }
-
-  UndoManager::~UndoManager()
-  {
-    utils::Pool::destroy(storage);
-  }
-
-  void UndoManager::setTransationStorage(usize transactionsToKeep)
-  {
-    transactionsToKeep = utils::max(transactionsToKeep, (usize)1);
-    if (transactions.size() == transactionsToKeep)
-      return;
-
-    if (!transactions.size())
-    {
-      transactions = { (decltype(transactions)::value_type *)nullptr, transactionsToKeep };
-      clear();
-      return;
-    }
-
-    usize copySize, begin;
-    if ((usize)(undoActionsCount + redoActionsCount) < transactionsToKeep)
-    {
-      // new buffer can house all currently stored actions
-      copySize = undoActionsCount + redoActionsCount;
-      begin = ((usize)currentIndex + 1 - undoActionsCount +
-        transactions.size()) % transactions.size();
-    }
-    else
-    {
-      // new buffer can't house all currently stored actions
-      // use half the size for undo and redo actions respectively
-      copySize = transactionsToKeep;
-      auto newRedoActionsCount = transactionsToKeep / 2;
-      auto newUndoActionsCount = transactionsToKeep - newRedoActionsCount;
-
-      // destroy the to be deleted redos/undos
-      // in reverse, from newest to oldest
-
-      for (usize i = redoActionsCount - newRedoActionsCount; i > 0; --i)
-        for (auto *action = transactions[currentIndex + newRedoActionsCount + i - 1].second; action; action = action->next)
-          if (action->destructor)
-            action->destructor(action);
-
-      for (usize i = 0; i < undoActionsCount - newUndoActionsCount; ++i)
-        for (auto *action = transactions[currentIndex - newUndoActionsCount - i].second; action; action = action->next)
-          if (action->destructor)
-            action->destructor(action);
-
-      redoActionsCount = newRedoActionsCount;
-      undoActionsCount = newUndoActionsCount;
-      begin = ((usize)currentIndex + 1 - undoActionsCount +
-        transactions.size()) % transactions.size();
-    }
-
-    currentIndex = undoActionsCount - 1;
-
-    auto *newTransactions = arranew(storage, decltype(transactions)::value_type,
-      transactionsToKeep, {});
-    for (usize i = 0; i < copySize; ++i)
-      newTransactions[i] = transactions[(begin + i) % transactions.size()];
-    transactions = { newTransactions, transactionsToKeep };
-  }
-
-  void UndoManager::clear()
-  {
-    currentIndex = transactions.size() - 1;
-    undoActionsCount = 0;
-    redoActionsCount = 0;
-
-    // this will also deallocate the transactions buffer, so we need to allocate it again
-    storage->clear(storage);
-
-    auto *newTransactions = arranew(storage, decltype(transactions)::value_type,
-      transactions.size(), {});
-    transactions = { newTransactions, transactions.size() };
-  }
-
-  bool UndoManager::perform(UndoAction *newAction)
-  {
-    if (newAction == nullptr)
-      return false;
-
-    if (isInsideUndoRedoCall)
-    {
-      COMPLEX_ASSERT_FALSE("Don't call UndoManager methods recursively from the \
-        redo()/undo() methods in UndoAction, or else these actions will be discarded!");
-      return false;
-    }
-
-    isInsideUndoRedoCall = true;
-
-    newAction->redo(newAction);
-
-    COMPLEX_ASSERT(redoActionsCount == 0, "You need to call UndoManager::beginNewTransaction() \
-      if you want to overwrite undone actions");
-
-    UndoAction *previousAction{};
-    auto [arena, action] = transactions[currentIndex];
-    if (!action)
-      transactions[currentIndex].second = newAction;
-    else while (true) // try to coalesce the new action with any one of the current transaction
-    {
-      if (!action)
-      {
-        newAction->next = transactions[currentIndex].second;
-        transactions[currentIndex].second = newAction;
-        break;
-      }
-
-      if (action->combineActions)
-      {
-        if (auto coalescedAction = action->combineActions(arena, action, newAction))
-        {
-          coalescedAction->next = action->next;
-          if (previousAction)
-            previousAction->next = coalescedAction;
-          else
-            transactions[currentIndex].second = coalescedAction;
-
-          // the coalesced action might be newAction, action or a newly allocated action
-          // therefore we need to clean up afterwards
-          if (coalescedAction != newAction)
-            utils::Pool::remove(newAction);
-          if (coalescedAction != action)
-            utils::Pool::remove(action);
-
-          break;
-        }
-      }
-
-      previousAction = action;
-      action = action->next;
-    }
-
-    isInsideUndoRedoCall = false;
-
-    return true;
-  }
-
-  utils::Pool *
-  UndoManager::beginNewTransaction()
-  {
-    currentIndex = (currentIndex + 1) % transactions.size();
-    bool currentHasArena = transactions[currentIndex].first;
-
-    // make a new action set if there isn't one currently
-    if (!currentHasArena)
-    {
-      COMPLEX_ASSERT(!transactions[currentIndex].second);
-      transactions[currentIndex].first =
-        utils::Pool::createNested(storage, storagePerTransaction);
-    }
-
-    // destroy transaction to be replaced, if such exist
-    for (auto *action = transactions[currentIndex].second; action; action = action->next)
-      if (action->destructor)
-        action->destructor(action);
-
-    transactions[currentIndex].second = {};
-    undoActionsCount = utils::min(undoActionsCount + 1, transactions.size());
-    redoActionsCount = 0;
-
-    //COMPLEX_DEBUG_LOG("begin new - index: %zu, undo count: %zu, redo count: %zu\n\n",
-    //  currentIndex, undoActionsCount, redoActionsCount);
-
-    return transactions[currentIndex].first;
-  }
-
-  bool 
-  UndoManager::undo()
-  {
-    if (undoActionsCount == 0)
-      return false;
-
-    if (isInsideUndoRedoCall)
-    {
-      COMPLEX_ASSERT_FALSE("Don't call UndoManager methods recursively from the \
-        redo()/undo() methods in UndoAction, or else these actions will be discarded!");
-      return false;
-    }
-
-    isInsideUndoRedoCall = true;
-
-    COMPLEX_FOREACH_AND_REVERSE_SLL(action, transactions[currentIndex].second)
-    {
-      action->undo(action);
-      transactions[currentIndex].second = action;
-    }
-
-    currentIndex = (currentIndex - 1 + transactions.size()) % transactions.size();
-    --undoActionsCount;
-    ++redoActionsCount;
-
-    //COMPLEX_DEBUG_LOG("undo - index: %zu, undo count: %zu, redo count: %zu\n\n",
-    //  currentIndex, undoActionsCount, redoActionsCount);
-
-    isInsideUndoRedoCall = false;
-    return true;
-  }
-
-  bool
-  UndoManager::redo()
-  {
-    if (!redoActionsCount)
-      return false;
-
-    if (isInsideUndoRedoCall)
-    {
-      COMPLEX_ASSERT_FALSE("Don't call UndoManager methods recursively from the \
-        redo()/undo() methods in UndoAction, or else these actions will be discarded!");
-      return false;
-    }
-
-    isInsideUndoRedoCall = true;
-
-    currentIndex = (currentIndex + 1) % transactions.size();
-
-    COMPLEX_FOREACH_AND_REVERSE_SLL(action, transactions[currentIndex].second)
-    {
-      action->redo(action);
-      transactions[currentIndex].second = action;
-    }
-
-    --redoActionsCount;
-    ++undoActionsCount;
-
-    //COMPLEX_DEBUG_LOG("redo - index: %zu, undo count: %zu, redo count: %zu\n\n",
-    //  currentIndex, undoActionsCount, redoActionsCount);
-
-    isInsideUndoRedoCall = false;
-    return true;
-  }
-
 }
 
-namespace Plugin
+void HostParameter::setValue(float newValue)
 {
-  void State::registerDynamicParameter(Framework::Parameter *parameter)
+  auto oldValue = value_.exchange(newValue, satomi::memory_order_relaxed);
+  if (oldValue != newValue)
+  {
+    wasValueSet_.store(true, satomi::memory_order_relaxed);
+    if (auto *parameter = getParameter())
+      parameter->normalisedValue.store(newValue, satomi::memory_order_relaxed);
+  }
+}
+
+float
+HostParameter::getDefaultValue() const
+{
+  if (auto parameter = parameter_.load(satomi::memory_order_acquire))
+    return utils::clamp(parameter->details.defaultNormalisedValue, 0.0f, 1.0f);
+  return kDefaultParameterValue;
+}
+
+void HostParameter::getName(utils::string &outString) const
+{
+  // this is hacky i know but there's no way to declare the atomic mutable inside the pair
+  utils::ScopedLock guard{ const_cast<satomi::atomic<bool> &>(name_.first), utils::WaitMechanism::Spin };
+
+  if (parameter_.load(satomi::memory_order_acquire))
+  {
+    outString.copy(name_.second);
+  }
+  else
+  {
+    auto index = name_.second.find(" ");
+    outString.copy({ name_.second, 0, index });
+  }
+}
+
+void HostParameter::getName(char *buffer, usize maximumStringLength) const
+{
+  // this is hacky i know but there's no way to declare the atomic mutable inside the pair
+  utils::ScopedLock guard{ const_cast<satomi::atomic<bool> &>(name_.first), utils::WaitMechanism::Spin };
+
+  usize size = utils::min(name_.second.size(), maximumStringLength - 1);
+  ::memcpy(buffer, name_.second.data(), size);
+  buffer[size] = '\0';
+}
+
+void HostParameter::getText(float value, char *buffer, usize maximumStringLength) const
+{
+  auto parameter = parameter_.load(satomi::memory_order_acquire);
+  float internalValue;
+  if (!parameter)
+    internalValue = value;
+  else
   {
     auto details = parameter->details;
-
-    if (details.scale != Framework::ParameterScale::Indexed)
-      return;
-
-    COMPLEX_ASSERT(details.options != nullptr);
-
-    // adding all possible reasons for update
-    // and recalculating the new max value based on current state
-    Framework::IndexedData::visit(details.options, [&](Framework::IndexedData &data)
-      {
-        if (data.dynamicUpdateUuid != uuid{})
-          dynamicParameters.emplaceBack(&data, parameter);
-
-        return false;
-      });
-  }
-
-  static void updateDynamicOptionEntries(Framework::IndexedData *target,
-    Framework::IndexedData *reference, utils::Pool *arena, bool allowsBreakingChanges = true)
-  {
-    // we've reached a leaf node
-    if (target->canBeChosen())
+    auto sampleRate = state->plugin->getSampleRate();
+    internalValue = scaleValue(value, details, sampleRate, true);
+    if (details.scale == ParameterScale::Indexed)
     {
-      auto temp = *target;
-      *target = *reference;
+      auto [indexedData, index] = getOptionFromValue(internalValue, details);
 
-      target->parent = temp.parent;
-      target->children = temp.children;
-      target->next = temp.next;
-      target->displayName = temp.displayName;
-      target->userFlags = temp.userFlags;
-
-      return;
-    }
-
-    // Framework::IndexedData *endOfUntrackedOptions{};
-    // Framework::IndexedData *endOfTrackedOptions{};
-    u32 i = 0;
-
-    // do a post-order traversal of this function first
-    // and check for erased options
-    for (Framework::IndexedData *targetChild = target->children, *previous = nullptr, *next = nullptr;
-      targetChild; (targetChild = next), (++i))
-    {
-      bool isPresent = false;
-      for (auto referenceChild = reference->children; referenceChild; referenceChild = referenceChild->next)
+      if (indexedData->valueCount > 1)
       {
-        isPresent = *targetChild == *referenceChild;
-        if (isPresent)
-        {
-          updateDynamicOptionEntries(targetChild, referenceChild, arena, allowsBreakingChanges);
-          break;
-        }
+        ::stbsp_snprintf(buffer, (int)maximumStringLength, "%.*s %zu",
+          (int)indexedData->displayName.size(), indexedData->displayName.data(), index + 1);
+      }
+      else
+      {
+        ::stbsp_snprintf(buffer, (int)maximumStringLength, "%.*s",
+          (int)indexedData->displayName.size(), indexedData->displayName.data());
       }
 
-      next = targetChild->next;
-      previous = (isPresent) ? targetChild : previous;
-      // endOfUntrackedOptions = previous;
-      // if (i < target->childrenCount)
-      //   endOfTrackedOptions = endOfUntrackedOptions;
+      return;
+    }
+  }
 
-      if (isPresent)
-        continue;
+  utils::floatToString(internalValue, buffer, maximumStringLength);
+}
 
-      // removing the option is breaking change but it could crash the program otherwise
-      target->removeChild(targetChild);
-      utils::Pool::remove(targetChild);
+float
+HostParameter::getValueForText(utils::string_view text) const
+{
+  if (auto parameter = parameter_.load(satomi::memory_order_acquire))
+    return (float)unscaleValue(::strtof(text.data(), nullptr), parameter->details, true);
+
+  return ::strtof(text.data(), nullptr);
+}
+
+bool
+HostParameter::isDiscrete() const
+{
+  if (auto parameter = parameter_.load(satomi::memory_order_acquire))
+    return parameter->details.scale == ParameterScale::Indexed;
+  return false;
+}
+
+bool
+HostParameter::isBoolean() const
+{
+  if (auto parameter = parameter_.load(satomi::memory_order_acquire))
+    return parameter->details.scale == ParameterScale::Toggle;
+  return false;
+}
+
+static void checkGlobalLockAcquired(Parameter *parameter)
+{
+  if (parameter->parentProcessor && parameter->parentProcessor->parent)
+  {
+    if (auto &lock = parameter->parentProcessor->state->plugin->processingLock;
+      lock.lock.load(satomi::memory_order_relaxed) >= 0 ||
+      lock.lastLockId.load(satomi::memory_order_relaxed) != utils::thread::getCurrentId())
+    {
+      COMPLEX_HARD_ASSERT_FALSE(
+        "Attempted parameter changes without an acquired lock on %v (%zu)",
+        parameter->details.displayName, parameter->details.id);
+    }
+  }
+}
+
+static float
+resetParameter(Parameter *p, const ParameterDetails *newDetails,
+  const float *value, float sampleRate, bool checkLock)
+{
+  if (newDetails)
+  {
+    // in order to make changes to the parameter details
+    // the main processing lock needs to be exclusively acquired
+    // violating this will cause data races because
+    // nothing is guarding most members in this class
+    if (checkLock)
+      checkGlobalLockAcquired(p);
+    const_cast<ParameterDetails &>(p->details) = *newDetails;
+  }
+
+  float newValue;
+  if (!value && p->details.scale == ParameterScale::Indexed)
+  {
+    newValue = unscaleValue(getValueFromOptionId(p->details.defaultOptionId,
+      p->details), p->details, sampleRate);
+  }
+  else
+  {
+    newValue = (value) ? *value : p->details.defaultNormalisedValue;
+  }
+
+  newValue = p->updateNormalisedValue(newValue);
+
+  // set the other values because we're initialising with new details
+  if (newDetails)
+    p->updateValue(sampleRate);
+
+  return newValue;
+}
+
+Parameter::Parameter(ParameterDetails details, Processor *parent) :
+  details{ COMPLEX_MOVE(details) }, parentProcessor{ parent }, 
+  modulators{ parent->arena } { }
+
+float
+Parameter::reset(const ParameterDetails *newDetails, 
+  const float *value, float sampleRate)
+{
+  return resetParameter(this, newDetails, value, sampleRate, true);
+}
+
+void Parameter::addModulator(ParameterModulator &modulator)
+{
+  checkGlobalLockAcquired(this);
+  const_cast<utils::vector<ParameterModulator *> &>(modulators).emplaceBack(&modulator);
+}
+
+void Parameter::deleteModulator(ParameterModulator &modulator)
+{
+  checkGlobalLockAcquired(this);
+  const_cast<utils::vector<ParameterModulator *> &>(modulators).erase(&modulator);
+}
+  
+Parameter *
+Parameter::createParameters(Processor *processor, usize count,
+  ParameterMetadata *pararmeterMetadata, Parameter *fromCopy)
+{
+  if (!count)
+    return nullptr;
+
+  auto *memory = arranew(processor->arena, Parameter, count, {});
+
+  for (usize i = 0; i < count; ++i)
+  {
+    ParameterDetails details;
+
+    if (fromCopy)
+      details = fromCopy->details;
+    else
+      details = pararmeterMetadata->details;
+
+    if (details.scale == ParameterScale::Indexed)
+      details.options = IndexedData::deepCopy(processor->arena, details.options);
+
+    (void)new(memory + i) Parameter{ COMPLEX_MOVE(details), processor };
+    memory[i].previous = memory + i - 1;
+    memory[i].next = memory + i + 1;
+
+    processor->state->registerDynamicParameter(&memory[i]);
+
+    if (fromCopy)
+      fromCopy = fromCopy->next;
+    else
+      pararmeterMetadata = pararmeterMetadata->next;
+  }
+
+  memory[0].previous = memory + count - 1;
+  memory[count - 1].next = nullptr;
+
+  return memory;
+}
+
+void Parameter::initialiseParameters(Parameter *parameters,
+  usize count, Parameter *fromCopy, bool keepValue)
+{
+  if (!count)
+    return;
+
+  auto sampleRate = parameters->parentProcessor->state->plugin->getSampleRate();
+
+  for (usize i = 0; i < count; (++i), (parameters = parameters->next))
+  {
+    if (fromCopy)
+    {
+      for (auto *modulator : fromCopy->modulators)
+        parameters->addModulator(*modulator);
+      float newValue = (keepValue) ? parameters->normalisedValue.load(satomi::memory_order_relaxed) :
+        fromCopy->normalisedValue.load(satomi::memory_order_relaxed);
+      parameters->reset(nullptr, &newValue, sampleRate);
+      fromCopy = fromCopy->next;
+    }
+    else
+    {
+      float newValue = parameters->normalisedValue.load(satomi::memory_order_relaxed);
+      parameters->reset(nullptr, (keepValue) ? &newValue : nullptr, sampleRate);
     }
 
-    utils::vector<Framework::IndexedData *> childrenToAdd{ getLocalScratch() };
+    parameters->updateValue(sampleRate);
+  }
+}
 
-    // check for added options, add them as untracked if breaking changes are not allowed
+UndoManager::UndoManager(utils::Pool *parentArena, usize transactionsToKeep)
+{
+  storage = utils::Pool::createNested(parentArena, 
+    transactionsToKeep * storagePerTransaction);
+  setTransationStorage(transactionsToKeep);
+}
+
+UndoManager::~UndoManager()
+{
+  utils::Pool::destroy(storage);
+}
+
+void UndoManager::setTransationStorage(usize transactionsToKeep)
+{
+  transactionsToKeep = utils::max(transactionsToKeep, (usize)1);
+  if (transactions.size() == transactionsToKeep)
+    return;
+
+  if (!transactions.size())
+  {
+    transactions = { (decltype(transactions)::value_type *)nullptr, transactionsToKeep };
+    clear();
+    return;
+  }
+
+  usize copySize, begin;
+  if ((usize)(undoActionsCount + redoActionsCount) < transactionsToKeep)
+  {
+    // new buffer can house all currently stored actions
+    copySize = undoActionsCount + redoActionsCount;
+    begin = ((usize)currentIndex + 1 - undoActionsCount +
+      transactions.size()) % transactions.size();
+  }
+  else
+  {
+    // new buffer can't house all currently stored actions
+    // use half the size for undo and redo actions respectively
+    copySize = transactionsToKeep;
+    auto newRedoActionsCount = transactionsToKeep / 2;
+    auto newUndoActionsCount = transactionsToKeep - newRedoActionsCount;
+
+    // destroy the to be deleted redos/undos
+    // in reverse, from newest to oldest
+
+    for (usize i = redoActionsCount - newRedoActionsCount; i > 0; --i)
+      for (auto *action = transactions[currentIndex + newRedoActionsCount + i - 1].second; action; action = action->next)
+        if (action->destructor)
+          action->destructor(action);
+
+    for (usize i = 0; i < undoActionsCount - newUndoActionsCount; ++i)
+      for (auto *action = transactions[currentIndex - newUndoActionsCount - i].second; action; action = action->next)
+        if (action->destructor)
+          action->destructor(action);
+
+    redoActionsCount = newRedoActionsCount;
+    undoActionsCount = newUndoActionsCount;
+    begin = ((usize)currentIndex + 1 - undoActionsCount +
+      transactions.size()) % transactions.size();
+  }
+
+  currentIndex = undoActionsCount - 1;
+
+  auto *newTransactions = arranew(storage, decltype(transactions)::value_type,
+    transactionsToKeep, {});
+  for (usize i = 0; i < copySize; ++i)
+    newTransactions[i] = transactions[(begin + i) % transactions.size()];
+  transactions = { newTransactions, transactionsToKeep };
+}
+
+void UndoManager::clear()
+{
+  currentIndex = transactions.size() - 1;
+  undoActionsCount = 0;
+  redoActionsCount = 0;
+
+  // this will also deallocate the transactions buffer, so we need to allocate it again
+  storage->clear(storage);
+
+  auto *newTransactions = arranew(storage, decltype(transactions)::value_type,
+    transactions.size(), {});
+  transactions = { newTransactions, transactions.size() };
+}
+
+bool UndoManager::perform(UndoAction *newAction)
+{
+  if (newAction == nullptr)
+    return false;
+
+  if (isInsideUndoRedoCall)
+  {
+    COMPLEX_ASSERT_FALSE("Don't call UndoManager methods recursively from the \
+      redo()/undo() methods in UndoAction, or else these actions will be discarded!");
+    return false;
+  }
+
+  isInsideUndoRedoCall = true;
+
+  newAction->redo(newAction);
+
+  COMPLEX_ASSERT(redoActionsCount == 0, "You need to call UndoManager::beginNewTransaction() \
+    if you want to overwrite undone actions");
+
+  UndoAction *previousAction{};
+  auto [arena, action] = transactions[currentIndex];
+  if (!action)
+    transactions[currentIndex].second = newAction;
+  else while (true) // try to coalesce the new action with any one of the current transaction
+  {
+    if (!action)
+    {
+      newAction->next = transactions[currentIndex].second;
+      transactions[currentIndex].second = newAction;
+      break;
+    }
+
+    if (action->combineActions)
+    {
+      if (auto coalescedAction = action->combineActions(arena, action, newAction))
+      {
+        coalescedAction->next = action->next;
+        if (previousAction)
+          previousAction->next = coalescedAction;
+        else
+          transactions[currentIndex].second = coalescedAction;
+
+        // the coalesced action might be newAction, action or a newly allocated action
+        // therefore we need to clean up afterwards
+        if (coalescedAction != newAction)
+          utils::Pool::remove(newAction);
+        if (coalescedAction != action)
+          utils::Pool::remove(action);
+
+        break;
+      }
+    }
+
+    previousAction = action;
+    action = action->next;
+  }
+
+  isInsideUndoRedoCall = false;
+
+  return true;
+}
+
+utils::Pool *
+UndoManager::beginNewTransaction()
+{
+  currentIndex = (currentIndex + 1) % transactions.size();
+  bool currentHasArena = transactions[currentIndex].first;
+
+  // make a new action set if there isn't one currently
+  if (!currentHasArena)
+  {
+    COMPLEX_ASSERT(!transactions[currentIndex].second);
+    transactions[currentIndex].first =
+      utils::Pool::createNested(storage, storagePerTransaction);
+  }
+
+  // destroy transaction to be replaced, if such exist
+  for (auto *action = transactions[currentIndex].second; action; action = action->next)
+    if (action->destructor)
+      action->destructor(action);
+
+  transactions[currentIndex].second = {};
+  undoActionsCount = utils::min(undoActionsCount + 1, transactions.size());
+  redoActionsCount = 0;
+
+  //COMPLEX_DEBUG_LOG("begin new - index: %zu, undo count: %zu, redo count: %zu\n\n",
+  //  currentIndex, undoActionsCount, redoActionsCount);
+
+  return transactions[currentIndex].first;
+}
+
+bool 
+UndoManager::undo()
+{
+  if (undoActionsCount == 0)
+    return false;
+
+  if (isInsideUndoRedoCall)
+  {
+    COMPLEX_ASSERT_FALSE("Don't call UndoManager methods recursively from the \
+      redo()/undo() methods in UndoAction, or else these actions will be discarded!");
+    return false;
+  }
+
+  isInsideUndoRedoCall = true;
+
+  COMPLEX_FOREACH_AND_REVERSE_SLL(action, transactions[currentIndex].second)
+  {
+    action->undo(action);
+    transactions[currentIndex].second = action;
+  }
+
+  currentIndex = (currentIndex - 1 + transactions.size()) % transactions.size();
+  --undoActionsCount;
+  ++redoActionsCount;
+
+  //COMPLEX_DEBUG_LOG("undo - index: %zu, undo count: %zu, redo count: %zu\n\n",
+  //  currentIndex, undoActionsCount, redoActionsCount);
+
+  isInsideUndoRedoCall = false;
+  return true;
+}
+
+bool
+UndoManager::redo()
+{
+  if (!redoActionsCount)
+    return false;
+
+  if (isInsideUndoRedoCall)
+  {
+    COMPLEX_ASSERT_FALSE("Don't call UndoManager methods recursively from the \
+      redo()/undo() methods in UndoAction, or else these actions will be discarded!");
+    return false;
+  }
+
+  isInsideUndoRedoCall = true;
+
+  currentIndex = (currentIndex + 1) % transactions.size();
+
+  COMPLEX_FOREACH_AND_REVERSE_SLL(action, transactions[currentIndex].second)
+  {
+    action->redo(action);
+    transactions[currentIndex].second = action;
+  }
+
+  --redoActionsCount;
+  ++undoActionsCount;
+
+  //COMPLEX_DEBUG_LOG("redo - index: %zu, undo count: %zu, redo count: %zu\n\n",
+  //  currentIndex, undoActionsCount, redoActionsCount);
+
+  isInsideUndoRedoCall = false;
+  return true;
+}
+
+void State::registerDynamicParameter(Parameter *parameter)
+{
+  auto details = parameter->details;
+
+  if (details.scale != ParameterScale::Indexed)
+    return;
+
+  COMPLEX_ASSERT(details.options != nullptr);
+
+  // adding all possible reasons for update
+  // and recalculating the new max value based on current state
+  IndexedData::visit(details.options, [&](IndexedData &data)
+    {
+      if (data.dynamicUpdateUuid != uuid{})
+        dynamicParameters.emplaceBack(&data, parameter);
+
+      return false;
+    });
+}
+
+static void updateDynamicOptionEntries(IndexedData *target,
+  IndexedData *reference, utils::Pool *arena, bool allowsBreakingChanges = true)
+{
+  // we've reached a leaf node
+  if (target->canBeChosen())
+  {
+    auto temp = *target;
+    *target = *reference;
+
+    target->parent = temp.parent;
+    target->children = temp.children;
+    target->next = temp.next;
+    target->displayName = temp.displayName;
+    target->userFlags = temp.userFlags;
+
+    return;
+  }
+
+  // IndexedData *endOfUntrackedOptions{};
+  // IndexedData *endOfTrackedOptions{};
+  u32 i = 0;
+
+  // do a post-order traversal of this function first
+  // and check for erased options
+  for (IndexedData *targetChild = target->children, *previous = nullptr, *next = nullptr;
+    targetChild; (targetChild = next), (++i))
+  {
+    bool isPresent = false;
     for (auto referenceChild = reference->children; referenceChild; referenceChild = referenceChild->next)
     {
-      bool isPresent = false;
-      for (auto targetChild = target->children; targetChild; targetChild = targetChild->next)
-      {
-        isPresent = *referenceChild == *targetChild;
-        if (isPresent)
-          break;
-      }
-
+      isPresent = *targetChild == *referenceChild;
       if (isPresent)
-        continue;
-
-      childrenToAdd.emplaceBack(Framework::IndexedData::deepCopy(arena, referenceChild));
+      {
+        updateDynamicOptionEntries(targetChild, referenceChild, arena, allowsBreakingChanges);
+        break;
+      }
     }
 
-    if (!childrenToAdd.empty())
-      target->addChildren(childrenToAdd, !allowsBreakingChanges);
+    next = targetChild->next;
+    previous = (isPresent) ? targetChild : previous;
+    // endOfUntrackedOptions = previous;
+    // if (i < target->childrenCount)
+    //   endOfTrackedOptions = endOfUntrackedOptions;
+
+    if (isPresent)
+      continue;
+
+    // removing the option is breaking change but it could crash the program otherwise
+    target->removeChild(targetChild);
+    utils::Pool::remove(targetChild);
   }
 
-  static void updateDynamicParameter(State *state,
-    Framework::Parameter *parameter, Framework::IndexedData *indexedData)
+  utils::vector<IndexedData *> childrenToAdd{ getLocalScratch() };
+
+  // check for added options, add them as untracked if breaking changes are not allowed
+  for (auto referenceChild = reference->children; referenceChild; referenceChild = referenceChild->next)
   {
-    using namespace Framework;
-
-    // if the current parameter is mapped out, we shouldn't change any of the values
-    // if some of them are not valid anymore, it's up to the consumers of said values to handle things properly
-    if (parameter->hostParameter)
-      return;
-
-    // getting the most up-to-date counts of the dynamic option
-    auto dynamicOption = state->dynamicOptions.find(indexedData->dynamicUpdateUuid)->second;
-    u32 newCount = dynamicOption->valueCount;
-
-    // this function assumes no changes are ever missed and
-    // therefore counts are always a valid method of checking for changes
-    // (no situations where 2 changes happen at the same time to cancel each other out)
-    if (indexedData->valueCount == newCount)
-      return;
-
-    // changing maxValue and setting normalised value to correspond to the current scaled value
-    // for parameter and control if it exists
-    auto details = parameter->details;
-    auto [oldOption, oldIndex] = getOptionFromValue(scaleValue(
-      parameter->normalisedValue.load(satomi::memory_order_relaxed), details), details);
-    auto oldId = oldOption->id;
-
-    updateDynamicOptionEntries(indexedData, dynamicOption,
-      utils::Pool::fromAllocation(details.options->children));
-
-    auto newNormalised = getValueFromOptionId(oldId, details);
-    newNormalised = unscaleValue((newNormalised < 0.0f) ? 0.0f :
-      newNormalised + (float)oldIndex, details);
-
-    float value = (float)newNormalised;
-    parameter->reset(&details, &value);
-
-    if (parameter->control)
+    bool isPresent = false;
+    for (auto targetChild = target->children; targetChild; targetChild = targetChild->next)
     {
-      parameter->control->details = details;
-      parameter->control->setValue(newNormalised, false);
+      isPresent = *referenceChild == *targetChild;
+      if (isPresent)
+        break;
     }
+
+    if (isPresent)
+      continue;
+
+    childrenToAdd.emplaceBack(IndexedData::deepCopy(arena, referenceChild));
   }
 
-  void State::updateAllDynamicParameters()
-  {
-    utils::ScopedLock guard{};
-    if (plugin->state_.get() == this)
-      guard = plugin->acquireProcessingLock(true);
+  if (!childrenToAdd.empty())
+    target->addChildren(childrenToAdd, !allowsBreakingChanges);
+}
 
-    for (auto [indexedData, currentParameter] : dynamicParameters)
+static void updateDynamicParameter(State *state,
+  Parameter *parameter, IndexedData *indexedData)
+{
+  // if the current parameter is mapped out, we shouldn't change any of the values
+  // if some of them are not valid anymore, it's up to the consumers of said values to handle things properly
+  if (parameter->hostParameter)
+    return;
+
+  // getting the most up-to-date counts of the dynamic option
+  auto dynamicOption = state->dynamicOptions.find(indexedData->dynamicUpdateUuid)->second;
+  u32 newCount = dynamicOption->valueCount;
+
+  // this function assumes no changes are ever missed and
+  // therefore counts are always a valid method of checking for changes
+  // (no situations where 2 changes happen at the same time to cancel each other out)
+  if (indexedData->valueCount == newCount)
+    return;
+
+  // changing maxValue and setting normalised value to correspond to the current scaled value
+  // for parameter and control if it exists
+  auto details = parameter->details;
+  auto [oldOption, oldIndex] = getOptionFromValue(scaleValue(
+    parameter->normalisedValue.load(satomi::memory_order_relaxed), details), details);
+  auto oldId = oldOption->id;
+
+  updateDynamicOptionEntries(indexedData, dynamicOption,
+    utils::Pool::fromAllocation(details.options->children));
+
+  auto newNormalised = getValueFromOptionId(oldId, details);
+  newNormalised = unscaleValue((newNormalised < 0.0f) ? 0.0f :
+    newNormalised + (float)oldIndex, details);
+
+  float value = (float)newNormalised;
+  parameter->reset(&details, &value);
+
+  if (parameter->control)
+  {
+    parameter->control->details = details;
+    parameter->control->setValue(newNormalised, false);
+  }
+}
+
+void State::updateAllDynamicParameters()
+{
+  utils::ScopedLock guard{};
+  if (plugin->state_.get() == this)
+    guard = plugin->acquireProcessingLock(true);
+
+  for (auto [indexedData, currentParameter] : dynamicParameters)
+    updateDynamicParameter(this, currentParameter, indexedData);
+}
+
+void State::updateDynamicParameters(uuid reason)
+{
+  utils::ScopedLock guard{};
+  if (plugin->state_.get() == this)
+    guard = plugin->acquireProcessingLock(true);
+
+  for (auto [indexedData, currentParameter] : dynamicParameters)
+    if (indexedData->dynamicUpdateUuid == reason)
       updateDynamicParameter(this, currentParameter, indexedData);
-  }
+}
 
-  void State::updateDynamicParameters(uuid reason)
+void State::createDynamicParameters()
+{
+  dynamicOptions.data = { { miscStorage, false }, ParameterChangeReason::values.size() };
+  for (auto reason : ParameterChangeReason::values)
   {
-    using namespace Framework;
+    auto dynamicOptionsArena = utils::Pool::createNested(miscStorage, COMPLEX_KB(1));
 
-    utils::ScopedLock guard{};
-    if (plugin->state_.get() == this)
-      guard = plugin->acquireProcessingLock(true);
+    auto iter = dynamicOptions.add(reason, anew(dynamicOptionsArena, IndexedData,
+      { .dynamicUpdateUuid = reason }));
 
-    for (auto [indexedData, currentParameter] : dynamicParameters)
-      if (indexedData->dynamicUpdateUuid == reason)
-        updateDynamicParameter(this, currentParameter, indexedData);
-  }
-
-  void State::createDynamicParameters()
-  {
-    using namespace Framework;
-
-    dynamicOptions.data = { { miscStorage, false }, ParameterChangeReason::values.size() };
-    for (auto reason : ParameterChangeReason::values)
+    switch (reason)
     {
-      auto dynamicOptionsArena = utils::Pool::createNested(miscStorage, COMPLEX_KB(1));
+    case ParameterChangeReason::inputSidechain:
+      iter->second->valueCount = plugin->inSidechains;
+      break;
 
-      auto iter = dynamicOptions.add(reason, anew(dynamicOptionsArena, IndexedData,
-        { .dynamicUpdateUuid = reason }));
+    case ParameterChangeReason::outputSidechain:
+      iter->second->valueCount = plugin->outSidechains;
+      break;
 
-      switch (reason)
+    case ParameterChangeReason::laneSources:
+    {
+      iter->second->valueCount = 0;
+      for (auto &pair : allProcessors.data)
       {
-      case ParameterChangeReason::inputSidechain:
-        iter->second->valueCount = plugin->inSidechains;
-        break;
+        if (pair.second->metadata->id != Processors::EffectsLane)
+          continue;
 
-      case ParameterChangeReason::outputSidechain:
-        iter->second->valueCount = plugin->outSidechains;
-        break;
-
-      case ParameterChangeReason::laneSources:
-      {
-        iter->second->valueCount = 0;
-        for (auto &pair : allProcessors.data)
-        {
-          if (pair.second->metadata->id != Generation::Processors::EffectsLane)
-            continue;
-
-          iter->second->addChildren({{ anew(dynamicOptionsArena, IndexedData,
-            {.id = pair.second->metadata->id, .flags = IndexedData::StateIdFlag, .stateId = pair.first }) }});
-        }
-
-        break;
+        iter->second->addChildren({{ anew(dynamicOptionsArena, IndexedData,
+          {.id = pair.second->metadata->id, .flags = IndexedData::StateIdFlag, .stateId = pair.first }) }});
       }
-      default:
-        COMPLEX_ASSERT_FALSE("Missing case");
-        break;
-      }
+
+      break;
+    }
+    default:
+      COMPLEX_ASSERT_FALSE("Missing case");
+      break;
     }
   }
 }

@@ -97,8 +97,8 @@
   // for some reason __fastfail()'s noreturn is not recognised by the compiler
   // so in cases it will request return values inside functions that won't return
   // noreturn_hack() exists to patch this
-  namespace common { [[noreturn]] forceinline void noreturn_hack() { } }
-  #define COMPLEX_TRAP() (::__fastfail(7 /*FAST_FAIL_FATAL_APP_EXIT*/), ::common::noreturn_hack())
+  [[noreturn]] forceinline void noreturn_hack() { }
+  #define COMPLEX_TRAP() (::__fastfail(7 /*FAST_FAIL_FATAL_APP_EXIT*/), noreturn_hack())
 
   #if COMPLEX_X64
     extern "C" void _mm_pause(void);
@@ -149,16 +149,16 @@
     #endif
   #endif
 
-  #define COMPLEX_LOG(format, ...) ::common::complexLogMessage(__FILE__, __func__, __LINE__, format __VA_OPT__(,) __VA_ARGS__)
-  #define COMPLEX_DEBUG_LOG(format, ...) ::common::complexLogMessage(nullptr, nullptr, __LINE__, format __VA_OPT__(,) __VA_ARGS__)
+  #define COMPLEX_LOG(format, ...) complexLogMessage(__FILE__, __func__, __LINE__, format __VA_OPT__(,) __VA_ARGS__)
+  #define COMPLEX_DEBUG_LOG(format, ...) complexLogMessage(nullptr, nullptr, __LINE__, format __VA_OPT__(,) __VA_ARGS__)
 
-  #define COMPLEX_ASSERT(condition, ...) (void)((!!(condition)) || (::common::complexPrintAssertMessage(#condition, \
+  #define COMPLEX_ASSERT(condition, ...) (void)((!!(condition)) || (complexPrintAssertMessage(#condition, \
     __FILE__, __func__, __LINE__ __VA_OPT__(, true,) __VA_ARGS__), COMPLEX_DEBUG_TRAP(), false))
-  #define COMPLEX_ASSERT_FALSE(...) (void)(::common::complexPrintAssertMessage(nullptr, \
+  #define COMPLEX_ASSERT_FALSE(...) (void)(complexPrintAssertMessage(nullptr, \
     __FILE__, __func__, __LINE__ __VA_OPT__(, true,) __VA_ARGS__), COMPLEX_DEBUG_TRAP(), false)
 
   #define COMPLEX_INVARIANT_ASSERT_HELPER(...) if (![&]() -> bool { __VA_ARGS__ }()) \
-    { ::common::complexPrintAssertMessage("Test failed:\n{\n" #__VA_ARGS__ "\n}", __FILE__, __func__, __LINE__); COMPLEX_DEBUG_TRAP(); }
+    { complexPrintAssertMessage("Test failed:\n{\n" #__VA_ARGS__ "\n}", __FILE__, __func__, __LINE__); COMPLEX_DEBUG_TRAP(); }
   #define COMPLEX_INVARIANT_ASSERT(...) [&]() { COMPLEX_FOR_EACH(COMPLEX_INTERNAL_ITERATE, COMPLEX_INVARIANT_ASSERT_HELPER, (,), __VA_ARGS__) }()
 #else
   #define COMPLEX_DEBUG_TRAP() ((void)0)
@@ -169,9 +169,9 @@
   #define COMPLEX_INVARIANT_ASSERT(...) ((void)0)
 #endif
 
-#define COMPLEX_HARD_ASSERT(condition, ...) (void)((!!(condition)) || (::common::complexPrintAssertMessage(#condition, \
+#define COMPLEX_HARD_ASSERT(condition, ...) (void)((!!(condition)) || (complexPrintAssertMessage(#condition, \
   __FILE__, __func__, __LINE__ __VA_OPT__(, true,) __VA_ARGS__), COMPLEX_TRAP(), false))
-#define COMPLEX_HARD_ASSERT_FALSE(...) (void)(::common::complexPrintAssertMessage(nullptr, \
+#define COMPLEX_HARD_ASSERT_FALSE(...) (void)(complexPrintAssertMessage(nullptr, \
     __FILE__, __func__, __LINE__ __VA_OPT__(, true,) __VA_ARGS__), COMPLEX_TRAP(), false)
 
 #define sizealignof(T, /*count*/ ...) (__VA_OPT__((__VA_ARGS__) *) sizeof(T)), alignof(T)
@@ -181,10 +181,8 @@
 #define COMPLEX_MB(bytes) (bytes << 20)
 #define COMPLEX_GB(bytes) (bytes << 30)
 
-namespace common
-{
-  // use an actually sane naming scheme
 
+// use an actually sane naming scheme
 #ifdef _MSC_VER
   using u8 = unsigned __int8;
   using u16 = unsigned __int16;
@@ -207,28 +205,26 @@ namespace common
   using i64 = __INT64_TYPE__;
 #endif
 
-  enum class byte : unsigned char { };
+enum class byte : unsigned char { };
 
-  using usize = decltype(sizeof(0));
-  using isize = decltype(static_cast<int *>(nullptr) - static_cast<int *>(nullptr));
-  static_assert(sizeof(isize) == sizeof(usize));
+using usize = decltype(sizeof(0));
+using isize = decltype(static_cast<int *>(nullptr) - static_cast<int *>(nullptr));
+static_assert(sizeof(isize) == sizeof(usize));
 
-  // this assert ensures u/intptr_t are the same size as size_t and ptrdiff_t
-  // should hold true on platforms where rust and zig can run
-  static_assert(sizeof(usize) == sizeof(void *));
+// this assert ensures u/intptr_t are the same size as size_t and ptrdiff_t
+// should hold true on platforms where rust and zig can run
+static_assert(sizeof(usize) == sizeof(void *));
 
-  // not an actual uuid container, use unix milliseconds for ids
-  using uuid = u64;
+// not an actual uuid container, use unix milliseconds for ids
+using uuid = u64;
 
-  // using int instead of bool to avoid standard argument promotion bs
-  void complexPrintAssertMessage(const char *conditionString, const char *fileName,
-    const char *functionName, int line, int hasMoreArgs = false, ...);
+// using int instead of bool to avoid standard argument promotion bs
+void complexPrintAssertMessage(const char *conditionString, const char *fileName,
+  const char *functionName, int line, int hasMoreArgs = false, ...);
 
-  void complexLogMessage(const char *fileName, const char *functionName,
-    int line, const char *format, ...);
-}
+void complexLogMessage(const char *fileName, const char *functionName,
+  int line, const char *format, ...);
 
-using namespace common;
 
 extern "C"
 {

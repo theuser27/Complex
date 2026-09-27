@@ -117,7 +117,7 @@ printVariadic(const char *format, va_list args)
   return (int)size;
 }
 
-void common::complexLogMessage(const char *fileName,
+void complexLogMessage(const char *fileName,
   const char *functionName, int line, const char *format, ...)
 {
   if (fileName && functionName)
@@ -131,7 +131,7 @@ void common::complexLogMessage(const char *fileName,
   va_end(args);
 }
 
-void common::complexPrintAssertMessage(const char *conditionString, const char *fileName,
+void complexPrintAssertMessage(const char *conditionString, const char *fileName,
   const char *functionName, int line, int hasMoreArgs, ...)
 {
   char errorBuffer[256];
@@ -180,121 +180,115 @@ extern "C"
 #pragma comment(lib, "Shcore.lib")
 }
 
-namespace Interface
+MonitorInfo
+getCurrentMonitorInfo(void *nativeHandle)
 {
-  MonitorInfo
-  getCurrentMonitorInfo(void *nativeHandle)
+  MonitorInfo ret;
+  ret.nativeHandle = MonitorFromWindow((HWND)nativeHandle, 2 /* MONITOR_DEFAULTTONEAREST */);
+
+  MONITORINFO info = {};
+  info.cbSize = sizeof(info);
+  GetMonitorInfoA((HMONITOR)ret.nativeHandle, &info);
+
+  ret.isPrimary = (info.dwFlags & 1 /* MONITORINFOF_PRIMARY */) != 0;
+  ret.totalArea = { info.rcMonitor.left, info.rcMonitor.top,
+    info.rcMonitor.right - info.rcMonitor.left,
+    info.rcMonitor.bottom - info.rcMonitor.top };
+  ret.totalArea = { info.rcWork.left, info.rcWork.top,
+    info.rcWork.right - info.rcWork.left,
+    info.rcWork.bottom - info.rcWork.top };
+
+  auto dpi = 0.0;
+  UINT dpiX = 0, dpiY = 0;
+  if (SUCCEEDED(GetDpiForMonitor((HMONITOR)ret.nativeHandle, MDT_Effective_DPI, &dpiX, &dpiY)))
+    dpi = (dpiX + dpiY) / 2.0;
+
+  ret.dpiScale = (float)dpi / 96.0f;
+  return ret;
+}
+
+bool showNativeMessageBox(const char *title, const char *message, MessageBoxType type)
+{
+  int iconFlag;
+
+  switch (type)
   {
-    MonitorInfo ret;
-    ret.nativeHandle = MonitorFromWindow((HWND)nativeHandle, 2 /* MONITOR_DEFAULTTONEAREST */);
-
-    MONITORINFO info = {};
-    info.cbSize = sizeof(info);
-    GetMonitorInfoA((HMONITOR)ret.nativeHandle, &info);
-
-    ret.isPrimary = (info.dwFlags & 1 /* MONITORINFOF_PRIMARY */) != 0;
-    ret.totalArea = { info.rcMonitor.left, info.rcMonitor.top,
-      info.rcMonitor.right - info.rcMonitor.left,
-      info.rcMonitor.bottom - info.rcMonitor.top };
-    ret.totalArea = { info.rcWork.left, info.rcWork.top,
-      info.rcWork.right - info.rcWork.left,
-      info.rcWork.bottom - info.rcWork.top };
-
-    auto dpi = 0.0;
-    UINT dpiX = 0, dpiY = 0;
-    if (SUCCEEDED(GetDpiForMonitor((HMONITOR)ret.nativeHandle, MDT_Effective_DPI, &dpiX, &dpiY)))
-      dpi = (dpiX + dpiY) / 2.0;
-
-    ret.dpiScale = (float)dpi / 96.0f;
-    return ret;
+  case MessageBoxType::Info:
+    iconFlag = MB_ICONINFORMATION;
+    break;
+  case MessageBoxType::Warning:
+    iconFlag = MB_ICONWARNING;
+    break;
+  default:
+  case MessageBoxType::Error:
+    iconFlag = MB_ICONERROR;
+    break;
   }
 
-  bool showNativeMessageBox(const char *title, const char *message, MessageBoxType type)
-  {
-    int iconFlag;
-
-    switch (type)
-    {
-    case MessageBoxType::Info:
-      iconFlag = MB_ICONINFORMATION;
-      break;
-    case MessageBoxType::Warning:
-      iconFlag = MB_ICONWARNING;
-      break;
-    default:
-    case MessageBoxType::Error:
-      iconFlag = MB_ICONERROR;
-      break;
-    }
-
-    int result = MessageBoxA(nullptr, message, title, MB_OKCANCEL | MB_SYSTEMMODAL | iconFlag);
-    return result == IDOK;
-  }
+  int result = MessageBoxA(nullptr, message, title, MB_OKCANCEL | MB_SYSTEMMODAL | iconFlag);
+  return result == IDOK;
 }
 
 #elif COMPLEX_MAC
 
-namespace Interface
+MonitorInfo 
+getCurrentMonitorInfo(void *nativeHandle)
 {
-  MonitorInfo 
-  getCurrentMonitorInfo(void *nativeHandle)
+  MonitorInfo ret{};
+
+  NSView *view = (__bridge NSView *)nativeHandle;
+  NSScreen *screen = view.window && view.window.screen ? view.window.screen : NSScreen.mainScreen;
+
+  ret.nativeHandle = (__bridge void *)screen;
+
+  // if it's anything other than (0,0) we have a big problem
+  COMPLEX_ASSERT(screen.frame.origin.x == 0);
+  COMPLEX_ASSERT(screen.frame.origin.y == 0);
+  ret.totalArea = { .w = (i32)screen.frame.size.width, .h = (i32)screen.frame.size.height };
+
+  ret.workArea = {
+      (i32)screen.visibleFrame.origin.x,
+      (i32)screen.visibleFrame.origin.y,
+      (i32)screen.visibleFrame.size.width,
+      (i32)screen.visibleFrame.size.height
+  };
+  // macOS's origin is in the bottom-left, we need to fix it to top-left
+  ret.workArea.y = ret.totalArea.h - (ret.workArea.y + ret.workArea.h);
+  ret.isPrimary = (screen == NSScreen.screens.firstObject);
+  ret.dpiScale = (float)screen.backingScaleFactor;
+
+  return ret;
+}
+
+bool showNativeMessageBox(const char *title, const char *message, MessageBoxType type)
+{
+  CFOptionFlags cfAlertIcon;
+
+  switch (type)
   {
-    MonitorInfo ret{};
-
-    NSView *view = (__bridge NSView *)nativeHandle;
-    NSScreen *screen = view.window && view.window.screen ? view.window.screen : NSScreen.mainScreen;
-
-    ret.nativeHandle = (__bridge void *)screen;
-
-    // if it's anything other than (0,0) we have a big problem
-    COMPLEX_ASSERT(screen.frame.origin.x == 0);
-    COMPLEX_ASSERT(screen.frame.origin.y == 0);
-    ret.totalArea = { .w = (i32)screen.frame.size.width, .h = (i32)screen.frame.size.height };
-
-    ret.workArea = {
-        (i32)screen.visibleFrame.origin.x,
-        (i32)screen.visibleFrame.origin.y,
-        (i32)screen.visibleFrame.size.width,
-        (i32)screen.visibleFrame.size.height
-    };
-    // macOS's origin is in the bottom-left, we need to fix it to top-left
-    ret.workArea.y = ret.totalArea.h - (ret.workArea.y + ret.workArea.h);
-    ret.isPrimary = (screen == NSScreen.screens.firstObject);
-    ret.dpiScale = (float)screen.backingScaleFactor;
-
-    return ret;
+  case MessageBoxType::Info:
+    cfAlertIcon = kCFUserNotificationNoteAlertLevel;
+    break;
+  case MessageBoxType::Warning:
+    cfAlertIcon = kCFUserNotificationCautionAlertLevel;
+    break;
+  default:
+  case MessageBoxType::Error:
+    cfAlertIcon = kCFUserNotificationStopAlertLevel;
+    break;
   }
 
-  bool showNativeMessageBox(const char *title, const char *message, MessageBoxType type)
-  {
-    CFOptionFlags cfAlertIcon;
+  CFStringRef cfTitle = CFStringCreateWithCString(kCFAllocatorDefault, title, kCFStringEncodingUTF8);
+  CFStringRef cfMessage = CFStringCreateWithCString(kCFAllocatorDefault, message, kCFStringEncodingUTF8);
 
-    switch (type)
-    {
-    case MessageBoxType::Info:
-      cfAlertIcon = kCFUserNotificationNoteAlertLevel;
-      break;
-    case MessageBoxType::Warning:
-      cfAlertIcon = kCFUserNotificationCautionAlertLevel;
-      break;
-    default:
-    case MessageBoxType::Error:
-      cfAlertIcon = kCFUserNotificationStopAlertLevel;
-      break;
-    }
+  CFOptionFlags result;
 
-    CFStringRef cfTitle = CFStringCreateWithCString(kCFAllocatorDefault, title, kCFStringEncodingUTF8);
-    CFStringRef cfMessage = CFStringCreateWithCString(kCFAllocatorDefault, message, kCFStringEncodingUTF8);
+  CFUserNotificationDisplayAlert(0, cfAlertIcon, nullptr, nullptr, nullptr, cfTitle, cfMessage, CFSTR("OK"), CFSTR("Cancel"), nullptr, &result);
 
-    CFOptionFlags result;
+  CFRelease(cfTitle);
+  CFRelease(cfMessage);
 
-    CFUserNotificationDisplayAlert(0, cfAlertIcon, nullptr, nullptr, nullptr, cfTitle, cfMessage, CFSTR("OK"), CFSTR("Cancel"), nullptr, &result);
-
-    CFRelease(cfTitle);
-    CFRelease(cfMessage);
-
-    return result == kCFUserNotificationDefaultResponse;
-  }
+  return result == kCFUserNotificationDefaultResponse;
 }
 
 #elif COMPLEX_LINUX

@@ -1175,12 +1175,9 @@ namespace utils
   };
 }
 
-namespace Interface
-{
-  // adapted from https://github.com/thegabman/native_message_box/blob/master/include/NMB/NMB.h
-  enum class MessageBoxType { Info, Warning, Error };
-  bool showNativeMessageBox(const char *title, const char *message, MessageBoxType type);
-}
+// adapted from https://github.com/thegabman/native_message_box/blob/master/include/NMB/NMB.h
+enum class MessageBoxType { Info, Warning, Error };
+bool showNativeMessageBox(const char *title, const char *message, MessageBoxType type);
 
 // https://github.com/colugomusic/snd/blob/master/include/snd/const_math.hpp
 // MIT License

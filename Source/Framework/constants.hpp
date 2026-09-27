@@ -5,72 +5,67 @@
 
 #include "platform.hpp"
 
-namespace common
-{
-  // general constants; don't change
-  inline constexpr float kPi = 3.141592653589793f;
-  inline constexpr float k2Pi = kPi * 2.0f;
-  inline constexpr float kExp = 2.71828182845904523536f;
-  inline constexpr float kEpsilon = 1e-20f;
-  inline constexpr u32 kFloatMantissaMask = 0x007fffffU;
-  inline constexpr u32 kFloatExponentMask = 0x7f800000U;
-  inline constexpr u32 kFloatExponentUnit = 1 << 23;
-  inline constexpr u32 kNotFloatExponentMask = ~kFloatExponentMask;
-  inline constexpr float kFloatInf = __builtin_bit_cast(float, kFloatExponentMask);
-  inline constexpr u64 kDoubleMantissaMask = 0x000fffffffffffffU;
-  inline constexpr u64 kDoubleExponentMask = 0x7ff0000000000000U;
-  inline constexpr u64 kDoubleExponentUnit = 1ULL << 52;
-  inline constexpr u64 kNotDoubleExponentMask = ~kDoubleExponentMask;
-  inline constexpr double kDoubleInf = __builtin_bit_cast(double, kDoubleExponentMask);
-  inline constexpr float kInvPi = 1.0f / kPi;
-  inline constexpr float kInv2Pi = 1.0f / k2Pi;
-  inline constexpr float kDefaultSampleRate = 44100.0f;
-  inline constexpr u32 kMidiSize = 128;
-  inline constexpr u32 kMidiKeyCenter = 60;
-  inline constexpr float kMidi0Frequency = 8.1757989156f;
-  inline constexpr u32 kNotesPerOctave = 12;
-  inline constexpr u32 kCentsPerNote = 100;
-  inline constexpr u32 kCentsPerOctave = kNotesPerOctave * kCentsPerNote;
-  inline constexpr float kAmplitudeToDbConversionMult = 6.02059991329f;
-  inline constexpr float kDbToAmplitudeConversionMult = 1.0f / kAmplitudeToDbConversionMult;
-  inline constexpr float kExpConversionMult = 1.44269504089f;
-  inline constexpr float kLogConversionMult = 0.69314718056f;
-  inline constexpr float kExp10ConversionMult = 3.321928094887f;
-  inline constexpr float kLog10ConversionMult = 0.30102999566f;
-  static constexpr float kOctaveToDecadeConversionMult = 3.321928095f;
-  inline constexpr float kInfDb = 764.616188299f;
-  // 20 * −126 / log2(10)
-  inline constexpr float kMinusInfDb = -758.595589072f;
+// general constants; don't change
+inline constexpr float kPi = 3.141592653589793f;
+inline constexpr float k2Pi = kPi * 2.0f;
+inline constexpr float kExp = 2.71828182845904523536f;
+inline constexpr float kEpsilon = 1e-20f;
+inline constexpr u32 kFloatMantissaMask = 0x007fffffU;
+inline constexpr u32 kFloatExponentMask = 0x7f800000U;
+inline constexpr u32 kFloatExponentUnit = 1 << 23;
+inline constexpr u32 kNotFloatExponentMask = ~kFloatExponentMask;
+inline constexpr float kFloatInf = __builtin_bit_cast(float, kFloatExponentMask);
+inline constexpr u64 kDoubleMantissaMask = 0x000fffffffffffffU;
+inline constexpr u64 kDoubleExponentMask = 0x7ff0000000000000U;
+inline constexpr u64 kDoubleExponentUnit = 1ULL << 52;
+inline constexpr u64 kNotDoubleExponentMask = ~kDoubleExponentMask;
+inline constexpr double kDoubleInf = __builtin_bit_cast(double, kDoubleExponentMask);
+inline constexpr float kInvPi = 1.0f / kPi;
+inline constexpr float kInv2Pi = 1.0f / k2Pi;
+inline constexpr float kDefaultSampleRate = 44100.0f;
+inline constexpr u32 kMidiSize = 128;
+inline constexpr u32 kMidiKeyCenter = 60;
+inline constexpr float kMidi0Frequency = 8.1757989156f;
+inline constexpr u32 kNotesPerOctave = 12;
+inline constexpr u32 kCentsPerNote = 100;
+inline constexpr u32 kCentsPerOctave = kNotesPerOctave * kCentsPerNote;
+inline constexpr float kAmplitudeToDbConversionMult = 6.02059991329f;
+inline constexpr float kDbToAmplitudeConversionMult = 1.0f / kAmplitudeToDbConversionMult;
+inline constexpr float kExpConversionMult = 1.44269504089f;
+inline constexpr float kLogConversionMult = 0.69314718056f;
+inline constexpr float kExp10ConversionMult = 3.321928094887f;
+inline constexpr float kLog10ConversionMult = 0.30102999566f;
+static constexpr float kOctaveToDecadeConversionMult = 3.321928095f;
+inline constexpr float kInfDb = 764.616188299f;
+// 20 * −126 / log2(10)
+inline constexpr float kMinusInfDb = -758.595589072f;
 
-  // FFT constants; internal processing relies that sizes be powers of 2
-  inline constexpr u32 kMinFFTOrder = 7;                          // (can be changed)    128 samples min
-  inline constexpr u32 kMaxFFTOrder = 15;                         // (can be changed)    32768 samples max
-  inline constexpr u32 kDefaultFFTOrder = 12;                     // (can be changed)    4096 samples default
-  inline constexpr float kMinWindowOverlap = 0.0f;                // (can be changed)    minimum window overlap
-  inline constexpr float kMaxWindowOverlap = 1.0f - 1.0f / 32.0f; // (can be changed)    maximum window overlap
-  inline constexpr float kDefaultWindowOverlap = 0.5f;            // (can be changed)    default window overlap
-  inline constexpr float kAlphaLowerBound = 1.0f;                 // (can be changed)    lower bound for alpha exponent
-  inline constexpr float kAlphaUpperBound = 10.0f;                // (can be changed)    upper bound for alpha exponent
-  inline constexpr u32 kWindowResolution = (1 << 8) + 1;          // (can be changed)    257 samples window lookup resolution
-                                                                  //                     (+ 1 in order to have a distinct sample in the center)
+// FFT constants; internal processing relies that sizes be powers of 2
+inline constexpr u32 kMinFFTOrder = 7;                          // (can be changed)    128 samples min
+inline constexpr u32 kMaxFFTOrder = 15;                         // (can be changed)    32768 samples max
+inline constexpr u32 kDefaultFFTOrder = 12;                     // (can be changed)    4096 samples default
+inline constexpr float kMinWindowOverlap = 0.0f;                // (can be changed)    minimum window overlap
+inline constexpr float kMaxWindowOverlap = 1.0f - 1.0f / 32.0f; // (can be changed)    maximum window overlap
+inline constexpr float kDefaultWindowOverlap = 0.5f;            // (can be changed)    default window overlap
+inline constexpr float kAlphaLowerBound = 1.0f;                 // (can be changed)    lower bound for alpha exponent
+inline constexpr float kAlphaUpperBound = 10.0f;                // (can be changed)    upper bound for alpha exponent
+inline constexpr u32 kWindowResolution = (1 << 8) + 1;          // (can be changed)    257 samples window lookup resolution
+                                                                //                     (+ 1 in order to have a distinct sample in the center)
 
-  // processing constants
-  inline constexpr float kMinFrequency = kMidi0Frequency;  // (can be changed)    lowest frequency that will be displayed
+// processing constants
+inline constexpr float kMinFrequency = kMidi0Frequency;  // (can be changed)    lowest frequency that will be displayed
 
-  // GUI constants
-  inline constexpr float kWindowScaleIncrements = 0.25f;
-  inline constexpr float kMinWindowScaleFactor = 1.0f;
-  inline constexpr float kMaxWindowScaleFactor = 3.0f;
-  inline constexpr int kParameterUpdateIntervalHz = 60;
+// GUI constants
+inline constexpr float kWindowScaleIncrements = 0.25f;
+inline constexpr float kMinWindowScaleFactor = 1.0f;
+inline constexpr float kMaxWindowScaleFactor = 3.0f;
+inline constexpr int kParameterUpdateIntervalHz = 60;
 
-  // used for updating parameters
-  enum class UpdateFlag : u8 { NoUpdates = 0, Realtime = 1, BeforeProcess = 2, AfterProcess = 3 };
+// used for updating parameters
+enum class UpdateFlag : u8 { NoUpdates = 0, Realtime = 1, BeforeProcess = 2, AfterProcess = 3 };
 
-  #define COMPLEX_UNDERSCORE_LITERAL "\xCC\xB2"
-  #define COMPLEX_MIDDLE_DOT_LITERAL "\xC2\xB7"
-  #define COMPLEX_DEGREE_SIGN_LITERAL "\xC2\xB0"
-  #define COMPLEX_PLUS_MINUS_SIGN_LITERAL "\xC2\xB1"
-  #define COMPLEX_MINUS_PLUS_SIGN_LITERAL "\xE2\x88\x93"
-}
-
-using namespace common;
+#define COMPLEX_UNDERSCORE_LITERAL "\xCC\xB2"
+#define COMPLEX_MIDDLE_DOT_LITERAL "\xC2\xB7"
+#define COMPLEX_DEGREE_SIGN_LITERAL "\xC2\xB0"
+#define COMPLEX_PLUS_MINUS_SIGN_LITERAL "\xC2\xB1"
+#define COMPLEX_MINUS_PLUS_SIGN_LITERAL "\xE2\x88\x93"

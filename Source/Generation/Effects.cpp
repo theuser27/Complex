@@ -12,589 +12,577 @@
 #include "Interface/LookAndFeel/Skin.hpp"
 #include "Interface/Sections/EffectModuleSection.hpp"
 
-namespace Generation
+static EffectData *
+createEffect(ProcessorMetadata *processorMetadata, EffectModule *module,
+  EffectData *copy = nullptr, void *jsonData = nullptr)
 {
-  static EffectData *
-  createEffect(Framework::ProcessorMetadata *processorMetadata, EffectModule *module,
-    EffectData *copy = nullptr, void *jsonData = nullptr)
+  if (copy)
+    processorMetadata = copy->metadata;
+
+  auto *vtable = (EffectVtable *)processorMetadata->vtable;
+
+  COMPLEX_ASSERT(processorMetadata->parameters);
+  COMPLEX_ASSERT(vtable->createEffect);
+  COMPLEX_ASSERT(vtable->runEffect);
+  COMPLEX_ASSERT(vtable->createUI);
+
+  EffectData *effectData = vtable->createEffect(module, copy);
+  effectData->metadata = processorMetadata;
+
+  Parameter *effectParameters{};
+  u32 parameterCount;
+  if (copy)
   {
-    if (copy)
-      processorMetadata = copy->metadata;
+    parameterCount = copy->parameterCount;
+    effectParameters = Parameter::createAndInitialiseParameters(
+      module, parameterCount, processorMetadata->parameters, copy->parameters);
+  }
+  else if (jsonData)
+  {
+    parameterCount = processorMetadata->parameterCount;
+    deserialiseParametersFromJson(jsonData, processorMetadata, effectParameters, module, false);
+  }
+  else
+  {
+    parameterCount = processorMetadata->parameterCount;
+    effectParameters = Parameter::createAndInitialiseParameters(
+      module, parameterCount, processorMetadata->parameters, nullptr);
+  }
 
-    auto *vtable = (EffectVtable *)processorMetadata->vtable;
+  effectData->parameters = effectParameters;
+  effectData->parameterCount = parameterCount;
 
-    COMPLEX_ASSERT(processorMetadata->parameters);
-    COMPLEX_ASSERT(vtable->createEffect);
-    COMPLEX_ASSERT(vtable->runEffect);
-    COMPLEX_ASSERT(vtable->createUI);
+  return effectData;
+}
 
-    EffectData *effectData = vtable->createEffect(module, copy);
-    effectData->metadata = processorMetadata;
+static Processor *
+createEffectModule(State *state, ProcessorMetadata *metadata, 
+  const void *copy, void *serialisedSave, void *extra)
+{
+  auto *arena = utils::Pool::createNested(state->processorStorage, COMPLEX_MB(1));
+  auto *module = anew(state->processorStorage, EffectModule, { arena, state, metadata });
 
-    Framework::Parameter *effectParameters{};
-    u32 parameterCount;
-    if (copy)
+  auto *other = (EffectModule *)copy;
+  module->dataBuffer = module->createBuffer((other) ? other->dataBuffer : nullptr);
+  if (serialisedSave)
+  {
+    module->deserialiseFromJson(serialisedSave);
+  }
+  else
+  {
+    module->parameters = Parameter::createParameters(module,
+      (other) ? other->parameterCount : metadata->parameterCount, 
+      metadata->parameters, (other) ? other->parameters : nullptr);
+    module->parameterCount = metadata->parameterCount;
+
+    if (other)
     {
-      parameterCount = copy->parameterCount;
-      effectParameters = Framework::Parameter::createAndInitialiseParameters(
-        module, parameterCount, processorMetadata->parameters, copy->parameters);
-    }
-    else if (jsonData)
-    {
-      parameterCount = processorMetadata->parameterCount;
-      deserialiseParametersFromJson(jsonData, processorMetadata, effectParameters, module, false);
+      Parameter::initialiseParameters(module->parameters, other->parameterCount, other->parameters);
     }
     else
     {
-      parameterCount = processorMetadata->parameterCount;
-      effectParameters = Framework::Parameter::createAndInitialiseParameters(
-        module, parameterCount, processorMetadata->parameters, nullptr);
+      // skip the module type parameter so we can initialise it ourselves
+      COMPLEX_ASSERT(module->parameters->details.id == EffectModule::ModuleType);
+      Parameter::initialiseParameters(module->parameters->next, module->parameterCount - 1);
+
+      COMPLEX_ASSERT(extra);
+      auto option = (IndexedData *)extra;
+      auto *moduleTypeParameter = module->getParameter(EffectModule::ModuleType);
+      auto normalisedValue = unscaleValue(getValueFromOptionId(option->id, 
+        moduleTypeParameter->details), moduleTypeParameter->details);
+      (void)moduleTypeParameter->updateNormalisedValue(normalisedValue);
     }
-
-    effectData->parameters = effectParameters;
-    effectData->parameterCount = parameterCount;
-
-    return effectData;
   }
 
-  static Processor *
-  createEffectModule(Plugin::State *state, Framework::ProcessorMetadata *metadata, 
-    const void *copy, void *serialisedSave, void *extra)
-  {
-    auto *arena = utils::Pool::createNested(state->processorStorage, COMPLEX_MB(1));
-    auto *module = anew(state->processorStorage, Generation::EffectModule, { arena, state, metadata });
+  return module;
+}
 
-    auto *other = (EffectModule *)copy;
-    module->dataBuffer = module->createBuffer((other) ? other->dataBuffer : nullptr);
+void serialiseToJsonEffectModule(const Processor *processor, void *jsonData, utils::span<Parameter *>)
+{
+  auto *effectModule = (EffectModule *)processor;
+  auto *effect = effectModule->currentEffect.load(satomi::memory_order_acquire);
+
+  auto parametersToSerialise = utils::vector<Parameter *>{
+    getLocalScratch(), effect->parameterCount + effectModule->parameterCount };
+
+  auto parameter = effectModule->parameters;
+  for (usize i = 0; i < effectModule->parameterCount; (++i), (parameter = parameter->next))
+    parametersToSerialise.emplaceBack(parameter);
+
+  //auto *effectParameter = effect->parameters;
+  //for (usize i = 0; i < effect->parameterCount; (++i), (effectParameter = effectParameter->next))
+  //  parametersToSerialise.emplaceBack(effectParameter);
+
+  serialiseProcessorGeneric(processor, jsonData, parametersToSerialise);
+}
+
+EffectData *
+EffectModule::changeEffect(const IndexedData *effectOption)
+{
+  auto *activeEffect = currentEffect.load(satomi::memory_order_acquire);
+  if (activeEffect && activeEffect->metadata->id == effectOption->processorMetadata->id)
+    return activeEffect;
+
+  // was effect already created?
+  auto *effect = effects;
+  auto *previousEffect = effect;
+  while (effect)
+  {
+    if (effect->metadata->id == effectOption->processorMetadata->id)
+      break;
+
+    previousEffect = effect;
+    effect = effect->next;
+  }
+
+  // if not, create and link it with the others
+  if (!effect)
+  {
+    effect = createEffect(effectOption->processorMetadata, this);
+    if (previousEffect)
+      previousEffect->next = effect;
+    else
+      effects = effect;
+  }
+
+  // remap mapped parameters to the new effect
+  if (activeEffect)
+  {
+    usize i = 0;
+    for (auto *parameter = activeEffect->parameters, *replacementParameter = effect->parameters;
+      parameter && i < activeEffect->parameterCount && i < effect->parameterCount;
+      (parameter = parameter->next), (replacementParameter = replacementParameter->next), (++i))
+    {
+      if (!parameter->hostParameter)
+        continue;
+
+      parameter->hostParameter->resetParameter(replacementParameter, false);
+    }
+  }
+
+  currentEffect.store(effect, satomi::memory_order_release);
+
+  auto parametersEnd = parameters;
+  for (usize i = 0; i < metadata->parameterCount - 1; (++i), (parametersEnd = parametersEnd->next)) { }
+
+  auto effectParametersEnd = effect->parameters;
+  for (usize i = 0; i < effect->parameterCount - 1; (++i), (effectParametersEnd = effectParametersEnd->next)) { }
+
+  parameters->previous = effectParametersEnd;
+  effect->parameters->previous = parametersEnd;
+  parametersEnd->next = effect->parameters;
+  parameterCount = metadata->parameterCount + effect->parameterCount;
+
+  return effect;
+}
+
+void EffectModule::processEffect(ComplexDataSource &source, u32 binCount, float sampleRate) noexcept
+{
+  using namespace utils;
+
+  if (!getParameter(ModuleEnabled)->getInternalValue<u32>(sampleRate))
+    return;
+
+  auto *effect = currentEffect.load(satomi::memory_order_acquire);
+
+  // getting exclusive access to data
+  lockAtomic(dataBuffer->dataLock, false, true, WaitMechanism::Spin);
+
+  ((EffectVtable *)effect->metadata->vtable)->runEffect(this, effect, source, dataBuffer, binCount, sampleRate);
+
+  // if the mix is 100% for all channels, we can skip mixing entirely
+  f4 wetMix = getParameter(ModuleMix)->getInternalValue<f4>(sampleRate);
+  if (!f4::allEqual(wetMix, 1.0f))
+  {
+    auto sourceData = source.sourceBuffer->get();
+    auto destinationData = dataBuffer->get();
+    f4 dryMix = 1.0f - wetMix;
+    for (u32 i = 0; i < binCount; i++)
+      destinationData[i] = f4::mulAdd(dryMix * sourceData[i], wetMix, destinationData[i]);
+  }
+
+  // switching to being a reader and allowing other readers to participate
+  // seq_cst because the following atomic could be reordered to happen prior to this one
+  dataBuffer->dataLock.lock.store(1, satomi::memory_order_release);
+  source.sourceBuffer->dataLock.lock.fetch_sub(1, satomi::memory_order_acq_rel);
+
+  source.sourceBuffer = dataBuffer;
+}
+
+static Processor *
+createEffectsLane(State *state, ProcessorMetadata *metadata, 
+  const void *copy, void *serialisedSave, void *)
+{
+  auto *arena = utils::Pool::createNested(state->processorStorage, COMPLEX_MB(1));
+  auto *lane = anew(state->processorStorage, EffectsLane, { arena, state, metadata });
+
+  if (auto *other = (EffectsLane *)copy)
+  {
+    lane->parameters = Parameter::createAndInitialiseParameters(
+      lane, other->parameterCount, metadata->parameters, other->parameters);
+    lane->parameterCount = other->parameterCount;
+    lane->dataBuffer = lane->createBuffer(other->dataBuffer);
+    lane->createChildren(*other);
+  }
+  else
+  {
+    auto maxInOutChannels = kChannelsPerInOut * (utils::max(state->plugin->inSidechains, state->plugin->outSidechains) + 1);
+    auto maxBinCount = state->getMaxBinCount();
+
+    lane->laneDataSource.scratchBuffer = SimdBuffer::create(arena, maxInOutChannels, maxBinCount);
+    lane->dataBuffer = SimdBuffer::create(arena, maxInOutChannels, maxBinCount);
+
     if (serialisedSave)
-    {
-      module->deserialiseFromJson(serialisedSave);
-    }
+      lane->deserialiseFromJson(serialisedSave);
     else
     {
-      module->parameters = Framework::Parameter::createParameters(module,
-        (other) ? other->parameterCount : metadata->parameterCount, 
-        metadata->parameters, (other) ? other->parameters : nullptr);
-      module->parameterCount = metadata->parameterCount;
+      lane->parameters = Parameter::createAndInitialiseParameters(
+        lane, metadata->parameterCount, metadata->parameters);
+      lane->parameterCount = metadata->parameterCount;
+    }
+  }
 
-      if (other)
-      {
-        Framework::Parameter::initialiseParameters(module->parameters, other->parameterCount, other->parameters);
-      }
-      else
-      {
-        // skip the module type parameter so we can initialise it ourselves
-        COMPLEX_ASSERT(module->parameters->details.id == Generation::EffectModule::ModuleType);
-        Framework::Parameter::initialiseParameters(module->parameters->next, module->parameterCount - 1);
+  return lane;
+}
 
-        COMPLEX_ASSERT(extra);
-        auto option = (Framework::IndexedData *)extra;
-        auto *moduleTypeParameter = module->getParameter(Generation::EffectModule::ModuleType);
-        auto normalisedValue = Framework::unscaleValue(getValueFromOptionId(option->id, 
-          moduleTypeParameter->details), moduleTypeParameter->details);
-        (void)moduleTypeParameter->updateNormalisedValue(normalisedValue);
-      }
+void resetEffectsLane(Processor *processor)
+{
+  resetProcessorGeneric(processor);
+  auto *lane = (EffectsLane *)processor;
+  lane->status.store(EffectsLane::Status::Finished, satomi::memory_order_release);
+  lane->currentEffectIndex.store(0, satomi::memory_order_release);
+}
+
+void SoundEngine::interleaveInputs(const Buffer &inputBuffer)
+{
+  using namespace utils;
+
+  COMPLEX_ASSERT(interleavedInputBuffer->dataLock.lock.load() >= 0);
+  ScopedLock g{ interleavedInputBuffer->dataLock, true, WaitMechanism::Spin };
+
+  auto values = utils::array<f4, SimdBuffer::kRelativeSize>{};
+  auto valueSources = utils::array<utils::ca<const float>, decltype(values)::size()>{};
+
+  for (u32 i = 0; i < inputBuffer.channels; i += (u32)values.size())
+  {
+    // if the input is not used we skip it
+    if (!usedInputChannels_[i])
+      continue;
+
+    for (u32 k = 0; k < valueSources.size(); ++k)
+      valueSources[k] = inputBuffer.get((u32)(i + k)).offset(0, 2 * binCount);
+
+    auto data = interleavedInputBuffer->get(i / (u32)valueSources.size());
+
+    // skipping every n-th complex pair (currently f4 can take 2 pairs)
+    for (u32 j = 0; j < binCount - 1; j += (u32)values.size())
+    {
+      // skipping every second sample (complex signal)
+      for (u32 k = 0; k < values.size(); ++k)
+        values[k] = toSimdFloatFromUnaligned(&valueSources[k][j * 2]);
+
+      complexTranspose(values);
+
+      for (u32 k = 0; k < values.size(); ++k)
+        data[j + k] = values[k];
     }
 
-    return module;
-  }
-
-  void serialiseToJsonEffectModule(const Generation::Processor *processor, void *jsonData, utils::span<Framework::Parameter *>)
-  {
-    auto *effectModule = (EffectModule *)processor;
-    auto *effect = effectModule->currentEffect.load(satomi::memory_order_acquire);
-
-    auto parametersToSerialise = utils::vector<Framework::Parameter *>{
-      getLocalScratch(), effect->parameterCount + effectModule->parameterCount };
-
-    auto parameter = effectModule->parameters;
-    for (usize i = 0; i < effectModule->parameterCount; (++i), (parameter = parameter->next))
-      parametersToSerialise.emplaceBack(parameter);
-
-    //auto *effectParameter = effect->parameters;
-    //for (usize i = 0; i < effect->parameterCount; (++i), (effectParameter = effectParameter->next))
-    //  parametersToSerialise.emplaceBack(effectParameter);
-
-    serialiseProcessorGeneric(processor, jsonData, parametersToSerialise);
-  }
-
-  EffectData *
-  EffectModule::changeEffect(const Framework::IndexedData *effectOption)
-  {
-    using namespace Framework;
-
-    auto *activeEffect = currentEffect.load(satomi::memory_order_acquire);
-    if (activeEffect && activeEffect->metadata->id == effectOption->processorMetadata->id)
-      return activeEffect;
-
-    // was effect already created?
-    auto *effect = effects;
-    auto *previousEffect = effect;
-    while (effect)
+    f4::array_t nyquist{};
+    for (u32 k = 0; k < valueSources.size(); ++k)
     {
-      if (effect->metadata->id == effectOption->processorMetadata->id)
+      nyquist[2 * k] = valueSources[k][(binCount - 1) * 2];
+      nyquist[2 * k + 1] = valueSources[k][(binCount - 1) * 2 + 1];
+    }
+    data[binCount - 1] = toSimdFloatFromUnaligned(nyquist.data());
+  }
+}
+
+void SoundEngine::processLanes()
+{
+  shouldWorkersProcess_.store(true, satomi::memory_order_release);
+  // sequential consistency just in case
+  // triggers the chains to run again
+  for (auto *lane = (EffectsLane *)getChild(children, 0, Processors::EffectsLane); lane;
+    lane = (EffectsLane *)getChild(lane, 1, Processors::EffectsLane))
+    lane->status.store(EffectsLane::Status::Ready, satomi::memory_order_seq_cst);
+
+  distributeWork();
+
+  // waiting for chains to finish
+  for (auto *lane = (EffectsLane *)getChild(children, 0, Processors::EffectsLane); lane;
+    lane = (EffectsLane *)getChild(lane, 1, Processors::EffectsLane))
+  {
+    while (lane->status.load(satomi::memory_order_acquire) != EffectsLane::Status::Finished)
+    { utils::longPause<5>(); }
+  }
+}
+
+void SoundEngine::checkUsage()
+{
+  // TODO: decide on a heuristic when to add worker threads
+  if (false)
+  {
+    auto &worker = state->reserveFreeWorker(typeId(SoundEngine));
+    worker.start([this](satomi::atomic<bool> &shouldStop)
+      {
+        while (!shouldStop.load(satomi::memory_order_acquire))
+        {
+          while (!shouldWorkersProcess_.load(satomi::memory_order_acquire))
+            utils::millisleep();
+
+          distributeWork();
+        }
+      });
+  }
+}
+
+void SoundEngine::distributeWork() const
+{
+  for (auto *lane = (EffectsLane *)getChild(children, 0, Processors::EffectsLane); lane;
+    lane = (EffectsLane *)getChild(lane, 1, Processors::EffectsLane))
+  {
+    if (lane->status.load(satomi::memory_order_relaxed) == EffectsLane::Status::Ready)
+    {
+      auto expected = EffectsLane::Status::Ready;
+      if (lane->status.compare_exchange_strong(expected, EffectsLane::Status::Running, satomi::memory_order_seq_cst))
+        processIndividualLanes(lane);
+    }
+  }
+}
+
+void SoundEngine::processIndividualLanes(EffectsLane *thisLane) const
+{
+  using namespace utils;
+
+  thisLane->currentEffectIndex.store(0, satomi::memory_order_release);
+  thisLane->volumeScale.store(1.0f, satomi::memory_order_relaxed);
+  auto &laneDataSource = thisLane->laneDataSource;
+  laneDataSource.blockPhase = blockPhase;
+  laneDataSource.blockPosition = blockPosition_;
+  bool isLaneOn = thisLane->getParameter(EffectsLane::LaneEnabled)->getInternalValue<u32>();
+
+  // Lane Input
+  // if this lane's input is another's output and that lane can be used,
+  // we wait until it is finished and then copy its data
+  if (auto inputIndex = thisLane->getParameter(EffectsLane::Input)->getInternalValue<IndexedData>();
+    inputIndex.first->parent && inputIndex.first->parent->id == EffectsLane::InputOptionsLane)
+  {
+    auto *otherLane = (EffectsLane *)state->getProcessor(inputIndex.first->stateId);
+    COMPLEX_ASSERT(thisLane != otherLane, "A lane cannot use its own output as input");
+
+    while (true)
+    {
+      auto otherLaneStatus = otherLane->status.load(satomi::memory_order_acquire);
+      if (otherLaneStatus == EffectsLane::Status::Finished)
         break;
 
-      previousEffect = effect;
-      effect = effect->next;
-    }
-
-    // if not, create and link it with the others
-    if (!effect)
-    {
-      effect = createEffect(effectOption->processorMetadata, this);
-      if (previousEffect)
-        previousEffect->next = effect;
-      else
-        effects = effect;
-    }
-
-    // remap mapped parameters to the new effect
-    if (activeEffect)
-    {
-      usize i = 0;
-      for (auto *parameter = activeEffect->parameters, *replacementParameter = effect->parameters;
-        parameter && i < activeEffect->parameterCount && i < effect->parameterCount;
-        (parameter = parameter->next), (replacementParameter = replacementParameter->next), (++i))
+      // process dependent lane if no one else has taken up the work
+      if (otherLaneStatus == EffectsLane::Status::Ready &&
+        otherLane->status.compare_exchange_strong(otherLaneStatus,
+          EffectsLane::Status::Running, satomi::memory_order_seq_cst))
       {
-        if (!parameter->hostParameter)
-          continue;
-
-        parameter->hostParameter->resetParameter(replacementParameter, false);
-      }
-    }
-
-    currentEffect.store(effect, satomi::memory_order_release);
-
-    auto parametersEnd = parameters;
-    for (usize i = 0; i < metadata->parameterCount - 1; (++i), (parametersEnd = parametersEnd->next)) { }
-
-    auto effectParametersEnd = effect->parameters;
-    for (usize i = 0; i < effect->parameterCount - 1; (++i), (effectParametersEnd = effectParametersEnd->next)) { }
-
-    parameters->previous = effectParametersEnd;
-    effect->parameters->previous = parametersEnd;
-    parametersEnd->next = effect->parameters;
-    parameterCount = metadata->parameterCount + effect->parameterCount;
-
-    return effect;
-  }
-
-  void EffectModule::processEffect(Framework::ComplexDataSource &source, u32 binCount, float sampleRate) noexcept
-  {
-    using namespace Framework;
-    using namespace utils;
-
-    if (!getParameter(ModuleEnabled)->getInternalValue<u32>(sampleRate))
-      return;
-
-    auto *effect = currentEffect.load(satomi::memory_order_acquire);
-
-    // getting exclusive access to data
-    lockAtomic(dataBuffer->dataLock, false, true, WaitMechanism::Spin);
-
-    ((EffectVtable *)effect->metadata->vtable)->runEffect(this, effect, source, dataBuffer, binCount, sampleRate);
-
-    // if the mix is 100% for all channels, we can skip mixing entirely
-    f4 wetMix = getParameter(ModuleMix)->getInternalValue<f4>(sampleRate);
-    if (!f4::allEqual(wetMix, 1.0f))
-    {
-      auto sourceData = source.sourceBuffer->get();
-      auto destinationData = dataBuffer->get();
-      f4 dryMix = 1.0f - wetMix;
-      for (u32 i = 0; i < binCount; i++)
-        destinationData[i] = f4::mulAdd(dryMix * sourceData[i], wetMix, destinationData[i]);
-    }
-
-    // switching to being a reader and allowing other readers to participate
-    // seq_cst because the following atomic could be reordered to happen prior to this one
-    dataBuffer->dataLock.lock.store(1, satomi::memory_order_release);
-    source.sourceBuffer->dataLock.lock.fetch_sub(1, satomi::memory_order_acq_rel);
-
-    source.sourceBuffer = dataBuffer;
-  }
-
-  static Processor *
-  createEffectsLane(Plugin::State *state, Framework::ProcessorMetadata *metadata, 
-    const void *copy, void *serialisedSave, void *)
-  {
-    auto *arena = utils::Pool::createNested(state->processorStorage, COMPLEX_MB(1));
-    auto *lane = anew(state->processorStorage, Generation::EffectsLane, { arena, state, metadata });
-
-    if (auto *other = (EffectsLane *)copy)
-    {
-      lane->parameters = Framework::Parameter::createAndInitialiseParameters(
-        lane, other->parameterCount, metadata->parameters, other->parameters);
-      lane->parameterCount = other->parameterCount;
-      lane->dataBuffer = lane->createBuffer(other->dataBuffer);
-      lane->createChildren(*other);
-    }
-    else
-    {
-      auto maxInOutChannels = kChannelsPerInOut * (utils::max(state->plugin->inSidechains, state->plugin->outSidechains) + 1);
-      auto maxBinCount = state->getMaxBinCount();
-
-      lane->laneDataSource.scratchBuffer = Framework::SimdBuffer::create(arena, maxInOutChannels, maxBinCount);
-      lane->dataBuffer = Framework::SimdBuffer::create(arena, maxInOutChannels, maxBinCount);
-
-      if (serialisedSave)
-        lane->deserialiseFromJson(serialisedSave);
-      else
-      {
-        lane->parameters = Framework::Parameter::createAndInitialiseParameters(
-          lane, metadata->parameterCount, metadata->parameters);
-        lane->parameterCount = metadata->parameterCount;
-      }
-    }
-
-    return lane;
-  }
-
-  void resetEffectsLane(Processor *processor)
-  {
-    resetProcessorGeneric(processor);
-    auto *lane = (EffectsLane *)processor;
-    lane->status.store(EffectsLane::Status::Finished, satomi::memory_order_release);
-    lane->currentEffectIndex.store(0, satomi::memory_order_release);
-  }
-
-  void SoundEngine::interleaveInputs(const Framework::Buffer &inputBuffer)
-  {
-    using namespace Framework;
-    using namespace utils;
-
-    COMPLEX_ASSERT(interleavedInputBuffer->dataLock.lock.load() >= 0);
-    ScopedLock g{ interleavedInputBuffer->dataLock, true, WaitMechanism::Spin };
-
-    auto values = utils::array<f4, SimdBuffer::kRelativeSize>{};
-    auto valueSources = utils::array<utils::ca<const float>, decltype(values)::size()>{};
-
-    for (u32 i = 0; i < inputBuffer.channels; i += (u32)values.size())
-    {
-      // if the input is not used we skip it
-      if (!usedInputChannels_[i])
+        processIndividualLanes(otherLane);
         continue;
-
-      for (u32 k = 0; k < valueSources.size(); ++k)
-        valueSources[k] = inputBuffer.get((u32)(i + k)).offset(0, 2 * binCount);
-
-      auto data = interleavedInputBuffer->get(i / (u32)valueSources.size());
-
-      // skipping every n-th complex pair (currently f4 can take 2 pairs)
-      for (u32 j = 0; j < binCount - 1; j += (u32)values.size())
-      {
-        // skipping every second sample (complex signal)
-        for (u32 k = 0; k < values.size(); ++k)
-          values[k] = toSimdFloatFromUnaligned(&valueSources[k][j * 2]);
-
-        complexTranspose(values);
-
-        for (u32 k = 0; k < values.size(); ++k)
-          data[j + k] = values[k];
       }
 
-      f4::array_t nyquist{};
-      for (u32 k = 0; k < valueSources.size(); ++k)
-      {
-        nyquist[2 * k] = valueSources[k][(binCount - 1) * 2];
-        nyquist[2 * k + 1] = valueSources[k][(binCount - 1) * 2 + 1];
-      }
-      data[binCount - 1] = toSimdFloatFromUnaligned(nyquist.data());
+      longPause<40>();
     }
-  }
 
-  void SoundEngine::processLanes()
-  {
-    shouldWorkersProcess_.store(true, satomi::memory_order_release);
-    // sequential consistency just in case
-    // triggers the chains to run again
-    for (auto *lane = (EffectsLane *)getChild(children, 0, Processors::EffectsLane); lane;
-      lane = (EffectsLane *)getChild(lane, 1, Processors::EffectsLane))
-      lane->status.store(EffectsLane::Status::Ready, satomi::memory_order_seq_cst);
-
-    distributeWork();
-
-    // waiting for chains to finish
-    for (auto *lane = (EffectsLane *)getChild(children, 0, Processors::EffectsLane); lane;
-      lane = (EffectsLane *)getChild(lane, 1, Processors::EffectsLane))
+    // getting shared access to the lane's output
+    // if this lane is turned off, we only grab the view from the other lane's buffer
+    // since we won't be reading from it but it's necessary for the outputBuffer to know where the data is
+    if (!isLaneOn)
     {
-      while (lane->status.load(satomi::memory_order_acquire) != EffectsLane::Status::Finished)
-      { utils::longPause<5>(); }
-    }
-  }
-
-  void SoundEngine::checkUsage()
-  {
-    // TODO: decide on a heuristic when to add worker threads
-    if (false)
-    {
-      auto &worker = state->reserveFreeWorker(typeId(SoundEngine));
-      worker.start([this](satomi::atomic<bool> &shouldStop)
-        {
-          while (!shouldStop.load(satomi::memory_order_acquire))
-          {
-            while (!shouldWorkersProcess_.load(satomi::memory_order_acquire))
-              utils::millisleep();
-
-            distributeWork();
-          }
-        });
-    }
-  }
-
-  void SoundEngine::distributeWork() const
-  {
-    for (auto *lane = (EffectsLane *)getChild(children, 0, Processors::EffectsLane); lane;
-      lane = (EffectsLane *)getChild(lane, 1, Processors::EffectsLane))
-    {
-      if (lane->status.load(satomi::memory_order_relaxed) == EffectsLane::Status::Ready)
-      {
-        auto expected = EffectsLane::Status::Ready;
-        if (lane->status.compare_exchange_strong(expected, EffectsLane::Status::Running, satomi::memory_order_seq_cst))
-          processIndividualLanes(lane);
-      }
-    }
-  }
-
-  void SoundEngine::processIndividualLanes(EffectsLane *thisLane) const
-  {
-    using namespace Framework;
-    using namespace utils;
-
-    thisLane->currentEffectIndex.store(0, satomi::memory_order_release);
-    thisLane->volumeScale.store(1.0f, satomi::memory_order_relaxed);
-    auto &laneDataSource = thisLane->laneDataSource;
-    laneDataSource.blockPhase = blockPhase;
-    laneDataSource.blockPosition = blockPosition_;
-    bool isLaneOn = thisLane->getParameter(EffectsLane::LaneEnabled)->getInternalValue<u32>();
-
-    // Lane Input
-    // if this lane's input is another's output and that lane can be used,
-    // we wait until it is finished and then copy its data
-    if (auto inputIndex = thisLane->getParameter(EffectsLane::Input)->getInternalValue<Framework::IndexedData>();
-      inputIndex.first->parent && inputIndex.first->parent->id == EffectsLane::InputOptionsLane)
-    {
-      auto *otherLane = (EffectsLane *)state->getProcessor(inputIndex.first->stateId);
-      COMPLEX_ASSERT(thisLane != otherLane, "A lane cannot use its own output as input");
-
-      while (true)
-      {
-        auto otherLaneStatus = otherLane->status.load(satomi::memory_order_acquire);
-        if (otherLaneStatus == EffectsLane::Status::Finished)
-          break;
-
-        // process dependent lane if no one else has taken up the work
-        if (otherLaneStatus == EffectsLane::Status::Ready &&
-          otherLane->status.compare_exchange_strong(otherLaneStatus,
-            EffectsLane::Status::Running, satomi::memory_order_seq_cst))
-        {
-          processIndividualLanes(otherLane);
-          continue;
-        }
-
-        longPause<40>();
-      }
-
-      // getting shared access to the lane's output
-      // if this lane is turned off, we only grab the view from the other lane's buffer
-      // since we won't be reading from it but it's necessary for the outputBuffer to know where the data is
-      if (!isLaneOn)
-      {
-        // TODO: decide if it's even worth to wait, or we can grab a reference to the other lane's SimdBufferView
-        laneDataSource.sourceBuffer = otherLane->laneDataSource.sourceBuffer;
-
-        thisLane->status.store(EffectsLane::Status::Finished, satomi::memory_order_release);
-        return;
-      }
-
-      // getting shared access to the lane's output data
-      (void)utils::lockAtomic(otherLane->laneDataSource.sourceBuffer->dataLock, false, false, WaitMechanism::Spin);
+      // TODO: decide if it's even worth to wait, or we can grab a reference to the other lane's SimdBufferView
       laneDataSource.sourceBuffer = otherLane->laneDataSource.sourceBuffer;
-    }
-    // input is not from a lane, we can begin processing
-    else
-    {
-      // if this lane is turned off, we set it as finished and grab view to the original dataBuffer's data
-      // and we don't actually read the data located there, hence why we don't lock
 
-      if (inputIndex.first->id == EffectsLane::InputOptionsMain)
-      {
-        laneDataSource.sourceBuffer = interleavedInputBuffer;
-        laneDataSource.simdChannelOffset = 0;
-      }
-      else if (inputIndex.first->id == EffectsLane::InputOptionsSidechain)
-      {
-        laneDataSource.sourceBuffer = interleavedInputBuffer;
-        laneDataSource.simdChannelOffset = (u32)inputIndex.second + 1;
-      }
-      else COMPLEX_ASSERT_FALSE("Missing case");
-
-      if (isLaneOn)
-      {
-        // getting shared access to the state's transformed data
-        COMPLEX_ASSERT(interleavedInputBuffer->dataLock.lock.load() >= 0);
-        (void)lockAtomic(interleavedInputBuffer->dataLock, false, false, WaitMechanism::Spin);
-      }
-      else
-      {
-        thisLane->status.store(EffectsLane::Status::Finished, satomi::memory_order_release);
-        return;
-      }
+      thisLane->status.store(EffectsLane::Status::Finished, satomi::memory_order_release);
+      return;
     }
 
-    f4 inputVolume = 0.0f;
-    f4 loudnessScale = 1.0f / (float)binCount;
-    u32 isGainMatching = thisLane->getParameter(EffectsLane::GainMatching)->getInternalValue<u32>();
+    // getting shared access to the lane's output data
+    (void)utils::lockAtomic(otherLane->laneDataSource.sourceBuffer->dataLock, false, false, WaitMechanism::Spin);
+    laneDataSource.sourceBuffer = otherLane->laneDataSource.sourceBuffer;
+  }
+  // input is not from a lane, we can begin processing
+  else
+  {
+    // if this lane is turned off, we set it as finished and grab view to the original dataBuffer's data
+    // and we don't actually read the data located there, hence why we don't lock
 
-    auto getLoudness = [](const ComplexDataSource &laneDataSource, f4 loudnessScale, u32 binCount)
+    if (inputIndex.first->id == EffectsLane::InputOptionsMain)
     {
-      f4 loudness = 0.0f;
-      // this is because we're squaring and then scaling inside the loops
-      loudnessScale *= loudnessScale;
-      auto data = laneDataSource.sourceBuffer->get(laneDataSource.simdChannelOffset);
-      for (u32 i = 0; i < binCount - 1; i += 2)
-      {
-        // magnitudes are: [left channel, right channel, left channel + 1, right channel + 1]
-        f4 values = complexMagnitude({ data[i], data[i + 1] }, false);
-        // [left channel,     left channel + 1, right channel,     right channel + 1] +
-        // [left channel + 1, left channel,     right channel + 1, right channel    ]
-        loudness += groupEven(values) + groupEvenReverse(values);
-      }
-
-      loudness += complexMagnitude(data[binCount - 1], false);
-      return loudness / loudnessScale;
-    };
-
-    if (isGainMatching)
+      laneDataSource.sourceBuffer = interleavedInputBuffer;
+      laneDataSource.simdChannelOffset = 0;
+    }
+    else if (inputIndex.first->id == EffectsLane::InputOptionsSidechain)
     {
-      inputVolume = getLoudness(laneDataSource, loudnessScale, binCount);
-      inputVolume = merge(inputVolume, f4(1.0f), f4::equal(inputVolume, 0.0f));
+      laneDataSource.sourceBuffer = interleavedInputBuffer;
+      laneDataSource.simdChannelOffset = (u32)inputIndex.second + 1;
+    }
+    else COMPLEX_ASSERT_FALSE("Missing case");
+
+    if (isLaneOn)
+    {
+      // getting shared access to the state's transformed data
+      COMPLEX_ASSERT(interleavedInputBuffer->dataLock.lock.load() >= 0);
+      (void)lockAtomic(interleavedInputBuffer->dataLock, false, false, WaitMechanism::Spin);
     }
     else
-      thisLane->volumeScale.store(1.0f, satomi::memory_order_relaxed);
-
-    // main processing loop
-    for (auto *child = thisLane->children; child; child = child->next)
     {
-      // this is safe because by design only EffectModules are contained in a lane
-      utils::as<EffectModule>(child)->processEffect(laneDataSource, binCount, sampleRate);
-
-      // incrementing where we are currently
-      thisLane->currentEffectIndex.fetch_add(1, satomi::memory_order_acq_rel);
+      thisLane->status.store(EffectsLane::Status::Finished, satomi::memory_order_release);
+      return;
     }
-
-    if (isGainMatching)
-    {
-      f4 outputVolume = getLoudness(laneDataSource, loudnessScale, binCount);
-      outputVolume = merge(outputVolume, f4(1.0f), f4::equal(outputVolume, 0.0f));
-      f4 scale = inputVolume / outputVolume;
-
-      // some arbitrary limits taken from dtblkfx
-      scale = merge(scale, f4{ 1.0f }, f4::greaterThan(scale, 1.0e30f));
-      scale = merge(scale, f4{ 0.0f }, f4::lessThan(scale, 1.0e-30f));
-
-      thisLane->volumeScale.store(f4::sqrt(scale), satomi::memory_order_relaxed);
-    }
-
-    // unlocking the final output of the lane until we need it again (be it a module or the input itself if the lane is empty)
-    laneDataSource.sourceBuffer->dataLock.lock.store(0, satomi::memory_order_seq_cst);
-
-    COMPLEX_ASSERT(interleavedInputBuffer->dataLock.lock.load() >= 0);
-
-    // to let other threads know that the data is in its final state
-    thisLane->status.store(EffectsLane::Status::Finished, satomi::memory_order_release);
   }
 
-  void SoundEngine::sumLanesAndDeinterleaveOutputs(Framework::Buffer &out)
+  f4 inputVolume = 0.0f;
+  f4 loudnessScale = 1.0f / (float)binCount;
+  u32 isGainMatching = thisLane->getParameter(EffectsLane::GainMatching)->getInternalValue<u32>();
+
+  auto getLoudness = [](const ComplexDataSource &laneDataSource, f4 loudnessScale, u32 binCount)
   {
-    using namespace Framework;
-    using namespace utils;
-
-    // TODO: redo when you get to multiple outputs
-
-    ScopedLock g{ interleavedOutputBuffer->dataLock, true, WaitMechanism::Spin };
-    interleavedOutputBuffer->clear();
-
-    // multipliers for scaling the multiple chains going into the same output
-    ::zeroset(outputScaleMultipliers_.data(), outputScaleMultipliers_.size());
-
-    for (auto *lane = getChild(children, 0, Processors::EffectsLane); lane;
-      lane = getChild(lane, 1, Processors::EffectsLane))
+    f4 loudness = 0.0f;
+    // this is because we're squaring and then scaling inside the loops
+    loudnessScale *= loudnessScale;
+    auto data = laneDataSource.sourceBuffer->get(laneDataSource.simdChannelOffset);
+    for (u32 i = 0; i < binCount - 1; i += 2)
     {
-      auto [outputOption, index] = lane->getParameter(EffectsLane::Output)
-        ->getInternalValue<Framework::IndexedData>();
-
-      if (outputOption->id != EffectsLane::OutputOptionsNone)
-        outputScaleMultipliers_[index]++;
+      // magnitudes are: [left channel, right channel, left channel + 1, right channel + 1]
+      f4 values = complexMagnitude({ data[i], data[i + 1] }, false);
+      // [left channel,     left channel + 1, right channel,     right channel + 1] +
+      // [left channel + 1, left channel,     right channel + 1, right channel    ]
+      loudness += groupEven(values) + groupEvenReverse(values);
     }
 
-    // for every lane we add its scaled output to the main sourceBuffer_ at the designated output channels
-    for (auto *lane = (EffectsLane *)getChild(children, 0, Processors::EffectsLane); lane;
-      lane = (EffectsLane *)getChild(lane, 1, Processors::EffectsLane))
+    loudness += complexMagnitude(data[binCount - 1], false);
+    return loudness / loudnessScale;
+  };
+
+  if (isGainMatching)
+  {
+    inputVolume = getLoudness(laneDataSource, loudnessScale, binCount);
+    inputVolume = merge(inputVolume, f4(1.0f), f4::equal(inputVolume, 0.0f));
+  }
+  else
+    thisLane->volumeScale.store(1.0f, satomi::memory_order_relaxed);
+
+  // main processing loop
+  for (auto *child = thisLane->children; child; child = child->next)
+  {
+    // this is safe because by design only EffectModules are contained in a lane
+    utils::as<EffectModule>(child)->processEffect(laneDataSource, binCount, sampleRate);
+
+    // incrementing where we are currently
+    thisLane->currentEffectIndex.fetch_add(1, satomi::memory_order_acq_rel);
+  }
+
+  if (isGainMatching)
+  {
+    f4 outputVolume = getLoudness(laneDataSource, loudnessScale, binCount);
+    outputVolume = merge(outputVolume, f4(1.0f), f4::equal(outputVolume, 0.0f));
+    f4 scale = inputVolume / outputVolume;
+
+    // some arbitrary limits taken from dtblkfx
+    scale = merge(scale, f4{ 1.0f }, f4::greaterThan(scale, 1.0e30f));
+    scale = merge(scale, f4{ 0.0f }, f4::lessThan(scale, 1.0e-30f));
+
+    thisLane->volumeScale.store(f4::sqrt(scale), satomi::memory_order_relaxed);
+  }
+
+  // unlocking the final output of the lane until we need it again (be it a module or the input itself if the lane is empty)
+  laneDataSource.sourceBuffer->dataLock.lock.store(0, satomi::memory_order_seq_cst);
+
+  COMPLEX_ASSERT(interleavedInputBuffer->dataLock.lock.load() >= 0);
+
+  // to let other threads know that the data is in its final state
+  thisLane->status.store(EffectsLane::Status::Finished, satomi::memory_order_release);
+}
+
+void SoundEngine::sumLanesAndDeinterleaveOutputs(Buffer &out)
+{
+  using namespace utils;
+
+  // TODO: redo when you get to multiple outputs
+
+  ScopedLock g{ interleavedOutputBuffer->dataLock, true, WaitMechanism::Spin };
+  interleavedOutputBuffer->clear();
+
+  // multipliers for scaling the multiple chains going into the same output
+  ::zeroset(outputScaleMultipliers_.data(), outputScaleMultipliers_.size());
+
+  for (auto *lane = getChild(children, 0, Processors::EffectsLane); lane;
+    lane = getChild(lane, 1, Processors::EffectsLane))
+  {
+    auto [outputOption, index] = lane->getParameter(EffectsLane::Output)
+      ->getInternalValue<IndexedData>();
+
+    if (outputOption->id != EffectsLane::OutputOptionsNone)
+      outputScaleMultipliers_[index]++;
+  }
+
+  // for every lane we add its scaled output to the main sourceBuffer_ at the designated output channels
+  for (auto *lane = (EffectsLane *)getChild(children, 0, Processors::EffectsLane); lane;
+    lane = (EffectsLane *)getChild(lane, 1, Processors::EffectsLane))
+  {
+    auto [outputOption, index] = lane->getParameter(EffectsLane::Output)
+      ->getInternalValue<IndexedData>();
+    if (outputOption->id == EffectsLane::OutputOptionsNone)
+      continue;
+
+    ScopedLock g1{ lane->laneDataSource.sourceBuffer->dataLock, false, WaitMechanism::Spin };
+
+    f4 multiplier = f4::max(1.0f, outputScaleMultipliers_[index]);
+    applyToThisNoMask<MathOperations::Add>(interleavedOutputBuffer,
+      lane->laneDataSource.sourceBuffer, kChannelsPerInOut, binCount, (u32)index * kChannelsPerInOut, 0, 0, 0,
+      lane->volumeScale.load(satomi::memory_order_relaxed) / multiplier);
+  }
+
+  auto values = utils::array<f4, SimdBuffer::kRelativeSize>{};
+  auto valueDestinations = utils::array<utils::ca<float>, decltype(values)::size()>{};
+
+  for (u32 i = 0; i < out.channels; i += (u32)values.size())
+  {
+    if (!usedOutputChannels_[i])
+      continue;
+
+    auto data = interleavedOutputBuffer->get(i / (u32)valueDestinations.size());
+
+    for (u32 k = 0; k < valueDestinations.size(); ++k)
+      valueDestinations[k] = out.get((u32)(i + k)).offset(0, 2 * binCount);
+
+    // skipping every n-th complex pair (currently f4 can take 2 pairs)
+    for (u32 j = 0; j < binCount - 1; j += (u32)values.size())
     {
-      auto [outputOption, index] = lane->getParameter(EffectsLane::Output)
-        ->getInternalValue<Framework::IndexedData>();
-      if (outputOption->id == EffectsLane::OutputOptionsNone)
-        continue;
+      for (u32 k = 0; k < values.size(); ++k)
+        values[k] = data[j + k];
 
-      ScopedLock g1{ lane->laneDataSource.sourceBuffer->dataLock, false, WaitMechanism::Spin };
+      complexTranspose(values);
 
-      f4 multiplier = f4::max(1.0f, outputScaleMultipliers_[index]);
-      Framework::applyToThisNoMask<MathOperations::Add>(interleavedOutputBuffer,
-        lane->laneDataSource.sourceBuffer, kChannelsPerInOut, binCount, (u32)index * kChannelsPerInOut, 0, 0, 0,
-        lane->volumeScale.load(satomi::memory_order_relaxed) / multiplier);
+      // skipping every second sample (complex signal)
+      for (u32 k = 0; k < values.size(); k++)
+        ::memcpy(&valueDestinations[k][j * 2], &values[k], sizeof(f4));
     }
 
-    auto values = utils::array<f4, SimdBuffer::kRelativeSize>{};
-    auto valueDestinations = utils::array<utils::ca<float>, decltype(values)::size()>{};
-
-    for (u32 i = 0; i < out.channels; i += (u32)values.size())
+    auto rest = data[binCount - 1].getArrayOfValues();
+    for (u32 k = 0; k < valueDestinations.size(); ++k)
     {
-      if (!usedOutputChannels_[i])
-        continue;
-
-      auto data = interleavedOutputBuffer->get(i / (u32)valueDestinations.size());
-
-      for (u32 k = 0; k < valueDestinations.size(); ++k)
-        valueDestinations[k] = out.get((u32)(i + k)).offset(0, 2 * binCount);
-
-      // skipping every n-th complex pair (currently f4 can take 2 pairs)
-      for (u32 j = 0; j < binCount - 1; j += (u32)values.size())
-      {
-        for (u32 k = 0; k < values.size(); ++k)
-          values[k] = data[j + k];
-
-        complexTranspose(values);
-
-        // skipping every second sample (complex signal)
-        for (u32 k = 0; k < values.size(); k++)
-          ::memcpy(&valueDestinations[k][j * 2], &values[k], sizeof(f4));
-      }
-
-      auto rest = data[binCount - 1].getArrayOfValues();
-      for (u32 k = 0; k < valueDestinations.size(); ++k)
-      {
-        valueDestinations[k][(binCount - 1) * 2] = rest[2 * k];
-        valueDestinations[k][(binCount - 1) * 2 + 1] = rest[2 * k + 1];
-      }
+      valueDestinations[k][(binCount - 1) * 2] = rest[2 * k];
+      valueDestinations[k][(binCount - 1) * 2 + 1] = rest[2 * k + 1];
     }
   }
 }
 
 void *
-initialiseTypeStructureEffectModule(void *, Framework::PluginStructure &structure)
+initialiseTypeStructureEffectModule(void *, PluginStructure &structure)
 {
-  using namespace Framework;
-  using namespace Generation;
-
-  Interface::Component *createUIEffectModule(Generation::Processor * processor);
+  Component *createUIEffectModule(Processor * processor);
 
   static constexpr auto moduleChangeCallback = [](Parameter *p, float newValue)
   {
     EffectModule *effectModule = (EffectModule *)p->parentProcessor;
 
     auto newScaled = scaleValue(newValue, p->details);
-    auto [option, _] = Framework::getOptionFromValue(newScaled, p->details);
+    auto [option, _] = getOptionFromValue(newScaled, p->details);
 
     // yes this "allocates" on the audio thread once per every new type, get over it
     (void)effectModule->changeEffect(option);
@@ -605,8 +593,8 @@ initialiseTypeStructureEffectModule(void *, Framework::PluginStructure &structur
   auto *arena = structure.getNewArena(COMPLEX_KB(2));
 
   ProcessorMetadata &effectModule = COMPLEX_STRUCTURE_PROCESSOR(EffectModule, 
-    "Effect Module", Generation::Processors::EffectModule, Interface::Skin::kNone, 
-    Generation::createEffectModule, createUIEffectModule, .serialise = serialiseToJsonEffectModule);
+    "Effect Module", Processors::EffectModule, Skin::kNone, 
+    createEffectModule, createUIEffectModule, .serialise = serialiseToJsonEffectModule);
   effectModule.flags |= ProcessorMetadata::NoParameterValidationTag;
   effectModule.parameters =
     (
@@ -623,7 +611,7 @@ initialiseTypeStructureEffectModule(void *, Framework::PluginStructure &structur
           .defaultOptionId = Filter::Types::Normal
         }, ParameterScale::Indexed, {}, ParameterDetails::Automatable | ParameterDetails::Extensible, UpdateFlag::AfterProcess, nullptr, moduleChangeCallback),
       COMPLEX_STRUCTURE_PARAMETER("Module Enabled", EffectModule::ModuleEnabled, { 0.0f, 1.0f, 1.0f },
-        ParameterScale::Toggle, {}, ParameterDetails::Modulatable | ParameterDetails::Automatable, UpdateFlag::Realtime, Framework::printToggleValues),
+        ParameterScale::Toggle, {}, ParameterDetails::Modulatable | ParameterDetails::Automatable, UpdateFlag::Realtime, printToggleValues),
       COMPLEX_STRUCTURE_PARAMETER("Module Mix", EffectModule::ModuleMix, { 0.0f, 1.0f, 1.0f }, ParameterScale::Linear, "%",
         ParameterDetails::Modulatable | ParameterDetails::Automatable | ParameterDetails::Stereo),
       COMPLEX_STRUCTURE_PARAMETER("Low Bound", EffectModule::LowBound, { 0.0f, 1.0f, 0.0f }, ParameterScale::Frequency, " hz",
@@ -638,19 +626,16 @@ initialiseTypeStructureEffectModule(void *, Framework::PluginStructure &structur
 }
 
 void *
-initialiseTypeStructureEffectsLane(void *, Framework::PluginStructure &structure)
+initialiseTypeStructureEffectsLane(void *, PluginStructure &structure)
 {
-  using namespace Framework;
-  using namespace Generation;
-  
-  Interface::Component *createUIEffectsLane(Generation::Processor * processor);
+  Component *createUIEffectsLane(Processor * processor);
   
   static constexpr auto laneInputChangeCallback = [](Parameter *p, float newValue)
   {
-    float newScaled = Framework::scaleValue(newValue, p->details);
+    float newScaled = scaleValue(newValue, p->details);
 
     auto *parentProcessor = p->parentProcessor;
-    auto [option, _] = Framework::getOptionFromValue(newScaled, p->details);
+    auto [option, _] = getOptionFromValue(newScaled, p->details);
 
     // disallow feedback until we figure out a good UX for that
     // FIXME: fix lane feedback UX
@@ -660,7 +645,7 @@ initialiseTypeStructureEffectsLane(void *, Framework::PluginStructure &structure
       while (true)
       {
         // have we reached a primary source? (main or sidechain inputs)
-        if (next->flags != Framework::IndexedData::StateIdFlag)
+        if (next->flags != IndexedData::StateIdFlag)
           break;
 
         // if we've reached our starting lane change initial option
@@ -670,31 +655,31 @@ initialiseTypeStructureEffectsLane(void *, Framework::PluginStructure &structure
           // the reason for going back is that eventually we can reach the default option from main input
           --newScaled;
 
-          option = Framework::getOptionFromValue(newScaled, p->details).first;
+          option = getOptionFromValue(newScaled, p->details).first;
           goto outer; // no labelled break in this language...
         }
 
         // continue down the chain until we find a primary source or our starting lane
         auto *nextParameter = parentProcessor->state
-          ->getProcessorParameter(next->stateId, Generation::EffectsLane::Input);
-        next = Framework::getOptionFromValue(Framework::scaleValue(
+          ->getProcessorParameter(next->stateId, EffectsLane::Input);
+        next = getOptionFromValue(scaleValue(
           nextParameter->normalisedValue.load(satomi::memory_order_relaxed),
           nextParameter->details), nextParameter->details).first;
       }
     }
 
-    newValue = Framework::unscaleValue(Framework::getValueFromOption(option, p->details), p->details);
+    newValue = unscaleValue(getValueFromOption(option, p->details), p->details);
     return newValue;
   };
 
   auto arena = structure.getNewArena(COMPLEX_KB(2));
 
-  ProcessorMetadata &effectsLane = COMPLEX_STRUCTURE_PROCESSOR(Generation::EffectsLane, "Effects Lane", 
-    Processors::EffectsLane, Interface::Skin::kEffectsLane, Generation::createEffectsLane, createUIEffectsLane, .reset = resetEffectsLane);
+  ProcessorMetadata &effectsLane = COMPLEX_STRUCTURE_PROCESSOR(EffectsLane, "Effects Lane", 
+    Processors::EffectsLane, Skin::kEffectsLane, createEffectsLane, createUIEffectsLane, .reset = resetEffectsLane);
   effectsLane.parameters =
   (
     COMPLEX_STRUCTURE_PARAMETER("Lane Enabled", EffectsLane::LaneEnabled, { 0.0f, 1.0f, 1.0f }, ParameterScale::Toggle, {},
-      ParameterDetails::Modulatable | ParameterDetails::Automatable, UpdateFlag::BeforeProcess, Framework::printToggleValues),
+      ParameterDetails::Modulatable | ParameterDetails::Automatable, UpdateFlag::BeforeProcess, printToggleValues),
     COMPLEX_STRUCTURE_PARAMETER("Input", EffectsLane::Input,
       {
         .options = COMPLEX_STRUCTURE_INDEXED_DATA()->addChildren({{
@@ -715,7 +700,7 @@ initialiseTypeStructureEffectsLane(void *, Framework::PluginStructure &structure
         .defaultOptionId = EffectsLane::OutputOptionsMain
       }, ParameterScale::Indexed, {}, ParameterDetails::Automatable | ParameterDetails::Extensible, UpdateFlag::BeforeProcess),
     COMPLEX_STRUCTURE_PARAMETER("Gain Matching", EffectsLane::GainMatching, { 0.0f, 1.0f, 1.0f }, ParameterScale::Toggle, {},
-      ParameterDetails::Modulatable | ParameterDetails::Automatable, UpdateFlag::BeforeProcess, Framework::printToggleValues)
+      ParameterDetails::Modulatable | ParameterDetails::Automatable, UpdateFlag::BeforeProcess, printToggleValues)
   );
 
   effectsLane.children = (ProcessorMetadata *)initialiseTypeStructureEffectModule(&effectsLane, structure);
