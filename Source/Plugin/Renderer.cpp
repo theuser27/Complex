@@ -12,9 +12,9 @@
 
 #include "Framework/load_save.hpp"
 #include "Framework/parameters.hpp"
-#include "Interface/LookAndFeel/Graphics.hpp"
-#include "Interface/LookAndFeel/Component.hpp"
-#include "Interface/Sections/MainInterface.hpp"
+#include "Interface/Graphics.hpp"
+#include "Interface/Component.hpp"
+#include "Interface/MainInterface.hpp"
 
 static auto
 unscaleDimensions(u32 width, u32 height, double currentScaling)

@@ -5,7 +5,7 @@
 
 #include "Framework/parameters.hpp"
 #include "Plugin/Complex.hpp"
-#include "../LookAndFeel/gui_constants.hpp"
+#include "gui_constants.hpp"
 #include "Control.hpp"
 
 TextEditor::TextEditor()

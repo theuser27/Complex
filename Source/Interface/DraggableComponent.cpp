@@ -7,7 +7,7 @@
 
 #include "Generation/Processor.hpp"
 #include "Plugin/Complex.hpp"
-#include "../Sections/MainInterface.hpp"
+#include "MainInterface.hpp"
 
 bool
 DraggableComponent::render(Graphics &g)

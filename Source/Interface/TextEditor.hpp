@@ -3,8 +3,8 @@
 
 #pragma once
 
-#include "../LookAndFeel/Graphics.hpp"
-#include "../LookAndFeel/Component.hpp"
+#include "Graphics.hpp"
+#include "Component.hpp"
 
 class TextEditor : public Component
 {

@@ -6,8 +6,8 @@
 #include "Framework/metadata.hpp"
 #include "Framework/parameters.hpp"
 #include "Plugin/Complex.hpp"
-#include "Interface/LookAndFeel/Component.hpp"
-#include "Interface/Components/Control.hpp"
+#include "Interface/Component.hpp"
+#include "Interface/Control.hpp"
 
 void deleteProcessor(Processor *processor)
 {

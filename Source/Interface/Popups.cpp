@@ -7,8 +7,8 @@
 
 #include "Framework/parameters.hpp"
 #include "Plugin/Complex.hpp"
-#include "../LookAndFeel/Graphics.hpp"
-#include "../Components/Control.hpp"
+#include "Graphics.hpp"
+#include "Control.hpp"
 
 static Range<i32>
 getPopupDisplayDimensions(Component *c, bool isCalculatingVertical)

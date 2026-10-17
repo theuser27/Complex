@@ -11,7 +11,7 @@
 
 #include "stl_utils.hpp"
 #include "simd_math.hpp"
-#include "Interface/LookAndFeel/gui_utils.hpp"
+#include "Interface/gui_utils.hpp"
 #include "Third Party/stb/stb_sprintf.h"
 
 #ifdef COMPLEX_WINDOWS

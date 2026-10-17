@@ -7,7 +7,7 @@
 #include "Framework/parameters.hpp"
 #include "Effects.hpp"
 #include "Plugin/Complex.hpp"
-#include "Interface/LookAndFeel/Skin.hpp"
+#include "Interface/Skin.hpp"
 
 static bool
 reserveBuffer(Buffer &buffer, utils::Pool *pool, u32 newChannels, u32 newSize, u32 *end)

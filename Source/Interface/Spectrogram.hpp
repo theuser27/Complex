@@ -4,7 +4,7 @@
 #pragma once
 
 #include "Framework/simd_buffer.hpp"
-#include "../LookAndFeel/Component.hpp"
+#include "Component.hpp"
 
 class Spectrogram final : public Component
 {

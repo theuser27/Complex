@@ -4,8 +4,8 @@
 #pragma once
 
 #include "Framework/parameters.hpp"
-#include "../Components/DraggableComponent.hpp"
-#include "../Components/Control.hpp"
+#include "DraggableComponent.hpp"
+#include "Control.hpp"
 
 class EffectModule;
 

@@ -3,9 +3,9 @@
 
 #pragma once
 
-#include "../LookAndFeel/Graphics.hpp"
-#include "../LookAndFeel/Component.hpp"
-#include "../Components/Control.hpp"
+#include "Graphics.hpp"
+#include "Component.hpp"
+#include "Control.hpp"
 
 class Control;
 

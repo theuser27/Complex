@@ -3,7 +3,7 @@
 
 #pragma once
 
-#include "../LookAndFeel/Component.hpp"
+#include "Component.hpp"
 
 struct DraggableComponent : public Component
 {

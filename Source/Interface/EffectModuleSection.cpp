@@ -7,7 +7,7 @@
 #include "Framework/parameters.hpp"
 #include "Generation/Effects.hpp"
 #include "Generation/Algorithms.hpp"
-#include "../Components/Control.hpp"
+#include "Control.hpp"
 #include "Popups.hpp"
 #include "EffectsLaneSection.hpp"
 #include "MainInterface.hpp"

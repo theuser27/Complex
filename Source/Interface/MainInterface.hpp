@@ -3,10 +3,10 @@
 
 #pragma once
 
-#include "../LookAndFeel/Component.hpp"
-#include "../Components/Control.hpp"
-#include "../Components/Spectrogram.hpp"
-#include "../Sections/Popups.hpp"
+#include "Component.hpp"
+#include "Control.hpp"
+#include "Spectrogram.hpp"
+#include "Popups.hpp"
 
 class SoundEngine;
 

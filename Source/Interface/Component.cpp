@@ -7,9 +7,9 @@
 #include "Graphics.hpp"
 #include "Plugin/Complex.hpp"
 #include "Generation/Processor.hpp"
-#include "../Components/Control.hpp"
-#include "../Sections/MainInterface.hpp"
-#include "../Sections/Popups.hpp"
+#include "Control.hpp"
+#include "MainInterface.hpp"
+#include "Popups.hpp"
 
 static bool
 calculateFit(Component *component, Component *children, bool isCalculatingVertical)

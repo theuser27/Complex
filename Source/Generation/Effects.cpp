@@ -11,8 +11,8 @@
 #include "Framework/parameters.hpp"
 #include "Plugin/Complex.hpp"
 #include "SoundEngine.hpp"
-#include "Interface/LookAndFeel/Skin.hpp"
-#include "Interface/Sections/EffectModuleSection.hpp"
+#include "Interface/Skin.hpp"
+#include "Interface/EffectModuleSection.hpp"
 
 static EffectData *
 createEffect(ProcessorMetadata *processorMetadata, EffectModule *module,

@@ -4,8 +4,8 @@
 #pragma once
 
 #include "Framework/metadata.hpp"
-#include "../LookAndFeel/Component.hpp"
-#include "../LookAndFeel/Graphics.hpp"
+#include "Component.hpp"
+#include "Graphics.hpp"
 #include "TextEditor.hpp"
 
 class Parameter;

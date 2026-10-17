@@ -3,9 +3,9 @@
 
 #pragma once
 
-#include "../LookAndFeel/Component.hpp"
-#include "../Components/Control.hpp"
-#include "../Components/DraggableComponent.hpp"
+#include "Component.hpp"
+#include "Control.hpp"
+#include "DraggableComponent.hpp"
 
 class EffectsLane;
 

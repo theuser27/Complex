@@ -6,7 +6,7 @@
 #include "parameters.hpp"
 #include "Plugin/Complex.hpp"
 #include "Generation/Processor.hpp"
-#include "Interface/Components/Control.hpp"
+#include "Interface/Control.hpp"
 
 
 utils::string_view

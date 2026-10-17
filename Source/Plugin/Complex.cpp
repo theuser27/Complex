@@ -13,9 +13,9 @@
 #include "Framework/parameters.hpp"
 #include "Generation/Effects.hpp"
 #include "Generation/SoundEngine.hpp"
-#include "Interface/LookAndFeel/Graphics.hpp"
-#include "Interface/LookAndFeel/Component.hpp"
-#include "Interface/Sections/MainInterface.hpp"
+#include "Interface/Graphics.hpp"
+#include "Interface/Component.hpp"
+#include "Interface/MainInterface.hpp"
 
 ExecutableMetadata executableStaticData{};
 

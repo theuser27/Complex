@@ -6,10 +6,10 @@
 #include "Framework/parameters.hpp"
 #include "Generation/Processor.hpp"
 #include "Plugin/Complex.hpp"
-#include "../LookAndFeel/gui_constants.hpp"
-#include "../LookAndFeel/Graphics.hpp"
-#include "../LookAndFeel/Skin.hpp"
-#include "../Sections/Popups.hpp"
+#include "gui_constants.hpp"
+#include "Graphics.hpp"
+#include "Skin.hpp"
+#include "Popups.hpp"
 
 bool
 Button::mouseDown(const MouseEvent &e)

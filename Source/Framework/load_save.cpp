@@ -11,9 +11,9 @@
 #include "Framework/parameters.hpp"
 #include "Generation/SoundEngine.hpp"
 #include "Generation/Effects.hpp"
-#include "Interface/LookAndFeel/Graphics.hpp"
-#include "Interface/LookAndFeel/gui_constants.hpp"
-#include "Interface/Sections/MainInterface.hpp"
+#include "Interface/Graphics.hpp"
+#include "Interface/gui_constants.hpp"
+#include "Interface/MainInterface.hpp"
 #include "Plugin/Complex.hpp"
 
 

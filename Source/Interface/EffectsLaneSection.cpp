@@ -7,7 +7,7 @@
 
 #include "Generation/Effects.hpp"
 #include "Plugin/Complex.hpp"
-#include "../Components/Control.hpp"
+#include "Control.hpp"
 #include "MainInterface.hpp"
 #include "EffectModuleSection.hpp"
 

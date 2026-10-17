@@ -7,8 +7,8 @@
 
 #include "Framework/parameters.hpp"
 #include "Plugin/Complex.hpp"
-#include "../Sections/MainInterface.hpp"
-#include "../Sections/Popups.hpp"
+#include "MainInterface.hpp"
+#include "Popups.hpp"
 
 Control::Control()
 {

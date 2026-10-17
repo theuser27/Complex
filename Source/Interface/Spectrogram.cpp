@@ -6,7 +6,7 @@
 #include "Framework/utils.hpp"
 #include "Framework/simd_math.hpp"
 #include "Plugin/Complex.hpp"
-#include "../LookAndFeel/Skin.hpp"
+#include "Skin.hpp"
 
 #define CHECK_NAN(x) if (i4mask::anyMask(f4::isNan(x)) != 0) COMPLEX_DEBUG_TRAP();
 

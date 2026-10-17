@@ -7,7 +7,7 @@
 #include "Framework/parameters.hpp"
 #include "Plugin/Complex.hpp"
 #include "Effects.hpp"
-#include "Interface/LookAndFeel/Skin.hpp"
+#include "Interface/Skin.hpp"
 #include "Data/BinaryData.hpp"
 #include "Third Party/nanovg/nanosvg.h"
 
