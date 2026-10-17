@@ -3,7 +3,6 @@
 
 #pragma once
 
-#include "memory.hpp"
 #include "utils.hpp"
 #include "simd_utils.hpp"
 
@@ -163,4 +162,3 @@ struct ComplexDataSource
   // scratch buffer for to be used during processing, initial data is undefined
   SimdBuffer *scratchBuffer = nullptr;
 };
-

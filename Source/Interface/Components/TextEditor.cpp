@@ -5,7 +5,7 @@
 
 #include "Framework/parameters.hpp"
 #include "Plugin/Complex.hpp"
-#include "../LookAndFeel/ui_constants.hpp"
+#include "../LookAndFeel/gui_constants.hpp"
 #include "Control.hpp"
 
 TextEditor::TextEditor()
@@ -80,8 +80,8 @@ Label::getSizeMetrics(Component *c, bool isCalculatingVertical)
 
     if (!self->text.capacity())
     {
-      COMPLEX_ASSERT(self->control, "Forgot to set control arena");
-      self->text.reserve(self->control->arena, (1 << 5) - 1);
+      COMPLEX_ASSERT(self->control, "Forgot to set control pool");
+      self->text.reserve(self->control->pool, (1 << 5) - 1);
     }
 
     self->cacheString(self, self->control);
@@ -154,8 +154,7 @@ SliderValueEditor::SliderValueEditor()
     {
       auto newValue = control->getValueFromText(self.text);
       control->setValue(newValue, true);
-      if (auto hostParameter = control->parameter->hostParameter)
-        hostParameter->setValueFromUI((float)newValue);
+      control->setValueToHost();
     }
 
     self.cachedValue = control->getValue();

@@ -4,7 +4,6 @@
 #pragma once
 
 #include "utils.hpp"
-#include "memory.hpp"
 #include "simd_utils.hpp"
 #include "metadata.hpp"
 #include "satomi.hpp"
@@ -23,14 +22,14 @@ class ParameterModulator
 {
 public:
 
-  f4 
+  f4
   getValue()
   {
     auto values = currentValue.load(satomi::memory_order_relaxed);
     f4::array_t expandedValues{};
     for (usize i = 0; i < expandedValues.size(); ++i)
       expandedValues[i] = values[i / 2];
-      
+
     return expandedValues;
   }
 
@@ -47,8 +46,8 @@ public:
   Parameter() = default;
   Parameter(ParameterDetails details, Processor *parent);
 
-  float reset(const ParameterDetails *newDetails = nullptr,
-    const float *value = nullptr, float sampleRate = kDefaultSampleRate);
+  void changeDetails(ParameterDetails newDetails);
+  float reset(const float *value = nullptr, float sampleRate = kDefaultSampleRate);
 
   // prefer calling this only once if possible
   // audio threads only
@@ -111,7 +110,8 @@ public:
 
   // this method will sample the current state of normalisedValue and modulations
   // and update the internal values only
-  void updateValue(float sampleRate)
+  // audio-thread, main-thread, must have write-lock
+  void updateValue(float sampleRate = kDefaultSampleRate)
   {
     sampledNormalisedValue = normalisedValue.load(satomi::memory_order_relaxed);
     sampledModulations = 0.0f;
@@ -125,12 +125,12 @@ public:
   void deleteModulator(ParameterModulator &modulator);
 
   [[nodiscard]] float
-  updateNormalisedValue(float value)
+  updateNormalisedValue(float value, ParameterAssignment assignmentType)
   {
     COMPLEX_ASSERT(value >= 0.0f && value <= 1.0f);
 
     if (details.valueChange)
-      value = details.valueChange(this, value);
+      value = details.valueChange(this, value, assignmentType);
 
     COMPLEX_ASSERT(value >= 0.0f && value <= 1.0f);
     normalisedValue.store(value, satomi::memory_order_relaxed);
@@ -139,21 +139,8 @@ public:
   }
 
   void serialiseToJson(void *jsonData) const;
-  static Parameter *deserialiseFromJson(Processor *processor, 
+  static Parameter *deserialiseFromJson(Processor *processor,
     void *jsonData, ParameterDetails &reference, Parameter *memory = nullptr);
-
-  [[nodiscard]] static Parameter *createParameters(Processor *processor, 
-    usize count, ParameterMetadata *metadata, Parameter *fromCopy = nullptr);
-  static void initialiseParameters(Parameter *parameters, usize count,
-    Parameter *fromCopy = nullptr, bool keepValue = false);
-  [[nodiscard]] static Parameter *
-  createAndInitialiseParameters(Processor *processor, usize count,
-    ParameterMetadata *metadata, Parameter *fromCopy = nullptr)
-  {
-    auto *createdParameters = createParameters(processor, count, metadata, fromCopy);
-    initialiseParameters(createdParameters, count, fromCopy);
-    return createdParameters;
-  }
 
 private:
   // after adding modulations and scaling
@@ -173,10 +160,26 @@ public:
   const ParameterDetails details{};
 
   Control *control = nullptr;
-  HostParameter *hostParameter = nullptr;
+  satomi::atomic<HostParameter *> hostParameter = nullptr;
   Parameter *previous{};
   Parameter *next{};
 };
+
+[[nodiscard]] Parameter *createParameters(Processor *processor,
+  usize count, ParameterMetadata *metadata, Parameter *fromCopy = nullptr);
+void initialiseParameters(Parameter *parameters, usize count,
+  Parameter *fromCopy = nullptr, bool keepValue = false);
+[[nodiscard]] inline Parameter *
+createAndInitialiseParameters(Processor *processor, usize count,
+  ParameterMetadata *metadata, Parameter *fromCopy = nullptr)
+{
+  auto *createdParameters = createParameters(processor, count, metadata, fromCopy);
+  initialiseParameters(createdParameters, count, fromCopy);
+  return createdParameters;
+}
+
+void serialiseParameters(void *jsonData, Parameter *parameters, usize parameterCount);
+void serialiseParameters(void *jsonData, utils::span<Parameter *> parametersToSerialise);
 
 class HostParameter
 {
@@ -193,38 +196,36 @@ public:
   ~HostParameter();
 
   auto *getParameter() const { return parameter_.load(satomi::memory_order_acquire); }
-  void resetParameter(Parameter *parameter, bool getValueFromParameter = true);
-  static void notifyParameterChange();
+  void resetParameter(Parameter *parameter, bool getValueFromParameter = true,
+    ParameterAssignment assignmentType = ParameterAssignment::MainThread);
 
   void beginChangeGesture();
   void setValueFromUI(float newValue);
   void endChangeGesture();
 
-  void updateUIParameter();
+  void flushUpdates();
+  static void notifyParameterChange();
 
-  void setCustomName(utils::string name);
-  void resetName();
-
-  bool isMappedToParameter() const { return parameter_.load(satomi::memory_order_acquire); }
-
+  float getScaledValue() const;
   float getValue() const { return value_.load(satomi::memory_order_relaxed); }
-  void setValue(float newValue);
+  float getDefaultScaledValue() const;
   float getDefaultValue() const;
+  void setValue(float newValue);
 
   void getName(utils::string &outString) const;
   void getName(char *buffer, usize maximumStringLength) const;
   void getText(float value, char *buffer, usize maximumStringLength) const;
   float getValueForText(utils::string_view text) const;
 
-  bool isDiscrete() const;
-  bool isBoolean() const;
-
   const u64 parameterIndex;
   State *state = nullptr;
+  utils::string customName{};
 
 private:
-  utils::pair<satomi::atomic<bool>, utils::string> name_{};
+  enum class GestureState : u8 { None, Begun, ShouldEnd };
+  
   satomi::atomic<float> value_ = kDefaultParameterValue;
   satomi::atomic<bool> wasValueSet_ = false;
+  satomi::atomic<GestureState> gestureState_ = GestureState::None;
   satomi::atomic<Parameter *> parameter_ = nullptr;
 };

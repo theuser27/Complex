@@ -85,15 +85,14 @@ void EffectModuleSection::EffectHolder::Header::reinitialise()
 
   addChildComponent(&effectTypeSelector);
   effectTypeSelector.addChildComponent(&effectTypeIcon, (usize)0);
-  effectTypeSelector.arena = arena;
+  effectTypeSelector.pool = pool;
   effectTypeSelector.placement = Placement::left;
   effectTypeSelector.dropdownOffset = { 0, 4 };
   effectTypeSelector.valueChangedCallback = [](Control *c, float newValue, float)
   {
     // selector -> header -> effectHolder -> effectModuleSection
     auto *section = (EffectModuleSection *)c->parent->parent->parent;
-    auto [option, _] = getOptionFromValue(
-      scaleValue(newValue, c->details), c->details);
+    auto [option, _] = getOptionFromValue(scaleValue(newValue, c->details), c->details);
 
     // make icon component invisible and only show it if an icon exist
     // selector -> header
@@ -101,8 +100,7 @@ void EffectModuleSection::EffectHolder::Header::reinitialise()
     header->icon = nullptr;
     header->effectTypeIcon.componentFlags.isVisible = false;
 
-    for (; option && (option->flags != IndexedData::SVGData || !option->svgData);
-      option = option->parent) { }
+    for (; option && (option->flags != IndexedData::SVGData || !option->svgData); option = option->parent) { }
     if (option)
     {
       header->icon = option->svgData;
@@ -114,7 +112,7 @@ void EffectModuleSection::EffectHolder::Header::reinitialise()
 
   addChildComponent(&mixNumberBox);
   mixNumberBox.maxDecimalCharacters = 2;
-  mixNumberBox.arena = arena;
+  mixNumberBox.pool = pool;
   mixNumberBox.placement = Placement::right;
 
   addChildComponent(&moduleActivator);
@@ -128,13 +126,14 @@ void EffectModuleSection::EffectHolder::Header::reinitialise()
 
 void EffectModuleSection::EffectHolder::reinitialise()
 {
-  removeChildComponent(&header);
-  deleteAllChildComponents();
+  removeAllChildComponents();
+  auto section = (EffectModuleSection *)parent;
+  utils::Pool::clear(section->effectArena);
 
   componentFlags.vertical = true;
 
   addChildComponent(&header);
-  header.arena = arena;
+  header.pool = pool;
   header.sizingFlags = Component::GrowableX;
   header.placement = Placement::top;
   header.desiredSize = { 0, kTopMenuHeight, 0, kTopMenuHeight };
@@ -181,28 +180,28 @@ void EffectModuleSection::reinitialise()
   componentFlags.clickable = true;
   desiredSize = { kEffectModuleWidth, 0, kEffectModuleWidth, utils::int_max<i32> };
 
-  if (!arena)
-    arena = utils::Pool::createNested(utils::Pool::fromAllocation(this), COMPLEX_KB(64));
+  if (!pool)
+    pool = utils::Pool::createNested(utils::Pool::fromAllocation(this), COMPLEX_KB(64));
   if (!effectArena)
-    effectArena = utils::Pool::createNested(arena, COMPLEX_KB(32));
+    effectArena = utils::Pool::createNested(pool, COMPLEX_KB(32));
 
 
   addChildComponent(&maskComponent);
   maskComponent.sizingFlags = Component::GrowableX;
   maskComponent.desiredSize = { 0, kSpectralMaskContractedHeight, 0, kSpectralMaskContractedHeight };
   utils::copy(utils::span{ maskComponent.rounding }, {{ (float)kOuterPixelRounding, (float)kOuterPixelRounding, 0.0f, 0.0f }});
-  maskComponent.lowBound.arena = arena;
+  maskComponent.lowBound.pool = pool;
   maskComponent.lowBound.changeLinkedParameter(*effectModule->getParameter(EffectModule::LowBound));
-  maskComponent.highBound.arena = arena;
+  maskComponent.highBound.pool = pool;
   maskComponent.highBound.changeLinkedParameter(*effectModule->getParameter(EffectModule::HighBound));
-  maskComponent.shiftBounds.arena = arena;
+  maskComponent.shiftBounds.pool = pool;
   maskComponent.shiftBounds.changeLinkedParameter(*effectModule->getParameter(EffectModule::ShiftBounds));
 
 
   addChildComponent(&effectHolder);
   effectHolder.sizingFlags = (Component::SizingFlags)(Component::GrowableX | Component::SnapToMinY);
   effectHolder.desiredSize = { 0, kEffectModuleMainBodyHeight, 0, utils::int_max<i32> };
-  effectHolder.arena = arena;
+  effectHolder.pool = pool;
 
   effectHolder.header.effectTypeSelector.changeLinkedParameter(*effectModule->getParameter(EffectModule::ModuleType));
   effectHolder.header.mixNumberBox.changeLinkedParameter(*effectModule->getParameter(EffectModule::ModuleMix));
@@ -245,7 +244,7 @@ EffectModuleSection::mouseDown(const MouseEvent &e)
     };
 
     auto *selector = getPopupSelector();
-    auto *itemArena = selector->arena;
+    auto *itemArena = selector->pool;
     PopupList *list = anew(itemArena, PopupList, { selector });
     list->desiredSize = { kPopupMinWidth, 0, utils::int_max<i32>, utils::int_max<i32> };
     list->padding = { 0, 4, 0, 4 };
@@ -299,11 +298,15 @@ EffectModuleSection::mouseDown(const MouseEvent &e)
 
 void EffectModuleSection::restartEffectUI()
 {
-  effectHolder.removeChildComponent(&effectHolder.header);
+  // detach the parameters from their GUI representation, 
+  // because those will stop existing after the next few lines
+  for (auto *c : effectControls)
+    c->setParameter(nullptr);
+
+  effectControls = {};
   effectHolder.removeAllChildComponents();
   utils::Pool::clear(effectArena);
   effectHolder.addChildComponent(&effectHolder.header);
-  effectControls = {};
 
   auto activeEffect = effectModule->currentEffect.load(satomi::memory_order_acquire);
   skinOverride = (Skin::Override)activeEffect->metadata->userFlags;
@@ -313,31 +316,30 @@ void EffectModuleSection::restartEffectUI()
       effectModule->currentEffect.load(satomi::memory_order_acquire));
 }
 
-#define findParameterWithId(parameters, idToCheck) utils::findIf(parameters, [](Parameter *item) { return item->details.id == idToCheck; })
 
 static CombinationRotarySlider *
-createRotary(utils::Pool *arena, Parameter *parameter)
+createRotary(utils::Pool *pool, Parameter *parameter)
 {
-  auto *rotary = anew(arena, CombinationRotarySlider, {});
+  auto *rotary = anew(pool, CombinationRotarySlider, {});
   rotary->placement = Placement::justifyX;
-  rotary->rotary.arena = arena;
+  rotary->rotary.pool = pool;
   rotary->rotary.changeLinkedParameter(*parameter);
   return rotary;
 }
 
 static utils::span<Control *>
-genericKnobUI(utils::Pool *arena, EffectModuleSection *section,
+genericKnobUI(utils::Pool *pool, EffectModuleSection *section,
   EffectData *effectData)
 {
-  Component *holder = anew(arena, Component, {});
+  Component *holder = anew(pool, Component, {});
   holder->sizingFlags = (Component::SizingFlags)(Component::GrowableX | Component::GrowableY);
   holder->padding = { 32, 0, 32, 0 };
 
-  utils::vectornd<Control *> controls{ arena, effectData->parameterCount };
+  utils::vectornd<Control *> controls{ pool, effectData->parameterCount };
   auto *parameter = effectData->parameters;
   for (usize i = 0; i < effectData->parameterCount; (++i), (parameter = parameter->next))
   {
-    auto *rotary = createRotary(arena, parameter);
+    auto *rotary = createRotary(pool, parameter);
     controls.emplaceBack(&rotary->rotary);
     holder->addChildComponent(rotary);
   }
@@ -350,136 +352,136 @@ genericKnobUI(utils::Pool *arena, EffectModuleSection *section,
 
 
 utils::span<Control *>
-Filter::createUINormal(utils::Pool *arena, EffectModuleSection *section,
+Filter::createUINormal(utils::Pool *pool, EffectModuleSection *section,
   EffectData *effectData)
 {
-  return genericKnobUI(arena, section, effectData);
+  return genericKnobUI(pool, section, effectData);
 }
 
 utils::span<Control *>
-Filter::createUIGate(utils::Pool *arena, EffectModuleSection *section,
+Filter::createUIGate(utils::Pool *pool, EffectModuleSection *section,
   EffectData *effectData)
 {
-  Component *holder = anew(arena, Component, {});
+  Component *holder = anew(pool, Component, {});
   holder->sizingFlags = (Component::SizingFlags)(Component::GrowableX | Component::GrowableY);
   holder->padding = { 32, 0, 32, 0 };
 
-  auto *gainRotary = createRotary(arena, findParameterWithId(effectData->parameters, Gate::Gain));
+  auto *gainRotary = createRotary(pool, effectData->getParameter(Gate::Gain));
   holder->addChildComponent(gainRotary);
 
-  auto *thresholdRotary = createRotary(arena, findParameterWithId(effectData->parameters, Gate::Threshold));
+  auto *thresholdRotary = createRotary(pool, effectData->getParameter(Gate::Threshold));
   holder->addChildComponent(thresholdRotary);
 
-  auto *tiltRotary = createRotary(arena, findParameterWithId(effectData->parameters, Gate::Tilt));
+  auto *tiltRotary = createRotary(pool, effectData->getParameter(Gate::Tilt));
   holder->addChildComponent(tiltRotary);
 
   section->effectHolder.addChildComponent(holder);
 
-  utils::vectornd<Control *> controls{ arena,
+  utils::vectornd<Control *> controls{ pool,
     {{ &gainRotary->rotary, &thresholdRotary->rotary, &tiltRotary->rotary }} };
   return controls;
 }
 
 utils::span<Control *>
-Dynamics::createUIContrast(utils::Pool *arena,
+Dynamics::createUIContrast(utils::Pool *pool,
   EffectModuleSection *section, EffectData *effectData)
 {
-  return genericKnobUI(arena, section, effectData);
+  return genericKnobUI(pool, section, effectData);
 }
 
 utils::span<Control *>
-Dynamics::createUIClip(utils::Pool *arena,
+Dynamics::createUIClip(utils::Pool *pool,
   EffectModuleSection *section, EffectData *effectData)
 {
-  return genericKnobUI(arena, section, effectData);
+  return genericKnobUI(pool, section, effectData);
 }
 
 utils::span<Control *>
-Phase::createUIShift(utils::Pool *arena,
+Phase::createUIShift(utils::Pool *pool,
   EffectModuleSection *section, EffectData *effectData)
 {
-  Component *holder = anew(arena, Component, {});
+  Component *holder = anew(pool, Component, {});
   holder->sizingFlags = (Component::SizingFlags)(Component::GrowableX | Component::GrowableY);
   holder->padding = { 32, 0, 32, 0 };
 
-  auto *shiftRotary = createRotary(arena, findParameterWithId(effectData->parameters, Shift::PhaseShift));
+  auto *shiftRotary = createRotary(pool, effectData->getParameter(Shift::PhaseShift));
   holder->addChildComponent(shiftRotary);
 
-  auto *intervalRotary = createRotary(arena, findParameterWithId(effectData->parameters, Shift::Interval));
+  auto *intervalRotary = createRotary(pool, effectData->getParameter(Shift::Interval));
   holder->addChildComponent(intervalRotary);
 
-  auto *offsetRotary = createRotary(arena, findParameterWithId(effectData->parameters, Shift::Offset));
+  auto *offsetRotary = createRotary(pool, effectData->getParameter(Shift::Offset));
   holder->addChildComponent(offsetRotary);
 
-  auto *selector = anew(arena, TextSelector, {});
-  selector->arena = arena;
-  selector->changeLinkedParameter(*findParameterWithId(effectData->parameters, Shift::Slope));
+  auto *selector = anew(pool, TextSelector, {});
+  selector->pool = pool;
+  selector->changeLinkedParameter(*effectData->getParameter(Shift::Slope));
   shiftRotary->setModifier(selector);
 
   section->effectHolder.addChildComponent(holder);
 
-  utils::vectornd<Control *> controls{ arena,
+  utils::vectornd<Control *> controls{ pool,
     {{ &shiftRotary->rotary, &intervalRotary->rotary, &offsetRotary->rotary, selector }} };
   return controls;
 }
 
 utils::span<Control *>
-Pitch::createUIResample(utils::Pool *arena,
+Pitch::createUIResample(utils::Pool *pool,
   EffectModuleSection *section, EffectData *effectData)
 {
-  Component *holder = anew(arena, Component, {});
+  Component *holder = anew(pool, Component, {});
   holder->sizingFlags = (Component::SizingFlags)(Component::GrowableX | Component::GrowableY);
   holder->padding = { 32, 0, 32, 0 };
 
-  auto *shiftRotary = createRotary(arena, findParameterWithId(effectData->parameters, Resample::Shift));
+  auto *shiftRotary = createRotary(pool, effectData->getParameter(Resample::Shift));
   holder->addChildComponent(shiftRotary);
 
   section->effectHolder.addChildComponent(holder);
 
-  utils::vectornd<Control *> controls{ arena, {{ &shiftRotary->rotary }} };
+  utils::vectornd<Control *> controls{ pool, {{ &shiftRotary->rotary }} };
   return controls;
 }
 
 utils::span<Control *>
-Pitch::createUIFrequencyShift(utils::Pool *arena,
+Pitch::createUIFrequencyShift(utils::Pool *pool,
   EffectModuleSection *section, EffectData *effectData)
 {
-  return genericKnobUI(arena, section, effectData);
+  return genericKnobUI(pool, section, effectData);
 }
 
-utils::span<Control *> 
-Freeze::createUIRolling(utils::Pool *arena, 
+utils::span<Control *>
+Freeze::createUIRolling(utils::Pool *pool,
   EffectModuleSection *section, EffectData *effectData)
 {
-  Component *holder = anew(arena, Component, {});
+  Component *holder = anew(pool, Component, {});
   holder->sizingFlags = (Component::SizingFlags)(Component::GrowableX | Component::GrowableY);
   holder->padding = { 32, 0, 32, 0 };
 
-  auto *shiftRotary = createRotary(arena, findParameterWithId(effectData->parameters, Rolling::Rate));
+  auto *shiftRotary = createRotary(pool, effectData->getParameter(Rolling::Rate));
   holder->addChildComponent(shiftRotary);
 
   section->effectHolder.addChildComponent(holder);
 
-  utils::vectornd<Control *> controls{ arena, {{ &shiftRotary->rotary }} };
+  utils::vectornd<Control *> controls{ pool, {{ &shiftRotary->rotary }} };
   return controls;
 }
 
 utils::span<Control *>
-Destroy::createUIReinterpret(utils::Pool *arena,
+Destroy::createUIReinterpret(utils::Pool *pool,
   EffectModuleSection *section, EffectData *effectData)
 {
-  Component *holder = anew(arena, Component, {});
+  Component *holder = anew(pool, Component, {});
   holder->sizingFlags = (Component::SizingFlags)(Component::GrowableX | Component::GrowableY);
   holder->padding = { 32, 0, 32, 0 };
 
-  auto *attenuationRotary = createRotary(arena, findParameterWithId(effectData->parameters, Reinterpret::Attenuation));
+  auto *attenuationRotary = createRotary(pool, effectData->getParameter(Reinterpret::Attenuation));
   holder->addChildComponent(attenuationRotary);
 
-  auto *mappingSelector = anew(arena, TextSelector, {});
-  mappingSelector->changeLinkedParameter(*findParameterWithId(effectData->parameters, Reinterpret::Transform));
-  mappingSelector->arena = arena;
+  auto *mappingSelector = anew(pool, TextSelector, {});
+  mappingSelector->changeLinkedParameter(*effectData->getParameter(Reinterpret::Transform));
+  mappingSelector->pool = pool;
   mappingSelector->placement = Placement::left;
-  auto *label = anew(arena, Label, {});
+  auto *label = anew(pool, Label, {});
   label->control = mappingSelector;
   label->textPlacement = Placement::right;
   label->placement = Placement::right;
@@ -488,7 +490,7 @@ Destroy::createUIReinterpret(utils::Pool *arena,
     c->padding = c->next->padding;
     return Label::getSizeMetrics(c, isCalculatingVertical);
   };
-  Component *mappingHolder = anew(arena, Component, {});
+  Component *mappingHolder = anew(pool, Component, {});
   mappingHolder->componentFlags.vertical = true;
   mappingHolder->placement = Placement::justifyX;
   mappingHolder->addChildComponent(label);
@@ -497,7 +499,7 @@ Destroy::createUIReinterpret(utils::Pool *arena,
 
   section->effectHolder.addChildComponent(holder);
 
-  utils::vectornd<Control *> controls{ arena, {{ &attenuationRotary->rotary, mappingSelector }} };
+  utils::vectornd<Control *> controls{ pool, {{ &attenuationRotary->rotary, mappingSelector }} };
   return controls;
 }
 
@@ -506,8 +508,7 @@ Destroy::createUIReinterpret(utils::Pool *arena,
 Component *
 createUIEffectModule(Processor *processor)
 {
-  auto guiArena = getUiRelated()->renderer->gui->arena;
-  auto *effectModuleSection = anew(guiArena, EffectModuleSection, {});
+  auto *effectModuleSection = anew(getUIPool(), EffectModuleSection, {});
   effectModuleSection->effectModule = (EffectModule *)processor;
   effectModuleSection->reinitialise();
   return effectModuleSection;

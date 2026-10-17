@@ -5,6 +5,7 @@
 
 #include "platform.hpp"
 #include "macro_helpers.hpp"
+#include "constants.hpp"
 
 // collection of utilities i regularly use of but don't want to include the headers of
 
@@ -143,9 +144,9 @@ namespace utils
   #define COMPLEX_MOVE(...) static_cast<::utils::remove_reference_t<decltype(__VA_ARGS__)>&&>(__VA_ARGS__)
   #define COMPLEX_SWAP(x, y) { auto temp_____ = COMPLEX_MOVE(x); (x) = COMPLEX_MOVE(y); y = COMPLEX_MOVE(temp_____); }
   #define COMPLEX_SWAP_MEMBERS(variable, otherObject, /*thisObject*/...) \
-    { auto _##variable##__ = (otherObject).variable;                   \
+    { auto variable##__ = (otherObject).variable;                   \
     (otherObject).variable = __VA_OPT__((__VA_ARGS__).)variable; \
-    __VA_OPT__((__VA_ARGS__).)variable = _##variable##__; }
+    __VA_OPT__((__VA_ARGS__).)variable = variable##__; }
 
   template<typename, typename> inline constexpr bool is_same_v = false;
   template<typename T> inline constexpr bool is_same_v<T, T> = true;
@@ -479,8 +480,8 @@ namespace utils
   struct dll
   {
     T object;
-    dll *previous{};
     dll *next{};
+    dll *previous{};
   };
 
   // inserts a node into a doubly-linked list
@@ -886,14 +887,14 @@ namespace utils
 
   #define typeId(T) ::utils::typeInfo::create<T>()
 
-  struct sourceLocation
+  struct SourceLocation
   {
     // The defaulted arguments are necessary so that the builtins are evaluated
     // in the context of the caller. Explicit values should never be provided.
 
   #ifdef _MSC_VER
 
-    static consteval sourceLocation
+    static consteval SourceLocation
     current(u32 line = __builtin_LINE(), u32 column = __builtin_COLUMN(),
       const char *file = __builtin_FILE(), const char *function = __builtin_FUNCSIG())
     {
@@ -902,7 +903,7 @@ namespace utils
 
   #else
 
-    static consteval sourceLocation
+    static consteval SourceLocation
     current(std::source_location::T pointer = __builtin_source_location()) noexcept
     {
       auto *data = static_cast<const std::source_location::__impl *>(pointer);
@@ -916,95 +917,6 @@ namespace utils
     u32 line{};
     u32 column{};
   };
-
-  // ghetto unique_ptr implementation
-  template<typename T>
-  class up
-  {
-    static constexpr bool is_array = is_array_v<T>;
-    using V = remove_extent_t<T>;
-  public:
-    constexpr up() noexcept = default;
-    constexpr up(nullptr_t) noexcept {}
-    constexpr up(T *pointer) : object_{ pointer } { }
-    constexpr up(const up &other) noexcept = delete;
-    constexpr up(up &&other) noexcept
-    {
-      object_ = other.object_;
-      other.object_ = nullptr;
-    }
-    // allows up- AND downcasting, check types before doing this
-    template<typename U> requires (!is_array) && (derived_from<U, T> || derived_from<T, U>)
-    constexpr up(up<U> &&other) noexcept
-    {
-      object_ = static_cast<V *>(other.object_);
-      other.object_ = nullptr;
-    }
-    constexpr up &operator=(const up &other) noexcept = delete;
-    constexpr up &operator=(up &&other) noexcept { up<T>{ COMPLEX_MOVE(other) }.swap(*this); return *this; }
-    // allows up- AND downcasting, check types before doing this
-    template<typename U> requires utils::derived_from<U, T> || utils::derived_from<T, U>
-    constexpr up &operator=(up<U> &&other) noexcept { up<T>{ COMPLEX_MOVE(other) }.swap(*this); return *this; }
-    constexpr ~up() noexcept
-    {
-      if constexpr (is_array)
-        delete[] object_;
-      else
-        delete object_;
-
-      object_ = nullptr;
-    }
-
-    static constexpr up<T> create(usize size) requires is_array
-    {
-      up unique;
-      unique.object_ = new V[size]{};
-      return unique;
-    }
-    static constexpr up<T> create(auto &&... args) requires (!is_array)
-    {
-      up unique;
-      unique.object_ = new T{ COMPLEX_FWD(args)... };
-      return unique;
-    }
-
-    constexpr void swap(up &other) noexcept
-    {
-      COMPLEX_SWAP_MEMBERS(object_, other);
-    }
-
-    constexpr void reset() noexcept { up{}.swap(*this); }
-    template<typename U> requires (!is_array) && (derived_from<U, T> || derived_from<T, U>)
-    constexpr void reset(U *pointer) { up<T>{ pointer }.swap(*this); }
-
-    constexpr V *release() noexcept
-    {
-      auto *pointer = object_;
-      object_ = nullptr;
-      return pointer;
-    }
-
-    constexpr V *get() const noexcept { return object_; }
-    constexpr V *operator->() const noexcept { return object_; }
-    constexpr V &operator*() const noexcept { return *object_; }
-    constexpr V &operator[](usize index) const noexcept requires is_array { return object_[index]; }
-
-    explicit constexpr operator bool() const noexcept { return object_; }
-
-  private:
-    V *object_ = nullptr;
-
-    template<typename U> friend class up;
-  };
-
-  template<typename T> up(T *pointer) -> up<T>;
-
-  template<typename T, typename U>
-  constexpr bool operator==(const up<T> &one, const up<U> &two) noexcept { return one.get() == two.get(); }
-  template<typename T>
-  constexpr bool operator==(const up<T> &one, nullptr_t) noexcept { return one.get() == nullptr; }
-  template<typename T>
-  constexpr bool operator==(nullptr_t, const up<T> &two) noexcept { return two.get() == nullptr; }
 
   // checked array
   // thin abstraction intended to be zero-cost in release builds
@@ -1142,27 +1054,64 @@ namespace utils
     if (lower >= upper)
       return;
 
-    COMPLEX_SWAP(container[lower], container[(upper + lower) / 2]);
-    const auto &pivot = container[lower];
-    usize	m = lower;
+    COMPLEX_SWAP(container[lower], container[lower + (upper - lower) / 2]);
 
-    for (usize i = lower + 1; i <= upper; ++i)
+    usize lt = lower;
+    usize i = lower + 1;
+    usize gt = upper;
+
+    for (const auto &pivot = container[lower]; i <= gt; )
     {
       if (predicate(container[i], pivot))
       {
-        ++m;
-        COMPLEX_SWAP(container[m], container[i]);
+        ++lt;
+        COMPLEX_SWAP(container[lt], container[i]);
+        ++i;
+      }
+      else if (predicate(pivot, container[i]))
+      {
+        COMPLEX_SWAP(container[i], container[gt]);
+        --gt;
+      }
+      else
+      {
+        // container[i] == pivot
+        ++i;
       }
     }
 
-    COMPLEX_SWAP(container[lower], container[m]);
-    quicksort(container, lower, m - 1, predicate);
-    quicksort(container, m + 1, upper, predicate);
+    COMPLEX_SWAP(container[lower], container[lt]);
+
+    if (lt > lower)
+      quicksort(container, lower, lt - 1, predicate);
+
+    if (gt < upper)
+      quicksort(container, gt + 1, upper, predicate);
   }
 
   constexpr void quicksort(auto &container, const auto &predicate)
   { quicksort(container, 0, container.size(), predicate); }
 
+  constexpr void insertionsort(auto &container, 
+    usize lower, usize upper, const auto &predicate)
+  {
+    for (usize i = lower + 1; i <= upper; ++i)
+    {
+      auto value = COMPLEX_MOVE(container[i]);
+      usize j = i;
+
+      while (j > lower && predicate(value, container[j - 1]))
+      {
+        container[j] = COMPLEX_MOVE(container[j - 1]);
+        --j;
+      }
+
+      container[j] = COMPLEX_MOVE(value);
+    }
+  }
+
+  constexpr void insertionsort(auto &container, const auto &predicate)
+  { insertionsort(container, 0, container.size(), predicate); }
 
 #if COMPLEX_MSVC
   extern "C"
@@ -1279,6 +1228,24 @@ namespace utils
     return (T)sign;
   }
 
+  constexpr bool
+  closeToZero(float value)
+  { return value <= kEpsilon && value >= -kEpsilon; }
+
+  constexpr bool
+  closeTo(float reference, float value)
+  { return closeToZero(reference - value); }
+
+  template<bool UseAnd = false, typename T>
+  constexpr T
+  circularDifference(T lower, T upper, T size)
+  {
+    if constexpr (UseAnd)
+      return (size + upper - lower) & (size - 1);
+    else
+      return (size + upper - lower) % size;
+  }
+
   template<typename T, typename U>
   constexpr T *
   as(U *pointer)
@@ -1320,13 +1287,10 @@ namespace utils
   // and size MUST be equal to the size, modified by reserveMemory
   // (because of posix munmap)
   void releaseMemory(void *memory, usize size);
-  // tries to lower private memory pages (memory usage) as much as possible
-  // useful for getting rid of pages that are never accessed again (i.e. OpenGl init resources)
-  void shrinkWorkingSet();
 }
 
 // float bit literal
-constexpr float 
+constexpr float
 operator ""_fbl(const char *string, usize size)
 {
   u32 ret = 0;
@@ -1334,7 +1298,7 @@ operator ""_fbl(const char *string, usize size)
   for (usize i = size; i > 0; --i)
     if (string[i - 1] == '0' || string[i - 1] == '1')
       ret |= (u32)(string[i - 1] - '0') << (j++);
-  
+
   COMPLEX_ASSERT(j == sizeof(float) * 8);
   return utils::bit_cast<float>(ret);
 }

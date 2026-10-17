@@ -35,12 +35,12 @@ public:
 
   using Processor::Processor;
 
-  void processEffect(ComplexDataSource &source, u32 binCount, float sampleRate) noexcept;
+  void process(ComplexDataSource &source, u32 binCount, float sampleRate);
 
-  EffectData *changeEffect(const IndexedData *effectOption);
-
-  EffectData *effects{};
+  satomi::atomic<bool> lock{};
+  satomi::atomic<EffectData *> effects{};
   satomi::atomic<EffectData *> currentEffect{};
+  utils::vectormapnd<usize, Parameter *> mappedParameters{};
 };
 
 static_assert(utils::is_trivially_destructible_v<EffectModule>);

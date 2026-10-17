@@ -21,10 +21,13 @@ COMPLEX_ENUM(Processors,
   (EffectModule, 1758070362397),
 )
 
+class Processor;
+void deleteProcessor(Processor *processor);
+
 class Processor
 {
 public:
-  Processor(utils::Pool *arena, State *state, ProcessorMetadata *metadata);
+  Processor(utils::Pool *pool, State *state, ProcessorMetadata *metadata);
   Processor(Processor &&) = default;
 
   Processor() = delete;
@@ -68,7 +71,7 @@ public:
   // if remapOnlyBridges is also provided it will unmap/remap only the bridges from the parameters
   // while the parameters still keep a reference to them
   void remapParameters(utils::span<HostParameter *> bridges,
-    bool bridgeValueFromParameters, bool remapOnlyBridges = false);
+    bool bridgeValueFromParameters, bool remapOnlyBridges);
 
   //void randomiseParameters();
   //void setAllParametersRandomisation(bool toRandomise = true);
@@ -106,23 +109,23 @@ public:
     return children;
   }
 
-  ProcessorMetadata *metadata{};
+  ProcessorMetadata *metadata;
   State *state;
-  const u64 stateId = 0;
+  const u64 stateId;
 
   Processor *parent = nullptr;
   Processor *previous = nullptr;
   Processor *next = nullptr;
   Processor *children = nullptr;
-  u32 childrenCount{};
+  u32 childrenCount = 0;
 
-  u32 parameterCount{};
-  // half-connected dll: first node's previous points to the last, 
+  u32 parameterCount = 0;
+  // half-connected dll: first node's previous points to the last,
   //                     last node's next is always nullptr
-  Parameter *parameters{};
+  Parameter *parameters = nullptr;
   SimdBuffer *dataBuffer = nullptr;
 
-  utils::Pool *arena = nullptr;
+  utils::Pool *pool = nullptr;
   Component *component = nullptr;
 
   utils::stringnd name{};

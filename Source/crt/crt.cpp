@@ -1,6 +1,6 @@
 ﻿
 #include "Framework/stl_utils.hpp"
-#include "Framework/memory.hpp"
+#include "Framework/utils.hpp"
 #include "Framework/simd.hpp"
 #include "Framework/simd_utils.hpp"
 #include "Framework/simd_math.hpp"
@@ -83,8 +83,8 @@ int printVariadic(const char *format, va_list args);
 
 extern "C"
 {
-  __declspec(allocator) __declspec(restrict) void *CALL_CONV malloc(usize size) { return utils::Pool::insert(globalArena, size, alignof(void *)); }
-  __declspec(allocator) __declspec(restrict) void *CALL_CONV calloc(usize count, usize size) { return utils::Pool::insert(globalArena, count * size, alignof(void *), true); }
+  __declspec(allocator) __declspec(restrict) void *CALL_CONV malloc(usize size) { return utils::Pool::insert(globalPool, size, alignof(void *)); }
+  __declspec(allocator) __declspec(restrict) void *CALL_CONV calloc(usize count, usize size) { return utils::Pool::insert(globalPool, count * size, alignof(void *), true); }
   __declspec(allocator) __declspec(restrict) void *CALL_CONV realloc(void *pointer, usize newSize) { return utils::Pool::resize(pointer, newSize); }
   void CALL_CONV free(void *pointer) { utils::Pool::remove(pointer); }
 

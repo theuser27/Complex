@@ -285,7 +285,7 @@ struct alignas(u32) Colour
   u8 b{}, g{}, r{}, a{};
 
   constexpr Colour() = default;
-  explicit constexpr Colour(u32 argb) : 
+  explicit constexpr Colour(u32 argb) :
     b{ u8(argb & 0xff) }, g{ u8((argb >> 8) & 0xff) }, r { u8((argb >> 16) & 0xff) }, a{ u8((argb >> 24) & 0xff) } { }
   constexpr Colour(int red, int green, int blue, int alpha = 255) :
     b{ (u8)blue }, g{ (u8)green }, r{ (u8)red }, a{ (u8)alpha } {  }

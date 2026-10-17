@@ -6,7 +6,6 @@
 #include "Framework/fourier_transform.hpp"
 #include "Framework/utils.hpp"
 #include "Framework/constants.hpp"
-#include "Framework/memory.hpp"
 #include "Framework/metadata.hpp"
 #include "Interface/LookAndFeel/gui_utils.hpp"
 
@@ -28,7 +27,8 @@ class HostParameter;
 
 struct MainInterface;
 
-using PersistentCallback = void(Component *component);
+// return true if the callback needs to be removed
+using PersistentCallback = bool(Component *component);
 struct MouseInteractions
 {
   Component *hovered = nullptr;
@@ -83,21 +83,19 @@ public:
   ModifierKeys mouseButtonsDown_{};
   ModifierKeys lastKeyboardMods_{};
 
-  u64 numberOfFrames{};
-
   u8 numberOfClicks = 0;
   double lastMouseClickTime = 0.0;
   Point<i32> lastMousePosition_{ 0, 0 };
   Point<i32> lastMouseDownPosition_{ 0, 0 };
 
-  utils::Pool *arena{};
+  utils::Pool *pool{};
 
-  utils::vectormap<Component *, PersistentCallback *> callbacks{};
+  utils::vectormap<Component *, utils::smallFn<PersistentCallback>> callbacks{};
 
   // deferred components that will set their own position
-  utils::vector<utils::pair<Component *, utils::smallFn<bool(Component *)>>> *customPlacement{ };
-  utils::vector<Component *> *sortedSizesMin{};
-  utils::vector<Component *> *sortedSizesMax{};
+  utils::vector<utils::pair<Component *, utils::smallFn<bool(Component *)>>> customPlacement{};
+  utils::vector<Component *> sortedSizesMin{};
+  utils::vector<Component *> sortedSizesMax{};
 
   bool renderDebugFps = true;
 
@@ -154,6 +152,7 @@ struct ComplexPlugin
     u32 numInputs, u32 numOutputs);
 
   void rescanLatency();
+  void markPluginDirty();
 
   float getSampleRate() const { return sampleRate.load(satomi::memory_order_acquire); }
   u32 getSamplesPerBlock() const { return samplesPerBlock.load(satomi::memory_order_acquire); }
@@ -180,7 +179,7 @@ struct ComplexPlugin
   const u32 outSidechains = 0;
   const usize parameterCount = 0;
 
-  utils::Pool *arena{};
+  utils::Pool *pool{};
 
   // might be updated on any thread hence atomic
   satomi::atomic<u32> samplesPerBlock = 0;
@@ -213,7 +212,6 @@ struct State
   // creates a default processor or loads processor from save if jsonData != nullptr
   Processor *createProcessor(uuid processorId, void *jsonData = nullptr, void *extra = nullptr);
   Processor *copyProcessor(Processor *processor);
-  void deleteProcessor(Processor *processor);
 
   utils::pair<u32, u32> getMinMaxFFTOrder() const;
   u32 getMaxBinCount() const;
@@ -227,6 +225,8 @@ struct State
 
   void registerProcessorForDynamicParameters(Processor *processor);
   void deregisterProcessorForDynamicParameters(Processor *processor);
+
+  void flushHostParameters();
 
   SoundEngine &getSoundEngine() { return *soundEngine; }
   float getOverlap();
@@ -247,7 +247,7 @@ struct State
       if (thread != utils::thread{})
         return false;
 
-      shouldStop = anew(globalArena, satomi::atomic<bool>, {});
+      shouldStop = anew(globalPool, satomi::atomic<bool>, {});
 
       thread = [shouldStop = shouldStop, function]() { function(*shouldStop); };
       return true;
@@ -293,15 +293,15 @@ struct State
   // parameters that receive updates upon various plugin changes
   utils::vectornd<utils::pair<IndexedData *, Parameter *>> dynamicParameters{};
   // the processor tree is stored in a flattened map
-  utils::vectormap<u64, Processor *> allProcessors{};
+  utils::vectormapnd<u64, Processor *> allProcessors{};
 
-  utils::vectormap<uuid, IndexedData *> dynamicOptions{};
+  utils::vectormapnd<uuid, IndexedData *> dynamicOptions{};
 
-  utils::vectormap<utils::string_view, void *> cachedHotreloadSymbols{};
+  utils::vectormapnd<utils::string_view, void *> cachedHotreloadSymbols{};
   PluginStructure pluginStructure{};
 
   utils::Pool *processorStorage{};
-  utils::Pool *uiStorage{};
+  utils::Pool *guiStorage{};
   utils::Pool *miscStorage{};
 
   utils::vectornd<Thread> workers{};

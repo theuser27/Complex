@@ -9,8 +9,54 @@
 #include "Interface/LookAndFeel/Component.hpp"
 #include "Interface/Components/Control.hpp"
 
-Processor::Processor(utils::Pool *arena, State *state, ProcessorMetadata *metadata) : 
-  metadata{ metadata }, state{ state }, stateId{ ++state->stateIdCounter }, arena{ arena }, name{ arena } { }
+void deleteProcessor(Processor *processor)
+{
+  COMPLEX_ASSERT(processor->state != nullptr);
+  COMPLEX_ASSERT(processor->stateId != 0);
+
+  // if the GUI for this processor is fading out, delay deletion until it disappears
+  if (processor->component->componentFlags.animateFadeAway && processor->component->fadeawayRatio != 0)
+  {
+    // when the timer on the fade out ends, only then delete
+    getUiRelated()->renderer->callbacks.add(processor->component, [processor](Component *component)
+      {
+        if (component->fadeawayRatio)
+          return false;
+
+        auto g = processor->state->plugin->acquireProcessingLock();
+        deleteProcessor(processor);
+        return true;
+      });
+    return;
+  }
+
+  for (auto child = processor->children; child; child = child->next)
+    deleteProcessor(child);
+
+  processor->state->deregisterProcessorForDynamicParameters(processor);
+
+  // unlink all parameters from parameter bridges
+  processor->remapParameters({}, false, false);
+
+  if (processor->component)
+  {
+    if (processor->component->parent)
+      processor->component->parent->removeChildComponent(processor->component);
+    deleteComponent(processor->component);
+  }
+
+  processor->state->allProcessors.data.erase({ processor->stateId, processor });
+  utils::Pool::remove(processor->pool);
+}
+
+Processor::Processor(utils::Pool *pool, State *state, ProcessorMetadata *metadata) :
+  metadata{ metadata }, state{ state }, stateId{ ++state->stateIdCounter }, pool{ pool }, name{ pool }
+{
+  COMPLEX_ASSERT(metadata);
+  COMPLEX_ASSERT(state);
+  COMPLEX_ASSERT(stateId > 0);
+  COMPLEX_ASSERT(pool);
+}
 
 void resetProcessorGeneric(Processor *processor)
 {
@@ -77,7 +123,7 @@ SimdBuffer *
 Processor::createBuffer(const SimdBuffer *other)
 {
   auto channels = (other) ? other->channels : kChannelsPerInOut;
-  auto *buffer = SimdBuffer::create(arena, channels, state->getMaxBinCount());
+  auto *buffer = SimdBuffer::create(pool, channels, state->getMaxBinCount());
 
   if (other)
     applyToThisNoMask<utils::MathOperations::Assign>(buffer,
@@ -115,49 +161,6 @@ void Processor::updateParameters(UpdateFlag flag, float sampleRate, bool updateC
       child->updateParameters(flag, sampleRate);
 }
 
-void Processor::remapParameters(utils::span<HostParameter *> bridges,
-  bool bridgeValueFromParameters, bool remapOnlyBridges)
-{
-  if (!bridges.size())
-  {
-    auto *parameter = parameters;
-    for (usize i = 0; i < parameterCount; (++i), (parameter = parameter->next))
-    {
-      auto bridge = parameter->hostParameter;
-      if (!bridge)
-        continue;
-
-      if (remapOnlyBridges)
-      {
-        if (bridge->getParameter())
-          bridge->resetParameter(nullptr);
-        else
-          bridge->resetParameter(parameter, bridgeValueFromParameters);
-      }
-      else
-      {
-        bridge->resetParameter(nullptr);
-        parameter->hostParameter = nullptr;
-      }
-    }
-  }
-  else
-  {
-    COMPLEX_ASSERT(bridges.size() == parameterCount);
-
-    auto *parameter = parameters;
-    for (usize i = 0; i < parameterCount; (++i), (parameter = parameter->next))
-    {
-      auto *newBridge = bridges[i];
-      if (auto *oldBridge = parameter->hostParameter = newBridge)
-        oldBridge->resetParameter(nullptr);
-
-      newBridge->resetParameter(parameter, bridgeValueFromParameters);
-    }
-  }
-
-  HostParameter::notifyParameterChange();
-}
 
 AddProcessorUpdate::AddProcessorUpdate(Processor *processorToAdd,
   u64 destinationParentStateId, usize destinationIndex) : state{ *processorToAdd->state }, processor{ processorToAdd },
@@ -167,7 +170,7 @@ AddProcessorUpdate::AddProcessorUpdate(Processor *processorToAdd,
   {
     auto *self = (AddProcessorUpdate *)a;
     if (self->processor)
-      self->state.deleteProcessor(self->processor);
+      deleteProcessor(self->processor);
   };
 
   redo = [](UndoAction *a)
@@ -194,6 +197,7 @@ AddProcessorUpdate::AddProcessorUpdate(Processor *processorToAdd,
     }
 
     self->state.registerProcessorForDynamicParameters(self->processor);
+    self->state.plugin->markPluginDirty();
 
     self->processor = nullptr;
   };
@@ -212,6 +216,7 @@ AddProcessorUpdate::AddProcessorUpdate(Processor *processorToAdd,
       self->processor->component->parent->removeChildComponent(self->processor->component);
 
     self->state.deregisterProcessorForDynamicParameters(self->processor);
+    self->state.plugin->markPluginDirty();
   };
 }
 
@@ -258,6 +263,8 @@ MoveProcessorUpdate::MoveProcessorUpdate(State *state,
     Processor *movedProcessor = Processor::getChild(
       sourcePointer->children, self->sourceIndex);
     insertComponent(movedProcessor, destinationPointer, (u32)self->destinationIndex);
+
+    self->state.plugin->markPluginDirty();
   };
 
   undo = [](UndoAction *a)
@@ -274,6 +281,8 @@ MoveProcessorUpdate::MoveProcessorUpdate(State *state,
     Processor *movedProcessor = Processor::getChild(
       destinationPointer->children, self->destinationIndex);
     insertComponent(movedProcessor, sourcePointer, (u32)self->sourceIndex);
+
+    self->state.plugin->markPluginDirty();
   };
 }
 
@@ -287,7 +296,7 @@ DeleteProcessorUpdate::DeleteProcessorUpdate(Processor *processorToDelete) :
   {
     auto *self = (DeleteProcessorUpdate *)a;
     if (self->processor)
-      self->state.deleteProcessor(self->processor);
+      deleteProcessor(self->processor);
   };
 
   redo = [](UndoAction *a)
@@ -309,6 +318,7 @@ DeleteProcessorUpdate::DeleteProcessorUpdate(Processor *processorToDelete) :
     recurseParameters(recurseParameters, self->processor);
 
     self->state.deregisterProcessorForDynamicParameters(self->processor);
+    self->state.plugin->markPluginDirty();
 
     self->processor->component->parent->removeChildComponent(self->processor->component);
   };
@@ -333,6 +343,7 @@ DeleteProcessorUpdate::DeleteProcessorUpdate(Processor *processorToDelete) :
     recurseParameters(recurseParameters, self->processor);
 
     self->state.registerProcessorForDynamicParameters(self->processor);
+    self->state.plugin->markPluginDirty();
 
     self->processor = nullptr;
   };

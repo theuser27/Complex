@@ -39,7 +39,7 @@ private:
     u32 blockBegin_ = 0;
     u32 blockEnd_ = 0;
 
-    utils::Pool *arena{};
+    utils::Pool *pool{};
 
     // lock must be acquired manually to have access to this struct (except in reserve())
 
@@ -67,7 +67,7 @@ private:
 
     // returns how many samples in the buffer can be read
     // starting at blockBegin_/blockEnd_until end_
-    u32 
+    u32
     newSamplesToRead(BeginPoint beginPoint, u32 overlapOffset = 0) const
     {
       u32 begin = (beginPoint == BlockBegin) ? blockBegin_ : blockEnd_;
@@ -81,7 +81,7 @@ private:
       return ret;
     }
 
-    u32 
+    u32
     getIndex(BeginPoint beginPoint, i32 offset = 0)
     {
       u32 index = (beginPoint == LastOutputBlock) ? lastOutputBlock_ :
@@ -116,7 +116,7 @@ private:
     // index of the first sample of the last add-overlapped block
     u32 addOverlap_ = 0;
 
-    utils::Pool *arena{};
+    utils::Pool *pool{};
 
     // lock must be acquired manually to have access to this struct (except in reserve())
 

@@ -33,10 +33,10 @@ struct EffectData;
 struct EffectVtable
 {
   EffectData *(*createEffect)(EffectModule *module, EffectData *copy);
-  void (*runEffect)(EffectModule *effectModule, EffectData *effectData, 
-    ComplexDataSource &source, SimdBuffer *destination, 
+  void (*runEffect)(EffectModule *effectModule, EffectData *effectData,
+    ComplexDataSource &source, SimdBuffer *destination,
     u32 binCount, float sampleRate);
-  utils::span<Control *>(*createUI)(utils::Pool *arena,
+  utils::span<Control *>(*createUI)(utils::Pool *pool,
     EffectModuleSection *section, EffectData *effectData);
 };
 
@@ -48,6 +48,8 @@ struct EffectData
   Parameter *parameters{};
   NSVGimage *(*createEffectIcon)(Graphics &g){};
   u32 parameterCount{};
+
+  Parameter *getParameter(uuid id);
 };
 
 namespace Utility
@@ -112,7 +114,7 @@ namespace Filter
     ComplexDataSource &source, SimdBuffer *destination,
     u32 binCount, float sampleRate) noexcept;
 
-  utils::span<Control *> createUINormal(utils::Pool *arena,
+  utils::span<Control *> createUINormal(utils::Pool *pool,
     EffectModuleSection *section, EffectData *effectData);
 
   // Gate - frequency gating
@@ -129,7 +131,6 @@ namespace Filter
   //  delta - instead of the absolute loudness it uses the averaged loudness change from the 2 neighbouring bins
   //
   COMPLEX_ENUM(Gate,
-    (InputGain, 1758738170767),
     (     Gain, 1758738189871),
     (Threshold, 1758738202274),
     (     Tilt, 1758738216078),
@@ -145,7 +146,7 @@ namespace Filter
     ComplexDataSource &source, SimdBuffer *destination,
     u32 binCount, float sampleRate) noexcept;
 
-  utils::span<Control *> createUIGate(utils::Pool *arena,
+  utils::span<Control *> createUIGate(utils::Pool *pool,
     EffectModuleSection *section, EffectData *effectData);
 
 
@@ -183,7 +184,7 @@ namespace Dynamics
     ComplexDataSource &source, SimdBuffer *destination,
     u32 binCount, float sampleRate) noexcept;
 
-  utils::span<Control *> createUIContrast(utils::Pool *arena,
+  utils::span<Control *> createUIContrast(utils::Pool *pool,
     EffectModuleSection *section, EffectData *effectData);
 
   COMPLEX_ENUM(Clip,
@@ -198,7 +199,7 @@ namespace Dynamics
     ComplexDataSource &source, SimdBuffer *destination,
     u32 binCount, float sampleRate) noexcept;
 
-  utils::span<Control *> createUIClip(utils::Pool *arena,
+  utils::span<Control *> createUIClip(utils::Pool *pool,
     EffectModuleSection *section, EffectData *effectData);
 
   // Invert the spectrum relative to a specific loudness value
@@ -250,7 +251,7 @@ namespace Phase
     ComplexDataSource &source, SimdBuffer *destination,
     u32 binCount, float sampleRate) noexcept;
 
-  utils::span<Control *> createUIShift(utils::Pool *arena,
+  utils::span<Control *> createUIShift(utils::Pool *pool,
     EffectModuleSection *section, EffectData *effectData);
 
   // TODO:
@@ -279,7 +280,7 @@ namespace Pitch
     ComplexDataSource &source, SimdBuffer *destination,
     u32 binCount, float sampleRate) noexcept;
 
-  utils::span<Control *> createUIResample(utils::Pool *arena,
+  utils::span<Control *> createUIResample(utils::Pool *pool,
     EffectModuleSection *section, EffectData *effectData);
 
 
@@ -291,7 +292,7 @@ namespace Pitch
     ComplexDataSource &source, SimdBuffer *destination,
     u32 binCount, float sampleRate) noexcept;
 
-  utils::span<Control *> createUIFrequencyShift(utils::Pool *arena,
+  utils::span<Control *> createUIFrequencyShift(utils::Pool *pool,
     EffectModuleSection *section, EffectData *effectData);
 
   // TODO: shift, harmonic shift, harmonic repitch
@@ -339,7 +340,7 @@ namespace Freeze
     ComplexDataSource &source, SimdBuffer *destination,
     u32 binCount, float sampleRate) noexcept;
 
-  utils::span<Control *> createUIRolling(utils::Pool *arena,
+  utils::span<Control *> createUIRolling(utils::Pool *pool,
     EffectModuleSection *section, EffectData *effectData);
 
   // various freezer ideas
@@ -372,7 +373,7 @@ namespace Destroy
     ComplexDataSource &source, SimdBuffer *destination,
     u32 binCount, float sampleRate) noexcept;
 
-  utils::span<Control *> createUIReinterpret(utils::Pool *arena,
+  utils::span<Control *> createUIReinterpret(utils::Pool *pool,
     EffectModuleSection *section, EffectData *effectData);
 
   // resize, specops effects category

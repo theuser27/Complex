@@ -36,9 +36,9 @@
 #define COMPLEX_INTERNAL_ITERATE_AGAIN() COMPLEX_INTERNAL_ITERATE
 
 #if defined(__GNUC__)
-  #define COMPLEX_DEFER(begin, end) _Pragma("GCC diagnostic push") _Pragma("GCC diagnostic ignored \"-Wunused-value\"") _Pragma("GCC diagnostic ignored \"-Wshadow\"") for(int _i___ = ((begin), 0); !_i___; (end), (_i___ += 1)) _Pragma("GCC diagnostic pop")
+  #define COMPLEX_SCOPE_DEFER(begin, end) _Pragma("GCC diagnostic push") _Pragma("GCC diagnostic ignored \"-Wunused-value\"") _Pragma("GCC diagnostic ignored \"-Wshadow\"") for(int _i___ = ((begin), 0); !_i___; (end), (_i___ += 1)) _Pragma("GCC diagnostic pop")
 #else
-  #define COMPLEX_DEFER(begin, end) _Pragma("warning(suppress : 4456)") for(int _i___ = ((begin), 0); !_i___; (end), (_i___ += 1))
+  #define COMPLEX_SCOPE_DEFER(begin, end) _Pragma("warning(suppress : 4456)") for(int _i___ = ((begin), 0); !_i___; (end), (_i___ += 1))
 #endif
 
 #define COMPLEX_INTERNAL_GET_1(x, ...) x

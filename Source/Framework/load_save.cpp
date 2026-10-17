@@ -12,7 +12,7 @@
 #include "Generation/SoundEngine.hpp"
 #include "Generation/Effects.hpp"
 #include "Interface/LookAndFeel/Graphics.hpp"
-#include "Interface/LookAndFeel/ui_constants.hpp"
+#include "Interface/LookAndFeel/gui_constants.hpp"
 #include "Interface/Sections/MainInterface.hpp"
 #include "Plugin/Complex.hpp"
 
@@ -23,12 +23,12 @@ __cdecl
 #endif
 cjsonAllocate(size_t size)
 {
-  auto jsonArena = getJsonContext().arena;
-  COMPLEX_ASSERT(jsonArena, "Someone forgot to set the arena before using json");
+  auto jsonArena = getJsonContext().pool;
+  COMPLEX_ASSERT(jsonArena, "Someone forgot to set the pool before using json");
   return utils::Pool::insert(jsonArena, size, alignof(void *));
 }
 
-// we free the arena at the end, so it's pointless to deallocate
+// we free the pool at the end, so it's pointless to deallocate
 static void
 #ifdef COMPLEX_WINDOWS
 __cdecl
@@ -73,8 +73,8 @@ static void useConfigJson(const auto &predicate, bool save = false)
   defer{ xfiles_read_free(string); };
 
   auto &jsonContext = getJsonContext();
-  jsonContext.arena = utils::Pool::createNested(getLocalScratch(), COMPLEX_KB(16));
-  defer{ utils::Pool::destroy(jsonContext.arena); jsonContext.arena = nullptr; };
+  jsonContext.pool = utils::Pool::createNested(getLocalScratch(), COMPLEX_KB(16));
+  defer{ utils::Pool::destroy(jsonContext.pool); jsonContext.pool = nullptr; };
 
   cjson *json = cjson_Parse(string, stringSize);
   if (json)
@@ -192,7 +192,7 @@ void saveUndoStepCount(usize undoStepCount)
 
 #undef setJsonItem
 
-static void handleIndexedData(utils::Pool *arena, bool isAutomated,
+static void handleIndexedData(utils::Pool *pool, bool isAutomated,
   ParameterDetails &details, cjson *indexedData)
 {
   auto *dynamicOptionFixups = getJsonContext().dynamicOptionFixups;
@@ -200,7 +200,7 @@ static void handleIndexedData(utils::Pool *arena, bool isAutomated,
   // FIXME: this adds duplicate options to IndexedData
   auto processSingle = [&](const auto &self, IndexedData &option, cjson *data) -> IndexedData *
   {
-    auto *newOption = anew(arena, IndexedData, { option });
+    auto *newOption = anew(pool, IndexedData, { option });
     // lose the reference to the original parent so that we don't increment its count
     newOption->parent = nullptr;
     // lose the reference to the original children because we'll add copies of them back in
@@ -257,7 +257,7 @@ static void handleIndexedData(utils::Pool *arena, bool isAutomated,
           // and add this option to a list for a later fixup
           // when the id of the deserialised processor in the current state will be assigned
 
-          auto *newChildOption = anew(arena, IndexedData, {});
+          auto *newChildOption = anew(pool, IndexedData, {});
           newChildOption->id = savedId;
           newChildOption->stateId = stateIdEntry->vuint;
           newChildOption->flags = IndexedData::StateIdFlag;
@@ -283,7 +283,7 @@ static void handleIndexedData(utils::Pool *arena, bool isAutomated,
       if (!isPresent)
       {
         // if the parameter is automated we don't want to mess up the options, so we add them as untracked
-        newOption->addChildren({{ IndexedData::deepCopy(arena, missingChild) }}, isAutomated);
+        newOption->addChildren({{ IndexedData::deepCopy(pool, missingChild) }}, isAutomated);
       }
     }
 
@@ -294,7 +294,7 @@ static void handleIndexedData(utils::Pool *arena, bool isAutomated,
   details.defaultOptionId = cjson_GetObjectItem(indexedData, "default_option_id")->vuint;
 }
 
-static void fixDeserialisedProcessorsStateIds(State *state, 
+static void fixDeserialisedProcessorsStateIds(State *state,
   utils::vector<IndexedData *> *dynamicOptionFixups)
 {
   state->stateIdCounter = {};
@@ -328,8 +328,8 @@ void Parameter::serialiseToJson(void *jsonData) const
   cjson_AddTo(data, "is_modulatable", cjson_Bool, (details.flags & ParameterDetails::Modulatable) != 0);
   cjson_AddTo(data, "is_extensible", cjson_Bool, (details.flags & ParameterDetails::Extensible) != 0);
   cjson_AddTo(data, "is_rounding_to_int", cjson_Bool, (details.flags & ParameterDetails::RoundToInt) != 0);
-  if (hostParameter)
-    cjson_AddTo(data, "automation_slot", cjson_Unsigned, hostParameter->parameterIndex);
+  if (auto hostParameter_ = hostParameter.load(satomi::memory_order_acquire))
+    cjson_AddTo(data, "automation_slot", cjson_Unsigned, hostParameter_->parameterIndex);
   if (details.scale == ParameterScale::Indexed)
   {
     auto recurseOptions = [&](const auto &self, cjson *optionData, IndexedData *option) -> void
@@ -396,7 +396,7 @@ Parameter::deserialiseFromJson(Processor *processor, void *jsonData,
     automationSlot = slot->vuint;
 
   auto &details = const_cast<ParameterDetails &>(parameter->details);
-    
+
   details.flags &= ~ParameterDetails::RoundToInt;
   if (cjson *slot = cjson_GetObjectItem(data, "is_rounding_to_int"))
     details.flags |= (slot->vbool) ? ParameterDetails::RoundToInt : 0;
@@ -413,12 +413,12 @@ Parameter::deserialiseFromJson(Processor *processor, void *jsonData,
         utils::string_view{ *errorPath }, details.displayName, details.id);
       showNativeMessageBox("Warning", errorString.data(), MessageBoxType::Warning);
 
-      details.options = IndexedData::deepCopy(processor->arena, details.options);
+      details.options = IndexedData::deepCopy(processor->pool, details.options);
     }
     else
     {
       // indexed values validation and deserialisation
-      handleIndexedData(processor->arena, automationSlot != u64(-1), details, data);
+      handleIndexedData(processor->pool, automationSlot != u64(-1), details, data);
       processor->state->registerDynamicParameter(parameter);
     }
   }
@@ -480,16 +480,42 @@ Parameter::deserialiseFromJson(Processor *processor, void *jsonData,
 
   if (automationSlot != u64(-1))
   {
-    // if we don't have enough parameters then too bad, we only guarantee kMaxParameterMappings generic parameters
-    // FIXME: report this to user
     if (automationSlot < (u64)processor->state->parameterBridges.size())
       processor->state->parameterBridges[automationSlot].resetParameter(parameter, true);
+    else
+    {
+      // if we don't have enough parameters then too bad, we only guarantee kMaxParameterMappings generic parameters
+      // FIXME: report this to user, maybe restart the plugin with more parameter slots
+    }
   }
 
   return parameter;
 }
 
-void serialiseProcessorGeneric(const Processor *processor, 
+
+void serialiseParameters(void *jsonData, Parameter *parameters, usize parameterCount)
+{
+  cjson *processorInfo = (cjson *)jsonData;
+  cjson *serialisedParameters = cjson_AddTo(processorInfo, "parameters", cjson_Array);
+  for (usize i = 0; parameters && i < parameterCount; parameters = parameters->next)
+  {
+    cjson *parameterData = cjson_AddTo(serialisedParameters, nullptr, cjson_Object);
+    parameters->serialiseToJson(parameterData);
+  }
+}
+
+void serialiseParameters(void *jsonData, utils::span<Parameter *> parametersToSerialise)
+{
+  cjson *processorInfo = (cjson *)jsonData;
+  cjson *serialisedParameters = cjson_AddTo(processorInfo, "parameters", cjson_Array);
+  for (auto &parameter : parametersToSerialise)
+  {
+    cjson *parameterData = cjson_AddTo(serialisedParameters, nullptr, cjson_Object);
+    parameter->serialiseToJson(parameterData);
+  }
+}
+
+void serialiseProcessorGeneric(const Processor *processor,
   void *jsonData, utils::span<Parameter *> parametersToSerialise)
 {
   cjson *processorInfo = (cjson *)jsonData;
@@ -505,23 +531,10 @@ void serialiseProcessorGeneric(const Processor *processor,
     child->serialiseToJson(subProcessorData);
   }
 
-  cjson *serialisedParameters = cjson_AddTo(processorInfo, "parameters", cjson_Array);
   if (parametersToSerialise.empty())
-  {
-    for (auto *parameter = processor->parameters; parameter; parameter = parameter->next)
-    {
-      cjson *parameterData = cjson_AddTo(serialisedParameters, nullptr, cjson_Object);
-      parameter->serialiseToJson(parameterData);
-    }
-  }
+    serialiseParameters(jsonData, processor->parameters, processor->parameterCount);
   else
-  {
-    for (auto &parameter : parametersToSerialise)
-    {
-      cjson *parameterData = cjson_AddTo(serialisedParameters, nullptr, cjson_Object);
-      parameter->serialiseToJson(parameterData);
-    }
-  }
+    serialiseParameters(jsonData, parametersToSerialise);
 }
 
 void deserialiseParametersFromJson(void *jsonData, ProcessorMetadata *metadata,
@@ -531,7 +544,7 @@ void deserialiseParametersFromJson(void *jsonData, ProcessorMetadata *metadata,
   cjson *parametersCopy = cjson_Duplicate(cjson_GetObjectItem(data, "parameters"), true);
   COMPLEX_ASSERT(parametersCopy, "Missing parameters for %v (%zu)", metadata->name, metadata->id);
 
-  auto *memory = arranew(processor->arena, Parameter, metadata->parameterCount, {});
+  auto *memory = arranew(processor->pool, Parameter, metadata->parameterCount, {});
 
   auto insertParameter = [&](Parameter *parameter)
   {
@@ -608,6 +621,12 @@ void deserialiseParametersFromJson(void *jsonData, ProcessorMetadata *metadata,
       }
     }
   }
+
+  // notify processor of all automation mappings that exist
+  if (processor->metadata->automationMappingChangedCallback)
+    for (auto *parameter = parameters; parameter; parameter = parameter->next)
+      if (parameter->hostParameter.load(satomi::memory_order_relaxed))
+        processor->metadata->automationMappingChangedCallback(processor, parameter, true);
 }
 
 void deserialiseProcessorChildren(void *jsonData, Processor *parent)
@@ -643,12 +662,11 @@ void Processor::deserialiseFromJson(void *jsonData)
   // id fixup will happen later when deserialisation has finished
   const_cast<u64 &>(stateId) = cjson_GetObjectItem(data, "state_id")->vuint;
   if (auto *nameItem = cjson_GetObjectItem(data, "name"))
-    name = { arena, nameItem->vstring, utils::getStringSize(nameItem->vstring) };
+    name = { pool, nameItem->vstring, utils::getStringSize(nameItem->vstring) };
 
   parameterCount = (u32)metadata->parameterCount;
   deserialiseParametersFromJson(jsonData, metadata, parameters, this,
     (metadata->flags & ProcessorMetadata::NoParameterValidationTag) == 0);
-  Parameter::initialiseParameters(parameters, parameterCount, nullptr, true);
 }
 
 
@@ -672,27 +690,16 @@ void serialiseToJson(State *state, void *jsonData)
   }
 }
 
-static void checkForDynamicParameters(State *state, Processor *processor)
-{
-  for (auto parameter = processor->parameters; parameter; parameter = parameter->next)
-    state->registerDynamicParameter(parameter);
-
-  for (auto child = processor->children; child; child = child->next)
-    checkForDynamicParameters(state, child);
-}
-
 utils::sp<State>
 ComplexPlugin::loadDefaultPreset()
 {
-  auto state = utils::sp<State>::create(this);
+  auto state = utils::sp<State>::create(pool, this);
 
   state->soundEngine = utils::as<SoundEngine>(state->createProcessor(Processors::SoundEngine));
   state->registerProcessorForDynamicParameters(state->soundEngine);
   auto effectsLane = state->createProcessor(Processors::EffectsLane);
   state->registerProcessorForDynamicParameters(effectsLane);
   state->soundEngine->addChildProcessor(*effectsLane);
-
-  checkForDynamicParameters(state.get(), state->soundEngine);
 
   auto min = utils::min(state->parameterBridges.size(), SoundEngine::valuesParameters.size());
   for (usize i = 0; i < min; ++i)
@@ -709,17 +716,17 @@ ComplexPlugin::loadDefaultPreset()
 utils::sp<State>
 deserialiseFromJson(ComplexPlugin *plugin, void *newSave)
 {
-  auto state = utils::sp<State>::create(plugin);
+  auto state = utils::sp<State>::create(plugin->pool, plugin);
   cjson *newData = (cjson *)newSave;
 
   auto &jsonContext = getJsonContext();
 
-  utils::string errorPath{ jsonContext.arena, 64 };
+  utils::string errorPath{ jsonContext.pool, 64 };
   jsonContext.errorPath = &errorPath;
 
-  utils::vector<IndexedData *> dynamicOptionFixups{ jsonContext.arena, 64 };
+  utils::vector<IndexedData *> dynamicOptionFixups{ jsonContext.pool, 64 };
   jsonContext.dynamicOptionFixups = &dynamicOptionFixups;
-    
+
   defer { jsonContext.dynamicOptionFixups = nullptr; jsonContext.errorPath = nullptr; };
 
   cjson *soundEngineJson = cjson_GetArrayItem(cjson_GetObjectItem(newData, "tree"), 0);
@@ -753,9 +760,12 @@ void saveState(ComplexPlugin *plugin, const void *stateCtx, cplug_writeProc writ
   getUiRelated() = &plugin->renderer.generalData;
   defer{ getUiRelated() = nullptr; };
 
+  // flush all changes that might still exist, otherwise the save might be in an invalid state
+  plugin->state_->flushHostParameters();
+
   auto &jsonContext = getJsonContext();
-  jsonContext.arena = utils::Pool::createNested(getLocalScratch(), COMPLEX_KB(128));
-  defer { utils::Pool::destroy(jsonContext.arena); jsonContext.arena = nullptr; };
+  jsonContext.pool = utils::Pool::createNested(getLocalScratch(), COMPLEX_KB(128));
+  defer { utils::Pool::destroy(jsonContext.pool); jsonContext.pool = nullptr; };
 
   cjson *data = cjson_Create(cjson_Object);
   serialiseToJson(plugin->state_.get(), data);
@@ -806,8 +816,8 @@ void loadState(ComplexPlugin *plugin, utils::string_view data)
   {
     auto &jsonContext = getJsonContext();
 
-    jsonContext.arena = utils::Pool::createNested(getLocalScratch(), COMPLEX_KB(128));
-    defer { utils::Pool::destroy(jsonContext.arena); jsonContext.arena = nullptr; };
+    jsonContext.pool = utils::Pool::createNested(getLocalScratch(), COMPLEX_KB(128));
+    defer { utils::Pool::destroy(jsonContext.pool); jsonContext.pool = nullptr; };
 
     const char *potentialError = nullptr;
     cjson *jsonData = cjson_ParseWithOpts(data.data(), data.size(), &potentialError, false);
@@ -838,8 +848,5 @@ void loadState(ComplexPlugin *plugin, utils::string_view data)
   else
     plugin->state_ = COMPLEX_MOVE(state);
 
-  auto *newGui = plugin->state_->gui;
-  plugin->renderer.resetGui(newGui);
-
-  newGui->restartUI(plugin->state_.get());
+  MainInterface::restartUI(plugin->state_.get());
 }

@@ -127,11 +127,11 @@ void CommandMessages::tryProcessorInsertion(Component *parentComponent, Processo
     parentComponent->addChildComponent(info.processor->component);
 }
 
-static void getLaneName(EffectsLaneSection *effectsLaneSection, 
+static void getLaneName(EffectsLaneSection *effectsLaneSection,
   EffectsSection *effectsSection)
 {
   auto *effectsLane = effectsLaneSection->effectsLane;
-  effectsLane->name = { effectsLane->arena, utils::string::minimumCapacity };
+  effectsLane->name = { effectsLane->pool, utils::string::minimumCapacity };
   usize i = effectsSection->laneNameOrdinal;
   do
   {
@@ -140,7 +140,7 @@ static void getLaneName(EffectsLaneSection *effectsLaneSection,
     i /= ('Z' - 'A' + 1);
   } while (i);
 
-  effectsLaneSection->laneTitle.text = { effectsLaneSection->arena, effectsLane->name };
+  effectsLaneSection->laneTitle.text = { effectsLaneSection->pool, effectsLane->name };
   ++effectsSection->laneNameOrdinal;
 }
 
@@ -391,7 +391,7 @@ void EffectsSection::reinitialise()
   laneSelector.placement = Placement::top;
   laneSelector.desiredSize = { 0, kLaneSelectorHeight, 0, kLaneSelectorHeight };
   laneSelector.margin = { 0, 0, 0, kLaneSelectorToLanesMargin };
-  laneSelector.arena = arena;
+  laneSelector.pool = pool;
   laneSelector.reinitialise();
 
   laneHolder.sizingFlags = (Component::SizingFlags)(Component::GrowableX | Component::GrowableY | Component::ScrollableX);
@@ -402,7 +402,7 @@ void EffectsSection::reinitialise()
 void EffectsSection::removeLane(EffectsLaneSection *lane)
 {
   auto laneIndex = utils::findIndexSll(laneSelector.children, (Component *)&lane->miniView);
-  // remove mini view before the lane UI
+  // remove mini view before the lane GUI
   lane->miniView.parent->removeChildComponent(&lane->miniView);
 
   if (laneIndex < startLaneIndex)
@@ -416,8 +416,7 @@ void EffectsSection::removeLane(EffectsLaneSection *lane)
 
   auto &plugin = getUiRelated()->plugin;
   auto transactionArena = plugin.undoManager.beginNewTransaction();
-  plugin.undoManager.perform(anew(transactionArena,
-    DeleteProcessorUpdate, { lane->effectsLane }));
+  plugin.undoManager.perform(anew(transactionArena, DeleteProcessorUpdate, { lane->effectsLane }));
 }
 
 void EffectsSection::setStartLaneIndex(u32 newStart, u32 newCount)
@@ -492,7 +491,7 @@ EffectsSection::render(Graphics &)
   return true;
 }
 
-bool 
+bool
 SoundEngineSection::TopBar::UndoRedoButton::mouseUp(const MouseEvent &)
 {
   if (componentFlags.isClicked && componentFlags.isHovered)
@@ -511,7 +510,7 @@ SoundEngineSection::TopBar::UndoRedoButton::render(Graphics &g)
 {
   auto &undoManager = getUiRelated()->plugin.undoManager;
   bool canDo = (isRedo && undoManager.canRedo()) || (!isRedo && undoManager.canUndo());
-  auto colour = canDo ? getColour(Skin::kWidgetAccent1, this) : 
+  auto colour = canDo ? getColour(Skin::kWidgetAccent1, this) :
     getColour(Skin::kWidgetPrimaryDisabled, this);
 
   tickAnimation(animationValues,
@@ -562,7 +561,7 @@ void SoundEngineSection::TopBar::reinitialise()
 
   gainLabel.margin = { 0, 0, 4, 0 };
   gainLabel.control = &gain;
-  gain.arena = arena;
+  gain.pool = pool;
   gain.maxDecimalCharacters = 2;
   gain.controlFlags.shouldUsePlusMinusPrefix = true;
   gain.changeLinkedParameter(*mainSection->soundEngine->getParameter(SoundEngine::OutGain));
@@ -574,7 +573,7 @@ void SoundEngineSection::TopBar::reinitialise()
 
   mixLabel.margin = { 0, 0, 4, 0 };
   mixLabel.control = &mix;
-  mix.arena = arena;
+  mix.pool = pool;
   mix.maxDecimalCharacters = 2;
   mix.changeLinkedParameter(*mainSection->soundEngine->getParameter(SoundEngine::Mix));
   mixGroup.placement = Placement::right;
@@ -600,7 +599,7 @@ void SoundEngineSection::BottomBar::reinitialise()
   blockSizeLabel.margin = { 0, 0, Control::kLabelMargin, 0 };
   blockSizeLabel.control = &blockSize;
   blockSizeGroup.addChildComponent(&blockSize);
-  blockSize.arena = arena;
+  blockSize.pool = pool;
   blockSize.drawBackgroundArrow = false;
   blockSize.maxDecimalCharacters = 0;
   blockSize.changeLinkedParameter(*mainSection->soundEngine->getParameter(SoundEngine::BlockSize));
@@ -610,7 +609,7 @@ void SoundEngineSection::BottomBar::reinitialise()
   overlapLabel.margin = { 0, 0, Control::kLabelMargin, 0 };
   overlapLabel.control = &overlap;
   overlapGroup.addChildComponent(&overlap);
-  overlap.arena = arena;
+  overlap.pool = pool;
   overlap.drawBackgroundArrow = false;
   overlap.maxDecimalCharacters = 2;
   overlap.changeLinkedParameter(*mainSection->soundEngine->getParameter(SoundEngine::Overlap));
@@ -624,13 +623,13 @@ void SoundEngineSection::BottomBar::reinitialise()
   windowLabel.margin = { 0, 0, Control::kLabelMargin, 0 };
   windowLabel.control = &window;
   windowGroup.addChildComponent(&windowAlpha);
-  windowAlpha.arena = arena;
+  windowAlpha.pool = pool;
   windowAlpha.margin = { 0, 0, Control::kLabelMargin, 0 };
   windowAlpha.drawBackgroundArrow = false;
   windowAlpha.maxDecimalCharacters = 1;
   windowAlpha.changeLinkedParameter(*mainSection->soundEngine->getParameter(SoundEngine::WindowAlpha));
   windowGroup.addChildComponent(&window);
-  window.arena = arena;
+  window.pool = pool;
   window.valueChangedCallback = [](Control *c, float newValue, float)
   {
     auto *bottomBar = (BottomBar *)c->parent->parent;
@@ -700,15 +699,15 @@ void SoundEngineSection::reinitialise()
     return false;
   };
 
-  if (!arena)
-    arena = utils::Pool::createNested(utils::Pool::fromAllocation(this), COMPLEX_KB(16));
-  utils::Pool::clear(arena);
+  if (!pool)
+    pool = utils::Pool::createNested(utils::Pool::fromAllocation(this), COMPLEX_KB(16));
+  utils::Pool::clear(pool);
 
   topBar.placement = Placement::top;
   topBar.sizingFlags |= Component::GrowableX;
   topBar.desiredSize = { 0, kHeaderHeight, utils::int_max<i32>, kHeaderHeight };
   topBar.padding = { 0, 0, 16, 0 };
-  topBar.arena = arena;
+  topBar.pool = pool;
   addChildComponent(&topBar);
   topBar.reinitialise();
 
@@ -724,7 +723,7 @@ void SoundEngineSection::reinitialise()
   effectsSection.placement = Placement::top;
   effectsSection.desiredSize = { kEffectsStateMinWidth, 0, kEffectsStateMinWidth, 0 };
   effectsSection.margin = { kHWindowEdgeMargin, 0, kHWindowEdgeMargin, 0 };
-  effectsSection.arena = arena;
+  effectsSection.pool = pool;
   addChildComponent(&effectsSection);
   effectsSection.reinitialise();
 
@@ -733,7 +732,7 @@ void SoundEngineSection::reinitialise()
   bottomBar.desiredSize = { 0, kFooterHeight, utils::int_max<i32>, kFooterHeight };
   bottomBar.margin = { 0, kLaneToBottomSettingsMargin, 0, 0 };
   bottomBar.padding = { 16, 0, 16, 0 };
-  bottomBar.arena = arena;
+  bottomBar.pool = pool;
   addChildComponent(&bottomBar);
   bottomBar.reinitialise();
 }
@@ -759,7 +758,7 @@ SoundEngineSection::render(Graphics &g)
 }
 
 PopupSelector *getPopupSelector() { return &getUiRelated()->renderer->gui->popupSelector; }
-utils::Pool *getUIArena() { return getUiRelated()->renderer->gui->arena; }
+utils::Pool *getUIPool() { return getUiRelated()->renderer->gui->pool; }
 UndoManager &getUndoManager() { return getUiRelated()->plugin.undoManager; }
 PopupDisplay *getPopupDisplay(bool primary = true)
 {
@@ -769,11 +768,12 @@ PopupDisplay *getPopupDisplay(bool primary = true)
 
 void MainInterface::restartUI(State *state)
 {
-  removeChildComponent(&popupSelector);
-  removeChildComponent(&popupDisplay1);
-  removeChildComponent(&popupDisplay2);
+  // clearing the pool will forget all GUI components
+  utils::Pool::clear(state->guiStorage);
 
-  deleteAllChildComponents();
+  state->gui = anew(state->guiStorage, MainInterface, {});
+  state->gui->pool = state->guiStorage;
+  state->plugin->renderer.resetGui(state->gui);
 
   auto recurseProcessors = [](const auto &self,
     Processor *processor, Component *parentComponent) -> void
@@ -796,26 +796,23 @@ void MainInterface::restartUI(State *state)
       self(self, child, processor->component);
   };
 
-  recurseProcessors(recurseProcessors, state->soundEngine, this);
+  recurseProcessors(recurseProcessors, state->soundEngine, state->gui);
 
-  popupSelector.componentFlags.isVisible = false;
-  //popupSelector.componentFlags.alwaysOnTop = true;
-  addChildComponent(&popupSelector);
-  popupSelector.reinitialise();
+  state->gui->popupSelector.componentFlags.isVisible = false;
+  state->gui->addChildComponent(&state->gui->popupSelector);
+  state->gui->popupSelector.reinitialise();
 
-  popupDisplay1.componentFlags.isVisible = false;
-  //popupDisplay1.componentFlags.alwaysOnTop = true;
-  addChildComponent(&popupDisplay1);
-  popupDisplay1.reinitialise();
+  state->gui->popupDisplay1.componentFlags.isVisible = false;
+  state->gui->addChildComponent(&state->gui->popupDisplay1);
+  state->gui->popupDisplay1.reinitialise();
 
-  popupDisplay2.componentFlags.isVisible = false;
-  //popupDisplay2.componentFlags.alwaysOnTop = true;
-  addChildComponent(&popupDisplay2);
-  popupDisplay2.reinitialise();
+  state->gui->popupDisplay2.componentFlags.isVisible = false;
+  state->gui->addChildComponent(&state->gui->popupDisplay2);
+  state->gui->popupDisplay2.reinitialise();
 }
-  
-  
-bool 
+
+
+bool
 MainInterface::keyPressed(const KeyPress &key)
 {
   bool isUndo = key.mods.test(ModifierKeys::ctrlModifier) && key.keyCode == 'z';
@@ -830,7 +827,7 @@ MainInterface::keyPressed(const KeyPress &key)
 
     return true;
   }
-  
+
   return false;
 }
 
@@ -855,8 +852,7 @@ checkResizing(Area<u32> newScaledSize, bool force)
 Component *
 createUISoundEngine(Processor *processor)
 {
-  auto guiArena = getUiRelated()->renderer->gui->arena;
-  auto *soundEngineSection = anew(guiArena, SoundEngineSection, {});
+  auto *soundEngineSection = anew(getUIPool(), SoundEngineSection, {});
   soundEngineSection->soundEngine = (SoundEngine *)processor;
   soundEngineSection->reinitialise();
   return soundEngineSection;

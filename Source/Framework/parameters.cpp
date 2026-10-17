@@ -366,91 +366,174 @@ scaleValue(f4 value, const ParameterDetails &details, float sampleRate)
   return result;
 }
 
-HostParameter::HostParameter(State *state, u64 parameterIndex) : 
-  parameterIndex{ parameterIndex }, state{ state }
-{
-  name_.second = utils::string::create(state->miscStorage, "%zu", parameterIndex + 1);
-}
+HostParameter::HostParameter(State *state, u64 parameterIndex) :
+  parameterIndex{ parameterIndex }, state{ state } { customName = { state->miscStorage }; }
 
 HostParameter::~HostParameter()
 {
-  if (auto parameter = parameter_.load(satomi::memory_order_acquire); parameter)
-    parameter->hostParameter = nullptr;
+  resetParameter(nullptr);
 }
 
-void HostParameter::resetParameter(Parameter *newParameter, bool getValueFromParameter)
+static void checkGlobalLockAcquired(Parameter *parameter)
 {
-  auto *old = parameter_.load(satomi::memory_order_acquire);
+  if (parameter->parentProcessor && parameter->parentProcessor->parent)
+  {
+    if (auto &lock = parameter->parentProcessor->state->plugin->processingLock;
+      lock.lock.load(satomi::memory_order_relaxed) > 0 ||
+      lock.lastLockId.load(satomi::memory_order_relaxed) != utils::thread::getCurrentId())
+    {
+      COMPLEX_HARD_ASSERT_FALSE(
+        "Attempted parameter changes without an acquired lock on %v (%zu)",
+        parameter->details.displayName, parameter->details.id);
+    }
+  }
+}
+
+// audio-thread, main-thread
+// 
+// this is rather tricky function because both audio-thread and main-thread can call it
+// for the audio-thread setValueToControl MUST be false otherwise it will enter GUI code
+// also it's only allowed to change the linked parameters within the same processor
+// 
+// for the main-thread a lot of edge-cases arise because of the 2 distinct assignments that must happen
+// to parameter_ and parameter->hostParameter. Because those can't happen in a single atomic operation
+// what can happen is that the audio-thread can change parameter_, but in the meantime
+// the main-thread can call into that same host parameter to perform some changes
+void HostParameter::resetParameter(Parameter *newParameter, 
+  bool getValueFromParameter, ParameterAssignment assignmentType)
+{
+  Parameter *old = parameter_.load(satomi::memory_order_relaxed);
+  for (; !parameter_.compare_exchange_strong(old, newParameter, satomi::memory_order_acq_rel); ) { }
   if (newParameter == old)
     return;
 
-  utils::ScopedLock guard{ name_.first, utils::WaitMechanism::Spin };
-
-  parameter_.store(newParameter, satomi::memory_order_release);
-
-  if (!newParameter)
+  if (auto expected = this; old)
   {
-    if (old)
-      old->hostParameter = nullptr;
-    name_.second = utils::string::create(state->miscStorage, "%zu", parameterIndex + 1);
+    [[maybe_unused]] bool success = old->hostParameter
+      .compare_exchange_strong(expected, nullptr, satomi::memory_order_release);
+    COMPLEX_ASSERT(success);
   }
-  else
+
   {
-    newParameter->hostParameter = this;
+    GestureState gestureState = GestureState::Begun;
+    (void)gestureState_.compare_exchange_strong(gestureState,
+      GestureState::ShouldEnd, satomi::memory_order_relaxed);
+  }
+
+  if (newParameter)
+  {
+    newParameter->hostParameter.store(this, satomi::memory_order_release);
     if (getValueFromParameter)
       value_.store(newParameter->normalisedValue.load(satomi::memory_order_relaxed),
         satomi::memory_order_release);
-    else if (newParameter->control)
-      newParameter->control->setValue(value_.load(satomi::memory_order_relaxed), true);
-
-    auto name = newParameter->details.displayName;
-    name_.second = utils::string::create(state->miscStorage, "%zu > %s", parameterIndex + 1, name.data());
+    else
+    {
+      // the host parameter deliberately ignores the internal parameter's value
+      if (assignmentType != ParameterAssignment::AudioThread && newParameter->control)
+        newParameter->control->setValue(value_.load(satomi::memory_order_relaxed), true);
+      else
+        (void)newParameter->updateNormalisedValue(
+          value_.load(satomi::memory_order_relaxed), assignmentType);
+    }
   }
 }
 
-
-
-// this function is called on the UI thread
-void HostParameter::updateUIParameter()
+void State::flushHostParameters()
 {
-  // for wasValueSet_ we only require atomicity, therefore memory_order_relaxed suffices
+  for (usize i = 0; i < parameterBridges.size(); ++i)
+    parameterBridges[i].flushUpdates();
+}
+
+// main-thread
+// this function is intended to be called regularly on the main-thread 
+// to perform tasks which can only be done there
+void HostParameter::flushUpdates()
+{
   bool dummy = true;
   if (wasValueSet_.compare_exchange_strong(dummy, false, satomi::memory_order_relaxed))
   {
     // for parameter_ it's fine to use relaxed because
-    // this method is only called from the UI thread
-    // which is the only one that touches the UI
+    // this method is only called from the main-thread
+    // which is the only one that touches the GUI
     auto p = parameter_.load(satomi::memory_order_relaxed);
-    if (!p || !p->control || p->hostParameter != this)
+    if (!p || p->hostParameter.load(satomi::memory_order_relaxed) != this)
       return;
 
-    // undo/redo doesn't track these changes
-    p->control->setValue(value_.load(satomi::memory_order_relaxed), false);
+    // loop until we have the most up-to-date value
+    auto newValue = value_.load(satomi::memory_order_relaxed);
+    do
+    {
+      // INFO: undo/redo doesn't track these changes
+      if (p->control)
+        p->control->setValue(newValue, true);
+      else
+        (void)p->updateNormalisedValue(newValue, ParameterAssignment::MainThread);
+
+      // check that we've set the most up-to-date value
+      // unfortunately this only guarantees eventual consistency because it might happen that
+      // the audio-thread processes values set by the main-thread that are are out-of-date
+      // and only then does the main-thread manage to set the most recent value
+      //
+      // a proper solution here would be to timestamp all values and
+      // compare_exchange both the value and timestamp at once,
+      // but this is would be extremely annoying to work with and probably unperformant
+      // given how often parameter values get updated
+      if (auto check = value_.load(satomi::memory_order_relaxed); check == newValue)
+      {
+        newValue = check;
+        continue;
+      }
+
+    } while (false);
   }
+
+  // has the parameter mapping been updated during a gesture?
+  if (gestureState_.load(satomi::memory_order_relaxed) == GestureState::ShouldEnd)
+    endChangeGesture();
 }
 
-void HostParameter::setCustomName(utils::string name)
+// main-thread
+float 
+HostParameter::getScaledValue() const
 {
-  utils::ScopedLock guard{ name_.first, utils::WaitMechanism::Spin };
-  name_.second = COMPLEX_MOVE(name);
-}
-
-void HostParameter::resetName()
-{
-  utils::ScopedLock guard{ name_.first, utils::WaitMechanism::Spin };
-  auto parameter = parameter_.load(satomi::memory_order_acquire);
-
+  auto parameter = getParameter();
+  float internalValue = getValue();
   if (parameter)
   {
-    auto name = parameter->details.displayName;
-    name_.second = utils::string::create(state->miscStorage, "%zu > %s", parameterIndex + 1, name.data());
+    auto details = parameter->details;
+    auto sampleRate = state->plugin->getSampleRate();
+    internalValue = scaleValue(internalValue, details, sampleRate, true);
   }
-  else
-  {
-    name_.second = utils::string::create(state->miscStorage, "%zu", parameterIndex + 1);
-  }
+
+  return internalValue;
 }
 
+// main-thread
+float
+HostParameter::getDefaultScaledValue() const
+{
+  auto parameter = getParameter();
+  float defaultValue = 0.5f;
+  if (parameter)
+  {
+    auto details = parameter->details;
+    auto sampleRate = state->plugin->getSampleRate();
+    defaultValue = scaleValue(details.defaultNormalisedValue, details, sampleRate, true);
+  }
+
+  return defaultValue;
+}
+
+// main-thread
+float
+HostParameter::getDefaultValue() const
+{
+  if (auto parameter = getParameter())
+    return utils::clamp(parameter->details.defaultNormalisedValue, 0.0f, 1.0f);
+  return kDefaultParameterValue;
+}
+
+// audio-thread, main-thread
 void HostParameter::setValue(float newValue)
 {
   auto oldValue = value_.exchange(newValue, satomi::memory_order_relaxed);
@@ -458,47 +541,51 @@ void HostParameter::setValue(float newValue)
   {
     wasValueSet_.store(true, satomi::memory_order_relaxed);
     if (auto *parameter = getParameter())
-      parameter->normalisedValue.store(newValue, satomi::memory_order_relaxed);
+      (void)parameter->updateNormalisedValue(newValue, ParameterAssignment::AudioThread);
   }
 }
 
-float
-HostParameter::getDefaultValue() const
-{
-  if (auto parameter = parameter_.load(satomi::memory_order_acquire))
-    return utils::clamp(parameter->details.defaultNormalisedValue, 0.0f, 1.0f);
-  return kDefaultParameterValue;
-}
-
+// main-thread
 void HostParameter::getName(utils::string &outString) const
 {
-  // this is hacky i know but there's no way to declare the atomic mutable inside the pair
-  utils::ScopedLock guard{ const_cast<satomi::atomic<bool> &>(name_.first), utils::WaitMechanism::Spin };
-
-  if (parameter_.load(satomi::memory_order_acquire))
+  outString.clear();
+  auto index = parameterIndex + 1;
+  if (!customName.empty())
   {
-    outString.copy(name_.second);
+    outString.appendFormat("%zu > %v", index, utils::string_view{ customName });
+  }
+  else if (auto parameter = getParameter())
+  {
+    outString.appendFormat("%zu > %v", index, parameter->details.displayName);
   }
   else
   {
-    auto index = name_.second.find(" ");
-    outString.copy({ name_.second, 0, index });
+    outString.appendFormat("%zu", index);
   }
 }
 
+// main-thread
 void HostParameter::getName(char *buffer, usize maximumStringLength) const
 {
-  // this is hacky i know but there's no way to declare the atomic mutable inside the pair
-  utils::ScopedLock guard{ const_cast<satomi::atomic<bool> &>(name_.first), utils::WaitMechanism::Spin };
-
-  usize size = utils::min(name_.second.size(), maximumStringLength - 1);
-  ::memcpy(buffer, name_.second.data(), size);
-  buffer[size] = '\0';
+  auto index = parameterIndex + 1;
+  if (!customName.empty())
+  {
+    stbsp_snprintf(buffer, (int)maximumStringLength, "%zu > %v", index, utils::string_view{ customName });
+  }
+  else if (auto parameter = getParameter())
+  {
+    stbsp_snprintf(buffer, (int)maximumStringLength, "%zu > %v", index, parameter->details.displayName);
+  }
+  else
+  {
+    stbsp_snprintf(buffer, (int)maximumStringLength, "%zu", index);
+  }
 }
 
+// main-thread
 void HostParameter::getText(float value, char *buffer, usize maximumStringLength) const
 {
-  auto parameter = parameter_.load(satomi::memory_order_acquire);
+  auto parameter = getParameter();
   float internalValue;
   if (!parameter)
     internalValue = value;
@@ -529,90 +616,48 @@ void HostParameter::getText(float value, char *buffer, usize maximumStringLength
   utils::floatToString(internalValue, buffer, maximumStringLength);
 }
 
+// main-thread
 float
 HostParameter::getValueForText(utils::string_view text) const
 {
-  if (auto parameter = parameter_.load(satomi::memory_order_acquire))
+  if (auto parameter = getParameter())
     return (float)unscaleValue(::strtof(text.data(), nullptr), parameter->details, true);
 
   return ::strtof(text.data(), nullptr);
 }
 
-bool
-HostParameter::isDiscrete() const
+
+Parameter::Parameter(ParameterDetails details, Processor *parent) :
+  details{ COMPLEX_MOVE(details) }, parentProcessor{ parent },
+  modulators{ parent->pool } { }
+
+void Parameter::changeDetails(ParameterDetails newDetails)
 {
-  if (auto parameter = parameter_.load(satomi::memory_order_acquire))
-    return parameter->details.scale == ParameterScale::Indexed;
-  return false;
+  // in order to make changes to the parameter details
+  // the main processing lock needs to be exclusively acquired
+  // violating this will cause data races because
+  // nothing is guarding most members in this class
+  checkGlobalLockAcquired(this);
+  const_cast<ParameterDetails &>(details) = COMPLEX_MOVE(newDetails);
 }
 
-bool
-HostParameter::isBoolean() const
+float
+Parameter::reset(const float *value, float sampleRate)
 {
-  if (auto parameter = parameter_.load(satomi::memory_order_acquire))
-    return parameter->details.scale == ParameterScale::Toggle;
-  return false;
-}
-
-static void checkGlobalLockAcquired(Parameter *parameter)
-{
-  if (parameter->parentProcessor && parameter->parentProcessor->parent)
-  {
-    if (auto &lock = parameter->parentProcessor->state->plugin->processingLock;
-      lock.lock.load(satomi::memory_order_relaxed) >= 0 ||
-      lock.lastLockId.load(satomi::memory_order_relaxed) != utils::thread::getCurrentId())
-    {
-      COMPLEX_HARD_ASSERT_FALSE(
-        "Attempted parameter changes without an acquired lock on %v (%zu)",
-        parameter->details.displayName, parameter->details.id);
-    }
-  }
-}
-
-static float
-resetParameter(Parameter *p, const ParameterDetails *newDetails,
-  const float *value, float sampleRate, bool checkLock)
-{
-  if (newDetails)
-  {
-    // in order to make changes to the parameter details
-    // the main processing lock needs to be exclusively acquired
-    // violating this will cause data races because
-    // nothing is guarding most members in this class
-    if (checkLock)
-      checkGlobalLockAcquired(p);
-    const_cast<ParameterDetails &>(p->details) = *newDetails;
-  }
-
   float newValue;
-  if (!value && p->details.scale == ParameterScale::Indexed)
+  if (!value && details.scale == ParameterScale::Indexed)
   {
-    newValue = unscaleValue(getValueFromOptionId(p->details.defaultOptionId,
-      p->details), p->details, sampleRate);
+    newValue = unscaleValue(getValueFromOptionId(details.defaultOptionId,
+      details), details, sampleRate);
   }
   else
   {
-    newValue = (value) ? *value : p->details.defaultNormalisedValue;
+    newValue = (value) ? *value : details.defaultNormalisedValue;
   }
 
-  newValue = p->updateNormalisedValue(newValue);
-
-  // set the other values because we're initialising with new details
-  if (newDetails)
-    p->updateValue(sampleRate);
+  newValue = updateNormalisedValue(newValue, ParameterAssignment::MainThread);
 
   return newValue;
-}
-
-Parameter::Parameter(ParameterDetails details, Processor *parent) :
-  details{ COMPLEX_MOVE(details) }, parentProcessor{ parent }, 
-  modulators{ parent->arena } { }
-
-float
-Parameter::reset(const ParameterDetails *newDetails, 
-  const float *value, float sampleRate)
-{
-  return resetParameter(this, newDetails, value, sampleRate, true);
 }
 
 void Parameter::addModulator(ParameterModulator &modulator)
@@ -626,15 +671,15 @@ void Parameter::deleteModulator(ParameterModulator &modulator)
   checkGlobalLockAcquired(this);
   const_cast<utils::vector<ParameterModulator *> &>(modulators).erase(&modulator);
 }
-  
+
 Parameter *
-Parameter::createParameters(Processor *processor, usize count,
+createParameters(Processor *processor, usize count,
   ParameterMetadata *pararmeterMetadata, Parameter *fromCopy)
 {
   if (!count)
     return nullptr;
 
-  auto *memory = arranew(processor->arena, Parameter, count, {});
+  auto *memory = arranew(processor->pool, Parameter, count, {});
 
   for (usize i = 0; i < count; ++i)
   {
@@ -646,7 +691,7 @@ Parameter::createParameters(Processor *processor, usize count,
       details = pararmeterMetadata->details;
 
     if (details.scale == ParameterScale::Indexed)
-      details.options = IndexedData::deepCopy(processor->arena, details.options);
+      details.options = IndexedData::deepCopy(processor->pool, details.options);
 
     (void)new(memory + i) Parameter{ COMPLEX_MOVE(details), processor };
     memory[i].previous = memory + i - 1;
@@ -666,7 +711,7 @@ Parameter::createParameters(Processor *processor, usize count,
   return memory;
 }
 
-void Parameter::initialiseParameters(Parameter *parameters,
+void initialiseParameters(Parameter *parameters,
   usize count, Parameter *fromCopy, bool keepValue)
 {
   if (!count)
@@ -682,22 +727,63 @@ void Parameter::initialiseParameters(Parameter *parameters,
         parameters->addModulator(*modulator);
       float newValue = (keepValue) ? parameters->normalisedValue.load(satomi::memory_order_relaxed) :
         fromCopy->normalisedValue.load(satomi::memory_order_relaxed);
-      parameters->reset(nullptr, &newValue, sampleRate);
+      parameters->reset(&newValue, sampleRate);
       fromCopy = fromCopy->next;
     }
     else
     {
       float newValue = parameters->normalisedValue.load(satomi::memory_order_relaxed);
-      parameters->reset(nullptr, (keepValue) ? &newValue : nullptr, sampleRate);
+      parameters->reset((keepValue) ? &newValue : nullptr, sampleRate);
     }
 
     parameters->updateValue(sampleRate);
   }
 }
 
+void Processor::remapParameters(utils::span<HostParameter *> bridges,
+  bool bridgeValueFromParameters, bool remapOnlyBridges)
+{
+  COMPLEX_ASSERT(bridges.empty() || bridges.size() == parameterCount);
+
+  auto *parameter = parameters;
+  for (usize i = 0; i < parameterCount; (++i), (parameter = parameter->next))
+  {
+    auto bridge = parameter->hostParameter.load(satomi::memory_order_acquire);
+
+    if (!bridges.empty())
+    {
+      bridge->resetParameter(nullptr);
+      bridges[i]->resetParameter(parameter, bridgeValueFromParameters);
+
+      continue;
+    }
+
+    if (!bridge)
+      continue;
+
+    if (remapOnlyBridges)
+    {
+      if (bridge->getParameter())
+      {
+        bridge->resetParameter(nullptr);
+        // remain with a one-way reference to the bridge we detached from
+        parameter->hostParameter.store(bridge, satomi::memory_order_release);
+      }
+      else
+        bridge->resetParameter(parameter, bridgeValueFromParameters);
+    }
+    else
+    {
+      bridge->resetParameter(nullptr);
+    }
+  }
+
+  HostParameter::notifyParameterChange();
+}
+
 UndoManager::UndoManager(utils::Pool *parentArena, usize transactionsToKeep)
 {
-  storage = utils::Pool::createNested(parentArena, 
+  storage = utils::Pool::createNested(parentArena,
     transactionsToKeep * storagePerTransaction);
   setTransationStorage(transactionsToKeep);
 }
@@ -798,7 +884,7 @@ bool UndoManager::perform(UndoAction *newAction)
     if you want to overwrite undone actions");
 
   UndoAction *previousAction{};
-  auto [arena, action] = transactions[currentIndex];
+  auto [pool, action] = transactions[currentIndex];
   if (!action)
     transactions[currentIndex].second = newAction;
   else while (true) // try to coalesce the new action with any one of the current transaction
@@ -812,7 +898,7 @@ bool UndoManager::perform(UndoAction *newAction)
 
     if (action->combineActions)
     {
-      if (auto coalescedAction = action->combineActions(arena, action, newAction))
+      if (auto coalescedAction = action->combineActions(pool, action, newAction))
       {
         coalescedAction->next = action->next;
         if (previousAction)
@@ -869,7 +955,7 @@ UndoManager::beginNewTransaction()
   return transactions[currentIndex].first;
 }
 
-bool 
+bool
 UndoManager::undo()
 {
   if (undoActionsCount == 0)
@@ -955,7 +1041,7 @@ void State::registerDynamicParameter(Parameter *parameter)
 }
 
 static void updateDynamicOptionEntries(IndexedData *target,
-  IndexedData *reference, utils::Pool *arena, bool allowsBreakingChanges = true)
+  IndexedData *reference, utils::Pool *pool, bool allowsBreakingChanges = true)
 {
   // we've reached a leaf node
   if (target->canBeChosen())
@@ -987,7 +1073,7 @@ static void updateDynamicOptionEntries(IndexedData *target,
       isPresent = *targetChild == *referenceChild;
       if (isPresent)
       {
-        updateDynamicOptionEntries(targetChild, referenceChild, arena, allowsBreakingChanges);
+        updateDynamicOptionEntries(targetChild, referenceChild, pool, allowsBreakingChanges);
         break;
       }
     }
@@ -1022,7 +1108,7 @@ static void updateDynamicOptionEntries(IndexedData *target,
     if (isPresent)
       continue;
 
-    childrenToAdd.emplaceBack(IndexedData::deepCopy(arena, referenceChild));
+    childrenToAdd.emplaceBack(IndexedData::deepCopy(pool, referenceChild));
   }
 
   if (!childrenToAdd.empty())
@@ -1034,7 +1120,7 @@ static void updateDynamicParameter(State *state,
 {
   // if the current parameter is mapped out, we shouldn't change any of the values
   // if some of them are not valid anymore, it's up to the consumers of said values to handle things properly
-  if (parameter->hostParameter)
+  if (parameter->hostParameter.load(satomi::memory_order_acquire))
     return;
 
   // getting the most up-to-date counts of the dynamic option
@@ -1061,8 +1147,9 @@ static void updateDynamicParameter(State *state,
   newNormalised = unscaleValue((newNormalised < 0.0f) ? 0.0f :
     newNormalised + (float)oldIndex, details);
 
-  float value = (float)newNormalised;
-  parameter->reset(&details, &value);
+  parameter->changeDetails(COMPLEX_MOVE(details));
+  newNormalised = parameter->reset(&newNormalised);
+  parameter->updateValue();
 
   if (parameter->control)
   {
@@ -1094,7 +1181,7 @@ void State::updateDynamicParameters(uuid reason)
 
 void State::createDynamicParameters()
 {
-  dynamicOptions.data = { { miscStorage, false }, ParameterChangeReason::values.size() };
+  dynamicOptions.data = { miscStorage, ParameterChangeReason::values.size() };
   for (auto reason : ParameterChangeReason::values)
   {
     auto dynamicOptionsArena = utils::Pool::createNested(miscStorage, COMPLEX_KB(1));
@@ -1121,7 +1208,7 @@ void State::createDynamicParameters()
           continue;
 
         iter->second->addChildren({{ anew(dynamicOptionsArena, IndexedData,
-          {.id = pair.second->metadata->id, .flags = IndexedData::StateIdFlag, .stateId = pair.first }) }});
+          { .id = pair.second->metadata->id, .flags = IndexedData::StateIdFlag, .stateId = pair.first }) }});
       }
 
       break;

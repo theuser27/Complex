@@ -43,7 +43,7 @@ summonModulePopup(PopupSelector *selector, Component *summoner,
       return true;
     });
 
-  PopupList *list = anew(selector->arena, PopupList, { selector });
+  PopupList *list = anew(selector->pool, PopupList, { selector });
   list->parentSelector = selector;
 
   iterateOverIndexedData(indexedData,
@@ -138,7 +138,7 @@ void EffectsLaneSection::reinitialise()
   static constexpr auto kHeaderRightPadding = 4;
   static constexpr auto kFooterPadding = 8;
 
-  moduleHolder.deleteAllChildComponents();
+  moduleHolder.removeAllChildComponents();
   header.removeAllChildComponents();
   footer.removeAllChildComponents();
   removeAllChildComponents();
@@ -154,8 +154,8 @@ void EffectsLaneSection::reinitialise()
   addCommandMessageHandler(laneHandler);
   laneHandler.object = laneMessageHandler;
 
-  if (!arena)
-    arena = utils::Pool::createNested(utils::Pool::fromAllocation(this), COMPLEX_KB(1));
+  if (!pool)
+    pool = utils::Pool::createNested(utils::Pool::fromAllocation(this), COMPLEX_KB(1));
 
   addChildComponent(&header);
   header.desiredSize = { 0, kEffectsLaneTopBarHeight, 0, kEffectsLaneTopBarHeight };
@@ -165,12 +165,12 @@ void EffectsLaneSection::reinitialise()
 
   header.addChildComponent(&laneTitle);
   laneTitle.placement = Placement::left;
-  laneTitle.text = { arena, effectsLane->name };
+  laneTitle.text = { pool, effectsLane->name };
   laneTitle.textColour = Skin::kWidgetAccent1;
   header.addChildComponent(&inputSelector);
   inputSelector.placement = Placement::right;
-  inputSelector.prefix = { arena, "From: " };
-  inputSelector.arena = arena;
+  inputSelector.prefix = { pool, "From: " };
+  inputSelector.pool = pool;
   inputSelector.text.font = FontId::InterType;
   inputSelector.changeLinkedParameter(*effectsLane->getParameter(EffectsLane::Input));
   header.addChildComponent(&laneActivator);
@@ -197,7 +197,7 @@ void EffectsLaneSection::reinitialise()
 
   footer.addChildComponent(&gainMatchingButton);
   gainMatchingButton.placement = Placement::left;
-  gainMatchingButton.arena = arena;
+  gainMatchingButton.pool = pool;
   gainMatchingButton.changeLinkedParameter(*effectsLane->getParameter(EffectsLane::GainMatching));
   footer.addChildComponent(&gainMatchingButtonLabel);
   gainMatchingButtonLabel.placement = Placement::left;
@@ -206,26 +206,20 @@ void EffectsLaneSection::reinitialise()
   footer.addChildComponent(&outputSelector);
   outputSelector.placement = Placement::right;
   outputSelector.popupPlacement = Placement::top;
-  outputSelector.prefix = { arena, "To: " };
-  outputSelector.arena = arena;
+  outputSelector.prefix = { pool, "To: " };
+  outputSelector.pool = pool;
   outputSelector.text.font = FontId::InterType;
   outputSelector.changeLinkedParameter(*effectsLane->getParameter(EffectsLane::Output));
 
   miniView.processor = effectsLane;
   miniView.draggedComponent = &miniView;
-}
 
-void EffectsLaneSection::destroy()
-{
-  moduleHolder.deleteAllChildComponents();
-  removeAllChildComponents();
-
-  utils::Pool::destroy(arena);
-  arena = nullptr;
-
-  auto *state = effectsLane->state;
-  auto *transactionArena = state->plugin->undoManager.beginNewTransaction();
-  state->plugin->undoManager.perform(anew(transactionArena, DeleteProcessorUpdate, { effectsLane }));
+  // add existing module components to the holder
+  usize i = 0;
+  for (auto *childModule = effectsLane->children;
+    childModule && i < effectsLane->childrenCount; ++i)
+    if (childModule->component)
+      moduleHolder.addChildComponent(childModule->component);
 }
 
 bool
@@ -294,6 +288,8 @@ EffectsLaneSection::ModuleHolder::mouseEnter(const MouseEvent &)
         getUiRelated()->renderer->setMouseCursor(MouseCursorTypes::Normal);
         self->hasEnteredHover = false;
       }
+
+      return false;
     });
 
   return true;
@@ -309,7 +305,7 @@ EffectsLaneSection::ModuleHolder::mouseExit(const MouseEvent &)
 
   COMPLEX_INVARIANT_ASSERT(
     (
-      return getUiRelated()->renderer->callbacks.find(this) == 
+      return getUiRelated()->renderer->callbacks.find(this) ==
         getUiRelated()->renderer->callbacks.data.end();
     )
   );
@@ -474,7 +470,7 @@ EffectsLaneSection::LaneMiniView::mouseDown(const MouseEvent &e)
   return true;
 }
 
-bool 
+bool
 EffectsLaneSection::LaneMiniView::mouseDrag(const MouseEvent &e)
 {
   auto offset = e.getOffsetFromDragStart();
@@ -484,7 +480,7 @@ EffectsLaneSection::LaneMiniView::mouseDrag(const MouseEvent &e)
     auto event = e;
     event.x = event.mouseDownPosition.x;
     event.y = event.mouseDownPosition.y;
-    
+
     (void)prepareToMove(event);
   }
 
@@ -497,7 +493,7 @@ EffectsLaneSection::LaneMiniView::mouseDrag(const MouseEvent &e)
   return true;
 }
 
-bool 
+bool
 EffectsLaneSection::LaneMiniView::mouseUp(const MouseEvent &e)
 {
   auto offset = e.getOffsetFromDragStart();
@@ -536,8 +532,7 @@ EffectsLaneSection::LaneMiniView::render(Graphics &g)
 Component *
 createUIEffectsLane(Processor *processor)
 {
-  auto guiArena = getUiRelated()->renderer->gui->arena;
-  auto *effectsLaneSection = anew(guiArena, EffectsLaneSection, {});
+  auto *effectsLaneSection = anew(getUIPool(), EffectsLaneSection, {});
   effectsLaneSection->effectsLane = (EffectsLane *)processor;
   effectsLaneSection->reinitialise();
   return effectsLaneSection;

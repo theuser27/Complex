@@ -2,6 +2,8 @@
 
 Source for the spectral effect plugin I'm working on, directly inspired by DtBlkFx  
 
+The plugin is still in alpha so **save compatibility** between versions is **not guaranteed**
+
 ## Compiling
 
 TL;DR If you just want to build the plugin as an end user run `build.bat`/`build.sh` on Windows/Unix-likes respectively. This will build both VST3 and CLAP plugins at `build/(vst/clap)/release`

@@ -691,7 +691,7 @@ namespace satomi
       #pragma pop_macro("SATOMI_MSVC_STL_SEQ_CST_FENCE")
 
       return 0;
-      
+
     #endif
 
   #endif

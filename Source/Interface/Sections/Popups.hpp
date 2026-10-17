@@ -108,7 +108,7 @@ struct PopupItem : public Component
   {
     componentFlags.clickable = true;
     componentFlags.clickableChildren = false;
-    componentFlags.acceptsOrphanMouseEvents = true;
+    componentFlags.acceptsOrphanEvents = true;
   }
 
   bool mouseMove(const MouseEvent &e) override;

@@ -70,16 +70,16 @@ void Spectrogram::reinitialise()
 
   auto maxBinCount = getUiRelated()->plugin.state_->getMaxBinCount();
 
-  if (!arena)
+  if (!pool)
   {
     auto scratchBufferSize = kChannelsPerInOut * maxBinCount * sizeof(f4);
     auto resultBufferSize = kChannelsPerInOut * kResolution * sizeof(f4);
-    arena = utils::Pool::createNested(parent->arena, (resultBufferSize + scratchBufferSize) + COMPLEX_MB(2));
+    pool = utils::Pool::createNested(parent->pool, (resultBufferSize + scratchBufferSize) + COMPLEX_MB(2));
   }
-  utils::Pool::clear(arena);
+  utils::Pool::clear(pool);
 
-  scratchBuffer = SimdBuffer::create(arena, kChannelsPerInOut, maxBinCount);
-  resultBuffer = SimdBuffer::create(arena, kChannelsPerInOut, kResolution);
+  scratchBuffer = SimdBuffer::create(pool, kChannelsPerInOut, maxBinCount);
+  resultBuffer = SimdBuffer::create(pool, kChannelsPerInOut, kResolution);
 }
 
 bool

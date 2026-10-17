@@ -30,7 +30,6 @@ struct EffectModuleSection final : public Component
   bool render(Graphics &g) override;
 
   void reinitialise();
-  void destroy();
   void restartEffectUI();
 
   bool mouseDown(const MouseEvent &e) override;

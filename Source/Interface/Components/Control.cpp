@@ -35,13 +35,11 @@ Parameter *
 Control::changeLinkedParameter(Parameter &newParameter,
   bool getValueFromParameter)
 {
-  controlFlags.hasParameter = true;
-
   auto *replacedParameter = setParameter(&newParameter);
 
   details = newParameter.details;
   {
-    controlFlags.isBipolar = -details.minValue == details.maxValue ||
+    controlFlags.bipolar = -details.minValue == details.maxValue ||
       details.scale == ParameterScale::SymmetricQuadratic ||
       details.scale == ParameterScale::SymmetricCubic ||
       details.scale == ParameterScale::SymmetricLoudness ||
@@ -54,24 +52,28 @@ Control::changeLinkedParameter(Parameter &newParameter,
   }
 
   if (getValueFromParameter)
-    setValue(newParameter.normalisedValue.load(satomi::memory_order_relaxed), false);
+    setValue(newParameter.normalisedValue.load(satomi::memory_order_relaxed), true);
   else
-    setValue(newParameter.updateNormalisedValue(getValue()), false);
+    setValue(getValue(), true);
 
   return replacedParameter;
 }
 
 void Control::setValueToHost() const
 {
-  if (parameter && parameter->hostParameter)
+  if (parameter)
   {
-    parameter->hostParameter->beginChangeGesture();
-    parameter->hostParameter->setValueFromUI((float)getValue());
-    parameter->hostParameter->endChangeGesture();
+    if (auto hostParameter = parameter->hostParameter.load(satomi::memory_order_acquire))
+    {
+      hostParameter->beginChangeGesture();
+      hostParameter->setValueFromUI(getValue());
+      hostParameter->endChangeGesture();
+    }
+    else
+      getUiRelated()->plugin.markPluginDirty();
   }
 }
 
-// TODO: change this bool to instead either run through the valueChange fn ptr or not
 bool
 Control::setValue(float newValue, bool setParameter)
 {
@@ -79,7 +81,7 @@ Control::setValue(float newValue, bool setParameter)
 
   // set parameter value as well
   if (setParameter && parameter)
-    newValue = parameter->updateNormalisedValue(newValue);
+    newValue = parameter->updateNormalisedValue(newValue, ParameterAssignment::MainThread);
 
   auto oldValue = value.exchange(newValue, satomi::memory_order_relaxed);
   if (newValue == oldValue)
@@ -307,7 +309,7 @@ getControlPopupItemText(ControlPopupItem *item, utils::string &savedText)
     auto index = getParameterIndexFromId(item->id);
     utils::span parameterBridges = getUiRelated()->plugin.state_->parameterBridges;
 
-    if (parameterBridges[index].isMappedToParameter())
+    if (parameterBridges[index].getParameter())
       item->textColourId = Skin::kWidgetPrimary1;
     else
     {
@@ -369,7 +371,7 @@ void Control::createPopupMenu(PopupSelector *selector, Point<i32> position)
   static constexpr auto kInlineGroupHeight = 32;	// serves also as minimum width for the elements
 
   selector->resetState();
-  auto *itemArena = selector->arena;
+  auto *itemArena = selector->pool;
   auto primaryDesiredSize = Rectangle{ 0, kPrimaryTextLineHeight, 0, kPrimaryTextLineHeight };
   auto secondaryDesiredSize = Rectangle{ 0, 13, 0, 13 };
   auto primaryPadding = Rectangle<u16>{ 12, 4, 12, 4 };
@@ -407,7 +409,7 @@ void Control::createPopupMenu(PopupSelector *selector, Point<i32> position)
 
   if (details.flags & ParameterDetails::Automatable)
   {
-    if (parameter && parameter->hostParameter)
+    if (parameter && parameter->hostParameter.load(satomi::memory_order_acquire))
     {
       options.addChildComponent(TEXT_ITEM(kClearMapping, options, .shortcutKeyCode = 'c'));
     }
@@ -430,7 +432,7 @@ void Control::createPopupMenu(PopupSelector *selector, Point<i32> position)
       utils::span parameterBridges = getUiRelated()->plugin.state_->parameterBridges;
       for (usize i = 0; i < parameterBridges.size(); ++i)
       {
-        if (!parameterBridges[i].isMappedToParameter())
+        if (!parameterBridges[i].getParameter())
         {
           mappingList.childList->addChildComponent(TEXT_ITEM(kMappingList + 1 + (i32)i * 2, (*mappingList.childList)));
 
@@ -465,7 +467,7 @@ void Control::createPopupMenu(PopupSelector *selector, Point<i32> position)
     .desiredSize = secondaryDesiredSize, .placement = Placement::right, .extraData = this,
     .sizingFlags = Component::GrowableX, .padding = {}, .textColourId = Skin::kTextComponentText2));
 
-  Component &inlineGroup = with_val(*anew(itemArena, Component, {}), .arena = itemArena,
+  Component &inlineGroup = with_val(*anew(itemArena, Component, {}), .pool = itemArena,
     .sizingFlags = Component::GrowableX, .padding = (Rectangle<u16>{ 4, 4, 4, 0 }),
     .desiredSize = (Rectangle{ 0, kInlineGroupHeight, 0, kInlineGroupHeight }));
   options.addChildComponent(&inlineGroup);
@@ -507,7 +509,7 @@ void Control::createParameterUpdate(float previousValue, bool forceOverwrite)
   if (!forceOverwrite)
     lastEditTime = getUiRelated()->steadyTime;
 
-  // we either force an overwrite or we check if there was a very recent change to the control 
+  // we either force an overwrite or we check if there was a very recent change to the control
   // we're about to create an event for
   bool overwriteInstead = forceOverwrite || getUiRelated()->steadyTime - oldEditTime <= Control::kUndoTimeout;
   if (overwriteInstead)
@@ -527,7 +529,6 @@ void Control::createParameterUpdate(float previousValue, bool forceOverwrite)
   }
 
   // create a parameter change event if one doesn't already exist
-  // same goes for forceOverwrite
   if (!overwriteInstead)
     undoManager.perform(anew(undoManager.beginNewTransaction(),
       ParameterUpdate, { this, previousValue, currentValue }));
@@ -598,11 +599,11 @@ void Control::getScaledValueString(utils::string &outString,
   float valueToConvert, bool addPrefix) const
 {
   // if the string doesn't have an allocated capacity,
-  // provide it through the control's arena
+  // provide it through the control's pool
   if (!outString.capacity())
-    outString = { arena };
+    outString = { pool };
 
-  if (!controlFlags.hasParameter)
+  if (!parameter)
   {
     utils::floatToString(outString, valueToConvert);
     return;
@@ -719,9 +720,6 @@ struct MappingParameterUpdate : public UndoAction
   MappingParameterUpdate(HostParameter *bridge,
     Parameter *parameter = nullptr) : bridge{ bridge }, parameter{ parameter }
   {
-    // FIXME: if you map and unmap the same parameter this transaction will contain both actions
-    //        instead of self cancelling and freeing the arena
-
     UndoAction::redo = redo;
     UndoAction::undo = redo;
   }
@@ -729,29 +727,22 @@ struct MappingParameterUpdate : public UndoAction
   static void redo(UndoAction *a)
   {
     auto *self = (MappingParameterUpdate *)a;
+    auto g = self->bridge->state->plugin->acquireProcessingLock();
+    auto oldParameter = self->bridge->getParameter();
+    auto newParameter = self->parameter;
 
-    if (self->parameter)
-    {
-      COMPLEX_ASSERT(!self->bridge->getParameter());
-      self->bridge->resetParameter(self->parameter);
+    if (oldParameter && oldParameter->parentProcessor && oldParameter->parentProcessor->metadata->automationMappingChangedCallback)
+      oldParameter->parentProcessor->metadata->automationMappingChangedCallback(
+        oldParameter->parentProcessor, oldParameter, false);
 
-      HostParameter::notifyParameterChange();
-      if (self->parameter->control && self->parameter->control->automationMappingChangedCallback)
-        self->parameter->control->automationMappingChangedCallback(self->parameter->control, false);
+    self->bridge->resetParameter(newParameter);
 
-      self->parameter = nullptr;
-    }
-    else
-    {
-      self->parameter = self->bridge->getParameter();
-      COMPLEX_ASSERT(self->parameter);
+    if (newParameter && newParameter->parentProcessor && newParameter->parentProcessor->metadata->automationMappingChangedCallback)
+      newParameter->parentProcessor->metadata->automationMappingChangedCallback(
+        newParameter->parentProcessor, newParameter, true);
 
-      if (self->parameter->control && self->parameter->control->automationMappingChangedCallback)
-        self->parameter->control->automationMappingChangedCallback(self->parameter->control, true);
-
-      self->bridge->resetParameter(nullptr);
-      HostParameter::notifyParameterChange();
-    }
+    HostParameter::notifyParameterChange();
+    self->parameter = oldParameter;
   }
 
   static bool isOfType(UndoAction *a) { return a->redo == redo && a->undo == redo; }
@@ -767,11 +758,11 @@ void handleControlPopupResult(Control *control, PopupItem *selectedItem)
   auto createMappingParameterUpdate = [&plugin](HostParameter *bridge, Parameter *parameter = nullptr)
   {
     // combine as many mappings into a single transaction
-    auto [arena, lastAction] = plugin.undoManager.getCurrent();
-    if (!arena || (lastAction && !MappingParameterUpdate::isOfType(lastAction)))
-      arena = plugin.undoManager.beginNewTransaction();
+    auto [pool, lastAction] = plugin.undoManager.getCurrent();
+    if (!pool || (lastAction && !MappingParameterUpdate::isOfType(lastAction)))
+      pool = plugin.undoManager.beginNewTransaction();
 
-    plugin.undoManager.perform(anew(arena, MappingParameterUpdate, { bridge, parameter }));
+    plugin.undoManager.perform(anew(pool, MappingParameterUpdate, { bridge, parameter }));
   };
 
   auto result = selectedItem->id;
@@ -791,7 +782,7 @@ void handleControlPopupResult(Control *control, PopupItem *selectedItem)
     usize stringSize{};
     float currentValue = control->getValue();
 
-    if (!control->controlFlags.hasParameter || result == kCopyNormalisedValue)
+    if (!control->parameter || result == kCopyNormalisedValue)
       stringSize = utils::floatToString(currentValue, stringBuffer, sizeof(stringBuffer) - 1, 5);
     else
     {
@@ -810,16 +801,20 @@ void handleControlPopupResult(Control *control, PopupItem *selectedItem)
   }
   else if (result == kClearMapping)
   {
-    if (!control->parameter || !control->parameter->hostParameter)
+    if (!control->parameter)
       return;
 
-    createMappingParameterUpdate(control->parameter->hostParameter);
+    auto hostParameter = control->parameter->hostParameter.load(satomi::memory_order_acquire);
+    if (!hostParameter)
+      return;
+
+    createMappingParameterUpdate(hostParameter);
   }
   else if (result == kMapFirstSlot)
   {
     for (auto &parameter : plugin.state_->parameterBridges)
     {
-      if (!parameter.isMappedToParameter())
+      if (!parameter.getParameter())
       {
         createMappingParameterUpdate(&parameter, control->parameter);
         break;

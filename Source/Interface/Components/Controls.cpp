@@ -6,7 +6,7 @@
 #include "Framework/parameters.hpp"
 #include "Generation/Processor.hpp"
 #include "Plugin/Complex.hpp"
-#include "../LookAndFeel/ui_constants.hpp"
+#include "../LookAndFeel/gui_constants.hpp"
 #include "../LookAndFeel/Graphics.hpp"
 #include "../LookAndFeel/Skin.hpp"
 #include "../Sections/Popups.hpp"
@@ -16,7 +16,7 @@ Button::mouseDown(const MouseEvent &e)
 {
   if (e.mods.test(ModifierKeys::popupMenuClickModifier))
   {
-    if (!controlFlags.hasParameter)
+    if (!parameter)
       return true;
 
     componentFlags.isClicked = false;
@@ -39,9 +39,6 @@ Button::mouseUp(const MouseEvent &e)
   if (!componentFlags.isClicked || !componentFlags.isHovered)
     return false;
 
-  if (parameter && parameter->hostParameter)
-    parameter->hostParameter->beginChangeGesture();
-
   auto previousValue = getValue();
   bool isChanged = setValue(!isOn(), true);
   if (isChanged)
@@ -60,7 +57,7 @@ PowerButton::PowerButton()
     (u16)(kAddedMargin + iconBounds.x), kAddedMargin };
 }
 
-bool 
+bool
 PowerButton::render(Graphics &g)
 {
   auto colour = getColour(Skin::kWidgetAccent1, this);
@@ -71,8 +68,8 @@ PowerButton::render(Graphics &g)
   activeColour = (componentFlags.isClicked) ? activeColour : colour;
   hoverColour = colour.brighter(0.6f);
 
-  tickAnimation(animationValues, 
-    {{ componentFlags.isHovered || componentFlags.isClicked }}, 
+  tickAnimation(animationValues,
+    {{ componentFlags.isHovered || componentFlags.isClicked }},
     {{ kHoverIncrement }});
 
   if (!componentFlags.isClicked)
@@ -92,7 +89,7 @@ RadioButton::RadioButton()
   desiredSize = { kDimensions, kDimensions, kDimensions, kDimensions };
 }
 
-bool 
+bool
 RadioButton::render(Graphics &g)
 {
   auto onNormalColor = getColour(Skin::kWidgetAccent1, this);
@@ -142,7 +139,7 @@ Slider::mouseDown(const MouseEvent &e)
     componentFlags.isClicked = false;
     mouseExit(e);
 
-    if (controlFlags.hasParameter)
+    if (parameter)
       showTextEntry();
 
     return true;
@@ -153,7 +150,7 @@ Slider::mouseDown(const MouseEvent &e)
     componentFlags.isClicked = false;
     mouseExit(e);
 
-    if (controlFlags.hasParameter)
+    if (parameter)
       createPopupMenu(getPopupSelector(), { e.x, e.y });
 
     return true;
@@ -170,8 +167,9 @@ Slider::mouseDown(const MouseEvent &e)
 
   showPopup();
 
-  if (parameter && parameter->hostParameter)
-    parameter->hostParameter->beginChangeGesture();
+  if (parameter)
+    if (auto hostParameter = parameter->hostParameter.load(satomi::memory_order_acquire))
+      hostParameter->beginChangeGesture();
 
   createParameterUpdate(getValue(), false);
 
@@ -186,7 +184,7 @@ Slider::mouseDrag(const MouseEvent &e)
   if (!componentFlags.isClicked)
     return false;
 
-  auto mouseDiff = (controlFlags.isHorizotalDraggable) ?
+  auto mouseDiff = (controlFlags.horizotalDrag) ?
     e.x - lastMouseDragPosition.x : lastMouseDragPosition.y - e.y;
   lastMouseDragPosition = { e.x, e.y };
 
@@ -199,8 +197,9 @@ Slider::mouseDrag(const MouseEvent &e)
     bool isChanged = setValue(newPos, true);
     if (isChanged)
     {
-      if (parameter && parameter->hostParameter)
-        parameter->hostParameter->setValueFromUI((float)getValue());
+      if (parameter)
+        if (auto hostParameter = parameter->hostParameter.load(satomi::memory_order_acquire))
+          hostParameter->setValueFromUI(getValue());
 
       createParameterUpdate(previousValue, true);
     }
@@ -215,9 +214,13 @@ Slider::mouseUp(const MouseEvent &e)
   if (!componentFlags.isClicked)
     return false;
 
-  if (parameter && parameter->hostParameter)
-    parameter->hostParameter->endChangeGesture();
-
+  if (parameter)
+  {
+    if (auto hostParameter = parameter->hostParameter.load(satomi::memory_order_acquire))
+      hostParameter->endChangeGesture();
+    else
+      getUiRelated()->plugin.markPluginDirty();
+  }
   if (e.numberOfClicks == 2)
   {
     if (!controlFlags.resetValueOnDoubleClick ||
@@ -373,7 +376,7 @@ RotarySlider::render(Graphics &g)
   // radial fill
   float startingPoint = -maxArc - kHalfPi;
   float length = 2 * maxArc * utils::max(currentValue, 0.01f);
-  if (controlFlags.isBipolar)
+  if (controlFlags.bipolar)
   {
     length = 2 * maxArc * (currentValue - 0.5f);
     startingPoint += utils::min(maxArc + length, maxArc);
@@ -506,15 +509,22 @@ PinSlider::mouseDrag(const MouseEvent &e)
   if (controlFlags.isInSensitiveMode)
     multiply *= kSlowDragMultiplier;
 
-  auto mouseEvent = e.getEventRelativeTo(parent);
+  auto previousValue = getValue();
 
+  auto mouseEvent = e.getEventRelativeTo(parent);
   auto normalisedDiff = ((double)mouseEvent.x - lastMouseDragPosition.x) / (double)parent->bounds.w;
   lastMouseDragPosition = { mouseEvent.x, mouseEvent.y };
   runningTotal += multiply * normalisedDiff;
 
   bool isChanged = setValue((float)utils::clamp(runningTotal, 0.0, 1.0), true);
-  if (isChanged && parameter && parameter->hostParameter)
-    parameter->hostParameter->setValueFromUI((float)getValue());
+  if (isChanged)
+  {
+    if (parameter)
+      if (auto hostParameter = parameter->hostParameter.load(satomi::memory_order_acquire))
+        hostParameter->setValueFromUI(getValue());
+
+    createParameterUpdate(previousValue, true);
+  }
 
   return true;
 }
@@ -666,14 +676,14 @@ TextSelector::mouseDown(const MouseEvent &e)
   if (isDropdownOpen)
   {
     selector->resetState();
-    isDropdownOpen = false;
+    COMPLEX_ASSERT(isDropdownOpen == false);
     return true;
   }
 
   selector->resetState();
   isDropdownOpen = true;
 
-  PopupList *list = anew(selector->arena, PopupList, { selector });
+  PopupList *list = anew(selector->pool, PopupList, { selector });
   list->parentSelector = selector;
 
   if (auto title = (!dropdownTitle.empty()) ?

@@ -5,7 +5,6 @@
 
 #include "constants.hpp"
 #include "utils.hpp"
-#include "memory.hpp"
 
 extern "C" typedef struct NSVGimage NSVGimage;
 
@@ -22,10 +21,15 @@ namespace utils
 
 class Processor;
 void resetProcessorGeneric(Processor *processor);
-void serialiseProcessorGeneric(const Processor *,
+void serialiseProcessorGeneric(const Processor *processor,
   void *jsonData, utils::span<Parameter *> parametersToSerialise);
 
 class Component;
+
+// used for updating parameters
+enum class UpdateFlag : u8 { NoUpdates = 0, Realtime = 1, BeforeProcess = 2, AfterProcess = 3 };
+
+enum class ParameterAssignment : u8 { AudioThread, MainThread, Skip };
 
 // symmetric types apply the flipped curve to negative values
 // all x values are normalised
@@ -44,7 +48,7 @@ COMPLEX_ENUM(ParameterScale,
   (          Loudness, 1757693294934),    // 20 * log10(x)
   ( SymmetricLoudness, 1757693297826),    // 20 * log10(abs(x)) * sgn(x)
   (         Frequency, 1757693375693),    // (sampleRate / 2 * minFrequency) ^ x
-  (SymmetricFrequency, 1757693385953)     // (sampleRate / 2 * minFrequency) ^ (abs(x)) * sgn(x)
+  (SymmetricFrequency, 1757693385953),    // (sampleRate / 2 * minFrequency) ^ (abs(x)) * sgn(x)
 );
 
 COMPLEX_ENUM(ParameterChangeReason,
@@ -155,14 +159,14 @@ struct IndexedData
   }
 
   static IndexedData *
-  deepCopy(auto *arena, IndexedData *options)
+  deepCopy(auto *pool, IndexedData *options)
   {
-    auto *newOption = anew(arena, IndexedData, { *options });
+    auto *newOption = anew(pool, IndexedData, { *options });
     if (newOption->children)
     {
-      newOption->children = deepCopy(arena, newOption->children);
+      newOption->children = deepCopy(pool, newOption->children);
       for (auto child = newOption->children; child->next; child = child->next)
-        child->next = deepCopy(arena, child->next);
+        child->next = deepCopy(pool, child->next);
     }
 
     return newOption;
@@ -197,40 +201,40 @@ struct ParameterDetails
 {
   enum Flags : u8
   {
-            None = 0,
-          Stereo = 1 << 0,                               // if parameter allows stereo modulation
-    Modulatable = 1 << 1,                               // if parameter allows modulation at all
-    Automatable = 1 << 2,                               // if parameter allows host automation
-      Extensible = 1 << 3,                               // if parameter's minimum/maximum/default values can change
-      RoundToInt = 1 << 4,                               // if parameter value must be rounded after scaling
+           None = 0,
+         Stereo = 1 << 0,                                 // if parameter allows stereo modulation
+    Modulatable = 1 << 1,                                 // if parameter allows modulation at all
+    Automatable = 1 << 2,                                 // if parameter allows host automation
+     Extensible = 1 << 3,                                 // if parameter's minimum/maximum/default values can change
+     RoundToInt = 1 << 4,                                 // if parameter value must be rounded after scaling
   };
 
-  utils::string_view displayName{};                     // name displayed to the user
-  uuid id{};												                    // parameter id
+  utils::string_view displayName{};                       // name displayed to the user
+  uuid id{};												                      // parameter id
   union
   {
     struct
     {
-      float minValue;                                   // minimum scaled value
-      float maxValue;                                   // maximum scaled value
-      float defaultNormalisedValue;                     // default normalised value
+      float minValue;                                     // minimum scaled value
+      float maxValue;                                     // maximum scaled value
+      float defaultNormalisedValue;                       // default normalised value
     };
     struct
     {
-      IndexedData *options;                             // (nested) list of options
-      uuid defaultOptionId;                             // id of the default option
+      IndexedData *options;                               // (nested) list of options
+      uuid defaultOptionId;                               // id of the default option
     };
   };
 
-  ParameterScale::Value scale = ParameterScale::Linear; // value skew factor
-  utils::string_view displayUnits{};                    // "%", " db", etc.
-  u32 flags = Modulatable | Automatable;                // various flags
-  UpdateFlag updateFlag = UpdateFlag::Realtime;         // at which point during processing the parameter is updated
-  usize (*toString)(char *string,                       // string generator function for IndexedNumeric parameters
+  ParameterScale::Value scale = ParameterScale::Linear;   // value skew factor
+  utils::string_view displayUnits{};                      // "%", " db", etc.
+  u32 flags = Modulatable | Automatable;                  // various flags
+  UpdateFlag updateFlag = UpdateFlag::Realtime;           // at which point during processing the parameter is updated
+  usize (*toString)(char *string,                         // string generator function for IndexedNumeric parameters
     usize stringSize, float value,
     const ParameterDetails &details) = nullptr;
-  float (*valueChange)(Parameter *parameter,            // calculates new value based on desired and previous ones
-    float newValue) = nullptr;
+  float (*valueChange)(Parameter *parameter,              // calculates new value based on desired and previous ones
+    float newValue, ParameterAssignment type) = nullptr;
 };
 
 
@@ -302,15 +306,16 @@ struct ProcessorMetadata
 {
   using CreateProcessorFn = Processor *(State *state,
     ProcessorMetadata *metadata, const void *toCopy, void *serialisedSave, void *extra);
-  using CreateUIFn = Component *(Processor *);
-  using ResetFn = void(Processor *);
-  using SerialiseToJsonFn = void(const Processor *,
+  using CreateUIFn = Component *(Processor *processor);
+  using ResetFn = void(Processor *processor);
+  using SerialiseToJsonFn = void(const Processor *processor,
     void *jsonData, utils::span<Parameter *> parametersToSerialise);
+  using AutomationMappingChangedFn = void(Processor *processor, 
+    Parameter *parameter, bool isMapping);
 
   enum : u32
   {
     NoTag = 0U,
-    GroupTag = NoTag,
     ProcessorTag = 1U << 0,
     NoParameterValidationTag = 1U << 1,
 
@@ -326,6 +331,7 @@ struct ProcessorMetadata
   CreateUIFn *createUI{};
   ResetFn *reset = resetProcessorGeneric;
   SerialiseToJsonFn *serialise = serialiseProcessorGeneric;
+  AutomationMappingChangedFn *automationMappingChangedCallback{};
   ProcessorMetadata *parent{};
   ProcessorMetadata *next{};
   ProcessorMetadata *children{};
@@ -334,15 +340,6 @@ struct ProcessorMetadata
   u32 parameterCount{};
   const void *vtable{};
 
-  ProcessorMetadata &
-  operator,(ProcessorMetadata &other)
-  {
-    if (next)
-      *next, other;
-    else
-      next = &other;
-    return *this;
-  }
   operator ProcessorMetadata *() { return this; }
 
   static bool
@@ -408,14 +405,14 @@ struct PluginStructure
 {
   u64 versionNumber{};
 
-  utils::Pool *arena{};
+  utils::Pool *pool{};
 
   ProcessorMetadata *metadata{};
   utils::vectornd<utils::sp<utils::Dylib>> loadedDynamicLibs{};
 
-  utils::Pool *getNewArena(usize size)
+  utils::Pool *getNewPool(usize size)
   {
-    return utils::Pool::createNested(arena, size);
+    return utils::Pool::createNested(pool, size);
   }
 };
 
@@ -423,13 +420,14 @@ struct ExecutableMetadata
 {
   utils::LockBlame<i32> readWriteLock{};
   PluginStructure structure{};
-  utils::Pool *arena{};
+  utils::Pool *pool{};
   utils::string_view configFolderPath{};
   utils::sll<utils::string_view> *strings{};
   utils::sll<ComplexPlugin> *pluginInstances{};
 };
 
-inline usize printToggleValues(char *string, usize size, float value, const ParameterDetails &)
+inline usize
+printToggleValues(char *string, usize size, float value, const ParameterDetails &)
 {
   static constexpr utils::string_view toggleStrings[] = { "Off", "On" };
   size = utils::min(toggleStrings[(usize)value].size(), size - 1);
@@ -440,16 +438,14 @@ inline usize printToggleValues(char *string, usize size, float value, const Para
 
 extern ExecutableMetadata executableStaticData;
 
-#define COMPLEX_STRUCTURE_PARAMETER(...) (*anew(arena, ParameterMetadata, { .details = { __VA_ARGS__ } }))
-#define COMPLEX_STRUCTURE_PARAMETER_CUSTOM(...) (__VA_ARGS__(*anew(arena, ParameterMetadata, {})))
+#define COMPLEX_STRUCTURE_PARAMETER(...) (*anew(pool, ParameterMetadata, { .details = { __VA_ARGS__ } }))
+#define COMPLEX_STRUCTURE_PARAMETER_CUSTOM(...) (__VA_ARGS__(*anew(pool, ParameterMetadata, {})))
 
-#define COMPLEX_STRUCTURE_PROCESSOR(T, nameString, idNumber, skinOverride, createFn, createUIFn, ...) (*anew(arena, ProcessorMetadata, \
+#define COMPLEX_STRUCTURE_PROCESSOR(T, nameString, idNumber, skinOverride, createFn, createUIFn, ...) (*anew(pool, ProcessorMetadata, \
   { .flags = ProcessorMetadata::ProcessorTag, .userFlags = skinOverride, .id = idNumber, .name = nameString, \
     .create = createFn, .createUI = createUIFn __VA_OPT__(,) __VA_ARGS__ }))
-#define COMPLEX_STRUCTURE_GROUP(nameString, idNumber, ...) (*anew(arena, ProcessorMetadata, \
-  { .flags = ProcessorMetadata::GroupTag, .id = idNumber, .name = nameString __VA_OPT__(,) __VA_ARGS__ }))
 
-#define COMPLEX_STRUCTURE_INDEXED_DATA(...) anew(arena, IndexedData, { __VA_ARGS__ })
+#define COMPLEX_STRUCTURE_INDEXED_DATA(...) anew(pool, IndexedData, { __VA_ARGS__ })
 
 struct UndoAction
 {
@@ -461,7 +457,7 @@ struct UndoAction
   void (*destructor)(UndoAction *){};
   // Allows multiple actions to be coalesced into a single action object, to reduce storage space.
   // The combined action can be the current, next or an entire new action
-  // Whichever gets returned, that will be stored 
+  // Whichever gets returned, that will be stored
   // If no action gets returned, both will remain
   UndoAction *(*combineActions)(utils::Pool *transaction,
     UndoAction *currentAction, UndoAction *nextAction){};
@@ -493,9 +489,6 @@ public:
 
   // Tries to roll-back the last transaction,
   // returns false if there aren't any transactions to undo
-  //
-  // if undoCurrentTransactionOnly == true, then the transaction index won't be changed
-  // when undone and things can immediately be added to the current transaction
   bool undo();
 
   // Tries to redo the last transaction that was undone.

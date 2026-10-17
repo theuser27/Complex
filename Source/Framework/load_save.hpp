@@ -17,8 +17,8 @@ namespace utils
 struct IndexedData;
 struct JsonTlsContext
 {
-  // after finishing work with the arena and freeing it, reset this pointer
-  utils::Pool *arena{};
+  // after finishing work with the pool and freeing it, reset this pointer
+  utils::Pool *pool{};
   utils::string *errorPath{};
   utils::vector<IndexedData *> *dynamicOptionFixups{};
 };

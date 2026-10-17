@@ -2,7 +2,7 @@
 // Created: 2024-02-13 20:05:06
 
 #include "fourier_transform.hpp"
-#include "memory.hpp"
+#include "utils.hpp"
 
 #ifdef COMPLEX_INTEL_IPP
   #include "ipps.h"
@@ -21,11 +21,11 @@ void createFFTRoutines(FFT &instance, u32 minOrder, u32 maxOrder)
   COMPLEX_ASSERT(minOrder <= maxOrder);
 
   // full array is needed so that extending FFT orders works
-  auto *ippSpecs = arranew(instance.arena, void *, maxOrder + 1);
+  auto *ippSpecs = arranew(instance.pool, void *, maxOrder + 1);
 
   auto orderCount = maxOrder - minOrder + 1;
   // compute sizes for all specs and add padding so that the specBuffer is also 64-byte aligned just in case
-  int *tempData = arranew(instance.arena, int, orderCount * 4);
+  int *tempData = arranew(instance.pool, int, orderCount * 4);
   int *specSizes = tempData;
   int *specSizesPadding = specSizes + orderCount;
   int *specBufferSizes = specSizesPadding + orderCount;
@@ -48,7 +48,7 @@ void createFFTRoutines(FFT &instance, u32 minOrder, u32 maxOrder)
 
   totalSize += maxBufferSize;
 
-  Ipp8u *buffer = arranew(instance.arena, Ipp8u, totalSize);
+  Ipp8u *buffer = arranew(instance.pool, Ipp8u, totalSize);
   Ipp8u *rest = buffer + maxBufferSize + (cachelLineAlignment - (maxBufferSize % cachelLineAlignment)) % cachelLineAlignment;
 
   for (u32 i = 0; i < orderCount; ++i)
@@ -128,18 +128,18 @@ forceinline void vectorcall fromSimdFloat(float *aligned, f4 value) noexcept
 static void createFFTRoutines(FFT &instance, u32 minOrder, u32 maxOrder)
 {
   // full array is needed so that extending FFT orders works
-  auto *plans = arranew(instance.arena, void *, maxOrder + 1);
+  auto *plans = arranew(instance.pool, void *, maxOrder + 1);
 
   for (usize i = minOrder; i < maxOrder + 1; ++i)
     plans[i] = pffft_new_setup(1 << i, PFFFT_REAL,
       [](void *ud, usize size, usize alignment) -> void * { return utils::Pool::insert((utils::Pool *)ud, size, alignment); },
       [](void *, void *allocation) { utils::Pool::remove(allocation); },
-      instance.arena);
+      instance.pool);
 
   instance.plans_.store(plans, satomi::memory_order_relaxed);
 
   // buffer needs to be 16 byte aligned for sse/neon
-  instance.scratchBuffers_.store((float *)instance.arena->insert(instance.arena,
+  instance.scratchBuffers_.store((float *)instance.pool->insert(instance.pool,
     ((usize(1) << maxOrder) * sizeof(float)), pffft_simd_size() * alignof(float), true),
     satomi::memory_order_relaxed);
 }

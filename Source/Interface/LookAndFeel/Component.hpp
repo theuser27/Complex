@@ -4,9 +4,8 @@
 #pragma once
 
 #include "Framework/utils.hpp"
-#include "Framework/memory.hpp"
 #include "Generation/Processor.hpp"
-#include "ui_constants.hpp"
+#include "gui_constants.hpp"
 #include "gui_utils.hpp"
 #include "Skin.hpp"
 #include "Graphics.hpp"
@@ -18,8 +17,8 @@ class PopupDisplay;
 class PopupSelector;
 struct PopupItem;
 
-// Basic UI thread loop:
-// 1. Perform any modifications from the UI
+// Basic main-thread loop:
+// 1. Perform any modifications from the GUI
 // 2. Calculate sizes and positions
 // 3. Do rendering
 
@@ -30,7 +29,7 @@ void animatePosition(Component *component, bool wasParentResized);
 
 PopupDisplay *getPopupDisplay(bool primary);
 PopupSelector *getPopupSelector();
-utils::Pool *getUIArena();
+utils::Pool *getUIPool();
 UndoManager &getUndoManager();
 
 void deleteComponent(Component *component);
@@ -39,7 +38,7 @@ void checkScrollClick(Component *component, const MouseEvent &e);
 void dragScroll(Component *component, const MouseEvent &e);
 bool offsetScroll(Component *component, float deltaX, float deltaY, bool switchDirections);
 
-Range<i32> calculateSingleLineTextSize(Component *c, 
+Range<i32> calculateSingleLineTextSize(Component *c,
   bool isCalculatingVertical, FontId fontId, utils::string_view text);
 
 namespace CommandMessages
@@ -105,7 +104,7 @@ public:
     ScrollableX = 1 << 6,
     ScrollableY = 1 << 7,
 
-    // adds an extra scrollbar to the off-axis' size
+    // adds an extra scrollbar in the off-axis' padding
     HasScrollbar = 1 << 8,
 
     ScrollableWithBarX = ScrollableX | HasScrollbar,
@@ -115,6 +114,7 @@ public:
     SnapToMinX = 1 << 9,
     SnapToMinY = 1 << 10,
 
+    // becomes scrollable only once all children have reached their minimum size
     ScrollableSnapToMinX = ScrollableX | SnapToMinX,
     ScrollableSnapToMinY = ScrollableY | SnapToMinY,
   };
@@ -167,30 +167,23 @@ public:
     if (componentFlags.isVisible)
       return true;
 
-    return (!componentFlags.animateFadeAway) ? false :
-      fadeawayRatio != utils::int_max<decltype(fadeawayRatio)>;
+    return (!componentFlags.animateFadeAway) ? false : fadeawayRatio;
   }
   bool isObscured(const Component *ignoreClipIncluding = nullptr) const;
   bool isShowing() const;
   void addChildComponent(Component *childToAdd, Component *insertBefore = nullptr);
   void addChildComponent(Component *childToAdd, usize index);
-  // keepFocus will let the UI system continue focus on childToRemove
+  // keepFocus will let the GUI system continue focus on childToRemove
   // but you MUST NOT delete the object after removal,
-  // otherwise the UI system will be reading into "freed" arena memory
+  // otherwise the GUI system will be reading into "freed" pool memory
   void removeChildComponent(Component *childToRemove, bool keepFocus = false);
   Component *removeChildComponent(usize childIndexToRemove, bool keepFocus = false);
   void removeAllChildComponents();
 
-  // this one removes and frees component from arena
-  void deleteChildComponent(Component *childToDelete);
-  void deleteChildComponent(usize childIndexToDelete);
-  void deleteAllChildComponents();
-
-  bool hasFocus(bool trueIfChildIsFocused) const;
+  bool isFocused(bool trueIfChildIsFocused) const;
   void grabFocus();
   bool giveAwayFocusTo(Component *component = nullptr);
 
-  // needs wantsFocus=1
   enum FocusChange : u8
   {                     //                                                     focus transfer direction
     FocusClick,         // focus changed by a click (clickable=1),          initiator <--  indirect target
@@ -212,7 +205,7 @@ public:
 
   Skin::Override getSkinOverride() const;
 
-  void renderChild(Graphics &g, Component *component, 
+  void renderChild(Graphics &g, Component *component,
     void (*renderFn)(Graphics &, Component *) = nullptr);
   void renderChildren(Graphics &g)
   {
@@ -222,7 +215,7 @@ public:
   void renderScrollbars(Graphics &g, float scrollHoverIncrement);
   virtual bool render([[maybe_unused]] Graphics &g) { return true; }
 
-  utils::Pool *arena{};
+  utils::Pool *pool{};
 
   Rectangle<i32> bounds{};
 
@@ -238,27 +231,27 @@ public:
   struct
   {
     // feature flags
-    bool clickable : 1 = false;
-    bool clickableChildren : 1 = true;
-    bool vertical : 1 = false;                  // controls orientation/axis on which children stack 
-    // TODO: add a separate flag for dual orientation, 
+    bool clickable           : 1 = false;
+    bool clickableChildren   : 1 = true;
+    bool vertical            : 1 = false;  // controls orientation/axis on which children stack
+    // TODO: add a separate flag for dual orientation,
     //       then vertical will only designate primary direction
     //       and also leave a single scrollable flag
-    bool animateMovement : 1 = false;
-    bool animateFadeAway : 1 = false;
-    bool acceptsOrphanMouseEvents : 1 = false;  // if component can accept mouseUp without mouseDown
-                                                //  happens if another component gives up on handling mouseUp
-    bool keepSize : 1 = false;
-    bool halfScissor : 1 = false;               // if a component should scissor only on the main axis
+    bool animateMovement     : 1 = false;
+    bool animateFadeAway     : 1 = false;
+    bool acceptsOrphanEvents : 1 = false;  // if component can accept mouseUp without mouseDown
+                                           // happens if another component gives up on handling mouseUp
+    bool keepSize            : 1 = false;
+    bool halfScissor         : 1 = false;  // if a component should scissor only on the main axis
 
     // state flags
-    bool isVisible : 1 = true;
-    bool isHovered : 1 = false;
-    bool isClicked : 1 = false;
+    bool isVisible           : 1 = true;
+    bool isHovered           : 1 = false;
+    bool isClicked           : 1 = false;
     bool isScrollbarXClicked : 1 = false;
     bool isScrollbarYClicked : 1 = false;
-    bool isPositionSet : 1 = true;              // to aid components with custom placement
-                                                //  depending on other components' position
+    bool isPositionSet       : 1 = true;   // to aid components with custom placement
+                                           // depending on other components' position
   } componentFlags{};
 
 

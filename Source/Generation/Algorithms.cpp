@@ -11,19 +11,25 @@
 #include "Data/BinaryData.hpp"
 #include "Third Party/nanovg/nanosvg.h"
 
-NSVGimage *parseSVG(utils::Pool *arena,
+NSVGimage *parseSVG(utils::Pool *pool,
   const void *data, usize dataSize);
+
+Parameter *
+EffectData::getParameter(uuid id)
+{
+  return utils::findIf(parameters, [&](Parameter *item) { return item->details.id == id; });
+}
 
 static EffectData *
 createEffectGeneric(EffectModule *module, EffectData *)
 {
-  return anew(module->arena, EffectData, {});
+  return anew(module->pool, EffectData, {});
 }
 
 // unary plus is so that it converts lambdas to function pointers (while also accepting raw functions as well)
 #define EFFECT_VTABLE(name, creationFunction, createUIFunction) \
 static constexpr EffectVtable vtable##name = { .createEffect = creationFunction, .runEffect = run##name, .createUI = createUIFunction }
-#define COMPLEX_STRUCTURE_EFFECT(nameString, idNumber, vtableStruct, skinOverride, ...) (*anew(arena, ProcessorMetadata, \
+#define COMPLEX_STRUCTURE_EFFECT(nameString, idNumber, vtableStruct, skinOverride, ...) (*anew(pool, ProcessorMetadata, \
 { .flags = ProcessorMetadata::ProcessorTag, .userFlags = skinOverride, .id = idNumber, .name = nameString __VA_OPT__(,) __VA_ARGS__, .vtable = &vtableStruct })).computeCounts()
 
 static Parameter *
@@ -41,7 +47,7 @@ getParameter(EffectData *effectData, uuid id)
 IndexedData *
 Utility::initialiseTypeStructure(PluginStructure &structure)
 {
-  auto *arena = structure.getNewArena(128);
+  auto *pool = structure.getNewPool(128);
 
   return COMPLEX_STRUCTURE_INDEXED_DATA(.displayName = "Utility", .id = id, .valueCount = 0);
 }
@@ -52,8 +58,8 @@ Filter::initialiseTypeStructure(PluginStructure &structure)
   EFFECT_VTABLE(Normal, createEffectGeneric, createUINormal);
   EFFECT_VTABLE(Gate, createEffectGeneric, createUIGate);
 
-  auto *arena = structure.getNewArena(COMPLEX_KB(40));
-  auto *parsedSVG = parseSVG(arena, BinaryData::Icon_Filter_svg, BinaryData::Icon_Filter_svgSize);
+  auto *pool = structure.getNewPool(COMPLEX_KB(40));
+  auto *parsedSVG = parseSVG(pool, BinaryData::Icon_Filter_svg, BinaryData::Icon_Filter_svgSize);
 
   return COMPLEX_STRUCTURE_INDEXED_DATA(.displayName = "Filter", .id = id, .flags = IndexedData::SVGData, .svgData = parsedSVG)->addChildren({{
     COMPLEX_STRUCTURE_INDEXED_DATA(.displayName = "Normal", .id = Types::Normal, .flags = IndexedData::ProcessorFlag,
@@ -71,9 +77,7 @@ Filter::initialiseTypeStructure(PluginStructure &structure)
     COMPLEX_STRUCTURE_INDEXED_DATA(.displayName = "Gate", .id = Types::Gate, .flags = IndexedData::ProcessorFlag,
       .processorMetadata = COMPLEX_STRUCTURE_EFFECT("Gate", Types::Gate, vtableGate, Skin::kFilterModule, .parameters =
         (
-          COMPLEX_STRUCTURE_PARAMETER("Input Gain", Gate::InputGain, { kMinusInfDb, kInfDb, 0.5f }, ParameterScale::SymmetricLoudness,
-            " dB", ParameterDetails::Modulatable | ParameterDetails::Automatable | ParameterDetails::Stereo),
-          COMPLEX_STRUCTURE_PARAMETER("Gain", Gate::Gain, { kMinusInfDb, kInfDb, 0.5f }, ParameterScale::SymmetricLoudness,
+           COMPLEX_STRUCTURE_PARAMETER("Gain", Gate::Gain, { kMinusInfDb, kInfDb, 0.5f }, ParameterScale::SymmetricLoudness,
             " dB", ParameterDetails::Modulatable | ParameterDetails::Automatable | ParameterDetails::Stereo),
           COMPLEX_STRUCTURE_PARAMETER("Threshold", Gate::Threshold, { -180.0f, 0.0f, 0.5f }, ParameterScale::ReverseQuadratic,
             " dB", ParameterDetails::Modulatable | ParameterDetails::Automatable | ParameterDetails::Stereo),
@@ -98,8 +102,8 @@ Dynamics::initialiseTypeStructure(PluginStructure &structure)
   EFFECT_VTABLE(Contrast, createEffectGeneric, createUIContrast);
   EFFECT_VTABLE(Clip, createEffectGeneric, createUIClip);
 
-  auto *arena = structure.getNewArena(COMPLEX_KB(2));
-  auto *parsedSVG = parseSVG(arena, BinaryData::Icon_Dynamics_svg, BinaryData::Icon_Dynamics_svgSize);
+  auto *pool = structure.getNewPool(COMPLEX_KB(2));
+  auto *parsedSVG = parseSVG(pool, BinaryData::Icon_Dynamics_svg, BinaryData::Icon_Dynamics_svgSize);
 
   return COMPLEX_STRUCTURE_INDEXED_DATA(.displayName = "Dynamics", .id = id, .flags = IndexedData::SVGData, .svgData = parsedSVG)->addChildren({{
     COMPLEX_STRUCTURE_INDEXED_DATA(.displayName = "Contrast", .id = Types::Contrast, .flags = IndexedData::ProcessorFlag,
@@ -132,8 +136,8 @@ Phase::initialiseTypeStructure(PluginStructure &structure)
 {
   EFFECT_VTABLE(Shift, createEffectGeneric, createUIShift);
 
-  auto *arena = structure.getNewArena(COMPLEX_KB(4));
-  auto *parsedSVG = parseSVG(arena, BinaryData::Icon_Phase_svg, BinaryData::Icon_Phase_svgSize);
+  auto *pool = structure.getNewPool(COMPLEX_KB(4));
+  auto *parsedSVG = parseSVG(pool, BinaryData::Icon_Phase_svg, BinaryData::Icon_Phase_svgSize);
 
   return COMPLEX_STRUCTURE_INDEXED_DATA(.displayName = "Phase", .id = id, .flags = IndexedData::SVGData, .svgData = parsedSVG)->addChildren({{
     COMPLEX_STRUCTURE_INDEXED_DATA(.displayName = "Shift", .id = Types::Shift, .flags = IndexedData::ProcessorFlag,
@@ -165,8 +169,8 @@ Pitch::initialiseTypeStructure(PluginStructure &structure)
   EFFECT_VTABLE(Resample, createEffectGeneric, createUIResample);
   EFFECT_VTABLE(FrequencyShift, createEffectGeneric, createUIFrequencyShift);
 
-  auto *arena = structure.getNewArena(COMPLEX_KB(2));
-  auto *parsedSVG = parseSVG(arena, BinaryData::Icon_Pitch_svg, BinaryData::Icon_Pitch_svgSize);
+  auto *pool = structure.getNewPool(COMPLEX_KB(2));
+  auto *parsedSVG = parseSVG(pool, BinaryData::Icon_Pitch_svg, BinaryData::Icon_Pitch_svgSize);
 
   return COMPLEX_STRUCTURE_INDEXED_DATA(.displayName = "Pitch", .id = id, .flags = IndexedData::SVGData, .svgData = parsedSVG)->addChildren({{
     COMPLEX_STRUCTURE_INDEXED_DATA(.displayName = "Resample", .id = Types::Resample, .flags = IndexedData::ProcessorFlag,
@@ -195,10 +199,10 @@ namespace Freeze
   EffectData *
   createEffectRolling(EffectModule *module, EffectData *copy)
   {
-    auto *rollingData = anew(module->arena, RollingData, {});
+    auto *rollingData = anew(module->pool, RollingData, {});
     auto maxBinCount = module->state->getMaxBinCount();
 
-    rollingData->freezeBuffer = SimdBuffer::create(module->arena,
+    rollingData->freezeBuffer = SimdBuffer::create(module->pool,
       kChannelsPerInOut, maxBinCount, copy != nullptr);
 
     if (copy)
@@ -214,7 +218,7 @@ Freeze::initialiseTypeStructure(PluginStructure &structure)
 {
   EFFECT_VTABLE(Rolling, createEffectRolling, createUIRolling);
 
-  auto *arena = structure.getNewArena(COMPLEX_KB(1));
+  auto *pool = structure.getNewPool(COMPLEX_KB(1));
 
   return COMPLEX_STRUCTURE_INDEXED_DATA(.displayName = "Freeze", .id = id)->addChildren({{
     COMPLEX_STRUCTURE_INDEXED_DATA(.displayName = "Rolling", .id = Types::Rolling, .flags = IndexedData::ProcessorFlag,
@@ -235,8 +239,8 @@ Destroy::initialiseTypeStructure(PluginStructure &structure)
 {
   EFFECT_VTABLE(Reinterpret, createEffectGeneric, createUIReinterpret);
 
-  auto *arena = structure.getNewArena(COMPLEX_KB(1));
-  auto *parsedSVG = parseSVG(arena, BinaryData::Icon_Destroy_svg, BinaryData::Icon_Destroy_svgSize);
+  auto *pool = structure.getNewPool(COMPLEX_KB(1));
+  auto *parsedSVG = parseSVG(pool, BinaryData::Icon_Destroy_svg, BinaryData::Icon_Destroy_svgSize);
 
   return COMPLEX_STRUCTURE_INDEXED_DATA(.displayName = "Destroy", .id = id, .flags = IndexedData::SVGData, .svgData = parsedSVG)->addChildren({{
     COMPLEX_STRUCTURE_INDEXED_DATA(.displayName = "Reinterpret", .id = Types::Reinterpret, .flags = IndexedData::ProcessorFlag,
@@ -1362,7 +1366,7 @@ void Pitch::runFrequencyShift(EffectModule *effectModule, EffectData *effectData
 }
 
 void Freeze::runRolling(EffectModule *effectModule, EffectData *effectData,
-  ComplexDataSource &source, SimdBuffer *destination, 
+  ComplexDataSource &source, SimdBuffer *destination,
   u32 binCount, float sampleRate) noexcept
 {
   using namespace utils;
@@ -1412,7 +1416,7 @@ void Freeze::runRolling(EffectModule *effectModule, EffectData *effectData,
     rawDestination[i] = merge(wet, rawSource[i],
       isOutsideBounds(i, lowBoundIndices, highBoundIndices, isHighAboveLow));
   }
-    
+
   rollingData->lastPosition = newPosition;
   rollingData->lastBinCount = binCount;
   rollingData->lastBlockPosition = source.blockPosition;
@@ -1433,7 +1437,7 @@ hotreloadable void Destroy::runReinterpret(EffectModule *effectModule, EffectDat
     return utils::pair{ toInt(shiftedBoundsIndices.first), toInt(shiftedBoundsIndices.second) };
   }();
   i4mask isHighAboveLow = i4::greaterThanOrEqualSigned(highBoundIndices, lowBoundIndices);
-    
+
   f4 attenuation = [&]()
   {
     auto parameter = getParameter(effectData, Destroy::Reinterpret::Attenuation)->getInternalValue<f4>();

@@ -1061,4 +1061,3 @@ inline constexpr i4mask kRealMask = { kFullMask, 0U };
 inline constexpr i4mask kImaginaryMask = { 0U, kFullMask };
 inline constexpr i4mask kMagnitudeMask = kRealMask;
 inline constexpr i4mask kPhaseMask = kImaginaryMask;
-

@@ -836,6 +836,7 @@ void pw_get_keyboard_focus(PuglView *view)
     {
       BOOL ok = GetModuleHandleExW(Flags, (LPCWSTR)&hModule, &hModule);
       assert(ok);
+      (void)ok;
     }
     if (hModule)
       view->impl->hGetMessageHook = SetWindowsHookExW(WH_GETMESSAGE, PWGetMsgProc, hModule, 0);

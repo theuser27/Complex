@@ -90,7 +90,7 @@ tryToInsertDraggableComponent(Component *componentToInsert, Component *lastInser
   return lastInsertedInto;
 }
 
-bool 
+bool
 DraggableComponent::prepareToMove(const MouseEvent &e)
 {
   COMPLEX_ASSERT(draggedComponent);
@@ -174,7 +174,7 @@ DraggableComponent::prepareToMove(const MouseEvent &e)
   draggedComponent->componentFlags.keepSize = true;
 
   // if this is the draggable component we must keep focus otherwise our click will be discarded
-  draggedComponent->parent->removeChildComponent(draggedComponent, 
+  draggedComponent->parent->removeChildComponent(draggedComponent,
     draggedComponent == this || draggedComponent->isParentOf(this));
   surfaceToLiftTo->addChildComponent(draggedComponent);
 
@@ -185,7 +185,7 @@ DraggableComponent::prepareToMove(const MouseEvent &e)
     {
       auto *self = (DraggableComponent *)c;
       if (!self->isDragging)
-        return;
+        return false;
 
       COMPLEX_ASSERT(self->processor);
 
@@ -212,6 +212,8 @@ DraggableComponent::prepareToMove(const MouseEvent &e)
         if (!scrollInfo.handleX && !scrollInfo.handleY)
           break;
       }
+
+      return false;
     });
 
   return true;
@@ -348,7 +350,7 @@ DraggableComponent::keyPressed(const KeyPress &keyPress)
   {
     // warning when this finishes the current object will not exist anymore
     // DO NOT TOUCH ANYTHING AFTER THIS!
-    processor->state->deleteProcessor(processor);
+    deleteProcessor(processor);
   }
 
   return true;

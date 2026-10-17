@@ -9,6 +9,7 @@ set clap=0
 set data=0
 set hotreload=0
 set reloadable=0
+set install=0
 
 echo:
 
@@ -25,8 +26,9 @@ if %ERRORLEVEL% neq 0 (
     call "%VS2026INSTALLDIR%\VC\Auxiliary\Build\vcvarsall.bat" x64
   ) else (
     echo Cannot find Visual Studio install directory
-    echo Please locate it and call vcvarsall.bat in command prompt before running the build
+    echo Please locate it and call vcvarsall.bat with your CPU architecture in command prompt before running the build
     echo The path should be something like C:\Program Files\Microsoft Visual Studio\<Year>\<Version>\VC\Auxiliary\Build\vcvarsall.bat
+    echo I.e. vcvarsall.bat x64
     goto :EOF
   )
   echo:
@@ -80,7 +82,7 @@ goto :EOF
 ::------Project Compilation------
 :ProjectCompile
 
-for /f "tokens=2 delims==" %%I in ('wmic os get localdatetime /format:list') do set datetime=%%I
+for /f "usebackq" %%I in (`powershell -NoProfile -Command "Get-Date -Format 'yyyyMMddHHmmss'"`) do set datetime=%%I
 set datetime=%datetime:~0,8%-%datetime:~8,6%
 
 set msvc_folder=
@@ -175,8 +177,10 @@ popd
 echo %cd%\%build_dir%
 echo:
 
-if "%vst%"=="1" copy /Y "%cd%\%build_dir%\%out_file%" "C:\Program Files\Common Files\VST3\DEV"
-if "%clap%"=="1" copy /Y "%cd%\%build_dir%\%out_file%" "C:\Program Files\Common Files\CLAP\DEV"
+if "%install%"=="1" (
+  if "%vst%"=="1" copy /Y "%cd%\%build_dir%\%out_file%" "C:\Program Files\Common Files\VST3\DEV"
+  if "%clap%"=="1" copy /Y "%cd%\%build_dir%\%out_file%" "C:\Program Files\Common Files\CLAP\DEV"
+)
 
 call :StopTimer
 call :DisplayTimerResult

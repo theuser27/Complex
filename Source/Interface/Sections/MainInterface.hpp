@@ -106,7 +106,7 @@ struct SoundEngineSection final : public Component
         };
       }
 
-      float 
+      float
       getGraphAverage()
       {
         float avg = 0;
@@ -123,7 +123,7 @@ struct SoundEngineSection final : public Component
         values[head] = frameTime;
       }
 
-      bool 
+      bool
       render(Graphics &g) override
       {
         char string[16];
@@ -160,7 +160,7 @@ struct SoundEngineSection final : public Component
     void reinitialise();
 
     FpsGraph fpsGraph{};
-      
+
     Component undoRedoGroup{};
     UndoRedoButton undoButton{};
     UndoRedoButton redoButton{};
@@ -213,7 +213,7 @@ Area<u32> checkResizing(Area<u32> newScaledSize, bool force = false);
 
 struct MainInterface final : public Component
 {
-  void restartUI(State *state);
+  static void restartUI(State *state);
 
   bool keyPressed(const KeyPress &key) override;
 

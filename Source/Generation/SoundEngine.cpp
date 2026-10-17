@@ -10,7 +10,7 @@
 #include "Interface/LookAndFeel/Skin.hpp"
 
 static bool
-reserveBuffer(Buffer &buffer, utils::Pool *arena, u32 newChannels, u32 newSize, u32 *end)
+reserveBuffer(Buffer &buffer, utils::Pool *pool, u32 newChannels, u32 newSize, u32 *end)
 {
   newChannels = newChannels ? newChannels : buffer.channels;
   newSize = newSize ? newSize : buffer.size;
@@ -18,7 +18,7 @@ reserveBuffer(Buffer &buffer, utils::Pool *arena, u32 newChannels, u32 newSize, 
   if (newChannels <= buffer.channels && newSize <= buffer.size)
     return false;
 
-  auto *newData = arranew(arena, float, newChannels * newSize);
+  auto *newData = arranew(pool, float, newChannels * newSize);
   auto *oldData = buffer.data;
   bool copiedData = buffer.size && end;
 
@@ -44,7 +44,7 @@ reserveBuffer(Buffer &buffer, utils::Pool *arena, u32 newChannels, u32 newSize, 
 
 void SoundEngine::InputBuffer::reserve(u32 newChannels, u32 newSize)
 {
-  bool copiedData = reserveBuffer(*this, arena, newChannels, newSize, &end);
+  bool copiedData = reserveBuffer(*this, pool, newChannels, newSize, &end);
   if (copiedData)
   {
     // recalculating indices based on the new size
@@ -56,7 +56,7 @@ void SoundEngine::InputBuffer::reserve(u32 newChannels, u32 newSize)
 
 void SoundEngine::OutputBuffer::reserve(u32 newChannels, u32 newSize)
 {
-  bool copiedData = reserveBuffer(*this, arena, newChannels, newSize, &end);
+  bool copiedData = reserveBuffer(*this, pool, newChannels, newSize, &end);
   if (copiedData)
   {
     // recalculating indices based on the new size
@@ -67,23 +67,26 @@ void SoundEngine::OutputBuffer::reserve(u32 newChannels, u32 newSize)
 }
 
 Processor *
-createSoundEngine(State *state, ProcessorMetadata *metadata, 
+createSoundEngine(State *state, ProcessorMetadata *metadata,
   const void *, void *serialisedSave, void *)
 {
-  auto *arena = utils::Pool::createNested(state->processorStorage, COMPLEX_MB(4));
-  auto *soundEngine = anew(arena, SoundEngine, { arena, state, metadata });
+  auto *pool = utils::Pool::createNested(state->processorStorage, COMPLEX_MB(4));
+  auto *soundEngine = anew(pool, SoundEngine, { pool, state, metadata });
 
   if (serialisedSave)
+  {
     soundEngine->deserialiseFromJson(serialisedSave);
+    initialiseParameters(soundEngine->parameters, soundEngine->parameterCount, nullptr, true);
+  }
   else
   {
-    soundEngine->parameters = Parameter::createAndInitialiseParameters(
+    soundEngine->parameters = createAndInitialiseParameters(
       soundEngine, metadata->parameterCount, metadata->parameters);
     soundEngine->parameterCount = metadata->parameterCount;
   }
 
-  soundEngine->inBuffer.arena = arena;
-  soundEngine->outBuffer.arena = arena;
+  soundEngine->inBuffer.pool = pool;
+  soundEngine->outBuffer.pool = pool;
   soundEngine->resizeBuffers(state->plugin->inSidechains, state->plugin->outSidechains);
 
   return soundEngine;
@@ -107,15 +110,15 @@ void SoundEngine::resizeBuffers(u32 maxSidechainInputs, u32 maxSidechainOutputs)
 
   inBuffer.reserve(maxInOutChannels, maxInputBufferLength);
   outBuffer.reserve(maxInOutChannels, maxOutputBufferLength);
-  (void)reserveBuffer(FFTBuffer_, arena, maxInOutChannels, maxProcessingBufferLength, nullptr);
+  (void)reserveBuffer(FFTBuffer_, pool, maxInOutChannels, maxProcessingBufferLength, nullptr);
 
-  usedInputChannels_ = { arranew(arena, bool, maxInChannels, {}), maxInChannels };
-  usedOutputChannels_ = { arranew(arena, bool, maxOutChannels, {}), maxOutChannels };
-  outputScaleMultipliers_ = { arranew(arena, float, maxOutChannels, {}), maxOutChannels };
+  usedInputChannels_ = { arranew(pool, bool, maxInChannels, {}), maxInChannels };
+  usedOutputChannels_ = { arranew(pool, bool, maxOutChannels, {}), maxOutChannels };
+  outputScaleMultipliers_ = { arranew(pool, float, maxOutChannels, {}), maxOutChannels };
 
   auto maxBinCount = (1 << (maxOrder - 1)) + 1;
-  interleavedInputBuffer = SimdBuffer::create(arena, maxInChannels, maxBinCount);
-  interleavedOutputBuffer = SimdBuffer::create(arena, maxOutChannels, maxBinCount);
+  interleavedInputBuffer = SimdBuffer::create(pool, maxInChannels, maxBinCount);
+  interleavedOutputBuffer = SimdBuffer::create(pool, maxOutChannels, maxBinCount);
 }
 
 u32 SoundEngine::getProcessingDelay() const { return FFTSamples_ + state->plugin->getSamplesPerBlock(); }
@@ -462,9 +465,9 @@ void *initialiseTypeStructureSoundEngine(void *, PluginStructure &structure)
 
   Component *createUISoundEngine(Processor * processor);
 
-  auto *arena = structure.getNewArena(COMPLEX_KB(3));
+  auto *pool = structure.getNewPool(COMPLEX_KB(3));
 
-  ProcessorMetadata &soundEngine = COMPLEX_STRUCTURE_PROCESSOR(SoundEngine, "Sound Engine", 
+  ProcessorMetadata &soundEngine = COMPLEX_STRUCTURE_PROCESSOR(SoundEngine, "Sound Engine",
     Processors::SoundEngine, Skin::kNone, createSoundEngine, createUISoundEngine);
   soundEngine.parameters =
   (

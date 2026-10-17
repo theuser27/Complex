@@ -1,4 +1,4 @@
-
+﻿
 // Created: 2021-05-23 00:20:15
 
 #include <stddef.h> // offsetof
@@ -23,8 +23,8 @@ static void initialisePluginStructure()
 {
   utils::ScopedLock g{ executableStaticData.readWriteLock, true, utils::WaitMechanism::WaitNotify };
 
-  executableStaticData.arena = utils::Pool::create(COMPLEX_MB(1), COMPLEX_KB(64));
-  executableStaticData.structure.arena = utils::Pool::create(COMPLEX_MB(1), COMPLEX_KB(64));
+  executableStaticData.pool = utils::Pool::create(COMPLEX_MB(1), COMPLEX_KB(64));
+  executableStaticData.structure.pool = utils::Pool::create(COMPLEX_MB(1), COMPLEX_KB(64));
 
   auto pushString = [&](utils::string_view string)
   {
@@ -35,7 +35,7 @@ static void initialisePluginStructure()
       if (element->object == string)
         return element->object;
 
-    auto *node = anew(executableStaticData.arena, utils::sll<utils::string_view>, { string });
+    auto *node = anew(executableStaticData.pool, utils::sll<utils::string_view>, { string });
     if (executableStaticData.strings)
       node->next = executableStaticData.strings;
     executableStaticData.strings = node;
@@ -120,10 +120,10 @@ static void deinitialisePluginStructure()
 {
   utils::ScopedLock g{ executableStaticData.readWriteLock, true, utils::WaitMechanism::WaitNotify };
 
-  utils::Pool::destroy(executableStaticData.structure.arena);
+  utils::Pool::destroy(executableStaticData.structure.pool);
 
   executableStaticData.strings = {};
-  utils::Pool::destroy(executableStaticData.arena);
+  utils::Pool::destroy(executableStaticData.pool);
 }
 
 utils::string_view
@@ -143,7 +143,7 @@ findOrAddPermanentString(utils::string_view string)
   {
     utils::ScopedLock g{ executableStaticData.readWriteLock, true, utils::WaitMechanism::WaitNotify };
 
-    auto *memory = utils::Pool::insert(executableStaticData.arena, sizeof(utils::sll<utils::string_view>) +
+    auto *memory = utils::Pool::insert(executableStaticData.pool, sizeof(utils::sll<utils::string_view>) +
       1 + string.size(), alignof(utils::sll<utils::string_view>));
     auto stringStart = memory + sizeof(utils::sll<utils::string_view>);
     ::memcpy(stringStart, string.data(), string.size());
@@ -168,29 +168,41 @@ void HostParameter::notifyParameterChange()
 
 void HostParameter::beginChangeGesture()
 {
-  if (!state->plugin->renderer.gui)
-    return;
-
-  auto event = CplugEvent{ .parameter = { .type = CPLUG_EVENT_PARAM_CHANGE_BEGIN, .id = (uint32_t)parameterIndex } };
-  state->plugin->hostContext->sendParamEvent(state->plugin->hostContext, &event);
+  // weird edge-case
+  // if a control has begun change but their host parameter changes underneath them before they can end the gesture
+  if (auto expected = GestureState::None;
+    gestureState_.compare_exchange_strong(expected, GestureState::Begun,satomi::memory_order_relaxed))
+  {
+    auto event = CplugEvent{ .parameter = { .type = CPLUG_EVENT_PARAM_CHANGE_BEGIN, .id = (uint32_t)parameterIndex } };
+    state->plugin->hostContext->sendParamEvent(state->plugin->hostContext, &event);
+  }
+  else
+  {
+    // weirder edge-case
+    // if a control was signalled to end its gesture but another one begins before the main-thread can end the previous
+    expected = GestureState::ShouldEnd;
+    (void)gestureState_.compare_exchange_strong(expected, GestureState::Begun, satomi::memory_order_relaxed);
+  }
 }
 
 void HostParameter::setValueFromUI(float newValue)
 {
-  value_.store(newValue, satomi::memory_order_release);
+  if (gestureState_.load(satomi::memory_order_relaxed) != GestureState::None)
+  {
+    value_.store(newValue, satomi::memory_order_release);
 
-  if (!state->plugin->renderer.gui)
-    return;
-
-  auto event = CplugEvent{ .parameter = { .type = CPLUG_EVENT_PARAM_CHANGE_UPDATE,
-    .id = (uint32_t)parameterIndex, .value = newValue } };
-  state->plugin->hostContext->sendParamEvent(state->plugin->hostContext, &event);
+    auto event = CplugEvent{ .parameter = { .type = CPLUG_EVENT_PARAM_CHANGE_UPDATE,
+      .id = (uint32_t)parameterIndex, .value = newValue } };
+    state->plugin->hostContext->sendParamEvent(state->plugin->hostContext, &event);
+  }
 }
 
 void HostParameter::endChangeGesture()
 {
-  if (!state->plugin->renderer.gui)
-    return;
+  for (auto expected = GestureState::Begun;
+    !gestureState_.compare_exchange_strong(expected, GestureState::None, satomi::memory_order_relaxed); )
+    if (expected == GestureState::None)
+      return;
 
   auto event = CplugEvent{ .parameter = {.type = CPLUG_EVENT_PARAM_CHANGE_END, .id = (uint32_t)parameterIndex } };
   state->plugin->hostContext->sendParamEvent(state->plugin->hostContext, &event);
@@ -203,16 +215,13 @@ State::State(ComplexPlugin *plugin) : plugin{ plugin }
 {
   processorStorage = utils::Pool::create(COMPLEX_MB(256), COMPLEX_MB(2));
   miscStorage = utils::Pool::createNested(processorStorage, COMPLEX_KB(128));
-  uiStorage = utils::Pool::create(COMPLEX_MB(256), COMPLEX_MB(4));
+  guiStorage = utils::Pool::create(COMPLEX_MB(256), COMPLEX_MB(4));
 
-  gui = anew(uiStorage, MainInterface, {});
-  gui->arena = uiStorage;
-
-  allProcessors.data = { { miscStorage, false }, 64 };
-  parameterModulators = { { miscStorage, false }, 32 };
-  dynamicParameters = { { miscStorage, false }, 32 };
-  workers = { { miscStorage, false }, 16 };
-  cachedHotreloadSymbols.data = { { miscStorage, false }, 16 };
+  allProcessors.data = { miscStorage, 64 };
+  parameterModulators = { miscStorage, 32 };
+  dynamicParameters = { miscStorage, 32 };
+  workers = { miscStorage, 16 };
+  cachedHotreloadSymbols.data = { miscStorage, 16 };
 
   createDynamicParameters();
 
@@ -225,11 +234,11 @@ State::State(ComplexPlugin *plugin) : plugin{ plugin }
 
   // TODO: copy over metadata tree
   // TODO: decide how runtime changes are going to be handled (this is going to be hard)
-  //pluginStructure.arena = utils::Pool::create();
+  //pluginStructure.pool = utils::Pool::create();
   //utils::ScopedLock g{ structure.readWriteLock, true, utils::WaitMechanism::WaitNotify };
 
   //pluginStructure.versionNumber = structure.structure.versionNumber;
-  //pluginStructure.loadedDynamicLibs = { pluginStructure.arena, structure.structure.loadedDynamicLibs };
+  //pluginStructure.loadedDynamicLibs = { pluginStructure.pool, structure.structure.loadedDynamicLibs };
   pluginStructure.metadata = executableStaticData.structure.metadata;
 }
 
@@ -238,7 +247,7 @@ State::~State()
   for (auto &worker : workers)
     worker.stop();
 
-  utils::Pool::destroy(uiStorage);
+  utils::Pool::destroy(guiStorage);
   utils::Pool::destroy(processorStorage);
 }
 
@@ -286,7 +295,7 @@ State::getProcessor(u64 processorId) const
 // check if processor creation causes dynamic parameters to change
 void State::registerProcessorForDynamicParameters(Processor *processor)
 {
-  auto *arena = miscStorage;
+  auto *pool = miscStorage;
 
   if (processor->metadata->id == Processors::EffectsLane)
   {
@@ -295,7 +304,7 @@ void State::registerProcessorForDynamicParameters(Processor *processor)
     if (!alreadyExists)
     {
       auto g = plugin->acquireProcessingLock();
-      iter->second->addChildren({{ anew(arena, IndexedData,
+      iter->second->addChildren({{ anew(pool, IndexedData,
         { .id = processor->metadata->id, .flags = IndexedData::StateIdFlag, .stateId = processor->stateId }) }});
 
       updateDynamicParameters(ParameterChangeReason::laneSources);
@@ -342,30 +351,6 @@ State::createProcessor(uuid processorId, void *jsonData, void *extra)
   allProcessors.add(processor->stateId, processor);
 
   return processor;
-}
-
-void State::deleteProcessor(Processor *processor)
-{
-  COMPLEX_ASSERT(processor->state == this);
-  COMPLEX_ASSERT(processor->stateId != 0);
-
-  for (auto child = processor->children; child; child = child->next)
-    deleteProcessor(child);
-
-  deregisterProcessorForDynamicParameters(processor);
-
-  // unlink all parameters from parameter bridges
-  processor->remapParameters({}, false, false);
-
-  if (processor->component)
-  {
-    if (processor->component->parent)
-      processor->component->parent->removeChildComponent(processor->component);
-    deleteComponent(processor->component);
-  }
-
-  allProcessors.data.erase({ processor->stateId, processor });
-  utils::Pool::remove(processor->arena);
 }
 
 Processor *
@@ -433,11 +418,11 @@ State::getHotreloadSymbol(utils::string_view decoratedName)
 
 ComplexPlugin::ComplexPlugin(usize parameterMappings, u32 inSidechains,
   u32 outSidechains, usize undoSteps, CplugHostContext *hostContext) :
-  inSidechains{ inSidechains }, outSidechains{ outSidechains }, parameterCount{ parameterMappings }, 
-  arena{ utils::Pool::create(COMPLEX_MB(16), COMPLEX_MB(2)) }, undoManager{ arena, undoSteps },
+  inSidechains{ inSidechains }, outSidechains{ outSidechains }, parameterCount{ parameterMappings },
+  pool{ utils::Pool::create(COMPLEX_MB(16), COMPLEX_MB(2)) }, undoManager{ pool, undoSteps },
   hostContext{ hostContext }, renderer{ *this }
 {
-  fft.arena = arena;
+  fft.pool = pool;
   loadState(this, {});
   // plugin formats will later call loadState
   // but in between that other functions get called that will require *some* state
@@ -488,16 +473,17 @@ void ComplexPlugin::rescanLatency()
     hostContext->rescan(hostContext, CPLUG_FLAG_RESCAN_LATENCY);
 }
 
+void ComplexPlugin::markPluginDirty()
+{
+  hostContext->rescan(hostContext, CPLUG_FLAG_RESCAN_MARK_DIRTY);
+}
+
 void ComplexPlugin::process(float *const *in, float *const *out,
   u32 numSamples, u32 numInputs, u32 numOutputs)
 {
   float currentSampleRate = getSampleRate();
-
-  utils::ScopedLock g{ processingLock, false, utils::WaitMechanism::Spin };
-
   auto state = state_;
-  state->soundEngine->updateParameters(UpdateFlag::BeforeProcess,
-    currentSampleRate, true);
+  state->soundEngine->updateParameters(UpdateFlag::BeforeProcess, currentSampleRate, true);
 
   if (auto latency_ = state->soundEngine->getProcessingDelay();
     latency_ != latency.load(satomi::memory_order_relaxed))
@@ -509,8 +495,7 @@ void ComplexPlugin::process(float *const *in, float *const *out,
   state->soundEngine->process(in, out, numSamples,
     currentSampleRate, numInputs, numOutputs, *state->fft);
 
-  state->soundEngine->updateParameters(UpdateFlag::AfterProcess,
-    currentSampleRate, true);
+  state->soundEngine->updateParameters(UpdateFlag::AfterProcess, currentSampleRate, true);
 }
 
 struct TlsContext
@@ -524,8 +509,8 @@ struct TlsContext
 void *
 utils::createTlsContext()
 {
-  auto *context = anew(globalArena, TlsContext, {});
-  
+  auto *context = anew(globalPool, TlsContext, {});
+
   context->localScratch = utils::Pool::create(COMPLEX_MB(4), COMPLEX_KB(128));
 
   return context;
@@ -545,7 +530,7 @@ getLocalScratch()
 }
 
 utils::Pool *&
-getLocalMallocArena()
+getSettableMallocPool()
 {
   return ((TlsContext *)utils::getTls())->localMallocArena;
 }
@@ -565,7 +550,7 @@ getJsonContext()
 void initialiseCJSONHooks();
 
 // DLL-wide global memmory pool, deallocated when DLL is unloaded
-constinit utils::Pool *globalArena = nullptr;
+constinit utils::Pool *globalPool = nullptr;
 
 void cplug_libraryLoad()
 {
@@ -577,7 +562,7 @@ void cplug_libraryLoad()
 void cplug_libraryUnload()
 {
   deinitialisePluginStructure();
-  
+
   utils::atUnload();
 }
 
@@ -588,7 +573,7 @@ void *cplug_createPlugin(CplugHostContext *ctx)
   usize parameterMappings = 64, inSidechains = 0, outSidechains = 0, undoSteps = 100;
   getStartupParameters(parameterMappings, inSidechains, outSidechains, undoSteps);
 
-  auto *plugin = anew(globalArena, utils::sll<ComplexPlugin>, 
+  auto *plugin = anew(globalPool, utils::sll<ComplexPlugin>,
     { { parameterMappings, (u32)inSidechains, (u32)outSidechains, undoSteps, ctx } });
   utils::ScopedLock g{ executableStaticData.readWriteLock, true, utils::WaitMechanism::WaitNotify };
 
@@ -629,25 +614,25 @@ void cplug_destroyPlugin(void *ptr)
 /* --------------------------------------------------------------------------------------------------------
  * Busses */
 
-uint32_t 
+uint32_t
 cplug_getNumInputBusses(void *ptr)
 {
   return ((ComplexPlugin *)ptr)->inSidechains + 1;
 }
 
-uint32_t 
+uint32_t
 cplug_getNumOutputBusses(void *ptr)
 {
   return ((ComplexPlugin *)ptr)->outSidechains + 1;
 }
 
-uint32_t 
+uint32_t
 cplug_getInputBusChannelCount([[maybe_unused]] void *ptr, [[maybe_unused]] uint32_t idx)
 {
   return 2; // always stereo
 }
 
-uint32_t 
+uint32_t
 cplug_getOutputBusChannelCount([[maybe_unused]] void *ptr, [[maybe_unused]] uint32_t idx)
 {
   return 2; // always stereo
@@ -678,13 +663,15 @@ void cplug_getOutputBusName([[maybe_unused]] void *ptr, uint32_t idx, char *buf,
 /* --------------------------------------------------------------------------------------------------------
  * Parameters */
 
-uint32_t 
+// audio-thread, main-thread
+uint32_t
 cplug_getNumParameters(void *ptr)
 {
   return (uint32_t)((ComplexPlugin *)ptr)->parameterCount;
 }
 
-uint32_t 
+// main-thread
+uint32_t
 cplug_getParameterID([[maybe_unused]] void *ptr, uint32_t paramIndex)
 {
   // TODO: consider taking advantage of the index -> id mapping in the future
@@ -692,6 +679,7 @@ cplug_getParameterID([[maybe_unused]] void *ptr, uint32_t paramIndex)
   return paramIndex;
 }
 
+// main-thread
 void cplug_getParameterName(void *ptr, uint32_t paramId, char *buf, size_t buflen)
 {
   auto lock = ((ComplexPlugin *)ptr)->acquireProcessingLock(false);
@@ -699,41 +687,54 @@ void cplug_getParameterName(void *ptr, uint32_t paramId, char *buf, size_t bufle
   state->parameterBridges[paramId].getName(buf, buflen);
 }
 
+// main-thread
 double
 cplug_getParameterValue(void *ptr, uint32_t paramId)
 {
   auto lock = ((ComplexPlugin *)ptr)->acquireProcessingLock(false);
   auto state = ((ComplexPlugin *)ptr)->state_;
+#ifdef COMPLEX_CLAP
+  return state->parameterBridges[paramId].getScaledValue();
+#else
   return state->parameterBridges[paramId].getValue();
+#endif
 }
 
-double cplug_getDefaultParameterValue(void *ptr, uint32_t paramId)
+// main-thread
+double 
+cplug_getDefaultParameterValue(void *ptr, uint32_t paramId)
 {
   auto lock = ((ComplexPlugin *)ptr)->acquireProcessingLock(false);
   auto state = ((ComplexPlugin *)ptr)->state_;
+#ifdef COMPLEX_CLAP
+  return state->parameterBridges[paramId].getDefaultScaledValue();
+#else
   return state->parameterBridges[paramId].getDefaultValue();
+#endif
 }
 
+// audio-thread, main-thread 💀
 void cplug_setParameterValue(void *ptr, uint32_t paramId, double value)
 {
-  auto lock = ((ComplexPlugin *)ptr)->acquireProcessingLock(false);
+  auto lock = ((ComplexPlugin *)ptr)->acquireProcessingLock(true);
   auto state = ((ComplexPlugin *)ptr)->state_;
   state->parameterBridges[paramId].setValue((float)value);
 }
 
-double 
+double
 cplug_denormaliseParameterValue([[maybe_unused]] void *ptr, [[maybe_unused]] uint32_t paramId, double normalised)
 {
   return normalised;
 }
 
-double 
+double
 cplug_normaliseParameterValue([[maybe_unused]] void *ptr, [[maybe_unused]] uint32_t paramId, double denormalised)
 {
   return denormalised;
 }
 
-double 
+// main-thread
+double
 cplug_parameterStringToValue(void *ptr, uint32_t paramId, const char *str)
 {
   auto lock = ((ComplexPlugin *)ptr)->acquireProcessingLock(false);
@@ -741,6 +742,7 @@ cplug_parameterStringToValue(void *ptr, uint32_t paramId, const char *str)
   return state->parameterBridges[paramId].getValueForText({ str, utils::getStringSize(str) });
 }
 
+// main-thread
 void cplug_parameterValueToString(void *ptr, uint32_t paramId, char *buf, size_t bufsize, double value)
 {
   auto lock = ((ComplexPlugin *)ptr)->acquireProcessingLock(false);
@@ -748,6 +750,7 @@ void cplug_parameterValueToString(void *ptr, uint32_t paramId, char *buf, size_t
   state->parameterBridges[paramId].getText((float)value, buf, bufsize);
 }
 
+// main-thread
 void cplug_getParameterRange(void *ptr, uint32_t paramId, double *min, double *max)
 {
   *min = 0.0;
@@ -771,6 +774,7 @@ void cplug_getParameterRange(void *ptr, uint32_t paramId, double *min, double *m
   }
 }
 
+// main-thread
 uint32_t
 cplug_getParameterFlags(void *ptr, uint32_t paramId)
 {
@@ -790,21 +794,25 @@ cplug_getParameterFlags(void *ptr, uint32_t paramId)
   return flags;
 }
 
-uint32_t 
+// main-thread
+uint32_t
 cplug_getLatencyInSamples(void *ptr)
 {
   return ((ComplexPlugin *)ptr)->latency.load(satomi::memory_order_relaxed);
 }
+// audio-thread, main-thread
 uint32_t cplug_getTailInSamples([[maybe_unused]] void *ptr) { return 0; }
 
 /* --------------------------------------------------------------------------------------------------------
  * State */
 
+// main-thread
 void cplug_saveState(void *userPlugin, const void *stateCtx, cplug_writeProc writeProc)
 {
   saveState((ComplexPlugin *)userPlugin, stateCtx, writeProc);
 }
 
+// main-thread
 void cplug_loadState(void *userPlugin, const void *stateCtx, cplug_readProc readProc)
 {
   static constexpr auto kCapacityIncrease = COMPLEX_KB(4);
@@ -832,17 +840,19 @@ void cplug_loadState(void *userPlugin, const void *stateCtx, cplug_readProc read
 }
 
 
-
+// main-thread
 void cplug_setSampleRateAndBlockSize(void *ptr, double sampleRate, uint32_t maxBlockSize)
 {
   ((ComplexPlugin *)ptr)->initialise((float)sampleRate, maxBlockSize);
 }
 
+// audio-thread
 void cplug_process(void *ptr, CplugProcessContext *ctx)
 {
   utils::ScopedNoDenormals noDenormals{};
 
   auto *plugin = (ComplexPlugin *)ptr;
+  auto g = plugin->acquireProcessingLock();
 
   // "Sample accurate" process loop
   CplugEvent event;
@@ -855,7 +865,8 @@ void cplug_process(void *ptr, CplugProcessContext *ctx)
       break;
     case CPLUG_EVENT_PARAM_CHANGE_UPDATE:
     {
-      cplug_setParameterValue(plugin, event.parameter.id, event.parameter.value);
+      auto state = ((ComplexPlugin *)ptr)->state_;
+      state->parameterBridges[event.parameter.id].setValue((float)event.parameter.value);
       break;
     }
     case CPLUG_EVENT_MIDI:

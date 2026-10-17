@@ -3,7 +3,6 @@
 
 #pragma once
 
-#include "Framework/memory.hpp"
 #include "Framework/metadata.hpp"
 #include "../LookAndFeel/Component.hpp"
 #include "../LookAndFeel/Graphics.hpp"
@@ -68,15 +67,14 @@ public:
     bool canUseScrollWheel : 1 = false;
     bool shouldCheckDbInfinities : 1 = false;
     bool canInputValue : 1 = false;
-    bool isHorizotalDraggable : 1 = false;
+    bool horizotalDrag : 1 = false;
     bool canLoopAround : 1 = false;
-    bool isBipolar : 1 = false;
+    bool bipolar : 1 = false;
     bool shouldMoveOnValueChange : 1 = false;
     bool resetValueOnDoubleClick : 1 = true;
-    bool isEnabled : 1 = true;
 
     // state flags
-    bool hasParameter : 1 = false;
+    bool isEnabled : 1 = true;
     bool isInSensitiveMode : 1 = false;
     bool isTextEntryVisible : 1 = false;
     bool isInModalState : 1 = false;
@@ -92,8 +90,6 @@ public:
 
   void (*valueChangedCallback)(Control *control,
     float newValue, float oldValue) = nullptr;
-  void (*automationMappingChangedCallback)(Control *control,
-    bool isUnmapping) = nullptr;
 };
 
 struct ParameterUpdate final : public UndoAction

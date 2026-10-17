@@ -3,6 +3,8 @@
 
 #include "Effects.hpp"
 
+#include "Third Party/cjson/cjson.h"
+
 #include "Framework/buffer.hpp"
 #include "Framework/simd_math.hpp"
 #include "Framework/simd_utils.hpp"
@@ -34,7 +36,7 @@ createEffect(ProcessorMetadata *processorMetadata, EffectModule *module,
   if (copy)
   {
     parameterCount = copy->parameterCount;
-    effectParameters = Parameter::createAndInitialiseParameters(
+    effectParameters = createAndInitialiseParameters(
       module, parameterCount, processorMetadata->parameters, copy->parameters);
   }
   else if (jsonData)
@@ -45,7 +47,7 @@ createEffect(ProcessorMetadata *processorMetadata, EffectModule *module,
   else
   {
     parameterCount = processorMetadata->parameterCount;
-    effectParameters = Parameter::createAndInitialiseParameters(
+    effectParameters = createAndInitialiseParameters(
       module, parameterCount, processorMetadata->parameters, nullptr);
   }
 
@@ -55,128 +57,166 @@ createEffect(ProcessorMetadata *processorMetadata, EffectModule *module,
   return effectData;
 }
 
+static void automationMappingChangedEffectModule(Processor *processor, Parameter *parameter, bool isMapping)
+{
+  auto *module = (EffectModule *)processor;
+  bool isFromModule = utils::findIf(processor->metadata->parameters, 
+    [&](const ParameterMetadata *item) { return item->details.id == parameter->details.id; });
+  if (isFromModule)
+    return;
+  
+  usize i = 0;
+  // because if the half-connected dll property, we can findthe index of the parameter 
+  for (auto firstParameter = parameter; firstParameter->previous->next;
+    (firstParameter = firstParameter->previous), (++i)) { }
+
+  utils::ScopedLock g{ module->lock, utils::WaitMechanism::Spin };
+
+  if (!isMapping)
+    module->mappedParameters.erase_ordered({ i, parameter });
+  else
+    module->mappedParameters.add_ordered(i, parameter);
+}
+
 static Processor *
-createEffectModule(State *state, ProcessorMetadata *metadata, 
+createEffectModule(State *state, ProcessorMetadata *metadata,
   const void *copy, void *serialisedSave, void *extra)
 {
-  auto *arena = utils::Pool::createNested(state->processorStorage, COMPLEX_MB(1));
-  auto *module = anew(state->processorStorage, EffectModule, { arena, state, metadata });
+  auto *pool = utils::Pool::createNested(state->processorStorage, COMPLEX_MB(1));
+  auto *module = anew(state->processorStorage, EffectModule, { pool, state, metadata });
 
   auto *other = (EffectModule *)copy;
   module->dataBuffer = module->createBuffer((other) ? other->dataBuffer : nullptr);
+  module->mappedParameters.data = { pool };
   if (serialisedSave)
   {
     module->deserialiseFromJson(serialisedSave);
+
+    auto *effectData = cjson_GetObjectItem((cjson *)serialisedSave, "effect");
+    auto moduleTypeParameter = module->getParameter(EffectModule::ModuleType);
+    auto [option, index] = getOptionFromValue(scaleValue(moduleTypeParameter->normalisedValue.load(satomi::memory_order_relaxed), 
+      moduleTypeParameter->details), moduleTypeParameter->details);
+    COMPLEX_ASSERT(option->processorMetadata->id == cjson_GetObjectItem(effectData, "id")->vuint);
+
+    module->effects.store(createEffect(option->processorMetadata, module, nullptr, effectData), satomi::memory_order_release);
+
+    initialiseParameters(module->parameters, module->parameterCount, nullptr, true);
   }
   else
   {
-    module->parameters = Parameter::createParameters(module,
-      (other) ? other->parameterCount : metadata->parameterCount, 
+    module->parameters = createParameters(module,
+      (other) ? other->parameterCount : metadata->parameterCount,
       metadata->parameters, (other) ? other->parameters : nullptr);
     module->parameterCount = metadata->parameterCount;
 
     if (other)
     {
-      Parameter::initialiseParameters(module->parameters, other->parameterCount, other->parameters);
+      initialiseParameters(module->parameters, other->parameterCount, other->parameters);
     }
     else
     {
       // skip the module type parameter so we can initialise it ourselves
       COMPLEX_ASSERT(module->parameters->details.id == EffectModule::ModuleType);
-      Parameter::initialiseParameters(module->parameters->next, module->parameterCount - 1);
+      initialiseParameters(module->parameters->next, module->parameterCount - 1);
 
       COMPLEX_ASSERT(extra);
       auto option = (IndexedData *)extra;
       auto *moduleTypeParameter = module->getParameter(EffectModule::ModuleType);
-      auto normalisedValue = unscaleValue(getValueFromOptionId(option->id, 
+      auto normalisedValue = unscaleValue(getValueFromOptionId(option->id,
         moduleTypeParameter->details), moduleTypeParameter->details);
-      (void)moduleTypeParameter->updateNormalisedValue(normalisedValue);
+      (void)moduleTypeParameter->updateNormalisedValue(normalisedValue, ParameterAssignment::MainThread);
     }
   }
 
   return module;
 }
 
-void serialiseToJsonEffectModule(const Processor *processor, void *jsonData, utils::span<Parameter *>)
+static void serialiseEffectModule(const Processor *processor, void *jsonData, utils::span<Parameter *>)
 {
   auto *effectModule = (EffectModule *)processor;
   auto *effect = effectModule->currentEffect.load(satomi::memory_order_acquire);
 
-  auto parametersToSerialise = utils::vector<Parameter *>{
-    getLocalScratch(), effect->parameterCount + effectModule->parameterCount };
+  serialiseProcessorGeneric(processor, jsonData, {});
 
-  auto parameter = effectModule->parameters;
-  for (usize i = 0; i < effectModule->parameterCount; (++i), (parameter = parameter->next))
-    parametersToSerialise.emplaceBack(parameter);
-
-  //auto *effectParameter = effect->parameters;
-  //for (usize i = 0; i < effect->parameterCount; (++i), (effectParameter = effectParameter->next))
-  //  parametersToSerialise.emplaceBack(effectParameter);
-
-  serialiseProcessorGeneric(processor, jsonData, parametersToSerialise);
+  cjson *data = (cjson *)jsonData;
+  cjson *effectData = cjson_AddTo(data, "effect", cjson_Object);
+  cjson_AddTo(effectData, "id", cjson_Unsigned, effect->metadata->id);
+  serialiseParameters(effectData, effect->parameters, effect->parameterCount);
 }
 
-EffectData *
-EffectModule::changeEffect(const IndexedData *effectOption)
+static void resetEffectModule(Processor *processor)
 {
-  auto *activeEffect = currentEffect.load(satomi::memory_order_acquire);
+  for (auto *parameter = processor->parameters; parameter; parameter = parameter->next)
+    parameter->reset();
+  for (auto *parameter = ((EffectModule *)processor)->currentEffect.load(satomi::memory_order_acquire)->parameters;
+    parameter; parameter = parameter->next)
+    parameter->reset();
+}
+
+
+static EffectData *
+changeEffect(EffectModule *module, const IndexedData *effectOption, ParameterAssignment assignmentType)
+{
+restart:
+
+  // reason for this lock is because both audio-thread and main-thread can call this function
+  // and the process of changing effects leaves things temporarily in an invalid state
+  // we need to prevent that from happening, but the function itself is bounded in time
+  // so spinning for a little shouldn't be too bad in the rare cases it's necessary
+  utils::ScopedLock g{ module->lock, utils::WaitMechanism::Spin };
+
+  auto *activeEffect = module->currentEffect.load(satomi::memory_order_acquire);
   if (activeEffect && activeEffect->metadata->id == effectOption->processorMetadata->id)
     return activeEffect;
 
   // was effect already created?
-  auto *effect = effects;
-  auto *previousEffect = effect;
-  while (effect)
-  {
+  auto *effect = module->effects.load(satomi::memory_order_acquire);
+  for (; effect; effect = effect->next)
     if (effect->metadata->id == effectOption->processorMetadata->id)
       break;
 
-    previousEffect = effect;
-    effect = effect->next;
-  }
-
-  // if not, create and link it with the others
   if (!effect)
   {
-    effect = createEffect(effectOption->processorMetadata, this);
-    if (previousEffect)
-      previousEffect->next = effect;
-    else
-      effects = effect;
+    // skip creation and leave it to the main-thread to handle
+    if (assignmentType == ParameterAssignment::AudioThread)
+      return nullptr;
+
+    // unlock while we create the effect
+    // so that if the audio thread comes along it can proceed in bounded time
+    g.~ScopedLock();
+
+    effect = createEffect(effectOption->processorMetadata, module);
+    effect->next = module->effects.load(satomi::memory_order_acquire);
+    module->effects.store(effect, satomi::memory_order_release);
+
+    // now that the effect is present in the list, we need to restart from the beginning
+    // we can technically call this function again, but i think goto has better readability here
+    // also gives you enough of a shock to keep you on your toes unlike possibly unbounded recursion
+    goto restart;
   }
 
-  // remap mapped parameters to the new effect
-  if (activeEffect)
+  // remap host parameters to the new effect
+  usize i = 0;
+  auto *replacementParameter = effect->parameters;
+  for (auto &[index, parameter] : module->mappedParameters.data)
   {
-    usize i = 0;
-    for (auto *parameter = activeEffect->parameters, *replacementParameter = effect->parameters;
-      parameter && i < activeEffect->parameterCount && i < effect->parameterCount;
-      (parameter = parameter->next), (replacementParameter = replacementParameter->next), (++i))
-    {
-      if (!parameter->hostParameter)
-        continue;
+    if (index >= effect->parameterCount)
+      continue;
 
-      parameter->hostParameter->resetParameter(replacementParameter, false);
-    }
+    COMPLEX_DEBUG_LOG("Replacing %v with %v at index %zu\n",
+      parameter->details.displayName, replacementParameter->details.displayName, index);
+
+    for (; i < index; (replacementParameter = replacementParameter->next), (++i)) { }
+    parameter->hostParameter.load(satomi::memory_order_relaxed)->resetParameter(replacementParameter, false, assignmentType);
+    parameter = replacementParameter;
   }
 
-  currentEffect.store(effect, satomi::memory_order_release);
-
-  auto parametersEnd = parameters;
-  for (usize i = 0; i < metadata->parameterCount - 1; (++i), (parametersEnd = parametersEnd->next)) { }
-
-  auto effectParametersEnd = effect->parameters;
-  for (usize i = 0; i < effect->parameterCount - 1; (++i), (effectParametersEnd = effectParametersEnd->next)) { }
-
-  parameters->previous = effectParametersEnd;
-  effect->parameters->previous = parametersEnd;
-  parametersEnd->next = effect->parameters;
-  parameterCount = metadata->parameterCount + effect->parameterCount;
+  module->currentEffect.store(effect, satomi::memory_order_release);
 
   return effect;
 }
 
-void EffectModule::processEffect(ComplexDataSource &source, u32 binCount, float sampleRate) noexcept
+void EffectModule::process(ComplexDataSource &source, u32 binCount, float sampleRate)
 {
   using namespace utils;
 
@@ -210,15 +250,15 @@ void EffectModule::processEffect(ComplexDataSource &source, u32 binCount, float 
 }
 
 static Processor *
-createEffectsLane(State *state, ProcessorMetadata *metadata, 
+createEffectsLane(State *state, ProcessorMetadata *metadata,
   const void *copy, void *serialisedSave, void *)
 {
-  auto *arena = utils::Pool::createNested(state->processorStorage, COMPLEX_MB(1));
-  auto *lane = anew(state->processorStorage, EffectsLane, { arena, state, metadata });
+  auto *pool = utils::Pool::createNested(state->processorStorage, COMPLEX_MB(1));
+  auto *lane = anew(state->processorStorage, EffectsLane, { pool, state, metadata });
 
   if (auto *other = (EffectsLane *)copy)
   {
-    lane->parameters = Parameter::createAndInitialiseParameters(
+    lane->parameters = createAndInitialiseParameters(
       lane, other->parameterCount, metadata->parameters, other->parameters);
     lane->parameterCount = other->parameterCount;
     lane->dataBuffer = lane->createBuffer(other->dataBuffer);
@@ -229,14 +269,17 @@ createEffectsLane(State *state, ProcessorMetadata *metadata,
     auto maxInOutChannels = kChannelsPerInOut * (utils::max(state->plugin->inSidechains, state->plugin->outSidechains) + 1);
     auto maxBinCount = state->getMaxBinCount();
 
-    lane->laneDataSource.scratchBuffer = SimdBuffer::create(arena, maxInOutChannels, maxBinCount);
-    lane->dataBuffer = SimdBuffer::create(arena, maxInOutChannels, maxBinCount);
+    lane->laneDataSource.scratchBuffer = SimdBuffer::create(pool, maxInOutChannels, maxBinCount);
+    lane->dataBuffer = SimdBuffer::create(pool, maxInOutChannels, maxBinCount);
 
     if (serialisedSave)
+    {
       lane->deserialiseFromJson(serialisedSave);
+      initialiseParameters(lane->parameters, lane->parameterCount, nullptr, true);
+    }
     else
     {
-      lane->parameters = Parameter::createAndInitialiseParameters(
+      lane->parameters = createAndInitialiseParameters(
         lane, metadata->parameterCount, metadata->parameters);
       lane->parameterCount = metadata->parameterCount;
     }
@@ -470,7 +513,7 @@ void SoundEngine::processIndividualLanes(EffectsLane *thisLane) const
   for (auto *child = thisLane->children; child; child = child->next)
   {
     // this is safe because by design only EffectModules are contained in a lane
-    utils::as<EffectModule>(child)->processEffect(laneDataSource, binCount, sampleRate);
+    utils::as<EffectModule>(child)->process(laneDataSource, binCount, sampleRate);
 
     // incrementing where we are currently
     thisLane->currentEffectIndex.fetch_add(1, satomi::memory_order_acq_rel);
@@ -577,24 +620,30 @@ initialiseTypeStructureEffectModule(void *, PluginStructure &structure)
 {
   Component *createUIEffectModule(Processor * processor);
 
-  static constexpr auto moduleChangeCallback = [](Parameter *p, float newValue)
+  static constexpr auto moduleChangeCallback = [](Parameter *p, 
+    float newValue, ParameterAssignment assignmentType)
   {
     EffectModule *effectModule = (EffectModule *)p->parentProcessor;
 
     auto newScaled = scaleValue(newValue, p->details);
     auto [option, _] = getOptionFromValue(newScaled, p->details);
 
-    // yes this "allocates" on the audio thread once per every new type, get over it
-    (void)effectModule->changeEffect(option);
-
-    return newValue;
+    // if we're on the audio thread and the effect isn't present, 
+    // we leave it to the main thread to create it
+    bool isChanged = changeEffect(effectModule, option, assignmentType);
+    if (isChanged)
+      return newValue;
+    else
+      return p->normalisedValue.load(satomi::memory_order_relaxed);
   };
 
-  auto *arena = structure.getNewArena(COMPLEX_KB(2));
+  auto *pool = structure.getNewPool(COMPLEX_KB(2));
 
-  ProcessorMetadata &effectModule = COMPLEX_STRUCTURE_PROCESSOR(EffectModule, 
-    "Effect Module", Processors::EffectModule, Skin::kNone, 
-    createEffectModule, createUIEffectModule, .serialise = serialiseToJsonEffectModule);
+  ProcessorMetadata &effectModule = COMPLEX_STRUCTURE_PROCESSOR(EffectModule,
+    "Effect Module", Processors::EffectModule, Skin::kNone,
+    createEffectModule, createUIEffectModule, .reset = resetEffectModule, .serialise = serialiseEffectModule, 
+    .automationMappingChangedCallback = automationMappingChangedEffectModule);
+
   effectModule.flags |= ProcessorMetadata::NoParameterValidationTag;
   effectModule.parameters =
     (
@@ -629,8 +678,8 @@ void *
 initialiseTypeStructureEffectsLane(void *, PluginStructure &structure)
 {
   Component *createUIEffectsLane(Processor * processor);
-  
-  static constexpr auto laneInputChangeCallback = [](Parameter *p, float newValue)
+
+  static constexpr auto laneInputChangeCallback = [](Parameter *p, float newValue, ParameterAssignment)
   {
     float newScaled = scaleValue(newValue, p->details);
 
@@ -672,9 +721,9 @@ initialiseTypeStructureEffectsLane(void *, PluginStructure &structure)
     return newValue;
   };
 
-  auto arena = structure.getNewArena(COMPLEX_KB(2));
+  auto pool = structure.getNewPool(COMPLEX_KB(2));
 
-  ProcessorMetadata &effectsLane = COMPLEX_STRUCTURE_PROCESSOR(EffectsLane, "Effects Lane", 
+  ProcessorMetadata &effectsLane = COMPLEX_STRUCTURE_PROCESSOR(EffectsLane, "Effects Lane",
     Processors::EffectsLane, Skin::kEffectsLane, createEffectsLane, createUIEffectsLane, .reset = resetEffectsLane);
   effectsLane.parameters =
   (

@@ -15,7 +15,7 @@
 
 Graphics::Graphics(utils::Pool *nestedArena)
 {
-  arena = utils::Pool::createNested(nestedArena, COMPLEX_KB(8));
+  pool = utils::Pool::createNested(nestedArena, COMPLEX_KB(8));
 
   context = nvgCreateGL3(NVG_ANTIALIAS | NVG_STENCIL_STROKES
   #if COMPLEX_DEBUG
@@ -35,13 +35,13 @@ Graphics::Graphics(utils::Pool *nestedArena)
   InterFontId = nvgCreateFontMem(context, "Inter",
     (unsigned char *)BinaryData::Inter_Medium_ttf, (int)BinaryData::Inter_Medium_ttfSize, false);
 
-  svgs.data = utils::Allocator{ arena, false };
+  svgs.data = { pool };
 }
 
 Graphics::~Graphics()
 {
   nvgDeleteGL3(context);
-  utils::Pool::destroy(arena);
+  utils::Pool::destroy(pool);
 }
 
 static constexpr float kDDinDefaultHeight = 11.5f;
@@ -123,19 +123,19 @@ Graphics::getSVG(utils::span<const byte> data)
   if (iter != svgs.data.end())
     return iter->second;
 
-  auto parsedSVG = parseSVG(arena, data.data(), data.size());
+  auto parsedSVG = parseSVG(pool, data.data(), data.size());
   return svgs.add_ordered(data.data(), parsedSVG)->second;
 }
 
 NSVGimage *
-parseSVG(utils::Pool *arenaToAllocateIn, const void *data, usize dataSize)
+parseSVG(utils::Pool *poolToAllocateIn, const void *data, usize dataSize)
 {
   char *svgString = arranew(getLocalScratch(), char, 1 + dataSize);
-  defer{ utils::Pool::remove(svgString); };
+  defer { utils::Pool::remove(svgString); };
   valcpy(svgString, data, dataSize);
   svgString[dataSize] = '\0';
 
-  getLocalMallocArena() = arenaToAllocateIn;
+  getSettableMallocPool() = poolToAllocateIn;
   return nsvgParse(svgString, "px", 96);
 }
 
@@ -150,7 +150,7 @@ void drawSVG(NSVGimage *image, Graphics &g, Colour colour,
 
   if (scale == 0.0f)
     scale = utils::min(utils::abs(bounds.w / image->width), utils::abs(bounds.h / image->height));
-    
+
   float xScale = scale * ((bounds.w < 0.0f) ? -1.0f : 1.0f);
   float yScale = scale * ((bounds.h < 0.0f) ? -1.0f : 1.0f);
 

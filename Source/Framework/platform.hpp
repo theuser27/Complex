@@ -262,7 +262,7 @@ extern "C"
 #endif
 
   CRT_LINKAGE unsigned long strtoul(const char *string, char **stringEnd, int base);
-  
+
   int stbsp_snprintf(char *buffer, int count, const char *format, ...);
 }
 

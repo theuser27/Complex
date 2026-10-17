@@ -3,7 +3,7 @@
 
 #include "Component.hpp"
 
-#include "ui_constants.hpp"
+#include "gui_constants.hpp"
 #include "Graphics.hpp"
 #include "Plugin/Complex.hpp"
 #include "Generation/Processor.hpp"
@@ -11,21 +11,35 @@
 #include "../Sections/MainInterface.hpp"
 #include "../Sections/Popups.hpp"
 
-static void calculateFit(Component *component, Component *children, bool isCalculatingVertical)
+static bool
+calculateFit(Component *component, Component *children, bool isCalculatingVertical)
 {
-  if (!component->componentFlags.isVisible)
-  {
-    component->previousPosition = invalidPosition;
-    return;
-  }
+  static constexpr float kFadeawaySpeed = 0.5f;
 
   if (!isCalculatingVertical)
   {
     // setup on first run
     component->componentFlags.isPositionSet = false;
-    component->fadeawayRatio = 0;
     component->lastBounds = component->bounds;
     component->bounds = {};
+
+    if (component->componentFlags.animateFadeAway)
+    {
+      auto increment = (i32)(getUiRelated()->deltaTime / kFadeawaySpeed *
+        utils::int_max<decltype(component->fadeawayRatio)>);
+      increment = (component->componentFlags.isVisible) ? increment : -increment;
+
+      component->fadeawayRatio = (decltype(component->fadeawayRatio))utils::clamp(
+        (i32)component->fadeawayRatio + increment, 0, (i32)utils::int_max<decltype(component->fadeawayRatio)>);
+    }
+    else
+      component->fadeawayRatio = utils::int_max<decltype(component->fadeawayRatio)>;
+  }
+
+  if (!component->isStillVisible())
+  {
+    component->previousPosition = invalidPosition;
+    return false;
   }
 
   auto Rectangle<i32>:: *minMember = (isCalculatingVertical) ? &Rectangle<i32>::y : &Rectangle<i32>::x;
@@ -41,10 +55,8 @@ static void calculateFit(Component *component, Component *children, bool isCalcu
   {
     COMPLEX_ASSERT(child->desiredSize.*minMember <= child->desiredSize.*maxMember);
 
-    if (!child->componentFlags.isVisible)
+    if (!calculateFit(child, child->children, isCalculatingVertical))
       continue;
-
-    calculateFit(child, child->children, isCalculatingVertical);
 
     auto extra = (isCalculatingVertical) ? child->margin.getBottom() : child->margin.getRight();
 
@@ -166,6 +178,8 @@ static void calculateFit(Component *component, Component *children, bool isCalcu
 
   COMPLEX_ASSERT(component->bounds.*minMember >= 0);
   COMPLEX_ASSERT(component->bounds.*maxMember >= 0);
+
+  return true;
 }
 
 static void calculateGrow(Component *component, Component *children, bool isCalculatingVertical)
@@ -201,14 +215,15 @@ static void calculateGrow(Component *component, Component *children, bool isCalc
     return;
   }
 
-  auto &sortedMin = *getUiRelated()->renderer->sortedSizesMin;
-  auto &sortedMax = *getUiRelated()->renderer->sortedSizesMax;
+  auto &sortedMin = getUiRelated()->renderer->sortedSizesMin;
+  auto &sortedMax = getUiRelated()->renderer->sortedSizesMax;
   sortedMin.clear();
   sortedMax.clear();
 
   // account for this component's padding from the size we were assigned
   Range<i64> sizes{};
   i64 childrenMinSizes{};
+  usize fadeawayComponents{};
   {
     sizes.min = (isCalculatingVertical) ?
       component->padding.getBottom() : component->padding.getRight();
@@ -227,6 +242,9 @@ static void calculateGrow(Component *component, Component *children, bool isCalc
 
       continue;
     }
+
+    if (child->fadeawayRatio != utils::int_max<decltype(Component::fadeawayRatio)>)
+      ++fadeawayComponents;
 
     auto extra = (isCalculatingVertical) ? child->margin.getBottom() : child->margin.getRight();
 
@@ -257,75 +275,135 @@ static void calculateGrow(Component *component, Component *children, bool isCalc
   {
     i32 remaining = component->bounds.*actualSize - (i32)sizes.min;
 
-    COMPLEX_ASSERT(remaining >= 0);
-
-    i32 smallestMaxSize;
-    i32 biggestMinSize;
-    usize count;
-    usize j = 0;
-    if (test_flag(component->sizingFlags, (isCalculatingVertical) ?
-      Component::ScrollableSnapToMinY : Component::ScrollableSnapToMinX))
+    if (remaining < 0)
     {
-      smallestMaxSize = 0;
-      biggestMinSize = utils::int_max<i32>;
-      count = sortedMax.size();
+      COMPLEX_ASSERT(component->fadeawayRatio != utils::int_max<decltype(Component::fadeawayRatio)>);
+
+      // size only components that are pinned left/top and right/bottom
+      // from the beginning and end respectively inwards first
+      // then if there's enough space size justfied components
+
+      remaining = component->bounds.*actualSize;
+      Component *start = component->children;
+      Component *end = (component->children) ? component->children->previous : nullptr;
+      Component *previousStart = start, *previousEnd = nullptr;
+      Component *componentToSize = start;
+
+      while (!remaining && previousStart != previousEnd)
+      {
+        auto extra = (isCalculatingVertical) ?
+          componentToSize->margin.getBottom() : componentToSize->margin.getRight();
+
+        // we take the minimum sizes as the actual sizes because we don't have enough space anyway
+        componentToSize->bounds.*actualSize = utils::min(remaining,
+          componentToSize->desiredSize.*actualSize + extra);
+        if (componentToSize->fadeawayRatio != utils::int_max<decltype(Component::fadeawayRatio)>)
+          componentToSize->bounds.*maxMember = (i32)(componentToSize->bounds.*maxMember *
+            ((float)componentToSize->fadeawayRatio / utils::int_max<decltype(Component::fadeawayRatio)>));
+
+        remaining -= componentToSize->bounds.*actualSize;
+
+        if (end != previousEnd &&
+          end->previous->placement != Placement::left &&
+          end->previous->placement != Placement::top)
+        {
+          componentToSize = end;
+          previousEnd = end;
+          start = start->next;
+        }
+        else
+        {
+          componentToSize = start;
+          previousStart = start;
+          end = end->previous;
+        }
+      }
+
+      // no space left for all other components so set their size to 0
+      for (; start->previous != end; start = start->next)
+        start->bounds.*actualSize = 0;
     }
     else
     {
-      usize lastJ = 0;
-      usize i = sortedMin.size(), lastI = sortedMin.size();
-
-      Component *biggestMin, *smallestMax;
-      while (true)
+      i32 smallestMaxSize;
+      i32 biggestMinSize;
+      usize count;
+      usize j = 0;
+      if (test_flag(component->sizingFlags, (isCalculatingVertical) ?
+        Component::ScrollableSnapToMinY : Component::ScrollableSnapToMinX))
       {
-        biggestMin = sortedMin[i - 1];
-        smallestMax = sortedMax[j];
+        smallestMaxSize = 0;
+        biggestMinSize = utils::int_max<i32>;
+        count = sortedMax.size();
+      }
+      else
+      {
+        usize lastJ = 0;
+        usize i = sortedMin.size(), lastI = sortedMin.size();
 
-        // if the most constrained component's maximum gets surpassed by the current size,
-        // exclude it and update the remainder
-        if (smallestMax->bounds.*maxMember < biggestMin->bounds.*minMember)
+        Component *biggestMin, *smallestMax;
+        while (true)
         {
-          // j can only get incremented and because we always assume that minMember <= maxMember
-          // we don't have to erase the skipped component in sortedMin here after incrementing j
-          if (j < sortedMax.size())
-            remaining -= smallestMax->bounds.*maxMember;
-          ++j;
-        }
-        // if the remaining size cannot expand all smaller components to the current minimum, exclude the biggest minimum
-        else if (i > 1 && (biggestMin->bounds.*minMember * (i32)(i - j)) > remaining)
-        {
-          biggestMin->bounds.*maxMember = biggestMin->bounds.*minMember;
-          --i;
+          biggestMin = sortedMin[i - 1];
+          smallestMax = sortedMax[j];
+
+          // if the most constrained component's maximum gets surpassed by the current size,
+          // exclude it and update the remainder
+          if (smallestMax->bounds.*maxMember < biggestMin->bounds.*minMember)
+          {
+            // j can only get incremented and because we always assume that minMember <= maxMember
+            // we don't have to erase the skipped component in sortedMin here after incrementing j
+            if (j < sortedMax.size())
+              remaining -= smallestMax->bounds.*maxMember;
+            ++j;
+          }
+          // if the remaining size cannot expand all smaller components to the current minimum, exclude the biggest minimum
+          else if (i > 1 && (biggestMin->bounds.*minMember * (i32)(i - j)) > remaining)
+          {
+            biggestMin->bounds.*maxMember = biggestMin->bounds.*minMember;
+            --i;
+          }
+
+          if ((i == lastI && j == lastJ) || j >= sortedMax.size())
+            break;
+
+          lastI = i;
+          lastJ = j;
         }
 
-        if ((i == lastI && j == lastJ) || j >= sortedMax.size())
-          break;
+        biggestMinSize = sortedMin[i - 1]->bounds.*minMember;
+        smallestMaxSize = sortedMax[utils::min(j, sortedMax.size() - 1)]->bounds.*maxMember;
+        count = i - j;
 
-        lastI = i;
-        lastJ = j;
+        if (j + count != sortedMax.size())
+          for (auto k = j + count; k < sortedMin.size(); ++k)
+            COMPLEX_ASSERT(sortedMin[k]->bounds.*maxMember != utils::int_max<i32>);
       }
 
-      biggestMinSize = sortedMin[i - 1]->bounds.*minMember;
-      smallestMaxSize = sortedMax[utils::min(j, sortedMax.size() - 1)]->bounds.*maxMember;
-      count = i - j;
-
-      if (j + count != sortedMax.size())
-        for (auto k = j + count; k < sortedMin.size(); ++k)
-          COMPLEX_ASSERT(sortedMin[k]->bounds.*maxMember != utils::int_max<i32>);
-    }
-
-
-    for (usize k = 0; k < count; ++k)
-    {
-      auto *c = sortedMax[j + k];
-      if (c->bounds.*minMember <= biggestMinSize &&
-        c->bounds.*maxMember >= smallestMaxSize)
+      // put fadeaway components to be sized first since they will be smaller than calculated above
+      if (fadeawayComponents)
       {
+        utils::insertionsort(sortedMax, j, j + count, [](Component *one, Component *two)
+          {
+            return one->fadeawayRatio != utils::int_max<decltype(Component::fadeawayRatio)> &&
+              two->fadeawayRatio == utils::int_max<decltype(Component::fadeawayRatio)>;
+          });
+      }
+
+      for (usize k = 0; k < count; ++k)
+      {
+        auto *c = sortedMax[j + k];
+        COMPLEX_ASSERT(c->bounds.*minMember <= biggestMinSize &&
+          c->bounds.*maxMember >= smallestMaxSize);
+
         i32 size = remaining / (i32)(count - k);
 
         c->bounds.*maxMember = utils::clamp(size, c->bounds.*minMember, c->bounds.*maxMember);
-        COMPLEX_ASSERT(c->bounds.*maxMember >= 0);
+        if (c->fadeawayRatio != utils::int_max<decltype(c->fadeawayRatio)>)
+          c->bounds.*maxMember = (i32)(c->bounds.*maxMember *
+            ((float)c->fadeawayRatio / utils::int_max<decltype(Component::fadeawayRatio)>));
 
+        COMPLEX_ASSERT(c->bounds.*maxMember >= 0);
         remaining -= c->bounds.*maxMember;
       }
     }
@@ -341,7 +419,6 @@ static void calculateGrow(Component *component, Component *children, bool isCalc
     {
       // parent is scrollable so every child is set to their preferred max sizes
       // which is already done, therefore we only need to update scrollable size
-      // and update the position in case we've been shrunk
 
       if (test_flag(component->sizingFlags, (isCalculatingVertical) ?
         Component::ScrollableSnapToMinY : Component::ScrollableSnapToMinX))
@@ -353,7 +430,7 @@ static void calculateGrow(Component *component, Component *children, bool isCalc
 
   for (auto *child = children; child; child = child->next)
   {
-    if (!child->componentFlags.isVisible)
+    if (!child->componentFlags.isVisible || child->bounds.*actualSize <= 0)
       continue;
 
     COMPLEX_ASSERT(child->bounds.*actualSize != utils::int_max<i32>);
@@ -365,14 +442,16 @@ static void calculateGrow(Component *component, Component *children, bool isCalc
   COMPLEX_ASSERT(component->bounds.*actualSize >= 0);
   component->bounds.*actualSize = (component->componentFlags.keepSize) ?
     component->lastBounds.*actualSize : component->bounds.*actualSize;
+
+  // refresh scroll position in case we've been shrunk
   offsetScroll(component, 0.0f, 0.0f, false);
 }
 
 void calculateSizes(Component *children, Component *component)
 {
-  calculateFit(component, children, false);
+  (void)calculateFit(component, children, false);
   calculateGrow(component, children, false);
-  calculateFit(component, children, true);
+  (void)calculateFit(component, children, true);
   calculateGrow(component, children, true);
 }
 
@@ -385,7 +464,7 @@ void calculateSizes(Component *children, Component *component)
 void calculatePositions(Component *children,
   Component *component, Rectangle<i32> boundsInTarget)
 {
-  if (!component->componentFlags.isVisible)
+  if (!component->isStillVisible())
     return;
 
   auto padding = scaleValueRoundInt(component->padding.toInt());
@@ -431,7 +510,7 @@ void calculatePositions(Component *children,
   boundsInTarget = TRANSPOSE(component, boundsInTarget);
   padding = TRANSPOSE(component, padding);
 
-  auto &customPlacement = *getUiRelated()->renderer->customPlacement;
+  auto &customPlacement = getUiRelated()->renderer->customPlacement;
 
   i32 primaryUsed = 0;
   i32 groupCount = 0;
@@ -444,7 +523,7 @@ void calculatePositions(Component *children,
     if (child->placement & Placement::custom)
     {
       // component has decided to take care of its own position
-      customPlacement.emplaceBack(child, 
+      customPlacement.emplaceBack(child,
         [](Component *c) { return c->overridePosition(c); });
       continue;
     }
@@ -645,7 +724,7 @@ animatePosition(Component *component, bool wasParentResized, bool recursive)
     using T = decltype(component->distanceToNextPositionRatio);
 
     // TODO: fix animations activating on scrolling
-      
+
     float distanceToNextPositionRatio = (float)component->distanceToNextPositionRatio / utils::int_max<T>;
     distanceToNextPositionRatio = utils::min(1.0f,
       distanceToNextPositionRatio + /*getUiRelated()->deltaTime /*/ kMoveDelay);
@@ -659,12 +738,12 @@ animatePosition(Component *component, bool wasParentResized, bool recursive)
       if (!component->lastParent->componentFlags.isPositionSet ||
         !component->parent->componentFlags.isPositionSet)
       {
-        if (recursive)          
-          getUiRelated()->renderer->customPlacement->emplaceBack(component,
+        if (recursive)
+          getUiRelated()->renderer->customPlacement.emplaceBack(component,
             [wasParentResized](Component *c) { return animatePosition(c, wasParentResized, false); });
-          
+
         // unset position flag, so that others can see
-        //component->componentFlags.isPositionSet = false;
+        component->componentFlags.isPositionSet = false;
         return false;
       }
 
@@ -747,8 +826,8 @@ static void clearLinkedComponents(Component *c, bool checkSelf)
 void deleteComponent(Component *component)
 {
   clearLinkedComponents(component, true);
-  if (component->arena)
-    utils::Pool::destroy(component->arena);
+  if (component->pool)
+    utils::Pool::destroy(component->pool);
   utils::Pool::remove(component);
 }
 
@@ -844,7 +923,7 @@ offsetScroll(Component *component, float deltaX, float deltaY, bool switchDirect
 }
 
 Range<i32>
-calculateSingleLineTextSize(Component *c, bool isCalculatingVertical, 
+calculateSingleLineTextSize(Component *c, bool isCalculatingVertical,
   FontId fontId, utils::string_view text)
 {
   float lineHeight = scaleValue((float)((c->componentFlags.vertical) ?
@@ -956,7 +1035,7 @@ Component::getComponentAt(i32 x, i32 y, bool onlyClickable,
 }
 
 bool
-Component::hasFocus(bool trueIfChildIsFocused) const
+Component::isFocused(bool trueIfChildIsFocused) const
 {
   auto *focusedComponent = getUiRelated()->renderer->getMouseInteractions().focused;
   if (!trueIfChildIsFocused && this != focusedComponent)
@@ -1111,8 +1190,10 @@ void Component::removeChildComponent(Component *childToRemove, bool keepFocus)
   if (!childToRemove || childToRemove->parent != this)
     return;
 
+
+
   if (!keepFocus)
-    clearLinkedComponents(childToRemove, true);    
+    clearLinkedComponents(childToRemove, true);
 
   childToRemove->lastParent = childToRemove->parent;
   childToRemove->parent = nullptr;
@@ -1145,33 +1226,6 @@ void Component::removeAllChildComponents()
   }
 
   COMPLEX_ASSERT(!children);
-}
-
-void Component::deleteChildComponent(Component *childToDelete)
-{
-  removeChildComponent(childToDelete);
-  deleteComponent(childToDelete);
-}
-
-void Component::deleteChildComponent(usize childIndexToDelete)
-{
-  auto childToDelete = removeChildComponent(childIndexToDelete);
-  deleteComponent(childToDelete);
-}
-
-void Component::deleteAllChildComponents()
-{
-  if (!children)
-    return;
-
-  clearLinkedComponents(this, false);
-
-  for (auto *child = children; child; child = child->next)
-  {
-    if (child->arena)
-      utils::Pool::destroy(child->arena);
-    utils::Pool::remove(child);
-  }
 }
 
 void Component::renderScrollbars(Graphics &g, float scrollExpandPercent)
@@ -1373,7 +1427,7 @@ void Component::renderChild(Graphics &g, Component *child,
     scissorBounds.w, scissorBounds.h);
 
   nvgTranslate(g, (float)child->bounds.x, (float)child->bounds.y);
-    
+
   if (renderFn)
     renderFn(g, child);
   else

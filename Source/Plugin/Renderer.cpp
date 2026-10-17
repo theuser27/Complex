@@ -92,7 +92,7 @@ void computeMultiClick(Renderer *renderer, double currentTime, MouseEvent &e, bo
 
   e.numberOfClicks = renderer->numberOfClicks;
 }
-  
+
 PuglStatus
 runThread(PuglView *view, const PuglEvent *event)
 {
@@ -111,7 +111,7 @@ runThread(PuglView *view, const PuglEvent *event)
     if ((!renderer->isInitialised && event->type != PUGL_REALIZE) &&
       ((renderer->area.w == 0 || renderer->area.h == 0) && event->type != PUGL_CONFIGURE))
     {
-      COMPLEX_ASSERT_FALSE("UI initialisation: %d, UI size: { w: %d, h: %d }",
+      COMPLEX_ASSERT_FALSE("GUI initialisation: %d, GUI size: { w: %d, h: %d }",
         renderer->isInitialised, (int)renderer->area.w, (int)renderer->area.h);
       return PUGL_FAILURE;
     }
@@ -124,11 +124,12 @@ runThread(PuglView *view, const PuglEvent *event)
     puglEnterContext(view);
     if (!gladLoadGLLoader((GLADloadproc)&puglGetProcAddress))
     {
-      COMPLEX_ASSERT_FALSE("Failed to load OpenGL functions\n");
+      showNativeMessageBox("Failed to initialise OpenGL", 
+        "GLAD couldn't load OpenGL function pointers\nShutting down GUI.", MessageBoxType::Error);
       return PUGL_FAILURE;
     }
 
-    renderer->generalData.g = anew(renderer->arena, Graphics, { renderer->arena });
+    renderer->generalData.g = anew(renderer->pool, Graphics, { renderer->pool });
     renderer->isInitialised = true;
 
     break;
@@ -354,17 +355,33 @@ void hotreloadCallback(XFILES_WATCH_TYPE type, const char *path, void *udata)
     if (s.rfind(".dll") == utils::string_view::npos)
       return;
 
-    auto newLib = utils::sp<utils::Dylib>::create(path);
-    if (!newLib->handle)
-      return;
+    // add hotreloaded library if it doesn't already exist
+    utils::sp<utils::Dylib> newLib;
+    {
+      utils::ScopedLock g{ executableStaticData.readWriteLock, true, utils::WaitMechanism::WaitNotify };
+      auto iter = utils::findIf(executableStaticData.structure.loadedDynamicLibs,
+        [&](const auto &element) { return element->path == path; });
 
-    utils::initialiseHotreload(newLib.get());
-    executableStaticData.structure.loadedDynamicLibs.emplaceBack(newLib);
+      if (iter != executableStaticData.structure.loadedDynamicLibs.end())
+        newLib = *iter;
+      else
+      {
+        newLib = utils::sp<utils::Dylib>::create(globalPool, path);
+        if (!newLib->handle)
+          return;
+        utils::initialiseHotreload(newLib.get());
+        executableStaticData.structure.loadedDynamicLibs.emplaceBack(newLib);
+      }
+    }
 
     auto *renderer = (Renderer *)udata;
     auto g = renderer->plugin.acquireProcessingLock();
     auto *state = renderer->plugin.state_.get();
-    state->pluginStructure.loadedDynamicLibs.emplaceBack(COMPLEX_MOVE(newLib));
+
+    // sanity check that we're not adding the same library twice
+    if (utils::findIf(state->pluginStructure.loadedDynamicLibs, 
+      [&](const auto &element) { return element->path == path; }) == state->pluginStructure.loadedDynamicLibs.end())
+      state->pluginStructure.loadedDynamicLibs.emplaceBack(COMPLEX_MOVE(newLib));
 
     // invalidate cached symbols
     state->cachedHotreloadSymbols.data.clear();
@@ -378,14 +395,17 @@ void hotreloadCallback(XFILES_WATCH_TYPE type, const char *path, void *udata)
 
 Renderer::Renderer(ComplexPlugin &plugin) : plugin{ plugin }, generalData{ plugin }
 {
-  arena = utils::Pool::createNested(plugin.arena, COMPLEX_MB(1));
-  callbacks.data = { arena };
+  pool = utils::Pool::createNested(plugin.pool, COMPLEX_MB(1));
+  callbacks.data = { pool };
+  customPlacement = { pool, 32 };
+  sortedSizesMin = { pool, 32 };
+  sortedSizesMax = { pool, 32 };
 
 #ifdef COMPLEX_HOTRELOAD_DIR
   watchFileContext = xfiles_watch_create(COMPLEX_HOTRELOAD_DIR, this, hotreloadCallback);
 #endif
   generalData.renderer = this;
-  generalData.skin = anew(arena, Skin, {});
+  generalData.skin = anew(pool, Skin, {});
 }
 
 Renderer::~Renderer()
@@ -395,18 +415,14 @@ Renderer::~Renderer()
 #ifdef COMPLEX_HOTRELOAD_DIR
   xfiles_watch_destroy(watchFileContext);
 #endif
-  utils::Pool::destroy(arena);
+  utils::Pool::destroy(pool);
 }
 
 void Renderer::resetGui(MainInterface *newGui)
 {
-  if (gui)
-  {
-    dragAndDropComponent_ = focusedComponent_ =
-      mouseDownComponent_ = mouseHoveredComponent_ = nullptr;
-    callbacks.data.clear();
-  }
-
+  dragAndDropComponent_ = focusedComponent_ =
+    mouseDownComponent_ = mouseHoveredComponent_ = nullptr;
+  callbacks.data.clear();
   gui = newGui;
 }
 
@@ -515,7 +531,7 @@ void Renderer::startUI()
     if (plugin.hostContext->getHostName(plugin.hostContext, hostNameData, countof(hostNameData)))
     {
       utils::string_view hostName = { hostNameData, utils::getStringSize(hostNameData) };
-      if (hostName.findCaseInsensitive("Live ") != utils::string_view::npos || 
+      if (hostName.findCaseInsensitive("Live ") != utils::string_view::npos ||
         hostName.findCaseInsensitive("FL") != utils::string_view::npos)
         puglSetViewHint(view_, PUGL_AGGRESSIVE_KEYBOARD_FOCUS, PUGL_TRUE);
     }
@@ -564,7 +580,7 @@ void Renderer::moveFocusTo(Component *component)
   }
 }
 
-utils::span<const byte> 
+utils::span<const byte>
 Renderer::getClipboard()
 {
   usize size;
@@ -730,7 +746,7 @@ void Renderer::handleMouseUp(MouseEvent e)
     if (!mouseHoveredComponent_->componentFlags.isHovered && !mouseHoveredComponent_->componentFlags.isClicked)
       mouseHoveredComponent_->mouseEnter(getRelativeEvent(e, mouseHoveredComponent_));
     mouseHoveredComponent_->componentFlags.isHovered = true;
-    if (isHandlingOrphanedMouseEvents && mouseHoveredComponent_->componentFlags.acceptsOrphanMouseEvents)
+    if (isHandlingOrphanedMouseEvents && mouseHoveredComponent_->componentFlags.acceptsOrphanEvents)
     {
       isHandlingOrphanedMouseEvents = false;
       mouseHoveredComponent_->mouseUp(getRelativeEvent(e, mouseHoveredComponent_));
@@ -791,7 +807,7 @@ Renderer::handleKeyPress(KeyPress k)
   // so that no keyboard input is missed
   return gui->keyPressed(k);
 }
-  
+
 void Renderer::recalculateScale(bool forceResize)
 {
   auto newEffectiveScale = getEffectiveScale();
@@ -804,7 +820,7 @@ void Renderer::recalculateScale(bool forceResize)
   generalData.scale = newEffectiveScale;
   getUiRelated() = &generalData;
   defer { getUiRelated() = nullptr; };
-  // the UI needs to be sized before we can proceed with checking
+  // the GUI needs to be sized before we can proceed with checking
   if (isInitialised && !gui->bounds.isEmpty())
     doSizingAndPositioning();
 
@@ -812,7 +828,7 @@ void Renderer::recalculateScale(bool forceResize)
 
   plugin.hostContext->requestResize(plugin.hostContext, area.w, area.h);
 }
-  
+
 void Renderer::checkFocusedComponent()
 {
   if (!focusedComponent_ || focusedComponent_->componentFlags.isVisible)
@@ -834,21 +850,22 @@ void Renderer::checkFocusedComponent()
 
   focusedComponent_ = nullptr;
 }
-  
+
 void Renderer::doSizingAndPositioning()
 {
   auto [unscaledWidth, unscaledHeight] = unscaleDimensions(area.w, area.h, generalData.scale);
   gui->desiredSize = { (i32)unscaledWidth, (i32)unscaledHeight, (i32)unscaledWidth, (i32)unscaledHeight };
 
-  for (auto &[c, callback] : callbacks.data)
-    callback(c);
-
-  utils::remove_cvref_t<decltype(*customPlacement)> customPlacement_{ getLocalScratch(), 32 };
-  customPlacement = &customPlacement_;
-  utils::vector<Component *> sortedSizesMin_{ getLocalScratch(), 32 };
-  sortedSizesMin = &sortedSizesMin_;
-  utils::vector<Component *> sortedSizesMax_{ getLocalScratch(), 32 };
-  sortedSizesMax = &sortedSizesMax_;
+  for (usize i = 0; i < callbacks.data.size(); ++i)
+  {
+    auto &[c, callback] = callbacks.data[i];
+    auto toRemove = callback(c);
+    if (toRemove)
+    {
+      callbacks.data.erase(i);
+      --i;
+    }
+  }
 
   calculateSizes(gui->children, gui);
   gui->bounds.x = 0;
@@ -857,16 +874,18 @@ void Renderer::doSizingAndPositioning()
 
   // looping until all conflicts are resolved
   // BEWARE of circular dependencies
-  while (!customPlacement->empty())
+  while (!customPlacement.empty())
   {
-    auto [c, fn] = customPlacement->popFront();
+    auto [c, fn] = customPlacement.popFront();
     c->componentFlags.isPositionSet = fn(c);
     if (!c->componentFlags.isPositionSet)
-      customPlacement->emplaceBack(c, fn);
+      customPlacement.emplaceBack(c, fn);
   }
-  customPlacement->clear();
+  customPlacement.clear();
+  sortedSizesMin.clear();
+  sortedSizesMax.clear();
 }
-  
+
 void Renderer::renderLoop(PuglView *view)
 {
 #ifdef COMPLEX_HOTRELOAD_DIR
@@ -874,22 +893,12 @@ void Renderer::renderLoop(PuglView *view)
     xfiles_watch_flush(watchFileContext);
 #endif
 
-  ++numberOfFrames;
-  if (numberOfFrames == 200)
-  {
-    utils::shrinkWorkingSet();
-  }
-
   auto newRenderTime = puglGetTime(puglGetWorld(view));
   generalData.deltaTime = (float)(newRenderTime - generalData.steadyTime);
   generalData.steadyTime = newRenderTime;
 
-  // FIXME; this needs to run when the UI is closed
-  {
-    auto state = plugin.state_;
-    for (usize i = 0; i < state->parameterBridges.size(); ++i)
-      state->parameterBridges[i].updateUIParameter();
-  }
+  // FIXME; this needs to run when the GUI is closed
+  plugin.state_->flushHostParameters();
 
   doSizingAndPositioning();
 

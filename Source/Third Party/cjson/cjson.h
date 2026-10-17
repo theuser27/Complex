@@ -41,7 +41,7 @@ enum cjson_Types
   cjson_Invalid       = 0,
   cjson_Bool          = 1 << 0,
   cjson_NULL          = 1 << 1,
-  cjson_Float        = 1 << 2,
+  cjson_Float         = 1 << 2,
   cjson_Integer       = 1 << 3,
   cjson_Unsigned      = 1 << 4,
   cjson_String        = 1 << 5,

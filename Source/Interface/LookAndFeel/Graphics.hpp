@@ -5,9 +5,9 @@
 
 #include "Third Party/nanovg/nanovg.h"
 
+#include "Framework/utils.hpp"
 #include "Framework/simd.hpp"
 #include "Framework/simd_utils.hpp"
-#include "Framework/memory.hpp"
 #include "gui_utils.hpp"
 
 extern "C"
@@ -27,7 +27,7 @@ class Skin;
 class Graphics
 {
 public:
-  Graphics(utils::Pool *arena);
+  Graphics(utils::Pool *pool);
   ~Graphics();
 
   static float getFontKerningFromFontHeight(FontId fontId, float height);
@@ -85,9 +85,9 @@ public:
 
   operator NVGcontext *() const { return context; }
 
-  utils::Pool *arena{};
+  utils::Pool *pool{};
 
-  utils::vectormap<const byte *, NSVGimage *> svgs{};
+  utils::vectormapnd<const byte *, NSVGimage *> svgs{};
   NVGcontext *context{};
 
   int DDinFontId;
@@ -221,7 +221,7 @@ inline void renderText(utils::string_view text, FontId font,
     nvgText(g, x, y, text.data(), text.data() + text.size());
 }
 
-NSVGimage *parseSVG(utils::Pool *arenaToAllocateIn, 
+NSVGimage *parseSVG(utils::Pool *arenaToAllocateIn,
   const void *data, usize dataSize);
 
 void drawSVG(NSVGimage *image, Graphics &g, Colour colour,

@@ -61,9 +61,6 @@ inline constexpr float kMinWindowScaleFactor = 1.0f;
 inline constexpr float kMaxWindowScaleFactor = 3.0f;
 inline constexpr int kParameterUpdateIntervalHz = 60;
 
-// used for updating parameters
-enum class UpdateFlag : u8 { NoUpdates = 0, Realtime = 1, BeforeProcess = 2, AfterProcess = 3 };
-
 #define COMPLEX_UNDERSCORE_LITERAL "\xCC\xB2"
 #define COMPLEX_MIDDLE_DOT_LITERAL "\xC2\xB7"
 #define COMPLEX_DEGREE_SIGN_LITERAL "\xC2\xB0"

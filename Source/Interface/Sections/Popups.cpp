@@ -37,13 +37,13 @@ getPopupDisplayDimensions(Component *c, bool isCalculatingVertical)
 
 void PopupDisplay::reinitialise()
 {
-  if (!arena)
-    arena = utils::Pool::createNested(parent->arena, COMPLEX_KB(8));
+  if (!pool)
+    pool = utils::Pool::createNested(parent->pool, COMPLEX_KB(8));
 
   placement = Placement::custom;
   padding = { kLineHeight / 4, 0, kLineHeight / 4, 0 };
   overrideSize = getPopupDisplayDimensions;
-  text = { arena };
+  text = { pool };
 
   overridePosition = [](Component *c)
   {
@@ -429,8 +429,8 @@ PopupItem::render(Graphics &g)
 
 void PopupSelector::reinitialise()
 {
-  if (!arena)
-    arena = utils::Pool::createNested(parent->arena, COMPLEX_KB(128));
+  if (!pool)
+    pool = utils::Pool::createNested(parent->pool, COMPLEX_KB(128));
 
   placement = Placement::custom;
   sizingFlags |= GrowableX | GrowableY;
@@ -517,7 +517,7 @@ void PopupSelector::resetState(bool callCancelFn)
     cancel(this);
   cancel = {};
   lastPlacement = Placement::right;
-  utils::Pool::clear(arena);
+  utils::Pool::clear(pool);
   skinOverride = Skin::kNone;
   toggleable = true;
   componentFlags.isVisible = false;
@@ -539,16 +539,17 @@ void PopupSelector::summon(Component *summoningComponent,
   grabFocus();
 
   getUiRelated()->renderer->callbacks.add(this, [](Component *c)
-  {
-    auto *self = (PopupSelector *)c;
-    for (auto *child = self->children; child; child = child->next)
-      child->componentFlags.isVisible = !self->summoner->isObscured();
-  });
+    {
+      auto *self = (PopupSelector *)c;
+      for (auto *child = self->children; child; child = child->next)
+        child->componentFlags.isVisible = !self->summoner->isObscured();
+      return false;
+    });
 }
 
 OptionPopupItem::OptionPopupItem()
 {
-  componentFlags.acceptsOrphanMouseEvents = true;
+  componentFlags.acceptsOrphanEvents = true;
   sizingFlags = Component::GrowableX;
   desiredSize = kPrimarySizeRect;
   padding = kPrimaryPaddingRect;
@@ -619,7 +620,7 @@ OptionPopupItem::getTextAndWrap()
 OptionPopupItem *
 OptionPopupItem::createTitle(PopupList *list, utils::string_view text)
 {
-  auto *itemArena = list->parentSelector->arena;
+  auto *itemArena = list->parentSelector->pool;
   auto *item = anew(itemArena, OptionPopupItem, {});
   item->extraData = anew(itemArena, utils::stringnd, { itemArena, text });
   item->dataTag = StringData;
@@ -634,7 +635,7 @@ OptionPopupItem::createTitle(PopupList *list, utils::string_view text)
 OptionPopupItem *
 OptionPopupItem::createOption(PopupList *list, IndexedData &option)
 {
-  auto *item = anew(list->parentSelector->arena, OptionPopupItem, {});
+  auto *item = anew(list->parentSelector->pool, OptionPopupItem, {});
   item->extraData = &option;
   item->dataTag = OptionData;
   item->canBeChosen = option.canBeChosen();

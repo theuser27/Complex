@@ -170,8 +170,8 @@ Skin::getValue(ValueId valueId, const Component *component) const
 void Skin::saveToFile(char *saveFile)
 {
   auto &jsonContext = getJsonContext();
-  jsonContext.arena = utils::Pool::createNested(getLocalScratch(), COMPLEX_KB(128));
-  defer { utils::Pool::destroy(jsonContext.arena); jsonContext.arena = nullptr; };
+  jsonContext.pool = utils::Pool::createNested(getLocalScratch(), COMPLEX_KB(128));
+  defer { utils::Pool::destroy(jsonContext.pool); jsonContext.pool = nullptr; };
 
   cjson *data = cjson_Create(cjson_Object);
   cjson_AddTo(data, "Plugin Version", cjson_String, CPLUG_PLUGIN_VERSION);
@@ -258,12 +258,12 @@ void Skin::jsonToState(void *jsonData)
   }
 }
 
-bool 
+bool
 Skin::stringToState(utils::string_view skinString)
 {
   auto &jsonContext = getJsonContext();
-  jsonContext.arena = utils::Pool::createNested(getLocalScratch(), COMPLEX_KB(128));
-  defer{ utils::Pool::destroy(jsonContext.arena); jsonContext.arena = nullptr; };
+  jsonContext.pool = utils::Pool::createNested(getLocalScratch(), COMPLEX_KB(128));
+  defer{ utils::Pool::destroy(jsonContext.pool); jsonContext.pool = nullptr; };
 
   const char *potentialError = nullptr;
   cjson *data = cjson_ParseWithOpts(skinString.data(), skinString.size(), &potentialError, false);
