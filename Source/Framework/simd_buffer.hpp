@@ -59,7 +59,7 @@ struct SimdBuffer
 // copies/does math operation on samples from "otherBuffer" to "thisBuffer"
 // specified by starting channels/indices
 // result is shifted by shiftMask and filtered with mergeMask
-// note: starting channels need to be congruent to kNumChannels
+// NB: starting channels need to be congruent to kNumChannels
 forceinline void applyToThis(SimdBuffer *thisBuffer, const SimdBuffer *otherBuffer,
   u32 channels, u32 samples, utils::MathOperations operation,
   i4mask mergeMask, u32 thisStartChannel = 0, u32 otherStartChannel = 0,

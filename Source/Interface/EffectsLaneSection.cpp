@@ -102,8 +102,8 @@ laneMessageHandler(Component *c, u64 commandId, void *extraData)
       offsetScroll(&self->moduleHolder, 0.0f, yOffset * getUiRelated()->deltaTime * kAutoscrollMultiplier, false);
     }
 
-    //COMPLEX_DEBUG_LOG("Position: %d, %d\n", data.position.x, data.position.y);
-    //COMPLEX_DEBUG_LOG("Autoscroll: %d\n", (int)self->moduleHolder.autoScrollIncrements.y);
+    //COMPLEX_LOG("Position: %d, %d\n", data.position.x, data.position.y);
+    //COMPLEX_LOG("Autoscroll: %d\n", (int)self->moduleHolder.autoScrollIncrements.y);
 
     return true;
   }
@@ -239,12 +239,12 @@ EffectsLaneSection::ModuleHolder::mouseEnter(const MouseEvent &)
 
   COMPLEX_INVARIANT_ASSERT(
     (
-      return uiRelated->renderer->callbacks.find(this) ==
+      return uiRelated->renderer->callbacks.find({ this, 0 }) ==
         uiRelated->renderer->callbacks.data.end();
     )
   );
 
-  uiRelated->renderer->callbacks.add(this, [](Component *c)
+  uiRelated->renderer->callbacks.add({ this, 0 }, [](Component *c)
     {
       auto self = (EffectsLaneSection::ModuleHolder *)c;
       auto laneSection = (EffectsLaneSection *)self->parent;
@@ -301,11 +301,11 @@ EffectsLaneSection::ModuleHolder::mouseExit(const MouseEvent &)
   getUiRelated()->renderer->setMouseCursor(MouseCursorTypes::Normal);
   hasEnteredHover = false;
 
-  getUiRelated()->renderer->callbacks.erase(this);
+  getUiRelated()->renderer->callbacks.erase({ this, 0 });
 
   COMPLEX_INVARIANT_ASSERT(
     (
-      return getUiRelated()->renderer->callbacks.find(this) ==
+      return getUiRelated()->renderer->callbacks.find({ this, 0 }) ==
         getUiRelated()->renderer->callbacks.data.end();
     )
   );
@@ -340,8 +340,9 @@ EffectsLaneSection::ModuleHolder::mouseDown(const MouseEvent &e)
   if (e.mods.test(ModifierKeys::altModifier) || e.mods.test(ModifierKeys::popupMenuClickModifier))
     return true;
 
-  summonModulePopup(getPopupSelector(), this, laneSection,
-    Placement::custom, { e.x, e.y }, hoveredBeforeModuleIndex);
+  if (hasEnteredHover)
+    summonModulePopup(getPopupSelector(), this, laneSection,
+      Placement::custom, { e.x, e.y }, hoveredBeforeModuleIndex);
 
   return true;
 }

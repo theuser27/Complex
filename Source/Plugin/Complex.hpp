@@ -90,7 +90,7 @@ public:
 
   utils::Pool *pool{};
 
-  utils::vectormap<Component *, utils::smallFn<PersistentCallback>> callbacks{};
+  utils::vectormap<utils::pair<Component *, u64>, utils::smallFn<PersistentCallback>> callbacks{};
 
   // deferred components that will set their own position
   utils::vector<utils::pair<Component *, utils::smallFn<bool(Component *)>>> customPlacement{};
@@ -105,14 +105,13 @@ public:
   void resetGui(MainInterface *newGui);
 
   void resizeChange(bool isResizing);
-  void moveFocusTo(Component *component);
 
   utils::span<const byte> getClipboard();
   void setClipboard(utils::span<const byte> data);
 
   void setMouseCursor(MouseCursorTypes cursorType);
-  bool setUISize(u32 width, u32 height);
-  void setUIScale(float newPluginScale);
+  bool setGuiSize(u32 width, u32 height);
+  void setGuiScale(float newPluginScale);
   void setHoveredComponent(Component *component);
   void setClickedComponent(Component *component);
   void setFocusedComponent(Component *component);

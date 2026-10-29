@@ -14,7 +14,7 @@
 static bool
 calculateFit(Component *component, Component *children, bool isCalculatingVertical)
 {
-  static constexpr float kFadeawaySpeed = 0.5f;
+  static constexpr float kFadeawayTime = 0.15f; //s
 
   if (!isCalculatingVertical)
   {
@@ -25,7 +25,7 @@ calculateFit(Component *component, Component *children, bool isCalculatingVertic
 
     if (component->componentFlags.animateFadeAway)
     {
-      auto increment = (i32)(getUiRelated()->deltaTime / kFadeawaySpeed *
+      auto increment = (i32)roundf(getUiRelated()->deltaTime / kFadeawayTime *
         utils::int_max<decltype(component->fadeawayRatio)>);
       increment = (component->componentFlags.isVisible) ? increment : -increment;
 
@@ -196,7 +196,7 @@ static void calculateGrow(Component *component, Component *children, bool isCalc
 
     for (auto *child = children; child; child = child->next)
     {
-      if (!child->componentFlags.isVisible)
+      if (!child->isStillVisible())
         continue;
 
       auto extra = (isCalculatingVertical) ? child->margin.getBottom() : child->margin.getRight();
@@ -232,7 +232,7 @@ static void calculateGrow(Component *component, Component *children, bool isCalc
 
   for (auto *child = children; child; child = child->next)
   {
-    if (!child->componentFlags.isVisible)
+    if (!child->isStillVisible())
       continue;
 
     if (child->placement == Placement::custom)
@@ -275,10 +275,8 @@ static void calculateGrow(Component *component, Component *children, bool isCalc
   {
     i32 remaining = component->bounds.*actualSize - (i32)sizes.min;
 
-    if (remaining < 0)
+    if ((remaining - (i32)childrenMinSizes) < 0)
     {
-      COMPLEX_ASSERT(component->fadeawayRatio != utils::int_max<decltype(Component::fadeawayRatio)>);
-
       // size only components that are pinned left/top and right/bottom
       // from the beginning and end respectively inwards first
       // then if there's enough space size justfied components
@@ -289,23 +287,20 @@ static void calculateGrow(Component *component, Component *children, bool isCalc
       Component *previousStart = start, *previousEnd = nullptr;
       Component *componentToSize = start;
 
-      while (!remaining && previousStart != previousEnd)
+      while (remaining && previousStart != previousEnd)
       {
         auto extra = (isCalculatingVertical) ?
           componentToSize->margin.getBottom() : componentToSize->margin.getRight();
 
         // we take the minimum sizes as the actual sizes because we don't have enough space anyway
-        componentToSize->bounds.*actualSize = utils::min(remaining,
-          componentToSize->desiredSize.*actualSize + extra);
+        componentToSize->bounds.*actualSize = utils::min(remaining, componentToSize->desiredSize.*actualSize + extra);
         if (componentToSize->fadeawayRatio != utils::int_max<decltype(Component::fadeawayRatio)>)
-          componentToSize->bounds.*maxMember = (i32)(componentToSize->bounds.*maxMember *
+          componentToSize->bounds.*maxMember = (i32)roundf(componentToSize->bounds.*maxMember *
             ((float)componentToSize->fadeawayRatio / utils::int_max<decltype(Component::fadeawayRatio)>));
 
         remaining -= componentToSize->bounds.*actualSize;
 
-        if (end != previousEnd &&
-          end->previous->placement != Placement::left &&
-          end->previous->placement != Placement::top)
+        if (end != previousEnd)
         {
           componentToSize = end;
           previousEnd = end;
@@ -320,7 +315,7 @@ static void calculateGrow(Component *component, Component *children, bool isCalc
       }
 
       // no space left for all other components so set their size to 0
-      for (; start->previous != end; start = start->next)
+      for (; start && start->previous != end; start = start->next)
         start->bounds.*actualSize = 0;
     }
     else
@@ -408,6 +403,21 @@ static void calculateGrow(Component *component, Component *children, bool isCalc
       }
     }
   }
+  else if (fadeawayComponents)
+  {
+    for (auto *c : sortedMax)
+    {
+      if (c->fadeawayRatio != utils::int_max<decltype(c->fadeawayRatio)>)
+      {
+        c->bounds.*maxMember = (i32)(c->bounds.*maxMember *
+          ((float)c->fadeawayRatio / utils::int_max<decltype(Component::fadeawayRatio)>));
+        --fadeawayComponents;
+      }
+
+      if (!fadeawayComponents)
+        break;
+    }
+  }
 
   if (test_flag(component->sizingFlags, (isCalculatingVertical) ? Component::ScrollableY : Component::ScrollableX))
   {
@@ -430,7 +440,7 @@ static void calculateGrow(Component *component, Component *children, bool isCalc
 
   for (auto *child = children; child; child = child->next)
   {
-    if (!child->componentFlags.isVisible || child->bounds.*actualSize <= 0)
+    if (!child->isStillVisible() || child->bounds.*actualSize <= 0)
       continue;
 
     COMPLEX_ASSERT(child->bounds.*actualSize != utils::int_max<i32>);
@@ -461,6 +471,8 @@ void calculateSizes(Component *children, Component *component)
 #define IS_PRIMARY_POSITION_FLAG_SET(child, parent, flag) (child->placement & GET_PRIMARY_FLAG(parent, flag))
 #define IS_SECONDARY_POSITION_FLAG_SET(child, parent, flag) (child->placement & GET_SECONDARY_FLAG(parent, flag))
 
+static bool animatePosition(Component *component, bool wasParentResized, bool recursive);
+
 void calculatePositions(Component *children,
   Component *component, Rectangle<i32> boundsInTarget)
 {
@@ -480,32 +492,9 @@ void calculatePositions(Component *children,
   if (test_flag(component->sizingFlags, Component::ScrollableY))
     boundsInTarget.y -= (i32)::roundf(component->scrollOffset.y);
 
+  auto Rectangle<i32>:: *primaryPosition = (component->componentFlags.vertical) ? &Rectangle<i32>::y : &Rectangle<i32>::x;
+  auto Rectangle<i32>:: *secondaryPosition = (component->componentFlags.vertical) ? &Rectangle<i32>::x : &Rectangle<i32>::y;
   auto Point<i32>:: *primary = (component->componentFlags.vertical) ? &Point<i32>::y : &Point<i32>::x;
-  auto Point<i32>:: *secondary = (component->componentFlags.vertical) ? &Point<i32>::x : &Point<i32>::y;
-
-  // setting the supposed position and
-  // resetting previous position with current if the supposed position has changed from previous run
-  auto setNextPosition = [&](bool isRight, Rectangle<i32> bounds, Component *child, i32 Point<i32>:: *coordinate)
-  {
-    auto change = child->nextPosition.*coordinate - bounds.getPosition().*coordinate;
-    if (isRight)
-    {
-      // was shift caused by a change in size?
-      auto sizeOffset = Point{ bounds.w, bounds.h }.*coordinate -
-        Point{ child->lastBounds.w, child->lastBounds.h }.*coordinate;
-
-      if (change && change - sizeOffset == 0)
-        child->previousPosition.*coordinate += sizeOffset;
-      change -= sizeOffset;
-    }
-
-    if (change && child->previousPosition != invalidPosition)
-    {
-      child->previousPosition = child->lastBounds.getPosition();
-      child->distanceToNextPositionRatio = 0;
-    }
-    child->nextPosition.*coordinate = bounds.getPosition().*coordinate;
-  };
 
   boundsInTarget = TRANSPOSE(component, boundsInTarget);
   padding = TRANSPOSE(component, padding);
@@ -517,7 +506,7 @@ void calculatePositions(Component *children,
   bool isInGroup = false;
   for (auto *child = children; child; child = child->next)
   {
-    if (!child->componentFlags.isVisible)
+    if (!child->isStillVisible())
       continue;
 
     if (child->placement & Placement::custom)
@@ -554,8 +543,7 @@ void calculatePositions(Component *children,
       bounds.y = utils::max(boundsInTarget.y + margin.y,
         (boundsInTarget.getBottom() - bounds.h) / 2);
 
-    setNextPosition(IS_SECONDARY_POSITION_FLAG_SET(child, component, Placement::right),
-      TRANSPOSE(component, bounds), child, secondary);
+    child->bounds.*secondaryPosition = bounds.y;
   }
 
   groupCount = utils::max(1, groupCount);
@@ -565,11 +553,11 @@ void calculatePositions(Component *children,
   if (component->sizingFlags & scrollableFlag)
     sizeLeftPerGroup = utils::max(sizeLeftPerGroup, 0);
 
+  i32 sizeOffset{};
   for (auto *child = children; child;)
   {
-    // skip if custom or invisible
-    if ((child->placement & Placement::custom) ||
-      !child->componentFlags.isVisible)
+    // skip components that won't be sized right now
+    if (!child->componentFlags.isPositionSet)
     {
       child = child->next;
       continue;
@@ -590,7 +578,7 @@ void calculatePositions(Component *children,
         for (; nextChild && (nextChild->placement & GET_PRIMARY_FLAG(component, Placement::justifyX)) == type;
           nextChild = nextChild->next)
         {
-          if (!nextChild->componentFlags.isVisible || (nextChild->placement & Placement::custom))
+          if (!nextChild->isStillVisible() || (nextChild->placement & Placement::custom))
             continue;
 
           auto bounds = TRANSPOSE(component, nextChild->bounds);
@@ -599,7 +587,7 @@ void calculatePositions(Component *children,
           bounds.x = boundsInTarget.x + margin.x;
           boundsInTarget.x += bounds.w + margin.getRight();
 
-          setNextPosition(false, TRANSPOSE(component, bounds), nextChild, primary);
+          nextChild->bounds.*primaryPosition = bounds.x;
         }
 
         boundsInTarget.x += sizeLeftPerGroup - offset;
@@ -613,7 +601,7 @@ void calculatePositions(Component *children,
         for (; nextChild && (nextChild->placement & GET_PRIMARY_FLAG(component, Placement::justifyX)) == type;
           nextChild = nextChild->next)
         {
-          if (nextChild->componentFlags.isVisible &&
+          if (nextChild->isStillVisible() &&
             !(nextChild->placement & Placement::custom))
             ++j;
         }
@@ -623,7 +611,7 @@ void calculatePositions(Component *children,
 
         for (auto *groupChild = child; j; groupChild = groupChild->next)
         {
-          if (!groupChild->componentFlags.isVisible || (groupChild->placement & Placement::custom))
+          if (!groupChild->isStillVisible() || (groupChild->placement & Placement::custom))
             continue;
 
           boundsInTarget.x += offset;
@@ -634,7 +622,7 @@ void calculatePositions(Component *children,
           bounds.x = boundsInTarget.x + margin.x;
           boundsInTarget.x += bounds.w + margin.getRight();
 
-          setNextPosition(false, TRANSPOSE(component, bounds), groupChild, primary);
+          groupChild->bounds.*primaryPosition = bounds.x;
 
           // we expect a division by zero on the last iteration
           offset = size / utils::max((i32)(j - 1), 1);
@@ -655,9 +643,18 @@ void calculatePositions(Component *children,
       auto margin = scaleValueRoundInt(TRANSPOSE(component, child->margin).toInt());
 
       bounds.x = boundsInTarget.x + margin.x;
+      
+      if (child->previousPosition != invalidPosition)
+        child->previousPosition.*primary += sizeOffset;
+      child->nextPosition.*primary += sizeOffset;
+      child->lastBounds.*primaryPosition += sizeOffset;
 
-      setNextPosition(false, TRANSPOSE(component, bounds), child, primary);
+      child->bounds.*primaryPosition = bounds.x;
       boundsInTarget = boundsInTarget.withTrimLeft(bounds.w + margin.getRight());
+
+      if (child->componentFlags.animateFadeAway)
+        sizeOffset += bounds.w - TRANSPOSE(component, child->lastBounds).w;
+
       child = child->next;
     }
     else if (IS_PRIMARY_POSITION_FLAG_SET(child, component, Placement::right))
@@ -673,7 +670,7 @@ void calculatePositions(Component *children,
       // in reverse start from the right-most
       do
       {
-        if (nextChild->componentFlags.isVisible &&
+        if (nextChild->isStillVisible() &&
           !(nextChild->placement & Placement::custom))
         {
           auto bounds = TRANSPOSE(component, nextChild->bounds);
@@ -682,7 +679,15 @@ void calculatePositions(Component *children,
           bounds.x = boundsInTarget.getRight() - margin.w - bounds.w;
           boundsInTarget.w -= bounds.w + margin.getRight();
 
-          setNextPosition(true, TRANSPOSE(component, bounds), nextChild, primary);
+          if (nextChild->previousPosition != invalidPosition)
+            nextChild->previousPosition.*primary -= sizeOffset;
+          nextChild->nextPosition.*primary -= sizeOffset;
+          nextChild->lastBounds.*primaryPosition -= sizeOffset;
+
+          if (nextChild->componentFlags.animateFadeAway)
+            sizeOffset += bounds.w - TRANSPOSE(component, nextChild->lastBounds).w;
+
+          nextChild->bounds.*primaryPosition = bounds.x;
         }
         nextChild = nextChild->previous;
 
@@ -698,8 +703,9 @@ void calculatePositions(Component *children,
   bool wasThisResized = component->bounds.withZeroOrigin() != component->lastBounds.withZeroOrigin();
   for (auto *child = children; child; child = child->next)
   {
+    // skip components that won't be sized right now
     if (child->componentFlags.isPositionSet)
-      animatePosition(child, wasThisResized);
+      (void)animatePosition(child, wasThisResized, true);
 
     calculatePositions(child->children, child);
   }
@@ -708,13 +714,49 @@ void calculatePositions(Component *children,
 static bool
 animatePosition(Component *component, bool wasParentResized, bool recursive)
 {
-  static constexpr float kMoveDelay = 0.15f; //s
+  static constexpr float kMoveTime = 0.15f; //s
+
+  {
+    auto change = component->nextPosition - component->bounds.getPosition();
+    auto sizeOffset = Point{ component->bounds.w, component->bounds.h } -
+      Point{ component->lastBounds.w, component->lastBounds.h };
+
+    if (test_flag(component->placement, Placement::justifyX) ||
+      test_flag(component->placement, Placement::right))
+    {
+      if (test_flag(component->placement, Placement::justifyX))
+        sizeOffset.x = sizeOffset.x / 2;
+
+      if (component->previousPosition != invalidPosition)
+        component->previousPosition.x += sizeOffset.x;
+      change.x -= sizeOffset.x;
+    }
+
+    if (test_flag(component->placement, Placement::justifyY) ||
+      test_flag(component->placement, Placement::bottom))
+    {
+      if (test_flag(component->placement, Placement::justifyY))
+        sizeOffset.y = sizeOffset.y / 2;
+
+      if (component->previousPosition != invalidPosition)
+        component->previousPosition.y += sizeOffset.y;
+      change.y -= sizeOffset.y;
+    }
+
+    if (change != Point<i32>{} && component->previousPosition != invalidPosition)
+    {
+      component->previousPosition = component->lastBounds.getPosition();
+      component->distanceToNextPositionRatio = 0;
+    }
+
+    component->nextPosition = component->bounds.getPosition();
+  }
 
   bool changedParents = component->lastParent != component->parent &&   // did we change parent components?
     component->lastParent && component->parent;
 
   bool requireReposition = changedParents || (!wasParentResized &&      // skip animations if triggered by parent resize
-    component->lastBounds.getPosition() != component->nextPosition);    // did we have a previous position?
+    component->lastBounds.getPosition() != component->nextPosition);    // have we reached the final destination?
 
   if (requireReposition &&
     component->componentFlags.animateMovement &&                        // are we animating to begin with?
@@ -723,12 +765,9 @@ animatePosition(Component *component, bool wasParentResized, bool recursive)
     // we're interpolating between the previous position (animation start) and the supposed position
     using T = decltype(component->distanceToNextPositionRatio);
 
-    // TODO: fix animations activating on scrolling
-
-    float distanceToNextPositionRatio = (float)component->distanceToNextPositionRatio / utils::int_max<T>;
-    distanceToNextPositionRatio = utils::min(1.0f,
-      distanceToNextPositionRatio + /*getUiRelated()->deltaTime /*/ kMoveDelay);
-    auto t = smoothstep(distanceToNextPositionRatio);
+    float ratio = (float)component->distanceToNextPositionRatio / utils::int_max<T>;
+    ratio = utils::min(1.0f, ratio + getUiRelated()->deltaTime / kMoveTime);
+    auto t = smoothstep(ratio);
 
     // translate the last position if it was in a different component
     if (changedParents)
@@ -754,7 +793,7 @@ animatePosition(Component *component, bool wasParentResized, bool recursive)
     component->bounds.x = (i32)::roundf(utils::lerp((float)component->previousPosition.x, (float)component->nextPosition.x, t));
     component->bounds.y = (i32)::roundf(utils::lerp((float)component->previousPosition.y, (float)component->nextPosition.y, t));
 
-    component->distanceToNextPositionRatio = (T)::ceilf(distanceToNextPositionRatio * utils::int_max<T>);
+    component->distanceToNextPositionRatio = (T)::ceilf(ratio * utils::int_max<T>);
   }
   else
   {
@@ -769,11 +808,6 @@ animatePosition(Component *component, bool wasParentResized, bool recursive)
   component->lastParent = component->parent;
 
   return true;
-}
-
-void animatePosition(Component *component, bool wasParentResized)
-{
-  (void)animatePosition(component, wasParentResized, true);
 }
 
 #undef IS_SECONDARY_POSITION_FLAG_SET
@@ -862,8 +896,11 @@ static void compensateScrollChange(Component *component, Point<float> oldScrollO
       if (child->placement & Placement::custom)
         continue;
 
-      child->previousPosition += offset;
+      if (child->previousPosition != invalidPosition)
+        child->previousPosition += offset;
       child->nextPosition += offset;
+      child->lastBounds += offset;
+      child->bounds += offset;
     }
   }
 }
@@ -945,6 +982,22 @@ calculateSingleLineTextSize(Component *c, bool isCalculatingVertical,
 }
 
 bool
+moveFocusTo(Renderer *renderer, Component *component, FocusChange reason)
+{
+  if (renderer->focusedComponent_ == component)
+    return true;
+
+  if ((!renderer->focusedComponent_ || renderer->focusedComponent_->handleFocus(false, reason, component)) &&
+    (!component || component->handleFocus(true, reason, renderer->focusedComponent_)))
+  {
+    renderer->focusedComponent_ = component;
+    return true;
+  }
+
+  return false;
+}
+
+bool
 Component::mouseDown(const MouseEvent &event)
 {
   checkScrollClick(this, event);
@@ -1013,14 +1066,13 @@ Component::getComponentAt(i32 x, i32 y, bool onlyClickable,
     // this is to support getting components that might be overlapping
     for (auto *child = ((startingAt) ? startingAt : children)->previous; ; child = child->previous)
     {
-      if (child->componentFlags.isVisible &&
+      if (child->isStillVisible() &&
         child->contains(Point{ x - child->bounds.x, y - child->bounds.y }))
       {
         if (!recursive)
           return child;
 
-        auto *result = child->getComponentAt(x - child->bounds.x,
-          y - child->bounds.y, onlyClickable);
+        auto *result = child->getComponentAt(x - child->bounds.x, y - child->bounds.y, onlyClickable);
         if (result)
           return result;
       }
@@ -1044,38 +1096,30 @@ Component::isFocused(bool trueIfChildIsFocused) const
   return isParentOf(focusedComponent);
 }
 
+// the focusing strategy is a little unusual
+// main idea is that if a component tries to grab focus,
+// it can delegate it to its children inside the handleFocus() callback
+// 
+// the reason for making the system as such is to support elements, that have combined functionality, work correctly
+// i.e. text dialogue with a bar of options appears and grabs the focus,
+// but itself can't do anything with the focus, instead it gets passed down to the textbox within it
+// 
+// if none of the (indirect) children can acquire focus, we try to transfer focus upwards if it's allowed
+// and repeat the process above while ignoring the tree we came from
 static bool
-isShowingInternal(Component *component)
+grabFocusInternal(Renderer *renderer, Component *component, 
+  Component *origin, bool tryToFocusUpwards)
 {
-  while (component)
-  {
-    if (!component->componentFlags.isVisible)
-      return false;
+  COMPLEX_ASSERT(component);
 
-    component = component->parent;
-  }
+  // if we're going up, we already know that the parent hierarchy is visible so we don't need to check
+  if (!origin && !component->isStillVisible())
+    return false;
 
-  return true;
-}
-
-static bool
-grabFocusInternal(Component *component, Component *origin = nullptr)
-{
-  if (!isShowingInternal(component))
+  if (component == renderer->getMouseInteractions().focused)
     return true;
 
-  auto *focusedComponent = getUiRelated()->renderer->getMouseInteractions().focused;
-  if (component == focusedComponent)
-    return true;
-
-  if (!focusedComponent || focusedComponent->handleFocus(false, Component::FocusGrabbed, component))
-  {
-    getUiRelated()->renderer->setFocusedComponent(component);
-    component->handleFocus(true, Component::FocusGrabbed, focusedComponent);
-    return true;
-  }
-
-  if (component->isParentOf(focusedComponent) && isShowingInternal(focusedComponent))
+  if (moveFocusTo(renderer, component, FocusChange::Grabbed))
     return true;
 
   if (component->children)
@@ -1083,12 +1127,8 @@ grabFocusInternal(Component *component, Component *origin = nullptr)
     // shallow search
     for (auto *child = component->children->previous; ; child = child->previous)
     {
-      if (child != origin && (!focusedComponent || focusedComponent->handleFocus(false, Component::FocusGrabbed, child)))
-      {
-        getUiRelated()->renderer->setFocusedComponent(child);
-        child->handleFocus(true, Component::FocusGrabbed, focusedComponent);
+      if (child != origin && moveFocusTo(renderer, child, FocusChange::Grabbed))
         return true;
-      }
 
       if (!child->previous->next)
         break;
@@ -1098,7 +1138,7 @@ grabFocusInternal(Component *component, Component *origin = nullptr)
     for (auto *child = component->children->previous; ; child = child->previous)
     {
       if (child != origin)
-        if (grabFocusInternal(child))
+        if (grabFocusInternal(renderer, child, nullptr, tryToFocusUpwards))
           return true;
 
       if (!child->previous->next)
@@ -1107,27 +1147,31 @@ grabFocusInternal(Component *component, Component *origin = nullptr)
   }
 
   // upwards search
-  if (component->parent != nullptr)
-    return grabFocusInternal(component->parent, component);
+  // we check for origin to disallow children to perform upwards searches
+  if (tryToFocusUpwards && origin && component->parent != nullptr)
+    return grabFocusInternal(renderer, component->parent, component, tryToFocusUpwards);
 
   return false;
 }
 
-void Component::grabFocus() { grabFocusInternal(this); }
+void Component::grabFocus(bool tryToFocusUpwards)
+{
+  // if this component isn't even visible in the hierarchy, then grabbing focus is pointless
+  if (!isShowing())
+    return;
+
+  auto *renderer = getUiRelated()->renderer;
+  grabFocusInternal(renderer, this, this, tryToFocusUpwards);
+}
 
 bool
 Component::giveAwayFocusTo(Component *component)
 {
-  auto *focusedComponent = getUiRelated()->renderer->getMouseInteractions().focused;
-  if (focusedComponent != this)
-    return false;
+  auto *renderer = getUiRelated()->renderer;
 
-  if (focusedComponent->handleFocus(false, Component::FocusGivenAway, component) &&
-    (!component || component->handleFocus(true, Component::FocusGivenAway, focusedComponent)))
-  {
-    getUiRelated()->renderer->setFocusedComponent(component);
+  if (this == renderer->getMouseInteractions().focused &&
+    moveFocusTo(renderer, component, FocusChange::GivenAway))
     return true;
-  }
 
   return false;
 }
@@ -1138,7 +1182,7 @@ Component::isObscured(const Component *ignoreClipIncluding) const
   auto scissorBounds = bounds;
 
   bool isNotClipping = ignoreClipIncluding != nullptr;
-  for (auto parentComponent = parent; parentComponent; parentComponent = parentComponent->parent)
+  for (auto *parentComponent = parent; parentComponent; parentComponent = parentComponent->parent)
   {
     auto parentBounds = parentComponent->bounds;
 
@@ -1152,18 +1196,18 @@ Component::isObscured(const Component *ignoreClipIncluding) const
       return true;
   }
 
-  if (scissorBounds.isEmpty())
-    return true;
-
-  return false;
+  return scissorBounds.isEmpty();
 }
 
 bool
-Component::isShowing() const
+Component::isShowing(const Component *relativeTo) const
 {
-  for (auto c = this; c; c = c->parent)
-    if (!c->componentFlags.isVisible)
+  auto *c = this;
+  for (; c != relativeTo; c = c->parent)
+    if (!c->isStillVisible())
       return false;
+
+  COMPLEX_ASSERT(c == relativeTo);
 
   return true;
 }
@@ -1180,7 +1224,7 @@ void Component::addChildComponent(Component *childToAdd, Component *insertBefore
 
 void Component::addChildComponent(Component *childToAdd, usize index)
 {
-  Component *insertBefore = children;
+  auto *insertBefore = children;
   for (; index && insertBefore; (--index), (insertBefore = insertBefore->next)) { }
   addChildComponent(childToAdd, insertBefore);
 }
@@ -1189,8 +1233,6 @@ void Component::removeChildComponent(Component *childToRemove, bool keepFocus)
 {
   if (!childToRemove || childToRemove->parent != this)
     return;
-
-
 
   if (!keepFocus)
     clearLinkedComponents(childToRemove, true);
@@ -1365,22 +1407,18 @@ void Component::removeCommandMessageHandler(utils::sll<CommandMessages::HandleMe
 }
 
 bool
-Component::handleCommandMessage(u64 commandId, void *extraData, bool useFallbackHandler)
+Component::handleCommandMessage(u64 commandId, void *extraData, bool skipDefaultHandler)
 {
   for (auto *handler = commandMessageHandler; handler; handler = handler->next)
     if (handler->object && handler->object(this, commandId, extraData))
       return true;
 
-  if (useFallbackHandler && componentHandleCommandMessage(this, commandId, extraData))
-    return true;
+  if (!skipDefaultHandler)
+  {
+    // insert default handlers if necessary
+    return false;
+  }
 
-  return false;
-}
-
-bool
-Component::componentHandleCommandMessage([[maybe_unused]] Component *c,
-  [[maybe_unused]] u64 commandId, [[maybe_unused]] void *extraData)
-{
   return false;
 }
 
@@ -1397,7 +1435,7 @@ Component::getSkinOverride() const
 void Component::renderChild(Graphics &g, Component *child,
   void (*renderFn)(Graphics &, Component *))
 {
-  if (!child->componentFlags.isVisible)
+  if (!child->isStillVisible())
     return;
 
   // is the child completely outside our bounds

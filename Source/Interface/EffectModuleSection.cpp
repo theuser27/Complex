@@ -158,6 +158,9 @@ EffectModuleSection::EffectHolder::render(Graphics &g)
 bool
 EffectModuleSection::render(Graphics &g)
 {
+  float transparency = (float)fadeawayRatio / utils::int_max<decltype(fadeawayRatio)>;
+  nvgGlobalAlpha(g, transparency * transparency);
+
   float rounding = scaleValue(kOuterPixelRounding);
   fillRect(g, getLocalBounds().toFloat(), getColour(Skin::kBackground, this),
     rounding, rounding, rounding, rounding);
@@ -178,6 +181,7 @@ void EffectModuleSection::reinitialise()
 
   componentFlags.vertical = true;
   componentFlags.clickable = true;
+  componentFlags.animateFadeAway = true;
   desiredSize = { kEffectModuleWidth, 0, kEffectModuleWidth, utils::int_max<i32> };
 
   if (!pool)

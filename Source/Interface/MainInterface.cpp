@@ -89,6 +89,11 @@ CommandMessages::handleProcessorInsertion(Processor *parentProcessor,
   {
     if (substituteInsert && substituteInsert->parent)
       substituteInsert->parent->removeChildComponent(substituteInsert);
+    
+    // FIXME:
+    // edge-case
+    // if the component is already in the correct place, 
+    // re-adding it can succeed a component that is still getting deleted (i.e. delete 2nd module, delete 1st, undo)
     newComponent->parent->removeChildComponent(newComponent);
   }
 
@@ -99,8 +104,7 @@ CommandMessages::handleProcessorInsertion(Processor *parentProcessor,
   auto childComponent = child ? getRelativeComponent(child) : nullptr;
   if (child && newComponent == childComponent)
   {
-    child = child->next;
-    childComponent = child ? getRelativeComponent(child) : nullptr;
+    childComponent = child->next ? getRelativeComponent(child->next) : nullptr;
   }
 
   newComponent->placement = placement;
@@ -594,7 +598,6 @@ void SoundEngineSection::BottomBar::reinitialise()
 
   addChildComponent(&blockSizeGroup);
   blockSizeGroup.placement = Placement::justifyX;
-  blockSizeGroup.componentFlags.animateMovement = true;
   blockSizeGroup.addChildComponent(&blockSizeLabel);
   blockSizeLabel.margin = { 0, 0, Control::kLabelMargin, 0 };
   blockSizeLabel.control = &blockSize;
@@ -618,7 +621,6 @@ void SoundEngineSection::BottomBar::reinitialise()
 
   addChildComponent(&windowGroup);
   windowGroup.placement = Placement::justifyX;
-  //windowGroup.componentFlags.animateMovement = true;
   windowGroup.addChildComponent(&windowLabel);
   windowLabel.margin = { 0, 0, Control::kLabelMargin, 0 };
   windowLabel.control = &window;

@@ -25,7 +25,6 @@ struct PopupItem;
 void calculateSizes(Component *children, Component *component);
 void calculatePositions(Component *children,
   Component *component, Rectangle<i32> boundsInComponent = {});
-void animatePosition(Component *component, bool wasParentResized);
 
 PopupDisplay *getPopupDisplay(bool primary);
 PopupSelector *getPopupSelector();
@@ -40,6 +39,15 @@ bool offsetScroll(Component *component, float deltaX, float deltaY, bool switchD
 
 Range<i32> calculateSingleLineTextSize(Component *c,
   bool isCalculatingVertical, FontId fontId, utils::string_view text);
+
+enum class FocusChange : u8
+{                //                                                     focus transfer direction
+  Click,         // focus changed by a click (clickable=1),          initiator <--  indirect target
+  Grabbed,       // focus manually grabbed by (grabFocus()),         initiator <--  indirect target
+  GivenAway,     // focus willingly given away (giveAwayFocusTo()),  initiator --> no/direct target
+  SetInvisible,  // focus changed due to invisibility (isVisible=0), initiator -->  indirect target
+};
+bool moveFocusTo(Renderer *renderer, Component *component, FocusChange reason);
 
 namespace CommandMessages
 {
@@ -145,7 +153,6 @@ public:
   }
 
   bool contains(Point<i32> parentPoint) const { return getLocalBounds().contains(parentPoint); }
-  bool contains(Point<float> parentPoint) const { return contains(parentPoint.toInt()); }
 
   Component *getComponentAt(i32 x, i32 y, bool onlyClickable = false,
     bool recursive = true, Component *startingAt = nullptr);
@@ -162,15 +169,18 @@ public:
     return false;
   }
   bool
-  isStillVisible()
+  isStillVisible() const
   {
     if (componentFlags.isVisible)
       return true;
 
     return (!componentFlags.animateFadeAway) ? false : fadeawayRatio;
   }
+  // does this component have visible bounds if we ignore the clipping bounds until particular component
+  // which must be a parent or nullptr
   bool isObscured(const Component *ignoreClipIncluding = nullptr) const;
-  bool isShowing() const;
+  // isStillVisible() from the perspective of a particular component which must be a parent or nullptr
+  bool isShowing(const Component *relativeTo = nullptr) const;
   void addChildComponent(Component *childToAdd, Component *insertBefore = nullptr);
   void addChildComponent(Component *childToAdd, usize index);
   // keepFocus will let the GUI system continue focus on childToRemove
@@ -181,27 +191,21 @@ public:
   void removeAllChildComponents();
 
   bool isFocused(bool trueIfChildIsFocused) const;
-  void grabFocus();
+  void grabFocus(bool tryToFocusUpwards = false);
   bool giveAwayFocusTo(Component *component = nullptr);
-
-  enum FocusChange : u8
-  {                     //                                                     focus transfer direction
-    FocusClick,         // focus changed by a click (clickable=1),          initiator <--  indirect target
-    FocusGrabbed,       // focus manually grabbed by (grabFocus()),         initiator <--  indirect target
-    FocusGivenAway,     // focus willingly given away (giveAwayFocusTo()),  initiator --> no/direct target
-    FocusSetInvisible,  // focus changed due to invisibility (isVisible=0), initiator -->  indirect target
-  };
-  virtual bool handleFocus([[maybe_unused]] bool hasFocus,
-    [[maybe_unused]] FocusChange focusChange,
-    [[maybe_unused]] Component *correspondent) { return true; }
+  virtual bool 
+  handleFocus([[maybe_unused]] bool hasFocus, [[maybe_unused]] FocusChange focusChange,
+    [[maybe_unused]] Component *correspondent)
+  {
+    return true;
+  }
 
   virtual bool keyPressed([[maybe_unused]] const KeyPress &key) { return false; }
 
   void addCommandMessageHandler(utils::sll<CommandMessages::HandleMessageFn *> &handler,
     utils::sll<CommandMessages::HandleMessageFn *> *insertBefore = nullptr);
   void removeCommandMessageHandler(utils::sll<CommandMessages::HandleMessageFn *> &handler);
-  bool handleCommandMessage(u64 commandId, void *extraData = {}, bool useFallbackHandler = true);
-  static bool componentHandleCommandMessage(Component *c, u64 commandId, void *extraData);
+  bool handleCommandMessage(u64 commandId, void *extraData = {}, bool skipDefaultHandler = false);
 
   Skin::Override getSkinOverride() const;
 
@@ -312,7 +316,8 @@ struct DrawComponent final : public Component
   }
 };
 
-inline bool preOrderTreeTraversal(Component *tree, const auto &lambda,
+inline bool 
+preOrderTreeTraversal(Component *tree, const auto &lambda,
   bool forward = true, bool includeParent = false)
 {
   if (includeParent && lambda(tree))
@@ -383,27 +388,6 @@ preOrderTreeTraversal(Component *tree, const auto &lambda, Point<i32> at,
     // if the algorithm reaches the first child it will loop back around, so we're done
     if (child == tree->children)
       break;
-  }
-
-  return false;
-}
-
-inline bool
-dfsUpwardTreeTraversal(Component *tree, const auto &lambda,
-  Point<i32> at, bool onlyClickable = true, Component *startingAt = nullptr)
-{
-  Component *deepestComponent{};
-  while ((deepestComponent = tree->getComponentAt(at.x, at.y, onlyClickable, true, startingAt)))
-  {
-    while (deepestComponent->parent != tree)
-    {
-      if (lambda(deepestComponent))
-        return true;
-
-      deepestComponent = deepestComponent->parent;
-    }
-
-    startingAt = tree->getComponentAt(at.x, at.y, false, false, startingAt);
   }
 
   return false;

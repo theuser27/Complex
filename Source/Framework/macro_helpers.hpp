@@ -47,11 +47,12 @@
 
 #define DEPENDENT_REQUIRES(type, ...) []<typename T = type>() { return requires __VA_ARGS__; }()
 
-#define COMPLEX_FOREACH_AND_REVERSE_SLL(iteratorName, begin, ... /*nextName*/) \
-  for (decltype(begin) iteratorName = begin, nextList__ = nullptr, temp__ = nullptr; iteratorName; \
-    (temp__ = nextList__), (nextList__ = iteratorName), \
-    (iteratorName = iteratorName->COMPLEX_DEFAULT_OR(next, __VA_ARGS__)), \
-    (nextList__->COMPLEX_DEFAULT_OR(next, __VA_ARGS__) = temp__))
+// reverses a singly linked list and replaces the pointer inside begin
+#define COMPLEX_REVERSE_SLL(begin, ... /*nextName*/) \
+  for (utils::remove_cvref_t<decltype(begin)> start__ = begin, nextList__ = nullptr, temp__ = nullptr; start__; \
+    (begin = start__), (temp__ = nextList__), (nextList__ = start__), \
+    (start__ = start__->COMPLEX_DEFAULT_OR(next, __VA_ARGS__)), \
+    (nextList__->COMPLEX_DEFAULT_OR(next, __VA_ARGS__) = temp__)) { }
 
 #define COMPLEX_DEFINE_ENUM_OPERATION(T, operation, underlying) \
   constexpr underlying operator operation (T a, auto b) { return (underlying)(a) operation (underlying)(b); }\
@@ -63,4 +64,4 @@
 #define with_val(object, ...) \
   ([&](auto &temp________) -> decltype(auto) { COMPLEX_FOR_EACH(COMPLEX_INTERNAL_ITERATE, COMPLEX_IDENTITY, (temp________, ;), __VA_ARGS__); return temp________; }(object))
 
-#define test_flag(variable, flag) (((variable) & (flag)) == (flag))
+#define test_flag(variable, flag) (((decltype(variable))((variable) & (flag))) == (flag))

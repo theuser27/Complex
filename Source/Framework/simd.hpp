@@ -504,6 +504,15 @@ namespace utils
     #endif
     }
 
+    static forceinline simdtype vectorcall loadAligned(const float *memory)
+    {
+    #if COMPLEX_SSE4_1
+      return _mm_load_ps(memory);
+    #elif COMPLEX_NEON
+      return vld1q_f32(memory);
+    #endif
+    }
+
     static forceinline simdtype vectorcall add(simdtype one, simdtype two)
     {
     #if COMPLEX_SSE4_1

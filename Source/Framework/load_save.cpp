@@ -786,6 +786,8 @@ struct PresetUpdate final : public UndoAction
       auto g = self->state->plugin->acquireProcessingLock();
       auto oldState = self->plugin.exchangeStates(COMPLEX_MOVE(self->state));
       self->state = COMPLEX_MOVE(oldState);
+
+      return true;
     };
 
     undo = [](UndoAction *a)
@@ -795,6 +797,8 @@ struct PresetUpdate final : public UndoAction
       auto g = self->state->plugin->acquireProcessingLock();
       auto newState = self->plugin.exchangeStates(COMPLEX_MOVE(self->state));
       self->state = COMPLEX_MOVE(newState);
+
+      return true;
     };
   }
 
@@ -842,8 +846,7 @@ void loadState(ComplexPlugin *plugin, utils::string_view data)
   if (wasStateInitialised && plugin->state_.get())
   {
     auto *storage = plugin->undoManager.beginNewTransaction();
-    plugin->undoManager.perform(anew(storage, PresetUpdate,
-      { *plugin, COMPLEX_MOVE(state) }));
+    plugin->undoManager.perform(anew(storage, PresetUpdate, { *plugin, COMPLEX_MOVE(state) }));
   }
   else
     plugin->state_ = COMPLEX_MOVE(state);

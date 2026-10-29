@@ -52,15 +52,6 @@ namespace utils
   }
   constexpr forceinline i4 vectorcall reinterpretToInt(i4 value) { return value; }
 
-  forceinline f4 vectorcall
-  toSimdFloatFromUnaligned(const float *unaligned)
-  {
-  #if COMPLEX_SSE4_1
-    return _mm_loadu_ps(unaligned);
-  #elif COMPLEX_NEON
-    return vld1q_f32(unaligned);
-  #endif
-  }
 
   forceinline void vectorcall transpose(utils::array<f4, f4::size> &rows)
   {
@@ -173,7 +164,7 @@ namespace utils
   {
     utils::array<f4, f4::size> values;
     for (u32 i = 0; i < values.size(); i++)
-      values[i] = toSimdFloatFromUnaligned(buffer + indices[i]);
+      values[i] = f4::load(buffer + indices[i]);
     return values;
   }
 

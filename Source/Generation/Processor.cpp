@@ -18,9 +18,10 @@ void deleteProcessor(Processor *processor)
   if (processor->component->componentFlags.animateFadeAway && processor->component->fadeawayRatio != 0)
   {
     // when the timer on the fade out ends, only then delete
-    getUiRelated()->renderer->callbacks.add(processor->component, [processor](Component *component)
+    getUiRelated()->renderer->callbacks.add({ processor->component, utils::int_max<u64> },
+      [processor](Component *c)
       {
-        if (component->fadeawayRatio)
+        if (c->fadeawayRatio)
           return false;
 
         auto g = processor->state->plugin->acquireProcessingLock();
@@ -161,6 +162,30 @@ void Processor::updateParameters(UpdateFlag flag, float sampleRate, bool updateC
       child->updateParameters(flag, sampleRate);
 }
 
+static void readdProcessorComponent(Processor *processor)
+{
+  processor->component->componentFlags.isVisible = true;
+  getUiRelated()->renderer->callbacks.erase({ processor->component, utils::int_max<u64> - 1 });
+}
+
+static void removeProcessorComponent(Processor *processor)
+{
+  if (!processor->component->componentFlags.animateFadeAway)
+    processor->component->parent->removeChildComponent(processor->component);
+  else
+  {
+    processor->component->componentFlags.isVisible = false;
+    getUiRelated()->renderer->callbacks.add({ processor->component, utils::int_max<u64> - 1 }, 
+      [](Component *c)
+      {
+        if (c->fadeawayRatio)
+          return false;
+
+        c->parent->removeChildComponent(c);
+        return true;
+      });
+  }
+}
 
 AddProcessorUpdate::AddProcessorUpdate(Processor *processorToAdd,
   u64 destinationParentStateId, usize destinationIndex) : state{ *processorToAdd->state }, processor{ processorToAdd },
@@ -176,6 +201,9 @@ AddProcessorUpdate::AddProcessorUpdate(Processor *processorToAdd,
   redo = [](UndoAction *a)
   {
     auto *self = (AddProcessorUpdate *)a;
+
+    COMPLEX_ASSERT(!self->processor->parent);
+
     auto destinationPointer = self->state.getProcessor(self->destinationParentStateId);
 
     if (self->processor->parent != destinationPointer)
@@ -184,6 +212,8 @@ AddProcessorUpdate::AddProcessorUpdate(Processor *processorToAdd,
       {
         if (!self->processor->component)
           self->processor->component = self->processor->createUI();
+
+        readdProcessorComponent(self->processor);
 
         CommandMessages::ProcessorInsertion info{ .processor = self->processor,
           .index = (u32)self->destinationIndex, .useIndex = true };
@@ -200,6 +230,8 @@ AddProcessorUpdate::AddProcessorUpdate(Processor *processorToAdd,
     self->state.plugin->markPluginDirty();
 
     self->processor = nullptr;
+
+    return true;
   };
 
   undo = [](UndoAction *a)
@@ -213,10 +245,12 @@ AddProcessorUpdate::AddProcessorUpdate(Processor *processorToAdd,
     }
 
     if (self->processor->component)
-      self->processor->component->parent->removeChildComponent(self->processor->component);
+      removeProcessorComponent(self->processor);
 
     self->state.deregisterProcessorForDynamicParameters(self->processor);
     self->state.plugin->markPluginDirty();
+
+    return true;
   };
 }
 
@@ -254,7 +288,7 @@ MoveProcessorUpdate::MoveProcessorUpdate(State *state,
     auto *self = (MoveProcessorUpdate *)a;
 
     if (self->isDone)
-      return;
+      return true;
     self->isDone = !self->isDone;
 
     auto destinationPointer = self->state.getProcessor(self->destinationParentStateId);
@@ -265,6 +299,8 @@ MoveProcessorUpdate::MoveProcessorUpdate(State *state,
     insertComponent(movedProcessor, destinationPointer, (u32)self->destinationIndex);
 
     self->state.plugin->markPluginDirty();
+
+    return true;
   };
 
   undo = [](UndoAction *a)
@@ -272,7 +308,7 @@ MoveProcessorUpdate::MoveProcessorUpdate(State *state,
     auto *self = (MoveProcessorUpdate *)a;
 
     if (!self->isDone)
-      return;
+      return true;
     self->isDone = !self->isDone;
 
     auto destinationPointer = self->state.getProcessor(self->destinationParentStateId);
@@ -283,25 +319,35 @@ MoveProcessorUpdate::MoveProcessorUpdate(State *state,
     insertComponent(movedProcessor, sourcePointer, (u32)self->sourceIndex);
 
     self->state.plugin->markPluginDirty();
+
+    return true;
   };
 }
 
 DeleteProcessorUpdate::DeleteProcessorUpdate(Processor *processorToDelete) :
   state{ *processorToDelete->state }
 {
-  parentStateId = processorToDelete->parent->stateId;
-  index = processorToDelete->getIndex();
+  if (processorToDelete->parent)
+  {
+    parentStateId = processorToDelete->parent->stateId;
+    index = processorToDelete->getIndex();
+  }
 
   destructor = [](UndoAction *a)
   {
     auto *self = (DeleteProcessorUpdate *)a;
-    if (self->processor)
-      deleteProcessor(self->processor);
+    if (self->parentStateId)
+      if (self->processor)
+        deleteProcessor(self->processor);
   };
 
   redo = [](UndoAction *a)
   {
     auto *self = (DeleteProcessorUpdate *)a;
+    // fail if this is a duplicate update
+    if (!self->parentStateId)
+      return false;
+
     auto parentPointer = self->state.getProcessor(self->parentStateId);
 
     auto g = self->state.plugin->acquireProcessingLock();
@@ -320,7 +366,9 @@ DeleteProcessorUpdate::DeleteProcessorUpdate(Processor *processorToDelete) :
     self->state.deregisterProcessorForDynamicParameters(self->processor);
     self->state.plugin->markPluginDirty();
 
-    self->processor->component->parent->removeChildComponent(self->processor->component);
+    removeProcessorComponent(self->processor);
+
+    return true;
   };
 
   undo = [](UndoAction *a)
@@ -345,6 +393,9 @@ DeleteProcessorUpdate::DeleteProcessorUpdate(Processor *processorToDelete) :
     self->state.registerProcessorForDynamicParameters(self->processor);
     self->state.plugin->markPluginDirty();
 
+    readdProcessorComponent(self->processor);
     self->processor = nullptr;
+
+    return true;
   };
 }

@@ -450,8 +450,8 @@ extern ExecutableMetadata executableStaticData;
 struct UndoAction
 {
   // mandatory to implement
-  void (*redo)(UndoAction *){};
-  void (*undo)(UndoAction *){};
+  bool (*redo)(UndoAction *){};
+  bool (*undo)(UndoAction *){};
 
   // free to implement or not
   void (*destructor)(UndoAction *){};

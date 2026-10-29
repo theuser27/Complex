@@ -724,7 +724,8 @@ struct MappingParameterUpdate : public UndoAction
     UndoAction::undo = redo;
   }
 
-  static void redo(UndoAction *a)
+  static bool
+  redo(UndoAction *a)
   {
     auto *self = (MappingParameterUpdate *)a;
     auto g = self->bridge->state->plugin->acquireProcessingLock();
@@ -743,6 +744,8 @@ struct MappingParameterUpdate : public UndoAction
 
     HostParameter::notifyParameterChange();
     self->parameter = oldParameter;
+
+    return true;
   }
 
   static bool isOfType(UndoAction *a) { return a->redo == redo && a->undo == redo; }

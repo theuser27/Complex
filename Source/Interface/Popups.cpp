@@ -522,7 +522,7 @@ void PopupSelector::resetState(bool callCancelFn)
   toggleable = true;
   componentFlags.isVisible = false;
 
-  getUiRelated()->renderer->callbacks.erase(this);
+  getUiRelated()->renderer->callbacks.erase({ this, 0 });
 }
 
 void PopupSelector::summon(Component *summoningComponent,
@@ -538,7 +538,7 @@ void PopupSelector::summon(Component *summoningComponent,
   componentFlags.isVisible = true;
   grabFocus();
 
-  getUiRelated()->renderer->callbacks.add(this, [](Component *c)
+  getUiRelated()->renderer->callbacks.add({ this, 0 }, [](Component *c)
     {
       auto *self = (PopupSelector *)c;
       for (auto *child = self->children; child; child = child->next)

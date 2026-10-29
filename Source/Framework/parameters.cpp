@@ -463,7 +463,7 @@ void HostParameter::flushUpdates()
     auto newValue = value_.load(satomi::memory_order_relaxed);
     do
     {
-      // INFO: undo/redo doesn't track these changes
+      // NB: undo/redo doesn't track these changes
       if (p->control)
         p->control->setValue(newValue, true);
       else
@@ -806,15 +806,8 @@ void UndoManager::setTransationStorage(usize transactionsToKeep)
     return;
   }
 
-  usize copySize, begin;
-  if ((usize)(undoActionsCount + redoActionsCount) < transactionsToKeep)
-  {
-    // new buffer can house all currently stored actions
-    copySize = undoActionsCount + redoActionsCount;
-    begin = ((usize)currentIndex + 1 - undoActionsCount +
-      transactions.size()) % transactions.size();
-  }
-  else
+  usize copySize = undoActionsCount + redoActionsCount;
+  if (copySize > transactionsToKeep)
   {
     // new buffer can't house all currently stored actions
     // use half the size for undo and redo actions respectively
@@ -837,17 +830,15 @@ void UndoManager::setTransationStorage(usize transactionsToKeep)
 
     redoActionsCount = newRedoActionsCount;
     undoActionsCount = newUndoActionsCount;
-    begin = ((usize)currentIndex + 1 - undoActionsCount +
-      transactions.size()) % transactions.size();
   }
 
-  currentIndex = undoActionsCount - 1;
+  usize begin = (currentIndex + 1 - undoActionsCount + transactions.size()) % transactions.size();
 
-  auto *newTransactions = arranew(storage, decltype(transactions)::value_type,
-    transactionsToKeep, {});
+  auto *newTransactions = arranew(storage, decltype(transactions)::value_type, transactionsToKeep, {});
   for (usize i = 0; i < copySize; ++i)
     newTransactions[i] = transactions[(begin + i) % transactions.size()];
   transactions = { newTransactions, transactionsToKeep };
+  currentIndex = undoActionsCount - 1;
 }
 
 void UndoManager::clear()
@@ -859,26 +850,32 @@ void UndoManager::clear()
   // this will also deallocate the transactions buffer, so we need to allocate it again
   storage->clear(storage);
 
-  auto *newTransactions = arranew(storage, decltype(transactions)::value_type,
-    transactions.size(), {});
+  auto *newTransactions = arranew(storage, decltype(transactions)::value_type, transactions.size(), {});
   transactions = { newTransactions, transactions.size() };
 }
 
-bool UndoManager::perform(UndoAction *newAction)
+bool 
+UndoManager::perform(UndoAction *newAction)
 {
   if (newAction == nullptr)
     return false;
 
   if (isInsideUndoRedoCall)
   {
-    COMPLEX_ASSERT_FALSE("Don't call UndoManager methods recursively from the \
-      redo()/undo() methods in UndoAction, or else these actions will be discarded!");
+    COMPLEX_ASSERT_FALSE("Don't call UndoManager methods recursively from redo()/undo() in UndoAction");
     return false;
   }
 
   isInsideUndoRedoCall = true;
+  defer { isInsideUndoRedoCall = false; };
 
-  newAction->redo(newAction);
+  if (!newAction->redo(newAction))
+  {
+    if (newAction->destructor)
+      newAction->destructor(newAction);
+    utils::Pool::remove(newAction);
+    return false;
+  }
 
   COMPLEX_ASSERT(redoActionsCount == 0, "You need to call UndoManager::beginNewTransaction() \
     if you want to overwrite undone actions");
@@ -921,19 +918,22 @@ bool UndoManager::perform(UndoAction *newAction)
     action = action->next;
   }
 
-  isInsideUndoRedoCall = false;
-
   return true;
 }
 
 utils::Pool *
 UndoManager::beginNewTransaction()
 {
+  redoActionsCount = 0;
+  // increment index only if the a current transaction exists and it has no actions
+  if (undoActionsCount && !getCurrent().second)
+    return transactions[currentIndex].first;
+  
+  undoActionsCount = utils::min(undoActionsCount + 1, transactions.size());
   currentIndex = (currentIndex + 1) % transactions.size();
-  bool currentHasArena = transactions[currentIndex].first;
 
-  // make a new action set if there isn't one currently
-  if (!currentHasArena)
+  // make a new action set/pool if there isn't one already
+  if (!transactions[currentIndex].first)
   {
     COMPLEX_ASSERT(!transactions[currentIndex].second);
     transactions[currentIndex].first =
@@ -946,13 +946,31 @@ UndoManager::beginNewTransaction()
       action->destructor(action);
 
   transactions[currentIndex].second = {};
-  undoActionsCount = utils::min(undoActionsCount + 1, transactions.size());
-  redoActionsCount = 0;
 
-  //COMPLEX_DEBUG_LOG("begin new - index: %zu, undo count: %zu, redo count: %zu\n\n",
+  //COMPLEX_LOG("begin new - index: %zu, undo count: %zu, redo count: %zu\n\n",
   //  currentIndex, undoActionsCount, redoActionsCount);
 
   return transactions[currentIndex].first;
+}
+
+static void undoRedo(UndoAction *&list, bool (*UndoAction:: *fn)(UndoAction *))
+{
+  for (UndoAction *action = list, *previous = nullptr; action; action = action->next)
+  {
+    if (!(action->*fn)(action))
+    {
+      if (action->destructor)
+        action->destructor(action);
+      utils::Pool::remove(action);
+
+      continue;
+    }
+
+    ((previous) ? previous->next : list) = action;
+    previous = action;
+  }
+
+  COMPLEX_REVERSE_SLL(list);
 }
 
 bool
@@ -963,24 +981,19 @@ UndoManager::undo()
 
   if (isInsideUndoRedoCall)
   {
-    COMPLEX_ASSERT_FALSE("Don't call UndoManager methods recursively from the \
-      redo()/undo() methods in UndoAction, or else these actions will be discarded!");
+    COMPLEX_ASSERT_FALSE("Don't call UndoManager methods recursively from redo()/undo() in UndoAction");
     return false;
   }
 
   isInsideUndoRedoCall = true;
 
-  COMPLEX_FOREACH_AND_REVERSE_SLL(action, transactions[currentIndex].second)
-  {
-    action->undo(action);
-    transactions[currentIndex].second = action;
-  }
+  undoRedo(transactions[currentIndex].second, &UndoAction::undo);
 
   currentIndex = (currentIndex - 1 + transactions.size()) % transactions.size();
   --undoActionsCount;
   ++redoActionsCount;
 
-  //COMPLEX_DEBUG_LOG("undo - index: %zu, undo count: %zu, redo count: %zu\n\n",
+  //COMPLEX_LOG("undo - index: %zu, undo count: %zu, redo count: %zu\n\n",
   //  currentIndex, undoActionsCount, redoActionsCount);
 
   isInsideUndoRedoCall = false;
@@ -995,8 +1008,7 @@ UndoManager::redo()
 
   if (isInsideUndoRedoCall)
   {
-    COMPLEX_ASSERT_FALSE("Don't call UndoManager methods recursively from the \
-      redo()/undo() methods in UndoAction, or else these actions will be discarded!");
+    COMPLEX_ASSERT_FALSE("Don't call UndoManager methods recursively from redo()/undo() in UndoAction");
     return false;
   }
 
@@ -1004,16 +1016,12 @@ UndoManager::redo()
 
   currentIndex = (currentIndex + 1) % transactions.size();
 
-  COMPLEX_FOREACH_AND_REVERSE_SLL(action, transactions[currentIndex].second)
-  {
-    action->redo(action);
-    transactions[currentIndex].second = action;
-  }
+  undoRedo(transactions[currentIndex].second, &UndoAction::redo);
 
   --redoActionsCount;
   ++undoActionsCount;
 
-  //COMPLEX_DEBUG_LOG("redo - index: %zu, undo count: %zu, redo count: %zu\n\n",
+  //COMPLEX_LOG("redo - index: %zu, undo count: %zu, redo count: %zu\n\n",
   //  currentIndex, undoActionsCount, redoActionsCount);
 
   isInsideUndoRedoCall = false;

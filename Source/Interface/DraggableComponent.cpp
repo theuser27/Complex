@@ -181,7 +181,7 @@ DraggableComponent::prepareToMove(const MouseEvent &e)
   // set the dragged component to its correct position
   draggedComponent->bounds = draggedComponent->bounds.withPosition(initialClickPosition);
 
-  getUiRelated()->renderer->callbacks.add(this, [](Component *c)
+  getUiRelated()->renderer->callbacks.add({ this, 0 }, [](Component *c)
     {
       auto *self = (DraggableComponent *)c;
       if (!self->isDragging)
@@ -245,7 +245,7 @@ void DraggableComponent::move(const MouseEvent &e)
   else if (!directionY && newPosition.y - directionChangePoint.y < -draggedComponent->bounds.h / 4)
     directionY = true;
 
-  //COMPLEX_DEBUG_LOG("wasMovingUpX: %d, wasMovingUpY: %d, new - directionChange: { %d, %d }\n",
+  //COMPLEX_LOG("wasMovingUpX: %d, wasMovingUpY: %d, new - directionChange: { %d, %d }\n",
   //  wasMovingUpX, wasMovingUpY, newPosition.x - directionChangePoint.x, newPosition.y - directionChangePoint.y);
 }
 
@@ -257,7 +257,7 @@ void DraggableComponent::endMove(const MouseEvent &e)
 
   COMPLEX_ASSERT(processor);
 
-  getUiRelated()->renderer->callbacks.erase(this);
+  getUiRelated()->renderer->callbacks.erase({ this, 0 });
 
   // finalising placement
   draggedComponent->nextPosition = initialClickPosition + e.getOffsetFromDragStart();
@@ -324,7 +324,7 @@ DraggableComponent::keyPressed(const KeyPress &keyPress)
   draggedComponent->overridePosition = previousOverridePosition;
   draggedComponent->componentFlags.keepSize = false;
 
-  getUiRelated()->renderer->callbacks.erase(this);
+  getUiRelated()->renderer->callbacks.erase({ this, 0 });
 
   if (!isCopying)
   {

@@ -1858,10 +1858,14 @@ namespace utils
       if (vtable_ == &detail::emptyVtable<R, Args...>)
         return;
 
-      vtable_->destroyer(data_);
-      if constexpr (isOnHeap)
-        if (data_)
-          utils::deallocate(data_);
+      if (vtable_)
+      {
+        vtable_->destroyer(data_);
+        if constexpr (isOnHeap)
+          if (data_)
+            utils::deallocate(data_);
+      }
+
       vtable_ = &detail::emptyVtable<R, Args...>;
     }
 
@@ -1872,7 +1876,10 @@ namespace utils
     fn(const fn<R(Args...), Size> &other)
     {
       allocate(other.vtable_);
-      vtable_->copier(data_, other.data_);
+      if (vtable_)
+        vtable_->copier(data_, other.data_);
+      else
+        fnPtr_ = other.fnPtr_;
     }
 
     template<usize Size>
@@ -1886,7 +1893,10 @@ namespace utils
       else
       {
         allocate(other.vtable_);
-        vtable_->mover(data_, other.data_);
+        if (vtable_)
+          vtable_->mover(data_, other.data_);
+        else
+          fnPtr_ = other.fnPtr_;
         other.~fn<R(Args...), Size>();
       }
     }
@@ -1906,7 +1916,10 @@ namespace utils
         vtable_->destroyer(data_);
 
       allocate(other.vtable_);
-      vtable_->copier(data_, other.data_);
+      if (vtable_)
+        vtable_->copier(data_, other.data_);
+      else
+        fnPtr_ = other.fnPtr_;
 
       return *this;
     }
@@ -1921,7 +1934,10 @@ namespace utils
         this->~fn();
 
         vtable_ = other.vtable_;
-        data_ = other.data_;
+        if (vtable_)
+          data_ = other.data_;
+        else
+          fnPtr_ = other.fnPtr_;
         other.data_ = nullptr;
         other.vtable_ = &detail::emptyVtable<R, Args...>;
       }
@@ -1930,7 +1946,10 @@ namespace utils
         if (vtable_ && data_)
           vtable_->destroyer(data_);
         allocate(other.vtable_);
-        vtable_->mover(data_, other.data_);
+        if (vtable_)
+          vtable_->mover(data_, other.data_);
+        else
+          fnPtr_ = other.fnPtr_;
 
         other.~fn<R(Args...), Size>();
       }
@@ -1962,12 +1981,24 @@ namespace utils
 
     explicit constexpr operator bool() const { return vtable_ != &detail::emptyVtable<R, Args...>; }
 
-    constexpr R operator()(Args ... args) const { return vtable_->invoker(data_, COMPLEX_FWD(args)...); }
+    constexpr R operator()(Args ... args) const
+    {
+      if (vtable_)
+        return vtable_->invoker(data_, COMPLEX_FWD(args)...);
+      else
+        return fnPtr_(COMPLEX_FWD(args)...);
+    }
 
     void swap(fn &other) requires isOnHeap
     {
       COMPLEX_SWAP_MEMBERS(vtable_, other);
-      COMPLEX_SWAP_MEMBERS(data_, other);
+      if (vtable_)
+      {
+        if constexpr (isOnHeap)
+          COMPLEX_SWAP_MEMBERS(data_, other);
+      }
+      else
+        COMPLEX_SWAP_MEMBERS(fnPtr_, other);
     }
 
   private:
@@ -1979,23 +2010,27 @@ namespace utils
 
     void allocate(const vtable_t *newVtable)
     {
+      auto *oldVtable = vtable_;
+      vtable_ = newVtable;
+      if (oldVtable)
+        oldVtable->destroyer(data_);
+
+      if (!newVtable)
+        return;
+      
       if constexpr (isOnHeap)
       {
-        if (vtable_ && vtable_->alignment >= newVtable->alignment && vtable_->size >= newVtable->size)
+        if (oldVtable && oldVtable->alignment >= newVtable->alignment && oldVtable->size >= newVtable->size)
         {
           // we already have enough memory, no allocation needed
           // however we might be losing track of the current amount of memory available
           // but we'd need to store this information dynamically otherwise ¯\_(ツ)_/¯
-          vtable_->destroyer(data_);
         }
         else
         {
           // we have (no) memory and it's not enough
-          if (data_)
-          {
-            COMPLEX_ASSERT(vtable_);
+          if (oldVtable && data_)
             utils::deallocate(data_);
-          }
 
           data_ = utils::allocate(newVtable->size, newVtable->alignment);
         }
@@ -2004,8 +2039,6 @@ namespace utils
       {
         COMPLEX_ASSERT(Alignment >= newVtable->alignment && MaxSize >= newVtable->size);
       }
-
-      vtable_ = newVtable;
     }
 
     template<typename FnT>
@@ -2013,28 +2046,42 @@ namespace utils
     {
       using fn_t = remove_cvref_t<FnT>;
 
-      static_assert(is_copy_constructible_v<fn_t>,
-        "fn cannot be constructed from a non-copyable type");
+      // if the new "lambda" is a function pointer/reference, we just store it
+      // that also doesn't require a vtable so we leave it empty
+      const vtable_t *newVtable = nullptr;
+      if constexpr (!utils::is_function_v<utils::remove_pointer_t<fn_t>>)
+      {
+        static_assert(is_copy_constructible_v<fn_t>,
+          "fn cannot be constructed from a non-copyable type");
 
-      static_assert(sizeof(fn_t) <= MaxSize || isOnHeap,
-        "fn is too small to fit this object");
+        static_assert(sizeof(fn_t) <= MaxSize || isOnHeap,
+          "fn is too small to fit this object");
 
-      static_assert((Alignment % alignof(fn_t) == 0) || isOnHeap,
-        "fn cannot be constructed from an object of this alignment");
+        static_assert((Alignment % alignof(fn_t) == 0) || isOnHeap,
+          "fn cannot be constructed from an object of this alignment");
 
-      static_assert(Alignment >= alignof(fn_t) || isOnHeap,
-        "fn does not support alignment higher the one defined in the class");
+        static_assert(Alignment >= alignof(fn_t) || isOnHeap,
+          "fn does not support alignment higher the one defined in the class");
 
-      static constexpr auto vtable = vtable_t::template create<fn_t>();
+        static constexpr auto vtable = vtable_t::template create<fn_t>();
+        newVtable = &vtable;
+      }
 
-      allocate(&vtable);
+      allocate(newVtable);
 
-      (void)new (data_) fn_t{ COMPLEX_FWD(lambda) };
+      if constexpr (utils::is_function_v<utils::remove_pointer_t<fn_t>>)
+        fnPtr_ = lambda;
+      else
+        (void)new(data_) fn_t{ COMPLEX_FWD(lambda) };
 
-      vtable_ = &vtable;
+      vtable_ = newVtable;
     }
 
-    alignas(isOnHeap ? alignof(storage_t) : Alignment) storage_t data_{};
+    union
+    {
+      alignas(isOnHeap ? alignof(storage_t) : Alignment) storage_t data_{};
+      R (*fnPtr_)(Args...);
+    };
     const vtable_t *vtable_ = &detail::emptyVtable<R, Args...>;
 
     template<typename, usize, usize>

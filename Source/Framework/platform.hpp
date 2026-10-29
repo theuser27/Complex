@@ -149,8 +149,7 @@
     #endif
   #endif
 
-  #define COMPLEX_LOG(format, ...) complexLogMessage(__FILE__, __func__, __LINE__, format __VA_OPT__(,) __VA_ARGS__)
-  #define COMPLEX_DEBUG_LOG(format, ...) complexLogMessage(nullptr, nullptr, __LINE__, format __VA_OPT__(,) __VA_ARGS__)
+  #define COMPLEX_LOG(format, ...) complexLogMessage(nullptr, nullptr, __LINE__, format __VA_OPT__(,) __VA_ARGS__)
 
   #define COMPLEX_ASSERT(condition, ...) (void)((!!(condition)) || (complexPrintAssertMessage(#condition, \
     __FILE__, __func__, __LINE__ __VA_OPT__(, true,) __VA_ARGS__), COMPLEX_DEBUG_TRAP(), false))
@@ -163,7 +162,6 @@
 #else
   #define COMPLEX_DEBUG_TRAP() ((void)0)
   #define COMPLEX_LOG(...) ((void)0)
-  #define COMPLEX_DEBUG_LOG(...) ((void)0)
   #define COMPLEX_ASSERT(...) ((void)0)
   #define COMPLEX_ASSERT_FALSE(...) ((void)0)
   #define COMPLEX_INVARIANT_ASSERT(...) ((void)0)

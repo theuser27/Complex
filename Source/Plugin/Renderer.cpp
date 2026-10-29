@@ -427,12 +427,12 @@ void Renderer::resetGui(MainInterface *newGui)
 }
 
 bool
-Renderer::setUISize(u32 width, u32 height)
+Renderer::setGuiSize(u32 width, u32 height)
 {
   return plugin.hostContext->requestResize(plugin.hostContext, width, height);
 }
 
-void Renderer::setUIScale(float newPluginScale)
+void Renderer::setGuiScale(float newPluginScale)
 {
   pluginScale = newPluginScale;
   recalculateScale();
@@ -571,15 +571,6 @@ void Renderer::resizeChange(bool resizeChange)
 }
 
 
-void Renderer::moveFocusTo(Component *component)
-{
-  if ((!focusedComponent_ || focusedComponent_->handleFocus(false, Component::FocusGivenAway, component)) &&
-    (!component || component->handleFocus(true, Component::FocusGivenAway, focusedComponent_)))
-  {
-    focusedComponent_ = component;
-  }
-}
-
 utils::span<const byte>
 Renderer::getClipboard()
 {
@@ -670,12 +661,12 @@ void Renderer::handleMouseDown(MouseEvent e)
 
   if (focusedComponent_ && mouseDownComponent_ != focusedComponent_ &&
     // does the old focused component allow losing focus
-    focusedComponent_->handleFocus(false, Component::FocusClick, mouseDownComponent_))
+    focusedComponent_->handleFocus(false, FocusChange::Click, mouseDownComponent_))
   {
     auto oldFocused = focusedComponent_;
     focusedComponent_ = mouseDownComponent_;
     // does the newly clicked component exist and allow gaining focus
-    if (mouseDownComponent_ && !mouseDownComponent_->handleFocus(true, Component::FocusClick, oldFocused))
+    if (mouseDownComponent_ && !mouseDownComponent_->handleFocus(true, FocusChange::Click, oldFocused))
       if (focusedComponent_ == mouseDownComponent_)
         focusedComponent_ = nullptr;
   }
@@ -685,8 +676,8 @@ void Renderer::handleMouseDown(MouseEvent e)
   {
     mouseDownComponent_->componentFlags.isClicked = true;
     success = mouseDownComponent_->mouseDown(getRelativeEvent(e, mouseDownComponent_));
-    // note: mouseDownComponent_ might not be the same as it was before the call
-    //       because setClickedComponent() might have been called
+    // NB: mouseDownComponent_ might not be the same as it was before the call
+    //     because setClickedComponent() might have been called
     if (success)
       break;
     mouseDownComponent_->componentFlags.isClicked = false;
@@ -831,20 +822,18 @@ void Renderer::recalculateScale(bool forceResize)
 
 void Renderer::checkFocusedComponent()
 {
+  // reason for checking isVisible directly and not isStillVisible() is because
+  // we want to immediately transfer as soon as something is known to disappear
   if (!focusedComponent_ || focusedComponent_->componentFlags.isVisible)
     return;
 
   auto next = focusedComponent_->parent;
   while (next)
   {
-    // both parties must agree to take over/relinquish focus from/to the other
-    if (next->componentFlags.isVisible &&
-      focusedComponent_->handleFocus(false, Component::FocusSetInvisible, next) &&
-      next->handleFocus(true, Component::FocusSetInvisible, focusedComponent_))
-    {
-      focusedComponent_ = next;
+    // we want to know that the candidate isn't disappearing either
+    if (next->componentFlags.isVisible && moveFocusTo(this, next, FocusChange::SetInvisible))
       return;
-    }
+    
     next = next->parent;
   }
 
@@ -859,7 +848,7 @@ void Renderer::doSizingAndPositioning()
   for (usize i = 0; i < callbacks.data.size(); ++i)
   {
     auto &[c, callback] = callbacks.data[i];
-    auto toRemove = callback(c);
+    auto toRemove = callback(c.first);
     if (toRemove)
     {
       callbacks.data.erase(i);

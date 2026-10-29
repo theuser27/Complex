@@ -203,7 +203,7 @@ restart:
     if (index >= effect->parameterCount)
       continue;
 
-    COMPLEX_DEBUG_LOG("Replacing %v with %v at index %zu\n",
+    COMPLEX_LOG("Replacing %v with %v at index %zu\n",
       parameter->details.displayName, replacementParameter->details.displayName, index);
 
     for (; i < index; (replacementParameter = replacementParameter->next), (++i)) { }
@@ -322,7 +322,7 @@ void SoundEngine::interleaveInputs(const Buffer &inputBuffer)
     {
       // skipping every second sample (complex signal)
       for (u32 k = 0; k < values.size(); ++k)
-        values[k] = toSimdFloatFromUnaligned(&valueSources[k][j * 2]);
+        values[k] = f4::load(&valueSources[k][j * 2]);
 
       complexTranspose(values);
 
@@ -336,7 +336,7 @@ void SoundEngine::interleaveInputs(const Buffer &inputBuffer)
       nyquist[2 * k] = valueSources[k][(binCount - 1) * 2];
       nyquist[2 * k + 1] = valueSources[k][(binCount - 1) * 2 + 1];
     }
-    data[binCount - 1] = toSimdFloatFromUnaligned(nyquist.data());
+    data[binCount - 1] = f4::load(nyquist.data());
   }
 }
 

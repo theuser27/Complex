@@ -101,20 +101,25 @@ struct ParameterUpdate final : public UndoAction
     UndoAction::undo = undo;
   }
 
-  static void redo(UndoAction *a)
+  static bool
+  redo(UndoAction *a)
   {
     auto *self = (ParameterUpdate *)a;
 
     if (self->control->setValue(self->newValue, true))
       self->control->setValueToHost();
+
+    return true;
   }
 
-  static void undo(UndoAction *a)
+  static bool undo(UndoAction *a)
   {
     auto *self = (ParameterUpdate *)a;
 
     if (self->control->setValue(self->oldValue, true))
       self->control->setValueToHost();
+    
+    return true;
   }
 
   static bool isOfType(UndoAction *a) { return a->redo == redo && a->undo == undo; }
