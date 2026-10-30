@@ -15,13 +15,13 @@ void deleteProcessor(Processor *processor)
   COMPLEX_ASSERT(processor->stateId != 0);
 
   // if the GUI for this processor is fading out, delay deletion until it disappears
-  if (processor->component->componentFlags.animateFadeAway && processor->component->fadeawayRatio != 0)
+  if (processor->component->componentFlags.animateFadeAway && processor->component->sizeRatio != 0)
   {
     // when the timer on the fade out ends, only then delete
-    getUiRelated()->renderer->callbacks.add({ processor->component, utils::int_max<u64> },
+    getThreadLocals()->renderer->callbacks.add({ processor->component, utils::int_max<u64> },
       [processor](Component *c)
       {
-        if (c->fadeawayRatio)
+        if (c->sizeRatio)
           return false;
 
         auto g = processor->state->plugin->acquireProcessingLock();
@@ -164,8 +164,8 @@ void Processor::updateParameters(UpdateFlag flag, float sampleRate, bool updateC
 
 static void readdProcessorComponent(Processor *processor)
 {
-  processor->component->componentFlags.isVisible = true;
-  getUiRelated()->renderer->callbacks.erase({ processor->component, utils::int_max<u64> - 1 });
+  processor->component->componentFlags.visible = true;
+  getThreadLocals()->renderer->callbacks.erase({ processor->component, utils::int_max<u64> - 1 });
 }
 
 static void removeProcessorComponent(Processor *processor)
@@ -174,11 +174,11 @@ static void removeProcessorComponent(Processor *processor)
     processor->component->parent->removeChildComponent(processor->component);
   else
   {
-    processor->component->componentFlags.isVisible = false;
-    getUiRelated()->renderer->callbacks.add({ processor->component, utils::int_max<u64> - 1 }, 
+    processor->component->componentFlags.visible = false;
+    getThreadLocals()->renderer->callbacks.add({ processor->component, utils::int_max<u64> - 1 }, 
       [](Component *c)
       {
-        if (c->fadeawayRatio)
+        if (c->sizeRatio)
           return false;
 
         c->parent->removeChildComponent(c);

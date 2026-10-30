@@ -240,7 +240,7 @@ static void handleIndexedData(utils::Pool *pool, bool isAutomated,
           newChildOption->valueCount = (u32)cjson_GetObjectItem(value, "value_count")->vuint;
           if ([[maybe_unused]] cjson *dataUuid = cjson_GetObjectItem(value, "dynamic_update_uuid"))
           {
-            COMPLEX_ASSERT(newChildOption->dynamicUpdateUuid = dataUuid->vuint);
+            COMPLEX_ASSERT(newChildOption->dynamicUpdateUuid == dataUuid->vuint);
           }
 
           newOption->addChildren({{ newChildOption }});
@@ -757,8 +757,8 @@ void saveState(ComplexPlugin *plugin, const void *stateCtx, cplug_writeProc writ
   if (!plugin->state_)
     return;
 
-  getUiRelated() = &plugin->renderer.generalData;
-  defer{ getUiRelated() = nullptr; };
+  getThreadLocals() = &plugin->renderer.generalData;
+  defer{ getThreadLocals() = nullptr; };
 
   // flush all changes that might still exist, otherwise the save might be in an invalid state
   plugin->state_->flushHostParameters();
@@ -813,8 +813,8 @@ void loadState(ComplexPlugin *plugin, utils::string_view data)
 
   utils::sp<State> state{};
 
-  getUiRelated() = &plugin->renderer.generalData;
-  defer{ getUiRelated() = nullptr; };
+  getThreadLocals() = &plugin->renderer.generalData;
+  defer{ getThreadLocals() = nullptr; };
 
   if (data.size() != 0)
   {

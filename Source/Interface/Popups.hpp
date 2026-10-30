@@ -27,7 +27,7 @@ public:
     relativePlacement = relativeSourcePlacement;
     offset = customPosition;
     text.copy(displayText);
-    componentFlags.isVisible = true;
+    componentFlags.visible = true;
   }
   void setContentControl(Control *sourceControl,
     Placement relativeSourcePlacement, Point<i32> customPosition = {})
@@ -36,12 +36,12 @@ public:
     isControl = true;
     relativePlacement = relativeSourcePlacement;
     offset = customPosition;
-    componentFlags.isVisible = true;
+    componentFlags.visible = true;
   }
   void reset()
   {
     source = nullptr;
-    componentFlags.isVisible = false;
+    componentFlags.visible = false;
   }
 
   utils::string text;

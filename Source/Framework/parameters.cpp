@@ -15,7 +15,7 @@ IndexedData::getText() const
   auto text = displayName;
   if (text.empty() && flags == StateIdFlag)
   {
-    auto *processor = getUiRelated()->plugin.state_->getProcessor(stateId);
+    auto *processor = getThreadLocals()->plugin.state_->getProcessor(stateId);
     text = processor->name;
   }
   return text;
@@ -149,7 +149,7 @@ scaleValue(float value, const ParameterDetails &details,
     break;
   case ParameterScale::SymmetricQuadratic:
     value = value * 2.0f - 1.0f;
-    sign = unsignFloat(value);
+    sign = utils::unsign(value);
     value *= value;
     result = (!skewOnly) ? (value * 0.5f * sign + 0.5f) * (details.maxValue - details.minValue) + details.minValue : value * 0.5f * sign + 0.5f;
     break;
@@ -188,7 +188,7 @@ scaleValue(float value, const ParameterDetails &details,
     break;
   case ParameterScale::SymmetricFrequency:
     value = value * 2.0f - 1.0f;
-    sign = unsignFloat(value);
+    sign = utils::unsign(value);
     result = (!skewOnly) ? normalisedToFrequency(value, sampleRate) * sign :
       (normalisedToFrequency(value, sampleRate) * sign) / sampleRate;
     break;
@@ -241,7 +241,7 @@ unscaleValue(float value, const ParameterDetails &details,
     break;
   case ParameterScale::SymmetricQuadratic:
     value = 2.0f * ((value - details.minValue) / (details.maxValue - details.minValue) - 0.5f);
-    sign = unsignFloat(value);
+    sign = utils::unsign(value);
     result = (::sqrtf(value) * sign + 1.0f) * 0.5f;
     break;
   case ParameterScale::Cubic:
@@ -271,7 +271,7 @@ unscaleValue(float value, const ParameterDetails &details,
     result = frequencyToNormalised(value, sampleRate);
     break;
   case ParameterScale::SymmetricFrequency:
-    sign = unsignFloat(value);
+    sign = utils::unsign(value);
     value = frequencyToNormalised(value, sampleRate);
     result = (value * sign + 1.0f) * 0.5f;
     break;

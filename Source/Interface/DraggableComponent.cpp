@@ -44,7 +44,7 @@ DraggableComponent::render(Graphics &g)
 bool
 DraggableComponent::mouseEnter(const MouseEvent &)
 {
-  getUiRelated()->renderer->setMouseCursor(MouseCursorTypes::AllScroll);
+  getThreadLocals()->renderer->setMouseCursor(MouseCursorTypes::AllScroll);
   return true;
 }
 
@@ -52,7 +52,7 @@ bool
 DraggableComponent::mouseExit(const MouseEvent &e)
 {
   if (!componentFlags.isClicked || !e.mods.test(ModifierKeys::leftButtonModifier))
-    getUiRelated()->renderer->setMouseCursor(MouseCursorTypes::Normal);
+    getThreadLocals()->renderer->setMouseCursor(MouseCursorTypes::Normal);
   return true;
 }
 
@@ -110,7 +110,7 @@ DraggableComponent::prepareToMove(const MouseEvent &e)
     newDraggableComponent->draggedComponent->placement = draggedComponent->placement;
     newDraggableComponent->isCopying = true;
 
-    getUiRelated()->renderer->setClickedComponent(newDraggableComponent);
+    getThreadLocals()->renderer->setClickedComponent(newDraggableComponent);
 
     auto event = e;
     event.mods = event.mods.withoutFlags(ModifierKeys::ctrlModifier);
@@ -119,7 +119,7 @@ DraggableComponent::prepareToMove(const MouseEvent &e)
 
   isDragging = true;
 
-  auto *placeholder = &getUiRelated()->renderer->gui->placeholderInsert;
+  auto *placeholder = &getThreadLocals()->renderer->gui->placeholderInsert;
   placeholder->reference = this;
   placeholder->placement = draggedComponent->placement;
   placeholder->sizingFlags = draggedComponent->sizingFlags;
@@ -181,7 +181,7 @@ DraggableComponent::prepareToMove(const MouseEvent &e)
   // set the dragged component to its correct position
   draggedComponent->bounds = draggedComponent->bounds.withPosition(initialClickPosition);
 
-  getUiRelated()->renderer->callbacks.add({ this, 0 }, [](Component *c)
+  getThreadLocals()->renderer->callbacks.add({ this, 0 }, [](Component *c)
     {
       auto *self = (DraggableComponent *)c;
       if (!self->isDragging)
@@ -190,7 +190,7 @@ DraggableComponent::prepareToMove(const MouseEvent &e)
       COMPLEX_ASSERT(self->processor);
 
       //draggedComponent->nextPosition = initialClickPosition + lastDragEvent.getOffsetFromDragStart();
-      auto *placeholder = &getUiRelated()->renderer->gui->placeholderInsert;
+      auto *placeholder = &getThreadLocals()->renderer->gui->placeholderInsert;
       auto *insertedIntoComponent = tryToInsertDraggableComponent(self->draggedComponent,
         placeholder->parent, self->processor, placeholder, self->directionX, self->directionY);
 
@@ -257,11 +257,11 @@ void DraggableComponent::endMove(const MouseEvent &e)
 
   COMPLEX_ASSERT(processor);
 
-  getUiRelated()->renderer->callbacks.erase({ this, 0 });
+  getThreadLocals()->renderer->callbacks.erase({ this, 0 });
 
   // finalising placement
   draggedComponent->nextPosition = initialClickPosition + e.getOffsetFromDragStart();
-  auto *placeholder = &getUiRelated()->renderer->gui->placeholderInsert;
+  auto *placeholder = &getThreadLocals()->renderer->gui->placeholderInsert;
   auto finalParentComponent = placeholder->parent;
   placeholder->parent->removeChildComponent(placeholder);
 
@@ -324,7 +324,7 @@ DraggableComponent::keyPressed(const KeyPress &keyPress)
   draggedComponent->overridePosition = previousOverridePosition;
   draggedComponent->componentFlags.keepSize = false;
 
-  getUiRelated()->renderer->callbacks.erase({ this, 0 });
+  getThreadLocals()->renderer->callbacks.erase({ this, 0 });
 
   if (!isCopying)
   {

@@ -71,7 +71,7 @@ public:
   PuglView *view_ = nullptr;
 
   ComplexPlugin &plugin;
-  InterfaceRelated generalData;
+  ThreadLocals generalData;
 
   MainInterface *gui{};
 
@@ -162,6 +162,7 @@ struct ComplexPlugin
   FFT *
   getFFTConverter(u32 minOrder, u32 maxOrder)
   {
+    auto g = acquireProcessingLock();
     fft.extendFFTOrders(minOrder, maxOrder);
     return &fft;
   }

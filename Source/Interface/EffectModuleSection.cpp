@@ -77,7 +77,7 @@ void EffectModuleSection::EffectHolder::Header::reinitialise()
     if (header->icon)
     {
       drawSVG(header->icon, g, getColour(Skin::kWidgetPrimary1, reference),
-        self->bounds.withZeroOrigin().toFloat(), getUiRelated()->scale, scaleValue(1.0f));
+        self->bounds.withZeroOrigin().toFloat(), getThreadLocals()->scale, scaleValue(1.0f));
     }
 
     return true;
@@ -98,13 +98,13 @@ void EffectModuleSection::EffectHolder::Header::reinitialise()
     // selector -> header
     auto *header = (Header *)c->parent;
     header->icon = nullptr;
-    header->effectTypeIcon.componentFlags.isVisible = false;
+    header->effectTypeIcon.componentFlags.visible = false;
 
     for (; option && (option->flags != IndexedData::SVGData || !option->svgData); option = option->parent) { }
     if (option)
     {
       header->icon = option->svgData;
-      header->effectTypeIcon.componentFlags.isVisible = true;
+      header->effectTypeIcon.componentFlags.visible = true;
     }
 
     section->restartEffectUI();
@@ -158,7 +158,7 @@ EffectModuleSection::EffectHolder::render(Graphics &g)
 bool
 EffectModuleSection::render(Graphics &g)
 {
-  float transparency = (float)fadeawayRatio / utils::int_max<decltype(fadeawayRatio)>;
+  float transparency = utils::getNormalisedValue(sizeRatio);
   nvgGlobalAlpha(g, transparency * transparency);
 
   float rounding = scaleValue(kOuterPixelRounding);

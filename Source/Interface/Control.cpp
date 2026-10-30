@@ -70,7 +70,7 @@ void Control::setValueToHost() const
       hostParameter->endChangeGesture();
     }
     else
-      getUiRelated()->plugin.markPluginDirty();
+      getThreadLocals()->plugin.markPluginDirty();
   }
 }
 
@@ -307,7 +307,7 @@ getControlPopupItemText(ControlPopupItem *item, utils::string &savedText)
   if (item->id > kMappingList && !isUnmappingParameter(item->id))
   {
     auto index = getParameterIndexFromId(item->id);
-    utils::span parameterBridges = getUiRelated()->plugin.state_->parameterBridges;
+    utils::span parameterBridges = getThreadLocals()->plugin.state_->parameterBridges;
 
     if (parameterBridges[index].getParameter())
       item->textColourId = Skin::kWidgetPrimary1;
@@ -316,7 +316,7 @@ getControlPopupItemText(ControlPopupItem *item, utils::string &savedText)
       item->canBeChosen = true;
       item->textColourId = Skin::kTextComponentText1;
       if (item->siblingItem)
-        item->siblingItem->componentFlags.isVisible = false;
+        item->siblingItem->componentFlags.visible = false;
     }
 
     parameterBridges[index].getName(savedText);
@@ -342,11 +342,11 @@ getControlPopupItemTextMetrics(Component *c, bool isCalculatingVertical)
 
   bool canTextWrap = item->canTextWrap;
   float height = ::roundf(scaleValue((float)item->desiredSize.h));
-  getUiRelated()->g->setFont(FontId::InterType, height);
+  getThreadLocals()->g->setFont(FontId::InterType, height);
 
   if (!isCalculatingVertical)
   {
-    minSize = (canTextWrap) ? 0 : (i32)::ceilf(getUiRelated()->g->getStringWidthFloat(text));
+    minSize = (canTextWrap) ? 0 : (i32)::ceilf(getThreadLocals()->g->getStringWidthFloat(text));
     if (item->id == kMappingList)
     {
       minSize += scaleValueRoundInt((float)(kPopupSubwindowArrowMargin + kPopupSubwindowArrowWidth));
@@ -356,7 +356,7 @@ getControlPopupItemTextMetrics(Component *c, bool isCalculatingVertical)
   }
   else
   {
-    auto lineCount = getUiRelated()->g->getStringNumberOfLines(text, (float)item->bounds.w);
+    auto lineCount = getThreadLocals()->g->getStringNumberOfLines(text, (float)item->bounds.w);
     minSize = (i32)height * (i32)lineCount;
     maxSize = minSize;
   }
@@ -429,7 +429,7 @@ void Control::createPopupMenu(PopupSelector *selector, Point<i32> position)
       mappingList.childList->draw = options.draw;
       mappingList.childList->padding = { 0, 4, 8, 4 };
       options.addChildComponent(&mappingList);
-      utils::span parameterBridges = getUiRelated()->plugin.state_->parameterBridges;
+      utils::span parameterBridges = getThreadLocals()->plugin.state_->parameterBridges;
       for (usize i = 0; i < parameterBridges.size(); ++i)
       {
         if (!parameterBridges[i].getParameter())
@@ -507,11 +507,11 @@ void Control::createParameterUpdate(float previousValue, bool forceOverwrite)
   auto oldEditTime = lastEditTime;
   auto currentValue = getValue();
   if (!forceOverwrite)
-    lastEditTime = getUiRelated()->steadyTime;
+    lastEditTime = getThreadLocals()->steadyTime;
 
   // we either force an overwrite or we check if there was a very recent change to the control
   // we're about to create an event for
-  bool overwriteInstead = forceOverwrite || getUiRelated()->steadyTime - oldEditTime <= Control::kUndoTimeout;
+  bool overwriteInstead = forceOverwrite || getThreadLocals()->steadyTime - oldEditTime <= Control::kUndoTimeout;
   if (overwriteInstead)
   {
     overwriteInstead = false;
@@ -570,7 +570,7 @@ Control::getNumericTextMaxWidth(FontId usedFont, float lineHeight)
   COMPLEX_ASSERT(details.scale != ParameterScale::Indexed);
 
   float probablyLongestValue = getProbablyLongestParameterValue(details,
-    getUiRelated()->plugin.getSampleRate());
+    getThreadLocals()->plugin.getSampleRate());
 
   char buffer[64]{};
   usize size{};
@@ -591,8 +591,8 @@ Control::getNumericTextMaxWidth(FontId usedFont, float lineHeight)
   if (!details.displayUnits.empty())
     maxStringLength.append(details.displayUnits);
 
-  getUiRelated()->g->setFont(usedFont, lineHeight);
-  return getUiRelated()->g->getStringWidthFloat(maxStringLength);
+  getThreadLocals()->g->setFont(usedFont, lineHeight);
+  return getThreadLocals()->g->getStringWidthFloat(maxStringLength);
 }
 
 void Control::getScaledValueString(utils::string &outString,
@@ -616,7 +616,7 @@ void Control::getScaledValueString(utils::string &outString,
     return;
   }
 
-  float sampleRate = getUiRelated()->plugin.getSampleRate();
+  float sampleRate = getThreadLocals()->plugin.getSampleRate();
   float scaledValue = scaleValue(valueToConvert, details, sampleRate, true);
 
   if (details.scale == ParameterScale::Indexed)
@@ -756,7 +756,7 @@ struct MappingParameterUpdate : public UndoAction
 
 void handleControlPopupResult(Control *control, PopupItem *selectedItem)
 {
-  auto &plugin = getUiRelated()->plugin;
+  auto &plugin = getThreadLocals()->plugin;
 
   auto createMappingParameterUpdate = [&plugin](HostParameter *bridge, Parameter *parameter = nullptr)
   {
@@ -776,7 +776,7 @@ void handleControlPopupResult(Control *control, PopupItem *selectedItem)
   }
   else if (result == kManualEntry)
   {
-    //auto font = getUiRelated()->cache->getInterFont();
+    //auto font = getThreadLocals()->cache->getInterFont();
     control->showTextEntry();
   }
   else if (result == kCopyValue || result == kCopyNormalisedValue)
@@ -794,11 +794,11 @@ void handleControlPopupResult(Control *control, PopupItem *selectedItem)
         stringBuffer, sizeof(stringBuffer) - 1, 5);
     }
 
-    getUiRelated()->renderer->setClipboard({ (byte *)stringBuffer, stringSize });
+    getThreadLocals()->renderer->setClipboard({ (byte *)stringBuffer, stringSize });
   }
   else if (result == kPasteValue)
   {
-    auto stringData = getUiRelated()->renderer->getClipboard();
+    auto stringData = getThreadLocals()->renderer->getClipboard();
     if (!stringData.empty())
       control->setValue(control->getValueFromText({ (char *)stringData.data(), stringData.size() }), true);
   }

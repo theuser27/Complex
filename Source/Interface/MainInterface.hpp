@@ -94,7 +94,7 @@ struct SoundEngineSection final : public Component
           auto *self = (FpsGraph *)c;
           if (!isCalculatingVertical)
           {
-            self->updateGraph(getUiRelated()->deltaTime);
+            self->updateGraph(getThreadLocals()->deltaTime);
             self->cachedValue = 1.0f / self->getGraphAverage();
           }
 

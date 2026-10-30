@@ -24,7 +24,7 @@ bool
 TextEditor::mouseEnter(const MouseEvent &)
 {
   if (componentFlags.clickable)
-    getUiRelated()->renderer->setMouseCursor(MouseCursorTypes::Caret);
+    getThreadLocals()->renderer->setMouseCursor(MouseCursorTypes::Caret);
   return true;
 }
 
@@ -32,7 +32,7 @@ bool
 TextEditor::mouseExit(const MouseEvent &)
 {
   if (componentFlags.clickable)
-    getUiRelated()->renderer->setMouseCursor(MouseCursorTypes::Normal);
+    getThreadLocals()->renderer->setMouseCursor(MouseCursorTypes::Normal);
   return true;
 }
 
@@ -85,8 +85,8 @@ Label::getSizeMetrics(Component *c, bool isCalculatingVertical)
     }
 
     self->cacheString(self, self->control);
-    getUiRelated()->g->setFont(self->font, lineHeight);
-    auto max = (i32)::ceilf(getUiRelated()->g->getStringWidthFloat(self->text));
+    getThreadLocals()->g->setFont(self->font, lineHeight);
+    auto max = (i32)::ceilf(getThreadLocals()->g->getStringWidthFloat(self->text));
 
     return Range<i32>{ 0, max };
   }
@@ -122,8 +122,8 @@ SliderValueEditor::SliderValueEditor()
 
       if (self->control->details.scale == ParameterScale::Indexed)
       {
-        getUiRelated()->g->setFont(self->font, lineHeight);
-        max = (i32)::ceilf(getUiRelated()->g->getStringWidthFloat(self->text));
+        getThreadLocals()->g->setFont(self->font, lineHeight);
+        max = (i32)::ceilf(getThreadLocals()->g->getStringWidthFloat(self->text));
       }
       else
         max = (i32)::ceilf(self->control->getNumericTextMaxWidth(self->font, lineHeight));

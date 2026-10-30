@@ -748,7 +748,7 @@ void nvgLineJoin(NVGcontext* ctx, int join)
 void nvgGlobalAlpha(NVGcontext* ctx, float alpha)
 {
 	NVGstate* state = nvg__getState(ctx);
-	state->alpha = alpha;
+	state->alpha *= alpha;
 }
 
 void nvgTransform(NVGcontext* ctx, float a, float b, float c, float d, float e, float f)

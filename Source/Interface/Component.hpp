@@ -171,10 +171,10 @@ public:
   bool
   isStillVisible() const
   {
-    if (componentFlags.isVisible)
+    if (componentFlags.visible)
       return true;
 
-    return (!componentFlags.animateFadeAway) ? false : fadeawayRatio;
+    return (!componentFlags.animateFadeAway) ? false : sizeRatio;
   }
   // does this component have visible bounds if we ignore the clipping bounds until particular component
   // which must be a parent or nullptr
@@ -221,8 +221,6 @@ public:
 
   utils::Pool *pool{};
 
-  Rectangle<i32> bounds{};
-
   Component *parent{};
   Component *children{};
   Component *previous{};
@@ -230,37 +228,7 @@ public:
 
   utils::sll<CommandMessages::HandleMessageFn *> *commandMessageHandler{};
 
-  //i8 layerIndex = 0;
-  Skin::Override skinOverride = Skin::kUseParentOverride;
-  struct
-  {
-    // feature flags
-    bool clickable           : 1 = false;
-    bool clickableChildren   : 1 = true;
-    bool vertical            : 1 = false;  // controls orientation/axis on which children stack
-    // TODO: add a separate flag for dual orientation,
-    //       then vertical will only designate primary direction
-    //       and also leave a single scrollable flag
-    bool animateMovement     : 1 = false;
-    bool animateFadeAway     : 1 = false;
-    bool acceptsOrphanEvents : 1 = false;  // if component can accept mouseUp without mouseDown
-                                           // happens if another component gives up on handling mouseUp
-    bool keepSize            : 1 = false;
-    bool halfScissor         : 1 = false;  // if a component should scissor only on the main axis
-
-    // state flags
-    bool isVisible           : 1 = true;
-    bool isHovered           : 1 = false;
-    bool isClicked           : 1 = false;
-    bool isScrollbarXClicked : 1 = false;
-    bool isScrollbarYClicked : 1 = false;
-    bool isPositionSet       : 1 = true;   // to aid components with custom placement
-                                           // depending on other components' position
-  } componentFlags{};
-
-
-  Placement placement{};
-  SizingFlags sizingFlags = None;
+  Rectangle<i32> bounds{};
 
   // margin in parent
   Rectangle<i16> margin{};
@@ -283,19 +251,49 @@ public:
   Rectangle<i32> lastBounds{};
   Component *lastParent{};
 
+  // support for animated scroll shrinking when not/hovered
+  Range<u16> scrollSizesRatio{};
+
   // support for animated positions
   Point<i32> nextPosition{};
   Point<i32> previousPosition = invalidPosition;
-  u16 distanceToNextPositionRatio{};
+  u16 positionRatio{};
 
   // support for animated shrinking and alpha fade when made invisible
-  // until it reaches utils::int_max<u16> the component is in a grace period
+  // until it reaches utils::int_max the component is in a grace period
   // where it will continue to have its size and position calculated
   // @see isStillVisible()
-  u16 fadeawayRatio{};
+  u16 sizeRatio{};
+  u16 previousSizeRatio{};
 
-  // support for animated scroll shrinking when not/hovered
-  Range<u16> scrollWidthsRatio{};
+  Skin::Override skinOverride = Skin::kUseParentOverride;
+  Placement placement{};
+  SizingFlags sizingFlags = None;
+  struct
+  {
+    // feature flags
+    bool visible             : 1 = true;
+    bool clickable           : 1 = false;
+    bool clickableChildren   : 1 = true;
+    bool vertical            : 1 = false;  // controls orientation/axis on which children stack
+    // TODO: add a separate flag for dual orientation,
+    //       then vertical will only designate primary direction
+    //       and also leave a single scrollable flag
+    bool animateMovement     : 1 = false;
+    bool animateFadeAway     : 1 = false;
+    bool acceptsOrphanEvents : 1 = false;  // if component can accept mouseUp without mouseDown
+                                           // happens if another component gives up on handling mouseUp
+    bool keepSize            : 1 = false;
+    bool halfScissor         : 1 = false;  // if a component should scissor only on the main axis
+
+    // state flags
+    bool isHovered           : 1 = false;
+    bool isClicked           : 1 = false;
+    bool isScrollbarXClicked : 1 = false;
+    bool isScrollbarYClicked : 1 = false;
+    bool isPositionSet       : 1 = false;  // to aid components with custom placement
+                                           // depending on other components' position
+  } componentFlags{};
 };
 
 COMPLEX_DEFINE_ENUM_OPERATION(Component::SizingFlags, |, u16)

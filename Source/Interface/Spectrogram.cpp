@@ -68,7 +68,7 @@ void Spectrogram::reinitialise()
   componentFlags.clickable = true;
   componentFlags.clickableChildren = false;
 
-  auto maxBinCount = getUiRelated()->plugin.state_->getMaxBinCount();
+  auto maxBinCount = getThreadLocals()->plugin.state_->getMaxBinCount();
 
   if (!pool)
   {
@@ -349,7 +349,7 @@ static void paintBackground(Graphics &g, Rectangle<float> bounds,
 
 hotreloadable void drawSpectrum(Graphics &g, Spectrogram *s)
 {
-  COMPLEX_HOTRELOAD_CHECK(getUiRelated()->plugin.state_.get(), drawSpectrum, g, s);
+  COMPLEX_HOTRELOAD_CHECK(getThreadLocals()->plugin.state_.get(), drawSpectrum, g, s);
 
   Colour colour = getColour(Skin::kWidgetPrimary1, s);
 
@@ -377,7 +377,7 @@ Spectrogram::render(Graphics &g)
     paintBackground(g, getLocalBounds().toFloat(), minFrequency, maxFrequency);
   }
 
-  auto &plugin = getUiRelated()->plugin;
+  auto &plugin = getThreadLocals()->plugin;
   nyquistFreq = plugin.getSampleRate() * 0.5f;
   binCount = plugin.state_->getFFTSize() / 2;
 

@@ -240,7 +240,7 @@ void EffectsSection::LaneSelector::reinitialise()
         offset = utils::min(offset, (i32)utils::int_max<i8>);
         auto xOffset = (i8)((position.x < self->bounds.w - position.x) ? offset : -offset);
 
-        offsetScroll(self, xOffset * getUiRelated()->deltaTime * kAutoscrollMultiplier, 0.0f, false);
+        offsetScroll(self, xOffset * getThreadLocals()->deltaTime * kAutoscrollMultiplier, 0.0f, false);
       }
 
       return true;
@@ -333,7 +333,7 @@ EffectsSection::LaneSelector::mouseWheelMove(const MouseEvent &e)
   if (e.mods.test(ModifierKeys::ctrlModifier))
     return false;
 
-  auto multiplier = 30.0f * getUiRelated()->scale;
+  auto multiplier = 30.0f * getThreadLocals()->scale;
   offsetScroll(this, ((utils::abs(e.wheelDeltaX) > utils::abs(e.wheelDeltaY)) ?
     e.wheelDeltaX : e.wheelDeltaY) * multiplier, 0.0f, false);
 
@@ -418,7 +418,7 @@ void EffectsSection::removeLane(EffectsLaneSection *lane)
   else
     setStartLaneIndex(startLaneIndex, visibleLaneCount);
 
-  auto &plugin = getUiRelated()->plugin;
+  auto &plugin = getThreadLocals()->plugin;
   auto transactionArena = plugin.undoManager.beginNewTransaction();
   plugin.undoManager.perform(anew(transactionArena, DeleteProcessorUpdate, { lane->effectsLane }));
 }
@@ -435,13 +435,13 @@ void EffectsSection::setStartLaneIndex(u32 newStart, u32 newCount)
     auto *start = laneHolder.children;
     u32 i = 0;
     for (; i < newStart && start->next; start = start->next)
-      if (start->next->componentFlags.isVisible)
+      if (start->next->componentFlags.visible)
         ++i;
 
     Component *end = start;
     u32 j = 1;
     for (; end->next && j < newCount; end = end->next)
-      if (end->next->componentFlags.isVisible)
+      if (end->next->componentFlags.visible)
         ++j;
 
     startLaneIndex = (u32)utils::max(0, (i32)(i - (visibleLaneCount - j)));
@@ -478,7 +478,7 @@ EffectsSection::render(Graphics &)
   static constexpr float kMoveDelay = 0.15f; //s
 
   auto t0 = smoothstep(nextScrollPositionRatio);
-  nextScrollPositionRatio = utils::min(nextScrollPositionRatio + getUiRelated()->deltaTime * 1.0f / kMoveDelay, 1.0f);
+  nextScrollPositionRatio = utils::min(nextScrollPositionRatio + getThreadLocals()->deltaTime * 1.0f / kMoveDelay, 1.0f);
   auto t1 = smoothstep(nextScrollPositionRatio);
 
   {
@@ -501,9 +501,9 @@ SoundEngineSection::TopBar::UndoRedoButton::mouseUp(const MouseEvent &)
   if (componentFlags.isClicked && componentFlags.isHovered)
   {
     if (isRedo)
-      getUiRelated()->plugin.undoManager.redo();
+      getThreadLocals()->plugin.undoManager.redo();
     else
-      getUiRelated()->plugin.undoManager.undo();
+      getThreadLocals()->plugin.undoManager.undo();
   }
 
   return true;
@@ -512,7 +512,7 @@ SoundEngineSection::TopBar::UndoRedoButton::mouseUp(const MouseEvent &)
 bool
 SoundEngineSection::TopBar::UndoRedoButton::render(Graphics &g)
 {
-  auto &undoManager = getUiRelated()->plugin.undoManager;
+  auto &undoManager = getThreadLocals()->plugin.undoManager;
   bool canDo = (isRedo && undoManager.canRedo()) || (!isRedo && undoManager.canUndo());
   auto colour = canDo ? getColour(Skin::kWidgetAccent1, this) :
     getColour(Skin::kWidgetPrimaryDisabled, this);
@@ -551,7 +551,7 @@ void SoundEngineSection::TopBar::reinitialise()
   auto *mainSection = (SoundEngineSection *)parent;
 
   fpsGraph = {};
-  fpsGraph.componentFlags.isVisible = mainSection->showFps;
+  fpsGraph.componentFlags.visible = mainSection->showFps;
   fpsGraph.placement = Placement::left;
   fpsGraph.margin = { 4, 0, 0, 0 };
   fpsGraph.desiredSize = { 24, 24, utils::int_max<i32>, utils::int_max<i32> };
@@ -635,7 +635,7 @@ void SoundEngineSection::BottomBar::reinitialise()
   window.valueChangedCallback = [](Control *c, float newValue, float)
   {
     auto *bottomBar = (BottomBar *)c->parent->parent;
-    bottomBar->windowAlpha.componentFlags.isVisible = getOptionFromValue(
+    bottomBar->windowAlpha.componentFlags.visible = getOptionFromValue(
       scaleValue(newValue, c->details), c->details).first->userFlags;
   };
   window.changeLinkedParameter(*mainSection->soundEngine->getParameter(SoundEngine::WindowType));
@@ -759,12 +759,12 @@ SoundEngineSection::render(Graphics &g)
   return true;
 }
 
-PopupSelector *getPopupSelector() { return &getUiRelated()->renderer->gui->popupSelector; }
-utils::Pool *getUIPool() { return getUiRelated()->renderer->gui->pool; }
-UndoManager &getUndoManager() { return getUiRelated()->plugin.undoManager; }
+PopupSelector *getPopupSelector() { return &getThreadLocals()->renderer->gui->popupSelector; }
+utils::Pool *getUIPool() { return getThreadLocals()->renderer->gui->pool; }
+UndoManager &getUndoManager() { return getThreadLocals()->plugin.undoManager; }
 PopupDisplay *getPopupDisplay(bool primary = true)
 {
-  auto *gui = getUiRelated()->renderer->gui;
+  auto *gui = getThreadLocals()->renderer->gui;
   return (primary) ? &gui->popupDisplay1 : &gui->popupDisplay2;
 }
 
@@ -800,15 +800,15 @@ void MainInterface::restartUI(State *state)
 
   recurseProcessors(recurseProcessors, state->soundEngine, state->gui);
 
-  state->gui->popupSelector.componentFlags.isVisible = false;
+  state->gui->popupSelector.componentFlags.visible = false;
   state->gui->addChildComponent(&state->gui->popupSelector);
   state->gui->popupSelector.reinitialise();
 
-  state->gui->popupDisplay1.componentFlags.isVisible = false;
+  state->gui->popupDisplay1.componentFlags.visible = false;
   state->gui->addChildComponent(&state->gui->popupDisplay1);
   state->gui->popupDisplay1.reinitialise();
 
-  state->gui->popupDisplay2.componentFlags.isVisible = false;
+  state->gui->popupDisplay2.componentFlags.visible = false;
   state->gui->addChildComponent(&state->gui->popupDisplay2);
   state->gui->popupDisplay2.reinitialise();
 }
@@ -823,9 +823,9 @@ MainInterface::keyPressed(const KeyPress &key)
   if (isUndo || isRedo)
   {
     if (isUndo)
-      getUiRelated()->plugin.undoManager.undo();
+      getThreadLocals()->plugin.undoManager.undo();
     else
-      getUiRelated()->plugin.undoManager.redo();
+      getThreadLocals()->plugin.undoManager.redo();
 
     return true;
   }
@@ -841,7 +841,7 @@ checkResizing(Area<u32> newScaledSize, bool force)
   newScaledSize.w = utils::max(newScaledSize.w, minScaledArea.w);
   newScaledSize.h = utils::max(newScaledSize.h, minScaledArea.h);
 
-  auto state = getUiRelated()->plugin.state_;
+  auto state = getThreadLocals()->plugin.state_;
   if (state)
   {
     auto soundEngineSection = (SoundEngineSection *)state->soundEngine->component;

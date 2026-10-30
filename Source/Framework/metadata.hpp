@@ -10,6 +10,9 @@ extern "C" typedef struct NSVGimage NSVGimage;
 
 struct State;
 struct ComplexPlugin;
+class Renderer;
+class Graphics;
+class Skin;
 
 class Parameter;
 
@@ -18,6 +21,19 @@ namespace utils
   struct i4;
   struct f4;
 }
+
+struct ThreadLocals
+{
+  ComplexPlugin &plugin;
+  Renderer *renderer = nullptr;
+  Graphics *g = nullptr;
+  Skin *skin = nullptr;
+  float scale = 1.0f;
+  float deltaTime = 0.0f;
+  double steadyTime = 0.0;
+};
+// thread-local variable for the message thread so that we don't need to pass pointers around
+ThreadLocals *&getThreadLocals();
 
 class Processor;
 void resetProcessorGeneric(Processor *processor);

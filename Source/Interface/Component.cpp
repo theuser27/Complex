@@ -12,7 +12,7 @@
 #include "Popups.hpp"
 
 static bool
-calculateFit(Component *component, Component *children, bool isCalculatingVertical)
+calculateFit(Component *component, Component *children, bool isCalculatingVertical, float deltaTime)
 {
   static constexpr float kFadeawayTime = 0.15f; //s
 
@@ -22,23 +22,25 @@ calculateFit(Component *component, Component *children, bool isCalculatingVertic
     component->componentFlags.isPositionSet = false;
     component->lastBounds = component->bounds;
     component->bounds = {};
+    component->previousSizeRatio = component->sizeRatio;
 
     if (component->componentFlags.animateFadeAway)
     {
-      auto increment = (i32)roundf(getUiRelated()->deltaTime / kFadeawayTime *
-        utils::int_max<decltype(component->fadeawayRatio)>);
-      increment = (component->componentFlags.isVisible) ? increment : -increment;
+      auto increment = (i32)roundf(deltaTime / kFadeawayTime *
+        utils::int_max<decltype(component->sizeRatio)>);
+      increment = (component->componentFlags.visible) ? increment : -increment;
 
-      component->fadeawayRatio = (decltype(component->fadeawayRatio))utils::clamp(
-        (i32)component->fadeawayRatio + increment, 0, (i32)utils::int_max<decltype(component->fadeawayRatio)>);
+      component->sizeRatio = (decltype(component->sizeRatio))utils::clamp(
+        (i32)component->sizeRatio + increment, 0, (i32)utils::int_max<decltype(component->sizeRatio)>);
     }
     else
-      component->fadeawayRatio = utils::int_max<decltype(component->fadeawayRatio)>;
+      component->sizeRatio = utils::int_max<decltype(component->sizeRatio)>;
   }
 
   if (!component->isStillVisible())
   {
     component->previousPosition = invalidPosition;
+    component->sizeRatio = 0;
     return false;
   }
 
@@ -55,10 +57,10 @@ calculateFit(Component *component, Component *children, bool isCalculatingVertic
   {
     COMPLEX_ASSERT(child->desiredSize.*minMember <= child->desiredSize.*maxMember);
 
-    if (!calculateFit(child, child->children, isCalculatingVertical))
+    if (!calculateFit(child, child->children, isCalculatingVertical, deltaTime))
       continue;
 
-    auto extra = (isCalculatingVertical) ? child->margin.getBottom() : child->margin.getRight();
+    i32 extra = (isCalculatingVertical) ? child->margin.getBottom() : child->margin.getRight();
 
     sameAsSiblingsSizes.min = utils::max(sameAsSiblingsSizes.min, child->bounds.*minMember);
     sameAsSiblingsSizes.max = utils::max(sameAsSiblingsSizes.max, child->bounds.*maxMember);
@@ -71,11 +73,13 @@ calculateFit(Component *component, Component *children, bool isCalculatingVertic
     }
     else if (child->placement == Placement::custom)
     {
+      extra = (i32)round(extra * utils::getNormalisedValue(component->sizeRatio));
       nonPositionedSizes.min = utils::max(nonPositionedSizes.min, (i64)(child->bounds.*minMember) + extra);
       nonPositionedSizes.max = utils::max(nonPositionedSizes.max, (i64)(child->bounds.*maxMember) + extra);
     }
     else
     {
+      extra = (i32)round(extra * utils::getNormalisedValue(component->sizeRatio));
       sizes.min += (i64)(child->bounds.*minMember) + extra;
       sizes.max += (i64)(child->bounds.*maxMember) + extra;
     }
@@ -96,7 +100,8 @@ calculateFit(Component *component, Component *children, bool isCalculatingVertic
 
     if (child->placement == Placement::custom)
     {
-      auto extra = (isCalculatingVertical) ? child->margin.getBottom() : child->margin.getRight();
+      i32 extra = (isCalculatingVertical) ? child->margin.getBottom() : child->margin.getRight();
+      extra = (i32)round(extra * utils::getNormalisedValue(component->sizeRatio));
       nonPositionedSizes.min = utils::max(nonPositionedSizes.min, (i64)sameAsSiblingsSizes.min + extra);
       nonPositionedSizes.max = utils::max(nonPositionedSizes.max, (i64)sameAsSiblingsSizes.max + extra);
     }
@@ -133,9 +138,7 @@ calculateFit(Component *component, Component *children, bool isCalculatingVertic
     {
       // if you have a scrollable parent and a growable child
       // along the same axis, the algorithm will fail spectacularly
-      //[[maybe_unused]] auto scrollableFlag = (isCalculatingVertical) ?
-      //  Component::ScrollableY : Component::ScrollableX;
-      //COMPLEX_ASSERT((component->parent->sizingFlags & scrollableFlag) == 0);
+      // unless it becomes scrollable if the children have reached their minimum size
 
       component->bounds.*maxMember = utils::int_max<i32>;
     }
@@ -162,11 +165,6 @@ calculateFit(Component *component, Component *children, bool isCalculatingVertic
   COMPLEX_ASSERT(component->bounds.*minMember >= 0);
   COMPLEX_ASSERT(component->bounds.*maxMember >= 0);
 
-  // alogn the primary   axis SameAsSiblings must be zero, the parent will take care of it
-  // along the secondary axis SameAsSiblings acts like Growable
-  //if (test_flag(component->sizingFlags, (isCalculatingVertical) ? Component::SameAsSiblingsY : Component::SameAsSiblingsX))
-  //  component->bounds.*maxMember = (component->componentFlags.isVertical ^ isCalculatingVertical) ? utils::int_max<i32> : 0;
-
   // add this component's padding to the total size
   auto padding = (isCalculatingVertical) ?
     component->padding.getBottom() : component->padding.getRight();
@@ -182,7 +180,8 @@ calculateFit(Component *component, Component *children, bool isCalculatingVertic
   return true;
 }
 
-static void calculateGrow(Component *component, Component *children, bool isCalculatingVertical)
+static void calculateGrow(Component *component, Component *children, bool isCalculatingVertical,
+  utils::vector<Component *> &sortedMin, utils::vector<Component *> &sortedMax)
 {
   auto Rectangle<i32>:: *minMember = (isCalculatingVertical) ? &Rectangle<i32>::y : &Rectangle<i32>::x;
   auto Rectangle<i32>:: *maxMember = (isCalculatingVertical) ? &Rectangle<i32>::h : &Rectangle<i32>::w;
@@ -199,11 +198,11 @@ static void calculateGrow(Component *component, Component *children, bool isCalc
       if (!child->isStillVisible())
         continue;
 
-      auto extra = (isCalculatingVertical) ? child->margin.getBottom() : child->margin.getRight();
+      i32 extra = (isCalculatingVertical) ? child->margin.getBottom() : child->margin.getRight();
 
-      auto maxSize = utils::min(child->bounds.*maxMember, component->bounds.*maxMember - extra - padding);
+      auto maxSize = utils::clamp(component->bounds.*maxMember - extra - padding, 0, child->bounds.*maxMember);
       child->bounds.*maxMember = maxSize;
-      calculateGrow(child, child->children, isCalculatingVertical);
+      calculateGrow(child, child->children, isCalculatingVertical, sortedMin, sortedMax);
     }
 
     // scaling the final size
@@ -215,8 +214,6 @@ static void calculateGrow(Component *component, Component *children, bool isCalc
     return;
   }
 
-  auto &sortedMin = getUiRelated()->renderer->sortedSizesMin;
-  auto &sortedMax = getUiRelated()->renderer->sortedSizesMax;
   sortedMin.clear();
   sortedMax.clear();
 
@@ -243,10 +240,11 @@ static void calculateGrow(Component *component, Component *children, bool isCalc
       continue;
     }
 
-    if (child->fadeawayRatio != utils::int_max<decltype(Component::fadeawayRatio)>)
+    if (child->sizeRatio != utils::int_max<decltype(Component::sizeRatio)>)
       ++fadeawayComponents;
 
-    auto extra = (isCalculatingVertical) ? child->margin.getBottom() : child->margin.getRight();
+    i32 extra = (isCalculatingVertical) ? child->margin.getBottom() : child->margin.getRight();
+    extra = (i32)round(extra * utils::getNormalisedValue(component->sizeRatio));
 
     // not adding minMember because we're going to compare against it in the next pass
     sizes.min += (i64)extra;
@@ -268,14 +266,15 @@ static void calculateGrow(Component *component, Component *children, bool isCalc
   sizes.min = utils::min(sizes.min, (i64)utils::int_max<i32>);
   sizes.max = utils::min(sizes.max, (i64)utils::int_max<i32>);
 
+  auto snapToMinFlag = (isCalculatingVertical) ? Component::SnapToMinY : Component::SnapToMinX;
   bool skipResizingChildren = test_flag(component->sizingFlags, (isCalculatingVertical) ? Component::ScrollableY : Component::ScrollableX) &&
-    !test_flag(component->sizingFlags, (isCalculatingVertical) ? Component::SnapToMinY : Component::SnapToMinX);
+    !test_flag(component->sizingFlags, snapToMinFlag);
 
   if (!skipResizingChildren && (!sortedMin.empty() && !sortedMax.empty()))
   {
     i32 remaining = component->bounds.*actualSize - (i32)sizes.min;
 
-    if ((remaining - (i32)childrenMinSizes) < 0)
+    if ((remaining - (i32)childrenMinSizes) < 0 && !test_flag(component->sizingFlags, snapToMinFlag))
     {
       // size only components that are pinned left/top and right/bottom
       // from the beginning and end respectively inwards first
@@ -289,14 +288,14 @@ static void calculateGrow(Component *component, Component *children, bool isCalc
 
       while (remaining && previousStart != previousEnd)
       {
-        auto extra = (isCalculatingVertical) ?
-          componentToSize->margin.getBottom() : componentToSize->margin.getRight();
+        i32 extra = (isCalculatingVertical) ? componentToSize->margin.getBottom() : componentToSize->margin.getRight();
+        extra = (i32)round(extra * utils::getNormalisedValue(component->sizeRatio));
 
         // we take the minimum sizes as the actual sizes because we don't have enough space anyway
         componentToSize->bounds.*actualSize = utils::min(remaining, componentToSize->desiredSize.*actualSize + extra);
-        if (componentToSize->fadeawayRatio != utils::int_max<decltype(Component::fadeawayRatio)>)
+        if (componentToSize->sizeRatio != utils::int_max<decltype(Component::sizeRatio)>)
           componentToSize->bounds.*maxMember = (i32)roundf(componentToSize->bounds.*maxMember *
-            ((float)componentToSize->fadeawayRatio / utils::int_max<decltype(Component::fadeawayRatio)>));
+            utils::getNormalisedValue(componentToSize->sizeRatio));
 
         remaining -= componentToSize->bounds.*actualSize;
 
@@ -378,10 +377,10 @@ static void calculateGrow(Component *component, Component *children, bool isCalc
       // put fadeaway components to be sized first since they will be smaller than calculated above
       if (fadeawayComponents)
       {
-        utils::insertionsort(sortedMax, j, j + count, [](Component *one, Component *two)
+        utils::insertionsort(sortedMax, j, j + count - 1, [](Component *one, Component *two)
           {
-            return one->fadeawayRatio != utils::int_max<decltype(Component::fadeawayRatio)> &&
-              two->fadeawayRatio == utils::int_max<decltype(Component::fadeawayRatio)>;
+            return one->sizeRatio != utils::int_max<decltype(Component::sizeRatio)> &&
+              two->sizeRatio == utils::int_max<decltype(Component::sizeRatio)>;
           });
       }
 
@@ -394,9 +393,8 @@ static void calculateGrow(Component *component, Component *children, bool isCalc
         i32 size = remaining / (i32)(count - k);
 
         c->bounds.*maxMember = utils::clamp(size, c->bounds.*minMember, c->bounds.*maxMember);
-        if (c->fadeawayRatio != utils::int_max<decltype(c->fadeawayRatio)>)
-          c->bounds.*maxMember = (i32)(c->bounds.*maxMember *
-            ((float)c->fadeawayRatio / utils::int_max<decltype(Component::fadeawayRatio)>));
+        if (c->sizeRatio != utils::int_max<decltype(c->sizeRatio)>)
+          c->bounds.*maxMember = (i32)(c->bounds.*maxMember * utils::getNormalisedValue(c->sizeRatio));
 
         COMPLEX_ASSERT(c->bounds.*maxMember >= 0);
         remaining -= c->bounds.*maxMember;
@@ -407,10 +405,9 @@ static void calculateGrow(Component *component, Component *children, bool isCalc
   {
     for (auto *c : sortedMax)
     {
-      if (c->fadeawayRatio != utils::int_max<decltype(c->fadeawayRatio)>)
+      if (c->sizeRatio != utils::int_max<decltype(c->sizeRatio)>)
       {
-        c->bounds.*maxMember = (i32)(c->bounds.*maxMember *
-          ((float)c->fadeawayRatio / utils::int_max<decltype(Component::fadeawayRatio)>));
+        c->bounds.*maxMember = (i32)(c->bounds.*maxMember * utils::getNormalisedValue(c->sizeRatio));
         --fadeawayComponents;
       }
 
@@ -444,7 +441,7 @@ static void calculateGrow(Component *component, Component *children, bool isCalc
       continue;
 
     COMPLEX_ASSERT(child->bounds.*actualSize != utils::int_max<i32>);
-    calculateGrow(child, child->children, isCalculatingVertical);
+    calculateGrow(child, child->children, isCalculatingVertical, sortedMin, sortedMax);
   }
 
   // scaling the final size
@@ -459,10 +456,12 @@ static void calculateGrow(Component *component, Component *children, bool isCalc
 
 void calculateSizes(Component *children, Component *component)
 {
-  (void)calculateFit(component, children, false);
-  calculateGrow(component, children, false);
-  (void)calculateFit(component, children, true);
-  calculateGrow(component, children, true);
+  auto *renderer = getThreadLocals()->renderer;
+  auto deltaTime = getThreadLocals()->deltaTime;
+  (void)calculateFit(component, children, false, deltaTime);
+  calculateGrow(component, children, false, renderer->sortedSizesMin, renderer->sortedSizesMax);
+  (void)calculateFit(component, children, true, deltaTime);
+  calculateGrow(component, children, true, renderer->sortedSizesMin, renderer->sortedSizesMax);
 }
 
 #define GET_PRIMARY_FLAG(component, flag) ((flag) << (i32)(!!(component->componentFlags.vertical)))
@@ -499,21 +498,20 @@ void calculatePositions(Component *children,
   boundsInTarget = TRANSPOSE(component, boundsInTarget);
   padding = TRANSPOSE(component, padding);
 
-  auto &customPlacement = getUiRelated()->renderer->customPlacement;
+  auto &customPlacement = getThreadLocals()->renderer->customPlacement;
 
   i32 primaryUsed = 0;
   i32 groupCount = 0;
   bool isInGroup = false;
   for (auto *child = children; child; child = child->next)
   {
-    if (!child->isStillVisible())
+    if (!child->isStillVisible() && !child->previousSizeRatio)
       continue;
 
     if (child->placement & Placement::custom)
     {
       // component has decided to take care of its own position
-      customPlacement.emplaceBack(child,
-        [](Component *c) { return c->overridePosition(c); });
+      customPlacement.emplaceBack(child, [](Component *c) { return c->overridePosition(c); });
       continue;
     }
 
@@ -522,7 +520,7 @@ void calculatePositions(Component *children,
 
     auto bounds = TRANSPOSE(component, child->bounds);
     auto margin = scaleValueRoundInt(TRANSPOSE(component, child->margin).toInt());
-    primaryUsed += bounds.w + margin.getRight();
+    primaryUsed += bounds.w + (i32)round(margin.getRight() * utils::getNormalisedValue(component->sizeRatio));
 
     if (auto type = child->placement & GET_PRIMARY_FLAG(component, Placement::justifyX);
       type == GET_PRIMARY_FLAG(component, Placement::justifyX) || type == 0)
@@ -567,6 +565,8 @@ void calculatePositions(Component *children,
       type == GET_PRIMARY_FLAG(component, Placement::justifyX) || type == 0)
     {
       auto *nextChild = child;
+
+      // FIXME: these placement modes don't account for expanding components
 
       if (type == 0)
       {
@@ -641,8 +641,11 @@ void calculatePositions(Component *children,
     {
       auto bounds = TRANSPOSE(component, child->bounds);
       auto margin = scaleValueRoundInt(TRANSPOSE(component, child->margin).toInt());
+      i32 marginRange = (i32)roundf(margin.getRight() * utils::getNormalisedValue(child->sizeRatio));
+      i32 marginRangePrevious = (i32)roundf(margin.getRight() * utils::getNormalisedValue(child->previousSizeRatio));
+      i32 marginLeft = (i32)roundf(margin.x * utils::getNormalisedValue(child->sizeRatio));
 
-      bounds.x = boundsInTarget.x + margin.x;
+      bounds.x = boundsInTarget.x + marginLeft;
       
       if (child->previousPosition != invalidPosition)
         child->previousPosition.*primary += sizeOffset;
@@ -650,10 +653,10 @@ void calculatePositions(Component *children,
       child->lastBounds.*primaryPosition += sizeOffset;
 
       child->bounds.*primaryPosition = bounds.x;
-      boundsInTarget = boundsInTarget.withTrimLeft(bounds.w + margin.getRight());
+      boundsInTarget = boundsInTarget.withTrimLeft(bounds.w + marginRange);
 
       if (child->componentFlags.animateFadeAway)
-        sizeOffset += bounds.w - TRANSPOSE(component, child->lastBounds).w;
+        sizeOffset += (bounds.w - TRANSPOSE(component, child->lastBounds).w) + (marginRange - marginRangePrevious);
 
       child = child->next;
     }
@@ -675,9 +678,12 @@ void calculatePositions(Component *children,
         {
           auto bounds = TRANSPOSE(component, nextChild->bounds);
           auto margin = scaleValueRoundInt(TRANSPOSE(component, nextChild->margin).toInt());
+          i32 marginRange = (i32)roundf(margin.getRight() * utils::getNormalisedValue(nextChild->sizeRatio));
+          i32 marginRangePrevious = (i32)roundf(margin.getRight() * utils::getNormalisedValue(nextChild->previousSizeRatio));
+          i32 marginRight = (i32)roundf(margin.w * utils::getNormalisedValue(nextChild->sizeRatio));
 
-          bounds.x = boundsInTarget.getRight() - margin.w - bounds.w;
-          boundsInTarget.w -= bounds.w + margin.getRight();
+          bounds.x = boundsInTarget.getRight() - marginRight - bounds.w;
+          boundsInTarget.w -= bounds.w + marginRange;
 
           if (nextChild->previousPosition != invalidPosition)
             nextChild->previousPosition.*primary -= sizeOffset;
@@ -685,7 +691,7 @@ void calculatePositions(Component *children,
           nextChild->lastBounds.*primaryPosition -= sizeOffset;
 
           if (nextChild->componentFlags.animateFadeAway)
-            sizeOffset += bounds.w - TRANSPOSE(component, nextChild->lastBounds).w;
+            sizeOffset += (bounds.w - TRANSPOSE(component, nextChild->lastBounds).w) + (marginRange - marginRangePrevious);
 
           nextChild->bounds.*primaryPosition = bounds.x;
         }
@@ -746,7 +752,7 @@ animatePosition(Component *component, bool wasParentResized, bool recursive)
     if (change != Point<i32>{} && component->previousPosition != invalidPosition)
     {
       component->previousPosition = component->lastBounds.getPosition();
-      component->distanceToNextPositionRatio = 0;
+      component->positionRatio = 0;
     }
 
     component->nextPosition = component->bounds.getPosition();
@@ -758,15 +764,17 @@ animatePosition(Component *component, bool wasParentResized, bool recursive)
   bool requireReposition = changedParents || (!wasParentResized &&      // skip animations if triggered by parent resize
     component->lastBounds.getPosition() != component->nextPosition);    // have we reached the final destination?
 
-  if (requireReposition &&
-    component->componentFlags.animateMovement &&                        // are we animating to begin with?
+  bool isAnimating = component->componentFlags.animateMovement ||       // are we animating in general?
+    component->positionRatio;                                           // have we already begun an animation?
+
+  if (requireReposition && isAnimating &&
     component->previousPosition != invalidPosition)                     // did we have a previous position?
   {
     // we're interpolating between the previous position (animation start) and the supposed position
-    using T = decltype(component->distanceToNextPositionRatio);
+    using T = decltype(component->positionRatio);
 
-    float ratio = (float)component->distanceToNextPositionRatio / utils::int_max<T>;
-    ratio = utils::min(1.0f, ratio + getUiRelated()->deltaTime / kMoveTime);
+    float ratio = utils::getNormalisedValue(component->positionRatio);
+    ratio = utils::min(1.0f, ratio + getThreadLocals()->deltaTime / kMoveTime);
     auto t = smoothstep(ratio);
 
     // translate the last position if it was in a different component
@@ -778,7 +786,7 @@ animatePosition(Component *component, bool wasParentResized, bool recursive)
         !component->parent->componentFlags.isPositionSet)
       {
         if (recursive)
-          getUiRelated()->renderer->customPlacement.emplaceBack(component,
+          getThreadLocals()->renderer->customPlacement.emplaceBack(component,
             [wasParentResized](Component *c) { return animatePosition(c, wasParentResized, false); });
 
         // unset position flag, so that others can see
@@ -793,15 +801,17 @@ animatePosition(Component *component, bool wasParentResized, bool recursive)
     component->bounds.x = (i32)::roundf(utils::lerp((float)component->previousPosition.x, (float)component->nextPosition.x, t));
     component->bounds.y = (i32)::roundf(utils::lerp((float)component->previousPosition.y, (float)component->nextPosition.y, t));
 
-    component->distanceToNextPositionRatio = (T)::ceilf(ratio * utils::int_max<T>);
+    // this automatically wraps back around to 0 once the animation is done (intentional)
+    component->positionRatio = (T)::ceilf(ratio * utils::int_max<T>);
   }
   else
   {
     // we're not animating position and just setting the supposed position directly in
 
-    component->previousPosition = component->nextPosition;
+    component->previousPosition = (!component->isStillVisible() && component->previousSizeRatio) ? 
+      invalidPosition : component->nextPosition;
     component->bounds = component->bounds.withPosition(component->nextPosition);
-    component->distanceToNextPositionRatio = 0;
+    component->positionRatio = 0;
   }
 
   component->componentFlags.isPositionSet = true;
@@ -818,7 +828,7 @@ animatePosition(Component *component, bool wasParentResized, bool recursive)
 
 static void clearLinkedComponents(Component *c, bool checkSelf)
 {
-  auto *renderer = getUiRelated()->renderer;
+  auto *renderer = getThreadLocals()->renderer;
   auto *gui = renderer->gui;
   if ((checkSelf && c == gui->popupSelector.summoner) || c->isParentOf(gui->popupSelector.summoner))
   {
@@ -830,11 +840,11 @@ static void clearLinkedComponents(Component *c, bool checkSelf)
   }
   if ((checkSelf && c == gui->popupDisplay1.source) || c->isParentOf(gui->popupDisplay1.source))
   {
-    gui->popupDisplay1.componentFlags.isVisible = false;
+    gui->popupDisplay1.componentFlags.visible = false;
   }
   if ((checkSelf && c == gui->popupDisplay2.source) || c->isParentOf(gui->popupDisplay2.source))
   {
-    gui->popupDisplay2.componentFlags.isVisible = false;
+    gui->popupDisplay2.componentFlags.visible = false;
   }
 
   auto mouseInteractions = renderer->getMouseInteractions();
@@ -968,8 +978,8 @@ calculateSingleLineTextSize(Component *c, bool isCalculatingVertical,
 
   if (!isCalculatingVertical)
   {
-    getUiRelated()->g->setFont(fontId, lineHeight);
-    auto max = (i32)::ceilf(getUiRelated()->g->getStringWidthFloat(text));
+    getThreadLocals()->g->setFont(fontId, lineHeight);
+    auto max = (i32)::ceilf(getThreadLocals()->g->getStringWidthFloat(text));
 
     return Range<i32>{ 0, max };
   }
@@ -1020,7 +1030,7 @@ Component::mouseWheelMove(const MouseEvent &e)
     return false;
 
   bool isHorizontal = e.mods.test(ModifierKeys::shiftModifier);
-  auto multiplier = 30.0f * getUiRelated()->scale;
+  auto multiplier = 30.0f * getThreadLocals()->scale;
   offsetScroll(this, e.wheelDeltaX * multiplier,
     e.wheelDeltaY * multiplier, isHorizontal);
 
@@ -1089,7 +1099,7 @@ Component::getComponentAt(i32 x, i32 y, bool onlyClickable,
 bool
 Component::isFocused(bool trueIfChildIsFocused) const
 {
-  auto *focusedComponent = getUiRelated()->renderer->getMouseInteractions().focused;
+  auto *focusedComponent = getThreadLocals()->renderer->getMouseInteractions().focused;
   if (!trueIfChildIsFocused && this != focusedComponent)
     return false;
 
@@ -1160,14 +1170,14 @@ void Component::grabFocus(bool tryToFocusUpwards)
   if (!isShowing())
     return;
 
-  auto *renderer = getUiRelated()->renderer;
+  auto *renderer = getThreadLocals()->renderer;
   grabFocusInternal(renderer, this, this, tryToFocusUpwards);
 }
 
 bool
 Component::giveAwayFocusTo(Component *component)
 {
-  auto *renderer = getUiRelated()->renderer;
+  auto *renderer = getThreadLocals()->renderer;
 
   if (this == renderer->getMouseInteractions().focused &&
     moveFocusTo(renderer, component, FocusChange::GivenAway))
@@ -1281,7 +1291,7 @@ void Component::renderScrollbars(Graphics &g, float scrollExpandPercent)
   Point<int> mousePosition{};
   if (componentFlags.isHovered)
   {
-    auto interactions = getUiRelated()->renderer->getMouseInteractions();
+    auto interactions = getThreadLocals()->renderer->getMouseInteractions();
     mousePosition = Point{ interactions.mouseState.x, interactions.mouseState.y } - getPositionInWindow();
   }
 
@@ -1316,7 +1326,7 @@ void Component::renderScrollbars(Graphics &g, float scrollExpandPercent)
     //}
 
     float width = 0.5f * (float)scrollBounds.h * calculateScrollWidth(scrollBounds,
-      scrollWidthsRatio.x, xScrollBrightness, componentFlags.isScrollbarXClicked);
+      scrollSizesRatio.x, xScrollBrightness, componentFlags.isScrollbarXClicked);
     xScrollBounds = { (float)scrollBounds.x + start,
       scrollBounds.getBottom() - width - 0.25f * scrollBounds.h, length, width };
   }
@@ -1336,7 +1346,7 @@ void Component::renderScrollbars(Graphics &g, float scrollExpandPercent)
     //}
 
     float width = 0.5f * (float)scrollBounds.w * calculateScrollWidth(scrollBounds,
-      scrollWidthsRatio.y, yScrollBrightness, componentFlags.isScrollbarYClicked);
+      scrollSizesRatio.y, yScrollBrightness, componentFlags.isScrollbarYClicked);
     yScrollBounds = { (float)scrollBounds.getRight() - width - 0.25f * scrollBounds.w,
       (float)scrollBounds.y + start, width, length };
   }

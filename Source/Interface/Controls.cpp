@@ -219,7 +219,7 @@ Slider::mouseUp(const MouseEvent &e)
     if (auto hostParameter = parameter->hostParameter.load(satomi::memory_order_acquire))
       hostParameter->endChangeGesture();
     else
-      getUiRelated()->plugin.markPluginDirty();
+      getThreadLocals()->plugin.markPluginDirty();
   }
   if (e.numberOfClicks == 2)
   {
@@ -710,7 +710,7 @@ TextSelector::mouseDown(const MouseEvent &e)
 
     auto previousValue = getValue();
     auto unscaledValue = unscaleValue(getValueFromOption(option, details),
-      details, getUiRelated()->plugin.getSampleRate());
+      details, getThreadLocals()->plugin.getSampleRate());
     bool isChanged = setValue(unscaledValue, true);
     if (isChanged)
     {
@@ -889,7 +889,7 @@ void CombinationRotarySlider::setModifier(TextSelector *newModifier)
   modifier = newModifier;
   modifier->placement = Placement::left;
   rotary.controlFlags.shouldShowPopup = modifier;
-  valueEditor.componentFlags.isVisible = !modifier;
+  valueEditor.componentFlags.visible = !modifier;
 
   if (modifier)
     infoSection.addChildComponent(modifier);

@@ -99,7 +99,7 @@ laneMessageHandler(Component *c, u64 commandId, void *extraData)
       offset = utils::min(offset, (i32)utils::int_max<i8>);
       auto yOffset = (i8)((position.y < self->bounds.h - position.y) ? offset : -offset);
 
-      offsetScroll(&self->moduleHolder, 0.0f, yOffset * getUiRelated()->deltaTime * kAutoscrollMultiplier, false);
+      offsetScroll(&self->moduleHolder, 0.0f, yOffset * getThreadLocals()->deltaTime * kAutoscrollMultiplier, false);
     }
 
     //COMPLEX_LOG("Position: %d, %d\n", data.position.x, data.position.y);
@@ -147,6 +147,7 @@ void EffectsLaneSection::reinitialise()
   componentFlags.vertical = true;
   componentFlags.animateMovement = true;
   componentFlags.halfScissor = true;
+  componentFlags.animateFadeAway = true;
   skinOverride = Skin::kEffectsLane;
   sizingFlags = Component::GrowableY;
   desiredSize = { kEffectsLaneWidth, 0, kEffectsLaneWidth, 0 };
@@ -235,7 +236,7 @@ EffectsLaneSection::ModuleHolder::mouseEnter(const MouseEvent &)
   //      meaning that the next highlight bounds will be where they already were
   //      and if the user doesn't move the cursor, it will not recheck that
 
-  auto *uiRelated = getUiRelated();
+  auto *uiRelated = getThreadLocals();
 
   COMPLEX_INVARIANT_ASSERT(
     (
@@ -268,7 +269,7 @@ EffectsLaneSection::ModuleHolder::mouseEnter(const MouseEvent &)
       {
         if (!self->hasEnteredHover)
         {
-          self->enterHoverTime = getUiRelated()->steadyTime;
+          self->enterHoverTime = getThreadLocals()->steadyTime;
           self->hasEnteredHover = true;
         }
 
@@ -285,7 +286,7 @@ EffectsLaneSection::ModuleHolder::mouseEnter(const MouseEvent &)
       }
       else if (self->hasEnteredHover)
       {
-        getUiRelated()->renderer->setMouseCursor(MouseCursorTypes::Normal);
+        getThreadLocals()->renderer->setMouseCursor(MouseCursorTypes::Normal);
         self->hasEnteredHover = false;
       }
 
@@ -298,15 +299,15 @@ EffectsLaneSection::ModuleHolder::mouseEnter(const MouseEvent &)
 bool
 EffectsLaneSection::ModuleHolder::mouseExit(const MouseEvent &)
 {
-  getUiRelated()->renderer->setMouseCursor(MouseCursorTypes::Normal);
+  getThreadLocals()->renderer->setMouseCursor(MouseCursorTypes::Normal);
   hasEnteredHover = false;
 
-  getUiRelated()->renderer->callbacks.erase({ this, 0 });
+  getThreadLocals()->renderer->callbacks.erase({ this, 0 });
 
   COMPLEX_INVARIANT_ASSERT(
     (
-      return getUiRelated()->renderer->callbacks.find({ this, 0 }) ==
-        getUiRelated()->renderer->callbacks.data.end();
+      return getThreadLocals()->renderer->callbacks.find({ this, 0 }) ==
+        getThreadLocals()->renderer->callbacks.data.end();
     )
   );
 
@@ -333,7 +334,7 @@ EffectsLaneSection::ModuleHolder::mouseDown(const MouseEvent &e)
     return true;
   }
 
-  double time = getUiRelated()->steadyTime;
+  double time = getThreadLocals()->steadyTime;
   if (time - enterHoverTime < kTimeout)
     return true;
 
@@ -355,14 +356,14 @@ static void renderInsertHint(EffectsLaneSection::ModuleHolder *holder, Graphics 
   bool isEmptyAndHovered = holder->componentFlags.isHovered && laneSection->effectsLane->childrenCount == 0;
   tickAnimation(holder->animationValues,
     { { isEmptyAndHovered || laneSection->isDropdownOpen ||
-      (holder->hasEnteredHover && getUiRelated()->steadyTime - holder->enterHoverTime >= EffectsLaneSection::kTimeout) } },
+      (holder->hasEnteredHover && getThreadLocals()->steadyTime - holder->enterHoverTime >= EffectsLaneSection::kTimeout) } },
     { { kHoverIncrement } });
 
   if (isEmptyAndHovered || laneSection->isDropdownOpen ||
-    (holder->hasEnteredHover && getUiRelated()->steadyTime - holder->enterHoverTime >= EffectsLaneSection::kTimeout))
+    (holder->hasEnteredHover && getThreadLocals()->steadyTime - holder->enterHoverTime >= EffectsLaneSection::kTimeout))
   {
     if (holder->hasEnteredHover)
-      getUiRelated()->renderer->setMouseCursor(MouseCursorTypes::PointingHand);
+      getThreadLocals()->renderer->setMouseCursor(MouseCursorTypes::PointingHand);
 
     auto scaledPadding = scaleValueRoundInt(holder->padding.toInt());
     auto drawBounds = holder->getLocalBounds().withTrimLeft(scaledPadding.x).withTrimRight(scaledPadding.w);
@@ -422,6 +423,9 @@ EffectsLaneSection::ModuleHolder::render(Graphics &g)
 bool
 EffectsLaneSection::render(Graphics &g)
 {
+  float transparency = utils::getNormalisedValue(sizeRatio);
+  nvgGlobalAlpha(g, transparency * transparency);
+
   if (renderStage == All || renderStage == Background)
   {
     fillRect(g, getLocalBounds().toFloat(), getColour(Skin::kBody, this), scaleValue(kInsideRouding));
@@ -453,7 +457,7 @@ EffectsLaneSection::LaneMiniView::LaneMiniView()
   sizingFlags = Component::GrowableX;
   padding = { 4, 0, 4, 0 };
   desiredSize = { kMinWidth, kMinHeight, utils::int_max<i32>, kMinHeight };
-  componentFlags.animateMovement = true;
+  componentFlags.animateFadeAway = true;
 }
 
 bool
@@ -482,6 +486,10 @@ EffectsLaneSection::LaneMiniView::mouseDrag(const MouseEvent &e)
     event.x = event.mouseDownPosition.x;
     event.y = event.mouseDownPosition.y;
 
+    // animate all mini views for the duration of the move
+    for (auto child = parent->children; child; child = child->next)
+      child->componentFlags.animateMovement = true;
+
     (void)prepareToMove(event);
   }
 
@@ -506,7 +514,13 @@ EffectsLaneSection::LaneMiniView::mouseUp(const MouseEvent &e)
     return true;
   }
 
-  return DraggableComponent::mouseUp(e);
+  endMove(e);
+
+  // stop animating mini views
+  for (auto child = parent->children; child; child = child->next)
+    child->componentFlags.animateMovement = false;
+
+  return true;
 }
 
 bool

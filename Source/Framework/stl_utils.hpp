@@ -185,7 +185,7 @@ namespace utils
 
   template<typename T>
   inline constexpr bool is_trivially_destructible_v =
-#if COMPLEX_GCC
+#if defined(__GNUC__) && !defined(__clang__)
   #if __has_builtin(__is_trivially_destructible)
     __is_trivially_destructible(T);
   #else
@@ -1195,7 +1195,7 @@ namespace utils
   #endif
   }
 
-  template <typename T>
+  template<typename T>
   constexpr int signum(T val, bool zeroAtCenter = true) noexcept
   {
     if (zeroAtCenter)
@@ -1210,23 +1210,19 @@ namespace utils
   centerAxis(T elementRange, T containerRange) noexcept
   { return (containerRange - elementRange) / T(2); }
 
-  template<utils::floating_point T>
+  template<typename T>
   constexpr T
-  unsignFloat(T &value) noexcept
+  unsign(T &value) noexcept
   {
     int sign = signum(value);
     value *= (T)sign;
     return (T)sign;
   }
 
-  template<utils::signed_integral T>
-  constexpr T
-  unsignInt(T &value) noexcept
-  {
-    int sign = signum(value);
-    value *= sign;
-    return (T)sign;
-  }
+  template<utils::unsigned_integral T>
+  constexpr float
+  getNormalisedValue(T value) noexcept
+  { return (float)value / utils::int_max<T>; }
 
   constexpr bool
   closeToZero(float value)

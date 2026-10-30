@@ -98,8 +98,8 @@ runThread(PuglView *view, const PuglEvent *event)
 {
   auto *renderer = (Renderer *)puglGetHandle(view);
 
-  getUiRelated() = &renderer->generalData;
-  defer { getUiRelated() = nullptr; };
+  getThreadLocals() = &renderer->generalData;
+  defer { getThreadLocals() = nullptr; };
 
   COMPLEX_ASSERT(renderer->view_ == view);
 
@@ -495,7 +495,7 @@ void Renderer::startUI()
   if (view_ != nullptr)
     return;
 
-  getUiRelated() = &generalData;
+  getThreadLocals() = &generalData;
 
   // Create world and view
   auto world = puglNewWorld(PUGL_MODULE, 0);
@@ -547,7 +547,7 @@ void Renderer::stopUI()
   if (view_ == nullptr)
     return;
 
-  getUiRelated() = &generalData;
+  getThreadLocals() = &generalData;
 
   puglUnrealize(view_);
 
@@ -575,13 +575,13 @@ utils::span<const byte>
 Renderer::getClipboard()
 {
   usize size;
-  auto *data = (const byte *)puglGetClipboard(getUiRelated()->renderer->view_, 0, &size);
+  auto *data = (const byte *)puglGetClipboard(getThreadLocals()->renderer->view_, 0, &size);
   return { data, size };
 }
 
 void Renderer::setClipboard(utils::span<const byte> data)
 {
-  puglSetClipboard(getUiRelated()->renderer->view_, nullptr, data.data(), data.size());
+  puglSetClipboard(getThreadLocals()->renderer->view_, nullptr, data.data(), data.size());
 }
 
 MouseEvent
@@ -809,8 +809,8 @@ void Renderer::recalculateScale(bool forceResize)
     (u32)::roundf((float)area.h * newEffectiveScale / generalData.scale) };
 
   generalData.scale = newEffectiveScale;
-  getUiRelated() = &generalData;
-  defer { getUiRelated() = nullptr; };
+  getThreadLocals() = &generalData;
+  defer { getThreadLocals() = nullptr; };
   // the GUI needs to be sized before we can proceed with checking
   if (isInitialised && !gui->bounds.isEmpty())
     doSizingAndPositioning();
@@ -824,14 +824,14 @@ void Renderer::checkFocusedComponent()
 {
   // reason for checking isVisible directly and not isStillVisible() is because
   // we want to immediately transfer as soon as something is known to disappear
-  if (!focusedComponent_ || focusedComponent_->componentFlags.isVisible)
+  if (!focusedComponent_ || focusedComponent_->componentFlags.visible)
     return;
 
   auto next = focusedComponent_->parent;
   while (next)
   {
     // we want to know that the candidate isn't disappearing either
-    if (next->componentFlags.isVisible && moveFocusTo(this, next, FocusChange::SetInvisible))
+    if (next->componentFlags.visible && moveFocusTo(this, next, FocusChange::SetInvisible))
       return;
     
     next = next->parent;
@@ -899,7 +899,7 @@ void Renderer::renderLoop(PuglView *view)
   glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
   glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
 
-  nvgBeginFrame(*generalData.g, (float)area.w, (float)area.h, getUiRelated()->scale);
+  nvgBeginFrame(*generalData.g, (float)area.w, (float)area.h, getThreadLocals()->scale);
 
   gui->renderChildren(*generalData.g);
 
@@ -1014,8 +1014,8 @@ extern "C"
   void cplug_checkSize(void *userGUI, uint32_t *width, uint32_t *height)
   {
     auto renderer = (Renderer *)userGUI;
-    getUiRelated() = &renderer->generalData;
-    defer { getUiRelated() = nullptr; };
+    getThreadLocals() = &renderer->generalData;
+    defer { getThreadLocals() = nullptr; };
     auto [w, h] = checkResizing({ *width, *height });
     *width = w;
     *height = h;

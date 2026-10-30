@@ -161,7 +161,7 @@ findOrAddPermanentString(utils::string_view string)
 
 void HostParameter::notifyParameterChange()
 {
-  auto hostContext = getUiRelated()->plugin.hostContext;
+  auto hostContext = getThreadLocals()->plugin.hostContext;
   hostContext->rescan(hostContext,
     CPLUG_FLAG_RESCAN_PARAM_VALUES | CPLUG_FLAG_RESCAN_PARAM_NAMES | CPLUG_FLAG_RESCAN_PARAM_METADATA);
 }
@@ -502,7 +502,7 @@ struct TlsContext
 {
   utils::Pool *localScratch{};
   utils::Pool *localMallocArena{};
-  InterfaceRelated *uiRelated{};
+  ThreadLocals *uiRelated{};
   JsonTlsContext jsonContext{};
 };
 
@@ -535,8 +535,8 @@ getSettableMallocPool()
   return ((TlsContext *)utils::getTls())->localMallocArena;
 }
 
-InterfaceRelated *&
-getUiRelated()
+ThreadLocals *&
+getThreadLocals()
 {
   return ((TlsContext *)utils::getTls())->uiRelated;
 }
@@ -852,7 +852,7 @@ void cplug_process(void *ptr, CplugProcessContext *ctx)
   utils::ScopedNoDenormals noDenormals{};
 
   auto *plugin = (ComplexPlugin *)ptr;
-  auto g = plugin->acquireProcessingLock();
+  utils::ScopedLock g{ plugin->processingLock, true, utils::WaitMechanism::Spin };
 
   // "Sample accurate" process loop
   CplugEvent event;

@@ -24,8 +24,8 @@ getPopupDisplayDimensions(Component *c, bool isCalculatingVertical)
       control->getScaledValueString(self->text, control->getValue());
     }
 
-    getUiRelated()->g->setFont((self->isControl) ? FontId::DDinType : FontId::InterType, (float)lineHeight);
-    self->cachedFontWidth = (i32)::ceilf(getUiRelated()->g->getStringWidthFloat(self->text));
+    getThreadLocals()->g->setFont((self->isControl) ? FontId::DDinType : FontId::InterType, (float)lineHeight);
+    self->cachedFontWidth = (i32)::ceilf(getThreadLocals()->g->getStringWidthFloat(self->text));
     return Range<i32>{ 0, self->cachedFontWidth };
   }
   else
@@ -145,7 +145,7 @@ bool
 PopupList::render(Graphics &g)
 {
   // if the user is currently holding down a mouse button, we shouldn't change anything
-  if (auto mouseInteractions = getUiRelated()->renderer->getMouseInteractions(); !mouseInteractions.clicked)
+  if (auto mouseInteractions = getThreadLocals()->renderer->getMouseInteractions(); !mouseInteractions.clicked)
   {
     if (currentSublistItem && componentFlags.isHovered)
     {
@@ -167,7 +167,7 @@ PopupList::render(Graphics &g)
 
     renderScrollbars(g, 0.2f);
 
-    auto mouseState = getUiRelated()->renderer->getMouseInteractions().mouseState.getEventRelativeTo(this);
+    auto mouseState = getThreadLocals()->renderer->getMouseInteractions().mouseState.getEventRelativeTo(this);
     auto *c = contains(Point{ mouseState.x, mouseState.y }) ? lastMouseEvent.eventComponent : currentSublistItem;
     summonChildList((PopupItem *)c, lastMouseEvent);
 
@@ -317,7 +317,7 @@ void PopupList::summonChildList(PopupItem *summoningItem,
 {
   static constexpr double kSublistConeTimeout = 0.25; //s
 
-  bool shouldCloseSublist = force || getUiRelated()->steadyTime - lastSummonTime >= kSublistConeTimeout;
+  bool shouldCloseSublist = force || getThreadLocals()->steadyTime - lastSummonTime >= kSublistConeTimeout;
   auto event = summoningMouseEvent.getEventRelativeTo(parentSelector);
   if (currentSublistItem)
   {
@@ -333,7 +333,7 @@ void PopupList::summonChildList(PopupItem *summoningItem,
   // refreshing the last summon time while we're on the summoning item
   lastSummonTime = (currentSublistItem != summoningItem && summoningItem && (summoningItem->childList || currentSublistItem) &&
     summoningItem->contains(Point{ summoningMouseEvent.x, summoningMouseEvent.y })) ?
-    lastSummonTime : getUiRelated()->steadyTime;
+    lastSummonTime : getThreadLocals()->steadyTime;
 
   if (currentSublistItem != summoningItem && shouldCloseSublist)
   {
@@ -410,7 +410,7 @@ PopupItem::mouseUp(const MouseEvent &)
   if (!canBeChosen || childList)
     return false;
 
-  if (getUiRelated()->steadyTime - associatedList->parentSelector->timeOfAppearance <= PopupSelector::kClickTimeout)
+  if (getThreadLocals()->steadyTime - associatedList->parentSelector->timeOfAppearance <= PopupSelector::kClickTimeout)
     return false;
 
   associatedList->parentSelector->newSelection(this);
@@ -459,7 +459,7 @@ void PopupSelector::newSelection(PopupItem *entry)
         return;
     }
 
-    componentFlags.isVisible = false;
+    componentFlags.visible = false;
   }
   else if (cancel)
     cancel(this);
@@ -475,7 +475,7 @@ PopupSelector::handleFocus(bool hasFocus, FocusChange, Component *correspondent)
     if ((correspondent == summoner && toggleable) || isParentOf(correspondent))
       return false;
 
-    componentFlags.isVisible = false;
+    componentFlags.visible = false;
     if (cancel)
       cancel(this);
 
@@ -520,9 +520,9 @@ void PopupSelector::resetState(bool callCancelFn)
   utils::Pool::clear(pool);
   skinOverride = Skin::kNone;
   toggleable = true;
-  componentFlags.isVisible = false;
+  componentFlags.visible = false;
 
-  getUiRelated()->renderer->callbacks.erase({ this, 0 });
+  getThreadLocals()->renderer->callbacks.erase({ this, 0 });
 }
 
 void PopupSelector::summon(Component *summoningComponent,
@@ -532,17 +532,17 @@ void PopupSelector::summon(Component *summoningComponent,
   listPlacement = newListPlacement;
   summoningPoint = customPosition;
   selectedList = list;
-  timeOfAppearance = getUiRelated()->steadyTime;
+  timeOfAppearance = getThreadLocals()->steadyTime;
   addChildComponent(list);
 
-  componentFlags.isVisible = true;
+  componentFlags.visible = true;
   grabFocus();
 
-  getUiRelated()->renderer->callbacks.add({ this, 0 }, [](Component *c)
+  getThreadLocals()->renderer->callbacks.add({ this, 0 }, [](Component *c)
     {
       auto *self = (PopupSelector *)c;
       for (auto *child = self->children; child; child = child->next)
-        child->componentFlags.isVisible = !self->summoner->isObscured();
+        child->componentFlags.visible = !self->summoner->isObscured();
       return false;
     });
 }
@@ -561,17 +561,17 @@ OptionPopupItem::OptionPopupItem()
     auto [text, canTextWrap] = item->getTextAndWrap();
 
     float height = scaleValue((float)item->desiredSize.h);
-    getUiRelated()->g->setFont(FontId::InterType, height);
-    nvgTextAlign(getUiRelated()->g->context, NVG_ALIGN_LEFT | NVG_ALIGN_CENTER);
+    getThreadLocals()->g->setFont(FontId::InterType, height);
+    nvgTextAlign(getThreadLocals()->g->context, NVG_ALIGN_LEFT | NVG_ALIGN_CENTER);
 
     if (!isCalculatingVertical)
     {
-      minSize = (canTextWrap) ? 0 : (i32)::ceilf(getUiRelated()->g->getStringWidthFloat(text));
+      minSize = (canTextWrap) ? 0 : (i32)::ceilf(getThreadLocals()->g->getStringWidthFloat(text));
       maxSize = -1;
     }
     else
     {
-      auto lineCount = getUiRelated()->g->getStringNumberOfLines(text, (float)item->bounds.w);
+      auto lineCount = getThreadLocals()->g->getStringNumberOfLines(text, (float)item->bounds.w);
       minSize = (i32)::roundf(height * (float)lineCount);
       maxSize = minSize;
     }

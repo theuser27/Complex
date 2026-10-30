@@ -551,18 +551,3 @@ struct MonitorInfo
 };
 
 MonitorInfo getCurrentMonitorInfo(void *nativeHandle);
-
-class Renderer;
-class Graphics;
-class Skin;
-
-struct InterfaceRelated
-{
-  ComplexPlugin &plugin;
-  Renderer *renderer = nullptr;
-  Graphics *g = nullptr;
-  Skin *skin = nullptr;
-  float scale = 1.0f;
-  float deltaTime = 0.0f;
-  double steadyTime = 0.0;
-};

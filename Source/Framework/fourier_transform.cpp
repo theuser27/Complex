@@ -3,6 +3,8 @@
 
 #include "fourier_transform.hpp"
 #include "utils.hpp"
+#include "metadata.hpp"
+#include "Plugin/Complex.hpp"
 
 #ifdef COMPLEX_INTEL_IPP
   #include "ipps.h"
@@ -202,6 +204,16 @@ FFT::~FFT() noexcept
 
 void FFT::extendFFTOrders(u32 newMinOrder, u32 newMaxOrder)
 {
+  // currently the plans are destroyed and (re)created every time we expand
+  // in the hopes that the data will be relatively local
+  // requires write-lock
+  if (auto &lock = getThreadLocals()->plugin.processingLock;
+    lock.lock.load(satomi::memory_order_relaxed) > 0 ||
+    lock.lastLockId.load(satomi::memory_order_relaxed) != utils::thread::getCurrentId())
+  {
+    COMPLEX_HARD_ASSERT_FALSE("Change of FFT orders while not having acquired write-lock");
+  }
+
   auto [minOrder, maxOrder] = orders.load(satomi::memory_order_acquire);
 
   // just performing an atomic swap after creating the new plans and buffer

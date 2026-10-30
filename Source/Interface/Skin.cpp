@@ -283,11 +283,11 @@ Skin::stringToState(utils::string_view skinString)
 float
 getValue(Skin::ValueId valueId, bool isScaled, Skin::Override skinOverride)
 {
-  if (getUiRelated()->skin)
+  if (getThreadLocals()->skin)
   {
     COMPLEX_ASSERT(skinOverride < Skin::kSectionsCount);
     COMPLEX_ASSERT(valueId < Skin::kValueIdCount);
-    auto value = getUiRelated()->skin->values[skinOverride][valueId];
+    auto value = getThreadLocals()->skin->values[skinOverride][valueId];
     return (isScaled) ? scaleValue(value) : value;
   }
 
@@ -297,9 +297,9 @@ getValue(Skin::ValueId valueId, bool isScaled, Skin::Override skinOverride)
 float
 getValue(Skin::ValueId valueId, bool isScaled, Component *component)
 {
-  if (getUiRelated()->skin)
+  if (getThreadLocals()->skin)
   {
-    auto value = getUiRelated()->skin->getValue(valueId, component);
+    auto value = getThreadLocals()->skin->getValue(valueId, component);
     return (isScaled) ? scaleValue(value) : value;
   }
 
@@ -309,11 +309,11 @@ getValue(Skin::ValueId valueId, bool isScaled, Component *component)
 Colour
 getColour(Skin::ColourId colorId, Skin::Override skinOverride)
 {
-  if (getUiRelated()->skin)
+  if (getThreadLocals()->skin)
   {
     COMPLEX_ASSERT(skinOverride < Skin::kSectionsCount);
     COMPLEX_ASSERT(colorId < Skin::kColorIdCount);
-    return getUiRelated()->skin->colours[skinOverride][colorId];
+    return getThreadLocals()->skin->colours[skinOverride][colorId];
   }
 
   return Colours::black;
@@ -322,8 +322,8 @@ getColour(Skin::ColourId colorId, Skin::Override skinOverride)
 Colour
 getColour(Skin::ColourId colorId, Component *component)
 {
-  if (getUiRelated()->skin)
-    return getUiRelated()->skin->getColour(colorId, component);
+  if (getThreadLocals()->skin)
+    return getThreadLocals()->skin->getColour(colorId, component);
 
   return Colours::black;
 }

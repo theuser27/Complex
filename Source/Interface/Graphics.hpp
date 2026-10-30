@@ -8,6 +8,7 @@
 #include "Framework/utils.hpp"
 #include "Framework/simd.hpp"
 #include "Framework/simd_utils.hpp"
+#include "Framework/metadata.hpp"
 #include "gui_utils.hpp"
 
 extern "C"
@@ -94,33 +95,36 @@ public:
   int InterFontId;
 };
 
-// thread-local variable for the message thread so that we don't need to pass pointers around
-InterfaceRelated *&getUiRelated();
-forceinline float scaleValue(float value) { return getUiRelated()->scale * value; }
+forceinline float scaleValue(float value) { return getThreadLocals()->scale * value; }
 forceinline Rectangle<float>
 scaleValue(Rectangle<float> bounds)
 {
   auto values = utils::bit_cast<f4>(bounds);
-  values = getUiRelated()->scale * utils::toFloat(values);
+  values = getThreadLocals()->scale * utils::toFloat(values);
   return utils::bit_cast<Rectangle<float>>(values);
 }
-forceinline float scaleValueRound(float value) { return ::roundf(getUiRelated()->scale * value); }
+forceinline float scaleValueRound(float value) { return ::roundf(getThreadLocals()->scale * value); }
 forceinline Rectangle<float>
 scaleValueRound(Rectangle<float> bounds)
 {
   auto values = utils::bit_cast<f4>(bounds);
-  values = f4::round(getUiRelated()->scale * utils::toFloat(values));
+  values = f4::round(getThreadLocals()->scale * utils::toFloat(values));
   return utils::bit_cast<Rectangle<float>>(values);
 }
-forceinline i32 scaleValueRoundInt(float value) { return (int)::roundf(getUiRelated()->scale * value); }
+forceinline i32 scaleValueRoundInt(float value) { return (int)::roundf(getThreadLocals()->scale * value); }
+forceinline Rectangle<i32>
+scaleValueRoundInt(Rectangle<i32> bounds, float scale)
+{
+  auto values = utils::bit_cast<i4>(bounds);
+  values = utils::toInt(f4::round(scale * utils::toFloat(values)));
+  return utils::bit_cast<Rectangle<i32>>(values);
+}
 forceinline Rectangle<i32>
 scaleValueRoundInt(Rectangle<i32> bounds)
 {
-  auto values = utils::bit_cast<i4>(bounds);
-  values = utils::toInt(f4::round(getUiRelated()->scale * utils::toFloat(values)));
-  return utils::bit_cast<Rectangle<i32>>(values);
+  return scaleValueRoundInt(bounds, getThreadLocals()->scale);
 }
-forceinline float unscaleValue(float value) { return value / getUiRelated()->scale; }
+forceinline float unscaleValue(float value) { return value / getThreadLocals()->scale; }
 
 inline void fillRect(NVGcontext *context, Rectangle<float> bounds,
   Colour colour = Colours::white, float cornerRounding = 0.0f)
