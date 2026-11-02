@@ -132,6 +132,8 @@ runThread(PuglView *view, const PuglEvent *event)
     renderer->generalData.g = anew(renderer->pool, Graphics, { renderer->pool });
     renderer->isInitialised = true;
 
+    renderer->backgroundWorker.stop();
+
     break;
   }
   case PUGL_CLOSE:
@@ -154,6 +156,24 @@ runThread(PuglView *view, const PuglEvent *event)
 
     auto [unscaledWidth, unscaledHeight] = unscaleDimensions(renderer->area.w, renderer->area.h, renderer->generalData.scale);
     saveWindowSizeScale(unscaledWidth, unscaledHeight, renderer->pluginScale);
+
+  #ifndef COMPLEX_STANDALONE
+    renderer->backgroundWorker.start([renderer](satomi::atomic<bool> &shouldStop)
+    {
+      utils::Timer timer{};
+      timer.setFrequency(renderer->fps);
+      timer.setCorrectionPeriod(5.0);
+      getThreadLocals() = &renderer->generalData;
+
+      while (!shouldStop.load(satomi::memory_order_seq_cst))
+      {
+        renderer->plugin.state_->flushHostParameters();
+        // add more things here to be done in the background when the GUI is closed...
+
+        timer.sleep();
+      }
+    });
+  #endif
 
     break;
   }
@@ -884,6 +904,7 @@ void Renderer::renderLoop(PuglView *view)
 
   auto newRenderTime = puglGetTime(puglGetWorld(view));
   generalData.deltaTime = (float)(newRenderTime - generalData.steadyTime);
+  COMPLEX_ASSERT(generalData.deltaTime >= 0.0F);
   generalData.steadyTime = newRenderTime;
 
   // FIXME; this needs to run when the GUI is closed
@@ -929,7 +950,8 @@ extern "C"
 
   void cplug_destroyGUI(void *userGUI)
   {
-    ((Renderer *)userGUI)->stopUI();
+    auto renderer = (Renderer *)userGUI;
+    renderer->stopUI();
   }
 
   void cplug_setParent(void *userGUI, void *newParent)
@@ -957,6 +979,7 @@ extern "C"
 
       getWindowSizeScale(renderer->area.w, renderer->area.h, renderer->pluginScale);
       renderer->generalData.scale = 1.0f;
+      renderer->generalData.steadyTime = 0.0;
       renderer->recalculateScale(true);
 
       //clampScaleWidthHeight(renderer->view_, renderer->effectiveScale, windowWidth, windowHeight);

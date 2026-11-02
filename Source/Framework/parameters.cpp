@@ -740,41 +740,30 @@ void initialiseParameters(Parameter *parameters,
   }
 }
 
-void Processor::remapParameters(utils::span<HostParameter *> bridges,
-  bool bridgeValueFromParameters, bool remapOnlyBridges)
+void Processor::remapParameters(Parameter *parameters, usize parameterCount,
+  bool getValueFromParameters, bool remapHostParametersOnly)
 {
-  COMPLEX_ASSERT(bridges.empty() || bridges.size() == parameterCount);
-
   auto *parameter = parameters;
   for (usize i = 0; i < parameterCount; (++i), (parameter = parameter->next))
   {
-    auto bridge = parameter->hostParameter.load(satomi::memory_order_acquire);
-
-    if (!bridges.empty())
-    {
-      bridge->resetParameter(nullptr);
-      bridges[i]->resetParameter(parameter, bridgeValueFromParameters);
-
-      continue;
-    }
-
-    if (!bridge)
+    auto hostParameter = parameter->hostParameter.load(satomi::memory_order_acquire);
+    if (!hostParameter)
       continue;
 
-    if (remapOnlyBridges)
+    if (remapHostParametersOnly)
     {
-      if (bridge->getParameter())
+      if (hostParameter->getParameter())
       {
-        bridge->resetParameter(nullptr);
-        // remain with a one-way reference to the bridge we detached from
-        parameter->hostParameter.store(bridge, satomi::memory_order_release);
+        hostParameter->resetParameter(nullptr);
+        // remain with a one-way reference to the hostParameter we detached from
+        parameter->hostParameter.store(hostParameter, satomi::memory_order_release);
       }
       else
-        bridge->resetParameter(parameter, bridgeValueFromParameters);
+        hostParameter->resetParameter(parameter, getValueFromParameters);
     }
     else
     {
-      bridge->resetParameter(nullptr);
+      hostParameter->resetParameter(nullptr);
     }
   }
 

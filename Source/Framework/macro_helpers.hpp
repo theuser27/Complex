@@ -55,7 +55,7 @@
     (nextList__->COMPLEX_DEFAULT_OR(next, __VA_ARGS__) = temp__)) { }
 
 #define COMPLEX_DEFINE_ENUM_OPERATION(T, operation, underlying) \
-  constexpr underlying operator operation (T a, auto b) { return (underlying)(a) operation (underlying)(b); }\
+  constexpr T operator operation (T a, auto b) { return (T)((underlying)(a) operation (underlying)(b)); }\
   constexpr T &operator operation##=(T &a, auto b) { a = (T)((underlying)(a) operation (underlying)(b)); return a; }
 
 // enabling portable out of order designated initialisers

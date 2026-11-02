@@ -248,32 +248,36 @@ void SoundEngine::isReadyToPerform(u32 samples)
   isPerforming_ = true;
 }
 
-void SoundEngine::updateParameters(UpdateFlag flag, float currentSampleRate, bool updateChildrenParameters)
+void updateSoundEngineParameters(Processor *p,
+  UpdateFlag flag, float currentSampleRate, bool updateChildrenParameters)
 {
-  Processor::updateParameters(flag, currentSampleRate, updateChildrenParameters);
+  updateProcessorParametersGeneric(p, flag, currentSampleRate, updateChildrenParameters);
+  auto *s = (SoundEngine *)p;
 
   switch (flag)
   {
   case UpdateFlag::Realtime:
-    currentOverlap_.store(nextOverlap_, satomi::memory_order_relaxed);
-    nextOverlap_ = getParameter(Overlap)->getInternalValue<float>(currentSampleRate);
-    windowTypeId_ = getParameter(WindowType)->getInternalValue<IndexedData>(currentSampleRate).first->id;
-    alpha_ = utils::lerp(kAlphaLowerBound, kAlphaUpperBound, getParameter(WindowAlpha)->getInternalValue<float>(currentSampleRate));
+    s->currentOverlap_.store(s->nextOverlap_, satomi::memory_order_relaxed);
+    s->nextOverlap_ = s->getParameter(SoundEngine::Overlap)->getInternalValue<float>(currentSampleRate);
+    s->windowTypeId_ = s->getParameter(SoundEngine::WindowType)->getInternalValue<IndexedData>(currentSampleRate).first->id;
+    s->alpha_ = utils::lerp(kAlphaLowerBound, kAlphaUpperBound, 
+      s->getParameter(SoundEngine::WindowAlpha)->getInternalValue<float>(currentSampleRate));
 
     // getting the next overlapOffset
-    nextOverlapOffset_ = (u32)::floorf((float)FFTSamples_ * (1.0f - nextOverlap_));
+    s->nextOverlapOffset_ = (u32)::floorf((float)s->FFTSamples_ * (1.0f - s->nextOverlap_));
 
     break;
   case UpdateFlag::BeforeProcess:
-    mix_ = getParameter(Mix)->getInternalValue<float>(currentSampleRate);
-    FFTOrder_ = getParameter(BlockSize)->getInternalValue<u32>(currentSampleRate);
-    outGain_ = (float)utils::dbToAmplitude(getParameter(OutGain)->getInternalValue<float>(currentSampleRate));
+    s->mix_ = s->getParameter(SoundEngine::Mix)->getInternalValue<float>(currentSampleRate);
+    s->FFTOrder_ = s->getParameter(SoundEngine::BlockSize)->getInternalValue<u32>(currentSampleRate);
+    s->outGain_ = (float)utils::dbToAmplitude(s->getParameter(SoundEngine::OutGain)
+      ->getInternalValue<float>(currentSampleRate));
 
-    if (!isInitialised_)
+    if (!s->isInitialised_)
     {
-      isInitialised_ = true;
-      FFTSamples_ = 1 << FFTOrder_;
-      FFTSamplesAtReset_ = FFTSamples_;
+      s->isInitialised_ = true;
+      s->FFTSamples_ = 1 << s->FFTOrder_;
+      s->FFTSamplesAtReset_ = s->FFTSamples_;
     }
 
     break;
@@ -468,7 +472,8 @@ void *initialiseTypeStructureSoundEngine(void *, PluginStructure &structure)
   auto *pool = structure.getNewPool(COMPLEX_KB(3));
 
   ProcessorMetadata &soundEngine = COMPLEX_STRUCTURE_PROCESSOR(SoundEngine, "Sound Engine",
-    Processors::SoundEngine, Skin::kNone, createSoundEngine, createUISoundEngine);
+    Processors::SoundEngine, Skin::kNone, createSoundEngine, createUISoundEngine, 
+    .updateParameters = updateSoundEngineParameters);
   soundEngine.parameters =
   (
     COMPLEX_STRUCTURE_PARAMETER("Mix", SoundEngine::Mix, { 0.0f, 1.0f, 1.0f },

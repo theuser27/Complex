@@ -842,6 +842,15 @@ namespace utils
   #endif
   }
 
+  void thread::yield()
+  {
+  #ifdef COMPLEX_WINDOWS
+    Sleep(0);
+  #else
+    sched_yield();
+  #endif
+  }
+
 #ifdef COMPLEX_WINDOWS
   static DWORD WINAPI threadEntry(LPVOID argument)
 #else
@@ -890,7 +899,8 @@ namespace utils
     }
   }
 
-  bool thread::join(int *exitCode)
+  bool 
+  thread::join(int *exitCode)
   {
   #ifdef COMPLEX_WINDOWS
     DWORD dwRes;
@@ -914,26 +924,24 @@ namespace utils
     if (exitCode != nullptr)
       *exitCode = (int)(usize)result;
   #endif
+    threadId = {};
+
     return true;
   }
 
-  bool thread::detach()
+  bool 
+  thread::detach()
   {
   #ifdef COMPLEX_WINDOWS
     auto handle = OpenThread(THREAD_ALL_ACCESS, false, (DWORD)threadId.nativeId);
     // https://stackoverflow.com/questions/12744324/how-to-detach-a-thread-on-windows-c#answer-12746081
-    return CloseHandle(handle) != 0;
+    auto ret = CloseHandle(handle) != 0;
+    threadId = {};
+    return ret;
   #else
-    return pthread_detach((pthread_t)threadId.nativeId) == 0;
-  #endif
-  }
-
-  void thread::yield()
-  {
-  #ifdef COMPLEX_WINDOWS
-    Sleep(0);
-  #else
-    sched_yield();
+    auto ret = pthread_detach((pthread_t)threadId.nativeId) == 0;
+    threadId = {};
+    return ret;
   #endif
   }
 

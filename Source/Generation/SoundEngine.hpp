@@ -178,7 +178,6 @@ private:
 public:
   // initialising pointers and FFT plans
   void resetBuffers();
-  void updateParameters(UpdateFlag flag, float sampleRate, bool updateChildrenParameters = true);
   void process(float *const *in, float *const *out, u32 samples, float sampleRate,
     u32 numInputs, u32 numOutputs, FFT &ffts);
 
@@ -258,6 +257,8 @@ private:
 
   friend Processor *createSoundEngine(State *state,
     ProcessorMetadata *metadata, const void *, void *serialisedSave, void *);
+  friend void updateSoundEngineParameters(Processor *p,
+    UpdateFlag flag, float currentSampleRate, bool updateChildrenParameters);
 };
 
 static_assert(utils::is_trivially_destructible_v<SoundEngine>);

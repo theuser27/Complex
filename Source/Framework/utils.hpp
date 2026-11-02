@@ -2118,7 +2118,7 @@ namespace utils
     struct id
     {
     #ifdef COMPLEX_WINDOWS
-      /*DWORD*/ unsigned int nativeId{};
+      /*DWORD*/ u32 nativeId{};
     #else
       /*pthread_t*/ unsigned long nativeId{};
     #endif
@@ -2130,6 +2130,7 @@ namespace utils
     // the necessity for this function instead of just getting the value directly
     // is because the thread might have been started
     static id getCurrentId();
+    static void yield();
     [[noreturn]] static void exit(int result);
 
     ~thread();
@@ -2167,9 +2168,46 @@ namespace utils
 
     bool join(int *exitCode = nullptr);
     bool detach();
-    void yield();
 
     bool operator==(const thread &other) const = default;
+  };
+
+  struct Worker
+  {
+    Worker() = default;
+    Worker(Worker &&other) noexcept : thread{ COMPLEX_MOVE(other.thread) },
+      shouldStop{ other.shouldStop } { }
+    ~Worker() { stop(); }
+
+    bool
+    start(const auto &function)
+    {
+      if (thread != utils::thread{})
+        return false;
+
+      shouldStop = anew(globalPool, satomi::atomic<bool>, {});
+
+      thread = [shouldStop = shouldStop, function]() { function(*shouldStop); };
+      return true;
+    }
+
+    bool
+    stop(int *exitCode = nullptr)
+    {
+      if (thread == utils::thread{})
+        return true;
+
+      shouldStop->store(true, satomi::memory_order_release);
+      bool success = thread.join(exitCode);
+      utils::Pool::remove(shouldStop);
+      thread = {};
+
+      return success;
+    }
+
+    utils::thread thread{};
+    utils::typeInfo reservationTag{};
+    satomi::atomic<bool> *shouldStop{};
   };
 
   // intended relative comparisons in time

@@ -3,13 +3,14 @@
 
 #pragma once
 
-#include "Framework/simd_buffer.hpp"
 #include "Framework/metadata.hpp"
 
 class HostParameter;
 class Parameter;
 struct ParameterMetadata;
 struct ProcessorMetadata;
+
+struct SimdBuffer;
 
 struct State;
 
@@ -36,7 +37,7 @@ public:
   Processor &operator=(Processor &&) = delete;
 
   Component *createUI() { return metadata->createUI(this); }
-  void reset() { metadata->reset(this); }
+  void reset(ResetFlags flags) { metadata->reset(this, flags); }
   void serialiseToJson(void *jsonData, utils::span<Parameter *> parametersToSerialise = {}) const
   {
     metadata->serialise(this, jsonData, parametersToSerialise);
@@ -65,13 +66,16 @@ public:
   SimdBuffer *createBuffer(const SimdBuffer *other = nullptr);
 
   Parameter *getParameter(uuid parameterId) const;
-  void updateParameters(UpdateFlag flag, float sampleRate, bool updateChildrenParameters = true);
+  void updateParameters(UpdateFlag flag, float sampleRate, bool updateChildrenParameters = true)
+  {
+    metadata->updateParameters(this, flag, sampleRate, updateChildrenParameters);
+  }
   // remaps parameters from the current bridges (if they exist) to new ones (if they exist)
   // if no bridges are provided they are assumed to be nullptr
   // if remapOnlyBridges is also provided it will unmap/remap only the bridges from the parameters
   // while the parameters still keep a reference to them
-  void remapParameters(utils::span<HostParameter *> bridges,
-    bool bridgeValueFromParameters, bool remapOnlyBridges);
+  static void remapParameters(Parameter *parameters, usize parameterCount,
+    bool getValueFromParameters, bool remapHostParametersOnly);
 
   //void randomiseParameters();
   //void setAllParametersRandomisation(bool toRandomise = true);

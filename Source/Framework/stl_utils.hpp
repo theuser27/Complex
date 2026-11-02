@@ -255,14 +255,14 @@ namespace utils
   #pragma warning(pop)
 #endif
 
-  template<class T, T ... Is>
+  template<typename T, T ... Is>
   struct integer_sequence
   {
     using value_type = T;
     [[nodiscard]] static constexpr usize size() noexcept { return sizeof...(Is); }
   };
 
-  template<class T, T Size>
+  template<typename T, T Size>
   using make_integer_sequence =
 #if defined(__GNUC__) && !defined(__clang__)
     integer_sequence<T, __integer_pack(Size)...>;

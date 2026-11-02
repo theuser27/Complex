@@ -10,6 +10,7 @@ extern "C" typedef struct NSVGimage NSVGimage;
 
 struct State;
 struct ComplexPlugin;
+class Processor;
 class Renderer;
 class Graphics;
 class Skin;
@@ -35,15 +36,29 @@ struct ThreadLocals
 // thread-local variable for the message thread so that we don't need to pass pointers around
 ThreadLocals *&getThreadLocals();
 
-class Processor;
-void resetProcessorGeneric(Processor *processor);
+// used for updating parameters
+enum class UpdateFlag : u8 { Realtime = 1, BeforeProcess = 2, AfterProcess = 3 };
+enum class ResetFlags : u8
+{
+  None = 0,
+  ProcessorState = 1 << 0,
+  Parameters = 1 << 1,
+
+  RemapParameters = 1 << 2,
+  RemapHostParameterOnly = 1 << 3,
+  GetValueFromParameter = 1 << 4,
+};
+
+COMPLEX_DEFINE_ENUM_OPERATION(ResetFlags, &, u8)
+COMPLEX_DEFINE_ENUM_OPERATION(ResetFlags, | , u8)
+
+void resetProcessorGeneric(Processor *processor, ResetFlags flags);
 void serialiseProcessorGeneric(const Processor *processor,
   void *jsonData, utils::span<Parameter *> parametersToSerialise);
+void updateProcessorParametersGeneric(Processor *processor, 
+  UpdateFlag flag, float sampleRate, bool updateChildrenParameters);
 
 class Component;
-
-// used for updating parameters
-enum class UpdateFlag : u8 { NoUpdates = 0, Realtime = 1, BeforeProcess = 2, AfterProcess = 3 };
 
 enum class ParameterAssignment : u8 { AudioThread, MainThread, Skip };
 
@@ -323,7 +338,9 @@ struct ProcessorMetadata
   using CreateProcessorFn = Processor *(State *state,
     ProcessorMetadata *metadata, const void *toCopy, void *serialisedSave, void *extra);
   using CreateUIFn = Component *(Processor *processor);
-  using ResetFn = void(Processor *processor);
+  using ResetFn = void(Processor *processor, ResetFlags flags);
+  using UpdateParametersFn = void(Processor *processor, UpdateFlag flag, 
+    float sampleRate, bool updateChildrenParameters);
   using SerialiseToJsonFn = void(const Processor *processor,
     void *jsonData, utils::span<Parameter *> parametersToSerialise);
   using AutomationMappingChangedFn = void(Processor *processor, 
@@ -346,6 +363,7 @@ struct ProcessorMetadata
   CreateProcessorFn *create{};
   CreateUIFn *createUI{};
   ResetFn *reset = resetProcessorGeneric;
+  UpdateParametersFn *updateParameters = updateProcessorParametersGeneric;
   SerialiseToJsonFn *serialise = serialiseProcessorGeneric;
   AutomationMappingChangedFn *automationMappingChangedCallback{};
   ProcessorMetadata *parent{};

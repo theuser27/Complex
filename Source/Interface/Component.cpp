@@ -467,8 +467,8 @@ void calculateSizes(Component *children, Component *component)
 #define GET_PRIMARY_FLAG(component, flag) ((flag) << (i32)(!!(component->componentFlags.vertical)))
 #define GET_SECONDARY_FLAG(component, flag) ((flag) << (1 - (!!(component->componentFlags.vertical))))
 #define TRANSPOSE(component, rect) ((component->componentFlags.vertical) ? (rect).transposed() : (rect))
-#define IS_PRIMARY_POSITION_FLAG_SET(child, parent, flag) (child->placement & GET_PRIMARY_FLAG(parent, flag))
-#define IS_SECONDARY_POSITION_FLAG_SET(child, parent, flag) (child->placement & GET_SECONDARY_FLAG(parent, flag))
+#define IS_PRIMARY_POSITION_FLAG_SET(child, parent, flag) test_flag(child->placement, GET_PRIMARY_FLAG(parent, flag))
+#define IS_SECONDARY_POSITION_FLAG_SET(child, parent, flag) test_flag(child->placement, GET_SECONDARY_FLAG(parent, flag))
 
 static bool animatePosition(Component *component, bool wasParentResized, bool recursive);
 
@@ -508,7 +508,7 @@ void calculatePositions(Component *children,
     if (!child->isStillVisible() && !child->previousSizeRatio)
       continue;
 
-    if (child->placement & Placement::custom)
+    if (test_flag(child->placement, Placement::custom))
     {
       // component has decided to take care of its own position
       customPlacement.emplaceBack(child, [](Component *c) { return c->overridePosition(c); });
@@ -523,7 +523,7 @@ void calculatePositions(Component *children,
     primaryUsed += bounds.w + (i32)round(margin.getRight() * utils::getNormalisedValue(component->sizeRatio));
 
     if (auto type = child->placement & GET_PRIMARY_FLAG(component, Placement::justifyX);
-      type == GET_PRIMARY_FLAG(component, Placement::justifyX) || type == 0)
+      type == GET_PRIMARY_FLAG(component, Placement::justifyX) || type == Placement::none)
     {
       if (!isInGroup)
         ++groupCount;
@@ -562,13 +562,13 @@ void calculatePositions(Component *children,
     }
 
     if (auto type = child->placement & GET_PRIMARY_FLAG(component, Placement::justifyX);
-      type == GET_PRIMARY_FLAG(component, Placement::justifyX) || type == 0)
+      type == GET_PRIMARY_FLAG(component, Placement::justifyX) || type == Placement::none)
     {
       auto *nextChild = child;
 
       // FIXME: these placement modes don't account for expanding components
 
-      if (type == 0)
+      if (type == Placement::none)
       {
         // centred components
 
@@ -578,7 +578,7 @@ void calculatePositions(Component *children,
         for (; nextChild && (nextChild->placement & GET_PRIMARY_FLAG(component, Placement::justifyX)) == type;
           nextChild = nextChild->next)
         {
-          if (!nextChild->isStillVisible() || (nextChild->placement & Placement::custom))
+          if (!nextChild->isStillVisible() || test_flag(nextChild->placement, Placement::custom))
             continue;
 
           auto bounds = TRANSPOSE(component, nextChild->bounds);
@@ -601,8 +601,7 @@ void calculatePositions(Component *children,
         for (; nextChild && (nextChild->placement & GET_PRIMARY_FLAG(component, Placement::justifyX)) == type;
           nextChild = nextChild->next)
         {
-          if (nextChild->isStillVisible() &&
-            !(nextChild->placement & Placement::custom))
+          if (nextChild->isStillVisible() && !test_flag(nextChild->placement, Placement::custom))
             ++j;
         }
 
@@ -611,7 +610,7 @@ void calculatePositions(Component *children,
 
         for (auto *groupChild = child; j; groupChild = groupChild->next)
         {
-          if (!groupChild->isStillVisible() || (groupChild->placement & Placement::custom))
+          if (!groupChild->isStillVisible() || test_flag(groupChild->placement, Placement::custom))
             continue;
 
           boundsInTarget.x += offset;
@@ -673,8 +672,7 @@ void calculatePositions(Component *children,
       // in reverse start from the right-most
       do
       {
-        if (nextChild->isStillVisible() &&
-          !(nextChild->placement & Placement::custom))
+        if (nextChild->isStillVisible() && !test_flag(nextChild->placement, Placement::custom))
         {
           auto bounds = TRANSPOSE(component, nextChild->bounds);
           auto margin = scaleValueRoundInt(TRANSPOSE(component, nextChild->margin).toInt());
@@ -903,7 +901,7 @@ static void compensateScrollChange(Component *component, Point<float> oldScrollO
 
     for (auto child = component->children; child; child = child->next)
     {
-      if (child->placement & Placement::custom)
+      if (test_flag(child->placement, Placement::custom))
         continue;
 
       if (child->previousPosition != invalidPosition)

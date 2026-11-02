@@ -3,7 +3,7 @@
 
 #include "Processor.hpp"
 
-#include "Framework/metadata.hpp"
+#include "Framework/simd_buffer.hpp"
 #include "Framework/parameters.hpp"
 #include "Plugin/Complex.hpp"
 #include "Interface/Component.hpp"
@@ -37,7 +37,7 @@ void deleteProcessor(Processor *processor)
   processor->state->deregisterProcessorForDynamicParameters(processor);
 
   // unlink all parameters from parameter bridges
-  processor->remapParameters({}, false, false);
+  processor->reset(ResetFlags::RemapParameters);
 
   if (processor->component)
   {
@@ -59,10 +59,18 @@ Processor::Processor(utils::Pool *pool, State *state, ProcessorMetadata *metadat
   COMPLEX_ASSERT(pool);
 }
 
-void resetProcessorGeneric(Processor *processor)
+void resetProcessorGeneric(Processor *p, ResetFlags flags)
 {
-  for (auto *parameter = processor->parameters; parameter; parameter = parameter->next)
-    parameter->reset();
+  if (test_flag(flags, ResetFlags::Parameters))
+    for (auto *parameter = p->parameters; parameter; parameter = parameter->next)
+      parameter->reset();
+
+  if (test_flag(flags, ResetFlags::RemapParameters))
+  {
+    Processor::remapParameters(p->parameters, p->parameterCount,
+      test_flag(flags, ResetFlags::GetValueFromParameter),
+      test_flag(flags, ResetFlags::RemapHostParameterOnly));
+  }
 }
 
 // the following functions are to be called outside of processing time
@@ -147,18 +155,16 @@ Processor::getParameter(uuid parameterId) const
   return nullptr;
 }
 
-void Processor::updateParameters(UpdateFlag flag, float sampleRate, bool updateChildrenParameters)
+void updateProcessorParametersGeneric(Processor *processor, 
+  UpdateFlag flag, float sampleRate, bool updateChildrenParameters)
 {
-  if (flag == UpdateFlag::NoUpdates)
-    return;
-
-  auto parameter = parameters;
-  for (usize i = 0; i < parameterCount; (i++), (parameter = parameter->next))
+  auto parameter = processor->parameters;
+  for (usize i = 0; i < processor->parameterCount; (i++), (parameter = parameter->next))
     if (parameter->details.updateFlag == flag)
       parameter->updateValue(sampleRate);
 
   if (updateChildrenParameters)
-    for (auto child = children; child; child = child->next)
+    for (auto child = processor->children; child; child = child->next)
       child->updateParameters(flag, sampleRate);
 }
 
@@ -356,7 +362,7 @@ DeleteProcessorUpdate::DeleteProcessorUpdate(Processor *processorToDelete) :
 
     auto recurseParameters = [](const auto &self, Processor *processor) -> void
     {
-      processor->remapParameters({}, true, true);
+      processor->reset(ResetFlags::RemapParameters | ResetFlags::RemapHostParameterOnly | ResetFlags::GetValueFromParameter);
       auto child = processor->children;
       for (usize i = 0; i < processor->childrenCount; (++i), (child = child->next))
         self(self, child);
@@ -383,7 +389,7 @@ DeleteProcessorUpdate::DeleteProcessorUpdate(Processor *processorToDelete) :
 
     auto recurseParameters = [](const auto &self, Processor *processor) -> void
     {
-      processor->remapParameters({}, true, true);
+      processor->reset(ResetFlags::RemapParameters | ResetFlags::RemapHostParameterOnly | ResetFlags::GetValueFromParameter);
       auto child = processor->children;
       for (usize i = 0; i < processor->childrenCount; (++i), (child = child->next))
         self(self, child);

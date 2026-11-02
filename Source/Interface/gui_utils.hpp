@@ -73,6 +73,7 @@ namespace std
 
 enum class Placement : u8
 {
+  none = 0,
   // centered on x and y by default
   centered = 0,
 

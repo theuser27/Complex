@@ -48,6 +48,8 @@ public:
   Renderer(ComplexPlugin &plugin);
   ~Renderer();
 
+  utils::Worker backgroundWorker{};
+
   Area<u32> area{};
   Area<u32> unscaledArea{};
   float pluginScale = 1.0f;
@@ -234,43 +236,7 @@ struct State
   u32 getBlockPosition();
   u32 getLaneCount() const;
 
-  struct Thread
-  {
-    Thread() = default;
-    Thread(Thread &&other) noexcept : thread{ COMPLEX_MOVE(other.thread) },
-      shouldStop{ other.shouldStop } { }
-    ~Thread() { stop(); }
-
-    bool
-    start(const auto &function)
-    {
-      if (thread != utils::thread{})
-        return false;
-
-      shouldStop = anew(globalPool, satomi::atomic<bool>, {});
-
-      thread = [shouldStop = shouldStop, function]() { function(*shouldStop); };
-      return true;
-    }
-
-    bool
-    stop(int *exitCode = nullptr)
-    {
-      if (thread == utils::thread{})
-        return true;
-
-      shouldStop->store(false, satomi::memory_order_release);
-      bool success = thread.join(exitCode);
-      utils::Pool::remove(shouldStop);
-      return success;
-    }
-
-    utils::thread thread{};
-    utils::typeInfo reservationTag{};
-    satomi::atomic<bool> *shouldStop{};
-  };
-
-  Thread &reserveFreeWorker(utils::typeInfo reservationTag);
+  utils::Worker &reserveFreeWorker(utils::typeInfo reservationTag);
 
   void *getHotreloadSymbol(utils::string_view decoratedName);
 
@@ -304,7 +270,7 @@ struct State
   utils::Pool *guiStorage{};
   utils::Pool *miscStorage{};
 
-  utils::vectornd<Thread> workers{};
+  utils::vectornd<utils::Worker> workers{};
 };
 
 #define COMPLEX_HOTRELOAD_CHECK(state, functionName, ...)         \

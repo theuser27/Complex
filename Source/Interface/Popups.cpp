@@ -50,7 +50,7 @@ void PopupDisplay::reinitialise()
     auto *self = (PopupDisplay *)c;
 
     Point<i32> position{};
-    COMPLEX_ASSERT((self->relativePlacement & Placement::custom) == 0);
+    COMPLEX_ASSERT(!test_flag(self->relativePlacement, Placement::custom));
 
     switch ((Placement)(self->relativePlacement & Placement::justifyX))
     {

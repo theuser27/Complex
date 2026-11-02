@@ -20,7 +20,7 @@ public:
 
   struct
   {
-    bool multiline            : 1 = false;
+    bool multiLine            : 1 = false;
     bool wordWrap             : 1 = false;
     bool readOnly             : 1 = false;
     bool selectAllWhenFocused : 1 = true;

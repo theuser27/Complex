@@ -386,7 +386,7 @@ u32
 State::getLaneCount() const { return soundEngine->childrenCount; }
 
 
-State::Thread &
+utils::Worker &
 State::reserveFreeWorker(utils::typeInfo reservationTag)
 {
   for (auto &worker : workers)
@@ -606,6 +606,10 @@ void cplug_destroyPlugin(void *ptr)
 
     ((lastNode) ? lastNode->next : executableStaticData.pluginInstances) = node->next;
   }
+
+  auto pool = plugin->pool;
+  plugin->~ComplexPlugin();
+  utils::Pool::destroy(pool);
 
   // warning: this only works because the plugin is the first member
   utils::Pool::remove(plugin);

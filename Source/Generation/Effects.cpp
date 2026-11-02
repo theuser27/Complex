@@ -131,12 +131,12 @@ createEffectModule(State *state, ProcessorMetadata *metadata,
   return module;
 }
 
-static void serialiseEffectModule(const Processor *processor, void *jsonData, utils::span<Parameter *>)
+static void serialiseEffectModule(const Processor *p, void *jsonData, utils::span<Parameter *>)
 {
-  auto *effectModule = (EffectModule *)processor;
+  auto *effectModule = (EffectModule *)p;
   auto *effect = effectModule->currentEffect.load(satomi::memory_order_acquire);
 
-  serialiseProcessorGeneric(processor, jsonData, {});
+  serialiseProcessorGeneric(p, jsonData, {});
 
   cjson *data = (cjson *)jsonData;
   cjson *effectData = cjson_AddTo(data, "effect", cjson_Object);
@@ -144,18 +144,49 @@ static void serialiseEffectModule(const Processor *processor, void *jsonData, ut
   serialiseParameters(effectData, effect->parameters, effect->parameterCount);
 }
 
-static void resetEffectModule(Processor *processor)
+static void resetEffectModule(Processor *p, ResetFlags flags)
 {
-  for (auto *parameter = processor->parameters; parameter; parameter = parameter->next)
-    parameter->reset();
-  for (auto *parameter = ((EffectModule *)processor)->currentEffect.load(satomi::memory_order_acquire)->parameters;
-    parameter; parameter = parameter->next)
-    parameter->reset();
+  if (test_flag(flags, ResetFlags::Parameters))
+  {
+    for (auto *parameter = p->parameters; parameter; parameter = parameter->next)
+      parameter->reset();
+    for (auto *parameter = ((EffectModule *)p)->currentEffect.load(satomi::memory_order_acquire)->parameters;
+      parameter; parameter = parameter->next)
+      parameter->reset();
+  }
+
+  if (test_flag(flags, ResetFlags::RemapParameters))
+  {
+    Processor::remapParameters(p->parameters, p->parameterCount,
+      test_flag(flags, ResetFlags::GetValueFromParameter),
+      test_flag(flags, ResetFlags::RemapHostParameterOnly));
+
+    auto *currentEffect = ((EffectModule *)p)->currentEffect.load(satomi::memory_order_acquire);
+    Processor::remapParameters(currentEffect->parameters, currentEffect->parameterCount,
+      test_flag(flags, ResetFlags::GetValueFromParameter),
+      test_flag(flags, ResetFlags::RemapHostParameterOnly));
+  }
+}
+
+static void updateEffectModuleParameters(Processor *p, UpdateFlag flag,
+  float sampleRate, bool updateChildrenParameters)
+{
+  updateProcessorParametersGeneric(p, flag, sampleRate, updateChildrenParameters);
+
+  auto *effectModule = (EffectModule *)p;
+  utils::ScopedLock g{ effectModule->lock, utils::WaitMechanism::Spin };
+
+  auto *activeEffect = effectModule->currentEffect.load(satomi::memory_order_acquire);
+
+  auto parameter = activeEffect->parameters;
+  for (usize i = 0; i < activeEffect->parameterCount; (i++), (parameter = parameter->next))
+    if (parameter->details.updateFlag == flag)
+      parameter->updateValue(sampleRate);
 }
 
 
 static EffectData *
-changeEffect(EffectModule *module, const IndexedData *effectOption, ParameterAssignment assignmentType)
+changeEffect(EffectModule *effectModule, const IndexedData *effectOption, ParameterAssignment assignmentType)
 {
 restart:
 
@@ -163,14 +194,14 @@ restart:
   // and the process of changing effects leaves things temporarily in an invalid state
   // we need to prevent that from happening, but the function itself is bounded in time
   // so spinning for a little shouldn't be too bad in the rare cases it's necessary
-  utils::ScopedLock g{ module->lock, utils::WaitMechanism::Spin };
+  utils::ScopedLock g{ effectModule->lock, utils::WaitMechanism::Spin };
 
-  auto *activeEffect = module->currentEffect.load(satomi::memory_order_acquire);
+  auto *activeEffect = effectModule->currentEffect.load(satomi::memory_order_acquire);
   if (activeEffect && activeEffect->metadata->id == effectOption->processorMetadata->id)
     return activeEffect;
 
   // was effect already created?
-  auto *effect = module->effects.load(satomi::memory_order_acquire);
+  auto *effect = effectModule->effects.load(satomi::memory_order_acquire);
   for (; effect; effect = effect->next)
     if (effect->metadata->id == effectOption->processorMetadata->id)
       break;
@@ -185,9 +216,9 @@ restart:
     // so that if the audio thread comes along it can proceed in bounded time
     g.~ScopedLock();
 
-    effect = createEffect(effectOption->processorMetadata, module);
-    effect->next = module->effects.load(satomi::memory_order_acquire);
-    module->effects.store(effect, satomi::memory_order_release);
+    effect = createEffect(effectOption->processorMetadata, effectModule);
+    effect->next = effectModule->effects.load(satomi::memory_order_acquire);
+    effectModule->effects.store(effect, satomi::memory_order_release);
 
     // now that the effect is present in the list, we need to restart from the beginning
     // we can technically call this function again, but i think goto has better readability here
@@ -198,20 +229,17 @@ restart:
   // remap host parameters to the new effect
   usize i = 0;
   auto *replacementParameter = effect->parameters;
-  for (auto &[index, parameter] : module->mappedParameters.data)
+  for (auto &[index, parameter] : effectModule->mappedParameters.data)
   {
     if (index >= effect->parameterCount)
       continue;
-
-    COMPLEX_LOG("Replacing %v with %v at index %zu\n",
-      parameter->details.displayName, replacementParameter->details.displayName, index);
 
     for (; i < index; (replacementParameter = replacementParameter->next), (++i)) { }
     parameter->hostParameter.load(satomi::memory_order_relaxed)->resetParameter(replacementParameter, false, assignmentType);
     parameter = replacementParameter;
   }
 
-  module->currentEffect.store(effect, satomi::memory_order_release);
+  effectModule->currentEffect.store(effect, satomi::memory_order_release);
 
   return effect;
 }
@@ -288,12 +316,16 @@ createEffectsLane(State *state, ProcessorMetadata *metadata,
   return lane;
 }
 
-void resetEffectsLane(Processor *processor)
+void resetEffectsLane(Processor *processor, ResetFlags flags)
 {
-  resetProcessorGeneric(processor);
-  auto *lane = (EffectsLane *)processor;
-  lane->status.store(EffectsLane::Status::Finished, satomi::memory_order_release);
-  lane->currentEffectIndex.store(0, satomi::memory_order_release);
+  resetProcessorGeneric(processor, flags);
+
+  if (test_flag(flags, ResetFlags::ProcessorState))
+  {
+    auto *lane = (EffectsLane *)processor;
+    lane->status.store(EffectsLane::Status::Finished, satomi::memory_order_release);
+    lane->currentEffectIndex.store(0, satomi::memory_order_release);
+  }
 }
 
 void SoundEngine::interleaveInputs(const Buffer &inputBuffer)
@@ -641,7 +673,8 @@ initialiseTypeStructureEffectModule(void *, PluginStructure &structure)
 
   ProcessorMetadata &effectModule = COMPLEX_STRUCTURE_PROCESSOR(EffectModule,
     "Effect Module", Processors::EffectModule, Skin::kNone,
-    createEffectModule, createUIEffectModule, .reset = resetEffectModule, .serialise = serialiseEffectModule, 
+    createEffectModule, createUIEffectModule, .reset = resetEffectModule, 
+    .updateParameters = updateEffectModuleParameters, .serialise = serialiseEffectModule,
     .automationMappingChangedCallback = automationMappingChangedEffectModule);
 
   effectModule.flags |= ProcessorMetadata::NoParameterValidationTag;
