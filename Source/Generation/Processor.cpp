@@ -9,19 +9,25 @@
 #include "Interface/Component.hpp"
 #include "Interface/Control.hpp"
 
+static bool
+checkComponentDeletion(Component *c)
+{
+  return !c->sizeRatio && (!c->removeNext || checkComponentDeletion(c->removeNext));
+}
+
 void deleteProcessor(Processor *processor)
 {
   COMPLEX_ASSERT(processor->state != nullptr);
   COMPLEX_ASSERT(processor->stateId != 0);
 
   // if the GUI for this processor is fading out, delay deletion until it disappears
-  if (processor->component->componentFlags.animateFadeAway && processor->component->sizeRatio != 0)
+  if (processor->component->componentFlags.animateSizing && processor->component->sizeRatio != 0)
   {
     // when the timer on the fade out ends, only then delete
     getThreadLocals()->renderer->callbacks.add({ processor->component, utils::int_max<u64> },
       [processor](Component *c)
       {
-        if (c->sizeRatio)
+        if (!checkComponentDeletion(c))
           return false;
 
         auto g = processor->state->plugin->acquireProcessingLock();
@@ -42,7 +48,7 @@ void deleteProcessor(Processor *processor)
   if (processor->component)
   {
     if (processor->component->parent)
-      processor->component->parent->removeChildComponent(processor->component);
+      removeChildComponent(processor->component);
     deleteComponent(processor->component);
   }
 
@@ -170,27 +176,40 @@ void updateProcessorParametersGeneric(Processor *processor,
 
 static void readdProcessorComponent(Processor *processor)
 {
-  processor->component->componentFlags.visible = true;
+  for (auto *removeNext = processor->component; removeNext; removeNext = removeNext->removeNext)
+    removeNext->componentFlags.visible = true;
+
   getThreadLocals()->renderer->callbacks.erase({ processor->component, utils::int_max<u64> - 1 });
 }
 
 static void removeProcessorComponent(Processor *processor)
 {
-  if (!processor->component->componentFlags.animateFadeAway)
-    processor->component->parent->removeChildComponent(processor->component);
-  else
-  {
-    processor->component->componentFlags.visible = false;
-    getThreadLocals()->renderer->callbacks.add({ processor->component, utils::int_max<u64> - 1 }, 
-      [](Component *c)
-      {
-        if (c->sizeRatio)
-          return false;
+  // if this or any of the removeNext components have animated sizing, 
+  // we need to delay the removal until all have disappeared
 
-        c->parent->removeChildComponent(c);
-        return true;
-      });
+  bool removeNow = true;
+  for (auto *removeNext = processor->component; removeNow && removeNext; removeNext = removeNext->removeNext)
+    removeNow &= !removeNext->componentFlags.animateSizing;
+
+  if (removeNow)
+  {
+    removeChildComponent(processor->component);
+    return;
   }
+  
+  // make all components invisible so they shrink and eventually get removed inside the callback
+  for (auto *removeNext = processor->component; removeNext; removeNext = removeNext->removeNext)
+    removeNext->componentFlags.visible = false;
+
+  getThreadLocals()->renderer->callbacks.add({ processor->component, utils::int_max<u64> - 1 }, 
+    [](Component *c)
+    {
+      if (!checkComponentDeletion(c))
+        return false;
+
+      removeChildComponent(c);
+      return true;
+    });
 }
 
 AddProcessorUpdate::AddProcessorUpdate(Processor *processorToAdd,
@@ -270,7 +289,7 @@ MoveProcessorUpdate::MoveProcessorUpdate(State *state,
     Processor *destinationProcessor, u32 index)
   {
     if (movedProcessor->component && movedProcessor->component->parent)
-      movedProcessor->component->parent->removeChildComponent(movedProcessor->component);
+      removeChildComponent(movedProcessor->component, true);
 
     if (destinationProcessor->component)
     {

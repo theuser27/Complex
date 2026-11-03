@@ -117,7 +117,7 @@ laneMessageHandler(Component *c, u64 commandId, void *extraData)
 
     auto section = (EffectModuleSection *)metadata->processor->component;
     section->laneSection = self;
-    section->componentFlags.animateMovement = true;
+    section->componentFlags.animatePosition = true;
 
     if (metadata->useIndex)
       section->effectHolder.header.draggableBox.surfaceToLiftTo =
@@ -145,9 +145,9 @@ void EffectsLaneSection::reinitialise()
   removeCommandMessageHandler(laneHandler);
 
   componentFlags.vertical = true;
-  componentFlags.animateMovement = true;
+  componentFlags.animatePosition = true;
   componentFlags.halfScissor = true;
-  componentFlags.animateFadeAway = true;
+  componentFlags.animateSizing = true;
   skinOverride = Skin::kEffectsLane;
   sizingFlags = Component::GrowableY;
   desiredSize = { kEffectsLaneWidth, 0, kEffectsLaneWidth, 0 };
@@ -214,6 +214,7 @@ void EffectsLaneSection::reinitialise()
 
   miniView.processor = effectsLane;
   miniView.draggedComponent = &miniView;
+  addRemoveNext(&miniView);
 
   // add existing module components to the holder
   usize i = 0;
@@ -457,7 +458,7 @@ EffectsLaneSection::LaneMiniView::LaneMiniView()
   sizingFlags = Component::GrowableX;
   padding = { 4, 0, 4, 0 };
   desiredSize = { kMinWidth, kMinHeight, utils::int_max<i32>, kMinHeight };
-  componentFlags.animateFadeAway = true;
+  componentFlags.animateSizing = true;
 }
 
 bool
@@ -468,6 +469,10 @@ EffectsLaneSection::LaneMiniView::mouseDown(const MouseEvent &e)
     // LaneSelector -> EffectsSection
     auto *effectsSection = (EffectsSection *)parent->parent;
     effectsSection->removeLane((EffectsLaneSection *)processor->component);
+    
+    // we handle the click successfully and want to give up focus
+    // given that we will be removed soon
+    componentFlags.isClicked = false;
 
     return true;
   }
@@ -488,7 +493,7 @@ EffectsLaneSection::LaneMiniView::mouseDrag(const MouseEvent &e)
 
     // animate all mini views for the duration of the move
     for (auto child = parent->children; child; child = child->next)
-      child->componentFlags.animateMovement = true;
+      child->componentFlags.animatePosition = true;
 
     (void)prepareToMove(event);
   }
@@ -518,7 +523,7 @@ EffectsLaneSection::LaneMiniView::mouseUp(const MouseEvent &e)
 
   // stop animating mini views
   for (auto child = parent->children; child; child = child->next)
-    child->componentFlags.animateMovement = false;
+    child->componentFlags.animatePosition = false;
 
   return true;
 }
@@ -535,11 +540,6 @@ EffectsLaneSection::LaneMiniView::render(Graphics &g)
 
   renderText(((EffectsLaneSection *)processor->component)->laneTitle.text,
     FontId::DDinType, textBounds, g, getColour(Skin::kHeadingText, this));
-
-  // remove the miniview as well if the lane is removed
-  auto *laneSection = getParentStruct(EffectsLaneSection, miniView, this);
-  if (!laneSection->parent)
-    parent->removeChildComponent(this);
 
   return true;
 }

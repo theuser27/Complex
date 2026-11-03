@@ -907,7 +907,6 @@ void Renderer::renderLoop(PuglView *view)
   COMPLEX_ASSERT(generalData.deltaTime >= 0.0F);
   generalData.steadyTime = newRenderTime;
 
-  // FIXME; this needs to run when the GUI is closed
   plugin.state_->flushHostParameters();
 
   doSizingAndPositioning();
@@ -941,7 +940,8 @@ void Renderer::renderLoop(PuglView *view)
 
 extern "C"
 {
-  void *cplug_createGUI(CplugHostContext *, void *userPlugin)
+  void *
+  cplug_createGUI(CplugHostContext *, void *userPlugin)
   {
     auto &renderer = ((ComplexPlugin *)userPlugin)->renderer;
     renderer.startUI();

@@ -181,7 +181,7 @@ void EffectModuleSection::reinitialise()
 
   componentFlags.vertical = true;
   componentFlags.clickable = true;
-  componentFlags.animateFadeAway = true;
+  componentFlags.animateSizing = true;
   desiredSize = { kEffectModuleWidth, 0, kEffectModuleWidth, utils::int_max<i32> };
 
   if (!pool)

@@ -82,19 +82,19 @@ CommandMessages::handleProcessorInsertion(Processor *parentProcessor,
   if (substituteInsert)
   {
     if (substituteInsert->parent)
-      substituteInsert->parent->removeChildComponent(substituteInsert);
+      removeChildComponent(substituteInsert);
     newComponent = substituteInsert;
   }
   else if (newComponent->parent)
   {
     if (substituteInsert && substituteInsert->parent)
-      substituteInsert->parent->removeChildComponent(substituteInsert);
+      removeChildComponent(substituteInsert);
     
     // FIXME:
     // edge-case
     // if the component is already in the correct place, 
     // re-adding it can succeed a component that is still getting deleted (i.e. delete 2nd module, delete 1st, undo)
-    newComponent->parent->removeChildComponent(newComponent);
+    removeChildComponent(newComponent, true);
   }
 
   COMPLEX_ASSERT(!child || child->component);
@@ -211,7 +211,7 @@ void EffectsSection::LaneSelector::reinitialise()
         self, metadata, Placement::centered, getMiniView))
         return false;
 
-      self->removeChildComponent(&self->addMoreLanesButton);
+      removeChildComponent(&self->addMoreLanesButton, true);
       self->addChildComponent(&self->addMoreLanesButton);
 
       auto miniView = getMiniView(metadata->processor);
@@ -220,7 +220,7 @@ void EffectsSection::LaneSelector::reinitialise()
       if (metadata->oldIndex != metadata->index)
       {
         auto *effectsState = metadata->processor->component->parent;
-        effectsState->removeChildComponent(metadata->processor->component);
+        removeChildComponent(metadata->processor->component, true);
         effectsState->addChildComponent(metadata->processor->component, metadata->index);
       }
 
@@ -273,8 +273,11 @@ getSelectorBounds(EffectsSection::LaneSelector *laneSelector)
   for (u32 i = 1; i < section->visibleLaneCount && end->next != &laneSelector->addMoreLanesButton; end = end->next)
     i += (u32)(start->placement != Placement::custom);
 
-  return Rectangle<i32>::fromPoints(start->bounds.getPosition(),
-    end->bounds.getPosition() + Point{ end->bounds.w, end->bounds.h });
+  auto minLeft = utils::min(start->bounds.x, end->bounds.x);
+  auto minTop = utils::min(start->bounds.y, end->bounds.y);
+  auto maxRight = utils::max(start->bounds.getRight(), end->bounds.getRight());
+  auto maxBottom = utils::max(start->bounds.getBottom(), end->bounds.getBottom());
+  return Rectangle<i32>::fromPoints({ minLeft, minTop }, { maxRight, maxBottom });
 }
 
 bool
@@ -406,8 +409,6 @@ void EffectsSection::reinitialise()
 void EffectsSection::removeLane(EffectsLaneSection *lane)
 {
   auto laneIndex = utils::findIndexSll(laneSelector.children, (Component *)&lane->miniView);
-  // remove mini view before the lane GUI
-  lane->miniView.parent->removeChildComponent(&lane->miniView);
 
   if (laneIndex < startLaneIndex)
   {
@@ -617,7 +618,7 @@ void SoundEngineSection::BottomBar::reinitialise()
   overlap.maxDecimalCharacters = 2;
   overlap.changeLinkedParameter(*mainSection->soundEngine->getParameter(SoundEngine::Overlap));
   overlapGroup.placement = Placement::justifyX;
-  overlapGroup.componentFlags.animateMovement = true;
+  overlapGroup.componentFlags.animatePosition = true;
 
   addChildComponent(&windowGroup);
   windowGroup.placement = Placement::justifyX;
@@ -684,8 +685,9 @@ void SoundEngineSection::reinitialise()
       section->miniView.surfaceToLiftTo = &self->effectsSection;
       if (!metadata->placeholder)
       {
+        section->miniView.componentFlags.visible = true;
         if (section->miniView.parent)
-          section->miniView.parent->removeChildComponent(&section->miniView);
+          removeChildComponent(&section->miniView, true);
 
         self->effectsSection.laneSelector.addChildComponent(&section->miniView, metadata->index);
         if (metadata->processor->name.empty())

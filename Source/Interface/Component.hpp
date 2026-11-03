@@ -49,6 +49,11 @@ enum class FocusChange : u8
 };
 bool moveFocusTo(Renderer *renderer, Component *component, FocusChange reason);
 
+// relocateOnly lets the GUI system know this component will continue existing but might be relocated elsewhere
+// focus is retained and the removeNext SLL remains untouched
+// you MUST NOT delete the object after removal in that case
+void removeChildComponent(Component *childToRemove, bool relocateOnly = false);
+
 namespace CommandMessages
 {
   enum CommandMessage : u64
@@ -143,8 +148,7 @@ public:
 
   Point<i32> getRelativePoint(const Component *source, Point<i32> pointRelativeToSource = {}) const;
   Rectangle<i32>
-  getRelativeArea(const Component *source,
-    Rectangle<i32> areaRelativeToSource = {}) const
+  getRelativeArea(const Component *source, Rectangle<i32> areaRelativeToSource = {}) const
   {
     areaRelativeToSource = (areaRelativeToSource.isEmpty()) ?
       Rectangle{ 0, 0, source->bounds.w, source->bounds.h } : areaRelativeToSource;
@@ -174,7 +178,7 @@ public:
     if (componentFlags.visible)
       return true;
 
-    return (!componentFlags.animateFadeAway) ? false : sizeRatio;
+    return (!componentFlags.animateSizing) ? false : sizeRatio;
   }
   // does this component have visible bounds if we ignore the clipping bounds until particular component
   // which must be a parent or nullptr
@@ -183,12 +187,11 @@ public:
   bool isShowing(const Component *relativeTo = nullptr) const;
   void addChildComponent(Component *childToAdd, Component *insertBefore = nullptr);
   void addChildComponent(Component *childToAdd, usize index);
-  // keepFocus will let the GUI system continue focus on childToRemove
-  // but you MUST NOT delete the object after removal,
-  // otherwise the GUI system will be reading into "freed" pool memory
-  void removeChildComponent(Component *childToRemove, bool keepFocus = false);
-  Component *removeChildComponent(usize childIndexToRemove, bool keepFocus = false);
   void removeAllChildComponents();
+  // add (owned) components to be removed from their parent when this component gets removed from its parent
+  // NOTE: if you plan on removing any of the linked components manually, make sure to remove them first
+  void addRemoveNext(Component *component);
+  void removeRemoveNext(Component *component);
 
   bool isFocused(bool trueIfChildIsFocused) const;
   void grabFocus(bool tryToFocusUpwards = false);
@@ -209,8 +212,7 @@ public:
 
   Skin::Override getSkinOverride() const;
 
-  void renderChild(Graphics &g, Component *component,
-    void (*renderFn)(Graphics &, Component *) = nullptr);
+  void renderChild(Graphics &g, Component *component, void (*renderFn)(Graphics &, Component *) = nullptr);
   void renderChildren(Graphics &g)
   {
     for (auto *child = children; child; child = child->next)
@@ -225,6 +227,8 @@ public:
   Component *children{};
   Component *previous{};
   Component *next{};
+
+  Component *removeNext{};
 
   utils::sll<CommandMessages::HandleMessageFn *> *commandMessageHandler{};
 
@@ -279,8 +283,8 @@ public:
     // TODO: add a separate flag for dual orientation,
     //       then vertical will only designate primary direction
     //       and also leave a single scrollable flag
-    bool animateMovement     : 1 = false;
-    bool animateFadeAway     : 1 = false;
+    bool animatePosition     : 1 = false;
+    bool animateSizing       : 1 = false;
     bool acceptsOrphanEvents : 1 = false;  // if component can accept mouseUp without mouseDown
                                            // happens if another component gives up on handling mouseUp
     bool keepSize            : 1 = false;

@@ -24,7 +24,7 @@ calculateFit(Component *component, Component *children, bool isCalculatingVertic
     component->bounds = {};
     component->previousSizeRatio = component->sizeRatio;
 
-    if (component->componentFlags.animateFadeAway)
+    if (component->componentFlags.animateSizing)
     {
       auto increment = (i32)roundf(deltaTime / kFadeawayTime *
         utils::int_max<decltype(component->sizeRatio)>);
@@ -551,6 +551,11 @@ void calculatePositions(Component *children,
   if (component->sizingFlags & scrollableFlag)
     sizeLeftPerGroup = utils::max(sizeLeftPerGroup, 0);
 
+  auto shouldCalculatePosition = [](Component *c)
+  {
+    return (c->isStillVisible() || c->previousSizeRatio) && !test_flag(c->placement, Placement::custom);
+  };
+
   i32 sizeOffset{};
   for (auto *child = children; child;)
   {
@@ -578,7 +583,7 @@ void calculatePositions(Component *children,
         for (; nextChild && (nextChild->placement & GET_PRIMARY_FLAG(component, Placement::justifyX)) == type;
           nextChild = nextChild->next)
         {
-          if (!nextChild->isStillVisible() || test_flag(nextChild->placement, Placement::custom))
+          if (!shouldCalculatePosition(nextChild))
             continue;
 
           auto bounds = TRANSPOSE(component, nextChild->bounds);
@@ -601,7 +606,7 @@ void calculatePositions(Component *children,
         for (; nextChild && (nextChild->placement & GET_PRIMARY_FLAG(component, Placement::justifyX)) == type;
           nextChild = nextChild->next)
         {
-          if (nextChild->isStillVisible() && !test_flag(nextChild->placement, Placement::custom))
+          if (shouldCalculatePosition(nextChild))
             ++j;
         }
 
@@ -610,7 +615,7 @@ void calculatePositions(Component *children,
 
         for (auto *groupChild = child; j; groupChild = groupChild->next)
         {
-          if (!groupChild->isStillVisible() || test_flag(groupChild->placement, Placement::custom))
+          if (!shouldCalculatePosition(groupChild))
             continue;
 
           boundsInTarget.x += offset;
@@ -654,7 +659,7 @@ void calculatePositions(Component *children,
       child->bounds.*primaryPosition = bounds.x;
       boundsInTarget = boundsInTarget.withTrimLeft(bounds.w + marginRange);
 
-      if (child->componentFlags.animateFadeAway)
+      if (child->componentFlags.animateSizing)
         sizeOffset += (bounds.w - TRANSPOSE(component, child->lastBounds).w) + (marginRange - marginRangePrevious);
 
       child = child->next;
@@ -672,7 +677,7 @@ void calculatePositions(Component *children,
       // in reverse start from the right-most
       do
       {
-        if (nextChild->isStillVisible() && !test_flag(nextChild->placement, Placement::custom))
+        if (shouldCalculatePosition(nextChild))
         {
           auto bounds = TRANSPOSE(component, nextChild->bounds);
           auto margin = scaleValueRoundInt(TRANSPOSE(component, nextChild->margin).toInt());
@@ -688,7 +693,7 @@ void calculatePositions(Component *children,
           nextChild->nextPosition.*primary -= sizeOffset;
           nextChild->lastBounds.*primaryPosition -= sizeOffset;
 
-          if (nextChild->componentFlags.animateFadeAway)
+          if (nextChild->componentFlags.animateSizing)
             sizeOffset += (bounds.w - TRANSPOSE(component, nextChild->lastBounds).w) + (marginRange - marginRangePrevious);
 
           nextChild->bounds.*primaryPosition = bounds.x;
@@ -762,7 +767,7 @@ animatePosition(Component *component, bool wasParentResized, bool recursive)
   bool requireReposition = changedParents || (!wasParentResized &&      // skip animations if triggered by parent resize
     component->lastBounds.getPosition() != component->nextPosition);    // have we reached the final destination?
 
-  bool isAnimating = component->componentFlags.animateMovement ||       // are we animating in general?
+  bool isAnimating = component->componentFlags.animatePosition ||       // are we animating in general?
     component->positionRatio;                                           // have we already begun an animation?
 
   if (requireReposition && isAnimating &&
@@ -834,7 +839,7 @@ static void clearLinkedComponents(Component *c, bool checkSelf)
       gui->popupSelector.cancel(&gui->popupSelector);
 
     gui->popupSelector.resetState();
-    gui->popupSelector.summoner->removeChildComponent(&gui->popupSelector);
+    removeChildComponent(&gui->popupSelector);
   }
   if ((checkSelf && c == gui->popupDisplay1.source) || c->isParentOf(gui->popupDisplay1.source))
   {
@@ -1237,29 +1242,22 @@ void Component::addChildComponent(Component *childToAdd, usize index)
   addChildComponent(childToAdd, insertBefore);
 }
 
-void Component::removeChildComponent(Component *childToRemove, bool keepFocus)
+void removeChildComponent(Component *childToRemove, bool relocateOnly)
 {
-  if (!childToRemove || childToRemove->parent != this)
+  if (!childToRemove || !childToRemove->parent)
     return;
 
-  if (!keepFocus)
-    clearLinkedComponents(childToRemove, true);
+  if (!relocateOnly)
+  {
+    for (auto toRemove = childToRemove->removeNext; toRemove; toRemove = toRemove->removeNext)
+      removeChildComponent(toRemove, relocateOnly);
 
+    clearLinkedComponents(childToRemove, true);
+  }
+
+  utils::removeDllHalfConnected(childToRemove, childToRemove->parent->children);
   childToRemove->lastParent = childToRemove->parent;
   childToRemove->parent = nullptr;
-  utils::removeDllHalfConnected(childToRemove, children);
-}
-
-Component *
-Component::removeChildComponent(usize childIndexToRemove, bool keepFocus)
-{
-  auto *child = children;
-  for (; child && childIndexToRemove; --childIndexToRemove)
-    child = child->next;
-
-  removeChildComponent(child, keepFocus);
-
-  return child;
 }
 
 void Component::removeAllChildComponents()
@@ -1267,15 +1265,34 @@ void Component::removeAllChildComponents()
   if (!children)
     return;
 
-  clearLinkedComponents(this, false);
-
   while (children)
-  {
-    // don't remove focus because it's already done
-    removeChildComponent(children, true);
-  }
+    removeChildComponent(children);
 
-  COMPLEX_ASSERT(!children);
+  COMPLEX_ASSERT(!children, "Children were not removed even though they should be");
+}
+
+void Component::addRemoveNext(Component *component)
+{
+  auto *toRemoveNext = this;
+  for (; toRemoveNext != component && toRemoveNext->removeNext; 
+    toRemoveNext = toRemoveNext->removeNext) { }
+
+  if (toRemoveNext != component)
+    toRemoveNext->removeNext = component;
+}
+
+void Component::removeRemoveNext(Component *component)
+{
+  auto *toRemovePrevious = this;
+  for (auto *toRemoveNext = removeNext; toRemoveNext;
+    (toRemovePrevious = toRemoveNext), (toRemoveNext = toRemoveNext->removeNext))
+  {
+    if (toRemoveNext == component)
+    {
+      toRemovePrevious->removeNext = toRemoveNext->next;
+      break;
+    }
+  }
 }
 
 void Component::renderScrollbars(Graphics &g, float scrollExpandPercent)

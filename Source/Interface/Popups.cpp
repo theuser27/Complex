@@ -341,7 +341,7 @@ void PopupList::summonChildList(PopupItem *summoningItem,
     if (currentSublistItem)
     {
       parentSelector->selectedList = this;
-      parentSelector->removeChildComponent(currentSublistItem->childList);
+      removeChildComponent(currentSublistItem->childList);
       currentSublistItem = {};
       sublistAnchorPoint = {};
     }

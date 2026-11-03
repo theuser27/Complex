@@ -884,7 +884,7 @@ CombinationRotarySlider::CombinationRotarySlider()
 void CombinationRotarySlider::setModifier(TextSelector *newModifier)
 {
   if (modifier)
-    infoSection.removeChildComponent(modifier);
+    removeChildComponent(modifier);
 
   modifier = newModifier;
   modifier->placement = Placement::left;

@@ -174,8 +174,7 @@ DraggableComponent::prepareToMove(const MouseEvent &e)
   draggedComponent->componentFlags.keepSize = true;
 
   // if this is the draggable component we must keep focus otherwise our click will be discarded
-  draggedComponent->parent->removeChildComponent(draggedComponent,
-    draggedComponent == this || draggedComponent->isParentOf(this));
+  removeChildComponent(draggedComponent, draggedComponent == this || draggedComponent->isParentOf(this));
   surfaceToLiftTo->addChildComponent(draggedComponent);
 
   // set the dragged component to its correct position
@@ -263,7 +262,7 @@ void DraggableComponent::endMove(const MouseEvent &e)
   draggedComponent->nextPosition = initialClickPosition + e.getOffsetFromDragStart();
   auto *placeholder = &getThreadLocals()->renderer->gui->placeholderInsert;
   auto finalParentComponent = placeholder->parent;
-  placeholder->parent->removeChildComponent(placeholder);
+  removeChildComponent(placeholder);
 
   tryToInsertDraggableComponent(draggedComponent, finalParentComponent,
     processor, nullptr, directionX, directionY);
