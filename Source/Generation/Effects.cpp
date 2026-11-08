@@ -60,13 +60,13 @@ createEffect(ProcessorMetadata *processorMetadata, EffectModule *module,
 static void automationMappingChangedEffectModule(Processor *processor, Parameter *parameter, bool isMapping)
 {
   auto *module = (EffectModule *)processor;
-  bool isFromModule = utils::findIf(processor->metadata->parameters, 
+  bool isFromModule = utils::findIf(processor->metadata->parameters,
     [&](const ParameterMetadata *item) { return item->details.id == parameter->details.id; });
   if (isFromModule)
     return;
-  
+
   usize i = 0;
-  // because if the half-connected dll property, we can findthe index of the parameter 
+  // because if the half-connected dll property, we can findthe index of the parameter
   for (auto firstParameter = parameter; firstParameter->previous->next;
     (firstParameter = firstParameter->previous), (++i)) { }
 
@@ -94,7 +94,7 @@ createEffectModule(State *state, ProcessorMetadata *metadata,
 
     auto *effectData = cjson_GetObjectItem((cjson *)serialisedSave, "effect");
     auto moduleTypeParameter = module->getParameter(EffectModule::ModuleType);
-    auto [option, index] = getOptionFromValue(scaleValue(moduleTypeParameter->normalisedValue.load(satomi::memory_order_relaxed), 
+    auto [option, index] = getOptionFromValue(scaleValue(moduleTypeParameter->normalisedValue.load(satomi::memory_order_relaxed),
       moduleTypeParameter->details), moduleTypeParameter->details);
     COMPLEX_ASSERT(option->processorMetadata->id == cjson_GetObjectItem(effectData, "id")->vuint);
 
@@ -652,7 +652,7 @@ initialiseTypeStructureEffectModule(void *, PluginStructure &structure)
 {
   Component *createUIEffectModule(Processor * processor);
 
-  static constexpr auto moduleChangeCallback = [](Parameter *p, 
+  static constexpr auto moduleChangeCallback = [](Parameter *p,
     float newValue, ParameterAssignment assignmentType)
   {
     EffectModule *effectModule = (EffectModule *)p->parentProcessor;
@@ -660,7 +660,7 @@ initialiseTypeStructureEffectModule(void *, PluginStructure &structure)
     auto newScaled = scaleValue(newValue, p->details);
     auto [option, _] = getOptionFromValue(newScaled, p->details);
 
-    // if we're on the audio thread and the effect isn't present, 
+    // if we're on the audio thread and the effect isn't present,
     // we leave it to the main thread to create it
     bool isChanged = changeEffect(effectModule, option, assignmentType);
     if (isChanged)
@@ -673,7 +673,7 @@ initialiseTypeStructureEffectModule(void *, PluginStructure &structure)
 
   ProcessorMetadata &effectModule = COMPLEX_STRUCTURE_PROCESSOR(EffectModule,
     "Effect Module", Processors::EffectModule, Skin::kNone,
-    createEffectModule, createUIEffectModule, .reset = resetEffectModule, 
+    createEffectModule, createUIEffectModule, .reset = resetEffectModule,
     .updateParameters = updateEffectModuleParameters, .serialise = serialiseEffectModule,
     .automationMappingChangedCallback = automationMappingChangedEffectModule);
 

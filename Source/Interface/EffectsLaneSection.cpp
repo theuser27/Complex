@@ -469,7 +469,7 @@ EffectsLaneSection::LaneMiniView::mouseDown(const MouseEvent &e)
     // LaneSelector -> EffectsSection
     auto *effectsSection = (EffectsSection *)parent->parent;
     effectsSection->removeLane((EffectsLaneSection *)processor->component);
-    
+
     // we handle the click successfully and want to give up focus
     // given that we will be removed soon
     componentFlags.isClicked = false;

@@ -390,16 +390,16 @@ static void checkGlobalLockAcquired(Parameter *parameter)
 }
 
 // audio-thread, main-thread
-// 
+//
 // this is rather tricky function because both audio-thread and main-thread can call it
 // for the audio-thread setValueToControl MUST be false otherwise it will enter GUI code
 // also it's only allowed to change the linked parameters within the same processor
-// 
+//
 // for the main-thread a lot of edge-cases arise because of the 2 distinct assignments that must happen
 // to parameter_ and parameter->hostParameter. Because those can't happen in a single atomic operation
 // what can happen is that the audio-thread can change parameter_, but in the meantime
 // the main-thread can call into that same host parameter to perform some changes
-void HostParameter::resetParameter(Parameter *newParameter, 
+void HostParameter::resetParameter(Parameter *newParameter,
   bool getValueFromParameter, ParameterAssignment assignmentType)
 {
   Parameter *old = parameter_.load(satomi::memory_order_relaxed);
@@ -445,7 +445,7 @@ void State::flushHostParameters()
 }
 
 // main-thread
-// this function is intended to be called regularly on the main-thread 
+// this function is intended to be called regularly on the main-thread
 // to perform tasks which can only be done there
 void HostParameter::flushUpdates()
 {
@@ -493,7 +493,7 @@ void HostParameter::flushUpdates()
 }
 
 // main-thread
-float 
+float
 HostParameter::getScaledValue() const
 {
   auto parameter = getParameter();
@@ -843,7 +843,7 @@ void UndoManager::clear()
   transactions = { newTransactions, transactions.size() };
 }
 
-bool 
+bool
 UndoManager::perform(UndoAction *newAction)
 {
   if (newAction == nullptr)
@@ -917,7 +917,7 @@ UndoManager::beginNewTransaction()
   // increment index only if the a current transaction exists and it has no actions
   if (undoActionsCount && !getCurrent().second)
     return transactions[currentIndex].first;
-  
+
   undoActionsCount = utils::min(undoActionsCount + 1, transactions.size());
   currentIndex = (currentIndex + 1) % transactions.size();
 

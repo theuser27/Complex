@@ -64,7 +64,7 @@ PUGL_API PuglStatus
 puglLeaveContext(PuglView* view);
 
 PUGL_API PuglStatus
-puglChangeContext(PuglView *oldView, PuglView *newView);
+puglChangeContext(PuglView *view);
 
 PUGL_API void
 puglSwapBuffers(PuglView* view);

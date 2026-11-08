@@ -789,7 +789,6 @@ typedef struct PuglWorld {
   double              startTime;
   size_t              numViews;
   PuglView**          views;
-  PuglView*           activeView;
   char*               strings[PUGL_NUM_STRING_HINTS];
   PuglWorldType       type;
 } PuglWorld;
@@ -959,8 +958,8 @@ typedef struct PuglBackend {
                                               const PuglExposeEvent *);
 
   /// Leave drawing context, after drawing if expose is non-null
-  PUGL_WARN_UNUSED_RESULT PuglStatus(*change)(PuglView *, PuglView *,
-                                             const PuglExposeEvent *);
+  PUGL_WARN_UNUSED_RESULT PuglStatus(*change)(PuglView *,
+                                              const PuglExposeEvent *);
 
   /// Return the puglGetContext() handle for the application, if any
   void * (*getContext)(PuglView *);

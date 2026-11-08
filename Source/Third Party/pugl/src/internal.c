@@ -283,8 +283,7 @@ puglDispatchEvent(PuglView* view, const PuglEvent* event)
 
   case PUGL_REALIZE:
     assert(view->stage == PUGL_VIEW_STAGE_ALLOCATED);
-    puglChangeContext(view->world->activeView, view);
-    view->world->activeView = view;
+    puglChangeContext(view);
     status = view->eventFunc(view, event);
     view->stage = PUGL_VIEW_STAGE_REALIZED;
     break;
@@ -292,17 +291,14 @@ puglDispatchEvent(PuglView* view, const PuglEvent* event)
   case PUGL_UNREALIZE:
   case PUGL_CLOSE:
     assert(view->stage >= PUGL_VIEW_STAGE_REALIZED);
-    puglChangeContext(view->world->activeView, view);
-    view->world->activeView = view;
+    puglChangeContext(view);
     status = view->eventFunc(view, event);
     puglLeaveContext(view);
-    view->world->activeView = NULL;
     view->stage = PUGL_VIEW_STAGE_ALLOCATED;
     break;
 
   case PUGL_CONFIGURE:
-    puglChangeContext(view->world->activeView, view);
-    view->world->activeView = view;
+    puglChangeContext(view);
     status = puglConfigure(view, event);
     if (view->stage == PUGL_VIEW_STAGE_REALIZED) {
       view->stage = PUGL_VIEW_STAGE_CONFIGURED;
@@ -311,14 +307,12 @@ puglDispatchEvent(PuglView* view, const PuglEvent* event)
 
   case PUGL_EXPOSE:
     assert(view->stage == PUGL_VIEW_STAGE_CONFIGURED);
-    puglChangeContext(view->world->activeView, view);
-    view->world->activeView = view;
+    puglChangeContext(view);
     status = view->eventFunc(view, event);
     break;
 
   default:
-    puglChangeContext(view->world->activeView, view);
-    view->world->activeView = view;
+    puglChangeContext(view);
     status = view->eventFunc(view, event);
   }
 
@@ -326,18 +320,10 @@ puglDispatchEvent(PuglView* view, const PuglEvent* event)
 }
 
 PuglStatus
-puglChangeContext(PuglView *oldView, PuglView *newView)
+puglChangeContext(PuglView *view)
 {
-  if (oldView == newView)
+  if (view->backend->change(view, NULL) == PUGL_SUCCESS)
     return PUGL_SUCCESS;
 
-  if (oldView && newView && oldView->backend == newView->backend && newView->backend != NULL)
-    return oldView->backend->change(oldView, newView, NULL);
-
-  PuglStatus st0 = PUGL_SUCCESS, st1 = PUGL_SUCCESS;
-  if (oldView)
-    st0 = puglLeaveContext(oldView);
-  if (newView)
-    st1 = puglEnterContext(newView);
-  return st0 ? st0 : st1;
+  return puglEnterContext(view);
 }

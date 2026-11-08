@@ -743,7 +743,7 @@ constrainAspect(const PuglView* const view,
   }
 }
 
-// This part of the code is taken from 
+// This part of the code is taken from
 // https://github.com/Tremus/CPLUG/blob/develop/src/cplug_extensions/window_win.c
 // in order to circumvent host keyboard focus hogging
 
@@ -793,7 +793,7 @@ LRESULT CALLBACK PWGetMsgProc(int nCode, WPARAM wParam, LPARAM lParam)
   return 0;
 }
 
-void pw_forward_keyboard_input(PuglView *view, 
+void pw_forward_keyboard_input(PuglView *view,
   UINT message, WPARAM wParam, LPARAM lParam)
 {
   if (view->hints[PUGL_AGGRESSIVE_KEYBOARD_FOCUS] == PUGL_TRUE)
@@ -1046,7 +1046,7 @@ handleMessage(PuglView* view, UINT message, WPARAM wParam, LPARAM lParam)
     status = puglDispatchEvent(view, &event);
     if (status != PUGL_SUCCESS)
       pw_forward_keyboard_input(view, WM_KEYDOWN, wParam, lParam);
-    
+
     return status != PUGL_SUCCESS;
   case WM_KEYUP:
     if (view->hints[PUGL_AGGRESSIVE_KEYBOARD_FOCUS] == PUGL_TRUE)

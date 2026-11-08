@@ -595,7 +595,7 @@ namespace utils
     correctionStart_ = timestamp;
   }
 
-  u64 
+  u64
   getTimestamp()
   {
   #if COMPLEX_MSVC
@@ -899,7 +899,7 @@ namespace utils
     }
   }
 
-  bool 
+  bool
   thread::join(int *exitCode)
   {
   #ifdef COMPLEX_WINDOWS
@@ -929,7 +929,7 @@ namespace utils
     return true;
   }
 
-  bool 
+  bool
   thread::detach()
   {
   #ifdef COMPLEX_WINDOWS

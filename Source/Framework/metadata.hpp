@@ -55,7 +55,7 @@ COMPLEX_DEFINE_ENUM_OPERATION(ResetFlags, | , u8)
 void resetProcessorGeneric(Processor *processor, ResetFlags flags);
 void serialiseProcessorGeneric(const Processor *processor,
   void *jsonData, utils::span<Parameter *> parametersToSerialise);
-void updateProcessorParametersGeneric(Processor *processor, 
+void updateProcessorParametersGeneric(Processor *processor,
   UpdateFlag flag, float sampleRate, bool updateChildrenParameters);
 
 class Component;
@@ -339,11 +339,11 @@ struct ProcessorMetadata
     ProcessorMetadata *metadata, const void *toCopy, void *serialisedSave, void *extra);
   using CreateUIFn = Component *(Processor *processor);
   using ResetFn = void(Processor *processor, ResetFlags flags);
-  using UpdateParametersFn = void(Processor *processor, UpdateFlag flag, 
+  using UpdateParametersFn = void(Processor *processor, UpdateFlag flag,
     float sampleRate, bool updateChildrenParameters);
   using SerialiseToJsonFn = void(const Processor *processor,
     void *jsonData, utils::span<Parameter *> parametersToSerialise);
-  using AutomationMappingChangedFn = void(Processor *processor, 
+  using AutomationMappingChangedFn = void(Processor *processor,
     Parameter *parameter, bool isMapping);
 
   enum : u32

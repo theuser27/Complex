@@ -118,7 +118,7 @@ struct ParameterUpdate final : public UndoAction
 
     if (self->control->setValue(self->oldValue, true))
       self->control->setValueToHost();
-    
+
     return true;
   }
 

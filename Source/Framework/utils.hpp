@@ -2017,7 +2017,7 @@ namespace utils
 
       if (!newVtable)
         return;
-      
+
       if constexpr (isOnHeap)
       {
         if (oldVtable && oldVtable->alignment >= newVtable->alignment && oldVtable->size >= newVtable->size)

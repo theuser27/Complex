@@ -302,7 +302,7 @@ EffectModuleSection::mouseDown(const MouseEvent &e)
 
 void EffectModuleSection::restartEffectUI()
 {
-  // detach the parameters from their GUI representation, 
+  // detach the parameters from their GUI representation,
   // because those will stop existing after the next few lines
   for (auto *c : effectControls)
     c->setParameter(nullptr);

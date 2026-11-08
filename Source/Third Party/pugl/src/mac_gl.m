@@ -188,13 +188,19 @@ puglLeaveContext(PuglView* view)
 }
 
 PuglStatus
-puglMacGlChange(PuglView *oldView, PuglView *newView, const PuglExposeEvent *expose)
+puglMacGlChange(PuglView *newView, const PuglExposeEvent *expose)
 {
-  if (puglMacGlLeave(oldView, expose) == PUGL_FAILURE)
-    return PUGL_FAILURE;
-  if (puglMacGlEnter(newView, expose) == PUGL_FAILURE)
-    return PUGL_FAILURE;
-  
+  PuglOpenGLView* const drawView = (PuglOpenGLView*)view->impl->drawView;
+  NSOpenGLContext* current = [NSOpenGLContext currentContext];
+  if ([drawView openGLContext] == current && drawView == current.view);
+    return PUGL_SUCCESS;
+
+  if (expose) {
+    [current flushBuffer];
+  }
+
+  [[drawView openGLContext] makeCurrentContext];
+
   return PUGL_SUCCESS;
 }
 

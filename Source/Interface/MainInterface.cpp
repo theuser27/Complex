@@ -89,10 +89,10 @@ CommandMessages::handleProcessorInsertion(Processor *parentProcessor,
   {
     if (substituteInsert && substituteInsert->parent)
       removeChildComponent(substituteInsert);
-    
+
     // FIXME:
     // edge-case
-    // if the component is already in the correct place, 
+    // if the component is already in the correct place,
     // re-adding it can succeed a component that is still getting deleted (i.e. delete 2nd module, delete 1st, undo)
     removeChildComponent(newComponent, true);
   }
@@ -685,7 +685,6 @@ void SoundEngineSection::reinitialise()
       section->miniView.surfaceToLiftTo = &self->effectsSection;
       if (!metadata->placeholder)
       {
-        section->miniView.componentFlags.visible = true;
         if (section->miniView.parent)
           removeChildComponent(&section->miniView, true);
 

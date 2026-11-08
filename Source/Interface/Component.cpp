@@ -650,7 +650,7 @@ void calculatePositions(Component *children,
       i32 marginLeft = (i32)roundf(margin.x * utils::getNormalisedValue(child->sizeRatio));
 
       bounds.x = boundsInTarget.x + marginLeft;
-      
+
       if (child->previousPosition != invalidPosition)
         child->previousPosition.*primary += sizeOffset;
       child->nextPosition.*primary += sizeOffset;
@@ -811,7 +811,7 @@ animatePosition(Component *component, bool wasParentResized, bool recursive)
   {
     // we're not animating position and just setting the supposed position directly in
 
-    component->previousPosition = (!component->isStillVisible() && component->previousSizeRatio) ? 
+    component->previousPosition = (!component->isStillVisible() && component->previousSizeRatio) ?
       invalidPosition : component->nextPosition;
     component->bounds = component->bounds.withPosition(component->nextPosition);
     component->positionRatio = 0;
@@ -1112,15 +1112,15 @@ Component::isFocused(bool trueIfChildIsFocused) const
 // the focusing strategy is a little unusual
 // main idea is that if a component tries to grab focus,
 // it can delegate it to its children inside the handleFocus() callback
-// 
+//
 // the reason for making the system as such is to support elements, that have combined functionality, work correctly
 // i.e. text dialogue with a bar of options appears and grabs the focus,
 // but itself can't do anything with the focus, instead it gets passed down to the textbox within it
-// 
+//
 // if none of the (indirect) children can acquire focus, we try to transfer focus upwards if it's allowed
 // and repeat the process above while ignoring the tree we came from
 static bool
-grabFocusInternal(Renderer *renderer, Component *component, 
+grabFocusInternal(Renderer *renderer, Component *component,
   Component *origin, bool tryToFocusUpwards)
 {
   COMPLEX_ASSERT(component);
@@ -1274,7 +1274,7 @@ void Component::removeAllChildComponents()
 void Component::addRemoveNext(Component *component)
 {
   auto *toRemoveNext = this;
-  for (; toRemoveNext != component && toRemoveNext->removeNext; 
+  for (; toRemoveNext != component && toRemoveNext->removeNext;
     toRemoveNext = toRemoveNext->removeNext) { }
 
   if (toRemoveNext != component)

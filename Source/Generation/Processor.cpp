@@ -161,7 +161,7 @@ Processor::getParameter(uuid parameterId) const
   return nullptr;
 }
 
-void updateProcessorParametersGeneric(Processor *processor, 
+void updateProcessorParametersGeneric(Processor *processor,
   UpdateFlag flag, float sampleRate, bool updateChildrenParameters)
 {
   auto parameter = processor->parameters;
@@ -184,7 +184,7 @@ static void readdProcessorComponent(Processor *processor)
 
 static void removeProcessorComponent(Processor *processor)
 {
-  // if this or any of the removeNext components have animated sizing, 
+  // if this or any of the removeNext components have animated sizing,
   // we need to delay the removal until all have disappeared
 
   bool removeNow = true;
@@ -196,12 +196,12 @@ static void removeProcessorComponent(Processor *processor)
     removeChildComponent(processor->component);
     return;
   }
-  
+
   // make all components invisible so they shrink and eventually get removed inside the callback
   for (auto *removeNext = processor->component; removeNext; removeNext = removeNext->removeNext)
     removeNext->componentFlags.visible = false;
 
-  getThreadLocals()->renderer->callbacks.add({ processor->component, utils::int_max<u64> - 1 }, 
+  getThreadLocals()->renderer->callbacks.add({ processor->component, utils::int_max<u64> - 1 },
     [](Component *c)
     {
       if (!checkComponentDeletion(c))

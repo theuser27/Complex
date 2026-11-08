@@ -295,18 +295,29 @@ puglWinGlLeave(PuglView* view, const PuglExposeEvent* expose)
 }
 
 static PuglStatus
-puglWinGlChange(PuglView *oldView, PuglView *newView, const PuglExposeEvent *expose)
+puglWinGlChange(PuglView *view, const PuglExposeEvent *expose)
 {
-  if (expose) {
-    SwapBuffers(oldView->impl->hdc);
+  PuglWinGlSurface *surface = (PuglWinGlSurface *)view->impl->surface;
+
+  HGLRC currentContext = wglGetCurrentContext();
+  HDC currentDC = wglGetCurrentDC();
+
+  // skip if our window currently holds the context
+  if (currentContext && currentDC &&
+    currentContext == surface->hglrc &&
+    currentDC == view->impl->hdc) {
+    return PUGL_SUCCESS;
   }
 
-  PuglWinGlSurface *surface = (PuglWinGlSurface *)newView->impl->surface;
+  if (expose) {
+    SwapBuffers(currentDC);
+  }
+
   if (!surface || !surface->hglrc) {
     return PUGL_FAILURE;
   }
 
-  wglMakeCurrent(newView->impl->hdc, surface->hglrc);
+  wglMakeCurrent(view->impl->hdc, surface->hglrc);
   return PUGL_SUCCESS;
 }
 
@@ -336,7 +347,7 @@ puglLeaveContext(PuglView* view)
   return view->backend->leave(view, NULL);
 }
 
-bool 
+bool
 puglIsOpenGlContextActive(void)
 {
   return wglGetCurrentContext() != NULL;

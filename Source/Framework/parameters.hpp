@@ -223,7 +223,7 @@ public:
 
 private:
   enum class GestureState : u8 { None, Begun, ShouldEnd };
-  
+
   satomi::atomic<float> value_ = kDefaultParameterValue;
   satomi::atomic<bool> wasValueSet_ = false;
   satomi::atomic<GestureState> gestureState_ = GestureState::None;

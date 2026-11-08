@@ -277,6 +277,9 @@ namespace utils
   struct ignore_t { constexpr const ignore_t &operator=(const auto &) const noexcept { return *this; } };
   inline constexpr ignore_t ignore{};
 
+  template<usize>
+  struct Sink { constexpr Sink(auto &&) { } };
+
   struct align_val_t
   {
     usize value{};
@@ -644,7 +647,121 @@ namespace utils
   array(First, Rest...) -> array<First, sizeof...(Rest) + 1>;
 
   template<usize Index, typename T, usize I>
-  T get(const array<T, I> &a) { return a[Index]; }
+  constexpr const T &get(const array<T, I> &a) { return a[Index]; }
+
+  template<usize Index, typename T, usize I>
+  constexpr T &get(array<T, I> &a) { return a[Index]; }
+
+  template<typename T>
+  struct tuple_storage
+  {
+    T value;
+    constexpr tuple_storage(auto &&v) : value{ COMPLEX_FWD(v) } { }
+    constexpr T &get() & noexcept { return value; }
+    constexpr const T &get() const &noexcept { return value; }
+    constexpr T &&get() && noexcept { return COMPLEX_MOVE(value); }
+  };
+
+  template<typename T>
+  struct tuple_storage<T &>
+  {
+    T *ptr;
+    constexpr tuple_storage(T &v) noexcept : ptr{ &v } { }
+    constexpr T &get() const noexcept { return *ptr; }
+  };
+
+  template<typename ... Ts>
+  struct tuple
+  {
+    static_assert((!remove_reference<Ts>::is_lvalue_or_rvalue_ref && ...),
+      "Binding rvalue references is highly error prone because passed temporaries go out of scope at the end of the current expression. "
+      "Then they become dangling references, and the next access will very likely read into uninitialised memory. "
+      "Consider using a value type (automatic with CTAD) and then remembering to move out of the data member when needed. "
+      "If you REALLY need rvalue reference binding, add a specialisation to tuple_storage above and erase this assert.");
+
+    static constexpr auto count = sizeof...(Ts);
+    static constexpr auto make_tuple(Ts &&... args)
+    {
+      // because by-value capture discards references we need a wrapper to emulate capturing references
+      return [...args = tuple_storage<Ts>{ COMPLEX_FWD(args) }](auto &&predicate) mutable -> decltype(auto) { return predicate(args.get()...); };
+    }
+
+    decltype(make_tuple(utils::declval<Ts>()...)) lambda;
+
+    constexpr tuple() : lambda{ make_tuple(Ts{}...) } { }
+    constexpr tuple(Ts ... args) requires (sizeof...(Ts) > 0) : lambda{ make_tuple(COMPLEX_FWD(args)...) } { }
+    constexpr tuple(auto &&... args) requires (sizeof...(Ts) > 0 && sizeof...(Ts) == sizeof...(args)) : lambda{ make_tuple(COMPLEX_FWD(args)...) } { }
+    constexpr tuple(const tuple &other) = default;
+    constexpr tuple(tuple &other) : tuple{ static_cast<const tuple &>(other) } { }
+    constexpr tuple(tuple &&other) = default;
+
+    constexpr void swap(tuple &other) noexcept
+    {
+      auto temp = COMPLEX_MOVE(other.lambda);
+      other.lambda = COMPLEX_MOVE(lambda);
+      lambda = COMPLEX_MOVE(temp);
+    }
+
+    template<usize I, usize ... Js>
+    friend constexpr auto &get_impl(const tuple<Ts...> &t, index_sequence<Js...>) noexcept
+    {
+      // const_cast because the call operator can "technically" mutate members
+      return const_cast<decltype(lambda) &>(t.lambda)([](Sink<Js>..., auto &v, auto &&...) -> auto & { return v; });
+    }
+
+    template<usize I>
+    constexpr const auto &get() const noexcept { return get_impl<I>(*this, make_index_sequence<I>()); }
+    template<usize I>
+    constexpr auto &get() noexcept { return get_impl<I>(*this, make_index_sequence<I>()); }
+
+    friend constexpr bool operator==(const tuple &lhs, const tuple &rhs) noexcept
+    {
+      return lhs.lambda([&](const Ts &... lhsValues)
+      {
+        return rhs.lambda([&](const Ts &... rhsValues)
+        {
+          return ((lhsValues == rhsValues) && ...);
+        });
+      });
+    }
+
+    template<typename ... Us>
+    friend constexpr tuple<Ts..., Us...> operator+(tuple &&lhs, tuple<Us...> &&rhs)
+    {
+      return lhs.lambda([&](Ts &... lhsValues)
+      {
+        return rhs.lambda([&](Us &... rhsValues)
+        {
+          return tuple<Ts..., Us...>{ COMPLEX_MOVE(lhsValues)..., COMPLEX_MOVE(rhsValues)... };
+        });
+      });
+    }
+  };
+
+  template <typename ... Ts>
+  tuple(Ts...) -> tuple<Ts...>;
+
+  template<usize Index, typename ... Ts>
+  constexpr auto &get(const tuple<Ts...> &t) noexcept { return t.template get<Index>(); }
+  template<usize Index, typename ... Ts>
+  constexpr auto &get(tuple<Ts...> &t) noexcept { return t.template get<Index>(); }
+
+  template<typename ... Args>
+  constexpr tuple<Args &...> tie(Args &... args) noexcept { return { args... }; }
+
+  constexpr auto tuple_cat(auto &&... t) { return (... + tuple{ COMPLEX_FWD(t) }); }
+
+  template<typename Tuple>
+  constexpr decltype(auto) apply(auto &&function, Tuple &&t)
+  {
+    return t.lambda([&](auto &... lhsValues) -> decltype(auto)
+    {
+      if constexpr (utils::remove_reference<Tuple>::is_ref && !utils::remove_reference<Tuple>::is_lvalue_or_rvalue_ref)
+        return function(lhsValues...);
+      else
+        return function(COMPLEX_MOVE(lhsValues)...);
+    });
+  }
 }
 
 namespace std
@@ -657,6 +774,16 @@ namespace std
   {
     using type = T;
     static_assert(Index < I, "too many structured bindings for Area");
+  };
+
+  template<typename ... Ts>
+  struct tuple_size<utils::tuple<Ts...>> { static constexpr auto value = utils::tuple<Ts...>::count; };
+
+  template<usize I, typename ... Ts>
+  struct tuple_element<I, utils::tuple<Ts...>>
+  {
+    using type = typename utils::remove_reference<
+      decltype(utils::declval<utils::tuple<Ts...>>().template get<I>())>::type;
   };
 }
 
@@ -1092,7 +1219,7 @@ namespace utils
   constexpr void quicksort(auto &container, const auto &predicate)
   { quicksort(container, 0, container.size(), predicate); }
 
-  constexpr void insertionsort(auto &container, 
+  constexpr void insertionsort(auto &container,
     usize lower, usize upper, const auto &predicate)
   {
     for (usize i = lower + 1; i <= upper; ++i)

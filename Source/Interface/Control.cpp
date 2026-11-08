@@ -732,14 +732,14 @@ struct MappingParameterUpdate : public UndoAction
     auto oldParameter = self->bridge->getParameter();
     auto newParameter = self->parameter;
 
-    if (oldParameter && oldParameter->parentProcessor && 
+    if (oldParameter && oldParameter->parentProcessor &&
       oldParameter->parentProcessor->metadata->automationMappingChangedCallback)
       oldParameter->parentProcessor->metadata->automationMappingChangedCallback(
         oldParameter->parentProcessor, oldParameter, false);
 
     self->bridge->resetParameter(newParameter);
 
-    if (newParameter && newParameter->parentProcessor && 
+    if (newParameter && newParameter->parentProcessor &&
       newParameter->parentProcessor->metadata->automationMappingChangedCallback)
       newParameter->parentProcessor->metadata->automationMappingChangedCallback(
         newParameter->parentProcessor, newParameter, true);

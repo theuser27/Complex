@@ -196,7 +196,7 @@ public:
   bool isFocused(bool trueIfChildIsFocused) const;
   void grabFocus(bool tryToFocusUpwards = false);
   bool giveAwayFocusTo(Component *component = nullptr);
-  virtual bool 
+  virtual bool
   handleFocus([[maybe_unused]] bool hasFocus, [[maybe_unused]] FocusChange focusChange,
     [[maybe_unused]] Component *correspondent)
   {
@@ -318,7 +318,7 @@ struct DrawComponent final : public Component
   }
 };
 
-inline bool 
+inline bool
 preOrderTreeTraversal(Component *tree, const auto &lambda,
   bool forward = true, bool includeParent = false)
 {

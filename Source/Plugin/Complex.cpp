@@ -705,7 +705,7 @@ cplug_getParameterValue(void *ptr, uint32_t paramId)
 }
 
 // main-thread
-double 
+double
 cplug_getDefaultParameterValue(void *ptr, uint32_t paramId)
 {
   auto lock = ((ComplexPlugin *)ptr)->acquireProcessingLock(false);

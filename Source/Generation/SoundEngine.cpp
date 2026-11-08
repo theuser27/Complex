@@ -260,7 +260,7 @@ void updateSoundEngineParameters(Processor *p,
     s->currentOverlap_.store(s->nextOverlap_, satomi::memory_order_relaxed);
     s->nextOverlap_ = s->getParameter(SoundEngine::Overlap)->getInternalValue<float>(currentSampleRate);
     s->windowTypeId_ = s->getParameter(SoundEngine::WindowType)->getInternalValue<IndexedData>(currentSampleRate).first->id;
-    s->alpha_ = utils::lerp(kAlphaLowerBound, kAlphaUpperBound, 
+    s->alpha_ = utils::lerp(kAlphaLowerBound, kAlphaUpperBound,
       s->getParameter(SoundEngine::WindowAlpha)->getInternalValue<float>(currentSampleRate));
 
     // getting the next overlapOffset
@@ -472,7 +472,7 @@ void *initialiseTypeStructureSoundEngine(void *, PluginStructure &structure)
   auto *pool = structure.getNewPool(COMPLEX_KB(3));
 
   ProcessorMetadata &soundEngine = COMPLEX_STRUCTURE_PROCESSOR(SoundEngine, "Sound Engine",
-    Processors::SoundEngine, Skin::kNone, createSoundEngine, createUISoundEngine, 
+    Processors::SoundEngine, Skin::kNone, createSoundEngine, createUISoundEngine,
     .updateParameters = updateSoundEngineParameters);
   soundEngine.parameters =
   (
